@@ -297,6 +297,7 @@ public sealed class V3AnswerSamplesTests
         [
             await DriveAsync(mount, "provenance", "one work, one state, asked in the language it is held in", parameters),
             await DriveAsync(mount, "as_of", "the same request, so a caller can move from one to the other", parameters),
+            await DriveAsync(mount, "evidence_bundle", "the same request again: the text and digests a quote of that state needs", parameters),
             // `coverage` asks about the mount rather than about a work, so it takes no identifier and no
             // date. It is sampled because its reader is the next one built against a captured answer, and
             // because that reader today requires seventeen paths of which the platform's sample carries

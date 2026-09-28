@@ -150,17 +150,40 @@ export const REFUSAL_EXAMPLES = Object.freeze({
     payload: { requested_language: 'eng', available_languages: ['deu', 'fra'] },
   },
   text_not_available: {
-    sentence: 'The publisher records this state but serves no text for it.',
+    sentence: 'The publisher records this state but this index holds no text for it.',
+    // What `evidence_bundle` sends: the registry's three (official identity, official source, the
+    // retained transport evidence) and the coordinate the state is held at, so a reader can go to
+    // the publisher and can name the state it asked about. `official_uri` and `gazette_chain` were
+    // the specification's guess at this payload, and no producer sends either.
     payload: {
-      official_uri: 'https://preview.invalid/synthetic-preview-work/2001-01-01',
-      gazette_chain: 'Synthetic gazette A 2001 no 1',
+      official_identity: 'https://preview.invalid/synthetic-preview-work/jo',
+      official_source: 'https://preview.invalid/synthetic-preview-work',
+      retained_transport_evidence: CANDIDATE_B,
+      stable_coordinate: `/${PUBLISHER}/${WORK}/2001-01-01`,
+      permalink: `/${PUBLISHER}/${WORK}/2001-01-01--${CANDIDATE_A}`,
+      language: 'fr',
+      articles_held: 3,
       what_would_answer: ['new_official_observation'],
       asserts_absence_of_law: false,
     },
   },
   text_withheld: {
-    sentence: 'The publisher licence does not permit serving this text.',
-    payload: { licence: 'synthetic-licence' },
+    sentence: 'The rights recorded for this text do not admit serving it.',
+    // What `evidence_bundle` sends when a source's two rights channels did not agree CC BY in the
+    // same run: the registry's three (official identity, official link, the retained body digest),
+    // the recorded rights disposition and outcome, the rule that decided, and the coordinate. The
+    // `licence` this example carried was nobody's field.
+    payload: {
+      official_identity: 'https://preview.invalid/synthetic-preview-work/jo',
+      official_link: 'https://preview.invalid/synthetic-preview-work',
+      content_sha256: CANDIDATE_B,
+      stable_coordinate: `/${PUBLISHER}/${WORK}/2001-01-01`,
+      permalink: `/${PUBLISHER}/${WORK}/2001-01-01--${CANDIDATE_A}`,
+      language: 'fr',
+      source_outcome: 'acquired',
+      rights_disposition: 'non_admitting_licence_scl',
+      rule: 'rights are enforced when the bundle is composed, before any text is read',
+    },
   },
   format_not_available: {
     sentence: 'This state is held as PDF only.',

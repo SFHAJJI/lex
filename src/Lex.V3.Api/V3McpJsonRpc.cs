@@ -61,6 +61,7 @@ internal static class V3McpJsonRpc
         "cited_by" => "The references, in any held Luxembourg state, whose target is exactly this work.",
         "verify" => "Verify a hash-pinned permalink against the state digest the index holds, or read the current digests to pin.",
         "relations" => "The reference edges of a Luxembourg work in both directions, as one ordered, paged list.",
+        "evidence_bundle" => "What a quote of a Luxembourg state needs: every article's text with its digests, the state's permalink, digests, sources and official identities, composed under the rights rule.",
         _ => throw new InvalidOperationException($"The served operation {operationId} has no MCP tool description."),
     };
 

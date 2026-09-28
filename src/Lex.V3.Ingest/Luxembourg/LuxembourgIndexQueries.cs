@@ -23,7 +23,7 @@ internal static class LuxembourgIndexQueries
         """;
 
     internal const string StateArticles = """
-        SELECT a.article_identity_sha256, a.publisher_id, a.tokens_json
+        SELECT a.article_identity_sha256, a.publisher_id, a.tokens_json, a.publisher_wid, a.applicability_date, a.searchable_text, a.object_ref_sha256
         FROM states s, json_each(s.article_identities_json) j
         JOIN articles a ON a.article_identity_sha256 = j.value
         WHERE s.state_sha256 = $digest

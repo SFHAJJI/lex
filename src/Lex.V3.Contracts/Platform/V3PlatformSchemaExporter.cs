@@ -255,6 +255,11 @@ public static class V3PlatformSchemaExporter
             ("direction", NonBlankString()),
             ("limit", RowLimit()),
             ("after", NonBlankString())),
+        "evidence_bundle" => Parameters(
+            ["identifier", "date"],
+            ("identifier", NonBlankString()),
+            ("date", CivilDate()),
+            ("language", NonBlankString())),
         _ => ClosedObject(),
     };
 

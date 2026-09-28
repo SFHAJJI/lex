@@ -326,8 +326,21 @@ export const REQUIRED_PAYLOAD = Object.freeze({
       'reachable via citations, labeled as citations"',
   }),
   text_not_available: Object.freeze({
-    keys: Object.freeze(['official_uri', 'gazette_chain']),
-    basis: '31-v3-spec: "text_not_available (metadata + official link + gazette chain)"',
+    // What the platform sends. The spec line this cited named `official_uri` and a `gazette_chain`;
+    // the reviewed registry mandates the official identity, the official source and the retained
+    // transport evidence (the digest of the receipt under which the publisher bytes were retained),
+    // and that is what `evidence_bundle` produces for a state whose articles hold no text. The
+    // coordinate, the permalink, the language and the article count travel beside them.
+    keys: Object.freeze(['official_identity', 'official_source', 'retained_transport_evidence']),
+    optional: Object.freeze(['articles_held', 'language', 'permalink', 'stable_coordinate']),
+    // TWO producers reach this card and they share no key. This surface's own reading view says it
+    // for one provision it holds no text for, with that provision's official file and gazette
+    // chain (`reading.mjs`), and it is held to exactly that set until it is rebuilt on
+    // `evidence_bundle`; a payload that carries neither set in full is held to the registry's.
+    alternatives: Object.freeze([Object.freeze(['official_uri', 'gazette_chain'])]),
+    basis:
+      'lex-v3-operation-registry/1: text_not_available carries official_identity, ' +
+      'official_source, retained_transport_evidence',
   }),
   retrieval_mode_unavailable: Object.freeze({
     // What the platform sends. The spec line this cited — "falls back visibly to keyword" — is a
@@ -813,7 +826,15 @@ function requirePayload(code, payload) {
     );
   }
 
-  const missing = requirement.keys.filter(
+  // A code with more than one producer can have more than one key set (`alternatives`), each an
+  // allowlist of its own. The payload is held to the alternative it carries in full, and to the
+  // declared keys when it carries none; a payload cannot satisfy the card by mixing two sets.
+  const alternative = (requirement.alternatives ?? []).find((set) =>
+    set.every((key) => isPresent(own(payload, key))),
+  );
+  const requiredKeys = alternative ?? requirement.keys;
+
+  const missing = requiredKeys.filter(
     (key) => !nullable.has(key) && !isPresent(own(payload, key)),
   );
   if (missing.length > 0) {
@@ -865,8 +886,8 @@ function requirePayload(code, payload) {
     // rejected when it is absent, and omitting it makes it undeclared and the refusal is rejected
     // when it is there. Both rejections turn a real refusal into an exception.
     const allowed = new Set([
-      ...requirement.keys,
-      ...(requirement.optional ?? []),
+      ...requiredKeys,
+      ...(alternative ? [] : requirement.optional ?? []),
       ...(ABSENCES.has(code) ? ['what_would_answer', 'asserts_absence_of_law'] : []),
     ]);
     const undeclared = Object.keys(payload ?? {}).filter((key) => !allowed.has(key));

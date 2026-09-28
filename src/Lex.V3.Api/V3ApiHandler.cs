@@ -148,6 +148,7 @@ internal sealed class V3ApiHandler
             "cited_by" => request => corpusMount.CitedBy(request, utcNow()),
             "verify" => request => corpusMount.Verify(request, utcNow()),
             "relations" => request => corpusMount.Relations(request, utcNow()),
+            "evidence_bundle" => request => corpusMount.EvidenceBundle(request, utcNow()),
             _ => throw new ArgumentOutOfRangeException(nameof(operationId), operationId, "Not a served operation."),
         };
     }

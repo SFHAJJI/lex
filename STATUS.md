@@ -5,8 +5,8 @@ every pull request that changes what is served, what is next or what is blocked.
 
 ## Heads
 
-- `v3/integration`: `35385a58` (2026-09-28, PR #753 merged). Build 45 s. Fast lane
-  (`eng/test-fast.ps1`): 3,032 tests pass, 1 skipped, 55 s. Ingest suite: green on CI for PR #753
+- `v3/integration`: `85b13e89` (2026-09-28, PR #754 merged). Build 45 s. Fast lane
+  (`eng/test-fast.ps1`): 3,032 tests pass, 1 skipped, 45 s. Ingest suite: green on CI for PR #754
   (the CI `dotnet` job runs the whole solution on every pull request, about 6 min on the runner);
   locally about 15 min. 771 web tests pass.
 - Plan: `C:\lex-v3\V3-FINISH-PLAN-2026-09-27.md` (owner's copy). Decision 94 (one driver, one queue,
@@ -16,31 +16,63 @@ every pull request that changes what is served, what is next or what is blocked.
 
 REST at `/api/v3/`, from a mounted `v3-corpus` directory, **Luxembourg only**: `resolve`, `as_of`,
 `timeline`, `article_history`, `diff`, `changes_in_period`, `in_force_on`, `search` (strict and relaxed
-lanes), `coverage`, `provenance`, `dossier`, `citation`, `cited_by`, and since this pull request
-`verify` (a hash-pinned permalink verified against the state digest the index holds; a work
-identifier or a stable coordinate answers the current digests) and `relations` (the one edge table in both directions,
-`cites` edges only, what `citation` and `cited_by` serve as one ordered, paged list). Without a
-mounted corpus every route answers `no_corpus_mounted`. EU serves `resolve` only.
+lanes), `coverage`, `provenance`, `dossier`, `citation`, `cited_by`, `verify` (PR #753: a
+hash-pinned permalink verified against the state digest the index holds; a work identifier or a
+stable coordinate answers the current digests), `relations` (PR #753: the one edge table in both
+directions, `cites` edges only, what `citation` and `cited_by` serve as one ordered, paged list),
+and since this pull request `evidence_bundle`. Without a mounted corpus every route answers
+`no_corpus_mounted`. EU serves `resolve` only.
+
+`evidence_bundle` (this pull request) is the first operation that serves article text. It takes
+`as_of`'s request (`identifier`, `date`, optional `language`), selects the state as `as_of` does and
+refuses as `as_of` refuses; then, per selected state and before any text is read, it enforces the
+launch contract's rights rule: every corpus member the state's articles come from must be
+`acquired` under the rights disposition `agreed_same_run_cc_by`, or the whole request refuses
+`text_withheld` naming the official identity, the official link and the retained body digest; a
+state whose articles hold no text refuses `text_not_available` (official identity, official source,
+the retained receipt digest, and the absence evidence `what_would_answer` /
+`asserts_absence_of_law: false`). The answer carries, per state, the permalink, stable coordinate,
+state digest, rule profiles, the sources as `provenance` names them and the distinct retained body
+digests; per article, the identity, publisher id and wId, the article-level date, the text (the
+publisher's wording: the text and reference tokens concatenated in publisher order, the same bytes
+`search` matches), `text_sha256` over exactly those UTF-8 bytes, the `wording_sha256` the index
+keeps, the notes (marker and body text, beside the text and outside the wording digest), the
+language, the `body_sha256` of the corpus member the article was read from, the official source
+and an article permalink (`permalink#publisher_id`; `verify` accepts that form and answers
+`digest_matches` naming the article, or `anchor_not_in_version` when the pinned state does not hold
+it; the language is pinned through the state digest, which is over the expression IRI and
+language, and named beside the permalink). Articles are in the state's own order. An article whose
+tokens carry no text (the index admits a marker-only article as evidence) is named under
+`articles_without_text` with its reason and is not served as a quote; a state none of whose articles
+holds text refuses `text_not_available`. Decisions taken by the driver, reversible: the text is the
+searchable wording rather than a re-rendering of the token stream; rights are enforced per request
+and not per article (one withholding source withholds the bundle); signature, observation time and
+export formats are named as not held. Known limit, for the owner to rule on if it matters for
+quotes: the text is the publisher's text and reference tokens joined with no separator, because
+paragraph structure and whitespace-only nodes are not retained at ingest, so "Art. 1er.La
+profession" runs together; the token stream the composer could render from is in the index
+(`tokens_json`), the paragraph boundaries are not. The web refusal card now accepts the registry's `text_not_available` payload beside
+the reading view's own provision-level one (two producers, two declared key sets) and the catalog's
+two text examples show the producer's fields.
 
 Registered and not served: `ask`, `answer_drift`, `as_observed`, `browse`, `classification`,
-`concepts`, `events`, `evidence_bundle`, `knowable_on`, `manifestation`, `status_on`,
-`transposition`. A request for one of them is the transport failure `unknown_route` (HTTP 404, no
-envelope); `coverage` names them. `ask` answers the typed `assistant_v3_unavailable` result by
-design until after launch. Survey of 2026-09-28 (read-only): `evidence_bundle` is answerable from
-the index once its shape and the launch contract's rights rule are decided; `status_on`,
+`concepts`, `events`, `knowable_on`, `manifestation`, `status_on`, `transposition`. A request for
+one of them is the transport failure `unknown_route` (HTTP 404, no envelope); `coverage` names
+them. `ask` answers the typed `assistant_v3_unavailable` result by design until after launch.
+Survey of 2026-09-28 (read-only): `status_on`,
 `classification`, `browse` and `manifestation` need a new index table over Stage 3 inputs the
 ingest already holds (`TypedAssertions`: in-force status and dates, `typeDocument`, `isEmbodiedBy`,
 `userFormat`), which bumps the index schema; `concepts`, `transposition`, `as_observed`,
 `knowable_on`, `events` and `answer_drift` need data the ingest does not produce.
 
-MCP: served over streamable HTTP at `POST /mcp` (this pull request), the request half of the
+MCP: served over streamable HTTP at `POST /mcp` (PR #754), the request half of the
 transport: one JSON-RPC message in, one JSON document out (`initialize`, `tools/list`, `tools/call`;
 a notification answers 202 with no body; a JSON-RPC error is an HTTP 200; a GET is 405; a body over
 the platform's 1 MiB ceiling is 413 before parsing; no server-initiated stream is offered). One tool
 per served REST operation, named by its operation id, whose `inputSchema` is the reviewed request
 schema's `parameters` shape, and whose call runs the same dispatch the REST route runs
 (`V3ApiHandler.ExecuteFor`), so the two transports answer one envelope for one request; the
-endpoint test proves it for all fifteen. The launch-contract line "REST and MCP derive identical
+endpoint test proves it for all sixteen. The launch-contract line "REST and MCP derive identical
 envelopes from the registry" is the owner's to tick.
 
 Web: 28 React components, 771 tests; no call to `/api/v3` yet. Screens render fixtures.
@@ -229,11 +261,11 @@ Web: 28 React components, 771 tests; no call to `/api/v3` yet. Screens render fi
    either). The driver proceeds with item 4 meanwhile.
 3. Define and run the Luxembourg population and the complete EU population (owner authorisation per
    run).
-4. Serve the unserved operations for Luxembourg (`verify` and `relations` served by PR #753;
-   twelve remain, see Served today; MCP over streamable HTTP served by this pull request): next
-   `evidence_bundle` once its shape is decided, then the index-table group (`status_on`,
-   `classification`, `browse`, `manifestation`) as one index schema bump; a typed answer for a
-   request to an unserved operation (today the transport failure `unknown_route`).
+4. Serve the unserved operations for Luxembourg (`verify` and `relations` served by PR #753, MCP
+   over streamable HTTP by PR #754, `evidence_bundle` by this pull request; eleven remain, see
+   Served today): next the index-table group (`status_on`, `classification`, `browse`,
+   `manifestation`) as one index schema bump; then a typed answer for a request to an unserved
+   operation (today the transport failure `unknown_route`).
 5. EU parity: every temporal and search operation from the EU index; French expressions.
 6. Wire the eight launch screens to `/api/v3`; journeys J1 to J8 in a real browser.
 7. Release pipeline: build, sign, image, zero-traffic deploy, probes. Then acceptance and promotion.
