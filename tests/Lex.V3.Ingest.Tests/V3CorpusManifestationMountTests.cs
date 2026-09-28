@@ -22,7 +22,7 @@ public sealed class V3CorpusManifestationMountTests
     private static string Token(string iri)
     {
         var trimmed = iri.TrimEnd('/');
-        return trimmed[(trimmed.LastIndexOf('/') + 1)..].ToLowerInvariant();
+        return trimmed[(trimmed.LastIndexOf('/') + 1)..];
     }
 
     [TestMethod]

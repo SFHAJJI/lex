@@ -1614,7 +1614,7 @@
             "object_ref_sha256": "\u003Cvaries-per-run\u003E"
           }
         ],
-        "scope": "the manifestations the publisher asserted for this work\u0027s expressions (jolux:isEmbodiedBy), each with its formats (jolux:userFormat) and items (jolux:isExemplifiedBy) as the publisher wrote them, read verbatim from the index\u0027s fact table; the manifestation this corpus retained the body of is marked retained and carries the corpus member\u0027s body digest; a requested format is the last segment of the format IRI (xml, pdf, pdfa) and a format no manifestation of the selected expressions carries is refused format_not_available naming the ones held; nothing is fetched and nothing is said about which manifestation is authentic",
+        "scope": "the manifestations the publisher asserted for this work\u0027s expressions (jolux:isEmbodiedBy), each with its formats (jolux:userFormat) and items (jolux:isExemplifiedBy) as the publisher wrote them, read verbatim from the index\u0027s fact table; the manifestation this corpus retained the body of is marked retained and carries the corpus member\u0027s body digest; a requested format is the last segment of the format IRI as the publisher wrote it (xml, pdf, pdfa), matched exactly, and a format no manifestation of the selected expressions carries is refused format_not_available naming the ones held; nothing is fetched and nothing is said about which manifestation is authentic",
         "verified_by": {
           "corpus_sha256": "\u003Cvaries-per-run\u003E",
           "index_sha256": "\u003Cvaries-per-run\u003E",

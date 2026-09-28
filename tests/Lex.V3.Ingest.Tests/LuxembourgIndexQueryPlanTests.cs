@@ -134,13 +134,6 @@ public sealed class LuxembourgIndexQueryPlanTests
     }
 
     /// <summary>
-    /// Which of a list of IRIs a state carries is not bounded by a state: no index starts with either IRI column, so it
-    /// reads <c>states</c> once for each of the two, compares each row with the list, and merges. This holds it to exactly
-    /// that: two passes over <c>states</c> and no more, never a nested one (a probe of the table per name in the list
-    /// would be a table pass each), and the list read as a list. If an index on an IRI column is ever added the plan
-    /// becomes a search and this fails, which is the moment to tighten it into the bound the per-state queries have.
-    /// </summary>
-    /// <summary>
     /// The facts of a list of subjects are reached from the list: the fact table's primary key starts with the
     /// subject, so each subject is one key search and the table is never scanned, whatever the statistics say.
     /// </summary>
@@ -158,6 +151,13 @@ public sealed class LuxembourgIndexQueryPlanTests
         }
     }
 
+    /// <summary>
+    /// Which of a list of IRIs a state carries is not bounded by a state: no index starts with either IRI column, so it
+    /// reads <c>states</c> once for each of the two, compares each row with the list, and merges. This holds it to exactly
+    /// that: two passes over <c>states</c> and no more, never a nested one (a probe of the table per name in the list
+    /// would be a table pass each), and the list read as a list. If an index on an IRI column is ever added the plan
+    /// becomes a search and this fails, which is the moment to tighten it into the bound the per-state queries have.
+    /// </summary>
     private static IEnumerable<string> HeldWorksProblems(string label, string[] plan)
     {
         var shown = $"{label}, HeldWorks: {string.Join(" | ", plan)}";

@@ -890,7 +890,7 @@ internal sealed class V3CorpusMount : IDisposable
     internal const string ManifestationScope =
         "the manifestations the publisher asserted for this work's expressions (jolux:isEmbodiedBy), each with its formats (jolux:userFormat) and items " +
         "(jolux:isExemplifiedBy) as the publisher wrote them, read verbatim from the index's fact table; the manifestation this corpus retained the body of is marked " +
-        "retained and carries the corpus member's body digest; a requested format is the last segment of the format IRI (xml, pdf, pdfa) and a format no manifestation " +
+        "retained and carries the corpus member's body digest; a requested format is the last segment of the format IRI as the publisher wrote it (xml, pdf, pdfa), matched exactly, and a format no manifestation " +
         "of the selected expressions carries is refused format_not_available naming the ones held; nothing is fetched and nothing is said about which manifestation is authentic";
 
     internal static readonly string[][] ManifestationNotHeld =
@@ -1121,11 +1121,11 @@ internal sealed class V3CorpusMount : IDisposable
         states.SelectMany(static state => new[] { state.PublisherWorkIri, state.PublisherLegalResourceIri, state.ExpressionIri })
             .Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray();
 
-    /// <summary>The last path segment of a publisher format IRI, lower-cased: the token the <c>format</c> parameter matches.</summary>
+    /// <summary>The last path segment of a publisher format IRI, as written: the token the <c>format</c> parameter matches exactly.</summary>
     private static string FormatToken(string formatIri)
     {
         var trimmed = formatIri.TrimEnd('/');
-        return trimmed[(trimmed.LastIndexOf('/') + 1)..].ToLowerInvariant();
+        return trimmed[(trimmed.LastIndexOf('/') + 1)..];
     }
 
     /// <summary>One fact as the answers serve it: the property names are the wire names.</summary>
