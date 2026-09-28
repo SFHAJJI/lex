@@ -117,13 +117,20 @@ public sealed record LuxembourgIndexArticleDate(
 /// are not in it either. Nothing is compared here.
 /// </summary>
 /// <summary>
-/// One article of one state: its identity, the publisher-minted article id and the wording digest
-/// (<see cref="LuxembourgIndexReader.WordingSha256"/>). Nothing is compared here.
+/// One article of one state: its identity, the publisher-minted article id, the wording digest
+/// (<see cref="LuxembourgIndexReader.WordingSha256"/>), the publisher's wId and article-level
+/// applicability date where it wrote them, the searchable text (the text and reference tokens'
+/// texts concatenated in publisher order, the bytes <c>search</c> matches) and the stored token
+/// stream, verbatim. Nothing is compared here.
 /// </summary>
 public sealed record LuxembourgIndexStateArticle(
     string ArticleIdentitySha256,
     string PublisherId,
-    string WordingSha256);
+    string WordingSha256,
+    string? PublisherWid,
+    string? ApplicabilityDate,
+    string Text,
+    string TokensJson);
 
 public sealed record LuxembourgIndexInboundCitation(
     string ArticleIdentitySha256,
@@ -2069,8 +2076,12 @@ public sealed class LuxembourgIndexReader : IDisposable
             var values = new List<LuxembourgIndexStateArticle>();
             while (reader.Read())
             {
+                var tokensJson = reader.GetString(2);
                 values.Add(new LuxembourgIndexStateArticle(
-                    reader.GetString(0), reader.GetString(1), WordingSha256(reader.GetString(2))));
+                    reader.GetString(0), reader.GetString(1), WordingSha256(tokensJson),
+                    reader.IsDBNull(3) ? null : reader.GetString(3),
+                    reader.IsDBNull(4) ? null : reader.GetString(4),
+                    reader.GetString(5), tokensJson));
             }
             return Array.AsReadOnly(values.ToArray());
         }

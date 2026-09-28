@@ -6,6 +6,7 @@ using System.Text.Json.Nodes;
 using Lex.V3.Contracts;
 using Lex.V3.Contracts.Facts;
 using Lex.V3.Contracts.Platform;
+using Lex.V3.Contracts.Source.Luxembourg;
 using Lex.V3.Ingest;
 using Lex.V3.Ingest.Europe;
 using Lex.V3.Ingest.Luxembourg;
@@ -576,6 +577,290 @@ internal sealed class V3CorpusMount : IDisposable
             new V3PlatformOperationResult(request, "provenance_chain", result.RootElement));
     }
 
+    /// <summary>The one rights disposition under which a member's text enters a bundle: both channels agreed CC BY in the same run.</summary>
+    private static readonly string EvidenceBundleAdmittingRightsDisposition =
+        ContractWire.NameOf(LuxembourgRightsChannelDisposition.AgreedSameRunCcBy);
+
+    private static readonly string AcquiredOutcomeToken = ContractWire.NameOf(LexCorpus6OutcomeKind.Acquired);
+
+    internal const string EvidenceBundleScope =
+        "the evidence a reader needs to quote a Luxembourg state: for the state selected as as_of selects it, the hash-pinned permalink and stable " +
+        "coordinate, the state digest and its rule profiles, the source documents with their retained body digests (as provenance names them), and every " +
+        "article this state holds with its identity, its wording as the publisher wrote it (text), the digest of that text, the digest of its wording " +
+        "structure, its notes, its official source and an article permalink; the text is the concatenation of the article's text and reference tokens " +
+        "in publisher order, the same bytes the index searches";
+
+    internal const string EvidenceBundleRightsRule =
+        "rights are enforced when the bundle is composed, before any text is read: every corpus member the state's articles come from must have " +
+        "been acquired with its two rights channels agreeing CC BY in the same run (rights_disposition agreed_same_run_cc_by); under any other outcome or " +
+        "rights disposition the bundle refuses text_withheld and names the official identity, the official link and the retained body digest, so a " +
+        "derived, unofficial or non-redistributable body never enters a bundle as authoritative text; a state whose articles hold no text refuses " +
+        "text_not_available";
+
+    internal static readonly string[][] EvidenceBundleNotHeld =
+    [
+        ["publisher_signature", "no signature or attestation of the publisher is held; the digests are this index's own reading of the retained bytes under the named rule profiles"],
+        ["observation_time", "when the publisher served the retained bytes is not held, so no observation time is stated"],
+        ["export_formats", "PDF, JSON and CSV exports are the export composer's, not this answer's; this answer is the evidence they compose from"],
+        ["notes_in_wording_digest", "wording_sha256 covers the article's text and reference tokens only; the notes travel beside it and are covered by text_sha256 only through the text they were attached to"],
+    ];
+
+    /// <summary>
+    /// <c>evidence_bundle</c>: what a quote needs, composed under the rights rule. It takes
+    /// <c>as_of</c>'s request, selects states by <c>as_of</c>'s rule and refuses as <c>as_of</c>
+    /// refuses; it then enforces rights per selected state before reading any text, and answers the
+    /// articles' text with the digests, sources, permalinks and official identities the launch
+    /// contract requires of a quote.
+    /// </summary>
+    public V3PlatformOperationOutcome EvidenceBundle(
+        V3PlatformOperationRequest request,
+        DateTimeOffset observedAt)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        if (!string.Equals(request.OperationId, "evidence_bundle", StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException("The mounted corpus evidence_bundle operation only accepts evidence_bundle/1.");
+        }
+
+        var identifier = RequiredString(request.Parameters, "identifier");
+        var requestedDate = RequiredString(request.Parameters, "date");
+        var requestedLanguage = OptionalLanguage(request.Parameters);
+        if (!DateOnly.TryParseExact(
+                requestedDate, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out _))
+        {
+            throw new V3TransportFailureException(
+                V3TransportFailureKind.RequestSchemaInvalid,
+                "The requested date is not a civil calendar date.");
+        }
+
+        if (RefuseUnlessWorkStates(request, identifier, observedAt, "r7_evidence_bundle", requestedLanguage,
+                out var states, out var availableLanguages) is { } refused)
+        {
+            return refused;
+        }
+
+        var scope = requestedLanguage is null
+            ? states
+            : states.Where(state => string.Equals(state.Language, requestedLanguage, StringComparison.Ordinal)).ToArray();
+        var servedLanguages = requestedLanguage is null ? availableLanguages : new[] { requestedLanguage };
+        var selected = new List<(LuxembourgIndexResolvedState State, string? NextDate)>();
+        var ambiguous = new List<string>();
+        foreach (var language in servedLanguages)
+        {
+            var ofLanguage = scope
+                .Where(state => string.Equals(state.Language, language, StringComparison.Ordinal))
+                .ToArray();
+            var (candidates, nextDate) = SelectAtDate(ofLanguage, requestedDate);
+            if (candidates.Length == 0)
+            {
+                continue;
+            }
+
+            if (candidates.Length > 1)
+            {
+                ambiguous.AddRange(candidates.Select(StateUrl));
+                continue;
+            }
+
+            selected.Add((candidates[0], nextDate));
+        }
+
+        if (ambiguous.Count != 0)
+        {
+            return RefuseAmbiguousVersion(request, observedAt, requestedDate, ambiguous.Order(StringComparer.Ordinal).ToArray(), bound: null);
+        }
+
+        if (selected.Count == 0)
+        {
+            return RefuseNoVersionForDate(request, observedAt, scope, requestedDate, bound: null);
+        }
+
+        // ---- Rights at compose time, per selected state, before any text is read. ----
+        var sourcesByState = new Dictionary<string, IReadOnlyList<LuxembourgIndexStateSource>>(StringComparer.Ordinal);
+        foreach (var (state, _) in selected)
+        {
+            var sources = _reader!.ResolveStateSources(state.StateSha256);
+            sourcesByState[state.StateSha256] = sources;
+            var blocking = sources.FirstOrDefault(source =>
+                !string.Equals(source.Outcome, AcquiredOutcomeToken, StringComparison.Ordinal)
+                || !string.Equals(source.RightsDisposition, EvidenceBundleAdmittingRightsDisposition, StringComparison.Ordinal));
+            if (sources.Count == 0 || blocking is not null)
+            {
+                var member = blocking is null ? null : MemberOf(blocking.ObjectRefSha256);
+                using var withheld = JsonSerializer.SerializeToDocument(new
+                {
+                    official_identity = state.PublisherLegalResourceIri,
+                    official_link = state.PublisherWorkIri,
+                    content_sha256 = member?.BodySha256 ?? state.StateSha256,
+                    stable_coordinate = StableCoordinate(state),
+                    permalink = StateUrl(state),
+                    language = state.Language,
+                    source_outcome = blocking?.Outcome,
+                    rights_disposition = blocking?.RightsDisposition,
+                    rule = EvidenceBundleRightsRule,
+                });
+                return V3PlatformOperationOutcome.Refused(
+                    Context("refusal", observedAt),
+                    new V3PlatformOperationRefusal(request, "text_withheld", withheld.RootElement));
+            }
+        }
+
+        var datesByIdentity = ArticleDateMap(selected.Select(static entry => entry.State).ToArray());
+        var notAdmitted = NotAdmittedMap(selected.Select(static entry => entry.State).ToArray());
+        var bundles = new List<object>(selected.Count);
+        foreach (var (state, nextDate) in selected)
+        {
+            // In the order the state lists its articles (the publisher's document order), not the reader's sort.
+            var rank = state.ArticleIdentities
+                .Select(static (identity, index) => (identity, index))
+                .ToDictionary(static pair => pair.identity, static pair => pair.index, StringComparer.Ordinal);
+            var articles = _reader!.ResolveStateArticles(state.StateSha256)
+                .OrderBy(article => rank.GetValueOrDefault(article.ArticleIdentitySha256, int.MaxValue))
+                .ThenBy(static article => article.ArticleIdentitySha256, StringComparer.Ordinal)
+                .ToArray();
+            if (articles.Length == 0 || articles.All(static article => article.Text.Length == 0))
+            {
+                var member = sourcesByState[state.StateSha256].Select(source => MemberOf(source.ObjectRefSha256)).FirstOrDefault(static value => value is not null);
+                using var unavailable = JsonSerializer.SerializeToDocument(new
+                {
+                    official_identity = state.PublisherLegalResourceIri,
+                    official_source = state.PublisherWorkIri,
+                    retained_transport_evidence = member?.BodyReceiptSha256 ?? "none",
+                    stable_coordinate = StableCoordinate(state),
+                    permalink = StateUrl(state),
+                    language = state.Language,
+                    articles_held = articles.Length,
+                    // An absence of text in this index is not an absence of law: the state is held and named above.
+                    what_would_answer = new[] { "new_official_observation" },
+                    asserts_absence_of_law = false,
+                });
+                return V3PlatformOperationOutcome.Refused(
+                    Context("refusal", observedAt),
+                    new V3PlatformOperationRefusal(request, "text_not_available", unavailable.RootElement));
+            }
+
+            var conflicts = 0;
+            var rows = new List<object>(articles.Length);
+            foreach (var article in articles)
+            {
+                var date = datesByIdentity.GetValueOrDefault(article.ArticleIdentitySha256);
+                var conflict = ValidityConflict(date, state.ApplicabilityDate);
+                if (conflict)
+                {
+                    conflicts++;
+                }
+
+                var textBytes = Encoding.UTF8.GetBytes(article.Text);
+                rows.Add(new
+                {
+                    article_identity_sha256 = article.ArticleIdentitySha256,
+                    publisher_id = article.PublisherId,
+                    publisher_wid = article.PublisherWid,
+                    article_valid_from = date,
+                    validity_conflict = conflict,
+                    wording_sha256 = article.WordingSha256,
+                    text = article.Text,
+                    text_sha256 = Convert.ToHexStringLower(SHA256.HashData(textBytes)),
+                    text_byte_length = textBytes.Length,
+                    notes = ArticleNotes(article.TokensJson),
+                    official_source = state.PublisherLegalResourceIri,
+                    article_permalink = StateUrl(state) + "#" + article.PublisherId,
+                });
+            }
+
+            bundles.Add(new
+            {
+                language = state.Language,
+                applicability_date = state.ApplicabilityDate,
+                next_applicability_date = nextDate,
+                state_sha256 = state.StateSha256,
+                stable_coordinate = StableCoordinate(state),
+                permalink = StateUrl(state),
+                expression_iri = state.ExpressionIri,
+                publisher_work_iri = state.PublisherWorkIri,
+                publisher_legal_resource_iri = state.PublisherLegalResourceIri,
+                rule_profile_sha256s = state.RuleProfileSha256s,
+                article_identities_sha256 = ArticleIdentitiesSha256(state.ArticleIdentities),
+                sources = sourcesByState[state.StateSha256].Select(SourceRow).ToArray(),
+                body_sha256s = sourcesByState[state.StateSha256]
+                    .Select(source => MemberOf(source.ObjectRefSha256)?.BodySha256)
+                    .Where(static value => value is not null)
+                    .Distinct(StringComparer.Ordinal)
+                    .Order(StringComparer.Ordinal)
+                    .ToArray(),
+                articles = rows,
+                articles_not_admitted = notAdmitted.GetValueOrDefault(state.StateSha256),
+                validity_conflict_count = conflicts,
+                validity_conflict_rule = ValidityConflictRule,
+            });
+        }
+
+        using var result = JsonSerializer.SerializeToDocument(new
+        {
+            scope = EvidenceBundleScope,
+            requested_identifier = identifier,
+            requested_date = requestedDate,
+            requested_language = requestedLanguage,
+            publisher = "lu-legilux",
+            work_key = states[0].WorkKey,
+            rights_rule = EvidenceBundleRightsRule,
+            rights_disposition = EvidenceBundleAdmittingRightsDisposition,
+            states = bundles,
+            articles_not_admitted_note = ArticlesNotAdmittedNote,
+            available_languages = availableLanguages,
+            verified_by = new
+            {
+                corpus_sha256 = _corpus.ArtifactRef.Sha256,
+                index_sha256 = _reader!.IndexRef.Sha256,
+                registry_sha256 = V3OperationRegistry.Reviewed.Sha256,
+            },
+            not_held = EvidenceBundleNotHeld.Select(static row => new { item = row[0], reason = row[1] }).ToArray(),
+        });
+        return V3PlatformOperationOutcome.Success(
+            Context("success", observedAt),
+            new V3PlatformOperationResult(request, "evidence_bundle", result.RootElement));
+    }
+
+    private LexCorpus6Member? MemberOf(string objectRefSha256) =>
+        _corpus.Set.Members.FirstOrDefault(candidate =>
+            candidate.Publisher == PublisherId.LuLegilux &&
+            string.Equals(candidate.ObjectRefSha256, objectRefSha256, StringComparison.Ordinal));
+
+    /// <summary>The article's notes, each the publisher's marker and the text of its body's text and reference tokens, in order.</summary>
+    private static object[] ArticleNotes(string tokensJson)
+    {
+        using var document = JsonDocument.Parse(tokensJson);
+        var notes = new List<object>();
+        foreach (var token in document.RootElement.EnumerateArray())
+        {
+            if (!string.Equals(token.GetProperty("kind").GetString(), "note_reference", StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            var body = new StringBuilder();
+            if (token.TryGetProperty("note_body", out var noteBody) && noteBody.ValueKind == JsonValueKind.Array)
+            {
+                foreach (var nested in noteBody.EnumerateArray())
+                {
+                    var kind = nested.GetProperty("kind").GetString();
+                    if ((kind is "text" or "reference") && nested.TryGetProperty("text", out var text) && text.ValueKind == JsonValueKind.String)
+                    {
+                        body.Append(text.GetString());
+                    }
+                }
+            }
+
+            notes.Add(new
+            {
+                marker = token.TryGetProperty("marker", out var marker) && marker.ValueKind == JsonValueKind.String ? marker.GetString() : null,
+                text = body.ToString(),
+            });
+        }
+
+        return notes.ToArray();
+    }
+
     public const int CitationMaxEdges = 200;
 
     internal const string CitationScope =
@@ -830,7 +1115,7 @@ internal sealed class V3CorpusMount : IDisposable
     [
         ["publisher_signature", "no signature or attestation of the publisher is held; the digest is this index's own reading of the retained bytes under the named rule profiles"],
         ["observation_time", "when the publisher served the retained bytes is not held in this index, so no observation time is stated"],
-        ["text_verification", "the text itself is not compared here: as_of and article_history serve it, and provenance names its sources"],
+        ["text_verification", "the text itself is not compared here: evidence_bundle serves it with its digests, and provenance names its sources"],
     ];
 
     internal const string RelationsScope =

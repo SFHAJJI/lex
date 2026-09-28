@@ -7,8 +7,6 @@
     "out_of_corpus_scope",
     "rate_limited",
     "snapshot_unknown",
-    "text_not_available",
-    "text_withheld",
     "upstream_unreachable"
   ],
   "produced": [
@@ -47,6 +45,7 @@
         "as_of",
         "citation",
         "diff",
+        "evidence_bundle",
         "in_force_on",
         "provenance",
         "search"
@@ -94,6 +93,7 @@
         "cited_by",
         "diff",
         "dossier",
+        "evidence_bundle",
         "in_force_on",
         "provenance",
         "relations",
@@ -121,6 +121,7 @@
         "coverage",
         "diff",
         "dossier",
+        "evidence_bundle",
         "in_force_on",
         "provenance",
         "search",
@@ -143,6 +144,7 @@
         "coverage",
         "diff",
         "dossier",
+        "evidence_bundle",
         "in_force_on",
         "provenance",
         "relations",
@@ -167,6 +169,7 @@
         "as_of",
         "citation",
         "diff",
+        "evidence_bundle",
         "in_force_on",
         "provenance",
         "relations",
@@ -229,6 +232,7 @@
         "cited_by",
         "diff",
         "dossier",
+        "evidence_bundle",
         "in_force_on",
         "provenance",
         "relations",
@@ -236,6 +240,44 @@
         "search",
         "timeline",
         "verify"
+      ]
+    },
+    {
+      "code": "text_not_available",
+      "optional_payload_keys": [],
+      "payload": {
+        "articles_held": 49,
+        "asserts_absence_of_law": false,
+        "language": "fra",
+        "official_identity": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo",
+        "official_source": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3",
+        "permalink": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--5bca01f82ef3058cfebe7f8a8a6eb1f1fbeeb32b8a1ea7b2c02ac20963235e3a",
+        "retained_transport_evidence": "fb59b9fd9372a286c80c90caae9b8676839c85c22f43fcfeec4444bbbf72addb",
+        "stable_coordinate": "/lu-legilux/loi-1991-08-10-n3/2024-02-01",
+        "what_would_answer": [
+          "new_official_observation"
+        ]
+      },
+      "produced_by": [
+        "evidence_bundle"
+      ]
+    },
+    {
+      "code": "text_withheld",
+      "optional_payload_keys": [],
+      "payload": {
+        "content_sha256": "3a6bb598a9310f8a31240c1f33ae357d6e1f7a46392ca33d223c2718cdded95c",
+        "language": "fra",
+        "official_identity": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo",
+        "official_link": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3",
+        "permalink": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--5bca01f82ef3058cfebe7f8a8a6eb1f1fbeeb32b8a1ea7b2c02ac20963235e3a",
+        "rights_disposition": "non_admitting_licence_scl",
+        "rule": "rights are enforced when the bundle is composed, before any text is read: every corpus member the state\u0027s articles come from must have been acquired with its two rights channels agreeing CC BY in the same run (rights_disposition agreed_same_run_cc_by); under any other outcome or rights disposition the bundle refuses text_withheld and names the official identity, the official link and the retained body digest, so a derived, unofficial or non-redistributable body never enters a bundle as authoritative text; a state whose articles hold no text refuses text_not_available",
+        "source_outcome": "acquired",
+        "stable_coordinate": "/lu-legilux/loi-1991-08-10-n3/2024-02-01"
+      },
+      "produced_by": [
+        "evidence_bundle"
       ]
     }
   ],

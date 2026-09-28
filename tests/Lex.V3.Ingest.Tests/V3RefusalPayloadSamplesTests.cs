@@ -44,6 +44,7 @@ public sealed class V3RefusalPayloadSamplesTests
         var census = new Census();
         await ObserveLuxembourgAsync(census);
         await ObserveOneStateAsync(census);
+        await ObserveRightsAsync(census);
         await ObserveUnmountedAsync(census);
         Assert.IsEmpty(census.Problems, "Scenarios that did not yield the refusal they name:\n" + string.Join("\n", census.Problems));
         var observed = census.Observed;
@@ -230,8 +231,44 @@ public sealed class V3RefusalPayloadSamplesTests
         await DriveAsync(observed, mount, "relations", "a European identifier on a Luxembourg-only mount", new { identifier = european }, "retrieval_mode_unavailable");
         await DriveAsync(observed, mount, "relations", "a date before the first state", new { identifier = $"/lu-legilux/{fixture.WorkKey}", date = "1900-01-01" }, "no_version_for_date");
 
+        // evidence_bundle
+        await DriveAsync(observed, mount, "evidence_bundle", "two states on the date", new { identifier = work, date = twinDate, language = "fra" }, "ambiguous_version");
+        await DriveAsync(observed, mount, "evidence_bundle", "a date before the history", new { identifier = work, date = beforeHistory, language = "fra" }, "no_version_for_date");
+        await DriveAsync(observed, mount, "evidence_bundle", "a language not held", new { identifier = work, date, language = "eng" }, "language_not_available");
+        await DriveAsync(observed, mount, "evidence_bundle", "an identifier no work has", new { identifier = unknown, date, language = "fra" }, "identifier_unknown");
+        await DriveAsync(observed, mount, "evidence_bundle", "a European identifier on a Luxembourg-only mount", new { identifier = european, date, language = "fra" }, "retrieval_mode_unavailable");
+
         // coverage
         await DriveAsync(observed, mount, "coverage", "a language not held", new { language = "eng" }, "language_not_available");
+    }
+
+    private static async Task ObserveRightsAsync(Census observed)
+    {
+        // The rights rule at compose time: a member the index records under any rights disposition but the
+        // admitting one withholds the whole bundle; a state whose articles hold no text has none to serve.
+        var withheld = await MountedFixture.CreateAsync();
+        await using var cleanupWithheld = withheld;
+        await withheld.SetMemberRightsDispositionAsync("non_admitting_licence_scl");
+        using (var mount = await V3CorpusMount.OpenAsync(withheld.Directory, CancellationToken.None))
+        {
+            Assert.IsNotNull(mount);
+            await DriveAsync(observed, mount, "evidence_bundle", "a member whose rights channels did not agree CC BY",
+                new { identifier = $"/lu-legilux/{withheld.WorkKey}", date = withheld.ApplicabilityDate, language = "fra" }, "text_withheld");
+        }
+
+        var empty = await MountedFixture.CreateAsync();
+        await using var cleanupEmpty = empty;
+        foreach (var (_, publisherId, _) in empty.ArticlesOfOwnState())
+        {
+            await empty.SetArticleTokensAsync(empty.ExpressionIri, publisherId, string.Empty, "[]");
+        }
+
+        using (var mount = await V3CorpusMount.OpenAsync(empty.Directory, CancellationToken.None))
+        {
+            Assert.IsNotNull(mount);
+            await DriveAsync(observed, mount, "evidence_bundle", "a state whose articles hold no text",
+                new { identifier = $"/lu-legilux/{empty.WorkKey}", date = empty.ApplicabilityDate, language = "fra" }, "text_not_available");
+        }
     }
 
     private static async Task ObserveUnmountedAsync(Census observed)
@@ -263,6 +300,7 @@ public sealed class V3RefusalPayloadSamplesTests
         await DriveAsync(observed, mount, "cited_by", "no Luxembourg index", new { identifier = work }, "no_corpus_mounted");
         await DriveAsync(observed, mount, "verify", "no Luxembourg index", new { identifier = work }, "no_corpus_mounted");
         await DriveAsync(observed, mount, "relations", "no Luxembourg index", new { identifier = work }, "no_corpus_mounted");
+        await DriveAsync(observed, mount, "evidence_bundle", "no Luxembourg index", new { identifier = work, date = "2024-01-01" }, "no_corpus_mounted");
     }
 
     /// <summary>Drives one served operation through the real handler and records the refusal, which must be the one named.</summary>

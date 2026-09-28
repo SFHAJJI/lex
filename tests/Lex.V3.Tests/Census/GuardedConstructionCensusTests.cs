@@ -89,6 +89,7 @@ public sealed class GuardedConstructionCensusTests
                     + "method public instance Lex.V3.Api.V3CorpusMount::Coverage, "
                     + "method public instance Lex.V3.Api.V3CorpusMount::Diff, "
                     + "method public instance Lex.V3.Api.V3CorpusMount::Dossier, "
+                    + "method public instance Lex.V3.Api.V3CorpusMount::EvidenceBundle, "
                     + "method public instance Lex.V3.Api.V3CorpusMount::InForceOn, "
                     + "method public instance Lex.V3.Api.V3CorpusMount::Provenance, "
                     + "method public instance Lex.V3.Api.V3CorpusMount::Relations, "
@@ -98,7 +99,7 @@ public sealed class GuardedConstructionCensusTests
                     + "method public instance Lex.V3.Api.V3CorpusMount::Verify, "
                     + "method public static Lex.V3.Api.V3PlatformOperationOutcome::Refused, "
                     + "method public static Lex.V3.Api.V3PlatformOperationOutcome::Success, "
-                    + "15 compiler-generated",
+                    + "16 compiler-generated",
                 "Lex.V3.Api.V3PlatformSchemaDocuments: constructor private instance "
                     + "Lex.V3.Api.V3PlatformSchemaDocuments::.ctor, "
                     + "constructor private static Lex.V3.Api.V3PlatformSchemaDocuments::.cctor, "
