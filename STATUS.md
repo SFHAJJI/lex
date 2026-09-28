@@ -5,8 +5,8 @@ every pull request that changes what is served, what is next or what is blocked.
 
 ## Heads
 
-- `v3/integration`: `85b13e89` (2026-09-28, PR #754 merged). Build 45 s. Fast lane
-  (`eng/test-fast.ps1`): 3,032 tests pass, 1 skipped, 45 s. Ingest suite: green on CI for PR #754
+- `v3/integration`: `b15e40f4` (2026-09-28, PR #755 merged). Build 45 s. Fast lane
+  (`eng/test-fast.ps1`): 3,032 tests pass, 1 skipped, 45 s. Ingest suite: green on CI for PR #755
   (the CI `dotnet` job runs the whole solution on every pull request, about 6 min on the runner);
   locally about 15 min. 771 web tests pass.
 - Plan: `C:\lex-v3\V3-FINISH-PLAN-2026-09-27.md` (owner's copy). Decision 94 (one driver, one queue,
@@ -20,10 +20,32 @@ lanes), `coverage`, `provenance`, `dossier`, `citation`, `cited_by`, `verify` (P
 hash-pinned permalink verified against the state digest the index holds; a work identifier or a
 stable coordinate answers the current digests), `relations` (PR #753: the one edge table in both
 directions, `cites` edges only, what `citation` and `cited_by` serve as one ordered, paged list),
-and since this pull request `evidence_bundle`. Without a mounted corpus every route answers
-`no_corpus_mounted`. EU serves `resolve` only.
+`evidence_bundle` (PR #755), and since this pull request `classification` and `manifestation`.
+Without a mounted corpus every route answers `no_corpus_mounted`. EU serves `resolve` only.
 
-`evidence_bundle` (this pull request) is the first operation that serves article text. It takes
+`classification` and `manifestation` (this pull request) read a new index table, `work_facts`: the
+publisher's typed assertions from the Stage 3 envelope (`TypedAssertions`, all 26 admitted
+predicates), verbatim, one row per assertion with the subject, the predicate and fact kind as the
+closed vocabulary names them, the object as an IRI or a literal with its datatype and language tag,
+and the observation digest. The index schema is `lex-v3-luxembourg-index/5` (`user_version` 5; the
+stamp, the logical-rows hash and the reader's exact-schema check all cover the new table; the
+fixed-input byte pin moved). `classification` takes `dossier`'s request (`identifier`, optional
+`language`) and answers the facts on the work's own IRIs and the selected expressions grouped by
+predicate: `document_types` (jolux:typeDocument), `resource_types` (rdf:type), `legal_values`,
+`responsible_bodies`, `historical_identifiers`, `publication_dates`, `document_dates`, each with
+subject, object kind, value and evidence digest, plus the count and the names of other predicates
+held but not grouped; nothing is inferred and no subject term exists. `manifestation` answers, per
+selected expression, the manifestations the publisher asserted (jolux:isEmbodiedBy) with their
+formats (jolux:userFormat, the last IRI segment as the token) and items (jolux:isExemplifiedBy), marks
+the manifestation whose body this corpus retained and carries the corpus manifest's body digest, and
+lists the retained members; an optional `format` filters and, when no manifestation of the selected
+expressions carries it, refuses `format_not_available` naming the formats held. Both refuse as
+`dossier` refuses. Decisions taken by the driver, reversible: every admitted predicate is stored (the
+table is the envelope's assertion list, not a selection); `status_on` and `browse` follow in the next
+slice over the same table (the real act's envelope carries no in-force facts, so `status_on` needs a
+fixture that does).
+
+`evidence_bundle` (PR #755) is the first operation that serves article text. It takes
 `as_of`'s request (`identifier`, `date`, optional `language`), selects the state as `as_of` does and
 refuses as `as_of` refuses; then, per selected state and before any text is read, it enforces the
 launch contract's rights rule: every corpus member the state's articles come from must be
@@ -55,13 +77,13 @@ profession" runs together; the token stream the composer could render from is in
 the reading view's own provision-level one (two producers, two declared key sets) and the catalog's
 two text examples show the producer's fields.
 
-Registered and not served: `ask`, `answer_drift`, `as_observed`, `browse`, `classification`,
-`concepts`, `events`, `knowable_on`, `manifestation`, `status_on`, `transposition`. A request for
-one of them is the transport failure `unknown_route` (HTTP 404, no envelope); `coverage` names
-them. `ask` answers the typed `assistant_v3_unavailable` result by design until after launch.
-Survey of 2026-09-28 (read-only): `status_on`,
-`classification`, `browse` and `manifestation` need a new index table over Stage 3 inputs the
-ingest already holds (`TypedAssertions`: in-force status and dates, `typeDocument`, `isEmbodiedBy`,
+Registered and not served: `ask`, `answer_drift`, `as_observed`, `browse`, `concepts`, `events`,
+`knowable_on`, `status_on`, `transposition`. A request for one of them is the transport failure
+`unknown_route` (HTTP 404, no envelope); `coverage` names them. `ask` answers the typed
+`assistant_v3_unavailable` result by design until after launch. Survey of 2026-09-28 (read-only):
+`status_on` and `browse` read the `work_facts` table this pull request adds (in-force status and
+dates, document types across works); the rest of the original note stands: the four needed a new
+index table over Stage 3 inputs the ingest already holds (`TypedAssertions`: in-force status and dates, `typeDocument`, `isEmbodiedBy`,
 `userFormat`), which bumps the index schema; `concepts`, `transposition`, `as_observed`,
 `knowable_on`, `events` and `answer_drift` need data the ingest does not produce.
 
@@ -72,7 +94,7 @@ the platform's 1 MiB ceiling is 413 before parsing; no server-initiated stream i
 per served REST operation, named by its operation id, whose `inputSchema` is the reviewed request
 schema's `parameters` shape, and whose call runs the same dispatch the REST route runs
 (`V3ApiHandler.ExecuteFor`), so the two transports answer one envelope for one request; the
-endpoint test proves it for all sixteen. The launch-contract line "REST and MCP derive identical
+endpoint test proves it for all eighteen. The launch-contract line "REST and MCP derive identical
 envelopes from the registry" is the owner's to tick.
 
 Web: 28 React components, 771 tests; no call to `/api/v3` yet. Screens render fixtures.
@@ -262,10 +284,11 @@ Web: 28 React components, 771 tests; no call to `/api/v3` yet. Screens render fi
 3. Define and run the Luxembourg population and the complete EU population (owner authorisation per
    run).
 4. Serve the unserved operations for Luxembourg (`verify` and `relations` served by PR #753, MCP
-   over streamable HTTP by PR #754, `evidence_bundle` by this pull request; eleven remain, see
-   Served today): next the index-table group (`status_on`, `classification`, `browse`,
-   `manifestation`) as one index schema bump; then a typed answer for a request to an unserved
-   operation (today the transport failure `unknown_route`).
+   over streamable HTTP by PR #754, `evidence_bundle` by PR #755, `classification` and
+   `manifestation` by this pull request; nine remain, see Served today): next `status_on` and
+   `browse` over the `work_facts` table (`status_on` needs a fixture with in-force facts); then a
+   typed answer for a request to an unserved operation (today the transport failure
+   `unknown_route`).
 5. EU parity: every temporal and search operation from the EU index; French expressions.
 6. Wire the eight launch screens to `/api/v3`; journeys J1 to J8 in a real browser.
 7. Release pipeline: build, sign, image, zero-traffic deploy, probes. Then acceptance and promotion.

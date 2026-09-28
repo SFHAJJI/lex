@@ -469,7 +469,8 @@ public sealed class LuxembourgIndexRelationsTests
                 LuxembourgIndexBuilderTests.ReadArticles(connection),
                 LuxembourgIndexBuilderTests.ReadStates(connection),
                 LuxembourgIndexBuilderTests.ReadWorkTitles(connection),
-                LuxembourgIndexBuilderTests.ReadRelations(connection));
+                LuxembourgIndexBuilderTests.ReadRelations(connection),
+                LuxembourgIndexBuilderTests.ReadWorkFacts(connection));
             LuxembourgIndexBuilderTests.Execute(connection,
                 "UPDATE stamp SET logical_rows_sha256=$digest WHERE stamp_id=1", ("$digest", logicalRows));
         });

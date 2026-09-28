@@ -52,6 +52,9 @@ public sealed class LuxembourgIndexQueryPlanTests
     private static readonly (string Sql, (string, object)[] Parameters) StateDocumentQuery =
         (LuxembourgIndexQueries.StateDocumentOutcomes, [("$states", "[\"" + Digest + "\"]")]);
 
+    private static readonly (string Sql, (string, object)[] Parameters) SubjectFactsQuery =
+        (LuxembourgIndexQueries.SubjectFacts, [("$subjects", "[\"http://example.invalid/eli/x\"]")]);
+
     /// <summary>
     /// The document behind each state asked for is reached from the list of states: each state by its digest, then its
     /// first article and that article's member, each by primary key. So its cost is the number of states in the list and
@@ -127,6 +130,24 @@ public sealed class LuxembourgIndexQueryPlanTests
         if (!(articles >= 0 && articles < edges))
         {
             yield return "the join order is not the article and then its edges. " + shown;
+        }
+    }
+
+    /// <summary>
+    /// The facts of a list of subjects are reached from the list: the fact table's primary key starts with the
+    /// subject, so each subject is one key search and the table is never scanned, whatever the statistics say.
+    /// </summary>
+    private static IEnumerable<string> SubjectFactsProblems(string label, string[] plan)
+    {
+        var shown = $"{label}, SubjectFacts: {string.Join(" | ", plan)}";
+        if (plan.Any(static line => Regex.IsMatch(line, @"^SCAN f\b")))
+        {
+            yield return "the fact table is scanned. " + shown;
+        }
+
+        if (!plan.Any(static line => line.StartsWith("SEARCH f USING INDEX sqlite_autoindex_work_facts_1 (subject_iri=?)", StringComparison.Ordinal)))
+        {
+            yield return "the facts are not searched by the table's primary key on the subject. " + shown;
         }
     }
 
@@ -307,7 +328,8 @@ public sealed class LuxembourgIndexQueryPlanTests
             .Concat(CitationProblems("the index as built", Plan(connection, CitationQuery.Sql, CitationQuery.Parameters)))
             .Concat(HeldWorksProblems("the index as built", Plan(connection, HeldWorksQuery.Sql, HeldWorksQuery.Parameters)))
             .Concat(CitationsToProblems("the index as built", Plan(connection, CitationsToQuery.Sql, CitationsToQuery.Parameters)))
-            .Concat(StatesOfExpressionsProblems("the index as built", Plan(connection, StatesOfExpressionsQuery.Sql, StatesOfExpressionsQuery.Parameters))).ToArray();
+            .Concat(StatesOfExpressionsProblems("the index as built", Plan(connection, StatesOfExpressionsQuery.Sql, StatesOfExpressionsQuery.Parameters)))
+            .Concat(SubjectFactsProblems("the index as built", Plan(connection, SubjectFactsQuery.Sql, SubjectFactsQuery.Parameters))).ToArray();
         Assert.AreEqual(0, problems.Length, string.Join(Environment.NewLine, problems));
     }
 
@@ -336,6 +358,7 @@ public sealed class LuxembourgIndexQueryPlanTests
                          "INSERT INTO sqlite_stat1 VALUES ('members','sqlite_autoindex_members_1','3000 1')",
                          "INSERT INTO sqlite_stat1 VALUES ('work_titles','sqlite_autoindex_work_titles_1','30000 5 5 4 2 1 1')",
                          "INSERT INTO sqlite_stat1 VALUES ('work_titles','work_titles_normalized','30000 3 1')",
+                         "INSERT INTO sqlite_stat1 VALUES ('work_facts','sqlite_autoindex_work_facts_1','60000 20 4 2 1 1 1 1')",
                      ], true),
                  })
         {
@@ -365,6 +388,7 @@ public sealed class LuxembourgIndexQueryPlanTests
             problems.AddRange(HeldWorksProblems(label, Plan(connection, HeldWorksQuery.Sql, HeldWorksQuery.Parameters)));
             problems.AddRange(CitationsToProblems(label, Plan(connection, CitationsToQuery.Sql, CitationsToQuery.Parameters)));
             problems.AddRange(StatesOfExpressionsProblems(label, Plan(connection, StatesOfExpressionsQuery.Sql, StatesOfExpressionsQuery.Parameters)));
+            problems.AddRange(SubjectFactsProblems(label, Plan(connection, SubjectFactsQuery.Sql, SubjectFactsQuery.Parameters)));
         }
 
         Assert.AreEqual(0, problems.Count, string.Join(Environment.NewLine, problems));
@@ -390,6 +414,10 @@ public sealed class LuxembourgIndexQueryPlanTests
             1,
             Occurrences(reader, "command.CommandText = LuxembourgIndexQueries.StateDocumentOutcomes;"),
             "The reader does not run LuxembourgIndexQueries.StateDocumentOutcomes exactly once, so the plan asked of it is not the plan it gets.");
+        Assert.AreEqual(
+            1,
+            Occurrences(reader, "command.CommandText = LuxembourgIndexQueries.SubjectFacts;"),
+            "The reader does not run LuxembourgIndexQueries.SubjectFacts exactly once, so the plan asked of it is not the plan it gets.");
         Assert.AreEqual(
             1,
             Occurrences(reader, "outcomes.CommandText = LuxembourgIndexQueries.MemberOutcomes;"),

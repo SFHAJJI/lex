@@ -80,6 +80,9 @@ public sealed class V3AnswerSamplesTests
         // census passed. Measuring three fields and listing five is the error this artifact exists to
         // catch, committed in the artifact itself.
         "states[].sources[].object_ref_sha256",
+        // The same object reference, where `manifestation` names the retained member; the body digest and
+        // the WEMI IRIs beside it are deterministic and stay pinned.
+        "retained[].object_ref_sha256",
     ];
 
     /// <summary>
@@ -298,6 +301,8 @@ public sealed class V3AnswerSamplesTests
             await DriveAsync(mount, "provenance", "one work, one state, asked in the language it is held in", parameters),
             await DriveAsync(mount, "as_of", "the same request, so a caller can move from one to the other", parameters),
             await DriveAsync(mount, "evidence_bundle", "the same request again: the text and digests a quote of that state needs", parameters),
+            await DriveAsync(mount, "classification", "the work, in the language it is held in: the publisher's typed facts", new { parameters.identifier, parameters.language }),
+            await DriveAsync(mount, "manifestation", "the work, in the language it is held in: the publisher's manifestations, the retained one marked", new { parameters.identifier, parameters.language }),
             // `coverage` asks about the mount rather than about a work, so it takes no identifier and no
             // date. It is sampled because its reader is the next one built against a captured answer, and
             // because that reader today requires seventeen paths of which the platform's sample carries

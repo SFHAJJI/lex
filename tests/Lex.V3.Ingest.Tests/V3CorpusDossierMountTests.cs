@@ -325,7 +325,7 @@ public sealed class V3CorpusDossierMountTests
             CollectionAssert.AreEqual(
                 new[]
                 {
-                    "no publisher document type is held, so nothing here says whether this work is a law, a grand-ducal regulation or an order",
+                    "the publisher's document type is not part of this record; classification serves the typeDocument facts the publisher asserted, verbatim",
                     "no current-state flag is held, so nothing here says whether the publisher treats this work as in force, and a flag about now would not be a statement about any date listed here",
                     "no publication date is held; the document date the index stores beside a title falls back to an article's applicability date, so it is not served as one",
                     "no entry-into-force date is held; a state's applicability date is the date that state applies from, which is a different fact",

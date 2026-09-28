@@ -240,6 +240,17 @@ public sealed class V3RefusalPayloadSamplesTests
         await DriveAsync(observed, mount, "evidence_bundle", "an identifier no work has", new { identifier = unknown, date, language = "fra" }, "identifier_unknown");
         await DriveAsync(observed, mount, "evidence_bundle", "a European identifier on a Luxembourg-only mount", new { identifier = european, date, language = "fra" }, "retrieval_mode_unavailable");
 
+        // classification
+        await DriveAsync(observed, mount, "classification", "a language not held", new { identifier = work, language = "eng" }, "language_not_available");
+        await DriveAsync(observed, mount, "classification", "an identifier no work has", new { identifier = unknown, language = "fra" }, "identifier_unknown");
+        await DriveAsync(observed, mount, "classification", "a European identifier on a Luxembourg-only mount", new { identifier = european, language = "fra" }, "retrieval_mode_unavailable");
+
+        // manifestation
+        await DriveAsync(observed, mount, "manifestation", "a format no manifestation of the work carries", new { identifier = work, language = "fra", format = "docx" }, "format_not_available");
+        await DriveAsync(observed, mount, "manifestation", "a language not held", new { identifier = work, language = "eng" }, "language_not_available");
+        await DriveAsync(observed, mount, "manifestation", "an identifier no work has", new { identifier = unknown, language = "fra" }, "identifier_unknown");
+        await DriveAsync(observed, mount, "manifestation", "a European identifier on a Luxembourg-only mount", new { identifier = european, language = "fra" }, "retrieval_mode_unavailable");
+
         // coverage
         await DriveAsync(observed, mount, "coverage", "a language not held", new { language = "eng" }, "language_not_available");
     }
@@ -303,6 +314,8 @@ public sealed class V3RefusalPayloadSamplesTests
         await DriveAsync(observed, mount, "verify", "no Luxembourg index", new { identifier = work }, "no_corpus_mounted");
         await DriveAsync(observed, mount, "relations", "no Luxembourg index", new { identifier = work }, "no_corpus_mounted");
         await DriveAsync(observed, mount, "evidence_bundle", "no Luxembourg index", new { identifier = work, date = "2024-01-01" }, "no_corpus_mounted");
+        await DriveAsync(observed, mount, "classification", "no Luxembourg index", new { identifier = work }, "no_corpus_mounted");
+        await DriveAsync(observed, mount, "manifestation", "no Luxembourg index", new { identifier = work }, "no_corpus_mounted");
     }
 
     /// <summary>Drives one served operation through the real handler and records the refusal, which must be the one named.</summary>

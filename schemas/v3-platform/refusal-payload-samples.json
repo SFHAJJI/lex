@@ -2,7 +2,6 @@
   "not_produced": [
     "advice_boundary",
     "derivation_refused",
-    "format_not_available",
     "not_transposable",
     "out_of_corpus_scope",
     "rate_limited",
@@ -77,6 +76,28 @@
       ]
     },
     {
+      "code": "format_not_available",
+      "optional_payload_keys": [],
+      "payload": {
+        "available_formats": [
+          "xml"
+        ],
+        "expressions": [
+          "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo/fr",
+          "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo/later",
+          "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo/twin-a",
+          "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo/twin-b"
+        ],
+        "requested_format": "docx",
+        "requested_identifier": "/lu-legilux/loi-1991-08-10-n3",
+        "requested_language": "fra",
+        "rule": "a format is the last segment of the publisher\u0027s userFormat IRI, matched exactly; the formats listed are every one the selected expressions\u0027 manifestations carry"
+      },
+      "produced_by": [
+        "manifestation"
+      ]
+    },
+    {
       "code": "identifier_unknown",
       "optional_payload_keys": [],
       "payload": {
@@ -92,10 +113,12 @@
         "changes_in_period",
         "citation",
         "cited_by",
+        "classification",
         "diff",
         "dossier",
         "evidence_bundle",
         "in_force_on",
+        "manifestation",
         "provenance",
         "relations",
         "resolve",
@@ -119,11 +142,13 @@
         "as_of",
         "changes_in_period",
         "citation",
+        "classification",
         "coverage",
         "diff",
         "dossier",
         "evidence_bundle",
         "in_force_on",
+        "manifestation",
         "provenance",
         "search",
         "timeline",
@@ -142,11 +167,13 @@
         "changes_in_period",
         "citation",
         "cited_by",
+        "classification",
         "coverage",
         "diff",
         "dossier",
         "evidence_bundle",
         "in_force_on",
+        "manifestation",
         "provenance",
         "relations",
         "search",
@@ -231,10 +258,12 @@
         "changes_in_period",
         "citation",
         "cited_by",
+        "classification",
         "diff",
         "dossier",
         "evidence_bundle",
         "in_force_on",
+        "manifestation",
         "provenance",
         "relations",
         "resolve",

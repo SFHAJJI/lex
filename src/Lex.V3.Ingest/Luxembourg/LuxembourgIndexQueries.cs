@@ -122,6 +122,17 @@ internal static class LuxembourgIndexQueries
         "WHERE t.expression_iri IN (SELECT value FROM json_each($expressions)) " +
         "ORDER BY t.language,t.expression_iri,t.title_kind,t.title,t.evidence_sha256";
 
+    /// <summary>
+    /// The publisher's typed assertions about a list of subjects, verbatim, by the fact table's primary key
+    /// (the subject is its first column, so the list drives one key search per subject and no table is
+    /// scanned), in the table's own order.
+    /// </summary>
+    internal const string SubjectFacts =
+        "SELECT f.subject_iri,f.predicate,f.fact_kind,f.object_kind,f.object_value,f.datatype_iri,f.language_tag,f.evidence_sha256 " +
+        "FROM work_facts f " +
+        "WHERE f.subject_iri IN (SELECT value FROM json_each($subjects)) " +
+        "ORDER BY f.subject_iri,f.predicate,f.object_kind,f.object_value,f.datatype_iri,f.language_tag,f.evidence_sha256";
+
     internal const string StateSources =
         "SELECT DISTINCT m.object_ref_sha256,m.outcome,m.rights_disposition,m.gaps_json " +
         "FROM states s CROSS JOIN json_each(s.article_identities_json) j " +
