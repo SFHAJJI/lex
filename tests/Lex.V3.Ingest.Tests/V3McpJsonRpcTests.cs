@@ -205,6 +205,19 @@ public sealed class V3McpJsonRpcTests
     }
 
     [TestMethod]
+    public async Task AToolsCallWhoseArgumentsAreNotAnObjectIsAnInvalidParamsErrorAndNothingRuns()
+    {
+        // REST refuses a non-object parameters member below the envelope; over MCP the same request is
+        // invalid params, never an empty parameter set that coverage would happily answer.
+        using var response = await HandleAsync(new { jsonrpc = "2.0", id = 8, method = "tools/call", @params = new { name = "coverage", arguments = "zzz" } });
+
+        Assert.IsFalse(response.RootElement.TryGetProperty("result", out _));
+        var error = response.RootElement.GetProperty("error");
+        Assert.AreEqual(-32602, error.GetProperty("code").GetInt32());
+        StringAssert.Contains(error.GetProperty("message").GetString(), "arguments");
+    }
+
+    [TestMethod]
     public async Task AnUnknownMethodIsMethodNotFound()
     {
         using var response = await HandleAsync(new { jsonrpc = "2.0", id = 9, method = "resources/list" });

@@ -172,10 +172,15 @@ internal static class V3McpJsonRpc
             return Error(id, -32602, $"Unknown tool: {name}");
         }
 
-        var arguments = parameters.TryGetProperty("arguments", out var argumentsElement) &&
-                         argumentsElement.ValueKind == JsonValueKind.Object
-            ? argumentsElement
-            : Empty();
+        var hasArguments = parameters.TryGetProperty("arguments", out var argumentsElement);
+        if (hasArguments && argumentsElement.ValueKind != JsonValueKind.Object)
+        {
+            // REST refuses parameters that are not an object below the envelope (parameters_not_object);
+            // the same request over MCP is an invalid-params error, never an empty parameter set.
+            return Error(id, -32602, "Invalid params: 'arguments' must be an object");
+        }
+
+        var arguments = hasArguments ? argumentsElement : Empty();
         var operationRequestUtf8 = BuildOperationRequest(binding.OperationId, arguments);
 
         try

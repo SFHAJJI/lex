@@ -160,9 +160,24 @@ internal sealed class V3ApiHandler
     /// </summary>
     private async Task HandleMcpAsync(HttpContext context, CancellationToken cancellationToken)
     {
+        // Every answer of the endpoint, transport failures included, names the one protocol version served.
+        static void NameProtocolVersion(Microsoft.AspNetCore.Http.HttpResponse response) =>
+            response.Headers["MCP-Protocol-Version"] = V3McpJsonRpc.ProtocolVersion;
+        NameProtocolVersion(context.Response);
         if (!string.Equals(context.Request.Method, Microsoft.AspNetCore.Http.HttpMethods.Post, StringComparison.Ordinal))
         {
-            await V3TransportResponse.WriteAsync(context.Response, V3TransportFailureKind.MethodNotAllowed, cancellationToken)
+            await V3TransportResponse.WriteAsync(context.Response, V3TransportFailureKind.MethodNotAllowed, NameProtocolVersion, cancellationToken)
+                .ConfigureAwait(false);
+            return;
+        }
+
+        // A client that names a protocol version names the one this server speaks; an absent header
+        // is the initialization phase or an older client and is served (the specification's rule).
+        if (context.Request.Headers.TryGetValue("MCP-Protocol-Version", out var requestedVersions)
+            && requestedVersions.Count > 0
+            && !(requestedVersions.Count == 1 && string.Equals(requestedVersions[0], V3McpJsonRpc.ProtocolVersion, StringComparison.Ordinal)))
+        {
+            await V3TransportResponse.WriteAsync(context.Response, V3TransportFailureKind.UnsupportedProtocolVersion, NameProtocolVersion, cancellationToken)
                 .ConfigureAwait(false);
             return;
         }
@@ -174,7 +189,7 @@ internal sealed class V3ApiHandler
         }
         catch (V3TransportFailureException exception)
         {
-            await V3TransportResponse.WriteAsync(context.Response, exception.Kind, cancellationToken).ConfigureAwait(false);
+            await V3TransportResponse.WriteAsync(context.Response, exception.Kind, NameProtocolVersion, cancellationToken).ConfigureAwait(false);
             return;
         }
 
@@ -191,12 +206,11 @@ internal sealed class V3ApiHandler
         }
         catch (Exception)
         {
-            await V3TransportResponse.WriteAsync(context.Response, V3TransportFailureKind.InternalFailure, cancellationToken)
+            await V3TransportResponse.WriteAsync(context.Response, V3TransportFailureKind.InternalFailure, NameProtocolVersion, cancellationToken)
                 .ConfigureAwait(false);
             return;
         }
 
-        context.Response.Headers["MCP-Protocol-Version"] = V3McpJsonRpc.ProtocolVersion;
         if (answer is null)
         {
             context.Response.StatusCode = Microsoft.AspNetCore.Http.StatusCodes.Status202Accepted;

@@ -16,6 +16,7 @@ internal enum V3TransportFailureKind
     UnknownRoute,
     InternalResponseInvalid,
     InternalFailure,
+    UnsupportedProtocolVersion,
 }
 
 internal sealed class V3TransportFailureException : Exception
@@ -47,6 +48,18 @@ internal static class V3TransportResponse
     public static Task WriteAsync(
         HttpResponse response,
         V3TransportFailureKind kind,
+        CancellationToken cancellationToken) =>
+        WriteAsync(response, kind, null, cancellationToken);
+
+    /// <summary>
+    /// The same problem document, with <paramref name="afterClear"/> run once the response has been
+    /// reset and before it is written, for a transport that owes a header on every answer (the MCP
+    /// endpoint's protocol version); <see cref="HttpResponse.Clear"/> would otherwise drop it.
+    /// </summary>
+    public static Task WriteAsync(
+        HttpResponse response,
+        V3TransportFailureKind kind,
+        Action<HttpResponse>? afterClear,
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(response);
@@ -68,6 +81,7 @@ internal static class V3TransportResponse
             response.Headers.Allow = HttpMethods.Post;
         }
 
+        afterClear?.Invoke(response);
         return BufferedHttpResponse.WriteJsonAsync(
             response,
             status,
@@ -108,6 +122,8 @@ internal static class V3TransportResponse
             ("internal_response_invalid", "Internal response invalid", StatusCodes.Status500InternalServerError),
         V3TransportFailureKind.InternalFailure =>
             ("internal_failure", "Internal failure", StatusCodes.Status500InternalServerError),
+        V3TransportFailureKind.UnsupportedProtocolVersion =>
+            ("unsupported_protocol_version", "Unsupported MCP protocol version", StatusCodes.Status400BadRequest),
         _ => throw new ArgumentOutOfRangeException(nameof(kind)),
     };
 }

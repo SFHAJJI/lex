@@ -89,6 +89,7 @@ public sealed class V3McpHttpEndpointTests
             using var rpc = JsonDocument.Parse(ResponseBytes(mcp));
             Assert.IsFalse(rpc.RootElement.TryGetProperty("error", out var rpcError), operation + ": " + (rpcError.ValueKind == JsonValueKind.Undefined ? "" : rpcError.ToString()));
             var structured = rpc.RootElement.GetProperty("result").GetProperty("structuredContent");
+            Assert.AreEqual(V3Verdicts.Answer, structured.GetProperty("verdict").GetString(), operation + ": the fixture answers this call; a refusal on both paths would still compare equal.");
 
             var rest = await PostAsync(mount, JsonSerializer.Serialize(new { operation_id = operation, parameters = arguments }), traceIdentifier,
                 V3RestRouteBinding.Served.Single(binding => binding.OperationId == operation).RawTarget);
@@ -138,13 +139,31 @@ public sealed class V3McpHttpEndpointTests
     }
 
     [TestMethod]
-    public async Task AGetIsMethodNotAllowedAndAnOversizedBodyIsRefusedBeforeParsing()
+    public async Task AGetIsMethodNotAllowedAndAnOversizedBodyIsRefusedBeforeParsingAndBothNameTheProtocolVersion()
     {
         var get = await SendAsync(null, HttpMethods.Get, Array.Empty<byte>());
         Assert.AreEqual(StatusCodes.Status405MethodNotAllowed, get.Response.StatusCode);
+        Assert.AreEqual(V3McpJsonRpc.ProtocolVersion, get.Response.Headers["MCP-Protocol-Version"].ToString());
 
         var oversized = await SendAsync(null, HttpMethods.Post, Encoding.UTF8.GetBytes("{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/list\",\"pad\":\"" + new string('x', V3PlatformHost.MaximumRequestBytes) + "\"}"));
         Assert.AreEqual(StatusCodes.Status413PayloadTooLarge, oversized.Response.StatusCode);
+        Assert.AreEqual(V3McpJsonRpc.ProtocolVersion, oversized.Response.Headers["MCP-Protocol-Version"].ToString());
+    }
+
+    [TestMethod]
+    public async Task AClientNamingAnotherProtocolVersionIsRefusedWithFourHundredAndTheServedOneOrNoneIsServed()
+    {
+        var body = JsonSerializer.Serialize(new { jsonrpc = "2.0", id = 1, method = "tools/list" });
+
+        var other = await SendAsync(null, HttpMethods.Post, Encoding.UTF8.GetBytes(body), protocolVersion: "1999-01-01");
+        Assert.AreEqual(StatusCodes.Status400BadRequest, other.Response.StatusCode);
+        StringAssert.Contains(Encoding.UTF8.GetString(ResponseBytes(other)), "unsupported_protocol_version");
+
+        var served = await SendAsync(null, HttpMethods.Post, Encoding.UTF8.GetBytes(body), protocolVersion: V3McpJsonRpc.ProtocolVersion);
+        Assert.AreEqual(StatusCodes.Status200OK, served.Response.StatusCode);
+
+        var none = await SendAsync(null, HttpMethods.Post, Encoding.UTF8.GetBytes(body));
+        Assert.AreEqual(StatusCodes.Status200OK, none.Response.StatusCode);
     }
 
     [TestMethod]
@@ -158,11 +177,17 @@ public sealed class V3McpHttpEndpointTests
         SendAsync(mount, HttpMethods.Post, Encoding.UTF8.GetBytes(body), rawTarget, traceIdentifier);
 
     private static async Task<DefaultHttpContext> SendAsync(
-        V3CorpusMount? mount, string method, byte[] body, string? rawTarget = null, string traceIdentifier = "mcp-endpoint")
+        V3CorpusMount? mount, string method, byte[] body, string? rawTarget = null, string traceIdentifier = "mcp-endpoint",
+        string? protocolVersion = null)
     {
         var context = new DefaultHttpContext();
         context.TraceIdentifier = traceIdentifier;
         context.Request.Method = method;
+        if (protocolVersion is not null)
+        {
+            context.Request.Headers["MCP-Protocol-Version"] = protocolVersion;
+        }
+
         context.Request.Body = new MemoryStream(body);
         context.Request.ContentLength = body.Length;
         context.Features.Get<IHttpRequestFeature>()!.RawTarget = rawTarget ?? RawTarget;
