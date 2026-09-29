@@ -76,6 +76,8 @@ public sealed class GuardedConstructionCensusTests
                 "Lex.V3.Api.V3PlatformOperationOutcome: constructor private instance "
                     + "Lex.V3.Api.V3PlatformOperationOutcome::.ctor, "
                     + "method internal static Lex.V3.Api.V3ApiHandler::ExecuteFor, "
+                    + "method private instance Lex.V3.Api.V3CorpusMount::DossierEurope, "
+                    + "method private instance Lex.V3.Api.V3CorpusMount::LocateEuropeWork, "
                     + "method private instance Lex.V3.Api.V3CorpusMount::ModeUnavailable, "
                     + "method private instance Lex.V3.Api.V3CorpusMount::RefuseAmbiguousVersion, "
                     + "method private instance Lex.V3.Api.V3CorpusMount::RefuseNoVersionForDate, "

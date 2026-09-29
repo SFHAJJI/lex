@@ -51,6 +51,23 @@ public sealed record EuropeIndexSearchHit(
     string ArticleIdentitySha256,
     string ProvisionCoordinate);
 
+/// <summary>
+/// One held expression of an EU work as the index holds it: the work and its CELEX, the expression and its
+/// language, the Formex act date of its wording (normally one), its article count, and the corpus members
+/// its articles were read from with their outcome and content class.
+/// </summary>
+public sealed record EuropeIndexWorkExpression(
+    string PublisherWorkId,
+    string PublisherWorkCelex,
+    string PublisherExpressionId,
+    string Language,
+    IReadOnlyList<string> WordingDates,
+    long ArticleCount,
+    IReadOnlyList<EuropeIndexExpressionMember> Members);
+
+/// <summary>A corpus member an expression's articles were read from, with its outcome and content class.</summary>
+public sealed record EuropeIndexExpressionMember(string ObjectRefSha256, string Outcome, string? ContentClass);
+
 public sealed record EuropeIndexResolvedExpression(
     string PublisherWorkId,
     string PublisherExpressionId,
@@ -820,6 +837,55 @@ public sealed class EuropeIndexReader : IDisposable
             var values = new List<string>();
             while (reader.Read()) values.Add(reader.GetString(0));
             return new EuropeIndexSearchResult(outcome, values.AsReadOnly());
+        }
+    }
+
+    /// <summary>
+    /// Every held expression of one EU work, in language and expression order, with the Formex act dates of
+    /// its wording, its article count and the members its articles were read from (joined to the members
+    /// table for their outcome and content class). An unknown work has no rows.
+    /// </summary>
+    public IReadOnlyList<EuropeIndexWorkExpression> ResolveWorkExpressions(string publisherWorkId)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(publisherWorkId);
+        lock (_gate)
+        {
+            using var command = _connection.CreateCommand();
+            command.CommandText = """
+                SELECT a.publisher_work_id,a.publisher_work_celex,a.publisher_expression_id,a.language,
+                       a.wording_date,a.object_ref_sha256,m.outcome,m.content_class,count(*)
+                FROM articles a JOIN members m ON m.object_ref_sha256=a.object_ref_sha256
+                WHERE a.publisher_work_id=$work
+                GROUP BY a.publisher_work_id,a.publisher_work_celex,a.publisher_expression_id,a.language,
+                         a.wording_date,a.object_ref_sha256,m.outcome,m.content_class
+                ORDER BY a.language,a.publisher_expression_id,a.wording_date,a.object_ref_sha256
+                """;
+            command.Parameters.AddWithValue("$work", publisherWorkId);
+            using var reader = command.ExecuteReader();
+            var rows = new List<(string Work, string Celex, string Expression, string Language, string Date,
+                string ObjectRef, string Outcome, string? ContentClass, long Articles)>();
+            while (reader.Read())
+            {
+                rows.Add((reader.GetString(0), reader.GetString(1), reader.GetString(2), reader.GetString(3),
+                    reader.GetString(4), reader.GetString(5), reader.GetString(6),
+                    reader.IsDBNull(7) ? null : reader.GetString(7), reader.GetInt64(8)));
+            }
+
+            return Array.AsReadOnly(rows
+                .GroupBy(static row => (row.Work, row.Celex, row.Expression, row.Language))
+                .Select(static group => new EuropeIndexWorkExpression(
+                    group.Key.Work,
+                    group.Key.Celex,
+                    group.Key.Expression,
+                    group.Key.Language,
+                    Array.AsReadOnly(group.Select(static row => row.Date).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray()),
+                    group.Sum(static row => row.Articles),
+                    Array.AsReadOnly(group
+                        .Select(static row => new EuropeIndexExpressionMember(row.ObjectRef, row.Outcome, row.ContentClass))
+                        .Distinct()
+                        .OrderBy(static member => member.ObjectRefSha256, StringComparer.Ordinal)
+                        .ToArray())))
+                .ToArray());
         }
     }
 

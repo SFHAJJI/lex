@@ -332,7 +332,7 @@ public sealed class V3CorpusDossierMountTests
                     "no application date is held; a state's applicability date is the date that state applies from, which is a different fact",
                     "no historical identifier is held, so no earlier or later identifier of this work is mapped to it",
                     "no responsible ministry is held",
-                    "no observation time or first-sighting event is held, so nothing here says when this work was first seen",
+                    "no observation time is held, so nothing here says when this work was first seen; the event log's first_sighting (events) says only that a state is first present in that log",
                     "each state carries the date it applies from and no end date, so no gap between states can be stated, and this answer never says there is none",
                 },
                 notHeld.Select(static row => row.GetProperty("reason").GetString()).ToArray());
@@ -419,8 +419,10 @@ public sealed class V3CorpusDossierMountTests
     }
 
     [TestMethod]
-    public async Task EuIdentifiersAndEuOnlyMountsRefuseTheModeWithEuContextNamingTheDossierMode()
+    public async Task EuIdentifiersAreTheEuIndexsToAnswerAndRefuseWithEuContextWhereItIsNotMounted()
     {
+        // Since PR #762 an EU work's dossier is answered from the EU index, so on a mount with no EU index
+        // the missing EU corpus is the reason (it was a mode refusal naming r6_dossier).
         var luxembourg = await MountedFixture.CreateAsync();
         await using var cleanupLuxembourg = luxembourg;
         using (var mount = await V3CorpusMount.OpenAsync(luxembourg.Directory, CancellationToken.None))
@@ -435,11 +437,8 @@ public sealed class V3CorpusDossierMountTests
             {
                 var envelope = await DossierAsync(mount, identifier);
                 Assert.AreEqual(V3Verdicts.Refuse, envelope.Verdict, identifier);
-                Assert.AreEqual("retrieval_mode_unavailable", envelope.Refusal!.Code, identifier);
-                Assert.AreEqual("r6_dossier", envelope.Refusal.HelpfulPayload.GetProperty("requested_mode").GetString());
-                CollectionAssert.AreEqual(new[] { "r0_exact_coordinate" },
-                    envelope.Refusal.HelpfulPayload.GetProperty("available_modes").EnumerateArray()
-                        .Select(static v => v.GetString()).ToArray());
+                Assert.AreEqual("no_corpus_mounted", envelope.Refusal!.Code, identifier);
+                Assert.AreEqual("eu", envelope.Refusal.HelpfulPayload.GetProperty("required_corpus").GetString());
                 Assert.AreEqual(PublisherId.EuEurLex, envelope.Context.Publisher, identifier);
                 Assert.AreEqual(TimelineSemantics.OfficialConsolidationState, envelope.Context.TimelineSemantics, identifier);
             }
@@ -455,8 +454,8 @@ public sealed class V3CorpusDossierMountTests
         Assert.AreEqual("lu", onEuropeOnly.Refusal.HelpfulPayload.GetProperty("required_corpus").GetString());
         Assert.AreEqual(PublisherId.LuLegilux, onEuropeOnly.Context.Publisher);
         var euOnEuropeOnly = await DossierAsync(europeMount, "32016R0679");
-        Assert.AreEqual("retrieval_mode_unavailable", euOnEuropeOnly.Refusal!.Code);
-        Assert.AreEqual("r6_dossier", euOnEuropeOnly.Refusal.HelpfulPayload.GetProperty("requested_mode").GetString());
+        Assert.IsNull(euOnEuropeOnly.Refusal, euOnEuropeOnly.Refusal?.Code);
+        Assert.AreEqual("eu-eurlex", euOnEuropeOnly.Result!.Value.GetProperty("publisher").GetString());
     }
 
     [TestMethod]
