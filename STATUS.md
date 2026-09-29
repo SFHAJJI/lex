@@ -297,28 +297,36 @@ Web: 28 React components, 771 tests; no call to `/api/v3` yet. Screens render fi
   exits 1 with its message, and process tests in the fast lane pin the exit codes without traffic
   (the refused case names a CELEX that is not a seed, refused before any request). The first real
   mount now needs only the bounded live run.
-- **The bounded live run: started 2026-09-27 21:26 UTC, stopped by the session harness, not
-  restarted.** With the tool at `8ec1fdb8` (GDPR `32016R0679`; the Luxembourg act
-  `loi/2017/03/14/a439`, range `.../a439/jo` to `.../a439/jp`; custody
-  `C:\lex-v3\first-mount-run-1\custody`; ceiling 800). It held the eight renderer sources and was
-  inside the EU adapter run when the Claude Code harness killed the process at 21:27:47 UTC because
-  the machine was critically low on memory (1.1 GB free of 15.7 GB, held by other applications);
-  473 custody files (5.1 MB) in 94 s, no milestone line reached, no wire count, refusal or digest
-  to record. The harness asks that a process it stopped for memory pressure is not restarted
-  unprompted, so the driver did not. To run it: free memory (or start the CLI with
-  `CLAUDE_CODE_DISABLE_BG_SHELL_PRESSURE_REAP=1`), then from `C:\lex-v3\first-mount-run-1` run the
-  command recorded on PR #750, logging to `build.log`; with this pull request merged the run also
-  acquires the GDPR Formex package (about three more requests per held expression). The run
-  record (wire counts, refusals, five digests, `resolve` from the mount) is still item 1.
-- **Second attempt: started 2026-09-29 17:27:20 UTC from another session, in progress when PR #759
-  was written.** Same command and custody root, the Release tool built in the driver's worktree at
-  17:21 UTC from the source PR #758 merged (it held the eight renderer sources; 3,394 custody files
-  at 18:05 UTC, no milestone line yet). Its record goes into the pull request after its `EXIT`
-  line; no publisher traffic is started by the driver before then.
+- **The bounded live run, attempt 2 (2026-09-29 17:27 to about 17:58 UTC): refused at the EUR-Lex
+  legal notice.** Same command as PR #750's comment, tool built at PR #758's head, custody
+  `C:\lex-v3irst-mount-run-1\custody` (attempt 1's files reused, content-addressed). Result, from
+  `build.log`: `refused: europe: LegalNoticeRefused: NoticeRouteInvalid ... (spent 619 of 800)`, exit 3.
+  The GDPR acquisition itself completed: 618 requests to the Publications Office, then the one GET
+  of `https://eur-lex.europa.eu/content/legal-notice/legal-notice.html?locale=en`, which answered
+  **HTTP 202** with a complete body (retained: route evidence `09a1443d...` in that custody). A 202
+  on that page is the EUR-Lex bot-protection challenge Decision 23 anticipated, so the route is
+  refused as designed and no retry or second request was sent. Memory was not a problem this time
+  (the process stayed near 90 MB). Because the build is one process, the 618 requests are spent and
+  nothing was written; the Luxembourg act was never reached.
+- **What this means.** Decision 88's one legal-notice GET cannot succeed from an automated client
+  while EUR-Lex challenges it, and `LexCorpus6Builder` refuses the whole corpus without that
+  evidence (`EuropeRightsEvidenceMissing`), so no mount, Luxembourg included, can be built. Two
+  fixes, neither built yet:
+  1. Fail fast (driver's call, no scope change): send the legal-notice GET first, before the EU
+     acquisition, so a challenge costs one request instead of 619.
+  2. A way past the missing notice (owner's call, it touches Decision 88): either (a) the builder
+     accepts a typed `eu_rights_evidence_unavailable` disposition and withholds every EU body as
+     text while still serving EU identity and `resolve`, which keeps rights fail-closed and lets the
+     Luxembourg side mount; or (b) the rights evidence comes from the same Commission reuse policy
+     (Decision 2011/833/EU) at an address that does not challenge, such as the Publications Office
+     legal notice, which needs a numbered Decision replacing Decision 88's exact URL. The driver
+     recommends (a) now and (b) later. Sending a browser user agent or solving the challenge is not
+     an option: it would evade the publisher's protection.
 
 ## Next, in order
 
-1. The bounded live run (authorised by the owner on 2026-09-27) with the tool: one EU work in EN and
+1. Unblock the first mount after the EUR-Lex challenge (see Data, attempt 2): fail fast first, then
+   option (a) unless the owner rules otherwise. Then the bounded live run again with the tool: one EU work in EN and
    FR (the manifestation enumerations and the legal-notice GET; no Formex package request), one
    Luxembourg act with a consolidated publisher PDF. Record the wire counts, the refusals met and
    the five digests in STATUS.md; mount the directory under the API and answer `resolve` from it.
