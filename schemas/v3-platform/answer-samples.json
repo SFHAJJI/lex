@@ -628,7 +628,7 @@
             "knowable_on",
             "transposition"
           ],
-          "note": "served_operations are the routes this mount answers and not_served_operations are registered with no route on it; this states a fact about the mount and says nothing about what a request for an unserved operation returns",
+          "note": "served_operations are the routes this mount answers and not_served_operations are registered with no route on it; a request for an unserved operation answers the transport failure operation_not_served (HTTP 404, below the envelope), which tells it apart from a path nothing names (unknown_route)",
           "registered": 27,
           "served_operations": [
             "article_history",

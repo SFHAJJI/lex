@@ -16,6 +16,7 @@ internal enum V3TransportFailureKind
     UnknownRoute,
     InternalResponseInvalid,
     InternalFailure,
+    OperationNotServed,
 }
 
 internal sealed class V3TransportFailureException : Exception
@@ -117,6 +118,8 @@ internal static class V3TransportResponse
             ("method_not_allowed", "Method not allowed", StatusCodes.Status405MethodNotAllowed),
         V3TransportFailureKind.UnknownRoute =>
             ("unknown_route", "Unknown route", StatusCodes.Status404NotFound),
+        V3TransportFailureKind.OperationNotServed =>
+            ("operation_not_served", "Operation registered and not served", StatusCodes.Status404NotFound),
         V3TransportFailureKind.InternalResponseInvalid =>
             ("internal_response_invalid", "Internal response invalid", StatusCodes.Status500InternalServerError),
         V3TransportFailureKind.InternalFailure =>

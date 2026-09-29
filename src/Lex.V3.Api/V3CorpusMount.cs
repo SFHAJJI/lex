@@ -3404,7 +3404,8 @@ internal sealed class V3CorpusMount : IDisposable
 
     internal const string CoverageOperationsNote =
         "served_operations are the routes this mount answers and not_served_operations are registered with no route on it; " +
-        "this states a fact about the mount and says nothing about what a request for an unserved operation returns";
+        "a request for an unserved operation answers the transport failure operation_not_served (HTTP 404, below the envelope), " +
+        "which tells it apart from a path nothing names (unknown_route)";
 
     internal static readonly string[][] CoverageNotHeld =
     [
