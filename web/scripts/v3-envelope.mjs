@@ -15,7 +15,9 @@
 // Two checks the platform makes are not made here, and are named so nobody cites this for more:
 // the platform refuses a duplicate member, and `JSON.parse` keeps the last one silently; and the
 // platform requires the canonical bytes, which a browser cannot reproduce exactly (the platform's
-// encoder escapes characters `JSON.stringify` does not). What this reads is the parsed value.
+// encoder escapes characters `JSON.stringify` does not). What this reads is the parsed value. Every
+// other rule the platform applies to an envelope is applied here, the request reference's and the
+// snapshot identity's forms, a real observation instant and the nesting limit included.
 
 const ROOT_MEMBERS = [
   "context", "object_type", "operation_id", "refusal", "registry_schema", "registry_sha256",
@@ -37,8 +39,14 @@ const PUBLISHERS = Object.freeze({
 
 const UPSTREAM_HEALTH = Object.freeze(["current", "stale", "unreachable"]);
 const SHA256 = /^[0-9a-f]{64}$/;
+// `RequireRequestRef`: an opaque lowercase token of letters, digits, `_` and `-`, at most 128 characters.
+const REQUEST_REF = /^[a-z0-9_-]{1,128}$/;
+// `RequireIdentifier`: printable ASCII, at most 256 characters, not blank.
+const IDENTIFIER = /^[\x20-\x7e]{1,256}$/;
 // The platform writes `DateTimeOffset.ToString("O")` of a UTC instant: seven fractional digits and Z.
-const OBSERVED_AT = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{7}Z$/;
+const OBSERVED_AT = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})\.\d{7}Z$/;
+// `JsonDocumentOptions.MaxDepth` in `ParseAndVerify`.
+const MAX_DEPTH = 32;
 
 const isObject = (value) => value !== null && typeof value === "object" && !Array.isArray(value);
 
@@ -56,6 +64,35 @@ function nonEmptyString(value) {
   return typeof value === "string" && value.length > 0;
 }
 
+/** The nesting depth of a parsed value, counting each object and array (a scalar is 0). */
+function depthOf(value) {
+  if (value === null || typeof value !== "object") return 0;
+  const children = Array.isArray(value) ? value : Object.values(value);
+  let deepest = 0;
+  for (const child of children) {
+    const depth = depthOf(child);
+    if (depth > deepest) deepest = depth;
+    if (deepest >= MAX_DEPTH) break;
+  }
+  return 1 + deepest;
+}
+
+/** A real calendar instant in the platform's form, never `DateTimeOffset`'s default. */
+function isObservedAt(value) {
+  if (typeof value !== "string") return false;
+  const match = OBSERVED_AT.exec(value);
+  if (!match) return false;
+  const [, year, month, day, hour, minute, second] = match.map(Number);
+  if (year < 1) return false;
+  if (year === 1 && month === 1 && day === 1 && hour === 0 && minute === 0 && second === 0) return false;
+  // setUTCFullYear, not Date.UTC, which reads years 0 to 99 as 1900 to 1999.
+  const instant = new Date(0);
+  instant.setUTCFullYear(year, month - 1, day);
+  instant.setUTCHours(hour, minute, second, 0);
+  return instant.getUTCFullYear() === year && instant.getUTCMonth() === month - 1 && instant.getUTCDate() === day &&
+    instant.getUTCHours() === hour && instant.getUTCMinutes() === minute && instant.getUTCSeconds() === second;
+}
+
 /**
  * Reads one parsed envelope against the contract.
  *
@@ -71,6 +108,7 @@ export function readV3Envelope(value, contract, expected = {}) {
     return fail("no contract to read the envelope against");
   }
 
+  if (depthOf(value) > MAX_DEPTH) return fail(`the envelope nests deeper than ${MAX_DEPTH}`);
   let problem = exactMembers(value, ROOT_MEMBERS, "the envelope");
   if (problem) return fail(problem);
   if (value.schema !== contract.envelope_schema) return fail("unexpected schema");
@@ -80,7 +118,9 @@ export function readV3Envelope(value, contract, expected = {}) {
   if (value.registry_sha256 !== contract.registry_sha256) {
     return fail("the envelope is not bound to the reviewed registry");
   }
-  if (!nonEmptyString(value.request_ref)) return fail("request_ref is not a string");
+  if (typeof value.request_ref !== "string" || !REQUEST_REF.test(value.request_ref)) {
+    return fail("request_ref is not an opaque bounded reference");
+  }
   if (!nonEmptyString(value.operation_id)) return fail("operation_id is not a string");
   if (expected.operation !== undefined && value.operation_id !== expected.operation) {
     return fail(`the envelope answers ${value.operation_id}, not ${expected.operation}`);
@@ -100,14 +140,17 @@ export function readV3Envelope(value, contract, expected = {}) {
   if (typeof context.provisional !== "boolean") return fail("provisional is not a boolean");
   problem = exactMembers(context.snapshot, SNAPSHOT_MEMBERS, "the snapshot");
   if (problem) return fail(problem);
-  if (!nonEmptyString(context.snapshot.snapshot_id)) return fail("snapshot_id is not a string");
+  if (typeof context.snapshot.snapshot_id !== "string" || !IDENTIFIER.test(context.snapshot.snapshot_id) ||
+      context.snapshot.snapshot_id.trim().length === 0) {
+    return fail("snapshot_id is not a bounded printable identifier");
+  }
   if (typeof context.snapshot.snapshot_sha256 !== "string" || !SHA256.test(context.snapshot.snapshot_sha256)) {
     return fail("snapshot_sha256 is not a digest");
   }
   problem = exactMembers(context.freshness, FRESHNESS_MEMBERS, "the freshness");
   if (problem) return fail(problem);
-  if (typeof context.freshness.observed_at !== "string" || !OBSERVED_AT.test(context.freshness.observed_at)) {
-    return fail("observed_at is not the platform's UTC timestamp");
+  if (!isObservedAt(context.freshness.observed_at)) {
+    return fail("observed_at is not a real instant in the platform's UTC form");
   }
   if (!UPSTREAM_HEALTH.includes(context.freshness.upstream_health)) return fail("unknown upstream health");
 

@@ -107,6 +107,9 @@ public static class V3Verdicts
         [Answer, AnswerWithEnrichment, Point, Clarify, Refuse, Split],
         StringComparer.Ordinal);
 
+    /// <summary>The closed verdict set, in declaration order, for a census to publish rather than restate.</summary>
+    public static IReadOnlyList<string> All { get; } = Array.AsReadOnly(new[] { Answer, AnswerWithEnrichment, Point, Clarify, Refuse, Split });
+
     public static bool IsKnown(string verdict) => Known.Contains(verdict);
 }
 

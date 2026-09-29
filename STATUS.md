@@ -9,7 +9,7 @@ every pull request that changes what is served, what is next or what is blocked.
   (`eng/test-fast.ps1`): 3,038 tests, 3,037 pass, 1 skipped. Ingest suite: green on CI for PR #760
   (the CI `dotnet` job runs the whole solution on every pull request, about 7 min on the runner;
   green for PR #762);
-  locally about 15 min. 782 web tests pass. CI's web job can flake in `keyboard-walk.test.mjs`
+  locally about 15 min. 785 web tests pass. CI's web job can flake in `keyboard-walk.test.mjs`
   ("browser debugger never answered"); rerunning the failed job is the fix.
 - Driver: Claude Opus 5.5 since 2026-09-29 (the Fable 5.1 driver ran out of tokens on 2026-09-28
   after PR #757; the user default model is now `claude-opus-5-5`).
@@ -235,16 +235,19 @@ schema's `parameters` shape, and whose call runs the same dispatch the REST rout
 endpoint test proves it for all twenty-three. The launch-contract line "REST and MCP derive identical
 envelopes from the registry" is the owner's to tick.
 
-Web: 28 React components, 782 tests. Screens render fixtures; no page calls `/api/v3` yet. PR #763
+Web: 28 React components, 785 tests. Screens render fixtures; no page calls `/api/v3` yet. PR #763
 adds the first code that can: `web/scripts/v3-envelope.mjs`, a strict reader that mirrors
 `V3EnvelopeJson.ParseAndVerify` (exact closed member sets, the reviewed registry digest, one branch
 with a consistent verdict and context status, the result bound to the operation's schema and object
 types, a registry refusal code with every mandatory payload field, the `anchor_not_in_version`
-rule; it cannot see duplicate members or non-canonical bytes and says so), and
+rule, the request reference's and snapshot identity's forms, a real observation instant that is not
+the default, and the nesting limit of 32; it cannot see duplicate members or non-canonical bytes and
+says so), and
 `web/scripts/v3-client.mjs`, which asks one served operation by a same-origin POST whose parameters
 travel in the body alone (no credentials, no cache, no referrer, redirects refused, no retry,
 nothing logged) and returns the renderable states (`success`, `refusal`, `transport_failure` with
-the problem code, `invalid_envelope` with the reason). The reader holds no copy of the registry: it
+the problem code, or `network_error` when the connection fails before or while the body arrives,
+`invalid_envelope` with the reason; a cancellation rejects as one). The reader holds no copy of the registry: it
 reads the `contract` block of a new census, `schemas/v3-platform/envelope-samples.json`, which the
 platform renders from the reviewed registry beside four whole envelopes the real handler sent
 (coverage answer, the `ask` card, `no_corpus_mounted`, a refusal with a payload), each verified by

@@ -85,9 +85,7 @@ public sealed class V3EnvelopeSamplesTests
             ["registry_schema"] = V3OperationRegistry.Schema,
             ["registry_sha256"] = registry.Sha256,
             ["refusal_schema"] = V3OperationRegistry.RefusalSchema,
-            ["verdicts"] = new JsonArray(
-                V3Verdicts.Answer, V3Verdicts.AnswerWithEnrichment, V3Verdicts.Point,
-                V3Verdicts.Clarify, V3Verdicts.Refuse, V3Verdicts.Split),
+            ["verdicts"] = new JsonArray(V3Verdicts.All.Select(static verdict => (JsonNode)verdict).ToArray()),
             ["operations"] = new JsonArray(registry.Operations.Select(static operation => (JsonNode)new JsonObject
             {
                 ["operation_id"] = operation.OperationId,

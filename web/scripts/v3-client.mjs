@@ -26,6 +26,27 @@ export const SERVED_OPERATIONS = Object.freeze([
 const PROBLEM_MEDIA_TYPE = "application/problem+json";
 const JSON_MEDIA_TYPE = "application/json";
 
+/**
+ * Reads the whole body as text. A cancellation stays a cancellation; any other failure while the
+ * body arrives (a reset connection) is the network's, not a malformed answer's.
+ */
+async function bodyText(response) {
+  try {
+    return { text: await response.text() };
+  } catch (error) {
+    if (error?.name === "AbortError") throw error;
+    return { failure: { state: "transport_failure", code: "network_error" } };
+  }
+}
+
+function parseJson(text) {
+  try {
+    return { value: JSON.parse(text) };
+  } catch {
+    return { invalid: true };
+  }
+}
+
 function mediaType(response) {
   const value = response.headers.get("content-type") ?? "";
   return value.split(";")[0].trim().toLowerCase();
@@ -68,13 +89,11 @@ export async function askV3(operation, parameters, options) {
 
   const type = mediaType(response);
   if (type === PROBLEM_MEDIA_TYPE) {
-    let code = "unknown_problem";
-    try {
-      const problem = await response.json();
-      if (typeof problem?.code === "string") code = problem.code;
-    } catch {
-      // A problem body that is not JSON still names a transport failure; its code is unknown.
-    }
+    const read = await bodyText(response);
+    if (read.failure) return read.failure;
+    // A problem body that is not JSON still names a transport failure; its code is unknown.
+    const problem = parseJson(read.text).value;
+    const code = typeof problem?.code === "string" ? problem.code : "unknown_problem";
     return { state: "transport_failure", code, status: response.status };
   }
 
@@ -85,14 +104,12 @@ export async function askV3(operation, parameters, options) {
     };
   }
 
-  let body;
-  try {
-    body = await response.json();
-  } catch {
-    return { state: "invalid_envelope", reason: "the answer is not JSON" };
-  }
+  const received = await bodyText(response);
+  if (received.failure) return received.failure;
+  const parsed = parseJson(received.text);
+  if (parsed.invalid) return { state: "invalid_envelope", reason: "the answer is not JSON" };
 
-  const read = readV3Envelope(body, contract, { operation, objectType });
+  const read = readV3Envelope(parsed.value, contract, { operation, objectType });
   return read.ok
     ? { state: read.state, envelope: read.envelope }
     : { state: "invalid_envelope", reason: read.reason };

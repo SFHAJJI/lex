@@ -47,7 +47,7 @@ test("each departure from the platform's envelope is refused, with its own reaso
     ["a jurisdiction that contradicts the publisher", success, (e) => { e.context.jurisdiction = "eu"; }, /jurisdiction does not match/],
     ["timeline semantics that contradict the publisher", success, (e) => { e.context.timeline_semantics = "official_consolidation_state"; }, /timeline semantics do not match/],
     ["a snapshot digest that is not one", success, (e) => { e.context.snapshot.snapshot_sha256 = "x"; }, /not a digest/],
-    ["an observation time in another form", success, (e) => { e.context.freshness.observed_at = "2026-09-17"; }, /UTC timestamp/],
+    ["an observation time in another form", success, (e) => { e.context.freshness.observed_at = "2026-09-17"; }, /real instant/],
     ["an unknown upstream health", success, (e) => { e.context.freshness.upstream_health = "fine"; }, /unknown upstream health/],
     ["a result schema of another operation", success, (e) => { e.result.schema = "lex-v3-search-result/1"; }, /result schema is not bound/],
     ["an object type the operation does not declare", success, (e) => { e.result.object_type = "quote"; }, /object type is not bound/],
@@ -57,14 +57,48 @@ test("each departure from the platform's envelope is refused, with its own reaso
     ["a payload missing a mandatory field", withPayload, (e) => { delete e.refusal.helpful_payload.available_languages; }, /missing available_languages/],
     ["an empty payload", refusal, (e) => { e.refusal.helpful_payload = {}; }, /helpful payload/],
     ["another refusal schema", refusal, (e) => { e.refusal.schema = "lex-v3-refusal/2"; }, /refusal schema/],
+    // The rules the review of #763 found unheld: each is the platform's, and each is refused here.
+    ["another version", success, (e) => { e.version = "v4"; }, /unexpected version/],
+    ["another object type", success, (e) => { e.object_type = "answer"; }, /unexpected object_type/],
+    ["another registry schema", success, (e) => { e.registry_schema = "lex-v3-operation-registry/2"; }, /unexpected registry_schema/],
+    ["a request reference that is not opaque", success, (e) => { e.request_ref = "Not Opaque!"; }, /opaque bounded reference/],
+    ["a request reference over 128 characters", success, (e) => { e.request_ref = "a".repeat(129); }, /opaque bounded reference/],
+    ["an unregistered operation", success, (e) => { e.operation_id = "horoscope"; }, /not a registered one/],
+    ["an unknown publisher", success, (e) => { e.context.publisher = "de-bgbl"; }, /unknown publisher/],
+    ["a provisional flag that is not a boolean", success, (e) => { e.context.provisional = "no"; }, /provisional is not a boolean/],
+    ["a blank snapshot identity", success, (e) => { e.context.snapshot.snapshot_id = "   "; }, /bounded printable identifier/],
+    ["a snapshot identity outside printable ASCII", success, (e) => { e.context.snapshot.snapshot_id = "corpus-é"; }, /bounded printable identifier/],
+    ["a snapshot identity over 256 characters", success, (e) => { e.context.snapshot.snapshot_id = "s".repeat(257); }, /bounded printable identifier/],
+    ["a date the calendar does not have", success, (e) => { e.context.freshness.observed_at = "2026-02-30T00:00:00.0000000Z"; }, /real instant/],
+    ["a time the clock does not have", success, (e) => { e.context.freshness.observed_at = "2026-09-17T25:61:61.0000000Z"; }, /real instant/],
+    ["the default instant", success, (e) => { e.context.freshness.observed_at = "0001-01-01T00:00:00.0000000Z"; }, /real instant/],
+    ["a context member too many", success, (e) => { e.context.extra = 1; }, /the context does not have the exact closed member set/],
+    ["a snapshot member too many", success, (e) => { e.context.snapshot.extra = 1; }, /the snapshot does not have the exact closed member set/],
+    ["a freshness member too many", success, (e) => { e.context.freshness.extra = 1; }, /the freshness does not have the exact closed member set/],
+    ["a result member too many", success, (e) => { e.result.extra = 1; }, /the result does not have the exact closed member set/],
+    ["a refusal member too many", refusal, (e) => { e.refusal.extra = 1; }, /the refusal does not have the exact closed member set/],
+    ["a refusal whose status says success", refusal, (e) => { e.context.status = "success"; }, /refusal's context status is refusal/],
+    ["a value nested past the platform's limit", success, (e) => {
+      let node = {};
+      e.result.value.deep = node;
+      for (let index = 0; index < 40; index += 1) { node.next = {}; node = node.next; }
+    }, /nests deeper than 32/],
   ];
   for (const [what, base, mutate, reason] of cases) {
     const envelope = clone(base);
     mutate(envelope);
-    const read = readV3Envelope(envelope, contract, { operation: base.operation_id });
+    const read = readV3Envelope(envelope, contract, { operation: envelope.operation_id });
     assert.equal(read.ok, false, `${what} was read`);
     assert.match(read.reason, reason, what);
   }
+});
+
+test("an instant the platform can write is read, early years included", () => {
+  const envelope = clone(sample("coverage", "success").envelope);
+  envelope.context.freshness.observed_at = "0050-06-15T12:30:45.1234567Z";
+  assert.equal(readV3Envelope(envelope, contract).ok, true, readV3Envelope(envelope, contract).reason);
+  envelope.context.freshness.observed_at = "2024-02-29T23:59:59.9999999Z";
+  assert.equal(readV3Envelope(envelope, contract).ok, true, "a leap day");
 });
 
 test("the answer must be to the question asked", () => {
