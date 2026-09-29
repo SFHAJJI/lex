@@ -492,6 +492,25 @@ public sealed class LuxembourgIndexBuilderTests
         AssertTamperedDatabaseRejected(built, corpusRef, sql, expected);
     }
 
+    /// <summary>
+    /// The event log is a function of the states, and the reader recomputes it: a row whose digest,
+    /// number or key differs, an extra row, or a log emptied of its rows is refused even with the stamp
+    /// recomputed over the tampered table, so only the recompute can refuse it. (A non-null observation
+    /// time and any name but first_sighting are refused by the table's own checks.)
+    /// </summary>
+    [TestMethod]
+    [DataRow("UPDATE events SET detail_json='{\"state_sha256\":\"0000000000000000000000000000000000000000000000000000000000000000\"}'", DisplayName = "a wrong state digest")]
+    [DataRow("UPDATE events SET seq=2", DisplayName = "a renumbered event")]
+    [DataRow("UPDATE events SET key='[\"other-work\",\"2024-01-01\",\"https://example.invalid/e\",\"fra\"]'", DisplayName = "a rewritten key")]
+    [DataRow("INSERT INTO events VALUES(2,'state','[\"extra\"]','first_sighting',NULL,'{}')", DisplayName = "an extra event")]
+    [DataRow("DELETE FROM events", DisplayName = "an emptied log")]
+    public async Task StrictReaderRejectsAnEventLogThatIsNotTheGenesisLogOfItsStates(string sql)
+    {
+        var (built, corpusRef) = await BuildStateIndexAsync();
+
+        AssertRecomputedStateTamperRejected(built, corpusRef, connection => Execute(connection, sql), "not the genesis log of its states");
+    }
+
     [TestMethod]
     public async Task StrictReaderRejectsAnArticleClaimedByTwoStates()
     {

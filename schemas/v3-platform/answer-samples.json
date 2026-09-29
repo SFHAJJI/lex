@@ -765,7 +765,7 @@
       "object_type": "event",
       "scenario": "the whole log from its start: a genesis log, one first_sighting per held state",
       "answer": {
-        "delivery": "cursor polling, at least once: a request with the same cursor answers the same events again, so a reader deduplicates by seq within log_id; next_after is always the cursor to poll next; there is no push delivery and no subscription (Decision 93)",
+        "delivery": "cursor polling, at least once: while this index is mounted a request with the same cursor answers the same events again, so a reader deduplicates by seq within log_id; next_after is always the cursor to poll next; a new build starts a new log, whose log_id differs and under which a cursor of this log refuses snapshot_unknown; there is no push delivery and no subscription (Decision 93)",
         "event_names": {
           "in_this_log": [
             "first_sighting"
@@ -784,7 +784,7 @@
             "future_state_scheduled",
             "future_state_activated"
           ],
-          "note": "the Stage 4 registry names thirteen events; this pipeline mints the twelve listed and never the coverage event (B42 finding 5.2: a gate must not be excused by an event the same pipeline mints); in_this_log names those this log holds"
+          "note": "the Stage 4 registry names thirteen events; mintable lists the twelve this pipeline may mint, never the coverage event (B42 finding 5.2: a gate must not be excused by an event the same pipeline mints); this build mints first_sighting only, because the others need a predecessor build to compare against; in_this_log names those this log holds"
         },
         "events": [
           {
@@ -832,7 +832,7 @@
           }
         ],
         "requested_event": null,
-        "scope": "the event log of the mounted Luxembourg index: an append-only list numbered from 1, polled by cursor; this build\u0027s log is a genesis log (one observation, no predecessor), so it holds one first_sighting per held state and nothing else",
+        "scope": "the event log of the mounted Luxembourg index: a list numbered from 1, polled by cursor, append-only while this index is mounted; this build\u0027s log is a genesis log (one observation, no predecessor), so it holds one first_sighting per held state and nothing else",
         "silence_note": "an empty page says this log holds no further event; it says nothing about whether the publisher changed anything or whether acquisition ran: this mount holds no upstream health and no build time, and every envelope\u0027s freshness names upstream health stale"
       }
     },

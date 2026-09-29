@@ -3672,12 +3672,13 @@ internal sealed class V3CorpusMount : IDisposable
     public const int EventsMaxRows = 200;
 
     internal const string EventsScope =
-        "the event log of the mounted Luxembourg index: an append-only list numbered from 1, polled by cursor; " +
+        "the event log of the mounted Luxembourg index: a list numbered from 1, polled by cursor, append-only while this index is mounted; " +
         "this build's log is a genesis log (one observation, no predecessor), so it holds one first_sighting per held state and nothing else";
 
     internal const string EventsDeliveryNote =
-        "cursor polling, at least once: a request with the same cursor answers the same events again, so a reader deduplicates by seq within log_id; " +
-        "next_after is always the cursor to poll next; there is no push delivery and no subscription (Decision 93)";
+        "cursor polling, at least once: while this index is mounted a request with the same cursor answers the same events again, so a reader " +
+        "deduplicates by seq within log_id; next_after is always the cursor to poll next; a new build starts a new log, whose log_id differs and " +
+        "under which a cursor of this log refuses snapshot_unknown; there is no push delivery and no subscription (Decision 93)";
 
     internal const string EventsGenesisNote =
         "this log comes from one observation with no predecessor, so it holds only first_sighting; first_sighting means first present in this log " +
@@ -3689,8 +3690,9 @@ internal sealed class V3CorpusMount : IDisposable
         "this mount holds no upstream health and no build time, and every envelope's freshness names upstream health stale";
 
     internal const string EventNamesNote =
-        "the Stage 4 registry names thirteen events; this pipeline mints the twelve listed and never the coverage event (B42 finding 5.2: a gate must not " +
-        "be excused by an event the same pipeline mints); in_this_log names those this log holds";
+        "the Stage 4 registry names thirteen events; mintable lists the twelve this pipeline may mint, never the coverage event (B42 finding 5.2: a " +
+        "gate must not be excused by an event the same pipeline mints); this build mints first_sighting only, because the others need a predecessor " +
+        "build to compare against; in_this_log names those this log holds";
 
     internal const string EventsForeignCursorWhatWouldAnswer =
         "a cursor from this log (its log_id is the mounted index digest), or no cursor to read this log from its first event";

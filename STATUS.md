@@ -41,8 +41,10 @@ events with their state's permalink and stable coordinate, `has_more` and `next_
 cursor to poll next), the log block (`basis: genesis`, `predecessor_index_sha256: null`,
 `observations_compared: 0`, count, last seq), the delivery rule (cursor polling, at least once,
 deduplicate by seq within log id, no push: Decision 93), what `first_sighting` does not say, that
-silence is not upstream health, the names this pipeline mints and those this log holds, and what is
-not held. A cursor from another log refuses `snapshot_unknown` (its first producer) rather than
+silence is not upstream health, the twelve names this pipeline may mint (this build mints
+`first_sighting` only; the others need a predecessor build) and those this log holds, and what is
+not held. Append-only and "the same cursor answers the same events" hold while one index is
+mounted, and the answer says so: a new build starts a new log whose cursors are new. A cursor from another log refuses `snapshot_unknown` (its first producer) rather than
 being read against this one; a sequence number beyond the log's last is a request-schema failure.
 `answer_drift` (optional `identifier`, refusing as `dossier` refuses; `after`; `limit`) enumerates
 the past dated answers the log's `validity_revised` and `interval_closed` events invalidated; a

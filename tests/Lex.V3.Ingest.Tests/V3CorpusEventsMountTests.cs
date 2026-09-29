@@ -98,6 +98,8 @@ public sealed class V3CorpusEventsMountTests
             new[] { "first_sighting" },
             body.GetProperty("event_names").GetProperty("in_this_log").EnumerateArray().Select(static value => value.GetString()).ToArray());
         StringAssert.Contains(body.GetProperty("delivery").GetString(), "at least once");
+        StringAssert.Contains(body.GetProperty("delivery").GetString(), "a new build starts a new log");
+        StringAssert.Contains(body.GetProperty("event_names").GetProperty("note").GetString(), "this build mints first_sighting only");
         StringAssert.Contains(body.GetProperty("silence_note").GetString(), "says nothing about whether the publisher changed anything");
         CollectionAssert.AreEqual(
             new[] { "observation_times", "revision_events", "work_level_events", "upstream_health" },
