@@ -1,14 +1,14 @@
 # Lex V3 status
 
-Updated 2026-09-27 by the driver. This file replaces the issue-comment ledgers. It is rewritten in
+Updated 2026-09-29 by the driver. This file replaces the issue-comment ledgers. It is rewritten in
 every pull request that changes what is served, what is next or what is blocked.
 
 ## Heads
 
-- `v3/integration`: `80d6587a` (2026-09-28, PR #757 merged). Build 45 s. Fast lane
-  (`eng/test-fast.ps1`): 3,032 tests pass, 1 skipped (3,033 with PR #758). Ingest suite: green on CI for PR #757
-  (the CI `dotnet` job runs the whole solution on every pull request, about 6 min on the runner);
-  locally about 15 min. 771 web tests pass.
+- `v3/integration`: `cd478f3c` (2026-09-29, PR #758 merged). Build 45 s. Fast lane
+  (`eng/test-fast.ps1`): 3,034 tests, 3,033 pass, 1 skipped (unchanged by PR #759, which rewrites two
+  tests). Ingest suite: green on CI for PR #758 (the CI `dotnet` job runs the whole solution on every
+  pull request, about 6 min on the runner); locally about 15 min. 771 web tests pass.
 - Driver: Claude Opus 5.5 since 2026-09-29 (the Fable 5.1 driver ran out of tokens on 2026-09-28
   after PR #757; the user default model is now `claude-opus-5-5`).
 - Plan: `C:\lex-v3\V3-FINISH-PLAN-2026-09-27.md` (owner's copy). Decision 94 (one driver, one queue,
@@ -23,8 +23,31 @@ hash-pinned permalink verified against the state digest the index holds; a work 
 stable coordinate answers the current digests), `relations` (PR #753: the one edge table in both
 directions, `cites` edges only, what `citation` and `cited_by` serve as one ordered, paged list),
 `evidence_bundle` (PR #755), `classification` and `manifestation` (PR #756), `status_on` and
-`browse` (PR #757). Without a mounted corpus every route answers `no_corpus_mounted`. EU serves
-`resolve` only.
+`browse` (PR #757), and `ask` as the contained assistant (PR #759). Without a mounted corpus every
+route answers `no_corpus_mounted`. EU serves `resolve` only.
+
+`ask` (PR #759) answers the containment and nothing else (Decisions 51 and 91, S4-A05): every
+request, whatever the question, is a success envelope under the `point` verdict whose result is a
+`handoff_card` carrying the typed presentation result `assistant_v3_unavailable` (not a refusal
+code; the registry stays at twenty), the containment and its end condition (the `answer_dossier/1`
+and advice-boundary slices reviewed and integrated), `model_gloss: disabled`, and the deterministic
+operations that answer from held law, in resolver-first order: `resolve`, `search` (with the
+languages this mount holds searchable text in), `as_of`, `evidence_bundle`, each with its route, the
+parameters its reviewed request schema requires (read from the schema) and what it answers. The
+request schema is `question` (a non-blank string) and nothing else; the question is not read, stored
+or echoed, so the card is byte-identical for every question. No model is called and no publisher is
+contacted. The same card over MCP (`tools/call ask`). Decisions taken by the driver, reversible: the
+verdict is `point` (the closed set's only verdict that sends the reader elsewhere; `answer` would
+claim held law, `refuse` needs a registry code); the host now takes the verdict from the result
+(every other operation still answers `answer`); `ask` refuses `no_corpus_mounted` without the
+Luxembourg index, as every served route does; `localization_unavailable` (the other Decision 91
+result) is a surface concern of chrome locales and is not produced by the API. Two guards changed
+meaning and say so: `AssistantContainmentTests.TheLegacyAssistantRouteIsStillDisabled` asserted
+that `ask` had no route; it now asserts that the route is the containment (five questions, one
+byte-identical card, the question never echoed, only served operations pointed to), and
+`ScopeLineQuestionTests` puts each of the eighteen scope-line questions to the card builder and
+fails on the day `ask` answers any of them with anything else (S4-A13). The owner may read the
+first guard as "no route until S4-A04 and S4-A05"; if so, say the word and the route is removed.
 
 `status_on` and `browse` (PR #757) read the `work_facts` table too. `status_on` takes
 `as_of`'s request (`identifier`, `date`, optional `language`), selects the state as `as_of` does and
@@ -103,8 +126,8 @@ profession" runs together; the token stream the composer could render from is in
 the reading view's own provision-level one (two producers, two declared key sets) and the catalog's
 two text examples show the producer's fields.
 
-Registered and not served: `ask`, `answer_drift`, `as_observed`, `concepts`, `events`,
-`knowable_on`, `transposition`. Since this pull request a request for one of them is the typed
+Registered and not served: `answer_drift`, `as_observed`, `concepts`, `events`,
+`knowable_on`, `transposition`. Since PR #758 a request for one of them is the typed
 transport failure `operation_not_served` (HTTP 404, `application/problem+json`, below the envelope
 like every transport failure), which tells a registered operation with no route apart from a path
 nothing names (`unknown_route`, still the answer for a typo, a query string, a trailing segment or
@@ -112,9 +135,7 @@ a case variant); an MCP `tools/call` naming one says "registered operation this 
 serve" in its invalid-params message; `coverage` names them and now says what a request returns.
 Decision taken by the driver, reversible: a transport failure rather than an envelope refusal,
 because the registry has no refusal code for "operation not served" and inventing one would change
-the reviewed registry; the owner can ask for an envelope answer instead. `ask` has no route yet, so today it answers `operation_not_served` like the other six; the
-launch contract wants it to answer the typed `assistant_v3_unavailable` result inside the envelope
-(Decision 91). Survey of 2026-09-28 (read-only): the index-table group of four
+the reviewed registry; the owner can ask for an envelope answer instead. Survey of 2026-09-28 (read-only): the index-table group of four
 needed a new index table over Stage 3 inputs the ingest already holds (`TypedAssertions`: in-force status and dates, `typeDocument`, `isEmbodiedBy`,
 `userFormat`), which bumps the index schema; `concepts`, `transposition`, `as_observed`,
 `knowable_on`, `events` and `answer_drift` need data the ingest does not produce.
@@ -126,7 +147,7 @@ the platform's 1 MiB ceiling is 413 before parsing; no server-initiated stream i
 per served REST operation, named by its operation id, whose `inputSchema` is the reviewed request
 schema's `parameters` shape, and whose call runs the same dispatch the REST route runs
 (`V3ApiHandler.ExecuteFor`), so the two transports answer one envelope for one request; the
-endpoint test proves it for all twenty. The launch-contract line "REST and MCP derive identical
+endpoint test proves it for all twenty-one. The launch-contract line "REST and MCP derive identical
 envelopes from the registry" is the owner's to tick.
 
 Web: 28 React components, 771 tests; no call to `/api/v3` yet. Screens render fixtures.
@@ -289,6 +310,11 @@ Web: 28 React components, 771 tests; no call to `/api/v3` yet. Screens render fi
   command recorded on PR #750, logging to `build.log`; with this pull request merged the run also
   acquires the GDPR Formex package (about three more requests per held expression). The run
   record (wire counts, refusals, five digests, `resolve` from the mount) is still item 1.
+- **Second attempt: started 2026-09-29 17:27:20 UTC from another session, in progress when PR #759
+  was written.** Same command and custody root, the Release tool built in the driver's worktree at
+  17:21 UTC from the source PR #758 merged (it held the eight renderer sources; 3,394 custody files
+  at 18:05 UTC, no milestone line yet). Its record goes into the pull request after its `EXIT`
+  line; no publisher traffic is started by the driver before then.
 
 ## Next, in order
 
@@ -317,17 +343,30 @@ Web: 28 React components, 771 tests; no call to `/api/v3` yet. Screens render fi
    run).
 4. Serve the unserved operations for Luxembourg (`verify` and `relations` served by PR #753, MCP
    over streamable HTTP by PR #754, `evidence_bundle` by PR #755, `classification` and
-   `manifestation` by PR #756, `status_on` and `browse` by PR #757; seven remain, all needing data
-   the ingest does not produce or, for `ask`, deferred by design; a request to an unserved operation now answers the transport
-   failure `operation_not_served`, PR #758). Still open for launch: `LAUNCH-CONTRACT.md` wants each of
-   the seven either served or refusing with a typed reason inside the envelope, so they need routes
-   that refuse (`ask` with `assistant_v3_unavailable`), not only data. Driver's next small slice.
+   `manifestation` by PR #756, `status_on` and `browse` by PR #757; a request to an unserved
+   operation answers the transport failure `operation_not_served`, PR #758; `ask` answers the
+   contained `assistant_v3_unavailable` card, PR #759). Six remain, all needing data the ingest does
+   not produce. `events` and `answer_drift` are launch-contract lines of their own ("append-only log,
+   cursor polling at-least-once, `answer_drift`"), so they must be served, not refused: next, the
+   driver designs the event log over what a build holds (a single build has no revision to report,
+   so the design question is what the first event is). For the other four (`as_observed`,
+   `knowable_on`, `concepts`, `transposition`) there is an owner question below.
 5. EU parity: every temporal and search operation from the EU index; French expressions.
 6. Wire the eight launch screens to `/api/v3`; journeys J1 to J8 in a real browser.
 7. Release pipeline: build, sign, image, zero-traffic deploy, probes. Then acceptance and promotion.
 
 ## Blocked or waiting on the owner
 
+- Four registered operations with no data (`as_observed`, `knowable_on`, `concepts`,
+  `transposition`): the launch contract wants each "served or refusing with a typed reason its
+  capability manifest states". None of the twenty refusal codes means "this mount does not produce
+  that data" (the nearest, `snapshot_unknown`, `retrieval_mode_unavailable`, `not_transposable`,
+  each says something else). Options: (a) keep the typed transport failure `operation_not_served`
+  and have the capability manifest state, per operation, that it is not served and which data would
+  serve it; (b) a twenty-first refusal code, which is a versioned registry change and needs its own
+  ruling on Decision 91's "stays at its twenty"; (c) build the data (`transposition` from the
+  Legilux `jolux:transposes` relations is the nearest). The driver's default is (a); nothing is built
+  for it before the owner answers.
 - Codex role: weekly cold read plus the two release gates, or none.
 - Run authorisation per run: Luxembourg population; French EU expressions; the complete Stage 7 run.
   The bounded first-mount run is authorised.

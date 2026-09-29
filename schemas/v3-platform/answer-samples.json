@@ -345,6 +345,68 @@
       }
     },
     {
+      "operation": "ask",
+      "object_type": "handoff_card",
+      "scenario": "any question: the contained assistant\u0027s one card, the same for every question",
+      "answer": {
+        "containment": {
+          "decisions": [
+            "51",
+            "91"
+          ],
+          "model_gloss": "disabled",
+          "reason": "the assistant is contained: no model answers, retrieves, reranks or authors authoritative text, and the legacy assistant route stays disabled until the answer_dossier/1 (S4-A04) and advice-boundary (S4-A05) slices are independently reviewed and integrated; the deterministic operations below answer from held law"
+        },
+        "deterministic_actions": [
+          {
+            "answers": "the work an exact identifier names (ELI, CELEX, publisher identifier or permalink), or identifier_unknown",
+            "languages": null,
+            "operation_id": "resolve",
+            "required_parameters": [
+              "identifier"
+            ],
+            "route": "/api/v3/resolve"
+          },
+          {
+            "answers": "the provisions whose publisher wording matches the query, strict lane before relaxed, per language",
+            "languages": [
+              "fra"
+            ],
+            "operation_id": "search",
+            "required_parameters": [
+              "query",
+              "language"
+            ],
+            "route": "/api/v3/search"
+          },
+          {
+            "answers": "the state of a work on a civil date, or ambiguous_version / no_version_for_date rather than a silent choice",
+            "languages": null,
+            "operation_id": "as_of",
+            "required_parameters": [
+              "identifier",
+              "date"
+            ],
+            "route": "/api/v3/as_of"
+          },
+          {
+            "answers": "the text of a state\u0027s articles with text_sha256, body_sha256, official source and permalink, rights enforced",
+            "languages": null,
+            "operation_id": "evidence_bundle",
+            "required_parameters": [
+              "identifier",
+              "date"
+            ],
+            "route": "/api/v3/evidence_bundle"
+          }
+        ],
+        "presentation_note": "a typed presentation result of ask (Decisions 51 and 91), not a refusal code: the closed refusal registry stays at its twenty codes, and this is neither an answer from held law nor a refusal",
+        "presentation_result": "assistant_v3_unavailable",
+        "question_note": "the question is checked to be a non-blank string and is not read, stored or echoed; nothing in this answer depends on it",
+        "question_read": false
+      }
+    },
+    {
       "operation": "browse",
       "object_type": "work_record",
       "scenario": "the whole mount, no filter: one page of the held works",
@@ -376,7 +438,7 @@
         "verified_by": {
           "corpus_sha256": "\u003Cvaries-per-run\u003E",
           "index_sha256": "\u003Cvaries-per-run\u003E",
-          "registry_sha256": "b1129c578dcc0d277311694feaa2829fbb4711bcb51243f281f070d9260717d8"
+          "registry_sha256": "27c535830617519a7cb4b1395ba1e448fd07e7dcda659b36cf9750a2b06e3de4"
         },
         "works": [
           {
@@ -494,7 +556,7 @@
         "verified_by": {
           "corpus_sha256": "\u003Cvaries-per-run\u003E",
           "index_sha256": "\u003Cvaries-per-run\u003E",
-          "registry_sha256": "b1129c578dcc0d277311694feaa2829fbb4711bcb51243f281f070d9260717d8"
+          "registry_sha256": "27c535830617519a7cb4b1395ba1e448fd07e7dcda659b36cf9750a2b06e3de4"
         },
         "work_key": "loi-1991-08-10-n3"
       }
@@ -594,7 +656,7 @@
           "corpus_sha256": "\u003Cvaries-per-run\u003E",
           "index_sha256": "\u003Cvaries-per-run\u003E",
           "publisher": "lu-legilux",
-          "registry_sha256": "b1129c578dcc0d277311694feaa2829fbb4711bcb51243f281f070d9260717d8"
+          "registry_sha256": "27c535830617519a7cb4b1395ba1e448fd07e7dcda659b36cf9750a2b06e3de4"
         },
         "not_held": [
           {
@@ -622,7 +684,6 @@
           "not_served_operations": [
             "answer_drift",
             "as_observed",
-            "ask",
             "concepts",
             "events",
             "knowable_on",
@@ -633,6 +694,7 @@
           "served_operations": [
             "article_history",
             "as_of",
+            "ask",
             "browse",
             "changes_in_period",
             "citation",
@@ -1609,7 +1671,7 @@
         "verified_by": {
           "corpus_sha256": "\u003Cvaries-per-run\u003E",
           "index_sha256": "\u003Cvaries-per-run\u003E",
-          "registry_sha256": "b1129c578dcc0d277311694feaa2829fbb4711bcb51243f281f070d9260717d8"
+          "registry_sha256": "27c535830617519a7cb4b1395ba1e448fd07e7dcda659b36cf9750a2b06e3de4"
         },
         "work_key": "loi-1991-08-10-n3"
       }
@@ -1692,7 +1754,7 @@
         "verified_by": {
           "corpus_sha256": "\u003Cvaries-per-run\u003E",
           "index_sha256": "\u003Cvaries-per-run\u003E",
-          "registry_sha256": "b1129c578dcc0d277311694feaa2829fbb4711bcb51243f281f070d9260717d8"
+          "registry_sha256": "27c535830617519a7cb4b1395ba1e448fd07e7dcda659b36cf9750a2b06e3de4"
         },
         "work_key": "loi-1991-08-10-n3"
       }
@@ -1768,7 +1830,7 @@
         "verified_by": {
           "corpus_sha256": "\u003Cvaries-per-run\u003E",
           "index_sha256": "\u003Cvaries-per-run\u003E",
-          "registry_sha256": "b1129c578dcc0d277311694feaa2829fbb4711bcb51243f281f070d9260717d8"
+          "registry_sha256": "27c535830617519a7cb4b1395ba1e448fd07e7dcda659b36cf9750a2b06e3de4"
         },
         "work_key": "loi-1991-08-10-n3"
       }
@@ -1833,7 +1895,7 @@
         "verified_by": {
           "corpus_sha256": "\u003Cvaries-per-run\u003E",
           "index_sha256": "\u003Cvaries-per-run\u003E",
-          "registry_sha256": "b1129c578dcc0d277311694feaa2829fbb4711bcb51243f281f070d9260717d8"
+          "registry_sha256": "27c535830617519a7cb4b1395ba1e448fd07e7dcda659b36cf9750a2b06e3de4"
         },
         "what_would_answer": [
           "new_official_observation"

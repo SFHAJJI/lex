@@ -305,6 +305,7 @@ public sealed class V3AnswerSamplesTests
             await DriveAsync(mount, "manifestation", "the work, in the language it is held in: the publisher's manifestations, the retained one marked", new { parameters.identifier, parameters.language }),
             await DriveAsync(mount, "status_on", "the same request as as_of: the publisher's force assertions beside the state, none asserted for this act", parameters),
             await DriveAsync(mount, "browse", "the whole mount, no filter: one page of the held works", new { }),
+            await DriveAsync(mount, "ask", "any question: the contained assistant's one card, the same for every question", new { question = "Can I be fired while on sick leave?" }),
             // `coverage` asks about the mount rather than about a work, so it takes no identifier and no
             // date. It is sampled because its reader is the next one built against a captured answer, and
             // because that reader today requires seventeen paths of which the platform's sample carries

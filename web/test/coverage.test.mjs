@@ -684,9 +684,12 @@ test("the operations census adds up, and says so where it does not", () => {
     () => readCoverage(mutate(whole, (a) => { a.operations.registered = 26; })),
     new RegExp(`${served} served and ${unrouted} unrouted operations are listed against 26 registered`),
   );
+  // An operation with no route, taken from the answer's own list so a route added later does not
+  // leave this test naming an operation that has one.
+  const unroutedOne = whole.operations.not_served_operations[0];
   assert.throws(
-    () => readCoverage(mutate(whole, (a) => { a.operations.served_operations.push("ask"); })),
-    /ask is listed both as served and as having no route/,
+    () => readCoverage(mutate(whole, (a) => { a.operations.served_operations.push(unroutedOne); })),
+    new RegExp(`${unroutedOne} is listed both as served and as having no route`),
   );
   // This answer exists, so the operation that produced it is one this mount answers.
   assert.throws(
@@ -706,11 +709,12 @@ test("a measured capability for an operation this mount does not serve is said, 
   const whole = PREVIEW_ANSWERS[0].answer;
   // The preview does not teach this shape -- a preview page carrying a contradiction would be
   // teaching one -- so it is constructed here, where a test is allowed to build what a page is not.
-  const contradiction = mutate(whole, (a) => { a.capability_cells[0].operation = "ask"; });
+  const unroutedOne = whole.operations.not_served_operations[0];
+  const contradiction = mutate(whole, (a) => { a.capability_cells[0].operation = unroutedOne; });
   const view = readCoverage(contradiction);
-  assert.deepEqual(unservedCapabilities(view), ["ask"]);
+  assert.deepEqual(unservedCapabilities(view), [unroutedOne]);
   for (const render of [string, react]) {
-    assert.ok(text(render(contradiction)).includes(unservedCapabilityNote(["ask"])));
+    assert.ok(text(render(contradiction)).includes(unservedCapabilityNote([unroutedOne])));
   }
   // And nothing is said when there is nothing to say.
   assert.deepEqual(unservedCapabilities(readCoverage(whole)), []);
@@ -1150,7 +1154,7 @@ test("one key is one row, in every keyed list on the page", () => {
     ["the outcome breakdown", (a) => { a.members.by_outcome.push({ ...a.members.by_outcome[0] }); }],
     ["the gap breakdown", (a) => { a.members.gaps.push({ ...a.members.gaps[0] }); }],
     ["the served operations", (a) => { a.operations.served_operations.push("coverage"); }],
-    ["the operations with no route", (a) => { a.operations.not_served_operations.push("ask"); }],
+    ["the operations with no route", (a) => { a.operations.not_served_operations.push(a.operations.not_served_operations[0]); }],
     ["the measured capabilities", (a) => { a.capability_cells.push({ ...a.capability_cells[0] }); }],
     ["the languages this mount holds", (a) => { a.languages_held.push("fra"); }],
     ["the list of what is not held", (a) => { a.not_held.push({ ...a.not_held[0] }); }],

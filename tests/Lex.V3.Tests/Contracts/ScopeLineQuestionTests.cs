@@ -2,6 +2,7 @@ using System;
 using System.IO;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text.Json;
 using Lex.V3.Api;
 using Lex.V3.Contracts.Platform;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
@@ -170,7 +171,10 @@ public sealed class ScopeLineQuestionTests
     private const int Contradicted = 5;
     private const int Undecidable = 3;
 
-    /// <summary>The operation these eighteen would be put to. Registered, and served by no route.</summary>
+    /// <summary>
+    /// The operation these eighteen would be put to. Registered, and since PR #759 served by a route
+    /// that answers only the containment (Decision 91).
+    /// </summary>
     private const string TheOperationTheyWouldBeAskedOf = "ask";
 
     /// <summary>
@@ -185,7 +189,7 @@ public sealed class ScopeLineQuestionTests
     /// </remarks>
     private static readonly string[] ServedOperations =
     [
-        "article_history", "as_of", "browse", "changes_in_period", "citation", "cited_by", "classification",
+        "article_history", "as_of", "ask", "browse", "changes_in_period", "citation", "cited_by", "classification",
         "coverage", "diff", "dossier", "evidence_bundle", "in_force_on", "manifestation", "provenance",
         "relations", "resolve", "search", "status_on", "timeline", "verify",
     ];
@@ -353,7 +357,7 @@ public sealed class ScopeLineQuestionTests
     }
 
     [TestMethod]
-    public void NoneOfTheEighteenHasARestRouteToBeAskedOfYet()
+    public void EveryOneOfTheEighteenPutToAskAnswersTheContainmentAndNothingElse()
     {
         var registered = V3OperationRegistry.Reviewed.Operations
             .Select(static operation => operation.OperationId)
@@ -373,14 +377,27 @@ public sealed class ScopeLineQuestionTests
             "The routes this mount serves have changed. They are named here rather than counted so "
             + "that a route added or removed is a decision someone takes in the open.");
 
-        CollectionAssert.DoesNotContain(
-            served, TheOperationTheyWouldBeAskedOf,
-            "`ask` now has a REST route, so these eighteen questions can be put to the product for the "
-            + "first time. Every case above must now assert the verdict the scope line requires of it, "
-            + "and the three the rule cannot decide must be disclosed as undecided rather than "
-            + "answered. This assertion exists to fail on exactly this day: S4-A13 makes the eighteen "
-            + "acceptance cases, and an acceptance case that the product can answer and nobody checks "
-            + "is worse than one it cannot answer at all.");
+        // `ask` has a route since PR #759, and it answers the containment: the typed presentation
+        // result assistant_v3_unavailable on one fixed card, whatever the question. So none of the
+        // eighteen is answered yet, and each is put to the route's own card builder here to prove it.
+        // This is what must fail on the day ask answers anything else: every case above must then
+        // assert the verdict the scope line requires of it, and the three the rule cannot decide must
+        // be disclosed as undecided rather than answered (S4-A13).
+        foreach (var question in Questions)
+        {
+            using var parameters = JsonDocument.Parse(JsonSerializer.Serialize(new { question = question.Question }));
+            var card = V3CorpusMount.AskContained(
+                new V3PlatformOperationRequest(
+                    V3OperationRegistry.Reviewed.Operation(TheOperationTheyWouldBeAskedOf), parameters.RootElement),
+                ["fra"]);
+            Assert.AreEqual("handoff_card", card.ObjectType, $"question {question.Number}");
+            Assert.AreEqual(V3Verdicts.Point, card.Verdict, $"question {question.Number}");
+            Assert.AreEqual(
+                "assistant_v3_unavailable",
+                card.Value.GetProperty("presentation_result").GetString(),
+                $"question {question.Number} was answered by ask with something other than the containment. "
+                + "Every case in this file must now assert the verdict the scope line requires of it.");
+        }
     }
 
     /// <summary>

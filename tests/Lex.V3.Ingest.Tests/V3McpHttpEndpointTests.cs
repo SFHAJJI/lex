@@ -77,6 +77,7 @@ public sealed class V3McpHttpEndpointTests
             ("manifestation", new { identifier = work, language = "fra" }),
             ("status_on", new { identifier = work, date = fixture.ApplicabilityDate, language = "fra" }),
             ("browse", new { language = "fra" }),
+            ("ask", new { question = "Can I be fired while on sick leave?" }),
         };
         CollectionAssert.AreEquivalent(
             V3RestRouteBinding.Served.Select(static binding => binding.OperationId).ToArray(),
@@ -94,7 +95,8 @@ public sealed class V3McpHttpEndpointTests
             using var rpc = JsonDocument.Parse(ResponseBytes(mcp));
             Assert.IsFalse(rpc.RootElement.TryGetProperty("error", out var rpcError), operation + ": " + (rpcError.ValueKind == JsonValueKind.Undefined ? "" : rpcError.ToString()));
             var structured = rpc.RootElement.GetProperty("result").GetProperty("structuredContent");
-            Assert.AreEqual(V3Verdicts.Answer, structured.GetProperty("verdict").GetString(), operation + ": the fixture answers this call; a refusal on both paths would still compare equal.");
+            // ask answers the contained assistant's card under the point verdict (Decision 91); every other call is an answer.
+            Assert.AreEqual(operation == "ask" ? V3Verdicts.Point : V3Verdicts.Answer, structured.GetProperty("verdict").GetString(), operation + ": the fixture answers this call; a refusal on both paths would still compare equal.");
 
             var rest = await PostAsync(mount, JsonSerializer.Serialize(new { operation_id = operation, parameters = arguments }), traceIdentifier,
                 V3RestRouteBinding.Served.Single(binding => binding.OperationId == operation).RawTarget);

@@ -280,6 +280,9 @@ public static class V3PlatformSchemaExporter
             ("language", NonBlankString()),
             ("limit", RowLimit()),
             ("after", NonBlankString())),
+        "ask" => Parameters(
+            ["question"],
+            ("question", NonBlankString())),
         _ => ClosedObject(),
     };
 
