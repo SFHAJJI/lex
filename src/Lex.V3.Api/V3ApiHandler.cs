@@ -103,9 +103,17 @@ internal sealed class V3ApiHandler
         }
         if (rawTarget.StartsWith("/api/v3/", StringComparison.Ordinal))
         {
+            // A registered operation this mount has no route for is a typed answer of its own
+            // (operation_not_served), so a client cannot take it for a path nothing names; the path
+            // segment is compared with the reviewed registry's ids exactly, and a query or a trailing
+            // segment keeps it a path nothing names, as the served routes' own claim does.
+            var operationId = rawTarget["/api/v3/".Length..];
+            var registeredAndNotServed =
+                V3OperationRegistry.Reviewed.Operations.Any(operation => string.Equals(operation.OperationId, operationId, StringComparison.Ordinal)) &&
+                !V3RestRouteBinding.Served.Any(served => string.Equals(served.OperationId, operationId, StringComparison.Ordinal));
             await V3TransportResponse.WriteAsync(
                     context.Response,
-                    V3TransportFailureKind.UnknownRoute,
+                    registeredAndNotServed ? V3TransportFailureKind.OperationNotServed : V3TransportFailureKind.UnknownRoute,
                     cancellationToken)
                 .ConfigureAwait(false);
             return;

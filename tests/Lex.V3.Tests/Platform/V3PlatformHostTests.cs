@@ -420,6 +420,36 @@ public sealed class V3PlatformHostTests
     }
 
     [TestMethod]
+    public async Task ARegisteredOperationWithNoRouteIsToldApartFromAPathNothingNames()
+    {
+        // Every registered id that no route serves answers operation_not_served; the exact segment only,
+        // so a query, a trailing segment or a served id keep their own answers.
+        var application = new V3ApiHandler(
+            SyntheticApiState.Unavailable,
+            static () => DateTimeOffset.Parse("2026-09-18T00:00:00Z"));
+        var unserved = V3OperationRegistry.Reviewed.Operations
+            .Select(static operation => operation.OperationId)
+            .Except(V3RestRouteBinding.Served.Select(static binding => binding.OperationId), StringComparer.Ordinal)
+            .ToArray();
+        Assert.IsNotEmpty(unserved, "the registry still names operations no route serves; when it does not, this test retires with the kind.");
+        foreach (var operationId in unserved)
+        {
+            var route = RouteContext(Encoding.UTF8.GetBytes("{}"));
+            route.Features.Get<IHttpRequestFeature>()!.RawTarget = "/api/v3/" + operationId;
+            await application.HandleAsync(route, CancellationToken.None);
+            AssertTransportProblem(route, "operation_not_served", StatusCodes.Status404NotFound);
+        }
+
+        foreach (var rawTarget in new[] { "/api/v3/" + unserved[0] + "?x=1", "/api/v3/" + unserved[0] + "/more", "/api/v3/" + unserved[0].ToUpperInvariant(), "/api/v3/" })
+        {
+            var route = RouteContext(Encoding.UTF8.GetBytes("{}"));
+            route.Features.Get<IHttpRequestFeature>()!.RawTarget = rawTarget;
+            await application.HandleAsync(route, CancellationToken.None);
+            AssertTransportProblem(route, "unknown_route", StatusCodes.Status404NotFound);
+        }
+    }
+
+    [TestMethod]
     public async Task SchemaInvalidResultCannotLeakAnEnvelopeOrPartialResult()
     {
         var context = RouteContext(Encoding.UTF8.GetBytes(

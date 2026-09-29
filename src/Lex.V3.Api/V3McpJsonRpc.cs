@@ -174,7 +174,12 @@ internal static class V3McpJsonRpc
             : V3RestRouteBinding.Served.FirstOrDefault(served => string.Equals(served.OperationId, name, StringComparison.Ordinal));
         if (binding is null)
         {
-            return Error(id, -32602, $"Unknown tool: {name}");
+            // The REST namespace tells a registered operation with no route apart from a name nothing
+            // has (operation_not_served against unknown_route); the tool call says the same in words.
+            return Error(id, -32602,
+                name is not null && V3OperationRegistry.Reviewed.Operations.Any(operation => string.Equals(operation.OperationId, name, StringComparison.Ordinal))
+                    ? $"Tool not served: {name} is a registered operation this mount does not serve"
+                    : $"Unknown tool: {name}");
         }
 
         var hasArguments = parameters.TryGetProperty("arguments", out var argumentsElement);

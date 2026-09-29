@@ -5,10 +5,12 @@ every pull request that changes what is served, what is next or what is blocked.
 
 ## Heads
 
-- `v3/integration`: `d1849df0` (2026-09-28, PR #756 merged). Build 45 s. Fast lane
-  (`eng/test-fast.ps1`): 3,032 tests pass, 1 skipped, 45 s. Ingest suite: green on CI for PR #756
+- `v3/integration`: `80d6587a` (2026-09-28, PR #757 merged). Build 45 s. Fast lane
+  (`eng/test-fast.ps1`): 3,032 tests pass, 1 skipped (3,033 with PR #758). Ingest suite: green on CI for PR #757
   (the CI `dotnet` job runs the whole solution on every pull request, about 6 min on the runner);
   locally about 15 min. 771 web tests pass.
+- Driver: Claude Opus 5.5 since 2026-09-29 (the Fable 5.1 driver ran out of tokens on 2026-09-28
+  after PR #757; the user default model is now `claude-opus-5-5`).
 - Plan: `C:\lex-v3\V3-FINISH-PLAN-2026-09-27.md` (owner's copy). Decision 94 (one driver, one queue,
   one review per pull request) merged in lex-governance on 2026-09-27. Launch target 2026-11-07.
 
@@ -20,11 +22,11 @@ lanes), `coverage`, `provenance`, `dossier`, `citation`, `cited_by`, `verify` (P
 hash-pinned permalink verified against the state digest the index holds; a work identifier or a
 stable coordinate answers the current digests), `relations` (PR #753: the one edge table in both
 directions, `cites` edges only, what `citation` and `cited_by` serve as one ordered, paged list),
-`evidence_bundle` (PR #755), `classification` and `manifestation` (PR #756), and since this pull
-request `status_on` and `browse`. Without a mounted corpus every route answers `no_corpus_mounted`.
-EU serves `resolve` only.
+`evidence_bundle` (PR #755), `classification` and `manifestation` (PR #756), `status_on` and
+`browse` (PR #757). Without a mounted corpus every route answers `no_corpus_mounted`. EU serves
+`resolve` only.
 
-`status_on` and `browse` (this pull request) read the `work_facts` table too. `status_on` takes
+`status_on` and `browse` (PR #757) read the `work_facts` table too. `status_on` takes
 `as_of`'s request (`identifier`, `date`, optional `language`), selects the state as `as_of` does and
 refuses as `as_of` refuses, and beside that state serves the publisher's force assertions about the
 work verbatim (`in_force_status` = jolux:inForceStatus tokens, `entry_into_force` =
@@ -102,9 +104,17 @@ the reading view's own provision-level one (two producers, two declared key sets
 two text examples show the producer's fields.
 
 Registered and not served: `ask`, `answer_drift`, `as_observed`, `concepts`, `events`,
-`knowable_on`, `transposition`. A request for one of them is the transport failure `unknown_route`
-(HTTP 404, no envelope); `coverage` names them. `ask` answers the typed `assistant_v3_unavailable`
-result by design until after launch. Survey of 2026-09-28 (read-only): the index-table group of four
+`knowable_on`, `transposition`. Since this pull request a request for one of them is the typed
+transport failure `operation_not_served` (HTTP 404, `application/problem+json`, below the envelope
+like every transport failure), which tells a registered operation with no route apart from a path
+nothing names (`unknown_route`, still the answer for a typo, a query string, a trailing segment or
+a case variant); an MCP `tools/call` naming one says "registered operation this mount does not
+serve" in its invalid-params message; `coverage` names them and now says what a request returns.
+Decision taken by the driver, reversible: a transport failure rather than an envelope refusal,
+because the registry has no refusal code for "operation not served" and inventing one would change
+the reviewed registry; the owner can ask for an envelope answer instead. `ask` has no route yet, so today it answers `operation_not_served` like the other six; the
+launch contract wants it to answer the typed `assistant_v3_unavailable` result inside the envelope
+(Decision 91). Survey of 2026-09-28 (read-only): the index-table group of four
 needed a new index table over Stage 3 inputs the ingest already holds (`TypedAssertions`: in-force status and dates, `typeDocument`, `isEmbodiedBy`,
 `userFormat`), which bumps the index schema; `concepts`, `transposition`, `as_observed`,
 `knowable_on`, `events` and `answer_drift` need data the ingest does not produce.
@@ -307,9 +317,11 @@ Web: 28 React components, 771 tests; no call to `/api/v3` yet. Screens render fi
    run).
 4. Serve the unserved operations for Luxembourg (`verify` and `relations` served by PR #753, MCP
    over streamable HTTP by PR #754, `evidence_bundle` by PR #755, `classification` and
-   `manifestation` by PR #756, `status_on` and `browse` by this pull request; seven remain, all
-   needing data the ingest does not produce or, for `ask`, deferred by design): next a typed answer
-   for a request to an unserved operation (today the transport failure `unknown_route`).
+   `manifestation` by PR #756, `status_on` and `browse` by PR #757; seven remain, all needing data
+   the ingest does not produce or, for `ask`, deferred by design; a request to an unserved operation now answers the transport
+   failure `operation_not_served`, PR #758). Still open for launch: `LAUNCH-CONTRACT.md` wants each of
+   the seven either served or refusing with a typed reason inside the envelope, so they need routes
+   that refuse (`ask` with `assistant_v3_unavailable`), not only data. Driver's next small slice.
 5. EU parity: every temporal and search operation from the EU index; French expressions.
 6. Wire the eight launch screens to `/api/v3`; journeys J1 to J8 in a real browser.
 7. Release pipeline: build, sign, image, zero-traffic deploy, probes. Then acceptance and promotion.

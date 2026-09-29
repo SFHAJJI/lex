@@ -431,9 +431,9 @@ public sealed class V3CorpusCoverageMountTests
         CollectionAssert.AreEqual(registered.Except(served, StringComparer.Ordinal).ToArray(), notServed);
         Assert.IsFalse(served.Intersect(notServed, StringComparer.Ordinal).Any());
         CollectionAssert.AreEqual(registered, served.Concat(notServed).Order(StringComparer.Ordinal).ToArray());
-        // It states a fact about the mount and says nothing of what an unserved request returns.
+        // It states a fact about the mount and says what a request for an unserved operation returns.
         var note = operations.GetProperty("note").GetString();
-        StringAssert.Contains(note, "says nothing about what a request for an unserved operation returns");
+        StringAssert.Contains(note, "a request for an unserved operation answers the transport failure operation_not_served");
     }
 
     [TestMethod]
