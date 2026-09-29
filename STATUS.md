@@ -6,7 +6,7 @@ every pull request that changes what is served, what is next or what is blocked.
 ## Heads
 
 - `v3/integration`: `80d6587a` (2026-09-28, PR #757 merged). Build 45 s. Fast lane
-  (`eng/test-fast.ps1`): 3,033 tests pass, 1 skipped, 50 s. Ingest suite: green on CI for PR #757
+  (`eng/test-fast.ps1`): 3,032 tests pass, 1 skipped (3,033 with PR #758). Ingest suite: green on CI for PR #757
   (the CI `dotnet` job runs the whole solution on every pull request, about 6 min on the runner);
   locally about 15 min. 771 web tests pass.
 - Driver: Claude Opus 5.5 since 2026-09-29 (the Fable 5.1 driver ran out of tokens on 2026-09-28
@@ -112,8 +112,9 @@ a case variant); an MCP `tools/call` naming one says "registered operation this 
 serve" in its invalid-params message; `coverage` names them and now says what a request returns.
 Decision taken by the driver, reversible: a transport failure rather than an envelope refusal,
 because the registry has no refusal code for "operation not served" and inventing one would change
-the reviewed registry; the owner can ask for an envelope answer instead. `ask` answers the typed `assistant_v3_unavailable`
-result by design until after launch. Survey of 2026-09-28 (read-only): the index-table group of four
+the reviewed registry; the owner can ask for an envelope answer instead. `ask` has no route yet, so today it answers `operation_not_served` like the other six; the
+launch contract wants it to answer the typed `assistant_v3_unavailable` result inside the envelope
+(Decision 91). Survey of 2026-09-28 (read-only): the index-table group of four
 needed a new index table over Stage 3 inputs the ingest already holds (`TypedAssertions`: in-force status and dates, `typeDocument`, `isEmbodiedBy`,
 `userFormat`), which bumps the index schema; `concepts`, `transposition`, `as_observed`,
 `knowable_on`, `events` and `answer_drift` need data the ingest does not produce.
@@ -317,9 +318,10 @@ Web: 28 React components, 771 tests; no call to `/api/v3` yet. Screens render fi
 4. Serve the unserved operations for Luxembourg (`verify` and `relations` served by PR #753, MCP
    over streamable HTTP by PR #754, `evidence_bundle` by PR #755, `classification` and
    `manifestation` by PR #756, `status_on` and `browse` by PR #757; seven remain, all needing data
-   the ingest does not produce or, for `ask`, deferred by design; the typed answer for a request to
-   an unserved operation is served by this pull request). Item 4 is closed: what remains is data,
-   not routes.
+   the ingest does not produce or, for `ask`, deferred by design; a request to an unserved operation now answers the transport
+   failure `operation_not_served`, PR #758). Still open for launch: `LAUNCH-CONTRACT.md` wants each of
+   the seven either served or refusing with a typed reason inside the envelope, so they need routes
+   that refuse (`ask` with `assistant_v3_unavailable`), not only data. Driver's next small slice.
 5. EU parity: every temporal and search operation from the EU index; French expressions.
 6. Wire the eight launch screens to `/api/v3`; journeys J1 to J8 in a real browser.
 7. Release pipeline: build, sign, image, zero-traffic deploy, probes. Then acceptance and promotion.
