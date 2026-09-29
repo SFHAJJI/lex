@@ -19,6 +19,9 @@ public sealed class V3CorpusEuropeSearchMountTests
     private const string Celex = "32016R0679";
     private const string Span = "It shall apply from 25 May 2018.";
 
+    /// <summary>A phrase written into the Luxembourg fixture's law for the scan (the search suite's own phrase).</summary>
+    private const string LuxembourgPhrase = "garantie locative";
+
     private static string RawTarget => V3RestRouteBinding.Search.RawTarget;
 
     [TestMethod]
@@ -165,6 +168,9 @@ public sealed class V3CorpusEuropeSearchMountTests
         await using var cleanup = fixture;
         // The publisher's work IRI names the Luxembourg work, and the EU index holds an article under it too.
         await fixture.BindPublisherWorkIdentifierAsync();
+        // One article of the Luxembourg state holds the phrase searched below, as the search suite does it.
+        await fixture.RewriteArticleTextAsync(
+            fixture.ExpressionIri, fixture.ArticlesOfOwnState()[0].PublisherId, "La " + LuxembourgPhrase + " ne peut exceder trois mois de loyer.");
         var europeExpression = await fixture.AddEuropeCollisionAsync();
         using var mount = await V3CorpusMount.OpenAsync(fixture.Directory, CancellationToken.None);
         Assert.IsNotNull(mount);
@@ -175,11 +181,16 @@ public sealed class V3CorpusEuropeSearchMountTests
         CollectionAssert.Contains(candidates, europeExpression);
         CollectionAssert.Contains(candidates, fixture.ExpressionIri);
 
-        var luxembourg = await EnvelopeAsync(mount, RawTarget, "search", new { query = "loyer", language = "fra", identifier = $"/lu-legilux/{fixture.WorkKey}" });
+        // A phrase written into the fixture's law above, so the scan below runs over real Luxembourg hits: an answer with
+        // no hit would carry no hit fields and pass whatever they said (review of #761).
+        var luxembourg = await EnvelopeAsync(mount, RawTarget, "search", new { query = LuxembourgPhrase, language = "fra", identifier = $"/lu-legilux/{fixture.WorkKey}" });
         Assert.IsNull(luxembourg.Refusal, luxembourg.Refusal?.Code);
         Assert.AreEqual("lu-legilux", luxembourg.Result!.Value.GetProperty("publisher").GetString());
+        var luxembourgHits = luxembourg.Result.Value.GetProperty("hits").EnumerateArray().ToArray();
+        Assert.IsNotEmpty(luxembourgHits, "the scan needs Luxembourg hits to mean anything.");
+        Assert.IsTrue(luxembourgHits.All(static hit => hit.TryGetProperty("applicability_date", out _)), "a Luxembourg hit names its publisher applicability date.");
         Assert.IsFalse(ContainsProperty(luxembourg.Result.Value, "wording_date"), "a Luxembourg answer never carries an EU wording date.");
-        var unscoped = await EnvelopeAsync(mount, RawTarget, "search", new { query = "loyer", language = "fra" });
+        var unscoped = await EnvelopeAsync(mount, RawTarget, "search", new { query = LuxembourgPhrase, language = "fra" });
         Assert.AreEqual("lu-legilux", unscoped.Result!.Value.GetProperty("publisher").GetString(), "a search that names no work is the Luxembourg search.");
     }
 
