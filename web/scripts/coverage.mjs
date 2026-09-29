@@ -17,8 +17,9 @@
 //   how current these counts are; the corpus and index digests name exactly which artifacts are
 //   mounted"
 //
-//   first_sighting_and_observation_times -- "no observation time or first-sighting event is held,
-//   so nothing here says when anything was first seen"
+//   first_sighting_and_observation_times -- "no observation time is held, so nothing here says
+//   when anything was first seen; events serves a genesis log whose first_sighting events say only
+//   that a state is first present in that log"
 //
 // So there is no build instant on this page and no retention sentence. Not "no date": the page
 // does carry calendar dates, the ends of each language's state range and each measured

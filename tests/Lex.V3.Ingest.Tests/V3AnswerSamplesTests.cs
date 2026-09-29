@@ -83,7 +83,21 @@ public sealed class V3AnswerSamplesTests
         // The same object reference, where `manifestation` names the retained member; the body digest and
         // the WEMI IRIs beside it are deterministic and stay pinned.
         "retained[].object_ref_sha256",
+        // The event log is named by the index digest (`log_id`), and every cursor into it carries that
+        // name before its sequence number, so all three move with `index_sha256`; the sequence numbers,
+        // state digests and permalinks beside them are deterministic and stay pinned.
+        // An entry that starts with an operation and a colon applies to that operation only: `browse`
+        // has a `next_after` of its own, a work key or null, which does not move.
+        "log.log_id",
+        "events[].cursor",
+        "events:next_after",
+        "answer_drift:next_after",
     ];
+
+    /// <summary>Whether a path (operation prefix dropped) of an operation's answer is one the fixture re-mints.</summary>
+    private static bool VariesPerRunAt(string operation, string path) =>
+        VariesPerRun.Contains(path, StringComparer.Ordinal) ||
+        VariesPerRun.Contains(operation + ":" + path, StringComparer.Ordinal);
 
     /// <summary>
     /// Operations served by a route but not yet sampled here, each with the reason. It is a declared
@@ -178,7 +192,7 @@ public sealed class V3AnswerSamplesTests
                 + $"{string.Join(", ", onlyFirst)}. Only in the second: {string.Join(", ", onlySecond)}.");
         var moved = firstByPath.Keys
             .Where(path => !string.Equals(firstByPath[path], secondByPath[path], StringComparison.Ordinal))
-            .Where(path => !VariesPerRun.Contains(NormalisePath(path), StringComparer.Ordinal))
+            .Where(path => !VariesPerRunAt(path[..path.IndexOf('.', StringComparison.Ordinal)], NormalisePath(path)))
             .Order(StringComparer.Ordinal)
             .ToArray();
         Assert.IsEmpty(
@@ -247,7 +261,7 @@ public sealed class V3AnswerSamplesTests
             var body = answers.Single(static a => a.Operation == "provenance").Body.DeepClone();
             body["verified_by"]!["corpus_sha256"] = value;
             var failure = Assert.ThrowsExactly<AssertFailedException>(
-                () => Normalise(body, string.Empty),
+                () => Normalise(body, string.Empty, "provenance"),
                 $"a value that is {why} was normalised without complaint");
             StringAssert.Contains(failure.Message, "verified_by.corpus_sha256");
         }
@@ -306,6 +320,8 @@ public sealed class V3AnswerSamplesTests
             await DriveAsync(mount, "status_on", "the same request as as_of: the publisher's force assertions beside the state, none asserted for this act", parameters),
             await DriveAsync(mount, "browse", "the whole mount, no filter: one page of the held works", new { }),
             await DriveAsync(mount, "ask", "any question: the contained assistant's one card, the same for every question", new { question = "Can I be fired while on sick leave?" }),
+            await DriveAsync(mount, "events", "the whole log from its start: a genesis log, one first_sighting per held state", new { }),
+            await DriveAsync(mount, "answer_drift", "the whole mount: no revising event in a genesis log, so none enumerated", new { }),
             // `coverage` asks about the mount rather than about a work, so it takes no identifier and no
             // date. It is sampled because its reader is the next one built against a captured answer, and
             // because that reader today requires seventeen paths of which the platform's sample carries
@@ -388,9 +404,16 @@ public sealed class V3AnswerSamplesTests
     private static List<string> ValuesAt(IReadOnlyList<Answer> answers, string path)
     {
         var found = new List<string>();
+        // "operation:path" looks in that operation's answer only (VariesPerRunAt).
+        var colon = path.IndexOf(':', StringComparison.Ordinal);
+        var operation = colon < 0 ? null : path[..colon];
+        var wanted = colon < 0 ? path : path[(colon + 1)..];
         foreach (var answer in answers.OrderBy(static a => a.Operation, StringComparer.Ordinal))
         {
-            Collect(answer.Body, string.Empty, path, found);
+            if (operation is null || string.Equals(answer.Operation, operation, StringComparison.Ordinal))
+            {
+                Collect(answer.Body, string.Empty, wanted, found);
+            }
         }
 
         return found;
@@ -428,14 +451,14 @@ public sealed class V3AnswerSamplesTests
     /// Replaces every value the fixture re-mints per run, after asserting it is a digest. Paths use
     /// <c>[]</c> for a list, so one entry covers every element of it.
     /// </summary>
-    private static void Normalise(JsonNode node, string path)
+    private static void Normalise(JsonNode node, string path, string operation)
     {
         switch (node)
         {
             case JsonArray array:
                 foreach (var item in array)
                 {
-                    if (item is not null) Normalise(item, path + "[]");
+                    if (item is not null) Normalise(item, path + "[]", operation);
                 }
 
                 break;
@@ -443,19 +466,27 @@ public sealed class V3AnswerSamplesTests
                 foreach (var property in observed.ToArray())
                 {
                     var childPath = path.Length == 0 ? property.Key : path + "." + property.Key;
-                    if (VariesPerRun.Contains(childPath, StringComparer.Ordinal))
+                    if (VariesPerRunAt(operation, childPath))
                     {
                         var value = property.Value?.GetValue<string>();
                         Assert.IsNotNull(value, $"{childPath} is normalised and is not a string.");
-                        Assert.AreEqual(64, value.Length, $"{childPath} is normalised and is not a 64-character digest: {value}");
+                        // An event cursor is the log's digest and a sequence number: only the digest moves,
+                        // so the sequence number stays in the sample where a reader can check it.
+                        var separator = value.IndexOf(':', StringComparison.Ordinal);
+                        var digest = separator < 0 ? value : value[..separator];
+                        var suffix = separator < 0 ? string.Empty : value[separator..];
+                        Assert.AreEqual(64, digest.Length, $"{childPath} is normalised and is not a 64-character digest: {value}");
                         Assert.IsTrue(
-                            value.All(static c => c is (>= '0' and <= '9') or (>= 'a' and <= 'f')),
+                            digest.All(static c => c is (>= '0' and <= '9') or (>= 'a' and <= 'f')),
                             $"{childPath} is normalised and is not lower-case hex: {value}");
-                        observed[property.Key] = Placeholder;
+                        Assert.IsTrue(
+                            suffix.Length == 0 || (suffix.Length > 1 && suffix[1..].All(char.IsAsciiDigit)),
+                            $"{childPath} is normalised and is neither a digest nor a digest and a sequence number: {value}");
+                        observed[property.Key] = Placeholder + suffix;
                         continue;
                     }
 
-                    if (property.Value is not null) Normalise(property.Value, childPath);
+                    if (property.Value is not null) Normalise(property.Value, childPath, operation);
                 }
 
                 break;
@@ -468,7 +499,7 @@ public sealed class V3AnswerSamplesTests
         foreach (var answer in answers.OrderBy(static a => a.Operation, StringComparer.Ordinal))
         {
             var body = answer.Body.DeepClone();
-            Normalise(body, string.Empty);
+            Normalise(body, string.Empty, answer.Operation);
             operations.Add(new JsonObject
             {
                 ["operation"] = answer.Operation,

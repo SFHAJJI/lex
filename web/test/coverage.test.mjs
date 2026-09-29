@@ -420,7 +420,7 @@ test("the two claims the platform refuses to make are gone, and its reasons are 
 
     // And the platform's own two reasons, which are what stands in their place.
     assert.ok(body.includes("no build time of the corpus or index is held"));
-    assert.ok(body.includes("no observation time or first-sighting event is held"));
+    assert.ok(body.includes("no observation time is held"));
     assert.ok(body.includes(answer.mounted.corpus_sha256));
     assert.ok(body.includes(answer.mounted.index_sha256));
   }

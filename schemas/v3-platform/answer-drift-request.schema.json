@@ -9,7 +9,24 @@
     },
     "parameters": {
       "type": "object",
-      "additionalProperties": true
+      "additionalProperties": false,
+      "properties": {
+        "identifier": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "\\S"
+        },
+        "after": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}:(0|[1-9][0-9]{0,17})$"
+        },
+        "limit": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 200
+        }
+      },
+      "required": []
     }
   },
   "required": [

@@ -18,7 +18,7 @@ public sealed class LuxembourgIndexBuilderTests
     {
         var digest = Convert.ToHexStringLower(SHA256.HashData(
             LuxembourgIndexBuilder.BuildFixedInputDeterminismEvidence()));
-        Assert.AreEqual("f745dd92673dc3f3c84bb001316f34b84603678d8b997bf21fd143ecc69fd71e", digest);
+        Assert.AreEqual("7d898d3fddfb60d6df81cf4180ad6c08813bbd76994ea5e519338f1df1f52956", digest);
     }
 
     internal const string Retained1991 = "loi-1991-08-10-n3--2024-02-01--fr.bin";
@@ -29,7 +29,7 @@ public sealed class LuxembourgIndexBuilderTests
         var schema = (string)typeof(LuxembourgIndexBuilder)
             .GetField(nameof(LuxembourgIndexBuilder.Schema))!
             .GetRawConstantValue()!;
-        Assert.AreEqual("lex-v3-luxembourg-index/5", schema);
+        Assert.AreEqual("lex-v3-luxembourg-index/6", schema);
         Assert.IsNotNull(typeof(LuxembourgIndexBuilder).GetMethod(nameof(LuxembourgIndexBuilder.TryBuild)));
         Assert.IsNotNull(typeof(LuxembourgIndexReader).GetMethod(nameof(LuxembourgIndexReader.OpenAndVerify)));
     }
@@ -706,7 +706,7 @@ public sealed class LuxembourgIndexBuilderTests
             tamper(connection);
             var logicalRows = LuxembourgIndexBuilder.HashLogicalRows(
                 ReadMembers(connection), ReadArticles(connection), ReadStates(connection),
-                ReadWorkTitles(connection), ReadRelations(connection), ReadWorkFacts(connection));
+                ReadWorkTitles(connection), ReadRelations(connection), ReadWorkFacts(connection), ReadEvents(connection));
             Execute(connection, "UPDATE stamp SET logical_rows_sha256=$digest WHERE stamp_id=1",
                 ("$digest", logicalRows));
         });
@@ -809,6 +809,49 @@ public sealed class LuxembourgIndexBuilderTests
             reader.GetString(7)));
         return rows.ToArray();
     }
+    internal static LuxembourgIndexBuilder.EventRow[] ReadEvents(SqliteConnection connection)
+    {
+        using var command = connection.CreateCommand();
+        command.CommandText = "SELECT seq,scope,key,event,observed_from,detail_json FROM events ORDER BY seq";
+        using var reader = command.ExecuteReader();
+        var values = new List<LuxembourgIndexBuilder.EventRow>();
+        while (reader.Read()) values.Add(new(
+            reader.GetInt64(0), reader.GetString(1), reader.GetString(2), reader.GetString(3),
+            reader.IsDBNull(4) ? null : reader.GetString(4), reader.GetString(5)));
+        return values.ToArray();
+    }
+
+    /// <summary>
+    /// Rewrites the event log as the genesis log of <paramref name="states"/>, for a fixture that added or
+    /// changed states legitimately (the log is a function of the states, as the reader checks).
+    /// </summary>
+    internal static LuxembourgIndexBuilder.EventRow[] RefreshGenesisEvents(
+        SqliteConnection connection,
+        IReadOnlyList<LuxembourgIndexBuilder.StateRow> states)
+    {
+        using (var clear = connection.CreateCommand())
+        {
+            clear.CommandText = "DELETE FROM events";
+            clear.ExecuteNonQuery();
+        }
+
+        var events = LuxembourgIndexBuilder.ProjectGenesisEvents(states);
+        foreach (var value in events)
+        {
+            using var insert = connection.CreateCommand();
+            insert.CommandText = "INSERT INTO events VALUES($seq,$scope,$key,$event,$observed,$detail)";
+            insert.Parameters.AddWithValue("$seq", value.Seq);
+            insert.Parameters.AddWithValue("$scope", value.Scope);
+            insert.Parameters.AddWithValue("$key", value.Key);
+            insert.Parameters.AddWithValue("$event", value.Event);
+            insert.Parameters.AddWithValue("$observed", (object?)value.ObservedFrom ?? DBNull.Value);
+            insert.Parameters.AddWithValue("$detail", value.DetailJson);
+            Assert.AreEqual(1, insert.ExecuteNonQuery());
+        }
+
+        return events;
+    }
+
     internal static LuxembourgIndexBuilder.WorkFactRow[] ReadWorkFacts(SqliteConnection connection)
     {
         using var command = connection.CreateCommand();

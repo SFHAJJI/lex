@@ -9,9 +9,44 @@
     "mounted.corpus_sha256",
     "mounted.index_sha256",
     "states[].sources[].object_ref_sha256",
-    "retained[].object_ref_sha256"
+    "retained[].object_ref_sha256",
+    "log.log_id",
+    "events[].cursor",
+    "events:next_after",
+    "answer_drift:next_after"
   ],
   "sampled": [
+    {
+      "operation": "answer_drift",
+      "object_type": "answer_drift",
+      "scenario": "the whole mount: no revising event in a genesis log, so none enumerated",
+      "answer": {
+        "asserts_no_drift_in_law": false,
+        "asserts_publisher_unrevised": false,
+        "basis": "this log is a genesis log and holds no validity_revised or interval_closed event, so no invalidated answer can be enumerated; this is a statement about the log, not about the law or the publisher",
+        "has_more": false,
+        "invalidated_answers": [],
+        "log": {
+          "basis": "genesis",
+          "events_held": 1,
+          "last_seq": 1,
+          "log_id": "\u003Cvaries-per-run\u003E",
+          "observations_compared": 0,
+          "predecessor_index_sha256": null
+        },
+        "next_after": "\u003Cvaries-per-run\u003E:1",
+        "requested_identifier": null,
+        "revising_event_types": [
+          "validity_revised",
+          "interval_closed"
+        ],
+        "revising_events_considered": 0,
+        "row_shape_note": "when a revising event is held, each invalidated answer is one row: the event\u0027s seq, the work, the language and the interval of dates whose as_of answer changed, with the permalinks before and after",
+        "scope": "the past dated answers (work and date) a publisher revision invalidated, enumerated from the validity_revised and interval_closed events of the mounted index\u0027s log",
+        "what_would_answer": "a later build of this corpus compared against this one, whose log would hold validity_revised or interval_closed events",
+        "work_key": null
+      }
+    },
     {
       "operation": "as_of",
       "object_type": "version_state",
@@ -438,7 +473,7 @@
         "verified_by": {
           "corpus_sha256": "\u003Cvaries-per-run\u003E",
           "index_sha256": "\u003Cvaries-per-run\u003E",
-          "registry_sha256": "27c535830617519a7cb4b1395ba1e448fd07e7dcda659b36cf9750a2b06e3de4"
+          "registry_sha256": "abe40749a2364dcbcf69a4427b0977e0510500345056eed4042b2e4758a53ef0"
         },
         "works": [
           {
@@ -556,7 +591,7 @@
         "verified_by": {
           "corpus_sha256": "\u003Cvaries-per-run\u003E",
           "index_sha256": "\u003Cvaries-per-run\u003E",
-          "registry_sha256": "27c535830617519a7cb4b1395ba1e448fd07e7dcda659b36cf9750a2b06e3de4"
+          "registry_sha256": "abe40749a2364dcbcf69a4427b0977e0510500345056eed4042b2e4758a53ef0"
         },
         "work_key": "loi-1991-08-10-n3"
       }
@@ -656,7 +691,7 @@
           "corpus_sha256": "\u003Cvaries-per-run\u003E",
           "index_sha256": "\u003Cvaries-per-run\u003E",
           "publisher": "lu-legilux",
-          "registry_sha256": "27c535830617519a7cb4b1395ba1e448fd07e7dcda659b36cf9750a2b06e3de4"
+          "registry_sha256": "abe40749a2364dcbcf69a4427b0977e0510500345056eed4042b2e4758a53ef0"
         },
         "not_held": [
           {
@@ -669,7 +704,7 @@
           },
           {
             "item": "first_sighting_and_observation_times",
-            "reason": "no observation time or first-sighting event is held, so nothing here says when anything was first seen"
+            "reason": "no observation time is held, so nothing here says when anything was first seen; events serves a genesis log whose first_sighting events say only that a state is first present in that log"
           },
           {
             "item": "build_time_and_currency",
@@ -682,16 +717,15 @@
         ],
         "operations": {
           "not_served_operations": [
-            "answer_drift",
             "as_observed",
             "concepts",
-            "events",
             "knowable_on",
             "transposition"
           ],
           "note": "served_operations are the routes this mount answers and not_served_operations are registered with no route on it; a request for an unserved operation answers the transport failure operation_not_served (HTTP 404, below the envelope), which tells it apart from a path nothing names (unknown_route)",
           "registered": 27,
           "served_operations": [
+            "answer_drift",
             "article_history",
             "as_of",
             "ask",
@@ -703,6 +737,7 @@
             "coverage",
             "diff",
             "dossier",
+            "events",
             "evidence_bundle",
             "in_force_on",
             "manifestation",
@@ -723,6 +758,82 @@
           "states": 1,
           "works": 1
         }
+      }
+    },
+    {
+      "operation": "events",
+      "object_type": "event",
+      "scenario": "the whole log from its start: a genesis log, one first_sighting per held state",
+      "answer": {
+        "delivery": "cursor polling, at least once: a request with the same cursor answers the same events again, so a reader deduplicates by seq within log_id; next_after is always the cursor to poll next; there is no push delivery and no subscription (Decision 93)",
+        "event_names": {
+          "in_this_log": [
+            "first_sighting"
+          ],
+          "mintable": [
+            "first_sighting",
+            "resighted",
+            "metadata_revised",
+            "validity_revised",
+            "interval_closed",
+            "withdrawn_from_source",
+            "expression_added",
+            "file_replaced",
+            "relation_asserted",
+            "relation_retracted",
+            "future_state_scheduled",
+            "future_state_activated"
+          ],
+          "note": "the Stage 4 registry names thirteen events; this pipeline mints the twelve listed and never the coverage event (B42 finding 5.2: a gate must not be excused by an event the same pipeline mints); in_this_log names those this log holds"
+        },
+        "events": [
+          {
+            "applicability_date": "2024-02-01",
+            "cursor": "\u003Cvaries-per-run\u003E:1",
+            "event": "first_sighting",
+            "expression_iri": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo/fr",
+            "language": "fra",
+            "observed_from": null,
+            "permalink": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--5bca01f82ef3058cfebe7f8a8a6eb1f1fbeeb32b8a1ea7b2c02ac20963235e3a",
+            "scope": "state",
+            "seq": 1,
+            "stable_coordinate": "/lu-legilux/loi-1991-08-10-n3/2024-02-01",
+            "state_sha256": "5bca01f82ef3058cfebe7f8a8a6eb1f1fbeeb32b8a1ea7b2c02ac20963235e3a",
+            "work_key": "loi-1991-08-10-n3"
+          }
+        ],
+        "genesis_note": "this log comes from one observation with no predecessor, so it holds only first_sighting; first_sighting means first present in this log and does not say when the publisher published the text or when it was fetched; observed_from is null because no observation time is held; a revision (validity_revised, interval_closed, file_replaced, withdrawn_from_source, ...) needs a later build compared against this one",
+        "has_more": false,
+        "log": {
+          "basis": "genesis",
+          "events_held": 1,
+          "last_seq": 1,
+          "log_id": "\u003Cvaries-per-run\u003E",
+          "observations_compared": 0,
+          "predecessor_index_sha256": null
+        },
+        "next_after": "\u003Cvaries-per-run\u003E:1",
+        "not_held": [
+          {
+            "item": "observation_times",
+            "reason": "no observation time is held; observed_from is null on every event"
+          },
+          {
+            "item": "revision_events",
+            "reason": "no predecessor build is compared, so no revision, withdrawal, replacement or relation event is held"
+          },
+          {
+            "item": "work_level_events",
+            "reason": "events are scoped to states; no work-level event is minted"
+          },
+          {
+            "item": "upstream_health",
+            "reason": "no upstream health or build time is held, so silence here is not a statement that the publisher was quiet"
+          }
+        ],
+        "requested_event": null,
+        "scope": "the event log of the mounted Luxembourg index: an append-only list numbered from 1, polled by cursor; this build\u0027s log is a genesis log (one observation, no predecessor), so it holds one first_sighting per held state and nothing else",
+        "silence_note": "an empty page says this log holds no further event; it says nothing about whether the publisher changed anything or whether acquisition ran: this mount holds no upstream health and no build time, and every envelope\u0027s freshness names upstream health stale"
       }
     },
     {
@@ -1671,7 +1782,7 @@
         "verified_by": {
           "corpus_sha256": "\u003Cvaries-per-run\u003E",
           "index_sha256": "\u003Cvaries-per-run\u003E",
-          "registry_sha256": "27c535830617519a7cb4b1395ba1e448fd07e7dcda659b36cf9750a2b06e3de4"
+          "registry_sha256": "abe40749a2364dcbcf69a4427b0977e0510500345056eed4042b2e4758a53ef0"
         },
         "work_key": "loi-1991-08-10-n3"
       }
@@ -1754,7 +1865,7 @@
         "verified_by": {
           "corpus_sha256": "\u003Cvaries-per-run\u003E",
           "index_sha256": "\u003Cvaries-per-run\u003E",
-          "registry_sha256": "27c535830617519a7cb4b1395ba1e448fd07e7dcda659b36cf9750a2b06e3de4"
+          "registry_sha256": "abe40749a2364dcbcf69a4427b0977e0510500345056eed4042b2e4758a53ef0"
         },
         "work_key": "loi-1991-08-10-n3"
       }
@@ -1771,7 +1882,7 @@
         "not_held": [
           {
             "item": "first_sighting_event",
-            "reason": "no observation time or first-sighting event is held, so nothing here says when the publisher\u0027s bytes were first seen"
+            "reason": "no observation time is held, so nothing here says when the publisher\u0027s bytes were first seen; the event log\u0027s first_sighting (events) says only that a state is first present in that log"
           },
           {
             "item": "signature_stamp",
@@ -1830,7 +1941,7 @@
         "verified_by": {
           "corpus_sha256": "\u003Cvaries-per-run\u003E",
           "index_sha256": "\u003Cvaries-per-run\u003E",
-          "registry_sha256": "27c535830617519a7cb4b1395ba1e448fd07e7dcda659b36cf9750a2b06e3de4"
+          "registry_sha256": "abe40749a2364dcbcf69a4427b0977e0510500345056eed4042b2e4758a53ef0"
         },
         "work_key": "loi-1991-08-10-n3"
       }
@@ -1895,7 +2006,7 @@
         "verified_by": {
           "corpus_sha256": "\u003Cvaries-per-run\u003E",
           "index_sha256": "\u003Cvaries-per-run\u003E",
-          "registry_sha256": "27c535830617519a7cb4b1395ba1e448fd07e7dcda659b36cf9750a2b06e3de4"
+          "registry_sha256": "abe40749a2364dcbcf69a4427b0977e0510500345056eed4042b2e4758a53ef0"
         },
         "what_would_answer": [
           "new_official_observation"

@@ -36,6 +36,7 @@ public sealed class V3CorpusLocatorTests
         ("/api/v3/classification", identifier => JsonSerializer.Serialize(new { operation_id = "classification", parameters = new { identifier } })),
         ("/api/v3/manifestation", identifier => JsonSerializer.Serialize(new { operation_id = "manifestation", parameters = new { identifier } })),
         ("/api/v3/status_on", identifier => JsonSerializer.Serialize(new { operation_id = "status_on", parameters = new { identifier, date = "2024-01-01" } })),
+        ("/api/v3/answer_drift", identifier => JsonSerializer.Serialize(new { operation_id = "answer_drift", parameters = new { identifier } })),
     ];
 
     /// <summary>
@@ -48,6 +49,7 @@ public sealed class V3CorpusLocatorTests
         ("/api/v3/coverage", nameof(V3CorpusCoverageMountTests)),
         ("/api/v3/browse", nameof(V3CorpusBrowseMountTests)),
         ("/api/v3/ask", nameof(V3CorpusAskMountTests)),
+        ("/api/v3/events", nameof(V3CorpusEventsMountTests)),
     ];
 
     [TestMethod]

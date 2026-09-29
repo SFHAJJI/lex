@@ -162,6 +162,8 @@ internal sealed class V3ApiHandler
             "status_on" => request => corpusMount.StatusOn(request, utcNow()),
             "browse" => request => corpusMount.Browse(request, utcNow()),
             "ask" => request => corpusMount.Ask(request, utcNow()),
+            "events" => request => corpusMount.Events(request, utcNow()),
+            "answer_drift" => request => corpusMount.AnswerDrift(request, utcNow()),
             _ => throw new ArgumentOutOfRangeException(nameof(operationId), operationId, "Not a served operation."),
         };
     }

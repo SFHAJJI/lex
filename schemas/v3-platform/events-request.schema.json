@@ -9,7 +9,36 @@
     },
     "parameters": {
       "type": "object",
-      "additionalProperties": true
+      "additionalProperties": false,
+      "properties": {
+        "after": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}:(0|[1-9][0-9]{0,17})$"
+        },
+        "limit": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 200
+        },
+        "event": {
+          "type": "string",
+          "enum": [
+            "first_sighting",
+            "resighted",
+            "metadata_revised",
+            "validity_revised",
+            "interval_closed",
+            "withdrawn_from_source",
+            "expression_added",
+            "file_replaced",
+            "relation_asserted",
+            "relation_retracted",
+            "future_state_scheduled",
+            "future_state_activated"
+          ]
+        }
+      },
+      "required": []
     }
   },
   "required": [

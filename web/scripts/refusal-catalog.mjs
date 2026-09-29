@@ -234,7 +234,10 @@ export const REFUSAL_EXAMPLES = Object.freeze({
   },
   snapshot_unknown: {
     sentence: 'That snapshot identity is not one this build holds.',
-    payload: { snapshots_held: '2026-01-01' },
+    payload: {
+      snapshot_id: '0000000000000000000000000000000000000000000000000000000000000000',
+      what_would_answer: 'a cursor from this log, or no cursor to read it from its first event',
+    },
   },
   upstream_unreachable: {
     sentence: 'The publisher did not answer.',

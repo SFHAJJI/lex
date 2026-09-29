@@ -58,6 +58,15 @@ public sealed class LuxembourgIndexQueryPlanTests
     private static readonly (string Sql, (string, object)[] Parameters) WorkRecordsQuery =
         (LuxembourgIndexQueries.WorkRecords, [("$after", "a"), ("$language", "fra"), ("$type", "LOI"), ("$take", 10)]);
 
+    private static readonly (string Sql, (string, object)[] Parameters) EventsAfterQuery =
+        (LuxembourgIndexQueries.EventsAfter, [("$after", 1L), ("$take", 10)]);
+
+    private static readonly (string Sql, (string, object)[] Parameters) EventsOfNameAfterQuery =
+        (LuxembourgIndexQueries.EventsOfNameAfter, [("$after", 1L), ("$event", "first_sighting"), ("$take", 10)]);
+
+    private static readonly (string Sql, (string, object)[] Parameters) EventCountQuery =
+        (LuxembourgIndexQueries.EventCount, [("$events", "[\"validity_revised\",\"interval_closed\"]")]);
+
     /// <summary>
     /// The document behind each state asked for is reached from the list of states: each state by its digest, then its
     /// first article and that article's member, each by primary key. So its cost is the number of states in the list and
@@ -178,6 +187,60 @@ public sealed class LuxembourgIndexQueryPlanTests
         if (!plan.Any(static line => Regex.IsMatch(line, @"^SEARCH f USING (COVERING )?INDEX sqlite_autoindex_work_facts_1 \(subject_iri=\?")))
         {
             yield return "the type filter does not reach the facts by the table's primary key on the subject. " + shown;
+        }
+    }
+
+    /// <summary>
+    /// A page of the event log is a range on its primary key (the rowid) after the cursor, so it costs the rows it
+    /// returns and never the rows before it; the event name is a filter on those rows, never a reason to scan.
+    /// </summary>
+    private static IEnumerable<string> EventsAfterProblems(string label, string[] plan)
+    {
+        var shown = $"{label}, EventsAfter: {string.Join(" | ", plan)}";
+        if (plan.Any(static line => Regex.IsMatch(line, @"^SCAN e\b")))
+        {
+            yield return "the event log is scanned from its start. " + shown;
+        }
+
+        if (!plan.Any(static line => line.StartsWith("SEARCH e USING INTEGER PRIMARY KEY (rowid>?)", StringComparison.Ordinal)))
+        {
+            yield return "the page is not a range on the log's primary key after the cursor. " + shown;
+        }
+    }
+
+    /// <summary>
+    /// A page of one event name starts after the cursor: a range on the (event, seq) index, or, where the statistics say
+    /// every event carries one name (a genesis log holds only first_sighting), the rowid range with the name as a filter.
+    /// Never a pass over the log from its start.
+    /// </summary>
+    private static IEnumerable<string> EventsOfNameAfterProblems(string label, string[] plan)
+    {
+        var shown = $"{label}, EventsOfNameAfter: {string.Join(" | ", plan)}";
+        if (plan.Any(static line => Regex.IsMatch(line, @"^SCAN e\b")))
+        {
+            yield return "the event log is scanned for one name. " + shown;
+        }
+
+        if (!plan.Any(static line =>
+                Regex.IsMatch(line, @"^SEARCH e USING (COVERING )?INDEX events_event_seq \(event=\? AND seq>\?\)") ||
+                line.StartsWith("SEARCH e USING INTEGER PRIMARY KEY (rowid>?)", StringComparison.Ordinal)))
+        {
+            yield return "the page of one name is not a range after the cursor. " + shown;
+        }
+    }
+
+    /// <summary>How many events of a list of names: one search of the (event, seq) index per name, never a scan.</summary>
+    private static IEnumerable<string> EventCountProblems(string label, string[] plan)
+    {
+        var shown = $"{label}, EventCount: {string.Join(" | ", plan)}";
+        if (plan.Any(static line => Regex.IsMatch(line, @"^SCAN e\b")))
+        {
+            yield return "the event log is scanned to count names. " + shown;
+        }
+
+        if (!plan.Any(static line => Regex.IsMatch(line, @"^SEARCH e USING (COVERING )?INDEX events_event_seq \(event=\?")))
+        {
+            yield return "the names are not counted by the (event, seq) index. " + shown;
         }
     }
 
@@ -353,7 +416,11 @@ public sealed class LuxembourgIndexQueryPlanTests
             .Concat(CitationsToProblems("the index as built", Plan(connection, CitationsToQuery.Sql, CitationsToQuery.Parameters)))
             .Concat(StatesOfExpressionsProblems("the index as built", Plan(connection, StatesOfExpressionsQuery.Sql, StatesOfExpressionsQuery.Parameters)))
             .Concat(SubjectFactsProblems("the index as built", Plan(connection, SubjectFactsQuery.Sql, SubjectFactsQuery.Parameters)))
-            .Concat(WorkRecordsProblems("the index as built", Plan(connection, WorkRecordsQuery.Sql, WorkRecordsQuery.Parameters))).ToArray();
+            .Concat(WorkRecordsProblems("the index as built", Plan(connection, WorkRecordsQuery.Sql, WorkRecordsQuery.Parameters)))
+            // The event pages are not asked of the fixture as built: its log holds one event, and the planner rightly
+            // scans a one-row table rather than seek into it. They are held below, with no statistics and with
+            // statistics shaped like a real log, which is where a pass from the start would cost something.
+            .Concat(EventCountProblems("the index as built", Plan(connection, EventCountQuery.Sql, EventCountQuery.Parameters))).ToArray();
         Assert.AreEqual(0, problems.Length, string.Join(Environment.NewLine, problems));
     }
 
@@ -383,6 +450,8 @@ public sealed class LuxembourgIndexQueryPlanTests
                          "INSERT INTO sqlite_stat1 VALUES ('work_titles','sqlite_autoindex_work_titles_1','30000 5 5 4 2 1 1')",
                          "INSERT INTO sqlite_stat1 VALUES ('work_titles','work_titles_normalized','30000 3 1')",
                          "INSERT INTO sqlite_stat1 VALUES ('work_facts','sqlite_autoindex_work_facts_1','60000 20 4 2 1 1 1 1')",
+                         "INSERT INTO sqlite_stat1 VALUES ('events','events_event_seq','9000 9000 1')",
+                         "INSERT INTO sqlite_stat1 VALUES ('events','sqlite_autoindex_events_1','9000 9000 1 1')",
                      ], true),
                  })
         {
@@ -414,6 +483,9 @@ public sealed class LuxembourgIndexQueryPlanTests
             problems.AddRange(StatesOfExpressionsProblems(label, Plan(connection, StatesOfExpressionsQuery.Sql, StatesOfExpressionsQuery.Parameters)));
             problems.AddRange(SubjectFactsProblems(label, Plan(connection, SubjectFactsQuery.Sql, SubjectFactsQuery.Parameters)));
             problems.AddRange(WorkRecordsProblems(label, Plan(connection, WorkRecordsQuery.Sql, WorkRecordsQuery.Parameters)));
+            problems.AddRange(EventsAfterProblems(label, Plan(connection, EventsAfterQuery.Sql, EventsAfterQuery.Parameters)));
+            problems.AddRange(EventsOfNameAfterProblems(label, Plan(connection, EventsOfNameAfterQuery.Sql, EventsOfNameAfterQuery.Parameters)));
+            problems.AddRange(EventCountProblems(label, Plan(connection, EventCountQuery.Sql, EventCountQuery.Parameters)));
         }
 
         Assert.AreEqual(0, problems.Count, string.Join(Environment.NewLine, problems));
@@ -447,6 +519,13 @@ public sealed class LuxembourgIndexQueryPlanTests
             1,
             Occurrences(reader, "command.CommandText = LuxembourgIndexQueries.WorkRecords;"),
             "The reader does not run LuxembourgIndexQueries.WorkRecords exactly once, so the plan asked of it is not the plan it gets.");
+        foreach (var name in new[] { "EventsAfter", "EventsOfNameAfter", "EventCount" })
+        {
+            Assert.AreEqual(
+                1,
+                Occurrences(reader, $"command.CommandText = LuxembourgIndexQueries.{name};"),
+                $"The reader does not run LuxembourgIndexQueries.{name} exactly once, so the plan asked of it is not the plan it gets.");
+        }
         Assert.AreEqual(
             1,
             Occurrences(reader, "outcomes.CommandText = LuxembourgIndexQueries.MemberOutcomes;"),

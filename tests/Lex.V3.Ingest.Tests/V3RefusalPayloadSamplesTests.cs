@@ -140,6 +140,10 @@ public sealed class V3RefusalPayloadSamplesTests
         var work = $"/lu-legilux/{fixture.WorkKey}";
         const string unknown = "/lu-legilux/no-such-work";
         const string european = "32016R0679";
+
+        // An event cursor names its log; one from another log is not read against this one.
+        await DriveAsync(observed, mount, "events", "a cursor from another log", new { after = new string('0', 64) + ":1" }, "snapshot_unknown");
+        await DriveAsync(observed, mount, "answer_drift", "a cursor from another log", new { after = new string('0', 64) + ":1" }, "snapshot_unknown");
         const string beforeHistory = "1900-01-01";
         var date = fixture.ApplicabilityDate;
 
@@ -329,6 +333,8 @@ public sealed class V3RefusalPayloadSamplesTests
         await DriveAsync(observed, mount, "status_on", "no Luxembourg index", new { identifier = work, date = "2024-01-01" }, "no_corpus_mounted");
         await DriveAsync(observed, mount, "browse", "no Luxembourg index", new { }, "no_corpus_mounted");
         await DriveAsync(observed, mount, "ask", "no Luxembourg index", new { question = "Can I be fired while on sick leave?" }, "no_corpus_mounted");
+        await DriveAsync(observed, mount, "events", "no Luxembourg index", new { }, "no_corpus_mounted");
+        await DriveAsync(observed, mount, "answer_drift", "no Luxembourg index", new { }, "no_corpus_mounted");
     }
 
     /// <summary>Drives one served operation through the real handler and records the refusal, which must be the one named.</summary>
