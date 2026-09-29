@@ -465,7 +465,7 @@ public sealed class V3CorpusCoverageMountTests
             {
                 "how many acts the publisher holds, or how many of them this mount lacks: the mount records only what was admitted",
                 "the count of as-published acts never consolidated is a corpus-level statement this mount does not carry",
-                "no observation time or first-sighting event is held, so nothing here says when anything was first seen",
+                "no observation time is held, so nothing here says when anything was first seen; events serves a genesis log whose first_sighting events say only that a state is first present in that log",
                 "no build time of the corpus or index is held, so nothing here says how current these counts are; the corpus and index digests name exactly which artifacts are mounted",
                 "no status, repeal or commencement fact is counted here; status_on serves the publisher's force assertions per work, verbatim",
             },

@@ -82,13 +82,14 @@ const OPERATIONS_NOTE =
   + 'names (unknown_route)';
 
 const SERVED = Object.freeze([
-  'article_history', 'as_of', 'ask', 'browse', 'changes_in_period', 'citation', 'cited_by',
-  'classification', 'coverage', 'diff', 'dossier', 'evidence_bundle', 'in_force_on', 'manifestation',
-  'provenance', 'relations', 'resolve', 'search', 'status_on', 'timeline', 'verify',
+  'answer_drift', 'article_history', 'as_of', 'ask', 'browse', 'changes_in_period', 'citation',
+  'cited_by', 'classification', 'coverage', 'diff', 'dossier', 'events', 'evidence_bundle',
+  'in_force_on', 'manifestation', 'provenance', 'relations', 'resolve', 'search', 'status_on',
+  'timeline', 'verify',
 ]);
 
 const NOT_SERVED = Object.freeze([
-  'answer_drift', 'as_observed', 'concepts', 'events', 'knowable_on', 'transposition',
+  'as_observed', 'concepts', 'knowable_on', 'transposition',
 ]);
 
 const NOT_HELD = Object.freeze([
@@ -104,8 +105,9 @@ const NOT_HELD = Object.freeze([
   }),
   Object.freeze({
     item: 'first_sighting_and_observation_times',
-    reason: 'no observation time or first-sighting event is held, so nothing here says when '
-      + 'anything was first seen',
+    reason: 'no observation time is held, so nothing here says when anything was first seen; '
+      + 'events serves a genesis log whose first_sighting events say only that a state is first '
+      + 'present in that log',
   }),
   Object.freeze({
     item: 'build_time_and_currency',

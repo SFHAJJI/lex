@@ -283,6 +283,16 @@ public static class V3PlatformSchemaExporter
         "ask" => Parameters(
             ["question"],
             ("question", NonBlankString())),
+        "events" => Parameters(
+            [],
+            ("after", EventCursor()),
+            ("limit", RowLimit()),
+            ("event", OneOf(V3EventRegistry.Mintable))),
+        "answer_drift" => Parameters(
+            [],
+            ("identifier", NonBlankString()),
+            ("after", EventCursor()),
+            ("limit", RowLimit())),
         _ => ClosedObject(),
     };
 
@@ -340,6 +350,23 @@ public static class V3PlatformSchemaExporter
         ["type"] = "integer",
         ["minimum"] = 1,
         ["maximum"] = 200,
+    };
+
+    /// <summary>
+    /// A position in an event log: the log's identity (the digest of the index that holds it) and the
+    /// last sequence number read, so a cursor from another log is told apart rather than reinterpreted.
+    /// </summary>
+    private static JsonObject EventCursor() => new()
+    {
+        ["type"] = "string",
+        ["pattern"] = "^[0-9a-f]{64}:(0|[1-9][0-9]{0,17})$",
+    };
+
+    /// <summary>A string that is one of a closed list of values.</summary>
+    private static JsonObject OneOf(IEnumerable<string> values) => new()
+    {
+        ["type"] = "string",
+        ["enum"] = new JsonArray(values.Select(static value => (JsonNode)value).ToArray()),
     };
 
     private static JsonObject ClosedObject() => new()

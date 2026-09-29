@@ -1955,7 +1955,8 @@ public sealed class V3CorpusResolveMountTests
                 Assert.AreEqual(1, insert.ExecuteNonQuery());
             }
 
-            return LuxembourgIndexBuilder.HashLogicalRows(members, articles, states, titles, relations, facts);
+            var events = LuxembourgIndexBuilderTests.RefreshGenesisEvents(connection, states);
+            return LuxembourgIndexBuilder.HashLogicalRows(members, articles, states, titles, relations, facts, events);
         }
 
         private static LuxembourgIndexBuilder.MemberRow[] ReadMembers(SqliteConnection connection)

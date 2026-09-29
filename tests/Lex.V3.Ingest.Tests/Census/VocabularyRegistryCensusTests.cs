@@ -76,10 +76,11 @@ public sealed class VocabularyRegistryCensusTests
                 "Lex.V3.Ingest.Luxembourg.LuxembourgIndexBuilder: const Ddl, const LegiluxEliRoot, "
                     + "const Schema",
                 "Lex.V3.Ingest.Luxembourg.LuxembourgIndexQueries: const AnchorArticles, "
-                    + "const ArticleIds, const CitationsTo, const HeldWorks, const MemberOutcomes, "
-                    + "const StateArticles, const StateCitations, const StateDocumentOutcomes, "
-                    + "const StateSources, const StatesOfExpressions, const SubjectFacts, "
-                    + "const WorkRecords, const WorkTitles",
+                    + "const ArticleIds, const CitationsTo, const EventCount, const EventLog, "
+                    + "const EventsAfter, const EventsOfNameAfter, const HeldWorks, "
+                    + "const MemberOutcomes, const StateArticles, const StateCitations, "
+                    + "const StateDocumentOutcomes, const StateSources, const StatesOfExpressions, "
+                    + "const SubjectFacts, const WorkRecords, const WorkTitles",
                 "Lex.V3.Ingest.Luxembourg.LuxembourgPublisherPdfActScopeProducer: const "
                     + "AdministrativeMemorialPrefix, const ExpectedResourceHost, "
                     + "const LegislativeMemorialPrefix, const RuleProfile, "

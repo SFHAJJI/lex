@@ -32,7 +32,9 @@ internal sealed record V3RestRouteBinding(string RawTarget, string OperationId)
     public static readonly V3RestRouteBinding StatusOn = new("/api/v3/status_on", "status_on");
     public static readonly V3RestRouteBinding Browse = new("/api/v3/browse", "browse");
     public static readonly V3RestRouteBinding Ask = new("/api/v3/ask", "ask");
-    public static readonly IReadOnlyList<V3RestRouteBinding> Served = [Resolve, AsOf, Timeline, ArticleHistory, Diff, ChangesInPeriod, InForceOn, Search, Coverage, Provenance, Dossier, Citation, CitedBy, Verify, Relations, EvidenceBundle, Classification, Manifestation, StatusOn, Browse, Ask];
+    public static readonly V3RestRouteBinding Events = new("/api/v3/events", "events");
+    public static readonly V3RestRouteBinding AnswerDrift = new("/api/v3/answer_drift", "answer_drift");
+    public static readonly IReadOnlyList<V3RestRouteBinding> Served = [Resolve, AsOf, Timeline, ArticleHistory, Diff, ChangesInPeriod, InForceOn, Search, Coverage, Provenance, Dossier, Citation, CitedBy, Verify, Relations, EvidenceBundle, Classification, Manifestation, StatusOn, Browse, Ask, Events, AnswerDrift];
 
     public bool Claims(string rawTarget) =>
         string.Equals(rawTarget, RawTarget, StringComparison.Ordinal) ||

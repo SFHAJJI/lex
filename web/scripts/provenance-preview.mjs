@@ -73,8 +73,9 @@ const SOURCES_NOTE =
 const NOT_HELD = Object.freeze([
   Object.freeze({
     item: 'first_sighting_event',
-    reason: 'no observation time or first-sighting event is held, so nothing here says when the '
-      + 'publisher’s bytes were first seen',
+    reason: 'no observation time is held, so nothing here says when the publisher’s bytes were '
+      + 'first seen; the event log’s first_sighting (events) says only that a state is first '
+      + 'present in that log',
   }),
   Object.freeze({
     item: 'signature_stamp',

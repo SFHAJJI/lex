@@ -79,8 +79,11 @@ public sealed class GuardedConstructionCensusTests
                     + "method private instance Lex.V3.Api.V3CorpusMount::ModeUnavailable, "
                     + "method private instance Lex.V3.Api.V3CorpusMount::RefuseAmbiguousVersion, "
                     + "method private instance Lex.V3.Api.V3CorpusMount::RefuseNoVersionForDate, "
+                    + "method private instance "
+                    + "Lex.V3.Api.V3CorpusMount::RefuseUnlessCursorOfThisLog, "
                     + "method private instance Lex.V3.Api.V3CorpusMount::RefuseUnlessWorkStates, "
                     + "method private instance Lex.V3.Api.V3CorpusMount::Unknown, "
+                    + "method public instance Lex.V3.Api.V3CorpusMount::AnswerDrift, "
                     + "method public instance Lex.V3.Api.V3CorpusMount::ArticleHistory, "
                     + "method public instance Lex.V3.Api.V3CorpusMount::AsOf, "
                     + "method public instance Lex.V3.Api.V3CorpusMount::Ask, "
@@ -92,6 +95,7 @@ public sealed class GuardedConstructionCensusTests
                     + "method public instance Lex.V3.Api.V3CorpusMount::Coverage, "
                     + "method public instance Lex.V3.Api.V3CorpusMount::Diff, "
                     + "method public instance Lex.V3.Api.V3CorpusMount::Dossier, "
+                    + "method public instance Lex.V3.Api.V3CorpusMount::Events, "
                     + "method public instance Lex.V3.Api.V3CorpusMount::EvidenceBundle, "
                     + "method public instance Lex.V3.Api.V3CorpusMount::InForceOn, "
                     + "method public instance Lex.V3.Api.V3CorpusMount::Manifestation, "
@@ -104,7 +108,7 @@ public sealed class GuardedConstructionCensusTests
                     + "method public instance Lex.V3.Api.V3CorpusMount::Verify, "
                     + "method public static Lex.V3.Api.V3PlatformOperationOutcome::Refused, "
                     + "method public static Lex.V3.Api.V3PlatformOperationOutcome::Success, "
-                    + "21 compiler-generated",
+                    + "23 compiler-generated",
                 "Lex.V3.Api.V3PlatformSchemaDocuments: constructor private instance "
                     + "Lex.V3.Api.V3PlatformSchemaDocuments::.ctor, "
                     + "constructor private static Lex.V3.Api.V3PlatformSchemaDocuments::.cctor, "

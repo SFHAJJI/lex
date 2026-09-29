@@ -4,6 +4,7 @@ using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Lex.V3.Contracts;
+using Lex.V3.Contracts.Platform;
 using Lex.V3.Contracts.Index;
 using Lex.V3.Contracts.Source.Core;
 using Microsoft.Data.Sqlite;
@@ -238,12 +239,31 @@ public sealed record LuxembourgIndexWorkFact(
     string EvidenceSha256);
 
 /// <summary>
+/// One event of the index's log as the reader hands it out: its sequence number, scope and name, the
+/// observation time (null: no observation time is held, and none is invented), and the state it is
+/// about, by the states table's key and digest.
+/// </summary>
+public sealed record LuxembourgIndexEvent(
+    long Seq,
+    string Scope,
+    string Event,
+    string? ObservedFrom,
+    string WorkKey,
+    string ApplicabilityDate,
+    string ExpressionIri,
+    string Language,
+    string StateSha256);
+
+/// <summary>What the index's event log holds: how many events and the last sequence number (0 when empty).</summary>
+public sealed record LuxembourgIndexEventLog(long Events, long LastSeq);
+
+/// <summary>
 /// Builds the immutable Luxembourg index from the same proof-complete envelope that builds
 /// lex-corpus/6. Callers cannot provide index rows or capability counts.
 /// </summary>
 public static class LuxembourgIndexBuilder
 {
-    public const string Schema = "lex-v3-luxembourg-index/5";
+    public const string Schema = "lex-v3-luxembourg-index/6";
     private const int ApplicationId = 0x4c563306;
     private const string Ddl = """
         CREATE TABLE stamp (
@@ -328,6 +348,16 @@ public static class LuxembourgIndexBuilder
           evidence_sha256 TEXT COLLATE BINARY NOT NULL CHECK (length(evidence_sha256) = 64),
           PRIMARY KEY (subject_iri, predicate, object_kind, object_value, datatype_iri, language_tag, evidence_sha256)
         ) STRICT;
+        CREATE TABLE events (
+          seq INTEGER NOT NULL PRIMARY KEY CHECK (seq >= 1),
+          scope TEXT COLLATE BINARY NOT NULL CHECK (scope IN ('state')),
+          key TEXT COLLATE BINARY NOT NULL,
+          event TEXT COLLATE BINARY NOT NULL CHECK (event IN ('first_sighting')),
+          observed_from TEXT COLLATE BINARY CHECK (observed_from IS NULL),
+          detail_json TEXT COLLATE BINARY NOT NULL,
+          UNIQUE (scope, key, event)
+        ) STRICT;
+        CREATE INDEX events_event_seq ON events(event, seq);
         """;
 
     public static LuxembourgIndexBuildResult? TryBuild(
@@ -369,12 +399,13 @@ public static class LuxembourgIndexBuilder
         }
 
         var relations = ProjectRelations(articles);
-        var logicalRowsSha256 = HashLogicalRows(members, articles, states, workTitles, relations, workFacts);
+        var events = ProjectGenesisEvents(states);
+        var logicalRowsSha256 = HashLogicalRows(members, articles, states, workTitles, relations, workFacts, events);
         var path = Path.Combine(Path.GetTempPath(), $"lex-v3-lu-index-{Guid.NewGuid():N}.sqlite");
         try
         {
             BuildDatabase(
-                path, corpus.ArtifactRef.Sha256, logicalRowsSha256, members, articles, states, workTitles, relations, workFacts);
+                path, corpus.ArtifactRef.Sha256, logicalRowsSha256, members, articles, states, workTitles, relations, workFacts, events);
             var bytes = File.ReadAllBytes(path);
             var digest = Convert.ToHexStringLower(SHA256.HashData(bytes));
             var indexRef = new SourceArtifactRef(LexCorpus6Builder.ResourceIdOf(digest), digest);
@@ -618,6 +649,30 @@ public static class LuxembourgIndexBuilder
             .ThenBy(static row => row.DatatypeIri, StringComparer.Ordinal)
             .ThenBy(static row => row.LanguageTag, StringComparer.Ordinal)
             .ThenBy(static row => row.EvidenceSha256, StringComparer.Ordinal)
+            .ToArray();
+
+    /// <summary>
+    /// The event log of an index built from one observation with no predecessor (a genesis log): one
+    /// <c>first_sighting</c> per held state, in the states table's order, numbered from 1. The key is the
+    /// states table's primary key as a JSON array, which a later build keeps for the same state, so a
+    /// comparison can say file_replaced rather than a withdrawal and a new sighting; the detail carries
+    /// the state's digest. No observation time is held, so none is written: first_sighting here means
+    /// first present in this log, not when the publisher published the text or when it was fetched.
+    /// A pure function of the states, so the reader recomputes it and refuses any other rows.
+    /// </summary>
+    internal static EventRow[] ProjectGenesisEvents(IReadOnlyList<StateRow> states) =>
+        states
+            .OrderBy(static row => row.WorkKey, StringComparer.Ordinal)
+            .ThenBy(static row => row.ApplicabilityDate, StringComparer.Ordinal)
+            .ThenBy(static row => row.ExpressionIri, StringComparer.Ordinal)
+            .ThenBy(static row => row.Language, StringComparer.Ordinal)
+            .Select(static (row, index) => new EventRow(
+                index + 1L,
+                "state",
+                JsonSerializer.Serialize(new[] { row.WorkKey, row.ApplicabilityDate, row.ExpressionIri, row.Language }),
+                V3EventRegistry.FirstSighting,
+                null,
+                JsonSerializer.Serialize(new { state_sha256 = row.StateSha256 })))
             .ToArray();
 
     private static string LanguageToken(string iri)
@@ -905,7 +960,8 @@ public static class LuxembourgIndexBuilder
         IReadOnlyList<StateRow> states,
         IReadOnlyList<WorkTitleRow> workTitles,
         IReadOnlyList<RelationRow> relations,
-        IReadOnlyList<WorkFactRow> workFacts)
+        IReadOnlyList<WorkFactRow> workFacts,
+        IReadOnlyList<EventRow> events)
     {
         using var connection = Open(path, SqliteOpenMode.ReadWriteCreate);
         Execute(connection, "PRAGMA page_size=4096");
@@ -915,7 +971,7 @@ public static class LuxembourgIndexBuilder
         Execute(connection, "PRAGMA synchronous=FULL");
         Execute(connection, "PRAGMA foreign_keys=ON");
         Execute(connection, $"PRAGMA application_id={ApplicationId}");
-        Execute(connection, "PRAGMA user_version=5");
+        Execute(connection, "PRAGMA user_version=6");
         using var transaction = connection.BeginTransaction();
         Execute(connection, Ddl, transaction);
         foreach (var member in members)
@@ -962,6 +1018,12 @@ public static class LuxembourgIndexBuilder
                 "INSERT INTO work_facts VALUES($p0,$p1,$p2,$p3,$p4,$p5,$p6,$p7)",
                 fact.SubjectIri, fact.Predicate, fact.FactKind, fact.ObjectKind, fact.ObjectValue,
                 fact.DatatypeIri, fact.LanguageTag, fact.EvidenceSha256);
+        }
+        foreach (var value in events)
+        {
+            Insert(connection, transaction,
+                "INSERT INTO events VALUES($p0,$p1,$p2,$p3,$p4,$p5)",
+                value.Seq, value.Scope, value.Key, value.Event, value.ObservedFrom, value.DetailJson);
         }
         var provenance = SqliteProvenance.Read(connection);
         Insert(connection, transaction, "INSERT INTO stamp VALUES(1,$p0,$p1,$p2,$p3,$p4,$p5)",
@@ -1012,8 +1074,9 @@ public static class LuxembourgIndexBuilder
         try
         {
             var relations = ProjectRelations(articles);
-            BuildDatabase(path, new string('a', 64), HashLogicalRows(members, articles, states, titles, relations, facts),
-                members, articles, states, titles, relations, facts);
+            var events = ProjectGenesisEvents(states);
+            BuildDatabase(path, new string('a', 64), HashLogicalRows(members, articles, states, titles, relations, facts, events),
+                members, articles, states, titles, relations, facts, events);
             return File.ReadAllBytes(path);
         }
         finally
@@ -1068,10 +1131,11 @@ public static class LuxembourgIndexBuilder
         IReadOnlyList<StateRow> states,
         IReadOnlyList<WorkTitleRow> workTitles,
         IReadOnlyList<RelationRow> relations,
-        IReadOnlyList<WorkFactRow> workFacts)
+        IReadOnlyList<WorkFactRow> workFacts,
+        IReadOnlyList<EventRow> events)
     {
         var bytes = JsonSerializer.SerializeToUtf8Bytes(
-            new LogicalRows(members, articles, states, workTitles, relations, workFacts));
+            new LogicalRows(members, articles, states, workTitles, relations, workFacts, events));
         return Convert.ToHexStringLower(SHA256.HashData(bytes));
     }
 
@@ -1247,13 +1311,27 @@ public static class LuxembourgIndexBuilder
         string LanguageTag,
         string EvidenceSha256);
 
+    /// <summary>
+    /// One row of the event log (<see cref="ProjectGenesisEvents"/>): the sequence number, the scope
+    /// (<c>state</c>), the key (the state's primary key as a JSON array), the event name, the observation
+    /// time (null: none is held) and the detail (the state's digest as JSON).
+    /// </summary>
+    internal sealed record EventRow(
+        long Seq,
+        string Scope,
+        string Key,
+        string Event,
+        string? ObservedFrom,
+        string DetailJson);
+
     private sealed record LogicalRows(
         IReadOnlyList<MemberRow> Members,
         IReadOnlyList<ArticleRow> Articles,
         IReadOnlyList<StateRow> States,
         IReadOnlyList<WorkTitleRow> WorkTitles,
         IReadOnlyList<RelationRow> Relations,
-        IReadOnlyList<WorkFactRow> WorkFacts);
+        IReadOnlyList<WorkFactRow> WorkFacts,
+        IReadOnlyList<EventRow> Events);
 
     internal static string NormalizeTitle(string value)
     {
@@ -1446,7 +1524,7 @@ public sealed class LuxembourgIndexReader : IDisposable
             LuxembourgIndexBuilder.EnsureExactSchema(connection);
             if (!string.Equals(Scalar(connection, "PRAGMA integrity_check"), "ok", StringComparison.Ordinal) ||
                 Convert.ToInt32(Scalar(connection, "PRAGMA application_id"), CultureInfo.InvariantCulture) != 0x4c563306 ||
-                Convert.ToInt32(Scalar(connection, "PRAGMA user_version"), CultureInfo.InvariantCulture) != 5)
+                Convert.ToInt32(Scalar(connection, "PRAGMA user_version"), CultureInfo.InvariantCulture) != 6)
             {
                 throw new InvalidDataException("The Luxembourg index failed SQLite integrity or schema identity checks.");
             }
@@ -1480,12 +1558,16 @@ public sealed class LuxembourgIndexReader : IDisposable
             var workTitles = ReadWorkTitles(connection);
             var relations = ReadRelations(connection);
             var workFacts = ReadWorkFacts(connection);
+            var events = ReadEvents(connection);
             ValidateStates(articles, states);
             if (!LuxembourgIndexBuilder.ProjectRelations(articles).SequenceEqual(relations))
                 throw new InvalidDataException(
                     "The Luxembourg index relation rows are not the references its articles carry.");
+            if (!LuxembourgIndexBuilder.ProjectGenesisEvents(states).SequenceEqual(events))
+                throw new InvalidDataException(
+                    "The Luxembourg index event rows are not the genesis log of its states.");
             if (!string.Equals(
-                    LuxembourgIndexBuilder.HashLogicalRows(members, articles, states, workTitles, relations, workFacts),
+                    LuxembourgIndexBuilder.HashLogicalRows(members, articles, states, workTitles, relations, workFacts, events),
                     expectedLogical,
                     StringComparison.Ordinal))
                 throw new InvalidDataException("The Luxembourg index logical rows do not match their stamp.");
@@ -2468,6 +2550,75 @@ public sealed class LuxembourgIndexReader : IDisposable
     /// optionally those with a state in a language, those whose publisher typeDocument is the given IRI or
     /// ends in the given token, and those after a work key. <paramref name="take"/> rows at most.
     /// </summary>
+    /// <summary>How many events the log holds and its last sequence number (0 when it holds none).</summary>
+    public LuxembourgIndexEventLog ResolveEventLog()
+    {
+        lock (_gate)
+        {
+            using var command = _connection.CreateCommand();
+            command.CommandText = LuxembourgIndexQueries.EventLog;
+            using var reader = command.ExecuteReader();
+            reader.Read();
+            return new LuxembourgIndexEventLog(reader.GetInt64(0), reader.GetInt64(1));
+        }
+    }
+
+    /// <summary>
+    /// The events after a sequence number, in sequence order, at most <paramref name="take"/>, optionally
+    /// of one event name (<see cref="LuxembourgIndexQueries.EventsAfter"/>,
+    /// <see cref="LuxembourgIndexQueries.EventsOfNameAfter"/>). The key and detail are read
+    /// back into the state's key columns and digest, which the reader verified against the states table
+    /// when it opened.
+    /// </summary>
+    public IReadOnlyList<LuxembourgIndexEvent> ResolveEvents(long afterSeq, string? eventName, int take)
+    {
+        if (afterSeq < 0) throw new ArgumentOutOfRangeException(nameof(afterSeq));
+        if (take < 1) throw new ArgumentOutOfRangeException(nameof(take));
+        lock (_gate)
+        {
+            using var command = _connection.CreateCommand();
+            if (eventName is null)
+            {
+                command.CommandText = LuxembourgIndexQueries.EventsAfter;
+            }
+            else
+            {
+                command.CommandText = LuxembourgIndexQueries.EventsOfNameAfter;
+                command.Parameters.AddWithValue("$event", eventName);
+            }
+
+            command.Parameters.AddWithValue("$after", afterSeq);
+            command.Parameters.AddWithValue("$take", take);
+            using var reader = command.ExecuteReader();
+            var values = new List<LuxembourgIndexEvent>();
+            while (reader.Read())
+            {
+                var key = JsonSerializer.Deserialize<string[]>(reader.GetString(2))!;
+                using var detail = JsonDocument.Parse(reader.GetString(5));
+                values.Add(new LuxembourgIndexEvent(
+                    reader.GetInt64(0), reader.GetString(1), reader.GetString(3),
+                    reader.IsDBNull(4) ? null : reader.GetString(4),
+                    key[0], key[1], key[2], key[3],
+                    detail.RootElement.GetProperty("state_sha256").GetString()!));
+            }
+
+            return Array.AsReadOnly(values.ToArray());
+        }
+    }
+
+    /// <summary>How many events of the given names the log holds.</summary>
+    public long CountEvents(IReadOnlyList<string> eventNames)
+    {
+        ArgumentNullException.ThrowIfNull(eventNames);
+        lock (_gate)
+        {
+            using var command = _connection.CreateCommand();
+            command.CommandText = LuxembourgIndexQueries.EventCount;
+            command.Parameters.AddWithValue("$events", JsonSerializer.Serialize(eventNames));
+            return Convert.ToInt64(command.ExecuteScalar(), CultureInfo.InvariantCulture);
+        }
+    }
+
     public IReadOnlyList<LuxembourgIndexWorkRecord> ResolveWorkRecords(string? language, string? type, string? afterWorkKey, int take)
     {
         ArgumentOutOfRangeException.ThrowIfLessThan(take, 1);
@@ -2720,6 +2871,18 @@ public sealed class LuxembourgIndexReader : IDisposable
             reader.IsDBNull(6) ? null : reader.GetString(6),
             reader.IsDBNull(7) ? null : reader.GetString(7),
             reader.GetString(8), reader.IsDBNull(9) ? null : reader.GetString(9)));
+        return values.ToArray();
+    }
+
+    private static LuxembourgIndexBuilder.EventRow[] ReadEvents(SqliteConnection connection)
+    {
+        using var command = connection.CreateCommand();
+        command.CommandText = "SELECT seq,scope,key,event,observed_from,detail_json FROM events ORDER BY seq";
+        using var reader = command.ExecuteReader();
+        var values = new List<LuxembourgIndexBuilder.EventRow>();
+        while (reader.Read()) values.Add(new(
+            reader.GetInt64(0), reader.GetString(1), reader.GetString(2), reader.GetString(3),
+            reader.IsDBNull(4) ? null : reader.GetString(4), reader.GetString(5)));
         return values.ToArray();
     }
 

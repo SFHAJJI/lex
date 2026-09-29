@@ -5,7 +5,6 @@
     "not_transposable",
     "out_of_corpus_scope",
     "rate_limited",
-    "snapshot_unknown",
     "upstream_unreachable"
   ],
   "produced": [
@@ -166,6 +165,7 @@
         "required_corpus": "lu"
       },
       "produced_by": [
+        "answer_drift",
         "article_history",
         "as_of",
         "ask",
@@ -177,6 +177,7 @@
         "coverage",
         "diff",
         "dossier",
+        "events",
         "evidence_bundle",
         "in_force_on",
         "manifestation",
@@ -279,6 +280,18 @@
         "status_on",
         "timeline",
         "verify"
+      ]
+    },
+    {
+      "code": "snapshot_unknown",
+      "optional_payload_keys": [],
+      "payload": {
+        "snapshot_id": "0000000000000000000000000000000000000000000000000000000000000000",
+        "what_would_answer": "a cursor from this log (its log_id is the mounted index digest), or no cursor to read this log from its first event"
+      },
+      "produced_by": [
+        "answer_drift",
+        "events"
       ]
     },
     {

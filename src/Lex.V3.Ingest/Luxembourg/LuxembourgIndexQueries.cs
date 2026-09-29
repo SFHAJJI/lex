@@ -157,6 +157,36 @@ internal static class LuxembourgIndexQueries
         "AND f.predicate='typeDocument' AND (f.object_value=$type OR substr(f.object_value,-(length($type)+1))='/'||$type))) " +
         "GROUP BY s.work_key ORDER BY s.work_key LIMIT $take";
 
+    /// <summary>The event log's size and last sequence number, read from the primary key (the rowid).</summary>
+    internal const string EventLog =
+        "SELECT COUNT(*),coalesce(MAX(e.seq),0) FROM events e";
+
+    /// <summary>
+    /// The events after a sequence number, in sequence order: a range on the primary key (the rowid), so
+    /// a page costs the rows it returns and never the rows before it.
+    /// </summary>
+    internal const string EventsAfter =
+        "SELECT e.seq,e.scope,e.key,e.event,e.observed_from,e.detail_json " +
+        "FROM events e " +
+        "WHERE e.seq > $after " +
+        "ORDER BY e.seq LIMIT $take";
+
+    /// <summary>
+    /// The events of one name after a sequence number, in sequence order: a range on the (event, seq)
+    /// index, so a rare name costs its own rows and never a pass over the log. A separate text from
+    /// <see cref="EventsAfter"/>, because an optional filter in one statement hides both ranges from
+    /// the planner.
+    /// </summary>
+    internal const string EventsOfNameAfter =
+        "SELECT e.seq,e.scope,e.key,e.event,e.observed_from,e.detail_json " +
+        "FROM events e " +
+        "WHERE e.event = $event AND e.seq > $after " +
+        "ORDER BY e.seq LIMIT $take";
+
+    /// <summary>How many events of a list of names the log holds, by the (event, seq) index.</summary>
+    internal const string EventCount =
+        "SELECT COUNT(*) FROM events e WHERE e.event IN (SELECT value FROM json_each($events))";
+
     internal const string StateSources =
         "SELECT DISTINCT m.object_ref_sha256,m.outcome,m.rights_disposition,m.gaps_json " +
         "FROM states s CROSS JOIN json_each(s.article_identities_json) j " +

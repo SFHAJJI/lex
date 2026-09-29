@@ -5,10 +5,10 @@ every pull request that changes what is served, what is next or what is blocked.
 
 ## Heads
 
-- `v3/integration`: `cd478f3c` (2026-09-29, PR #758 merged). Build 45 s. Fast lane
-  (`eng/test-fast.ps1`): 3,035 tests with PR #759, 3,034 pass, 1 skipped (PR #759 adds one and
-  rewrites two). Ingest suite: green on CI for PR #758 (the CI `dotnet` job runs the whole solution on every
-  pull request, about 6 min on the runner); locally about 15 min. 771 web tests pass.
+- `v3/integration`: `41edf9ae` (2026-09-29, PR #759 merged). Build 45 s. Fast lane
+  (`eng/test-fast.ps1`): 3,038 tests with PR #760, 3,037 pass, 1 skipped. Ingest suite: green on
+  CI for PR #759 (the CI `dotnet` job runs the whole solution on every pull request, about 7 min on
+  the runner); locally about 15 min. 771 web tests pass.
 - Driver: Claude Opus 5.5 since 2026-09-29 (the Fable 5.1 driver ran out of tokens on 2026-09-28
   after PR #757; the user default model is now `claude-opus-5-5`).
 - Plan: `C:\lex-v3\V3-FINISH-PLAN-2026-09-27.md` (owner's copy). Decision 94 (one driver, one queue,
@@ -23,8 +23,43 @@ hash-pinned permalink verified against the state digest the index holds; a work 
 stable coordinate answers the current digests), `relations` (PR #753: the one edge table in both
 directions, `cites` edges only, what `citation` and `cited_by` serve as one ordered, paged list),
 `evidence_bundle` (PR #755), `classification` and `manifestation` (PR #756), `status_on` and
-`browse` (PR #757), and `ask` as the contained assistant (PR #759). Without a mounted corpus every
-route answers `no_corpus_mounted`. EU serves `resolve` only.
+`browse` (PR #757), `ask` as the contained assistant (PR #759), and `events` and `answer_drift`
+over a genesis event log (PR #760). Without a mounted corpus every route answers
+`no_corpus_mounted`. EU serves `resolve` only.
+
+`events` and `answer_drift` (PR #760) read a new index table, `events`: the index's append-only
+event log (`seq`, `scope`, `key`, `event`, `observed_from`, `detail_json`; schema
+`lex-v3-luxembourg-index/6`, `user_version` 6, the fixed-input byte pin moved). A build is one
+observation with no predecessor, so its log is a **genesis log**: one `first_sighting` per held
+state, in the states table's key order, numbered from 1, keyed by the state's primary key and
+carrying its digest, with `observed_from` null because no observation time reaches the index (the
+body's HTTP evidence stays in the adapter, and the custody receipt's clock is not an observation
+time, so none is invented). The log is a pure function of the states, so the reader recomputes it
+and refuses any other rows. `events` takes `after` (a cursor `{log_id}:{seq}`, where the log id is
+the index digest), `limit` (up to 200) and `event` (one of the mintable names); it answers the
+events with their state's permalink and stable coordinate, `has_more` and `next_after` (always the
+cursor to poll next), the log block (`basis: genesis`, `predecessor_index_sha256: null`,
+`observations_compared: 0`, count, last seq), the delivery rule (cursor polling, at least once,
+deduplicate by seq within log id, no push: Decision 93), what `first_sighting` does not say, that
+silence is not upstream health, the twelve names this pipeline may mint (this build mints
+`first_sighting` only; the others need a predecessor build) and those this log holds, and what is
+not held. Append-only and "the same cursor answers the same events" hold while one index is
+mounted, and the answer says so: a new build starts a new log whose cursors are new. A cursor from another log refuses `snapshot_unknown` (its first producer) rather than
+being read against this one; a sequence number beyond the log's last is a request-schema failure.
+`answer_drift` (optional `identifier`, refusing as `dossier` refuses; `after`; `limit`) enumerates
+the past dated answers the log's `validity_revised` and `interval_closed` events invalidated; a
+genesis log holds none, so it answers an empty list with its basis, `asserts_no_drift_in_law:
+false`, `asserts_publisher_unrevised: false` and what would answer (a later build compared against
+this one), never "nothing drifted". The code holds twelve event names (`V3EventRegistry`); the Stage
+4 registry's thirteenth, the coverage event, is never minted (B42 finding 5.2; the scope-line gate
+forbids production source naming it) and is an owner question below. The two "not held" sentences
+that said no first-sighting event is held (`provenance`, `coverage`) now say no observation time is
+held and what the log's `first_sighting` does and does not mean. Decisions taken by the driver,
+reversible: events are scoped to states (no work-level events); the cursor names its log;
+`answer_drift`'s future rows are date intervals per revising event (stated in the answer).
+Deferred to the next index schema: predecessor chaining (the builder takes the previous verified
+index, copies its log unchanged and appends comparison events), `observed_from` from the route
+evidence, and every revision event.
 
 `ask` (PR #759) answers the containment and nothing else (Decisions 51 and 91, S4-A05): every
 request, whatever the question, is a success envelope under the `point` verdict whose result is a
@@ -80,7 +115,7 @@ comparison and nothing more (an inForceStatus token is served, not read); `brows
 publisher's typed assertions from the Stage 3 envelope (`TypedAssertions`, all 26 admitted
 predicates), verbatim, one row per assertion with the subject, the predicate and fact kind as the
 closed vocabulary names them, the object as an IRI or a literal with its datatype and language tag,
-and the observation digest. The index schema is `lex-v3-luxembourg-index/5` (`user_version` 5; the
+and the observation digest. The index schema was `lex-v3-luxembourg-index/5` (`user_version` 5; the
 stamp, the logical-rows hash and the reader's exact-schema check all cover the new table; the
 fixed-input byte pin moved). `classification` takes `dossier`'s request (`identifier`, optional
 `language`) and answers the facts on the work's own IRIs and the selected expressions grouped by
@@ -130,8 +165,8 @@ profession" runs together; the token stream the composer could render from is in
 the reading view's own provision-level one (two producers, two declared key sets) and the catalog's
 two text examples show the producer's fields.
 
-Registered and not served: `answer_drift`, `as_observed`, `concepts`, `events`,
-`knowable_on`, `transposition`. Since PR #758 a request for one of them is the typed
+Registered and not served: `as_observed`, `concepts`, `knowable_on`, `transposition`. Since PR
+#758 a request for one of them is the typed
 transport failure `operation_not_served` (HTTP 404, `application/problem+json`, below the envelope
 like every transport failure), which tells a registered operation with no route apart from a path
 nothing names (`unknown_route`, still the answer for a typo, a query string, a trailing segment or
@@ -151,7 +186,7 @@ the platform's 1 MiB ceiling is 413 before parsing; no server-initiated stream i
 per served REST operation, named by its operation id, whose `inputSchema` is the reviewed request
 schema's `parameters` shape, and whose call runs the same dispatch the REST route runs
 (`V3ApiHandler.ExecuteFor`), so the two transports answer one envelope for one request; the
-endpoint test proves it for all twenty-one. The launch-contract line "REST and MCP derive identical
+endpoint test proves it for all twenty-three. The launch-contract line "REST and MCP derive identical
 envelopes from the registry" is the owner's to tick.
 
 Web: 28 React components, 771 tests; no call to `/api/v3` yet. Screens render fixtures.
@@ -375,17 +410,22 @@ Web: 28 React components, 771 tests; no call to `/api/v3` yet. Screens render fi
    over streamable HTTP by PR #754, `evidence_bundle` by PR #755, `classification` and
    `manifestation` by PR #756, `status_on` and `browse` by PR #757; a request to an unserved
    operation answers the transport failure `operation_not_served`, PR #758; `ask` answers the
-   contained `assistant_v3_unavailable` card, PR #759). Six remain, all needing data the ingest does
-   not produce. `events` and `answer_drift` are launch-contract lines of their own ("append-only log,
-   cursor polling at-least-once, `answer_drift`"), so they must be served, not refused: next, the
-   driver designs the event log over what a build holds (a single build has no revision to report,
-   so the design question is what the first event is). For the other four (`as_observed`,
-   `knowable_on`, `concepts`, `transposition`) there is an owner question below.
+   contained `assistant_v3_unavailable` card, PR #759; `events` and `answer_drift` over a genesis
+   log, PR #760). Four remain (`as_observed`, `knowable_on`, `concepts`, `transposition`), all
+   needing data the ingest does not produce; owner question below. The event log's next step,
+   predecessor chaining with observation times, needs a second build, so it follows the first mount.
 5. EU parity: every temporal and search operation from the EU index; French expressions.
 6. Wire the eight launch screens to `/api/v3`; journeys J1 to J8 in a real browser.
 7. Release pipeline: build, sign, image, zero-traffic deploy, probes. Then acceptance and promotion.
 
 ## Blocked or waiting on the owner
+
+- The event log (PR #760): (a) is the mintable registry twelve names, the coverage event never
+  minted under B42 finding 5.2, or should the scope-line gate be amended to admit a name that is
+  never emitted; (b) may launch ship genesis-only logs (append-only within one log; a rebuild or a
+  rollback starts a new log whose cursors are new), or must predecessor chaining land first; (c) a
+  cursor from a retired log refuses `snapshot_unknown` (the driver's default) rather than restarting
+  from seq 1 silently.
 
 - The EUR-Lex legal notice answered the tool's one Decision 88 GET with an empty HTTP 202, so no
   corpus can be built (Data, attempt 2): (a) the builder accepts a typed

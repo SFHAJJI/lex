@@ -547,7 +547,7 @@ public sealed class V3CorpusProvenanceMountTests
         CollectionAssert.AreEqual(
             new[]
             {
-                "no observation time or first-sighting event is held, so nothing here says when the publisher's bytes were first seen",
+                "no observation time is held, so nothing here says when the publisher's bytes were first seen; the event log's first_sighting (events) says only that a state is first present in that log",
                 "no signature or stamp is held or made: this states which digests this mount verified and signs nothing",
                 "no record of corrections or withdrawals of the publisher's document is held",
             },
