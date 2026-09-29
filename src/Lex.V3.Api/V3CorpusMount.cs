@@ -3418,10 +3418,7 @@ internal sealed class V3CorpusMount : IDisposable
 
     /// <summary>
     /// Where a named work is an EU work, <c>search</c> answers from the EU index (<see cref="SearchEurope"/>)
-    /// or refuses with EU context; otherwise the Luxembourg path runs unchanged (null). An identifier both
-    /// indexes hold is <c>ambiguous_identifier</c>, as <c>resolve</c> answers it, and never silently one of
-    /// them. An EU-shaped identifier the EU index does not hold is <c>no_corpus_mounted</c> for the EU when
-    /// no EU index is mounted and <c>identifier_unknown</c> with EU context when one is.
+    /// or refuses with EU context; otherwise the Luxembourg path runs unchanged (null).
     /// </summary>
     private V3PlatformOperationOutcome? RouteEuropeSearch(
         V3PlatformOperationRequest request,
@@ -3435,12 +3432,35 @@ internal sealed class V3CorpusMount : IDisposable
         int limit,
         DateTimeOffset observedAt)
     {
-        var europe = _europeReader?.ResolveExact(identifier) ?? Array.Empty<EuropeIndexResolvedExpression>();
+        if (LocateEuropeWork(request, identifier, observedAt, out var europe) is { } refused)
+        {
+            return refused;
+        }
+
+        return europe.Count > 0
+            ? SearchEurope(request, identifier, europe, language, query, terms, requestedDate, mode, after, limit, observedAt)
+            : null;
+    }
+
+    /// <summary>
+    /// Decides which publisher's index answers an operation that serves both for a named work: returns a
+    /// refusal, or null with <paramref name="europe"/> holding the EU index's expressions for the identifier
+    /// (the EU path answers) or empty (the Luxembourg path answers, unchanged). An identifier both indexes
+    /// hold is <c>ambiguous_identifier</c>, as <c>resolve</c> answers it: Luxembourg holds it if it names a
+    /// work there or if <c>resolve</c>'s exact match finds it. An EU-shaped identifier the EU index does not
+    /// hold is <c>no_corpus_mounted</c> for the EU when no EU index is mounted and <c>identifier_unknown</c>
+    /// with EU context when one is.
+    /// </summary>
+    private V3PlatformOperationOutcome? LocateEuropeWork(
+        V3PlatformOperationRequest request,
+        string identifier,
+        DateTimeOffset observedAt,
+        out IReadOnlyList<EuropeIndexResolvedExpression> europe)
+    {
+        europe = _europeReader?.ResolveExact(identifier) ?? Array.Empty<EuropeIndexResolvedExpression>();
         var luxembourg = _reader is null
             ? Array.Empty<LuxembourgIndexResolvedState>()
             : _reader.ResolveWorkStates(TryParseStableWorkCoordinate(identifier, out var workKey) ? workKey : identifier);
-        // Luxembourg holds the identifier if it names a work there or if resolve's exact match finds it,
-        // so search and resolve agree on which identifiers are ambiguous across publishers.
         var luxembourgExact = europe.Count > 0 && _reader is not null
             ? _reader.ResolveExact(identifier)
             : Array.Empty<LuxembourgIndexResolvedExpression>();
@@ -3461,12 +3481,7 @@ internal sealed class V3CorpusMount : IDisposable
                 new V3PlatformOperationRefusal(request, "ambiguous_identifier", helpful.RootElement));
         }
 
-        if (europe.Count > 0)
-        {
-            return SearchEurope(request, identifier, europe, language, query, terms, requestedDate, mode, after, limit, observedAt);
-        }
-
-        if (luxembourg.Count > 0 || !IsEuropeanUnionShaped(identifier))
+        if (europe.Count > 0 || luxembourg.Count > 0 || !IsEuropeanUnionShaped(identifier))
         {
             return null;
         }
@@ -4630,6 +4645,16 @@ internal sealed class V3CorpusMount : IDisposable
 
         var identifier = RequiredString(request.Parameters, "identifier");
         var requestedLanguage = OptionalLanguage(request.Parameters);
+        if (LocateEuropeWork(request, identifier, observedAt, out var europe) is { } refusedEurope)
+        {
+            return refusedEurope;
+        }
+
+        if (europe.Count > 0)
+        {
+            return DossierEurope(request, identifier, europe, requestedLanguage, observedAt);
+        }
+
         if (RefuseUnlessWorkStates(request, identifier, observedAt, "r6_dossier", requestedLanguage,
                 out var states, out var availableLanguages) is { } refused)
         {
@@ -4687,6 +4712,105 @@ internal sealed class V3CorpusMount : IDisposable
             new V3PlatformOperationResult(request, "work_record", result.RootElement));
     }
 
+    internal const string EuropeDossierScope =
+        "the EU work as the mounted EU index holds it: its expressions, the one wording held of each with the Formex act date, the article count and " +
+        "the corpus members the articles were read from; a record of this corpus and not of what the publisher holds, and a missing expression or " +
+        "wording here is neither absent from the publisher's record nor absent from law; with a language, only that language's expressions are listed " +
+        "and available_languages still lists every language the work has";
+
+    internal static readonly string[][] EuropeDossierNotHeld =
+    [
+        ["titles", "no title of the EU work is held by the EU index"],
+        ["later_wordings", "no consolidated version is held, so the wording listed is the original act's and no later wording or state is listed"],
+        ["force_dates", "no entry-into-force, application or end-of-validity date is held; wording_date is none of them"],
+        ["document_type", "the publisher's document type is not held for EU works"],
+        ["corrigenda", "corrigendum lines are recorded by the index per corrected work root and are not joined to the work here, because the join between a corrected work root and the work's publisher identifier is not established"],
+        ["other_languages", "an expression in a language the index holds no wording in is not listed; French expressions are not acquired (Decision 89)"],
+    ];
+
+    /// <summary>
+    /// <c>dossier</c> for an EU work: every expression of the work the EU index holds, with the Formex act
+    /// date of its one held wording (named with its meaning, never as an applicability date), its article
+    /// count and the corpus members its articles were read from, plus fixed words for what is not held. An
+    /// identifier whose expressions belong to more than one EU work is <c>ambiguous_identifier</c>; a
+    /// language the work holds no expression in is <c>language_not_available</c>; both with EU context.
+    /// </summary>
+    private V3PlatformOperationOutcome DossierEurope(
+        V3PlatformOperationRequest request,
+        string identifier,
+        IReadOnlyList<EuropeIndexResolvedExpression> resolved,
+        string? requestedLanguage,
+        DateTimeOffset observedAt)
+    {
+        ArgumentNullException.ThrowIfNull(_europeReader);
+        var works = resolved.Select(static expression => expression.PublisherWorkId)
+            .Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray();
+        if (works.Length > 1)
+        {
+            using var ambiguous = JsonSerializer.SerializeToDocument(new
+            {
+                requested_identifier = identifier,
+                candidates = works,
+            });
+            return V3PlatformOperationOutcome.Refused(
+                Context("refusal", observedAt, PublisherId.EuEurLex),
+                new V3PlatformOperationRefusal(request, "ambiguous_identifier", ambiguous.RootElement));
+        }
+
+        var expressions = _europeReader.ResolveWorkExpressions(works[0]);
+        var languages = expressions.Select(static expression => expression.Language)
+            .Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray();
+        if (requestedLanguage is not null && !languages.Contains(requestedLanguage, StringComparer.Ordinal))
+        {
+            using var unavailableLanguage = JsonSerializer.SerializeToDocument(new
+            {
+                requested_language = requestedLanguage,
+                available_languages = languages,
+            });
+            return V3PlatformOperationOutcome.Refused(
+                Context("refusal", observedAt, PublisherId.EuEurLex),
+                new V3PlatformOperationRefusal(request, "language_not_available", unavailableLanguage.RootElement));
+        }
+
+        var listed = expressions
+            .Where(expression => requestedLanguage is null || string.Equals(expression.Language, requestedLanguage, StringComparison.Ordinal))
+            .ToArray();
+        using var result = JsonSerializer.SerializeToDocument(new
+        {
+            scope = EuropeDossierScope,
+            requested_identifier = identifier,
+            requested_language = requestedLanguage,
+            publisher = "eu-eurlex",
+            publisher_work_id = works[0],
+            celex = expressions[0].PublisherWorkCelex,
+            available_languages = languages,
+            expression_count = listed.Length,
+            expressions = listed.Select(static expression => new
+            {
+                publisher_expression_id = expression.PublisherExpressionId,
+                language = expression.Language,
+                wording_dates = expression.WordingDates,
+                article_count = expression.ArticleCount,
+                members = expression.Members.Select(static member => new
+                {
+                    object_ref_sha256 = member.ObjectRefSha256,
+                    outcome = member.Outcome,
+                    content_class = member.ContentClass,
+                }).ToArray(),
+                // The expression is an identifier EU resolve answers.
+                resolve = new { identifier = expression.PublisherExpressionId },
+            }).ToArray(),
+            date_semantics = EuropeWordingDateSemantics,
+            consolidations_held = false,
+            not_held = EuropeDossierNotHeld.Select(static row => new { item = row[0], reason = row[1] }).ToArray(),
+            corpus_sha256 = _corpus.ArtifactRef.Sha256,
+            index_sha256 = _europeReader.IndexRef.Sha256,
+        });
+        return V3PlatformOperationOutcome.Success(
+            Context("success", observedAt, PublisherId.EuEurLex),
+            new V3PlatformOperationResult(request, "work_record", result.RootElement));
+    }
+
     internal const string DossierScope =
         "The titles and the publisher-dated states the mounted index holds for this work. It is a record of what this corpus holds and not of what the publisher holds: " +
         "a title or a state absent here may exist at the publisher, and absence from this corpus is neither absence from the publisher's record nor absence of law. " +
@@ -4702,7 +4826,7 @@ internal sealed class V3CorpusMount : IDisposable
         ["application", "no application date is held; a state's applicability date is the date that state applies from, which is a different fact"],
         ["historical_identifiers", "no historical identifier is held, so no earlier or later identifier of this work is mapped to it"],
         ["responsible_ministry", "no responsible ministry is held"],
-        ["first_observed", "no observation time or first-sighting event is held, so nothing here says when this work was first seen"],
+        ["first_observed", "no observation time is held, so nothing here says when this work was first seen; the event log's first_sighting (events) says only that a state is first present in that log"],
         ["coverage_gaps", "each state carries the date it applies from and no end date, so no gap between states can be stated, and this answer never says there is none"],
     ];
 

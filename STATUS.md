@@ -5,9 +5,10 @@ every pull request that changes what is served, what is next or what is blocked.
 
 ## Heads
 
-- `v3/integration`: `d9b2721e` (2026-09-29, PR #760 merged). Build 45 s. Fast lane
+- `v3/integration`: `f1fa563d` (2026-09-29, PR #761 merged). Build 45 s. Fast lane
   (`eng/test-fast.ps1`): 3,038 tests, 3,037 pass, 1 skipped. Ingest suite: green on CI for PR #760
-  (the CI `dotnet` job runs the whole solution on every pull request, about 7 min on the runner);
+  (the CI `dotnet` job runs the whole solution on every pull request, about 7 min on the runner;
+  green for PR #761);
   locally about 15 min. 771 web tests pass. CI's web job can flake in `keyboard-walk.test.mjs`
   ("browser debugger never answered"); rerunning the failed job is the fix.
 - Driver: Claude Opus 5.5 since 2026-09-29 (the Fable 5.1 driver ran out of tokens on 2026-09-28
@@ -26,7 +27,24 @@ directions, `cites` edges only, what `citation` and `cited_by` serve as one orde
 `evidence_bundle` (PR #755), `classification` and `manifestation` (PR #756), `status_on` and
 `browse` (PR #757), `ask` as the contained assistant (PR #759), and `events` and `answer_drift`
 over a genesis event log (PR #760). Without a mounted corpus every route answers
-`no_corpus_mounted`. EU serves `resolve`, and `search` in one EU work named by identifier (PR #761).
+`no_corpus_mounted`. EU serves `resolve`, `search` in one EU work named by identifier (PR #761), and
+`dossier` for an EU work (PR #762).
+
+EU `dossier` (PR #762) answers from the EU index for an EU work named by any of its identifiers
+(CELEX, work or expression IRI, provision, article identity): the work and its CELEX, every
+expression the index holds with its language, the Formex act date of its one held wording
+(`wording_dates`, with the same date semantics sentence as search), its article count (99 for the
+GDPR) and the corpus members its articles were read from (object ref, outcome, content class), each
+expression's identifier for `resolve`, `consolidations_held: false`, and fixed words for what is not
+held (titles, later wordings, force dates, document type, corrigenda, other languages). Corrigendum
+lines are in the EU index but are not joined to the work: the join between a corrected work root and
+the work's publisher identifier is not established by any fixture, and the answer says exactly that
+rather than calling them absent. Refusals with EU context: a language the work has no expression in,
+an identifier naming more than one EU work, an unknown EU identifier, no EU index mounted (was a
+mode refusal naming `r6_dossier`), and an identifier both indexes hold (`ambiguous_identifier`).
+The routing is one helper, `LocateEuropeWork`, which `search` and `dossier` share. The Luxembourg
+dossier's `first_observed` sentence now says what the event log's `first_sighting` does and does not
+mean, as `coverage` and `provenance` do since PR #760.
 
 EU `search` (PR #761) answers from the EU index when the named work is an EU work: a CELEX, a work
 or expression IRI, or one of its provisions. It runs the Luxembourg search's two lanes (strict, then
@@ -443,8 +461,9 @@ Web: 28 React components, 771 tests; no call to `/api/v3` yet. Screens render fi
    needing data the ingest does not produce; owner question below. The event log's next step,
    predecessor chaining with observation times, needs a second build, so it follows the first mount.
 5. EU parity: every temporal and search operation from the EU index; French expressions. EU
-   `search` in one work served by PR #761; EU `dossier` next; the temporal operations wait on
-   consolidation acquisition and the owner questions below.
+   `search` in one work served by PR #761, EU `dossier` by PR #762; the temporal operations,
+   `provenance`, `evidence_bundle` and `verify` wait on consolidation acquisition, an EU permalink
+   grammar and the owner questions below.
 6. Wire the eight launch screens to `/api/v3`; journeys J1 to J8 in a real browser.
 7. Release pipeline: build, sign, image, zero-traffic deploy, probes. Then acceptance and promotion.
 

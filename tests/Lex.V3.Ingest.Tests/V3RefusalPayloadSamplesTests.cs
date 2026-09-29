@@ -208,7 +208,7 @@ public sealed class V3RefusalPayloadSamplesTests
         // dossier
         await DriveAsync(observed, mount, "dossier", "a language not held", new { identifier = work, language = "eng" }, "language_not_available");
         await DriveAsync(observed, mount, "dossier", "an identifier no work has", new { identifier = unknown, language = "fra" }, "identifier_unknown");
-        await DriveAsync(observed, mount, "dossier", "a European identifier on a Luxembourg-only mount", new { identifier = european, language = "fra" }, "retrieval_mode_unavailable");
+        await DriveAsync(observed, mount, "dossier", "a European identifier on a Luxembourg-only mount", new { identifier = european, language = "fra" }, "no_corpus_mounted");
 
         // citation
         await DriveAsync(observed, mount, "citation", "two states on the date", new { identifier = work, date = twinDate, language = "fra" }, "ambiguous_version");
