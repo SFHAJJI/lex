@@ -5,10 +5,11 @@ every pull request that changes what is served, what is next or what is blocked.
 
 ## Heads
 
-- `v3/integration`: `41edf9ae` (2026-09-29, PR #759 merged). Build 45 s. Fast lane
-  (`eng/test-fast.ps1`): 3,038 tests with PR #760, 3,037 pass, 1 skipped. Ingest suite: green on
-  CI for PR #759 (the CI `dotnet` job runs the whole solution on every pull request, about 7 min on
-  the runner); locally about 15 min. 771 web tests pass.
+- `v3/integration`: `d9b2721e` (2026-09-29, PR #760 merged). Build 45 s. Fast lane
+  (`eng/test-fast.ps1`): 3,038 tests, 3,037 pass, 1 skipped. Ingest suite: green on CI for PR #760
+  (the CI `dotnet` job runs the whole solution on every pull request, about 7 min on the runner);
+  locally about 15 min. 771 web tests pass. CI's web job can flake in `keyboard-walk.test.mjs`
+  ("browser debugger never answered"); rerunning the failed job is the fix.
 - Driver: Claude Opus 5.5 since 2026-09-29 (the Fable 5.1 driver ran out of tokens on 2026-09-28
   after PR #757; the user default model is now `claude-opus-5-5`).
 - Plan: `C:\lex-v3\V3-FINISH-PLAN-2026-09-27.md` (owner's copy). Decision 94 (one driver, one queue,
@@ -25,7 +26,34 @@ directions, `cites` edges only, what `citation` and `cited_by` serve as one orde
 `evidence_bundle` (PR #755), `classification` and `manifestation` (PR #756), `status_on` and
 `browse` (PR #757), `ask` as the contained assistant (PR #759), and `events` and `answer_drift`
 over a genesis event log (PR #760). Without a mounted corpus every route answers
-`no_corpus_mounted`. EU serves `resolve` only.
+`no_corpus_mounted`. EU serves `resolve`, and `search` in one EU work named by identifier (PR #761).
+
+EU `search` (PR #761) answers from the EU index when the named work is an EU work: a CELEX, a work
+or expression IRI, or one of its provisions. It runs the Luxembourg search's two lanes (strict, then
+relaxed; byte-exact; no ranker; paged with `continue_after`) over the one wording the EU index holds
+of the work's expression in the language asked, with EU context (`eu-eurlex`, jurisdiction `eu`,
+`official_consolidation_state`). Each hit names the article (CELEX, expression, the publisher's
+article id and heading, article identity), its `wording_date` and the provision coordinate EU
+`resolve` answers; no text or snippet is served. `wording_date` is the date the Formex package gives
+the act (for the GDPR 2016-04-27), and the answer says it is not a publication, entry-into-force,
+application or consolidation date and is never merged with a Luxembourg applicability date; no EU
+answer carries `applicability_date` and no Luxembourg answer `wording_date` (tested). Refusals, all
+with EU context: a language the work holds no expression in is `language_not_available` (French
+answers `["eng"]` until Decision 89's expressions are acquired); two expressions in the language are
+`ambiguous_identifier`; any `date` is `retrieval_mode_unavailable` (`requested_mode: r6_as_of`),
+because one work on a date is `as_of`'s question and the index holds one original wording and no
+consolidation, so no later date could be answered honestly; an unknown EU identifier is
+`identifier_unknown`; an EU identifier on a mount with no EU index is `no_corpus_mounted`
+(`required_corpus: eu`, where it was a mode refusal); an identifier both indexes hold is
+`ambiguous_identifier`, as `resolve` answers it. A search that names no work is the Luxembourg
+search, unchanged. `EuropeIndexReader` gained a work-scoped search on its own read-only connection,
+and its older date-range `Search` and its counts now take the reader's lock (they used the shared
+connection without it). Survey of 2026-09-29 (read-only): the EU index holds one original wording
+per expression, no dated state, no consolidation, no article order and no permalink, so EU `as_of`,
+`timeline`, `article_history`, `diff` and `changes_in_period` need consolidation acquisition and an
+EU states table, `in_force_on` and `status_on` need Cellar force facts, and `evidence_bundle` and
+`verify` need an EU permalink grammar (owner questions below). EU `dossier` is the next slice that
+needs none of those.
 
 `events` and `answer_drift` (PR #760) read a new index table, `events`: the index's append-only
 event log (`seq`, `scope`, `key`, `event`, `observed_from`, `detail_json`; schema
@@ -414,11 +442,22 @@ Web: 28 React components, 771 tests; no call to `/api/v3` yet. Screens render fi
    log, PR #760). Four remain (`as_observed`, `knowable_on`, `concepts`, `transposition`), all
    needing data the ingest does not produce; owner question below. The event log's next step,
    predecessor chaining with observation times, needs a second build, so it follows the first mount.
-5. EU parity: every temporal and search operation from the EU index; French expressions.
+5. EU parity: every temporal and search operation from the EU index; French expressions. EU
+   `search` in one work served by PR #761; EU `dossier` next; the temporal operations wait on
+   consolidation acquisition and the owner questions below.
 6. Wire the eight launch screens to `/api/v3`; journeys J1 to J8 in a real browser.
 7. Release pipeline: build, sign, image, zero-traffic deploy, probes. Then acceptance and promotion.
 
 ## Blocked or waiting on the owner
+
+- EU parity (PR #761): (a) is the Formex act date (`wording_date`) the "EU wording-state date" the
+  launch contract means, and does `official_consolidation_state` fit answers over an original
+  wording; (b) may the original wording answer EU `as_of` for dates after it when no consolidation
+  is held (the driver's default is no), and if not, is consolidation acquisition in scope for
+  launch, and which of the twenty codes refuses meanwhile (none says "a later wording may exist and
+  is not held"); (c) search across all EU works needs a `jurisdiction` request parameter (a reviewed
+  schema change) or stays scoped to one work at launch; (d) under the legal-notice option (a), may
+  search match over withheld EU bodies, given that hits carry no text.
 
 - The event log (PR #760): (a) is the mintable registry twelve names, the coverage event never
   minted under B42 finding 5.2, or should the scope-line gate be amended to admit a name that is

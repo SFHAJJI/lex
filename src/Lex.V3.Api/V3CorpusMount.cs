@@ -3129,6 +3129,12 @@ internal sealed class V3CorpusMount : IDisposable
                 "The requested date is not a civil calendar date.");
         }
 
+        if (identifier is not null &&
+            RouteEuropeSearch(request, identifier, language, query, terms, requestedDate, mode, after, limit, observedAt) is { } europe)
+        {
+            return europe;
+        }
+
         var statesByWork = new Dictionary<string, IReadOnlyList<LuxembourgIndexResolvedState>>(StringComparer.Ordinal);
         string? workKey = null;
         if (identifier is not null)
@@ -3379,6 +3385,268 @@ internal sealed class V3CorpusMount : IDisposable
         });
         return V3PlatformOperationOutcome.Success(
             Context("success", observedAt),
+            new V3PlatformOperationResult(request, "quote", result.RootElement));
+    }
+
+    internal const string EuropeSearchScope =
+        "one EU work named by the identifier (its CELEX, work or expression IRI, or one of its provisions), in the one held wording of its " +
+        "expression in the language asked; a search across EU works is not served";
+
+    internal const string EuropeSearchRanking =
+        "none; strict lane before relaxed lane, then the publisher's article id and article identity. " +
+        "This index holds no BM25 ranker, so a page is the first hits in this order and not the best hits";
+
+    internal const string EuropeSearchMatching =
+        "byte-exact substring of the article's searchable text as the EU index holds it; case and diacritics are significant; " +
+        "nothing is folded, stemmed or expanded";
+
+    internal const string EuropeSearchHitUnit =
+        "a hit is one article of the one wording this index holds of the expression; no other wording of the act is held";
+
+    internal const string EuropeWordingDateSemantics =
+        "wording_date is the date the publisher's Formex package gives the act, the date of the original wording this index holds; " +
+        "it is not a publication, entry-into-force, application or consolidation date, and an EU date is never merged with a Luxembourg " +
+        "applicability date";
+
+    internal static readonly string[][] EuropeSearchNotHeld =
+    [
+        ["later_wordings", "no consolidated version is held, so a later wording of the act is not searched and a date is not answered here"],
+        ["corrigenda_applied", "corrigenda are recorded by the index and not applied to the wording searched"],
+        ["other_languages", "an expression in a language this index holds no wording in is not searched; French expressions are not acquired (Decision 89)"],
+        ["article_text", "no snippet or article text is served; each hit names its provision, which resolve answers"],
+    ];
+
+    /// <summary>
+    /// Where a named work is an EU work, <c>search</c> answers from the EU index (<see cref="SearchEurope"/>)
+    /// or refuses with EU context; otherwise the Luxembourg path runs unchanged (null). An identifier both
+    /// indexes hold is <c>ambiguous_identifier</c>, as <c>resolve</c> answers it, and never silently one of
+    /// them. An EU-shaped identifier the EU index does not hold is <c>no_corpus_mounted</c> for the EU when
+    /// no EU index is mounted and <c>identifier_unknown</c> with EU context when one is.
+    /// </summary>
+    private V3PlatformOperationOutcome? RouteEuropeSearch(
+        V3PlatformOperationRequest request,
+        string identifier,
+        string language,
+        string query,
+        string[] terms,
+        string? requestedDate,
+        string? mode,
+        string? after,
+        int limit,
+        DateTimeOffset observedAt)
+    {
+        var europe = _europeReader?.ResolveExact(identifier) ?? Array.Empty<EuropeIndexResolvedExpression>();
+        var luxembourg = _reader is null
+            ? Array.Empty<LuxembourgIndexResolvedState>()
+            : _reader.ResolveWorkStates(TryParseStableWorkCoordinate(identifier, out var workKey) ? workKey : identifier);
+        // Luxembourg holds the identifier if it names a work there or if resolve's exact match finds it,
+        // so search and resolve agree on which identifiers are ambiguous across publishers.
+        var luxembourgExact = europe.Count > 0 && _reader is not null
+            ? _reader.ResolveExact(identifier)
+            : Array.Empty<LuxembourgIndexResolvedExpression>();
+        if (europe.Count > 0 && (luxembourg.Count > 0 || luxembourgExact.Count > 0))
+        {
+            using var helpful = JsonSerializer.SerializeToDocument(new
+            {
+                requested_identifier = identifier,
+                candidates = luxembourg.Select(static state => state.ExpressionIri)
+                    .Concat(luxembourgExact.Select(static expression => expression.ExpressionIri))
+                    .Concat(europe.Select(static expression => expression.PublisherExpressionId))
+                    .Distinct(StringComparer.Ordinal)
+                    .Order(StringComparer.Ordinal)
+                    .ToArray(),
+            });
+            return V3PlatformOperationOutcome.Refused(
+                Context("refusal", observedAt, PublisherFor(identifier)),
+                new V3PlatformOperationRefusal(request, "ambiguous_identifier", helpful.RootElement));
+        }
+
+        if (europe.Count > 0)
+        {
+            return SearchEurope(request, identifier, europe, language, query, terms, requestedDate, mode, after, limit, observedAt);
+        }
+
+        if (luxembourg.Count > 0 || !IsEuropeanUnionShaped(identifier))
+        {
+            return null;
+        }
+
+        if (_europeReader is null)
+        {
+            using var unmounted = JsonSerializer.SerializeToDocument(new { required_corpus = "eu" });
+            return V3PlatformOperationOutcome.Refused(
+                Context("refusal", observedAt, PublisherId.EuEurLex),
+                new V3PlatformOperationRefusal(request, "no_corpus_mounted", unmounted.RootElement));
+        }
+
+        return Unknown(request, identifier, observedAt, PublisherId.EuEurLex,
+            "an EU work identifier (CELEX, work or expression IRI) or provision present in the mounted EU index");
+    }
+
+    /// <summary>
+    /// EU <c>search</c> in one work (lane R2): the two lexical lanes of the Luxembourg search over the one
+    /// held wording of the work's expression in the language asked, with its refusals. A language the work
+    /// holds no expression in is <c>language_not_available</c>; two expressions in it are
+    /// <c>ambiguous_identifier</c>, never one of them; a date is refused <c>retrieval_mode_unavailable</c>,
+    /// because one work on a date is <c>as_of</c>'s question and EU <c>as_of</c> is not served (the index
+    /// holds one original wording and no consolidation, so no date after it could be answered honestly);
+    /// a mode other than the two lanes is refused as the Luxembourg search refuses it. Each hit names its
+    /// article, the Formex act date of the wording (<c>wording_date</c>, with its meaning in the answer,
+    /// never an applicability date), and the provision coordinate <c>resolve</c> answers; no text is served.
+    /// </summary>
+    private V3PlatformOperationOutcome SearchEurope(
+        V3PlatformOperationRequest request,
+        string identifier,
+        IReadOnlyList<EuropeIndexResolvedExpression> resolved,
+        string language,
+        string query,
+        string[] terms,
+        string? requestedDate,
+        string? mode,
+        string? after,
+        int limit,
+        DateTimeOffset observedAt)
+    {
+        ArgumentNullException.ThrowIfNull(_europeReader);
+        var languagesHeld = resolved.Select(static expression => expression.Language)
+            .Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray();
+        var expressions = resolved
+            .Where(expression => string.Equals(expression.Language, language, StringComparison.Ordinal))
+            .Select(static expression => expression.PublisherExpressionId)
+            .Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray();
+        if (expressions.Length == 0)
+        {
+            using var unavailableLanguage = JsonSerializer.SerializeToDocument(new
+            {
+                requested_language = language,
+                available_languages = languagesHeld,
+            });
+            return V3PlatformOperationOutcome.Refused(
+                Context("refusal", observedAt, PublisherId.EuEurLex),
+                new V3PlatformOperationRefusal(request, "language_not_available", unavailableLanguage.RootElement));
+        }
+
+        if (expressions.Length > 1)
+        {
+            using var ambiguous = JsonSerializer.SerializeToDocument(new
+            {
+                requested_identifier = identifier,
+                candidates = expressions,
+            });
+            return V3PlatformOperationOutcome.Refused(
+                Context("refusal", observedAt, PublisherId.EuEurLex),
+                new V3PlatformOperationRefusal(request, "ambiguous_identifier", ambiguous.RootElement));
+        }
+
+        if (requestedDate is not null || (mode is not null && !SearchModes.Contains(mode, StringComparer.Ordinal)))
+        {
+            using var unavailableMode = JsonSerializer.SerializeToDocument(requestedDate is not null
+                ? new { requested_mode = "r6_as_of", available_modes = new[] { "r2_provision_discovery" } }
+                : new { requested_mode = mode!, available_modes = SearchModes });
+            return V3PlatformOperationOutcome.Refused(
+                Context("refusal", observedAt, PublisherId.EuEurLex),
+                new V3PlatformOperationRefusal(request, "retrieval_mode_unavailable", unavailableMode.RootElement));
+        }
+
+        var expression = expressions[0];
+        var wantStrict = mode is null || string.Equals(mode, "strict", StringComparison.Ordinal);
+        var wantRelaxed = mode is null || string.Equals(mode, "relaxed", StringComparison.Ordinal);
+        var relaxedIsStrict = terms.Length == 1 && string.Equals(terms[0], query, StringComparison.Ordinal);
+        var strictFound = wantStrict ? _europeReader.SearchExpressionArticles(language, [query], expression) : null;
+        var relaxedFound = wantRelaxed && (mode is not null || !relaxedIsStrict)
+            ? _europeReader.SearchExpressionArticles(language, terms, expression)
+            : null;
+        var measured = wantStrict ? strictFound is not null : relaxedFound is not null;
+        IReadOnlyList<EuropeIndexSearchHit> strict = wantStrict ? strictFound ?? [] : [];
+        var strictKeys = strict.Select(static hit => hit.ArticleIdentitySha256).ToHashSet(StringComparer.Ordinal);
+        IReadOnlyList<EuropeIndexSearchHit> relaxed = !wantRelaxed
+            ? []
+            : mode is null
+                ? (relaxedFound ?? []).Where(hit => !strictKeys.Contains(hit.ArticleIdentitySha256)).ToArray()
+                : relaxedFound ?? [];
+        var all = strict.Select(static hit => (Lane: "strict", Hit: hit))
+            .Concat(relaxed.Select(static hit => (Lane: "relaxed", Hit: hit)))
+            .ToArray();
+        static string Cursor((string Lane, EuropeIndexSearchHit Hit) entry) => $"{entry.Lane}.{entry.Hit.ArticleIdentitySha256}";
+        var start = 0;
+        if (after is not null)
+        {
+            var index = Array.FindIndex(all, entry => string.Equals(Cursor(entry), after, StringComparison.Ordinal));
+            if (index < 0)
+            {
+                throw new V3TransportFailureException(
+                    V3TransportFailureKind.RequestSchemaInvalid,
+                    "The operation request's 'after' names no hit of this query; a cursor is the continue_after of the same query, scope and index.");
+            }
+
+            start = index + 1;
+        }
+
+        var page = all.Skip(start).Take(limit).ToArray();
+        var truncated = start + page.Length < all.Length;
+        using var result = JsonSerializer.SerializeToDocument(new
+        {
+            requested_query = query,
+            requested_language = language,
+            requested_date = (string?)null,
+            requested_identifier = identifier,
+            requested_mode = mode,
+            requested_after = after,
+            publisher = "eu-eurlex",
+            scope = EuropeSearchScope,
+            ranking = EuropeSearchRanking,
+            matching = EuropeSearchMatching,
+            hit_unit = EuropeSearchHitUnit,
+            lanes = SearchLanes,
+            date_semantics = EuropeWordingDateSemantics,
+            consolidations_held = false,
+            text_served = false,
+            searchable_text_held_for_language = measured,
+            searchable_languages = _europeReader.SearchableLanguages(),
+            modes_held = SearchModes,
+            modes_not_held = new[] { "bm25", "semantic" },
+            work_resolution = new
+            {
+                retrieval_lane = "r1_work_discovery",
+                outcome = "not_run_identifier_given",
+                work = (object?)null,
+                candidates = (object?)null,
+            },
+            terms,
+            population = new
+            {
+                scope = new { identifier, language, date = (string?)null, mode },
+                strict_hits = wantStrict ? (int?)strict.Count : null,
+                relaxed_hits = wantRelaxed ? (int?)relaxed.Count : null,
+                distinct_publisher_articles = all.Select(static entry => entry.Hit.PublisherIdentifier).Distinct(StringComparer.Ordinal).Count(),
+                works_with_hits = all.Select(static entry => entry.Hit.PublisherWorkId).Distinct(StringComparer.Ordinal).Count(),
+            },
+            ambiguous_works = Array.Empty<object>(),
+            limit,
+            truncated,
+            continue_after = truncated ? Cursor(page[^1]) : null,
+            page_is = SearchPageIs,
+            hits = page.Select(static entry => new
+            {
+                lane = entry.Lane,
+                match_reasons = new[] { entry.Lane == "strict" ? "exact_phrase" : "all_terms" },
+                publisher_work_id = entry.Hit.PublisherWorkId,
+                celex = entry.Hit.PublisherWorkCelex,
+                publisher_expression_id = entry.Hit.PublisherExpressionId,
+                language = entry.Hit.Language,
+                wording_date = entry.Hit.WordingDate,
+                article_identity_sha256 = entry.Hit.ArticleIdentitySha256,
+                publisher_id = entry.Hit.PublisherIdentifier,
+                heading = entry.Hit.Heading,
+                // The provision coordinate EU resolve answers; the text is not served here.
+                resolve = new { identifier = entry.Hit.ProvisionCoordinate },
+            }).ToArray(),
+            not_held = EuropeSearchNotHeld.Select(static row => new { item = row[0], reason = row[1] }).ToArray(),
+            corpus_sha256 = _corpus.ArtifactRef.Sha256,
+            index_sha256 = _europeReader.IndexRef.Sha256,
+        });
+        return V3PlatformOperationOutcome.Success(
+            Context("success", observedAt, PublisherId.EuEurLex),
             new V3PlatformOperationResult(request, "quote", result.RootElement));
     }
 

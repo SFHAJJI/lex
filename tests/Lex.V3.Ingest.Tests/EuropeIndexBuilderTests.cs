@@ -108,6 +108,43 @@ public sealed class EuropeIndexBuilderTests
     }
 
     [TestMethod]
+    public async Task AWorkScopedSearchMatchesEveryNeedleInOneExpressionAndSaysWhenALanguageIsNotMeasured()
+    {
+        var envelope = await RetainedGdprEnvelopeAsync();
+        var built = EuropeIndexBuilder.TryBuild(envelope, out var refusal, out var detail);
+        Assert.IsNotNull(built, $"{refusal}: {detail}");
+        var corpus = LexCorpus6Builder.TryBuild(envelope, out _, out _)!;
+        using var reader = EuropeIndexReader.OpenAndVerify(
+            built.IndexRef, built.IndexBytes.Span, corpus.ArtifactRef, built.CapabilityManifest);
+        var expression = reader.ResolveExact("32016R0679").Single().PublisherExpressionId;
+
+        CollectionAssert.AreEqual(new[] { "eng" }, reader.SearchableLanguages().ToArray());
+        Assert.IsNull(
+            reader.SearchExpressionArticles("fra", ["Regulation"], expression),
+            "no searchable text is measured in French, so the index cannot answer; that is not an empty list.");
+
+        var phrase = reader.SearchExpressionArticles("eng", ["It shall apply from 25 May 2018."], expression)!;
+        Assert.HasCount(1, phrase);
+        Assert.AreEqual("2016-04-27", phrase[0].WordingDate);
+        Assert.AreEqual("32016R0679", phrase[0].PublisherWorkCelex);
+        Assert.HasCount(1, reader.ResolveExact(phrase[0].ProvisionCoordinate), "the hit's coordinate resolves to its provision.");
+
+        var both = reader.SearchExpressionArticles("eng", ["shall apply", "25 May 2018"], expression)!;
+        var reversed = reader.SearchExpressionArticles("eng", ["25 May 2018", "shall apply"], expression)!;
+        CollectionAssert.AreEqual(
+            both.Select(static hit => hit.ArticleIdentitySha256).ToArray(),
+            reversed.Select(static hit => hit.ArticleIdentitySha256).ToArray(),
+            "the needles are an AND, in any order.");
+        CollectionAssert.IsSubsetOf(
+            both.Select(static hit => hit.ArticleIdentitySha256).ToArray(),
+            reader.SearchExpressionArticles("eng", ["shall apply"], expression)!.Select(static hit => hit.ArticleIdentitySha256).ToArray(),
+            "adding a needle narrows.");
+        Assert.IsEmpty(
+            reader.SearchExpressionArticles("eng", ["It shall apply from 25 May 2018."], "http://publications.europa.eu/resource/cellar/not-held")!,
+            "the search is scoped to the expression named.");
+    }
+
+    [TestMethod]
     public async Task ExactPublisherWorkExpressionAndProvisionCoordinatesResolveFromVerifiedRows()
     {
         var envelope = await RetainedGdprEnvelopeAsync();

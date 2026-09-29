@@ -34,6 +34,23 @@ public sealed record EuropeIndexSearchResult(
     V3IndexCapabilityLookupOutcome Outcome,
     IReadOnlyList<string> ArticleIdentities);
 
+/// <summary>
+/// One article of one held EU expression that a search matched: the work, its CELEX and the expression,
+/// the publisher's article id and heading, the Formex act date of the wording (<c>wording_date</c>, the
+/// date of the original act the package carries, never an applicability or consolidation date), the
+/// language, the article identity, and the qualified provision coordinate EU <c>resolve</c> accepts.
+/// </summary>
+public sealed record EuropeIndexSearchHit(
+    string PublisherWorkId,
+    string PublisherWorkCelex,
+    string PublisherExpressionId,
+    string PublisherIdentifier,
+    string Heading,
+    string WordingDate,
+    string Language,
+    string ArticleIdentitySha256,
+    string ProvisionCoordinate);
+
 public sealed record EuropeIndexResolvedExpression(
     string PublisherWorkId,
     string PublisherExpressionId,
@@ -784,21 +801,91 @@ public sealed class EuropeIndexReader : IDisposable
             "search", "articles", "searchable_text", language, from, to, out _);
         if (outcome != V3IndexCapabilityLookupOutcome.Supported)
             return new EuropeIndexSearchResult(outcome, Array.Empty<string>());
-        using var command = _connection.CreateCommand();
-        command.CommandText = """
-            SELECT article_identity_sha256 FROM articles
-            WHERE language=$language AND wording_date BETWEEN $from AND $to
-              AND instr(searchable_text,$query) > 0
-            ORDER BY article_identity_sha256
-            """;
+        // The shared connection is used under the gate, as ResolveExact uses it: the mount serves
+        // requests concurrently and a SQLite connection is not safe to share across threads.
+        lock (_gate)
+        {
+            using var command = _connection.CreateCommand();
+            command.CommandText = """
+                SELECT article_identity_sha256 FROM articles
+                WHERE language=$language AND wording_date BETWEEN $from AND $to
+                  AND instr(searchable_text,$query) > 0
+                ORDER BY article_identity_sha256
+                """;
+            command.Parameters.AddWithValue("$language", language);
+            command.Parameters.AddWithValue("$from", from.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
+            command.Parameters.AddWithValue("$to", to.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
+            command.Parameters.AddWithValue("$query", query);
+            using var reader = command.ExecuteReader();
+            var values = new List<string>();
+            while (reader.Read()) values.Add(reader.GetString(0));
+            return new EuropeIndexSearchResult(outcome, values.AsReadOnly());
+        }
+    }
+
+    /// <summary>The languages the capability manifest measured searchable text in.</summary>
+    public IReadOnlyList<string> SearchableLanguages() =>
+        Array.AsReadOnly(_capabilityManifest.Cells
+            .Where(static cell =>
+                string.Equals(cell.Operation, "search", StringComparison.Ordinal) &&
+                string.Equals(cell.Column, "articles", StringComparison.Ordinal) &&
+                string.Equals(cell.Field, "searchable_text", StringComparison.Ordinal))
+            .Select(static cell => cell.Language)
+            .Distinct(StringComparer.Ordinal)
+            .Order(StringComparer.Ordinal)
+            .ToArray());
+
+    /// <summary>
+    /// The articles of one held expression, in one language, whose searchable text contains every one of
+    /// <paramref name="needles"/> as a byte-exact substring, in the publisher's article id and article
+    /// identity order. Nothing is ranked, folded or dated here. The result is null when the capability
+    /// manifest measured no searchable text in that language, which is the index saying it cannot answer,
+    /// as distinct from an empty list, which is no hit.
+    /// </summary>
+    public IReadOnlyList<EuropeIndexSearchHit>? SearchExpressionArticles(
+        string language, IReadOnlyList<string> needles, string publisherExpressionId)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(language);
+        ArgumentException.ThrowIfNullOrWhiteSpace(publisherExpressionId);
+        ArgumentNullException.ThrowIfNull(needles);
+        if (needles.Count == 0 || needles.Any(static needle => string.IsNullOrEmpty(needle)))
+        {
+            throw new ArgumentException("A search needs at least one non-empty needle.", nameof(needles));
+        }
+
+        if (!SearchableLanguages().Contains(language, StringComparer.Ordinal))
+        {
+            return null;
+        }
+
+        // Its own read-only connection on the reader's private, verified copy, as the Luxembourg reader's
+        // search does: a scan must not hold the shared connection every other operation waits on.
+        using var connection = EuropeIndexBuilder.Open(_path, SqliteOpenMode.ReadOnly);
+        using var command = connection.CreateCommand();
+        command.CommandText =
+            "SELECT publisher_work_id,publisher_work_celex,publisher_expression_id,publisher_identifier,heading," +
+            "wording_date,language,article_identity_sha256 FROM articles " +
+            "WHERE language=$language AND publisher_expression_id=$expression" +
+            string.Concat(needles.Select(static (_, index) => $" AND instr(searchable_text,$needle{index})>0")) +
+            " ORDER BY publisher_identifier,article_identity_sha256";
         command.Parameters.AddWithValue("$language", language);
-        command.Parameters.AddWithValue("$from", from.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
-        command.Parameters.AddWithValue("$to", to.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
-        command.Parameters.AddWithValue("$query", query);
+        command.Parameters.AddWithValue("$expression", publisherExpressionId);
+        for (var index = 0; index < needles.Count; index++)
+        {
+            command.Parameters.AddWithValue($"$needle{index}", needles[index]);
+        }
+
         using var reader = command.ExecuteReader();
-        var values = new List<string>();
-        while (reader.Read()) values.Add(reader.GetString(0));
-        return new EuropeIndexSearchResult(outcome, values.AsReadOnly());
+        var values = new List<EuropeIndexSearchHit>();
+        while (reader.Read())
+        {
+            values.Add(new EuropeIndexSearchHit(
+                reader.GetString(0), reader.GetString(1), reader.GetString(2), reader.GetString(3),
+                reader.GetString(4), reader.GetString(5), reader.GetString(6), reader.GetString(7),
+                QualifiedProvisionIdentifierOf(reader.GetString(2), reader.GetString(3))));
+        }
+
+        return Array.AsReadOnly(values.ToArray());
     }
 
     public void Dispose()
@@ -809,16 +896,19 @@ public sealed class EuropeIndexReader : IDisposable
 
     private long Count(string table)
     {
-        using var command = _connection.CreateCommand();
-        command.CommandText = table switch
+        lock (_gate)
         {
-            "members" => "SELECT count(*) FROM members",
-            "articles" => "SELECT count(*) FROM articles",
-            "corrigendum_lines" => "SELECT count(*) FROM corrigendum_lines",
-            "corrigendum_gaps" => "SELECT count(*) FROM corrigendum_gaps",
-            _ => throw new ArgumentOutOfRangeException(nameof(table)),
-        };
-        return Convert.ToInt64(command.ExecuteScalar(), CultureInfo.InvariantCulture);
+            using var command = _connection.CreateCommand();
+            command.CommandText = table switch
+            {
+                "members" => "SELECT count(*) FROM members",
+                "articles" => "SELECT count(*) FROM articles",
+                "corrigendum_lines" => "SELECT count(*) FROM corrigendum_lines",
+                "corrigendum_gaps" => "SELECT count(*) FROM corrigendum_gaps",
+                _ => throw new ArgumentOutOfRangeException(nameof(table)),
+            };
+            return Convert.ToInt64(command.ExecuteScalar(), CultureInfo.InvariantCulture);
+        }
     }
 
     private static string? Scalar(SqliteConnection connection, string sql)
