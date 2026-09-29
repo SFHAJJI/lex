@@ -6,8 +6,8 @@ every pull request that changes what is served, what is next or what is blocked.
 ## Heads
 
 - `v3/integration`: `cd478f3c` (2026-09-29, PR #758 merged). Build 45 s. Fast lane
-  (`eng/test-fast.ps1`): 3,034 tests, 3,033 pass, 1 skipped (unchanged by PR #759, which rewrites two
-  tests). Ingest suite: green on CI for PR #758 (the CI `dotnet` job runs the whole solution on every
+  (`eng/test-fast.ps1`): 3,035 tests with PR #759, 3,034 pass, 1 skipped (PR #759 adds one and
+  rewrites two). Ingest suite: green on CI for PR #758 (the CI `dotnet` job runs the whole solution on every
   pull request, about 6 min on the runner); locally about 15 min. 771 web tests pass.
 - Driver: Claude Opus 5.5 since 2026-09-29 (the Fable 5.1 driver ran out of tokens on 2026-09-28
   after PR #757; the user default model is now `claude-opus-5-5`).
@@ -36,18 +36,22 @@ languages this mount holds searchable text in), `as_of`, `evidence_bundle`, each
 parameters its reviewed request schema requires (read from the schema) and what it answers. The
 request schema is `question` (a non-blank string) and nothing else; the question is not read, stored
 or echoed, so the card is byte-identical for every question. No model is called and no publisher is
-contacted. The same card over MCP (`tools/call ask`). Decisions taken by the driver, reversible: the
-verdict is `point` (the closed set's only verdict that sends the reader elsewhere; `answer` would
-claim held law, `refuse` needs a registry code); the host now takes the verdict from the result
-(every other operation still answers `answer`); `ask` refuses `no_corpus_mounted` without the
-Luxembourg index, as every served route does; `localization_unavailable` (the other Decision 91
-result) is a surface concern of chrome locales and is not produced by the API. Two guards changed
-meaning and say so: `AssistantContainmentTests.TheLegacyAssistantRouteIsStillDisabled` asserted
-that `ask` had no route; it now asserts that the route is the containment (five questions, one
-byte-identical card, the question never echoed, only served operations pointed to), and
-`ScopeLineQuestionTests` puts each of the eighteen scope-line questions to the card builder and
-fails on the day `ask` answers any of them with anything else (S4-A13). The owner may read the
-first guard as "no route until S4-A04 and S4-A05"; if so, say the word and the route is removed.
+contacted. The same card over MCP (`tools/call ask`). The envelope verdict is `point` for now and is
+an owner question below (review of PR #759: the catalogue's POINT delivers an instrument, an
+official link, a reason and a human counter, and the card has only the reason; Decision 91 cites
+Decision 63(a)'s presentation verdict as the precedent). Decisions taken by the driver, reversible:
+the host takes the verdict from the result (every other operation still answers `answer`); `ask`
+refuses `no_corpus_mounted` without the Luxembourg index, as every served route does;
+`localization_unavailable` (the other Decision 91 result) is a surface concern of chrome locales and
+is not produced by the API. The guards: `V3CorpusAskMountTests` puts the eighteen scope-line
+questions (now one shared list, `tests/Lex.V3.TestSupport/ScopeLineQuestions.cs`, which
+`ScopeLineQuestionTests` pins its cases to) and five containment questions to the mounted route over
+REST and MCP and requires the builder's card, verdict and object type for each, so a route that
+answered any of them otherwise fails there (the review's mutation, a question-dependent answer, is
+caught); `AssistantContainmentTests.TheLegacyAssistantRouteIsStillDisabled`, which asserted that
+`ask` had no route, and `ScopeLineQuestionTests` now pin the binding and the builder and say that the
+route is the ingest suite's. The owner may read Decision 91 as "no route until S4-A04 and S4-A05"; if
+so, say the word and the route is removed.
 
 `status_on` and `browse` (PR #757) read the `work_facts` table too. `status_on` takes
 `as_of`'s request (`identifier`, `date`, optional `language`), selects the state as `as_of` does and
@@ -297,23 +301,33 @@ Web: 28 React components, 771 tests; no call to `/api/v3` yet. Screens render fi
   exits 1 with its message, and process tests in the fast lane pin the exit codes without traffic
   (the refused case names a CELEX that is not a seed, refused before any request). The first real
   mount now needs only the bounded live run.
-- **The bounded live run, attempt 2 (2026-09-29 17:27 to about 17:58 UTC): refused at the EUR-Lex
-  legal notice.** Same command as PR #750's comment, tool built at PR #758's head, custody
-  `C:\lex-v3irst-mount-run-1\custody` (attempt 1's files reused, content-addressed). Result, from
-  `build.log`: `refused: europe: LegalNoticeRefused: NoticeRouteInvalid ... (spent 619 of 800)`, exit 3.
-  The GDPR acquisition itself completed: 618 requests to the Publications Office, then the one GET
-  of `https://eur-lex.europa.eu/content/legal-notice/legal-notice.html?locale=en`, which answered
-  **HTTP 202** with a complete body (retained: route evidence `09a1443d...` in that custody). A 202
-  on that page is the EUR-Lex bot-protection challenge Decision 23 anticipated, so the route is
-  refused as designed and no retry or second request was sent. Memory was not a problem this time
-  (the process stayed near 90 MB). Because the build is one process, the 618 requests are spent and
-  nothing was written; the Luxembourg act was never reached.
+- **The bounded live run, attempt 1 (2026-09-27 21:26 UTC):** killed after 94 s by the Claude Code
+  harness for system memory pressure (1.1 GB free of 15.7 GB, held by other applications); 473
+  custody files, no milestone, nothing to record.
+- **The bounded live run, attempt 2 (2026-09-29 17:27:20 to 18:19:39 UTC): refused at the EUR-Lex
+  legal notice.** Same command as PR #750's comment, the Release tool built in the driver's worktree
+  at 17:21 UTC from PR #758's source, custody `C:\lex-v3\first-mount-run-1\custody` (attempt 1's
+  files reused, content-addressed). Result, from `build.log`: `refused: europe: LegalNoticeRefused:
+  NoticeRouteInvalid ... (spent 619 of 800)`, exit 3, no directory written. The EU adapter run and
+  the Formex population returned without a refusal; the one GET of
+  `https://eur-lex.europa.eu/content/legal-notice/legal-notice.html?locale=en`, the last EU step,
+  answered **HTTP 202, `Content-Type: text/html; charset=UTF-8`, `Content-Length: 0`, an empty body,
+  `Cache-Control: no-store`**, in 20 ms (retained: route evidence
+  `09a1443d1be3deae02630d292d34d39e0387f0c9450b7b3e87f660fbe85a651d` in that custody). An empty 202
+  on that page is consistent with the EUR-Lex bot-protection challenge Decision 23 anticipated, so the
+  route is refused as designed and no retry or second request was sent. Custody from this attempt
+  holds 409 logical requests and 402 HTTP evidence documents with 408 hops: 401 answered 200 and 6
+  answered 303 by `publications.europa.eu`, 1 answered 202 by `eur-lex.europa.eu`; plus 106
+  acquisition runs and 619 durable write receipts. The tool's "spent 619" equals the receipt count,
+  not the request count, which the fail-fast slice checks. Memory was not a problem this time (the
+  process stayed near 90 MB). Because the build is one process, the acquisition is spent and nothing
+  was written; the Luxembourg act was never reached.
 - **What this means.** Decision 88's one legal-notice GET cannot succeed from an automated client
   while EUR-Lex challenges it, and `LexCorpus6Builder` refuses the whole corpus without that
   evidence (`EuropeRightsEvidenceMissing`), so no mount, Luxembourg included, can be built. Two
   fixes, neither built yet:
   1. Fail fast (driver's call, no scope change): send the legal-notice GET first, before the EU
-     acquisition, so a challenge costs one request instead of 619.
+     acquisition, so a challenge costs one request instead of the whole EU acquisition.
   2. A way past the missing notice (owner's call, it touches Decision 88): either (a) the builder
      accepts a typed `eu_rights_evidence_unavailable` disposition and withholds every EU body as
      text while still serving EU identity and `resolve`, which keeps rights fail-closed and lets the
@@ -325,8 +339,10 @@ Web: 28 React components, 771 tests; no call to `/api/v3` yet. Screens render fi
 
 ## Next, in order
 
-1. Unblock the first mount after the EUR-Lex challenge (see Data, attempt 2): fail fast first, then
-   option (a) unless the owner rules otherwise. Then the bounded live run again with the tool: one EU work in EN and
+1. Unblock the first mount after the EUR-Lex challenge (see Data, attempt 2): fail fast first (the
+   driver's next slice, no publisher traffic, with the spent figure checked against the requests
+   custody holds), then option (a) or (b) as the owner rules. Then the bounded live run again with
+   the tool: one EU work in EN and
    FR (the manifestation enumerations and the legal-notice GET; no Formex package request), one
    Luxembourg act with a consolidated publisher PDF. Record the wire counts, the refusals met and
    the five digests in STATUS.md; mount the directory under the API and answer `resolve` from it.
@@ -364,6 +380,18 @@ Web: 28 React components, 771 tests; no call to `/api/v3` yet. Screens render fi
 7. Release pipeline: build, sign, image, zero-traffic deploy, probes. Then acceptance and promotion.
 
 ## Blocked or waiting on the owner
+
+- The EUR-Lex legal notice answered the tool's one Decision 88 GET with an empty HTTP 202, so no
+  corpus can be built (Data, attempt 2): (a) the builder accepts a typed
+  `eu_rights_evidence_unavailable` disposition, withholds every EU body as text and lets the
+  Luxembourg side mount, or (b) a numbered Decision names an address that does not challenge (the
+  Publications Office legal notice, same Commission reuse policy). The driver recommends (a) now and
+  (b) later, and builds neither before the owner's word.
+- The verdict of `ask`'s containment card: keep `point` (the closed set's only verdict that sends the
+  reader elsewhere, though the catalogue's POINT also names an instrument, a link and a human counter
+  the card does not have, and the scope line requires REFUSE of question 2), or rule a presentation
+  verdict as Decision 63(a) did for `localization_unavailable` (a seventh verdict, an envelope schema
+  change). The driver's default is `point` until the owner rules.
 
 - Four registered operations with no data (`as_observed`, `knowable_on`, `concepts`,
   `transposition`): the launch contract wants each "served or refusing with a typed reason its

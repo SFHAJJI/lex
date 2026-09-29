@@ -16,6 +16,7 @@
              Link="TestSupport/AbsenceFixtures.cs" />
     <Compile Include="../Lex.V3.TestSupport/CustodyStoreConformance.cs" Link="TestSupport/CustodyStoreConformance.cs" />
     <Compile Include="../Lex.V3.TestSupport/LuxembourgProfiles.cs" Link="TestSupport/LuxembourgProfiles.cs" />
+    <Compile Include="../Lex.V3.TestSupport/ScopeLineQuestions.cs" Link="TestSupport/ScopeLineQuestions.cs" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="../../src/Lex.V3.Artifacts/Lex.V3.Artifacts.csproj" />

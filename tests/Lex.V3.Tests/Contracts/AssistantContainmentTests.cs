@@ -162,11 +162,13 @@ public sealed class AssistantContainmentTests
         // renews, has affected requests "return the reviewed typed assistant_v3_unavailable result
         // with deterministic search and text actions", and LAUNCH-CONTRACT says `ask` answers it.
         // Until PR #759 `ask` had no route at all, which disabled the legacy route and answered
-        // nothing. It now has one, and this pins that the route is the containment and not the
-        // legacy route: whatever the question, the answer is the one fixed handoff card under the
-        // point verdict, naming assistant_v3_unavailable and the deterministic operations, built
-        // without reading the question. Serving anything else from ask is the decision that needs
-        // the S4-A04 and S4-A05 slices on the record first.
+        // nothing. It now has one. This pins the route's binding and the card its builder answers:
+        // whatever the question, one fixed handoff card naming assistant_v3_unavailable and the
+        // deterministic operations, built without reading the question. That the mounted route
+        // answers exactly this card, over REST and MCP, for these questions and the eighteen
+        // scope-line ones, is V3CorpusAskMountTests' (the ingest suite, which can mount a corpus).
+        // Serving anything else from ask is the decision that needs the S4-A04 and S4-A05 slices on
+        // the record first.
         var registered = V3OperationRegistry.Reviewed.Operations
             .Select(static operation => operation.OperationId)
             .ToArray();
@@ -186,6 +188,7 @@ public sealed class AssistantContainmentTests
         foreach (var (question, card) in questions.Zip(cards))
         {
             Assert.AreEqual("handoff_card", card.ObjectType, question);
+            // The containment card's verdict; whether it stays point is before the owner (STATUS.md).
             Assert.AreEqual(V3Verdicts.Point, card.Verdict, question);
             Assert.AreEqual("assistant_v3_unavailable", card.Value.GetProperty("presentation_result").GetString(), question);
             Assert.AreEqual(JsonValueKind.False, card.Value.GetProperty("question_read").ValueKind, question);
