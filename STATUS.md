@@ -318,8 +318,10 @@ Web: 28 React components, 771 tests; no call to `/api/v3` yet. Screens render fi
   route is refused as designed and no retry or second request was sent. Custody from this attempt
   holds 409 logical requests and 402 HTTP evidence documents with 408 hops: 401 answered 200 and 6
   answered 303 by `publications.europa.eu`, 1 answered 202 by `eur-lex.europa.eu`; plus 106
-  acquisition runs and 619 durable write receipts. The tool's "spent 619" equals the receipt count,
-  not the request count, which the fail-fast slice checks. Memory was not a problem this time (the
+  acquisition sessions, each of which opens with one robots fetch whose evidence is not among those
+  documents. The tool's 619 is the budget's reservation count, which the budget holds equal to sends;
+  408 hops and 106 robots fetches make 514, and the remaining 105 are not reconciled here (custody is
+  content-addressed, so its file counts are not request counts). Memory was not a problem this time (the
   process stayed near 90 MB). Because the build is one process, the acquisition is spent and nothing
   was written; the Luxembourg act was never reached.
 - **What this means.** Decision 88's one legal-notice GET cannot succeed from an automated client
@@ -327,7 +329,11 @@ Web: 28 React components, 771 tests; no call to `/api/v3` yet. Screens render fi
   evidence (`EuropeRightsEvidenceMissing`), so no mount, Luxembourg included, can be built. Two
   fixes, neither built yet:
   1. Fail fast (driver's call, no scope change): send the legal-notice GET first, before the EU
-     acquisition, so a challenge costs one request instead of the whole EU acquisition.
+     acquisition, so a challenge costs one request instead of the whole EU acquisition. Not a
+     reorder: the notice route binds the corpus run identity, which the adapter mints during the
+     EU run, so the identity has to exist before the adapter runs (a preflight GET would be a
+     second notice request, against Decision 88's one). Under option (a) below a refused notice no
+     longer stops the build, which lowers this fix's value.
   2. A way past the missing notice (owner's call, it touches Decision 88): either (a) the builder
      accepts a typed `eu_rights_evidence_unavailable` disposition and withholds every EU body as
      text while still serving EU identity and `resolve`, which keeps rights fail-closed and lets the
@@ -339,9 +345,9 @@ Web: 28 React components, 771 tests; no call to `/api/v3` yet. Screens render fi
 
 ## Next, in order
 
-1. Unblock the first mount after the EUR-Lex challenge (see Data, attempt 2): fail fast first (the
-   driver's next slice, no publisher traffic, with the spent figure checked against the requests
-   custody holds), then option (a) or (b) as the owner rules. Then the bounded live run again with
+1. Unblock the first mount after the EUR-Lex challenge (see Data, attempt 2): option (a) or (b) as
+   the owner rules, and fail fast if the notice stays mandatory (it needs the run identity before
+   the adapter runs; the 619 spent against the requests custody holds is reconciled there). Then the bounded live run again with
    the tool: one EU work in EN and
    FR (the manifestation enumerations and the legal-notice GET; no Formex package request), one
    Luxembourg act with a consolidated publisher PDF. Record the wire counts, the refusals met and
