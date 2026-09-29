@@ -2,8 +2,10 @@ using System;
 using System.IO;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text.Json;
 using Lex.V3.Api;
 using Lex.V3.Contracts.Platform;
+using Lex.V3.TestSupport;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
 namespace Lex.V3.Tests.Contracts;
@@ -40,14 +42,18 @@ namespace Lex.V3.Tests.Contracts;
 /// </para>
 /// <para>
 /// <b>What this proves, stated no higher than it is.</b> It does <b>not</b> prove the product answers
-/// these questions: it cannot be asked any of them, because <c>ask</c> is a registered operation with
-/// no route. What it proves is that the eighteen exist here as data, are well formed against the
-/// catalogue's closed verdict set, that the pack's own score is reproduced from the cases rather than
-/// copied from its prose, and — the load-bearing part —
-/// <see cref="NoneOfTheEighteenHasARestRouteToBeAskedOfYet"/> <b>fails the day <c>ask</c> gets a
-/// REST route</b>. That is deliberate: it makes it impossible to ship the operation these questions are
-/// asked of without coming back here and asserting the verdicts. An acceptance suite whose cases can
-/// never run is a filing system; this one is wired to break when the product grows into it.
+/// these questions: since PR #759 <c>ask</c> has a route, and the route answers every question with
+/// the contained assistant's one card (<c>assistant_v3_unavailable</c>, Decision 91), so none of the
+/// eighteen is answered. What it proves is that the eighteen exist here as data, are well formed
+/// against the catalogue's closed verdict set, carry exactly the wordings of
+/// <c>ScopeLineQuestions.Eighteen</c>, and that the pack's own score is reproduced from the cases
+/// rather than copied from its prose. <see cref="EveryOneOfTheEighteenPutToAskAnswersTheContainmentAndNothingElse"/>
+/// puts each wording to the card builder here; <c>V3CorpusAskMountTests</c> in the ingest suite puts
+/// each to the mounted route over REST and MCP and requires the builder's card byte for byte. That
+/// route test is what breaks the day <c>ask</c> answers any of them with anything else, and on that day
+/// every case here must assert the verdict the scope line requires. The card's envelope verdict
+/// (<c>point</c>) is the containment's and is before the owner; it is not the scope line's verdict for
+/// any case, and nothing here says it is.
 /// </para>
 /// </remarks>
 [TestClass]
@@ -170,7 +176,10 @@ public sealed class ScopeLineQuestionTests
     private const int Contradicted = 5;
     private const int Undecidable = 3;
 
-    /// <summary>The operation these eighteen would be put to. Registered, and served by no route.</summary>
+    /// <summary>
+    /// The operation these eighteen would be put to. Registered, and since PR #759 served by a route
+    /// that answers only the containment (Decision 91).
+    /// </summary>
     private const string TheOperationTheyWouldBeAskedOf = "ask";
 
     /// <summary>
@@ -185,10 +194,21 @@ public sealed class ScopeLineQuestionTests
     /// </remarks>
     private static readonly string[] ServedOperations =
     [
-        "article_history", "as_of", "browse", "changes_in_period", "citation", "cited_by", "classification",
+        "article_history", "as_of", "ask", "browse", "changes_in_period", "citation", "cited_by", "classification",
         "coverage", "diff", "dossier", "evidence_bundle", "in_force_on", "manifestation", "provenance",
         "relations", "resolve", "search", "status_on", "timeline", "verify",
     ];
+
+    [TestMethod]
+    public void TheCasesCarryExactlyTheSharedWordingsTheRouteSuiteAsks()
+    {
+        // The ingest suite puts ScopeLineQuestions.Eighteen to the mounted ask route; these cases are
+        // what the rule requires of the same questions, so the two lists must be one list.
+        CollectionAssert.AreEqual(
+            ScopeLineQuestions.Eighteen.Select(static question => $"{question.Number}|{question.Language}|{question.Question}").ToArray(),
+            Questions.Select(static question => $"{question.Number}|{question.Language}|{question.Question}").ToArray(),
+            "A case's number, language or wording differs from the shared list the route suite asks.");
+    }
 
     [TestMethod]
     public void TheEighteenArePresentAndNumberedOneToEighteenWithNoGap()
@@ -353,7 +373,7 @@ public sealed class ScopeLineQuestionTests
     }
 
     [TestMethod]
-    public void NoneOfTheEighteenHasARestRouteToBeAskedOfYet()
+    public void EveryOneOfTheEighteenPutToAskAnswersTheContainmentAndNothingElse()
     {
         var registered = V3OperationRegistry.Reviewed.Operations
             .Select(static operation => operation.OperationId)
@@ -373,14 +393,36 @@ public sealed class ScopeLineQuestionTests
             "The routes this mount serves have changed. They are named here rather than counted so "
             + "that a route added or removed is a decision someone takes in the open.");
 
-        CollectionAssert.DoesNotContain(
-            served, TheOperationTheyWouldBeAskedOf,
-            "`ask` now has a REST route, so these eighteen questions can be put to the product for the "
-            + "first time. Every case above must now assert the verdict the scope line requires of it, "
-            + "and the three the rule cannot decide must be disclosed as undecided rather than "
-            + "answered. This assertion exists to fail on exactly this day: S4-A13 makes the eighteen "
-            + "acceptance cases, and an acceptance case that the product can answer and nobody checks "
-            + "is worse than one it cannot answer at all.");
+        // `ask` has a route since PR #759, and it answers the containment: the typed presentation
+        // result assistant_v3_unavailable on one fixed card, whatever the question. This covers the
+        // card builder only, and says so: the route is covered by V3CorpusAskMountTests, which puts
+        // each of the eighteen to the mounted route over REST and MCP and requires this card byte for
+        // byte. On the day ask answers any of them with anything else, every case above must assert
+        // the verdict the scope line requires of it, and the three the rule cannot decide must be
+        // disclosed as undecided rather than answered (S4-A13). The card's verdict is not asserted
+        // here: it is the containment's (point, before the owner), not a scope-line verdict.
+        var cards = Questions.Select(question =>
+        {
+            using var parameters = JsonDocument.Parse(JsonSerializer.Serialize(new { question = question.Question }));
+            return V3CorpusMount.AskContained(
+                new V3PlatformOperationRequest(
+                    V3OperationRegistry.Reviewed.Operation(TheOperationTheyWouldBeAskedOf), parameters.RootElement),
+                ["fra"]);
+        }).ToArray();
+        foreach (var (question, card) in Questions.Zip(cards))
+        {
+            Assert.AreEqual("handoff_card", card.ObjectType, $"question {question.Number}");
+            Assert.AreEqual(
+                "assistant_v3_unavailable",
+                card.Value.GetProperty("presentation_result").GetString(),
+                $"question {question.Number} was answered by the ask card builder with something other than the containment. "
+                + "Every case in this file must now assert the verdict the scope line requires of it.");
+        }
+
+        Assert.AreEqual(
+            1,
+            cards.Select(static card => card.Verdict + card.Value.GetRawText()).Distinct(StringComparer.Ordinal).Count(),
+            "the eighteen must answer one card: a card that differs by question has read the question.");
     }
 
     /// <summary>

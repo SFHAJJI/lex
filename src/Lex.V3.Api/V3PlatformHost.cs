@@ -36,7 +36,8 @@ internal sealed class V3PlatformOperationResult
     public V3PlatformOperationResult(
         V3PlatformOperationRequest request,
         string objectType,
-        JsonElement value)
+        JsonElement value,
+        string verdict = V3Verdicts.Answer)
     {
         ArgumentNullException.ThrowIfNull(request);
         ArgumentException.ThrowIfNullOrWhiteSpace(objectType);
@@ -45,11 +46,19 @@ internal sealed class V3PlatformOperationResult
             throw new ArgumentException("An operation result must be an object.", nameof(value));
         }
 
+        // A result is an answer from held law unless the operation says otherwise; ask's contained
+        // presentation result points instead (Decision 91). A refusal is never a result.
+        if (!V3Verdicts.IsKnown(verdict) || string.Equals(verdict, V3Verdicts.Refuse, StringComparison.Ordinal))
+        {
+            throw new ArgumentException("Unknown or refusal-only result verdict.", nameof(verdict));
+        }
+
         OperationId = request.OperationId;
         Schema = request.Operation.ResultSchema;
         SchemaSha256 = request.Operation.ResultSchemaSha256;
         ObjectType = objectType;
         Value = value.Clone();
+        Verdict = verdict;
     }
 
     public string OperationId { get; }
@@ -61,6 +70,8 @@ internal sealed class V3PlatformOperationResult
     public string ObjectType { get; }
 
     public JsonElement Value { get; }
+
+    public string Verdict { get; }
 }
 
 internal sealed class V3PlatformOperationRefusal
@@ -422,7 +433,7 @@ internal sealed class V3PlatformHost
             requestReference,
             operation.OperationId,
             context,
-            V3Verdicts.Answer,
+            result.Verdict,
             result.Schema,
             result.ObjectType,
             result.Value);

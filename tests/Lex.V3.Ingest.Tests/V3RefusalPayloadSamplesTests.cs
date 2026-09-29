@@ -328,6 +328,7 @@ public sealed class V3RefusalPayloadSamplesTests
         await DriveAsync(observed, mount, "manifestation", "no Luxembourg index", new { identifier = work }, "no_corpus_mounted");
         await DriveAsync(observed, mount, "status_on", "no Luxembourg index", new { identifier = work, date = "2024-01-01" }, "no_corpus_mounted");
         await DriveAsync(observed, mount, "browse", "no Luxembourg index", new { }, "no_corpus_mounted");
+        await DriveAsync(observed, mount, "ask", "no Luxembourg index", new { question = "Can I be fired while on sick leave?" }, "no_corpus_mounted");
     }
 
     /// <summary>Drives one served operation through the real handler and records the refusal, which must be the one named.</summary>

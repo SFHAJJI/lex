@@ -47,6 +47,7 @@ public sealed class V3CorpusLocatorTests
     [
         ("/api/v3/coverage", nameof(V3CorpusCoverageMountTests)),
         ("/api/v3/browse", nameof(V3CorpusBrowseMountTests)),
+        ("/api/v3/ask", nameof(V3CorpusAskMountTests)),
     ];
 
     [TestMethod]

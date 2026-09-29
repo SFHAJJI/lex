@@ -82,13 +82,13 @@ const OPERATIONS_NOTE =
   + 'names (unknown_route)';
 
 const SERVED = Object.freeze([
-  'article_history', 'as_of', 'browse', 'changes_in_period', 'citation', 'cited_by', 'classification',
-  'coverage', 'diff', 'dossier', 'evidence_bundle', 'in_force_on', 'manifestation', 'provenance',
-  'relations', 'resolve', 'search', 'status_on', 'timeline', 'verify',
+  'article_history', 'as_of', 'ask', 'browse', 'changes_in_period', 'citation', 'cited_by',
+  'classification', 'coverage', 'diff', 'dossier', 'evidence_bundle', 'in_force_on', 'manifestation',
+  'provenance', 'relations', 'resolve', 'search', 'status_on', 'timeline', 'verify',
 ]);
 
 const NOT_SERVED = Object.freeze([
-  'answer_drift', 'as_observed', 'ask', 'concepts', 'events', 'knowable_on', 'transposition',
+  'answer_drift', 'as_observed', 'concepts', 'events', 'knowable_on', 'transposition',
 ]);
 
 const NOT_HELD = Object.freeze([

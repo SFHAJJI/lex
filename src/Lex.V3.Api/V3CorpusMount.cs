@@ -3551,6 +3551,123 @@ internal sealed class V3CorpusMount : IDisposable
             new V3PlatformOperationResult(request, "coverage_report", result.RootElement));
     }
 
+    /// <summary>The typed presentation result every <c>ask</c> answers while the assistant is contained (Decision 91).</summary>
+    internal const string AssistantUnavailable = "assistant_v3_unavailable";
+
+    internal const string AskPresentationNote =
+        "a typed presentation result of ask (Decisions 51 and 91), not a refusal code: the closed refusal registry stays at its twenty codes, " +
+        "and this is neither an answer from held law nor a refusal";
+
+    internal const string AskContainmentReason =
+        "the assistant is contained: no model answers, retrieves, reranks or authors authoritative text, and the legacy assistant route stays disabled " +
+        "until the answer_dossier/1 (S4-A04) and advice-boundary (S4-A05) slices are independently reviewed and integrated; " +
+        "the deterministic operations below answer from held law";
+
+    internal const string AskQuestionNote =
+        "the question is checked to be a non-blank string and is not read, stored or echoed; nothing in this answer depends on it";
+
+    /// <summary>
+    /// The deterministic operations an <c>ask</c> points to, in the order a reader would use them
+    /// (resolver first, then search, then the text of a state), each with what it answers.
+    /// </summary>
+    internal static readonly string[][] AskDeterministicActions =
+    [
+        ["resolve", "the work an exact identifier names (ELI, CELEX, publisher identifier or permalink), or identifier_unknown"],
+        ["search", "the provisions whose publisher wording matches the query, strict lane before relaxed, per language"],
+        ["as_of", "the state of a work on a civil date, or ambiguous_version / no_version_for_date rather than a silent choice"],
+        ["evidence_bundle", "the text of a state's articles with text_sha256, body_sha256, official source and permalink, rights enforced"],
+    ];
+
+    /// <summary>
+    /// <c>ask</c> while the assistant is contained (Decisions 51 and 91, S4-A05): every request answers
+    /// the typed presentation result <c>assistant_v3_unavailable</c> as a <c>handoff_card</c> under the
+    /// <c>point</c> verdict, never a refusal code and never an answer from held law. The question is
+    /// checked by the request schema and not read, so the card is the same for every question: the
+    /// containment and its end condition, and the deterministic operations that do answer (resolve,
+    /// search, as_of, evidence_bundle), each with its route, the parameters its reviewed request schema
+    /// requires and what it answers; for search, the languages this mount holds searchable text in. No
+    /// model is called and no publisher is contacted.
+    /// </summary>
+    public V3PlatformOperationOutcome Ask(
+        V3PlatformOperationRequest request,
+        DateTimeOffset observedAt)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        if (!string.Equals(request.OperationId, "ask", StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException("The mounted corpus ask operation only accepts ask/1.");
+        }
+
+        _ = RequiredString(request.Parameters, "question");
+        if (_reader is null)
+        {
+            using var unmounted = JsonSerializer.SerializeToDocument(new { required_corpus = "lu" });
+            return V3PlatformOperationOutcome.Refused(
+                Context("refusal", observedAt, PublisherId.LuLegilux),
+                new V3PlatformOperationRefusal(request, "no_corpus_mounted", unmounted.RootElement));
+        }
+
+        return V3PlatformOperationOutcome.Success(
+            Context("success", observedAt),
+            AskContained(request, _reader.SearchableLanguages()));
+    }
+
+    /// <summary>
+    /// The card <see cref="Ask"/> answers, given the languages the mount holds searchable text in.
+    /// It reads nothing of the question, which is why it can be built here without a mount and put to
+    /// every scope-line question in the contracts suite.
+    /// </summary>
+    internal static V3PlatformOperationResult AskContained(
+        V3PlatformOperationRequest request,
+        IEnumerable<string> searchableLanguages)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        ArgumentNullException.ThrowIfNull(searchableLanguages);
+        if (!string.Equals(request.OperationId, "ask", StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException("The contained ask card only answers ask/1.");
+        }
+
+        var searchable = searchableLanguages.Order(StringComparer.Ordinal).ToArray();
+        var actions = AskDeterministicActions.Select(action =>
+        {
+            var binding = V3RestRouteBinding.Served.Single(served => string.Equals(served.OperationId, action[0], StringComparison.Ordinal));
+            return new
+            {
+                operation_id = action[0],
+                route = binding.RawTarget,
+                required_parameters = RequiredRequestParameters(action[0]),
+                languages = string.Equals(action[0], "search", StringComparison.Ordinal) ? searchable : null,
+                answers = action[1],
+            };
+        }).ToArray();
+        using var result = JsonSerializer.SerializeToDocument(new
+        {
+            presentation_result = AssistantUnavailable,
+            presentation_note = AskPresentationNote,
+            containment = new
+            {
+                decisions = new[] { "51", "91" },
+                reason = AskContainmentReason,
+                model_gloss = "disabled",
+            },
+            question_read = false,
+            question_note = AskQuestionNote,
+            deterministic_actions = actions,
+        });
+        return new V3PlatformOperationResult(request, "handoff_card", result.RootElement, V3Verdicts.Point);
+    }
+
+    /// <summary>The parameters an operation's reviewed request schema requires, read from the schema itself so the card cannot drift from it.</summary>
+    private static string[] RequiredRequestParameters(string operationId)
+    {
+        using var schema = JsonDocument.Parse(V3PlatformSchemaExporter.ExportRequestUtf8(operationId));
+        return schema.RootElement.GetProperty("properties").GetProperty("parameters").GetProperty("required")
+            .EnumerateArray()
+            .Select(static required => required.GetString()!)
+            .ToArray();
+    }
+
     /// <summary>The ceiling on the rows one <c>changes_in_period</c> answer carries.</summary>
     public const int ChangesInPeriodMaxRows = 200;
 
