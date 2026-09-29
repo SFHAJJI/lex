@@ -195,7 +195,8 @@ public sealed class V3RefusalPayloadSamplesTests
         await DriveAsync(observed, mount, "search", "a language not held", new { query = "loyer", language = "eng" }, "language_not_available");
         await DriveAsync(observed, mount, "search", "an identifier no work has", new { query = "loyer", language = "fra", identifier = unknown }, "identifier_unknown");
         await DriveAsync(observed, mount, "search", "a mode the index cannot serve", new { query = "loyer", language = "fra", mode = "bm25" }, "retrieval_mode_unavailable");
-        await DriveAsync(observed, mount, "search", "a European identifier on a Luxembourg-only mount", new { query = "loyer", language = "fra", identifier = european }, "retrieval_mode_unavailable");
+        // search can answer one EU work, so on a mount with no EU index the missing corpus is the reason.
+        await DriveAsync(observed, mount, "search", "a European identifier on a Luxembourg-only mount", new { query = "loyer", language = "fra", identifier = european }, "no_corpus_mounted");
 
         // provenance
         await DriveAsync(observed, mount, "provenance", "two states on the date", new { identifier = work, date = twinDate, language = "fra" }, "ambiguous_version");

@@ -728,9 +728,11 @@ public sealed class V3CorpusSearchMountTests
             Assert.AreEqual("language_not_available", englishOfOneWork.Refusal!.Code);
             var unknown = await SearchAsync(mount, Phrase, identifier: "/lu-legilux/no-such-work");
             Assert.AreEqual("identifier_unknown", unknown.Refusal!.Code);
+            // An EU work on a mount with no EU index: search can answer an EU work now, so the EU corpus
+            // not being mounted is the reason, with EU context, rather than a mode this mount lacks.
             var eu = await SearchAsync(mount, Phrase, identifier: "32016R0679");
-            Assert.AreEqual("retrieval_mode_unavailable", eu.Refusal!.Code);
-            Assert.AreEqual("r2_provision_discovery", eu.Refusal.HelpfulPayload.GetProperty("requested_mode").GetString());
+            Assert.AreEqual("no_corpus_mounted", eu.Refusal!.Code);
+            Assert.AreEqual("eu", eu.Refusal.HelpfulPayload.GetProperty("required_corpus").GetString());
             Assert.AreEqual(PublisherId.EuEurLex, eu.Context.Publisher);
         }
 
