@@ -3404,7 +3404,8 @@ internal sealed class V3CorpusMount : IDisposable
         "a hit is one article of the one wording this index holds of the expression; no other wording of the act is held";
 
     internal const string EuropeWordingDateSemantics =
-        "wording_date is the date the publisher's Formex package gives the act, the date of the original wording this index holds; " +
+        "the wording date (wording_date in search, wording_dates in dossier) is the date the publisher's Formex package gives the act, " +
+        "the date of the original wording this index holds; " +
         "it is not a publication, entry-into-force, application or consolidation date, and an EU date is never merged with a Luxembourg " +
         "applicability date";
 
@@ -4722,7 +4723,7 @@ internal sealed class V3CorpusMount : IDisposable
     [
         ["titles", "no title of the EU work is held by the EU index"],
         ["later_wordings", "no consolidated version is held, so the wording listed is the original act's and no later wording or state is listed"],
-        ["force_dates", "no entry-into-force, application or end-of-validity date is held; wording_date is none of them"],
+        ["force_dates", "no entry-into-force, application or end-of-validity date is held; the wording date is none of them"],
         ["document_type", "the publisher's document type is not held for EU works"],
         ["corrigenda", "corrigendum lines are recorded by the index per corrected work root and are not joined to the work here, because the join between a corrected work root and the work's publisher identifier is not established"],
         ["other_languages", "an expression in a language the index holds no wording in is not listed; French expressions are not acquired (Decision 89)"],

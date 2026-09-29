@@ -56,7 +56,7 @@ internal static class V3McpJsonRpc
         "search" => "Search the held Luxembourg article text, strict or relaxed, with the quotes that answer; for one EU work named by identifier, its held wording.",
         "coverage" => "What this mount holds and serves, named, and what it does not.",
         "provenance" => "The retained sources, rule profiles and digests behind a Luxembourg state.",
-        "dossier" => "The work record of a Luxembourg act as the index holds it.",
+        "dossier" => "The work record of a Luxembourg act as the index holds it; for an EU work named by identifier, its held expressions from the EU index.",
         "citation" => "The references the publisher wrote in the text of a Luxembourg state's articles.",
         "cited_by" => "The references, in any held Luxembourg state, whose target is exactly this work.",
         "verify" => "Verify a hash-pinned permalink against the state digest the index holds, or read the current digests to pin.",

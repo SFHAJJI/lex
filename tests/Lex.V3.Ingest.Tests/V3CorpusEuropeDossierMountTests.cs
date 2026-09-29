@@ -93,14 +93,19 @@ public sealed class V3CorpusEuropeDossierMountTests
         Assert.AreEqual("identifier_unknown", unknown.Refusal?.Code);
         Assert.AreEqual(PublisherId.EuEurLex, unknown.Context.Publisher);
 
-        // The fixture's provision identifier is carried by a second act too, so the provision alone names two works.
-        var second = await fixture.AddSecondExpressionWithSamePublisherProvisionIdentifierAsync();
+        // A hand-edited index where one CELEX names two works (the builder ties each work root to one CELEX
+        // seed, so only a fixture reaches this): the dossier names both and picks neither (review of #762).
+        await fixture.AddSecondExpressionWithSamePublisherProvisionIdentifierAsync(celex: Celex);
         using var twoWorks = await V3CorpusMount.OpenAsync(fixture.Directory, CancellationToken.None);
         Assert.IsNotNull(twoWorks);
         var byCelex = await EnvelopeAsync(twoWorks, RawTarget, "dossier", new { identifier = Celex });
-        Assert.IsNull(byCelex.Refusal, "the CELEX still names one work.");
-        Assert.AreEqual(1, byCelex.Result!.Value.GetProperty("expression_count").GetInt32(), "the second act is another work, not listed here.");
-        Assert.IsNotNull(second);
+        Assert.AreEqual("ambiguous_identifier", byCelex.Refusal?.Code, "one CELEX naming two works is never answered with the first.");
+        Assert.AreEqual(PublisherId.EuEurLex, byCelex.Context.Publisher);
+        CollectionAssert.AreEquivalent(
+            new[] { fixture.PublisherWorkId, "http://publications.europa.eu/resource/celex/32026R1965" },
+            Strings(byCelex.Refusal!.HelpfulPayload.GetProperty("candidates")));
+        var byWork = await EnvelopeAsync(twoWorks, RawTarget, "dossier", new { identifier = fixture.PublisherWorkId });
+        Assert.IsNull(byWork.Refusal, "the work IRI still names one work.");
     }
 
     [TestMethod]

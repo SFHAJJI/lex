@@ -2164,7 +2164,8 @@ public sealed class V3CorpusResolveMountTests
             AddSecondExpressionWithSamePublisherProvisionIdentifierAsync();
 
         public async Task<string> AddSecondExpressionWithSamePublisherProvisionIdentifierAsync(
-            string? publisherWorkId = null)
+            string? publisherWorkId = null,
+            string? celex = null)
         {
             const string secondWork =
                 "http://publications.europa.eu/resource/celex/32026R1965";
@@ -2184,7 +2185,7 @@ public sealed class V3CorpusResolveMountTests
                 var source = articles[0];
                 var inserted = new EuropeIndexBuilder.ArticleRow(
                     new string('d', 64), source.ObjectRefSha256, publisherWorkId ?? secondWork,
-                    "32026R0002", secondExpression,
+                    celex ?? "32026R0002", secondExpression,
                     "second-act.xml", PublisherProvisionIdentifier, "Article 1", "2026-01-01",
                     "eng", "second act wording", "[]");
                 using var insert = connection.CreateCommand();
