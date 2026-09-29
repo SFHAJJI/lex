@@ -1,0 +1,736 @@
+{
+  "schema": "lex-v3-envelope-samples/1",
+  "note": "Whole REST envelopes the real handler sent, each verified by V3EnvelopeJson.ParseAndVerify before it was recorded, and the reviewed registry\u0027s contract a reader needs to verify one. The fixture\u0027s per-run corpus and index digests are replaced by aaaaaaaa... and bbbbbbbb... (same shape, every occurrence); nothing else is edited. THE PRODUCER IS REAL AND THE MOUNT IS A FIXTURE.",
+  "contract": {
+    "envelope_schema": "lex-v3-envelope/1",
+    "version": "v3",
+    "registry_schema": "lex-v3-operation-registry/1",
+    "registry_sha256": "abe40749a2364dcbcf69a4427b0977e0510500345056eed4042b2e4758a53ef0",
+    "refusal_schema": "lex-v3-refusal/1",
+    "verdicts": [
+      "answer",
+      "answer_with_enrichment",
+      "point",
+      "clarify",
+      "refuse",
+      "split"
+    ],
+    "operations": [
+      {
+        "operation_id": "answer_drift",
+        "result_schema": "lex-v3-answer_drift-result/1",
+        "result_object_types": [
+          "answer_drift"
+        ]
+      },
+      {
+        "operation_id": "article_history",
+        "result_schema": "lex-v3-article_history-result/1",
+        "result_object_types": [
+          "provision_history"
+        ]
+      },
+      {
+        "operation_id": "as_observed",
+        "result_schema": "lex-v3-as_observed-result/1",
+        "result_object_types": [
+          "quote",
+          "version_state"
+        ]
+      },
+      {
+        "operation_id": "as_of",
+        "result_schema": "lex-v3-as_of-result/1",
+        "result_object_types": [
+          "quote",
+          "version_state"
+        ]
+      },
+      {
+        "operation_id": "ask",
+        "result_schema": "lex-v3-ask-result/1",
+        "result_object_types": [
+          "answer_dossier",
+          "handoff_card"
+        ]
+      },
+      {
+        "operation_id": "browse",
+        "result_schema": "lex-v3-browse-result/1",
+        "result_object_types": [
+          "classification",
+          "work_record"
+        ]
+      },
+      {
+        "operation_id": "changes_in_period",
+        "result_schema": "lex-v3-changes_in_period-result/1",
+        "result_object_types": [
+          "change_list"
+        ]
+      },
+      {
+        "operation_id": "citation",
+        "result_schema": "lex-v3-citation-result/1",
+        "result_object_types": [
+          "relation_edge"
+        ]
+      },
+      {
+        "operation_id": "cited_by",
+        "result_schema": "lex-v3-cited_by-result/1",
+        "result_object_types": [
+          "relation_edge"
+        ]
+      },
+      {
+        "operation_id": "classification",
+        "result_schema": "lex-v3-classification-result/1",
+        "result_object_types": [
+          "classification"
+        ]
+      },
+      {
+        "operation_id": "concepts",
+        "result_schema": "lex-v3-concepts-result/1",
+        "result_object_types": [
+          "classification"
+        ]
+      },
+      {
+        "operation_id": "coverage",
+        "result_schema": "lex-v3-coverage-result/1",
+        "result_object_types": [
+          "coverage_report"
+        ]
+      },
+      {
+        "operation_id": "diff",
+        "result_schema": "lex-v3-diff-result/1",
+        "result_object_types": [
+          "diff"
+        ]
+      },
+      {
+        "operation_id": "dossier",
+        "result_schema": "lex-v3-dossier-result/1",
+        "result_object_types": [
+          "work_record"
+        ]
+      },
+      {
+        "operation_id": "events",
+        "result_schema": "lex-v3-events-result/1",
+        "result_object_types": [
+          "event"
+        ]
+      },
+      {
+        "operation_id": "evidence_bundle",
+        "result_schema": "lex-v3-evidence_bundle-result/1",
+        "result_object_types": [
+          "evidence_bundle"
+        ]
+      },
+      {
+        "operation_id": "in_force_on",
+        "result_schema": "lex-v3-in_force_on-result/1",
+        "result_object_types": [
+          "version_state"
+        ]
+      },
+      {
+        "operation_id": "knowable_on",
+        "result_schema": "lex-v3-knowable_on-result/1",
+        "result_object_types": [
+          "quote",
+          "version_state"
+        ]
+      },
+      {
+        "operation_id": "manifestation",
+        "result_schema": "lex-v3-manifestation-result/1",
+        "result_object_types": [
+          "manifestation"
+        ]
+      },
+      {
+        "operation_id": "provenance",
+        "result_schema": "lex-v3-provenance-result/1",
+        "result_object_types": [
+          "provenance_chain"
+        ]
+      },
+      {
+        "operation_id": "relations",
+        "result_schema": "lex-v3-relations-result/1",
+        "result_object_types": [
+          "relation_edge"
+        ]
+      },
+      {
+        "operation_id": "resolve",
+        "result_schema": "lex-v3-resolve-result/1",
+        "result_object_types": [
+          "work_resolution"
+        ]
+      },
+      {
+        "operation_id": "search",
+        "result_schema": "lex-v3-search-result/1",
+        "result_object_types": [
+          "quote",
+          "work_record"
+        ]
+      },
+      {
+        "operation_id": "status_on",
+        "result_schema": "lex-v3-status_on-result/1",
+        "result_object_types": [
+          "version_state"
+        ]
+      },
+      {
+        "operation_id": "timeline",
+        "result_schema": "lex-v3-timeline-result/1",
+        "result_object_types": [
+          "timeline"
+        ]
+      },
+      {
+        "operation_id": "transposition",
+        "result_schema": "lex-v3-transposition-result/1",
+        "result_object_types": [
+          "relation_edge"
+        ]
+      },
+      {
+        "operation_id": "verify",
+        "result_schema": "lex-v3-verify-result/1",
+        "result_object_types": [
+          "verification"
+        ]
+      }
+    ],
+    "refusals": [
+      {
+        "code": "advice_boundary",
+        "mandatory_payload_fields": [
+          "descriptive_maximum",
+          "handoff"
+        ]
+      },
+      {
+        "code": "ambiguous_identifier",
+        "mandatory_payload_fields": [
+          "requested_identifier",
+          "candidates"
+        ]
+      },
+      {
+        "code": "ambiguous_version",
+        "mandatory_payload_fields": [
+          "requested_date",
+          "candidates"
+        ]
+      },
+      {
+        "code": "anchor_not_in_version",
+        "mandatory_payload_fields": [
+          "requested_anchor",
+          "nearest_anchors",
+          "do_not_fall_back_to_full_text_search"
+        ]
+      },
+      {
+        "code": "derivation_refused",
+        "mandatory_payload_fields": [
+          "derivation",
+          "reason"
+        ]
+      },
+      {
+        "code": "format_not_available",
+        "mandatory_payload_fields": [
+          "requested_format",
+          "available_formats"
+        ]
+      },
+      {
+        "code": "identifier_unknown",
+        "mandatory_payload_fields": [
+          "requested_identifier",
+          "official_search_actions",
+          "what_would_answer"
+        ]
+      },
+      {
+        "code": "language_not_available",
+        "mandatory_payload_fields": [
+          "requested_language",
+          "available_languages"
+        ]
+      },
+      {
+        "code": "no_corpus_mounted",
+        "mandatory_payload_fields": [
+          "required_corpus"
+        ]
+      },
+      {
+        "code": "no_version_for_date",
+        "mandatory_payload_fields": [
+          "requested_date",
+          "history_begins",
+          "nearest_earlier",
+          "nearest_later"
+        ]
+      },
+      {
+        "code": "not_transposable",
+        "mandatory_payload_fields": [
+          "instrument_type",
+          "explanation"
+        ]
+      },
+      {
+        "code": "out_of_corpus_scope",
+        "mandatory_payload_fields": [
+          "requested_identifier",
+          "official_source"
+        ]
+      },
+      {
+        "code": "pinned_digest_mismatch",
+        "mandatory_payload_fields": [
+          "requested_digest",
+          "current_digest",
+          "stable_coordinate",
+          "current_hash_pinned_url"
+        ]
+      },
+      {
+        "code": "profiles_differ",
+        "mandatory_payload_fields": [
+          "left_profile",
+          "right_profile"
+        ]
+      },
+      {
+        "code": "rate_limited",
+        "mandatory_payload_fields": [
+          "retry_after",
+          "retryable"
+        ]
+      },
+      {
+        "code": "retrieval_mode_unavailable",
+        "mandatory_payload_fields": [
+          "requested_mode",
+          "available_modes"
+        ]
+      },
+      {
+        "code": "snapshot_unknown",
+        "mandatory_payload_fields": [
+          "snapshot_id",
+          "what_would_answer"
+        ]
+      },
+      {
+        "code": "text_not_available",
+        "mandatory_payload_fields": [
+          "official_identity",
+          "official_source",
+          "retained_transport_evidence"
+        ]
+      },
+      {
+        "code": "text_withheld",
+        "mandatory_payload_fields": [
+          "official_identity",
+          "official_link",
+          "content_sha256"
+        ]
+      },
+      {
+        "code": "upstream_unreachable",
+        "mandatory_payload_fields": [
+          "upstream",
+          "retryable"
+        ]
+      }
+    ]
+  },
+  "envelopes": [
+    {
+      "operation": "coverage",
+      "scenario": "the whole mount: an answer",
+      "http_status": 200,
+      "content_type": "application/json;charset=utf-8",
+      "envelope": {
+        "context": {
+          "freshness": {
+            "observed_at": "2026-09-18T07:00:00.0000000Z",
+            "upstream_health": "stale"
+          },
+          "jurisdiction": "lu",
+          "provisional": false,
+          "publisher": "lu-legilux",
+          "snapshot": {
+            "snapshot_id": "corpus-aaaaaaaaaaaaaaaa",
+            "snapshot_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          "status": "success",
+          "timeline_semantics": "publisher_applicability"
+        },
+        "object_type": "envelope",
+        "operation_id": "coverage",
+        "refusal": null,
+        "registry_schema": "lex-v3-operation-registry/1",
+        "registry_sha256": "abe40749a2364dcbcf69a4427b0977e0510500345056eed4042b2e4758a53ef0",
+        "request_ref": "http_fb09fb7191e84f40f48d21b4532a48ef36c84efacd236a30abd075a5a2b2c639",
+        "result": {
+          "object_type": "coverage_report",
+          "schema": "lex-v3-coverage-result/1",
+          "value": {
+            "capability_cells": [
+              {
+                "column": "articles",
+                "field": "searchable_text",
+                "language": "fra",
+                "operation": "search",
+                "period_from": "2021-08-22",
+                "period_to": "2021-08-22",
+                "population": 36
+              },
+              {
+                "column": "articles",
+                "field": "searchable_text",
+                "language": "fra",
+                "operation": "search",
+                "period_from": "2023-01-01",
+                "period_to": "2023-01-01",
+                "population": 2
+              },
+              {
+                "column": "articles",
+                "field": "searchable_text",
+                "language": "fra",
+                "operation": "search",
+                "period_from": "2023-07-03",
+                "period_to": "2023-07-03",
+                "population": 10
+              },
+              {
+                "column": "articles",
+                "field": "searchable_text",
+                "language": "fra",
+                "operation": "search",
+                "period_from": "2023-09-16",
+                "period_to": "2023-09-16",
+                "population": 1
+              }
+            ],
+            "counts_note": "counts are of rows the index holds; totals.articles and languages[].articles count the articles the index holds, and the corpus can have recorded more articles than the index holds: members.article_outcomes counts what it recorded; a missing publisher date is counted as missing and never dropped; articles_with_searchable_text is counted where the article carries a publisher date, which is what the capability cells measure, and so it and articles_without_publisher_date are not addends; when a language is requested, requested_language echoes it and only languages and capability_cells are narrowed to it, and every other member, totals included, is the whole mount\u0027s",
+            "languages": [
+              {
+                "articles": 49,
+                "articles_with_searchable_text": 49,
+                "articles_without_publisher_date": 0,
+                "first_state_date": "2024-02-01",
+                "language": "fra",
+                "last_state_date": "2024-02-01",
+                "searchable_text_held": true,
+                "states": 1,
+                "works": 1
+              }
+            ],
+            "languages_held": [
+              "fra"
+            ],
+            "members": {
+              "article_outcomes": [
+                {
+                  "disposition": "akn_admitted",
+                  "outcomes": 49
+                },
+                {
+                  "disposition": "akn_unsupported_content_shape",
+                  "outcomes": 5
+                }
+              ],
+              "article_outcomes_note": "the corpus\u0027s own record of what its legal-content stage did with the articles of its acquired Luxembourg documents, counted by the corpus\u0027s disposition token and given verbatim, and this answer does not define the tokens; an outcome is one article\u0027s, except akn_upstream_not_inventoried, which is one document\u0027s because none of its articles was listed; the articles the index holds, which totals.articles and languages[].articles count, are exactly the akn_admitted and akn_marker_only_evidence outcomes, and an outcome under any other token is not held here; which article an outcome belongs to is not held; the outcomes of members that are not acquired are not counted",
+              "by_outcome": [
+                {
+                  "members": 1,
+                  "outcome": "acquired"
+                },
+                {
+                  "members": 2,
+                  "outcome": "unavailable"
+                }
+              ],
+              "gaps": [
+                {
+                  "gap": "point",
+                  "members": 2
+                }
+              ],
+              "gaps_note": "the gap tokens the corpus recorded per member, verbatim, counted by member",
+              "with_gaps": 2
+            },
+            "mounted": {
+              "corpus_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "index_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+              "publisher": "lu-legilux",
+              "registry_sha256": "abe40749a2364dcbcf69a4427b0977e0510500345056eed4042b2e4758a53ef0"
+            },
+            "not_held": [
+              {
+                "item": "publisher_universe",
+                "reason": "how many acts the publisher holds, or how many of them this mount lacks: the mount records only what was admitted"
+              },
+              {
+                "item": "never_consolidated_acts",
+                "reason": "the count of as-published acts never consolidated is a corpus-level statement this mount does not carry"
+              },
+              {
+                "item": "first_sighting_and_observation_times",
+                "reason": "no observation time is held, so nothing here says when anything was first seen; events serves a genesis log whose first_sighting events say only that a state is first present in that log"
+              },
+              {
+                "item": "build_time_and_currency",
+                "reason": "no build time of the corpus or index is held, so nothing here says how current these counts are; the corpus and index digests name exactly which artifacts are mounted"
+              },
+              {
+                "item": "legal_status",
+                "reason": "no status, repeal or commencement fact is counted here; status_on serves the publisher\u0027s force assertions per work, verbatim"
+              }
+            ],
+            "operations": {
+              "not_served_operations": [
+                "as_observed",
+                "concepts",
+                "knowable_on",
+                "transposition"
+              ],
+              "note": "served_operations are the routes this mount answers and not_served_operations are registered with no route on it; a request for an unserved operation answers the transport failure operation_not_served (HTTP 404, below the envelope), which tells it apart from a path nothing names (unknown_route)",
+              "registered": 27,
+              "served_operations": [
+                "answer_drift",
+                "article_history",
+                "as_of",
+                "ask",
+                "browse",
+                "changes_in_period",
+                "citation",
+                "cited_by",
+                "classification",
+                "coverage",
+                "diff",
+                "dossier",
+                "events",
+                "evidence_bundle",
+                "in_force_on",
+                "manifestation",
+                "provenance",
+                "relations",
+                "resolve",
+                "search",
+                "status_on",
+                "timeline",
+                "verify"
+              ]
+            },
+            "requested_language": null,
+            "scope": "the mounted Luxembourg corpus and index: what this mount holds and recorded as missing, and nothing about what the publisher holds",
+            "totals": {
+              "articles": 49,
+              "members": 3,
+              "states": 1,
+              "works": 1
+            }
+          }
+        },
+        "schema": "lex-v3-envelope/1",
+        "verdict": "answer",
+        "version": "v3"
+      }
+    },
+    {
+      "operation": "ask",
+      "scenario": "any question: the contained assistant\u0027s card under the point verdict",
+      "http_status": 200,
+      "content_type": "application/json;charset=utf-8",
+      "envelope": {
+        "context": {
+          "freshness": {
+            "observed_at": "2026-09-18T07:00:00.0000000Z",
+            "upstream_health": "stale"
+          },
+          "jurisdiction": "lu",
+          "provisional": false,
+          "publisher": "lu-legilux",
+          "snapshot": {
+            "snapshot_id": "corpus-aaaaaaaaaaaaaaaa",
+            "snapshot_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          "status": "success",
+          "timeline_semantics": "publisher_applicability"
+        },
+        "object_type": "envelope",
+        "operation_id": "ask",
+        "refusal": null,
+        "registry_schema": "lex-v3-operation-registry/1",
+        "registry_sha256": "abe40749a2364dcbcf69a4427b0977e0510500345056eed4042b2e4758a53ef0",
+        "request_ref": "http_fb09fb7191e84f40f48d21b4532a48ef36c84efacd236a30abd075a5a2b2c639",
+        "result": {
+          "object_type": "handoff_card",
+          "schema": "lex-v3-ask-result/1",
+          "value": {
+            "containment": {
+              "decisions": [
+                "51",
+                "91"
+              ],
+              "model_gloss": "disabled",
+              "reason": "the assistant is contained: no model answers, retrieves, reranks or authors authoritative text, and the legacy assistant route stays disabled until the answer_dossier/1 (S4-A04) and advice-boundary (S4-A05) slices are independently reviewed and integrated; the deterministic operations below answer from held law"
+            },
+            "deterministic_actions": [
+              {
+                "answers": "the work an exact identifier names (ELI, CELEX, publisher identifier or permalink), or identifier_unknown",
+                "languages": null,
+                "operation_id": "resolve",
+                "required_parameters": [
+                  "identifier"
+                ],
+                "route": "/api/v3/resolve"
+              },
+              {
+                "answers": "the provisions whose publisher wording matches the query, strict lane before relaxed, per language",
+                "languages": [
+                  "fra"
+                ],
+                "operation_id": "search",
+                "required_parameters": [
+                  "query",
+                  "language"
+                ],
+                "route": "/api/v3/search"
+              },
+              {
+                "answers": "the state of a work on a civil date, or ambiguous_version / no_version_for_date rather than a silent choice",
+                "languages": null,
+                "operation_id": "as_of",
+                "required_parameters": [
+                  "identifier",
+                  "date"
+                ],
+                "route": "/api/v3/as_of"
+              },
+              {
+                "answers": "the text of a state\u0027s articles with text_sha256, body_sha256, official source and permalink, rights enforced",
+                "languages": null,
+                "operation_id": "evidence_bundle",
+                "required_parameters": [
+                  "identifier",
+                  "date"
+                ],
+                "route": "/api/v3/evidence_bundle"
+              }
+            ],
+            "presentation_note": "a typed presentation result of ask (Decisions 51 and 91), not a refusal code: the closed refusal registry stays at its twenty codes, and this is neither an answer from held law nor a refusal",
+            "presentation_result": "assistant_v3_unavailable",
+            "question_note": "the question is checked to be a non-blank string and is not read, stored or echoed; nothing in this answer depends on it",
+            "question_read": false
+          }
+        },
+        "schema": "lex-v3-envelope/1",
+        "verdict": "point",
+        "version": "v3"
+      }
+    },
+    {
+      "operation": "coverage",
+      "scenario": "no corpus mounted: a refusal",
+      "http_status": 200,
+      "content_type": "application/json;charset=utf-8",
+      "envelope": {
+        "context": {
+          "freshness": {
+            "observed_at": "2026-09-18T07:00:00.0000000Z",
+            "upstream_health": "unreachable"
+          },
+          "jurisdiction": "lu",
+          "provisional": false,
+          "publisher": "lu-legilux",
+          "snapshot": {
+            "snapshot_id": "no-corpus-mounted",
+            "snapshot_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          "status": "refusal",
+          "timeline_semantics": "publisher_applicability"
+        },
+        "object_type": "envelope",
+        "operation_id": "coverage",
+        "refusal": {
+          "code": "no_corpus_mounted",
+          "helpful_payload": {
+            "required_corpus": "lu"
+          },
+          "schema": "lex-v3-refusal/1"
+        },
+        "registry_schema": "lex-v3-operation-registry/1",
+        "registry_sha256": "abe40749a2364dcbcf69a4427b0977e0510500345056eed4042b2e4758a53ef0",
+        "request_ref": "http_fb09fb7191e84f40f48d21b4532a48ef36c84efacd236a30abd075a5a2b2c639",
+        "result": null,
+        "schema": "lex-v3-envelope/1",
+        "verdict": "refuse",
+        "version": "v3"
+      }
+    },
+    {
+      "operation": "search",
+      "scenario": "a language the mount holds no text in: a refusal with a payload",
+      "http_status": 200,
+      "content_type": "application/json;charset=utf-8",
+      "envelope": {
+        "context": {
+          "freshness": {
+            "observed_at": "2026-09-18T07:00:00.0000000Z",
+            "upstream_health": "stale"
+          },
+          "jurisdiction": "lu",
+          "provisional": false,
+          "publisher": "lu-legilux",
+          "snapshot": {
+            "snapshot_id": "corpus-aaaaaaaaaaaaaaaa",
+            "snapshot_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          "status": "refusal",
+          "timeline_semantics": "publisher_applicability"
+        },
+        "object_type": "envelope",
+        "operation_id": "search",
+        "refusal": {
+          "code": "language_not_available",
+          "helpful_payload": {
+            "available_languages": [
+              "fra"
+            ],
+            "requested_language": "deu"
+          },
+          "schema": "lex-v3-refusal/1"
+        },
+        "registry_schema": "lex-v3-operation-registry/1",
+        "registry_sha256": "abe40749a2364dcbcf69a4427b0977e0510500345056eed4042b2e4758a53ef0",
+        "request_ref": "http_fb09fb7191e84f40f48d21b4532a48ef36c84efacd236a30abd075a5a2b2c639",
+        "result": null,
+        "schema": "lex-v3-envelope/1",
+        "verdict": "refuse",
+        "version": "v3"
+      }
+    }
+  ]
+}

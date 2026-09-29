@@ -38,10 +38,11 @@ function Test-V3TrackedPath {
         $normalized -ceq 'eng/test-fast.ps1' -or
         $normalized -ceq 'eng/verify-s0-05-preview.ps1' -or
         $normalized -cmatch '^schemas/v3-[a-z0-9-]+/[a-z0-9-]+\.schema\.json$' -or
-        # The two censuses: real payloads and real answers the platform sends, not schemas, so each is
+        # The three censuses: real payloads, real answers and whole envelopes the platform sends, not schemas, so each is
         # admitted by its exact path and nothing else in that directory is.
         $normalized -ceq 'schemas/v3-platform/refusal-payload-samples.json' -or
         $normalized -ceq 'schemas/v3-platform/answer-samples.json' -or
+        $normalized -ceq 'schemas/v3-platform/envelope-samples.json' -or
         $normalized -cmatch '^schemas/v3-source/core/[a-z0-9-]+\.schema\.json$' -or
         $normalized -cmatch '^schemas/v3-source/http/[a-z0-9-]+\.json$' -or
         $normalized -cmatch '^src/Lex\.V3\.[A-Za-z0-9.]+/.+$' -or
