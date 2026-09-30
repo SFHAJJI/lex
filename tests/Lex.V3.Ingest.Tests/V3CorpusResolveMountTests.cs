@@ -716,6 +716,78 @@ public sealed class V3CorpusResolveMountTests
     }
 
     [TestMethod]
+    public async Task BilingualEuropeWorkCoordinatesOfferBothExactExpressionChoices()
+    {
+        var fixture = await EuropeMountedFixture.CreateAsync();
+        await using var cleanup = fixture;
+        var frenchExpression = await fixture.AddSecondExpressionWithSamePublisherProvisionIdentifierAsync(
+            fixture.PublisherWorkId, "32016R0679", "fra");
+        using var mount = await V3CorpusMount.OpenAsync(fixture.Directory, CancellationToken.None);
+        Assert.IsNotNull(mount);
+
+        foreach (var identifier in new[] { fixture.PublisherWorkId, "32016R0679" })
+        {
+            var resolved = await ResolveAsync(mount, identifier);
+            Assert.AreEqual(V3Verdicts.Answer, resolved.Verdict, resolved.Refusal?.Code);
+            Assert.AreEqual(PublisherId.EuEurLex, resolved.Context.Publisher);
+            var body = resolved.Result!.Value;
+            Assert.AreEqual("work", body.GetProperty("resolution_scope").GetString());
+            Assert.IsTrue(body.GetProperty("expression_selection_required").GetBoolean());
+            Assert.AreEqual(fixture.PublisherWorkId, body.GetProperty("publisher_work_id").GetString());
+            Assert.AreEqual(fixture.CorpusSha256, body.GetProperty("corpus_sha256").GetString());
+            Assert.AreEqual(fixture.IndexSha256, body.GetProperty("index_sha256").GetString());
+            Assert.IsFalse(body.TryGetProperty("expression_iri", out _), "No language is selected at work scope.");
+            CollectionAssert.AreEqual(new[] { "eng", "fra" }, body.GetProperty("available_languages")
+                .EnumerateArray().Select(static language => language.GetString()).ToArray());
+            var expressions = body.GetProperty("expressions").EnumerateArray().ToArray();
+            CollectionAssert.AreEqual(new[] { fixture.PublisherExpressionId, frenchExpression },
+                expressions.Select(static expression => expression.GetProperty("expression_iri").GetString()).ToArray());
+            foreach (var expression in expressions)
+            {
+                var selected = await ResolveAsync(mount, expression.GetProperty("resolve").GetProperty("identifier").GetString()!);
+                Assert.AreEqual(V3Verdicts.Answer, selected.Verdict);
+                Assert.AreEqual(expression.GetProperty("expression_iri").GetString(),
+                    selected.Result!.Value.GetProperty("expression_iri").GetString());
+                Assert.AreEqual(expression.GetProperty("language").GetString(),
+                    selected.Result.Value.GetProperty("language").GetString());
+            }
+        }
+    }
+
+    [TestMethod]
+    public async Task FrenchOnlyEuropeWorkResolvesItsHeldFrenchExpression()
+    {
+        var fixture = await EuropeMountedFixture.CreateAsync(acquireFrenchExpression: true);
+        await using var cleanup = fixture;
+        using var mount = await V3CorpusMount.OpenAsync(fixture.Directory, CancellationToken.None);
+        Assert.IsNotNull(mount);
+        foreach (var identifier in new[] { fixture.PublisherWorkId, "32016R0679", fixture.PublisherExpressionId })
+        {
+            var resolved = await ResolveAsync(mount, identifier);
+            Assert.AreEqual(V3Verdicts.Answer, resolved.Verdict, resolved.Refusal?.Code);
+            Assert.AreEqual("fra", resolved.Result!.Value.GetProperty("language").GetString());
+            Assert.AreEqual(fixture.PublisherExpressionId,
+                resolved.Result.Value.GetProperty("expression_iri").GetString());
+        }
+    }
+
+    [TestMethod]
+    public async Task DifferentEuropeWorksStayAmbiguousEvenWhenTheirLanguagesDiffer()
+    {
+        var fixture = await EuropeMountedFixture.CreateAsync();
+        await using var cleanup = fixture;
+        var secondExpression = await fixture.AddSecondExpressionWithSamePublisherProvisionIdentifierAsync(
+            celex: "32016R0679", language: "fra");
+        using var mount = await V3CorpusMount.OpenAsync(fixture.Directory, CancellationToken.None);
+        Assert.IsNotNull(mount);
+        var resolved = await ResolveAsync(mount, "32016R0679");
+        Assert.AreEqual("ambiguous_identifier", resolved.Refusal?.Code);
+        CollectionAssert.AreEquivalent(new[] { fixture.PublisherExpressionId, secondExpression },
+            resolved.Refusal!.HelpfulPayload.GetProperty("candidates").EnumerateArray()
+                .Select(static candidate => candidate.GetString()).ToArray());
+    }
+
+    [TestMethod]
     public async Task EuropeOnlyRefusalsCarryEuropeContext()
     {
         var fixture = await EuropeMountedFixture.CreateAsync();
@@ -2112,9 +2184,10 @@ public sealed class V3CorpusResolveMountTests
         public string CorpusSha256 { get; }
         public string IndexSha256 { get; private set; }
 
-        public static async Task<EuropeMountedFixture> CreateAsync()
+        public static async Task<EuropeMountedFixture> CreateAsync(bool acquireFrenchExpression = false)
         {
-            var envelope = await EuropeIndexBuilderTests.RetainedGdprEnvelopeAsync();
+            var envelope = await EuropeIndexBuilderTests.RetainedGdprEnvelopeAsync(
+                acquireFrenchExpression: acquireFrenchExpression);
             var corpus = LexCorpus6Builder.TryBuild(
                 envelope, out var corpusRefusal, out var corpusDetail);
             Assert.IsNotNull(corpus, $"{corpusRefusal}: {corpusDetail}");
@@ -2165,7 +2238,8 @@ public sealed class V3CorpusResolveMountTests
 
         public async Task<string> AddSecondExpressionWithSamePublisherProvisionIdentifierAsync(
             string? publisherWorkId = null,
-            string? celex = null)
+            string? celex = null,
+            string language = "eng")
         {
             const string secondWork =
                 "http://publications.europa.eu/resource/celex/32026R1965";
@@ -2187,7 +2261,7 @@ public sealed class V3CorpusResolveMountTests
                     new string('d', 64), source.ObjectRefSha256, publisherWorkId ?? secondWork,
                     celex ?? "32026R0002", secondExpression,
                     "second-act.xml", PublisherProvisionIdentifier, "Article 1", "2026-01-01",
-                    "eng", "second act wording", "[]");
+                    language, "second act wording", "[]");
                 using var insert = connection.CreateCommand();
                 insert.CommandText = "INSERT INTO articles VALUES($identity,$object,$work,$celex,$expression,$entry,$identifier,$heading,$date,$language,$text,$tokens)";
                 insert.Parameters.AddWithValue("$identity", inserted.ArticleIdentitySha256);
