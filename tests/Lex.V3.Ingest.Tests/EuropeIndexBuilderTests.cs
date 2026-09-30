@@ -140,26 +140,39 @@ public sealed class EuropeIndexBuilderTests
     }
 
     [TestMethod]
-    public async Task ActualFrozenSchema2MountRemainsReadableWithoutInventingSourceCoordinates()
+    [DataRow(false)]
+    [DataRow(true)]
+    public async Task ActualFrozenSchema2MountRemainsReadableWithoutInventingSourceCoordinates(bool carriageReturnSchema)
     {
         var fixture = Path.Combine(AppContext.BaseDirectory, "Fixtures", "EuDocumentFetch");
-        using var compressed = File.OpenRead(Path.Combine(fixture, "legacy-europe-index-v2-gzip.bin"));
+        using var compressed = File.OpenRead(Path.Combine(fixture, "legacy-europe-index-schema2-gzip.bin"));
         using var gzip = new System.IO.Compression.GZipStream(compressed, System.IO.Compression.CompressionMode.Decompress);
         using var output = new MemoryStream();
         await gzip.CopyToAsync(output);
         var bytes = output.ToArray();
         const string indexSha = "77f38ce099bf4adb1c1d42d4af2a6682b6d0bfd24a5b70111cf949afcd98ecc0";
         Assert.AreEqual(indexSha, Convert.ToHexStringLower(SHA256.HashData(bytes)));
-        var capabilityBytes = await File.ReadAllBytesAsync(Path.Combine(fixture, "legacy-europe-index-v2-capability.bin"));
+        var capabilityBytes = await File.ReadAllBytesAsync(Path.Combine(fixture, "legacy-europe-index-schema2-capability.bin"));
         Assert.AreEqual("97fa74ef5d47ce7c07320cbfede2463d654e713e0d3a873dae1441bf8b259c22",
             Convert.ToHexStringLower(SHA256.HashData(capabilityBytes)));
         var capabilitySha = V3IndexCapabilityManifestArtifact.ComputeSha256(capabilityBytes);
         var capability = V3IndexCapabilityManifestArtifact.ParseAndVerify(
             new SourceArtifactRef(LexCorpus6Builder.ResourceIdOf(capabilitySha), capabilitySha),
             capabilityBytes, PublisherId.EuEurLex, indexSha);
+        var mountedDigest = indexSha;
+        if (carriageReturnSchema)
+        {
+            bytes = MutateDatabase(bytes, "PRAGMA writable_schema=ON; UPDATE sqlite_schema SET sql=replace(sql,char(10),char(13)||char(10)) WHERE sql IS NOT NULL; PRAGMA writable_schema=OFF;");
+            mountedDigest = Convert.ToHexStringLower(SHA256.HashData(bytes));
+            Assert.IsTrue(V3IndexCapabilityManifest.TryCreate(PublisherId.EuEurLex, mountedDigest,
+                capability.Cells.Select(cell => new V3IndexCapabilityCell(cell.Publisher, mountedDigest,
+                    cell.Operation, cell.Column, cell.Field, cell.Language, cell.PeriodFrom, cell.PeriodTo,
+                    cell.Population)).ToArray(), out var rebound, out var refusal), refusal.ToString());
+            capability = rebound!;
+        }
         const string corpusSha = "cd36530f70421ab2efe543a31871266ac64823d75b419155c95806c7ec04dae5";
         using var reader = EuropeIndexReader.OpenAndVerify(
-            new SourceArtifactRef(LexCorpus6Builder.ResourceIdOf(indexSha), indexSha), bytes,
+            new SourceArtifactRef(LexCorpus6Builder.ResourceIdOf(mountedDigest), mountedDigest), bytes,
             new SourceArtifactRef(LexCorpus6Builder.ResourceIdOf(corpusSha), corpusSha), capability);
         Assert.AreEqual(198, reader.ArticleCount);
         Assert.IsFalse(reader.HasArticleSourceEvidence);

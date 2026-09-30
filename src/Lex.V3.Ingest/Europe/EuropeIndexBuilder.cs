@@ -405,7 +405,7 @@ public static class EuropeIndexBuilder
         Execute(connection, $"PRAGMA application_id={ApplicationId}");
         Execute(connection, "PRAGMA user_version=3");
         using var transaction = connection.BeginTransaction();
-        Execute(connection, Ddl, transaction);
+        Execute(connection, Ddl.Replace("\r\n", "\n", StringComparison.Ordinal), transaction);
         foreach (var row in members)
             Insert(connection, transaction, "INSERT INTO members VALUES($p0,$p1,$p2,$p3,$p4,$p5)",
                 row.ObjectRefSha256, row.SourceOrdinal, row.Outcome, row.ContentClass,
@@ -533,11 +533,13 @@ public static class EuropeIndexBuilder
             Cache = SqliteCacheMode.Private, Pooling = false,
         }.ToString());
         expected.Open();
-        Execute(expected, legacy ? LegacyDdl : Ddl);
+        Execute(expected, (legacy ? LegacyDdl : Ddl).Replace("\r\n", "\n", StringComparison.Ordinal));
         if (!ReadSchema(expected).SequenceEqual(ReadSchema(actual), StringComparer.Ordinal))
             throw new InvalidDataException("The EU index schema differs from the exact terminal schema.");
     }
 
+    // C# raw SQL literals inherited checkout line endings in older mounts. Compare only that
+    // known spelling difference; all other schema text and the original file digest stay exact.
     private static string[] ReadSchema(SqliteConnection connection)
     {
         using var command = connection.CreateCommand();
@@ -546,7 +548,7 @@ public static class EuropeIndexBuilder
         using var reader = command.ExecuteReader();
         var rows = new List<string>();
         while (reader.Read())
-            rows.Add(string.Join('\n', reader.GetString(0), reader.GetString(1), reader.GetString(2), reader.GetString(3)));
+            rows.Add(string.Join('\n', reader.GetString(0), reader.GetString(1), reader.GetString(2), reader.GetString(3).Replace("\r\n", "\n", StringComparison.Ordinal)));
         return rows.ToArray();
     }
 

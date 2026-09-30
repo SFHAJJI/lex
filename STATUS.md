@@ -16,7 +16,13 @@ Existing schema2 mounts keep their exact schema/logical-hash verification and se
 behavior. They report source-coordinate support as unavailable. The draft includes an exact
 compressed fixture from the completed bilingual canary (198 articles; original index digest
 77f38ce099bf4adb1c1d42d4af2a6682b6d0bfd24a5b70111cf949afcd98ecc0), plus
-producer-binding and hostile source/version tests. The fixed-input schema3 bytes were derived twice and matched (SHA-256 7d6aa9be7334bcdb2fd224a6f0857fddbadca6b92d49a0532337a528f38cd711). Required fast/ingest validation and cross-family review remain pending.
+producer-binding and hostile source/version tests. Initial validation reproduced a checkout-line-ending difference in historical SQLite schema
+text. New schema creation canonicalizes CRLF to LF; legacy schema comparison accepts only that
+spelling difference while retaining the exact original file digest and logical-row checks. The
+actual legacy fixture and a CRLF schema variant cover both forms. Synthetic mount helpers now
+supply complete source rows, and the vocabulary census pins the explicit legacy constants.
+The schema3 byte pin must be remeasured after this correction; fresh fast/ingest validation and
+cross-family review remain pending.
 
 Population checkpoint: PR835 merged7144666c after review and greenCI36790548675. The bounded
 32023R2854 census used10/20requests and independently reopened5rows; all6retained routes used
