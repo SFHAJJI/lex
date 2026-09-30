@@ -5,7 +5,9 @@
 // until then `liveChrome` answers only for English, and French, German and Luxembourgish answer
 // `localization_unavailable` (`live-locale-page.jsx`). The table holds each page's title, eyebrow,
 // heading and introduction, the forms' labels and buttons, each screen's idle sentence, and the
-// sentences the search, dossier, reading and history screens say about an answer. A sentence with
+// sentences the search, dossier, reading, history, compare, radar and export screens say about an
+// answer (Trust and Coverage lays its answer out with the shared `Coverage` component, whose copy is
+// its own). A sentence with
 // values in it is a template with `{name}` placeholders (`fillParts`), so a translation can put them
 // where its grammar needs them; a sentence that counts is `{ one, other }`, chosen by the language's
 // plural rule (`countedEntry`). The phrases the platform itself sends (a matching rule, a scope, a
@@ -119,6 +121,22 @@ const EN = Object.freeze({
     heading: "Two states, article by article",
     intro: "The states of one Luxembourg work that applied on two dates, compared by the publisher's article ids and wording, with nothing said about legal effect. The identifier and the dates go to this server in the request and nowhere else, and this page keeps nothing.",
     idle: "Type a work identifier and two dates to compare the states that applied on them.",
+    summary: "{work}: {from} against {to}.",
+    summaryIn: "{work}: {from} against {to} in {language}.",
+    sideFrom: "From",
+    sideTo: "To",
+    side: "{side}: the state applying from {from}, {articles} articles, {conflicts} with their own date differing from the state's, {permalink}",
+    sideNext: "{side}: the state applying from {from} (the next state held applies from {next}), {articles} articles, {conflicts} with their own date differing from the state's, {permalink}",
+    counts: "{changed} changed, {added} added, {removed} removed, {unchanged} unchanged.",
+    status: Object.freeze({ changed: "changed", added: "added", removed: "removed", unchanged: "unchanged" }),
+    row: "{article}: {status} (wording {from} → {to})",
+    noWording: "none",
+    kept: Object.freeze({
+      one: "{count} unchanged article",
+      other: "{count} unchanged articles",
+    }),
+    bound: Object.freeze({ from: "from", to: "to" }),
+    notCompared: "{language} is not compared: {reason} ({bound} date).",
   }),
   radar: Object.freeze({
     title: "Radar",
@@ -126,6 +144,32 @@ const EN = Object.freeze({
     heading: "The change radar",
     intro: "The publisher-dated states of Luxembourg works that this server holds in a window of dates, each with the state it replaced and whether its wording changed. The dates and any identifier go to this server in the request and nowhere else, and this page keeps nothing.",
     idle: "Type two dates to list the publisher-dated states in that window.",
+    summary: "{from} to {to}: {states} of {works}, of {held} held.",
+    states: Object.freeze({
+      one: "{count} state",
+      other: "{count} states",
+    }),
+    works: Object.freeze({
+      one: "{count} work",
+      other: "{count} works",
+    }),
+    noRow: "No held state is dated in this window.",
+    windowMisses: "This window does not meet what this index holds.",
+    windowMissesRange: "This window does not meet what this index holds, from {first} to {last}.",
+    row: "{work}, {language}, from {from}: {verdict}. {permalink}",
+    wording: Object.freeze({ changed: "wording changed", unchanged: "wording unchanged" }),
+    compared: "{wording} from the state of {date}{baseline}: {changed} changed, {added} added, {removed} removed, {unchanged} unchanged",
+    notCompared: "not compared: {reason}{named}",
+    reason: Object.freeze({
+      first_held_state: "the first state this index holds for the work and language, so there is nothing to compare it with",
+      ambiguous_version: "several states of the work apply on this date, so none is compared",
+      ambiguous_baseline: "several states apply on the date before it, so no baseline is chosen",
+      profiles_differ: "this state and its baseline were read under different rule profiles, so they are not compared",
+    }),
+    named: "({label} {permalinks})",
+    baseline: "baseline",
+    candidates: "candidates",
+    truncated: "The rows stop before {date}; a next request starts there.",
   }),
   export: Object.freeze({
     title: "Export composer",
@@ -133,6 +177,25 @@ const EN = Object.freeze({
     heading: "Take articles away, with their citations",
     intro: "Read one Luxembourg work on one date, pin the articles you need, and save them as JSON, CSV or PDF. Each exported article carries its citation, its text digest, its official source and the rights it was served under, and every export carries the watermark. The identifier and the date go to this server in the request and nowhere else; the file is made in this page, and this page keeps nothing.",
     idle: "Type a work identifier and a date, then pin the articles to take away.",
+    readOn: "Read on {date}. Pin the articles to export.",
+    readOnIn: "Read on {date} in {language}. Pin the articles to export.",
+    pin: "Pin {article}",
+    withoutTextHeading: "Held without text",
+    withoutTextNote: "held without text; an export records it as excluded, with its reason.",
+    panelHeading: "Export",
+    nothingPinned: "Nothing is pinned yet. Pin an article above and its export appears here, with what it carries.",
+    counts: Object.freeze({
+      one: "{count} article pinned: {withText} exported with text, {excluded} excluded.",
+      other: "{count} articles pinned: {withText} exported with text, {excluded} excluded.",
+    }),
+    rights: "Text served under {rights}.",
+    snapshot: "Read on {date}, from the snapshot observed at {observedAt}. Corpus {corpus}, index {index}, registry {registry}.",
+    item: "{article} ({language}, applying from {from}): {citation}, text digest {digest}, official source {source}",
+    excluded: "{article} ({language}, applying from {from}): excluded, {reason}, {citation}",
+    save: Object.freeze({ json: "Save as JSON", csv: "Save as CSV", pdf: "Save as PDF" }),
+    formatRefused: "{format} is not offered for this export: {reason}.",
+    composeFailed: "This export cannot be composed: {reason}.",
+    jsonSummary: "The JSON as it will be saved",
   }),
   common: Object.freeze({
     loading: "Asking this server.",

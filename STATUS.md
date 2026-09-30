@@ -38,11 +38,11 @@ CI evidence are recorded in the pull request before merge.
 
 ## Heads
 
-- `v3/integration`: `de1052b2` (2026-09-30, PR #802 merged). Build 45 s. Fast lane
+- `v3/integration`: `5923d695` (2026-09-30, PR #803 merged). Build 45 s. Fast lane
   (`eng/test-fast.ps1`): 3,067 tests, 3,066 pass, 1 skipped (PR #798's validation). Ingest suite: green on CI for PR #760
   (the CI `dotnet` job runs the whole solution on every pull request, about 7 min on the runner;
-  green for PR #802);
-  locally about 15 min. 940 web tests pass. CI's web job can flake in `keyboard-walk.test.mjs`
+  green for PR #803);
+  locally about 15 min. 941 web tests pass. CI's web job can flake in `keyboard-walk.test.mjs`
   ("browser debugger never answered"); rerunning the failed job is the fix.
 - Driver: Claude Opus 5.5 since 2026-09-29 (the Fable 5.1 driver ran out of tokens on 2026-09-28
   after PR #757; the user default model is now `claude-opus-5-5`).
@@ -268,7 +268,7 @@ schema's `parameters` shape, and whose call runs the same dispatch the REST rout
 endpoint test proves it for all twenty-three. The launch-contract line "REST and MCP derive identical
 envelopes from the registry" is the owner's to tick.
 
-Web: 40 React components, 940 tests. Preview screens render fixtures. The V3 Luxembourg search
+Web: 40 React components, 941 tests. Preview screens render fixtures. The V3 Luxembourg search
 answer has a reader (PR #771). The answer census now samples `search` five ways from the real handler:
 - a phrase with 4 strict hits and 1 relaxed hit;
 - the same phrase one hit per page, with its cursor;
@@ -650,6 +650,24 @@ The screens' sentences join the chrome table (PR #803, the second step toward Fr
 - The French draft covers every new entry. A test holds each draft template to its English
   template's placeholders and each counted entry to both forms. French still ships only once
   reviewed (Decision 41).
+
+The compare, radar and export screens' sentences join the table (PR #804).
+- Compare: the summary, each side, the counts, each row (its status now labelled from the table,
+  `changed`, `added`, `removed`, `unchanged`, rather than printed as the platform's code), the
+  unchanged articles' disclosure, and a language not compared, with its bound labelled the same
+  way.
+- Radar: the summary (two counted phrases, states and works), each row and its verdict, the four
+  reasons a state is not compared, the baseline and candidates, the empty window, and the truncated
+  list.
+- Export: the reading line, the pins, the held-without-text note, the panel's counts, rights,
+  snapshot, each item and each exclusion, the three save buttons, the nothing-pinned sentence and
+  the two sentences a format refused or a failed composition says.
+- Every census envelope of the three screens through its views, with the export panel empty and
+  with every article pinned, and each idle page: 17 renders, all byte-identical before and after.
+  The paths the census does not reach (two different states compared, a radar row with a baseline,
+  a list of candidates) are held by the screens' existing tests to their exact markup.
+- The French draft covers every new entry. Trust and Coverage's answer is laid out by the shared
+  `Coverage` component, whose copy stays its own for now, and the refusal card's labels come next.
 
 The live export composer and its journey step (PR #789), the eighth screen. `dist-live/export.html`
 has its own bundle `client-live-export.js`.
@@ -1190,9 +1208,9 @@ has not yet run; the bounded first mount above is complete.
    `localization_unavailable`; PR #800: the live pages' chrome in one table; PR #801: the API process
    records nothing while a browser asks it; PR #802: the keyboard and screen-reader paths (live
    regions, and the journey's keyboard mode); PR #803: the search, dossier, reading and history
-   screens' sentences in the chrome table, with French drafted beside them. Next: the compare,
-   radar, export and Trust and Coverage screens' sentences and the refusal card's labels into the
-   table; French ships only once reviewed (Decision 41). Hosting (ruling 3): `Lex.V3.Api`
+   screens' sentences in the chrome table, with French drafted beside them; PR #804: the compare,
+   radar and export screens' sentences. Next: the refusal card's labels and Trust and Coverage's
+   copy into the table; French ships only once reviewed (Decision 41). Hosting (ruling 3): `Lex.V3.Api`
    serves the live pages on the API's origin with `frame-ancestors`, HSTS and `Referrer-Policy`,
    and a live page never shows the synthetic banner on a real mount. J1 to J8 are restated as V3
    steps by the driver (they exist only in the pre-V3 pack, `05-user-journeys.md`).

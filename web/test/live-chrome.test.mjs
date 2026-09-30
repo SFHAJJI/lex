@@ -118,6 +118,17 @@ test("a counted sentence follows the language's plural rule, not a comparison wi
   assert.equal(countedEntry(entry, 1_000_000, "fr"), "{count} versions", "a form the entry lacks (French 'many') falls back to 'other'");
 });
 
+test("every code a reader admits has a label in the table, so a page never prints a code or nothing", async () => {
+  const { ARTICLE_STATUSES } = await import("../scripts/compare-answer.mjs");
+  const { RADAR_REASONS } = await import("../scripts/radar-answer.mjs");
+  const copy = liveChrome("en");
+  assert.deepEqual(Object.keys(copy.compare.status).sort(), [...ARTICLE_STATUSES].sort(), "a compared article's status");
+  assert.deepEqual(Object.keys(copy.compare.bound).sort(), ["from", "to"], "the bound a language is not compared on");
+  assert.deepEqual(Object.keys(copy.radar.reason).sort(), [...RADAR_REASONS].sort(), "why a radar row is not compared");
+  const { EXPORT_FORMATS } = await import("../scripts/live-export.mjs");
+  assert.deepEqual(Object.keys(copy.export.save).sort(), EXPORT_FORMATS.map((format) => format.id).sort(), "each format's save button");
+});
+
 test("the table answers only for a reviewed interface language", () => {
   assert.deepEqual(Object.keys(LIVE_CHROME), REVIEWED_CHROME_LOCALES, "a table exists exactly for each reviewed language");
   for (const locale of ["fr", "de", "lb", "pt"]) {
