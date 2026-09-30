@@ -36,8 +36,10 @@ The EU parity slice must close that prerequisite; expression-specific resolution
 
 The cross-family review at 12d58871 reported MERGE with two should-fix findings. The repair counts
 French expression objects in the population total and tests closure for bilingual and French-only
-runs, records the resolve prerequisite above, and restores the missing-outcome negative test.
-The PR evidence records the repair validation and final exact-head CI.
+runs, records the resolve prerequisite above, and adds an absent-outcome negative case. That case reaches the earlier complete-population
+guard; the per-member binding guard is unchanged.
+Repair validation passed 3,066 fast tests with one Windows skip (58.382s) and 204 affected ingest
+tests with three opt-in skips (80.074s). The PR records final exact-head CI.
 
 ## EU Formex language scope (Codex, 2026-09-30)
 

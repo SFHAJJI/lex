@@ -596,7 +596,7 @@ public sealed class LexCorpus6BuilderTests
     }
 
     [TestMethod]
-    public async Task HeldEuMemberWithoutPrimaryFormexOutcomeRefusesBeforeCorpusBytes()
+    public async Task HeldEuMemberWithoutFormexMainBodyOutcomesRefusesBeforeCorpusBytes()
     {
         var envelope = await CompleteProfileEnvelopeAsync(
             formexMainBodyTransform: population =>
@@ -606,7 +606,7 @@ public sealed class LexCorpus6BuilderTests
 
         Assert.IsNull(LexCorpus6Builder.TryBuild(envelope, out var refusal, out var detail));
         Assert.AreEqual(LexCorpus6BuildRefusal.PopulationMismatch, refusal, detail);
-        StringAssert.Contains(detail, "exactly one Formex main-body outcome per member");
+        StringAssert.Contains(detail, "The Formex main-body population is missing, reordered, extra or unbound.");
     }
 
     [TestMethod]
