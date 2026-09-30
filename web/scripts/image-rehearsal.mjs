@@ -3,8 +3,8 @@
 // signs it with a rehearsal identity, verifies the signature, and removes it (the launch contract's
 // release path; production signing, credentials and deployment stay with the owner).
 //
-//   node scripts/image-rehearsal.mjs --mount <a v3-corpus directory with its build-report.json> [--keep]
-//     [--no-reproduce] [--no-probe]
+//   node scripts/image-rehearsal.mjs --mount <a v3-corpus directory with its build-report.json, or the
+//     journey's fixture mount with its journey-mount.json> [--keep] [--no-reproduce] [--no-probe]
 //
 // The image is built without a container daemon, by the .NET SDK (`dotnet publish -t:PublishContainer`,
 // the base image pinned by digest in `Lex.V3.Api.csproj`), as an OCI image layout archive. Then:
@@ -266,14 +266,37 @@ async function buildImage({ into, mountPath, epoch, log }) {
   return { webRoot, archive, image: readOciImage(readLayout(await readFile(archive))) };
 }
 
+/**
+ * What a mount says it holds, as `{ kind, report }`: a real mount's build report (`build-report.json`),
+ * or, for the journey's fixture mount (`journey-mount.json`, written by `V3JourneyMountTests`), what it
+ * names in the build report's shape. The fixture names its corpus by the snapshot digest the coverage
+ * answer shows, not by its file's bytes, so only its Luxembourg index is held to a file digest; the
+ * corpus file is held byte for byte to the mount like every mount file, and its snapshot digest to the
+ * coverage probe.
+ */
+export async function mountReport(mountPath) {
+  if (!existsSync(join(mountPath, "journey-mount.json"))) {
+    return { kind: "real", report: JSON.parse(await readFile(join(mountPath, "build-report.json"), "utf8")) };
+  }
+  const fixture = JSON.parse(await readFile(join(mountPath, "journey-mount.json"), "utf8"));
+  return {
+    kind: "fixture",
+    report: {
+      corpus: { Sha256: fixture.corpus_sha256 },
+      luxembourgIndex: { Sha256: fixture.index_sha256 },
+      files: [{ Name: "luxembourg-index.sqlite3", Sha256: fixture.index_sha256 }],
+    },
+  };
+}
+
 /** The rehearsal, end to end. Returns its report; throws on the first step that fails. */
 export async function rehearse({ mount, keep = false, probe = true, reproduce = true, log = () => {} }) {
   const mountPath = resolve(mount);
-  const report = JSON.parse(await readFile(join(mountPath, "build-report.json"), "utf8"));
+  const { kind: mountKind, report } = await mountReport(mountPath);
   const work = await mkdtemp(join(tmpdir(), "lex-image-rehearsal-"));
   const { sourceDate } = await import("./image-reproducible.mjs");
   const source = sourceDate();
-  const result = { mount: mountPath, corpusSha256: report.corpus?.Sha256 ?? null, source };
+  const result = { mount: mountPath, mountKind, corpusSha256: report.corpus?.Sha256 ?? null, source };
   let container = null;
   try {
     const { webRoot, archive, image } = await buildImage({ into: join(work, "first"), mountPath, epoch: source.epoch, log });
@@ -319,10 +342,13 @@ export async function rehearse({ mount, keep = false, probe = true, reproduce = 
       // security headers the page arrives with.
       log("running the image in WSL and probing it");
       const { unpackImage, startImage } = await import("./image-run.mjs");
-      const { realMountRuns } = await import("./journey.mjs");
+      const { fixtureMountRuns, realMountRuns } = await import("./journey.mjs");
       const { findBrowser } = await import("./browser-evidence.mjs");
       container = unpackImage({ archive, layers: image.layers.map((layer) => layer.digest) });
-      const runs = await realMountRuns(null, mountPath, { servedByApi: true, keyboard: false, startServer: () => startImage({ run: container, config: image.config }) }, await findBrowser(), null);
+      // On a real mount each page is held to what the image's API answers; on the fixture mount every
+      // page must answer with the texts the fixture's one work gives it, and its citations verify.
+      const probeRuns = mountKind === "fixture" ? fixtureMountRuns : realMountRuns;
+      const runs = await probeRuns(null, mountPath, { servedByApi: true, keyboard: false, startServer: () => startImage({ run: container, config: image.config }) }, await findBrowser(), null);
       result.probes = runs.map(([label, { observed, failures }]) => ({
         step: label, state: observed.answerState, failures,
         paintedElements: observed.paint?.painted ?? 0, citationsVerified: observed.verifications?.length ?? 0,
@@ -348,7 +374,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
   const argv = process.argv.slice(2);
   const at = argv.indexOf("--mount");
   if (at < 0 || at + 1 >= argv.length) {
-    console.error("usage: node scripts/image-rehearsal.mjs --mount <v3-corpus directory> [--keep] [--no-reproduce] [--no-probe]");
+    console.error("usage: node scripts/image-rehearsal.mjs --mount <v3-corpus directory or journey fixture mount> [--keep] [--no-reproduce] [--no-probe]");
     process.exit(2);
   }
   rehearse({ mount: argv[at + 1], keep: argv.includes("--keep"), probe: !argv.includes("--no-probe"), reproduce: !argv.includes("--no-reproduce"), log: (line) => console.error(`- ${line}`) }).then(

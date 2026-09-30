@@ -6,7 +6,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { DOSSIER_IDENTIFIER, HISTORY_ANCHOR, JOURNEY_STEPS, READING_DATE, SEARCH_PHRASE, expectedFromEnvelope, journeyVerdict, watchFiles } from "../scripts/journey.mjs";
+import { DOSSIER_IDENTIFIER, HISTORY_ANCHOR, JOURNEY_STEPS, READING_DATE, SEARCH_PHRASE, expectedFromEnvelope, fixtureMountExpectations, journeyVerdict, watchFiles } from "../scripts/journey.mjs";
 import { cspValue } from "../scripts/csp.mjs";
 
 const ORIGIN = "http://127.0.0.1:5000";
@@ -390,4 +390,16 @@ test("a run whose page the API served is held to the headers the page arrived wi
     assert.ok(journeyVerdict(observed, expected).some((failure) => reason.test(failure)), what);
   }
   assert.deepEqual(journeyVerdict({ ...goodSearch(), pageHeaders: null }, SEARCH), [], "a page served by serve-live is not held to them");
+});
+
+test("on the fixture mount every step must answer, and coverage must name the mount's own digests", () => {
+  const mount = { corpus_sha256: "a".repeat(64), index_sha256: "b".repeat(64), work_key: "lu-legilux/loi-1991-08-10-n3" };
+  const expectations = fixtureMountExpectations(mount);
+  assert.deepEqual(expectations.map(([name]) => name).sort(), Object.keys(JOURNEY_STEPS).sort(), "each of the eight steps, once");
+  assert.ok(expectations.every(([name, expected]) => expected.step === JOURNEY_STEPS[name] && expected.state === "success"), "each is its own step, answered");
+  const [, coverage] = expectations[0];
+  assert.equal(coverage.corpusSha256, mount.corpus_sha256);
+  assert.equal(coverage.indexSha256, mount.index_sha256);
+  assert.ok(expectations.slice(1).every(([, expected]) => expected.texts.length > 0), "every other step names the texts it must show");
+  assert.ok(expectations.find(([name]) => name === "dossier")[1].texts.includes(mount.work_key), "the dossier names the mount's work");
 });
