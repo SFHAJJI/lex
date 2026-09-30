@@ -7,39 +7,46 @@
 // Wilson interval and every 1 beside its rule-of-three bound; the shuffled controls are shown like
 // any other number; the statistical rows say "not yet labelled"; the negative results are listed.
 
-import { Fragment } from 'react';
+import { Say } from './LiveAnswer.jsx';
+import { fillCounted, fillText, liveChrome } from '../scripts/live-chrome.mjs';
 
-const VERDICT_WORDS = Object.freeze({ pass: 'pass', fail: 'fail', not_measured: 'not measured' });
-const CONTROL_WORDS = Object.freeze({
-  caught_the_shuffle: 'caught the shuffle',
-  missed_the_shuffle: 'missed the shuffle',
-  not_applicable: 'not applicable',
-});
+/** The card's words, from the interface copy table. */
+const CARD = liveChrome().card;
 
 function Summary({ view }) {
   if (view.gatesNotPassing.length === 0 && view.controlsNotCaught.length === 0) {
-    return <p data-card-summary="clean">Every machine gate on this card passes, and every shuffled control caught its shuffle.</p>;
+    return <p data-card-summary="clean">{CARD.clean}</p>;
   }
+  const gates = fillCounted(CARD.gatesNotPassing, view.gatesNotPassing.length);
+  const controls = fillCounted(CARD.controlsNotCaught, view.controlsNotCaught.length);
+  const listed = (summary, rows, template, name) => (rows.length === 0 ? summary : fillText(CARD.listed, {
+    summary,
+    list: rows.map((row) => fillText(template, { [name]: row[name], set: row.set, arm: row.arm, verdict: name === 'gate' ? CARD.verdict[row.verdict] : CARD.controlVerdict[row.verdict] })).join('; '),
+  }));
   return (
     <p data-card-summary="not-clean">
-      {view.gatesNotPassing.length} {view.gatesNotPassing.length === 1 ? 'gate does' : 'gates do'} not pass
-      {view.gatesNotPassing.length === 0 ? '' : ` (${view.gatesNotPassing.map((row) => `${row.gate} in ${row.set}, ${row.arm}: ${VERDICT_WORDS[row.verdict]}`).join('; ')})`},
-      and {view.controlsNotCaught.length} shuffled {view.controlsNotCaught.length === 1 ? 'control' : 'controls'} did not catch the shuffle
-      {view.controlsNotCaught.length === 0 ? '' : ` (${view.controlsNotCaught.map((row) => `${row.control} in ${row.set}, ${row.arm}: ${CONTROL_WORDS[row.verdict]}`).join('; ')})`}.
+      <Say
+        template={CARD.notClean}
+        values={{
+          gates: listed(gates, view.gatesNotPassing, CARD.gateListed, 'gate'),
+          controls: listed(controls, view.controlsNotCaught, CARD.controlListed, 'control'),
+        }}
+      />
     </p>
   );
 }
 
 function GateRow({ gate }) {
+  const verdict = CARD.verdict[gate.verdict];
   return (
     <tr data-verdict={gate.verdict}>
       <th scope="row">{gate.gate}</th>
-      <td>{VERDICT_WORDS[gate.verdict]}{gate.reason === null ? '' : ` (${gate.reason})`}</td>
-      <td>{gate.value === null ? 'none' : gate.value}</td>
+      <td>{gate.reason === null ? verdict : fillText(CARD.verdictReason, { verdict, reason: gate.reason })}</td>
+      <td>{gate.value === null ? CARD.none : gate.value}</td>
       <td>{gate.threshold}</td>
       <td>{gate.n}</td>
-      <td>{gate.wilson95 === null ? 'not a rate' : `${gate.wilson95[0]} to ${gate.wilson95[1]}`}</td>
-      <td>{gate.ruleOfThree === null ? 'none' : `failure rate below ${gate.ruleOfThree}`}</td>
+      <td>{gate.wilson95 === null ? CARD.notARate : fillText(CARD.interval, { low: gate.wilson95[0], high: gate.wilson95[1] })}</td>
+      <td>{gate.ruleOfThree === null ? CARD.none : fillText(CARD.ruleOfThree, { bound: gate.ruleOfThree })}</td>
     </tr>
   );
 }
@@ -48,23 +55,23 @@ function GateRow({ gate }) {
 export function EvaluationCardView({ view }) {
   return (
     <section data-evaluation-card="">
-      <h2>Evaluation card</h2>
-      <p data-card-target="">Run over: {view.target}</p>
+      <h2>{CARD.heading}</h2>
+      <p data-card-target=""><Say template={CARD.target} values={{ target: view.target }} /></p>
       <Summary view={view} />
       {view.sets.map((set) => (
         <table key={`${set.set}/${set.arm}`} data-set={set.set}>
           <caption>
-            {set.set}, {set.arm}: {set.cases} cases, digest <code>{set.casesSha256}</code>
+            <Say template={CARD.caption} values={{ set: set.set, arm: set.arm, cases: set.cases, digest: <code>{set.casesSha256}</code> }} />
           </caption>
           <thead>
             <tr>
-              <th scope="col">Gate</th>
-              <th scope="col">Verdict</th>
-              <th scope="col">Value</th>
-              <th scope="col">Threshold</th>
-              <th scope="col">Cases</th>
-              <th scope="col">Wilson 95%</th>
-              <th scope="col">Rule of three (95%)</th>
+              <th scope="col">{CARD.columns.gate}</th>
+              <th scope="col">{CARD.columns.verdict}</th>
+              <th scope="col">{CARD.columns.value}</th>
+              <th scope="col">{CARD.columns.threshold}</th>
+              <th scope="col">{CARD.columns.cases}</th>
+              <th scope="col">{CARD.columns.wilson}</th>
+              <th scope="col">{CARD.columns.ruleOfThree}</th>
             </tr>
           </thead>
           <tbody>
@@ -72,30 +79,43 @@ export function EvaluationCardView({ view }) {
           </tbody>
         </table>
       ))}
-      <h3>Shuffled controls</h3>
+      <h3>{CARD.controlsHeading}</h3>
       <ul data-controls={view.controls.length}>
         {view.controls.map((control) => (
           <li key={`${control.control}/${control.set}/${control.arm}`} data-control-verdict={control.verdict}>
-            {control.control} on {control.set}, {control.arm}: {CONTROL_WORDS[control.verdict]}, {control.reason} (seed{' '}
-            {control.seed}, {control.cases} cases, digest <code>{control.casesSha256}</code>)
-            {control.note === null ? null : <Fragment>. {control.note}</Fragment>}.
+            <Say
+              template={control.note === null ? CARD.control : CARD.controlNote}
+              values={{
+                control: control.control,
+                set: control.set,
+                arm: control.arm,
+                verdict: CARD.controlVerdict[control.verdict],
+                reason: control.reason,
+                seed: control.seed,
+                cases: control.cases,
+                digest: <code>{control.casesSha256}</code>,
+                ...(control.note === null ? {} : { note: control.note }),
+              }}
+            />
           </li>
         ))}
       </ul>
-      <h3>Statistical rows</h3>
+      <h3>{CARD.statisticalHeading}</h3>
       <ul data-statistical-rows={view.statisticalRows.length}>
         {view.statisticalRows.map((row) => (
           <li key={row.dataset}>
-            {row.dataset}, {row.name}: not yet labelled. Gates {row.gates}. {row.governedBy}.
+            <Say template={CARD.statistical} values={{ dataset: row.dataset, name: row.name, gates: row.gates, governedBy: row.governedBy }} />
           </li>
         ))}
       </ul>
-      <h3>Negative results</h3>
+      <h3>{CARD.negativeHeading}</h3>
       <ul data-negative-results={view.negativeResults.length}>
         {view.negativeResults.map((row) => (
           <li key={row.hypothesis}>
-            Hypothesis: {row.hypothesis}. Dataset: {row.dataset}. Result: {row.result}. Decision: {row.decision}. What
-            would reverse it: {row.whatWouldReverseIt}.
+            <Say
+              template={CARD.negative}
+              values={{ hypothesis: row.hypothesis, dataset: row.dataset, result: row.result, decision: row.decision, reverse: row.whatWouldReverseIt }}
+            />
           </li>
         ))}
       </ul>

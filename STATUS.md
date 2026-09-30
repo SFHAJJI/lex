@@ -56,10 +56,10 @@ CI evidence are recorded in the pull request before merge.
 
 ## Heads
 
-- `v3/integration`: `c39093a1` (2026-09-30, PR #805 merged). Build 45 s. Fast lane
+- `v3/integration`: `925d280e` (2026-09-30, PR #806 merged). Build 45 s. Fast lane
   (`eng/test-fast.ps1`): 3,067 tests, 3,066 pass, 1 skipped (PR #798's validation). Ingest suite: green on CI for PR #760
   (the CI `dotnet` job runs the whole solution on every pull request, about 7 min on the runner;
-  green for PR #805);
+  green for PR #806);
   locally about 15 min. 944 web tests pass. CI's web job can flake in `keyboard-walk.test.mjs`
   ("browser debugger never answered"); rerunning the failed job is the fix.
 - Driver: Claude Opus 5.5 since 2026-09-29 (the Fable 5.1 driver ran out of tokens on 2026-09-28
@@ -733,6 +733,20 @@ French chrome plan asked for).
   the temporary directory. That, with a reviewer's solution build, filled C: on 2026-09-30. With the
   flags, a 16-run journey leaves no package; the two journeys before it, without the flags, left 39.
 
+The evaluation card's words join the chrome table (PR #807).
+- `EvaluationCardView` now takes every word from the table's `card` section: its heading, the "run
+  over" line, the clean and not-clean summaries (counted by the language's plural rule), the verdict
+  and control words, each table's caption and columns, and the controls, statistical rows and
+  negative results.
+- The card's own values stay the card's: its target sentence, set and gate names, figures, reasons
+  and notes.
+- The card rendered clean, and failing with one gate failed and one control missed, is
+  byte-identical before and after. The Trust and Coverage page differs only in React's hydration
+  boundaries.
+- The chrome scan now covers the card as well, so what it still leaves out is the refusal card and
+  the `Coverage` component. The French is drafted. The card beside the release assets belongs to the
+  release pipeline.
+
 The live export composer and its journey step (PR #789), the eighth screen. `dist-live/export.html`
 has its own bundle `client-live-export.js`.
 - The page asks what the reading page asks: the same form (`ReadingForm`, now shared), the same one
@@ -1275,9 +1289,9 @@ has not yet run; the bounded first mount above is complete.
    regions, and the journey's keyboard mode); PR #803: the search, dossier, reading and history
    screens' sentences in the chrome table, with French drafted beside them; PR #804: the compare,
    radar and export screens' sentences; PR #805: every citation the journey's pages print verifies;
-   PR #806: no interface text on a live page bypasses the chrome table (a pseudo-locale scan).
-   Next: the refusal card's labels, Trust and Coverage's copy and the evaluation card into the
-   table; French ships only once reviewed (Decision 41). Hosting (ruling 3): `Lex.V3.Api`
+   PR #806: no interface text on a live page bypasses the chrome table (a pseudo-locale scan); PR
+   #807: the evaluation card's words in the table. Next: the refusal card's labels and Trust and
+   Coverage's copy into the table; French ships only once reviewed (Decision 41). Hosting (ruling 3): `Lex.V3.Api`
    serves the live pages on the API's origin with `frame-ancestors`, HSTS and `Referrer-Policy`,
    and a live page never shows the synthetic banner on a real mount. J1 to J8 are restated as V3
    steps by the driver (they exist only in the pre-V3 pack, `05-user-journeys.md`).

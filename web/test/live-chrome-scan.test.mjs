@@ -8,10 +8,10 @@
 // from the table, which a French table could never translate. The pages' structure is untouched by
 // the swap, so the same render proves the table reaches every text node.
 //
-// Three surfaces carry copy of their own and are the next slices, so they are not scanned: the refusal
+// Two surfaces carry copy of their own and are the next slices, so they are not scanned: the refusal
 // card (a refusal's sentences are the checkpoint list of #793; the card's labels live in
-// `refusal-card.mjs`, shared with the pre-V3 renderer), Trust and Coverage's `Coverage` component,
-// and the evaluation card on that page (`EvaluationCardView`). What an export will carry (its
+// `refusal-card.mjs`, shared with the pre-V3 renderer) and Trust and Coverage's `Coverage` component.
+// The evaluation card on that page is scanned: its words are the table's and its figures the card's. What an export will carry (its
 // watermark, its JSON) is the file's content, shown as the file will hold it, not interface text.
 
 import assert from "node:assert/strict";
@@ -143,12 +143,12 @@ test("no interface text on a live page or a census answer bypasses the chrome ta
     radar: app.renderLiveRadarPage, export: app.renderLiveExportPage,
   };
   for (const [name, render] of Object.entries(pages)) {
-    const page = name === "coverage" ? split(render(), 'data-evaluation-card=""').outside : render();
     // The locale navigation names each language in that language, which no table translates. Only
     // there: a language named anywhere else is the interface's word for it (review of #806: the
-    // statute-language selects' "English" hid behind a page-wide exemption).
-    const { inside: nav, outside: rest } = split(page, 'data-locale-nav=""');
-    scan(`${name} page`, rest, []);
+    // statute-language selects' "English" hid behind a page-wide exemption). The evaluation card's own
+    // values (its target sentence, set names, figures) are the card's.
+    const { inside: nav, outside: rest } = split(render(), 'data-locale-nav=""');
+    scan(`${name} page`, rest, name === "coverage" ? dataOf(app.CENSUS_EVALUATION_CARD) : []);
     scan(`${name} locale navigation`, nav, dataOf(["English", "Français", "Deutsch", "Lëtzebuergesch"]));
   }
 
