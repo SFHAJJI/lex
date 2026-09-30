@@ -107,7 +107,6 @@ public sealed class V3AnswerSamplesTests
     {
         ["resolve"] = "sampled when a reader is built against it",
         ["timeline"] = "sampled when a reader is built against it",
-        ["changes_in_period"] = "sampled when a reader is built against it",
         ["in_force_on"] = "sampled when a reader is built against it",
         ["citation"] = "sampled when a reader is built against it",
         ["cited_by"] = "sampled when a reader is built against it",
@@ -357,6 +356,10 @@ public sealed class V3AnswerSamplesTests
             // states with one article reworded and one id renamed, in its language.
             await DriveAsync(mount, "diff", "the work's state on one date against the state on the same date: the same version, nothing compared", new { parameters.identifier, date_from = parameters.date, date_to = parameters.date, parameters.language }),
             await DriveAsync(comparedMount, "diff", "two states a year apart: one article's wording changed, one article id renamed, the rest unchanged", new { identifier = $"/lu-legilux/{compared.WorkKey}", date_from = compared.ApplicabilityDate, date_to = laterDate, language = "fra" }),
+            // `changes_in_period` is sampled for the live radar screen's reader: a window holding the one-state fixture's
+            // first state (no baseline), and the two-state fixture's window holding both (the later one compared).
+            await DriveAsync(mount, "changes_in_period", "a window holding the work's first held state: one row, no baseline to compare with", new { date_from = parameters.date, date_to = parameters.date }),
+            await DriveAsync(comparedMount, "changes_in_period", "a window holding both states of the two-state work: the first without a baseline, the later compared with it", new { date_from = compared.ApplicabilityDate, date_to = laterDate }),
         ];
     }
 
