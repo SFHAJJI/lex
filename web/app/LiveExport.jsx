@@ -1,4 +1,4 @@
-// The export composer, asked of the live API: pin articles of one reading and save them as JSON or CSV.
+// The export composer, asked of the live API: pin articles of one reading and save them as JSON, CSV or PDF.
 //
 // The server renders the form and the idle state, and the browser asks only when the reader submits;
 // pinning, composing and saving ask nothing. What an answer means is decided elsewhere:
@@ -17,7 +17,7 @@ import { useEffect, useRef, useState } from 'react';
 
 import { ReadingAnswerView, ReadingForm } from './LiveReading.jsx';
 import { createReadingSession, quotationLanguageTag } from '../scripts/live-reading.mjs';
-import { EXPORT_FORMATS, LIVE_EXPORT_IDLE, exportState, pinKey, saveExport } from '../scripts/live-export.mjs';
+import { EXPORT_FORMATS, LIVE_EXPORT_IDLE, exportState, formatRefusedSentence, pinKey, saveExport } from '../scripts/live-export.mjs';
 import { exportJson } from '../scripts/export-build.mjs';
 
 const IDLE = Object.freeze({ state: 'idle', sentence: LIVE_EXPORT_IDLE });
@@ -74,6 +74,11 @@ function StatePins({ state, workKey, pins, onPin }) {
 /** One composed export, laid out as the file will carry it, with the buttons that save it. */
 export function ExportPreview({ model, onSave }) {
   const total = model.items.length + model.excluded.length;
+  // A format that cannot carry this model (a PDF whose text the standard fonts cannot set) is not
+  // offered, and the page says why, rather than a button that fails.
+  const judged = EXPORT_FORMATS.map((format) => ({ format, reason: format.refusal(model) }));
+  const offered = judged.filter((entry) => entry.reason === null).map((entry) => entry.format);
+  const refused = judged.filter((entry) => entry.reason !== null);
   return (
     <>
       <p data-export-counts="">
@@ -109,12 +114,17 @@ export function ExportPreview({ model, onSave }) {
         </ul>
       ) : null}
       <p>
-        {EXPORT_FORMATS.map((format) => (
+        {offered.map((format) => (
           <button key={format.id} type="button" data-save={format.id} onClick={() => onSave(format)}>
             {format.label}
           </button>
         ))}
       </p>
+      {refused.map(({ format, reason }) => (
+        <p key={format.id} data-format-refused={format.id}>
+          {formatRefusedSentence(format, reason)}
+        </p>
+      ))}
       <details>
         <summary>The JSON as it will be saved</summary>
         <pre>{exportJson(model)}</pre>

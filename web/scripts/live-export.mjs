@@ -8,15 +8,24 @@
 // what an export carries is decided in `export-build.mjs`.
 
 import { composeExport, exportCsv, exportJson } from './export-build.mjs';
+import { exportPdf, pdfRefusal } from './export-pdf.mjs';
 
 export const LIVE_EXPORT_IDLE = 'Type a work identifier and a date, then pin the articles to take away.';
 export const NOTHING_PINNED = 'Nothing is pinned yet. Pin an article above and its export appears here, with what it carries.';
 
-/** The formats a reader can save, each written by `export-build.mjs`. */
+/**
+ * The formats a reader can save, each written from the one model (`export-build.mjs`,
+ * `export-pdf.mjs`). `refusal` says why a model cannot be written in that format, or null.
+ */
 export const EXPORT_FORMATS = Object.freeze([
-  Object.freeze({ id: 'json', label: 'Save as JSON', extension: 'json', mediaType: 'application/json', write: exportJson }),
-  Object.freeze({ id: 'csv', label: 'Save as CSV', extension: 'csv', mediaType: 'text/csv;charset=utf-8', write: exportCsv }),
+  Object.freeze({ id: 'json', label: 'Save as JSON', extension: 'json', mediaType: 'application/json', write: exportJson, refusal: () => null }),
+  Object.freeze({ id: 'csv', label: 'Save as CSV', extension: 'csv', mediaType: 'text/csv;charset=utf-8', write: exportCsv, refusal: () => null }),
+  Object.freeze({ id: 'pdf', label: 'Save as PDF', extension: 'pdf', mediaType: 'application/pdf', write: exportPdf, refusal: pdfRefusal }),
 ]);
+
+export function formatRefusedSentence(format, reason) {
+  return `${format.id.toUpperCase()} is not offered for this export: ${reason}.`;
+}
 
 /** One pin: the state's digest and the article's publisher id, which together name one article. */
 export function pinKey(stateSha256, publisherId) {

@@ -30,7 +30,7 @@ export function renderLiveExportPage() {
       <p className="eyebrow">Export composer</p>
       <h1>Take articles away, with their citations</h1>
       <p>
-        Read one Luxembourg work on one date, pin the articles you need, and save them as JSON or CSV.
+        Read one Luxembourg work on one date, pin the articles you need, and save them as JSON, CSV or PDF.
         Each exported article carries its citation, its text digest, its official source and the rights
         it was served under, and every export carries the watermark. The identifier and the date go to
         this server in the request and nowhere else; the file is made in this page, and this page keeps
