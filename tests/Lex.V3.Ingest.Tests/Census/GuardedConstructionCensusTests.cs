@@ -61,6 +61,9 @@ public sealed class GuardedConstructionCensusTests
         CollectionAssert.AreEqual(
             new[]
             {
+                "Lex.V3.Ingest.ChunkedDerivedArtifact: constructor private instance "
+                    + "Lex.V3.Ingest.ChunkedDerivedArtifact::.ctor, "
+                    + "method internal static Lex.V3.Ingest.ChunkedDerivedArtifact::OpenAsync",
                 "Lex.V3.Ingest.CorpusAcquisitionOutcome: constructor private instance "
                     + "Lex.V3.Ingest.CorpusAcquisitionOutcome::.ctor, "
                     + "constructor private instance Lex.V3.Ingest.CorpusAcquisitionOutcome::.ctor, "

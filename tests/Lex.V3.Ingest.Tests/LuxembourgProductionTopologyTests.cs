@@ -467,7 +467,8 @@ public sealed class LuxembourgProductionTopologyTests
         using var canonical = artifact.OpenRead();
         Assert.AreEqual(result.CorpusRecordSet!.Set.ManifestRef.ResourceId,
             ContentDerivedIdentity.DeriveUuidUrnFromStream("lex-lu-scope-manifest/1", canonical));
-        await LuxembourgRetainedRunReplay.ReplayAsync(store, profile, result, ["assertions"], ["relations"], Manifestation);
+        // This fixture declares xml-akomantoso; the optional final argument asserts plain XML only.
+        await LuxembourgRetainedRunReplay.ReplayAsync(store, profile, result, ["assertions"], ["relations"], null);
     }
 
     [TestMethod]
