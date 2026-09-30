@@ -66,6 +66,10 @@ public sealed class V3EnvelopeSamplesTests
             await CaptureAsync(fixture, mount, "article_history", "an article id no held state carries: a refusal with a payload", new { identifier = $"/lu-legilux/{fixture.WorkKey}", anchor = "art_44" }),
             await CaptureAsync(fixture, mount, "article_history", "a work the index does not hold: a refusal with a payload", new { identifier = "/lu-legilux/no-such-work", anchor = "art_15" }),
             await CaptureAsync(fixture, null, "article_history", "no corpus mounted: a refusal", new { identifier = $"/lu-legilux/{fixture.WorkKey}", anchor = "art_15" }),
+            await CaptureAsync(fixture, mount, "diff", "the state on one date against the state on the same date: an answer", new { identifier = $"/lu-legilux/{fixture.WorkKey}", date_from = fixture.ApplicabilityDate, date_to = fixture.ApplicabilityDate, language = "fra" }),
+            await CaptureAsync(fixture, mount, "diff", "a from date before the work's history: a refusal with a payload", new { identifier = $"/lu-legilux/{fixture.WorkKey}", date_from = "1990-01-01", date_to = fixture.ApplicabilityDate }),
+            await CaptureAsync(fixture, mount, "diff", "a work the index does not hold: a refusal with a payload", new { identifier = "/lu-legilux/no-such-work", date_from = fixture.ApplicabilityDate, date_to = fixture.ApplicabilityDate }),
+            await CaptureAsync(fixture, null, "diff", "no corpus mounted: a refusal", new { identifier = $"/lu-legilux/{fixture.WorkKey}", date_from = fixture.ApplicabilityDate, date_to = fixture.ApplicabilityDate }),
         };
 
         var document = new JsonObject

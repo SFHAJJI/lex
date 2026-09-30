@@ -33,6 +33,8 @@ export { LiveReading, ReadingAnswerView, ReadingView } from './LiveReading.jsx';
 export { LIVE_READING_ROOT, liveReadingTree, renderLiveReadingPage } from './live-reading-page.jsx';
 export { HistoryAnswerView, HistoryView, LiveHistory } from './LiveHistory.jsx';
 export { LIVE_HISTORY_ROOT, liveHistoryTree, renderLiveHistoryPage } from './live-history-page.jsx';
+export { CompareAnswerView, CompareView, LiveCompare } from './LiveCompare.jsx';
+export { LIVE_COMPARE_ROOT, liveCompareTree, renderLiveComparePage } from './live-compare-page.jsx';
 export {
   renderTimelineReactPage,
   renderCoverageReactPage,
