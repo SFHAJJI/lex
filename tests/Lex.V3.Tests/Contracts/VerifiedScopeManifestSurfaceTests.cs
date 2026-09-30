@@ -18,14 +18,10 @@ namespace Lex.V3.Tests.Contracts;
 /// <para>
 /// It is not closed by an assembly boundary: the constructor is internal to
 /// <c>Lex.V3.Contracts</c>, so every legitimate producer lives inside this one assembly, and this
-/// pin is what makes a new one a visible diff rather than a silent addition. Three exist today:
-/// <see cref="ScopeReducer.Reduce"/> and <see cref="ScopeReducer.VerifyAndOpen"/> for a live, in
-/// process reduction against an object graph, and
-/// <see cref="VerifiedScopeManifest.ParseAndVerify"/> (this lane's addition) for durable canonical
-/// bytes previously written by <see cref="ScopeManifestCanonicalWriter"/>. A fourth,
-/// <c>VerifiedLuxembourgSourceProfile.ReduceScope</c>, is D1-04's own thin wrapper around
-/// <see cref="ScopeReducer.Reduce"/> and is pinned here too since it is a real door even though it
-/// adds no verification of its own.
+/// pin is what makes a new producer a visible diff rather than a silent addition. It includes
+/// the live reducer, independent span and stream readers, and retained-byte comparison against
+/// an existing graph with renewed evidence admission. The private canonical comparison helper
+/// is pinned too. Luxembourg profile reduction wrappers are covered by the assembly sweep.
 /// </para>
 /// </summary>
 [TestClass]
@@ -37,17 +33,36 @@ public sealed class VerifiedScopeManifestSurfaceTests
     private const string Scope = "Lex.V3.Contracts.Source.Scope.";
 
     [TestMethod]
-    public void VerifiedManifestsAreMintedByExactlyTwoDeclaredPaths()
+    public void VerifiedManifestsHaveExactlyTheseDeclaredPaths()
     {
         CollectionAssert.AreEqual(
             new[]
             {
-                "constructor internal instance " + Verified + "::.ctor(" + Manifest + ") -> " + Verified,
-                "method public static " + Verified + "::ParseAndVerify(" + Core + "SourceArtifactRef, "
-                + "System.ReadOnlySpan<System.Byte>, " + Scope + "IScopeReductionEvidenceResolver) -> "
-                + Verified,
-                "method public static " + Verified + "::ParseAndVerifyStream(" + Core + "SourceArtifactRef, "
-                + "System.IO.Stream, " + Scope + "IScopeReductionEvidenceResolver) -> " + Verified,
+                "constructor internal instance "
+                    + "Lex.V3.Contracts.Source.Scope.VerifiedScopeManifest::.ctor(Lex.V3.Contracts."
+                    + "Source.Scope.ScopeManifest) -> "
+                    + "Lex.V3.Contracts.Source.Scope.VerifiedScopeManifest",
+                "method private static "
+                    + "Lex.V3.Contracts.Source.Scope.VerifiedScopeManifest::VerifyCanonicalReadback"
+                    + "(Lex.V3.Contracts.Source.Core.SourceArtifactRef, System.IO.Stream, "
+                    + "Lex.V3.Contracts.Source.Scope.VerifiedScopeManifest) -> "
+                    + "Lex.V3.Contracts.Source.Scope.VerifiedScopeManifest",
+                "method public static "
+                    + "Lex.V3.Contracts.Source.Scope.VerifiedScopeManifest::ParseAndVerify(Lex.V3.C"
+                    + "ontracts.Source.Core.SourceArtifactRef, System.ReadOnlySpan<System.Byte>, "
+                    + "Lex.V3.Contracts.Source.Scope.IScopeReductionEvidenceResolver) -> "
+                    + "Lex.V3.Contracts.Source.Scope.VerifiedScopeManifest",
+                "method public static "
+                    + "Lex.V3.Contracts.Source.Scope.VerifiedScopeManifest::ParseAndVerifyStream(Le"
+                    + "x.V3.Contracts.Source.Core.SourceArtifactRef, System.IO.Stream, "
+                    + "Lex.V3.Contracts.Source.Scope.IScopeReductionEvidenceResolver) -> "
+                    + "Lex.V3.Contracts.Source.Scope.VerifiedScopeManifest",
+                "method public static "
+                    + "Lex.V3.Contracts.Source.Scope.VerifiedScopeManifest::VerifyStreamAgainst(Lex"
+                    + ".V3.Contracts.Source.Core.SourceArtifactRef, System.IO.Stream, "
+                    + "Lex.V3.Contracts.Source.Scope.VerifiedScopeManifest, "
+                    + "Lex.V3.Contracts.Source.Scope.IScopeReductionEvidenceResolver) -> "
+                    + "Lex.V3.Contracts.Source.Scope.VerifiedScopeManifest",
             },
             ConstructionSurface.Of(typeof(VerifiedScopeManifest)).ToArray(),
             "a new path onto the verified manifest itself must be justified in review, not "

@@ -1740,6 +1740,8 @@ public sealed class GuardedConstructionCensusTests
                     + "Lex.V3.Contracts.Source.Scope.ScopeManifestCanonicalWriter::WriteStreaming",
                 "Lex.V3.Contracts.Source.Scope.VerifiedScopeManifest: constructor internal "
                     + "instance Lex.V3.Contracts.Source.Scope.VerifiedScopeManifest::.ctor, "
+                    + "method private static "
+                    + "Lex.V3.Contracts.Source.Scope.VerifiedScopeManifest::VerifyCanonicalReadback, "
                     + "method public instance "
                     + "Lex.V3.Contracts.Source.Luxembourg.VerifiedLuxembourgSourceProfile::ReduceSc"
                     + "ope, "
@@ -1751,7 +1753,9 @@ public sealed class GuardedConstructionCensusTests
                     + "method public static "
                     + "Lex.V3.Contracts.Source.Scope.VerifiedScopeManifest::ParseAndVerify, "
                     + "method public static "
-                    + "Lex.V3.Contracts.Source.Scope.VerifiedScopeManifest::ParseAndVerifyStream",
+                    + "Lex.V3.Contracts.Source.Scope.VerifiedScopeManifest::ParseAndVerifyStream, "
+                    + "method public static "
+                    + "Lex.V3.Contracts.Source.Scope.VerifiedScopeManifest::VerifyStreamAgainst",
                 "Lex.V3.Contracts.SyntheticResolveEnvelope: constructor private-protected instance "
                     + "Lex.V3.Contracts.SyntheticResolveEnvelope::.ctor, "
                     + "constructor public instance "
