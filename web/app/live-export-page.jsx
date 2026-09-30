@@ -6,7 +6,7 @@
 // submits, and pinning and saving ask nothing.
 
 import { Document } from './Document.jsx';
-import { liveChrome } from '../scripts/live-chrome.mjs';
+import { liveChrome, livePath } from '../scripts/live-chrome.mjs';
 import { LiveExport } from './LiveExport.jsx';
 import { renderHydratableDocument } from './render-document.mjs';
 import { skinFor } from '../scripts/shells.mjs';
@@ -33,7 +33,7 @@ export function renderLiveExportPage() {
       <h1>{copy.heading}</h1>
       <p>{copy.intro}</p>
       <div id={LIVE_EXPORT_ROOT}>{liveExportTree()}</div>
-      <script src="/client-live-export.js" defer />
+      <script src={livePath('client-live-export.js')} defer />
     </Document>,
   );
 }

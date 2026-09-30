@@ -17,8 +17,16 @@ const LOCALES = Object.freeze([
 ]);
 
 /** Where a language's chrome is: the page itself when reviewed, else the page that says it is not. */
+/**
+ * A language's home page: English at the root, any other at its own path (`build-live.mjs`). Named by
+ * its file, because both servers map only the root to an index page (review of #813: `/fr/` was a 404).
+ */
+export function localeHome(code) {
+  return code === 'en' ? '/' : `/${code}/index.html`;
+}
+
 export function localeHref(code) {
-  return REVIEWED_CHROME_LOCALES.includes(code) ? '/' : `/locale-${code}.html`;
+  return REVIEWED_CHROME_LOCALES.includes(code) ? localeHome(code) : `/locale-${code}.html`;
 }
 
 export function LocaleNav({ current = 'en' }) {

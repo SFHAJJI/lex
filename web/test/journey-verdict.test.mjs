@@ -341,6 +341,14 @@ test("every quotation carries its digests, its official source and a citation pi
     .includes("the quote of art_15 does not show its text digest, body digest and official source"), "no official source");
 });
 
+test("nothing on the page means anything by colour alone: painted elements say what they are", () => {
+  const expected = { origin: ORIGIN, step: JOURNEY_STEPS.search, state: "success" };
+  assert.deepEqual(journeyVerdict({ ...goodSearch(), paint: { painted: 4, unnamed: [] } }, expected), [], "a page whose painted elements all speak passes");
+  assert.ok(journeyVerdict({ ...goodSearch(), paint: { painted: 4, unnamed: ["span.badge", "span.badge"] } }, expected)
+    .includes("meaning by colour alone: span.badge painted with no words or accessible name"), "a painted, wordless badge fails, named once");
+  assert.deepEqual(journeyVerdict(goodSearch(), expected), [], "a run that did not look is not judged on it");
+});
+
 test("a run whose page the API served is held to the headers the page arrived with (Decision 95, ruling 3)", () => {
   const policy = `${cspValue()}; frame-ancestors 'none'`;
   const served = () => ({

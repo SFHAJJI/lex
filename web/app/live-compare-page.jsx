@@ -6,7 +6,7 @@
 // submits.
 
 import { Document } from './Document.jsx';
-import { liveChrome } from '../scripts/live-chrome.mjs';
+import { liveChrome, livePath } from '../scripts/live-chrome.mjs';
 import { LiveCompare } from './LiveCompare.jsx';
 import { renderHydratableDocument } from './render-document.mjs';
 import { skinFor } from '../scripts/shells.mjs';
@@ -33,7 +33,7 @@ export function renderLiveComparePage() {
       <h1>{copy.heading}</h1>
       <p>{copy.intro}</p>
       <div id={LIVE_COMPARE_ROOT}>{liveCompareTree()}</div>
-      <script src="/client-live-compare.js" defer />
+      <script src={livePath('client-live-compare.js')} defer />
     </Document>,
   );
 }

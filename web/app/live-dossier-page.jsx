@@ -6,7 +6,7 @@
 // submits.
 
 import { Document } from './Document.jsx';
-import { liveChrome } from '../scripts/live-chrome.mjs';
+import { liveChrome, livePath } from '../scripts/live-chrome.mjs';
 import { LiveDossier } from './LiveDossier.jsx';
 import { renderHydratableDocument } from './render-document.mjs';
 import { skinFor } from '../scripts/shells.mjs';
@@ -33,7 +33,7 @@ export function renderLiveDossierPage() {
       <h1>{copy.heading}</h1>
       <p>{copy.intro}</p>
       <div id={LIVE_DOSSIER_ROOT}>{liveDossierTree()}</div>
-      <script src="/client-live-dossier.js" defer />
+      <script src={livePath('client-live-dossier.js')} defer />
     </Document>,
   );
 }

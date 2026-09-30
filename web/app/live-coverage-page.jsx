@@ -12,7 +12,7 @@
 // handed another, as a release build will be.
 
 import { Document } from './Document.jsx';
-import { liveChrome } from '../scripts/live-chrome.mjs';
+import { liveChrome, livePath } from '../scripts/live-chrome.mjs';
 import { LiveCoverage } from './LiveCoverage.jsx';
 import { renderHydratableDocument } from './render-document.mjs';
 import { skinFor } from '../scripts/shells.mjs';
@@ -50,7 +50,7 @@ export function renderLiveCoveragePage({ card = CENSUS_EVALUATION_CARD } = {}) {
       <p>{copy.intro}</p>
       <div id={LIVE_COVERAGE_ROOT}>{liveCoverageTree()}</div>
       <EvaluationCardView view={view} />
-      <script src="/client-live.js" defer />
+      <script src={livePath('client-live.js')} defer />
     </Document>,
   );
 }

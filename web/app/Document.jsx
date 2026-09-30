@@ -17,7 +17,7 @@
 import { CHROME_LOCALES } from '../scripts/localization.mjs';
 import { cspValue } from '../scripts/csp.mjs';
 import { LocaleNav } from './LocaleNav.jsx';
-import { fillText, liveChrome } from '../scripts/live-chrome.mjs';
+import { CHROME_LOCALE, fillText, liveChrome } from '../scripts/live-chrome.mjs';
 
 /** The marker that says, in the DOM, that nothing on this page is law. */
 export const SYNTHETIC_MARKER = 'lex-v3-synthetic-preview';
@@ -72,11 +72,13 @@ export function LiveBanner() {
 export function Document({
   state,
   title,
-  locale = 'en',
-  copyLocale = 'en',
+  banner = 'synthetic',
+  // A live page is labelled, and written, in the language its bundle was built for (`CHROME_LOCALE`);
+  // a preview page in English. Each still names itself, so the guard below can tell them apart.
+  locale = banner === 'live' ? CHROME_LOCALE : 'en',
+  copyLocale = banner === 'live' ? CHROME_LOCALE : 'en',
   shell = null,
   density = null,
-  banner = 'synthetic',
   children,
 }) {
   // Each axis names itself. Both guards used to raise the same sentence, so a test feeding an

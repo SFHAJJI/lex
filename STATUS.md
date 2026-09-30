@@ -137,11 +137,11 @@ CI evidence are recorded in the pull request before merge.
 
 ## Heads
 
-- `v3/integration`: `1ef8d665` (2026-09-30, PR #809 merged). Build 45 s. Fast lane
+- `v3/integration`: `d1b92077` (2026-09-30, PR #811 merged). Build 45 s. Fast lane
   (`eng/test-fast.ps1`): 3,067 tests, 3,066 pass, 1 skipped (PR #798's validation). Ingest suite: green on CI for PR #760
   (the CI `dotnet` job runs the whole solution on every pull request, about 7 min on the runner;
-  green for PR #809);
-  locally about 15 min. 944 web tests pass. CI's web job can flake in `keyboard-walk.test.mjs`
+  green for PR #811);
+  locally about 15 min. 951 web tests pass. CI's web job can flake in `keyboard-walk.test.mjs`
   ("browser debugger never answered"); rerunning the failed job is the fix.
 - Driver: Claude Opus 5.5 since 2026-09-29 (the Fable 5.1 driver ran out of tokens on 2026-09-28
   after PR #757; the user default model is now `claude-opus-5-5`).
@@ -367,7 +367,7 @@ schema's `parameters` shape, and whose call runs the same dispatch the REST rout
 endpoint test proves it for all twenty-three. The launch-contract line "REST and MCP derive identical
 envelopes from the registry" is the owner's to tick.
 
-Web: 41 React components, 944 tests. Preview screens render fixtures. The V3 Luxembourg search
+Web: 41 React components, 951 tests. Preview screens render fixtures. The V3 Luxembourg search
 answer has a reader (PR #771). The answer census now samples `search` five ways from the real handler:
 - a phrase with 4 strict hits and 1 relaxed hit;
 - the same phrase one hit per page, with its cursor;
@@ -866,6 +866,58 @@ Trust and Coverage's answer joins the chrome table, and the scan exempts nothing
 - The chrome scan now renders Trust and Coverage's answer too and has no exemption left: every
   word on the eight live pages, answers and refusals included, comes from the table. The only
   exceptions are data and each language's own name in the locale navigation.
+
+The launch contract's accessibility and scope line held on the live screens (PR #811): "no meaning
+by colour alone, linear diff, explicit dates, bracket tables whole".
+- `live-a11y.test.mjs` works over every census envelope of the eight screens and each page as
+  served:
+  - Explicit dates: no relative date ("today", "3 days ago"), no month written out beside a number,
+    no local numeric format, and every ISO date a real calendar date. Quotations of the law are
+    left out, since their dates are the publisher's.
+  - A linear diff: each compared language is one list, one row per article, its status in the
+    table's words, with no side-by-side table and no inline colour.
+  - Bracket tables whole (the product spec's rule 11): every quotation on the reading and export
+    screens is the publisher's whole article text, in order, none dropped or cut.
+  - No control takes a personal fact: every form has only the declared, labelled text fields, with
+    no number, range or choice that could filter a bracket.
+  - Truncating a quote to 200 characters, or adding a "Seniority" number field, fails the test.
+- `journey.mjs`, in the real browser: every element painted apart from what is behind it must say
+  what it is, in words or an accessible name. Painted means a background image, a background colour
+  other than the one it sits on, a visible border, an outline or a shadow. Borders, outlines and
+  shadows count since the review of #811 found an empty red-bordered span passed. Each run prints how
+  many painted elements it examined. A wordless red square injected beside each search hit failed
+  the search run (8 painted, 5 wordless).
+- `paint-check.test.mjs` proves the check in a real browser against two fixtures:
+  - four marks that say what they are pass;
+  - four wordless marks (a background, a border, an outline and a shadow) are all caught.
+
+  Removing the border clause fails it.
+
+A reviewed interface language builds its own live pages (PR #813), so French can ship the day its
+table is reviewed, with no other change.
+- `live-chrome.mjs` knows the language its bundle was built for (`CHROME_LOCALE`, from esbuild's
+  `define` of `__LEX_CHROME_LOCALE__`, English otherwise). `liveChrome()`, the plural rule and
+  `livePath` default to it.
+- A live page is labelled in that language (`Document`'s `locale` and `copyLocale`), and loads its
+  script from that language's path.
+- `build-live.mjs` builds English at the root as before, and every other reviewed language under its
+  own path (`/fr/`), each page and its hydrating script compiled together for it. The locale
+  navigation links a reviewed language to its home by file (`/fr/index.html`): both servers map only
+  the root to an index page, and the review of #813 found `/fr/` was a 404.
+- None but English is reviewed, so the product build is unchanged: its HTML pages are byte-identical,
+  and its scripts differ only by the locale code they now carry. The journey passes with them, plain
+  and served.
+- `live-locale-build.test.mjs` builds a stand-in second language from the French draft, which the
+  product never imports or serves. It holds:
+  - every page and script under `/fr/`, labelled `fr`, saying the table's words and loading its own
+    script, and each served by the live server, the language's home included;
+  - the English pages byte-identical whether or not a second language is built;
+  - no `fr/` directory from a product build.
+
+  Its builds are tagged (`buildTag`), so their intermediate bundles never collide with another test
+  file's build.
+- To ship French after the owner's review: turn the draft into the reviewed table beside English in
+  `LIVE_CHROME`, and add `fr` to `REVIEWED_CHROME_LOCALES`.
 
 The live export composer and its journey step (PR #789), the eighth screen. `dist-live/export.html`
 has its own bundle `client-live-export.js`.
@@ -1410,9 +1462,11 @@ has not yet run; the bounded first mount above is complete.
    radar and export screens' sentences; PR #805: every citation the journey's pages print verifies;
    PR #806: no interface text on a live page bypasses the chrome table (a pseudo-locale scan); PR
    #807: the evaluation card's words in the table; PR #809: the refusal card's words in the table;
-   PR #810: Trust and Coverage's words in the table, so the chrome scan exempts nothing. Next: the
+   PR #810: Trust and Coverage's words in the table, so the chrome scan exempts nothing; PR #811:
+   the accessibility and scope line held on the live screens; PR #813: a reviewed language builds
+   its own pages. Next: the
    owner's review of the French drafts (`node web/scripts/live-chrome-fr-draft.mjs`), then the
-   reviewed French build (`/fr/*.html`, `REVIEWED_CHROME_LOCALES` gains `fr`). French ships only once
+   reviewed table in `LIVE_CHROME` and `fr` in `REVIEWED_CHROME_LOCALES`, which builds `/fr/*.html`. French ships only once
    reviewed (Decision 41). Hosting (ruling 3): `Lex.V3.Api`
    serves the live pages on the API's origin with `frame-ancestors`, HSTS and `Referrer-Policy`,
    and a live page never shows the synthetic banner on a real mount. J1 to J8 are restated as V3
