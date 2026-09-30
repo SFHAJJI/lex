@@ -513,7 +513,7 @@ CI evidence are recorded in the pull request before merge.
 
 ## Heads
 
-- `v3/integration`: `b908bcc8` (2026-09-30, PR #828 merged). Build 45 s. Fast lane
+- `v3/integration`: `1a16009b` (2026-09-30, PR #829 merged). Build 45 s. Fast lane
   (`eng/test-fast.ps1`): 3,077 tests, 3,076 pass, 1 skipped (the review of PR #828). Ingest suite: green on CI for PR #760
   (the CI `dotnet` job runs the whole solution on every pull request, about 7 min on the runner;
   green for PR #828);
@@ -1432,11 +1432,15 @@ release pipeline's. V2 is the retired product on `main` (`Lex.Ask` to `Lex.Web`)
   - the API's dependency manifest (`Lex.V3.Api.deps.json`) names no Lex library that is not V3's, so
     a V3 assembly that referenced V2 would be caught;
   - a missing dependency manifest is itself a failure.
-- With the probes, the running image is asked V2's routes (`V2_ROUTES`), and each must answer 404:
-  its 20 pages, among them `/ask`, `/attestation.json` and `/pubkey.pem`, and its four assistant
-  endpoints under `POST /api/ask`.
-- On the real bounded mount: 526 entries across the 6 layers read, no failure; all 24 V2 routes 404;
-  the 8 probes pass; the image reproduced by its second build; everything removed.
+- With the probes, the running image is asked every route V2 served (`V2_ROUTES`, 63): each
+  `MapGet` and `MapPost` of `Lex.Web` on `main`, the ten pages of its `/built` table, its diagrams,
+  its publisher document routes, its `/mcp/{*rest}` fallback, its static files and its four assistant
+  endpoints. Each must answer 404, except where V3 serves the same path from its live pages (`/`),
+  which must answer V3's own file byte for byte. The first list left out `/built` and its table
+  (review of #831).
+- On the real bounded mount: 526 entries across the 6 layers read, no failure; all 63 routes asked,
+  `/` answering V3's own page and every other 404; the 8 probes pass; the image reproduced by its
+  second build; everything removed.
 
 The live export composer and its journey step (PR #789), the eighth screen. `dist-live/export.html`
 has its own bundle `client-live-export.js`.
@@ -1986,7 +1990,7 @@ has not yet run; the bounded first mount above is complete.
    it runs the image (WSL, read-only root, private /tmp) and probes the eight screens against it; PR
    #826: the image is reproducible (two builds from scratch, one manifest digest); PR #828: the
    image probed on the journey's fixture mount, where every screen answers and 105 citations verify;
-   PR #831: V2 absent from the image (no V2 assembly or dependency, V2's routes 404). The
+   PR #831: V2 absent from the image (no V2 assembly or dependency, V2's 63 routes 404). The
    credential-free release steps are rehearsed end to end. Production signing,
    credentials and deployment stay with the owner.
 8. Machine gates (launch contract, Evaluation): the temporal, refusal and retrieval case sets run

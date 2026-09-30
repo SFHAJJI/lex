@@ -154,17 +154,36 @@ export function imageFailures(image, { web, mount, report }) {
 
 /**
  * The retired product, V2 (the `main` line), by what would betray it in an image: its projects (`src/`
- * on `main`, 2026-09-30), and the routes its `Lex.Web` served that V3 does not. The launch contract's
- * machine gates ask "V2 absent from the image".
+ * on `main`, 2026-09-30), and every route its `Lex.Web` served. The routes are every `MapGet` and
+ * `MapPost` of `Lex.Web` on `main`, the pages its `/built` table maps, its publisher document routes
+ * (`/{publisher}/{work}...` for `lu-legilux` and `eu-eurlex`) and its `/built/diagrams/{name}.svg` with
+ * values it held, its `/mcp/{*rest}` fallback, and the static files of its `wwwroot`. The first list
+ * left out `/built` and its table (review of #831). The launch contract's machine gates ask "V2
+ * absent from the image".
  */
 export const V2_PROJECTS = Object.freeze([
   "Lex.Ask", "Lex.Derive", "Lex.Index", "Lex.Ingest", "Lex.Law", "Lex.Mcp", "Lex.Mcp.Stdio",
   "Lex.Sources.EurLex", "Lex.Sources.Legilux", "Lex.Temporal", "Lex.Web",
 ]);
 export const V2_ROUTES = Object.freeze([
-  ...["/about", "/ai", "/architecture", "/architecture/dossier", "/architecture/next", "/ask", "/attestation.json", "/benchmarks",
-    "/benchmarks/cases.json", "/benchmarks/latest.json", "/built/release/evaluation.json", "/changed", "/decisions", "/developers",
-    "/find", "/go-asof", "/how-it-works", "/in-force-on", "/pubkey.pem", "/stories"].map((path) => ["GET", path]),
+  ...[
+    // Its pages and documents.
+    "/", "/about", "/ai", "/architecture", "/architecture/dossier", "/architecture/next", "/ask", "/attestation.json",
+    "/benchmarks", "/benchmarks/cases.json", "/benchmarks/latest.json", "/browse", "/changed", "/coverage", "/decisions",
+    "/developers", "/find", "/go-asof?work=loi-1991-08-10-n3&date=2024-02-01", "/healthz", "/how-it-works", "/in-force-on",
+    "/provenance/lu-legilux", "/pubkey.pem", "/readyz", "/robots.txt", "/search", "/sitemap.xml", "/stories", "/verify",
+    // The /built table, its release status and its diagrams.
+    "/built", "/built/model", "/built/data", "/built/retrieval", "/built/assistant", "/built/release", "/built/decisions",
+    "/built/incidents", "/built/limits", "/built/repositories", "/built/release/evaluation.json", "/built/diagrams/system.svg",
+    // One law: its timeline, its text on a date, a comparison, per publisher.
+    "/lu-legilux/loi-1991-08-10-n3", "/lu-legilux/loi-1991-08-10-n3/2024-02-01", "/lu-legilux/loi-1991-08-10-n3/diff/2024-02-01/2024-02-01",
+    "/eu-eurlex/32016R0679", "/eu-eurlex/32016R0679/2016-05-04", "/eu-eurlex/32016R0679/diff/2016-05-04/2016-05-04",
+    // Its MCP fallback (V3's own MCP endpoint is /mcp itself) and its static files.
+    "/mcp/tools", "/.well-known/glama.json", "/dossier.css", "/make-og.py", "/og.png", "/site.js",
+    ...["IBMPlexMono-latin-ext", "IBMPlexMono-latin", "IBMPlexSans-latin-ext", "IBMPlexSans-latin", "SourceSerif4-latin-ext", "SourceSerif4-latin"]
+      .map((font) => `/fonts/${font}.woff2`),
+  ].map((path) => ["GET", path]),
+  // Its assistant.
   ...["/api/ask", "/api/ask/stream", "/api/ask/thread/reset", "/api/ask/evaluation/admission"].map((path) => ["POST", path]),
 ]);
 
@@ -199,17 +218,31 @@ export function v2Failures(image) {
 }
 
 /**
- * The V2 routes a running image answers, as failures (empty when each is 404): V2's pages and its
- * assistant endpoints, asked of the image's own origin.
+ * The V2 routes a running image answers, as failures (empty when V2 answers none), asked of the image's
+ * own origin. Each must answer 404, except a path V3 serves itself from its live pages (`v3Files`, URL
+ * path to bytes: `/` and a font V2 also had), which must answer 200 with V3's own file, byte for byte.
+ * Redirects are not followed: a V2 redirect is an answer.
  */
-export async function v2RouteFailures(origin, routes = V2_ROUTES) {
+export async function v2RouteFailures(origin, { v3Files = new Map(), routes = V2_ROUTES } = {}) {
   const failures = [];
   for (const [method, path] of routes) {
     const response = await fetch(`${origin}${path}`, { method, headers: { "content-type": "application/json" }, body: method === "POST" ? "{}" : undefined, redirect: "manual" });
-    await response.arrayBuffer();
-    if (response.status !== 404) failures.push(`${method} ${path} answered ${response.status}, not 404`);
+    const body = Buffer.from(await response.arrayBuffer());
+    const own = method === "GET" ? v3Files.get(path.split("?")[0]) : undefined;
+    if (own === undefined) {
+      if (response.status !== 404) failures.push(`${method} ${path} answered ${response.status}, not 404`);
+    } else if (response.status !== 200 || !body.equals(own)) {
+      failures.push(`${method} ${path} answered ${response.status} with bytes that are not V3's own file at that path`);
+    }
   }
   return failures;
+}
+
+/** The live pages as the image serves them, URL path to bytes: each file at `/<path>`, and `/` as `index.html`. */
+export function servedPaths(web) {
+  const served = new Map(web.map(([path, bytes]) => [`/${path}`, bytes]));
+  if (served.has("/index.html")) served.set("/", served.get("/index.html"));
+  return served;
 }
 
 /**
@@ -422,10 +455,11 @@ export async function rehearse({ mount, keep = false, probe = true, reproduce = 
       const failing = result.probes.filter((one) => one.failures.length > 0);
       if (failing.length > 0) throw new Error(`the image failed its probes:\n${failing.map((one) => `- ${one.step}: ${one.failures.join("; ")}`).join("\n")}`);
 
-      // V2 unreachable in the image: each route the retired product served answers 404.
+      // V2 unreachable in the image: each route the retired product served answers 404, or V3's own
+      // file where V3 serves the same path.
       const server = await startImage({ run: container, config: image.config });
       try {
-        const routeFailures = await v2RouteFailures(server.origin);
+        const routeFailures = await v2RouteFailures(server.origin, { v3Files: servedPaths(web) });
         Object.assign(result.v2Absent, { routesAsked: V2_ROUTES.length, routeFailures });
         if (routeFailures.length > 0) throw new Error(`the image answers V2's routes:\n- ${routeFailures.join("\n- ")}`);
       } finally {

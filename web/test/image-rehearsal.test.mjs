@@ -14,7 +14,7 @@ import { join } from "node:path";
 import test from "node:test";
 import { gzipSync } from "node:zlib";
 
-import { REHEARSAL_IDENTITY, V2_ROUTES, imageFailures, mountReport, readOciImage, readTar, rehearsalSignatureFailures, signRehearsal, v2Failures, v2RouteFailures } from "../scripts/image-rehearsal.mjs";
+import { REHEARSAL_IDENTITY, V2_ROUTES, imageFailures, mountReport, readOciImage, readTar, rehearsalSignatureFailures, servedPaths, signRehearsal, v2Failures, v2RouteFailures } from "../scripts/image-rehearsal.mjs";
 
 const sha256 = (bytes) => createHash("sha256").update(bytes).digest("hex");
 
@@ -181,19 +181,40 @@ test("V2 is absent from the image: no Lex assembly that is not V3's, and no V2 l
   assert.deepEqual(v2Failures(readOciImage(image({ appFiles: [["app/Lex.V3.Api.dll", Buffer.from("MZ")]] }))), ["the app layer holds no app/Lex.V3.Api.deps.json to read the API's dependencies from"]);
 });
 
-test("V2's routes must each answer 404 from the running image", async () => {
-  assert.ok(V2_ROUTES.some(([method, path]) => method === "POST" && path === "/api/ask") && V2_ROUTES.some(([, path]) => path === "/pubkey.pem"), "V2's assistant and its signing key are asked");
-  const answering = new Map([["GET /ask", 200], ["POST /api/ask", 405]]);
+test("V2's routes must each answer 404 from the running image, or V3's own file where V3 serves that path", async () => {
+  const paths = V2_ROUTES.map(([method, path]) => `${method} ${path}`);
+  for (const route of ["GET /built", "GET /built/model", "GET /built/repositories", "GET /built/diagrams/system.svg", "GET /lu-legilux/loi-1991-08-10-n3",
+    "GET /dossier.css", "GET /fonts/IBMPlexSans-latin.woff2", "GET /", "GET /pubkey.pem", "POST /api/ask"]) {
+    assert.ok(paths.includes(route), `${route} is asked (the first list left out /built and its table, review of #831)`);
+  }
+  const index = Buffer.from("<!doctype html><title>Lex</title>");
+  const answering = new Map();
   const server = createServer((request, response) => {
     request.resume();
-    request.on("end", () => { response.statusCode = answering.get(`${request.method} ${request.url}`) ?? 404; response.end(); });
+    request.on("end", () => {
+      const answer = answering.get(`${request.method} ${request.url}`);
+      response.statusCode = answer?.status ?? 404;
+      response.end(answer?.body ?? "");
+    });
   });
   await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
   try {
     const origin = `http://127.0.0.1:${server.address().port}`;
-    assert.deepEqual(await v2RouteFailures(origin, [["GET", "/about"], ["GET", "/ask"], ["POST", "/api/ask"]]), ["GET /ask answered 200, not 404", "POST /api/ask answered 405, not 404"]);
-    answering.clear();
-    assert.deepEqual(await v2RouteFailures(origin), [], "every V2 route answered 404");
+    const v3Files = servedPaths([["index.html", index], ["client-live.js", Buffer.from("hydrate()")]]);
+    assert.deepEqual(await v2RouteFailures(origin, { v3Files }), ["GET / answered 404 with bytes that are not V3's own file at that path"], "V3's own page must be there");
+    answering.set("GET /", { status: 200, body: index });
+    assert.deepEqual(await v2RouteFailures(origin, { v3Files }), [], "every V2 route answers 404, and / is V3's own page");
+    answering.set("GET /built", { status: 200, body: "<h1>Overview</h1>" });
+    assert.deepEqual(await v2RouteFailures(origin, { v3Files }), ["GET /built answered 200, not 404"], "the reviewer's reproduction: /built served by V2 is caught");
+    answering.delete("GET /built");
+    answering.set("GET /", { status: 200, body: "<h1>V2 home</h1>" });
+    answering.set("POST /api/ask", { status: 405 });
+    answering.set("GET /ai", { status: 301 });
+    assert.deepEqual(await v2RouteFailures(origin, { v3Files }), [
+      "GET / answered 200 with bytes that are not V3's own file at that path",
+      "GET /ai answered 301, not 404",
+      "POST /api/ask answered 405, not 404",
+    ], "V2's home in V3's place, a V2 redirect and a V2 method refusal are each caught");
   } finally {
     await new Promise((resolve) => server.close(resolve));
   }
