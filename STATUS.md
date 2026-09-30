@@ -5,11 +5,11 @@ every pull request that changes what is served, what is next or what is blocked.
 
 ## Heads
 
-- `v3/integration`: `592cd701` (2026-09-30, PR #795 merged). Build 45 s. Fast lane
+- `v3/integration`: `9f8e083d` (2026-09-30, PR #797 merged). Build 45 s. Fast lane
   (`eng/test-fast.ps1`): 3,038 tests, 3,037 pass, 1 skipped. Ingest suite: green on CI for PR #760
   (the CI `dotnet` job runs the whole solution on every pull request, about 7 min on the runner;
-  green for PR #796);
-  locally about 15 min. 929 web tests pass. CI's web job can flake in `keyboard-walk.test.mjs`
+  green for PR #797);
+  locally about 15 min. 933 web tests pass. CI's web job can flake in `keyboard-walk.test.mjs`
   ("browser debugger never answered"); rerunning the failed job is the fix.
 - Driver: Claude Opus 5.5 since 2026-09-29 (the Fable 5.1 driver ran out of tokens on 2026-09-28
   after PR #757; the user default model is now `claude-opus-5-5`).
@@ -235,7 +235,7 @@ schema's `parameters` shape, and whose call runs the same dispatch the REST rout
 endpoint test proves it for all twenty-three. The launch-contract line "REST and MCP derive identical
 envelopes from the registry" is the owner's to tick.
 
-Web: 38 React components, 929 tests. Preview screens render fixtures. The V3 Luxembourg search
+Web: 38 React components, 933 tests. Preview screens render fixtures. The V3 Luxembourg search
 answer has a reader (PR #771). The answer census now samples `search` five ways from the real handler:
 - a phrase with 4 strict hits and 1 relaxed hit;
 - the same phrase one hit per page, with its cursor;
@@ -553,6 +553,17 @@ is reviewed (Decision 41); German and Luxembourgish stay unavailable at launch.
   its own language, which the resolver's card now names (`matched_title_language`, from the title
   row): the resolver searches every language's titles, so the language searched in is not the
   title's (review of #797). History, compare and radar show digests and ids, no publisher text.
+
+The live pages' interface copy starts to come from one table (PR #800, the first step toward French
+chrome). `web/scripts/live-chrome.mjs` holds each live page's title, eyebrow, heading and
+introduction and every form's labels and buttons, in English, and the eight pages and their forms
+render from it; every page rendered before and after the move is byte-identical. `liveChrome(locale)` answers only for a reviewed language and throws
+for any other, since serving it would be a substitution; a test holds each page to its entries and
+the table to the reviewed languages. French is drafted beside it for review
+(`live-chrome-fr-draft.mjs`, printed by `node web/scripts/live-chrome-fr-draft.mjs`): never
+imported by the product, and held by a test to the English table's exact shape, so an English
+entry without a draft is caught. Next into the table: the screens' answer sentences, drafted
+the same way; French ships once reviewed (Decision 41).
 
 The live export composer and its journey step (PR #789), the eighth screen. `dist-live/export.html`
 has its own bundle `client-live-export.js`.
@@ -1090,9 +1101,10 @@ has not yet run; the bounded first mount above is complete.
    for the checkpoint (ruling 4); PR #794: the absence refusals carry the card's evidence, so the
    live pages show them as cards; PR #796: every citation the served answers emit verifies; PR #797:
    the interface languages, German and Luxembourgish (and French until reviewed) answering
-   `localization_unavailable`. Next: keyboard and screen-reader paths for the eight screens, then
-   French chrome, which ships only once its copy is reviewed (Decision 41): the driver drafts it
-   for the owner as the refusal sentences were. Hosting (ruling 3): `Lex.V3.Api`
+   `localization_unavailable`; PR #800: the live pages' chrome in one table. Next: keyboard and
+   screen-reader paths for the eight screens, the screens' labels and sentences into the chrome
+   table, then French drafted beside it for review; French ships only once reviewed (Decision
+   41). Hosting (ruling 3): `Lex.V3.Api`
    serves the live pages on the API's origin with `frame-ancestors`, HSTS and `Referrer-Policy`,
    and a live page never shows the synthetic banner on a real mount. J1 to J8 are restated as V3
    steps by the driver (they exist only in the pre-V3 pack, `05-user-journeys.md`).
@@ -1241,6 +1253,10 @@ Repair fast lane: 3,065 pass / 1 Windows skip; repair build: zero warnings/error
   nearest article ids; review of #793), English as served and French as the driver's draft. Printed from the pages' own sentences by
   `node web/scripts/refusal-sentences.mjs`; a test holds every served sentence to one draft. Nothing
   French ships until the owner's reviewed wording replaces the drafts.
+- The live pages' French interface copy, drafted for review (Decision 41: French chrome ships only
+  once reviewed): every entry of the chrome table so far (each page's title, eyebrow, heading and
+  introduction, the forms' labels and buttons), printed by `node web/scripts/live-chrome-fr-draft.mjs`
+  (PR #800).
 
 ## Blocked on the owner
 

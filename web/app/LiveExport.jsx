@@ -19,6 +19,10 @@ import { ReadingAnswerView, ReadingForm } from './LiveReading.jsx';
 import { createReadingSession, quotationLanguageTag } from '../scripts/live-reading.mjs';
 import { EXPORT_FORMATS, LIVE_EXPORT_IDLE, exportState, formatRefusedSentence, pinKey, saveExport } from '../scripts/live-export.mjs';
 import { exportJson } from '../scripts/export-build.mjs';
+import { liveChrome } from '../scripts/live-chrome.mjs';
+
+/** The forms' labels and buttons, from the interface copy table. */
+const FORM = liveChrome().form;
 
 const IDLE = Object.freeze({ state: 'idle', sentence: LIVE_EXPORT_IDLE });
 
@@ -191,7 +195,7 @@ export function LiveExport({ contract, fetchImpl, save = saveExport }) {
 
   return (
     <div>
-      <ReadingForm submitLabel="Read for export" onAsk={(request) => session.current.ask(request)} />
+      <ReadingForm submitLabel={FORM.submit.export} onAsk={(request) => session.current.ask(request)} />
       <ExportAnswerView outcome={outcome} pins={pins} onPin={onPin} />
       <ExportPanel outcome={outcome} pins={pins} onSave={(format) => {
         const panel = exportState(outcome, pins);

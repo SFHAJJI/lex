@@ -6,6 +6,7 @@
 // reader submits.
 
 import { Document } from './Document.jsx';
+import { liveChrome } from '../scripts/live-chrome.mjs';
 import { LiveSearch } from './LiveSearch.jsx';
 import { renderHydratableDocument } from './render-document.mjs';
 import { skinFor } from '../scripts/shells.mjs';
@@ -19,21 +20,18 @@ export function liveSearchTree() {
 }
 
 export function renderLiveSearchPage() {
+  const copy = liveChrome().search;
   return renderHydratableDocument(
     <Document
       state="live-search"
-      title="Search"
+      title={copy.title}
       shell="dev"
       density={skinFor('dev').density}
       banner="live"
     >
-      <p className="eyebrow">Search</p>
-      <h1>Search the held text</h1>
-      <p>
-        Finds the articles whose text contains the phrase exactly as typed, or every word of it, in
-        the text this server holds. The phrase goes to this server in the request and nowhere else,
-        and this page keeps nothing.
-      </p>
+      <p className="eyebrow">{copy.eyebrow}</p>
+      <h1>{copy.heading}</h1>
+      <p>{copy.intro}</p>
       <div id={LIVE_SEARCH_ROOT}>{liveSearchTree()}</div>
       <script src="/client-live-search.js" defer />
     </Document>,

@@ -17,6 +17,10 @@ import { useEffect, useRef, useState } from 'react';
 
 import { RefusalCard } from './RefusalCard.jsx';
 import { HISTORY_LANGUAGES, LIVE_HISTORY_IDLE, createHistorySession } from '../scripts/live-history.mjs';
+import { liveChrome } from '../scripts/live-chrome.mjs';
+
+/** The forms' labels and buttons, from the interface copy table. */
+const FORM = liveChrome().form;
 
 const IDLE = Object.freeze({ state: 'idle', sentence: LIVE_HISTORY_IDLE });
 
@@ -149,7 +153,7 @@ export function LiveHistory({ contract, fetchImpl }) {
         }}
       >
         <label>
-          Work identifier{' '}
+          {FORM.workIdentifier}{' '}
           <input
             type="text"
             value={identifier}
@@ -159,7 +163,7 @@ export function LiveHistory({ contract, fetchImpl }) {
           />
         </label>{' '}
         <label>
-          Article id{' '}
+          {FORM.articleId}{' '}
           <input
             type="text"
             placeholder="art_15"
@@ -170,9 +174,9 @@ export function LiveHistory({ contract, fetchImpl }) {
           />
         </label>{' '}
         <label>
-          Language{' '}
+          {FORM.language}{' '}
           <select value={language} onChange={(event) => setLanguage(event.target.value)}>
-            <option value="">Any held language</option>
+            <option value="">{FORM.anyLanguage}</option>
             {HISTORY_LANGUAGES.map((offered) => (
               <option key={offered.code} value={offered.code}>
                 {offered.label}
@@ -180,7 +184,7 @@ export function LiveHistory({ contract, fetchImpl }) {
             ))}
           </select>
         </label>{' '}
-        <button type="submit">Trace</button>
+        <button type="submit">{FORM.submit.history}</button>
       </form>
       <HistoryAnswerView outcome={outcome} />
     </div>

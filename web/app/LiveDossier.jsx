@@ -15,6 +15,10 @@ import { useEffect, useRef, useState } from 'react';
 import { RefusalCard } from './RefusalCard.jsx';
 import { DOSSIER_LANGUAGES, LIVE_DOSSIER_IDLE, createDossierSession } from '../scripts/live-dossier.mjs';
 import { quotationLanguageTag } from '../scripts/live-reading.mjs';
+import { liveChrome } from '../scripts/live-chrome.mjs';
+
+/** The forms' labels and buttons, from the interface copy table. */
+const FORM = liveChrome().form;
 
 const IDLE = Object.freeze({ state: 'idle', sentence: LIVE_DOSSIER_IDLE });
 
@@ -154,7 +158,7 @@ export function LiveDossier({ contract, fetchImpl }) {
         }}
       >
         <label>
-          Work identifier{' '}
+          {FORM.workIdentifier}{' '}
           <input
             type="text"
             value={identifier}
@@ -164,9 +168,9 @@ export function LiveDossier({ contract, fetchImpl }) {
           />
         </label>{' '}
         <label>
-          Language{' '}
+          {FORM.language}{' '}
           <select value={language} onChange={(event) => setLanguage(event.target.value)}>
-            <option value="">Any held language</option>
+            <option value="">{FORM.anyLanguage}</option>
             {DOSSIER_LANGUAGES.map((offered) => (
               <option key={offered.code} value={offered.code}>
                 {offered.label}
@@ -174,7 +178,7 @@ export function LiveDossier({ contract, fetchImpl }) {
             ))}
           </select>
         </label>{' '}
-        <button type="submit">Read the dossier</button>
+        <button type="submit">{FORM.submit.dossier}</button>
       </form>
       <DossierAnswerView outcome={outcome} />
     </div>
