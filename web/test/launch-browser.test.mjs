@@ -15,7 +15,11 @@ test("two browsers started together each bind their own debugging port and answe
   const profiles = await Promise.all([1, 2].map((n) => mkdtemp(join(tmpdir(), `lex-launch-${n}-`))));
   const launched = [];
   try {
-    launched.push(...await Promise.all(profiles.map((profile) => launchBrowser(browser, profile))));
+    // Settled, not raced: a browser that started is recorded even when the other launch fails, so the
+    // cleanup below ends it (review of #822: `Promise.all` rejected first and left one running).
+    const settled = await Promise.allSettled(profiles.map((profile) => launchBrowser(browser, profile)));
+    launched.push(...settled.filter((one) => one.status === "fulfilled").map((one) => one.value));
+    for (const one of settled) if (one.status === "rejected") throw one.reason;
     const ports = launched.map(({ url }) => new URL(url).port);
     assert.equal(new Set(ports).size, 2, `two ports, not one shared: ${ports.join(", ")}`);
     for (const { url } of launched) assert.match(url, /^ws:\/\/127\.0\.0\.1:\d+\/devtools\/browser\//);
