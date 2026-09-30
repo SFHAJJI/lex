@@ -276,7 +276,7 @@ public sealed class VerifiedLuxembourgObservedObjectIdentitySet
 
         using var round = new MemoryStream();
         LuxembourgObservedObjectIdentitySetCanonicalWriter.Write(round, set);
-        if (!round.ToArray().AsSpan().SequenceEqual(canonicalBytes))
+        if (!round.GetBuffer().AsSpan(0, checked((int)round.Length)).SequenceEqual(canonicalBytes))
         {
             throw new ArgumentException(
                 "The observed object identity set bytes are not the canonical form of the set they parse into.",

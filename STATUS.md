@@ -9,7 +9,9 @@ The observed-object identity writer builds a full canonical buffer and copies it
 schema-domain digest. Reversible driver decision: write directly to the caller's stream and hash
 incrementally, with periodic JSON flushes. Preserve exact ordering, escaping, newline, digest,
 caller ownership and destination prefixes. Document partial writes and flush failures explicitly.
-The independent reader and persistence store remain buffered; this does not establish full-run fit.
+Persistence and canonical round-trip comparison use their owned MemoryStream backing memory
+instead of copying it with ToArray. The independent reader and persistence store remain buffered;
+this does not establish full-run fit.
 
 Two draft regressions cover 3,000 identities on a nonseekable stream, maximum observed write size,
 independent canonical bytes/hash/readback, prefix handling and stream ownership. This slice is

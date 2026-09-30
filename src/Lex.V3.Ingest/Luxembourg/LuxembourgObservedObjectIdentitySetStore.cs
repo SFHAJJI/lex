@@ -99,7 +99,8 @@ public sealed class LuxembourgObservedObjectIdentitySetWriter
         var set = LuxembourgObservedObjectIdentitySet.FromObservations(runIdentity, observations);
         using var buffer = new MemoryStream();
         var setCanonicalSha256 = LuxembourgObservedObjectIdentitySetCanonicalWriter.Write(buffer, set);
-        var setBytes = buffer.ToArray();
+        // The owned buffer remains alive until hold and independent readback finish.
+        var setBytes = new ReadOnlyMemory<byte>(buffer.GetBuffer(), 0, checked((int)buffer.Length));
 
         var (writeReceipt, holdFailure) = await CustodyHold
             .TryHoldAsync(_custodyStore, setBytes, cancellationToken)
