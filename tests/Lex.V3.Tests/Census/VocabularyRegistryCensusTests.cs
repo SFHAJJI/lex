@@ -117,7 +117,7 @@ public sealed class VocabularyRegistryCensusTests
                     + "const WithdrawnFromSource",
                 "Lex.V3.Contracts.Platform.V3PlatformSchemaExporter: const EnvelopeSchemaId, "
                     + "const RefusalSchemaId",
-                "Lex.V3.Contracts.Platform.V3Verdicts: Known=6, const Answer, "
+                "Lex.V3.Contracts.Platform.V3Verdicts: Known=6, All=6, const Answer, "
                     + "const AnswerWithEnrichment, const Clarify, const Point, const Refuse, "
                     + "const Split",
                 "Lex.V3.Contracts.PreviewOfficialPublisherLinks: const EuSearch, const LuSearch",

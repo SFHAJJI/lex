@@ -5,11 +5,11 @@ every pull request that changes what is served, what is next or what is blocked.
 
 ## Heads
 
-- `v3/integration`: `f1fa563d` (2026-09-29, PR #761 merged). Build 45 s. Fast lane
+- `v3/integration`: `23f0cb37` (2026-09-30, PR #762 merged). Build 45 s. Fast lane
   (`eng/test-fast.ps1`): 3,038 tests, 3,037 pass, 1 skipped. Ingest suite: green on CI for PR #760
   (the CI `dotnet` job runs the whole solution on every pull request, about 7 min on the runner;
-  green for PR #761);
-  locally about 15 min. 771 web tests pass. CI's web job can flake in `keyboard-walk.test.mjs`
+  green for PR #762);
+  locally about 15 min. 785 web tests pass. CI's web job can flake in `keyboard-walk.test.mjs`
   ("browser debugger never answered"); rerunning the failed job is the fix.
 - Driver: Claude Opus 5.5 since 2026-09-29 (the Fable 5.1 driver ran out of tokens on 2026-09-28
   after PR #757; the user default model is now `claude-opus-5-5`).
@@ -235,7 +235,24 @@ schema's `parameters` shape, and whose call runs the same dispatch the REST rout
 endpoint test proves it for all twenty-three. The launch-contract line "REST and MCP derive identical
 envelopes from the registry" is the owner's to tick.
 
-Web: 28 React components, 771 tests; no call to `/api/v3` yet. Screens render fixtures.
+Web: 28 React components, 785 tests. Screens render fixtures; no page calls `/api/v3` yet. PR #763
+adds the first code that can: `web/scripts/v3-envelope.mjs`, a strict reader that mirrors
+`V3EnvelopeJson.ParseAndVerify` (exact closed member sets, the reviewed registry digest, one branch
+with a consistent verdict and context status, the result bound to the operation's schema and object
+types, a registry refusal code with every mandatory payload field, the `anchor_not_in_version`
+rule, the request reference's and snapshot identity's forms, a real observation instant that is not
+the default, and the nesting limit of 32; it cannot see duplicate members or non-canonical bytes and
+says so), and
+`web/scripts/v3-client.mjs`, which asks one served operation by a same-origin POST whose parameters
+travel in the body alone (no credentials, no cache, no referrer, redirects refused, no retry,
+nothing logged) and returns the renderable states (`success`, `refusal`, `transport_failure` with
+the problem code, or `network_error` when the connection fails before or while the body arrives,
+`invalid_envelope` with the reason; a cancellation rejects as one). The reader holds no copy of the registry: it
+reads the `contract` block of a new census, `schemas/v3-platform/envelope-samples.json`, which the
+platform renders from the reviewed registry beside four whole envelopes the real handler sent
+(coverage answer, the `ask` card, `no_corpus_mounted`, a refusal with a payload), each verified by
+`ParseAndVerify` before it is recorded (render with `V3_RENDER_ENVELOPE_SAMPLES=1`). The client's
+served list is pinned to the platform's own list in the coverage answer sample.
 
 ## Data
 
@@ -464,10 +481,21 @@ Web: 28 React components, 771 tests; no call to `/api/v3` yet. Screens render fi
    `search` in one work served by PR #761, EU `dossier` by PR #762; the temporal operations,
    `provenance`, `evidence_bundle` and `verify` wait on consolidation acquisition, an EU permalink
    grammar and the owner questions below.
-6. Wire the eight launch screens to `/api/v3`; journeys J1 to J8 in a real browser.
+6. Wire the eight launch screens to `/api/v3`; journeys J1 to J8 in a real browser. PR #763: the
+   envelope reader and the client module. Next: Trust and Coverage as the first live screen (its
+   reader is already held to the coverage answer; its request carries no query text), a journey
+   mount written by a test, and one browser journey step against a local API process. J1 to J8
+   exist only in the pre-V3 pack (`05-user-journeys.md`) and need restating as V3 steps.
 7. Release pipeline: build, sign, image, zero-traffic deploy, probes. Then acceptance and promotion.
 
 ## Blocked or waiting on the owner
+
+- Web hosting (PR #763): the page's CSP allows `connect-src 'self'` and the API has no CORS, so the
+  page and the API share an origin. Either the API serves the web bundle, or an ingress routes
+  `/api/v3` and `/mcp` to the API and the rest to static files; which layer sends
+  `frame-ancestors`, HSTS and `Referrer-Policy`; what a live page's banner says (the synthetic
+  banner would be false on a real mount); whether J1 to J8 are restated as V3 steps; who reviews one
+  refusal sentence per code in FR and EN.
 
 - EU parity (PR #761): (a) is the Formex act date (`wording_date`) the "EU wording-state date" the
   launch contract means, and does `official_consolidation_state` fit answers over an original
