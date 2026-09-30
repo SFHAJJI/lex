@@ -3,6 +3,35 @@
 Updated 2026-09-30 by the driver. This file replaces the issue-comment ledgers. It is rewritten in
 every pull request that changes what is served, what is next or what is blocked.
 
+## Luxembourg scope input reuse (Codex, 2026-09-30)
+
+Scope resolution retains four rule-evaluation objects and multiple not-applicable selectors per
+resource even when their values are identical. Reversible driver decision: reuse only immutable
+values with no object identity or observation/evidence ordinal, within one profile resolution.
+The table is bounded by four axes and seven terminal states (at most 28 projections), plus four
+not-applicable selectors. Evidence-bearing selectors retain their existing per-object construction.
+No static cache crosses runs or profiles; projection rules, evidence admission and ordering stay
+unchanged.
+
+Validation: clean Release build (85.99 s), `pwsh -File eng/test-fast.ps1` (3,075 passed,
+one platform skip), and 97 affected Luxembourg ingest tests passed. Two regressions cover 128
+objects sharing immutable values, isolation between resolutions, repeated serialization and mixed
+missing/accepted dispositions with exact evidence. Independent reflection kept the global census
+at 211 types and supplied the changed private producer signature pin.
+
+The frozen comparison at `C:\lex-v3\lanes\lu-scope-input-comparison-20260930\comparison.json`
+checks actual loaded assembly hashes and source stamps for baseline 66371006 and candidate
+6209ce9d. For the same 10,000 synthetic empty subjects, retained scope memory after GC fell from
+27,854,264 to 19,280,128 bytes (8,574,136 fewer, about 30.8%). Both diagnostic JSON files have
+SHA-256 `c03f7c39759b4043581cddb58e69e60a789ff2978d4576f4ec6ebb9d0653f643`.
+Projection instances fell from 40,000 to four; not-applicable selectors from 100,000 to three.
+This measures retained synthetic scope results, not transient peaks or full-process fit. Real
+assertion graphs, reduction, corpus persistence and indexes remain outside this measurement.
+
+The full Luxembourg run remains gated on retained-state and persistence sizing. The new disk
+standing order requires space recovery before a large run; cited custody and evidence remain
+preserved. Required cross-family review and green exact-head CI remain merge gates.
+
 ## Formex package outcome diagnostics (Codex, 2026-09-30)
 
 The successful three-seed mount holds 34 EU XHTML members but admits only two Formex article
@@ -2159,3 +2188,28 @@ Only money, legal or public claims, credentials and going live (ruling 7):
 
 - The corrigendum tripwire classifies a French corrigendum as `within_served_body_languages` while no
   French body is served (Decision 89 section 4). True once the French expressions land.
+
+
+Required Claude review #829 returned MERGE with no blocking defect. It checked the cache keys,
+immutability and per-resolution isolation, reproduced the memory figures and identical JSON
+hashes, and made the disposition regression fail by mutating the cache key. Its clean build and
+fast suite passed; its broader offline ingest selection passed 137 tests. A trial integration merge
+also passed build and fast (3,078 passed, one platform skip).
+
+One follow-up preserves both STATUS sections during the current base merge. The earlier 97-test
+log lacks its filter string, so that historical count alone is not a reproducible command record.
+The explicit affected ingest rerun passed 101 tests, zero failures/skips, in 74.919 s at
+2678415d. Its command, source and result are retained under C:\lex-v3\lanes\pr-829-explicit-ingest-*.
+The exact filter was:
+`FullyQualifiedName~LuxembourgQueryExecutionAdapterTests|FullyQualifiedName~LuxembourgProductionTopologyTests|FullyQualifiedName~GuardedConstructionCensusTests|FullyQualifiedName~CustodyStoreConformanceTests`.
+The result is recorded in the PR. The final base refresh includes merged #827 and #830, with
+both STATUS sections retained; green exact-head CI remains required before merge.
+
+
+DATA lane checkpoint: #827 merged at 21:10 UTC and #830 at 21:23 UTC after their required reviews,
+one repair each and green exact-head CI. The fresh all-82-seed EU retry is prepared but has not
+started. It will use the merged Formex diagnostics and the retained 4,999,959,422-byte launch
+allowance, with checks before and after runtime preparation. Completed ignored checkout outputs
+have been reclaimed. Old EU runs named in STATUS remain intact; selected large files are queued
+for transparent NTFS compression with before/after hashes. A whole-tree hashing attempt was
+stopped before compression because tiny-file I/O delayed validation. No custody was deleted.
