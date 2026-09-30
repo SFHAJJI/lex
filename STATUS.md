@@ -18,6 +18,10 @@ with the observed timeout JSON or Virtuoso SR319 prefix), alongside saturated co
 still needs both enumeration passes and a tiled cover proof. Other statuses, malformed errors and
 challenges stop the cover. The shared wire ceiling includes failed parent attempts. An optional
 smaller leaf target supports bounded live verification; the publisher threshold remains 1,000,000.
+Single-partition callers also report these initial COUNT capacity errors as PartitionRequired;
+they still refuse unless a supplied or automatic cover proves every leaf. Compact counts do not
+remove the page projection: a page containing an over-wide row can still fail with SR319. The
+fresh preflight will retain and inspect page failures before sizing a complete run.
 The bounded a439 S cover completed at 13:00:09 UTC: 12 proven leaves (including empty ranges),
 10 delivered rows and 10 rows reopened from custody, using 68/150 wire requests in 30 minutes.
 Its five-row target exercised automatic splitting and the existing leaf-tiling proof; it proves
@@ -27,9 +31,10 @@ leaves cost requests too; full Luxembourg sizing must include this measured over
 whole-population preflight follows merge; no production credentials are used.
 
 Validation: solution build passed with zero warnings/errors; fast lane 3,066 passed and one
-Windows symlink skip. Affected ingest/census and request-policy tests are running. Initial CI
-found only the two expected identity/surface pin changes; both were regenerated or transcribed
-from the observed candidate and corrected. Cross-family review follows local validation.
+Windows symlink skip. Affected ingest/census and request-policy tests passed: 840 passed, 12
+opt-in live skips. Initial CI found only the two expected identity/surface pin changes; both were
+regenerated or transcribed from the observed candidate and corrected. Review and final exact-head
+CI evidence are recorded in the pull request before merge.
 
 ## Heads
 
