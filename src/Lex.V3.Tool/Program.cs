@@ -142,6 +142,8 @@ try
     if (!europe.Delivered)
     {
         Console.Error.WriteLine($"refused: europe: {europe.Refusal}: {europe.Detail} (spent {budget.Spent} of {budget.Limit})");
+        if (europe.Formex is { } refusedFormex)
+            Console.WriteLine("europe formex outcomes: " + refusedFormex.CreateOutcomeDiagnosticsJson());
         return 3;
     }
 
@@ -151,6 +153,8 @@ try
         + $"not_enumerated_language_out_of_scope {europe.Formex.NotEnumeratedExpressionCount}; "
         + $"notice route {europe.LegalNotice!.Route!.Hops.Count} hop(s); "
         + $"spent {budget.Spent} of {budget.Limit}");
+
+    Console.WriteLine("europe formex outcomes: " + europe.Formex.CreateOutcomeDiagnosticsJson());
 
     var luxembourg = await new LuxembourgFirstMountAcquisition(store, TimeProvider.System)
         .RunAsync(act, luxembourgRenderers, budget, token);

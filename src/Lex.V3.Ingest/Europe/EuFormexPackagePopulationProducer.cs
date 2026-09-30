@@ -1,3 +1,4 @@
+using System.Text.Json;
 using System.Text.Json.Serialization;
 using Lex.V3.Contracts.Custody;
 using Lex.V3.Contracts.Source.Core;
@@ -96,6 +97,41 @@ public sealed class EuFormexPackagePopulationResult
     public string? Detail { get; }
 
     public bool Delivered => Reconciliation is not null;
+
+    /// <summary>
+    /// Diagnostic projection of the existing reconciliation for retained CLI logs. It creates no
+    /// proof or acquisition outcome. On refusal, the expression total is unknown and outcomes null.
+    /// Enum names are diagnostic codes; publisher identities and details are JSON-escaped.
+    /// </summary>
+    public string CreateOutcomeDiagnosticsJson() => JsonSerializer.Serialize(new
+    {
+        schema = "lex-v3-eu-formex-outcome-diagnostic/1",
+        delivered = Delivered,
+        expression_count = Reconciliation?.ExpressionCount,
+        enumerated_count = Enumerations.Count,
+        eligible_count = EligibleExpressionCount,
+        acquired_count = AcquiredExpressionCount,
+        not_enumerated_language_out_of_scope_count = NotEnumeratedExpressionCount,
+        refusal = Refusal?.ToString(),
+        detail = Detail,
+        outcomes = Reconciliation?.Outcomes.Select(static outcome => new
+        {
+            work = outcome.ExpressionIdentity.PublisherWorkId,
+            expression = outcome.ExpressionIdentity.PublisherExpressionId,
+            language = outcome.Expression.OfficialLanguage,
+            kind = outcome.Kind.ToString(),
+            not_acquired_reason = outcome.NotAcquiredReason == EuFormexPackageNotAcquiredReason.None
+                ? null : outcome.NotAcquiredReason.ToString(),
+            package_refusal = outcome.PackageRefusal == EuFormexAnnexInventoryRefusal.None
+                ? null : outcome.PackageRefusal.ToString(),
+            acquisition_refusal = outcome.AcquisitionRefusal?.ToString(),
+            unavailable_reason = outcome.UnavailableReason?.ToString(),
+            observed_status = outcome.ObservedStatus,
+            retained_package_sha256 = outcome.AcquiredInventory?.SourceReceipt.Reference.ContentSha256,
+            detail = outcome.Detail,
+        }),
+    });
+
 
     public static EuFormexPackagePopulationResult Success(
         EuFormexRunOutcomeReconciliation reconciliation,

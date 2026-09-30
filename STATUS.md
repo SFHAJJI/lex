@@ -2050,3 +2050,20 @@ Only money, legal or public claims, credentials and going live (ruling 7):
 
 - The corrigendum tripwire classifies a French corrigendum as `within_served_body_languages` while no
   French body is served (Decision 89 section 4). True once the French expressions land.
+
+## DATA draft: retain Formex package outcome diagnostics
+
+The successful three-seed mount holds34EU XHTML members but admits only two Formex article
+expressions;32members report package_not_acquired. The mount's coarse Stage3 disposition omits
+the exact package reason and detail, so diagnosing it later would otherwise need reconstruction
+or another acquisition. Reversible driver decision: print the existing reconciliation as one
+JSON diagnostic line in Lex.V3.Tool, including every expression's work/language, typed outcome,
+not-acquired/inventory/transport reasons, observed status and original detail. Acquired packages
+include their retained content digest. Refused populations retain null totals/outcomes rather
+than claiming a complete empty population.
+
+This draft adds no requests, retries or eligibility/admission changes. The projection is diagnostic
+output, not proof or a new acquisition outcome. All out-of-scope-language outcomes remain explicit.
+Tests extend real scripted population cases for acquired/ineligible/out-of-scope, annex rejection,
+malformed package and unexpected status; one new case checks refused totals and escaped detail.
+Build, required fast/affected ingest, review and CI remain pending while PR827 review runs.
