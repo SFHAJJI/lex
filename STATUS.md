@@ -5,11 +5,11 @@ every pull request that changes what is served, what is next or what is blocked.
 
 ## Heads
 
-- `v3/integration`: `8fcbfc01` (2026-09-30, PR #789 merged). Build 45 s. Fast lane
+- `v3/integration`: `bb842133` (2026-09-30, PR #790 merged). Build 45 s. Fast lane
   (`eng/test-fast.ps1`): 3,038 tests, 3,037 pass, 1 skipped. Ingest suite: green on CI for PR #760
   (the CI `dotnet` job runs the whole solution on every pull request, about 7 min on the runner;
-  green for PR #789);
-  locally about 15 min. 915 web tests pass. CI's web job can flake in `keyboard-walk.test.mjs`
+  green for PR #790);
+  locally about 15 min. 922 web tests pass. CI's web job can flake in `keyboard-walk.test.mjs`
   ("browser debugger never answered"); rerunning the failed job is the fix.
 - Driver: Claude Opus 5.5 since 2026-09-29 (the Fable 5.1 driver ran out of tokens on 2026-09-28
   after PR #757; the user default model is now `claude-opus-5-5`).
@@ -235,7 +235,7 @@ schema's `parameters` shape, and whose call runs the same dispatch the REST rout
 endpoint test proves it for all twenty-three. The launch-contract line "REST and MCP derive identical
 envelopes from the registry" is the owner's to tick.
 
-Web: 36 React components, 915 tests. Preview screens render fixtures. The V3 Luxembourg search
+Web: 37 React components, 922 tests. Preview screens render fixtures. The V3 Luxembourg search
 answer has a reader (PR #771). The answer census now samples `search` five ways from the real handler:
 - a phrase with 4 strict hits and 1 relaxed hit;
 - the same phrase one hit per page, with its cursor;
@@ -573,6 +573,28 @@ three formats cannot disagree, and the export composer offers "Save as PDF" besi
   text intact.
 - The launch-contract line "Exports PDF, JSON, CSV preserve citations, rights, watermarks and
   exclusions" is the owner's to tick.
+
+The evaluation card on the Trust and Coverage page (PR #792, ruling 2). The page carries the card
+below the coverage answer, rendered by the server from the card the build is given (by default the
+one the platform renders, `schemas/v3-platform/evaluation-card.json`; a release build will be handed
+the release card), outside the hydrated tree, so it needs no script and the page still asks one
+request.
+- `web/scripts/evaluation-card.mjs` (`readEvaluationCard`) holds the card's rules and recomputes
+  what it can: each gate's verdict in the closed vocabulary, exactly a not-measured gate carrying a
+  reason and no value, a pass at or above its threshold and a fail below it, each rate's Wilson 95
+  percent interval (recomputed from the value and the stratum; anchor nDCG, a graded mean, has
+  none), the rule-of-three bound beside every 1 (recomputed), each set's own gates and nothing else
+  (temporal exactness; the refusal verdict match; retrieval's three, in order), one shuffled control
+  per case set in order and of that set's kind (a control over fewer cases than its set says why),
+  and every statistical row `not_yet_labelled` (Decision 92). A card that breaks a rule is not
+  printed. The live build takes the card it is handed (`buildLive(destination, { card })`).
+- `EvaluationCardView` prints what the card was run over first, as the card says it ("THE MOUNT IS A
+  FIXTURE ... this card is not a release card"), then whether every gate passes and every control
+  caught its shuffle (or which do not), one captioned table per case set (verdicts as words, values,
+  thresholds, cases, the interval, the bound), the controls, the statistical rows "not yet
+  labelled", and the negative-results register.
+- Not yet: the card as signed JSON at a stable route and beside the release assets, and the gates
+  run over the real mounted corpus; both follow the release pipeline (item 7) and the first mount.
 
 **The search journey step passes (PR #773, run locally 2026-09-30).** `node scripts/journey.mjs`
 now runs two steps, each with and without the fixture mount, and all four runs pass.
@@ -990,8 +1012,9 @@ proves the path, not a corpus.
    and journey step; PR #784: the radar reader `readChanges` over `changes_in_period`; PR #787: the
    live radar screen and journey step; PR #788: the API serves the live pages with the security
    headers (ruling 3); PR #789: the live export composer and its journey step. All eight of the
-   launch contract's screens are live and journeyed; PR #790: the PDF export. Next: the evaluation
-   card on the Trust and Coverage page (ruling 2). Hosting (ruling 3): `Lex.V3.Api`
+   launch contract's screens are live and journeyed; PR #790: the PDF export; PR #792: the
+   evaluation card on the Trust and Coverage page (ruling 2). Next: the French and English refusal
+   sentences for the checkpoint (ruling 4). Hosting (ruling 3): `Lex.V3.Api`
    serves the live pages on the API's origin with `frame-ancestors`, HSTS and `Referrer-Policy`,
    and a live page never shows the synthetic banner on a real mount. The absence refusals the card
    will not show: the producer carries the fields (driver decision). J1 to J8 are restated as V3
@@ -1000,7 +1023,7 @@ proves the path, not a corpus.
 8. Machine gates (launch contract, Evaluation): the temporal, refusal and retrieval case sets run
    against the real handler, and all three shuffled controls are caught (PRs #767 and #768). The
    evaluation card is rendered from them with the statistical rows `not_yet_labelled` (PR #769).
-   Ruling 2: it is served on the Trust and Coverage page and beside the release assets, and the
+   Ruling 2: it is served on the Trust and Coverage page (PR #792) and beside the release assets, and the
    launch card carries the machine gates run over the real mounted corpus, so the gates gain a
    mounted-corpus run once the first mount exists. Replay G1 to G5 (`33-product-spec.md`): G2 snapshot
    determinism and G5 independent verifiability run on the real handler (PR #770). G1 version
