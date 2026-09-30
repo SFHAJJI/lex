@@ -3,6 +3,25 @@
 Updated 2026-09-30 by the driver. This file replaces the issue-comment ledgers. It is rewritten in
 every pull request that changes what is served, what is next or what is blocked.
 
+## Scope manifest stream readback (Codex, 2026-09-30)
+
+Full Luxembourg sizing exposed both retained scope objects and complete serialized buffers.
+Reversible driver decision: add a strict seekable-stream reader and use it for Luxembourg scope
+readback. It checks the original domain-separated digest before deserialization, admits the same
+complete-enumeration and selector/rule evidence, and compares freshly written canonical bytes
+against the retained stream with bounded buffers. A second digest pin rejects a different valid
+canonical document substituted between passes. The existing span reader remains available.
+
+The production custody restore already freezes its byte array; a read-only stream reuses that array.
+This removes the complete UTF-16 JSON string and canonical reserialization copies from this path.
+It still materializes typed scope objects and custody bytes. Individual custody objects remain
+limited to 256 MiB; segmented derived-artifact persistence and further retained-object sizing are
+still required before the full Luxembourg run. No launch or memory-fit claim follows this change.
+
+Regression drafts cover short reads, identical canonical output, caller ownership of the stream,
+digest failure precedence, malformed UTF-8, noncanonical spacing/trailing bytes, changed canonical
+input between passes and independent evidence refusal. Build and test validation are pending.
+
 ## Luxembourg population memory prerequisite (Codex, 2026-09-30)
 
 The four bounded COUNT diagnostics now cover all assertion ranges: 9,672,378 A rows

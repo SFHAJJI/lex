@@ -1,3 +1,4 @@
+using System.Runtime.InteropServices;
 using System.Runtime.CompilerServices;
 using System.Text;
 using System.Text.Json;
@@ -2098,7 +2099,10 @@ public sealed class LuxembourgQueryExecutionAdapter
             // Canonical identity is domain separated; custody identity is the plain byte digest.
             var artifactRef = new SourceArtifactRef(
                 ContentDerivedIdentity.DeriveUuidUrn("lex-lu-scope-manifest/1", bytes.Span), canonicalSha256);
-            var reopened = VerifiedScopeManifest.ParseAndVerify(artifactRef, bytes.Span, resolver).Manifest;
+            using var readback = MemoryMarshal.TryGetArray(bytes, out var buffer)
+                ? new MemoryStream(buffer.Array!, buffer.Offset, buffer.Count, writable: false)
+                : new MemoryStream(bytes.ToArray(), writable: false);
+            var reopened = VerifiedScopeManifest.ParseAndVerifyStream(artifactRef, readback, resolver).Manifest;
             return (reopened, receipt, artifactRef, canonicalSha256, null);
         }
         catch (CustodyIntegrityException exception)
