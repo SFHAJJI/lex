@@ -102,4 +102,35 @@ public sealed class ContentDerivedIdentityTests
         Assert.AreEqual(urn, ContentDerivedIdentity.DeriveUuidUrn("scope/1", ReadOnlySpan<byte>.Empty));
         Assert.AreNotEqual(urn, ContentDerivedIdentity.DeriveUuidUrn("scope/1", Bytes));
     }
+    [TestMethod]
+    public void StreamAndSpanIdentitiesAgreeAcrossChunkBoundariesAndCurrentPosition()
+    {
+        var bytes = Enumerable.Range(0, 12001).Select(index => (byte)(index % 251)).ToArray();
+        using var stream = new ThreeByteReadStream(bytes);
+        Assert.AreEqual(ContentDerivedIdentity.DeriveUuidUrn("large/1", bytes),
+            ContentDerivedIdentity.DeriveUuidUrnFromStream("large/1", stream));
+        Assert.IsTrue(stream.CanRead);
+        stream.Position = 17;
+        Assert.AreEqual(ContentDerivedIdentity.DeriveUuidUrn("large/1", bytes.AsSpan(17)),
+            ContentDerivedIdentity.DeriveUuidUrnFromStream("large/1", stream));
+        Assert.AreEqual(ContentDerivedIdentity.DeriveUuidUrn("large/1", ReadOnlySpan<byte>.Empty),
+            ContentDerivedIdentity.DeriveUuidUrnFromStream("large/1", stream));
+    }
+
+    [TestMethod]
+    public void StreamIdentityCancellationNeverProducesAnIdentity()
+    {
+        using var canceled = new CancellationTokenSource();
+        canceled.Cancel();
+        using var stream = new MemoryStream(Bytes, writable: false);
+        Assert.ThrowsExactly<OperationCanceledException>(() =>
+            ContentDerivedIdentity.DeriveUuidUrnFromStream("scope/1", stream, canceled.Token));
+        Assert.AreEqual(0L, stream.Position);
+    }
+
+    private sealed class ThreeByteReadStream(byte[] bytes) : MemoryStream(bytes, writable: false)
+    {
+        public override int Read(Span<byte> buffer) => base.Read(buffer[..Math.Min(3, buffer.Length)]);
+    }
+
 }

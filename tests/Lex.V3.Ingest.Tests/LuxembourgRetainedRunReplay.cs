@@ -33,8 +33,7 @@ internal static class LuxembourgRetainedRunReplay
         IReadOnlyList<string> assertionFamilyKeys, IReadOnlyList<string> relationFamilyKeys, string? expectedManifestation)
     {
         Assert.IsNotNull(result.ScopeManifestReceipt);
-        var finalBytes = await CustodyRestore.ReadByDigestCheckedAsync(store,
-            result.ScopeManifestReceipt.Reference.ContentSha256, CancellationToken.None);
+        var finalBytes = await ReadScopeBytesAsync(store, result.ScopeManifestReceipt.Reference.ContentSha256);
         using var manifest = JsonDocument.Parse(finalBytes);
         var indexes = new Dictionary<string, (SourceArtifactRef Ref, JsonElement Json)>(StringComparer.Ordinal);
         foreach (var artifact in manifest.RootElement.GetProperty("ordered_evidence_artifacts").EnumerateArray())
@@ -58,8 +57,8 @@ internal static class LuxembourgRetainedRunReplay
             CollectionAssert.Contains(citedDeliveries, key,
                 $"The retained rights index must name the delivery of family '{key}'; it names {string.Join(", ", citedDeliveries)}.");
 
-        var acquisitionBytes = await CustodyRestore.ReadByDigestCheckedAsync(store,
-            inFile.Json.GetProperty("acquisitionManifestContentSha256").GetString()!, CancellationToken.None);
+        var acquisitionBytes = await ReadScopeBytesAsync(store,
+            inFile.Json.GetProperty("acquisitionManifestContentSha256").GetString()!);
         var acquisitionRef = JsonSerializer.Deserialize<SourceArtifactRef>(inFile.Json.GetProperty("acquisitionManifestRef"))!;
         Assert.AreEqual(acquisitionRef.Sha256, ScopeManifestCanonicalWriter.ComputeManifestSha256(acquisitionBytes.Span));
         var run = profile.Snapshot.ObservationRef;
@@ -125,6 +124,23 @@ internal static class LuxembourgRetainedRunReplay
         var finalRef = result.CorpusRecordSet!.Set.ManifestRef;
         VerifiedScopeManifest.ParseAndVerify(finalRef, finalBytes.Span, resolver);
     }
+    // Test replay may materialize its bounded fixture document to compare complete bytes. The
+    // production scope reader consumes the checked stream and never performs this concatenation.
+    private static async Task<ReadOnlyMemory<byte>> ReadScopeBytesAsync(ICustodyStore store, string digest)
+    {
+        var retained = await CustodyRestore.ReadByDigestCheckedAsync(store, digest, CancellationToken.None);
+        using var root = JsonDocument.Parse(retained);
+        if (root.RootElement.GetProperty("schema").GetString() != ChunkedDerivedArtifact.Schema)
+            return retained;
+        var artifact = await ChunkedDerivedArtifact.OpenAsync(store, digest, "lex-lu-scope-manifest/1", CancellationToken.None);
+        using var stream = artifact.OpenRead();
+        using var bytes = new MemoryStream();
+        await stream.CopyToAsync(bytes);
+        var result = bytes.ToArray();
+        Assert.AreEqual(artifact.CanonicalSha256, ScopeManifestCanonicalWriter.ComputeManifestSha256(result));
+        return result;
+    }
+
     internal static async IAsyncEnumerable<JsonElement> ReadObservationRowsAsync(ICustodyStore store, JsonElement root)
     {
         if (root.GetProperty("schema").GetString() == LegacyRightsIndexSchema)
