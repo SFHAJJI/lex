@@ -780,6 +780,34 @@ export async function realMountRuns(apiOutput, mount, options, browser, liveRoot
   return runs;
 }
 
+/**
+ * What each of the eight steps must show on the fixture mount (`journey-mount.json`), as `[step name,
+ * expected]`: every page answers, with the texts the fixture's one work gives it.
+ */
+export function fixtureMountExpectations(journeyMount) {
+  const { coverage, search, dossier, reading, history, compare, radar, export: exporting } = JOURNEY_STEPS;
+  return [
+    ["coverage", { step: coverage, state: "success", corpusSha256: journeyMount.corpus_sha256, indexSha256: journeyMount.index_sha256 }],
+    ["search", { step: search, state: "success", texts: [`“${SEARCH_PHRASE}” in fra: 4 with the exact phrase, 1 with every word, in 1 work.`, "art_15 in", "The first hits in the stated order, not the best hits."] }],
+    ["dossier", { step: dossier, state: "success", texts: [journeyMount.work_key, "1 state, from 2024-02-01 to 2024-02-01.", "What this dossier does not hold"] }],
+    ["reading", { step: reading, state: "success", texts: ["the state applying from 2024-02-01", "49 articles quoted", "Art. 15.", "Text served under agreed_same_run_cc_by"] }],
+    ["history", { step: history, state: "success", texts: [`${HISTORY_ANCHOR} in loi-1991-08-10-n3`, "Carried by 1 held state, from 2024-02-01", "first held wording"] }],
+    ["compare", { step: compare, state: "success", texts: [`loi-1991-08-10-n3: ${READING_DATE} against ${READING_DATE}.`, "The same version applied on both dates."] }],
+    ["radar", { step: radar, state: "success", texts: [`${READING_DATE} to ${READING_DATE}: 1 state of 1 work, of 1 held.`, "not compared: the first state this index holds"] }],
+    ["export", { step: exporting, state: "success", texts: ["1 article pinned: 1 exported with text, 0 excluded.", EXPORT_WATERMARK, "Text served under agreed_same_run_cc_by."] }],
+  ];
+}
+
+/** The eight steps against the fixture mount, each held to `fixtureMountExpectations`. */
+export async function fixtureMountRuns(apiOutput, mount, options, browser, liveRoot) {
+  const journeyMount = JSON.parse(await readFile(join(mount, "journey-mount.json"), "utf8"));
+  const runs = [];
+  for (const [name, expected] of fixtureMountExpectations(journeyMount)) {
+    runs.push([`${name}, with the fixture mount`, await run(apiOutput, mount, { ...options, ...expected }, browser, liveRoot)]);
+  }
+  return runs;
+}
+
 async function main(argv) {
   const argument = (name) => {
     const index = argv.indexOf(name);
@@ -797,25 +825,15 @@ async function main(argv) {
   const browser = await findBrowser();
   const servedByApi = argv.includes("--served-by-api");
   const keyboard = argv.includes("--keyboard");
-  const { coverage, search, dossier, reading, history, compare, radar, export: exporting } = JOURNEY_STEPS;
-  const results = realMount ? await realMountRuns(apiOutput, mount, { servedByApi, keyboard }, browser, liveRoot) : [
-    ["coverage, with the fixture mount", await run(apiOutput, mount, { servedByApi, keyboard, step: coverage, state: "success", corpusSha256: journeyMount.corpus_sha256, indexSha256: journeyMount.index_sha256 }, browser, liveRoot)],
-    ["coverage, with no mount", await run(apiOutput, null, { servedByApi, keyboard, step: coverage, state: "refusal", refusalCode: "no_corpus_mounted" }, browser, liveRoot)],
-    ["search, with the fixture mount", await run(apiOutput, mount, { servedByApi, keyboard, step: search, state: "success", texts: [`“${SEARCH_PHRASE}” in fra: 4 with the exact phrase, 1 with every word, in 1 work.`, "art_15 in", "The first hits in the stated order, not the best hits."] }, browser, liveRoot)],
-    ["search, with no mount", await run(apiOutput, null, { servedByApi, keyboard, step: search, state: "refusal", refusalCode: "no_corpus_mounted" }, browser, liveRoot)],
-    ["dossier, with the fixture mount", await run(apiOutput, mount, { servedByApi, keyboard, step: dossier, state: "success", texts: [journeyMount.work_key, "1 state, from 2024-02-01 to 2024-02-01.", "What this dossier does not hold"] }, browser, liveRoot)],
-    ["dossier, with no mount", await run(apiOutput, null, { servedByApi, keyboard, step: dossier, state: "refusal", refusalCode: "no_corpus_mounted" }, browser, liveRoot)],
-    ["reading, with the fixture mount", await run(apiOutput, mount, { servedByApi, keyboard, step: reading, state: "success", texts: ["the state applying from 2024-02-01", "49 articles quoted", "Art. 15.", "Text served under agreed_same_run_cc_by"] }, browser, liveRoot)],
-    ["reading, with no mount", await run(apiOutput, null, { servedByApi, keyboard, step: reading, state: "refusal", refusalCode: "no_corpus_mounted" }, browser, liveRoot)],
-    ["history, with the fixture mount", await run(apiOutput, mount, { servedByApi, keyboard, step: history, state: "success", texts: [`${HISTORY_ANCHOR} in loi-1991-08-10-n3`, "Carried by 1 held state, from 2024-02-01", "first held wording"] }, browser, liveRoot)],
-    ["history, with no mount", await run(apiOutput, null, { servedByApi, keyboard, step: history, state: "refusal", refusalCode: "no_corpus_mounted" }, browser, liveRoot)],
-    ["compare, with the fixture mount", await run(apiOutput, mount, { servedByApi, keyboard, step: compare, state: "success", texts: [`loi-1991-08-10-n3: ${READING_DATE} against ${READING_DATE}.`, "The same version applied on both dates."] }, browser, liveRoot)],
-    ["compare, with no mount", await run(apiOutput, null, { servedByApi, keyboard, step: compare, state: "refusal", refusalCode: "no_corpus_mounted" }, browser, liveRoot)],
-    ["radar, with the fixture mount", await run(apiOutput, mount, { servedByApi, keyboard, step: radar, state: "success", texts: [`${READING_DATE} to ${READING_DATE}: 1 state of 1 work, of 1 held.`, "not compared: the first state this index holds"] }, browser, liveRoot)],
-    ["radar, with no mount", await run(apiOutput, null, { servedByApi, keyboard, step: radar, state: "refusal", refusalCode: "no_corpus_mounted" }, browser, liveRoot)],
-    ["export, with the fixture mount", await run(apiOutput, mount, { servedByApi, keyboard, step: exporting, state: "success", texts: ["1 article pinned: 1 exported with text, 0 excluded.", EXPORT_WATERMARK, "Text served under agreed_same_run_cc_by."] }, browser, liveRoot)],
-    ["export, with no mount", await run(apiOutput, null, { servedByApi, keyboard, step: exporting, state: "refusal", refusalCode: "no_corpus_mounted" }, browser, liveRoot)],
-  ];
+  const results = [];
+  if (realMount) results.push(...await realMountRuns(apiOutput, mount, { servedByApi, keyboard }, browser, liveRoot));
+  else {
+    // Each step with the fixture mount, then with no mount, where every page shows the refusal card.
+    for (const [name, expected] of fixtureMountExpectations(journeyMount)) {
+      results.push([`${name}, with the fixture mount`, await run(apiOutput, mount, { servedByApi, keyboard, ...expected }, browser, liveRoot)]);
+      results.push([`${name}, with no mount`, await run(apiOutput, null, { servedByApi, keyboard, step: expected.step, state: "refusal", refusalCode: "no_corpus_mounted" }, browser, liveRoot)]);
+    }
+  }
   let failed = false;
   for (const [label, { observed, failures }] of results) {
     const toApi = observed.requests.filter((request) => new URL(request.url).pathname.startsWith("/api/")).length;

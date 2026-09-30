@@ -26,6 +26,39 @@ ineligible, language-out-of-scope, invalid-package and escaped refusal detail. R
 and green exact-head CI are required before merge. The full EU retry remains subject to its
 storage allowance; cited custody and evidence are preserved.
 
+## Corpus record-set canonical streaming and readback (Codex, 2026-09-30)
+
+The full Luxembourg path still creates a complete corpus record set. Its canonical writer used
+a whole MemoryStream/ToArray copy, and independent readback added a full UTF-8 string and another
+canonical buffer. Reversible driver decision: write records through an incremental domain hash
+and reopen through a strict stream reader. Preserve field order, newline, digest, destination
+prefix and caller stream ownership. Flush at record boundaries after64KiB pending, allowing
+one-record overshoot; this is not a fixed bound on arbitrary records.
+
+The new reader checks the original digest before strict UTF-8, uses the same typed constructors,
+compares canonical output against a fresh read, requires EOF and pins the final digest. Both
+inline custody reader and writer wrap existing retained arrays when possible. Independent
+readback still constructs a new typed record set; it does not trust a graph from the writer.
+
+Validation: clean solution build (0warnings/errors,100.31s); required fast3,080passed plus one
+platform skip (64.133s); all40 affected CorpusRecordSetWriter and EU/LU/V3 FirstMount ingest tests
+passed (49.780s). Seven new regressions cover a3,000-record nonseekable destination, independent
+hash/readback, destination prefix, short reads/ownership, wrong digest/noncanonical/UTF-8/EOF,
+typed ordinal invariants, canonical substitution and stream preconditions. Existing fixture
+byte/digest pins remain unchanged. Independent reflection confirms211guarded types, with only
+ParseAndVerifyStream added to VerifiedCorpusRecordSet's global/per-type construction pins.
+
+The required Claude review returned MERGE at a4d6fbc9 with no material defect. It reproduced
+the clean build, fast suite and all 40 affected tests. It passed 52 tests with broader readback
+and lineage coverage, and compared readers over 15,039 inputs with zero disagreements (247
+accepted by both). A 5,000-record set also produced
+identical canonical output. The one follow-up uses the persistence MemoryStream backing memory
+instead of ToArray, documents partial output/flush on failure, and refreshes through merged824.
+Repair validation passed build/fast (3,083 plus one skip)/40 affected ingest; #827 merged at
+21:10 UTC after green exact-head CI. Persistence still buffers one complete
+canonical set and retains reopened bytes; typed records/completion also remain. Chunked record-set
+persistence and measured downstream resources remain required before full Luxembourg. No full
+population-fit claim, publisher traffic or production operation follows this change.
 ## DATA review and fresh population evidence (Codex, 2026-09-30)
 
 The required Claude review of #824 at99a8e29d returned MERGE, with no blocking finding.
@@ -451,11 +484,11 @@ CI evidence are recorded in the pull request before merge.
 
 ## Heads
 
-- `v3/integration`: `baccee96` (2026-09-30, PR #821 merged). Build 45 s. Fast lane
-  (`eng/test-fast.ps1`): 3,067 tests, 3,066 pass, 1 skipped (PR #798's validation). Ingest suite: green on CI for PR #760
+- `v3/integration`: `efdf0d5c` (2026-09-30, PR #826 merged). Build 45 s. Fast lane
+  (`eng/test-fast.ps1`): 3,074 tests, 3,073 pass, 1 skipped (the review of PR #826). Ingest suite: green on CI for PR #760
   (the CI `dotnet` job runs the whole solution on every pull request, about 7 min on the runner;
-  green for PR #821);
-  locally about 15 min. 961 web tests pass. The web job's "browser debugger never answered" failures
+  green for PR #826);
+  locally about 15 min. 970 web tests pass. The web job's "browser debugger never answered" failures
   (keyboard-walk, and paint-check since #811) are fixed by PR #822: each browser binds its own
   debugging port (`launchBrowser`) instead of a random one another browser starting at the same
   moment could hold.
@@ -683,7 +716,7 @@ schema's `parameters` shape, and whose call runs the same dispatch the REST rout
 endpoint test proves it for all twenty-three. The launch-contract line "REST and MCP derive identical
 envelopes from the registry" is the owner's to tick.
 
-Web: 41 React components, 961 tests. Preview screens render fixtures. The V3 Luxembourg search
+Web: 41 React components, 970 tests. Preview screens render fixtures. The V3 Luxembourg search
 answer has a reader (PR #771). The answer census now samples `search` five ways from the real handler:
 - a phrase with 4 strict hits and 1 relaxed hit;
 - the same phrase one hit per page, with its cursor;
@@ -1315,10 +1348,53 @@ The image run and its zero-traffic probes (PR #825).
 - A deployment requirement it found: the image needs a writable, private `/tmp`. Mounting a corpus
   verifies its index into a private temporary file (`LuxembourgIndexBuilder`, deleted on dispose). On
   a fully read-only filesystem the mount is refused and every answer is `no_corpus_mounted`.
-- Not yet reproducible: two builds of the same sources and mount give different manifest digests
-  (the app layer differs). The launch contract asks byte-stable derivation of the corpus and
-  indexes, which the build report proves, and not of the image; making the image reproducible is a
-  release-pipeline item.
+- Not yet reproducible then: two builds of the same sources and mount gave different manifest
+  digests. PR #826 makes the image reproducible (below).
+
+The reproducible image (PR #826).
+- Why two builds differed: every file in them was byte for byte the same, but the .NET SDK stamps
+  the config's `created`, the app layer's history entry and every file's modification time with the
+  time it ran, and names each pax header after its own process id.
+- `image-reproducible.mjs` rewrites only what the SDK stamped:
+  - the app layer is written again from the same entries (path, kind, mode, owner, bytes), sorted by
+    path, each at the source date, with no pax header unless a path needs one, and uncompressed;
+  - the config's `created` and the app layer's history entry take the source date;
+  - the manifest and index name the new blobs; the base layers are kept byte for byte.
+  The source date is `SOURCE_DATE_EPOCH`, else the commit's time, and the report records the commit
+  and whether the tree was clean. The repack refuses an entry that is neither a file nor a directory,
+  a layer that does not match its diff id, and a history that does not map one entry to each layer.
+- Each build restores and compiles every project afresh in `artifacts/image-rehearsal` inside the
+  checkout, emptied before and after, with source paths mapped (`ContinuousIntegrationBuild`). The
+  first layout gave each build its own directory outside the checkout, and the rehearsal's own check
+  refused it: 8 assemblies and symbol files differed, because the compiler writes the paths of its
+  generated sources and symbol files into each assembly and maps only paths under the checkout.
+- The rehearsal builds the image a second time from scratch and requires the same manifest digest.
+  `reproductionFailures` names what differs, down to the files; `--no-reproduce` skips the check.
+- On the real bounded mount, at a clean commit: manifest
+  `sha256:600bbf106510837f779fe86fb2c7a6ce4595979a80dd568641bc5c4fe0c3766c`, reproduced by the second
+  build. A second run on the same commit gave the same digest: four builds, one image. The checks
+  passed (25 live page files, 6 mount files, the report's 5 digests) and the signature verified. All
+  8 probes pass against the reproducible image, and the work directory, the artifacts directory and
+  the container were removed.
+
+The image probed on the journey's fixture mount (PR #828). On the real bounded mount six of the
+eight screens refuse, because Luxembourg holds no state there. The answers themselves (hits, quotes,
+citations) had been probed only against the host API, never against the image.
+- The rehearsal takes the fixture mount `V3JourneyMountTests` writes (`journey-mount.json`) as well
+  as a real mount. `mountReport` reads either:
+  - the fixture's Luxembourg index is held to the file digest it names;
+  - its corpus digest is a snapshot digest (what the coverage answer shows), not the file's bytes, so
+    the corpus file is held byte for byte to the mount, and its snapshot digest to the coverage probe.
+- On a fixture mount the probes are the journey's fixture steps (`fixtureMountRuns`, the expectations
+  `journey.mjs` now keeps in one list, `fixtureMountExpectations`): every screen must answer with the
+  texts the fixture's one work gives it, and every citation must verify.
+- Against the image: all eight screens answer, and 105 citations verify through the image's own
+  `verify`, each `digest_matches`: reading 50, export 50, and one each for search, dossier, history,
+  compare and radar. The image was reproduced by its second build
+  (`sha256:441853466bf9945f7f61db5ea0ae86f97aecf11c6dc26e8f8c5de215aca3b044` at that commit), and
+  everything was removed.
+- A mutation: a fixture manifest naming another corpus digest fails the coverage probe ("the page
+  does not show the mounted digest").
 
 The live export composer and its journey step (PR #789), the eighth screen. `dist-live/export.html`
 has its own bundle `client-live-export.js`.
@@ -1865,8 +1941,10 @@ has not yet run; the bounded first mount above is complete.
 7. Release pipeline: build, sign, image, zero-traffic deploy, probes. Then acceptance and promotion.
    The steps that need no production credential are the web lane's since 2026-09-30 (the owner's proxy).
    PR #821: one command builds, verifies, rehearsal-signs and removes the one-server image; PR #825:
-   it runs the image (WSL, read-only root, private /tmp) and probes the eight screens against it. Next:
-   a reproducible image, and the probes against the full fixture mount. Production signing,
+   it runs the image (WSL, read-only root, private /tmp) and probes the eight screens against it; PR
+   #826: the image is reproducible (two builds from scratch, one manifest digest); PR #828: the
+   image probed on the journey's fixture mount, where every screen answers and 105 citations verify.
+   The credential-free release steps are rehearsed end to end. Production signing,
    credentials and deployment stay with the owner.
 8. Machine gates (launch contract, Evaluation): the temporal, refusal and retrieval case sets run
    against the real handler, and all three shuffled controls are caught (PRs #767 and #768). The
@@ -1935,6 +2013,14 @@ Each is the driver's call under ruling 7 and can be reversed by a later pull req
   - Running the image comes next: the image's own filesystem under this machine's WSL Ubuntu, with
     no install and no daemon. The alternative, a CI runner with Docker, is kept for when a hosted
     run is wanted.
+- The reproducible image (PR #826):
+  - The app layer is stored uncompressed, so its digest depends only on its tar and not on the
+    compressor a machine has (gzip output depends on the zlib build). The cost is size: 17 MB against
+    the SDK's 6 MB gzip on the bounded mount. A pinned compressor can replace it if the full corpus
+    makes the size matter.
+  - The source date is the commit's time (the `SOURCE_DATE_EPOCH` convention): the image says when
+    its sources were committed, not when it was built. The product reads no file modification time
+    (`V3WebRoot` holds the pages in memory), so the choice changes no answer.
 
 - The refusal card's payload rows keep the payload's own member names (`requested_identifier`,
   `asserts_absence_of_law`) as their labels, in every interface language (PR #809). They are the

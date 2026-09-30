@@ -1092,7 +1092,7 @@ public sealed class VerifiedCorpusRecordSet
 
     /// <summary>
     /// The verified set's own content. Reading it needs no InternalsVisibleTo; holding an instance
-    /// is itself the evidence that <see cref="ParseAndVerify"/> ran to completion, because the
+    /// is itself evidence that a canonical reader completed verification, because the
     /// constructor above is the only door onto this type and it stays internal.
     /// </summary>
     public CorpusRecordSet Set { get; }
@@ -1138,6 +1138,94 @@ public sealed class VerifiedCorpusRecordSet
 
         return new VerifiedCorpusRecordSet(set);
     }
+
+    /// <summary>
+    /// Verifies a readable, seekable canonical stream positioned at zero. Checks its original
+    /// domain-separated digest and strict UTF-8, admits the same typed record-set invariants,
+    /// and compares canonical output against a fresh read with a final digest pin. Leaves the
+    /// caller's stream open. The typed records remain materialized; byte checks use fixed buffers.
+    /// </summary>
+    public static VerifiedCorpusRecordSet ParseAndVerifyStream(
+        SourceArtifactRef artifactRef, Stream canonicalStream)
+    {
+        ArgumentNullException.ThrowIfNull(artifactRef);
+        ArgumentNullException.ThrowIfNull(canonicalStream);
+        if (!canonicalStream.CanRead || !canonicalStream.CanSeek || canonicalStream.Position != 0)
+        {
+            throw new ArgumentException(
+                "The corpus record set stream must be readable, seekable and positioned at zero.",
+                nameof(canonicalStream));
+        }
+        var observedDigest = CorpusRecordSetCanonicalWriter.ComputeSetSha256(canonicalStream, out var validUtf8);
+        if (!string.Equals(observedDigest, artifactRef.Sha256, StringComparison.Ordinal))
+        {
+            throw new ArgumentException("The corpus record set bytes do not match their artifact reference.",
+                nameof(canonicalStream));
+        }
+        if (!validUtf8)
+        {
+            throw new ArgumentException("The corpus record set stream is not strict UTF-8.", nameof(canonicalStream));
+        }
+        canonicalStream.Position = 0;
+        CorpusRecordSet set;
+        try
+        {
+            set = ContractJson.DeserializeFromStream<CorpusRecordSet>(canonicalStream);
+        }
+        catch (JsonException exception)
+        {
+            throw new ArgumentException("The corpus record set bytes are not one valid typed canonical document.",
+                nameof(canonicalStream), exception);
+        }
+        canonicalStream.Position = 0;
+        using var comparison = new CanonicalComparisonStream(canonicalStream);
+        var rebuiltDigest = CorpusRecordSetCanonicalWriter.Write(comparison, set);
+        comparison.RequireEnd();
+        if (!string.Equals(rebuiltDigest, artifactRef.Sha256, StringComparison.Ordinal))
+        {
+            throw new ArgumentException("The corpus record set changed between verification passes.",
+                nameof(canonicalStream));
+        }
+        return new VerifiedCorpusRecordSet(set);
+    }
+
+    private sealed class CanonicalComparisonStream(Stream expected) : Stream
+    {
+        public override bool CanRead => false;
+        public override bool CanSeek => false;
+        public override bool CanWrite => true;
+        public override long Length => throw new NotSupportedException();
+        public override long Position
+        {
+            get => throw new NotSupportedException();
+            set => throw new NotSupportedException();
+        }
+        public override void Flush() { }
+        public override int Read(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+        public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
+        public override void SetLength(long value) => throw new NotSupportedException();
+        public override void Write(byte[] buffer, int offset, int count) => Write(buffer.AsSpan(offset, count));
+        public override void Write(ReadOnlySpan<byte> buffer)
+        {
+            Span<byte> actual = stackalloc byte[4096];
+            while (!buffer.IsEmpty)
+            {
+                var count = expected.Read(actual[..Math.Min(actual.Length, buffer.Length)]);
+                if (count == 0 || !buffer[..count].SequenceEqual(actual[..count]))
+                {
+                    throw NonCanonical();
+                }
+                buffer = buffer[count..];
+            }
+        }
+        public void RequireEnd()
+        {
+            if (expected.ReadByte() != -1) throw NonCanonical();
+        }
+        private static ArgumentException NonCanonical() => new(
+            "The corpus record set is not its exact canonical typed representation.", "canonicalStream");
+    }
+
 }
 
 /// <summary>
@@ -1153,6 +1241,10 @@ public static class CorpusRecordSetCanonicalWriter
 {
     private const string SetDomain = "lex-v3-source-corpus-record-set/1\n";
 
+    /// <summary>
+    /// Writes and flushes incrementally, leaving the caller's stream open. A failure can leave
+    /// partial canonical bytes in the destination; callers must discard that incomplete output.
+    /// </summary>
     public static string Write(Stream destination, CorpusRecordSet set)
     {
         ArgumentNullException.ThrowIfNull(destination);
@@ -1163,8 +1255,8 @@ public static class CorpusRecordSetCanonicalWriter
                 "The canonical destination must be writable.", nameof(destination));
         }
 
-        using var buffer = new MemoryStream();
-        using (var writer = NewWriter(buffer))
+        using var output = new CanonicalSetWriteStream(destination);
+        using (var writer = NewWriter(output))
         {
             writer.WriteStartObject();
             writer.WriteString("schema", CorpusRecordSetSchemaIds.Set);
@@ -1177,6 +1269,8 @@ public static class CorpusRecordSetCanonicalWriter
             foreach (var record in set.Records)
             {
                 CorpusRecordCanonicalWriter.WriteRecord(writer, record);
+                // A record can exceed the threshold; do not accumulate the entire population.
+                if (writer.BytesPending >= 64 * 1024) writer.Flush();
             }
 
             writer.WriteEndArray();
@@ -1184,10 +1278,8 @@ public static class CorpusRecordSetCanonicalWriter
             writer.Flush();
         }
 
-        buffer.WriteByte((byte)'\n');
-        var bytes = buffer.ToArray();
-        destination.Write(bytes, 0, bytes.Length);
-        return ComputeSetSha256(bytes);
+        output.WriteByte((byte)'\n');
+        return output.CompleteDigest();
     }
 
     /// <summary>
@@ -1204,6 +1296,87 @@ public static class CorpusRecordSetCanonicalWriter
         Span<byte> digest = stackalloc byte[SHA256.HashSizeInBytes];
         incremental.GetHashAndReset(digest);
         return Convert.ToHexStringLower(digest);
+    }
+
+    internal static string ComputeSetSha256(Stream canonicalStream, out bool validUtf8)
+    {
+        using var hashing = new CanonicalSetWriteStream(Stream.Null);
+        var decoder = new UTF8Encoding(false, true).GetDecoder();
+        Span<byte> buffer = stackalloc byte[4096];
+        Span<char> characters = stackalloc char[4098];
+        validUtf8 = true;
+        int read;
+        while ((read = canonicalStream.Read(buffer)) != 0)
+        {
+            hashing.Write(buffer[..read]);
+            if (!validUtf8) continue;
+            try { _ = decoder.GetChars(buffer[..read], characters, flush: false); }
+            catch (DecoderFallbackException) { validUtf8 = false; }
+        }
+        if (validUtf8)
+        {
+            try { _ = decoder.GetChars(ReadOnlySpan<byte>.Empty, characters, flush: true); }
+            catch (DecoderFallbackException) { validUtf8 = false; }
+        }
+        return hashing.CompleteDigest();
+    }
+
+    // The domain participates in the digest only. The caller receives canonical bytes and keeps
+    // its stream; neither seeking nor reading the destination is required.
+    private sealed class CanonicalSetWriteStream : Stream
+    {
+        private readonly Stream _destination;
+        private readonly IncrementalHash _hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
+        private bool _completed;
+
+        public CanonicalSetWriteStream(Stream destination)
+        {
+            _destination = destination;
+            _hash.AppendData(Encoding.ASCII.GetBytes(SetDomain));
+        }
+
+        public string CompleteDigest()
+        {
+            ObjectDisposedException.ThrowIf(_completed, this);
+            _completed = true;
+            return Convert.ToHexStringLower(_hash.GetHashAndReset());
+        }
+
+        public override bool CanRead => false;
+        public override bool CanSeek => false;
+        public override bool CanWrite => !_completed;
+        public override long Length => throw new NotSupportedException();
+        public override long Position
+        {
+            get => throw new NotSupportedException();
+            set => throw new NotSupportedException();
+        }
+        public override void Flush() => _destination.Flush();
+        public override int Read(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+        public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
+        public override void SetLength(long value) => throw new NotSupportedException();
+        public override void Write(byte[] buffer, int offset, int count) => Write(buffer.AsSpan(offset, count));
+        public override void Write(ReadOnlySpan<byte> buffer)
+        {
+            ObjectDisposedException.ThrowIf(_completed, this);
+            _destination.Write(buffer);
+            _hash.AppendData(buffer);
+        }
+        public override void WriteByte(byte value)
+        {
+            Span<byte> one = stackalloc byte[1];
+            one[0] = value;
+            Write(one);
+        }
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing)
+            {
+                _completed = true;
+                _hash.Dispose();
+            }
+            base.Dispose(disposing);
+        }
     }
 
     private static Utf8JsonWriter NewWriter(Stream output) => new(

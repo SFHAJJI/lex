@@ -66,19 +66,20 @@ while True:
 
 /**
  * Unpacks an OCI image layout archive into a root filesystem in WSL, layer by layer in the manifest's
- * order, removing what each layer's whiteouts remove. Answers the run directory's WSL path.
+ * order, removing what each layer's whiteouts remove. A layer may be gzipped (the base image's) or a
+ * plain tar (the reproducible app layer); tar reads either. Answers the run directory's WSL path.
  */
 export function unpackImage({ archive, layers }) {
   const run = `/tmp/lex-image-run-${randomUUID()}`;
   const steps = layers.map((digest) => {
     const blob = `${run}/layout/blobs/sha256/${digest.replace(/^sha256:/, "")}`;
     return `
-tar -tzf ${blob} | grep -E '(^|/)\\.wh\\.\\.wh\\.\\.opq$' && { echo "an opaque whiteout is not supported"; exit 4; } || true
-tar -tzf ${blob} | grep -E '(^|/)\\.wh\\.[^/]+$' | while read -r marker; do
+tar -tf ${blob} | grep -E '(^|/)\\.wh\\.\\.wh\\.\\.opq$' && { echo "an opaque whiteout is not supported"; exit 4; } || true
+tar -tf ${blob} | grep -E '(^|/)\\.wh\\.[^/]+$' | while read -r marker; do
   target="$(dirname "$marker")/$(basename "$marker" | sed 's/^\\.wh\\.//')"
   rm -rf "${run}/rootfs/$target"
 done
-tar -xzf ${blob} -C ${run}/rootfs --numeric-owner --exclude='.wh.*'`;
+tar -xf ${blob} -C ${run}/rootfs --numeric-owner --exclude='.wh.*'`;
   }).join("\n");
   wsl(`set -e
 mkdir -p ${run}/layout ${run}/rootfs

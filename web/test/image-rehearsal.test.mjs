@@ -7,10 +7,13 @@
 
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import test from "node:test";
 import { gzipSync } from "node:zlib";
 
-import { REHEARSAL_IDENTITY, imageFailures, readOciImage, readTar, rehearsalSignatureFailures, signRehearsal } from "../scripts/image-rehearsal.mjs";
+import { REHEARSAL_IDENTITY, imageFailures, mountReport, readOciImage, readTar, rehearsalSignatureFailures, signRehearsal } from "../scripts/image-rehearsal.mjs";
 
 const sha256 = (bytes) => createHash("sha256").update(bytes).digest("hex");
 
@@ -69,7 +72,7 @@ function image({ user = "1654", entrypoint = ["dotnet", "/app/Lex.V3.Api.dll"], 
   const manifest = Buffer.from(JSON.stringify({
     schemaVersion: 2,
     config: { digest: `sha256:${sha256(config)}`, size: config.length },
-    layers: [{ digest: `sha256:${sha256(layer)}`, size: layer.length }],
+    layers: [{ mediaType: "application/vnd.oci.image.layer.v1.tar+gzip", digest: `sha256:${sha256(layer)}`, size: layer.length }],
   }));
   const blobs = new Map([[`sha256:${sha256(manifest)}`, manifest], [`sha256:${sha256(config)}`, config], [`sha256:${sha256(layer)}`, layer]]);
   const index = { manifests: [{ digest: `sha256:${sha256(manifest)}`, size: manifest.length }] };
@@ -140,4 +143,22 @@ test("the rehearsal signature holds for its image's manifest digest, and for not
   assert.ok(rehearsalSignatureFailures({ ...signed, payload, manifestDigest: `sha256:${"f".repeat(64)}` }).includes("the signature does not verify over its payload with this key"), "a payload changed after signing fails");
   const other = signRehearsal({ manifestDigest: digest, reference: "lex-v3-rehearsal:rehearsal" });
   assert.ok(rehearsalSignatureFailures({ ...signed, publicKeyPem: other.publicKeyPem, manifestDigest: digest }).includes("the signature does not verify over its payload with this key"), "another key fails");
+});
+
+test("a real mount is held to its build report; the journey's fixture mount to the digests it names", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "lex-mount-report-"));
+  try {
+    const report = { corpus: { Sha256: "c".repeat(64) }, files: [{ Name: "lex-corpus-6.json", Sha256: "c".repeat(64) }] };
+    await writeFile(join(directory, "build-report.json"), JSON.stringify(report));
+    assert.deepEqual(await mountReport(directory), { kind: "real", report });
+
+    await writeFile(join(directory, "journey-mount.json"), JSON.stringify({ schema: "lex-v3-journey-mount/1", corpus_sha256: "a".repeat(64), index_sha256: "b".repeat(64), work_key: "w" }));
+    const fixture = await mountReport(directory);
+    assert.equal(fixture.kind, "fixture", "a mount with journey-mount.json is the fixture mount");
+    assert.deepEqual(fixture.report.files, [{ Name: "luxembourg-index.sqlite3", Sha256: "b".repeat(64) }],
+      "the index is held to the file digest the fixture names; the corpus digest it names is a snapshot digest, not its file's");
+    assert.equal(fixture.report.corpus.Sha256, "a".repeat(64), "the snapshot digest the coverage probe holds the page to");
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
 });
