@@ -1,0 +1,8 @@
+Exact completed EN/FRA canary index, 2026-09-30 18:18 UTC.
+Source: C:/lex-v3/bounded-en-fr-canary-20260930-1/v3-corpus/
+Merged runtime: b0923cb0 (PR814). Index schema2; 198 articles across ENG/FRA.
+Index1417216bytes SHA25677f38ce099bf4adb1c1d42d4af2a6682b6d0bfd24a5b70111cf949afcd98ecc0.
+Capability499bytes SHA25697fa74ef5d47ce7c07320cbfede2463d654e713e0d3a873dae1441bf8b259c22.
+Logical corpus SHA256cd36530f70421ab2efe543a31871266ac64823d75b419155c95806c7ec04dae5.
+Index compressed losslessly with gzip; test pins decompressed bytes. No publisher request in test.
+This fixture has no Formex source coordinates and cannot supply them through a legacy reader.

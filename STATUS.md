@@ -3,6 +3,30 @@
 Updated 2026-09-30 by the driver. This file replaces the issue-comment ledgers. It is rewritten in
 every pull request that changes what is served, what is next or what is blocked.
 
+## EU article source coordinates (Codex draft, 2026-10-01)
+
+Reversible driver decision: preserve the admitted Formex package SHA-256 and the checked
+original request URI alongside each indexed article. Schema3 binds these rows in the logical
+index digest and requires one source row per article on reopen. The coordinate reader returns
+work, expression, article, wording date, language and package entry with those source fields.
+The package digest identifies the complete ZIP; it is not an article-text or XHTML body digest.
+This slice does not expose new public API operations or claim custody replay.
+
+Existing schema2 mounts keep their exact schema/logical-hash verification and search/resolve
+behavior. They report source-coordinate support as unavailable. The draft includes an exact
+compressed fixture from the completed bilingual canary (198 articles; original index digest
+77f38ce099bf4adb1c1d42d4af2a6682b6d0bfd24a5b70111cf949afcd98ecc0), plus
+producer-binding and hostile source/version tests. Compilation, the new deterministic byte pin,
+required fast/ingest validation and cross-family review remain pending behind the live EU job.
+
+Population checkpoint: PR835 merged7144666c after review and greenCI36790548675. The bounded
+32023R2854 census used10/20requests and independently reopened5rows; all6retained routes used
+attempt0, so no live retry was exercised. FullEU retry3 is active from frozen40004a69 in
+C:/lex-v3/eu-population-20261001-1 with82seeds,20kwire and the LU a439 companion. Its unchanged
+4,999,959,422-byte allowance passed before/after freeze. This is not yet a completed population.
+The offline combined LU graph diagnostic is queued next; full Luxembourg still needs measured
+whole-process/storage sizing. No production signing, credentials, deployment or promotion.
+
 ## Luxembourg identity canonical output (Codex, 2026-09-30)
 
 The previous observed-object identity writer built a full canonical buffer and copied it again for the
