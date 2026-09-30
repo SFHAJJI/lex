@@ -44,13 +44,14 @@ public sealed class EvaluationCardTests
         var ndcg = new EvaluationCardGateRow(EvaluationGateNames.AnchorNdcgAt10, GateVerdict.Pass, 1.0, null, 1.0, 9);
         Assert.IsFalse(ndcg.IsRate);
         Assert.IsNull(ndcg.Wilson95, "a graded mean is not a share of cases");
-        Assert.IsNull(ndcg.RuleOfThreeFailureUpper95);
+        Assert.AreEqual(0.3333, ndcg.RuleOfThreeFailureUpper95, "a mean nDCG of 1.0 is every case ranked perfectly: zero failures in n");
+        Assert.IsNull(new EvaluationCardGateRow(EvaluationGateNames.AnchorNdcgAt10, GateVerdict.Fail, 0.9, null, 1.0, 9).RuleOfThreeFailureUpper95);
 
         var unmeasured = new EvaluationCardGateRow(
             EvaluationGateNames.NoHitAccuracy, GateVerdict.NotMeasured, null, NotMeasuredReason.StratumBelowFloor, 1.0, 1);
         Assert.IsNull(unmeasured.Wilson95);
         Assert.IsNull(unmeasured.RuleOfThreeFailureUpper95);
-        var node = Gate(EvaluationCard.Render("t", [new EvaluationCardSet("s", "a", "d", 1, [unmeasured], Caught)]), 0, 0);
+        var node = Gate(EvaluationCard.Render("t", [new EvaluationCardSet("s", "a", "d", 1, [unmeasured], Caught, "d", 1, null)]), 0, 0);
         Assert.AreEqual("not_measured", (string?)node["verdict"]);
         Assert.AreEqual("stratum_below_floor", (string?)node["not_measured_reason"]);
         Assert.IsNull(node["value"]);
@@ -106,7 +107,7 @@ public sealed class EvaluationCardTests
     public void EveryStatisticalRowIsNotYetLabelledAndTheControlsArePrintedLikeAnyOtherNumber()
     {
         var gate = new EvaluationCardGateRow(EvaluationGateNames.VerdictExactMatch, GateVerdict.Pass, 1.0, null, 1.0, 4);
-        var card = EvaluationCard.Render("the fixture", [new EvaluationCardSet("refusal", "served", "d", 4, [gate], Caught)]);
+        var card = EvaluationCard.Render("the fixture", [new EvaluationCardSet("refusal", "served", "d", 4, [gate], Caught, "d", 4, null)]);
 
         Assert.AreEqual(EvaluationCard.Schema, (string?)card["schema"]);
         var rows = card["statistical_rows"]!.AsArray();
@@ -123,6 +124,29 @@ public sealed class EvaluationCardTests
         var node = Gate(card, 0, 0);
         Assert.AreEqual(0.75, (double?)node["rule_of_three_failure_upper_95"], "a pass on four cases bounds the failure rate only at 3 / 4");
         CollectionAssert.AreEqual(new double?[] { 0.5101, 1.0 }, node["wilson_95"]!.AsArray().Select(static value => (double?)value).ToArray());
+    }
+
+    [TestMethod]
+    public void AControlOverFewerCasesThanItsSetNamesThoseCasesAndSaysWhy()
+    {
+        TemporalCase At(string id, int day) => new(id, "w", new DateOnly(2024, 1, 1).AddDays(day), "s");
+        TemporalCase[] cases = [At("a", 0), At("b", 1), At("latest", 2)];
+        var report = TemporalEvaluation.Evaluate(cases, static (_, _) => "s", floor: 1);
+        var control = new ControlResult(ShuffledControlNames.DateShuffle, ControlVerdict.CaughtTheShuffle, "broke", 3);
+
+        var set = EvaluationCard.Temporal("arm", cases, report, cases[..2], control, "the latest case cannot break");
+        Assert.AreEqual(3, set.CaseCount);
+        Assert.AreEqual(2, set.ControlCaseCount);
+        Assert.AreNotEqual(set.CasesSha256, set.ControlCasesSha256);
+        var node = EvaluationCard.Render("t", [set])["shuffled_controls"]!.AsArray().Single()!;
+        Assert.AreEqual(2, (int?)node["cases"]);
+        Assert.AreEqual("the latest case cannot break", (string?)node["note"]);
+
+        Assert.ThrowsExactly<ArgumentException>(() => EvaluationCard.Temporal("arm", cases, report, cases[..2], control, null));
+        Assert.ThrowsExactly<ArgumentException>(() => EvaluationCard.Temporal("arm", cases, report, [At("elsewhere", 9)], control, "x"));
+        var whole = EvaluationCard.Temporal("arm", cases, report, cases, control, "ignored when the control covers the set");
+        Assert.AreEqual(whole.CasesSha256, whole.ControlCasesSha256);
+        Assert.IsNull(whole.ControlNote);
     }
 
     private static JsonObject Gate(JsonObject card, int set, int gate) =>

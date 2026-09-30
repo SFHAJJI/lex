@@ -339,17 +339,22 @@ Evaluation card (PR #769): `EvaluationCard` in `Lex.V3.Contracts.Evaluation` pri
 gates as the card of `36-ideal-evaluation.md` section 6 describes, as far as the launch contract
 asks. Each case set and arm is a row with its case count and `cases_sha256`. Each gate carries
 its verdict (`pass`, `fail` or `not_measured` with its reason), value, threshold and stratum `n`.
-Every rate carries its Wilson 95 percent interval, and every rate of exactly 1.0 carries the
+Every rate carries its Wilson 95 percent interval, and every value of exactly 1.0 carries the
 rule-of-three bound on the failure rate, so a pass on a small set is never oversold. Anchor nDCG
-is a graded mean and carries neither. Each shuffled control result is printed like any other
-number. The 8 statistical rows (D1 to D8 of section 2) are all `not_yet_labelled` under Decision
-92, and the negative-results register holds its standing entry (a ranked lane is not shipped, and
-search refuses a ranked mode `retrieval_mode_unavailable`). The machine gates test renders the
+is a graded mean, so it has no Wilson interval. Its 1.0 still carries the bound: each case scores
+at most 1, so 1.0 means every case ranked perfectly. Each shuffled control result is printed like
+any other number, with the count and digest of the cases it ran over. The date control runs over
+6 of the 8 temporal cases, and its note says why: the cases at or after the latest held state
+cannot break under a forward shift. The 8 statistical rows (D1 to D8 of section 2) are all
+`not_yet_labelled` under Decision 92. The negative-results register holds its standing entry:
+hybrid retrieval is not activated, and search refuses a ranked mode `retrieval_mode_unavailable`.
+What would reverse that is the activation gate as section 2 (D6) and section 1.4 (repair 6) state
+it. The machine gates test renders the
 card to `schemas/v3-platform/evaluation-card.json` (census, `V3_RENDER_EVALUATION_CARD=1`) and
 compares it byte for byte on every run. The fixture's cases give the same card run after run. As
 held today: temporal 8 cases per arm, Wilson [0.6756, 1], rule of three 0.375; refusal 18 cases,
-[0.8241, 1], 0.1667; retrieval nDCG n 9, no-hit n 4 ([0.5101, 1], 0.75), resolver n 3
-([0.4385, 1], 1, which bounds nothing). The card is not published and is not a release card: it
+[0.8241, 1], 0.1667; retrieval nDCG n 9 (rule of three 0.3333), no-hit n 4 ([0.5101, 1], 0.75),
+resolver n 3 ([0.4385, 1], 1, which bounds nothing). The card is not published and is not a release card: it
 has no release, image or snapshot identity (item 7) and no signature. Where it is published is an
 owner question below.
 

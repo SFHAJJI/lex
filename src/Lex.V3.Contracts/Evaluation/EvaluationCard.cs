@@ -9,8 +9,9 @@ namespace Lex.V3.Contracts.Evaluation;
 /// <summary>
 /// One gate as the evaluation card prints it: its verdict in the closed vocabulary, its value or the typed reason it has
 /// none, the threshold it was read against and the number of cases in its stratum. A rate (every gate but anchor nDCG,
-/// which is a graded mean) also carries its Wilson 95 percent interval, and a rate of exactly 1.0 the rule-of-three
-/// bound on the failure rate, so that a pass on a small set is never oversold (<c>36-ideal-evaluation.md</c> section 5).
+/// which is a graded mean) also carries its Wilson 95 percent interval, and every value of exactly 1.0 carries the
+/// rule-of-three bound on the failure rate, so that a pass on a small set is never oversold
+/// (<c>36-ideal-evaluation.md</c> sections 5 and 6).
 /// </summary>
 public sealed record EvaluationCardGateRow(
     string Gate, GateVerdict Verdict, double? Value, NotMeasuredReason? Reason, double Threshold, int N)
@@ -24,17 +25,30 @@ public sealed record EvaluationCardGateRow(
             ? EvaluationCard.Wilson95((int)Math.Round(value * N), N)
             : null;
 
-    /// <summary>The rule-of-three 95 percent upper bound on the failure rate of a rate measured at exactly 1.0, or null.</summary>
+    /// <summary>
+    /// The rule-of-three 95 percent upper bound on the failure rate of a value of exactly 1.0, or null. For anchor nDCG
+    /// each case scores at most 1, so a mean of 1.0 is every case ranked perfectly, and the bound is on the share of cases
+    /// not ranked perfectly.
+    /// </summary>
     public double? RuleOfThreeFailureUpper95 =>
-        IsRate && Value == 1.0 && N > 0 ? EvaluationCard.RuleOfThreeUpper95(N) : null;
+        Value == 1.0 && N > 0 ? EvaluationCard.RuleOfThreeUpper95(N) : null;
 }
 
 /// <summary>
-/// One case set run through one arm: the gates it produced, the shuffled control run over it, and the digest of the
-/// cases, so a card names exactly what it measured.
+/// One case set run through one arm: the gates it produced and the digest of its cases, and the shuffled control with
+/// the digest of the cases that control ran over (which can be fewer, as the note then says), so a card names exactly
+/// what each of its numbers measured.
 /// </summary>
 public sealed record EvaluationCardSet(
-    string Set, string Arm, string CasesSha256, int CaseCount, IReadOnlyList<EvaluationCardGateRow> Gates, ControlResult Control);
+    string Set,
+    string Arm,
+    string CasesSha256,
+    int CaseCount,
+    IReadOnlyList<EvaluationCardGateRow> Gates,
+    ControlResult Control,
+    string ControlCasesSha256,
+    int ControlCaseCount,
+    string? ControlNote);
 
 /// <summary>
 /// The evaluation card of <c>36-ideal-evaluation.md</c> section 6, as far as the launch contract asks for it: every
@@ -78,19 +92,34 @@ public static class EvaluationCard
         return Round(Math.Min(1.0, 3.0 / n));
     }
 
-    /// <summary>A temporal case set through one arm: <c>temporal_exactness</c> over every case.</summary>
-    public static EvaluationCardSet Temporal(string arm, IReadOnlyList<TemporalCase> cases, TemporalReport report, ControlResult control)
+    /// <summary>
+    /// A temporal case set through one arm: <c>temporal_exactness</c> over every case, and the date control over
+    /// <paramref name="controlCases"/>, with <paramref name="controlNote"/> saying why any case is outside it.
+    /// </summary>
+    public static EvaluationCardSet Temporal(
+        string arm,
+        IReadOnlyList<TemporalCase> cases,
+        TemporalReport report,
+        IReadOnlyList<TemporalCase> controlCases,
+        ControlResult control,
+        string? controlNote)
     {
         ArgumentNullException.ThrowIfNull(cases);
         ArgumentNullException.ThrowIfNull(report);
-        var digest = Digest(new JsonArray(cases.Select(static value => (JsonNode)new JsonObject
+        ArgumentNullException.ThrowIfNull(controlCases);
+        if (controlCases.Any(value => !cases.Contains(value)))
         {
-            ["case_id"] = value.CaseId,
-            ["work_key"] = value.WorkKey,
-            ["as_of"] = value.AsOf.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
-            ["expected_state_key"] = value.ExpectedStateKey,
-        }).ToArray()));
-        return new EvaluationCardSet("temporal", arm, digest, cases.Count, [Row(report.Gate, report.Exactness, 1.0, cases.Count)], control);
+            throw new ArgumentException("A control runs over cases of its own set.", nameof(controlCases));
+        }
+
+        if (controlCases.Count < cases.Count && string.IsNullOrWhiteSpace(controlNote))
+        {
+            throw new ArgumentException("A control over fewer cases than its set says why.", nameof(controlNote));
+        }
+
+        return new EvaluationCardSet(
+            "temporal", arm, TemporalDigest(cases), cases.Count, [Row(report.Gate, report.Exactness, 1.0, cases.Count)],
+            control, TemporalDigest(controlCases), controlCases.Count, controlCases.Count < cases.Count ? controlNote : null);
     }
 
     /// <summary>A verdict (refusal) case set through one arm: <c>verdict_exact_match</c> over every case.</summary>
@@ -103,7 +132,8 @@ public static class EvaluationCard
             ["case_id"] = value.CaseId,
             ["gold_verdict"] = value.GoldVerdict,
         }).ToArray()));
-        return new EvaluationCardSet(set, arm, digest, cases.Count, [Row(report.Gate, report.ExactMatch, 1.0, cases.Count)], control);
+        return new EvaluationCardSet(
+            set, arm, digest, cases.Count, [Row(report.Gate, report.ExactMatch, 1.0, cases.Count)], control, digest, cases.Count, null);
     }
 
     /// <summary>
@@ -139,7 +169,10 @@ public static class EvaluationCard
                 RowOf(EvaluationGateNames.NoHitAccuracy, report.NoHitAccuracy, 1.0, cases.Count(RetrievalEvaluation.IsNoHit)),
                 RowOf(EvaluationGateNames.ResolverExactness, report.ResolverExactness, 1.0, cases.Count(RetrievalEvaluation.IsExactIdentifier)),
             ],
-            control);
+            control,
+            digest,
+            cases.Count,
+            null);
     }
 
     /// <summary>
@@ -178,15 +211,7 @@ public static class EvaluationCard
                 ["cases_sha256"] = set.CasesSha256,
                 ["gates"] = new JsonArray(set.Gates.Select(static row => (JsonNode)GateNode(row)).ToArray()),
             }).ToArray()),
-            ["shuffled_controls"] = new JsonArray(sets.Select(static set => (JsonNode)new JsonObject
-            {
-                ["control"] = set.Control.Name,
-                ["set"] = set.Set,
-                ["arm"] = set.Arm,
-                ["verdict"] = ControlVerdictName(set.Control.Verdict),
-                ["reason"] = set.Control.Reason,
-                ["seed"] = set.Control.Seed,
-            }).ToArray()),
+            ["shuffled_controls"] = new JsonArray(sets.Select(static set => (JsonNode)ControlNode(set)).ToArray()),
             ["statistical_rows"] = new JsonArray(StatisticalRows.Select(static row => (JsonNode)new JsonObject
             {
                 ["dataset"] = row.Dataset,
@@ -198,11 +223,11 @@ public static class EvaluationCard
             ["negative_results"] = new JsonArray(
                 new JsonObject
                 {
-                    ["hypothesis"] = "a ranked lane (BM25 or hybrid) serves better provisions than the strict and relaxed keyword lanes",
-                    ["dataset"] = "D1, not yet labelled",
+                    ["hypothesis"] = "hybrid retrieval serves the lay population it claims to serve better than the keyword lanes",
+                    ["dataset"] = "D6 crosswalk gold, not yet labelled",
                     ["result"] = "not measured",
-                    ["decision"] = "not shipped: search serves only the keyword lanes and refuses a ranked mode with retrieval_mode_unavailable",
-                    ["what_would_reverse_it"] = "D1 labelled and frozen, and a ranked lane beating the keyword lanes by more than D1's MDE under the paired permutation test",
+                    ["decision"] = "not shipped: hybrid retrieval is not activated; search serves only the keyword lanes and refuses a ranked mode with retrieval_mode_unavailable",
+                    ["what_would_reverse_it"] = "passing the activation gate as 36-ideal-evaluation.md states it: on D6, recall@10 of the governing anchor at least 0.7 in English and German and at least 0.5 in Luxembourgish, with the keyword baseline printed beside it and the interpretation banner correct 100 percent of the time (section 2), and the published benchmark's conceptual nDCG +10 percent uplift condition (section 1.4, repair 6)",
                 }),
         };
     }
@@ -213,6 +238,36 @@ public static class EvaluationCard
         ArgumentNullException.ThrowIfNull(card);
         return card.ToJsonString(new JsonSerializerOptions { WriteIndented = true }).Replace("\r\n", "\n", StringComparison.Ordinal) + "\n";
     }
+
+    private static JsonObject ControlNode(EvaluationCardSet set)
+    {
+        var node = new JsonObject
+        {
+            ["control"] = set.Control.Name,
+            ["set"] = set.Set,
+            ["arm"] = set.Arm,
+            ["verdict"] = ControlVerdictName(set.Control.Verdict),
+            ["reason"] = set.Control.Reason,
+            ["seed"] = set.Control.Seed,
+            ["cases"] = set.ControlCaseCount,
+            ["cases_sha256"] = set.ControlCasesSha256,
+        };
+        if (set.ControlNote is { } note)
+        {
+            node["note"] = note;
+        }
+
+        return node;
+    }
+
+    private static string TemporalDigest(IReadOnlyList<TemporalCase> cases) =>
+        Digest(new JsonArray(cases.Select(static value => (JsonNode)new JsonObject
+        {
+            ["case_id"] = value.CaseId,
+            ["work_key"] = value.WorkKey,
+            ["as_of"] = value.AsOf.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
+            ["expected_state_key"] = value.ExpectedStateKey,
+        }).ToArray()));
 
     private static EvaluationCardGateRow Row(GateResult gate, MetricResult metric, double threshold, int n) =>
         new(gate.Name, gate.Verdict, metric.Value, metric.Reason, threshold, n);

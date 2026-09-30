@@ -150,7 +150,9 @@ public sealed class V3MachineGatesTests
             var control = ShuffledControls.DateShuffle(
                 beforeLatest, arm, (set, run) => TemporalEvaluation.Evaluate(set, run, floor: set.Count), [Spacing], Seed);
             Assert.AreEqual(ControlVerdict.CaughtTheShuffle, control.Verdict, $"{name}: {control.Reason}");
-            sets.Add(EvaluationCard.Temporal(name, cases, report, control));
+            sets.Add(EvaluationCard.Temporal(
+                name, cases, report, beforeLatest, control,
+                "the cases at or after the latest held state are outside the control by its design: a forward shift leaves the same state applying, so they cannot break"));
         }
 
         return [.. sets];

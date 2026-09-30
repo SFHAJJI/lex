@@ -113,7 +113,8 @@
           "verdict": "pass",
           "value": 1,
           "threshold": 1,
-          "n": 9
+          "n": 9,
+          "rule_of_three_failure_upper_95": 0.3333
         },
         {
           "gate": "no_hit_accuracy",
@@ -149,7 +150,10 @@
       "arm": "as_of in fra",
       "verdict": "caught_the_shuffle",
       "reason": "every expectation broke after the shift",
-      "seed": 20260930
+      "seed": 20260930,
+      "cases": 6,
+      "cases_sha256": "d83e30881e28eb2b0602e8eb9d2f55d87ae2652d5dbada04ad49449b28fb351a",
+      "note": "the cases at or after the latest held state are outside the control by its design: a forward shift leaves the same state applying, so they cannot break"
     },
     {
       "control": "date_shuffle",
@@ -157,7 +161,10 @@
       "arm": "as_of with no language",
       "verdict": "caught_the_shuffle",
       "reason": "every expectation broke after the shift",
-      "seed": 20260930
+      "seed": 20260930,
+      "cases": 6,
+      "cases_sha256": "d83e30881e28eb2b0602e8eb9d2f55d87ae2652d5dbada04ad49449b28fb351a",
+      "note": "the cases at or after the latest held state are outside the control by its design: a forward shift leaves the same state applying, so they cannot break"
     },
     {
       "control": "date_shuffle",
@@ -165,7 +172,10 @@
       "arm": "in_force_on in fra",
       "verdict": "caught_the_shuffle",
       "reason": "every expectation broke after the shift",
-      "seed": 20260930
+      "seed": 20260930,
+      "cases": 6,
+      "cases_sha256": "d83e30881e28eb2b0602e8eb9d2f55d87ae2652d5dbada04ad49449b28fb351a",
+      "note": "the cases at or after the latest held state are outside the control by its design: a forward shift leaves the same state applying, so they cannot break"
     },
     {
       "control": "date_shuffle",
@@ -173,7 +183,10 @@
       "arm": "in_force_on with no language",
       "verdict": "caught_the_shuffle",
       "reason": "every expectation broke after the shift",
-      "seed": 20260930
+      "seed": 20260930,
+      "cases": 6,
+      "cases_sha256": "d83e30881e28eb2b0602e8eb9d2f55d87ae2652d5dbada04ad49449b28fb351a",
+      "note": "the cases at or after the latest held state are outside the control by its design: a forward shift leaves the same state applying, so they cannot break"
     },
     {
       "control": "verdict_shuffle",
@@ -181,7 +194,9 @@
       "arm": "the served operations",
       "verdict": "caught_the_shuffle",
       "reason": "exact match fell to 0, within the base-rate ceiling 0.1667",
-      "seed": 20260930
+      "seed": 20260930,
+      "cases": 18,
+      "cases_sha256": "dbe197e014d09cb9fa9a69c13e30877f06fd072975a2792cfb987d39c423d0fc"
     },
     {
       "control": "qrels_shuffle",
@@ -189,7 +204,9 @@
       "arm": "search and verify",
       "verdict": "caught_the_shuffle",
       "reason": "anchor nDCG@10 fell to 0 and both invariant gates stopped passing",
-      "seed": 20260930
+      "seed": 20260930,
+      "cases": 13,
+      "cases_sha256": "c2a3574dbfec83ed6f5cb58bf1f9f28dc84b66189960831559026c1012698bc0"
     }
   ],
   "statistical_rows": [
@@ -252,11 +269,11 @@
   ],
   "negative_results": [
     {
-      "hypothesis": "a ranked lane (BM25 or hybrid) serves better provisions than the strict and relaxed keyword lanes",
-      "dataset": "D1, not yet labelled",
+      "hypothesis": "hybrid retrieval serves the lay population it claims to serve better than the keyword lanes",
+      "dataset": "D6 crosswalk gold, not yet labelled",
       "result": "not measured",
-      "decision": "not shipped: search serves only the keyword lanes and refuses a ranked mode with retrieval_mode_unavailable",
-      "what_would_reverse_it": "D1 labelled and frozen, and a ranked lane beating the keyword lanes by more than D1\u0027s MDE under the paired permutation test"
+      "decision": "not shipped: hybrid retrieval is not activated; search serves only the keyword lanes and refuses a ranked mode with retrieval_mode_unavailable",
+      "what_would_reverse_it": "passing the activation gate as 36-ideal-evaluation.md states it: on D6, recall@10 of the governing anchor at least 0.7 in English and German and at least 0.5 in Luxembourgish, with the keyword baseline printed beside it and the interpretation banner correct 100 percent of the time (section 2), and the published benchmark\u0027s conceptual nDCG \u002B10 percent uplift condition (section 1.4, repair 6)"
     }
   ]
 }
