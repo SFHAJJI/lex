@@ -153,6 +153,70 @@ public sealed partial class LuxembourgQueryExecutionAdapterTests
             value.State != LuxembourgRelationFamilyAcquisitionState.AcquiredComplete));
     }
 
+    [TestMethod]
+    [DataRow("S", false)]
+    [DataRow("A", false)]
+    [DataRow("S", true)]
+    [DataRow("A", true)]
+    public async Task CustodyChangedOrCancelledAfterPreliminaryVerificationCannotPublishObservations(string set, bool cancel)
+    {
+        var (profile, _, enumerationRef) = BuildProfile();
+        var (families, members, subjects) = DisjointScopeRequests();
+        var bytes = System.Text.Encoding.UTF8.GetBytes(set == "S"
+            ? LuxembourgAcquisitionTestFixture.RowsJson(subjects[0])
+            : AssertionRowsJson((subjects[0], TypeDocumentPredicate, TypeDocumentPrefix + "LOI", "iri", "", ""),
+                (subjects[0], RdfType, JoluxAct, "iri", "", "")));
+        var digest = CustodyDigest.Of(bytes);
+        var baselineStore = new ReadCountingCustodyStore(new InMemoryCustodyStore(), digest, int.MaxValue);
+        var baseline = new LuxembourgQueryExecutionAdapter(baselineStore,
+            NewExecutor(baselineStore, DisjointScopeHandler(families, subjects)), profile);
+        var successful = await baseline.RunScopedAsync(families, members,
+            new PermissiveEvidenceResolver(enumerationRef), DocumentFetchRendererSource(),
+            LuxembourgAcquisitionTestFixture.TestWireBudget(), CancellationToken.None);
+        Assert.IsNull(successful.Refusal, successful.Refusal?.Detail);
+        Assert.IsTrue(baselineStore.ReadCount >= 2);
+
+        // Corrupt only the final page reopen, after enumeration and preliminary verification.
+        using var cancellation = new CancellationTokenSource();
+        var corruptStore = new ReadCountingCustodyStore(new InMemoryCustodyStore(), digest, baselineStore.ReadCount,
+            cancel ? cancellation.Cancel : null);
+        var adapter = new LuxembourgQueryExecutionAdapter(corruptStore,
+            NewExecutor(corruptStore, DisjointScopeHandler(families, subjects)), profile);
+        if (cancel)
+        {
+            await Assert.ThrowsAsync<OperationCanceledException>(() => adapter.RunScopedAsync(families, members,
+                new PermissiveEvidenceResolver(enumerationRef), DocumentFetchRendererSource(),
+                LuxembourgAcquisitionTestFixture.TestWireBudget(), cancellation.Token));
+            return;
+        }
+        var refused = await adapter.RunScopedAsync(families, members,
+            new PermissiveEvidenceResolver(enumerationRef), DocumentFetchRendererSource(),
+            LuxembourgAcquisitionTestFixture.TestWireBudget(), cancellation.Token);
+        Assert.IsTrue(refused.FamilyOutcomes.All(value => value.Kind == LuxembourgFamilyEnumerationOutcomeKind.Proven));
+        Assert.IsNotNull(refused.Refusal);
+        Assert.AreEqual(LuxembourgQueryExecutionRefusal.ResourceObservationRowsNotVerified, refused.Refusal.Code);
+        Assert.IsNull(refused.ScopeManifestReceipt);
+        Assert.IsNull(refused.CorpusRecordSet);
+    }
+
+    private sealed class ReadCountingCustodyStore(ICustodyStore inner, string targetDigest, int corruptAtRead, Action? onTargetRead = null) : ICustodyStore
+    {
+        public int ReadCount { get; private set; }
+        public Task<DurableBlobWriteReceipt> CreateAsync(ReadOnlyMemory<byte> bytes, CustodyClass custodyClass,
+            CancellationToken cancellationToken) => inner.CreateAsync(bytes, custodyClass, cancellationToken);
+        public Task<ReadOnlyMemory<byte>> ReadAsync(DurableBlobRef reference, CancellationToken cancellationToken) =>
+            ReadByDigestAsync(reference.ContentSha256, cancellationToken);
+        public Task<ReadOnlyMemory<byte>> ReadByDigestAsync(string contentSha256, CancellationToken cancellationToken)
+        {
+            if (contentSha256 == targetDigest && ++ReadCount == corruptAtRead)
+            {
+                if (onTargetRead is null) return Task.FromResult<ReadOnlyMemory<byte>>("corrupted"u8.ToArray());
+                onTargetRead();
+            }
+            return inner.ReadByDigestAsync(contentSha256, cancellationToken);
+        }
+    }
+
     private sealed class LaterCorruptingCustodyStore(ICustodyStore inner, string targetDigest) : ICustodyStore
     {
         public bool Corrupt { get; set; }

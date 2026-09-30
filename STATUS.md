@@ -3,6 +3,40 @@
 Updated 2026-09-30 by the driver. This file replaces the issue-comment ledgers. It is rewritten in
 every pull request that changes what is served, what is next or what is blocked.
 
+## Luxembourg population memory prerequisite (Codex, 2026-09-30)
+
+The four bounded COUNT diagnostics now cover all assertion ranges: 9,672,378 A rows
+across 29 measured leaves. Together with prior S=1,986,924 and G=221,852, the estimated
+page-enumeration floor is 31,456 requests before split COUNTs, vocabulary, bodies and retries.
+These independently timed counts size the run; they do not prove a delivered population.
+Evidence: `C:\lex-v3\lu-assertion-sizing-20260930-4\observations\summary.json` and
+`C:\lex-v3\lanes\lu-population-sizing-progress.json`.
+
+A zero-network measurement of the actual parser retained 205,171,464 managed bytes for
+100,035 rows from one digest-checked 65-row page (about 2,051 bytes per row). Applying
+that sample size to A alone gives about 19.8 GB, before typed observations or indexes.
+The sample is not a population-wide memory bound. Available commit was about 5 GB.
+Reversible driver decision: reduce raw-row retention before launching the complete run.
+
+The adapter verifies every S/A leaf before semantic decoding, then reopens and verifies each
+leaf again while accumulating typed observations. Raw S/A unions are no longer retained.
+Subject and predicate strings reuse the exact census/vocabulary values. Adaptive acquisition
+targets at most 100,000 rows per leaf; cover and repeated-pass proof requirements are unchanged.
+The relation union, typed observations, rights-index serialization and downstream outputs still
+consume memory. Full-run resource sizing remains pending; no complete population is claimed.
+A second offline diagnostic called the actual semantic builder with independently parsed copies
+of that page and a synthetic nine-subject census: 100,035 input rows retained 26,399,312 managed
+bytes in typed results, with zero surviving sampled raw rows. The observation JSON alone measured
+108,361,751 bytes. This repeated small sample is not representative of all subject counts or graph
+shapes, and excludes proof, relation and downstream allocations. The single rights-index byte array
+is a further scaling constraint to address before a full Luxembourg launch.
+Evidence: `C:\lex-v3\lanes\lu-typed-memory-sample\measurement.json` (0 requests).
+
+Validation: clean full solution build; fast 3,066 passed/1 platform skip. Broader Luxembourg/census
+checks passed 833 and skipped 12, with one stale construction-surface pin. Its independently
+reflected diff adds exactly the new private async builder; both focused construction tests passed. S/A changed
+custody and cancellation after preliminary verification are covered.
+
 ## EU Formex language scope (Codex, 2026-09-30)
 
 Reversible driver decision under standing order section 5: enumerate Formex manifestations for
