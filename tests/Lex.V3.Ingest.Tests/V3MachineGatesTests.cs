@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Text;
 using System.Text.Json;
 using Lex.V3.Api;
 using Lex.V3.Contracts.Evaluation;
@@ -45,6 +46,12 @@ public sealed class V3MachineGatesTests
 {
     private const int Spacing = 400;
     private const ulong Seed = 20260930;
+    private const string CardRenderVariable = "V3_RENDER_EVALUATION_CARD";
+
+    private const string CardTarget =
+        "the test fixture's Luxembourg mount, asked through the real handler (THE MOUNT IS A FIXTURE): the machine gates " +
+        "prove the served path, not a corpus. The cases are purpose-built evidence for the harness (Decision 92), and no " +
+        "release, image or snapshot identity exists yet (STATUS item 7), so this card is not a release card.";
 
     private static string Shift(string date, int days) =>
         DateOnly.ParseExact(date, "yyyy-MM-dd", CultureInfo.InvariantCulture).AddDays(days)
@@ -53,8 +60,49 @@ public sealed class V3MachineGatesTests
     private static DateOnly Day(string date) => DateOnly.ParseExact(date, "yyyy-MM-dd", CultureInfo.InvariantCulture);
 
     [TestMethod]
-    public async Task TheTemporalCaseSetPassesAtOneHundredPercentAndTheDateShiftControlCatchesAShiftedSet()
+    public async Task TheTemporalCaseSetPassesAtOneHundredPercentAndTheDateShiftControlCatchesAShiftedSet() =>
+        await RunTemporalGateAsync();
+
+    [TestMethod]
+    public async Task TheRefusalCaseSetPassesAtOneHundredPercentAndTheVerdictShuffleControlCatchesAShuffledSet() =>
+        await RunRefusalGateAsync();
+
+    [TestMethod]
+    public async Task TheRetrievalCaseSetPassesEveryGateAndTheJudgmentsShuffleControlCatchesAShuffledSet() =>
+        await RunRetrievalGateAsync();
+
+    /// <summary>
+    /// The card the three gates print, held as a census: rendered only when <c>V3_RENDER_EVALUATION_CARD=1</c>, and
+    /// otherwise compared byte for byte, so a gate, a bound, a control result or a case that changes changes the card
+    /// in the same pull request.
+    /// </summary>
+    [TestMethod]
+    public async Task TheEvaluationCardIsWhatTheMachineGatesMeasureNow()
     {
+        EvaluationCardSet[] sets = [.. await RunTemporalGateAsync(), .. await RunRefusalGateAsync(), .. await RunRetrievalGateAsync()];
+        CollectionAssert.AreEquivalent(
+            new[] { ShuffledControlNames.DateShuffle, ShuffledControlNames.VerdictShuffle, ShuffledControlNames.QrelsShuffle },
+            sets.Select(static set => set.Control.Name).Distinct().ToArray(),
+            "the card shows each of the three shuffled controls.");
+        Assert.IsTrue(sets.All(static set => set.Control.Verdict == ControlVerdict.CaughtTheShuffle));
+        Assert.IsTrue(sets.SelectMany(static set => set.Gates).All(static gate => gate.Verdict == GateVerdict.Pass));
+
+        var bytes = Encoding.UTF8.GetBytes(EvaluationCard.ToText(EvaluationCard.Render(CardTarget, sets)));
+        var path = Path.Combine(RepositoryRoot(), "schemas", "v3-platform", "evaluation-card.json");
+        if (Environment.GetEnvironmentVariable(CardRenderVariable) == "1")
+        {
+            await File.WriteAllBytesAsync(path, bytes);
+            Assert.Fail($"{CardRenderVariable} rendered {path} and did not verify it: run again without the variable, which is the only run that checks anything.");
+        }
+
+        Assert.IsTrue(File.Exists(path), "The evaluation card is missing: render it with " + CardRenderVariable + "=1 and commit it.");
+        var held = Encoding.UTF8.GetBytes((await File.ReadAllTextAsync(path)).Replace("\r\n", "\n", StringComparison.Ordinal));
+        CollectionAssert.AreEqual(bytes, held, "The evaluation card is not what the machine gates measure now.");
+    }
+
+    private static async Task<EvaluationCardSet[]> RunTemporalGateAsync()
+    {
+        var sets = new List<EvaluationCardSet>();
         // One work in three held dates: the fixture's own state, two states on one later date (ambiguous), and one
         // latest state held singly, so every region a date can fall in is represented.
         var fixture = await MountedFixture.CreateAsync();
@@ -102,11 +150,13 @@ public sealed class V3MachineGatesTests
             var control = ShuffledControls.DateShuffle(
                 beforeLatest, arm, (set, run) => TemporalEvaluation.Evaluate(set, run, floor: set.Count), [Spacing], Seed);
             Assert.AreEqual(ControlVerdict.CaughtTheShuffle, control.Verdict, $"{name}: {control.Reason}");
+            sets.Add(EvaluationCard.Temporal(name, cases, report, control));
         }
+
+        return [.. sets];
     }
 
-    [TestMethod]
-    public async Task TheRefusalCaseSetPassesAtOneHundredPercentAndTheVerdictShuffleControlCatchesAShuffledSet()
+    private static async Task<EvaluationCardSet[]> RunRefusalGateAsync()
     {
         // The main mount: two titled works, a later state with another rule profile, and two states on one date.
         var fixture = await MountedFixture.CreateAsync();
@@ -183,10 +233,10 @@ public sealed class V3MachineGatesTests
 
         var control = ShuffledControls.VerdictShuffle(cases, arm, (set, run) => VerdictEvaluation.Evaluate(set, run, floor: set.Count), Seed);
         Assert.AreEqual(ControlVerdict.CaughtTheShuffle, control.Verdict, control.Reason);
+        return [EvaluationCard.Verdict("refusal", "the served operations", cases, report, control)];
     }
 
-    [TestMethod]
-    public async Task TheRetrievalCaseSetPassesEveryGateAndTheJudgmentsShuffleControlCatchesAShuffledSet()
+    private static async Task<EvaluationCardSet[]> RunRetrievalGateAsync()
     {
         // Two works of one date, every article text written by the test: a few words each held by chosen articles,
         // and text that matches none of them everywhere else, so the judgments below are the corpus's own truth.
@@ -287,12 +337,13 @@ public sealed class V3MachineGatesTests
             $"{value.CaseId}: {string.Join(", ", arm(value.CaseId).Select(static item => $"{item.WorkKey}/{item.AnchorId}"))}"));
         Assert.AreEqual(1.0, report.AnchorNdcgAt10.Value, $"every search ranks its judged provisions as judged. {rankings}");
         Assert.AreEqual(1.0, report.NoHitAccuracy.Value, "every search that must find nothing finds nothing.");
-        Assert.AreEqual(1.0, report.ResolverExactness.Value, "every article anchor resolves to exactly its provision.");
+        Assert.AreEqual(1.0, report.ResolverExactness.Value, "every held article permalink is accepted under its own work.");
         Assert.IsTrue(report.Releases, string.Join("; ", report.Gates.Select(static gate => $"{gate.Name} {gate.Verdict}")));
 
         var control = ShuffledControls.QrelsShuffle(
             cases, arm, (set, run) => RetrievalEvaluation.Evaluate(set, run, Floor, ndcgThreshold: 1.0), Seed);
         Assert.AreEqual(ControlVerdict.CaughtTheShuffle, control.Verdict, control.Reason);
+        return [EvaluationCard.Retrieval("search and verify", cases, report, 1.0, control)];
     }
 
     private static JudgedAnchor Supporting(string workKey, string anchorId) =>
@@ -323,8 +374,7 @@ public sealed class V3MachineGatesTests
         return $"/lu-legilux/{workKey}/{date}--{states[0].GetProperty("state_sha256").GetString()}";
     }
 
-    /// <summary>The codes the refusal census records as produced by the served operations.</summary>
-    private static string[] ProducedCodes()
+    private static string RepositoryRoot()
     {
         var directory = new DirectoryInfo(AppContext.BaseDirectory);
         while (directory is not null && !File.Exists(Path.Combine(directory.FullName, "Lex.V3.slnx")))
@@ -332,8 +382,14 @@ public sealed class V3MachineGatesTests
             directory = directory.Parent;
         }
 
+        return directory?.FullName ?? throw new InvalidOperationException("The repository root holds Lex.V3.slnx.");
+    }
+
+    /// <summary>The codes the refusal census records as produced by the served operations.</summary>
+    private static string[] ProducedCodes()
+    {
         using var census = JsonDocument.Parse(File.ReadAllText(Path.Combine(
-            directory!.FullName, "schemas", "v3-platform", "refusal-payload-samples.json")));
+            RepositoryRoot(), "schemas", "v3-platform", "refusal-payload-samples.json")));
         return census.RootElement.GetProperty("produced").EnumerateArray()
             .Select(static row => row.GetProperty("code").GetString()!)
             .ToArray();
