@@ -39,8 +39,8 @@ export function searchTerms(query) {
  * reader may ask for, not a claim about what is held.
  */
 export const SEARCH_LANGUAGES = Object.freeze([
-  Object.freeze({ code: "fra", label: "French" }),
-  Object.freeze({ code: "deu", label: "German" }),
+  Object.freeze({ code: "fra", label: liveChrome().common.languageNames.fra }),
+  Object.freeze({ code: "deu", label: liveChrome().common.languageNames.deu }),
   Object.freeze({ code: "eng", label: "English" }),
 ]);
 

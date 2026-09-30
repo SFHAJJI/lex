@@ -197,7 +197,7 @@ export function ReadingForm({ onAsk, submitLabel = FORM.submit.reading }) {
         <input
           type="text"
           inputMode="numeric"
-          placeholder="yyyy-mm-dd"
+          placeholder={FORM.datePlaceholder}
           value={date}
           autoComplete="off"
           onChange={(event) => setDate(event.target.value)}

@@ -519,7 +519,12 @@ async function observe(browser, pageOrigin, step, { keyboard = false } = {}) {
   const profile = await mkdtemp(join(tmpdir(), "lex-journey-cdp-"));
   const chrome = spawn(browser, [
     "--headless=new", `--remote-debugging-port=${port}`, `--user-data-dir=${profile}`,
-    "--no-first-run", "--no-default-browser-check", "about:blank",
+    "--no-first-run", "--no-default-browser-check",
+    // No component or background downloads: a fresh profile per run otherwise leaves Chrome's component
+    // packages in the temporary directory, about 12 MB each, never removed (1,581 of them, 4.4 GB, by
+    // 2026-09-30).
+    "--disable-component-update", "--disable-background-networking",
+    "about:blank",
   ], { stdio: "ignore" });
   try {
     const session = await Session.open(await waitForDebugger(port));

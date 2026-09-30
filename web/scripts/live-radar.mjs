@@ -19,8 +19,8 @@ import { liveChrome } from "./live-chrome.mjs";
  * with `language_not_available`, naming the ones it does.
  */
 export const RADAR_LANGUAGES = Object.freeze([
-  Object.freeze({ code: "fra", label: "French" }),
-  Object.freeze({ code: "deu", label: "German" }),
+  Object.freeze({ code: "fra", label: liveChrome().common.languageNames.fra }),
+  Object.freeze({ code: "deu", label: liveChrome().common.languageNames.deu }),
   Object.freeze({ code: "eng", label: "English" }),
 ]);
 
