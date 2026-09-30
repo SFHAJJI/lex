@@ -5,11 +5,11 @@ every pull request that changes what is served, what is next or what is blocked.
 
 ## Heads
 
-- `v3/integration`: `fc7e9264` (2026-09-30, PR #763 merged). Build 45 s. Fast lane
+- `v3/integration`: `b06bf5f7` (2026-09-30, PR #764 merged). Build 45 s. Fast lane
   (`eng/test-fast.ps1`): 3,038 tests, 3,037 pass, 1 skipped. Ingest suite: green on CI for PR #760
   (the CI `dotnet` job runs the whole solution on every pull request, about 7 min on the runner;
-  green for PR #763);
-  locally about 15 min. 793 web tests pass. CI's web job can flake in `keyboard-walk.test.mjs`
+  green for PR #764);
+  locally about 15 min. 800 web tests pass. CI's web job can flake in `keyboard-walk.test.mjs`
   ("browser debugger never answered"); rerunning the failed job is the fix.
 - Driver: Claude Opus 5.5 since 2026-09-29 (the Fable 5.1 driver ran out of tokens on 2026-09-28
   after PR #757; the user default model is now `claude-opus-5-5`).
@@ -235,7 +235,19 @@ schema's `parameters` shape, and whose call runs the same dispatch the REST rout
 endpoint test proves it for all twenty-three. The launch-contract line "REST and MCP derive identical
 envelopes from the registry" is the owner's to tick.
 
-Web: 29 React components, 793 tests. Screens render fixtures; no page calls `/api/v3` yet. PR #764
+Web: 29 React components, 800 tests. Preview screens render fixtures. PR #765 builds the first live
+page, Trust and Coverage, into its own directory (`node scripts/build-live.mjs` writes
+`dist-live/`, gitignored, apart from the preview `dist/` and its gates): the loading state under a
+live banner (the synthetic banner's "describes no real legal record" would be false on a real mount;
+the live banner's wording is a driver draft before the owner's), hydrated by its own bundle
+(`client-live.js`, which embeds the census contract and nothing else of the census; the preview
+pages' `client.js` still carries no request). `scripts/serve-live.mjs` serves that directory and the
+API on one origin for a local journey: static files with `nosniff` and `no-store`, and exactly
+`POST /api/v3/{operation}` forwarded (no query string, case variant, deeper path, `/mcp` or other
+method), carrying the body and its media type and nothing about the caller (no cookie, user agent,
+referrer or forwarded address), a body over 1 MiB refused before it is forwarded, an unreachable API
+a `502` problem; the traversal guard is tested with raw requests, since `fetch` normalises dot
+segments. PR #764
 adds the first live screen as a component, `LiveCoverage` (Trust and Coverage): the server renders
 its loading state, the browser asks `coverage` with no parameters in an effect through the client
 module, and the answer is the `Coverage` page (read by `readCoverage`, so a served answer the reader
@@ -493,9 +505,10 @@ served list is pinned to the platform's own list in the coverage answer sample.
    `provenance`, `evidence_bundle` and `verify` wait on consolidation acquisition, an EU permalink
    grammar and the owner questions below.
 6. Wire the eight launch screens to `/api/v3`; journeys J1 to J8 in a real browser. PR #763: the
-   envelope reader and the client module; PR #764: the live Trust and Coverage component. Next: its
-   page and a build that embeds the census contract, a journey mount written by a test, and one
-   browser journey step against a local API process on the same origin. J1 to J8
+   envelope reader and the client module; PR #764: the live Trust and Coverage component; PR #765:
+   its page, the live build and the one-origin server. Next: a journey mount written by a test, and
+   one browser journey step (the page against a local `Lex.V3.Api` on that mount, through
+   `serve-live.mjs`, waiting on `data-answer-state`). J1 to J8
    exist only in the pre-V3 pack (`05-user-journeys.md`) and need restating as V3 steps.
 7. Release pipeline: build, sign, image, zero-traffic deploy, probes. Then acceptance and promotion.
 
