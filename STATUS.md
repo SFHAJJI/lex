@@ -2051,7 +2051,7 @@ Only money, legal or public claims, credentials and going live (ruling 7):
 - The corrigendum tripwire classifies a French corrigendum as `within_served_body_languages` while no
   French body is served (Decision 89 section 4). True once the French expressions land.
 
-## DATA draft: retain Formex package outcome diagnostics
+## DATA: retain Formex package outcome diagnostics
 
 The successful three-seed mount holds34EU XHTML members but admits only two Formex article
 expressions;32members report package_not_acquired. The mount's coarse Stage3 disposition omits
@@ -2067,3 +2067,13 @@ output, not proof or a new acquisition outcome. All out-of-scope-language outcom
 Tests extend real scripted population cases for acquired/ineligible/out-of-scope, annex rejection,
 malformed package and unexpected status; one new case checks refused totals and escaped detail.
 Build, required fast/affected ingest, review and CI remain pending while PR827 review runs.
+
+
+Formex diagnostic validation completed at a53ae771: clean Release build (93.27 s),
+`pwsh -File eng/test-fast.ps1` (3,076 passed, one platform skip), and all 29 affected
+EuFormexPackagePopulationProducer/EuFirstMountAcquisition ingest tests passed. Refused runs
+report unknown reconciliation totals as null; attempted enumeration remains an observed count.
+Tests cover acquired, language-out-of-scope, ineligible, invalid package, missing inventoried
+main body, acquisition failure and escaped refusal detail. Required Claude review and green
+exact-head CI remain merge gates. Full EU retry also requires the disk reserve in its plan;
+cited custody and evidence are preserved under the new disk standing order.
