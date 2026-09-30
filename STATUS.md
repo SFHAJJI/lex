@@ -657,7 +657,7 @@ CI evidence are recorded in the pull request before merge.
 
 ## Heads
 
-- `v3/integration`: `933fe8e3` (2026-10-01, PR #834 merged). Build 45 s. Fast lane
+- `v3/integration`: `4b5c943b` (2026-10-01, PR #838 merged). Build 45 s. Fast lane
   (`eng/test-fast.ps1`): 3,077 tests, 3,076 pass, 1 skipped (the review of PR #828). Ingest suite: green on CI for PR #760
   (the CI `dotnet` job runs the whole solution on every pull request, about 7 min on the runner;
   green for PR #834);
@@ -1886,6 +1886,43 @@ mount they are given.
 - Next slices: the refusal and retrieval sets derived from a mount, then the card over the release's
   mount in the rehearsal.
 
+The refusal set over any mount (PR #839), the second slice of ruling 2's gates over the real
+mounted corpus (`V3MountedGatesTests.Refusal.cs`). Each request is built from what the mount holds,
+so the one code the registry says answers it follows from the mount's own data:
+- a state held alone on its date anchors most requests:
+  - that state and its permalink must be answered;
+  - an unknown work gives `identifier_unknown`;
+  - the day before the work's first date gives `no_version_for_date`;
+  - an anchor the state lacks gives `anchor_not_in_version`;
+  - a wrong digest gives `pinned_digest_mismatch`;
+  - a language the work is not held in gives `language_not_available`;
+- mode, cursor and format requests are refused `retrieval_mode_unavailable`, `snapshot_unknown` and
+  `format_not_available`;
+- data-dependent codes are derived only where the data holds them:
+  - two states on one date: `ambiguous_version`;
+  - a title two works carry, or a beginning two works' titles share (the resolver's own rule, exact
+    first, then prefix): `ambiguous_identifier`;
+  - two states whose rule profiles differ: `profiles_differ`;
+  - a state whose every article's licence does not admit redistribution: `text_withheld`;
+  - a state with no text: `text_not_available`;
+  - no EU index: `no_corpus_mounted`.
+- A code the mount cannot produce is named on the card as not produced, with its reason, and never
+  faked.
+- On the fixture (two titled works, a later state with another rule profile, two states on one
+  date): 16 requests, every one answered with its code; the verdict control catches the shuffle.
+  `text_withheld` and `text_not_available` need other mounts. The withheld-licence fixture derives
+  `text_withheld`.
+- `TheGatesOverTheMountTheReleaseNames` now runs the temporal and refusal sets over the mount
+  `V3_EVALUATE_MOUNT` names and writes both to the card:
+  - the journey mount: 13 requests, all answered with their code, and the control catches the
+    shuffle;
+  - the licence-blocked mount: 14, adding `text_withheld`;
+  - the real bounded first mount: 1 (coverage, answered). Every Luxembourg code is listed as not
+    produced there, since there is no Luxembourg state. `no_corpus_mounted` is not produced either,
+    since the EU index exists.
+  EU refusal cases derived from the EU index are a later slice.
+- A mutation, the day-before-history request given the gold `answer`, fails both refusal tests.
+
 Evaluation card (PR #769): `EvaluationCard` in `Lex.V3.Contracts.Evaluation` prints the machine
 gates as the card of `36-ideal-evaluation.md` section 6 describes, as far as the launch contract
 asks. Each case set and arm is a row with its case count and `cases_sha256`. Each gate carries
@@ -2258,8 +2295,8 @@ has not yet run; the bounded first mount above is complete.
    chaining with observation times, so they follow the first mount and the event-log ruling. What
    is left of the launch contract's machine-gates line after that was "V2 absent from the image",
    which the image rehearsal now checks (PR #831, item 7). Ruling 2's gates over the real mounted
-   corpus: PR #838 derives the temporal set from any mount; the refusal and retrieval sets and the
-   release card follow.
+   corpus: PR #838 derives the temporal set from any mount, PR #839 the refusal set; the retrieval
+   set and the release card follow.
 
 ## Owner rulings, 2026-09-30
 
