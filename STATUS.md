@@ -5,11 +5,11 @@ every pull request that changes what is served, what is next or what is blocked.
 
 ## Heads
 
-- `v3/integration`: `b84244eb` (2026-09-30, PR #769 merged). Build 45 s. Fast lane
+- `v3/integration`: `34dac1ac` (2026-09-30, PR #770 merged). Build 45 s. Fast lane
   (`eng/test-fast.ps1`): 3,038 tests, 3,037 pass, 1 skipped. Ingest suite: green on CI for PR #760
   (the CI `dotnet` job runs the whole solution on every pull request, about 7 min on the runner;
-  green for PR #769);
-  locally about 15 min. 806 web tests pass. CI's web job can flake in `keyboard-walk.test.mjs`
+  green for PR #770);
+  locally about 15 min. 810 web tests pass. CI's web job can flake in `keyboard-walk.test.mjs`
   ("browser debugger never answered"); rerunning the failed job is the fix.
 - Driver: Claude Opus 5.5 since 2026-09-29 (the Fable 5.1 driver ran out of tokens on 2026-09-28
   after PR #757; the user default model is now `claude-opus-5-5`).
@@ -235,7 +235,23 @@ schema's `parameters` shape, and whose call runs the same dispatch the REST rout
 endpoint test proves it for all twenty-three. The launch-contract line "REST and MCP derive identical
 envelopes from the registry" is the owner's to tick.
 
-Web: 29 React components, 806 tests. Preview screens render fixtures. **The first browser journey
+Web: 29 React components, 810 tests. Preview screens render fixtures. The V3 search answer has a
+reader (PR #771). The answer census now samples `search` three ways from the real handler: a
+phrase with 4 strict hits and 1 relaxed hit, the same phrase one hit per page with its cursor,
+and a word the held text does not carry (no hit is an answer). `web/scripts/search-answer.mjs`
+(`readSearch`) reads that shape and throws on any answer that breaks a rule the answer states
+about itself:
+- strict hits before relaxed ones, and a hit's one reason is its lane's (`exact_phrase` or
+  `all_terms`);
+- each article of a state appears once;
+- no more hits than the limit;
+- a cursor exactly when the page is truncated, and the cursor names the last hit;
+- the population's strict and relaxed counts add up to an untruncated page;
+- each hit's permalink is the work, date and state digest the hit names.
+
+It reads no text snippet, because the answer carries none. The pre-V3 renderer
+`search-results.mjs` (`lex_id`, `provision_num`, a row set) stays for the preview until the live
+search screen replaces it. **The first browser journey
 step passes (PR #766, run locally 2026-09-30):** `node scripts/journey.mjs --api <Lex.V3.Api build
 output> --mount <journey mount>` runs the real `Lex.V3.Api` from a copy of its build output with the
 mount beside it, serves `dist-live/` through `serve-live.mjs`, and drives headless Chrome over the
@@ -621,10 +637,12 @@ proves the path, not a corpus.
 6. Wire the eight launch screens to `/api/v3`; journeys J1 to J8 in a real browser. PR #763: the
    envelope reader and the client module; PR #764: the live Trust and Coverage component; PR #765:
    its page, the live build and the one-origin server; PR #766: the first browser journey step,
-   passing against the real API with and without a mount. Next: the other launch screens live
-   (their readers must first be held to served answer samples: search, dossier and reading still
-   read pre-V3 shapes), and J1 to J8 restated as V3 steps (owner question). J1 to J8
-   exist only in the pre-V3 pack (`05-user-journeys.md`) and need restating as V3 steps.
+   passing against the real API with and without a mount; PR #771: the V3 search reader
+   `readSearch`, held to three search answers the census now samples. Next: the live search
+   screen (a component, its page and a journey step over `readSearch`'s view). Then dossier and
+   reading, whose readers still read pre-V3 shapes and must first be held to served samples. Also
+   J1 to J8 restated as V3 steps (owner question): they exist only in the pre-V3 pack
+   (`05-user-journeys.md`).
 7. Release pipeline: build, sign, image, zero-traffic deploy, probes. Then acceptance and promotion.
 8. Machine gates (launch contract, Evaluation): the temporal, refusal and retrieval case sets run
    against the real handler, and all three shuffled controls are caught (PRs #767 and #768). The

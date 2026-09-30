@@ -111,7 +111,6 @@ public sealed class V3AnswerSamplesTests
         ["diff"] = "sampled when a reader is built against it",
         ["changes_in_period"] = "sampled when a reader is built against it",
         ["in_force_on"] = "sampled when a reader is built against it",
-        ["search"] = "sampled when a reader is built against it",
         ["dossier"] = "sampled when a reader is built against it",
         ["citation"] = "sampled when a reader is built against it",
         ["cited_by"] = "sampled when a reader is built against it",
@@ -330,6 +329,11 @@ public sealed class V3AnswerSamplesTests
             // works}. ("one" was my count and it was off by one; the writer seat counted both lists.)
             // The census is what makes a gap like that visible rather than something a person notices.
             await DriveAsync(mount, "coverage", "the whole mount, no language asked", new { }),
+            // `search` is sampled for the live search screen's reader: a phrase with hits in both lanes, the
+            // first page of one hit with its cursor, and a query the held text does not carry.
+            await DriveAsync(mount, "search", "a phrase the held text carries, in its language: strict hits, then relaxed hits that carry every term", new { query = "assemblée générale", language = "fra" }),
+            await DriveAsync(mount, "search", "the same phrase, one hit per page: the first hit and the cursor to the next page", new { query = "assemblée générale", language = "fra", limit = 1 }),
+            await DriveAsync(mount, "search", "a word the held text does not carry: no hit is an answer, not a refusal", new { query = "zéphyr", language = "fra" }),
         ];
     }
 
