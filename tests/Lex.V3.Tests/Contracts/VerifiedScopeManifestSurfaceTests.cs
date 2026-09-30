@@ -46,6 +46,8 @@ public sealed class VerifiedScopeManifestSurfaceTests
                 "method public static " + Verified + "::ParseAndVerify(" + Core + "SourceArtifactRef, "
                 + "System.ReadOnlySpan<System.Byte>, " + Scope + "IScopeReductionEvidenceResolver) -> "
                 + Verified,
+                "method public static " + Verified + "::ParseAndVerifyStream(" + Core + "SourceArtifactRef, "
+                + "System.IO.Stream, " + Scope + "IScopeReductionEvidenceResolver) -> " + Verified,
             },
             ConstructionSurface.Of(typeof(VerifiedScopeManifest)).ToArray(),
             "a new path onto the verified manifest itself must be justified in review, not "

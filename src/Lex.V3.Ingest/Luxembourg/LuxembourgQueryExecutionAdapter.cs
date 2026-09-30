@@ -1,3 +1,4 @@
+using System.Runtime.InteropServices;
 using System.Runtime.CompilerServices;
 using System.Text;
 using System.Text.Json;
@@ -1986,16 +1987,30 @@ public sealed class LuxembourgQueryExecutionAdapter
         var assertions = observations
             .SelectMany(static observation => observation.Assertions)
             .Distinct()
-            .OrderBy(static assertion => assertion.SubjectIri, StringComparer.Ordinal)
-            .ThenBy(static assertion => assertion.PredicateIri, StringComparer.Ordinal)
-            .ThenBy(static assertion => assertion.ObjectKind)
-            .ThenBy(static assertion => assertion.ObjectIriOrLexical, StringComparer.Ordinal)
-            .ThenBy(static assertion => assertion.DatatypeIriOrEmpty, StringComparer.Ordinal)
-            .ThenBy(static assertion => assertion.LanguageTagOrEmpty, StringComparer.Ordinal)
-            .ThenBy(static assertion => assertion.ObservationRef.ResourceId, StringComparer.Ordinal)
-            .ThenBy(static assertion => assertion.ObservationRef.Sha256, StringComparer.Ordinal)
             .ToArray();
+        // Preserve the complete ordinal tuple order without allocating a key array
+        // for each field over the whole assertion population.
+        Array.Sort(assertions, static (left, right) =>
+        {
+            var comparison = StringComparer.Ordinal.Compare(left.SubjectIri, right.SubjectIri);
+            if (comparison != 0) return comparison;
+            comparison = StringComparer.Ordinal.Compare(left.PredicateIri, right.PredicateIri);
+            if (comparison != 0) return comparison;
+            comparison = ((int)left.ObjectKind).CompareTo((int)right.ObjectKind);
+            if (comparison != 0) return comparison;
+            comparison = StringComparer.Ordinal.Compare(left.ObjectIriOrLexical, right.ObjectIriOrLexical);
+            if (comparison != 0) return comparison;
+            comparison = StringComparer.Ordinal.Compare(left.DatatypeIriOrEmpty, right.DatatypeIriOrEmpty);
+            if (comparison != 0) return comparison;
+            comparison = StringComparer.Ordinal.Compare(left.LanguageTagOrEmpty, right.LanguageTagOrEmpty);
+            if (comparison != 0) return comparison;
+            comparison = StringComparer.Ordinal.Compare(left.ObservationRef.ResourceId, right.ObservationRef.ResourceId);
+            return comparison != 0 ? comparison :
+                StringComparer.Ordinal.Compare(left.ObservationRef.Sha256, right.ObservationRef.Sha256);
+        });
         var assertionPredicatesByIri = BuildAssertionPredicatesByIri();
+        var dispositions = new Dictionary<(LuxembourgAssertionPredicate Predicate, SourceArtifactRef Evidence),
+            LuxembourgAssertionFactDisposition>();
         var typed = new List<LuxembourgTypedAssertion>(assertions.Length);
         foreach (var assertion in assertions)
         {
@@ -2006,10 +2021,15 @@ public sealed class LuxembourgQueryExecutionAdapter
                 return null;
             }
 
-            var disposition = new LuxembourgAssertionFactDisposition(
-                predicate,
-                LuxembourgAssertionVocabulary.FactKindOf(predicate),
-                assertion.ObservationRef);
+            var dispositionKey = (predicate, assertion.ObservationRef);
+            if (!dispositions.TryGetValue(dispositionKey, out var disposition))
+            {
+                disposition = new LuxembourgAssertionFactDisposition(
+                    predicate,
+                    LuxembourgAssertionVocabulary.FactKindOf(predicate),
+                    assertion.ObservationRef);
+                dispositions.Add(dispositionKey, disposition);
+            }
             LuxembourgActForceDateFact? actForceDate = null;
             LuxembourgConsolidationApplicabilityDateFact? consolidationDate = null;
             if (predicate is LuxembourgAssertionPredicate.DateEntryInForce or
@@ -2164,7 +2184,10 @@ public sealed class LuxembourgQueryExecutionAdapter
             // Canonical identity is domain separated; custody identity is the plain byte digest.
             var artifactRef = new SourceArtifactRef(
                 ContentDerivedIdentity.DeriveUuidUrn("lex-lu-scope-manifest/1", bytes.Span), canonicalSha256);
-            var reopened = VerifiedScopeManifest.ParseAndVerify(artifactRef, bytes.Span, resolver).Manifest;
+            using var readback = MemoryMarshal.TryGetArray(bytes, out var buffer)
+                ? new MemoryStream(buffer.Array!, buffer.Offset, buffer.Count, writable: false)
+                : new MemoryStream(bytes.ToArray(), writable: false);
+            var reopened = VerifiedScopeManifest.ParseAndVerifyStream(artifactRef, readback, resolver).Manifest;
             return (reopened, receipt, artifactRef, canonicalSha256, null);
         }
         catch (CustodyIntegrityException exception)

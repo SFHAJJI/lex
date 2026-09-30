@@ -939,6 +939,107 @@ public sealed class VerifiedScopeManifest
 
         return verified;
     }
+
+    /// <summary>
+    /// Reopens a complete canonical document from a readable, seekable stream positioned at zero.
+    /// Checks the pinned digest before parsing, verifies every scope invariant, then compares the
+    /// canonical writer's output byte for byte against a fresh read. The writer's digest must also
+    /// match the original pin, so changed bytes between passes cannot produce a verified manifest.
+    /// Leaves the caller's stream open. The typed manifest is still materialized; byte validation
+    /// and comparison reads use fixed buffers. Canonical output flushes at array-element boundaries
+    /// after 64 KiB pending; one element or scalar can exceed that threshold.
+    /// </summary>
+    public static VerifiedScopeManifest ParseAndVerifyStream(
+        SourceArtifactRef artifactRef,
+        Stream canonicalStream,
+        IScopeReductionEvidenceResolver observationResolver)
+    {
+        ArgumentNullException.ThrowIfNull(artifactRef);
+        ArgumentNullException.ThrowIfNull(canonicalStream);
+        ArgumentNullException.ThrowIfNull(observationResolver);
+        if (!canonicalStream.CanRead || !canonicalStream.CanSeek || canonicalStream.Position != 0)
+        {
+            throw new ArgumentException(
+                "The scope manifest stream must be readable, seekable and positioned at zero.",
+                nameof(canonicalStream));
+        }
+
+        var observedDigest = ScopeManifestCanonicalWriter.ComputeManifestSha256(
+            canonicalStream, out var validUtf8);
+        if (!string.Equals(observedDigest, artifactRef.Sha256, StringComparison.Ordinal))
+        {
+            throw new ArgumentException("The scope manifest bytes do not match their artifact reference.",
+                nameof(canonicalStream));
+        }
+        if (!validUtf8)
+        {
+            throw new ArgumentException("The scope manifest stream is not strict UTF-8.",
+                nameof(canonicalStream));
+        }
+
+        canonicalStream.Position = 0;
+        ScopeManifest manifest;
+        try
+        {
+            manifest = ContractJson.DeserializeFromStream<ScopeManifest>(canonicalStream);
+        }
+        catch (JsonException exception)
+        {
+            throw new ArgumentException("The scope manifest bytes are not one valid typed canonical document.",
+                nameof(canonicalStream), exception);
+        }
+
+        var verified = ScopeReducer.VerifyAndOpen(manifest, observationResolver);
+        canonicalStream.Position = 0;
+        using var comparison = new CanonicalComparisonStream(canonicalStream);
+        var rebuiltDigest = ScopeManifestCanonicalWriter.Write(comparison, verified);
+        comparison.RequireEnd();
+        if (!string.Equals(rebuiltDigest, artifactRef.Sha256, StringComparison.Ordinal))
+        {
+            throw new ArgumentException("The scope manifest changed between verification passes.",
+                nameof(canonicalStream));
+        }
+
+        return verified;
+    }
+
+    private sealed class CanonicalComparisonStream(Stream expected) : Stream
+    {
+        public override bool CanRead => false;
+        public override bool CanSeek => false;
+        public override bool CanWrite => true;
+        public override long Length => throw new NotSupportedException();
+        public override long Position
+        {
+            get => throw new NotSupportedException();
+            set => throw new NotSupportedException();
+        }
+        public override void Flush() { }
+        public override int Read(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+        public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
+        public override void SetLength(long value) => throw new NotSupportedException();
+        public override void Write(byte[] buffer, int offset, int count) => Write(buffer.AsSpan(offset, count));
+        public override void Write(ReadOnlySpan<byte> buffer)
+        {
+            Span<byte> actual = stackalloc byte[4096];
+            while (!buffer.IsEmpty)
+            {
+                var count = expected.Read(actual[..Math.Min(actual.Length, buffer.Length)]);
+                if (count == 0 || !buffer[..count].SequenceEqual(actual[..count]))
+                {
+                    throw NonCanonical();
+                }
+                buffer = buffer[count..];
+            }
+        }
+        public void RequireEnd()
+        {
+            if (expected.ReadByte() != -1) throw NonCanonical();
+        }
+        private static ArgumentException NonCanonical() => new(
+            "The scope manifest is not its exact canonical typed representation.", "canonicalStream");
+    }
+
 }
 
 public sealed class ScopeManifestWriteReceipt
@@ -1184,6 +1285,7 @@ public static class ScopeManifestCanonicalWriter
                 input,
                 observationResolver);
             WriteObservedObject(writer, observed);
+            FlushPending(writer);
             WriteProjection(
                 projections.AsSpan(ordinal * ProjectionWidth, ProjectionWidth),
                 reduced.Results,
@@ -1247,6 +1349,7 @@ public static class ScopeManifestCanonicalWriter
             }
 
             WriteRow(writer, reduced.Row);
+            FlushPending(writer);
             AppendInputSequence(sequenceHash, ordinal, observed.ObjectRefSha256, reduced.Row.RowSha256);
             previousObjectSha256 = observed.ObjectRefSha256;
         }
@@ -1442,6 +1545,7 @@ public static class ScopeManifestCanonicalWriter
                         ProjectionDispositionByte(disposition))
                     {
                         writer.WriteNumberValue(ordinal);
+                        FlushPending(writer);
                     }
                 }
 
@@ -1471,6 +1575,7 @@ public static class ScopeManifestCanonicalWriter
             if (projections[(ordinal * ProjectionWidth) + 4] == 1)
             {
                 writer.WriteNumberValue(ordinal);
+                FlushPending(writer);
             }
         }
 
@@ -1500,6 +1605,29 @@ public static class ScopeManifestCanonicalWriter
     {
         using var hashing = new HashingWriteStream(Stream.Null, ManifestDomain);
         hashing.Write(canonicalBytes);
+        return hashing.GetHashAndReset();
+    }
+
+    internal static string ComputeManifestSha256(Stream canonicalStream, out bool validUtf8)
+    {
+        using var hashing = new HashingWriteStream(Stream.Null, ManifestDomain);
+        var decoder = new UTF8Encoding(false, true).GetDecoder();
+        Span<byte> buffer = stackalloc byte[4096];
+        Span<char> characters = stackalloc char[4098];
+        validUtf8 = true;
+        int read;
+        while ((read = canonicalStream.Read(buffer)) != 0)
+        {
+            hashing.Write(buffer[..read]);
+            if (!validUtf8) continue;
+            try { _ = decoder.GetChars(buffer[..read], characters, flush: false); }
+            catch (DecoderFallbackException) { validUtf8 = false; }
+        }
+        if (validUtf8)
+        {
+            try { _ = decoder.GetChars(ReadOnlySpan<byte>.Empty, characters, flush: true); }
+            catch (DecoderFallbackException) { validUtf8 = false; }
+        }
         return hashing.GetHashAndReset();
     }
 
@@ -2000,6 +2128,16 @@ public static class ScopeManifestCanonicalWriter
         writer.WriteEndObject();
     }
 
+    // Utf8JsonWriter over Stream otherwise retains the entire document until its final Flush.
+    // This bounds pending output by the threshold plus one element/scalar, not a hard token limit.
+    private static void FlushPending(Utf8JsonWriter writer)
+    {
+        if (writer.BytesPending >= 64 * 1024)
+        {
+            writer.Flush();
+        }
+    }
+
     private static void WriteArray<T>(
         Utf8JsonWriter writer,
         string name,
@@ -2011,6 +2149,7 @@ public static class ScopeManifestCanonicalWriter
         foreach (var value in values)
         {
             write(writer, value);
+            FlushPending(writer);
         }
 
         writer.WriteEndArray();
@@ -2026,6 +2165,7 @@ public static class ScopeManifestCanonicalWriter
         foreach (var value in values)
         {
             writer.WriteNumberValue(value);
+            FlushPending(writer);
         }
 
         writer.WriteEndArray();

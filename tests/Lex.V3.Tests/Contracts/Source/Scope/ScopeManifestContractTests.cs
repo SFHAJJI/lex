@@ -1520,6 +1520,158 @@ public sealed class ScopeManifestContractTests
             VerifiedScopeManifest.ParseAndVerify(artifactRef, bytes, resolver));
     }
 
+    [TestMethod]
+    public void CanonicalWritersFlushPopulationArraysWithoutBufferingTheWholeDocument()
+    {
+        var profile = Profile();
+        var evidence = EvidenceArtifacts();
+        var inputs = Enumerable.Range(0, 2_000)
+            .Select(index => ValidInput(profile, Object($"flush-{index}")))
+            .OrderBy(input => ScopeManifestCanonicalWriter.ComputeObjectRefSha256(input.ObjectRef),
+                StringComparer.Ordinal).ToArray();
+        var resolver = ExactResolver.For(profile, evidence, inputs);
+        var verified = ScopeReducer.Reduce(profile, evidence,
+            inputs.Select(input => input.ObjectRef).ToArray(), inputs, resolver);
+        using var direct = new OffsetCountingStream(0);
+        var digest = ScopeManifestCanonicalWriter.Write(direct, verified);
+        using var streaming = new OffsetCountingStream(0);
+        var receipt = ScopeManifestCanonicalWriter.WriteStreaming(
+            streaming, profile, evidence, inputs.Length, _ => inputs, resolver);
+        Assert.AreEqual(digest, receipt.ManifestSha256);
+        Assert.AreEqual(direct.Length, streaming.Length);
+        Assert.IsTrue(direct.Length > 1_000_000);
+        // Fixture elements are smaller than 4 KiB; permit that overshoot above the flush threshold.
+        Assert.IsTrue(direct.LargestWrite <= 68 * 1024, $"Direct write: {direct.LargestWrite}");
+        Assert.IsTrue(streaming.LargestWrite <= 68 * 1024, $"Streaming write: {streaming.LargestWrite}");
+        using var bytes = new MemoryStream(CanonicalBytes(verified));
+        var reopened = VerifiedScopeManifest.ParseAndVerifyStream(
+            ArtifactRefFor(bytes.ToArray()), bytes, resolver);
+        CollectionAssert.AreEqual(CanonicalBytes(verified), CanonicalBytes(reopened));
+    }
+
+    [TestMethod]
+    public void StreamReadbackPreservesCanonicalBytesWithShortReadsAndLeavesInputOpen()
+    {
+        var profile = Profile();
+        var evidence = EvidenceArtifacts();
+        var input = ValidInput(profile, Object("stream-reader"));
+        var resolver = ExactResolver.For(profile, evidence, [input]);
+        var verified = ScopeReducer.Reduce(profile, evidence, [input.ObjectRef], [input], resolver);
+        var bytes = CanonicalBytes(verified);
+        using var stream = new ShortReadStream(bytes);
+        var reopened = VerifiedScopeManifest.ParseAndVerifyStream(ArtifactRefFor(bytes), stream, resolver);
+        CollectionAssert.AreEqual(bytes, CanonicalBytes(reopened));
+        Assert.IsTrue(stream.CanRead);
+        Assert.IsTrue(stream.Rewinds >= 2);
+    }
+
+    [TestMethod]
+    public void StreamReadbackRejectsDigestMismatchNonCanonicalBytesAndInvalidUtf8()
+    {
+        var profile = Profile();
+        var evidence = EvidenceArtifacts();
+        var input = ValidInput(profile, Object("stream-refusals"));
+        var resolver = ExactResolver.For(profile, evidence, [input]);
+        var bytes = CanonicalBytes(ScopeReducer.Reduce(profile, evidence, [input.ObjectRef], [input], resolver));
+        var spaced = new byte[bytes.Length + 1];
+        spaced[0] = (byte)' ';
+        bytes.CopyTo(spaced, 1);
+        using var wrongDigest = new ShortReadStream(spaced);
+        var wrong = Assert.ThrowsExactly<ArgumentException>(() =>
+            VerifiedScopeManifest.ParseAndVerifyStream(ArtifactRefFor(bytes), wrongDigest, resolver));
+        StringAssert.Contains(wrong.Message, "do not match their artifact reference");
+        using var nonCanonical = new ShortReadStream(spaced);
+        var spacing = Assert.ThrowsExactly<ArgumentException>(() =>
+            VerifiedScopeManifest.ParseAndVerifyStream(ArtifactRefFor(spaced), nonCanonical, resolver));
+        StringAssert.Contains(spacing.Message, "exact canonical typed representation");
+        var invalid = bytes.Concat(new byte[] { 0xc3 }).ToArray();
+        using var badUtf8 = new ShortReadStream(invalid);
+        var unicode = Assert.ThrowsExactly<ArgumentException>(() =>
+            VerifiedScopeManifest.ParseAndVerifyStream(ArtifactRefFor(invalid), badUtf8, resolver));
+        StringAssert.Contains(unicode.Message, "strict UTF-8");
+        using var badUtf8AndDigest = new ShortReadStream(invalid);
+        var precedence = Assert.ThrowsExactly<ArgumentException>(() =>
+            VerifiedScopeManifest.ParseAndVerifyStream(ArtifactRefFor(bytes), badUtf8AndDigest, resolver));
+        StringAssert.Contains(precedence.Message, "do not match their artifact reference");
+        var trailing = bytes.Concat(new byte[] { (byte)' ' }).ToArray();
+        using var extraBytes = new ShortReadStream(trailing);
+        var tail = Assert.ThrowsExactly<ArgumentException>(() =>
+            VerifiedScopeManifest.ParseAndVerifyStream(ArtifactRefFor(trailing), extraBytes, resolver));
+        StringAssert.Contains(tail.Message, "exact canonical typed representation");
+    }
+
+    [TestMethod]
+    public void StreamReadbackRejectsAChangedCanonicalDocumentBetweenPasses()
+    {
+        var profile = Profile();
+        var evidence = EvidenceArtifacts();
+        var input = ValidInput(profile, Object("stream-original"));
+        var replacementInput = ValidInput(profile, Object("stream-replaced"));
+        var resolver = ExactResolver.For(profile, evidence, [input]);
+        var replacementResolver = ExactResolver.For(profile, evidence, [replacementInput]);
+        var bytes = CanonicalBytes(ScopeReducer.Reduce(profile, evidence, [input.ObjectRef], [input], resolver));
+        var replacement = CanonicalBytes(ScopeReducer.Reduce(profile, evidence,
+            [replacementInput.ObjectRef], [replacementInput], replacementResolver));
+        using var stream = new ShortReadStream(bytes, replacement);
+        // The resolver admits the replacement, so only the pinned byte identity can reject it.
+        var exception = Assert.ThrowsExactly<ArgumentException>(() =>
+            VerifiedScopeManifest.ParseAndVerifyStream(ArtifactRefFor(bytes), stream, replacementResolver));
+        StringAssert.Contains(exception.Message, "changed between verification passes");
+    }
+
+    [TestMethod]
+    public void StreamReadbackStillRequiresIndependentScopeEvidenceAdmission()
+    {
+        var profile = Profile();
+        var evidence = EvidenceArtifacts();
+        var input = ValidInput(profile, Object("stream-admitted"));
+        var other = ValidInput(profile, Object("stream-not-admitted"));
+        var resolver = ExactResolver.For(profile, evidence, [input]);
+        var bytes = CanonicalBytes(ScopeReducer.Reduce(profile, evidence, [input.ObjectRef], [input], resolver));
+        using var stream = new ShortReadStream(bytes);
+        Assert.ThrowsExactly<InvalidOperationException>(() =>
+            VerifiedScopeManifest.ParseAndVerifyStream(ArtifactRefFor(bytes), stream,
+                ExactResolver.For(profile, evidence, [other])));
+    }
+
+    private sealed class ShortReadStream(byte[] initial, byte[]? replacement = null) : Stream
+    {
+        private MemoryStream _inner = new(initial, writable: false);
+        public int Rewinds { get; private set; }
+        public override bool CanRead => _inner.CanRead;
+        public override bool CanSeek => true;
+        public override bool CanWrite => false;
+        public override long Length => _inner.Length;
+        public override long Position
+        {
+            get => _inner.Position;
+            set
+            {
+                if (value == 0)
+                {
+                    Rewinds++;
+                    if (Rewinds == 1 && replacement is not null)
+                    {
+                        _inner.Dispose();
+                        _inner = new MemoryStream(replacement, writable: false);
+                    }
+                }
+                _inner.Position = value;
+            }
+        }
+        public override int Read(byte[] buffer, int offset, int count) => Read(buffer.AsSpan(offset, count));
+        public override int Read(Span<byte> buffer) => _inner.Read(buffer[..Math.Min(buffer.Length, 7)]);
+        public override long Seek(long offset, SeekOrigin origin) => _inner.Seek(offset, origin);
+        public override void Flush() { }
+        public override void SetLength(long value) => throw new NotSupportedException();
+        public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing) _inner.Dispose();
+            base.Dispose(disposing);
+        }
+    }
+
     private static SourceArtifactRef ArtifactRefFor(byte[] canonicalBytes) => new(
         "urn:uuid:99999999-9999-4999-8999-999999999999",
         ScopeManifestCanonicalWriter.ComputeManifestSha256(canonicalBytes));
@@ -1966,6 +2118,8 @@ public sealed class ScopeManifestContractTests
 
     private sealed class OffsetCountingStream : Stream
     {
+        public int LargestWrite { get; private set; }
+
         public OffsetCountingStream(long initialPosition)
         {
             Position = initialPosition;
@@ -1994,11 +2148,13 @@ public sealed class ScopeManifestContractTests
 
         public override void Write(byte[] buffer, int offset, int count)
         {
+            LargestWrite = Math.Max(LargestWrite, count);
             Position += count;
         }
 
         public override void Write(ReadOnlySpan<byte> buffer)
         {
+            LargestWrite = Math.Max(LargestWrite, buffer.Length);
             Position += buffer.Length;
         }
 
