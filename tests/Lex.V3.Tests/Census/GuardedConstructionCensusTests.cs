@@ -117,6 +117,10 @@ public sealed class GuardedConstructionCensusTests
                     + "Lex.V3.Api.V3PlatformSchemaDocuments::.ctor, "
                     + "constructor private static Lex.V3.Api.V3PlatformSchemaDocuments::.cctor, "
                     + "method private static Lex.V3.Api.V3PlatformSchemaDocuments::LoadReviewed",
+                "Lex.V3.Api.V3WebRoot: constructor private instance "
+                    + "Lex.V3.Api.V3WebRoot::.ctor, "
+                    + "constructor private static Lex.V3.Api.V3WebRoot::.cctor, "
+                    + "method internal static Lex.V3.Api.V3WebRoot::Open",
                 "Lex.V3.Artifacts.ArtifactAdmissionFailure: by-ref-method public instance "
                     + "Lex.V3.Artifacts.HeaderReadResult::Deconstruct, "
                     + "constructor internal instance "

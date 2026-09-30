@@ -205,3 +205,31 @@ test("a radar run types two dates and is held to exactly those in the body", () 
   observed.requests[1].postData = JSON.stringify({ operation_id: "changes_in_period", parameters: { date_from: READING_DATE, date_to: READING_DATE, identifier: "x" } });
   assert.ok(journeyVerdict(observed, expected).some((failure) => /body was/.test(failure)), "a request carrying an identifier nobody typed fails");
 });
+
+test("a run whose page the API served is held to the headers the page arrived with (Decision 95, ruling 3)", () => {
+  const policy = `${cspValue()}; frame-ancestors 'none'`;
+  const served = () => ({
+    ...goodSearch(),
+    pageHeaders: {
+      "Content-Security-Policy": policy,
+      "Strict-Transport-Security": "max-age=31536000; includeSubDomains",
+      "Referrer-Policy": "no-referrer",
+      "X-Content-Type-Options": "nosniff",
+    },
+  });
+  const expected = { ...SEARCH, servedByApi: true };
+  assert.deepEqual(journeyVerdict(served(), expected), []);
+  const cases = [
+    ["no frame-ancestors", (o) => { o.pageHeaders["Content-Security-Policy"] = cspValue(); }, /arrived with the CSP/],
+    ["no HSTS", (o) => { delete o.pageHeaders["Strict-Transport-Security"]; }, /without HSTS/],
+    ["a referrer policy that sends one", (o) => { o.pageHeaders["Referrer-Policy"] = "origin"; }, /Referrer-Policy origin/],
+    ["no nosniff", (o) => { delete o.pageHeaders["X-Content-Type-Options"]; }, /without nosniff/],
+    ["headers never observed", (o) => { o.pageHeaders = null; }, /arrived with the CSP null/],
+  ];
+  for (const [what, mutate, reason] of cases) {
+    const observed = served();
+    mutate(observed);
+    assert.ok(journeyVerdict(observed, expected).some((failure) => reason.test(failure)), what);
+  }
+  assert.deepEqual(journeyVerdict({ ...goodSearch(), pageHeaders: null }, SEARCH), [], "a page served by serve-live is not held to them");
+});
