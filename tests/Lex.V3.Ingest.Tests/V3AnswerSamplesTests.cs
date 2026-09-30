@@ -107,7 +107,6 @@ public sealed class V3AnswerSamplesTests
     {
         ["resolve"] = "sampled when a reader is built against it",
         ["timeline"] = "sampled when a reader is built against it",
-        ["article_history"] = "sampled when a reader is built against it",
         ["diff"] = "sampled when a reader is built against it",
         ["changes_in_period"] = "sampled when a reader is built against it",
         ["in_force_on"] = "sampled when a reader is built against it",
@@ -339,6 +338,8 @@ public sealed class V3AnswerSamplesTests
             await DriveAsync(mount, "search", "a word the held text does not carry: no hit is an answer, not a refusal", new { query = "zéphyr", language = "fra" }),
             // `dossier` is sampled for the live dossier screen's reader: the work, in the language it is held in.
             await DriveAsync(mount, "dossier", "the work, in the language it is held in: its identity, its held states and what the dossier does not hold", new { parameters.identifier, parameters.language }),
+            // `article_history` is sampled for the live provision history screen's reader: one article of the work, in its language.
+            await DriveAsync(mount, "article_history", "one article of the work, in the language it is held in: its lineage through the held states", new { parameters.identifier, anchor = "art_15", parameters.language }),
         ];
     }
 
