@@ -37,6 +37,44 @@ checks passed 833 and skipped 12, with one stale construction-surface pin. Its i
 reflected diff adds exactly the new private async builder; both focused construction tests passed. S/A changed
 custody and cancellation after preliminary verification are covered.
 
+## French EU expression bodies (Codex, 2026-09-30)
+
+The acquisition adapter now projects French body candidates from this run's proven expression
+population. Each candidate keeps its exact expression identity and language evidence; the FRA
+route is selected explicitly. Original Work metadata remains in the corpus, including French-only
+Works with an observed absence of an English expression. A missing French response cannot reuse
+an English receipt. Annex binding checks expression lineage even when two held bodies have the
+same bytes. Formex main-body admission also requires the package language to match the expression.
+Its interpretation profile advances to version 3 so that this acceptance rule has its own digest;
+new corpus/index derivations carry that profile.
+
+Offline cases cover bilingual and French-only acquisition, missing French bodies, shared-receipt
+annex binding, and repeatable French corpus/index construction. The French positive Formex fixture
+is synthetic; the retained English GDPR package supplies the language-mismatch negative case.
+These changes prepare live French acquisition. The completed bounded mount still contains the
+previously acquired bodies; no new live French population or serving claim is made here.
+
+Validation: Release solution build had zero warnings/errors; full ingest passed 1,984 with
+19 opt-in skips and zero failures (12m39.548s). After the profile-version update, fast tests passed
+3,066 with one Windows skip (48.870s), and affected ingest passed 194 with three opt-in skips
+(31.873s). Exact-head CI also passed on 12d58871.
+
+Reversible sequencing decision: merge this acquisition prerequisite before the expensive fresh
+all-seed EU build, so one union run can retain English and French bodies. This avoids repeating a
+whole acquisition merely to add the second served language. Population completion remains the
+next live objective. The full EU run is prepared with a 20,000-wire planning cap, separately from
+the full Luxembourg run; storage and frozen-source checks still precede launch.
+Before a French-bearing mount is served, EU resolve must apply the Decision 89 language rule:
+the current CELEX/Work resolver treats two held language expressions as `ambiguous_identifier`.
+The EU parity slice must close that prerequisite; expression-specific resolution remains available.
+
+The cross-family review at 12d58871 reported MERGE with two should-fix findings. The repair counts
+French expression objects in the population total and tests closure for bilingual and French-only
+runs, records the resolve prerequisite above, and adds an absent-outcome negative case. That case reaches the earlier complete-population
+guard; the per-member binding guard is unchanged.
+Repair validation passed 3,066 fast tests with one Windows skip (58.382s) and 204 affected ingest
+tests with three opt-in skips (80.074s). The PR records final exact-head CI.
+
 ## EU Formex language scope (Codex, 2026-09-30)
 
 Reversible driver decision under standing order section 5: enumerate Formex manifestations for
@@ -53,7 +91,7 @@ The guarded eligibility door requires proven EN/FRA enumerations and records the
 separately. Closure still requires one outcome per expression, rejects missing/duplicate outcomes,
 and cannot label an unenumerated expression ineligible. The older all-language door remains strict.
 Main-body processing preserves the typed source outcome and maps it to package-not-acquired.
-French bodies are the following slice; this change does not claim they are already acquired.
+French body acquisition is implemented above; a fresh live run must still retain the bodies.
 
 ## Luxembourg COUNT follow-up (Codex, 2026-09-30)
 
@@ -1130,9 +1168,8 @@ proves the path, not a corpus.
   on the real GDPR package through the real session: the corpus states
   `formex_main_body_admitted` for the held EU member and the main-body producer parses its 99
   articles. What is not acquired is stated as its own outcome, never as a transport refusal:
-  `not_acquired` with a reason (`body_not_held`: the run holds no body for the expression, today
-  French original expressions, Decision 89, and the corpus binds every acquired Formex outcome to one held
-  body; `language_not_addressable`, `manifestation_not_singular`, `identity_not_admitted` for works
+  `not_acquired` with a reason (`body_not_held`: the run holds no body for that expression; French candidates now have their
+  own acquisition path, and the corpus binds every acquired Formex outcome to one held body; `language_not_addressable`, `manifestation_not_singular`, `identity_not_admitted` for works
   outside the reviewed seed-root map, including consolidated expressions; and the
   four annex reasons below),
   `route_refused` with the status for any answer but 200 or 404 and for a 200 reached on a route
@@ -1498,10 +1535,15 @@ path. This adds no publisher traffic by itself. The bounded mount completed; ful
 acquisition follows the reviewed selector and adaptive-cover changes.
 Adaptive covers use midpoint boundaries and the existing executor's delivery ceiling. The query
 plan still records a legacy 900-row accumulated-slice rule that this executor does not apply;
-its renderer bytes are unchanged. Automatic covers have offline proof only so far. A root COUNT
-timeout still refuses, and publisher handling of control characters in split boundaries remains
-unverified. Review repair stops at the first unprovable leaf and records later leaves as not
-attempted, with no further requests for that cover.
+its renderer bytes were unchanged in that slice. PR #798 subsequently added compact COUNTs and
+splitting for narrowly recognized, retained initial COUNT capacity errors. The live bounded S
+cover proved 12 leaves and reopened all 10 rows using 68 wire requests. This proves the bounded
+range only. Fresh whole-population preflight2 used its 100-request ceiling on S splitting and
+refused before A/G; it did not prove the population. Review repair stops at the first unprovable
+leaf and records later leaves as not attempted, with no further requests for that cover.
+Separate COUNT diagnostics have measured 5,366,756 assertion rows in 22 ranges. The remaining
+range is `[http://data.legilux.public.lu/eli/etat/a, http://data.legilux.public.lu/eli/etat/b)`. These independent observations size a future run; they are not a same-instant
+population proof. The full run must also allow for retained pages, decoded rows and derived files.
 Validation: solution build with zero warnings/errors; fast lane 3,065 pass / 1 Windows skip;
 153 initial affected ingest tests pass, including a two-work corpus through split S/A/G families.
 The one review repair updates all four construction census pins and adds the stop-after-failure

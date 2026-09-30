@@ -155,9 +155,9 @@ public sealed class EuFormexMainBodyLegalContentPopulation
 public sealed class EuFormexMainBodyLegalContentProducer
 {
     public const string Profile =
-        "lex-v3-eu-formex-main-body-profile/2;root=ACT;units=ARTICLE;" +
+        "lex-v3-eu-formex-main-body-profile/3;root=ACT;units=ARTICLE;" +
         "tokens=text,reference,footnote-with-body;oj-reference-target=publisher-attributes;" +
-        "exclude=recitals,final,annex";
+        "exclude=recitals,final,annex;language=matches-expression-with-en-eng-fr-fra-authority-aliases";
     public static string ProfileSha256 { get; } = Convert.ToHexStringLower(
         SHA256.HashData(Encoding.UTF8.GetBytes(Profile)));
 
@@ -221,6 +221,13 @@ public sealed class EuFormexMainBodyLegalContentProducer
         _ => throw new ArgumentOutOfRangeException(nameof(kind)),
     };
 
+    private static string NormalizeLanguage(string value) => value switch
+    {
+        "EN" or "ENG" or "http://publications.europa.eu/resource/authority/language/ENG" => "EN",
+        "FR" or "FRA" or "http://publications.europa.eu/resource/authority/language/FRA" => "FR",
+        _ => value,
+    };
+
     private static (EuFormexMainBodyLegalContentDisposition Disposition,
         IReadOnlyList<EuFormexMainBodyArticle> Articles, string? Detail) Parse(
         EuFormexPackageOutcome source,
@@ -282,6 +289,10 @@ public sealed class EuFormexMainBodyLegalContentProducer
                 if (string.IsNullOrWhiteSpace(language) || string.IsNullOrWhiteSpace(publisherDate))
                     return Refused(EuFormexMainBodyLegalContentDisposition.UnsupportedContentShape,
                         $"Formex ACT entry {entry.FullName} lacks one language or publisher date");
+
+                if (NormalizeLanguage(language) != NormalizeLanguage(source.Expression.OfficialLanguage))
+                    return Refused(EuFormexMainBodyLegalContentDisposition.UnsupportedContentShape,
+                        $"Formex ACT entry {entry.FullName} language does not match its proven expression language");
 
                 foreach (var element in document.Root.Descendants()
                     .Where(static value => value.Name.LocalName == "ARTICLE"))

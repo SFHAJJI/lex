@@ -35,6 +35,32 @@ public sealed class EuObjectPopulationCompletionTests
             "a run cannot fetch more objects than it addressed.");
     }
 
+    [TestMethod]
+    [DataRow(false)]
+    [DataRow(true)]
+    public async Task FrenchExpressionsCloseWithTheirWorkMetadata(bool frenchOnly)
+    {
+        const string french = "http://publications.europa.eu/resource/authority/language/FRA";
+        var root = EuAxiomWiringHarness.SeedRoot("32016R0679");
+        var run = await EuAxiomWiringHarness.RunAsync(
+            static work => EuAcquisitionTestFixture.AxiomAbsenceScriptFor(work),
+            seedCelex: "32016R0679",
+            expressionIri: root + ".0001",
+            expressionLanguageAuthority: frenchOnly ? french : EuAcquisitionTestFixture.EnglishLanguageAuthority,
+            additionalExpressionIri: frenchOnly ? null : root + ".0002",
+            additionalExpressionLanguageAuthority: frenchOnly ? null : french);
+
+        var population = EuObjectPopulationCompletion.TryClose(run, out var refusal, out var detail);
+
+        Assert.AreEqual(EuObjectPopulationRefusal.None, refusal, detail);
+        Assert.IsNotNull(population);
+        Assert.AreEqual(2, run.ObservedObjectCount, "the Work and its French expression are separate corpus objects.");
+        Assert.AreEqual(run.ObservedObjectCount, run.CorpusRecordSet!.Set.Records.Count);
+        Assert.AreEqual(run.ObservedObjectCount, population.ObjectCount);
+        Assert.AreEqual(frenchOnly ? 1 : 2, run.CorpusRecordSet.Set.Records.Count(record =>
+            record.Body.Kind == CorpusBodyRecordKind.Held));
+    }
+
     /// <summary>
     /// THE RULE THIS TYPE EXISTS FOR. Drop an object's fetch row and it is still a member. A
     /// completion built on minted rows would have reported a smaller population and called it

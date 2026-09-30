@@ -3218,6 +3218,65 @@ public sealed class EuQueryExecutionAdapterTests
     /// family-M listing the caller chooses. A null <paramref name="listedTypes"/> scripts family M's
     /// own explicit absence row instead.
     /// </summary>
+    [TestMethod]
+    [DataRow(true)]
+    [DataRow(false)]
+    public async Task FrenchExpressionBodyUsesItsOwnIdentityAndLanguage(bool includeEnglish)
+    {
+        var requests = new List<(string Language, string Path)>();
+        var (result, handler, store) = await RunWorkingTimeDirectiveAsync(
+            ["xhtml"], request =>
+            {
+                requests.Add((request.Headers.AcceptLanguage.ToString(), request.RequestUri!.AbsolutePath));
+                return EuAcquisitionTestFixture.BinaryResponse(request, HttpStatusCode.OK,
+                    WorkingTimeHtmlBody, "application/xhtml+xml;charset=UTF-8");
+            }, includeFrench: true, includeEnglish: includeEnglish);
+        Assert.IsNull(result.Refusal, result.Refusal?.Detail);
+        Assert.AreEqual(includeEnglish ? 2 : 1, handler.DocumentFetchCount);
+        Assert.AreEqual(1, requests.Count(request => request.Language == "fra"));
+        Assert.AreEqual(includeEnglish ? 1 : 0, requests.Count(request => request.Language == "eng"));
+        Assert.IsTrue(requests.Single(request => request.Language == "fra").Path.EndsWith(
+            ".0002", StringComparison.Ordinal));
+        var records = result.CorpusRecordSet!.Set.Records;
+        Assert.HasCount(2, records, "the discovered Work metadata remains alongside the French expression");
+        Assert.AreEqual(includeEnglish ? 2 : 1, records.Count(record => record.Body.Kind == CorpusBodyRecordKind.Held));
+        if (!includeEnglish)
+            Assert.AreEqual(CorpusBodyRecordKind.NotHeld, records.Single(record =>
+                !record.ObjectRef.PublisherUri.EndsWith(".0002", StringComparison.Ordinal)).Body.Kind);
+        var french = records.Single(record => record.ObjectRef.PublisherUri.EndsWith(
+            ".0002", StringComparison.Ordinal));
+        var manifest = await ReopenManifestAsync(result, store);
+        Assert.HasCount(records.Count, manifest.Rows);
+        var frenchRow = manifest.Rows.Single(row => row.ObjectOrdinal == french.ObjectOrdinal);
+        Assert.AreEqual("fra", frenchRow.FetchAddress.AcceptLanguage);
+        var provenExpression = result.CorrigendumTripwires!.ProductionsByFamilyKey.Values
+            .SelectMany(production => production.Expressions!.Derivation!.Expressions)
+            .Single(expression => expression.Identity.PublisherExpressionId == french.ObjectRef.PublisherUri);
+        Assert.AreEqual(provenExpression.SourceObject, french.ObjectRef,
+            "French identity must come from the proof-derived X expression, not a new Work identity.");
+        Assert.IsTrue(frenchRow.Selectors.Any(selector => selector.EvidenceArtifactOrdinal is { } ordinal &&
+            manifest.OrderedEvidenceArtifacts[ordinal] == provenExpression.SourceObject.IdentityProfileRef),
+            "The manifest must cite the exact X proof used for the expression's language.");
+    }
+
+    [TestMethod]
+    public async Task MissingFrenchBodyDoesNotReuseTheEnglishReceipt()
+    {
+        var (result, _, _) = await RunWorkingTimeDirectiveAsync(
+            ["xhtml"], request => request.Headers.AcceptLanguage.ToString() == "fra"
+                ? EuAcquisitionTestFixture.BinaryResponse(request, HttpStatusCode.NotFound,
+                    DatastreamAbsent404Body(WorkingTimeCellarKey))
+                : EuAcquisitionTestFixture.BinaryResponse(request, HttpStatusCode.OK,
+                    WorkingTimeHtmlBody, "application/xhtml+xml;charset=UTF-8"), includeFrench: true);
+        Assert.IsNull(result.Refusal, result.Refusal?.Detail);
+        var records = result.CorpusRecordSet!.Set.Records;
+        Assert.HasCount(2, records);
+        Assert.AreEqual(CorpusBodyRecordKind.PendingAcquisition, records.Single(record =>
+            record.ObjectRef.PublisherUri.EndsWith(".0002", StringComparison.Ordinal)).Body.Kind);
+        Assert.AreEqual(CorpusBodyRecordKind.Held, records.Single(record =>
+            !record.ObjectRef.PublisherUri.EndsWith(".0002", StringComparison.Ordinal)).Body.Kind);
+    }
+
     private static async Task<(
         EuQueryExecutionResult Result,
         EuAcquisitionTestFixture.ClassifyingHandler Handler,
@@ -3226,7 +3285,9 @@ public sealed class EuQueryExecutionAdapterTests
             IReadOnlyList<string>? listedTypes,
             Func<HttpRequestMessage, HttpResponseMessage> documentFetchResponse,
             EuAcquisitionTestFixture.EuInMemoryCustodyStore? custodyStore = null,
-            IReadOnlyList<string>? witnessBodies = null)
+            IReadOnlyList<string>? witnessBodies = null,
+            bool includeFrench = false,
+            bool includeEnglish = true)
     {
         // ONE BUDGET FOR THE WHOLE RUN. The adapter refuses a census request
         // carrying a different instance, because two counters reading the same
@@ -3236,7 +3297,7 @@ public sealed class EuQueryExecutionAdapterTests
         var seed = EuAppendixASeedMap.SeedsInCelexOrder.Single(entry => entry.Celex == WorkingTimeCelex);
         var rootIri = EuPackRootCanonicalForm.TryCanonicalize(seed.WorkRoot, out _)
             ?? throw new AssertFailedException("Appendix A's own seed root failed to canonicalize.");
-        var expressionIri = seed.WorkRoot + ".0001.01/DOC_1";
+        var expressionIri = seed.WorkRoot + ".0001";
         const string watermarkLexical = "2026-01-01T00:00:00.0000000+01:00";
 
         var pOutcomes = EuAcquisitionTestFixture.ObjectAuthorityPredicates
@@ -3248,7 +3309,16 @@ public sealed class EuQueryExecutionAdapterTests
             .Concat(EuAcquisitionTestFixture.RelationPredicates.Select(predicate => (predicate, (string?)null)))
             .ToArray();
         var pRows = EuAcquisitionTestFixture.SortedObjectFactRows(rootIri, pOutcomes);
-        var xRows = EuAcquisitionTestFixture.EnglishExpressionFactRows(rootIri, expressionIri);
+        var xRows = new List<string>();
+        if (includeEnglish)
+            xRows.AddRange(EuAcquisitionTestFixture.EnglishExpressionFactRows(rootIri, expressionIri));
+        if (includeFrench)
+        {
+            var frenchIri = seed.WorkRoot + ".0002";
+            xRows.Add(EuAcquisitionTestFixture.ExpressionFactRow(rootIri, frenchIri));
+            xRows.Add(EuAcquisitionTestFixture.ExpressionLanguageRow(rootIri, frenchIri,
+                "http://publications.europa.eu/resource/authority/language/FRA"));
+        }
         var wRows = new[] { EuAcquisitionTestFixture.RootWatermarkRow(rootIri, watermarkLexical) };
 
         var scripts = new Dictionary<string, EuAcquisitionTestFixture.FamilyScript>(StringComparer.Ordinal)
@@ -3406,7 +3476,7 @@ public sealed class EuQueryExecutionAdapterTests
             listedDisposition.EvidenceRef, listedDisposition.OrderedCandidates);
 
         var mintedResult = (System.Runtime.CompilerServices.ITuple)method.Invoke(
-            null, [cellarObject, disposition])!;
+            null, [cellarObject, disposition, EuOfficialLanguage.English])!;
         var mintedFetchAddress = (ScopeManifestFetchAddress)mintedResult[0]!;
         var mintedLadder = (IReadOnlyList<EuDocumentFetchAddress>)mintedResult[1]!;
         Assert.AreEqual(ScopeManifestFetchAddressStatus.Minted, mintedFetchAddress.Status);
@@ -3426,10 +3496,20 @@ public sealed class EuQueryExecutionAdapterTests
         Assert.AreEqual(mintedFetchAddress.AcceptMediaType, mintedLadder[0].Accept,
             "the manifest row's single address must be the ladder's FIRST candidate, not any other.");
 
+        var frenchResult = (System.Runtime.CompilerServices.ITuple)method.Invoke(
+            null, [cellarObject, disposition, EuOfficialLanguage.French])!;
+        Assert.AreEqual("fra", ((ScopeManifestFetchAddress)frenchResult[0]!).AcceptLanguage);
+        Assert.IsTrue(((IReadOnlyList<EuDocumentFetchAddress>)frenchResult[1]!)
+            .All(address => address.Language == EuDocumentLanguage.Fra));
+        var germanResult = (System.Runtime.CompilerServices.ITuple)method.Invoke(
+            null, [cellarObject, disposition, EuOfficialLanguage.German])!;
+        Assert.AreEqual(ScopeManifestFetchAddressStatus.NotMinted,
+            ((ScopeManifestFetchAddress)germanResult[0]!).Status);
+
         // An object with no listing at all mints nothing: no listed wording format means no fetch
         // this route could name, and a fabricated default address would claim otherwise.
         var noListingResult = (System.Runtime.CompilerServices.ITuple)method.Invoke(
-            null, [cellarObject, null])!;
+            null, [cellarObject, null, EuOfficialLanguage.English])!;
         Assert.AreEqual(
             ScopeManifestFetchAddressStatus.NotMinted,
             ((ScopeManifestFetchAddress)noListingResult[0]!).Status);
@@ -3449,7 +3529,7 @@ public sealed class EuQueryExecutionAdapterTests
             evidenceRef,
             null);
         var notMintedResult = (System.Runtime.CompilerServices.ITuple)method.Invoke(
-            null, [nonCellarObject, disposition])!;
+            null, [nonCellarObject, disposition, EuOfficialLanguage.English])!;
         var notMinted = (ScopeManifestFetchAddress)notMintedResult[0]!;
         Assert.AreEqual(ScopeManifestFetchAddressStatus.NotMinted, notMinted.Status);
         Assert.AreEqual(
