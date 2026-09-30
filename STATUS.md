@@ -923,6 +923,15 @@ proves the path, not a corpus.
   corpus/index digests, and records response hashes. The real-data smoke run follows a successful
   build automatically; no production deployment is involved.
 
+- **First-mount restart, 2026-09-30 09:57 UTC (Codex).** The acquisition in
+  `C:\lex-v3\first-mount-decision95` stopped without an exit receipt during the IDE restart;
+  its custody remains intact. The same isolated runtime from `1774a774` is running the same
+  GDPR/Luxembourg selection and 800-request ceiling in the fresh directory
+  `C:\lex-v3\first-mount-decision95-restart-20260930`. The detached runner records its exit
+  code and invokes the local verifier after exit 0. The receipt again completed 303 -> 200
+  before census traffic. No real mount success is claimed while acquisition is pending.
+  PR #786's cross-family findings are repaired: the verifier has an exact tree-allowlist entry,
+  its Luxembourg default names the `/jo/fr` expression, and snapshot/coverage digests are checked.
 ## Next, in order
 
 1. Data lane (Codex, Decision 95). The receipt route is changed and live-verified (PR #780).
