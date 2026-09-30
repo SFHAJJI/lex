@@ -25,6 +25,8 @@ export { Timeline, DERIVED_HOLE, DERIVED_OVERLAP, DERIVED_TITLE } from './Timeli
 export { Coverage } from './Coverage.jsx';
 export { CoverageAnswerView, LiveCoverage } from './LiveCoverage.jsx';
 export { LIVE_CONTRACT, LIVE_COVERAGE_ROOT, liveCoverageTree, renderLiveCoveragePage } from './live-coverage-page.jsx';
+export { LiveSearch, SearchAnswerView, SearchResultsView } from './LiveSearch.jsx';
+export { LIVE_SEARCH_ROOT, liveSearchTree, renderLiveSearchPage } from './live-search-page.jsx';
 export {
   renderTimelineReactPage,
   renderCoverageReactPage,

@@ -49,6 +49,8 @@ public sealed class V3EnvelopeSamplesTests
             await CaptureAsync(fixture, mount, "ask", "any question: the contained assistant's card under the point verdict", new { question = "Can I be fired while on sick leave?" }),
             await CaptureAsync(fixture, null, "coverage", "no corpus mounted: a refusal", new { }),
             await CaptureAsync(fixture, mount, "search", "a language the mount holds no text in: a refusal with a payload", new { query = "loyer", language = "deu" }),
+            await CaptureAsync(fixture, mount, "search", "a phrase the held text carries: an answer with hits in both lanes", new { query = "assemblée générale", language = "fra" }),
+            await CaptureAsync(fixture, null, "search", "no corpus mounted: a refusal", new { query = "assemblée générale", language = "fra" }),
         };
 
         var document = new JsonObject

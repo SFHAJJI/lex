@@ -345,6 +345,7 @@ export function readSearch(answer) {
       .map((mode, index) => requireText(mode, `modes_not_held[${index}]`))),
     searchableTextHeld: requireBoolean(
       requireOwn(answer, 'searchable_text_held_for_language', where), 'searchable_text_held_for_language'),
+    searchableLanguages: requireTexts(requireOwn(answer, 'searchable_languages', where), 'searchable_languages'),
     corpusSha256: requireDigest(requireOwn(answer, 'corpus_sha256', where), 'corpus_sha256'),
     indexSha256: requireDigest(requireOwn(answer, 'index_sha256', where), 'index_sha256'),
   });

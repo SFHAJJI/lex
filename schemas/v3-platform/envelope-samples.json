@@ -731,6 +731,222 @@
         "verdict": "refuse",
         "version": "v3"
       }
+    },
+    {
+      "operation": "search",
+      "scenario": "a phrase the held text carries: an answer with hits in both lanes",
+      "http_status": 200,
+      "content_type": "application/json;charset=utf-8",
+      "envelope": {
+        "context": {
+          "freshness": {
+            "observed_at": "2026-09-18T07:00:00.0000000Z",
+            "upstream_health": "stale"
+          },
+          "jurisdiction": "lu",
+          "provisional": false,
+          "publisher": "lu-legilux",
+          "snapshot": {
+            "snapshot_id": "corpus-aaaaaaaaaaaaaaaa",
+            "snapshot_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          "status": "success",
+          "timeline_semantics": "publisher_applicability"
+        },
+        "object_type": "envelope",
+        "operation_id": "search",
+        "refusal": null,
+        "registry_schema": "lex-v3-operation-registry/1",
+        "registry_sha256": "abe40749a2364dcbcf69a4427b0977e0510500345056eed4042b2e4758a53ef0",
+        "request_ref": "http_fb09fb7191e84f40f48d21b4532a48ef36c84efacd236a30abd075a5a2b2c639",
+        "result": {
+          "object_type": "quote",
+          "schema": "lex-v3-search-result/1",
+          "value": {
+            "ambiguous_works": [],
+            "continue_after": null,
+            "corpus_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "hit_unit": "a hit is one article of one held state, not a provision: a provision whose wording never changed is a hit in every state that holds it",
+            "hits": [
+              {
+                "applicability_date": "2024-02-01",
+                "article_identity_sha256": "05308b0478c8f6bf9ab81db3514594a5bd4098555db06f5a656ab27130f0d7fb",
+                "lane": "strict",
+                "language": "fra",
+                "match_reasons": [
+                  "exact_phrase"
+                ],
+                "publisher_id": "art_15",
+                "publisher_wid": null,
+                "publisher_work_iri": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3",
+                "resolve": {
+                  "identifier": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--5bca01f82ef3058cfebe7f8a8a6eb1f1fbeeb32b8a1ea7b2c02ac20963235e3a"
+                },
+                "state_sha256": "5bca01f82ef3058cfebe7f8a8a6eb1f1fbeeb32b8a1ea7b2c02ac20963235e3a",
+                "work_key": "loi-1991-08-10-n3"
+              },
+              {
+                "applicability_date": "2024-02-01",
+                "article_identity_sha256": "2bcf7567d4fec6a1a48c08e2007848bf9dbcf548c4e759da1cb252870d2dcfb5",
+                "lane": "strict",
+                "language": "fra",
+                "match_reasons": [
+                  "exact_phrase"
+                ],
+                "publisher_id": "art_16",
+                "publisher_wid": null,
+                "publisher_work_iri": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3",
+                "resolve": {
+                  "identifier": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--5bca01f82ef3058cfebe7f8a8a6eb1f1fbeeb32b8a1ea7b2c02ac20963235e3a"
+                },
+                "state_sha256": "5bca01f82ef3058cfebe7f8a8a6eb1f1fbeeb32b8a1ea7b2c02ac20963235e3a",
+                "work_key": "loi-1991-08-10-n3"
+              },
+              {
+                "applicability_date": "2024-02-01",
+                "article_identity_sha256": "c86fe9cf34f27d8bc5f65ecb91e33b2a8a0ec9127ea03bfe6aa9ca498e499cd3",
+                "lane": "strict",
+                "language": "fra",
+                "match_reasons": [
+                  "exact_phrase"
+                ],
+                "publisher_id": "art_24",
+                "publisher_wid": null,
+                "publisher_work_iri": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3",
+                "resolve": {
+                  "identifier": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--5bca01f82ef3058cfebe7f8a8a6eb1f1fbeeb32b8a1ea7b2c02ac20963235e3a"
+                },
+                "state_sha256": "5bca01f82ef3058cfebe7f8a8a6eb1f1fbeeb32b8a1ea7b2c02ac20963235e3a",
+                "work_key": "loi-1991-08-10-n3"
+              },
+              {
+                "applicability_date": "2024-02-01",
+                "article_identity_sha256": "f3c96389f8e28c9a15a4f114bd4506f338444a770fc7a6d17c7910f84ec90b8d",
+                "lane": "strict",
+                "language": "fra",
+                "match_reasons": [
+                  "exact_phrase"
+                ],
+                "publisher_id": "art_21",
+                "publisher_wid": null,
+                "publisher_work_iri": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3",
+                "resolve": {
+                  "identifier": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--5bca01f82ef3058cfebe7f8a8a6eb1f1fbeeb32b8a1ea7b2c02ac20963235e3a"
+                },
+                "state_sha256": "5bca01f82ef3058cfebe7f8a8a6eb1f1fbeeb32b8a1ea7b2c02ac20963235e3a",
+                "work_key": "loi-1991-08-10-n3"
+              },
+              {
+                "applicability_date": "2024-02-01",
+                "article_identity_sha256": "fc1c1fda1d6d768931cf296275582a63259fd60b5078b71f7828f8bfee7a7391",
+                "lane": "relaxed",
+                "language": "fra",
+                "match_reasons": [
+                  "all_terms"
+                ],
+                "publisher_id": "art_40",
+                "publisher_wid": null,
+                "publisher_work_iri": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3",
+                "resolve": {
+                  "identifier": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--5bca01f82ef3058cfebe7f8a8a6eb1f1fbeeb32b8a1ea7b2c02ac20963235e3a"
+                },
+                "state_sha256": "5bca01f82ef3058cfebe7f8a8a6eb1f1fbeeb32b8a1ea7b2c02ac20963235e3a",
+                "work_key": "loi-1991-08-10-n3"
+              }
+            ],
+            "index_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            "lanes": "strict: the query as typed is a substring; relaxed: every distinct whitespace-separated term is a substring, in any order, so the relaxed set contains the strict set. With no mode the answer is the strict hits and then only the relaxed hits strict did not serve, each article once; with a mode it is that lane\u0027s whole set. A lane not asked for is null in the population, not zero",
+            "limit": 200,
+            "matching": "byte-exact substring of the article\u0027s searchable text, which is its text and reference tokens as the index holds them (modification markers and note references are not searched); case and diacritics are significant; nothing is folded, stemmed or expanded",
+            "modes_held": [
+              "strict",
+              "relaxed"
+            ],
+            "modes_not_held": [
+              "bm25",
+              "semantic"
+            ],
+            "page_is": "the first hits in the stated order, not the best hits",
+            "population": {
+              "distinct_publisher_articles": 5,
+              "relaxed_hits": 1,
+              "scope": {
+                "date": null,
+                "identifier": null,
+                "language": "fra",
+                "mode": null
+              },
+              "strict_hits": 4,
+              "works_with_hits": 1
+            },
+            "publisher": "lu-legilux",
+            "ranking": "none; strict lane before relaxed lane, then work key, publisher date, article identity and state digest. This index holds no BM25 ranker, so a page is the first hits in this order and not the best hits",
+            "requested_after": null,
+            "requested_date": null,
+            "requested_identifier": null,
+            "requested_language": "fra",
+            "requested_mode": null,
+            "requested_query": "assembl\u00E9e g\u00E9n\u00E9rale",
+            "searchable_languages": [
+              "fra"
+            ],
+            "searchable_text_held_for_language": true,
+            "terms": [
+              "assembl\u00E9e",
+              "g\u00E9n\u00E9rale"
+            ],
+            "truncated": false,
+            "work_resolution": {
+              "candidates": null,
+              "outcome": "no_titles_held",
+              "retrieval_lane": "r1_work_discovery",
+              "work": null
+            }
+          }
+        },
+        "schema": "lex-v3-envelope/1",
+        "verdict": "answer",
+        "version": "v3"
+      }
+    },
+    {
+      "operation": "search",
+      "scenario": "no corpus mounted: a refusal",
+      "http_status": 200,
+      "content_type": "application/json;charset=utf-8",
+      "envelope": {
+        "context": {
+          "freshness": {
+            "observed_at": "2026-09-18T07:00:00.0000000Z",
+            "upstream_health": "unreachable"
+          },
+          "jurisdiction": "lu",
+          "provisional": false,
+          "publisher": "lu-legilux",
+          "snapshot": {
+            "snapshot_id": "no-corpus-mounted",
+            "snapshot_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          "status": "refusal",
+          "timeline_semantics": "publisher_applicability"
+        },
+        "object_type": "envelope",
+        "operation_id": "search",
+        "refusal": {
+          "code": "no_corpus_mounted",
+          "helpful_payload": {
+            "required_corpus": "lu"
+          },
+          "schema": "lex-v3-refusal/1"
+        },
+        "registry_schema": "lex-v3-operation-registry/1",
+        "registry_sha256": "abe40749a2364dcbcf69a4427b0977e0510500345056eed4042b2e4758a53ef0",
+        "request_ref": "http_fb09fb7191e84f40f48d21b4532a48ef36c84efacd236a30abd075a5a2b2c639",
+        "result": null,
+        "schema": "lex-v3-envelope/1",
+        "verdict": "refuse",
+        "version": "v3"
+      }
     }
   ]
 }

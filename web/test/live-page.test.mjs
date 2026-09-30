@@ -14,7 +14,7 @@ import { createElement as h } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 
 import { renderToString } from "react-dom/server";
-import { Document, LIVE_CONTRACT, LIVE_MARKER, SYNTHETIC_MARKER, liveCoverageTree, renderLiveCoveragePage } from "../.react-build/app.mjs";
+import { Document, LIVE_CONTRACT, LIVE_MARKER, SYNTHETIC_MARKER, liveCoverageTree, liveSearchTree, renderLiveCoveragePage, renderLiveSearchPage } from "../.react-build/app.mjs";
 import { MAXIMUM_REQUEST_BYTES, createLiveServer } from "../scripts/serve-live.mjs";
 import { buildLive } from "../scripts/build-live.mjs";
 
@@ -40,6 +40,14 @@ test("the tree the browser hydrates is the tree the server rendered (review of #
   assert.equal(inner, renderToString(liveCoverageTree()), "a hydration that changed the markup would re-render silently");
 });
 
+test("the search page's server render is the tree the browser hydrates", () => {
+  const html = renderLiveSearchPage();
+  const open = '<div id="live-search-root">';
+  const root = html.slice(html.indexOf(open) + open.length);
+  assert.ok(root.startsWith(renderToString(liveSearchTree())), "a hydration that changed the markup would re-render silently");
+  assert.match(html, new RegExp(`data-live="${LIVE_MARKER}"`), "the search page is a live page, under the live banner");
+});
+
 test("the live build writes its own directory, embeds the contract and nothing else of the census (review of #765)", async () => {
   const destination = await mkdtemp(join(tmpdir(), "lex-live-build-"));
   const url = new URL(`file:///${destination.replaceAll("\\", "/")}/`);
@@ -52,6 +60,15 @@ test("the live build writes its own directory, embeds the contract and nothing e
     assert.ok(bundle.includes(census.contract.registry_sha256), "the contract is embedded");
     for (const entry of census.envelopes) {
       assert.ok(!bundle.includes(entry.scenario), `the census envelope "${entry.scenario}" is not shipped to the browser`);
+    }
+
+    const search = await readFile(join(destination, "search.html"), "utf8");
+    const searchBundle = await readFile(join(destination, "client-live-search.js"), "utf8");
+    assert.match(search, /<script src="\/client-live-search.js" defer=""><\/script>/);
+    assert.match(search, new RegExp(`data-live="${LIVE_MARKER}"`));
+    assert.ok(searchBundle.includes(census.contract.registry_sha256), "the search bundle embeds the contract");
+    for (const entry of census.envelopes) {
+      assert.ok(!searchBundle.includes(entry.scenario), `the census envelope "${entry.scenario}" is not shipped with the search page`);
     }
   } finally {
     await rm(destination, { recursive: true, force: true });
