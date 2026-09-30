@@ -3,7 +3,7 @@
 Updated 2026-09-30 by the driver. This file replaces the issue-comment ledgers. It is rewritten in
 every pull request that changes what is served, what is next or what is blocked.
 
-## Luxembourg scope input reuse draft (Codex, 2026-09-30)
+## Luxembourg scope input reuse (Codex, 2026-09-30)
 
 Scope resolution retains four rule-evaluation objects and multiple not-applicable selectors per
 resource even when their values are identical. Reversible driver decision: reuse only immutable
@@ -13,12 +13,24 @@ not-applicable selectors. Evidence-bearing selectors retain their existing per-o
 No static cache crosses runs or profiles; projection rules, evidence admission and ordering stay
 unchanged.
 
-This draft is uncompiled and unvalidated while the three-seed EU diagnostic run occupies the
-heavy-job slot. Regression drafts cover 128 distinct objects sharing identity-free values,
-immutable collections, a separate cache per resolution, unchanged repeated serialization and
-mixed missing/accepted record dispositions with exact publisher evidence. Retained-memory
-measurement and affected ingest tests remain required. This is not a full-process fit claim;
-record-set chunking and other retained scope/observation state remain unresolved.
+Validation: clean Release build (85.99 s), `pwsh -File eng/test-fast.ps1` (3,075 passed,
+one platform skip), and 97 affected Luxembourg ingest tests passed. Two regressions cover 128
+objects sharing immutable values, isolation between resolutions, repeated serialization and mixed
+missing/accepted dispositions with exact evidence. Independent reflection kept the global census
+at 211 types and supplied the changed private producer signature pin.
+
+The frozen comparison at `C:\lex-v3\lanes\lu-scope-input-comparison-20260930\comparison.json`
+checks actual loaded assembly hashes and source stamps for baseline 66371006 and candidate
+6209ce9d. For the same 10,000 synthetic empty subjects, retained scope memory after GC fell from
+27,854,264 to 19,280,128 bytes (8,574,136 fewer, about 30.8%). Both diagnostic JSON files have
+SHA-256 `c03f7c39759b4043581cddb58e69e60a789ff2978d4576f4ec6ebb9d0653f643`.
+Projection instances fell from 40,000 to four; not-applicable selectors from 100,000 to three.
+This measures retained synthetic scope results, not transient peaks or full-process fit. Real
+assertion graphs, reduction, corpus persistence and indexes remain outside this measurement.
+
+The full Luxembourg run remains gated on retained-state and persistence sizing. The new disk
+standing order requires space recovery before a large run; cited custody and evidence remain
+preserved. Required cross-family review and green exact-head CI remain merge gates.
 
 ## EU population census refusal diagnostics (Codex, 2026-09-30)
 
