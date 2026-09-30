@@ -3,6 +3,32 @@
 Updated 2026-09-30 by the driver. This file replaces the issue-comment ledgers. It is rewritten in
 every pull request that changes what is served, what is next or what is blocked.
 
+## Retained EU maintenance response retry (Codex draft, 2026-10-01)
+
+The fresh full-EU retry3 ended after490/20,000requests with79/82census families proven.
+Three typed refusals bind HTTP503 to the same retained2,005-byte maintenance page for
+12016E/TXT,32022L2555 and32023R1115. Its SHA-256 is
+e7fab335ce5367cfe359f9f7e0ad6ce1838bec9189a216bc3faf437ce169d404.
+The previous run remains refused; custody and resource samples are preserved at
+C:/lex-v3/eu-population-20261001-1. No Formex or full-population result was produced.
+
+Reversible driver decision: permit the existing four-attempt session retry only for a complete
+503 from the exact Publications Office SPARQL endpoint with that independently reopened body
+digest. Retain each failed route using the existing deadlock path; charge each wire attempt and
+keep session backoff. Different bodies, bot challenges, statuses and publishers remain refused.
+The draft adds10cases for count/page recovery, attempt/route lineage, exhaustion, wire budget,
+changed maintenance bytes, wrong statuses and the same exact page from Luxembourg. Build,
+required fast/ingest tests and cross-family review remain pending. Before the next full run,
+prove/reopen the three affected census families with fresh custody and a bounded wire ceiling.
+
+The offline combined Luxembourg diagnostic completed at merged7144666c, without publisher
+traffic. In its largest synthetic case,9,000subjects and61,000admitted assertions retained
+70,855,000additional managed bytes across semantic, typed and scope results, with an OS peak
+working set of160,976,896bytes. Evidence: C:/lex-v3/lu-combined-graph-20261001-2.
+It repeats one retained assertion pattern, excludes relations and later reduction/corpus/indexes,
+and does not establish full-population fit. The initial diagnostic refused an unadmitted predicate;
+its complete frozen source/runtime/error remain preserved separately in run1.
+
 ## Luxembourg identity canonical output (Codex, 2026-09-30)
 
 The previous observed-object identity writer built a full canonical buffer and copied it again for the
