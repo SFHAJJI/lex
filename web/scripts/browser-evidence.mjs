@@ -296,6 +296,53 @@ export async function waitForDebugger(port, deadlineMs = 20000) {
   throw new Error(`browser debugger never answered on ${port}: ${lastError}`);
 }
 
+/**
+ * Starts a headless browser on a debugging port it binds itself, and answers `{ child, url }`: the
+ * process and its DevTools socket URL.
+ *
+ * A port chosen for the browser (`allocateDebuggerPort`) can already be taken when two browsers start
+ * at once, and a browser that cannot bind its port exits without a word, which the waiting side saw
+ * only as "browser debugger never answered" (the CI failures of keyboard-walk and paint-check, which
+ * start their browsers together). Port 0 lets the browser bind a free port and write it to
+ * `DevToolsActivePort` in its profile. A browser that exits first is reported with its exit code, and a
+ * slow start on a busy runner gets a minute rather than twenty seconds.
+ */
+export async function launchBrowser(browser, profile, args = [], { deadlineMs = 60000 } = {}) {
+  const child = spawn(browser, [
+    "--headless=new", "--remote-debugging-port=0", `--user-data-dir=${profile}`,
+    "--no-first-run", "--no-default-browser-check",
+    // No component or background downloads: a fresh profile per run otherwise leaves Chrome's component
+    // packages in the temporary directory, about 12 MB each, never removed.
+    "--disable-component-update", "--disable-background-networking",
+    ...args,
+    "about:blank",
+  ], { stdio: "ignore" });
+  let exited = null;
+  child.on("exit", (code, signal) => { exited = code ?? signal; });
+  const started = Date.now();
+  while (Date.now() - started < deadlineMs) {
+    if (exited !== null) throw new Error(`the browser exited (${exited}) before it opened its debugging port`);
+    let port = null;
+    try {
+      const first = (await readFile(join(profile, "DevToolsActivePort"), "utf8")).split("\n")[0].trim();
+      if (/^\d+$/.test(first)) port = Number(first);
+    } catch {
+      // Not written yet.
+    }
+    if (port !== null) {
+      try {
+        return { child, url: await waitForDebugger(port, Math.max(1000, deadlineMs - (Date.now() - started))) };
+      } catch (error) {
+        child.kill();
+        throw error;
+      }
+    }
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
+  child.kill();
+  throw new Error(`the browser wrote no debugging port within ${deadlineMs} ms`);
+}
+
 /** A minimal CDP client: send a command, await its reply, observe events. */
 export class Session {
   #socket;
@@ -1760,7 +1807,6 @@ async function main() {
   let measuredPages = 0;
   await sweepStaleProfiles();
   const browser = await findBrowser();
-  const port = allocateDebuggerPort(9222, 500);
   const profile = await mkdtemp(join(tmpdir(), "lex-cdp-"));
   // An induced mutation serves a deliberately broken copy so the gates can be shown red.
   // A gate nobody has watched fail is a gate nobody should trust: the heading-order and
@@ -1770,29 +1816,12 @@ async function main() {
     ? resolvePath(process.env.LEX_EVIDENCE_ROOT)
     : join(process.cwd(), "dist");
   const site = await serveDist(root);
-  const child = spawn(
-    browser,
-    [
-      "--headless=new",
-      `--remote-debugging-port=${port}`,
-      `--user-data-dir=${profile}`,
-      "--no-first-run",
-      "--no-default-browser-check",
-      // No component or background downloads: a fresh profile per run otherwise leaves Chrome's
-      // component packages in the temporary directory, about 12 MB each, never removed.
-      "--disable-component-update",
-      "--disable-background-networking",
-      "--disable-extensions",
-      "--force-prefers-reduced-motion",
-      "about:blank",
-    ],
-    { stdio: "ignore" },
-  );
+  const { child, url } = await launchBrowser(browser, profile, ["--disable-extensions", "--force-prefers-reduced-motion"]);
 
   const failures = [];
   const rows = [];
   try {
-    const session = await Session.open(await waitForDebugger(port));
+    const session = await Session.open(url);
     // Every combination gets a tab of its own. The bounded-network check runs the page's clock on
     // virtual time, and a page cannot leave virtual time once it is in it: "advance" does not
     // return it to the wall clock, it fast-forwards to each next timer for as long as the page
