@@ -13,6 +13,8 @@
 // plural rule (`countedEntry`). The phrases the platform itself sends (a matching rule, a scope, a
 // reason something is not held) are the platform's English and are shown as sent.
 
+import { REFUSAL_CARD_COPY } from './refusal-card.mjs';
+
 const EN = Object.freeze({
   coverage: Object.freeze({
     title: "Trust and Coverage",
@@ -197,6 +199,54 @@ const EN = Object.freeze({
     composeFailed: "This export cannot be composed: {reason}.",
     jsonSummary: "The JSON as it will be saved",
   }),
+  card: Object.freeze({
+    heading: "Evaluation card",
+    target: "Run over: {target}",
+    clean: "Every machine gate on this card passes, and every shuffled control caught its shuffle.",
+    notClean: "{gates}, and {controls}.",
+    gatesNotPassing: Object.freeze({
+      one: "{count} gate does not pass",
+      other: "{count} gates do not pass",
+    }),
+    controlsNotCaught: Object.freeze({
+      one: "{count} shuffled control did not catch the shuffle",
+      other: "{count} shuffled controls did not catch the shuffle",
+    }),
+    listed: "{summary} ({list})",
+    gateListed: "{gate} in {set}, {arm}: {verdict}",
+    controlListed: "{control} in {set}, {arm}: {verdict}",
+    verdict: Object.freeze({ pass: "pass", fail: "fail", not_measured: "not measured" }),
+    controlVerdict: Object.freeze({
+      caught_the_shuffle: "caught the shuffle",
+      missed_the_shuffle: "missed the shuffle",
+      not_applicable: "not applicable",
+    }),
+    caption: "{set}, {arm}: {cases} cases, digest {digest}",
+    columns: Object.freeze({
+      gate: "Gate",
+      verdict: "Verdict",
+      value: "Value",
+      threshold: "Threshold",
+      cases: "Cases",
+      wilson: "Wilson 95%",
+      ruleOfThree: "Rule of three (95%)",
+    }),
+    verdictReason: "{verdict} ({reason})",
+    none: "none",
+    notARate: "not a rate",
+    interval: "{low} to {high}",
+    ruleOfThree: "failure rate below {bound}",
+    controlsHeading: "Shuffled controls",
+    control: "{control} on {set}, {arm}: {verdict}, {reason} (seed {seed}, {cases} cases, digest {digest}).",
+    controlNote: "{control} on {set}, {arm}: {verdict}, {reason} (seed {seed}, {cases} cases, digest {digest}). {note}.",
+    statisticalHeading: "Statistical rows",
+    statistical: "{dataset}, {name}: not yet labelled. Gates {gates}. {governedBy}.",
+    negativeHeading: "Negative results",
+    negative: "Hypothesis: {hypothesis}. Dataset: {dataset}. Result: {result}. Decision: {decision}. What would reverse it: {reverse}.",
+  }),
+  // The refusal card's words, from `refusal-card.mjs`, their one English source (the string renderer
+  // says them too); the French is drafted beside them.
+  refusalCard: REFUSAL_CARD_COPY,
   shell: Object.freeze({
     title: "{title} - Lex V3 live",
     bannerLead: "Live development build.",

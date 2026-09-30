@@ -8,16 +8,18 @@
 // from the table, which a French table could never translate. The pages' structure is untouched by
 // the swap, so the same render proves the table reaches every text node.
 //
-// Three surfaces carry copy of their own and are the next slices, so they are not scanned: the refusal
-// card (a refusal's sentences are the checkpoint list of #793; the card's labels live in
-// `refusal-card.mjs`, shared with the pre-V3 renderer), Trust and Coverage's `Coverage` component,
-// and the evaluation card on that page (`EvaluationCardView`). What an export will carry (its
+// One surface carries copy of its own and is the next slice, so it is not scanned: Trust and Coverage's
+// `Coverage` component. The refusal card is scanned: its words are the table's (from their one English
+// source, `refusal-card.mjs`), and the sentence a refusal says is the checkpoint list's (#793), with
+// its own French drafts, so it counts as data here. The evaluation card is scanned too: its words are
+// the table's and its figures the card's. What an export will carry (its
 // watermark, its JSON) is the file's content, shown as the file will hold it, not interface text.
 
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 import test from "node:test";
+import { dirname } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 import { build } from "esbuild";
@@ -56,7 +58,8 @@ async function pseudoBuild() {
           const source = await readFile(args.path, "utf8");
           const table = "export const LIVE_CHROME = Object.freeze({ en: EN });";
           assert.equal(source.split(table).length, 2, "the table is exported once, as the swap expects");
-          return { contents: source.replace(table, `${PSEUDO_SOURCE}\nexport const LIVE_CHROME = Object.freeze({ en: __pseudo(EN) });`), loader: "js" };
+          // `resolveDir`, so the table's own imports (the refusal card's words) resolve as they do unswapped.
+          return { contents: source.replace(table, `${PSEUDO_SOURCE}\nexport const LIVE_CHROME = Object.freeze({ en: __pseudo(EN) });`), loader: "js", resolveDir: dirname(args.path) };
         });
       },
     }],
@@ -95,12 +98,23 @@ function split(markup, attribute) {
   throw new Error(`the element with ${attribute} is never closed`);
 }
 
+/**
+ * The evaluation card as the data it shows: every value but its verdicts, which the page says in the
+ * table's words ("pass", "caught the shuffle"), so a verdict written into the page by hand is caught
+ * (review of #807: the card's "pass" exempted a hard-coded "pass").
+ */
+function withoutVerdicts(node) {
+  if (Array.isArray(node)) return node.map(withoutVerdicts);
+  if (node === null || typeof node !== "object") return node;
+  return Object.fromEntries(Object.entries(node).filter(([key]) => key !== "verdict").map(([key, value]) => [key, withoutVerdicts(value)]));
+}
+
 /** Every string and number an answer carries, longest first, so a longer value is taken out whole. */
 function dataOf(...values) {
   const found = new Set();
   const walk = (node) => {
     if (typeof node === "string") found.add(node);
-    else if (typeof node === "number") found.add(String(node));
+    else if (typeof node === "number" || typeof node === "boolean") found.add(String(node));
     else if (Array.isArray(node)) node.forEach(walk);
     else if (node !== null && typeof node === "object") Object.values(node).forEach(walk);
   };
@@ -143,17 +157,16 @@ test("no interface text on a live page or a census answer bypasses the chrome ta
     radar: app.renderLiveRadarPage, export: app.renderLiveExportPage,
   };
   for (const [name, render] of Object.entries(pages)) {
-    const page = name === "coverage" ? split(render(), 'data-evaluation-card=""').outside : render();
     // The locale navigation names each language in that language, which no table translates. Only
     // there: a language named anywhere else is the interface's word for it (review of #806: the
-    // statute-language selects' "English" hid behind a page-wide exemption).
-    const { inside: nav, outside: rest } = split(page, 'data-locale-nav=""');
-    scan(`${name} page`, rest, []);
+    // statute-language selects' "English" hid behind a page-wide exemption). The evaluation card's own
+    // values (its target sentence, set names, figures) are the card's.
+    const { inside: nav, outside: rest } = split(render(), 'data-locale-nav=""');
+    scan(`${name} page`, rest, name === "coverage" ? dataOf(withoutVerdicts(app.CENSUS_EVALUATION_CARD)) : []);
     scan(`${name} locale navigation`, nav, dataOf(["English", "Français", "Deutsch", "Lëtzebuergesch"]));
   }
 
-  // Every census answer each screen shows, through its view. Refusals are the checkpoint list's and the
-  // card's, so only answers are scanned here.
+  // Every census answer and refusal each screen shows, through its view.
   const screens = [
     ["search", "search", "live-search.mjs", "searchOutcome", app.SearchAnswerView],
     ["dossier", "dossier", "live-dossier.mjs", "dossierOutcome", app.DossierAnswerView],
@@ -164,8 +177,19 @@ test("no interface text on a live page or a census answer bypasses the chrome ta
     ["export", "evidence_bundle", "live-reading.mjs", "readingOutcome", app.ExportAnswerView],
   ];
   const answered = new Set();
-  for (const [name, operation, module, outcomeName, View] of screens) {
+  const refused = new Set();
+  for (const [name, operation, module, outcomeName, View] of [...screens, ["coverage", "coverage", "live-coverage.mjs", "coverageOutcome", app.CoverageAnswerView]]) {
     const scripts = await import(new URL(`scripts/${module}`, web).href);
+    for (const entry of census.envelopes.filter((candidate) => candidate.operation === operation && candidate.envelope.refusal)) {
+      const outcome = scripts[outcomeName]({ state: "refusal", envelope: entry.envelope });
+      // The card lists the payload as the platform sent it, each member under its own name (a driver
+      // decision: the member names are the contract's, like the refusal code beside them).
+      const members = Object.keys(entry.envelope.refusal.helpful_payload ?? {});
+      scan(`${name}: ${entry.scenario}`, renderToStaticMarkup(h(View, { outcome, pins: new Set(), onPin: () => {}, onNextPage: () => {} })), dataOf(entry.envelope, members, [outcome.sentence]));
+      refused.add(name);
+    }
+    // Trust and Coverage's answer is the `Coverage` component's, the next slice.
+    if (name === "coverage") continue;
     for (const entry of census.envelopes.filter((candidate) => candidate.operation === operation && !candidate.envelope.refusal)) {
       const outcome = scripts[outcomeName]({ state: "success", envelope: entry.envelope });
       assert.equal(outcome.state, "success", `${name}: ${entry.scenario}`);
@@ -185,5 +209,6 @@ test("no interface text on a live page or a census answer bypasses the chrome ta
     }
   }
   assert.deepEqual([...answered].sort(), screens.map(([name]) => name).sort(), "every screen had a census answer to scan");
+  assert.deepEqual([...refused].sort(), [...screens.map(([name]) => name), "coverage"].sort(), "every screen had a census refusal to scan");
   assert.deepEqual(found, [], `interface text outside the chrome table:\n${found.join("\n")}`);
 });
