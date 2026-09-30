@@ -18,6 +18,7 @@ import { useEffect, useRef, useState } from 'react';
 import { RefusalCard } from './RefusalCard.jsx';
 import { HISTORY_LANGUAGES, LIVE_HISTORY_IDLE, createHistorySession } from '../scripts/live-history.mjs';
 import { liveChrome } from '../scripts/live-chrome.mjs';
+import { LiveAnswer } from './LiveAnswer.jsx';
 
 /** The forms' labels and buttons, from the interface copy table. */
 const FORM = liveChrome().form;
@@ -186,7 +187,9 @@ export function LiveHistory({ contract, fetchImpl }) {
         </label>{' '}
         <button type="submit">{FORM.submit.history}</button>
       </form>
-      <HistoryAnswerView outcome={outcome} />
+      <LiveAnswer>
+        <HistoryAnswerView outcome={outcome} />
+      </LiveAnswer>
     </div>
   );
 }

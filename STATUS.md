@@ -56,11 +56,11 @@ CI evidence are recorded in the pull request before merge.
 
 ## Heads
 
-- `v3/integration`: `7ccc31ea` (2026-09-30, PR #798 merged). Fast lane
-  (`eng/test-fast.ps1`): 3,067 tests, 3,066 pass, 1 skipped. Ingest suite: green on CI for PR #760
+- `v3/integration`: `de1052b2` (2026-09-30, PR #802 merged). Fast lane
+  (`eng/test-fast.ps1`): 3,067 tests, 3,066 pass, 1 skipped (PR #798's validation). Ingest suite: green on CI for PR #760
   (the CI `dotnet` job runs the whole solution on every pull request, about 7 min on the runner;
   green for PR #798);
-  locally about 15 min. 935 web tests pass. CI's web job can flake in `keyboard-walk.test.mjs`
+  locally about 15 min. 937 web tests pass. CI's web job can flake in `keyboard-walk.test.mjs`
   ("browser debugger never answered"); rerunning the failed job is the fix.
 - Driver: Claude Opus 5.5 since 2026-09-29 (the Fable 5.1 driver ran out of tokens on 2026-09-28
   after PR #757; the user default model is now `claude-opus-5-5`).
@@ -286,7 +286,7 @@ schema's `parameters` shape, and whose call runs the same dispatch the REST rout
 endpoint test proves it for all twenty-three. The launch-contract line "REST and MCP derive identical
 envelopes from the registry" is the owner's to tick.
 
-Web: 38 React components, 935 tests. Preview screens render fixtures. The V3 Luxembourg search
+Web: 39 React components, 937 tests. Preview screens render fixtures. The V3 Luxembourg search
 answer has a reader (PR #771). The answer census now samples `search` five ways from the real handler:
 - a phrase with 4 strict hits and 1 relaxed hit;
 - the same phrase one hit per page, with its cursor;
@@ -630,6 +630,23 @@ judged apart rather than admitted by its text. With the check, all sixteen journ
 all sixteen again with `--served-by-api` (run 2026-09-30 on the journey mount written again that
 day: the data lane's corpus format change had made the earlier mount unreadable, "the corpus
 manifest-set bytes are not one valid typed document").
+
+Keyboard and screen-reader paths through the eight screens (PR #802, the launch contract's
+accessibility line).
+- Screen reader: every live screen writes its answer (the result, the refusal card, or the sentence
+  a state carries) into a polite live region (`LiveAnswer`) that the server renders around the idle
+  or loading state, so the region exists before the answer arrives and a screen reader hears it.
+  The export composer's panel is a live region of its own, since pinning changes it and the reading
+  above does not. Every journey run now holds the answer to that region, at load and at the end.
+- Keyboard: `journey.mjs --keyboard` drives every form step by the keyboard alone: from the top of
+  the page, Tab until each text field has focus, type key by key, Enter to submit; the export
+  composer's pin is reached by Tab and checked with Space. Each character is its own key press, and
+  the page counts the character keys it receives: a run whose text arrived without them fails (the
+  review of #802 found CDP's `Input.insertText` sets a field with no key event at all). Every focus stop on the way must show a focus indicator
+  (an outline or a shadow), and Tab must reach every field the step types into (a text or a search
+  field). All sixteen runs pass with `--keyboard`, and all sixteen with `--keyboard --served-by-api`
+  (run 2026-09-30); the first run found the search box is `type="search"`, which the keyboard path
+  now types into as well.
 
 The live export composer and its journey step (PR #789), the eighth screen. `dist-live/export.html`
 has its own bundle `client-live-export.js`.
@@ -1168,10 +1185,11 @@ has not yet run; the bounded first mount above is complete.
    for the checkpoint (ruling 4); PR #794: the absence refusals carry the card's evidence, so the
    live pages show them as cards; PR #796: every citation the served answers emit verifies; PR #797:
    the interface languages, German and Luxembourgish (and French until reviewed) answering
-   `localization_unavailable`; PR #800: the live pages' chrome in one table. Next: keyboard and
-   screen-reader paths for the eight screens, the screens' labels and sentences into the chrome
-   table, then French drafted beside it for review; French ships only once reviewed (Decision
-   41). Hosting (ruling 3): `Lex.V3.Api`
+   `localization_unavailable`; PR #800: the live pages' chrome in one table; PR #801: the API process
+   records nothing while a browser asks it; PR #802: the keyboard and screen-reader paths (live
+   regions, and the journey's keyboard mode). Next: the screens' labels and sentences into the
+   chrome table, then French drafted beside it for review; French ships only once reviewed
+   (Decision 41). Hosting (ruling 3): `Lex.V3.Api`
    serves the live pages on the API's origin with `frame-ancestors`, HSTS and `Referrer-Policy`,
    and a live page never shows the synthetic banner on a real mount. J1 to J8 are restated as V3
    steps by the driver (they exist only in the pre-V3 pack, `05-user-journeys.md`).

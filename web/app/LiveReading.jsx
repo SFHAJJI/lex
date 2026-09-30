@@ -16,6 +16,7 @@
 import { useEffect, useRef, useState } from 'react';
 
 import { RefusalCard } from './RefusalCard.jsx';
+import { LiveAnswer } from './LiveAnswer.jsx';
 import {
   LIVE_READING_IDLE,
   READING_LANGUAGES,
@@ -202,7 +203,9 @@ export function LiveReading({ contract, fetchImpl }) {
   return (
     <div>
       <ReadingForm onAsk={(request) => session.current.ask(request)} />
-      <ReadingAnswerView outcome={outcome} />
+      <LiveAnswer>
+        <ReadingAnswerView outcome={outcome} />
+      </LiveAnswer>
     </div>
   );
 }

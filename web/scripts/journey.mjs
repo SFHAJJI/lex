@@ -23,7 +23,13 @@
 // driven over the DevTools protocol by the same `Session`.
 //
 //   node scripts/journey.mjs --api <Lex.V3.Api build output> --mount <journey mount directory>
-//                            [--live-root <a built live directory>] [--served-by-api] [--verbose]
+//                            [--live-root <a built live directory>] [--served-by-api] [--keyboard] [--verbose]
+//
+// With `--keyboard` every form step is driven by the keyboard alone (the launch contract's keyboard
+// path): from the top of the page, Tab until each text field has focus, type, Enter to submit; the
+// export composer's pin is reached by Tab and checked with Space. Every focus stop must show a focus
+// indicator. In every run, keyboard or not, the answer must be written into a polite live region the
+// server already rendered (the screen-reader path).
 //
 // With `--served-by-api` the pages are not served by `serve-live.mjs`: the built directory is placed
 // beside the API as `v3-web` and the API serves it on its own origin (Decision 95, ruling 3), and
@@ -171,6 +177,25 @@ export function journeyVerdict(observed, expected) {
     if (observed.history.state !== "null") failures.push(`the page wrote history state: ${observed.history.state}`);
   }
   if (observed.cookie !== undefined && observed.cookie !== "") failures.push(`the page set a cookie: ${observed.cookie}`);
+  // The answer is written into a polite live region that exists before it arrives, so a screen reader
+  // hears it (the launch contract's screen-reader path).
+  if (observed.liveRegion !== undefined) {
+    if (observed.liveRegion.atLoad !== "polite") failures.push(`the answer's region at load is ${observed.liveRegion.atLoad === null ? "in no live region" : `aria-live=${observed.liveRegion.atLoad}`}, not polite`);
+    if (observed.liveRegion.atEnd !== "polite") failures.push(`the answer arrived ${observed.liveRegion.atEnd === null ? "outside any live region" : `in aria-live=${observed.liveRegion.atEnd}`}, not a polite one`);
+  }
+  // The keyboard path: every field reached by Tab alone, every stop showing where focus is.
+  if (expected.keyboard && step.typed !== undefined) {
+    const keys = observed.keyboard;
+    if (keys === undefined) failures.push("the run took no keyboard path");
+    else {
+      if (keys.placed !== keys.wanted) failures.push(`Tab reached ${keys.placed} of the form's ${keys.wanted} text fields`);
+      // Not `<`: a count the page never kept (undefined) must fail, not pass.
+      if (!(keys.keyPresses >= keys.characters)) failures.push(`text arrived without key presses: ${keys.characters} characters typed, ${keys.keyPresses} character keys pressed`);
+      for (const stop of keys.stops.filter((candidate) => !candidate.ring)) {
+        failures.push(`a focus stop shows no focus indicator: ${stop.tag}${stop.type ? `[type=${stop.type}]` : ""} "${stop.label}"`);
+      }
+    }
+  }
   if (observed.api !== undefined) {
     // What the API process recorded while serving the run: nothing, on its outputs or in its files.
     const typed = step.typed === undefined ? [] : [step.typed].flat();
@@ -344,7 +369,95 @@ async function typeAndSubmit(session, sessionId, evaluate, deadline, typed) {
   await evaluate("document.querySelector('form[role=search] button[type=submit]').click()");
 }
 
-async function observe(browser, pageOrigin, step) {
+const KEYS = Object.freeze({ Tab: { code: "Tab", vk: 9 }, Enter: { code: "Enter", vk: 13, text: String.fromCharCode(13) }, " ": { code: "Space", vk: 32, text: " " } });
+
+/** One key pressed as a keyboard presses it: down, the character it types (if any), up. */
+async function pressKey(session, sessionId, key) {
+  const { code, vk, text } = KEYS[key];
+  await session.send("Input.dispatchKeyEvent", { type: "rawKeyDown", key, code, windowsVirtualKeyCode: vk, nativeVirtualKeyCode: vk }, sessionId);
+  if (text !== undefined) await session.send("Input.dispatchKeyEvent", { type: "char", key, code, text, windowsVirtualKeyCode: vk }, sessionId);
+  await session.send("Input.dispatchKeyEvent", { type: "keyUp", key, code, windowsVirtualKeyCode: vk, nativeVirtualKeyCode: vk }, sessionId);
+}
+
+/**
+ * Text typed as a keyboard types it: each character its own key press (down, with the character, then
+ * up), so the page receives keydown, keypress and input for every character. `Input.insertText`
+ * changes a field with no key event at all, so a keyboard path built on it proves nothing about typing
+ * (review of #802).
+ */
+async function typeByKeys(session, sessionId, text) {
+  for (const character of text) {
+    await session.send("Input.dispatchKeyEvent", { type: "keyDown", key: character, text: character, unmodifiedText: character }, sessionId);
+    await session.send("Input.dispatchKeyEvent", { type: "keyUp", key: character }, sessionId);
+  }
+}
+
+/** Counts, in the page, the character keys pressed (a key whose name is one character). */
+const COUNT_CHARACTER_KEYS = `(() => {
+  window.__journeyCharacterKeys = 0;
+  document.addEventListener('keydown', (event) => { if ([...event.key].length === 1) window.__journeyCharacterKeys += 1; }, true);
+})()`;
+
+/** What has focus, and whether it shows a focus indicator (an outline or a shadow). */
+const FOCUSED = `(() => {
+  const el = document.activeElement;
+  if (!el || el === document.body) return null;
+  const style = getComputedStyle(el);
+  const ring = (parseFloat(style.outlineWidth) > 0 && style.outlineStyle !== 'none') || (style.boxShadow !== 'none' && style.boxShadow !== '');
+  return { tag: el.tagName.toLowerCase(), type: el.getAttribute('type'), inForm: el.closest('form[role=search]') !== null, pin: el.matches('input[data-pin]'), label: (el.labels?.[0]?.textContent ?? el.textContent ?? '').trim().slice(0, 40), ring };
+})()`;
+
+/**
+ * The keyboard path through a form step: from the top of the page, Tab until each of the form's text
+ * fields (text or search) has focus in turn, type into it key by key, then press Enter, which submits
+ * the form as a keyboard user submits it. Every focus stop on the way is recorded with whether it
+ * shows a focus indicator, and the page counts the character keys it received.
+ */
+async function keyboardTypeAndSubmit(session, sessionId, evaluate, deadline, typed) {
+  while (Date.now() < deadline && (await evaluate("document.documentElement.dataset.hydrated ?? null")) === null) {
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
+  await evaluate("document.activeElement && document.activeElement.blur(); window.scrollTo(0, 0)");
+  await evaluate(COUNT_CHARACTER_KEYS);
+  const texts = Array.isArray(typed) ? typed : [typed];
+  const stops = [];
+  let placed = 0;
+  let characters = 0;
+  for (let tab = 0; tab < 40 && placed < texts.length; tab += 1) {
+    await pressKey(session, sessionId, "Tab");
+    const focused = await evaluate(FOCUSED);
+    if (focused === null) continue;
+    stops.push(focused);
+    if (focused.inForm && focused.tag === "input" && (focused.type === "text" || focused.type === "search")) {
+      await typeByKeys(session, sessionId, texts[placed]);
+      characters += [...texts[placed]].length;
+      placed += 1;
+    }
+  }
+  const keyPresses = await evaluate("window.__journeyCharacterKeys");
+  if (placed === texts.length) await pressKey(session, sessionId, "Enter");
+  return { stops, placed, wanted: texts.length, characters, keyPresses };
+}
+
+/** The keyboard path to a pin: Tab until a pin has focus, then Space, which checks it. */
+async function keyboardPin(session, sessionId, evaluate, stops) {
+  for (let tab = 0; tab < 80; tab += 1) {
+    await pressKey(session, sessionId, "Tab");
+    const focused = await evaluate(FOCUSED);
+    if (focused === null) continue;
+    stops.push(focused);
+    if (focused.pin) {
+      await pressKey(session, sessionId, " ");
+      return "clicked";
+    }
+  }
+  return "absent";
+}
+
+/** The politeness of the live region the answer is written into, or null when it is in none. */
+const ANSWER_LIVE_REGION = "document.querySelector('[data-answer-state]')?.closest('[aria-live]')?.getAttribute('aria-live') ?? null";
+
+async function observe(browser, pageOrigin, step, { keyboard = false } = {}) {
   const port = allocateDebuggerPort(9800, 300);
   const profile = await mkdtemp(join(tmpdir(), "lex-journey-cdp-"));
   const chrome = spawn(browser, [
@@ -398,7 +511,10 @@ async function observe(browser, pageOrigin, step) {
       await new Promise((resolve) => setTimeout(resolve, 50));
     }
     const historyAtLoad = await evaluate("history.length");
-    if (step.typed !== undefined) await typeAndSubmit(session, sessionId, evaluate, deadline, step.typed);
+    const liveRegionAtLoad = await evaluate(ANSWER_LIVE_REGION);
+    let keys;
+    if (step.typed !== undefined && keyboard) keys = await keyboardTypeAndSubmit(session, sessionId, evaluate, deadline, step.typed);
+    else if (step.typed !== undefined) await typeAndSubmit(session, sessionId, evaluate, deadline, step.typed);
     let answerState = null;
     while (Date.now() < deadline) {
       answerState = await evaluate("document.querySelector('[data-answer-state]')?.dataset.answerState ?? null");
@@ -409,7 +525,9 @@ async function observe(browser, pageOrigin, step) {
     // reach its state before the deadline.
     let then;
     if (step.then !== undefined && answerState === "success") {
-      then = await evaluate(`(() => { const node = document.querySelector(${JSON.stringify(step.then.click)}); if (node === null) return "absent"; node.click(); return "clicked"; })()`);
+      then = keyboard
+        ? await keyboardPin(session, sessionId, evaluate, keys.stops)
+        : await evaluate(`(() => { const node = document.querySelector(${JSON.stringify(step.then.click)}); if (node === null) return "absent"; node.click(); return "clicked"; })()`);
       while (then === "clicked" && Date.now() < deadline) {
         if (await evaluate(`document.querySelector(${JSON.stringify(step.then.until)}) !== null`)) then = "reached";
         else await new Promise((resolve) => setTimeout(resolve, 100));
@@ -439,6 +557,8 @@ async function observe(browser, pageOrigin, step) {
       pageHeaders,
       then,
       userAgent: await evaluate("navigator.userAgent"),
+      liveRegion: { atLoad: liveRegionAtLoad, atEnd: await evaluate(ANSWER_LIVE_REGION) },
+      keyboard: keys,
     };
   } finally {
     chrome.kill();
@@ -452,7 +572,7 @@ async function run(apiOutput, mount, expected, browser, liveRoot) {
   const live = expected.servedByApi ? null : createLiveServer({ root: liveRoot, apiOrigin: api.origin });
   const pageOrigin = live === null ? api.origin : await listen(live);
   try {
-    const observed = await observe(browser, pageOrigin, expected.step);
+    const observed = await observe(browser, pageOrigin, expected.step, { keyboard: expected.keyboard === true });
     const fileEvents = await api.fileWatch.stop();
     const filesAtEnd = await listFiles(api.home);
     const changedFiles = [...filesAtEnd].filter(([path, facts]) => api.filesAtStart.get(path) !== facts).map(([path]) => path);
@@ -481,30 +601,33 @@ async function main(argv) {
   const liveRoot = argv.includes("--live-root") ? argument("--live-root") : await buildLive();
   const browser = await findBrowser();
   const servedByApi = argv.includes("--served-by-api");
+  const keyboard = argv.includes("--keyboard");
   const { coverage, search, dossier, reading, history, compare, radar, export: exporting } = JOURNEY_STEPS;
   const results = [
-    ["coverage, with the fixture mount", await run(apiOutput, mount, { servedByApi, step: coverage, state: "success", corpusSha256: journeyMount.corpus_sha256, indexSha256: journeyMount.index_sha256 }, browser, liveRoot)],
-    ["coverage, with no mount", await run(apiOutput, null, { servedByApi, step: coverage, state: "refusal", refusalCode: "no_corpus_mounted" }, browser, liveRoot)],
-    ["search, with the fixture mount", await run(apiOutput, mount, { servedByApi, step: search, state: "success", texts: [`“${SEARCH_PHRASE}” in fra: 4 with the exact phrase, 1 with every word, in 1 work.`, "art_15 in", "The first hits in the stated order, not the best hits."] }, browser, liveRoot)],
-    ["search, with no mount", await run(apiOutput, null, { servedByApi, step: search, state: "refusal", refusalCode: "no_corpus_mounted" }, browser, liveRoot)],
-    ["dossier, with the fixture mount", await run(apiOutput, mount, { servedByApi, step: dossier, state: "success", texts: [journeyMount.work_key, "1 state, from 2024-02-01 to 2024-02-01.", "What this dossier does not hold"] }, browser, liveRoot)],
-    ["dossier, with no mount", await run(apiOutput, null, { servedByApi, step: dossier, state: "refusal", refusalCode: "no_corpus_mounted" }, browser, liveRoot)],
-    ["reading, with the fixture mount", await run(apiOutput, mount, { servedByApi, step: reading, state: "success", texts: ["the state applying from 2024-02-01", "49 articles quoted", "Art. 15.", "Text served under agreed_same_run_cc_by"] }, browser, liveRoot)],
-    ["reading, with no mount", await run(apiOutput, null, { servedByApi, step: reading, state: "refusal", refusalCode: "no_corpus_mounted" }, browser, liveRoot)],
-    ["history, with the fixture mount", await run(apiOutput, mount, { servedByApi, step: history, state: "success", texts: [`${HISTORY_ANCHOR} in loi-1991-08-10-n3`, "Carried by 1 held state, from 2024-02-01", "first held wording"] }, browser, liveRoot)],
-    ["history, with no mount", await run(apiOutput, null, { servedByApi, step: history, state: "refusal", refusalCode: "no_corpus_mounted" }, browser, liveRoot)],
-    ["compare, with the fixture mount", await run(apiOutput, mount, { servedByApi, step: compare, state: "success", texts: [`loi-1991-08-10-n3: ${READING_DATE} against ${READING_DATE}.`, "The same version applied on both dates."] }, browser, liveRoot)],
-    ["compare, with no mount", await run(apiOutput, null, { servedByApi, step: compare, state: "refusal", refusalCode: "no_corpus_mounted" }, browser, liveRoot)],
-    ["radar, with the fixture mount", await run(apiOutput, mount, { servedByApi, step: radar, state: "success", texts: [`${READING_DATE} to ${READING_DATE}: 1 state of 1 work, of 1 held.`, "not compared: the first state this index holds"] }, browser, liveRoot)],
-    ["radar, with no mount", await run(apiOutput, null, { servedByApi, step: radar, state: "refusal", refusalCode: "no_corpus_mounted" }, browser, liveRoot)],
-    ["export, with the fixture mount", await run(apiOutput, mount, { servedByApi, step: exporting, state: "success", texts: ["1 article pinned: 1 exported with text, 0 excluded.", EXPORT_WATERMARK, "Text served under agreed_same_run_cc_by."] }, browser, liveRoot)],
-    ["export, with no mount", await run(apiOutput, null, { servedByApi, step: exporting, state: "refusal", refusalCode: "no_corpus_mounted" }, browser, liveRoot)],
+    ["coverage, with the fixture mount", await run(apiOutput, mount, { servedByApi, keyboard, step: coverage, state: "success", corpusSha256: journeyMount.corpus_sha256, indexSha256: journeyMount.index_sha256 }, browser, liveRoot)],
+    ["coverage, with no mount", await run(apiOutput, null, { servedByApi, keyboard, step: coverage, state: "refusal", refusalCode: "no_corpus_mounted" }, browser, liveRoot)],
+    ["search, with the fixture mount", await run(apiOutput, mount, { servedByApi, keyboard, step: search, state: "success", texts: [`“${SEARCH_PHRASE}” in fra: 4 with the exact phrase, 1 with every word, in 1 work.`, "art_15 in", "The first hits in the stated order, not the best hits."] }, browser, liveRoot)],
+    ["search, with no mount", await run(apiOutput, null, { servedByApi, keyboard, step: search, state: "refusal", refusalCode: "no_corpus_mounted" }, browser, liveRoot)],
+    ["dossier, with the fixture mount", await run(apiOutput, mount, { servedByApi, keyboard, step: dossier, state: "success", texts: [journeyMount.work_key, "1 state, from 2024-02-01 to 2024-02-01.", "What this dossier does not hold"] }, browser, liveRoot)],
+    ["dossier, with no mount", await run(apiOutput, null, { servedByApi, keyboard, step: dossier, state: "refusal", refusalCode: "no_corpus_mounted" }, browser, liveRoot)],
+    ["reading, with the fixture mount", await run(apiOutput, mount, { servedByApi, keyboard, step: reading, state: "success", texts: ["the state applying from 2024-02-01", "49 articles quoted", "Art. 15.", "Text served under agreed_same_run_cc_by"] }, browser, liveRoot)],
+    ["reading, with no mount", await run(apiOutput, null, { servedByApi, keyboard, step: reading, state: "refusal", refusalCode: "no_corpus_mounted" }, browser, liveRoot)],
+    ["history, with the fixture mount", await run(apiOutput, mount, { servedByApi, keyboard, step: history, state: "success", texts: [`${HISTORY_ANCHOR} in loi-1991-08-10-n3`, "Carried by 1 held state, from 2024-02-01", "first held wording"] }, browser, liveRoot)],
+    ["history, with no mount", await run(apiOutput, null, { servedByApi, keyboard, step: history, state: "refusal", refusalCode: "no_corpus_mounted" }, browser, liveRoot)],
+    ["compare, with the fixture mount", await run(apiOutput, mount, { servedByApi, keyboard, step: compare, state: "success", texts: [`loi-1991-08-10-n3: ${READING_DATE} against ${READING_DATE}.`, "The same version applied on both dates."] }, browser, liveRoot)],
+    ["compare, with no mount", await run(apiOutput, null, { servedByApi, keyboard, step: compare, state: "refusal", refusalCode: "no_corpus_mounted" }, browser, liveRoot)],
+    ["radar, with the fixture mount", await run(apiOutput, mount, { servedByApi, keyboard, step: radar, state: "success", texts: [`${READING_DATE} to ${READING_DATE}: 1 state of 1 work, of 1 held.`, "not compared: the first state this index holds"] }, browser, liveRoot)],
+    ["radar, with no mount", await run(apiOutput, null, { servedByApi, keyboard, step: radar, state: "refusal", refusalCode: "no_corpus_mounted" }, browser, liveRoot)],
+    ["export, with the fixture mount", await run(apiOutput, mount, { servedByApi, keyboard, step: exporting, state: "success", texts: ["1 article pinned: 1 exported with text, 0 excluded.", EXPORT_WATERMARK, "Text served under agreed_same_run_cc_by."] }, browser, liveRoot)],
+    ["export, with no mount", await run(apiOutput, null, { servedByApi, keyboard, step: exporting, state: "refusal", refusalCode: "no_corpus_mounted" }, browser, liveRoot)],
   ];
   let failed = false;
   for (const [label, { observed, failures }] of results) {
     const toApi = observed.requests.filter((request) => new URL(request.url).pathname.startsWith("/api/")).length;
     console.log(`${label}: ${observed.answerState}; ${observed.requests.length} requests (${toApi} to the API); ` +
-      `console ${observed.console.length}; hydration ${observed.hydrated}; ${failures.length === 0 ? "PASS" : "FAIL"}`);
+      `console ${observed.console.length}; hydration ${observed.hydrated}; ` +
+      `${observed.keyboard ? `${observed.keyboard.keyPresses} of ${observed.keyboard.characters} characters typed by key; ` : ""}` +
+      `${failures.length === 0 ? "PASS" : "FAIL"}`);
     for (const failure of failures) console.log(`  - ${failure}`);
     if (argv.includes("--verbose")) {
       for (const request of observed.requests) {
