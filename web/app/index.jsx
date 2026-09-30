@@ -27,6 +27,8 @@ export { CoverageAnswerView, LiveCoverage } from './LiveCoverage.jsx';
 export { LIVE_CONTRACT, LIVE_COVERAGE_ROOT, liveCoverageTree, renderLiveCoveragePage } from './live-coverage-page.jsx';
 export { LiveSearch, SearchAnswerView, SearchResultsView } from './LiveSearch.jsx';
 export { LIVE_SEARCH_ROOT, liveSearchTree, renderLiveSearchPage } from './live-search-page.jsx';
+export { DossierAnswerView, DossierView, LiveDossier } from './LiveDossier.jsx';
+export { LIVE_DOSSIER_ROOT, liveDossierTree, renderLiveDossierPage } from './live-dossier-page.jsx';
 export {
   renderTimelineReactPage,
   renderCoverageReactPage,

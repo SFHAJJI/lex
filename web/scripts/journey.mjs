@@ -1,10 +1,11 @@
 // Browser journey steps against a live API, each read in a real browser.
 //
-// Two steps, each run twice. Trust and Coverage: with a mount, the page must end in the coverage
-// answer and show the digests of the corpus and index that mount holds. Search: once the page has
-// hydrated, the journey types a phrase into the form and submits it; with a mount, the page must
-// end in the answer's hits, and the one request must carry exactly the phrase and the language.
-// Without a mount, each must end in the refusal card for `no_corpus_mounted`. In every run, what the
+// Three steps, each run twice. Trust and Coverage: with a mount, the page must end in the coverage
+// answer and show the digests of the corpus and index that mount holds. Search and dossier: once the
+// page has hydrated, the journey types into the form (a phrase; a work identifier) and submits it;
+// with a mount, the page must end in the answer, and the one request must carry exactly what was
+// typed and nothing else. Without a mount, each must end in the refusal card for
+// `no_corpus_mounted`. In every run, what the
 // browser did is measured, not assumed: exactly one request to the API (`POST /api/v3/{operation}`,
 // no query string, no referrer, no cookie), every other request a same-origin asset, the page still
 // at its own address with no history entry added and no history state written, no cookie set,
@@ -39,13 +40,23 @@ export const ANSWER_DEADLINE_MS = 30_000;
 /** The phrase the search step types: on the fixture mount, 4 strict hits and 1 relaxed. */
 export const SEARCH_PHRASE = "assemblée générale";
 
+/** The identifier the dossier step types: the fixture mount's one work, asked in any held language. */
+export const DOSSIER_IDENTIFIER = "/lu-legilux/loi-1991-08-10-n3";
+
 /** The two steps: the page each loads, the operation it must ask, and what it does before waiting. */
 export const JOURNEY_STEPS = Object.freeze({
   coverage: Object.freeze({ path: "/", operation: "coverage", body: null }),
   search: Object.freeze({
     path: "/search.html",
     operation: "search",
+    typed: SEARCH_PHRASE,
     body: Object.freeze({ operation_id: "search", parameters: Object.freeze({ query: SEARCH_PHRASE, language: "fra" }) }),
+  }),
+  dossier: Object.freeze({
+    path: "/dossier.html",
+    operation: "dossier",
+    typed: DOSSIER_IDENTIFIER,
+    body: Object.freeze({ operation_id: "dossier", parameters: Object.freeze({ identifier: DOSSIER_IDENTIFIER }) }),
   }),
 });
 
@@ -182,13 +193,13 @@ async function startApi(apiOutput, mount) {
     : `the API did not answer within 60 s: ${stderr}`);
 }
 
-/** The search step's action: once hydrated, type the phrase into the form and submit it. */
-async function typeAndSubmit(session, sessionId, evaluate, deadline) {
+/** A form step's action: once hydrated, type into the form's text field and submit it. */
+async function typeAndSubmit(session, sessionId, evaluate, deadline, typed) {
   while (Date.now() < deadline && (await evaluate("document.documentElement.dataset.hydrated ?? null")) === null) {
     await new Promise((resolve) => setTimeout(resolve, 100));
   }
   await evaluate("document.querySelector('form[role=search] input').focus()");
-  await session.send("Input.insertText", { text: SEARCH_PHRASE }, sessionId);
+  await session.send("Input.insertText", { text: typed }, sessionId);
   await evaluate("document.querySelector('form[role=search] button[type=submit]').click()");
 }
 
@@ -240,7 +251,7 @@ async function observe(browser, pageOrigin, step) {
       await new Promise((resolve) => setTimeout(resolve, 50));
     }
     const historyAtLoad = await evaluate("history.length");
-    if (step.operation === "search") await typeAndSubmit(session, sessionId, evaluate, deadline);
+    if (step.typed !== undefined) await typeAndSubmit(session, sessionId, evaluate, deadline, step.typed);
     let answerState = null;
     while (Date.now() < deadline) {
       answerState = await evaluate("document.querySelector('[data-answer-state]')?.dataset.answerState ?? null");
@@ -305,12 +316,14 @@ async function main(argv) {
   // broken page is shown to fail the journey.
   const liveRoot = argv.includes("--live-root") ? argument("--live-root") : await buildLive();
   const browser = await findBrowser();
-  const { coverage, search } = JOURNEY_STEPS;
+  const { coverage, search, dossier } = JOURNEY_STEPS;
   const results = [
     ["coverage, with the fixture mount", await run(apiOutput, mount, { step: coverage, state: "success", corpusSha256: journeyMount.corpus_sha256, indexSha256: journeyMount.index_sha256 }, browser, liveRoot)],
     ["coverage, with no mount", await run(apiOutput, null, { step: coverage, state: "refusal", refusalCode: "no_corpus_mounted" }, browser, liveRoot)],
     ["search, with the fixture mount", await run(apiOutput, mount, { step: search, state: "success", texts: [`“${SEARCH_PHRASE}” in fra: 4 with the exact phrase, 1 with every word, in 1 work.`, "art_15 in", "The first hits in the stated order, not the best hits."] }, browser, liveRoot)],
     ["search, with no mount", await run(apiOutput, null, { step: search, state: "refusal", refusalCode: "no_corpus_mounted" }, browser, liveRoot)],
+    ["dossier, with the fixture mount", await run(apiOutput, mount, { step: dossier, state: "success", texts: [journeyMount.work_key, "1 state, from 2024-02-01 to 2024-02-01.", "What this dossier does not hold"] }, browser, liveRoot)],
+    ["dossier, with no mount", await run(apiOutput, null, { step: dossier, state: "refusal", refusalCode: "no_corpus_mounted" }, browser, liveRoot)],
   ];
   let failed = false;
   for (const [label, { observed, failures }] of results) {

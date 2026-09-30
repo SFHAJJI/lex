@@ -4,8 +4,9 @@
 // gates measure against a closed list (`pages.json`) and a network gate that fails on any request,
 // and this page's whole purpose is one request to the server it came from. The shell (stylesheet,
 // fonts, favicon) is the same, copied from `src/` with the generated tokens appended, as the
-// preview build does. The pages are `index.html` (Trust and Coverage, script `client-live.js`) and
-// `search.html` (search, script `client-live-search.js`).
+// preview build does. The pages are `index.html` (Trust and Coverage, script `client-live.js`),
+// `search.html` (search, script `client-live-search.js`) and `dossier.html` (dossier, script
+// `client-live-dossier.js`).
 
 import { cp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { pathToFileURL } from "node:url";
@@ -36,6 +37,9 @@ ${tokenCss()}`, "utf8");
   const searchSsr = await import(pathToFileURL(await bundle("app/live-search-page.jsx", "live-search-page.mjs")).href);
   await writeFile(new URL("search.html", destination), searchSsr.renderLiveSearchPage(), "utf8");
   await cp(await bundleClient("app/client-live-search-entry.jsx", "client-live-search.js"), new URL("client-live-search.js", destination));
+  const dossierSsr = await import(pathToFileURL(await bundle("app/live-dossier-page.jsx", "live-dossier-page.mjs")).href);
+  await writeFile(new URL("dossier.html", destination), dossierSsr.renderLiveDossierPage(), "utf8");
+  await cp(await bundleClient("app/client-live-dossier-entry.jsx", "client-live-dossier.js"), new URL("client-live-dossier.js", destination));
   return destination;
 }
 

@@ -14,6 +14,7 @@
 import { askV3 } from "./v3-client.mjs";
 import { readSearch } from "./search-answer.mjs";
 import { validateRefusal } from "./refusal-card.mjs";
+import { noCorpusMountedSentence } from "./live-refusals.mjs";
 
 /** The ceiling on a query's characters, the platform's own (`SearchMaxQueryCharacters`). */
 export const SEARCH_QUERY_MAX = 512;
@@ -43,12 +44,11 @@ export const SEARCH_LANGUAGES = Object.freeze([
 ]);
 
 /**
- * The one sentence per refusal code a request from this page can meet: no Luxembourg index
- * mounted (the refusal catalog's sentence, held equal by a test), or a language the mount holds no
- * searchable text in. Any other code gets a sentence that names it.
+ * The one sentence per refusal code a request from this page can meet besides `no_corpus_mounted`,
+ * whose sentence names the missing index from its payload (`noCorpusMountedSentence`): a language
+ * the mount holds no searchable text in. Any other code gets a sentence that names it.
  */
 export const LIVE_SEARCH_REFUSAL_SENTENCES = Object.freeze({
-  no_corpus_mounted: "This build has no index mounted.",
   language_not_available: "This index holds no searchable text in the language asked for.",
 });
 
@@ -116,7 +116,9 @@ export function searchOutcome(asked) {
 
   if (asked.state === "refusal") {
     const { code, helpful_payload: payload } = asked.envelope.refusal;
-    const sentence = LIVE_SEARCH_REFUSAL_SENTENCES[code] ?? unexpectedRefusalSentence(code);
+    const sentence = code === "no_corpus_mounted"
+      ? noCorpusMountedSentence(payload)
+      : LIVE_SEARCH_REFUSAL_SENTENCES[code] ?? unexpectedRefusalSentence(code);
     try {
       validateRefusal({ code, sentence, payload });
     } catch (error) {

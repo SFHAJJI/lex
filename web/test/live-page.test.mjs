@@ -14,7 +14,7 @@ import { createElement as h } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 
 import { renderToString } from "react-dom/server";
-import { Document, LIVE_CONTRACT, LIVE_MARKER, SYNTHETIC_MARKER, liveCoverageTree, liveSearchTree, renderLiveCoveragePage, renderLiveSearchPage } from "../.react-build/app.mjs";
+import { Document, LIVE_CONTRACT, LIVE_MARKER, SYNTHETIC_MARKER, liveCoverageTree, liveDossierTree, liveSearchTree, renderLiveCoveragePage, renderLiveDossierPage, renderLiveSearchPage } from "../.react-build/app.mjs";
 import { MAXIMUM_REQUEST_BYTES, createLiveServer } from "../scripts/serve-live.mjs";
 import { buildLive } from "../scripts/build-live.mjs";
 
@@ -48,6 +48,14 @@ test("the search page's server render is the tree the browser hydrates", () => {
   assert.match(html, new RegExp(`data-live="${LIVE_MARKER}"`), "the search page is a live page, under the live banner");
 });
 
+test("the dossier page's server render is the tree the browser hydrates", () => {
+  const html = renderLiveDossierPage();
+  const open = '<div id="live-dossier-root">';
+  const root = html.slice(html.indexOf(open) + open.length);
+  assert.ok(root.startsWith(renderToString(liveDossierTree())), "a hydration that changed the markup would re-render silently");
+  assert.match(html, new RegExp(`data-live="${LIVE_MARKER}"`), "the dossier page is a live page, under the live banner");
+});
+
 test("the live build writes its own directory, embeds the contract and nothing else of the census (review of #765)", async () => {
   const destination = await mkdtemp(join(tmpdir(), "lex-live-build-"));
   const url = new URL(`file:///${destination.replaceAll("\\", "/")}/`);
@@ -69,6 +77,15 @@ test("the live build writes its own directory, embeds the contract and nothing e
     assert.ok(searchBundle.includes(census.contract.registry_sha256), "the search bundle embeds the contract");
     for (const entry of census.envelopes) {
       assert.ok(!searchBundle.includes(entry.scenario), `the census envelope "${entry.scenario}" is not shipped with the search page`);
+    }
+
+    const dossier = await readFile(join(destination, "dossier.html"), "utf8");
+    const dossierBundle = await readFile(join(destination, "client-live-dossier.js"), "utf8");
+    assert.ok(dossier.includes('<script src="/client-live-dossier.js" defer=""></script>'));
+    assert.match(dossier, new RegExp(`data-live="${LIVE_MARKER}"`));
+    assert.ok(dossierBundle.includes(census.contract.registry_sha256), "the dossier bundle embeds the contract");
+    for (const entry of census.envelopes) {
+      assert.ok(!dossierBundle.includes(entry.scenario), `the census envelope "${entry.scenario}" is not shipped with the dossier page`);
     }
   } finally {
     await rm(destination, { recursive: true, force: true });
