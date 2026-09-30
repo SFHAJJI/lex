@@ -186,7 +186,7 @@ public sealed class V3CorpusDiffMountTests
         var beforeHistory = await DiffAsync(mount, $"/lu-legilux/{fixture.WorkKey}", Shift(fixture.ApplicabilityDate, -1), laterDate);
         Assert.AreEqual("no_version_for_date", beforeHistory.Refusal!.Code);
         Assert.AreEqual(
-            "bound,history_begins,nearest_earlier,nearest_later,requested_date",
+            "asserts_absence_of_law,bound,history_begins,nearest_earlier,nearest_later,requested_date,what_would_answer",
             string.Join(",", beforeHistory.Refusal.HelpfulPayload.EnumerateObject().Select(static property => property.Name)),
             "diff names the bound: exactly these properties, as served in the envelope's canonical order.");
         Assert.AreEqual(PublisherId.LuLegilux, beforeHistory.Context.Publisher);

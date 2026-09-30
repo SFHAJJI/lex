@@ -10,7 +10,7 @@
 import { askV3 } from "./v3-client.mjs";
 import { readDiff } from "./compare-answer.mjs";
 import { validateRefusal } from "./refusal-card.mjs";
-import { noCorpusMountedSentence } from "./live-refusals.mjs";
+import { noCorpusMountedSentence, historyBeginsHint } from "./live-refusals.mjs";
 import { isCalendarDate } from "./temporal.mjs";
 
 /**
@@ -82,7 +82,7 @@ export function compareParameters({ identifier, dateFrom, dateTo, language = "" 
 /** What an absence whose card cannot be shown still carries: the date the held history begins. */
 function retryHint(code, payload) {
   return code === "no_version_for_date" && isCalendarDate(payload?.history_begins)
-    ? ` The history this index holds for this work begins on ${payload.history_begins}.`
+    ? ` ${historyBeginsHint(payload.history_begins)}`
     : "";
 }
 

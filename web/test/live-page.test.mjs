@@ -106,6 +106,8 @@ test("the live build writes its own directory, embeds the contract and nothing e
     assert.match(index, new RegExp(`data-live="${LIVE_MARKER}"`));
     for (const asset of ["styles.css", "favicon.svg"]) await readFile(join(destination, asset));
     assert.ok(bundle.includes(census.contract.registry_sha256), "the contract is embedded");
+    assert.ok(index.includes("data-evaluation-card") && index.includes("THE MOUNT IS A FIXTURE"), "the page carries the evaluation card (ruling 2)");
+    assert.ok(!bundle.includes("THE MOUNT IS A FIXTURE"), "the card is the server's render alone: no script carries it");
     for (const entry of census.envelopes) {
       assert.ok(!bundle.includes(entry.scenario), `the census envelope "${entry.scenario}" is not shipped to the browser`);
     }

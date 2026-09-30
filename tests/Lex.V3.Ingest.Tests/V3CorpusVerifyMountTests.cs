@@ -94,7 +94,7 @@ public sealed class V3CorpusVerifyMountTests
         var envelope = await VerifyAsync(mount, new { identifier = $"/lu-legilux/{fixture.WorkKey}/1900-01-01--{fixture.StateSha256}" });
 
         Assert.AreEqual("identifier_unknown", envelope.Refusal!.Code);
-        StringAssert.Contains(envelope.Refusal.HelpfulPayload.GetProperty("what_would_answer").GetString(), "hash-pinned permalink");
+        StringAssert.Contains(envelope.Refusal.HelpfulPayload.GetProperty("what_would_answer_detail").GetString(), "hash-pinned permalink");
     }
 
     [TestMethod]
@@ -129,7 +129,7 @@ public sealed class V3CorpusVerifyMountTests
         // A dated coordinate at which nothing is held is unknown, not the work's digests.
         var elsewhere = await VerifyAsync(mount, new { identifier = $"/lu-legilux/{fixture.WorkKey}/1900-01-01" });
         Assert.AreEqual("identifier_unknown", elsewhere.Refusal!.Code);
-        StringAssert.Contains(elsewhere.Refusal.HelpfulPayload.GetProperty("what_would_answer").GetString(), "stable coordinate");
+        StringAssert.Contains(elsewhere.Refusal.HelpfulPayload.GetProperty("what_would_answer_detail").GetString(), "stable coordinate");
     }
 
     [TestMethod]

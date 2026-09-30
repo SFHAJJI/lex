@@ -35,7 +35,7 @@ const SAMPLES = new URL("../../schemas/v3-platform/refusal-payload-samples.json"
  * until it is removed, and a code that stops rendering fails here because it is not on the list.
  * A break the suite tolerates silently is a break the suite has stopped reporting.
  */
-const KNOWN_BREAKS = ["anchor_not_in_version", "identifier_unknown", "no_version_for_date"];
+const KNOWN_BREAKS = [];
 
 async function samples() {
   let parsed;
