@@ -51,6 +51,11 @@ public sealed class V3EnvelopeSamplesTests
             await CaptureAsync(fixture, mount, "search", "a language the mount holds no text in: a refusal with a payload", new { query = "loyer", language = "deu" }),
             await CaptureAsync(fixture, mount, "search", "a phrase the held text carries: an answer with hits in both lanes", new { query = "assemblée générale", language = "fra" }),
             await CaptureAsync(fixture, null, "search", "no corpus mounted: a refusal", new { query = "assemblée générale", language = "fra" }),
+            await CaptureAsync(fixture, mount, "dossier", "the work, in the language it is held in: an answer", new { identifier = $"/lu-legilux/{fixture.WorkKey}", language = "fra" }),
+            await CaptureAsync(fixture, mount, "dossier", "a work the index does not hold: a refusal with a payload", new { identifier = "/lu-legilux/no-such-work" }),
+            await CaptureAsync(fixture, mount, "dossier", "a language the work is not held in: a refusal with a payload", new { identifier = $"/lu-legilux/{fixture.WorkKey}", language = "deu" }),
+            await CaptureAsync(fixture, mount, "dossier", "an EU identifier on a mount without the EU index: a refusal with a payload", new { identifier = "32016R0679" }),
+            await CaptureAsync(fixture, null, "dossier", "no corpus mounted: a refusal", new { identifier = $"/lu-legilux/{fixture.WorkKey}" }),
         };
 
         var document = new JsonObject

@@ -6,7 +6,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { JOURNEY_STEPS, SEARCH_PHRASE, journeyVerdict } from "../scripts/journey.mjs";
+import { DOSSIER_IDENTIFIER, JOURNEY_STEPS, SEARCH_PHRASE, journeyVerdict } from "../scripts/journey.mjs";
 import { cspValue } from "../scripts/csp.mjs";
 
 const ORIGIN = "http://127.0.0.1:5000";
@@ -125,4 +125,19 @@ test("a coverage run is still judged as one, with no body required", () => {
   assert.equal(JOURNEY_STEPS.coverage.body, null);
   assert.deepEqual(journeyVerdict({ ...good(), location: `${ORIGIN}/` }, SUCCESS), []);
   assert.ok(journeyVerdict({ ...good(), location: `${ORIGIN}/?x=1` }, SUCCESS).some((failure) => /ended at/.test(failure)));
+});
+
+test("a dossier run is held to its own page, operation and exact body", () => {
+  const observed = goodSearch();
+  observed.requests = [
+    { url: `${ORIGIN}/dossier.html`, method: "GET", headers: {} },
+    { url: `${ORIGIN}/api/v3/dossier`, method: "POST", headers: {}, headersSent: true, postData: JSON.stringify(JOURNEY_STEPS.dossier.body) },
+  ];
+  observed.location = `${ORIGIN}/dossier.html`;
+  observed.text = "loi-1991-08-10-n3 1 state, from 2024-02-01 to 2024-02-01.";
+  const expected = { origin: ORIGIN, step: JOURNEY_STEPS.dossier, state: "success", texts: ["1 state, from"] };
+  assert.deepEqual(JOURNEY_STEPS.dossier.body, { operation_id: "dossier", parameters: { identifier: DOSSIER_IDENTIFIER } }, "any held language: no language sent");
+  assert.deepEqual(journeyVerdict(observed, expected), []);
+  observed.requests[1].postData = JSON.stringify({ operation_id: "dossier", parameters: { identifier: DOSSIER_IDENTIFIER, language: "fra" } });
+  assert.ok(journeyVerdict(observed, expected).some((failure) => /body was .*"language":"fra"/.test(failure)));
 });

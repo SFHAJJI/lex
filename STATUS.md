@@ -5,11 +5,11 @@ every pull request that changes what is served, what is next or what is blocked.
 
 ## Heads
 
-- `v3/integration`: `ad285481` (2026-09-30, PR #773 merged). Build 45 s. Fast lane
+- `v3/integration`: `d8ec55dd` (2026-09-30, PR #774 merged). Build 45 s. Fast lane
   (`eng/test-fast.ps1`): 3,038 tests, 3,037 pass, 1 skipped. Ingest suite: green on CI for PR #760
   (the CI `dotnet` job runs the whole solution on every pull request, about 7 min on the runner;
-  green for PR #773);
-  locally about 15 min. 829 web tests pass. CI's web job can flake in `keyboard-walk.test.mjs`
+  green for PR #774);
+  locally about 15 min. 839 web tests pass. CI's web job can flake in `keyboard-walk.test.mjs`
   ("browser debugger never answered"); rerunning the failed job is the fix.
 - Driver: Claude Opus 5.5 since 2026-09-29 (the Fable 5.1 driver ran out of tokens on 2026-09-28
   after PR #757; the user default model is now `claude-opus-5-5`).
@@ -235,7 +235,7 @@ schema's `parameters` shape, and whose call runs the same dispatch the REST rout
 endpoint test proves it for all twenty-three. The launch-contract line "REST and MCP derive identical
 envelopes from the registry" is the owner's to tick.
 
-Web: 30 React components, 829 tests. Preview screens render fixtures. The V3 Luxembourg search
+Web: 31 React components, 839 tests. Preview screens render fixtures. The V3 Luxembourg search
 answer has a reader (PR #771). The answer census now samples `search` five ways from the real handler:
 - a phrase with 4 strict hits and 1 relaxed hit;
 - the same phrase one hit per page, with its cursor;
@@ -303,6 +303,32 @@ An EU dossier (`publisher: "eu-eurlex"`) has another shape and is refused. The f
 state and no titles, so the tests also read a work with three states in two languages and a
 titled work, built from the captured answer the way `V3CorpusMount.Dossier` builds them. The
 pre-V3 `dossier.mjs` renderer stays for the preview until the live dossier screen replaces it.
+
+The live dossier screen and its journey step (PR #775). `dist-live/dossier.html` has its own
+bundle `client-live-dossier.js`, which embeds the contract and nothing else of the census.
+- The form sends the work identifier as typed, plus a language only when one is chosen (French,
+  German, English, or "any held language", which sends none). The controls carry no `name`, as the
+  search form's do.
+- One `POST /api/v3/dossier` per submit, and a new request cancels the one in flight.
+- The answer is read by `readDossier` and laid out: the work and its languages, its titles ("This
+  index holds no title for this work" when none), the state count and range, a table of states
+  (language, applicability date, next state, articles held and not admitted, printed permalink),
+  and every item the dossier does not hold with its reason.
+- An EU work's dossier is answered in another shape and is said as not shown on this screen.
+- The envelope census now holds the dossier answer and its four refusals from the real handler. A
+  language not held, an EU identifier on a mount without the EU index (`no_corpus_mounted`,
+  `required_corpus: "eu"`), and no mount are refusal cards.
+- An unknown work (`identifier_unknown`) is said by its code without the card. `refusal-card.mjs`
+  keeps its standing requirement that this card carry a `population_disclosure` (the size of what
+  was searched, so "not found" is never read as "no such law"), and the platform's payload carries
+  none yet. That disagreement is now visible on a live page: either the producer carries the
+  disclosure, or the reader supplies it from its own census.
+- `journey.mjs` now runs a third step. On `/dossier.html` it types the fixture work's identifier and
+  submits with any language. With the mount the page ends in the dossier ("1 state, from 2024-02-01
+  to 2024-02-01", the not-held list); without one, in the `no_corpus_mounted` card. All six runs
+  pass: 6 requests each, exactly one to the API with exactly the typed body, the page at its own
+  address, no history entry, history state or cookie, and hydration clean. A build whose request
+  always added a language failed both dossier runs on the body check.
 
 **The search journey step passes (PR #773, run locally 2026-09-30).** `node scripts/journey.mjs`
 now runs two steps, each with and without the fixture mount, and all four runs pass.
@@ -717,8 +743,9 @@ proves the path, not a corpus.
    `readSearch`, held to five search answers the census now samples; PR #772: the live search
    screen and its page; PR #773: the search journey step (type, submit, the answer; the next page
    waits for a mount with more hits than one page); PR #774: the V3 dossier reader `readDossier`,
-   held to the dossier answer the census now samples. Next: the live dossier screen, its page
-   and journey step; then reading, whose reader still reads a pre-V3 shape. Also J1 to J8
+   held to the dossier answer the census now samples; PR #775: the live dossier screen, its page
+   and journey step. Next: the reading screen, whose reader still reads a pre-V3 shape, and the
+   `identifier_unknown` population disclosure (producer or reader). Also J1 to J8
    restated as V3 steps (owner question): they exist only in the pre-V3 pack
    (`05-user-journeys.md`).
 7. Release pipeline: build, sign, image, zero-traffic deploy, probes. Then acceptance and promotion.
