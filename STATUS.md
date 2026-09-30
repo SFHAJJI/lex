@@ -3,6 +3,22 @@
 Updated 2026-09-30 by the driver. This file replaces the issue-comment ledgers. It is rewritten in
 every pull request that changes what is served, what is next or what is blocked.
 
+## Retained EU transaction deadlock retry (Codex, 2026-10-01)
+
+The fresh full-EU retry2 refused after 494 requests with 81 of 82 census families proven.
+The retained HTTP 500 body for 32023R2854 names a Virtuoso 40001 transaction deadlock
+(SHA-256 70769075fe4617e11288eda6ac3120c1b10b7f5e64d90149ff9e8c28431b3627).
+Reversible driver decision: retry only complete 500 responses from the exact Publications Office
+SPARQL endpoint whose hash-checked first line carries that signature. Use the existing plan item's
+four-attempt limit, session backoff and shared wire budget. Keep every recognized failed route in
+custody, including the last attempt, and require ordinary full proof for the successful response.
+
+Other status/body failures, malformed successful replies, capacity errors and challenges retain
+their refusal paths. The draft includes the actual retained deadlock fixture and nine tests for
+count/page recovery, same-request attempt lineage, failed-route custody, exhaustion, budget and
+nonretry cases. Build, fast, affected ingest, review and green CI are pending. No live retry has
+started; the prior run remains refused and its custody is preserved.
+
 ## Luxembourg scope input reuse (Codex, 2026-09-30)
 
 Scope resolution retains four rule-evaluation objects and multiple not-applicable selectors per

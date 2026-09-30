@@ -1,0 +1,25 @@
+Virtuoso 40001 Error SR...: Transaction deadlock, from SQL built-in function.
+
+SPARQL query:
+SELECT ?base_celex ?base ?state ?family_multiplicity ?state_key WHERE {
+  {
+  SELECT ?base_celex ?base ?state (COUNT(*) AS ?family_multiplicity) WHERE {
+      VALUES ?lex_pass_id { 1 }
+        VALUES ?base_celex { "32023R2854"^^<http://www.w3.org/2001/XMLSchema#string> }
+        ?base <http://publications.europa.eu/ontology/cdm#resource_legal_id_celex> ?base_celex .
+        ?state <http://publications.europa.eu/ontology/cdm#act_consolidated_based_on_resource_legal> ?base .
+      
+    }
+    GROUP BY ?base_celex ?base ?state
+  
+  }
+  BIND(STR(?state) AS ?state_key)
+  VALUES (?has_cursor ?last_state_key) {
+    (0 "")
+  }
+  FILTER(?has_cursor = 0 || ?state_key > ?last_state_key)
+  FILTER(?has_cursor = 0 || !(?state_key = ?last_state_key))
+}
+ORDER BY ?state_key
+LIMIT 997
+
