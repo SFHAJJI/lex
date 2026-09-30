@@ -516,12 +516,15 @@ async function keyboardPin(session, sessionId, evaluate, stops) {
 
 /**
  * Every element whose meaning could lie in paint alone: painted apart from what is behind it (a
- * background image, or a background colour other than the one it sits on) and saying nothing in words
- * or in an accessible name. The launch contract's "no meaning by colour alone", measured on the page as
- * the browser paints it; decorative elements declared `aria-hidden` are exempt.
+ * background image, a background colour other than the one it sits on, a visible border, outline or
+ * shadow) and saying nothing in words or in an accessible name. The launch contract's "no meaning by
+ * colour alone", measured on the page as the browser paints it; decorative elements declared
+ * `aria-hidden` are exempt. Borders, outlines and shadows count since the review of #811: an empty
+ * span with a red border is a marker as surely as a red square.
  */
-const PAINT_ONLY = `(() => {
+export const PAINT_ONLY = `(() => {
   const transparent = (colour) => colour === 'transparent' || colour === 'rgba(0, 0, 0, 0)';
+  const edge = (width, style, colour) => parseFloat(width) > 0 && style !== 'none' && style !== 'hidden' && !transparent(colour);
   const behind = (el) => {
     for (let node = el; node !== null; node = node.parentElement) {
       const colour = getComputedStyle(node).backgroundColor;
@@ -535,7 +538,10 @@ const PAINT_ONLY = `(() => {
     if (el.closest('[aria-hidden="true"]') !== null || el.offsetParent === null) continue;
     const style = getComputedStyle(el);
     const paints = style.backgroundImage !== 'none'
-      || (!transparent(style.backgroundColor) && style.backgroundColor !== behind(el.parentElement));
+      || (!transparent(style.backgroundColor) && style.backgroundColor !== behind(el.parentElement))
+      || ['Top', 'Right', 'Bottom', 'Left'].some((side) => edge(style['border' + side + 'Width'], style['border' + side + 'Style'], style['border' + side + 'Color']))
+      || edge(style.outlineWidth, style.outlineStyle, style.outlineColor)
+      || style.boxShadow !== 'none';
     if (!paints) continue;
     painted += 1;
     const named = el.textContent.trim() !== '' || (el.getAttribute('aria-label') ?? '').trim() !== ''

@@ -98,7 +98,7 @@ CI evidence are recorded in the pull request before merge.
   (`eng/test-fast.ps1`): 3,067 tests, 3,066 pass, 1 skipped (PR #798's validation). Ingest suite: green on CI for PR #760
   (the CI `dotnet` job runs the whole solution on every pull request, about 7 min on the runner;
   green for PR #810);
-  locally about 15 min. 949 web tests pass. CI's web job can flake in `keyboard-walk.test.mjs`
+  locally about 15 min. 950 web tests pass. CI's web job can flake in `keyboard-walk.test.mjs`
   ("browser debugger never answered"); rerunning the failed job is the fix.
 - Driver: Claude Opus 5.5 since 2026-09-29 (the Fable 5.1 driver ran out of tokens on 2026-09-28
   after PR #757; the user default model is now `claude-opus-5-5`).
@@ -324,7 +324,7 @@ schema's `parameters` shape, and whose call runs the same dispatch the REST rout
 endpoint test proves it for all twenty-three. The launch-contract line "REST and MCP derive identical
 envelopes from the registry" is the owner's to tick.
 
-Web: 41 React components, 949 tests. Preview screens render fixtures. The V3 Luxembourg search
+Web: 41 React components, 950 tests. Preview screens render fixtures. The V3 Luxembourg search
 answer has a reader (PR #771). The answer census now samples `search` five ways from the real handler:
 - a phrase with 4 strict hits and 1 relaxed hit;
 - the same phrase one hit per page, with its cursor;
@@ -838,10 +838,17 @@ by colour alone, linear diff, explicit dates, bracket tables whole".
   - No control takes a personal fact: every form has only the declared, labelled text fields, with
     no number, range or choice that could filter a bracket.
   - Truncating a quote to 200 characters, or adding a "Seniority" number field, fails the test.
-- `journey.mjs`, in the real browser: every element painted apart from what is behind it (a
-  background image, or a background colour other than the one it sits on) must say what it is, in
-  words or an accessible name. Each run prints how many painted elements it examined. A wordless red
-  square injected beside each search hit failed the search run (8 painted, 5 wordless).
+- `journey.mjs`, in the real browser: every element painted apart from what is behind it must say
+  what it is, in words or an accessible name. Painted means a background image, a background colour
+  other than the one it sits on, a visible border, an outline or a shadow. Borders, outlines and
+  shadows count since the review of #811 found an empty red-bordered span passed. Each run prints how
+  many painted elements it examined. A wordless red square injected beside each search hit failed
+  the search run (8 painted, 5 wordless).
+- `paint-check.test.mjs` proves the check in a real browser against two fixtures:
+  - four marks that say what they are pass;
+  - four wordless marks (a background, a border, an outline and a shadow) are all caught.
+
+  Removing the border clause fails it.
 
 The live export composer and its journey step (PR #789), the eighth screen. `dist-live/export.html`
 has its own bundle `client-live-export.js`.
