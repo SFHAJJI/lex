@@ -155,11 +155,11 @@ CI evidence are recorded in the pull request before merge.
 
 ## Heads
 
-- `v3/integration`: `d1b92077` (2026-09-30, PR #811 merged). Build 45 s. Fast lane
+- `v3/integration`: `ae4030d4` (2026-09-30, PR #815 merged). Build 45 s. Fast lane
   (`eng/test-fast.ps1`): 3,067 tests, 3,066 pass, 1 skipped (PR #798's validation). Ingest suite: green on CI for PR #760
   (the CI `dotnet` job runs the whole solution on every pull request, about 7 min on the runner;
-  green for PR #811);
-  locally about 15 min. 951 web tests pass. CI's web job can flake in `keyboard-walk.test.mjs`
+  green for PR #815);
+  locally about 15 min. 952 web tests pass. CI's web job can flake in `keyboard-walk.test.mjs`
   ("browser debugger never answered"); rerunning the failed job is the fix.
 - Driver: Claude Opus 5.5 since 2026-09-29 (the Fable 5.1 driver ran out of tokens on 2026-09-28
   after PR #757; the user default model is now `claude-opus-5-5`).
@@ -385,7 +385,7 @@ schema's `parameters` shape, and whose call runs the same dispatch the REST rout
 endpoint test proves it for all twenty-three. The launch-contract line "REST and MCP derive identical
 envelopes from the registry" is the owner's to tick.
 
-Web: 41 React components, 951 tests. Preview screens render fixtures. The V3 Luxembourg search
+Web: 41 React components, 952 tests. Preview screens render fixtures. The V3 Luxembourg search
 answer has a reader (PR #771). The answer census now samples `search` five ways from the real handler:
 - a phrase with 4 strict hits and 1 relaxed hit;
 - the same phrase one hit per page, with its cursor;
@@ -937,6 +937,28 @@ table is reviewed, with no other change.
 - To ship French after the owner's review: turn the draft into the reviewed table beside English in
   `LIVE_CHROME`, and add `fr` to `REVIEWED_CHROME_LOCALES`.
 
+The eight live screens against the real bounded mount (PR #815). The data lane's first mount
+(`C:\lex-v3\first-mount-decision95-restart-20260930\v3-corpus`, built twice and equal) is the
+first real build the pages have met; until now every journey ran on the test fixture's mount.
+- `journey.mjs --real-mount` runs the eight steps against a real build. Its contents are not known in
+  advance, so each step asks the API its page's own request first (`expectedFromEnvelope`). The page
+  is then held to that answer (a success, or that refusal by its code) and to every invariant a run
+  checks: requests, headers, recording, citations, quotes, live regions, colour and hydration. The
+  coverage page must name the corpus and Luxembourg index by the digests the mount's
+  `build-report.json` records.
+- On this mount the Luxembourg side holds no state (10 members: 1 acquired, 9 unavailable), and the
+  EU index holds 99 searchable English articles, which no live screen asks yet.
+  - Trust and Coverage and the radar answer; the other six refuse (`language_not_available`,
+    `identifier_unknown`) and show their cards.
+  - Every web reader accepted the real build's answers.
+  - All eight runs pass, and all eight with `--served-by-api`.
+- The first run found a flaw in the citation rule of #805: the radar's empty window answered with
+  nothing to cite, and the rule required one citation. Such an answer is now excused when the API's
+  own answer holds nothing to cite (no search hit, no radar row) and the page says so. The page's
+  word alone excuses nothing: the review of #815 showed a page could hide a hit behind "no hits".
+  Now a page that says it is empty while the API's answer holds something fails, and every other
+  answer of a citing step must still cite.
+
 The live export composer and its journey step (PR #789), the eighth screen. `dist-live/export.html`
 has its own bundle `client-live-export.js`.
 - The page asks what the reading page asks: the same form (`ReadingForm`, now shared), the same one
@@ -1482,7 +1504,7 @@ has not yet run; the bounded first mount above is complete.
    #807: the evaluation card's words in the table; PR #809: the refusal card's words in the table;
    PR #810: Trust and Coverage's words in the table, so the chrome scan exempts nothing; PR #811:
    the accessibility and scope line held on the live screens; PR #813: a reviewed language builds
-   its own pages. Next: the
+   its own pages; PR #815: the eight screens against the real bounded mount. Next: the
    owner's review of the French drafts (`node web/scripts/live-chrome-fr-draft.mjs`), then the
    reviewed table in `LIVE_CHROME` and `fr` in `REVIEWED_CHROME_LOCALES`, which builds `/fr/*.html`. French ships only once
    reviewed (Decision 41). Hosting (ruling 3): `Lex.V3.Api`
@@ -1635,8 +1657,17 @@ Repair fast lane: 3,065 pass / 1 Windows skip; repair build: zero warnings/error
 ## Waiting on others
 
 - The bounded real mount is available at
-  `C:\lex-v3\first-mount-decision95-restart-20260930\v3-corpus` for the web lane's mounted-corpus
-  evaluation and journeys. The data lane continues the full EU and Luxembourg populations.
+  `C:\lex-v3\first-mount-decision95-restart-20260930\v3-corpus`; the web lane's journeys run on it
+  (PR #815). The machine gates' mounted-corpus run needs case sets written for a real corpus, whose
+  Luxembourg side holds no state yet. The data lane continues the full EU and Luxembourg populations.
+- EU search on the live search screen waits on an EU permalink grammar (item 5). The real mount's
+  EU index answers `search` in one work (for example `32016R0679`, 60 hits for "personal data"), and
+  the web search reader refuses the answer by design, reading Luxembourg's only. Each EU hit cites
+  its expression IRI and provision (`…/3e485e15-…-01aa75ed71a1.0006#lex-provision=001`), not a
+  hash-pinned permalink. A screen showing those citations would break the launch contract's first
+  promise, which the journey holds. Once the grammar exists: the search screen gains the optional
+  work identifier, the reader reads the EU answer, and the journey searches the EU work on the real
+  mount.
 
 ## For the weekly checkpoint
 
@@ -1674,8 +1705,5 @@ Only money, legal or public claims, credentials and going live (ruling 7):
 
 ## Known defects carried
 
-- `V3PlatformSchemaTests` renders the tracked schemas and then verifies them when
-  `V3_RENDER_PLATFORM_SCHEMAS=1`, so a render passes unconditionally. CI never sets it. Fix: fail after
-  rendering.
 - The corrigendum tripwire classifies a French corrigendum as `within_served_body_languages` while no
   French body is served (Decision 89 section 4). True once the French expressions land.
