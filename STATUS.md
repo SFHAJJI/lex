@@ -369,12 +369,14 @@ CI evidence are recorded in the pull request before merge.
 
 ## Heads
 
-- `v3/integration`: `ae4030d4` (2026-09-30, PR #815 merged). Build 45 s. Fast lane
+- `v3/integration`: `6d8756a2` (2026-09-30, PR #823 merged). Build 45 s. Fast lane
   (`eng/test-fast.ps1`): 3,067 tests, 3,066 pass, 1 skipped (PR #798's validation). Ingest suite: green on CI for PR #760
   (the CI `dotnet` job runs the whole solution on every pull request, about 7 min on the runner;
-  green for PR #815);
-  locally about 15 min. 952 web tests pass. CI's web job can flake in `keyboard-walk.test.mjs`
-  ("browser debugger never answered"); rerunning the failed job is the fix.
+  green for PR #823);
+  locally about 15 min. 954 web tests pass. The web job's "browser debugger never answered" failures
+  (keyboard-walk, and paint-check since #811) are fixed by PR #822: each browser binds its own
+  debugging port (`launchBrowser`) instead of a random one another browser starting at the same
+  moment could hold.
 - Driver: Claude Opus 5.5 since 2026-09-29 (the Fable 5.1 driver ran out of tokens on 2026-09-28
   after PR #757; the user default model is now `claude-opus-5-5`).
 - Plan: `C:\lex-v3\V3-FINISH-PLAN-2026-09-27.md` (owner's copy). Decision 94 (one driver, one queue,
