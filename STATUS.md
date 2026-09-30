@@ -602,7 +602,7 @@ CI evidence are recorded in the pull request before merge.
 
 ## Heads
 
-- `v3/integration`: `fb828004` (2026-10-01, PR #833 merged). Build 45 s. Fast lane
+- `v3/integration`: `24c59015` (2026-10-01, PR #836 merged). Build 45 s. Fast lane
   (`eng/test-fast.ps1`): 3,077 tests, 3,076 pass, 1 skipped (the review of PR #828). Ingest suite: green on CI for PR #760
   (the CI `dotnet` job runs the whole solution on every pull request, about 7 min on the runner;
   green for PR #833);
@@ -1577,21 +1577,26 @@ The licence-blocked journey (PR #834), the launch contract's "one licence-blocke
 line "rights are enforced at compose time".
 - `V3JourneyMountTests` also writes a licence-blocked mount when `V3_WRITE_LICENCE_BLOCKED_MOUNT`
   names a directory. It is the fixture mount with its member's rights recorded as
-  `non_admitting_licence_scl`, and its `journey-mount.json` names that disposition and the opening
-  words of every article's body (47; the label and paragraph marker are left off).
+  `non_admitting_licence_scl`, and its `journey-mount.json` names that disposition and passages
+  covering every article's whole body: windows of 40 characters every 20 (2,950), so any leaked run
+  of 60 characters or more holds a whole window. The label and first paragraph marker are left off.
 - `journey.mjs` runs the eight steps on it (`licenceBlockedRuns`, chosen when the mount names a
   rights disposition):
   - each page is held to what the API answers its request;
-  - reading and export must refuse `text_withheld` (`mustRefuse`), whatever the API answered;
-  - no page may show any of the openings or carry them in its markup (`absentTexts`, the page's
-    text and its HTML, whitespace collapsed).
+  - reading and export must refuse `text_withheld` (`mustRefuse`), whatever the API answered, and
+    show it on the page's refusal card (the code read off `.refusal-card .refusal-code`). Every
+    refusal step is now held to the card's own code, not to a mention of it anywhere on the page;
+  - no page may show any passage or carry one in its markup (`absentTexts`, the page's text and its
+    HTML, whitespace collapsed).
+  The review of #834 found that the first version checked only each article's opening, and took any
+  mention of `text_withheld` for the card.
 - On the host API all eight pass, plain and with `--served-by-api`:
   - reading and export refuse `text_withheld`;
-  - coverage, search, dossier, compare, radar and history answer, and none shows or carries an
-    article's words;
+  - coverage, search, dossier, compare, radar and history answer, and none shows or carries a
+    passage;
   - the citations on the answering pages verify.
-- The check is not blind: run against the normal fixture mount, the same 47 openings are found on
-  the reading and export pages (47 failures each).
+- The check is not blind: run against the normal fixture mount, all 2,950 windows are found on the
+  reading and export pages. The normal journey's 16 runs pass under the card-code rule.
 
 The live export composer and its journey step (PR #789), the eighth screen. `dist-live/export.html`
 has its own bundle `client-live-export.js`.

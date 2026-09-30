@@ -18,6 +18,8 @@ public sealed class V3JourneyMountTests
     private const string WriteVariable = "V3_WRITE_JOURNEY_MOUNT";
     private const string LicenceBlockedVariable = "V3_WRITE_LICENCE_BLOCKED_MOUNT";
     private const string NonAdmittingLicence = "non_admitting_licence_scl";
+    private const int WindowLength = 40;
+    private const int WindowStride = 20;
 
     [TestMethod]
     public async Task TheJourneyMountIsTheFixtureMountWrittenWhereTheJourneyAsks()
@@ -56,8 +58,9 @@ public sealed class V3JourneyMountTests
     /// Writes the licence-blocked mount the launch contract's "one licence-blocked journey" runs on,
     /// when <c>V3_WRITE_LICENCE_BLOCKED_MOUNT</c> names a directory: the fixture mount with its member's
     /// rights recorded as a licence that does not admit redistribution. Its <c>journey-mount.json</c>
-    /// names that disposition and the opening words of every article of the state, which no page may
-    /// show.
+    /// names that disposition and passages covering every article's whole body, which no page may show:
+    /// windows of 40 characters every 20, so any leaked run of 60 characters or more of a body holds a
+    /// whole window (review of #834: the openings alone let a later passage leak).
     /// </summary>
     [TestMethod]
     public async Task TheLicenceBlockedMountIsTheFixtureMountWithANonAdmittingLicence()
@@ -84,14 +87,22 @@ public sealed class V3JourneyMountTests
             Assert.IsNotNull(mount, "the licence-blocked directory mounts through the API's own verifier: the licence withholds text, not the mount.");
         }
 
-        // The opening words of an article's body: its label ("Art. 15.") and paragraph marker ("(1)") are
-        // left off, since a page may show the label and renders it apart from the text.
-        static string Opening(string text)
+        // An article's body, whitespace collapsed, with its label ("Art. 15.") and first paragraph marker
+        // ("(1)") left off, since a page may show the label and renders it apart from the text; and the
+        // windows that cover it: 40 characters every 20, and the last 40.
+        static IEnumerable<string> Windows(string text)
         {
-            var words = string.Join(' ', text.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries));
-            words = System.Text.RegularExpressions.Regex.Replace(words, @"^Art\.\s*[0-9A-Za-z-]+\.\s*", string.Empty);
-            words = System.Text.RegularExpressions.Regex.Replace(words, @"^\(\d+\)\s*", string.Empty);
-            return words.Length <= 40 ? words : words[..40];
+            var body = string.Join(' ', text.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries));
+            body = System.Text.RegularExpressions.Regex.Replace(body, @"^Art\.\s*[0-9A-Za-z-]+\.\s*", string.Empty);
+            body = System.Text.RegularExpressions.Regex.Replace(body, @"^\(\d+\)\s*", string.Empty);
+            if (body.Length <= WindowLength)
+            {
+                if (body.Length >= 12) yield return body;
+                yield break;
+            }
+
+            for (var at = 0; at + WindowLength <= body.Length; at += WindowStride) yield return body.Substring(at, WindowLength);
+            yield return body[^WindowLength..];
         }
 
         var manifest = JsonSerializer.Serialize(new
@@ -102,7 +113,8 @@ public sealed class V3JourneyMountTests
             index_sha256 = Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(File.ReadAllBytes(Path.Combine(target, V3CorpusMount.IndexFileName)))),
             work_key = fixture.WorkKey,
             rights_disposition = NonAdmittingLicence,
-            withheld_openings = articles.Select(static article => Opening(article.Text)).Where(static opening => opening.Length >= 12).Distinct(StringComparer.Ordinal).ToArray(),
+            passage_windows = new { length = WindowLength, stride = WindowStride },
+            withheld_passages = articles.SelectMany(static article => Windows(article.Text)).Distinct(StringComparer.Ordinal).ToArray(),
         }, new JsonSerializerOptions { WriteIndented = true });
         await File.WriteAllTextAsync(Path.Combine(target, "journey-mount.json"), manifest + "\n");
     }

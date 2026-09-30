@@ -179,7 +179,8 @@ export const JOURNEY_STEPS = Object.freeze({
  * @param {object} expected `{origin, state: "success"|"refusal", step?, corpusSha256?, indexSha256?,
  *   texts?, refusalCode?, absentTexts?, mustRefuse?}`; `step` is a `JOURNEY_STEPS` entry and defaults
  *   to coverage. `absentTexts` must appear nowhere on the page, in its text or its markup (whitespace
- *   collapsed); `mustRefuse` is the refusal code the step must end in, whatever the API answered.
+ *   collapsed); `mustRefuse` is the refusal code the step must end in, whatever the API answered, read
+ *   off the refusal card the page shows (`refusalCodes`).
  */
 export function journeyVerdict(observed, expected) {
   const failures = [];
@@ -298,14 +299,25 @@ export function journeyVerdict(observed, expected) {
   if (expected.state === "refusal" && !observed.text.includes(expected.refusalCode)) {
     failures.push(`the page does not name the refusal ${expected.refusalCode}`);
   }
-  if (expected.mustRefuse !== undefined && !(expected.state === "refusal" && expected.refusalCode === expected.mustRefuse)) {
-    failures.push(`the step must refuse ${expected.mustRefuse}, and it was held to ${expected.state === "refusal" ? `the refusal ${expected.refusalCode}` : "an answer"}`);
+  // The code the page's refusal card shows, not a mention of it anywhere on the page (review of #834).
+  const shownCodes = Array.isArray(observed.refusalCodes) ? observed.refusalCodes : null;
+  if (expected.state === "refusal" && shownCodes !== null && !(shownCodes.length === 1 && shownCodes[0] === expected.refusalCode)) {
+    failures.push(`the page's refusal card shows ${JSON.stringify(shownCodes)}, not ${expected.refusalCode}`);
+  }
+  if (expected.mustRefuse !== undefined) {
+    if (!(expected.state === "refusal" && expected.refusalCode === expected.mustRefuse)) {
+      failures.push(`the step must refuse ${expected.mustRefuse}, and it was held to ${expected.state === "refusal" ? `the refusal ${expected.refusalCode}` : "an answer"}`);
+    }
+    if (!(shownCodes !== null && shownCodes.length === 1 && shownCodes[0] === expected.mustRefuse)) {
+      failures.push(`the step must show the refusal card ${expected.mustRefuse}, and it shows ${JSON.stringify(shownCodes)}`);
+    }
   }
   const collapse = (text) => (text ?? "").replace(/\s+/g, " ");
+  const [pageText, pageHtml] = [collapse(observed.text), collapse(observed.html)];
   for (const text of expected.absentTexts ?? []) {
     const words = collapse(text);
-    if (collapse(observed.text).includes(words)) failures.push(`the page shows withheld text "${words}"`);
-    else if (collapse(observed.html).includes(words)) failures.push(`the page's markup carries withheld text "${words}"`);
+    if (pageText.includes(words)) failures.push(`the page shows withheld text "${words}"`);
+    else if (pageHtml.includes(words)) failures.push(`the page's markup carries withheld text "${words}"`);
   }
 
   const toApi = observed.requests.filter((request) => new URL(request.url).pathname.startsWith("/api/"));
@@ -671,6 +683,7 @@ async function observe(browser, pageOrigin, step, { keyboard = false } = {}) {
       answerState,
       text: await evaluate("document.body.innerText"),
       html: await evaluate("document.documentElement.outerHTML"),
+      refusalCodes: await evaluate("[...document.querySelectorAll('.refusal-card .refusal-code')].map((code) => code.textContent.trim())"),
       requests: requests.map(({ id, ...request }) => ({
         ...request,
         headers: sentHeaders.get(id) ?? request.headers,
@@ -795,13 +808,13 @@ export async function realMountRuns(apiOutput, mount, options, browser, liveRoot
 /**
  * The launch contract's licence-blocked journey: the eight steps on the fixture mount with its member's
  * rights recorded as a licence that does not admit redistribution (`journey-mount.json` names the
- * disposition and the opening words of every article). Each page is held to what the API answers its
- * request, reading and export must refuse `text_withheld` (rights enforced at compose time), and no
- * page may show, or carry in its markup, any article's words.
+ * disposition and passages covering every article's body). Each page is held to what the API answers
+ * its request, reading and export must show the refusal card `text_withheld` (rights enforced at
+ * compose time), and no page may show, or carry in its markup, any passage of an article.
  */
 export async function licenceBlockedRuns(apiOutput, mount, options, browser, liveRoot) {
   const journeyMount = JSON.parse(await readFile(join(mount, "journey-mount.json"), "utf8"));
-  const absentTexts = journeyMount.withheld_openings ?? [];
+  const absentTexts = journeyMount.withheld_passages ?? [];
   if (absentTexts.length === 0) throw new Error("the licence-blocked mount names no withheld text to look for");
   const runs = [];
   for (const [name, step] of Object.entries(JOURNEY_STEPS)) {
