@@ -9,26 +9,29 @@ using static Lex.V3.Ingest.Tests.V3CorpusResolveMountTests;
 namespace Lex.V3.Ingest.Tests;
 
 /// <summary>
-/// Two of the launch contract's machine gates, run against the real handler on a mounted corpus: the temporal
+/// The launch contract's machine gates, run against the real handler on a mounted corpus: the temporal
 /// case set at 100 percent (a dated request never receives a different date silently: <c>as_of</c> and
 /// <c>in_force_on</c> select the one state that applies, or refuse <c>no_version_for_date</c> or
-/// <c>ambiguous_version</c> rather than choose) and the refusal case set at 100 percent (every absence is typed:
-/// each request that must be refused is refused with its registry code), each with the shuffled control that
-/// proves the harness would notice if it were wrong.
+/// <c>ambiguous_version</c> rather than choose), the refusal case set at 100 percent (every absence is typed:
+/// each request that must be refused is refused with its registry code) and the retrieval case set (anchor
+/// nDCG@10, no-hit accuracy and resolver exactness), each with the shuffled control that proves the harness
+/// would notice if it were wrong: the three controls the contract asks to see fail.
 /// </summary>
 /// <remarks>
 /// <para>
 /// The harness is the one in <c>Lex.V3.Contracts.Evaluation</c> (<see cref="TemporalEvaluation"/>,
-/// <see cref="VerdictEvaluation"/>, <see cref="ShuffledControls"/>), which until now nothing outside its own tests
-/// called. The arms are the served operations, asked through <see cref="V3ApiHandler"/> as a client asks them; a
-/// refusal is the key <c>refusal:{code}</c>, a selected state its digest. The cases are the fixture's, so the gates
+/// <see cref="VerdictEvaluation"/>, <see cref="RetrievalEvaluation"/>, <see cref="ShuffledControls"/>), which until
+/// now nothing outside its own tests called. The arms are the served operations, asked through
+/// <see cref="V3ApiHandler"/> as a client asks them; a refusal is the key <c>refusal:{code}</c>, a selected state its
+/// digest, a search hit its work and publisher article id. The cases are the fixture's, so the gates
 /// prove the path, not a corpus: the first real mount is still blocked.
 /// </para>
 /// <para>
 /// The temporal set runs through four arms: <c>as_of</c> and <c>in_force_on</c>, each asked with the work's language
 /// and with none, since the contract names both operations and each has its own selection. The refusal set covers
 /// every code the refusal census records as produced, across three mounts (the rights and empty-text cases need
-/// their own).
+/// their own). The retrieval set's judgments are written from the corpus the test builds, so its nDCG threshold is
+/// 1.0: the path's exactness, not a quality claim.
 /// </para>
 /// <para>
 /// The date control shifts every case forward by an interval the corpus holds and requires every expectation to
@@ -180,6 +183,133 @@ public sealed class V3MachineGatesTests
 
         var control = ShuffledControls.VerdictShuffle(cases, arm, (set, run) => VerdictEvaluation.Evaluate(set, run, floor: set.Count), Seed);
         Assert.AreEqual(ControlVerdict.CaughtTheShuffle, control.Verdict, control.Reason);
+    }
+
+    [TestMethod]
+    public async Task TheRetrievalCaseSetPassesEveryGateAndTheJudgmentsShuffleControlCatchesAShuffledSet()
+    {
+        // Two works of one date, every article text written by the test: a few words each held by chosen articles,
+        // and text that matches none of them everywhere else, so the judgments below are the corpus's own truth.
+        var fixture = await MountedFixture.CreateAsync();
+        await using var cleanup = fixture;
+        var second = await fixture.AddStateAsync(fixture.ApplicabilityDate, "w2", workLeaf: "n4");
+        var workA = fixture.WorkKey;
+        var workB = second.WorkKey;
+        await WriteTextsAsync(fixture, fixture.ExpressionIri, new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["art_2"] = "Le quorum est atteint lorsque la moitie des membres est presente.",
+            ["art_3"] = "Le membre suppléant remplace le titulaire empeche.",
+            ["art_4"] = "Le délai de recours est d'un mois.",
+            ["art_5"] = "Le préavis est de trois mois.",
+        });
+        await WriteTextsAsync(fixture, second.ExpressionIri, new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["art_4"] = "Le recours est introduit dans un délai raisonnable, de bonne foi.",
+            ["art_5"] = "Aucun préavis n'est requis.",
+            ["art_7"] = "La cotisation annuelle est fixee par le conseil.",
+        });
+        using var mount = await V3CorpusMount.OpenAsync(fixture.Directory, CancellationToken.None);
+        Assert.IsNotNull(mount);
+        var permalinkA = await PermalinkAsync(mount, workA, fixture.ApplicabilityDate);
+        var permalinkB = await PermalinkAsync(mount, workB, fixture.ApplicabilityDate);
+
+        // Search cases are asked through `search` (a strict hit, the phrase, above a relaxed one, every term); the
+        // exact-identifier cases through `verify` with an article anchor, the one operation that resolves a
+        // provision. Grades: 3 supports, 1 is context (the relaxed hit that holds the terms but not the phrase).
+        const string Collection = "lu-fixture";
+        var requests = new Dictionary<string, (EvaluationCaseKind Kind, string Operation, object Parameters, JudgedAnchor[] Judged)>(StringComparer.Ordinal)
+        {
+            ["one-article"] = (EvaluationCaseKind.Retrieval, "search", new { query = "quorum", language = "fra" },
+                [Supporting(workA, "art_2")]),
+            ["accented-word"] = (EvaluationCaseKind.Retrieval, "search", new { query = "suppléant", language = "fra" },
+                [Supporting(workA, "art_3")]),
+            ["strict-above-relaxed"] = (EvaluationCaseKind.Retrieval, "search", new { query = "délai de recours", language = "fra" },
+                [Supporting(workA, "art_4"), new JudgedAnchor(workB, "art_4", JudgedAnchor.ContextGrade)]),
+            ["across-works"] = (EvaluationCaseKind.Retrieval, "search", new { query = "préavis", language = "fra" },
+                [Supporting(workA, "art_5"), Supporting(workB, "art_5")]),
+            ["second-work"] = (EvaluationCaseKind.Retrieval, "search", new { query = "cotisation", language = "fra" },
+                [Supporting(workB, "art_7")]),
+            ["no-hit-word"] = (EvaluationCaseKind.Retrieval, "search", new { query = "zéphyr", language = "fra" }, []),
+            ["no-hit-scoped-to-b"] = (EvaluationCaseKind.Retrieval, "search", new { query = "quorum", language = "fra", identifier = $"/lu-legilux/{workB}" }, []),
+            ["no-hit-scoped-to-a"] = (EvaluationCaseKind.Retrieval, "search", new { query = "cotisation", language = "fra", identifier = $"/lu-legilux/{workA}" }, []),
+            ["exact-first-article"] = (EvaluationCaseKind.ExactIdentifier, "verify", new { identifier = permalinkA + "#art_1er", language = "fra" },
+                [Supporting(workA, "art_1er")]),
+            ["exact-numbered-sub-article"] = (EvaluationCaseKind.ExactIdentifier, "verify", new { identifier = permalinkA + "#art_24-1", language = "fra" },
+                [Supporting(workA, "art_24-1")]),
+            ["exact-in-second-work"] = (EvaluationCaseKind.ExactIdentifier, "verify", new { identifier = permalinkB + "#art_10", language = "fra" },
+                [Supporting(workB, "art_10")]),
+        };
+        CollectionAssert.IsSubsetOf(
+            new[] { "art_1er", "art_24-1", "art_10" },
+            fixture.ArticlesOfOwnState().Select(static article => article.PublisherId).ToArray(),
+            "every anchor an exact case names is held.");
+        var cases = requests
+            .Select(static pair => new EvaluationCase(pair.Key, Collection, pair.Value.Kind, new QueryJudgments(pair.Key, pair.Value.Judged)))
+            .ToArray();
+        RetrievalArm arm = caseId =>
+        {
+            var (_, operation, parameters, _) = requests[caseId];
+            var envelope = EnvelopeAsync(mount, "/api/v3/" + operation, operation, parameters).GetAwaiter().GetResult();
+            if (envelope.Refusal is not null)
+            {
+                return [];
+            }
+
+            var value = envelope.Result!.Value;
+            if (operation == "verify")
+            {
+                return [new RankedAnchor(value.GetProperty("work_key").GetString()!, value.GetProperty("requested_anchor").GetString()!)];
+            }
+
+            // A hit is one article in one held state; the ranking is of provisions, first appearance kept.
+            return value.GetProperty("hits").EnumerateArray()
+                .Select(static hit => new RankedAnchor(hit.GetProperty("work_key").GetString()!, hit.GetProperty("publisher_id").GetString()!))
+                .Distinct()
+                .ToArray();
+        };
+
+        // The judgments are written from the corpus this test builds, so the served order must meet them exactly:
+        // 1.0 here is the path's exactness, not a quality threshold. The labelled row stays "not yet labelled".
+        const int Floor = 3;
+        var report = RetrievalEvaluation.Evaluate(cases, arm, Floor, ndcgThreshold: 1.0);
+        var rankings = string.Join(" | ", cases.Select(value =>
+            $"{value.CaseId}: {string.Join(", ", arm(value.CaseId).Select(static item => $"{item.WorkKey}/{item.AnchorId}"))}"));
+        Assert.AreEqual(1.0, report.AnchorNdcgAt10.Value, $"every search ranks its judged provisions as judged. {rankings}");
+        Assert.AreEqual(1.0, report.NoHitAccuracy.Value, "every search that must find nothing finds nothing.");
+        Assert.AreEqual(1.0, report.ResolverExactness.Value, "every article anchor resolves to exactly its provision.");
+        Assert.IsTrue(report.Releases, string.Join("; ", report.Gates.Select(static gate => $"{gate.Name} {gate.Verdict}")));
+
+        var control = ShuffledControls.QrelsShuffle(
+            cases, arm, (set, run) => RetrievalEvaluation.Evaluate(set, run, Floor, ndcgThreshold: 1.0), Seed);
+        Assert.AreEqual(ControlVerdict.CaughtTheShuffle, control.Verdict, control.Reason);
+    }
+
+    private static JudgedAnchor Supporting(string workKey, string anchorId) =>
+        new(workKey, anchorId, JudgedAnchor.SupportingGrade);
+
+    /// <summary>
+    /// Writes the text of every article of one expression: the texts given by publisher id, and text that matches
+    /// none of this set's queries everywhere else. Every publisher id given must be held.
+    /// </summary>
+    private static async Task WriteTextsAsync(MountedFixture fixture, string expressionIri, IReadOnlyDictionary<string, string> texts)
+    {
+        var held = fixture.ArticlesOfOwnState().Select(static article => article.PublisherId).ToArray();
+        CollectionAssert.IsSubsetOf(texts.Keys.ToArray(), held, "every article the set writes is held by the fixture's state.");
+        foreach (var publisherId in held)
+        {
+            await fixture.RewriteArticleTextAsync(
+                expressionIri, publisherId, texts.TryGetValue(publisherId, out var text) ? text : "Le present article ne dit rien.");
+        }
+    }
+
+    /// <summary>The permalink of a work's one state on a date, as <c>as_of</c> serves it.</summary>
+    private static async Task<string> PermalinkAsync(V3CorpusMount mount, string workKey, string date)
+    {
+        var envelope = await EnvelopeAsync(mount, "/api/v3/as_of", "as_of", new { identifier = $"/lu-legilux/{workKey}", date, language = "fra" });
+        Assert.IsNull(envelope.Refusal, envelope.Refusal?.Code);
+        var states = envelope.Result!.Value.GetProperty("states").EnumerateArray().ToArray();
+        Assert.HasCount(1, states);
+        return $"/lu-legilux/{workKey}/{date}--{states[0].GetProperty("state_sha256").GetString()}";
     }
 
     /// <summary>The codes the refusal census records as produced by the served operations.</summary>
