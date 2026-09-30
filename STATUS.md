@@ -1186,6 +1186,27 @@ Each is the driver's call under ruling 7 and can be reversed by a later pull req
   mount, complete EU and Luxembourg populations, and French EU bodies. Production signing,
   deployment and promotion remain outside that authorisation.
 
+## Luxembourg population partitioning (2026-09-30)
+
+The whole-population acquisition now drives adaptive covers for S, A and G when the existing
+executor reports `PartitionRequired` at its 1,000,000-row delivery ceiling. It splits six-part
+cursor ranges, retains empty leaves, and runs all leaves of a family in one session and under the
+same wire budget. The adapter reconciles each cover and independently reopens every leaf before
+scope reduction, body acquisition or corpus construction. Explicit act ranges keep their current
+path. This adds no publisher traffic by itself. The bounded mount completed; full-population
+acquisition follows the reviewed selector and adaptive-cover changes.
+Adaptive covers use midpoint boundaries and the existing executor's delivery ceiling. The query
+plan still records a legacy 900-row accumulated-slice rule that this executor does not apply;
+its renderer bytes are unchanged. Automatic covers have offline proof only so far. A root COUNT
+timeout still refuses, and publisher handling of control characters in split boundaries remains
+unverified. Review repair stops at the first unprovable leaf and records later leaves as not
+attempted, with no further requests for that cover.
+Validation: solution build with zero warnings/errors; fast lane 3,065 pass / 1 Windows skip;
+153 initial affected ingest tests pass, including a two-work corpus through split S/A/G families.
+The one review repair updates all four construction census pins and adds the stop-after-failure
+regression. Full unfiltered ingest: 1,964 pass, 19 opt-in skips, zero failures (1,983 total).
+Repair fast lane: 3,065 pass / 1 Windows skip; repair build: zero warnings/errors.
+
 ## Waiting on others
 
 - The bounded real mount is available at

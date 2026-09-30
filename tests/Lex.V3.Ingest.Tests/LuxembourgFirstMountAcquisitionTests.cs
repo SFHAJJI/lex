@@ -106,10 +106,13 @@ public sealed class LuxembourgFirstMountAcquisitionTests
     }
 
     [TestMethod]
-    public async Task TheWholePopulationProvesTwoWorksAndBuildsOneCorpus()
+    [DataRow(false)]
+    [DataRow(true)]
+    public async Task TheWholePopulationProvesTwoWorksAndBuildsOneCorpus(bool saturatedRoot)
     {
         var store = new RoutedHttpAcquisitionSessionTests.MultiObjectCustodyStore();
-        var handler = new LuxembourgFamilyHandler(PdfBytes(), includeSecondWork: true, includeBlankNode: true);
+        var handler = new LuxembourgFamilyHandler(PdfBytes(), includeSecondWork: true, includeBlankNode: true,
+            saturatedRoot: saturatedRoot);
         var renderers = await LuxembourgRendererSources.FromCheckoutAsync(store, CheckoutRoot(), CancellationToken.None);
         var scope = LuxembourgActRange.WholePopulation;
         Assert.AreEqual("A", scope.StartInclusive);
@@ -275,7 +278,8 @@ public sealed class LuxembourgFirstMountAcquisitionTests
         string? sparqlRobots = null,
         string? omitRequiredPredicate = null,
         bool includeSecondWork = false,
-        bool includeBlankNode = false) : HttpMessageHandler
+        bool includeBlankNode = false,
+        bool saturatedRoot = false) : HttpMessageHandler
     {
         // The page query binds VALUES (?has_cursor ?last_key_1 ...) { (1 "last key" ...) } on a
         // continuation and (0 "" ...) on a first page (LuxembourgQueryPlan, has_cursor:uint).
@@ -358,15 +362,31 @@ public sealed class LuxembourgFirstMountAcquisitionTests
                 RegexOptions.CultureInvariant);
             Assert.IsTrue(lowerBound.Success, "The fixture must read the bound sent to the publisher.");
             var blankInRange = includeBlankNode && lowerBound.Groups["start"].Value.Length == 0;
-            if (includeSecondWork && family is "S" or "A" or "G")
+            var assertions = ActAssertions;
+            if (family is "S" or "A" or "G")
             {
-                Assert.IsTrue(body.Contains("\uffff", StringComparison.Ordinal) || body.Contains("\\uFFFF", StringComparison.OrdinalIgnoreCase),
-                    "Both fixture works must be enumerated under the whole-population upper bound.");
+                var bounds = Regex.Match(body,
+                    @"VALUES\s*\(\?partition_start_1[^)]*\)\s*\{\s*\((?<values>[^)]*)\)",
+                    RegexOptions.CultureInvariant);
+                Assert.IsTrue(bounds.Success);
+                var values = Regex.Matches(bounds.Groups["values"].Value, "\"(?:\\\\.|[^\"\\\\])*\"")
+                    .Select(match => JsonSerializer.Deserialize<string>(match.Value)!).ToArray();
+                Assert.AreEqual(12, values.Length);
+                var start = new LuxembourgQueryCursor(values[0], values[1], values[2], values[3], values[4], values[5]);
+                var end = new LuxembourgQueryCursor(values[6], values[7], values[8], values[9], values[10], values[11]);
+                bool InRange(LuxembourgQueryCursor key) => key.CompareTo(start) >= 0 && key.CompareTo(end) < 0;
+                rows = rows.Where(value => InRange(new(value, "", "", "", "", ""))).ToArray();
+                assertions = assertions.Where(row => InRange(new(row.Subject, row.Predicate, "iri", row.Value, "", ""))).ToArray();
+                // Synthetic saturation drives the real cover path without a million-row fixture.
+                // Children are answered from their actual bounds; leaf counts/pages agree.
+                if (saturatedRoot && count && start.Key1 == "A" && end.Key1 == "\uffff")
+                    return LuxembourgAcquisitionTestFixture.JsonResponse(request,
+                        LuxembourgAcquisitionTestFixture.CountJson(1_000_000));
             }
             var page = family switch
             {
-                "A" when count => LuxembourgAcquisitionTestFixture.CountJson(ActAssertions.Length + (blankInRange ? 1 : 0)),
-                "A" => AssertionRows(continuation ? [] : ActAssertions, !continuation && blankInRange),
+                "A" when count => LuxembourgAcquisitionTestFixture.CountJson(assertions.Length + (blankInRange ? 1 : 0)),
+                "A" => AssertionRows(continuation ? [] : assertions, !continuation && blankInRange),
                 "G" when count => LuxembourgAcquisitionTestFixture.CountJson(0),
                 "G" => RelationRows(),
                 _ when count => LuxembourgAcquisitionTestFixture.CountJson(rows.Count),

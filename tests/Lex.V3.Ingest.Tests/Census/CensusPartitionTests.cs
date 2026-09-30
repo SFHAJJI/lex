@@ -44,6 +44,9 @@ public sealed class CensusPartitionTests
     /// </summary>
     private static readonly string[] Declined =
     [
+        "Lex.V3.Ingest.Luxembourg.LuxembourgPartitionBoundary: one private Unicode scalar limit; "
+            + "this is arithmetic, not a selectable vocabulary. Boundary and progress tests "
+            + "cover scalar ordering, surrogate exclusion and the cursor byte limit.",
         "Lex.V3.Ingest.Luxembourg.LuxembourgTranspositionProducer: one private predicate token; "
             + "the producer has its own direct contract tests and is not a vocabulary registry.",
         "Lex.V3.Ingest.Luxembourg.LuxembourgObservedObjectIdentitySetCanonicalWriter: one private "
@@ -87,14 +90,14 @@ public sealed class CensusPartitionTests
     public void ThePartitionTotalsAreExactlyThese()
     {
         Assert.AreEqual(
-            253, ClosedSurfaceCensus.Candidates(CensusScope.SweptHere).Count, "candidates");
+            254, ClosedSurfaceCensus.Candidates(CensusScope.SweptHere).Count, "candidates");
         Assert.AreEqual(
             103, ClosedSurfaceCensus.ClosedVocabularies(CensusScope.SweptHere).Count, "vocabularies");
         Assert.AreEqual(
             136, ClosedSurfaceCensus.GuardedConstruction(CensusScope.SweptHere).Count, "guarded types");
         Assert.AreEqual(
             9, ClosedSurfaceCensus.VocabularyRegistries(CensusScope.SweptHere).Count, "registries");
-        Assert.AreEqual(5, Declined.Length, "declined");
+        Assert.AreEqual(6, Declined.Length, "declined");
     }
 
     private static string NameOf(string row) =>

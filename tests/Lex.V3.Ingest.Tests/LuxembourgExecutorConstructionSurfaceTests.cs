@@ -126,12 +126,23 @@ public sealed class LuxembourgExecutorConstructionSurfaceTests
             {
                 "method internal instance "
                     + "Lex.V3.Ingest.Luxembourg.LuxembourgRepeatedEnumerationExecutor+<>c::<RunCove"
-                    + "rAsync>b__11_0(Lex.V3.Contracts.Source.Luxembourg.LuxembourgQueryPartitionRa"
-                    + "nge) -> Lex.V3.Ingest.Luxembourg.LuxembourgEnumerationRunResult",
+                    + "rCoreAsync>b__13_0(Lex.V3.Contracts.Source.Luxembourg.LuxembourgQueryPartiti"
+                    + "onRange) -> Lex.V3.Ingest.Luxembourg.LuxembourgEnumerationRunResult",
                 "method internal instance "
                     + "Lex.V3.Ingest.Luxembourg.LuxembourgRepeatedEnumerationExecutor+<>c::<RunCove"
-                    + "rAsync>b__11_1(Lex.V3.Contracts.Source.Luxembourg.LuxembourgQueryPartitionRa"
-                    + "nge) -> Lex.V3.Ingest.Luxembourg.LuxembourgEnumerationRunResult",
+                    + "rCoreAsync>b__13_1(Lex.V3.Contracts.Source.Luxembourg.LuxembourgQueryPartiti"
+                    + "onRange) -> Lex.V3.Ingest.Luxembourg.LuxembourgEnumerationRunResult",
+                "method private instance "
+                    + "Lex.V3.Ingest.Luxembourg.LuxembourgRepeatedEnumerationExecutor::RunCoverCore"
+                    + "Async(Lex.V3.Ingest.Luxembourg.LuxembourgPartitionRunRequest, "
+                    + "Lex.V3.Contracts.Source.Luxembourg.LuxembourgPartitionChain, "
+                    + "Lex.V3.Contracts.Source.Core.BoundMachineRequest, "
+                    + "Lex.V3.Ingest.WireRequestBudget, System.Boolean, "
+                    + "System.Threading.CancellationToken) -> "
+                    + "System.Threading.Tasks.Task<System.ValueTuple<Lex.V3.Contracts.Source.Luxemb"
+                    + "ourg.LuxembourgPartitionChain, "
+                    + "System.Collections.Generic.IReadOnlyList<Lex.V3.Ingest.Luxembourg.Luxembourg"
+                    + "EnumerationRunResult>, System.Int32>>",
                 "method private instance "
                     + "Lex.V3.Ingest.Luxembourg.LuxembourgRepeatedEnumerationExecutor::RunPartition"
                     + "OnSessionAsync(Lex.V3.Ingest.Luxembourg.LuxembourgPartitionRunRequest, "
@@ -141,6 +152,16 @@ public sealed class LuxembourgExecutorConstructionSurfaceTests
                     + "System.Threading.CancellationToken) -> "
                     + "System.Threading.Tasks.Task<Lex.V3.Ingest.Luxembourg.LuxembourgEnumerationRu"
                     + "nResult>",
+                "method public instance "
+                    + "Lex.V3.Ingest.Luxembourg.LuxembourgRepeatedEnumerationExecutor::RunAdaptiveC"
+                    + "overAsync(Lex.V3.Ingest.Luxembourg.LuxembourgPartitionRunRequest, "
+                    + "Lex.V3.Contracts.Source.Core.BoundMachineRequest, "
+                    + "Lex.V3.Ingest.WireRequestBudget, "
+                    + "System.Threading.CancellationToken) -> "
+                    + "System.Threading.Tasks.Task<System.ValueTuple<Lex.V3.Contracts.Source.Luxemb"
+                    + "ourg.LuxembourgPartitionChain, "
+                    + "System.Collections.Generic.IReadOnlyList<Lex.V3.Ingest.Luxembourg.Luxembourg"
+                    + "EnumerationRunResult>, System.Int32>>",
                 "method public instance "
                     + "Lex.V3.Ingest.Luxembourg.LuxembourgRepeatedEnumerationExecutor::RunCoverAsyn"
                     + "c(Lex.V3.Ingest.Luxembourg.LuxembourgPartitionRunRequest, "

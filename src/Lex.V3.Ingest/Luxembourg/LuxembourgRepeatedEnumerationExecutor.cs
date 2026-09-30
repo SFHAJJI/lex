@@ -859,6 +859,34 @@ public sealed class LuxembourgRepeatedEnumerationExecutor
         BoundMachineRequest sourceWitness,
         WireRequestBudget wireBudget,
         CancellationToken cancellationToken)
+        => (await RunCoverCoreAsync(rootRequest, chain, sourceWitness, wireBudget,
+            adaptive: false, cancellationToken).ConfigureAwait(false)).Results;
+
+    /// <summary>
+    /// Splits selections at or above the publisher ceiling until every leaf can be enumerated
+    /// twice. All attempts, including saturated ancestors and empty leaves, use one wire budget
+    /// and one acquisition session. This returns evidence; the caller must still prove the cover.
+    /// </summary>
+    public Task<(LuxembourgPartitionChain Chain, IReadOnlyList<LuxembourgEnumerationRunResult> Results,
+        int ProductRequestCount)> RunAdaptiveCoverAsync(
+        LuxembourgPartitionRunRequest rootRequest,
+        BoundMachineRequest sourceWitness,
+        WireRequestBudget wireBudget,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(rootRequest);
+        return RunCoverCoreAsync(rootRequest, LuxembourgPartitionChain.Root(rootRequest.Partition),
+            sourceWitness, wireBudget, adaptive: true, cancellationToken);
+    }
+
+    private async Task<(LuxembourgPartitionChain Chain, IReadOnlyList<LuxembourgEnumerationRunResult> Results,
+        int ProductRequestCount)> RunCoverCoreAsync(
+        LuxembourgPartitionRunRequest rootRequest,
+        LuxembourgPartitionChain chain,
+        BoundMachineRequest sourceWitness,
+        WireRequestBudget wireBudget,
+        bool adaptive,
+        CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(rootRequest);
         ArgumentNullException.ThrowIfNull(chain);
@@ -874,13 +902,13 @@ public sealed class LuxembourgRepeatedEnumerationExecutor
         // results.Count == chain.Leaves.Count has to hold on every path, including this one.
         if (!wireBudget.TryReserveAttempt())
         {
-            return chain.Leaves
+            return (chain, chain.Leaves
                 .Select(static _ => LuxembourgEnumerationRunResult.Refused(
                     new LuxembourgEnumerationRefusalDetail(
                         LuxembourgEnumerationRefusal.WireBudgetExhausted,
                         null, null, null, null, null, null, [], null),
                     productRequestCount: 0))
-                .ToArray();
+                .ToArray(), 0);
         }
 
         // One session for every leaf (see RunPartitionOnSessionAsync's doc comment for why): the
@@ -893,13 +921,13 @@ public sealed class LuxembourgRepeatedEnumerationExecutor
             : await StartWithTestHandlerAsync(sourceWitness, wireBudget, cancellationToken).ConfigureAwait(false);
         if (start.Kind != OfficialHttpAcquisitionOutcomeKind.ExecutedObservation || start.Session is null)
         {
-            return chain.Leaves
+            return (chain, chain.Leaves
                 .Select(static _ => LuxembourgEnumerationRunResult.Refused(
                     new LuxembourgEnumerationRefusalDetail(
                         LuxembourgEnumerationRefusal.RobotsBootstrapRefused,
                         null, null, null, null, null, null, [], null),
                     productRequestCount: 0))
-                .ToArray();
+                .ToArray(), 0);
         }
 
         var runner = start.Session;
@@ -915,15 +943,52 @@ public sealed class LuxembourgRepeatedEnumerationExecutor
             var sharedProfileRef = RepeatedEnumerationInterpretationProfileIdentity.Create(NewUrn(), sharedProfile);
 
             var results = new List<LuxembourgEnumerationRunResult>(chain.Leaves.Count);
-            foreach (var leaf in chain.Leaves)
+            var productRequests = 0;
+            var splitNumber = 0;
+            var splitPrefix = "split-" + Guid.NewGuid().ToString("N");
+            for (var index = 0; index < chain.Leaves.Count;)
             {
+                cancellationToken.ThrowIfCancellationRequested();
+                var leaf = chain.Leaves[index];
                 var leafRequest = rootRequest with { Partition = leaf };
-                results.Add(await RunPartitionOnSessionAsync(
+                var result = await RunPartitionOnSessionAsync(
                         leafRequest, runner, sharedProfileRef, wireBudget, cancellationToken)
-                    .ConfigureAwait(false));
+                    .ConfigureAwait(false);
+                productRequests = checked(productRequests + result.ProductRequestCount);
+                if (adaptive && result.Refusal?.Code == LuxembourgEnumerationRefusal.PartitionRequired &&
+                    LuxembourgPartitionBoundary.Between(leaf) is { } boundary)
+                {
+                    string leftId, rightId;
+                    do
+                    {
+                        splitNumber++;
+                        leftId = $"{splitPrefix}-{splitNumber}-left";
+                        rightId = $"{splitPrefix}-{splitNumber}-right";
+                    } while (chain.Leaves.Any(l => l.PartitionId == leftId || l.PartitionId == rightId));
+                    chain = chain.SplitLeaf(leaf.PartitionId, boundary, leftId, rightId);
+                    continue;
+                }
+
+                results.Add(result);
+                index++;
+                if (adaptive && result.Refusal is { } failedLeaf)
+                {
+                    // A cover requires every leaf. Keep the ordered result shape without sending
+                    // requests for leaves that can no longer make this cover provable.
+                    for (; index < chain.Leaves.Count; index++)
+                    {
+                        results.Add(LuxembourgEnumerationRunResult.Refused(
+                            new LuxembourgEnumerationRefusalDetail(
+                                LuxembourgEnumerationRefusal.ObservationNotExecuted,
+                                null, null, null, null, null, null, [],
+                                $"not attempted: preceding leaf '{leaf.PartitionId}' refused with {failedLeaf.Code}"),
+                            productRequestCount: 0));
+                    }
+                    break;
+                }
             }
 
-            return results;
+            return (chain, results, productRequests);
         }
         finally
         {
