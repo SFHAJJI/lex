@@ -20,6 +20,7 @@ import { createReadingSession, quotationLanguageTag } from '../scripts/live-read
 import { EXPORT_FORMATS, LIVE_EXPORT_IDLE, exportState, formatRefusedSentence, pinKey, saveExport } from '../scripts/live-export.mjs';
 import { exportJson } from '../scripts/export-build.mjs';
 import { liveChrome } from '../scripts/live-chrome.mjs';
+import { LiveAnswer } from './LiveAnswer.jsx';
 
 /** The forms' labels and buttons, from the interface copy table. */
 const FORM = liveChrome().form;
@@ -196,11 +197,16 @@ export function LiveExport({ contract, fetchImpl, save = saveExport }) {
   return (
     <div>
       <ReadingForm submitLabel={FORM.submit.export} onAsk={(request) => session.current.ask(request)} />
-      <ExportAnswerView outcome={outcome} pins={pins} onPin={onPin} />
-      <ExportPanel outcome={outcome} pins={pins} onSave={(format) => {
-        const panel = exportState(outcome, pins);
-        if (panel.state === 'composed') save(panel.model, format);
-      }} />
+      <LiveAnswer>
+        <ExportAnswerView outcome={outcome} pins={pins} onPin={onPin} />
+      </LiveAnswer>
+      {/* The export is its own live region: pinning changes it, and the reading above does not change. */}
+      <LiveAnswer>
+        <ExportPanel outcome={outcome} pins={pins} onSave={(format) => {
+          const panel = exportState(outcome, pins);
+          if (panel.state === 'composed') save(panel.model, format);
+        }} />
+      </LiveAnswer>
     </div>
   );
 }

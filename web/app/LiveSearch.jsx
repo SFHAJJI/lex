@@ -18,6 +18,7 @@
 import { useEffect, useRef, useState } from 'react';
 
 import { RefusalCard } from './RefusalCard.jsx';
+import { LiveAnswer } from './LiveAnswer.jsx';
 import { quotationLanguageTag } from '../scripts/live-reading.mjs';
 import {
   LIVE_SEARCH_IDLE,
@@ -222,7 +223,9 @@ export function LiveSearch({ contract, fetchImpl }) {
         </label>{' '}
         <button type="submit">{FORM.submit.search}</button>
       </form>
-      <SearchAnswerView outcome={outcome} onNextPage={(after) => session.current.next(after)} />
+      <LiveAnswer>
+        <SearchAnswerView outcome={outcome} onNextPage={(after) => session.current.next(after)} />
+      </LiveAnswer>
     </div>
   );
 }

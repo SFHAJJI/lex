@@ -26,7 +26,8 @@ test("the live page is the loading state under the live banner, with its own scr
   assert.match(html, /data-preview-state="live-coverage"/);
   assert.match(html, new RegExp(`data-live="${LIVE_MARKER}"`));
   assert.ok(!html.includes(`data-synthetic="${SYNTHETIC_MARKER}"`), "the synthetic banner would misdescribe a live answer");
-  assert.match(html, /id="live-coverage-root"><section data-answer-state="loading">/);
+  assert.match(html, /id="live-coverage-root"><div class="live-answer" aria-live="polite" data-live-answer=""><section data-answer-state="loading">/,
+    "the answer is written into a live region the server already rendered, so a screen reader hears it arrive");
   assert.match(html, /<script src="\/client-live.js" defer=""><\/script>/);
   assert.ok(!html.includes('src="/client.js"'), "the preview pages' bundle is not this page's");
   assert.deepEqual(LIVE_CONTRACT, census.contract, "the contract is the census's, as the platform rendered it");
@@ -36,8 +37,7 @@ test("the live page is the loading state under the live banner, with its own scr
 test("the tree the browser hydrates is the tree the server rendered (review of #765)", () => {
   const html = renderLiveCoveragePage();
   const root = html.slice(html.indexOf('<div id="live-coverage-root">') + '<div id="live-coverage-root">'.length);
-  const inner = root.slice(0, root.indexOf("</div>"));
-  assert.equal(inner, renderToString(liveCoverageTree()), "a hydration that changed the markup would re-render silently");
+  assert.ok(root.startsWith(`${renderToString(liveCoverageTree())}</div>`), "a hydration that changed the markup would re-render silently");
 });
 
 test("the search page's server render is the tree the browser hydrates", () => {
@@ -425,6 +425,8 @@ test("no live page says synthetic in its text, since a live page may stand over 
     const html = render();
     const text = html.slice(html.indexOf("<body")).replace(/<[^>]+>/g, " ");
     assert.doesNotMatch(text, /synthetic/i, `${name}: the visible text never calls the page synthetic`);
+    assert.match(html, /<div class="live-answer" aria-live="polite" data-live-answer=""><section data-answer-state="(idle|loading)">/,
+      `${name}: the answer's live region is rendered by the server, before any answer arrives`);
     assert.match(html, new RegExp(`data-live="${LIVE_MARKER}"`), `${name}: under the live banner`);
   }
 });

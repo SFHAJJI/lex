@@ -17,6 +17,7 @@ import { useEffect, useRef, useState } from 'react';
 import { RefusalCard } from './RefusalCard.jsx';
 import { COMPARE_LANGUAGES, LIVE_COMPARE_IDLE, createCompareSession } from '../scripts/live-compare.mjs';
 import { liveChrome } from '../scripts/live-chrome.mjs';
+import { LiveAnswer } from './LiveAnswer.jsx';
 
 /** The forms' labels and buttons, from the interface copy table. */
 const FORM = liveChrome().form;
@@ -187,7 +188,9 @@ export function LiveCompare({ contract, fetchImpl }) {
         </label>{' '}
         <button type="submit">{FORM.submit.compare}</button>
       </form>
-      <CompareAnswerView outcome={outcome} />
+      <LiveAnswer>
+        <CompareAnswerView outcome={outcome} />
+      </LiveAnswer>
     </div>
   );
 }
