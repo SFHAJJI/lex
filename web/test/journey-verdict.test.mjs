@@ -90,6 +90,8 @@ function goodSearch() {
       },
     ],
     location: `${ORIGIN}/search.html`,
+    history: { atLoad: 2, atEnd: 2, state: "null" },
+    cookie: "",
   };
 }
 
@@ -107,6 +109,9 @@ test("each way a search run can fail is a failure, named", () => {
     ["the coverage operation", (o) => { o.requests[2].url = `${ORIGIN}/api/v3/coverage`; }, /not POST \/api\/v3\/search/],
     ["a text missing", (o) => { o.text = "nothing"; }, /does not show "4 with the exact phrase"/],
     ["two searches", (o) => { o.requests.push({ ...o.requests[2] }); }, /2 requests to the API/],
+    ["a history entry pushed", (o) => { o.history.atEnd = 3; }, /changed the history from 2 entries to 3/],
+    ["history state written", (o) => { o.history.state = JSON.stringify({ query: SEARCH_PHRASE }); }, /wrote history state/],
+    ["a cookie set", (o) => { o.cookie = "lastq=x"; }, /set a cookie: lastq=x/],
   ];
   for (const [what, mutate, reason] of cases) {
     const observed = goodSearch();

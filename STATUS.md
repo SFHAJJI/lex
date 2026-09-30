@@ -295,11 +295,19 @@ now runs two steps, each with and without the fixture mount, and all four runs p
   `no_corpus_mounted` card.
 - Each run makes 6 requests, exactly one of them `POST /api/v3/search`. Its body, read from the
   request the browser sent, is exactly `{operation_id: "search", parameters: {query, language:
-  "fra"}}`. The page is still at `/search.html`, so the phrase is not in the address or the
-  history. There is no referrer, no cookie, no storage and nothing on the console, and hydration
-  is clean.
-- Shown to fail: a live build whose request carried one extra field failed the body check,
-  naming the field.
+  "fra"}}`. The page ends at `/search.html` with the history length it had when it loaded and
+  no history state, so the phrase is not in the address or the history. `document.cookie` is
+  empty at the end and the API request carried no cookie. There is no referrer, no storage and
+  nothing on the console, and hydration is clean.
+- Shown to fail:
+  - a live build whose request carried one extra field failed the body check, naming the field;
+  - a build that pushed the phrase into the history and set it in a cookie after submitting (the
+    review of #773 showed it passed before these checks) failed three checks: history grown from
+    2 to 3 entries, history state written, cookie set.
+- Not driven yet: the next page. On the fixture the phrase has 5 hits and the form asks the
+  platform's default page size, so no page is truncated and no "Next page" button appears. The
+  cursor-carrying request is covered only by the injected-fetch test of PR #772. Driving it needs
+  a mount with more hits than one page, which the first real mount would give.
 
 **The first browser journey step passes (PR #766, run locally 2026-09-30):** `node scripts/journey.mjs --api <Lex.V3.Api build
 output> --mount <journey mount>` runs the real `Lex.V3.Api` from a copy of its build output with the
@@ -688,7 +696,8 @@ proves the path, not a corpus.
    its page, the live build and the one-origin server; PR #766: the first browser journey step,
    passing against the real API with and without a mount; PR #771: the V3 search reader
    `readSearch`, held to five search answers the census now samples; PR #772: the live search
-   screen and its page; PR #773: the search journey step. Next: dossier and reading, whose
+   screen and its page; PR #773: the search journey step (type, submit, the answer; the next page
+   waits for a mount with more hits than one page). Next: dossier and reading, whose
    readers still read pre-V3 shapes and must first be held to served samples. Also J1 to J8
    restated as V3 steps (owner question): they exist only in the pre-V3 pack
    (`05-user-journeys.md`).

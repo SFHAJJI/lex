@@ -7,9 +7,10 @@
 // Without a mount, each must end in the refusal card for `no_corpus_mounted`. In every run, what the
 // browser did is measured, not assumed: exactly one request to the API (`POST /api/v3/{operation}`,
 // no query string, no referrer, no cookie), every other request a same-origin asset, the page still
-// at its own address (a phrase in the address bar would be in the history), nothing written to
-// storage, nothing logged to the console and no uncaught exception or unhandled rejection, the
-// page's CSP the reviewed one, and hydration clean.
+// at its own address with no history entry added and no history state written, no cookie set,
+// nothing written to storage, nothing logged to the console and no uncaught exception or unhandled
+// rejection, the page's CSP the reviewed one, and hydration clean. (The history and cookie checks
+// came from the review of #773: a page that pushed the phrase into the history and a cookie passed.)
 //
 // The API is the real `Lex.V3.Api`, run from a copy of its build output so the mount can sit beside
 // it (`AppContext.BaseDirectory/v3-corpus`, which is where the API looks). The page is `dist-live/`,
@@ -53,7 +54,9 @@ export const JOURNEY_STEPS = Object.freeze({
  *
  * @param {object} observed what the browser run read: `answerState`, `text`, `requests`
  *   (`{url, method, headers, postData?}`), `console`, `storage` (`{local, session}`), `csp`,
- *   `hydrated`, and `location` (where the page ended)
+ *   `hydrated`, `location` (where the page ended), `history` (`{atLoad, atEnd, state}`: the
+ *   history length when the page had loaded and at the end, and the history state, as JSON) and
+ *   `cookie` (`document.cookie` at the end)
  * @param {object} expected `{origin, state: "success"|"refusal", step?, corpusSha256?, indexSha256?,
  *   texts?, refusalCode?}`; `step` is a `JOURNEY_STEPS` entry and defaults to coverage
  */
@@ -74,6 +77,13 @@ export function journeyVerdict(observed, expected) {
   if (observed.location !== undefined && observed.location !== `${expected.origin}${step.path}`) {
     failures.push(`the page ended at ${observed.location}, not at ${expected.origin}${step.path}`);
   }
+  if (observed.history !== undefined) {
+    if (observed.history.atEnd !== observed.history.atLoad) {
+      failures.push(`the page changed the history from ${observed.history.atLoad} entries to ${observed.history.atEnd}`);
+    }
+    if (observed.history.state !== "null") failures.push(`the page wrote history state: ${observed.history.state}`);
+  }
+  if (observed.cookie !== undefined && observed.cookie !== "") failures.push(`the page set a cookie: ${observed.cookie}`);
   if (expected.state === "refusal" && !observed.text.includes(expected.refusalCode)) {
     failures.push(`the page does not name the refusal ${expected.refusalCode}`);
   }
@@ -226,6 +236,10 @@ async function observe(browser, pageOrigin, step) {
     const evaluate = async (expression) =>
       (await session.send("Runtime.evaluate", { expression, returnByValue: true }, sessionId)).result.value;
     const deadline = Date.now() + ANSWER_DEADLINE_MS;
+    while (Date.now() < deadline && (await evaluate("document.readyState")) !== "complete") {
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    }
+    const historyAtLoad = await evaluate("history.length");
     if (step.operation === "search") await typeAndSubmit(session, sessionId, evaluate, deadline);
     let answerState = null;
     while (Date.now() < deadline) {
@@ -248,6 +262,12 @@ async function observe(browser, pageOrigin, step) {
       csp: await evaluate("document.querySelector('meta[http-equiv=\"Content-Security-Policy\"]')?.content ?? null"),
       hydrated: await evaluate("document.documentElement.dataset.hydrated ?? null"),
       location: await evaluate("location.href"),
+      history: {
+        atLoad: historyAtLoad,
+        atEnd: await evaluate("history.length"),
+        state: await evaluate("JSON.stringify(history.state)"),
+      },
+      cookie: await evaluate("document.cookie"),
     };
   } finally {
     chrome.kill();
