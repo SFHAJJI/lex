@@ -130,3 +130,30 @@ test("a card whose gate fails says so above its tables, and the page will not pr
   assert.ok(markup.includes(`1 shuffled control did not catch the shuffle (${failing.shuffled_controls[1].control} in ${failing.shuffled_controls[1].set}, ${failing.shuffled_controls[1].arm}: missed the shuffle)`));
   assert.throws(() => renderLiveCoveragePage({ card: mutate((c) => { c.statistical_rows[0].status = "labelled"; }) }), /Decision 92/);
 });
+
+test("a set the gates found nothing to ask of reads as not measured, and only that way (the gates over a mounted corpus)", () => {
+  // The first temporal set emptied as a mount with no Luxembourg state empties it: no case, every gate not measured
+  // for no measurable query, and the control not applicable, saying why.
+  const empty = (change = () => {}) => mutate((c) => {
+    Object.assign(c.machine_gates[0], { cases: 0 });
+    c.machine_gates[0].gates = c.machine_gates[0].gates.map((gate) => ({ gate: gate.gate, verdict: "not_measured", value: null, threshold: gate.threshold, n: 0, not_measured_reason: "no_measurable_query" }));
+    Object.assign(c.shuffled_controls[0], { verdict: "not_applicable", cases: 0, reason: "there is no temporal case to shift: the mount holds no Luxembourg state for this arm" });
+    delete c.shuffled_controls[0].note;
+    change(c);
+  });
+  const read = readEvaluationCard(empty());
+  assert.equal(read.sets[0].cases, 0);
+  assert.equal(read.sets[0].gates[0].verdict, "not_measured");
+  assert.equal(read.controls[0].verdict, "not_applicable");
+
+  assert.throws(() => readEvaluationCard(empty((c) => {
+    Object.assign(c.machine_gates[0].gates[0], { verdict: "pass", value: 1, not_measured_reason: undefined });
+    delete c.machine_gates[0].gates[0].not_measured_reason;
+  })), /counts 0 cases|not a whole number of at least 1/, "a scored gate over no case");
+  assert.throws(() => readEvaluationCard(empty((c) => { c.machine_gates[0].gates[0].not_measured_reason = "stratum_below_floor"; })),
+    /not a whole number of at least 1/, "only no measurable query counts no case");
+  assert.throws(() => readEvaluationCard(empty((c) => { Object.assign(c.shuffled_controls[0], { verdict: "caught_the_shuffle" }); })),
+    /cases is not a whole number of at least 1/, "a control over no case cannot have caught anything");
+  assert.throws(() => readEvaluationCard(mutate((c) => { c.machine_gates[0].cases = 0; })), /counts \d+ cases in its stratum, and its set holds 0|holds no case/,
+    "a set of no case whose gates are measured");
+});

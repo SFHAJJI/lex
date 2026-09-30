@@ -657,11 +657,11 @@ CI evidence are recorded in the pull request before merge.
 
 ## Heads
 
-- `v3/integration`: `7144666c` (2026-10-01, PR #835 merged). Build 45 s. Fast lane
+- `v3/integration`: `398f936e` (2026-10-01, PR #839 merged). Build 45 s. Fast lane
   (`eng/test-fast.ps1`): 3,077 tests, 3,076 pass, 1 skipped (the review of PR #828). Ingest suite: green on CI for PR #760
   (the CI `dotnet` job runs the whole solution on every pull request, about 7 min on the runner;
   green for PR #834);
-  locally about 15 min. 979 web tests pass. The web job's "browser debugger never answered" failures
+  locally about 15 min. 980 web tests pass. The web job's "browser debugger never answered" failures
   (keyboard-walk, and paint-check since #811) are fixed by PR #822: each browser binds its own
   debugging port (`launchBrowser`) instead of a random one another browser starting at the same
   moment could hold.
@@ -889,7 +889,7 @@ schema's `parameters` shape, and whose call runs the same dispatch the REST rout
 endpoint test proves it for all twenty-three. The launch-contract line "REST and MCP derive identical
 envelopes from the registry" is the owner's to tick.
 
-Web: 41 React components, 979 tests. Preview screens render fixtures. The V3 Luxembourg search
+Web: 41 React components, 980 tests. Preview screens render fixtures. The V3 Luxembourg search
 answer has a reader (PR #771). The answer census now samples `search` five ways from the real handler:
 - a phrase with 4 strict hits and 1 relaxed hit;
 - the same phrase one hit per page, with its cursor;
@@ -1927,6 +1927,16 @@ so the one code the registry says answers it follows from the mount's own data:
 - Two mutations:
   - the day-before-history request given the gold `answer` fails the refusal tests;
   - the first version's `non_admitting` guess fails the `conflict` case.
+
+The page reads a card over a mount the gates found nothing to ask of (PR #841). Over the real
+bounded first mount the temporal no-language arms and the retrieval set have no case, and the page's
+card reader refused a set of no case. `readEvaluationCard` now accepts one only as honest emptiness:
+- a gate may count no case only when it is not measured for `no_measurable_query`;
+- a set of no case must have every gate that way;
+- a control over no case can only be `not_applicable`, with its reason.
+A scored gate over no case, another not-measured reason over no case, and a control over no case that
+"caught" something are refused. The first mount's card reads and renders ("5 gates do not pass",
+each named not measured), as do the journey and licence-blocked mounts' cards and the platform card.
 
 Evaluation card (PR #769): `EvaluationCard` in `Lex.V3.Contracts.Evaluation` prints the machine
 gates as the card of `36-ideal-evaluation.md` section 6 describes, as far as the launch contract
