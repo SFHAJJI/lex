@@ -575,7 +575,9 @@ public sealed class GuardedConstructionCensusTests
                 "Lex.V3.Contracts.Source.Corpus.VerifiedCorpusRecordSet: constructor internal "
                     + "instance Lex.V3.Contracts.Source.Corpus.VerifiedCorpusRecordSet::.ctor, "
                     + "method public static "
-                    + "Lex.V3.Contracts.Source.Corpus.VerifiedCorpusRecordSet::ParseAndVerify",
+                    + "Lex.V3.Contracts.Source.Corpus.VerifiedCorpusRecordSet::ParseAndVerify, "
+                    + "method public static "
+                    + "Lex.V3.Contracts.Source.Corpus.VerifiedCorpusRecordSet::ParseAndVerifyStream",
                 "Lex.V3.Contracts.Source.Europe.EuAuthorityQualifiedToken: constructor private "
                     + "instance Lex.V3.Contracts.Source.Europe.EuAuthorityQualifiedToken::.ctor, "
                     + "method public static "

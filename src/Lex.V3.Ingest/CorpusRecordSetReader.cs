@@ -1,3 +1,4 @@
+using System.Runtime.InteropServices;
 using System.Text.Json.Serialization;
 using Lex.V3.Contracts.Custody;
 using Lex.V3.Contracts.Source.Core;
@@ -51,7 +52,7 @@ public sealed class CorpusRecordSetReadResult
     /// <summary>
     /// The reopened set, verified against the reference it was asked for and against its own exact
     /// canonical form, for a reopened result only. Holding one is the evidence that
-    /// <see cref="VerifiedCorpusRecordSet.ParseAndVerify"/> ran to completion over bytes custody
+    /// <see cref="VerifiedCorpusRecordSet.ParseAndVerifyStream"/> ran to completion over bytes custody
     /// actually returned -- never over an in-memory set this process still happened to be holding.
     /// </summary>
     public VerifiedCorpusRecordSet? VerifiedSet { get; }
@@ -137,12 +138,15 @@ public sealed class CorpusRecordSetReader
 
         try
         {
+            using var readback = MemoryMarshal.TryGetArray(retained, out var buffer)
+                ? new MemoryStream(buffer.Array!, buffer.Offset, buffer.Count, writable: false)
+                : new MemoryStream(retained.ToArray(), writable: false);
             return CorpusRecordSetReadResult.Reopened(
-                VerifiedCorpusRecordSet.ParseAndVerify(setRef, retained.Span));
+                VerifiedCorpusRecordSet.ParseAndVerifyStream(setRef, readback));
         }
         catch (ArgumentException exception)
         {
-            // ParseAndVerify states every one of its own rejections as an ArgumentException naming
+            // ParseAndVerifyStream states every one of its own rejections as an ArgumentException naming
             // the bytes: the reference's digest, strict UTF-8, typed deserialization, and the exact
             // canonical round trip. Catching that one type is catching exactly its verdict, not a
             // net thrown over unrelated failures -- a null argument cannot reach here, both are

@@ -3,6 +3,38 @@
 Updated 2026-09-30 by the driver. This file replaces the issue-comment ledgers. It is rewritten in
 every pull request that changes what is served, what is next or what is blocked.
 
+## Corpus record-set canonical streaming and readback (Codex, 2026-09-30)
+
+The full Luxembourg path still creates a complete corpus record set. Its canonical writer used
+a whole MemoryStream/ToArray copy, and independent readback added a full UTF-8 string and another
+canonical buffer. Reversible driver decision: write records through an incremental domain hash
+and reopen through a strict stream reader. Preserve field order, newline, digest, destination
+prefix and caller stream ownership. Flush at record boundaries after64KiB pending, allowing
+one-record overshoot; this is not a fixed bound on arbitrary records.
+
+The new reader checks the original digest before strict UTF-8, uses the same typed constructors,
+compares canonical output against a fresh read, requires EOF and pins the final digest. Both
+inline custody reader and writer wrap existing retained arrays when possible. Independent
+readback still constructs a new typed record set; it does not trust a graph from the writer.
+
+Validation: clean solution build (0warnings/errors,100.31s); required fast3,080passed plus one
+platform skip (64.133s); all40 affected CorpusRecordSetWriter and EU/LU/V3 FirstMount ingest tests
+passed (49.780s). Seven new regressions cover a3,000-record nonseekable destination, independent
+hash/readback, destination prefix, short reads/ownership, wrong digest/noncanonical/UTF-8/EOF,
+typed ordinal invariants, canonical substitution and stream preconditions. Existing fixture
+byte/digest pins remain unchanged. Independent reflection confirms211guarded types, with only
+ParseAndVerifyStream added to VerifiedCorpusRecordSet's global/per-type construction pins.
+
+The required Claude review returned MERGE at a4d6fbc9 with no material defect. It reproduced
+the clean build, fast suite and all 40 affected tests. It passed 52 tests with broader readback
+and lineage coverage, and compared readers over 15,039 inputs with zero disagreements (247
+accepted by both). A 5,000-record set also produced
+identical canonical output. The one follow-up uses the persistence MemoryStream backing memory
+instead of ToArray, documents partial output/flush on failure, and refreshes through merged824.
+Fresh repair validation and exact-head CI remain pending. Persistence still buffers one complete
+canonical set and retains reopened bytes; typed records/completion also remain. Chunked record-set
+persistence and measured downstream resources remain required before full Luxembourg. No full
+population-fit claim, publisher traffic or production operation follows this change.
 ## DATA review and fresh population evidence (Codex, 2026-09-30)
 
 The required Claude review of #824 at99a8e29d returned MERGE, with no blocking finding.
