@@ -18,6 +18,7 @@
 import { useEffect, useRef, useState } from 'react';
 
 import { RefusalCard } from './RefusalCard.jsx';
+import { quotationLanguageTag } from '../scripts/live-reading.mjs';
 import {
   LIVE_SEARCH_IDLE,
   SEARCH_LANGUAGES,
@@ -38,11 +39,14 @@ function laneCount(count) {
   return count === null ? 'not counted' : String(count);
 }
 
-function WorkResolution({ resolution }) {
+export function SearchWorkResolution({ resolution }) {
+  // A matched title is the publisher's text, marked in the language that title is written in, which the
+  // card names: the resolver searches every language's titles, so the search's language is not it (review
+  // of #797).
   if (resolution.outcome === 'one_work') {
     return (
       <p data-work-resolution="one_work">
-        The phrase names the work “{resolution.work.matchedTitle}” ({resolution.work.workIdentifier}).
+        The phrase names the work “<span lang={quotationLanguageTag(resolution.work.matchedTitleLanguage)}>{resolution.work.matchedTitle}</span>” ({resolution.work.workIdentifier}).
       </p>
     );
   }
@@ -52,7 +56,7 @@ function WorkResolution({ resolution }) {
         <p>The phrase matches the titles of several works:</p>
         <ul>
           {resolution.candidates.map((card) => (
-            <li key={card.workIdentifier}>“{card.matchedTitle}” ({card.workIdentifier})</li>
+            <li key={card.workIdentifier}>“<span lang={quotationLanguageTag(card.matchedTitleLanguage)}>{card.matchedTitle}</span>” ({card.workIdentifier})</li>
           ))}
         </ul>
       </div>
@@ -112,7 +116,7 @@ export function SearchResultsView({ view, onNextPage }) {
         {laneCount(population.relaxedHits)} with every word, in {population.worksWithHits}{' '}
         {population.worksWithHits === 1 ? 'work' : 'works'}.
       </p>
-      <WorkResolution resolution={view.workResolution} />
+      <SearchWorkResolution resolution={view.workResolution} />
       <AmbiguousWorks works={view.ambiguousWorks} date={view.date} />
       {view.hits.length === 0 ? (
         view.searchableTextHeld ? (

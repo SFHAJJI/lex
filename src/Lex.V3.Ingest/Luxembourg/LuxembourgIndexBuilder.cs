@@ -185,11 +185,16 @@ public sealed record LuxembourgIndexAnchorArticle(
     string? ApplicabilityDate,
     string WordingSha256);
 
+/// <summary>
+/// One work a title resolved to: its expressions and languages, the title that matched and that title's own language
+/// (the resolver searches every language's titles, so the language searched in is not the title's), and why it matched.
+/// </summary>
 public sealed record LuxembourgIndexResolvedWork(
     string WorkIdentifier,
     IReadOnlyList<string> ExpressionIris,
     IReadOnlyList<string> Languages,
     string MatchedTitle,
+    string MatchedTitleLanguage,
     string MatchReason);
 
 public sealed record LuxembourgIndexWorkResolution(
@@ -2477,7 +2482,8 @@ public sealed class LuxembourgIndexReader : IDisposable
                         .Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray()),
                     Array.AsReadOnly(group.Select(static row => row.Language)
                         .Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray()),
-                    group.OrderBy(static row => row.Title, StringComparer.Ordinal).First().Title,
+                    group.OrderBy(static row => row.Title, StringComparer.Ordinal).ThenBy(static row => row.Language, StringComparer.Ordinal).First().Title,
+                    group.OrderBy(static row => row.Title, StringComparer.Ordinal).ThenBy(static row => row.Language, StringComparer.Ordinal).First().Language,
                     reason))
                 .ToArray();
             return new LuxembourgIndexWorkResolution(true, Array.AsReadOnly(candidates));

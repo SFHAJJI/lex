@@ -234,6 +234,9 @@ public sealed class V3CorpusSearchMountTests
             Assert.AreEqual("one_work", byTitle.GetProperty("outcome").GetString());
             Assert.AreEqual("exact_normalized_title", byTitle.GetProperty("work").GetProperty("match_reason").GetString());
             Assert.AreEqual(fixture.PublisherWid, byTitle.GetProperty("work").GetProperty("work_identifier").GetString());
+            // The matched title's own language, which the page marks it in (review of #797): the resolver searches
+            // every language's titles, so the language searched in does not say what the title is written in.
+            Assert.AreEqual("fra", byTitle.GetProperty("work").GetProperty("matched_title_language").GetString());
             Assert.AreEqual(JsonValueKind.Null, byTitle.GetProperty("candidates").ValueKind);
 
             var noMatch = (await SearchAsync(oneTitle, "ordinary unknown words")).Result!.Value.GetProperty("work_resolution");
@@ -249,6 +252,10 @@ public sealed class V3CorpusSearchMountTests
         Assert.AreEqual("several_candidates", plural.GetProperty("outcome").GetString());
         Assert.AreEqual(JsonValueKind.Null, plural.GetProperty("work").ValueKind, "Several candidates are listed and none is picked.");
         Assert.AreEqual(2, plural.GetProperty("candidates").GetArrayLength());
+        foreach (var candidate in plural.GetProperty("candidates").EnumerateArray())
+        {
+            Assert.IsFalse(string.IsNullOrEmpty(candidate.GetProperty("matched_title_language").GetString()), "every candidate names its title's language");
+        }
     }
 
     [TestMethod]

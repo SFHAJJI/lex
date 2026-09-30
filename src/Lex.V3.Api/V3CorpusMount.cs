@@ -260,6 +260,7 @@ internal sealed class V3CorpusMount : IDisposable
                 expressions = work.ExpressionIris,
                 languages = work.Languages,
                 matched_title = work.MatchedTitle,
+                matched_title_language = work.MatchedTitleLanguage,
                 retrieval_lane = "r1_work_discovery",
                 match_reason = work.MatchReason,
                 corpus_sha256 = _corpus.ArtifactRef.Sha256,
@@ -3230,6 +3231,7 @@ internal sealed class V3CorpusMount : IDisposable
             expressions = work.ExpressionIris,
             languages = work.Languages,
             matched_title = work.MatchedTitle,
+            matched_title_language = work.MatchedTitleLanguage,
             match_reason = work.MatchReason,
         };
 
