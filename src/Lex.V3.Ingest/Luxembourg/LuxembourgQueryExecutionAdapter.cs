@@ -957,9 +957,9 @@ public sealed class LuxembourgQueryExecutionResult
     /// <remarks>
     /// <see cref="CorpusRecordSetRef"/> cannot serve that purpose. Its digest is
     /// <c>CorpusRecordSetCanonicalWriter.ComputeSetSha256</c>, which hashes a domain string before
-    /// the bytes, while custody addresses blobs by their plain SHA-256. The two are different values
-    /// of the same bytes, so a reader holding only the reference has the set's identity and no way
-    /// to fetch it. <see cref="CorpusRecordSetReader"/> takes both and checks each against the bytes.
+    /// the complete canonical bytes. Custody instead addresses either inline bytes or an ordered
+    /// chunk root by its plain SHA-256. A reference alone therefore cannot locate the stored set.
+    /// <see cref="CorpusRecordSetReader"/> checks the storage closure and canonical identity.
     /// This mirrors <see cref="ScopeManifestReceipt"/>, which this result has always carried for the
     /// manifest one step earlier.
     /// </remarks>

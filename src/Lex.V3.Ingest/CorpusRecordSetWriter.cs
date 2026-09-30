@@ -325,16 +325,12 @@ public sealed class CorpusRecordSetWriteResult
     /// by which the retained set can be found again after this run ends.
     /// </summary>
     /// <remarks>
-    /// <see cref="SetRef"/> cannot serve that purpose and never could.
-    /// <c>CorpusRecordSetCanonicalWriter.ComputeSetSha256</c> domain-separates its digest by hashing
-    /// a domain string before the bytes, while custody addresses blobs by
-    /// <see cref="CustodyDigest.Of"/>, the plain SHA-256 of those same bytes; the two values are
-    /// different, which is why <see cref="CorpusRecordSetWriter.WriteAsync"/> itself reads by the
-    /// receipt's digest and only then verifies against <see cref="SetRef"/>. Before this property
-    /// existed the receipt was used for exactly that one read and then dropped, so a run retained
-    /// its corpus/6 record set and kept no address by which anyone could ever reopen it -- unlike
-    /// the scope manifest one step earlier, whose receipt both adapters carry on their own results.
-    /// <see cref="CorpusRecordSetReader"/> is the door that needs it.
+    /// <see cref="SetRef"/> identifies the complete canonical set with its domain-separated digest.
+    /// Custody uses a different address: the raw digest of inline bytes, or the raw digest of a
+    /// root naming the ordered chunk closure. <see cref="CorpusRecordSetReader"/> takes both and
+    /// checks the storage closure and complete canonical identity independently. The root receipt
+    /// describes the root's retention only; <see cref="RetainedFloor"/> describes the weakest
+    /// receipt observed across the writer's complete storage closure.
     /// </remarks>
     public DurableBlobWriteReceipt? RetainedSetReceipt { get; }
 

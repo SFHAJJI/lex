@@ -3,7 +3,7 @@
 Updated 2026-09-30 by the driver. This file replaces the issue-comment ledgers. It is rewritten in
 every pull request that changes what is served, what is next or what is blocked.
 
-## Corpus persistence in bounded custody objects (Codex draft, 2026-09-30)
+## Corpus persistence in bounded custody objects (Codex, 2026-09-30)
 
 The corpus writer still held one complete canonical byte buffer after the stream-reader change.
 Reversible driver decision: sets larger than 4 MiB use the existing ordered chunk closure; small
@@ -13,10 +13,18 @@ canonical bytes, and retains its three typed refusal categories. The storage roo
 the root; the write result's retention class takes the weakest observed class across data chunks,
 retained receipt-evidence objects and the root. It does not infer the closure floor from the root.
 
-This code-only draft is uncompiled while required reviews occupy the machine. Regressions are
-prepared for independent public reopen, exact bytes, data/evidence/root retention differences,
-missing/reordered/substituted chunks, wrong canonical references, unavailable custody and failed
-holds. Typed records and completion remain materialized, so full Luxembourg fit is still unproved.
+Validation passed at 9fa26e4e: clean solution build (86.96 s), required fast (3,083 passed,
+one platform skip, 64.814 s), and 93 affected ingest tests (two live canaries skipped, 79.674 s).
+Six new cases cover exact bytes and independent public reopen, bounded custody writes, data /
+receipt-evidence / root retention differences, missing/reordered/substituted chunks, wrong set
+references, unavailable custody and failed holds. Independent reflection preserves 137 guarded
+Ingest types and 86 receipt producers; the pins add the private chunk writer and the existing
+helper's receipt observer parameter. The six declined types are unchanged.
+
+The exact commands and results are retained in C:\lex-v3\lanes\corpus-chunk-validation-commands.json
+and corpus-chunk-validation.json. Required cross-family review and green exact-head CI remain
+merge gates. Typed records and completion remain materialized; this is not a full Luxembourg
+fit or population-completeness claim. No publisher traffic was sent by the validation.
 
 ## Corpus record-set canonical streaming and readback (Codex, 2026-09-30)
 
