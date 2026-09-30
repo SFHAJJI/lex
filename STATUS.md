@@ -557,8 +557,9 @@ three formats cannot disagree, and the export composer offers "Save as PDF" besi
   what was asked, the snapshot's observation time, the rights served under with the platform's rule,
   the counts, and the corpus, index and registry digests. Each item carries its citation, state
   permalink, text and body digests and official source (monospaced, wrapped without losing a
-  character), its rights, its own date where it differs, its notes and its whole text; each
-  exclusion its reason. No heading ends a page alone.
+  character), its rights, its own date where it differs, its notes and its whole text, every byte
+  kept: its lines joined with nothing between them are the text (review of #790). Each exclusion
+  carries its citation and reason. No heading ends a page alone.
 - Written byte by byte with no library: PDF 1.4, A4, uncompressed streams, the standard Helvetica
   and Courier fonts in WinAnsiEncoding, no embedded font and no time of making, so the same model
   gives the same bytes. Typographic spaces and hyphens outside WinAnsi are set plainly, and the PDF
@@ -568,7 +569,7 @@ three formats cannot disagree, and the export composer offers "Save as PDF" besi
   page tree, stream lengths, each text run decoded from WinAnsi by the test's own table) and check
   the launch contract's citations, rights, watermark and exclusions on it, every line inside the
   text width, and page breaks losing nothing. Read independently with pypdf (strict) and PyMuPDF:
-  the fixture's 49 articles make 23 pages, with the watermark, the page numbers and the accented
+  the fixture's 49 articles make 24 pages, with the watermark, the page numbers and the accented
   text intact.
 - The launch-contract line "Exports PDF, JSON, CSV preserve citations, rights, watermarks and
   exclusions" is the owner's to tick.

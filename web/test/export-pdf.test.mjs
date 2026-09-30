@@ -153,9 +153,30 @@ test("an exclusion is set with its reason, and every line stays inside the text 
   const mono = runs.filter((run) => run.font === "F2").map((run) => run.text).join("");
   assert.ok(mono.includes(model.excluded[0].citation), "an excluded article keeps its citation in the PDF too");
   for (const run of runs) {
-    const width = pdfTextWidth([...run.raw], run.font === "F2" ? "mono" : "sans", run.size);
+    // What a line shows: its trailing spaces are kept (the text is kept whole) and take no room.
+    const shown = [...run.raw];
+    while (shown.at(-1) === 0x20) shown.pop();
+    const width = pdfTextWidth(shown, run.font === "F2" ? "mono" : "sans", run.size);
     assert.ok(run.x + width <= 56 + PDF_TEXT_WIDTH + 0.01, `"${run.text.slice(0, 40)}" fits (${width.toFixed(1)} pt)`);
   }
+});
+
+test("an item's text is set whole: its lines joined with nothing between them are the text, every space kept", async () => {
+  const { createHash } = await import("node:crypto");
+  // Double spaces, a leading and a trailing space, a run of spaces at a likely break, and a word longer
+  // than a line: each must survive into the PDF (review of #790: "A  B" was set as "A B").
+  const text = ` Art. 1.  Le  texte   garde ${"chaque ".repeat(18)}espace,  y compris   ${"x".repeat(140)}  et à la fin. `;
+  const { model } = await modelOf((raw) => {
+    const article = raw.states[0].articles[0];
+    article.text = text;
+    article.text_byte_length = Buffer.byteLength(text, "utf8");
+    article.text_sha256 = createHash("sha256").update(text, "utf8").digest("hex");
+  }, (state) => [state.articles[0]]);
+  const body = bodyOf(readPdf(exportPdf(model)));
+  const after = body.findIndex((run) => run.text.startsWith("Rights: "));
+  const lines = body.slice(after + 1).filter((run) => run.font === "F1" && run.size === 10);
+  assert.ok(lines.length > 2, `the text wraps over ${lines.length} lines`);
+  assert.equal(lines.map((run) => run.text).join(""), text, "not normalised: the very text the digest vouches for");
 });
 
 test("many items run over pages, each page within its margins, and the same model gives the same bytes", async () => {

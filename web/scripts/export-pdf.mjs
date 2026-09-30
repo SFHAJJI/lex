@@ -110,35 +110,49 @@ export function pdfRefusal(model) {
   return unsettable.size === 0 ? null : `its text holds characters the standard PDF fonts cannot set (${[...unsettable].join(', ')})`;
 }
 
-/** Breaks WinAnsi bytes into lines no wider than `width`: at spaces, and inside a word only when it must. */
+/** The width a line takes on the page: its trailing spaces take none. */
+function visibleWidth(bytes, font, size) {
+  let end = bytes.length;
+  while (end > 0 && bytes[end - 1] === 0x20) end -= 1;
+  return pdfTextWidth(bytes.slice(0, end), font, size);
+}
+
+/**
+ * Breaks WinAnsi bytes into lines no wider than `width`, as consecutive slices of the text: a line ends
+ * after a run of spaces, which stays on it where it takes no visible room, and inside a word only when
+ * the word is wider than a line. Every byte is kept, so the lines joined with nothing between them are the
+ * text exactly (review of #790: collapsing a double space changed the text its digest vouches for).
+ */
 function wrap(bytes, font, size, width) {
+  const runs = [];
+  for (const byte of bytes) {
+    const space = byte === 0x20;
+    const last = runs.at(-1);
+    if (last !== undefined && last.space === space) last.bytes.push(byte);
+    else runs.push({ space, bytes: [byte] });
+  }
   const lines = [];
   let line = [];
-  let word = [];
-  const fits = (candidate) => pdfTextWidth(candidate, font, size) <= width;
-  const flushWord = () => {
-    if (word.length === 0) return;
-    const joined = line.length === 0 ? word : [...line, 0x20, ...word];
-    if (fits(joined)) {
-      line = joined;
-    } else {
-      if (line.length > 0) lines.push(line);
-      line = [];
-      for (const byte of word) {
-        if (!fits([...line, byte]) && line.length > 0) {
-          lines.push(line);
-          line = [];
-        }
-        line.push(byte);
-      }
+  const fits = (candidate) => visibleWidth(candidate, font, size) <= width;
+  for (const run of runs) {
+    if (run.space || fits([...line, ...run.bytes])) {
+      line.push(...run.bytes);
+      continue;
     }
-    word = [];
-  };
-  for (const byte of bytes) {
-    if (byte === 0x20) flushWord();
-    else word.push(byte);
+    // A line holding only spaces keeps them: they lead the word, and a break there would drop nothing
+    // but start a line with nothing visible on the one before.
+    if (visibleWidth(line, font, size) > 0) {
+      lines.push(line);
+      line = [];
+    }
+    for (const byte of run.bytes) {
+      if (!fits([...line, byte]) && visibleWidth(line, font, size) > 0) {
+        lines.push(line);
+        line = [];
+      }
+      line.push(byte);
+    }
   }
-  flushWord();
   if (line.length > 0 || lines.length === 0) lines.push(line);
   return lines;
 }
