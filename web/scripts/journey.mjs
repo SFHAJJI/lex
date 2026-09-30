@@ -1,11 +1,16 @@
-// One browser journey step against a live API: the Trust and Coverage page, read in a real browser.
+// Browser journey steps against a live API, each read in a real browser.
 //
-// Two runs of one step. With a mount, the page must end in the coverage answer and show the digests
-// of the corpus and index that mount holds; without one, it must end in the refusal card for
-// `no_corpus_mounted`. In both, what the browser did is measured, not assumed: exactly one request to
-// the API (`POST /api/v3/coverage`, no query string, no referrer), every other request a same-origin
-// asset, nothing written to storage, nothing logged to the console and no uncaught exception or
-// unhandled rejection, the page's CSP the reviewed one, and hydration clean.
+// Two steps, each run twice. Trust and Coverage: with a mount, the page must end in the coverage
+// answer and show the digests of the corpus and index that mount holds. Search: once the page has
+// hydrated, the journey types a phrase into the form and submits it; with a mount, the page must
+// end in the answer's hits, and the one request must carry exactly the phrase and the language.
+// Without a mount, each must end in the refusal card for `no_corpus_mounted`. In every run, what the
+// browser did is measured, not assumed: exactly one request to the API (`POST /api/v3/{operation}`,
+// no query string, no referrer, no cookie), every other request a same-origin asset, the page still
+// at its own address with no history entry added and no history state written, no cookie set,
+// nothing written to storage, nothing logged to the console and no uncaught exception or unhandled
+// rejection, the page's CSP the reviewed one, and hydration clean. (The history and cookie checks
+// came from the review of #773: a page that pushed the phrase into the history and a cookie passed.)
 //
 // The API is the real `Lex.V3.Api`, run from a copy of its build output so the mount can sit beside
 // it (`AppContext.BaseDirectory/v3-corpus`, which is where the API looks). The page is `dist-live/`,
@@ -31,23 +36,54 @@ import { cspValue } from "./csp.mjs";
 
 export const ANSWER_DEADLINE_MS = 30_000;
 
+/** The phrase the search step types: on the fixture mount, 4 strict hits and 1 relaxed. */
+export const SEARCH_PHRASE = "assemblée générale";
+
+/** The two steps: the page each loads, the operation it must ask, and what it does before waiting. */
+export const JOURNEY_STEPS = Object.freeze({
+  coverage: Object.freeze({ path: "/", operation: "coverage", body: null }),
+  search: Object.freeze({
+    path: "/search.html",
+    operation: "search",
+    body: Object.freeze({ operation_id: "search", parameters: Object.freeze({ query: SEARCH_PHRASE, language: "fra" }) }),
+  }),
+});
+
 /**
  * What one run must show, as failures (empty means the run passed).
  *
  * @param {object} observed what the browser run read: `answerState`, `text`, `requests`
- *   (`{url, method, headers}`), `console`, `storage` (`{local, session}`), `csp`, `hydrated`
- * @param {object} expected `{origin, state: "success"|"refusal", corpusSha256?, indexSha256?, refusalCode?}`
+ *   (`{url, method, headers, postData?}`), `console`, `storage` (`{local, session}`), `csp`,
+ *   `hydrated`, `location` (where the page ended), `history` (`{atLoad, atEnd, state}`: the
+ *   history length when the page had loaded and at the end, and the history state, as JSON) and
+ *   `cookie` (`document.cookie` at the end)
+ * @param {object} expected `{origin, state: "success"|"refusal", step?, corpusSha256?, indexSha256?,
+ *   texts?, refusalCode?}`; `step` is a `JOURNEY_STEPS` entry and defaults to coverage
  */
 export function journeyVerdict(observed, expected) {
   const failures = [];
+  const step = expected.step ?? JOURNEY_STEPS.coverage;
   if (observed.answerState !== expected.state) {
     failures.push(`the page ended in ${observed.answerState}, not ${expected.state}`);
   }
-  if (expected.state === "success") {
+  if (expected.state === "success" && step.operation === "coverage") {
     for (const digest of [expected.corpusSha256, expected.indexSha256]) {
       if (!observed.text.includes(digest)) failures.push(`the page does not show the mounted digest ${digest}`);
     }
   }
+  for (const text of expected.texts ?? []) {
+    if (!observed.text.includes(text)) failures.push(`the page does not show "${text}"`);
+  }
+  if (observed.location !== undefined && observed.location !== `${expected.origin}${step.path}`) {
+    failures.push(`the page ended at ${observed.location}, not at ${expected.origin}${step.path}`);
+  }
+  if (observed.history !== undefined) {
+    if (observed.history.atEnd !== observed.history.atLoad) {
+      failures.push(`the page changed the history from ${observed.history.atLoad} entries to ${observed.history.atEnd}`);
+    }
+    if (observed.history.state !== "null") failures.push(`the page wrote history state: ${observed.history.state}`);
+  }
+  if (observed.cookie !== undefined && observed.cookie !== "") failures.push(`the page set a cookie: ${observed.cookie}`);
   if (expected.state === "refusal" && !observed.text.includes(expected.refusalCode)) {
     failures.push(`the page does not name the refusal ${expected.refusalCode}`);
   }
@@ -59,7 +95,20 @@ export function journeyVerdict(observed, expected) {
   for (const request of toApi) {
     const url = new URL(request.url);
     if (url.origin !== expected.origin) failures.push(`an API request left the page's origin: ${request.url}`);
-    if (url.pathname !== "/api/v3/coverage" || url.search !== "") failures.push(`an API request was not POST /api/v3/coverage: ${request.url}`);
+    if (url.pathname !== `/api/v3/${step.operation}` || url.search !== "") {
+      failures.push(`an API request was not POST /api/v3/${step.operation}: ${request.url}`);
+    }
+    if (step.body !== null) {
+      let body = null;
+      try {
+        body = JSON.parse(request.postData ?? "");
+      } catch {
+        // Recorded as not the body below.
+      }
+      if (JSON.stringify(body) !== JSON.stringify(step.body)) {
+        failures.push(`the API request's body was ${request.postData ?? "not observed"}, not ${JSON.stringify(step.body)}`);
+      }
+    }
     if (request.method !== "POST") failures.push(`an API request used ${request.method}`);
     // The browser reports a provisional `Referer: ""` under the no-referrer policy: an empty value is
     // no referrer (observed in the first run of this journey), a non-empty one is a leak.
@@ -133,7 +182,17 @@ async function startApi(apiOutput, mount) {
     : `the API did not answer within 60 s: ${stderr}`);
 }
 
-async function observe(browser, pageOrigin) {
+/** The search step's action: once hydrated, type the phrase into the form and submit it. */
+async function typeAndSubmit(session, sessionId, evaluate, deadline) {
+  while (Date.now() < deadline && (await evaluate("document.documentElement.dataset.hydrated ?? null")) === null) {
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
+  await evaluate("document.querySelector('form[role=search] input').focus()");
+  await session.send("Input.insertText", { text: SEARCH_PHRASE }, sessionId);
+  await evaluate("document.querySelector('form[role=search] button[type=submit]').click()");
+}
+
+async function observe(browser, pageOrigin, step) {
   const port = allocateDebuggerPort(9800, 300);
   const profile = await mkdtemp(join(tmpdir(), "lex-journey-cdp-"));
   const chrome = spawn(browser, [
@@ -155,6 +214,7 @@ async function observe(browser, pageOrigin) {
           url: message.params.request.url,
           method: message.params.request.method,
           headers: message.params.request.headers,
+          postData: message.params.request.postData,
         });
       } else if (message.method === "Network.requestWillBeSentExtraInfo") {
         // The headers the browser actually sent (cookies and the referrer included), where
@@ -172,14 +232,19 @@ async function observe(browser, pageOrigin) {
       }
     });
     for (const domain of ["Network", "Runtime", "Log", "Page"]) await session.send(`${domain}.enable`, {}, sessionId);
-    await session.send("Page.navigate", { url: `${pageOrigin}/` }, sessionId);
+    await session.send("Page.navigate", { url: `${pageOrigin}${step.path}` }, sessionId);
     const evaluate = async (expression) =>
       (await session.send("Runtime.evaluate", { expression, returnByValue: true }, sessionId)).result.value;
     const deadline = Date.now() + ANSWER_DEADLINE_MS;
+    while (Date.now() < deadline && (await evaluate("document.readyState")) !== "complete") {
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    }
+    const historyAtLoad = await evaluate("history.length");
+    if (step.operation === "search") await typeAndSubmit(session, sessionId, evaluate, deadline);
     let answerState = null;
     while (Date.now() < deadline) {
       answerState = await evaluate("document.querySelector('[data-answer-state]')?.dataset.answerState ?? null");
-      if (answerState !== null && answerState !== "loading") break;
+      if (answerState !== null && answerState !== "loading" && answerState !== "idle") break;
       await new Promise((resolve) => setTimeout(resolve, 100));
     }
     // Let a late request or log line arrive before the observation is closed.
@@ -196,6 +261,13 @@ async function observe(browser, pageOrigin) {
       storage: await evaluate("({ local: localStorage.length, session: sessionStorage.length })"),
       csp: await evaluate("document.querySelector('meta[http-equiv=\"Content-Security-Policy\"]')?.content ?? null"),
       hydrated: await evaluate("document.documentElement.dataset.hydrated ?? null"),
+      location: await evaluate("location.href"),
+      history: {
+        atLoad: historyAtLoad,
+        atEnd: await evaluate("history.length"),
+        state: await evaluate("JSON.stringify(history.state)"),
+      },
+      cookie: await evaluate("document.cookie"),
     };
   } finally {
     chrome.kill();
@@ -209,7 +281,7 @@ async function run(apiOutput, mount, expected, browser, liveRoot) {
   const live = createLiveServer({ root: liveRoot, apiOrigin: api.origin });
   const pageOrigin = await listen(live);
   try {
-    const observed = await observe(browser, pageOrigin);
+    const observed = await observe(browser, pageOrigin, expected.step);
     return { observed, failures: journeyVerdict(observed, { ...expected, origin: pageOrigin }) };
   } finally {
     await new Promise((resolve) => live.close(resolve));
@@ -233,9 +305,12 @@ async function main(argv) {
   // broken page is shown to fail the journey.
   const liveRoot = argv.includes("--live-root") ? argument("--live-root") : await buildLive();
   const browser = await findBrowser();
+  const { coverage, search } = JOURNEY_STEPS;
   const results = [
-    ["with the fixture mount", await run(apiOutput, mount, { state: "success", corpusSha256: journeyMount.corpus_sha256, indexSha256: journeyMount.index_sha256 }, browser, liveRoot)],
-    ["with no mount", await run(apiOutput, null, { state: "refusal", refusalCode: "no_corpus_mounted" }, browser, liveRoot)],
+    ["coverage, with the fixture mount", await run(apiOutput, mount, { step: coverage, state: "success", corpusSha256: journeyMount.corpus_sha256, indexSha256: journeyMount.index_sha256 }, browser, liveRoot)],
+    ["coverage, with no mount", await run(apiOutput, null, { step: coverage, state: "refusal", refusalCode: "no_corpus_mounted" }, browser, liveRoot)],
+    ["search, with the fixture mount", await run(apiOutput, mount, { step: search, state: "success", texts: [`“${SEARCH_PHRASE}” in fra: 4 with the exact phrase, 1 with every word, in 1 work.`, "art_15 in", "The first hits in the stated order, not the best hits."] }, browser, liveRoot)],
+    ["search, with no mount", await run(apiOutput, null, { step: search, state: "refusal", refusalCode: "no_corpus_mounted" }, browser, liveRoot)],
   ];
   let failed = false;
   for (const [label, { observed, failures }] of results) {

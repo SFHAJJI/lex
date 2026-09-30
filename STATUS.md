@@ -5,11 +5,11 @@ every pull request that changes what is served, what is next or what is blocked.
 
 ## Heads
 
-- `v3/integration`: `acd337de` (2026-09-30, PR #771 merged). Build 45 s. Fast lane
+- `v3/integration`: `86b83cc9` (2026-09-30, PR #772 merged). Build 45 s. Fast lane
   (`eng/test-fast.ps1`): 3,038 tests, 3,037 pass, 1 skipped. Ingest suite: green on CI for PR #760
   (the CI `dotnet` job runs the whole solution on every pull request, about 7 min on the runner;
-  green for PR #771);
-  locally about 15 min. 822 web tests pass. CI's web job can flake in `keyboard-walk.test.mjs`
+  green for PR #772);
+  locally about 15 min. 825 web tests pass. CI's web job can flake in `keyboard-walk.test.mjs`
   ("browser debugger never answered"); rerunning the failed job is the fix.
 - Driver: Claude Opus 5.5 since 2026-09-29 (the Fable 5.1 driver ran out of tokens on 2026-09-28
   after PR #757; the user default model is now `claude-opus-5-5`).
@@ -235,7 +235,7 @@ schema's `parameters` shape, and whose call runs the same dispatch the REST rout
 endpoint test proves it for all twenty-three. The launch-contract line "REST and MCP derive identical
 envelopes from the registry" is the owner's to tick.
 
-Web: 30 React components, 822 tests. Preview screens render fixtures. The V3 Luxembourg search
+Web: 30 React components, 825 tests. Preview screens render fixtures. The V3 Luxembourg search
 answer has a reader (PR #771). The answer census now samples `search` five ways from the real handler:
 - a phrase with 4 strict hits and 1 relaxed hit;
 - the same phrase one hit per page, with its cursor;
@@ -283,9 +283,33 @@ the census.
   (`request_schema_invalid`, in practice a cursor from a result the server no longer holds) is said
   as refused, not as unreachable.
 - The tests drive it with the census's real whole envelopes. The envelope census now holds a
-  search answer with hits in both lanes and a search `no_corpus_mounted` refusal. The screen is not
-  yet driven in a real browser: the journey step for it is next. **The first browser journey
-step passes (PR #766, run locally 2026-09-30):** `node scripts/journey.mjs --api <Lex.V3.Api build
+  search answer with hits in both lanes and a search `no_corpus_mounted` refusal.
+
+**The search journey step passes (PR #773, run locally 2026-09-30).** `node scripts/journey.mjs`
+now runs two steps, each with and without the fixture mount, and all four runs pass.
+- The search step loads `/search.html` and waits for hydration. It types "assemblée générale"
+  over the DevTools protocol (`Input.insertText`, so React's own change handler runs) and presses
+  the submit button.
+- With the mount, the page ends in the answer, showing "4 with the exact phrase, 1 with every
+  word, in 1 work", `art_15` and the no-ranker sentence. Without one, it ends in the
+  `no_corpus_mounted` card.
+- Each run makes 6 requests, exactly one of them `POST /api/v3/search`. Its body, read from the
+  request the browser sent, is exactly `{operation_id: "search", parameters: {query, language:
+  "fra"}}`. The page ends at `/search.html` with the history length it had when it loaded and
+  no history state, so the phrase is not in the address or the history. `document.cookie` is
+  empty at the end and the API request carried no cookie. There is no referrer, no storage and
+  nothing on the console, and hydration is clean.
+- Shown to fail:
+  - a live build whose request carried one extra field failed the body check, naming the field;
+  - a build that pushed the phrase into the history and set it in a cookie after submitting (the
+    review of #773 showed it passed before these checks) failed three checks: history grown from
+    2 to 3 entries, history state written, cookie set.
+- Not driven yet: the next page. On the fixture the phrase has 5 hits and the form asks the
+  platform's default page size, so no page is truncated and no "Next page" button appears. The
+  cursor-carrying request is covered only by the injected-fetch test of PR #772. Driving it needs
+  a mount with more hits than one page, which the first real mount would give.
+
+**The first browser journey step passes (PR #766, run locally 2026-09-30):** `node scripts/journey.mjs --api <Lex.V3.Api build
 output> --mount <journey mount>` runs the real `Lex.V3.Api` from a copy of its build output with the
 mount beside it, serves `dist-live/` through `serve-live.mjs`, and drives headless Chrome over the
 DevTools protocol until `data-answer-state` settles. With the fixture mount (written by
@@ -672,10 +696,10 @@ proves the path, not a corpus.
    its page, the live build and the one-origin server; PR #766: the first browser journey step,
    passing against the real API with and without a mount; PR #771: the V3 search reader
    `readSearch`, held to five search answers the census now samples; PR #772: the live search
-   screen and its page. Next: the browser journey step for search (type, submit, the answer, the
-   next page). Then dossier and reading, whose readers still read pre-V3 shapes and must first be
-   held to served samples. Also
-   J1 to J8 restated as V3 steps (owner question): they exist only in the pre-V3 pack
+   screen and its page; PR #773: the search journey step (type, submit, the answer; the next page
+   waits for a mount with more hits than one page). Next: dossier and reading, whose
+   readers still read pre-V3 shapes and must first be held to served samples. Also J1 to J8
+   restated as V3 steps (owner question): they exist only in the pre-V3 pack
    (`05-user-journeys.md`).
 7. Release pipeline: build, sign, image, zero-traffic deploy, probes. Then acceptance and promotion.
 8. Machine gates (launch contract, Evaluation): the temporal, refusal and retrieval case sets run
