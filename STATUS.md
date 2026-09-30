@@ -5,7 +5,7 @@ every pull request that changes what is served, what is next or what is blocked.
 
 ## Heads
 
-- `v3/integration`: `ba63b3c3` (2026-09-30, PR #782 merged). Build 45 s. Fast lane
+- `v3/integration`: `1774a774` (2026-09-30, PR #780 merged). Build 45 s. Fast lane
   (`eng/test-fast.ps1`): 3,038 tests, 3,037 pass, 1 skipped. Ingest suite: green on CI for PR #760
   (the CI `dotnet` job runs the whole solution on every pull request, about 7 min on the runner;
   green for PR #782);
@@ -459,9 +459,12 @@ The live compare screen and its journey step (PR #783). `dist-live/compare.html`
 - The form sends the work identifier, two dates written `yyyy-mm-dd`, and a language only when one is
   chosen. One `POST /api/v3/diff` per submit.
 - The comparison is read by `readDiff` and laid out linearly: each side's state and permalink, the
+  date the next held state applies from (said as that state's start, never as "until"), its
+  article count and how many of its articles carry their own date differing from the state's, the
   platform's note ("nothing about legal effect is asserted"), the counts, then the changed, added
-  and removed articles (each status a word, with the wording digests on each side). The unchanged
-  articles are one disclosure away. The same state on both dates says so, with no counts.
+  and removed articles (each status a word, with the whole wording digests on each side). The
+  unchanged articles are one disclosure away. The same state on both dates says so, with no counts.
+  The wording rule and the validity conflict rule close the page.
 - The envelope census now holds the same-state comparison and three refusals (a from date before the
   history, an unknown work, no mount). The two-state comparison from the answer census is rendered
   in the tests: `art_15` changed, `art_16` removed, `art_16-new` added, 47 unchanged.

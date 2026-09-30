@@ -28,15 +28,19 @@ function asSentence(text) {
 function Side({ label, side }) {
   return (
     <p data-side={label}>
+      {/* The next state's date is said as that state's start, never as this one's end: "until" would
+          leave open whether the boundary day is this state's (review of #783). */}
       {label}: the state applying from {side.applicabilityDate}
-      {side.nextApplicabilityDate === null ? '' : ` until ${side.nextApplicabilityDate}`}, {side.articleCount} articles,{' '}
+      {side.nextApplicabilityDate === null ? '' : ` (the next state held applies from ${side.nextApplicabilityDate})`},{' '}
+      {side.articleCount} articles, {side.validityConflictCount} with their own date differing from the state's,{' '}
       <code>{side.permalink}</code>
     </p>
   );
 }
 
 function Row({ row }) {
-  const digest = (entries) => (entries.length === 0 ? 'none' : entries.map((entry) => entry.wordingSha256.slice(0, 8)).join(', '));
+  // The whole digest, never a prefix: a prefix is not the digest a reader can check (review of #783).
+  const digest = (entries) => (entries.length === 0 ? 'none' : <code>{entries.map((entry) => entry.wordingSha256).join(', ')}</code>);
   return (
     <li data-status={row.status}>
       <strong>{row.publisherId}</strong>: {row.status} (wording {digest(row.from)} → {digest(row.to)})
@@ -97,6 +101,7 @@ export function CompareView({ view }) {
         </ul>
       ) : null}
       <p>{asSentence(view.wordingRule)}</p>
+      <p>{asSentence(view.validityConflictRule)}</p>
     </>
   );
 }

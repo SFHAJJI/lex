@@ -98,6 +98,19 @@ test("two states are listed article by article: the moved ones first, the unchan
   assert.match(markup, /<details><summary>47 unchanged articles<\/summary>/);
   assert.ok(markup.includes("nothing about legal effect is asserted"));
   assert.ok(!/color|colour/i.test(markup), "each status is a word, not a colour");
+
+  // Review of #783: the next state's date is its start, not this one's end; each side's article date
+  // conflicts are counted, with the platform's rule; and the wording digests are whole.
+  const [comparison] = row.answer.comparisons;
+  const sideText = (label) => markup.slice(markup.indexOf(`data-side="${label}"`), markup.indexOf("</p>", markup.indexOf(`data-side="${label}"`))).replace(/<[^>]+>/g, "").replaceAll("&#x27;", "'");
+  assert.ok(sideText("From").includes("the state applying from 2024-02-01 (the next state held applies from 2025-03-07)"), sideText("From"));
+  assert.ok(!markup.includes(" until "), "no side is said to apply until the next state's date");
+  assert.ok(sideText("From").includes(`${comparison.from.validity_conflict_count} with their own date differing from the state's`));
+  assert.ok(sideText("To").includes(`${comparison.to.validity_conflict_count} with their own date differing from the state's`));
+  assert.equal(comparison.from.validity_conflict_count, 49, "the sample's first state holds the conflicts the page must not hide");
+  assert.ok(markup.replaceAll("&#x27;", "'").includes("Article_valid_from is the publisher's article-level applicability date"), "the platform's validity conflict rule is said");
+  const changed = comparison.articles.find((entry) => entry.publisher_id === "art_15");
+  assert.ok(markup.includes(`<code>${changed.from[0].wording_sha256}</code> → <code>${changed.to[0].wording_sha256}</code>`), "the whole wording digests of art_15");
 });
 
 test("the refusals a comparison from this page can meet", async () => {
