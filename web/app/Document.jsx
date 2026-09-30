@@ -35,6 +35,25 @@ export function SyntheticBanner() {
   );
 }
 
+/** The marker that says, in the DOM, that this page shows what the server it came from answers. */
+export const LIVE_MARKER = 'lex-v3-live-mount';
+
+/**
+ * The banner a live page carries instead of the synthetic one, whose sentence ("describes no real
+ * legal record") would be false on a real mount. A driver's draft, before the owner's wording:
+ * it claims only what the page does, and names the digests as the way to know which corpus it is.
+ */
+export function LiveBanner() {
+  return (
+    <aside className="synthetic" role="note" data-live={LIVE_MARKER}>
+      <strong>Live development build.</strong> This page shows what the server it was loaded from
+      answers. When a coverage report arrives, its digests name the corpus it counted; until then,
+      or when no corpus is mounted, nothing below describes one. It is not a release and not legal
+      advice.
+    </aside>
+  );
+}
+
 /**
  * The full document.
  *
@@ -45,6 +64,8 @@ export function SyntheticBanner() {
  * @param {string} [props.copyLocale] the language the copy is actually written in
  * @param {string|null} [props.shell] which skin, or null
  * @param {string|null} [props.density]
+ * @param {'synthetic'|'live'} [props.banner] which banner the page carries; synthetic unless the
+ *   page asks the mounted API, whose answers the synthetic banner would misdescribe
  * @param {React.ReactNode} props.children the page body, as components
  */
 export function Document({
@@ -54,6 +75,7 @@ export function Document({
   copyLocale = 'en',
   shell = null,
   density = null,
+  banner = 'synthetic',
   children,
 }) {
   // Each axis names itself. Both guards used to raise the same sentence, so a test feeding an
@@ -83,6 +105,9 @@ export function Document({
   if (typeof title !== 'string' || title.length === 0) {
     throw new Error('a page carries a title');
   }
+  if (banner !== 'synthetic' && banner !== 'live') {
+    throw new Error(`a page carries the synthetic or the live banner, not ${JSON.stringify(banner)}`);
+  }
 
   const shellAttributes =
     shell === null ? {} : { 'data-shell': shell, 'data-density': density ?? '' };
@@ -97,12 +122,12 @@ export function Document({
             of anything; what has to hold is that nothing executes which was not reviewed
             and served from this origin. */}
         <meta httpEquiv="Content-Security-Policy" content={cspValue()} />
-        <title>{`${title} - Lex V3 preview`}</title>
+        <title>{`${title} - Lex V3 ${banner === 'live' ? 'live' : 'preview'}`}</title>
         <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
         <link rel="stylesheet" href="/styles.css" />
       </head>
       <body>
-        <SyntheticBanner />
+        {banner === 'live' ? <LiveBanner /> : <SyntheticBanner />}
         <main id="main">{children}</main>
       </body>
     </html>

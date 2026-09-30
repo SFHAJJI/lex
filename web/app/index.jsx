@@ -5,7 +5,7 @@
 // compiler between the tests and the code they are testing. Compiling once, the same way the
 // build does, means the tests measure what ships.
 
-export { Document, SyntheticBanner, SYNTHETIC_MARKER } from './Document.jsx';
+export { Document, SyntheticBanner, SYNTHETIC_MARKER, LiveBanner, LIVE_MARKER } from './Document.jsx';
 export { renderDocument } from './render-document.mjs';
 export { RefusalCard, Mark } from './RefusalCard.jsx';
 export { Dossier } from './Dossier.jsx';
@@ -24,6 +24,7 @@ export { Reading } from './Reading.jsx';
 export { Timeline, DERIVED_HOLE, DERIVED_OVERLAP, DERIVED_TITLE } from './Timeline.jsx';
 export { Coverage } from './Coverage.jsx';
 export { CoverageAnswerView, LiveCoverage } from './LiveCoverage.jsx';
+export { LIVE_CONTRACT, LIVE_COVERAGE_ROOT, liveCoverageTree, renderLiveCoveragePage } from './live-coverage-page.jsx';
 export {
   renderTimelineReactPage,
   renderCoverageReactPage,
