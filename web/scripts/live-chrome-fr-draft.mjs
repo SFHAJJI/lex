@@ -82,7 +82,7 @@ export const LIVE_CHROME_FR_DRAFT = Object.freeze({
       other: '{count} articles cités ; sans texte : {withoutText} ; non admis : {notAdmitted} ; date propre différente de celle de la version : {conflicts}.',
     }),
     validityConflict: 'La date propre de cet article est le {own} ; sa version s’applique à partir du {state}.',
-    digest: 'Empreinte du texte {digest}, {permalink}',
+    evidence: 'Empreinte du texte {text}, empreinte du corps {body}, source officielle {source}, {permalink}',
     withoutText: 'Détenus sans texte : {articles}.',
     notHeldHeading: 'Ce que cette lecture ne contient pas',
   }),
