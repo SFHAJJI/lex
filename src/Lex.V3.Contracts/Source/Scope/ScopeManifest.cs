@@ -866,7 +866,8 @@ public sealed class VerifiedScopeManifest
     /// row's selector evidence and matched rule outcomes, the sixteen accounting partitions and the
     /// body-candidate projection. Reading it needs no InternalsVisibleTo (Decision 80); holding an
     /// instance is itself the evidence that <see cref="ScopeReducer.Reduce"/>,
-    /// <see cref="ScopeReducer.VerifyAndOpen"/> or <see cref="ParseAndVerify"/> ran every check to
+    /// <see cref="ScopeReducer.VerifyAndOpen"/>, <see cref="ParseAndVerify"/>,
+    /// <see cref="ParseAndVerifyStream"/> or <see cref="VerifyStreamAgainst"/> ran every check to
     /// completion, because the constructor above is the only door onto this type and it stays
     /// internal.
     /// </summary>

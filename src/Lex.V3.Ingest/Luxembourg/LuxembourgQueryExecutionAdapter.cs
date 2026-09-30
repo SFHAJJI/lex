@@ -2126,8 +2126,8 @@ public sealed class LuxembourgQueryExecutionAdapter
         return result;
     }
 
-    // Retain and independently reopen both the acquisition plan and the final rights-bearing
-    // scope through the same canonical reader and custody checks.
+    // Retain both scopes, then verify each retained stream against its held verified graph:
+    // custody integrity, digest, strict UTF-8, fresh evidence admission and exact canonical bytes.
     private async Task<(ScopeManifest? Manifest, DurableBlobWriteReceipt? Receipt,
         SourceArtifactRef? ArtifactRef, string? CanonicalSha256, LuxembourgQueryExecutionRefusalDetail? Refusal)>
         HoldManifestAsync(VerifiedScopeManifest manifest, IScopeReductionEvidenceResolver resolver,
