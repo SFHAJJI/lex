@@ -513,11 +513,11 @@ CI evidence are recorded in the pull request before merge.
 
 ## Heads
 
-- `v3/integration`: `efdf0d5c` (2026-09-30, PR #826 merged). Build 45 s. Fast lane
-  (`eng/test-fast.ps1`): 3,074 tests, 3,073 pass, 1 skipped (the review of PR #826). Ingest suite: green on CI for PR #760
+- `v3/integration`: `b908bcc8` (2026-09-30, PR #828 merged). Build 45 s. Fast lane
+  (`eng/test-fast.ps1`): 3,077 tests, 3,076 pass, 1 skipped (the review of PR #828). Ingest suite: green on CI for PR #760
   (the CI `dotnet` job runs the whole solution on every pull request, about 7 min on the runner;
-  green for PR #826);
-  locally about 15 min. 970 web tests pass. The web job's "browser debugger never answered" failures
+  green for PR #828);
+  locally about 15 min. 972 web tests pass. The web job's "browser debugger never answered" failures
   (keyboard-walk, and paint-check since #811) are fixed by PR #822: each browser binds its own
   debugging port (`launchBrowser`) instead of a random one another browser starting at the same
   moment could hold.
@@ -745,7 +745,7 @@ schema's `parameters` shape, and whose call runs the same dispatch the REST rout
 endpoint test proves it for all twenty-three. The launch-contract line "REST and MCP derive identical
 envelopes from the registry" is the owner's to tick.
 
-Web: 41 React components, 970 tests. Preview screens render fixtures. The V3 Luxembourg search
+Web: 41 React components, 972 tests. Preview screens render fixtures. The V3 Luxembourg search
 answer has a reader (PR #771). The answer census now samples `search` five ways from the real handler:
 - a phrase with 4 strict hits and 1 relaxed hit;
 - the same phrase one hit per page, with its cursor;
@@ -1425,6 +1425,19 @@ citations) had been probed only against the host API, never against the image.
 - A mutation: a fixture manifest naming another corpus digest fails the coverage probe ("the page
   does not show the mounted digest").
 
+V2 absent from the image (PR #831), the launch contract's last machine-gates item that is the
+release pipeline's. V2 is the retired product on `main` (`Lex.Ask` to `Lex.Web`).
+- Before signing, the rehearsal checks that V2 is absent (`v2Failures`):
+  - no layer holds a Lex assembly, symbol or documentation file that is not `Lex.V3.*`;
+  - the API's dependency manifest (`Lex.V3.Api.deps.json`) names no Lex library that is not V3's, so
+    a V3 assembly that referenced V2 would be caught;
+  - a missing dependency manifest is itself a failure.
+- With the probes, the running image is asked V2's routes (`V2_ROUTES`), and each must answer 404:
+  its 20 pages, among them `/ask`, `/attestation.json` and `/pubkey.pem`, and its four assistant
+  endpoints under `POST /api/ask`.
+- On the real bounded mount: 526 entries across the 6 layers read, no failure; all 24 V2 routes 404;
+  the 8 probes pass; the image reproduced by its second build; everything removed.
+
 The live export composer and its journey step (PR #789), the eighth screen. `dist-live/export.html`
 has its own bundle `client-live-export.js`.
 - The page asks what the reading page asks: the same form (`ReadingForm`, now shared), the same one
@@ -1972,8 +1985,9 @@ has not yet run; the bounded first mount above is complete.
    PR #821: one command builds, verifies, rehearsal-signs and removes the one-server image; PR #825:
    it runs the image (WSL, read-only root, private /tmp) and probes the eight screens against it; PR
    #826: the image is reproducible (two builds from scratch, one manifest digest); PR #828: the
-   image probed on the journey's fixture mount, where every screen answers and 105 citations verify.
-   The credential-free release steps are rehearsed end to end. Production signing,
+   image probed on the journey's fixture mount, where every screen answers and 105 citations verify;
+   PR #831: V2 absent from the image (no V2 assembly or dependency, V2's routes 404). The
+   credential-free release steps are rehearsed end to end. Production signing,
    credentials and deployment stay with the owner.
 8. Machine gates (launch contract, Evaluation): the temporal, refusal and retrieval case sets run
    against the real handler, and all three shuffled controls are caught (PRs #767 and #768). The
@@ -1984,8 +1998,8 @@ has not yet run; the bounded first mount above is complete.
    determinism and G5 independent verifiability run on the real handler (PR #770). G1 version
    immutability, G3 bitemporal completeness and G4 as-observed answering need predecessor
    chaining with observation times, so they follow the first mount and the event-log ruling. What
-   is left of the launch contract's machine-gates line after that is "V2 absent from the image",
-   which belongs to the release pipeline (item 7).
+   is left of the launch contract's machine-gates line after that was "V2 absent from the image",
+   which the image rehearsal now checks (PR #831, item 7).
 
 ## Owner rulings, 2026-09-30
 
