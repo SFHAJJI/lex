@@ -12,7 +12,7 @@ param(
     [Parameter(Mandatory)][string]$MountDirectory,
     [Parameter(Mandatory)][string]$EvidenceDirectory,
     [string]$EuIdentifier = '32016R0679',
-    [string]$LuxembourgIdentifier = 'http://data.legilux.public.lu/eli/etat/leg/loi/2017/03/14/a439/jo'
+    [string]$LuxembourgIdentifier = 'http://data.legilux.public.lu/eli/etat/leg/loi/2017/03/14/a439/jo/fr'
 )
 $ErrorActionPreference = 'Stop'
 $apiRoot = (Resolve-Path -LiteralPath $ApiDirectory).Path
@@ -94,7 +94,8 @@ try {
                 }
                 if ($envelope.schema -cne 'lex-v3-envelope/1' -or $envelope.version -cne 'v3' -or
                     $envelope.object_type -cne 'envelope' -or $envelope.operation_id -cne $case.Operation -or
-                    $envelope.result.schema -cne "lex-v3-$($case.Operation)-result/1" -or $null -ne $envelope.refusal) {
+                    $envelope.result.schema -cne "lex-v3-$($case.Operation)-result/1" -or $null -ne $envelope.refusal -or
+                    $envelope.context.snapshot.snapshot_sha256 -cne $buildReport.corpus.Sha256) {
                     throw "$($case.Name) returned an unexpected envelope or result contract."
                 }
                 if ($case.Operation -eq 'resolve') {
@@ -107,6 +108,12 @@ try {
                         $envelope.result.value.index_sha256 -cne $expectedIndex) {
                         throw "$($case.Name) did not bind the requested identifier, publisher and built corpus/index digests."
                     }
+                }
+                elseif ($envelope.result.object_type -cne 'coverage_report' -or
+                    $envelope.result.value.mounted.publisher -cne 'lu-legilux' -or
+                    $envelope.result.value.mounted.corpus_sha256 -cne $buildReport.corpus.Sha256 -or
+                    $envelope.result.value.mounted.index_sha256 -cne $buildReport.luxembourgIndex.Sha256) {
+                    throw 'Coverage did not bind the built Luxembourg corpus and index digests.'
                 }
                 $results += [ordered]@{
                     name = $case.Name
