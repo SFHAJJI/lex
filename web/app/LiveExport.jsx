@@ -15,7 +15,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 
-import { ReadingAnswerView, ReadingForm } from './LiveReading.jsx';
+import { QuoteEvidence, ReadingAnswerView, ReadingForm } from './LiveReading.jsx';
 import { createReadingSession, quotationLanguageTag } from '../scripts/live-reading.mjs';
 import { EXPORT_FORMATS, LIVE_EXPORT_IDLE, exportState, formatRefusedSentence, pinKey, saveExport } from '../scripts/live-export.mjs';
 import { exportJson } from '../scripts/export-build.mjs';
@@ -58,6 +58,7 @@ function StatePins({ state, workKey, pins, onPin }) {
             <li key={article.articleIdentitySha256} data-article={article.publisherId}>
               <Pin checked={pins.has(key)} onPin={(on) => onPin(key, on)} label={fillText(COPY.pin, { article: article.publisherId })} />
               <blockquote lang={quotationLanguageTag(state.language)}>{article.text}</blockquote>
+              <QuoteEvidence article={article} />
             </li>
           );
         })}

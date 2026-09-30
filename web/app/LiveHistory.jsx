@@ -173,7 +173,7 @@ export function LiveHistory({ contract, fetchImpl }) {
           {FORM.articleId}{' '}
           <input
             type="text"
-            placeholder="art_15"
+            placeholder={FORM.articleIdPlaceholder}
             value={anchor}
             autoComplete="off"
             spellCheck={false}

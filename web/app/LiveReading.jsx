@@ -32,6 +32,27 @@ const COMMON = liveChrome().common;
 
 const IDLE = Object.freeze({ state: 'idle', sentence: LIVE_READING_IDLE });
 
+/**
+ * What a quotation carries, beside it (the launch contract's first promise): its text digest, its body
+ * digest, its official source and the permalink that pins its work, article, date, language and state.
+ * Shared with the export composer, which quotes the same articles (review of #805).
+ */
+export function QuoteEvidence({ article }) {
+  return (
+    <p data-quote-evidence="">
+      <Say
+        template={COPY.evidence}
+        values={{
+          text: <code>{article.textSha256}</code>,
+          body: <code>{article.bodySha256}</code>,
+          source: <code>{article.officialSource}</code>,
+          permalink: <code>{article.permalink}</code>,
+        }}
+      />
+    </p>
+  );
+}
+
 function Article({ article, state }) {
   return (
     <li id={`${state.language}-${article.publisherId}`} data-article={article.publisherId}>
@@ -51,9 +72,7 @@ function Article({ article, state }) {
           ))}
         </ol>
       ) : null}
-      <p>
-        <Say template={COPY.digest} values={{ digest: <code>{article.textSha256}</code>, permalink: <code>{article.permalink}</code> }} />
-      </p>
+      <QuoteEvidence article={article} />
     </li>
   );
 }
@@ -178,7 +197,7 @@ export function ReadingForm({ onAsk, submitLabel = FORM.submit.reading }) {
         <input
           type="text"
           inputMode="numeric"
-          placeholder="yyyy-mm-dd"
+          placeholder={FORM.datePlaceholder}
           value={date}
           autoComplete="off"
           onChange={(event) => setDate(event.target.value)}
