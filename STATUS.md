@@ -3,6 +3,29 @@
 Updated 2026-09-30 by the driver. This file replaces the issue-comment ledgers. It is rewritten in
 every pull request that changes what is served, what is next or what is blocked.
 
+## Luxembourg identity canonical output (Codex, 2026-09-30)
+
+The previous observed-object identity writer built a full canonical buffer and copied it again for the
+schema-domain digest. Reversible driver decision: write directly to the caller's stream and hash
+incrementally, with periodic JSON flushes. Preserve exact ordering, escaping, newline, digest,
+caller ownership and destination prefixes. Document partial writes and flush failures explicitly.
+Persistence and canonical round-trip comparison use their owned MemoryStream backing memory
+instead of copying it with ToArray. The independent reader and persistence store remain buffered;
+this does not establish full-run fit.
+
+Two regressions cover 3,000 identities on a nonseekable stream, maximum observed write size,
+independent canonical bytes/hash/readback, prefix handling and stream ownership. This slice is
+prepared from current integration using the preserved draft. Validation at fb30816a passed a clean
+Release build (43.22 s), required fast (3,085 passed, one platform skip, 65.379 s), and 124 affected
+ingest tests (two live EU tests skipped, 81.681 s). Exact commands and results are retained under
+C:\lex-v3\lanes\lu-identity-stream-*. Required Claude review returned MERGE with no material
+findings. It reproduced the fast and affected suites; adding the third caller, Stage3EvidenceLineage,
+passed 134 ingest tests with two live EU skips. Restoring the base writer made the new bounded-write
+regression fail as intended. The documentation repair now states that every JSON flush forwards
+Flush to the caller's stream, including the last JSON flush before the newline. All production
+callers currently own MemoryStreams. No production behavior changed after review; final CI remains
+a merge gate. No measured whole-run memory-fit claim is made.
+
 ## Retained EU transaction deadlock retry (Codex, 2026-10-01)
 
 The fresh full-EU retry2 refused after 494 requests with 81 of 82 census families proven.
@@ -24,14 +47,15 @@ repair adds the missing Luxembourg endpoint regression and records that failed-r
 currently discoverable by scanning custody; they are not linked from the final refusal or receipt.
 The review stopped its optional full local ingest run after 21 minutes because another lane's
 review was competing for memory: 1,774 passed, four skipped, no failed tests, incomplete suite.
-Initial exact-head CI36784354147 passed 5,105 tests with 19 skips. Fresh repair validation and final
-CI remain gates. No live retry has started; the prior run remains refused and its custody is preserved.
+Initial exact-head CI36784354147 passed 5,105 tests with 19 skips. The repair build, required fast and affected ingest validation passed; final
+exact-head CI passed and PR837 merged at 40004a69. The prior run remains refused and its custody is preserved. Fresh acquisition follows the
+bounded census and storage gates recorded in the lane notes.
 
 The next recovery run will use fresh custody and a shared 20-request ceiling to prove/reopen only
 32023R2854's census. The following full EU attempt keeps the 20,000-wire ceiling and original
 4,999,959,422-byte free-space allowance before and after freeze. A byte-verified transparent
 compression pass over local SDK/tool files is queued after reviews; no cited evidence is deleted.
-Launchers are prepared but unrun. Full Luxembourg still lacks a measured whole-process/storage fit.
+Prepared launchers enforce those gates and preserve any refused run. Full Luxembourg still lacks a measured whole-process/storage fit.
 
 ## Publisher annex IDs and subtitles (Codex, 2026-10-01)
 

@@ -207,6 +207,85 @@ public sealed class LuxembourgObservedObjectIdentitySetTests
         Assert.IsNotNull(honest.VerifiedSet);
     }
 
+    [TestMethod]
+    public void LargeCanonicalSetStreamsToNonSeekableDestinationWithIndependentDigest()
+    {
+        var observations = Enumerable.Range(0, 3000)
+            .Select(index => Observation($"https://data.legilux.lu/eli/stream/{index:D5}"))
+            .ToArray();
+        var set = LuxembourgObservedObjectIdentitySet.FromObservations(RunIdentity, observations);
+        using var output = new BoundedWriteDestination();
+        var digest = LuxembourgObservedObjectIdentitySetCanonicalWriter.Write(output, set);
+        var bytes = output.Bytes;
+        Assert.IsTrue(bytes.Length > 128 * 1024);
+        Assert.IsTrue(output.LargestWrite <= 68 * 1024,
+            $"The writer buffered a {output.LargestWrite}-byte write.");
+        Assert.IsFalse(output.Disposed, "The caller owns the destination.");
+        var expected = "{\"schema\":\"lex-v3-luxembourg-observed-object-identity-set/1\","
+            + "\"run_identity\":{\"resource_id\":\"" + RunIdentity.ResourceId + "\","
+            + "\"sha256\":\"" + RunIdentity.Sha256 + "\"},\"object_ref_sha256\":["
+            + string.Join(",", set.ObjectRefSha256Values.Select(value => "\"" + value + "\""))
+            + "]}\n";
+        CollectionAssert.AreEqual(Encoding.UTF8.GetBytes(expected), bytes);
+        var independentDigest = Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(
+            Encoding.UTF8.GetBytes("lex-v3-luxembourg-observed-object-identity-set/1\n" + expected)));
+        Assert.AreEqual(independentDigest, digest);
+        Assert.AreEqual(independentDigest,
+            LuxembourgObservedObjectIdentitySetCanonicalWriter.ComputeSetSha256(bytes));
+        var reopened = VerifiedLuxembourgObservedObjectIdentitySet.ParseAndVerify(
+            new SourceArtifactRef("urn:uuid:88888888-8888-4888-8888-888888888888", digest), bytes);
+        Assert.AreEqual(3000, reopened.Set.ObjectRefSha256Values.Count);
+    }
+
+    [TestMethod]
+    public void CanonicalDigestExcludesExistingDestinationPrefix()
+    {
+        var set = LuxembourgObservedObjectIdentitySet.FromObservations(
+            RunIdentity, [Observation("https://data.legilux.lu/eli/prefix")]);
+        var canonical = Canonical(set);
+        using var output = new MemoryStream();
+        byte[] prefix = [1, 2, 3, 4];
+        output.Write(prefix);
+        var digest = LuxembourgObservedObjectIdentitySetCanonicalWriter.Write(output, set);
+        CollectionAssert.AreEqual(prefix.Concat(canonical).ToArray(), output.ToArray());
+        var domain = Encoding.UTF8.GetBytes("lex-v3-luxembourg-observed-object-identity-set/1\n");
+        Assert.AreEqual(Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(
+            domain.Concat(canonical).ToArray())), digest);
+        Assert.IsTrue(output.CanWrite);
+    }
+
+    private sealed class BoundedWriteDestination : Stream
+    {
+        private readonly MemoryStream _bytes = new();
+        public byte[] Bytes => _bytes.ToArray();
+        public int LargestWrite { get; private set; }
+        public bool Disposed { get; private set; }
+        public override bool CanRead => false;
+        public override bool CanSeek => false;
+        public override bool CanWrite => !Disposed;
+        public override long Length => throw new NotSupportedException();
+        public override long Position
+        {
+            get => throw new NotSupportedException();
+            set => throw new NotSupportedException();
+        }
+        public override void Flush() { }
+        public override int Read(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+        public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
+        public override void SetLength(long value) => throw new NotSupportedException();
+        public override void Write(byte[] buffer, int offset, int count) => Write(buffer.AsSpan(offset, count));
+        public override void Write(ReadOnlySpan<byte> buffer)
+        {
+            LargestWrite = Math.Max(LargestWrite, buffer.Length);
+            _bytes.Write(buffer);
+        }
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing) { Disposed = true; _bytes.Dispose(); }
+            base.Dispose(disposing);
+        }
+    }
+
     private static byte[] Canonical(LuxembourgObservedObjectIdentitySet set)
     {
         using var buffer = new MemoryStream();
