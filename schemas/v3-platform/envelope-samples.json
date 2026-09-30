@@ -1081,11 +1081,17 @@
         "refusal": {
           "code": "identifier_unknown",
           "helpful_payload": {
+            "asserts_absence_of_law": false,
             "official_search_actions": [
               "search"
             ],
+            "population_disclosure": "This build\u0027s Luxembourg index holds 1 Luxembourg work, with states dated from 2024-02-01 to 2024-02-01.",
             "requested_identifier": "/lu-legilux/no-such-work",
-            "what_would_answer": "a Luxembourg work identifier present in the mounted index"
+            "what_would_answer": [
+              "corrected_identifier",
+              "expanded_official_scope"
+            ],
+            "what_would_answer_detail": "a Luxembourg work identifier present in the mounted index"
           },
           "schema": "lex-v3-refusal/1"
         },
@@ -2226,10 +2232,14 @@
         "refusal": {
           "code": "no_version_for_date",
           "helpful_payload": {
+            "asserts_absence_of_law": false,
             "history_begins": "2024-02-01",
             "nearest_earlier": null,
             "nearest_later": "2024-02-01",
-            "requested_date": "1990-01-01"
+            "requested_date": "1990-01-01",
+            "what_would_answer": [
+              "new_official_observation"
+            ]
           },
           "schema": "lex-v3-refusal/1"
         },
@@ -2268,11 +2278,17 @@
         "refusal": {
           "code": "identifier_unknown",
           "helpful_payload": {
+            "asserts_absence_of_law": false,
             "official_search_actions": [
               "search"
             ],
+            "population_disclosure": "This build\u0027s Luxembourg index holds 1 Luxembourg work, with states dated from 2024-02-01 to 2024-02-01.",
             "requested_identifier": "/lu-legilux/no-such-work",
-            "what_would_answer": "a Luxembourg work identifier present in the mounted index"
+            "what_would_answer": [
+              "corrected_identifier",
+              "expanded_official_scope"
+            ],
+            "what_would_answer_detail": "a Luxembourg work identifier present in the mounted index"
           },
           "schema": "lex-v3-refusal/1"
         },
@@ -2477,6 +2493,7 @@
         "refusal": {
           "code": "anchor_not_in_version",
           "helpful_payload": {
+            "asserts_absence_of_law": false,
             "do_not_fall_back_to_full_text_search": true,
             "nearest_anchors": [
               "art_4",
@@ -2484,7 +2501,11 @@
               "art_41",
               "art_42"
             ],
-            "requested_anchor": "art_44"
+            "requested_anchor": "art_44",
+            "what_would_answer": [
+              "corrected_identifier",
+              "new_official_observation"
+            ]
           },
           "schema": "lex-v3-refusal/1"
         },
@@ -2523,11 +2544,17 @@
         "refusal": {
           "code": "identifier_unknown",
           "helpful_payload": {
+            "asserts_absence_of_law": false,
             "official_search_actions": [
               "search"
             ],
+            "population_disclosure": "This build\u0027s Luxembourg index holds 1 Luxembourg work, with states dated from 2024-02-01 to 2024-02-01.",
             "requested_identifier": "/lu-legilux/no-such-work",
-            "what_would_answer": "a Luxembourg work identifier present in the mounted index"
+            "what_would_answer": [
+              "corrected_identifier",
+              "expanded_official_scope"
+            ],
+            "what_would_answer_detail": "a Luxembourg work identifier present in the mounted index"
           },
           "schema": "lex-v3-refusal/1"
         },
@@ -3291,11 +3318,15 @@
         "refusal": {
           "code": "no_version_for_date",
           "helpful_payload": {
+            "asserts_absence_of_law": false,
             "bound": "from",
             "history_begins": "2024-02-01",
             "nearest_earlier": null,
             "nearest_later": "2024-02-01",
-            "requested_date": "1990-01-01"
+            "requested_date": "1990-01-01",
+            "what_would_answer": [
+              "new_official_observation"
+            ]
           },
           "schema": "lex-v3-refusal/1"
         },
@@ -3334,11 +3365,17 @@
         "refusal": {
           "code": "identifier_unknown",
           "helpful_payload": {
+            "asserts_absence_of_law": false,
             "official_search_actions": [
               "search"
             ],
+            "population_disclosure": "This build\u0027s Luxembourg index holds 1 Luxembourg work, with states dated from 2024-02-01 to 2024-02-01.",
             "requested_identifier": "/lu-legilux/no-such-work",
-            "what_would_answer": "a Luxembourg work identifier present in the mounted index"
+            "what_would_answer": [
+              "corrected_identifier",
+              "expanded_official_scope"
+            ],
+            "what_would_answer_detail": "a Luxembourg work identifier present in the mounted index"
           },
           "schema": "lex-v3-refusal/1"
         },

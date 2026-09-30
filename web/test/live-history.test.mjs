@@ -113,11 +113,13 @@ test("a longer lineage shows the change, the next state counting an absent one, 
 test("the refusals a lineage from this page can meet", async () => {
   const early = await loadLiveHistory({ contract, fetchImpl: answering(200, "application/json", envelopeOf("an article id no held state carries")).fetchImpl, request: REQUEST });
   assert.equal(early.code, "anchor_not_in_version");
-  assert.equal(early.card, false, "an absence whose payload names no what_would_answer is said by its code (driver decision: the producer will carry it)");
-  assert.match(early.sentence, /The nearest article ids this index holds are art_4, art_40, art_41, art_42\.$/, "the ids to try next travel with the refusal");
+  assert.equal(early.card, true, "the absence carries its evidence, so it is a card (driver decision (a))");
+  const earlyCard = renderToStaticMarkup(h(RefusalCard, { code: early.code, sentence: early.sentence, payload: early.payload }));
+  for (const id of ["art_4", "art_40", "art_41", "art_42"]) assert.ok(earlyCard.includes(id), `the card names the nearest id ${id}`);
+  assert.ok(earlyCard.includes("It is not evidence that the instrument or the law does not exist."));
 
   const unknown = await loadLiveHistory({ contract, fetchImpl: answering(200, "application/json", envelopeOf("a work the index does not hold")).fetchImpl, request: REQUEST });
-  assert.equal(unknown.card, false);
+  assert.equal(unknown.card, true);
   const none = await loadLiveHistory({ contract, fetchImpl: answering(200, "application/json", envelopeOf("no corpus mounted")).fetchImpl, request: REQUEST });
   assert.equal(none.card, true);
   assert.equal(none.sentence, "This build has no Luxembourg index mounted.");

@@ -101,9 +101,12 @@ public sealed class V3CorpusAsOfMountTests
         Assert.AreEqual(PublisherId.LuLegilux, envelope.Context.Publisher);
         var payload = envelope.Refusal.HelpfulPayload;
         Assert.AreEqual(
-            "history_begins,nearest_earlier,nearest_later,requested_date",
+            "asserts_absence_of_law,history_begins,nearest_earlier,nearest_later,requested_date,what_would_answer",
             string.Join(",", payload.EnumerateObject().Select(static property => property.Name)),
             "as_of has one date, so its refusal names no bound: exactly these properties, as served in the envelope's canonical order.");
+        // The absence evidence the refusal card requires: a route out, and no claim that the law is absent.
+        Assert.IsFalse(payload.GetProperty("asserts_absence_of_law").GetBoolean());
+        CollectionAssert.AreEqual(new[] { "new_official_observation" }, payload.GetProperty("what_would_answer").EnumerateArray().Select(static value => value.GetString()).ToArray());
         Assert.AreEqual(before, payload.GetProperty("requested_date").GetString());
         Assert.AreEqual(fixture.ApplicabilityDate, payload.GetProperty("history_begins").GetString());
         Assert.AreEqual(JsonValueKind.Null, payload.GetProperty("nearest_earlier").ValueKind);
@@ -271,7 +274,7 @@ public sealed class V3CorpusAsOfMountTests
             Assert.AreEqual(identifier,
                 envelope.Refusal.HelpfulPayload.GetProperty("requested_identifier").GetString());
             StringAssert.Contains(
-                envelope.Refusal.HelpfulPayload.GetProperty("what_would_answer").GetString(),
+                envelope.Refusal.HelpfulPayload.GetProperty("what_would_answer_detail").GetString(),
                 "Luxembourg work identifier");
         }
     }

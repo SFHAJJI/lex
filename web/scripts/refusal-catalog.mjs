@@ -69,7 +69,10 @@ export const REFUSAL_EXAMPLES = Object.freeze({
         '{held_lu_works} consolidated LU works and {held_eu_works} EU works are searchable; ' +
         '{unconsolidated_lu_acts} never-consolidated LU acts, of a {lu_act_population} LOI and ' +
         'RGD population, are not.',
+      requested_identifier: `/${PUBLISHER}/${WORK}-unheld`,
+      official_search_actions: ['search'],
       what_would_answer: ['corrected_identifier', 'expanded_official_scope'],
+      what_would_answer_detail: 'a work identifier present in the mounted index',
       asserts_absence_of_law: false,
     },
   },
@@ -95,6 +98,7 @@ export const REFUSAL_EXAMPLES = Object.freeze({
   no_version_for_date: {
     sentence: 'No publisher state covers 1999-06-01.',
     payload: {
+      requested_date: '1999-06-01',
       history_begins: '2001-01-01',
       nearest_earlier: null,
       nearest_later: '2001-01-01',
@@ -139,7 +143,7 @@ export const REFUSAL_EXAMPLES = Object.freeze({
       requested_anchor: 'art_1',
       nearest_anchors: ['art_1er', 'art_1er__2'],
       do_not_fall_back_to_full_text_search: true,
-      what_would_answer: ['corrected_identifier'],
+      what_would_answer: ['corrected_identifier', 'new_official_observation'],
       asserts_absence_of_law: false,
     },
   },
