@@ -3,34 +3,35 @@
 Updated 2026-09-30 by the driver. This file replaces the issue-comment ledgers. It is rewritten in
 every pull request that changes what is served, what is next or what is blocked.
 
-## EU article source coordinates (Codex draft, 2026-10-01)
+## EU article source coordinates (Codex, 2026-10-01)
 
-Reversible driver decision: preserve the admitted Formex package SHA-256 and the checked
-original request URI alongside each indexed article. Schema3 binds these rows in the logical
-index digest and requires one source row per article on reopen. The coordinate reader returns
-work, expression, article, wording date, language and package entry with those source fields.
-The package digest identifies the complete ZIP; it is not an article-text or XHTML body digest.
-This slice does not expose new public API operations or claim custody replay.
+Reversible driver decision: schema3 preserves the admitted Formex package SHA-256 and checked
+original request URI for every indexed article. The logical index hash binds these source rows;
+reopen requires exact article coverage. The reader returns work, expression, article, wording
+date, language and package entry with those fields. Package SHA identifies the complete ZIP,
+not article text or the separate XHTML body. No new public API operation or custody replay is claimed.
 
-Existing schema2 mounts keep their exact schema/logical-hash verification and search/resolve
-behavior. They report source-coordinate support as unavailable. The draft includes an exact
-compressed fixture from the completed bilingual canary (198 articles; original index digest
-77f38ce099bf4adb1c1d42d4af2a6682b6d0bfd24a5b70111cf949afcd98ecc0), plus
-producer-binding and hostile source/version tests. Initial validation reproduced a checkout-line-ending difference in historical SQLite schema
-text. New schema creation canonicalizes CRLF to LF; legacy schema comparison accepts only that
-spelling difference while retaining the exact original file digest and logical-row checks. The
-actual legacy fixture and a CRLF schema variant cover both forms. Synthetic mount helpers now
-supply complete source rows, and the vocabulary census pins the explicit legacy constants.
-The schema3 byte pin must be remeasured after this correction; fresh fast/ingest validation and
-cross-family review remain pending.
+Schema2 mounts retain their original file/logical-hash and capability checks, with source-coordinate
+support unavailable. Schema comparison normalizes only CRLF/LF SQL spelling; new schema SQL uses
+LF on every checkout. Tests include the exact198article bilingual schema2 canary and a CRLF variant,
+producer-bound source fields, hostile digest/URI/coverage/version changes, and complete synthetic
+source rows in the existing ambiguity fixtures. The fixed-input index was derived twice identically:
+61,440bytes, SHA-256153b5852a3c55ab85bf5064757638051a9f67c2109cdd16bedef6fce9aab7123.
 
-Population checkpoint: PR835 merged7144666c after review and greenCI36790548675. The bounded
-32023R2854 census used10/20requests and independently reopened5rows; all6retained routes used
-attempt0, so no live retry was exercised. FullEU retry3 is active from frozen40004a69 in
-C:/lex-v3/eu-population-20261001-1 with82seeds,20kwire and the LU a439 companion. Its unchanged
-4,999,959,422-byte allowance passed before/after freeze. This is not yet a completed population.
-The offline combined LU graph diagnostic is queued next; full Luxembourg still needs measured
-whole-process/storage sizing. No production signing, credentials, deployment or promotion.
+After correcting the reproduced initial fixture/schema/census failures, validation at53ceaffe passed
+clean build(39.43s), required fast(3,085passed/1platformskip,73.580s), and105affected ingest tests
+(3skips: two live EU tests and the owner-named mounted temporal gate,134.765s). Exact commands,
+initial failures and successful results remain under C:/lex-v3/lanes/eu-source-*. Integration839 adds
+mounted refusal tests; final CI must validate that combination. Required cross-family review remains.
+
+Population checkpoint: fullEU retry3 ended490/20,000requests with79/82census families after three
+retained503maintenance responses. PR840 narrowly retries that exact body within existing limits;
+its reviewed merge and a fresh60wire three-family proof/reopen remain gates before the next full run.
+Offline LU run2 measured70,855,000additional retained bytes for9,000synthetic subjects and61,000
+admitted assertions through semantic/typed/scope stages. It excludes later stages and proves no full fit.
+Question Q-20261001-0049-codex is recorded in C:/lex-v3/lanes/QUESTIONS.md: an existing larger
+non-production worker, or an explicit spending cap, for bounded measurement before full Luxembourg.
+No spending or credentials are assumed; local work continues. No production signing, deployment or promotion.
 
 ## Luxembourg identity canonical output (Codex, 2026-09-30)
 
