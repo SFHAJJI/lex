@@ -3,6 +3,54 @@
 Updated 2026-09-30 by the driver. This file replaces the issue-comment ledgers. It is rewritten in
 every pull request that changes what is served, what is next or what is blocked.
 
+## Corpus persistence in bounded custody objects (Codex, 2026-09-30)
+
+The corpus writer still held one complete canonical byte buffer after the stream-reader change.
+Reversible driver decision: sets larger than 4 MiB use the existing ordered chunk closure; small
+sets keep inline storage. Both paths preserve the same domain-separated logical set digest.
+The public reader independently reopens legacy inline sets and chunked sets, verifies closure and
+canonical bytes, and retains its three typed refusal categories. The storage root receipt identifies
+the root; the write result's retention class takes the weakest observed class across data chunks,
+retained receipt-evidence objects and the root. It does not infer the closure floor from the root.
+
+Validation passed at 9fa26e4e: clean solution build (86.96 s), required fast (3,083 passed,
+one platform skip, 64.814 s), and 93 affected ingest tests (two live canaries skipped, 79.674 s).
+Six new cases cover exact bytes and independent public reopen, bounded custody writes, data /
+receipt-evidence / root retention differences, missing/reordered/substituted chunks, wrong set
+references, unavailable custody and failed holds. Independent reflection preserves 137 guarded
+Ingest types and 86 receipt producers; the pins add the private chunk writer and the existing
+helper's receipt observer parameter. The six declined types are unchanged.
+
+The exact commands and results are retained in C:\lex-v3\lanes\corpus-chunk-validation-commands.json
+and corpus-chunk-validation.json. Required cross-family review and green exact-head CI remain
+merge gates. Typed records and completion remain materialized; this is not a full Luxembourg
+fit or population-completeness claim. No publisher traffic was sent by the validation.
+
+Required Claude review #832 returned MERGE after a clean build, fast (3,083 passed, one
+platform skip), and 140 broader ingest passes (two live canaries skipped). Its two findings are
+addressed in the single repair: intact foreign chunk roots now return RetainedBytesAreNotThisSet,
+matching foreign inline objects, with paired regression coverage; STATUS is strict UTF-8 again.
+The code/test repair is commit 816d4f09; its title mentioned the encoding repair prematurely,
+which is completed in this follow-up after a failed text-edit script.
+
+Large roots include retained receipt digests and write times, so their physical addresses may
+vary between executions. Canonical record-set bytes and the logical SetRef.Sha256 remain stable;
+the existing raw-storage equality test explicitly covers small inline sets. Opening and independent
+verification reread chunks, and all writes include a canonical sizing pass. This adds I/O and
+requires measurement before any full Luxembourg fit claim. Repair validation and exact-head CI
+remain required; no production Azure operation or publisher traffic is part of these checks.
+
+Repair validation at 45de557f passed clean build (75.17 s), required fast (3,085 passed,
+one platform skip, 65.608 s), and 140 broader ingest tests (two live skips, 87.773 s).
+The subsequent full CI run 36782023846 found two custody-store census failures: the new
+ChunkReadFaultStore test double was not declared exempt. The affected local filter and review
+had omitted that census. This follow-up names its constructor-configured corruption/timeout
+behavior and updates the observed inventory from 28 to 29 stores (nine driven, 20 exempt).
+Production behavior is unchanged; fresh full CI must verify the test-inventory correction.
+The live all-82-seed EU retry began at 21:51 UTC from merged 7e90e943, in fresh custody at
+C:\lex-v3\eu-population-20260930-2. Its 20,000-wire ceiling, frozen inputs and unchanged
+storage allowance were verified. It has not completed; full Luxembourg remains resource-gated.
+
 ## Luxembourg scope input reuse (Codex, 2026-09-30)
 
 Scope resolution retains four rule-evaluation objects and multiple not-applicable selectors per
@@ -32,6 +80,21 @@ The full Luxembourg run remains gated on retained-state and persistence sizing. 
 standing order requires space recovery before a large run; cited custody and evidence remain
 preserved. Required cross-family review and green exact-head CI remain merge gates.
 
+Required Claude review #829 returned MERGE with no blocking defect. It checked the cache keys,
+immutability and per-resolution isolation, reproduced the memory figures and identical JSON
+hashes, and made the disposition regression fail by mutating the cache key. Its clean build and
+fast suite passed; its broader offline ingest selection passed 137 tests. A trial integration merge
+also passed build and fast (3,078 passed, one platform skip).
+
+One follow-up preserves both STATUS sections during the current base merge. The earlier 97-test
+log lacks its filter string, so that historical count alone is not a reproducible command record.
+The explicit affected ingest rerun passed 101 tests, zero failures/skips, in 74.919 s at
+2678415d. Its command, source and result are retained under C:\lex-v3\lanes\pr-829-explicit-ingest-*.
+The exact filter was:
+`FullyQualifiedName~LuxembourgQueryExecutionAdapterTests|FullyQualifiedName~LuxembourgProductionTopologyTests|FullyQualifiedName~GuardedConstructionCensusTests|FullyQualifiedName~CustodyStoreConformanceTests`.
+The result is recorded in the PR. The final base refresh includes merged #827 and #830, with
+both STATUS sections retained. PR #829 merged at 21:33 UTC after green exact-head CI.
+
 ## Formex package outcome diagnostics (Codex, 2026-09-30)
 
 The successful three-seed mount holds 34 EU XHTML members but admits only two Formex article
@@ -51,8 +114,9 @@ The single repair uses declared wire codes, adds explicit 404/unavailable diagno
 and corrects the test description: the annex case lacks the publisher's annex XHTML convention;
 it is not a missing main-body case. The 500 case tests route_refused. Direct acquisition_refusal
 projection remains unexercised by these scripted cases. Existing checks also cover acquired,
-ineligible, language-out-of-scope, invalid-package and escaped refusal detail. Repair validation
-and green exact-head CI are required before merge. The full EU retry remains subject to its
+ineligible, language-out-of-scope, invalid-package and escaped refusal detail. Repair build
+(81.91 s), fast (3,083 plus one skip) and 29 ingest checks passed; #830 merged at 21:23 UTC
+after green exact-head CI. The full EU retry remains subject to its
 storage allowance; cited custody and evidence are preserved.
 
 ## Corpus record-set canonical streaming and readback (Codex, 2026-09-30)
@@ -2252,27 +2316,15 @@ Only money, legal or public claims, credentials and going live (ruling 7):
 - The corrigendum tripwire classifies a French corrigendum as `within_served_body_languages` while no
   French body is served (Decision 89 section 4). True once the French expressions land.
 
+## DATA lane disk and launch checkpoint (2026-09-30)
 
-Required Claude review #829 returned MERGE with no blocking defect. It checked the cache keys,
-immutability and per-resolution isolation, reproduced the memory figures and identical JSON
-hashes, and made the disposition regression fail by mutating the cache key. Its clean build and
-fast suite passed; its broader offline ingest selection passed 137 tests. A trial integration merge
-also passed build and fast (3,078 passed, one platform skip).
+Disk checkpoint: all 3,652 selected large files in old EU runs 1-8b were transparently compressed
+and checked for identical length and SHA-256 before/after. They total 1,828,552,185 logical bytes;
+no custody was deleted. Evidence: C:\lex-v3\lanes\old-eu-largest-compression-result.json and its
+verified-file manifest (SHA-256 a0c9bd9c8a773df60be98c6dcaad6926897c0256ccc6f06a3e0c163c068f1e73).
+Observed free space rose from 4,015,509,504 to 5,163,757,568 bytes. The abandoned whole-tree
+hashing attempt changed no source files. The fresh EU retry still needs final local-job completion
+and a current storage check before and after its runtime is frozen; it has not started.
 
-One follow-up preserves both STATUS sections during the current base merge. The earlier 97-test
-log lacks its filter string, so that historical count alone is not a reproducible command record.
-The explicit affected ingest rerun passed 101 tests, zero failures/skips, in 74.919 s at
-2678415d. Its command, source and result are retained under C:\lex-v3\lanes\pr-829-explicit-ingest-*.
-The exact filter was:
-`FullyQualifiedName~LuxembourgQueryExecutionAdapterTests|FullyQualifiedName~LuxembourgProductionTopologyTests|FullyQualifiedName~GuardedConstructionCensusTests|FullyQualifiedName~CustodyStoreConformanceTests`.
-The result is recorded in the PR. The final base refresh includes merged #827 and #830, with
-both STATUS sections retained; green exact-head CI remains required before merge.
-
-
-DATA lane checkpoint: #827 merged at 21:10 UTC and #830 at 21:23 UTC after their required reviews,
-one repair each and green exact-head CI. The fresh all-82-seed EU retry is prepared but has not
-started. It will use the merged Formex diagnostics and the retained 4,999,959,422-byte launch
-allowance, with checks before and after runtime preparation. Completed ignored checkout outputs
-have been reclaimed. Old EU runs named in STATUS remain intact; selected large files are queued
-for transparent NTFS compression with before/after hashes. A whole-tree hashing attempt was
-stopped before compression because tiny-file I/O delayed validation. No custody was deleted.
+PRs #827, #829 and #830 are merged. The all-82-seed EU retry remains prepared, with a
+4,999,959,422-byte launch allowance and checks before and after freezing its runtime.
