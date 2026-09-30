@@ -239,6 +239,9 @@ export function journeyVerdict(observed, expected) {
       }
     }
   }
+  if (observed.paint !== undefined && observed.paint.unnamed.length > 0) {
+    failures.push(`meaning by colour alone: ${[...new Set(observed.paint.unnamed)].join(", ")} painted with no words or accessible name`);
+  }
   if (observed.quotes !== undefined) {
     // Every quotation carries, beside it, what the launch contract's first promise names: its text and
     // body digests, its official source, and a permalink that pins its very article (review of #805:
@@ -511,6 +514,43 @@ async function keyboardPin(session, sessionId, evaluate, stops) {
   return "absent";
 }
 
+/**
+ * Every element whose meaning could lie in paint alone: painted apart from what is behind it (a
+ * background image, a background colour other than the one it sits on, a visible border, outline or
+ * shadow) and saying nothing in words or in an accessible name. The launch contract's "no meaning by
+ * colour alone", measured on the page as the browser paints it; decorative elements declared
+ * `aria-hidden` are exempt. Borders, outlines and shadows count since the review of #811: an empty
+ * span with a red border is a marker as surely as a red square.
+ */
+export const PAINT_ONLY = `(() => {
+  const transparent = (colour) => colour === 'transparent' || colour === 'rgba(0, 0, 0, 0)';
+  const edge = (width, style, colour) => parseFloat(width) > 0 && style !== 'none' && style !== 'hidden' && !transparent(colour);
+  const behind = (el) => {
+    for (let node = el; node !== null; node = node.parentElement) {
+      const colour = getComputedStyle(node).backgroundColor;
+      if (!transparent(colour)) return colour;
+    }
+    return 'rgb(255, 255, 255)';
+  };
+  const found = [];
+  let painted = 0;
+  for (const el of document.querySelectorAll('body *')) {
+    if (el.closest('[aria-hidden="true"]') !== null || el.offsetParent === null) continue;
+    const style = getComputedStyle(el);
+    const paints = style.backgroundImage !== 'none'
+      || (!transparent(style.backgroundColor) && style.backgroundColor !== behind(el.parentElement))
+      || ['Top', 'Right', 'Bottom', 'Left'].some((side) => edge(style['border' + side + 'Width'], style['border' + side + 'Style'], style['border' + side + 'Color']))
+      || edge(style.outlineWidth, style.outlineStyle, style.outlineColor)
+      || style.boxShadow !== 'none';
+    if (!paints) continue;
+    painted += 1;
+    const named = el.textContent.trim() !== '' || (el.getAttribute('aria-label') ?? '').trim() !== ''
+      || (el.getAttribute('alt') ?? '').trim() !== '' || (el.labels?.length ?? 0) > 0;
+    if (!named) found.push(el.tagName.toLowerCase() + (el.className ? '.' + String(el.className).split(' ')[0] : ''));
+  }
+  return { painted, unnamed: found };
+})()`;
+
 /** The politeness of the live region the answer is written into, or null when it is in none. */
 const ANSWER_LIVE_REGION = "document.querySelector('[data-answer-state]')?.closest('[aria-live]')?.getAttribute('aria-live') ?? null";
 
@@ -625,6 +665,7 @@ async function observe(browser, pageOrigin, step, { keyboard = false } = {}) {
       // code begins with a slash (digests are hex, IRIs are absolute).
       citations: await evaluate("[...new Set([...document.querySelectorAll('[data-live-answer] code')].map((node) => node.textContent.trim()).filter((text) => text.startsWith('/')))]"),
       // Every quotation the answer shows, with what its article's element prints beside it.
+      paint: await evaluate(PAINT_ONLY),
       quotes: await evaluate("[...document.querySelectorAll('[data-live-answer] [data-article]')].filter((node) => node.querySelector('blockquote') !== null).map((node) => ({ article: node.dataset.article, codes: [...node.querySelectorAll('code')].map((code) => code.textContent.trim()) }))"),
     };
   } finally {
@@ -715,6 +756,7 @@ async function main(argv) {
     const toApi = observed.requests.filter((request) => new URL(request.url).pathname.startsWith("/api/")).length;
     console.log(`${label}: ${observed.answerState}; ${observed.requests.length} requests (${toApi} to the API); ` +
       `console ${observed.console.length}; hydration ${observed.hydrated}; ${observed.verifications?.length ?? 0} citations verified; ` +
+      `${observed.paint?.painted ?? 0} painted elements, ${observed.paint?.unnamed.length ?? 0} wordless; ` +
       `${observed.keyboard ? `${observed.keyboard.keyPresses} of ${observed.keyboard.characters} characters typed by key; ` : ""}` +
       `${failures.length === 0 ? "PASS" : "FAIL"}`);
     for (const failure of failures) console.log(`  - ${failure}`);
