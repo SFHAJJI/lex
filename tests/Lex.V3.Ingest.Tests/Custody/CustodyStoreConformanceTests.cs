@@ -90,6 +90,8 @@ public sealed class CustodyStoreConformanceTests
         "Lex.V3.Ingest.Tests.LuxembourgQueryExecutionAdapterTests"
             + "+ManifestReopenFailingCustodyStore: decorates an inner store in order to corrupt "
             + "the second read of a digest",
+        "Lex.V3.Ingest.Tests.LuxembourgQueryExecutionAdapterTests+ReadCountingCustodyStore: "
+            + "decorates an inner store and corrupts or cancels a selected digest read at a chosen ordinal",
         "Lex.V3.Ingest.Tests.LuxembourgRepeatedEnumerationExecutorTests"
             + "+CustodyRequiredAfterBootstrapStore: decorates an inner store and takes the flag "
             + "that arms its refusal once the robots bootstrap completes",
@@ -140,14 +142,14 @@ public sealed class CustodyStoreConformanceTests
     public void TheImplementationCountsAreExactlyThese()
     {
         var types = CustodyStoreConformance.ImplementationTypes(Scope);
-        Assert.AreEqual(26, types.Count, "implementations swept");
+        Assert.AreEqual(27, types.Count, "implementations swept");
         Assert.AreEqual(
             9,
             types.Count(static type =>
                 CustodyStoreConformance.IsDrivenByDefault(type)
                 || CustodyStoreConformance.HasRecipe(type)),
             "implementations driven");
-        Assert.AreEqual(17, Exempt.Length, "implementations exempt");
+        Assert.AreEqual(18, Exempt.Length, "implementations exempt");
     }
 
     [TestMethod]

@@ -22,6 +22,49 @@ source with the reviewed PR #812 streaming change. No population completeness or
 typed observations, individual large observations, the root metadata and downstream manifests still
 need resource allowance.
 
+## Luxembourg population memory prerequisite (Codex, 2026-09-30)
+
+The four bounded COUNT diagnostics now cover all assertion ranges: 9,672,378 A rows
+across 29 measured leaves. Together with prior S=1,986,924 and G=221,852, the estimated
+page-enumeration floor is 31,456 requests before split COUNTs, vocabulary, bodies and retries.
+These independently timed counts size the run; they do not prove a delivered population.
+Evidence: `C:\lex-v3\lu-assertion-sizing-20260930-4\observations\summary.json` and
+`C:\lex-v3\lanes\lu-population-sizing-progress.json`.
+
+A zero-network measurement of the actual parser retained 205,171,464 managed bytes for
+100,035 rows from one digest-checked 65-row page (about 2,051 bytes per row). Applying
+that sample size to A alone gives about 19.8 GB, before typed observations or indexes.
+The sample is not a population-wide memory bound. Available commit was about 5 GB.
+Reversible driver decision: reduce raw-row retention before launching the complete run.
+
+The adapter verifies every S/A leaf before semantic decoding, then reopens and verifies each
+leaf again while accumulating typed observations. Raw S/A unions are no longer retained.
+Subject and predicate strings reuse the exact census/vocabulary values. Adaptive acquisition
+targets at most 100,000 rows per leaf; cover and repeated-pass proof requirements are unchanged.
+The relation union, typed observations, rights-index serialization and downstream outputs still
+consume memory. Full-run resource sizing remains pending; no complete population is claimed.
+A second offline diagnostic called the actual semantic builder with independently parsed copies
+of that page and a synthetic nine-subject census: 100,035 input rows retained 26,399,312 managed
+bytes in typed results, with zero surviving sampled raw rows. The observation JSON alone measured
+108,361,751 bytes. This repeated small sample is not representative of all subject counts or graph
+shapes, and excludes proof, relation and downstream allocations. The single rights-index byte array
+is a further scaling constraint to address before a full Luxembourg launch.
+Evidence: `C:\lex-v3\lanes\lu-typed-memory-sample\measurement.json` (0 requests).
+
+Validation: clean full solution build; fast 3,066 passed/1 platform skip. Broader Luxembourg/census
+checks passed 833 and skipped 12, with one stale construction-surface pin. Its independently
+reflected diff adds exactly the new private async builder; both focused construction tests passed. S/A changed
+custody and cancellation after preliminary verification are covered.
+
+The cross-family review of PR #812 returned MERGE and independently passed all 834 affected
+checks with 12 opt-in skips. Its repair corrects the older leaf-target wording below and adds adapter
+boundary tests at 100,000/100,001 rows. Full CI also found an unregistered fault-injection test store;
+the repair records its explicit custody-conformance exemption and the observed implementation count.
+Repair validation passed 3,066 fast tests/1 platform skip (70.717s) and all 84 focused tests
+(68.363s), including custody conformance and the adapter threshold. Final CI remains required.
+The extra local S/A verification pass remains an intentional
+CPU/read cost for lower retained memory; the in-memory compatibility wrapper performs no I/O.
+
 ## French EU expression bodies (Codex, 2026-09-30)
 
 The acquisition adapter now projects French body candidates from this run's proven expression
@@ -1512,13 +1555,14 @@ Each is the driver's call under ruling 7 and can be reversed by a later pull req
 ## Luxembourg population partitioning (2026-09-30)
 
 The whole-population acquisition now drives adaptive covers for S, A and G when the existing
-executor reports `PartitionRequired` at its 1,000,000-row delivery ceiling. It splits six-part
+executor reports `PartitionRequired`: at the publisher's 1,000,000-row delivery ceiling or
+above the adapter's lower 100,000-row memory target (PR #812). It splits six-part
 cursor ranges, retains empty leaves, and runs all leaves of a family in one session and under the
 same wire budget. The adapter reconciles each cover and independently reopens every leaf before
 scope reduction, body acquisition or corpus construction. Explicit act ranges keep their current
 path. This adds no publisher traffic by itself. The bounded mount completed; full-population
 acquisition follows the reviewed selector and adaptive-cover changes.
-Adaptive covers use midpoint boundaries and the existing executor's delivery ceiling. The query
+Adaptive covers use midpoint boundaries, the 100,000-row adapter target and the publisher ceiling. The query
 plan still records a legacy 900-row accumulated-slice rule that this executor does not apply;
 its renderer bytes were unchanged in that slice. PR #798 subsequently added compact COUNTs and
 splitting for narrowly recognized, retained initial COUNT capacity errors. The live bounded S
