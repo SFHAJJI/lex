@@ -27,6 +27,7 @@ public sealed class V3WebRootTests
         File.WriteAllText(Path.Combine(directory, "client-live.js"), "void 0;");
         File.WriteAllText(Path.Combine(directory, "styles.css"), "body{}");
         File.WriteAllBytes(Path.Combine(directory, "fonts", "inter-400-latin.woff2"), [1, 2, 3]);
+        File.WriteAllText(Path.Combine(directory, "evaluation-card.json"), "{\"schema\":\"lex-v3-evaluation-card/1\"}");
         return directory;
     }
 
@@ -66,7 +67,7 @@ public sealed class V3WebRootTests
             var root = V3WebRoot.Open(directory)!;
             Assert.AreEqual($"{DecodedCsp}; frame-ancestors 'none'", root.ContentSecurityPolicy, "the page's policy, entities decoded, plus the header-only directive");
             CollectionAssert.AreEquivalent(
-                new[] { "/", "/index.html", "/search.html", "/client-live.js", "/styles.css", "/fonts/inter-400-latin.woff2" },
+                new[] { "/", "/index.html", "/search.html", "/client-live.js", "/styles.css", "/fonts/inter-400-latin.woff2", "/evaluation-card.json" },
                 root.Paths.ToArray());
 
             foreach (var (target, type, body) in new[]
@@ -75,6 +76,7 @@ public sealed class V3WebRootTests
                 ("/search.html", "text/html; charset=utf-8", "search"),
                 ("/client-live.js", "text/javascript; charset=utf-8", "void 0;"),
                 ("/styles.css", "text/css; charset=utf-8", "body{}"),
+                ("/evaluation-card.json", "application/json; charset=utf-8", "lex-v3-evaluation-card/1"),
                 ("/search.html?query=x", "text/html; charset=utf-8", "search"),
             })
             {

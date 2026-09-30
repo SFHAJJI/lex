@@ -81,18 +81,17 @@ public sealed class CorpusRecordSetReadResult
 /// </summary>
 /// <remarks>
 /// <para>
-/// TWO DIGESTS, AND THE ONE CUSTODY UNDERSTANDS IS THE RECEIPT'S. A set's
-/// <see cref="SourceArtifactRef.Sha256"/> is <c>CorpusRecordSetCanonicalWriter.ComputeSetSha256</c>,
-/// which hashes a domain string and then the bytes; custody addresses blobs by
-/// <see cref="CustodyDigest.Of"/>, the plain SHA-256 of the same bytes. The two values differ, so a
-/// set reference alone cannot locate its own bytes, which is exactly why this door takes the
-/// retained write receipt as well and why <see cref="CorpusRecordSetWriteResult.RetainedSetReceipt"/>
-/// now carries it.
+/// The set reference carries the domain-separated digest of the complete canonical set. The
+/// receipt supplies its storage address: inline canonical bytes for small or legacy sets, or a
+/// root naming an ordered chunk closure for large sets. The reader verifies both storage and
+/// canonical identity. A root receipt describes that root's protection, not an aggregate floor
+/// for every object in the closure; this read result makes no aggregate retention claim.
 /// </para>
 /// <para>
 /// BOTH INPUTS ARE CHECKED AGAINST THE BYTES, NEVER AGAINST EACH OTHER. The receipt decides which
-/// bytes are fetched and <see cref="CustodyRestore.ReadByDigestCheckedAsync"/> proves they carry its
-/// digest; the reference then has to be the digest those same bytes actually produce, and the parsed
+/// storage object is fetched and <see cref="CustodyRestore.ReadByDigestCheckedAsync"/> proves it carries its
+/// digest. Chunk roots also require a complete checked closure. The reference must match the
+/// resulting canonical bytes, and the parsed
 /// set has to re-serialize to them exactly. A caller who pairs one run's receipt with another run's
 /// reference therefore gets <see cref="CorpusRecordSetReadRefusalKind.RetainedBytesAreNotThisSet"/>,
 /// not a set. There is no parameter on this type through which a caller could supply a population,
@@ -116,13 +115,32 @@ public sealed class CorpusRecordSetReader
         ArgumentNullException.ThrowIfNull(retainedSetReceipt);
         ArgumentNullException.ThrowIfNull(setRef);
 
-        ReadOnlyMemory<byte> retained;
         try
         {
-            retained = await CustodyRestore
-                .ReadByDigestCheckedAsync(
-                    _custodyStore, retainedSetReceipt.Reference.ContentSha256, cancellationToken)
-                .ConfigureAwait(false);
+            var retained = await CustodyRestore.ReadByDigestCheckedAsync(
+                _custodyStore, retainedSetReceipt.Reference.ContentSha256, cancellationToken).ConfigureAwait(false);
+            if (ChunkedDerivedArtifact.IsRoot(retained.Span, out var kind))
+            {
+                if (kind != CorpusRecordSetWriter.ChunkedKind)
+                    return CorpusRecordSetReadResult.Refused(new CorpusRecordSetReadRefusal(
+                        CorpusRecordSetReadRefusalKind.RetainedBytesAreNotThisSet,
+                        "The retained chunk root is not a corpus record set."));
+                var artifact = await ChunkedDerivedArtifact.OpenAsync(_custodyStore,
+                    retainedSetReceipt.Reference.ContentSha256, CorpusRecordSetWriter.ChunkedKind,
+                    cancellationToken).ConfigureAwait(false);
+                if (artifact.CanonicalSha256 != setRef.Sha256)
+                    return CorpusRecordSetReadResult.Refused(new CorpusRecordSetReadRefusal(
+                        CorpusRecordSetReadRefusalKind.RetainedBytesAreNotThisSet,
+                        "The retained chunk root names a different canonical corpus set."));
+                using var chunks = artifact.OpenRead();
+                return CorpusRecordSetReadResult.Reopened(
+                    VerifiedCorpusRecordSet.ParseAndVerifyStream(setRef, chunks));
+            }
+            using var readback = MemoryMarshal.TryGetArray(retained, out var buffer)
+                ? new MemoryStream(buffer.Array!, buffer.Offset, buffer.Count, writable: false)
+                : new MemoryStream(retained.ToArray(), writable: false);
+            return CorpusRecordSetReadResult.Reopened(
+                VerifiedCorpusRecordSet.ParseAndVerifyStream(setRef, readback));
         }
         catch (CustodyIntegrityException exception)
         {
@@ -134,15 +152,6 @@ public sealed class CorpusRecordSetReader
         {
             return CorpusRecordSetReadResult.Refused(new CorpusRecordSetReadRefusal(
                 CorpusRecordSetReadRefusalKind.CustodyUnavailable, exception.Message));
-        }
-
-        try
-        {
-            using var readback = MemoryMarshal.TryGetArray(retained, out var buffer)
-                ? new MemoryStream(buffer.Array!, buffer.Offset, buffer.Count, writable: false)
-                : new MemoryStream(retained.ToArray(), writable: false);
-            return CorpusRecordSetReadResult.Reopened(
-                VerifiedCorpusRecordSet.ParseAndVerifyStream(setRef, readback));
         }
         catch (ArgumentException exception)
         {

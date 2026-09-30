@@ -1,0 +1,28 @@
+Retained publisher bytes from the completed three-seed run, 2026-09-30.
+No new publisher requests. Exact fixture hashes and original custody paths:
+[
+  {
+    "file": "r2024-1620-en-xhtml-body.bin",
+    "sha256": "4c8fdcb35c31f19c6321f988b690f2b8d3aab8476023869706e96a3678da9411",
+    "bytes": 766847,
+    "sourceCustody": "C:\\lex-v3\\eu-three-seed-retry-20260930-1\\custody\\nightly-floor-90d\\4c8fdcb35c31f19c6321f988b690f2b8d3aab8476023869706e96a3678da9411"
+  },
+  {
+    "file": "r2024-1620-fr-xhtml-body.bin",
+    "sha256": "04f578d3fa499a61a4c183da6a63dfa894be87f7ed498796ecc3655d127f51fe",
+    "bytes": 818206,
+    "sourceCustody": "C:\\lex-v3\\eu-three-seed-retry-20260930-1\\custody\\nightly-floor-90d\\04f578d3fa499a61a4c183da6a63dfa894be87f7ed498796ecc3655d127f51fe"
+  },
+  {
+    "file": "r2024-1620-en-formex.zip.bin",
+    "sha256": "25b269fc0c3cc9f5fffb7d2c736fb60fe237c4aa7a987918eff0bb8445617f76",
+    "bytes": 96599,
+    "sourceCustody": "C:\\lex-v3\\eu-three-seed-retry-20260930-1\\custody\\nightly-floor-90d\\25b269fc0c3cc9f5fffb7d2c736fb60fe237c4aa7a987918eff0bb8445617f76"
+  },
+  {
+    "file": "r2024-1620-fr-formex.zip.bin",
+    "sha256": "3c35442f9bd934b6745e40effc280277204b463fc362be1604627ad0e7b58f64",
+    "bytes": 107385,
+    "sourceCustody": "C:\\lex-v3\\eu-three-seed-retry-20260930-1\\custody\\nightly-floor-90d\\3c35442f9bd934b6745e40effc280277204b463fc362be1604627ad0e7b58f64"
+  }
+]

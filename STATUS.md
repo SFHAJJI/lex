@@ -26,6 +26,80 @@ Flush to the caller's stream, including the last JSON flush before the newline. 
 callers currently own MemoryStreams. No production behavior changed after review; final CI remains
 a merge gate. No measured whole-run memory-fit claim is made.
 
+## Publisher annex IDs and subtitles (Codex, 2026-10-01)
+
+The completed three-seed run retains English and French 2024/1620 XHTML with Roman annex IDs
+(including a nonbreaking space) and two title paragraphs. The previous parser admitted only numeric
+IDs and one paragraph. Reversible driver decision: recognize canonical uppercase Roman IDs with
+the observed optional nonbreaking space, preserve the exact publisher ID, and concatenate a title
+and subtitle in publisher order as the independently retained Formex TITLE.Value does. The binder
+must still match complete package entries and exact titles; no annex or PDF admission is bypassed.
+
+The draft includes four exact retained XHTML/ZIP fixtures with SHA-256 pins and tests comparing
+both languages' titles against their Formex entries, plus valid/invalid identifier cases. Validation
+at 752f6ff3 passed clean build (41.41 s), required fast (3,085 plus one platform skip, 97.513 s),
+and 106 affected ingest tests (two live skips, 44.695 s). Commands and results are retained under
+C:\lex-v3\lanes\eu-annex-publisher-*. Required Claude review returned MERGE with no
+material findings. It independently reproduced the 106 ingest passes and fast suite, and exercised
+both production inventory producers on the retained English and French fixtures: exact titles
+agreed in both languages. Empty or whitespace-only title paragraphs now refuse explicitly; the
+joined title is used for binding and identity, not display. PR836 merged at 24c59015 after all
+exact-head checks passed (CI36785179485).
+This fixes a concrete parser limit;
+it does not claim to explain all 32 prior package-not-acquired outcomes or complete the annex chain.
+
+## Corpus persistence in bounded custody objects (Codex, 2026-09-30)
+
+The corpus writer still held one complete canonical byte buffer after the stream-reader change.
+Reversible driver decision: sets larger than 4 MiB use the existing ordered chunk closure; small
+sets keep inline storage. Both paths preserve the same domain-separated logical set digest.
+The public reader independently reopens legacy inline sets and chunked sets, verifies closure and
+canonical bytes, and retains its three typed refusal categories. The storage root receipt identifies
+the root; the write result's retention class takes the weakest observed class across data chunks,
+retained receipt-evidence objects and the root. It does not infer the closure floor from the root.
+
+Validation passed at 9fa26e4e: clean solution build (86.96 s), required fast (3,083 passed,
+one platform skip, 64.814 s), and 93 affected ingest tests (two live canaries skipped, 79.674 s).
+Six new cases cover exact bytes and independent public reopen, bounded custody writes, data /
+receipt-evidence / root retention differences, missing/reordered/substituted chunks, wrong set
+references, unavailable custody and failed holds. Independent reflection preserves 137 guarded
+Ingest types and 86 receipt producers; the pins add the private chunk writer and the existing
+helper's receipt observer parameter. The six declined types are unchanged.
+
+The exact commands and results are retained in C:\lex-v3\lanes\corpus-chunk-validation-commands.json
+and corpus-chunk-validation.json. Required cross-family review and green exact-head CI remain
+merge gates. Typed records and completion remain materialized; this is not a full Luxembourg
+fit or population-completeness claim. No publisher traffic was sent by the validation.
+
+Required Claude review #832 returned MERGE after a clean build, fast (3,083 passed, one
+platform skip), and 140 broader ingest passes (two live canaries skipped). Its two findings are
+addressed in the single repair: intact foreign chunk roots now return RetainedBytesAreNotThisSet,
+matching foreign inline objects, with paired regression coverage; STATUS is strict UTF-8 again.
+The code/test repair is commit 816d4f09; its title mentioned the encoding repair prematurely,
+which is completed in this follow-up after a failed text-edit script.
+
+Large roots include retained receipt digests and write times, so their physical addresses may
+vary between executions. Canonical record-set bytes and the logical SetRef.Sha256 remain stable;
+the existing raw-storage equality test explicitly covers small inline sets. Opening and independent
+verification reread chunks, and all writes include a canonical sizing pass. This adds I/O and
+requires measurement before any full Luxembourg fit claim. Repair validation and exact-head CI
+remain required; no production Azure operation or publisher traffic is part of these checks.
+
+Repair validation at 45de557f passed clean build (75.17 s), required fast (3,085 passed,
+one platform skip, 65.608 s), and 140 broader ingest tests (two live skips, 87.773 s).
+The subsequent full CI run 36782023846 found two custody-store census failures: the new
+ChunkReadFaultStore test double was not declared exempt. The affected local filter and review
+had omitted that census. This follow-up names its constructor-configured corruption/timeout
+behavior and updates the observed inventory from 28 to 29 stores (nine driven, 20 exempt).
+Production behavior is unchanged. Full CI passed after the test-inventory correction; PR832
+merged at 5d6055ca after the final base refresh and green exact-head checks.
+The live all-82-seed EU retry began at 21:51 UTC from merged 7e90e943, in fresh custody at
+C:\lex-v3\eu-population-20260930-2. Its 20,000-wire ceiling, frozen inputs and unchanged
+storage allowance were verified. It ended with exit 3 after 494 requests and 81 of 82 proven
+census families: seed 32023R2854 returned a retained Virtuoso 40001 transaction deadlock. PR837
+adds a narrowly bounded retry and has a MERGE review; a fresh bounded census run must precede the
+next full attempt. Full Luxembourg remains resource-gated.
+
 ## Luxembourg scope input reuse (Codex, 2026-09-30)
 
 Scope resolution retains four rule-evaluation objects and multiple not-applicable selectors per
@@ -55,6 +129,21 @@ The full Luxembourg run remains gated on retained-state and persistence sizing. 
 standing order requires space recovery before a large run; cited custody and evidence remain
 preserved. Required cross-family review and green exact-head CI remain merge gates.
 
+Required Claude review #829 returned MERGE with no blocking defect. It checked the cache keys,
+immutability and per-resolution isolation, reproduced the memory figures and identical JSON
+hashes, and made the disposition regression fail by mutating the cache key. Its clean build and
+fast suite passed; its broader offline ingest selection passed 137 tests. A trial integration merge
+also passed build and fast (3,078 passed, one platform skip).
+
+One follow-up preserves both STATUS sections during the current base merge. The earlier 97-test
+log lacks its filter string, so that historical count alone is not a reproducible command record.
+The explicit affected ingest rerun passed 101 tests, zero failures/skips, in 74.919 s at
+2678415d. Its command, source and result are retained under C:\lex-v3\lanes\pr-829-explicit-ingest-*.
+The exact filter was:
+`FullyQualifiedName~LuxembourgQueryExecutionAdapterTests|FullyQualifiedName~LuxembourgProductionTopologyTests|FullyQualifiedName~GuardedConstructionCensusTests|FullyQualifiedName~CustodyStoreConformanceTests`.
+The result is recorded in the PR. The final base refresh includes merged #827 and #830, with
+both STATUS sections retained. PR #829 merged at 21:33 UTC after green exact-head CI.
+
 ## Formex package outcome diagnostics (Codex, 2026-09-30)
 
 The successful three-seed mount holds 34 EU XHTML members but admits only two Formex article
@@ -74,8 +163,9 @@ The single repair uses declared wire codes, adds explicit 404/unavailable diagno
 and corrects the test description: the annex case lacks the publisher's annex XHTML convention;
 it is not a missing main-body case. The 500 case tests route_refused. Direct acquisition_refusal
 projection remains unexercised by these scripted cases. Existing checks also cover acquired,
-ineligible, language-out-of-scope, invalid-package and escaped refusal detail. Repair validation
-and green exact-head CI are required before merge. The full EU retry remains subject to its
+ineligible, language-out-of-scope, invalid-package and escaped refusal detail. Repair build
+(81.91 s), fast (3,083 plus one skip) and 29 ingest checks passed; #830 merged at 21:23 UTC
+after green exact-head CI. The full EU retry remains subject to its
 storage allowance; cited custody and evidence are preserved.
 
 ## Corpus record-set canonical streaming and readback (Codex, 2026-09-30)
@@ -536,11 +626,11 @@ CI evidence are recorded in the pull request before merge.
 
 ## Heads
 
-- `v3/integration`: `efdf0d5c` (2026-09-30, PR #826 merged). Build 45 s. Fast lane
-  (`eng/test-fast.ps1`): 3,074 tests, 3,073 pass, 1 skipped (the review of PR #826). Ingest suite: green on CI for PR #760
+- `v3/integration`: `24c59015` (2026-10-01, PR #836 merged). Build 45 s. Fast lane
+  (`eng/test-fast.ps1`): 3,077 tests, 3,076 pass, 1 skipped (the review of PR #828). Ingest suite: green on CI for PR #760
   (the CI `dotnet` job runs the whole solution on every pull request, about 7 min on the runner;
-  green for PR #826);
-  locally about 15 min. 970 web tests pass. The web job's "browser debugger never answered" failures
+  green for PR #833);
+  locally about 15 min. 979 web tests pass. The web job's "browser debugger never answered" failures
   (keyboard-walk, and paint-check since #811) are fixed by PR #822: each browser binds its own
   debugging port (`launchBrowser`) instead of a random one another browser starting at the same
   moment could hold.
@@ -768,7 +858,7 @@ schema's `parameters` shape, and whose call runs the same dispatch the REST rout
 endpoint test proves it for all twenty-three. The launch-contract line "REST and MCP derive identical
 envelopes from the registry" is the owner's to tick.
 
-Web: 41 React components, 970 tests. Preview screens render fixtures. The V3 Luxembourg search
+Web: 41 React components, 979 tests. Preview screens render fixtures. The V3 Luxembourg search
 answer has a reader (PR #771). The answer census now samples `search` five ways from the real handler:
 - a phrase with 4 strict hits and 1 relaxed hit;
 - the same phrase one hit per page, with its cursor;
@@ -1448,6 +1538,90 @@ citations) had been probed only against the host API, never against the image.
 - A mutation: a fixture manifest naming another corpus digest fails the coverage probe ("the page
   does not show the mounted digest").
 
+V2 absent from the image (PR #831), the launch contract's last machine-gates item that is the
+release pipeline's. V2 is the retired product on `main` (`Lex.Ask` to `Lex.Web`).
+- Before signing, the rehearsal checks that V2 is absent (`v2Failures`):
+  - no layer holds a Lex assembly, symbol or documentation file that is not `Lex.V3.*`;
+  - the API's dependency manifest (`Lex.V3.Api.deps.json`) names no Lex library that is not V3's, so
+    a V3 assembly that referenced V2 would be caught;
+  - a missing dependency manifest is itself a failure.
+- With the probes, the running image is asked every route V2 served (`V2_ROUTES`, 63): each
+  `MapGet` and `MapPost` of `Lex.Web` on `main`, the ten pages of its `/built` table, its diagrams,
+  its publisher document routes, its `/mcp/{*rest}` fallback, its static files and its four assistant
+  endpoints. Each must answer 404, except where V3 serves the same path from its live pages (`/`),
+  which must answer V3's own file byte for byte. The first list left out `/built` and its table
+  (review of #831).
+- On the real bounded mount: 526 entries across the 6 layers read, no failure; all 63 routes asked,
+  `/` answering V3's own page and every other 404; the 8 probes pass; the image reproduced by its
+  second build; everything removed.
+
+The release assets published, read back and verified, and the evaluation card at its stable route
+(PR #833): the release path's first line without its production credential, ruling 2's card
+beside the release assets, and 36 s6's card for machines at a stable route.
+- The card is served as JSON at `/evaluation-card.json`, the same card the Trust and Coverage page
+  renders, and the page links it ("The same card for machines, as JSON"; drafted in French). The
+  live build writes it beside the pages, and the API's web root now serves `.json`
+  (`application/json`). The probes fetch it from the running image and require the bytes the
+  release carries and signs.
+- Once everything else has held (build, verification, V2 absence, signature, reproduction, probes),
+  the rehearsal publishes a release into a directory named by its version
+  (`v3-rehearsal-<source date>-<commit>`), which is never overwritten (`release-assets.mjs`):
+  - `lex-v3-image.oci.tar` (the image) and `lex-v3-image.sig.json` (its signature);
+  - `evaluation-card.json`: the card the image serves at its route. The rehearsal reads the
+    platform's card once, checks it by the page's rules, hands it to the live build and holds the
+    served file to it;
+  - `mount-report.json`: the mount's build report, or the fixture's own manifest;
+  - `release-manifest.json`, naming the version, the source commit, the image's manifest digest, the
+    corpus digest and each asset by size and SHA-256, and `release-manifest.sig.json`. One key for
+    the run signs the image and the manifest.
+- Reading back (`releaseFailures`) trusts nothing the directory says about itself:
+  - the key is the caller's: a manifest or image signed by another key fails, even one re-signed
+    after a change;
+  - every asset is hashed again: nothing unlisted, nothing missing;
+  - the image is read blob by blob and must be the digest the manifest names, and its signature must
+    name that digest;
+  - the card must be the very card the image serves (`app/v3-web/evaluation-card.json` in its app
+    layer), and read by the page's rules;
+  - the directory, the manifest's version and the source it signs must name each other.
+  The review of #833 found the last two were checked alone. A release could carry a valid card the
+  image does not serve, or a version naming another commit than its signed source.
+- On the real bounded mount: release `v3-rehearsal-20260930T213833Z-23d939b6e63c`, six files, read
+  back with no failure, after the image was reproduced, V2 found absent, the 8 probes passed and the
+  image served the release's card at `/evaluation-card.json` (200, `application/json`, the same
+  bytes).
+  Tampering with a kept release was caught:
+  - a card with a statistical row rewritten to `pass` failed its size, its hash and the card's rule
+    (Decision 92);
+  - one flipped image byte failed the asset's hash and the blob digest of layer 3.
+- Not in this step: building the corpus from custody in the same command, which is the data lane's
+  build (`Lex.V3.Tool build`), and publishing anywhere but a local directory, which needs the owner's
+  release identity and storage.
+
+The licence-blocked journey (PR #834), the launch contract's "one licence-blocked journey" for its
+line "rights are enforced at compose time".
+- `V3JourneyMountTests` also writes a licence-blocked mount when `V3_WRITE_LICENCE_BLOCKED_MOUNT`
+  names a directory. It is the fixture mount with its member's rights recorded as
+  `non_admitting_licence_scl`, and its `journey-mount.json` names that disposition and passages
+  covering every article's whole body: windows of 40 characters every 20 (2,950), so any leaked run
+  of 60 characters or more holds a whole window. The label and first paragraph marker are left off.
+- `journey.mjs` runs the eight steps on it (`licenceBlockedRuns`, chosen when the mount names a
+  rights disposition):
+  - each page is held to what the API answers its request;
+  - reading and export must refuse `text_withheld` (`mustRefuse`), whatever the API answered, and
+    show it on the page's refusal card (the code read off `.refusal-card .refusal-code`). Every
+    refusal step is now held to the card's own code, not to a mention of it anywhere on the page;
+  - no page may show any passage or carry one in its markup (`absentTexts`, the page's text and its
+    HTML, whitespace collapsed).
+  The review of #834 found that the first version checked only each article's opening, and took any
+  mention of `text_withheld` for the card.
+- On the host API all eight pass, plain and with `--served-by-api`:
+  - reading and export refuse `text_withheld`;
+  - coverage, search, dossier, compare, radar and history answer, and none shows or carries a
+    passage;
+  - the citations on the answering pages verify.
+- The check is not blind: run against the normal fixture mount, all 2,950 windows are found on the
+  reading and export pages. The normal journey's 16 runs pass under the card-code rule.
+
 The live export composer and its journey step (PR #789), the eighth screen. `dist-live/export.html`
 has its own bundle `client-live-export.js`.
 - The page asks what the reading page asks: the same form (`ReadingForm`, now shared), the same one
@@ -1516,8 +1690,8 @@ request.
   caught its shuffle (or which do not), one captioned table per case set (verdicts as words, values,
   thresholds, cases, the interval, the bound), the controls, the statistical rows "not yet
   labelled", and the negative-results register.
-- Not yet: the card as signed JSON at a stable route and beside the release assets, and the gates
-  run over the real mounted corpus; both follow the release pipeline (item 7) and the first mount.
+- Since PR #833: served as JSON at `/evaluation-card.json` and beside the release assets, signed
+  through the release manifest. Not yet: the gates run over the real mounted corpus.
 
 **The search journey step passes (PR #773, run locally 2026-09-30).** `node scripts/journey.mjs`
 now runs two steps, each with and without the fixture mount, and all four runs pass.
@@ -1983,7 +2157,8 @@ has not yet run; the bounded first mount above is complete.
    #807: the evaluation card's words in the table; PR #809: the refusal card's words in the table;
    PR #810: Trust and Coverage's words in the table, so the chrome scan exempts nothing; PR #811:
    the accessibility and scope line held on the live screens; PR #813: a reviewed language builds
-   its own pages; PR #815: the eight screens against the real bounded mount. Next: the
+   its own pages; PR #815: the eight screens against the real bounded mount; PR #834: the
+   licence-blocked journey. Next: the
    owner's review of the French drafts (`node web/scripts/live-chrome-fr-draft.mjs`), then the
    reviewed table in `LIVE_CHROME` and `fr` in `REVIEWED_CHROME_LOCALES`, which builds `/fr/*.html`. French ships only once
    reviewed (Decision 41). Hosting (ruling 3): `Lex.V3.Api`
@@ -1995,8 +2170,12 @@ has not yet run; the bounded first mount above is complete.
    PR #821: one command builds, verifies, rehearsal-signs and removes the one-server image; PR #825:
    it runs the image (WSL, read-only root, private /tmp) and probes the eight screens against it; PR
    #826: the image is reproducible (two builds from scratch, one manifest digest); PR #828: the
-   image probed on the journey's fixture mount, where every screen answers and 105 citations verify.
-   The credential-free release steps are rehearsed end to end. Production signing,
+   image probed on the journey's fixture mount, where every screen answers and 105 citations verify;
+   PR #831: V2 absent from the image (no V2 assembly or dependency, V2's 63 routes 404); PR #833:
+   the release assets (the image, its signature, the evaluation card, the mount's report, a signed
+   manifest) published under a version, read back and verified, and the card served at
+   `/evaluation-card.json`. The credential-free release steps
+   are rehearsed end to end. Production signing,
    credentials and deployment stay with the owner.
 8. Machine gates (launch contract, Evaluation): the temporal, refusal and retrieval case sets run
    against the real handler, and all three shuffled controls are caught (PRs #767 and #768). The
@@ -2007,8 +2186,8 @@ has not yet run; the bounded first mount above is complete.
    determinism and G5 independent verifiability run on the real handler (PR #770). G1 version
    immutability, G3 bitemporal completeness and G4 as-observed answering need predecessor
    chaining with observation times, so they follow the first mount and the event-log ruling. What
-   is left of the launch contract's machine-gates line after that is "V2 absent from the image",
-   which belongs to the release pipeline (item 7).
+   is left of the launch contract's machine-gates line after that was "V2 absent from the image",
+   which the image rehearsal now checks (PR #831, item 7).
 
 ## Owner rulings, 2026-09-30
 
@@ -2212,27 +2391,15 @@ Only money, legal or public claims, credentials and going live (ruling 7):
 - The corrigendum tripwire classifies a French corrigendum as `within_served_body_languages` while no
   French body is served (Decision 89 section 4). True once the French expressions land.
 
+## DATA lane disk and launch checkpoint (2026-09-30)
 
-Required Claude review #829 returned MERGE with no blocking defect. It checked the cache keys,
-immutability and per-resolution isolation, reproduced the memory figures and identical JSON
-hashes, and made the disposition regression fail by mutating the cache key. Its clean build and
-fast suite passed; its broader offline ingest selection passed 137 tests. A trial integration merge
-also passed build and fast (3,078 passed, one platform skip).
+Disk checkpoint: all 3,652 selected large files in old EU runs 1-8b were transparently compressed
+and checked for identical length and SHA-256 before/after. They total 1,828,552,185 logical bytes;
+no custody was deleted. Evidence: C:\lex-v3\lanes\old-eu-largest-compression-result.json and its
+verified-file manifest (SHA-256 a0c9bd9c8a773df60be98c6dcaad6926897c0256ccc6f06a3e0c163c068f1e73).
+Observed free space rose from 4,015,509,504 to 5,163,757,568 bytes. The abandoned whole-tree
+hashing attempt changed no source files. The fresh EU retry still needs final local-job completion
+and a current storage check before and after its runtime is frozen; it has not started.
 
-One follow-up preserves both STATUS sections during the current base merge. The earlier 97-test
-log lacks its filter string, so that historical count alone is not a reproducible command record.
-The explicit affected ingest rerun passed 101 tests, zero failures/skips, in 74.919 s at
-2678415d. Its command, source and result are retained under C:\lex-v3\lanes\pr-829-explicit-ingest-*.
-The exact filter was:
-`FullyQualifiedName~LuxembourgQueryExecutionAdapterTests|FullyQualifiedName~LuxembourgProductionTopologyTests|FullyQualifiedName~GuardedConstructionCensusTests|FullyQualifiedName~CustodyStoreConformanceTests`.
-The result is recorded in the PR. The final base refresh includes merged #827 and #830, with
-both STATUS sections retained; green exact-head CI remains required before merge.
-
-
-DATA lane checkpoint: #827 merged at 21:10 UTC and #830 at 21:23 UTC after their required reviews,
-one repair each and green exact-head CI. The fresh all-82-seed EU retry is prepared but has not
-started. It will use the merged Formex diagnostics and the retained 4,999,959,422-byte launch
-allowance, with checks before and after runtime preparation. Completed ignored checkout outputs
-have been reclaimed. Old EU runs named in STATUS remain intact; selected large files are queued
-for transparent NTFS compression with before/after hashes. A whole-tree hashing attempt was
-stopped before compression because tiny-file I/O delayed validation. No custody was deleted.
+PRs #827, #829 and #830 are merged. The all-82-seed EU retry remains prepared, with a
+4,999,959,422-byte launch allowance and checks before and after freezing its runtime.

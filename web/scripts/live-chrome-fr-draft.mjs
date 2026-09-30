@@ -202,6 +202,7 @@ export const LIVE_CHROME_FR_DRAFT = Object.freeze({
   card: Object.freeze({
     heading: 'Fiche d’évaluation',
     target: 'Portée de l’exécution : {target}',
+    machineReadable: 'La même fiche pour les machines, en JSON',
     clean: 'Chaque contrôle automatique de cette fiche est satisfait, et chaque contrôle par permutation a détecté sa permutation.',
     notClean: '{gates}, et {controls}.',
     gatesNotPassing: Object.freeze({

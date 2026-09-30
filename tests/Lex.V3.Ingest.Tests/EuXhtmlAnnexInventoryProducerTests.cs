@@ -1,4 +1,7 @@
 using System.Security.Cryptography;
+using System.IO.Compression;
+using System.Xml;
+using System.Xml.Linq;
 using System.Reflection;
 using System.Text;
 using Lex.V3.Contracts.Custody;
@@ -29,6 +32,70 @@ public sealed class EuXhtmlAnnexInventoryProducerTests
         Assert.AreEqual("L_202601965EN.000201.fmx.xml", result.Inventory.Members[0].FormexPackageEntry);
         Assert.AreEqual("anx_1", result.Inventory.Members[0].PublisherAnnexId);
         Assert.AreEqual("ANNEX", result.Inventory.Members[0].Title);
+    }
+
+    [TestMethod]
+    [DataRow("en", "4c8fdcb35c31f19c6321f988b690f2b8d3aab8476023869706e96a3678da9411",
+        "25b269fc0c3cc9f5fffb7d2c736fb60fe237c4aa7a987918eff0bb8445617f76")]
+    [DataRow("fr", "04f578d3fa499a61a4c183da6a63dfa894be87f7ed498796ecc3655d127f51fe",
+        "3c35442f9bd934b6745e40effc280277204b463fc362be1604627ad0e7b58f64")]
+    public async Task RetainedBilingualRomanAnnexIdsAndSubtitlesMatchTheirFormexEntries(
+        string language, string xhtmlSha256, string zipSha256)
+    {
+        var bytes = await FixtureBytesAsync($"r2024-1620-{language}-xhtml-body.bin");
+        var zipBytes = await FixtureBytesAsync($"r2024-1620-{language}-formex.zip.bin");
+        Assert.AreEqual(xhtmlSha256, Convert.ToHexStringLower(SHA256.HashData(bytes)));
+        Assert.AreEqual(zipSha256, Convert.ToHexStringLower(SHA256.HashData(zipBytes)));
+        var (store, receipt, profile) = await FixtureAsync(bytes);
+        var result = await new EuXhtmlAnnexInventoryProducer(store).RunAsync(
+            receipt, profile.Bytes, profile.Reference, CancellationToken.None);
+        Assert.AreEqual(EuXhtmlAnnexInventoryRefusal.None, result.Refusal, result.Detail);
+        Assert.IsNotNull(result.Inventory);
+        Assert.AreEqual("http://data.europa.eu/eli/reg/2024/1620/oj", result.Inventory.WorkEli);
+        CollectionAssert.AreEqual(new[] { "anx_ I", "anx_ II" },
+            result.Inventory.Members.Select(static member => member.PublisherAnnexId).ToArray());
+        using var zip = new ZipArchive(new MemoryStream(zipBytes), ZipArchiveMode.Read);
+        foreach (var member in result.Inventory.Members)
+        {
+            var entry = zip.GetEntry(member.FormexPackageEntry);
+            Assert.IsNotNull(entry);
+            using var stream = entry.Open();
+            using var xml = XmlReader.Create(stream, new XmlReaderSettings
+            {
+                DtdProcessing = DtdProcessing.Ignore, XmlResolver = null,
+            });
+            var document = XDocument.Load(xml);
+            var title = document.Root!.Elements().Single(e => e.Name.LocalName == "TITLE").Value.Trim();
+            Assert.AreEqual(title, member.Title,
+                "The independently retained Formex title, including subtitle, must match exactly.");
+        }
+    }
+
+    [TestMethod]
+    [DataRow("anx_I")]
+    [DataRow("anx_ II")]
+    [DataRow("anx_XIV")]
+    public async Task RomanPublisherIdentifierIsPreservedExactly(string identifier)
+    {
+        var result = await RunAsync(Xhtml(identifier, includeWorkEli: true));
+        Assert.IsNotNull(result.Inventory, result.Detail);
+        Assert.AreEqual(identifier, result.Inventory.Members.Single().PublisherAnnexId);
+    }
+
+    [TestMethod]
+    [DataRow("anx_")]
+    [DataRow("anx_ ")]
+    [DataRow("anx_ I")]
+    [DataRow("anx_  I")]
+    [DataRow("anx_IIII")]
+    [DataRow("anx_IC")]
+    [DataRow("anx_ii")]
+    [DataRow("anx_I2")]
+    public async Task MalformedRomanPublisherIdentifierIsRefused(string identifier)
+    {
+        var result = await RunAsync(Xhtml(identifier, includeWorkEli: true));
+        Assert.AreEqual(EuXhtmlAnnexInventoryRefusal.PublisherAnnexConventionInvalid, result.Refusal);
+        Assert.IsNull(result.Inventory);
     }
 
     [TestMethod]
