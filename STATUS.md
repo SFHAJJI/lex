@@ -43,7 +43,11 @@ reader. All 108 affected ingest checks passed: 27 storage/topology/census checks
 81 adapter/resolver checks (57.322s). Two independently transcribed census pins add one guarded
 type and three receipt holders, with no removed entries. The large fixture declares xml-akomantoso;
 its initial plain-XML-specific assertion argument was corrected. Both rights channels and complete
-canonical byte replay pass. The required cross-family review follows the full EU acquisition to
+canonical byte replay pass. Full CI found one further stale census total: the independently
+reflected new guarded type raises candidates from 254 to 255 and guarded types from 136 to 137.
+Those totals are corrected; other partitions are unchanged. CI recorded 5,081 passes and 19 skips
+with that one failure. Local census revalidation remains queued behind acquisition.
+The required cross-family review follows the full EU acquisition to
 respect the one-heavy-job limit; the draft will not merge before that review and exact-head CI.
 Record-set persistence and retained typed scope objects remain further limits; this is not a
 full-run memory or storage bound and does not authorize a population-completeness claim.
