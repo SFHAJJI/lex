@@ -308,8 +308,11 @@ test("every citation the page prints is hash-pinned and verifies as the state an
   assert.ok(failing({ citations: [...observed.citations, "/lu-legilux/loi-1991-08-10-n3/2024-02-01"] })
     .includes("the page printed /lu-legilux/loi-1991-08-10-n3/2024-02-01, which is not a hash-pinned permalink"), "an unpinned permalink fails");
   assert.ok(failing({ citations: [], verifications: [] }).includes("the page printed no citation"), "an answer of a citing step that cites nothing fails");
-  assert.deepEqual(failing({ citations: [], verifications: [], emptyAnswer: true }).filter((failure) => failure.includes("citation")), [],
-    "an answer that says it holds nothing to cite (an empty radar window, a search with no hit) need not cite");
+  assert.deepEqual(journeyVerdict({ ...observed, citations: [], verifications: [], emptyAnswer: true }, { ...expected, nothingToCite: true })
+    .filter((failure) => failure.includes("cite")), [], "an answer holding nothing to cite, which the page says, need not cite");
+  const hidden = failing({ citations: [], verifications: [], emptyAnswer: true });
+  assert.ok(hidden.includes("the page printed no citation"), "the page's own 'no hit' excuses nothing while the API's answer holds a hit (review of #815)");
+  assert.ok(hidden.includes("the page says it holds nothing to cite, and the API's answer holds something"));
   assert.deepEqual(journeyVerdict({ ...goodSearch(), answerState: "refusal", citations: [], verifications: [] }, { ...expected, state: "refusal" })
     .filter((failure) => failure.includes("citation")), [], "a refusal need not cite");
   assert.ok(failing({ verifications: [matches(state)] }).includes(`${article} was not verified`), "a citation left unverified fails");
@@ -352,7 +355,10 @@ test("nothing on the page means anything by colour alone: painted elements say w
 });
 
 test("on a real mount, a page is held to what the API answers its request: a success, or that refusal by its code", () => {
-  assert.deepEqual(expectedFromEnvelope({ verdict: "answer", result: {} }), { state: "success" });
+  assert.deepEqual(expectedFromEnvelope({ verdict: "answer", result: {} }), { state: "success", nothingToCite: false });
+  assert.deepEqual(expectedFromEnvelope({ verdict: "answer", result: { value: { hits: [] } } }), { state: "success", nothingToCite: true }, "a search with no hit");
+  assert.deepEqual(expectedFromEnvelope({ verdict: "answer", result: { value: { changes: [] } } }), { state: "success", nothingToCite: true }, "a radar window with no row");
+  assert.deepEqual(expectedFromEnvelope({ verdict: "answer", result: { value: { hits: [{}] } } }), { state: "success", nothingToCite: false }, "a search with a hit");
   assert.deepEqual(expectedFromEnvelope({ verdict: "refuse", refusal: { code: "identifier_unknown" } }), { state: "refusal", refusalCode: "identifier_unknown" });
   assert.throws(() => expectedFromEnvelope({ verdict: "refuse" }), /neither an answer nor a typed refusal/, "a refusal without its code sets no expectation");
   assert.throws(() => expectedFromEnvelope({ type: "urn:lex:v3:transport:request_schema_invalid" }), /neither an answer nor a typed refusal/, "a transport failure is not an answer to hold a page to");

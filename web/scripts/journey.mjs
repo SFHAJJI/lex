@@ -232,10 +232,15 @@ export function journeyVerdict(observed, expected) {
     for (const citation of observed.citations.filter((candidate) => !PINNED_PERMALINK.test(candidate))) {
       failures.push(`the page printed ${citation}, which is not a hash-pinned permalink`);
     }
-    // An answer that says it holds nothing to cite (the radar's empty window, a search with no hit) prints
-    // none; any other answer of a citing step must (the real mount's empty radar window found this).
-    if (step.cites && expected.state === "success" && observed.citations.length === 0 && !observed.emptyAnswer) {
+    // An answer that holds nothing to cite (the radar's empty window, a search with no hit) prints none,
+    // when the API's own answer holds nothing and the page says so; any other answer of a citing step
+    // must cite (the real mount's empty radar window found the first; the review of #815 the second).
+    const excused = expected.nothingToCite === true && observed.emptyAnswer === true;
+    if (step.cites && expected.state === "success" && observed.citations.length === 0 && !excused) {
       failures.push("the page printed no citation");
+    }
+    if (observed.emptyAnswer === true && expected.state === "success" && expected.nothingToCite !== true) {
+      failures.push("the page says it holds nothing to cite, and the API's answer holds something");
     }
     if (observed.verifications !== undefined) {
       const verified = new Set(observed.verifications.map((check) => check.identifier));
@@ -692,7 +697,14 @@ async function observe(browser, pageOrigin, step, { keyboard = false } = {}) {
  * asks the API first and holds the page to its answer (`--real-mount`).
  */
 export function expectedFromEnvelope(envelope) {
-  if (envelope?.verdict === "answer") return { state: "success" };
+  if (envelope?.verdict === "answer") {
+    // Whether the answer itself holds nothing a page could cite: a search with no hit, a radar window
+    // with no row. Only then may the page print no citation (review of #815: the page's own "no hit"
+    // is not evidence that there was none).
+    const value = envelope.result?.value ?? {};
+    const listed = Array.isArray(value.hits) ? value.hits : Array.isArray(value.changes) ? value.changes : null;
+    return { state: "success", nothingToCite: listed !== null && listed.length === 0 };
+  }
   if (envelope?.verdict === "refuse" && typeof envelope.refusal?.code === "string") return { state: "refusal", refusalCode: envelope.refusal.code };
   throw new Error(`the API answered neither an answer nor a typed refusal: ${JSON.stringify(envelope).slice(0, 200)}`);
 }

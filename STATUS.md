@@ -935,9 +935,11 @@ first real build the pages have met; until now every journey ran on the test fix
   - Every web reader accepted the real build's answers.
   - All eight runs pass, and all eight with `--served-by-api`.
 - The first run found a flaw in the citation rule of #805: the radar's empty window answered with
-  nothing to cite, and the rule required one citation. An answer that says it holds nothing to cite
-  (the radar's empty window, a search with no hit) is now excused; any other answer of a citing
-  step still must cite.
+  nothing to cite, and the rule required one citation. Such an answer is now excused when the API's
+  own answer holds nothing to cite (no search hit, no radar row) and the page says so. The page's
+  word alone excuses nothing: the review of #815 showed a page could hide a hit behind "no hits".
+  Now a page that says it is empty while the API's answer holds something fails, and every other
+  answer of a citing step must still cite.
 
 The live export composer and its journey step (PR #789), the eighth screen. `dist-live/export.html`
 has its own bundle `client-live-export.js`.
