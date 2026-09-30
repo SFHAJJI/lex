@@ -34,6 +34,7 @@ public sealed class V3EnvelopeSamplesTests
     private const string SamplesSchema = "lex-v3-envelope-samples/1";
     private static readonly string FixedCorpusDigest = new('a', 64);
     private static readonly string FixedIndexDigest = new('b', 64);
+    private static readonly string FixedObjectRefDigest = new('c', 64);
 
     [TestMethod]
     public async Task TheEnvelopeSamplesAreWhatTheHandlerSendsBesideTheReviewedContract()
@@ -56,6 +57,11 @@ public sealed class V3EnvelopeSamplesTests
             await CaptureAsync(fixture, mount, "dossier", "a language the work is not held in: a refusal with a payload", new { identifier = $"/lu-legilux/{fixture.WorkKey}", language = "deu" }),
             await CaptureAsync(fixture, mount, "dossier", "an EU identifier on a mount without the EU index: a refusal with a payload", new { identifier = "32016R0679" }),
             await CaptureAsync(fixture, null, "dossier", "no corpus mounted: a refusal", new { identifier = $"/lu-legilux/{fixture.WorkKey}" }),
+            await CaptureAsync(fixture, mount, "evidence_bundle", "the work on its state's date, in the language it is held in: an answer", new { identifier = $"/lu-legilux/{fixture.WorkKey}", date = fixture.ApplicabilityDate, language = "fra" }),
+            await CaptureAsync(fixture, mount, "evidence_bundle", "a date before the work's history: a refusal with a payload", new { identifier = $"/lu-legilux/{fixture.WorkKey}", date = "1990-01-01" }),
+            await CaptureAsync(fixture, mount, "evidence_bundle", "a work the index does not hold: a refusal with a payload", new { identifier = "/lu-legilux/no-such-work", date = fixture.ApplicabilityDate }),
+            await CaptureAsync(fixture, mount, "evidence_bundle", "an EU identifier on a mount without the EU index: a refusal with a payload", new { identifier = "32016R0679", date = fixture.ApplicabilityDate }),
+            await CaptureAsync(fixture, null, "evidence_bundle", "no corpus mounted: a refusal", new { identifier = $"/lu-legilux/{fixture.WorkKey}", date = fixture.ApplicabilityDate }),
         };
 
         var document = new JsonObject
@@ -63,7 +69,8 @@ public sealed class V3EnvelopeSamplesTests
             ["schema"] = SamplesSchema,
             ["note"] = "Whole REST envelopes the real handler sent, each verified by V3EnvelopeJson.ParseAndVerify before it was recorded, " +
                 "and the reviewed registry's contract a reader needs to verify one. The fixture's per-run corpus and index digests are replaced " +
-                $"by {FixedCorpusDigest[..8]}... and {FixedIndexDigest[..8]}... (same shape, every occurrence); nothing else is edited. " +
+                $"by {FixedCorpusDigest[..8]}... and {FixedIndexDigest[..8]}... (same shape, every occurrence), and every object_ref_sha256 " +
+                $"(the corpus's per-run reference to the object holding a source's bytes) by {FixedObjectRefDigest[..8]}...; nothing else is edited. " +
                 "THE PRODUCER IS REAL AND THE MOUNT IS A FIXTURE.",
             ["contract"] = Contract(),
             ["envelopes"] = envelopes,
@@ -135,8 +142,44 @@ public sealed class V3EnvelopeSamplesTests
             ["scenario"] = scenario,
             ["http_status"] = context.Response.StatusCode,
             ["content_type"] = context.Response.ContentType,
-            ["envelope"] = JsonNode.Parse(text),
+            ["envelope"] = WithFixedObjectRefs(JsonNode.Parse(text)!),
         };
+    }
+
+    /// <summary>
+    /// Replaces every <c>object_ref_sha256</c> value with the fixed digest: the corpus mints its object
+    /// references per run, so the evidence bundle's sources would otherwise differ between two runs of
+    /// the same fixture. A value that is not a digest is left as it is, so the verification still sees it.
+    /// </summary>
+    private static JsonNode WithFixedObjectRefs(JsonNode node)
+    {
+        switch (node)
+        {
+            case JsonObject value:
+                foreach (var key in value.Select(static pair => pair.Key).ToArray())
+                {
+                    if (key == "object_ref_sha256" && value[key] is JsonValue digest &&
+                        digest.TryGetValue<string>(out var text) && text.Length == 64 && text.All(Uri.IsHexDigit))
+                    {
+                        value[key] = FixedObjectRefDigest;
+                    }
+                    else if (value[key] is { } child)
+                    {
+                        WithFixedObjectRefs(child);
+                    }
+                }
+
+                break;
+            case JsonArray items:
+                foreach (var child in items)
+                {
+                    if (child is not null) WithFixedObjectRefs(child);
+                }
+
+                break;
+        }
+
+        return node;
     }
 
     private static string RepositoryRoot()

@@ -903,29 +903,41 @@ function requirePayload(code, payload) {
   if (code === 'profiles_differ') requireProfiles(payload);
 }
 
+/**
+ * One offered state as both renderers say it, from a candidate as the producer sent it: an object,
+ * or a bare hash-pinned reading link. The React card once read the raw candidate and so threw on the
+ * platform's own `ambiguous_version` payload (bare links), where this string renderer normalised it;
+ * one description for both keeps them saying the same thing.
+ */
+export function candidateView(candidate) {
+  const one = normaliseCandidate(candidate);
+  return Object.freeze({
+    href: one.href,
+    validFrom: one.valid_from,
+    hashPrefix: one.hash.slice(0, 8),
+    // What the producer did not say is said as not said. A blank where a date belongs reads as
+    // a missing value in this interface; "not stated by the platform" reads as what it is, and
+    // neither of them is a date the publisher never gave us.
+    published: one.publication_date
+      ? `published ${one.publication_date}`
+      : 'publication date not stated by the platform',
+    // And the ranking. Silence is not "still held": the mount holds no status facts, so a card
+    // that omitted this would let a reader take two states as both current when the system
+    // knows only that both cover the date.
+    standing: typeof one.withdrawn === 'boolean' ? '' : ', withdrawal not stated by the platform',
+  });
+}
+
 function renderCandidates(candidates) {
   const items = candidates
-    .map(normaliseCandidate)
+    .map(candidateView)
     .map((candidate) => {
-      // What the producer did not say is said as not said. A blank where a date belongs reads as
-      // a missing value in this interface; "not stated by the platform" reads as what it is, and
-      // neither of them is a date the publisher never gave us.
-      const published = candidate.publication_date
-        ? `published ${escapeHtml(candidate.publication_date)}`
-        : 'publication date not stated by the platform';
-      // And the ranking. Silence is not "still held": the mount holds no status facts, so a card
-      // that omitted this would let a reader take two states as both current when the system
-      // knows only that both cover the date.
-      const standing =
-        typeof candidate.withdrawn === 'boolean'
-          ? ''
-          : ', withdrawal not stated by the platform';
       return (
         '<li class="refusal-candidate">' +
         `<a href="${escapeHtml(candidate.href)}">applicable from ` +
-        `${escapeHtml(candidate.valid_from)}, hash ` +
-        `<code>${escapeHtml(candidate.hash.slice(0, 8))}</code>, ${published}` +
-        `${standing}</a></li>`
+        `${escapeHtml(candidate.validFrom)}, hash ` +
+        `<code>${escapeHtml(candidate.hashPrefix)}</code>, ${escapeHtml(candidate.published)}` +
+        `${escapeHtml(candidate.standing)}</a></li>`
       );
     })
     .join('');
