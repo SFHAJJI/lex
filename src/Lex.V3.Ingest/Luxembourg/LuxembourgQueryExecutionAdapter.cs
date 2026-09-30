@@ -1,3 +1,4 @@
+using System.Runtime.CompilerServices;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -1400,7 +1401,7 @@ public sealed class LuxembourgQueryExecutionAdapter
             if (adaptive)
             {
                 var execution = await _executor.RunAdaptiveCoverAsync(
-                    partitionRequest, sourceWitness, wireBudget, cancellationToken).ConfigureAwait(false);
+                    partitionRequest, sourceWitness, wireBudget, cancellationToken, maximumLeafRows: 100_000).ConfigureAwait(false);
                 var reconciled = ReconcileCover(partitionRequest, execution.Chain, execution.Results);
                 if (reconciled.Legs is { } adaptiveLegs)
                 {
@@ -1597,13 +1598,10 @@ public sealed class LuxembourgQueryExecutionAdapter
                         "proven by this run's enumeration."));
             }
 
-            // D1-04c: unions across every leg -- one leg for the ordinary single-partition path
-            // (unchanged behavior), or one leg per cover leaf when the family's pass saturated and
-            // reconciled through DriveCoverReconciliationAsync above. Each leg is still reopened and
-            // independently re-verified through the exact same door (ReopenAndVerifyFamilyRowsAsync,
-            // item 17's TryOpen); only the union is new.
+            // Verify all S/A leaves before semantic decoding, preserving refusal precedence.
+            // Release their raw row graphs here; the streaming pass below rechecks each leaf.
             var (censusRows, censusProfile, censusRefusal) = await ReopenAndVerifyFamilyRowsUnionAsync(
-                    censusLegs, cancellationToken)
+                    censusLegs, cancellationToken, retainRows: false)
                 .ConfigureAwait(false);
             if (censusRows is null)
             {
@@ -1619,7 +1617,7 @@ public sealed class LuxembourgQueryExecutionAdapter
             }
 
             var (assertionRows, assertionProfile, assertionRefusal) = await ReopenAndVerifyFamilyRowsUnionAsync(
-                    assertionLegs, cancellationToken)
+                    assertionLegs, cancellationToken, retainRows: false)
                 .ConfigureAwait(false);
             if (assertionRows is null)
             {
@@ -1634,11 +1632,25 @@ public sealed class LuxembourgQueryExecutionAdapter
                         $"not reverify: {assertionRefusal}."));
             }
 
-            var buildResult = BuildResourceObservations(
-                censusRows, censusProfile!, assertionRows, assertionProfile!,
-                assertionLegs[0].PartitionRequest.InvariantPlan.SelectorPredicates,
-                relationRows, relationProfile,
-                _sourceProfile.RelationRules.Select(static rule => rule.PredicateIri).ToArray());
+            ResourceObservationBuildResult buildResult;
+            try
+            {
+                buildResult = await BuildResourceObservationsAsync(
+                    StreamVerifiedFamilyRowsAsync(censusLegs, cancellationToken), censusProfile!,
+                    StreamVerifiedFamilyRowsAsync(assertionLegs, cancellationToken), assertionProfile!,
+                    assertionLegs[0].PartitionRequest.InvariantPlan.SelectorPredicates,
+                    relationRows, relationProfile,
+                    _sourceProfile.RelationRules.Select(static rule => rule.PredicateIri).ToArray(),
+                    cancellationToken).ConfigureAwait(false);
+            }
+            catch (CustodyIntegrityException exception)
+            {
+                return LuxembourgQueryExecutionResult.Refused(
+                    topology, outcomes, relationAcquisitions,
+                    new LuxembourgQueryExecutionRefusalDetail(
+                        LuxembourgQueryExecutionRefusal.ResourceObservationRowsNotVerified,
+                        null, exception.Message));
+            }
             if (buildResult.Kind != ResourceObservationBuildOutcomeKind.Built)
             {
                 var (refusalCode, refusalDetail) = MapResourceObservationBuildFailure(
@@ -3221,20 +3233,17 @@ public sealed class LuxembourgQueryExecutionAdapter
     }
 
     /// <summary>
-    /// D1-04c: reopens and independently re-verifies every <paramref name="legs"/> entry through
-    /// <see cref="ReopenAndVerifyFamilyRowsAsync"/> (unchanged: item 19's shared reopen glue, item 17's
-    /// <c>TryOpen</c> door), then returns the UNION of every leg's own verified rows, in leg order --
-    /// the census or assertion family's own rows, whether they came from one ordinary partition (one
-    /// leg) or a reconciled cover chain (one leg per leaf). The identity binding in
-    /// <see cref="BuildResourceObservations"/> below is unchanged either way: it reads a plain row
-    /// list and does not know or care how many partitions it was assembled from.
+    /// Reopens and independently verifies every leaf through the existing proof door.
+    /// When retainRows is false, only verification status and the profile survive each leaf;
+    /// the caller subsequently streams reverified rows. Relation-only callers retain their union.
     /// </summary>
     private async Task<(
         IReadOnlyList<RepeatedEnumerationRow>? Rows,
         RepeatedEnumerationInterpretationProfile? Profile,
         string? Refusal)> ReopenAndVerifyFamilyRowsUnionAsync(
         IReadOnlyList<FamilyRowsLeg> legs,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        bool retainRows = true)
     {
         var allRows = new List<RepeatedEnumerationRow>();
         RepeatedEnumerationInterpretationProfile? profile = null;
@@ -3250,7 +3259,7 @@ public sealed class LuxembourgQueryExecutionAdapter
                         $"leaf '{leg.PartitionRequest.Partition.PartitionId}' did not reverify: {refusal}");
 
                 profile ??= legProfile;
-                allRows.AddRange(rows);
+                if (retainRows) allRows.AddRange(rows);
             }
             catch (CustodyIntegrityException exception)
             {
@@ -3260,6 +3269,35 @@ public sealed class LuxembourgQueryExecutionAdapter
         }
 
         return (allRows, profile, null);
+    }
+
+    // Every leaf crosses the existing proof door again before decoding. The preliminary
+    // verification preserves failure precedence; this second read also detects changed custody.
+    private async IAsyncEnumerable<RepeatedEnumerationRow> StreamVerifiedFamilyRowsAsync(
+        IReadOnlyList<FamilyRowsLeg> legs,
+        [EnumeratorCancellation] CancellationToken cancellationToken)
+    {
+        foreach (var leg in legs)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var (rows, _, refusal) = await ReopenAndVerifyFamilyRowsAsync(
+                leg.Proof, leg.Receipt, leg.PartitionRequest, cancellationToken).ConfigureAwait(false);
+            if (rows is null)
+                throw new CustodyIntegrityException(
+                    $"leaf '{leg.PartitionRequest.Partition.PartitionId}' did not reverify: {refusal}");
+            foreach (var row in rows)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                yield return row;
+            }
+        }
+    }
+
+    private static async IAsyncEnumerable<RepeatedEnumerationRow> EnumerateRowsAsync(
+        IReadOnlyList<RepeatedEnumerationRow> rows)
+    {
+        await Task.CompletedTask.ConfigureAwait(false);
+        foreach (var row in rows) yield return row;
     }
 
     /// <summary>
@@ -3496,6 +3534,25 @@ public sealed class LuxembourgQueryExecutionAdapter
                 nameof(relationProfile));
         }
 
+        // This compatibility path enumerates only in-memory lists and performs no I/O.
+        return BuildResourceObservationsAsync(
+            EnumerateRowsAsync(censusRows), censusProfile,
+            EnumerateRowsAsync(assertionRows), assertionProfile, assertionPredicateVocabulary,
+            relationRows, relationProfile, relationPredicateVocabulary, CancellationToken.None)
+            .GetAwaiter().GetResult();
+    }
+
+    private async Task<ResourceObservationBuildResult> BuildResourceObservationsAsync(
+        IAsyncEnumerable<RepeatedEnumerationRow> censusRows,
+        RepeatedEnumerationInterpretationProfile? censusProfile,
+        IAsyncEnumerable<RepeatedEnumerationRow> assertionRows,
+        RepeatedEnumerationInterpretationProfile? assertionProfile,
+        IReadOnlyCollection<string> assertionPredicateVocabulary,
+        IReadOnlyList<RepeatedEnumerationRow> relationRows,
+        RepeatedEnumerationInterpretationProfile? relationProfile,
+        IReadOnlyCollection<string> relationPredicateVocabulary,
+        CancellationToken cancellationToken)
+    {
         var hasResourceCensus = censusProfile is not null;
         var censusKeyIndex = censusProfile is null
             ? -1
@@ -3524,8 +3581,8 @@ public sealed class LuxembourgQueryExecutionAdapter
         // The census: every resource identity the "subjects" family actually delivered this run,
         // preserving delivery order for the observations this method emits below.
         var censusKeys = new HashSet<string>(StringComparer.Ordinal);
-        var censusOrder = new List<string>(censusRows.Count + relationRows.Count);
-        foreach (var row in censusRows)
+        var censusOrder = new List<string>();
+        await foreach (var row in censusRows.WithCancellation(cancellationToken).ConfigureAwait(false))
         {
             var key = row.Terms[censusKeyIndex].Value;
             if (key is null)
@@ -3544,7 +3601,7 @@ public sealed class LuxembourgQueryExecutionAdapter
         var assertionsBySubject = new Dictionary<string, List<LuxembourgObservedAssertion>>(StringComparer.Ordinal);
         var relationsBySubject = new Dictionary<string, List<LuxembourgObservedRelation>>(StringComparer.Ordinal);
         var exclusionCounts = new Dictionary<(string Subject, LuxembourgResourceObservationExclusionCause Cause), int>();
-        foreach (var row in assertionRows)
+        await foreach (var row in assertionRows.WithCancellation(cancellationToken).ConfigureAwait(false))
         {
             var subject = row.Terms[subjectIndex].Value;
             if (subject is null)
@@ -3553,11 +3610,12 @@ public sealed class LuxembourgQueryExecutionAdapter
                     "the assertion-rows family's subject term");
             }
 
-            if (!censusKeys.Contains(subject))
+            if (!censusKeys.TryGetValue(subject, out var canonicalSubject))
             {
                 return ResourceObservationBuildResult.SubjectNotInCensus(subject);
             }
 
+            subject = canonicalSubject;
             if (!assertionsBySubject.TryGetValue(subject, out var list))
             {
                 list = [];
@@ -3571,13 +3629,14 @@ public sealed class LuxembourgQueryExecutionAdapter
                     "the assertion-rows family's predicate term");
             }
 
-            if (!assertionPredicates.Contains(predicate))
+            if (!assertionPredicates.TryGetValue(predicate, out var canonicalPredicate))
             {
                 RecordExclusion(
                     exclusionCounts, subject, LuxembourgResourceObservationExclusionCause.PredicateNotAdmitted);
                 continue;
             }
 
+            predicate = canonicalPredicate;
             var objectKind = row.Terms[objectKindIndex].Value;
             if (objectKind is null)
             {
