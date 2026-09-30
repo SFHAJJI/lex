@@ -6,7 +6,7 @@ every pull request that changes what is served, what is next or what is blocked.
 ## Publisher annex IDs and subtitles (Codex, 2026-10-01)
 
 The completed three-seed run retains English and French 2024/1620 XHTML with Roman annex IDs
-(including a nonbreaking space) and two title paragraphs. The parser currently admits only numeric
+(including a nonbreaking space) and two title paragraphs. The previous parser admitted only numeric
 IDs and one paragraph. Reversible driver decision: recognize canonical uppercase Roman IDs with
 the observed optional nonbreaking space, preserve the exact publisher ID, and concatenate a title
 and subtitle in publisher order as the independently retained Formex TITLE.Value does. The binder
@@ -16,7 +16,11 @@ The draft includes four exact retained XHTML/ZIP fixtures with SHA-256 pins and 
 both languages' titles against their Formex entries, plus valid/invalid identifier cases. Validation
 at 752f6ff3 passed clean build (41.41 s), required fast (3,085 plus one platform skip, 97.513 s),
 and 106 affected ingest tests (two live skips, 44.695 s). Commands and results are retained under
-C:\lex-v3\lanes\eu-annex-publisher-*. Required review and green CI remain pending.
+C:\lex-v3\lanes\eu-annex-publisher-*. Required Claude review returned MERGE with no
+material findings. It independently reproduced the 106 ingest passes and fast suite, and exercised
+both production inventory producers on the retained English and French fixtures: exact titles
+agreed in both languages. Empty or whitespace-only title paragraphs now refuse explicitly; the
+joined title is used for binding and identity, not display. Green exact-head CI remains a merge gate.
 This fixes a concrete parser limit;
 it does not claim to explain all 32 prior package-not-acquired outcomes or complete the annex chain.
 
