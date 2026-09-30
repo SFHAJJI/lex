@@ -5,11 +5,11 @@ every pull request that changes what is served, what is next or what is blocked.
 
 ## Heads
 
-- `v3/integration`: `b06bf5f7` (2026-09-30, PR #764 merged). Build 45 s. Fast lane
+- `v3/integration`: `fc936acf` (2026-09-30, PR #765 merged). Build 45 s. Fast lane
   (`eng/test-fast.ps1`): 3,038 tests, 3,037 pass, 1 skipped. Ingest suite: green on CI for PR #760
   (the CI `dotnet` job runs the whole solution on every pull request, about 7 min on the runner;
-  green for PR #764);
-  locally about 15 min. 803 web tests pass. CI's web job can flake in `keyboard-walk.test.mjs`
+  green for PR #765);
+  locally about 15 min. 806 web tests pass. CI's web job can flake in `keyboard-walk.test.mjs`
   ("browser debugger never answered"); rerunning the failed job is the fix.
 - Driver: Claude Opus 5.5 since 2026-09-29 (the Fable 5.1 driver ran out of tokens on 2026-09-28
   after PR #757; the user default model is now `claude-opus-5-5`).
@@ -235,7 +235,22 @@ schema's `parameters` shape, and whose call runs the same dispatch the REST rout
 endpoint test proves it for all twenty-three. The launch-contract line "REST and MCP derive identical
 envelopes from the registry" is the owner's to tick.
 
-Web: 29 React components, 803 tests. Preview screens render fixtures. PR #765 builds the first live
+Web: 29 React components, 806 tests. Preview screens render fixtures. **The first browser journey
+step passes (PR #766, run locally 2026-09-30):** `node scripts/journey.mjs --api <Lex.V3.Api build
+output> --mount <journey mount>` runs the real `Lex.V3.Api` from a copy of its build output with the
+mount beside it, serves `dist-live/` through `serve-live.mjs`, and drives headless Chrome over the
+DevTools protocol until `data-answer-state` settles. With the fixture mount (written by
+`V3JourneyMountTests` when `V3_WRITE_JOURNEY_MOUNT` names a directory; skipped otherwise) the page
+ends in the coverage answer showing the mounted corpus and index digests; with no mount it ends in
+the `no_corpus_mounted` refusal card. Both runs: 6 requests, exactly one to the API
+(`POST /api/v3/coverage`, no query string), every other a same-origin asset, the headers the browser
+actually sent (`requestWillBeSentExtraInfo`) with no referrer and no cookie, nothing in storage,
+nothing on the console and no uncaught exception or unhandled rejection (a page given either fails
+both runs, shown with `--live-root` on a deliberately broken build), the reviewed CSP, hydration
+clean. The first run caught the journey's own
+over-strict check: under `no-referrer` Chrome reports a provisional `Referer: ""`, and the verdict now
+reads the headers actually sent. The journey is a local run, not a CI step (it needs a browser and a
+built API). PR #765 builds the first live
 page, Trust and Coverage, into its own directory (`node scripts/build-live.mjs` writes
 `dist-live/`, gitignored, apart from the preview `dist/` and its gates): the loading state under a
 live banner (the synthetic banner's "describes no real legal record" would be false on a real mount;
@@ -507,9 +522,10 @@ served list is pinned to the platform's own list in the coverage answer sample.
    grammar and the owner questions below.
 6. Wire the eight launch screens to `/api/v3`; journeys J1 to J8 in a real browser. PR #763: the
    envelope reader and the client module; PR #764: the live Trust and Coverage component; PR #765:
-   its page, the live build and the one-origin server. Next: a journey mount written by a test, and
-   one browser journey step (the page against a local `Lex.V3.Api` on that mount, through
-   `serve-live.mjs`, waiting on `data-answer-state`). J1 to J8
+   its page, the live build and the one-origin server; PR #766: the first browser journey step,
+   passing against the real API with and without a mount. Next: the other launch screens live
+   (their readers must first be held to served answer samples: search, dossier and reading still
+   read pre-V3 shapes), and J1 to J8 restated as V3 steps (owner question). J1 to J8
    exist only in the pre-V3 pack (`05-user-journeys.md`) and need restating as V3 steps.
 7. Release pipeline: build, sign, image, zero-traffic deploy, probes. Then acceptance and promotion.
 
