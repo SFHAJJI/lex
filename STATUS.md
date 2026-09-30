@@ -15,8 +15,10 @@ this does not establish full-run fit.
 
 Two draft regressions cover 3,000 identities on a nonseekable stream, maximum observed write size,
 independent canonical bytes/hash/readback, prefix handling and stream ownership. This slice is
-prepared from current integration using the preserved draft. Build, required fast and affected
-ingest tests, cross-family review and green CI remain pending while the earlier local job runs.
+prepared from current integration using the preserved draft. Validation at fb30816a passed a clean
+Release build (43.22 s), required fast (3,085 passed, one platform skip, 65.379 s), and 124 affected
+ingest tests (two live canaries skipped, 81.681 s). Exact commands and results are retained under
+C:\lex-v3\lanes\lu-identity-stream-*. Required cross-family review and green CI remain pending.
 
 ## Luxembourg scope input reuse (Codex, 2026-09-30)
 
