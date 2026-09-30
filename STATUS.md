@@ -602,11 +602,11 @@ CI evidence are recorded in the pull request before merge.
 
 ## Heads
 
-- `v3/integration`: `3b9d04cf` (2026-09-30, PR #831 merged). Build 45 s. Fast lane
+- `v3/integration`: `fb828004` (2026-10-01, PR #833 merged). Build 45 s. Fast lane
   (`eng/test-fast.ps1`): 3,077 tests, 3,076 pass, 1 skipped (the review of PR #828). Ingest suite: green on CI for PR #760
   (the CI `dotnet` job runs the whole solution on every pull request, about 7 min on the runner;
-  green for PR #831);
-  locally about 15 min. 978 web tests pass. The web job's "browser debugger never answered" failures
+  green for PR #833);
+  locally about 15 min. 979 web tests pass. The web job's "browser debugger never answered" failures
   (keyboard-walk, and paint-check since #811) are fixed by PR #822: each browser binds its own
   debugging port (`launchBrowser`) instead of a random one another browser starting at the same
   moment could hold.
@@ -834,7 +834,7 @@ schema's `parameters` shape, and whose call runs the same dispatch the REST rout
 endpoint test proves it for all twenty-three. The launch-contract line "REST and MCP derive identical
 envelopes from the registry" is the owner's to tick.
 
-Web: 41 React components, 978 tests. Preview screens render fixtures. The V3 Luxembourg search
+Web: 41 React components, 979 tests. Preview screens render fixtures. The V3 Luxembourg search
 answer has a reader (PR #771). The answer census now samples `search` five ways from the real handler:
 - a phrase with 4 strict hits and 1 relaxed hit;
 - the same phrase one hit per page, with its cursor;
@@ -1573,6 +1573,26 @@ beside the release assets, and 36 s6's card for machines at a stable route.
   build (`Lex.V3.Tool build`), and publishing anywhere but a local directory, which needs the owner's
   release identity and storage.
 
+The licence-blocked journey (PR #834), the launch contract's "one licence-blocked journey" for its
+line "rights are enforced at compose time".
+- `V3JourneyMountTests` also writes a licence-blocked mount when `V3_WRITE_LICENCE_BLOCKED_MOUNT`
+  names a directory. It is the fixture mount with its member's rights recorded as
+  `non_admitting_licence_scl`, and its `journey-mount.json` names that disposition and the opening
+  words of every article's body (47; the label and paragraph marker are left off).
+- `journey.mjs` runs the eight steps on it (`licenceBlockedRuns`, chosen when the mount names a
+  rights disposition):
+  - each page is held to what the API answers its request;
+  - reading and export must refuse `text_withheld` (`mustRefuse`), whatever the API answered;
+  - no page may show any of the openings or carry them in its markup (`absentTexts`, the page's
+    text and its HTML, whitespace collapsed).
+- On the host API all eight pass, plain and with `--served-by-api`:
+  - reading and export refuse `text_withheld`;
+  - coverage, search, dossier, compare, radar and history answer, and none shows or carries an
+    article's words;
+  - the citations on the answering pages verify.
+- The check is not blind: run against the normal fixture mount, the same 47 openings are found on
+  the reading and export pages (47 failures each).
+
 The live export composer and its journey step (PR #789), the eighth screen. `dist-live/export.html`
 has its own bundle `client-live-export.js`.
 - The page asks what the reading page asks: the same form (`ReadingForm`, now shared), the same one
@@ -2108,7 +2128,8 @@ has not yet run; the bounded first mount above is complete.
    #807: the evaluation card's words in the table; PR #809: the refusal card's words in the table;
    PR #810: Trust and Coverage's words in the table, so the chrome scan exempts nothing; PR #811:
    the accessibility and scope line held on the live screens; PR #813: a reviewed language builds
-   its own pages; PR #815: the eight screens against the real bounded mount. Next: the
+   its own pages; PR #815: the eight screens against the real bounded mount; PR #834: the
+   licence-blocked journey. Next: the
    owner's review of the French drafts (`node web/scripts/live-chrome-fr-draft.mjs`), then the
    reviewed table in `LIVE_CHROME` and `fr` in `REVIEWED_CHROME_LOCALES`, which builds `/fr/*.html`. French ships only once
    reviewed (Decision 41). Hosting (ruling 3): `Lex.V3.Api`

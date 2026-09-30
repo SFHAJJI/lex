@@ -177,7 +177,9 @@ export const JOURNEY_STEPS = Object.freeze({
  *   history length when the page had loaded and at the end, and the history state, as JSON) and
  *   `cookie` (`document.cookie` at the end)
  * @param {object} expected `{origin, state: "success"|"refusal", step?, corpusSha256?, indexSha256?,
- *   texts?, refusalCode?}`; `step` is a `JOURNEY_STEPS` entry and defaults to coverage
+ *   texts?, refusalCode?, absentTexts?, mustRefuse?}`; `step` is a `JOURNEY_STEPS` entry and defaults
+ *   to coverage. `absentTexts` must appear nowhere on the page, in its text or its markup (whitespace
+ *   collapsed); `mustRefuse` is the refusal code the step must end in, whatever the API answered.
  */
 export function journeyVerdict(observed, expected) {
   const failures = [];
@@ -295,6 +297,15 @@ export function journeyVerdict(observed, expected) {
   }
   if (expected.state === "refusal" && !observed.text.includes(expected.refusalCode)) {
     failures.push(`the page does not name the refusal ${expected.refusalCode}`);
+  }
+  if (expected.mustRefuse !== undefined && !(expected.state === "refusal" && expected.refusalCode === expected.mustRefuse)) {
+    failures.push(`the step must refuse ${expected.mustRefuse}, and it was held to ${expected.state === "refusal" ? `the refusal ${expected.refusalCode}` : "an answer"}`);
+  }
+  const collapse = (text) => (text ?? "").replace(/\s+/g, " ");
+  for (const text of expected.absentTexts ?? []) {
+    const words = collapse(text);
+    if (collapse(observed.text).includes(words)) failures.push(`the page shows withheld text "${words}"`);
+    else if (collapse(observed.html).includes(words)) failures.push(`the page's markup carries withheld text "${words}"`);
   }
 
   const toApi = observed.requests.filter((request) => new URL(request.url).pathname.startsWith("/api/"));
@@ -659,6 +670,7 @@ async function observe(browser, pageOrigin, step, { keyboard = false } = {}) {
     return {
       answerState,
       text: await evaluate("document.body.innerText"),
+      html: await evaluate("document.documentElement.outerHTML"),
       requests: requests.map(({ id, ...request }) => ({
         ...request,
         headers: sentHeaders.get(id) ?? request.headers,
@@ -781,6 +793,26 @@ export async function realMountRuns(apiOutput, mount, options, browser, liveRoot
 }
 
 /**
+ * The launch contract's licence-blocked journey: the eight steps on the fixture mount with its member's
+ * rights recorded as a licence that does not admit redistribution (`journey-mount.json` names the
+ * disposition and the opening words of every article). Each page is held to what the API answers its
+ * request, reading and export must refuse `text_withheld` (rights enforced at compose time), and no
+ * page may show, or carry in its markup, any article's words.
+ */
+export async function licenceBlockedRuns(apiOutput, mount, options, browser, liveRoot) {
+  const journeyMount = JSON.parse(await readFile(join(mount, "journey-mount.json"), "utf8"));
+  const absentTexts = journeyMount.withheld_openings ?? [];
+  if (absentTexts.length === 0) throw new Error("the licence-blocked mount names no withheld text to look for");
+  const runs = [];
+  for (const [name, step] of Object.entries(JOURNEY_STEPS)) {
+    const mustRefuse = name === "reading" || name === "export" ? { mustRefuse: "text_withheld" } : {};
+    const digests = name === "coverage" ? { corpusSha256: journeyMount.corpus_sha256, indexSha256: journeyMount.index_sha256 } : {};
+    runs.push([`${name}, with the licence-blocked mount`, await run(apiOutput, mount, { ...options, step, fromApi: true, absentTexts, ...mustRefuse, ...digests }, browser, liveRoot)]);
+  }
+  return runs;
+}
+
+/**
  * What each of the eight steps must show on the fixture mount (`journey-mount.json`), as `[step name,
  * expected]`: every page answers, with the texts the fixture's one work gives it.
  */
@@ -819,6 +851,8 @@ async function main(argv) {
   if (!(await readdir(apiOutput)).includes("Lex.V3.Api.dll")) throw new Error(`${apiOutput} holds no Lex.V3.Api.dll`);
   const realMount = argv.includes("--real-mount");
   const journeyMount = realMount ? null : JSON.parse(await readFile(join(mount, "journey-mount.json"), "utf8"));
+  // A fixture mount that names a rights disposition is the licence-blocked mount.
+  const licenceBlocked = journeyMount?.rights_disposition !== undefined;
   // `--live-root` serves a directory built elsewhere instead of building one: how a deliberately
   // broken page is shown to fail the journey.
   const liveRoot = argv.includes("--live-root") ? argument("--live-root") : await buildLive();
@@ -827,6 +861,7 @@ async function main(argv) {
   const keyboard = argv.includes("--keyboard");
   const results = [];
   if (realMount) results.push(...await realMountRuns(apiOutput, mount, { servedByApi, keyboard }, browser, liveRoot));
+  else if (licenceBlocked) results.push(...await licenceBlockedRuns(apiOutput, mount, { servedByApi, keyboard }, browser, liveRoot));
   else {
     // Each step with the fixture mount, then with no mount, where every page shows the refusal card.
     for (const [name, expected] of fixtureMountExpectations(journeyMount)) {
