@@ -852,8 +852,9 @@ public sealed class EuQueryExecutionResult
     public IReadOnlyList<EuFamilyEnumerationOutcome> FamilyOutcomes { get; }
 
     /// <summary>
-    /// D1-05c-2 precision six: the measured size of the observed object set <c>O</c> (every root this
-    /// run enumerated plus every discovered consolidated state), real and counted, never estimated.
+    /// The measured size of the observed corpus-object population: every enumerated Work and
+    /// consolidated state, plus French expression objects projected from the proven X population.
+    /// Work snapshots independently drive the watermark witness; this count closes the corpus set.
     /// </summary>
     public int ObservedObjectCount { get; }
 
@@ -2090,7 +2091,7 @@ public sealed class EuQueryExecutionAdapter
         return EuQueryExecutionResult.DeliveredWithLocatedAmendments(
             topology,
             outcomes,
-            observedObjectCount: allSnapshots.Count,
+            observedObjectCount: bodySnapshots.Count,
             observedExpressionCount: expressionIris.Count,
             reductionExclusions: exclusions,
             observedManifestationTypesByCelex: observedManifestationTypesByCelex,

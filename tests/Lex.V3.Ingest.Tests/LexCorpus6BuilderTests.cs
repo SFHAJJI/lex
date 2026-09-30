@@ -596,6 +596,20 @@ public sealed class LexCorpus6BuilderTests
     }
 
     [TestMethod]
+    public async Task HeldEuMemberWithoutPrimaryFormexOutcomeRefusesBeforeCorpusBytes()
+    {
+        var envelope = await CompleteProfileEnvelopeAsync(
+            formexMainBodyTransform: population =>
+                new Europe.EuFormexMainBodyLegalContentPopulation(population.Formex, []));
+        Assert.IsTrue(envelope.BodyComposition.Envelope.Europe.CorpusRecordSet!.Set.Records.Any(record =>
+            record.Body.Kind == Lex.V3.Contracts.Source.Corpus.CorpusBodyRecordKind.Held));
+
+        Assert.IsNull(LexCorpus6Builder.TryBuild(envelope, out var refusal, out var detail));
+        Assert.AreEqual(LexCorpus6BuildRefusal.PopulationMismatch, refusal, detail);
+        StringAssert.Contains(detail, "exactly one Formex main-body outcome per member");
+    }
+
+    [TestMethod]
     public async Task FrenchOnlyWorkRetainsMetadataAndBindsItsExpressionOutcome()
     {
         var europe = await EuAxiomWiringHarness.RunAsync(

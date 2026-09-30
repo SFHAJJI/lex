@@ -20,8 +20,24 @@ is synthetic; the retained English GDPR package supplies the language-mismatch n
 These changes prepare live French acquisition. The completed bounded mount still contains the
 previously acquired bodies; no new live French population or serving claim is made here.
 
-Validation: Release solution build had zero warnings/errors; fast tests passed 3,066 with one
-Windows skip; full ingest passed 1,984 with 19 opt-in skips and zero failures (12m39.548s).
+Validation: Release solution build had zero warnings/errors; full ingest passed 1,984 with
+19 opt-in skips and zero failures (12m39.548s). After the profile-version update, fast tests passed
+3,066 with one Windows skip (48.870s), and affected ingest passed 194 with three opt-in skips
+(31.873s). Exact-head CI also passed on 12d58871.
+
+Reversible sequencing decision: merge this acquisition prerequisite before the expensive fresh
+all-seed EU build, so one union run can retain English and French bodies. This avoids repeating a
+whole acquisition merely to add the second served language. Population completion remains the
+next live objective. The full EU run is prepared with a 20,000-wire planning cap, separately from
+the full Luxembourg run; storage and frozen-source checks still precede launch.
+Before a French-bearing mount is served, EU resolve must apply the Decision 89 language rule:
+the current CELEX/Work resolver treats two held language expressions as `ambiguous_identifier`.
+The EU parity slice must close that prerequisite; expression-specific resolution remains available.
+
+The cross-family review at 12d58871 reported MERGE with two should-fix findings. The repair counts
+French expression objects in the population total and tests closure for bilingual and French-only
+runs, records the resolve prerequisite above, and restores the missing-outcome negative test.
+The PR evidence records the repair validation and final exact-head CI.
 
 ## EU Formex language scope (Codex, 2026-09-30)
 
@@ -1427,8 +1443,8 @@ cover proved 12 leaves and reopened all 10 rows using 68 wire requests. This pro
 range only. Fresh whole-population preflight2 used its 100-request ceiling on S splitting and
 refused before A/G; it did not prove the population. Review repair stops at the first unprovable
 leaf and records later leaves as not attempted, with no further requests for that cover.
-Separate COUNT diagnostics have measured 5,366,404 assertion rows in 15 ranges, with one range
-still unresolved. These independent observations size a future run; they are not a same-instant
+Separate COUNT diagnostics have measured 5,366,756 assertion rows in 22 ranges. The remaining
+range is `[http://data.legilux.public.lu/eli/etat/a, http://data.legilux.public.lu/eli/etat/b)`. These independent observations size a future run; they are not a same-instant
 population proof. The full run must also allow for retained pages, decoded rows and derived files.
 Validation: solution build with zero warnings/errors; fast lane 3,065 pass / 1 Windows skip;
 153 initial affected ingest tests pass, including a two-work corpus through split S/A/G families.
