@@ -3,6 +3,22 @@
 Updated 2026-09-30 by the driver. This file replaces the issue-comment ledgers. It is rewritten in
 every pull request that changes what is served, what is next or what is blocked.
 
+## EU Work resolution across languages (Codex, 2026-09-30)
+
+French acquisition merged in PR #808. Before serving a mount that holds both languages,
+Decision 89 requires an explicit resolution rule. Reversible driver decision: a Work/CELEX naming
+one EU work with one held expression per language returns an ordered list of expression identifiers
+and their languages. The response says expression selection is required. A caller selects a
+language with the existing exact-expression resolve request; no default language is assumed.
+An identifier with only one held expression still resolves directly, including a French-only work.
+Several works, several expressions in the same language, or a Luxembourg/EU collision remain
+`ambiguous_identifier`. Expression and provision coordinates keep their exact identity.
+
+API regressions cover bilingual choices and following each expression identifier, a French-only
+mount built from the synthetic French package, and different works whose languages differ.
+Existing same-language and cross-publisher ambiguity tests remain in scope. Validation is pending;
+this preparation does not change the served mount or claim either complete population.
+
 ## Luxembourg population memory prerequisite (Codex, 2026-09-30)
 
 The four bounded COUNT diagnostics now cover all assertion ranges: 9,672,378 A rows
