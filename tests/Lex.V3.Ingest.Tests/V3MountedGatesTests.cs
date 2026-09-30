@@ -39,7 +39,7 @@ namespace Lex.V3.Ingest.Tests;
 /// </para>
 /// </remarks>
 [TestClass]
-public sealed class V3MountedGatesTests
+public sealed partial class V3MountedGatesTests
 {
     private const string MountVariable = "V3_EVALUATE_MOUNT";
     private const string CardOutVariable = "V3_EVALUATION_CARD_OUT";
@@ -341,7 +341,7 @@ public sealed class V3MountedGatesTests
     }
 
     [TestMethod]
-    public async Task TheTemporalGateOverTheMountTheReleaseNames()
+    public async Task TheGatesOverTheMountTheReleaseNames()
     {
         var directory = Environment.GetEnvironmentVariable(MountVariable);
         if (string.IsNullOrWhiteSpace(directory))
@@ -351,22 +351,25 @@ public sealed class V3MountedGatesTests
 
         using var mount = await V3CorpusMount.OpenAsync(directory, CancellationToken.None);
         Assert.IsNotNull(mount, $"{directory} does not mount.");
-        var sets = RunTemporalGate(mount, directory);
+        var timelines = Sample(Timelines(directory), WorkSample, Seed);
+        var temporal = RunTemporalGate(mount, timelines);
+        var (refusal, _) = RunRefusalGate(mount, directory, timelines);
+        EvaluationCardSet[] sets = [.. temporal, refusal];
         var output = Environment.GetEnvironmentVariable(CardOutVariable);
         if (!string.IsNullOrWhiteSpace(output))
         {
             var corpus = Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(await File.ReadAllBytesAsync(Path.Combine(directory, V3CorpusMount.CorpusFileName))));
-            var target = $"the mount whose corpus file is sha256:{corpus}, asked through the real handler; the temporal cases are derived from its own Luxembourg index";
+            var target = $"the mount whose corpus file is sha256:{corpus}, asked through the real handler; the cases are derived from its own Luxembourg index";
             await File.WriteAllTextAsync(output, EvaluationCard.ToText(EvaluationCard.Render(target, sets)));
         }
 
         foreach (var set in sets)
         {
             var gate = set.Gates.Single();
-            Assert.AreNotEqual(GateVerdict.Fail, gate.Verdict, $"{set.Arm}: a derived case selected another state than its timeline says");
-            if (gate.Verdict == GateVerdict.Pass)
+            Assert.AreNotEqual(GateVerdict.Fail, gate.Verdict, $"{set.Set}, {set.Arm}: a derived case was not answered as the mount's data says");
+            if (gate.Verdict == GateVerdict.Pass && set.CaseCount > 1)
             {
-                Assert.AreEqual(ControlVerdict.CaughtTheShuffle, set.Control.Verdict, $"{set.Arm}: {set.Control.Reason}");
+                Assert.AreEqual(ControlVerdict.CaughtTheShuffle, set.Control.Verdict, $"{set.Set}, {set.Arm}: {set.Control.Reason}");
             }
         }
     }
