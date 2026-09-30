@@ -3,6 +3,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using System.Xml.Linq;
 using Lex.V3.Api;
 using Lex.V3.Contracts.Platform;
 using Microsoft.AspNetCore.Http;
@@ -14,16 +15,19 @@ namespace Lex.V3.Ingest.Tests;
 /// <summary>
 /// The replay guarantees of <c>33-product-spec.md</c> (G1 to G5) that a single build can prove, run against the real
 /// handler on a mounted corpus: G2 snapshot determinism (every served operation answers the same canonical bytes from
-/// the same snapshot, from a byte copy of it and when asked again later, apart from the observation time) and G5
-/// independent verifiability (a reader holding one evidence bundle and the publisher's file recomputes every digest the
-/// bundle states, from the derivations the platform publishes).
+/// the same snapshot, from a byte copy of it and when asked again later, apart from the observation time and the
+/// request's own reference) and G5 independent verifiability (a reader holding one evidence bundle and the publisher's
+/// file finds each served article's text in that file, and recomputes the body digest, each text digest, the article
+/// identities digest and the state digest from the derivations the platform publishes).
 /// </summary>
 /// <remarks>
 /// G1 (a replaced publisher file mints a new version id and a <c>file_replaced</c> event), G3 (nothing hard-deleted
 /// across builds) and G4 (as-observed answering) need predecessor chaining with observation times: one build holds no
 /// observation time and its log is a genesis log, so they wait for a second build after the first mount, and their
 /// operations (<c>as_observed</c>, <c>knowable_on</c>) are registered and not served. G2's detached signature comes from
-/// the release pipeline. The mount is the test fixture, so this proves the path, not a corpus.
+/// the release pipeline. G5 does not recompute <c>wording_sha256</c> (its input is the stored token stream, which the
+/// bundle does not serve), nor the article identities, the rule-profile digests or the body receipt, whose derivations
+/// are not published. The mount is the test fixture, so this proves the path, not a corpus.
 /// </remarks>
 [TestClass]
 public sealed class V3ReplayGuaranteesTests
@@ -55,7 +59,7 @@ public sealed class V3ReplayGuaranteesTests
             var date = fixture.ApplicabilityDate;
             var requests = new Dictionary<string, object>(StringComparer.Ordinal)
             {
-                ["resolve"] = new { identifier = work },
+                ["resolve"] = new { identifier = fixture.Permalink },
                 ["as_of"] = new { identifier = work, date, language = "fra" },
                 ["timeline"] = new { identifier = work, language = "fra" },
                 ["article_history"] = new { identifier = work, anchor = "art_2", language = "fra" },
@@ -86,16 +90,19 @@ public sealed class V3ReplayGuaranteesTests
 
             foreach (var (operation, parameters) in requests)
             {
-                var first = await AnswerAsync(mount, operation, parameters, ObservedAt);
-                CollectionAssert.AreEqual(first, await AnswerAsync(mount, operation, parameters, ObservedAt), $"{operation}: asked again");
-                CollectionAssert.AreEqual(first, await AnswerAsync(copied, operation, parameters, ObservedAt), $"{operation}: from a byte copy of the mount");
+                // The same request (one trace identity) asked twice, and of a byte copy of the mount: the same bytes.
+                var first = await AnswerAsync(mount, operation, parameters, ObservedAt, "replay-first");
+                CollectionAssert.AreEqual(first, await AnswerAsync(mount, operation, parameters, ObservedAt, "replay-first"), $"{operation}: asked again");
+                CollectionAssert.AreEqual(first, await AnswerAsync(copied, operation, parameters, ObservedAt, "replay-first"), $"{operation}: from a byte copy of the mount");
 
-                // Asked later, only the observation time moves: the snapshot, the result and any refusal are the same bytes.
-                var later = await AnswerAsync(mount, operation, parameters, Later);
-                var (earlierRest, earlierTime) = WithoutObservationTime(first);
-                var (laterRest, laterTime) = WithoutObservationTime(later);
-                Assert.AreNotEqual(earlierTime, laterTime, $"{operation}: the observation time is the request's own");
-                Assert.AreEqual(earlierRest, laterRest, $"{operation}: asked later");
+                // Asked later, by another request: only the observation time and the request's own reference move; the
+                // snapshot, the result and any refusal are the same bytes.
+                var later = await AnswerAsync(mount, operation, parameters, Later, "replay-later");
+                var earlier = WithoutRequestOwnFields(first);
+                var then = WithoutRequestOwnFields(later);
+                Assert.AreNotEqual(earlier.ObservedAt, then.ObservedAt, $"{operation}: the observation time is the request's own");
+                Assert.AreNotEqual(earlier.RequestRef, then.RequestRef, $"{operation}: the request reference is the request's own");
+                Assert.AreEqual(earlier.Remainder, then.Remainder, $"{operation}: asked later by another request");
             }
         }
         finally
@@ -105,14 +112,14 @@ public sealed class V3ReplayGuaranteesTests
     }
 
     [TestMethod]
-    public async Task OneEvidenceBundleAndThePublisherFileAreEnoughToRecomputeEveryDigestTheBundleStates()
+    public async Task OneEvidenceBundleAndThePublisherFileAreEnoughToCheckItsTextAndRecomputeItsDerivedDigests()
     {
         var fixture = await MountedFixture.CreateAsync();
         await using var cleanup = fixture;
         using var mount = await V3CorpusMount.OpenAsync(fixture.Directory, CancellationToken.None);
         Assert.IsNotNull(mount);
         var envelope = V3EnvelopeJson.ParseAndVerify(
-            await AnswerAsync(mount, "evidence_bundle", new { identifier = $"/lu-legilux/{fixture.WorkKey}", date = fixture.ApplicabilityDate, language = "fra" }, ObservedAt),
+            await AnswerAsync(mount, "evidence_bundle", new { identifier = $"/lu-legilux/{fixture.WorkKey}", date = fixture.ApplicabilityDate, language = "fra" }, ObservedAt, "replay-bundle"),
             V3OperationRegistry.Reviewed);
         Assert.IsNull(envelope.Refusal, envelope.Refusal?.Code);
         var bundle = envelope.Result!.Value;
@@ -130,9 +137,24 @@ public sealed class V3ReplayGuaranteesTests
             new[] { source.GetProperty("body_sha256").GetString() },
             state.GetProperty("body_sha256s").EnumerateArray().Select(static value => value.GetString()).ToArray());
 
+        // Each served article's text is in the publisher's file: the article with that id, its non-blank text nodes
+        // in document order, outside the publisher's own scl: annotations and the authorial notes (which travel as
+        // notes). So the text a quote carries is the publisher's, not only self-consistent with its digest.
+        XNamespace scl = "http://www.scl.lu";
+        var publisherArticles = XDocument.Load(new MemoryStream(publisherFile)).Descendants()
+            .Where(static element => element.Name.LocalName == "article" && element.Attribute("id") is not null)
+            .ToDictionary(static element => element.Attribute("id")!.Value, StringComparer.Ordinal);
         foreach (var article in articles)
         {
-            var id = article.GetProperty("publisher_id").GetString();
+            var id = article.GetProperty("publisher_id").GetString()!;
+            Assert.IsTrue(publisherArticles.TryGetValue(id, out var inFile), $"{id}: the publisher's file holds that article");
+            var publisherText = string.Concat(inFile.DescendantNodes().OfType<XText>()
+                .Where(node => node.Ancestors().TakeWhile(ancestor => ancestor != inFile)
+                    .All(ancestor => ancestor.Name.Namespace != scl && ancestor.Name.LocalName != "authorialNote"))
+                .Select(static node => node.Value)
+                .Where(static value => !string.IsNullOrWhiteSpace(value)));
+            Assert.AreEqual(publisherText, article.GetProperty("text").GetString(), $"{id}: the served text is the publisher's");
+
             var text = Encoding.UTF8.GetBytes(article.GetProperty("text").GetString()!);
             Assert.AreEqual(Sha256(text), article.GetProperty("text_sha256").GetString(), $"{id}: the text digest is the served text's");
             Assert.AreEqual(text.Length, article.GetProperty("text_byte_length").GetInt32(), id);
@@ -169,7 +191,7 @@ public sealed class V3ReplayGuaranteesTests
         // every value after it (an earlier wording put it outside that clause, and a reader who followed it got another
         // digest).
         var provenance = V3EnvelopeJson.ParseAndVerify(
-            await AnswerAsync(mount, "provenance", new { identifier = $"/lu-legilux/{fixture.WorkKey}", date = fixture.ApplicabilityDate, language = "fra" }, ObservedAt),
+            await AnswerAsync(mount, "provenance", new { identifier = $"/lu-legilux/{fixture.WorkKey}", date = fixture.ApplicabilityDate, language = "fra" }, ObservedAt, "replay-provenance"),
             V3OperationRegistry.Reviewed).Result!.Value.GetProperty("derivation").GetString();
         StringAssert.StartsWith(provenance,
             "state_sha256 is a SHA-256 over these values, each as UTF-8 preceded by its length as four bytes big-endian: the domain tag " +
@@ -195,11 +217,12 @@ public sealed class V3ReplayGuaranteesTests
         return Convert.ToHexStringLower(hash.GetHashAndReset());
     }
 
-    /// <summary>The whole response bytes of one REST request, answered at <paramref name="observedAt"/>.</summary>
-    private static async Task<byte[]> AnswerAsync(V3CorpusMount mount, string operation, object parameters, DateTimeOffset observedAt)
+    /// <summary>The whole response bytes of one REST request with its own trace identity, answered at <paramref name="observedAt"/>.</summary>
+    private static async Task<byte[]> AnswerAsync(
+        V3CorpusMount mount, string operation, object parameters, DateTimeOffset observedAt, string traceIdentifier)
     {
         var body = Encoding.UTF8.GetBytes(JsonSerializer.Serialize(new { operation_id = operation, parameters }));
-        var context = new DefaultHttpContext { TraceIdentifier = "replay" };
+        var context = new DefaultHttpContext { TraceIdentifier = traceIdentifier };
         context.Request.Method = HttpMethods.Post;
         context.Request.Body = new MemoryStream(body);
         context.Request.ContentLength = body.Length;
@@ -213,12 +236,15 @@ public sealed class V3ReplayGuaranteesTests
         return bytes;
     }
 
-    private static (string Remainder, string? ObservedAt) WithoutObservationTime(byte[] envelope)
+    /// <summary>The envelope without the two fields that belong to the request rather than the answer.</summary>
+    private static (string Remainder, string? ObservedAt, string? RequestRef) WithoutRequestOwnFields(byte[] envelope)
     {
         var node = JsonNode.Parse(envelope)!.AsObject();
         var freshness = node["context"]!["freshness"]!.AsObject();
         var observedAt = (string?)freshness["observed_at"];
         freshness.Remove("observed_at");
-        return (node.ToJsonString(), observedAt);
+        var requestRef = (string?)node["request_ref"];
+        node.Remove("request_ref");
+        return (node.ToJsonString(), observedAt, requestRef);
     }
 }

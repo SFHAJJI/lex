@@ -361,15 +361,23 @@ owner question below.
 Replay guarantees (PR #770): `V3ReplayGuaranteesTests` runs the two guarantees of
 `33-product-spec.md` G1 to G5 that one build can prove against the real handler.
 - G2, snapshot determinism: each of the 23 served operations (pinned to `V3RestRouteBinding.Served`,
-  so a new operation fails until it has a case) answers the same canonical bytes when asked again,
-  when asked of a mount opened from a byte copy of the directory, and 30 days later apart from
-  `context.freshness.observed_at`. Every envelope is also verified canonical by
-  `V3EnvelopeJson.ParseAndVerify`.
+  so a new operation fails until it has a case) answers the same canonical bytes to the same
+  request asked again and to a mount opened from a byte copy of the directory. Asked 30 days later
+  by another request, the answer is the same bytes apart from the two fields that belong to the
+  request: `context.freshness.observed_at` and `request_ref`, the digest of the request's own
+  trace identity. Every envelope is also verified canonical by `V3EnvelopeJson.ParseAndVerify`.
+  `resolve` is asked with the fixture's permalink, so the check covers its answer path and not
+  only a refusal.
 - G5, independent verifiability: a reader holding one `evidence_bundle` answer and the
-  publisher's file recomputes every digest the bundle states. The file hashes to the source's
-  `body_sha256` and length, and each article's `text_sha256` and byte length are its served
-  text's. `article_identities_sha256` and `state_sha256` recompute from the derivation
-  `provenance` publishes, and the permalink pins that digest.
+  publisher's file checks each served article's text against that file. The text of the article
+  with that id is its non-blank text nodes in order, outside the publisher's `scl:` annotations
+  and the authorial notes, and it equals the served text for every article. The reader then
+  recomputes the digests whose derivations are published. The file hashes to the source's
+  `body_sha256` and length, and each article's `text_sha256` and byte length are its text's.
+  `article_identities_sha256` and `state_sha256` recompute from the derivation `provenance`
+  publishes, and the permalink pins that digest. Not recomputed: `wording_sha256`, whose input
+  is the stored token stream the bundle does not serve, and the article identities, rule-profile
+  digests and body receipt, whose derivations are not published.
 
 Running G5 found a defect: the published derivation put the domain tag outside "each as UTF-8
 preceded by its length", while the builder length-prefixes it. A reader who followed the sentence
