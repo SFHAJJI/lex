@@ -19,7 +19,11 @@ import { tokenCss } from "./design-tokens.mjs";
 const source = new URL("../src/", import.meta.url);
 export const LIVE_DESTINATION = new URL("../dist-live/", import.meta.url);
 
-export async function buildLive(destination = LIVE_DESTINATION) {
+/**
+ * Builds the live pages into `destination`. `card` is the evaluation card the Trust and Coverage page carries: the
+ * platform's rendered card when none is given, the release card when a release build hands one (ruling 2).
+ */
+export async function buildLive(destination = LIVE_DESTINATION, { card } = {}) {
   await rm(destination, { force: true, recursive: true });
   await mkdir(destination, { recursive: true });
   for (const asset of ["styles.css", "favicon.svg", "fonts"]) {
@@ -35,7 +39,7 @@ ${tokenCss()}`, "utf8");
   // them (as this build first did) fails whichever test file loads it mid-write.
   const { bundle, bundleClient } = await import("./react-build.mjs");
   const ssr = await import(pathToFileURL(await bundle("app/live-coverage-page.jsx", "live-coverage-page.mjs")).href);
-  await writeFile(new URL("index.html", destination), ssr.renderLiveCoveragePage(), "utf8");
+  await writeFile(new URL("index.html", destination), ssr.renderLiveCoveragePage({ card }), "utf8");
   await cp(await bundleClient("app/client-live-entry.jsx", "client-live.js"), new URL("client-live.js", destination));
   const searchSsr = await import(pathToFileURL(await bundle("app/live-search-page.jsx", "live-search-page.mjs")).href);
   await writeFile(new URL("search.html", destination), searchSsr.renderLiveSearchPage(), "utf8");

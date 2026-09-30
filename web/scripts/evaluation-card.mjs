@@ -24,6 +24,18 @@ export const NOT_YET_LABELLED = 'not_yet_labelled';
 
 /** The gates that are graded means rather than shares of cases, so they carry no binomial interval. */
 const GRADED_GATES = new Set(['anchor_ndcg_at_10']);
+
+/**
+ * The gates each case set must carry, in order, and the shuffled control that set runs
+ * (`EvaluationCard.Temporal`, `Verdict` and `Retrieval`; `EvaluationGateNames`, `ShuffledControlNames`). A set
+ * missing a gate would otherwise read as clean with nothing measured (review of #792).
+ */
+export const SET_GATES = Object.freeze({
+  temporal: Object.freeze(['temporal_exactness']),
+  refusal: Object.freeze(['verdict_exact_match']),
+  retrieval: Object.freeze(['anchor_ndcg_at_10', 'no_hit_accuracy', 'resolver_exactness']),
+});
+export const SET_CONTROLS = Object.freeze({ temporal: 'date_shuffle', refusal: 'verdict_shuffle', retrieval: 'qrels_shuffle' });
 const DIGEST = /^[0-9a-f]{64}$/;
 const Z95 = 1.959963984540054;
 
@@ -134,12 +146,18 @@ function readSet(set, index) {
   const caseCount = requireCount(requireOwn(set, 'cases', where), `${where} cases`, 1);
   const casesSha256 = requireOwn(set, 'cases_sha256', where);
   if (!DIGEST.test(casesSha256)) throw new Error(`${where} cases_sha256 is not a SHA-256 digest`);
+  const name = requireOneOf(requireOwn(set, 'set', where), Object.keys(SET_GATES), `${where}'s set`);
+  const gates = Object.freeze(requireList(requireOwn(set, 'gates', where), `${where} gates`, 1).map((gate, gateIndex) => readGate(gate, `${where} gates[${gateIndex}]`, caseCount)));
+  const names = gates.map((gate) => gate.gate);
+  if (names.join() !== SET_GATES[name].join()) {
+    throw new Error(`${where} is a ${name} set, so its gates are ${SET_GATES[name].join(', ')}, and it carries ${names.join(', ')}`);
+  }
   return Object.freeze({
-    set: requireText(requireOwn(set, 'set', where), `${where} set`),
+    set: name,
     arm: requireText(requireOwn(set, 'arm', where), `${where} arm`),
     cases: caseCount,
     casesSha256,
-    gates: Object.freeze(requireList(requireOwn(set, 'gates', where), `${where} gates`, 1).map((gate, gateIndex) => readGate(gate, `${where} gates[${gateIndex}]`, caseCount))),
+    gates,
   });
 }
 
@@ -158,7 +176,7 @@ function readControl(control, index, set) {
     throw new Error(`${where} ran over fewer cases than its set, and does not say why`);
   }
   return Object.freeze({
-    control: requireText(requireOwn(control, 'control', where), `${where} control`),
+    control: requireOneOf(requireOwn(control, 'control', where), [SET_CONTROLS[set.set]], `${where}'s control for a ${set.set} set`),
     set: forSet,
     arm,
     verdict: requireOneOf(requireOwn(control, 'verdict', where), CONTROL_VERDICTS, `${where}'s verdict`),

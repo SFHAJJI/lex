@@ -71,6 +71,11 @@ test("each rule of the card, broken, is refused with that rule's reason", () => 
     ["a control over fewer cases, unexplained", (c) => { delete c.shuffled_controls[0].note; }, /ran over fewer cases than its set, and does not say why/],
     ["a statistical row labelled", (c) => { c.statistical_rows[0].status = "labelled"; }, /is not_yet_labelled until its dataset is labelled \(Decision 92\)/],
     ["a negative result without its reversal", (c) => { delete c.negative_results[0].what_would_reverse_it; }, /does not carry what_would_reverse_it/],
+    // Review of #792: a set that carries another set's gate, or lacks one, or runs another set's control.
+    ["a temporal set carrying a retrieval gate", (c) => { const gate = firstGate(c); gate.gate = "anchor_ndcg_at_10"; delete gate.wilson_95; }, /is a temporal set, so its gates are temporal_exactness, and it carries anchor_ndcg_at_10/],
+    ["a retrieval set missing a gate", (c) => { c.machine_gates.find((set) => set.set === "retrieval").gates.pop(); }, /is a retrieval set, so its gates are anchor_ndcg_at_10, no_hit_accuracy, resolver_exactness, and it carries anchor_ndcg_at_10, no_hit_accuracy$/],
+    ["a set of no known kind", (c) => { c.machine_gates[0].set = "speed"; }, /set "speed" is not one of temporal, refusal, retrieval/],
+    ["a control of another set", (c) => { c.shuffled_controls[0].control = "qrels_shuffle"; }, /control for a temporal set "qrels_shuffle" is not one of date_shuffle/],
   ];
   for (const [what, change, reason] of cases) assert.throws(() => readEvaluationCard(mutate(change)), reason, what);
 });
@@ -91,6 +96,23 @@ test("the page prints the card after the answer, its target first, every table w
   assert.equal([...section.matchAll(/: not yet labelled\./g)].length, card.statistical_rows.length);
   assert.ok(section.includes(card.negative_results[0].decision));
   assert.ok(!/color|colour/i.test(section), "no verdict is a colour");
+});
+
+test("the live build carries the card it is handed, as a release build will hand it (review of #792)", async () => {
+  const { buildLive } = await import("../scripts/build-live.mjs");
+  const { mkdtemp, rm } = await import("node:fs/promises");
+  const { tmpdir } = await import("node:os");
+  const { join } = await import("node:path");
+  const destination = await mkdtemp(join(tmpdir(), "lex-card-build-"));
+  try {
+    const release = mutate((c) => { c.target = "RELEASE CARD TARGET: the release's own mounted corpus."; });
+    await buildLive(new URL(`file:///${destination.replaceAll("\\", "/")}/`), { card: release });
+    const index = await readFile(join(destination, "index.html"), "utf8");
+    assert.ok(index.includes("RELEASE CARD TARGET: the release"), "the handed card is the one printed");
+    assert.ok(!index.includes("THE MOUNT IS A FIXTURE"), "and not the platform's rendered one");
+  } finally {
+    await rm(destination, { recursive: true, force: true });
+  }
 });
 
 test("a card whose gate fails says so above its tables, and the page will not print a card that breaks its rules", () => {

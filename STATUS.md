@@ -9,7 +9,7 @@ every pull request that changes what is served, what is next or what is blocked.
   (`eng/test-fast.ps1`): 3,038 tests, 3,037 pass, 1 skipped. Ingest suite: green on CI for PR #760
   (the CI `dotnet` job runs the whole solution on every pull request, about 7 min on the runner;
   green for PR #790);
-  locally about 15 min. 920 web tests pass. CI's web job can flake in `keyboard-walk.test.mjs`
+  locally about 15 min. 922 web tests pass. CI's web job can flake in `keyboard-walk.test.mjs`
   ("browser debugger never answered"); rerunning the failed job is the fix.
 - Driver: Claude Opus 5.5 since 2026-09-29 (the Fable 5.1 driver ran out of tokens on 2026-09-28
   after PR #757; the user default model is now `claude-opus-5-5`).
@@ -235,7 +235,7 @@ schema's `parameters` shape, and whose call runs the same dispatch the REST rout
 endpoint test proves it for all twenty-three. The launch-contract line "REST and MCP derive identical
 envelopes from the registry" is the owner's to tick.
 
-Web: 37 React components, 920 tests. Preview screens render fixtures. The V3 Luxembourg search
+Web: 37 React components, 922 tests. Preview screens render fixtures. The V3 Luxembourg search
 answer has a reader (PR #771). The answer census now samples `search` five ways from the real handler:
 - a phrase with 4 strict hits and 1 relaxed hit;
 - the same phrase one hit per page, with its cursor;
@@ -583,9 +583,11 @@ request.
   what it can: each gate's verdict in the closed vocabulary, exactly a not-measured gate carrying a
   reason and no value, a pass at or above its threshold and a fail below it, each rate's Wilson 95
   percent interval (recomputed from the value and the stratum; anchor nDCG, a graded mean, has
-  none), the rule-of-three bound beside every 1 (recomputed), one shuffled control per case set in
-  order (a control over fewer cases than its set says why), and every statistical row
-  `not_yet_labelled` (Decision 92). A card that breaks a rule is not printed.
+  none), the rule-of-three bound beside every 1 (recomputed), each set's own gates and nothing else
+  (temporal exactness; the refusal verdict match; retrieval's three, in order), one shuffled control
+  per case set in order and of that set's kind (a control over fewer cases than its set says why),
+  and every statistical row `not_yet_labelled` (Decision 92). A card that breaks a rule is not
+  printed. The live build takes the card it is handed (`buildLive(destination, { card })`).
 - `EvaluationCardView` prints what the card was run over first, as the card says it ("THE MOUNT IS A
   FIXTURE ... this card is not a release card"), then whether every gate passes and every control
   caught its shuffle (or which do not), one captioned table per case set (verdicts as words, values,
