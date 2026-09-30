@@ -602,10 +602,10 @@ CI evidence are recorded in the pull request before merge.
 
 ## Heads
 
-- `v3/integration`: `24c59015` (2026-10-01, PR #836 merged). Build 45 s. Fast lane
+- `v3/integration`: `933fe8e3` (2026-10-01, PR #834 merged). Build 45 s. Fast lane
   (`eng/test-fast.ps1`): 3,077 tests, 3,076 pass, 1 skipped (the review of PR #828). Ingest suite: green on CI for PR #760
   (the CI `dotnet` job runs the whole solution on every pull request, about 7 min on the runner;
-  green for PR #833);
+  green for PR #834);
   locally about 15 min. 979 web tests pass. The web job's "browser debugger never answered" failures
   (keyboard-walk, and paint-check since #811) are fixed by PR #822: each browser binds its own
   debugging port (`launchBrowser`) instead of a random one another browser starting at the same
@@ -1792,6 +1792,45 @@ relaxed hits before strict ones, a scoped search matching no work, and `verify` 
 anchor the state does not hold. The cases come from the fixture, so the gates prove the path
 until a real mount exists.
 
+The temporal gate over any mount (PR #838), the first slice of ruling 2's machine gates over the
+real mounted corpus. The fixture's gates build their own states; these derive their cases from the
+mount they are given.
+- `V3MountedGatesTests` reads the mount's Luxembourg index: each work's held states in one language,
+  by applicability date, form a timeline. The timeline says what a dated request must select on any
+  day:
+  - nothing before the first date (`no_version_for_date`);
+  - the one state of the latest date on or before it;
+  - `ambiguous_version` where two states share that date.
+- The cases, for a seeded sample of up to 40 works:
+  - the day before the first date;
+  - each date, a day inside and the last day of each window;
+  - a day 1,000 days after the latest date.
+- The arms are `as_of` and `in_force_on`, in each language the sample holds, and with no language
+  for every work. With no language the mount selects in every language the work holds:
+  `ambiguous_version` if any language's date holds two states, `no_version_for_date` if none holds
+  one yet, and otherwise each language's state. The work's timelines together give that key (the
+  sorted states). The review of #838 found that the first version left multilingual works out of
+  the no-language arms.
+- The date control shifts every case by the median gap between held dates. It runs over the cases
+  whose selection the timeline says the shift changes, which always includes each day before a first
+  date.
+- An arm with no case is `not_measured` (`no_measurable_query`), and its control says there was no
+  case to shift. An empty stratum is reported, never scored.
+- With no variable it runs on the fixture: the fixture's state, two states on one date and a latest
+  state give 9 cases per arm, all passing, and every control catches the shift. When
+  `V3_EVALUATE_MOUNT` names a mount it runs there, and `V3_EVALUATION_CARD_OUT` receives the card
+  sets.
+- Over the real bounded first mount, which holds no Luxembourg state: not measured, and it says why.
+  Over the journey mount, written by another test with one state: 3 cases per arm, all pass, and every
+  control catches the shift.
+- A French work with a German state 200 days later gives 6 no-language cases: French alone before
+  the German date and both from it. All pass, and every control catches the shift.
+- Two mutations:
+  - a timeline that ignores two states on one date fails the timeline test and the fixture gate;
+  - the first version's single-state arm used for no language fails the multilingual test.
+- Next slices: the refusal and retrieval sets derived from a mount, then the card over the release's
+  mount in the rehearsal.
+
 Evaluation card (PR #769): `EvaluationCard` in `Lex.V3.Contracts.Evaluation` prints the machine
 gates as the card of `36-ideal-evaluation.md` section 6 describes, as far as the launch contract
 asks. Each case set and arm is a row with its case count and `cases_sha256`. Each gate carries
@@ -2163,7 +2202,9 @@ has not yet run; the bounded first mount above is complete.
    immutability, G3 bitemporal completeness and G4 as-observed answering need predecessor
    chaining with observation times, so they follow the first mount and the event-log ruling. What
    is left of the launch contract's machine-gates line after that was "V2 absent from the image",
-   which the image rehearsal now checks (PR #831, item 7).
+   which the image rehearsal now checks (PR #831, item 7). Ruling 2's gates over the real mounted
+   corpus: PR #838 derives the temporal set from any mount; the refusal and retrieval sets and the
+   release card follow.
 
 ## Owner rulings, 2026-09-30
 
