@@ -79,6 +79,8 @@ public sealed class CustodyStoreConformanceTests
             + "after the session has already held those bytes. A DISTINCT TYPE from the "
             + "CorpusRecordSetWriterTests store of the same simple name, which is why every key "
             + "here is a full name including the declaring type",
+        "Lex.V3.Ingest.Tests.LuxembourgProductionTopologyTests+UnreadableSecondBatchStore: "
+            + "decorates an inner store to corrupt readback of the second retained observation batch",
         "Lex.V3.Ingest.Tests.LuxembourgQueryExecutionAdapterTests+DigestSubstitutingCustodyStore: "
             + "decorates an inner store in order to substitute one digest",
         "Lex.V3.Ingest.Tests.LuxembourgQueryExecutionAdapterTests+EnforcingCustodyStore: "
@@ -142,14 +144,14 @@ public sealed class CustodyStoreConformanceTests
     public void TheImplementationCountsAreExactlyThese()
     {
         var types = CustodyStoreConformance.ImplementationTypes(Scope);
-        Assert.AreEqual(27, types.Count, "implementations swept");
+        Assert.AreEqual(28, types.Count, "implementations swept");
         Assert.AreEqual(
             9,
             types.Count(static type =>
                 CustodyStoreConformance.IsDrivenByDefault(type)
                 || CustodyStoreConformance.HasRecipe(type)),
             "implementations driven");
-        Assert.AreEqual(18, Exempt.Length, "implementations exempt");
+        Assert.AreEqual(19, Exempt.Length, "implementations exempt");
     }
 
     [TestMethod]
