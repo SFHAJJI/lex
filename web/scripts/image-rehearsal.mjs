@@ -4,6 +4,7 @@
 // release path; production signing, credentials and deployment stay with the owner).
 //
 //   node scripts/image-rehearsal.mjs --mount <a v3-corpus directory with its build-report.json> [--keep]
+//     [--no-reproduce] [--no-probe]
 //
 // The image is built without a container daemon, by the .NET SDK (`dotnet publish -t:PublishContainer`,
 // the base image pinned by digest in `Lex.V3.Api.csproj`), as an OCI image layout archive. Then:
@@ -14,14 +15,19 @@
 // - the image must run as a non-root user, start the API, and name its base image by digest.
 // The signature is the rehearsal's own: an ECDSA P-256 key made for the run and never kept, over a
 // signing payload in the shape container signatures use, naming the manifest digest and saying it is a
-// rehearsal. Verifying it checks the signature, the digest and that rehearsal label. Nothing is pushed
-// anywhere, and the archive, its extraction and the publish directory are removed at the end, which the
-// report records. Running the image and probing it is the next step.
+// rehearsal. Verifying it checks the signature, the digest and that rehearsal label.
+// The image is reproducible: each build restores and compiles every project afresh in its own directory,
+// the SDK's time stamps are replaced by the source date (`image-reproducible.mjs`), and a second build
+// from scratch must give the same manifest digest (`--no-reproduce` skips it). The image then runs in
+// WSL as a hardened container would, and the zero-traffic probes run against it (`image-run.mjs`;
+// `--no-probe` skips them). Nothing is pushed anywhere, and the work directory (both builds, their
+// archives), the build's artifacts directory and the container's run directory are removed at the end,
+// which the report records.
 
 import { spawnSync } from "node:child_process";
 import { createHash, createPublicKey, generateKeyPairSync, sign, verify } from "node:crypto";
 import { existsSync } from "node:fs";
-import { mkdtemp, readFile, readdir, rm, stat } from "node:fs/promises";
+import { mkdtemp, readFile, readdir, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, relative, resolve, sep } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -34,21 +40,23 @@ const sha256 = (bytes) => createHash("sha256").update(bytes).digest("hex");
 export const REHEARSAL_IDENTITY = "lex-v3-rehearsal (not a release identity)";
 
 /**
- * The entries of a tar archive, as `{ path, type, bytes }`: ustar names with their prefix, and the long
- * names pax headers (`x`) and GNU headers (`L`) carry.
+ * The entries of a tar archive, as `{ path, type, mode, uid, gid, bytes }`: ustar names with their
+ * prefix, and the long names pax headers (`x`) and GNU headers (`L`) carry.
  */
 export function readTar(buffer) {
   const entries = [];
   let offset = 0;
   let longName = null;
   const text = (start, length) => buffer.subarray(start, start + length).toString("utf8").replace(/\0.*$/s, "");
+  const number = (start, length) => parseInt(text(start, length).trim() || "0", 8);
   while (offset + 512 <= buffer.length) {
     const header = buffer.subarray(offset, offset + 512);
     if (header.every((byte) => byte === 0)) break;
     const name = text(offset, 100);
-    const size = parseInt(text(offset + 124, 12).trim() || "0", 8);
+    const size = number(offset + 124, 12);
     const type = String.fromCharCode(header[156] || 48);
     const prefix = text(offset + 345, 155);
+    const [mode, uid, gid] = [number(offset + 100, 8), number(offset + 108, 8), number(offset + 116, 8)];
     const bytes = buffer.subarray(offset + 512, offset + 512 + size);
     offset += 512 + Math.ceil(size / 512) * 512;
     if (type === "x") {
@@ -61,9 +69,14 @@ export function readTar(buffer) {
     if (type === "g") continue;
     const path = longName ?? (prefix ? `${prefix}/${name}` : name);
     longName = null;
-    entries.push({ path: path.replace(/^\.\//, ""), type: type === "5" ? "directory" : type === "0" ? "file" : type, bytes });
+    entries.push({ path: path.replace(/^\.\//, ""), type: type === "5" ? "directory" : type === "0" ? "file" : type, mode, uid, gid, bytes });
   }
   return entries;
+}
+
+/** A layer's tar: gunzipped when its media type says gzip (the base image's, the SDK's), else as it is. */
+export function layerTar(layer) {
+  return /gzip$/.test(layer.mediaType ?? "") ? gunzipSync(layer.bytes) : layer.bytes;
 }
 
 /**
@@ -118,7 +131,7 @@ export function imageFailures(image, { web, mount, report }) {
   if (!/@sha256:[0-9a-f]{64}$/.test(base)) failures.push(`the base image is not named by digest: ${JSON.stringify(base)}`);
   const app = image.layers.at(-1);
   if (!app) return [...failures, "the image has no layer"];
-  const files = new Map(readTar(gunzipSync(app.bytes)).filter((entry) => entry.type === "file").map((entry) => [entry.path, entry.bytes]));
+  const files = new Map(readTar(layerTar(app)).filter((entry) => entry.type === "file").map((entry) => [entry.path, entry.bytes]));
   if (!files.has("app/Lex.V3.Api.dll")) failures.push("the app layer holds no app/Lex.V3.Api.dll");
   for (const [label, prefix, list] of [["live page file", "app/v3-web/", web], ["mount file", "app/v3-corpus/", mount]]) {
     if (list.length === 0) failures.push(`no ${label} was given to check`);
@@ -179,35 +192,94 @@ function run(command, args, options = {}) {
   return result;
 }
 
+/** The layout an OCI image layout archive holds, as `{ index, blobs }` with blobs keyed `sha256:<hex>`. */
+export function readLayout(archive) {
+  const named = new Map(readTar(archive).filter((entry) => entry.type === "file").map((entry) => [entry.path, entry.bytes]));
+  const index = JSON.parse(named.get("index.json").toString("utf8"));
+  const blobs = new Map([...named].filter(([path]) => path.startsWith("blobs/sha256/")).map(([path, bytes]) => [`sha256:${path.slice("blobs/sha256/".length)}`, bytes]));
+  return { index, blobs };
+}
+
+/**
+ * Where two builds of the image differ, as failures (empty when they are the same image): the manifest,
+ * the config's fields, each layer, and in a differing layer the entries that differ.
+ */
+export function reproductionFailures(first, second) {
+  if (first.manifestDigest === second.manifestDigest) return [];
+  const failures = [`the second build's manifest is ${second.manifestDigest}, the first's ${first.manifestDigest}`];
+  for (const key of new Set([...Object.keys(first.config), ...Object.keys(second.config)])) {
+    if (JSON.stringify(first.config[key]) !== JSON.stringify(second.config[key])) failures.push(`the config's ${key} differs`);
+  }
+  const entries = (layer) => new Map(readTar(layerTar(layer)).map((entry) => [entry.path.replace(/\/+$/, ""), entry]));
+  for (let position = 0; position < Math.max(first.layers.length, second.layers.length); position++) {
+    const [one, other] = [first.layers[position], second.layers[position]];
+    if (one?.digest === other?.digest) continue;
+    failures.push(`layer ${position + 1} differs: ${one?.digest ?? "none"} and ${other?.digest ?? "none"}`);
+    if (!one || !other) continue;
+    const [a, b] = [entries(one), entries(other)];
+    const differing = [...new Set([...a.keys(), ...b.keys()])].sort().filter((path) => {
+      const [x, y] = [a.get(path), b.get(path)];
+      return !x || !y || x.type !== y.type || x.mode !== y.mode || x.uid !== y.uid || x.gid !== y.gid || !x.bytes.equals(y.bytes);
+    });
+    failures.push(differing.length === 0
+      ? `layer ${position + 1} holds the same entries; only how it is written differs`
+      : `layer ${position + 1}: ${differing.length} entries differ: ${differing.slice(0, 20).join(", ")}`);
+  }
+  return failures;
+}
+
+/** Where the image is built: inside the checkout, so the compiler maps its paths (see `buildImage`). */
+const ARTIFACTS = join(repository, "artifacts", "image-rehearsal");
+
+/**
+ * One build of the image, into its own directory: the live pages, then `dotnet publish
+ * -t:PublishContainer` into an emptied artifacts directory, so every project is restored and compiled
+ * afresh and nothing is taken from the repository's bin or obj, with source paths mapped
+ * (ContinuousIntegrationBuild) so the image does not depend on where the checkout lives. The artifacts
+ * directory is `artifacts/image-rehearsal` inside the checkout, the same for every build: the compiler
+ * writes the paths of its generated sources and symbol files into each assembly, and only paths under
+ * the checkout are mapped (a directory per build outside it gave each build its own assemblies). The
+ * SDK's image is then made reproducible (`reproducibleImage`). Answers `{ webRoot, archive, image }`.
+ */
+async function buildImage({ into, mountPath, epoch, log }) {
+  log("building the live pages");
+  const { buildLive } = await import("./build-live.mjs");
+  const webRoot = join(into, "v3-web");
+  await buildLive(pathToFileURL(`${webRoot}/`), { buildTag: "image-rehearsal" });
+
+  log("building the image (dotnet publish -t:PublishContainer)");
+  const sdkArchive = join(into, "sdk-image.tar");
+  await rm(ARTIFACTS, { recursive: true, force: true });
+  run("dotnet", ["publish", join(repository, "src", "Lex.V3.Api", "Lex.V3.Api.csproj"), "-c", "Release", "-r", "linux-x64", "--self-contained", "false",
+    "-p:UseArtifactsOutput=true", `-p:ArtifactsPath=${ARTIFACTS}`, "-p:ContinuousIntegrationBuild=true",
+    `-p:LexImageWebRoot=${webRoot}`, `-p:LexImageMount=${mountPath}`, `-p:ContainerArchiveOutputPath=${sdkArchive}`,
+    "-p:ContainerRepository=lex-v3-rehearsal", "-p:ContainerImageTag=rehearsal", "-t:PublishContainer", "-m:1", "-nodeReuse:false", "-v", "q"]);
+  spawnSync("dotnet", ["build-server", "shutdown"], { encoding: "utf8" });
+  await rm(ARTIFACTS, { recursive: true, force: true });
+
+  log("making the image reproducible");
+  const { reproducibleImage, writeLayout } = await import("./image-reproducible.mjs");
+  const reproducible = reproducibleImage(readLayout(await readFile(sdkArchive)), { epoch });
+  const archive = join(into, "lex-v3-rehearsal.tar");
+  await writeFile(archive, writeLayout(reproducible, { mtime: epoch }));
+  await rm(sdkArchive, { force: true });
+  return { webRoot, archive, image: readOciImage(readLayout(await readFile(archive))) };
+}
+
 /** The rehearsal, end to end. Returns its report; throws on the first step that fails. */
-export async function rehearse({ mount, keep = false, probe = true, log = () => {} }) {
+export async function rehearse({ mount, keep = false, probe = true, reproduce = true, log = () => {} }) {
   const mountPath = resolve(mount);
   const report = JSON.parse(await readFile(join(mountPath, "build-report.json"), "utf8"));
   const work = await mkdtemp(join(tmpdir(), "lex-image-rehearsal-"));
-  const publishDirectory = join(repository, "src", "Lex.V3.Api", "bin", "Release", "net10.0", "linux-x64", "publish");
-  const archive = join(work, "lex-v3-rehearsal.tar");
-  const result = { mount: mountPath, corpusSha256: report.corpus?.Sha256 ?? null };
+  const { sourceDate } = await import("./image-reproducible.mjs");
+  const source = sourceDate();
+  const result = { mount: mountPath, corpusSha256: report.corpus?.Sha256 ?? null, source };
   let container = null;
   try {
-    log("building the live pages");
-    const { buildLive } = await import("./build-live.mjs");
-    const webRoot = join(work, "v3-web");
-    await buildLive(pathToFileURL(`${webRoot}/`), { buildTag: "image-rehearsal" });
-
-    log("building the image (dotnet publish -t:PublishContainer)");
-    await rm(publishDirectory, { recursive: true, force: true });
-    run("dotnet", ["publish", join(repository, "src", "Lex.V3.Api", "Lex.V3.Api.csproj"), "-c", "Release", "-r", "linux-x64", "--self-contained", "false",
-      `-p:LexImageWebRoot=${webRoot}`, `-p:LexImageMount=${mountPath}`, `-p:ContainerArchiveOutputPath=${archive}`,
-      "-p:ContainerRepository=lex-v3-rehearsal", "-p:ContainerImageTag=rehearsal", "-t:PublishContainer", "-m:1", "-nodeReuse:false", "-v", "q"]);
-    spawnSync("dotnet", ["build-server", "shutdown"], { encoding: "utf8" });
+    const { webRoot, archive, image } = await buildImage({ into: join(work, "first"), mountPath, epoch: source.epoch, log });
     result.archiveBytes = (await stat(archive)).size;
 
     log("verifying the image");
-    const layout = readTar(await readFile(archive));
-    const named = new Map(layout.filter((entry) => entry.type === "file").map((entry) => [entry.path, entry.bytes]));
-    const index = JSON.parse(named.get("index.json").toString("utf8"));
-    const blobs = new Map([...named].filter(([path]) => path.startsWith("blobs/sha256/")).map(([path, bytes]) => [`sha256:${path.slice("blobs/sha256/".length)}`, bytes]));
-    const image = readOciImage({ index, blobs });
     const web = await filesUnder(webRoot);
     const corpus = await filesUnder(mountPath);
     const failures = imageFailures(image, { web, mount: corpus, report });
@@ -229,6 +301,16 @@ export async function rehearse({ mount, keep = false, probe = true, log = () => 
     const signatureFailures = rehearsalSignatureFailures({ ...signed, manifestDigest: image.manifestDigest });
     Object.assign(result, { signer: REHEARSAL_IDENTITY, signatureVerified: signatureFailures.length === 0, publicKeyPem: signed.publicKeyPem });
     if (signatureFailures.length > 0) throw new Error(`the rehearsal signature does not hold:\n- ${signatureFailures.join("\n- ")}`);
+
+    if (reproduce) {
+      // Reproducible: a second build, from scratch in its own directory, must give the same image.
+      log("building the image a second time, from scratch, to check it is reproducible");
+      const second = await buildImage({ into: join(work, "second"), mountPath, epoch: source.epoch, log });
+      const differences = reproductionFailures(image, second.image);
+      result.reproduced = { manifestDigest: second.image.manifestDigest, identical: differences.length === 0 };
+      await rm(join(work, "second"), { recursive: true, force: true });
+      if (differences.length > 0) throw new Error(`the image is not reproducible:\n- ${differences.join("\n- ")}`);
+    }
 
     if (probe) {
       // The zero-traffic probes, against the image itself: health (it answers), the API (each page's
@@ -252,8 +334,8 @@ export async function rehearse({ mount, keep = false, probe = true, log = () => 
   } finally {
     if (!keep) {
       await rm(work, { recursive: true, force: true });
-      await rm(publishDirectory, { recursive: true, force: true });
-      result.removed = { archive: !existsSync(archive), work: !existsSync(work), publish: !existsSync(publishDirectory) };
+      await rm(ARTIFACTS, { recursive: true, force: true });
+      result.removed = { work: !existsSync(work), artifacts: !existsSync(ARTIFACTS) };
       if (container !== null) {
         const { removeRun } = await import("./image-run.mjs");
         result.removed.container = removeRun(container);
@@ -266,10 +348,10 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
   const argv = process.argv.slice(2);
   const at = argv.indexOf("--mount");
   if (at < 0 || at + 1 >= argv.length) {
-    console.error("usage: node scripts/image-rehearsal.mjs --mount <v3-corpus directory> [--keep]");
+    console.error("usage: node scripts/image-rehearsal.mjs --mount <v3-corpus directory> [--keep] [--no-reproduce] [--no-probe]");
     process.exit(2);
   }
-  rehearse({ mount: argv[at + 1], keep: argv.includes("--keep"), probe: !argv.includes("--no-probe"), log: (line) => console.error(`- ${line}`) }).then(
+  rehearse({ mount: argv[at + 1], keep: argv.includes("--keep"), probe: !argv.includes("--no-probe"), reproduce: !argv.includes("--no-reproduce"), log: (line) => console.error(`- ${line}`) }).then(
     (result) => { console.log(JSON.stringify(result, null, 2)); },
     (error) => { console.error(error.message); process.exit(1); },
   );
