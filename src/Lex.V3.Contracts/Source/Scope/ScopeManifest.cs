@@ -866,7 +866,8 @@ public sealed class VerifiedScopeManifest
     /// row's selector evidence and matched rule outcomes, the sixteen accounting partitions and the
     /// body-candidate projection. Reading it needs no InternalsVisibleTo (Decision 80); holding an
     /// instance is itself the evidence that <see cref="ScopeReducer.Reduce"/>,
-    /// <see cref="ScopeReducer.VerifyAndOpen"/> or <see cref="ParseAndVerify"/> ran every check to
+    /// <see cref="ScopeReducer.VerifyAndOpen"/>, <see cref="ParseAndVerify"/>,
+    /// <see cref="ParseAndVerifyStream"/> or <see cref="VerifyStreamAgainst"/> ran every check to
     /// completion, because the constructor above is the only door onto this type and it stays
     /// internal.
     /// </summary>
@@ -957,6 +958,48 @@ public sealed class VerifiedScopeManifest
         ArgumentNullException.ThrowIfNull(artifactRef);
         ArgumentNullException.ThrowIfNull(canonicalStream);
         ArgumentNullException.ThrowIfNull(observationResolver);
+        ValidateStreamDigest(artifactRef, canonicalStream);
+
+        canonicalStream.Position = 0;
+        ScopeManifest manifest;
+        try
+        {
+            manifest = ContractJson.DeserializeFromStream<ScopeManifest>(canonicalStream);
+        }
+        catch (JsonException exception)
+        {
+            throw new ArgumentException("The scope manifest bytes are not one valid typed canonical document.",
+                nameof(canonicalStream), exception);
+        }
+
+        var verified = ScopeReducer.VerifyAndOpen(manifest, observationResolver);
+        return VerifyCanonicalReadback(artifactRef, canonicalStream, verified);
+    }
+
+    /// <summary>
+    /// Verifies retained bytes against an already verified scope without deserializing a second
+    /// typed graph. Rechecks complete enumeration, selector and rule evidence with the supplied
+    /// resolver, then requires exact canonical byte equality and the original digest pin.
+    /// The returned wrapper shares the immutable manifest; caller stream ownership is preserved.
+    /// </summary>
+    public static VerifiedScopeManifest VerifyStreamAgainst(
+        SourceArtifactRef artifactRef,
+        Stream canonicalStream,
+        VerifiedScopeManifest expected,
+        IScopeReductionEvidenceResolver observationResolver)
+    {
+        ArgumentNullException.ThrowIfNull(artifactRef);
+        ArgumentNullException.ThrowIfNull(canonicalStream);
+        ArgumentNullException.ThrowIfNull(expected);
+        ArgumentNullException.ThrowIfNull(observationResolver);
+        ValidateStreamDigest(artifactRef, canonicalStream);
+        // Reusing the typed graph must not bypass admission if custody evidence has changed.
+        var verified = ScopeReducer.VerifyAndOpen(expected.Manifest, observationResolver);
+        return VerifyCanonicalReadback(artifactRef, canonicalStream, verified);
+    }
+
+    private static void ValidateStreamDigest(SourceArtifactRef artifactRef, Stream canonicalStream)
+    {
         if (!canonicalStream.CanRead || !canonicalStream.CanSeek || canonicalStream.Position != 0)
         {
             throw new ArgumentException(
@@ -976,20 +1019,11 @@ public sealed class VerifiedScopeManifest
             throw new ArgumentException("The scope manifest stream is not strict UTF-8.",
                 nameof(canonicalStream));
         }
+    }
 
-        canonicalStream.Position = 0;
-        ScopeManifest manifest;
-        try
-        {
-            manifest = ContractJson.DeserializeFromStream<ScopeManifest>(canonicalStream);
-        }
-        catch (JsonException exception)
-        {
-            throw new ArgumentException("The scope manifest bytes are not one valid typed canonical document.",
-                nameof(canonicalStream), exception);
-        }
-
-        var verified = ScopeReducer.VerifyAndOpen(manifest, observationResolver);
+    private static VerifiedScopeManifest VerifyCanonicalReadback(
+        SourceArtifactRef artifactRef, Stream canonicalStream, VerifiedScopeManifest verified)
+    {
         canonicalStream.Position = 0;
         using var comparison = new CanonicalComparisonStream(canonicalStream);
         var rebuiltDigest = ScopeManifestCanonicalWriter.Write(comparison, verified);

@@ -4,6 +4,8 @@ namespace Lex.V3.Contracts.Source.Scope;
 
 public static class ScopeReducer
 {
+    private const int VerificationProjectionWidth = 5;
+
     public static VerifiedScopeManifest Reduce(
         ScopeProfileBinding profile,
         IReadOnlyList<SourceArtifactRef> orderedEvidenceArtifacts,
@@ -110,7 +112,9 @@ public static class ScopeReducer
                 "Manifest rows do not cover the complete observed object table.");
         }
 
-        var resultsByRow = new IReadOnlyList<ScopeAxisResult>[manifest.Rows.Count];
+        // Four dispositions and one body-role bit per row replace retained axis-result objects.
+        var projections = GC.AllocateUninitializedArray<byte>(
+            checked(manifest.Rows.Count * VerificationProjectionWidth));
         for (var ordinal = 0; ordinal < manifest.Rows.Count; ordinal++)
         {
             var row = manifest.Rows[ordinal];
@@ -150,7 +154,17 @@ public static class ScopeReducer
                 throw new InvalidOperationException("A manifest row digest is incorrect.");
             }
 
-            resultsByRow[ordinal] = results;
+            var offset = ordinal * VerificationProjectionWidth;
+            for (var axisIndex = 0; axisIndex < ScopeValidation.AllAxes.Length; axisIndex++)
+            {
+                // SelectAllWinners returns the fixed ScopeValidation.AllAxes order.
+                projections[offset + axisIndex] = checked((byte)results[axisIndex].Disposition);
+            }
+            projections[offset + 4] = results.Any(result =>
+                result.Axis == ScopeAxis.Body &&
+                result.Disposition == ScopeDisposition.AcceptedSelected &&
+                result.RoleMemberOrdinals.Contains(manifest.Profile.BodyCandidateRoleMemberOrdinal))
+                ? (byte)1 : (byte)0;
         }
 
         var usedEvidenceOrdinals = manifest.Rows
@@ -167,8 +181,8 @@ public static class ScopeReducer
                 "The evidence-artifact table must contain exactly the referenced artifacts.");
         }
 
-        VerifyAccounting(manifest, resultsByRow);
-        VerifyBodyCandidates(manifest, resultsByRow);
+        VerifyAccounting(manifest, projections);
+        VerifyBodyCandidates(manifest, projections);
         return new VerifiedScopeManifest(manifest);
     }
 
@@ -742,7 +756,7 @@ public static class ScopeReducer
 
     private static void VerifyAccounting(
         ScopeManifest manifest,
-        IReadOnlyList<ScopeAxisResult>[] resultsByRow)
+        byte[] projections)
     {
         var expectedCount = ScopeValidation.AllAxes.Length * ScopeValidation.AllDispositions.Length;
         if (manifest.Accounting.Count != expectedCount)
@@ -751,8 +765,9 @@ public static class ScopeReducer
         }
 
         var position = 0;
-        foreach (var axis in ScopeValidation.AllAxes)
+        for (var axisIndex = 0; axisIndex < ScopeValidation.AllAxes.Length; axisIndex++)
         {
+            var axis = ScopeValidation.AllAxes[axisIndex];
             foreach (var disposition in ScopeValidation.AllDispositions)
             {
                 var actual = manifest.Accounting[position++];
@@ -762,12 +777,9 @@ public static class ScopeReducer
                         "Accounting entries must use the fixed axis-major order.");
                 }
 
-                var expected = resultsByRow
-                    .Select((results, ordinal) => (results, ordinal))
-                    .Where(value => value.results.Any(result =>
-                        result.Axis == axis && result.Disposition == disposition))
-                    .Select(static value => value.ordinal)
-                    .ToArray();
+                var expected = Enumerable.Range(0, manifest.Rows.Count)
+                    .Where(ordinal => projections[ordinal * VerificationProjectionWidth + axisIndex] ==
+                        checked((byte)disposition));
                 if (!actual.ObjectOrdinals.SequenceEqual(expected))
                 {
                     throw new InvalidOperationException(
@@ -779,17 +791,10 @@ public static class ScopeReducer
 
     private static void VerifyBodyCandidates(
         ScopeManifest manifest,
-        IReadOnlyList<ScopeAxisResult>[] resultsByRow)
+        byte[] projections)
     {
-        var expected = resultsByRow
-            .Select((results, ordinal) => (results, ordinal))
-            .Where(value => value.results.Any(result =>
-                result.Axis == ScopeAxis.Body &&
-                result.Disposition == ScopeDisposition.AcceptedSelected &&
-                result.RoleMemberOrdinals.Contains(
-                    manifest.Profile.BodyCandidateRoleMemberOrdinal)))
-            .Select(static value => value.ordinal)
-            .ToArray();
+        var expected = Enumerable.Range(0, manifest.Rows.Count)
+            .Where(ordinal => projections[ordinal * VerificationProjectionWidth + 4] == 1);
         if (!manifest.BodyCandidateOrdinals.SequenceEqual(expected))
         {
             throw new InvalidOperationException(

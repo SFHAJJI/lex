@@ -26,14 +26,74 @@ byte/digest pins remain unchanged. Independent reflection confirms211guarded typ
 ParseAndVerifyStream added to VerifiedCorpusRecordSet's global/per-type construction pins.
 
 The required Claude review returned MERGE at a4d6fbc9 with no material defect. It reproduced
-build/fast40affected tests, passed52with broader readback/lineage coverage, and compared readers
-over15,039 inputs with zero disagreements (247accepted by both). A5,000-record set also produced
+the clean build, fast suite and all 40 affected tests. It passed 52 tests with broader readback
+and lineage coverage, and compared readers over 15,039 inputs with zero disagreements (247
+accepted by both). A 5,000-record set also produced
 identical canonical output. The one follow-up uses the persistence MemoryStream backing memory
 instead of ToArray, documents partial output/flush on failure, and refreshes through merged824.
 Fresh repair validation and exact-head CI remain pending. Persistence still buffers one complete
 canonical set and retains reopened bytes; typed records/completion also remain. Chunked record-set
 persistence and measured downstream resources remain required before full Luxembourg. No full
 population-fit claim, publisher traffic or production operation follows this change.
+## DATA review and fresh population evidence (Codex, 2026-09-30)
+
+The required Claude review of #824 at99a8e29d returned MERGE, with no blocking finding.
+It independently rebuilt (0 warnings/errors,68s), passed fast (3,076 plus one platform skip,68s)
+and all97 affected Luxembourg ingest checks (69s). Forcing the body-role bit true failed the new
+partition regression; the reviewer restored source and rebuilt. This one follow-up corrects the
+adapter comment and lists both stream entry points in the verified manifest documentation.
+
+Readback tradeoff: hold-time verification compares custody bytes with the held immutable graph
+and repeats evidence admission; independent deserialization happens on later custody replay.
+Both independent parser doors remain available, and the retained-run topology replay passed.
+No writer/parser disagreement was reproduced; no full-process memory claim is made.
+
+The fresh three-seed retry (32019R2088,32024L1760,32024R1620 plus Luxembourg a439) completed
+at20:07 UTC with506/600 requests in38m39s. It proved399EU expressions:34Formex enumerations
+eligible and365explicit language-out-of-scope outcomes. Luxembourg produced10records. All five
+mount files were built twice identically and reopened. The read-only audit checked their hashes,
+rights batches and323retained HTTP observations on Publications Office/Legilux only.
+
+Coverage remains explicit:34EU XHTML bodies were held, but only32019R2088ENG/FRA has admitted
+Formex articles (20 each). The other32 held bodies carry formex_main_body_package_not_acquired;
+those outcomes are not article-index coverage. The six retained ZIP candidates include the two
+2024 acts' annex files; their exact package refusal causes are not reconstructed by this audit.
+Evidence: C:\lex-v3\eu-three-seed-retry-20260930-1, report SHA
+`e15f7a247c7e813d7b0ab5d918c9f17c68c4ae53339a5db988a52aa3c8d270a4`.
+
+Reversible driver decision: prepare a fresh all82-seed EU retry with the existing20,000-request
+ceiling, EN/FRA-only Formex enumeration and typed outcomes for every other language. Use the
+larger package sample107,385bytes with the original4x factor, retain the larger earlier index
+sample, and require4,999,959,422free bytes including reserve before/after runtime freeze. The
+plan in lanes/eu-population-retry-sizing-proposed-20260930.json remains unlaunched until queued
+heavy work finishes and clean merged source/storage guards pass. These factors are estimates,
+not bounds; neither full population is yet proved. No served mount or production setting changes.
+
+## Reuse verified scope objects during retained readback (Codex, 2026-09-30)
+
+Even after chunked storage, parsing scope JSON again constructs a second complete typed graph.
+The writer already holds a verified scope. Reversible driver decision: compare retained canonical
+bytes against that object while re-running the reducer's complete enumeration, selector and rule
+evidence checks. Initial digest/strict UTF-8 checks, exact canonical byte comparison and final digest
+pin stay shared with the independent parsing reader. The returned wrapper shares the immutable
+manifest, and the independent reader remains available when no verified object is already held.
+
+This change builds on merged PR #820 and compiles with zero warnings/errors (71.99s).
+Regressions cover object sharing, fresh evidence refusal, foreign canonical bytes,
+noncanonical whitespace and substitution of another valid document between read passes. Construction
+pins were independently reflected: the verified type adds one public comparison door and one
+private shared comparison helper. Its global type count remains 211. The reducer's private
+scratch-layout constant makes it a census candidate, explicitly classified as not a token registry
+or vocabulary (610 candidates, 53 declined). All 97 affected Luxembourg ingest checks passed
+(67.582s). The initial fast run failed four census checks; corrected fast passed all 3,076 tests plus
+one platform skip (57.694s). Required review and exact-head green CI remain merge gates.
+The original typed scope graph and corpus record-set persistence remain full-Luxembourg constraints.
+
+The same draft also replaces the verifier's retained per-row axis-result objects with five bytes
+per row (four dispositions and the exact accepted-body-role bit). Accounting compares streamed
+ordinal sequences, avoiding whole expected-partition arrays. A 32-object mixed-disposition fixture
+cross-checks all 16 partitions against the unchanged builder, role-gated body membership and a
+corrupted partition refusal. No measured savings or full-process memory bound is claimed.
 ## EU population census refusal diagnostics (Codex, 2026-09-30)
 
 The fresh all-82-seed EU run at `C:\lex-v3\eu-population-20260930-1` ended with

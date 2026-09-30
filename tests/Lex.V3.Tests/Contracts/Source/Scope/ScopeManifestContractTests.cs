@@ -1550,6 +1550,99 @@ public sealed class ScopeManifestContractTests
     }
 
     [TestMethod]
+    public void ScopeVerificationPreservesEveryPartitionAndRequiresTheAcceptedBodyRole()
+    {
+        var profile = Profile();
+        var evidence = EvidenceArtifacts();
+        var dispositions = Enum.GetValues<ScopeDisposition>();
+        Assert.AreEqual(4, dispositions.Length);
+        var inputs = Enumerable.Range(0, 32).Select(index =>
+        {
+            var input = ValidInput(profile, Object($"projection-{index}"));
+            var evaluations = input.RuleEvaluations.ToArray();
+            for (var axis = 0; axis < 4; axis++)
+            {
+                var disposition = dispositions[(index + axis) % dispositions.Length];
+                var keepRoles = disposition == ScopeDisposition.AcceptedSelected &&
+                    (axis != 1 || (index / 4) % 2 == 0);
+                evaluations[axis] = Matched(axis, ScopeRuleEffect.Positive, disposition,
+                    keepRoles ? evaluations[axis].RoleMemberOrdinals : [], []);
+            }
+            return Change(input, evaluations: evaluations);
+        }).ToArray();
+        var resolver = ExactResolver.For(profile, evidence, inputs);
+        // Reduce builds accounting directly from axis results; verification independently rebuilds
+        // every partition, so this exercises the compact verifier against the unchanged builder.
+        var verified = ScopeReducer.Reduce(profile, evidence,
+            inputs.Select(input => input.ObjectRef).ToArray(), inputs, resolver);
+        Assert.AreEqual(16, verified.Manifest.Accounting.Count);
+        Assert.IsTrue(verified.Manifest.Accounting.All(partition => partition.ObjectOrdinals.Count == 8));
+        var expectedBodies = inputs.Where(input =>
+                input.RuleEvaluations[1].Disposition == ScopeDisposition.AcceptedSelected &&
+                input.RuleEvaluations[1].RoleMemberOrdinals.Contains(profile.BodyCandidateRoleMemberOrdinal))
+            .Select(input => input.ObjectRef.CanonicalKey).Order(StringComparer.Ordinal).ToArray();
+        var actualBodies = verified.Manifest.BodyCandidateOrdinals
+            .Select(ordinal => verified.Manifest.ObservedObjects[ordinal].ObjectRef.CanonicalKey)
+            .Order(StringComparer.Ordinal).ToArray();
+        Assert.AreEqual(4, expectedBodies.Length);
+        CollectionAssert.AreEqual(expectedBodies, actualBodies);
+        var manifest = verified.Manifest;
+        var wrongAccounting = manifest.Accounting.ToArray();
+        wrongAccounting[0] = new ScopeAccountingSet(wrongAccounting[0].Axis,
+            wrongAccounting[0].Disposition, []);
+        var wrong = new ScopeManifest(manifest.Schema, manifest.Profile, manifest.CompleteEnumerationRef,
+            manifest.OrderedEvidenceArtifacts, manifest.ObservedObjects, manifest.Rows,
+            wrongAccounting, manifest.BodyCandidateOrdinals);
+        var refusal = Assert.ThrowsExactly<InvalidOperationException>(() => ScopeReducer.VerifyAndOpen(wrong, resolver));
+        StringAssert.Contains(refusal.Message, "exact derived partition");
+    }
+
+    [TestMethod]
+    public void KnownScopeReadbackSharesTheTypedGraphAndRequiresFreshEvidenceAdmission()
+    {
+        var profile = Profile();
+        var evidence = EvidenceArtifacts();
+        var input = ValidInput(profile, Object("known-scope"));
+        var resolver = ExactResolver.For(profile, evidence, [input]);
+        var expected = ScopeReducer.Reduce(profile, evidence, [input.ObjectRef], [input], resolver);
+        var bytes = CanonicalBytes(expected);
+        using var retained = new ShortReadStream(bytes);
+        var reopened = VerifiedScopeManifest.VerifyStreamAgainst(ArtifactRefFor(bytes), retained, expected, resolver);
+        Assert.AreSame(expected.Manifest, reopened.Manifest);
+        Assert.IsTrue(retained.CanRead);
+        retained.Position = 0;
+        Assert.ThrowsExactly<InvalidOperationException>(() => VerifiedScopeManifest.VerifyStreamAgainst(
+            ArtifactRefFor(bytes), retained, expected,
+            new CompleteEnumerationRefusingResolver(expected.Manifest.CompleteEnumerationRef)));
+    }
+
+    [TestMethod]
+    public void KnownScopeReadbackRejectsOtherCanonicalContentAndSubstitutionBetweenPasses()
+    {
+        var profile = Profile();
+        var evidence = EvidenceArtifacts();
+        var a = ValidInput(profile, Object("known-a"));
+        var b = ValidInput(profile, Object("known-b"));
+        var resolverA = ExactResolver.For(profile, evidence, [a]);
+        var resolverB = ExactResolver.For(profile, evidence, [b]);
+        var knownA = ScopeReducer.Reduce(profile, evidence, [a.ObjectRef], [a], resolverA);
+        var knownB = ScopeReducer.Reduce(profile, evidence, [b.ObjectRef], [b], resolverB);
+        var bytesA = CanonicalBytes(knownA);
+        var bytesB = CanonicalBytes(knownB);
+        using var other = new ShortReadStream(bytesB);
+        Assert.ThrowsExactly<ArgumentException>(() => VerifiedScopeManifest.VerifyStreamAgainst(
+            ArtifactRefFor(bytesB), other, knownA, resolverA));
+        using var substituted = new ShortReadStream(bytesA, bytesB);
+        var failure = Assert.ThrowsExactly<ArgumentException>(() => VerifiedScopeManifest.VerifyStreamAgainst(
+            ArtifactRefFor(bytesA), substituted, knownB, resolverB));
+        StringAssert.Contains(failure.Message, "changed between verification passes");
+        var noncanonical = new byte[] { (byte)' ' }.Concat(bytesA).ToArray();
+        using var spaced = new ShortReadStream(noncanonical);
+        Assert.ThrowsExactly<ArgumentException>(() => VerifiedScopeManifest.VerifyStreamAgainst(
+            ArtifactRefFor(noncanonical), spaced, knownA, resolverA));
+    }
+
+    [TestMethod]
     public void StreamReadbackPreservesCanonicalBytesWithShortReadsAndLeavesInputOpen()
     {
         var profile = Profile();
