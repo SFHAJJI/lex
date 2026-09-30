@@ -286,6 +286,78 @@ public sealed class CorpusRecordSetTests
         Assert.AreEqual("canonicalBytes", exception.ParamName);
     }
 
+    [TestMethod]
+    public void PopulationWriterFlushesBeforeTheCompleteSetAndPreservesItsIndependentDigest()
+    {
+        var records = Enumerable.Range(0, 3_000).Select(ordinal => new CorpusRecord(
+            CorpusRecordSchemaIds.Record, ObjectRef(ordinal), ordinal,
+            ScopeDisposition.AcceptedSelected, ScopeDisposition.TypedQuarantine,
+            ScopeDisposition.Point, ScopeDisposition.NeverIngest,
+            CorpusBodyRecord.NotHeld(ScopeDisposition.TypedQuarantine), ManifestRef(), RunIdentity())).ToArray();
+        var set = new CorpusRecordSet(CorpusRecordSetSchemaIds.Set, ManifestRef(), RunIdentity(), records);
+        using var output = new RecordingWriteStream();
+        var digest = CorpusRecordSetCanonicalWriter.Write(output, set);
+        var bytes = output.Bytes;
+        Assert.IsTrue(bytes.Length > 1_000_000);
+        // Each fixture record is below 4 KiB; permit one record beyond the 64 KiB flush threshold.
+        Assert.IsTrue(output.LargestWrite <= 68 * 1024, $"Largest destination write: {output.LargestWrite}");
+        Assert.IsTrue(output.WriteCount > 10);
+        Assert.IsFalse(output.Disposed);
+        using var independent = System.Security.Cryptography.IncrementalHash.CreateHash(
+            System.Security.Cryptography.HashAlgorithmName.SHA256);
+        independent.AppendData(Encoding.ASCII.GetBytes("lex-v3-source-corpus-record-set/1\n"));
+        independent.AppendData(bytes);
+        Assert.AreEqual(Convert.ToHexStringLower(independent.GetHashAndReset()), digest);
+        var reopened = VerifiedCorpusRecordSet.ParseAndVerify(
+            new SourceArtifactRef("urn:uuid:bbbbbbb3-bbbb-4bbb-8bbb-bbbbbbbbbbb3", digest), bytes);
+        Assert.AreEqual(records.Length, reopened.Set.Records.Count);
+    }
+
+    [TestMethod]
+    public void APreexistingDestinationPrefixDoesNotEnterTheSetDigest()
+    {
+        using var destination = new MemoryStream();
+        destination.Write("prefix"u8);
+        var digest = CorpusRecordSetCanonicalWriter.Write(destination, Fixture());
+        Assert.AreEqual(FixtureDigest, digest);
+        CollectionAssert.AreEqual("prefix"u8.ToArray(), destination.ToArray()[..6]);
+        Assert.IsTrue(destination.CanWrite);
+    }
+
+    private sealed class RecordingWriteStream : Stream
+    {
+        private readonly MemoryStream _bytes = new();
+        public byte[] Bytes => _bytes.ToArray();
+        public int LargestWrite { get; private set; }
+        public int WriteCount { get; private set; }
+        public bool Disposed { get; private set; }
+        public override bool CanRead => false;
+        public override bool CanSeek => false;
+        public override bool CanWrite => !Disposed;
+        public override long Length => throw new NotSupportedException();
+        public override long Position
+        {
+            get => throw new NotSupportedException();
+            set => throw new NotSupportedException();
+        }
+        public override void Flush() { }
+        public override int Read(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+        public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
+        public override void SetLength(long value) => throw new NotSupportedException();
+        public override void Write(byte[] buffer, int offset, int count) => Write(buffer.AsSpan(offset, count));
+        public override void Write(ReadOnlySpan<byte> buffer)
+        {
+            LargestWrite = Math.Max(LargestWrite, buffer.Length);
+            WriteCount++;
+            _bytes.Write(buffer);
+        }
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing) { Disposed = true; _bytes.Dispose(); }
+            base.Dispose(disposing);
+        }
+    }
+
     private static CorpusRecordSet Fixture() => new(
         CorpusRecordSetSchemaIds.Set, ManifestRef(), RunIdentity(), new[] { RecordAt(0), RecordAt(1) });
 

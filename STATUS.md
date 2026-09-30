@@ -3,6 +3,20 @@
 Updated 2026-09-30 by the driver. This file replaces the issue-comment ledgers. It is rewritten in
 every pull request that changes what is served, what is next or what is blocked.
 
+## Corpus record-set canonical streaming (Codex, 2026-09-30, preparation)
+
+The full Luxembourg path still serializes every corpus record into one artifact. Its canonical
+writer additionally accumulated a complete MemoryStream and ToArray copy before writing to the
+caller's destination. Reversible driver decision: stream canonical records into a domain-separated
+hashing destination and flush after records once 64 KiB is pending. One record can exceed that
+threshold. Keep the existing byte format, digest, destination prefix and caller stream ownership.
+
+This code-only draft is uncompiled while the full EU acquisition occupies the heavy-job slot.
+Regressions are prepared for a 3,000-record nonseekable destination, write-size observations,
+independent domain hash/readback and a preexisting destination prefix. Existing fixture digest
+pins remain unchanged. Record-set chunk storage/readback and typed object retention still need
+separate work; no full-population memory-fit claim follows this preparation.
+
 ## Scope manifest stream readback (Codex, 2026-09-30)
 
 Full Luxembourg sizing exposed both retained scope objects and complete serialized buffers.
