@@ -60,7 +60,7 @@ CI evidence are recorded in the pull request before merge.
   (`eng/test-fast.ps1`): 3,067 tests, 3,066 pass, 1 skipped (PR #798's validation). Ingest suite: green on CI for PR #760
   (the CI `dotnet` job runs the whole solution on every pull request, about 7 min on the runner;
   green for PR #804);
-  locally about 15 min. 942 web tests pass. CI's web job can flake in `keyboard-walk.test.mjs`
+  locally about 15 min. 943 web tests pass. CI's web job can flake in `keyboard-walk.test.mjs`
   ("browser debugger never answered"); rerunning the failed job is the fix.
 - Driver: Claude Opus 5.5 since 2026-09-29 (the Fable 5.1 driver ran out of tokens on 2026-09-28
   after PR #757; the user default model is now `claude-opus-5-5`).
@@ -286,7 +286,7 @@ schema's `parameters` shape, and whose call runs the same dispatch the REST rout
 endpoint test proves it for all twenty-three. The launch-contract line "REST and MCP derive identical
 envelopes from the registry" is the owner's to tick.
 
-Web: 40 React components, 942 tests. Preview screens render fixtures. The V3 Luxembourg search
+Web: 41 React components, 943 tests. Preview screens render fixtures. The V3 Luxembourg search
 answer has a reader (PR #771). The answer census now samples `search` five ways from the real handler:
 - a phrase with 4 strict hits and 1 relaxed hit;
 - the same phrase one hit per page, with its cursor;
@@ -696,6 +696,10 @@ journey suite". PR #796 walked the served answers; this walks what the browser a
 - A step that cites (every screen but Trust and Coverage) must print at least one on an answer.
 - Once the run's recording is closed, each permalink is asked of the API's `verify`. It must answer
   `digest_matches` for the very state the permalink pins, and for the article it names.
+- Every quotation must carry, beside it, its text digest, its body digest, its official source and a
+  permalink pinning its own article. The review of #805 found that the export composer quoted 49
+  articles and cited only their state. The reading page and the export composer now share one
+  evidence line under each quote (`QuoteEvidence`).
 - The journey's summary line counts the citations verified in each run. All sixteen runs pass, and
   all sixteen with `--served-by-api` (2026-09-30). The fixture mount's runs verified 57 citations,
   each `digest_matches`: reading 50 (the state and its 49 articles), export 2, and one each for

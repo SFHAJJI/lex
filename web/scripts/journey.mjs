@@ -239,6 +239,20 @@ export function journeyVerdict(observed, expected) {
       }
     }
   }
+  if (observed.quotes !== undefined) {
+    // Every quotation carries, beside it, what the launch contract's first promise names: its text and
+    // body digests, its official source, and a permalink that pins its very article (review of #805:
+    // the export composer quoted 49 articles and cited only their state).
+    for (const quote of observed.quotes) {
+      if (!quote.codes.some((code) => code.match(PINNED_PERMALINK)?.[2] === quote.article)) {
+        failures.push(`the quote of ${quote.article} carries no citation that pins it`);
+      }
+      const digests = quote.codes.filter((code) => /^[0-9a-f]{64}$/.test(code)).length;
+      if (digests < 2 || !quote.codes.some((code) => /^https?:\/\//.test(code))) {
+        failures.push(`the quote of ${quote.article} does not show its text digest, body digest and official source`);
+      }
+    }
+  }
   if (observed.api !== undefined) {
     // What the API process recorded while serving the run: nothing, on its outputs or in its files.
     const typed = step.typed === undefined ? [] : [step.typed].flat();
@@ -605,6 +619,8 @@ async function observe(browser, pageOrigin, step, { keyboard = false } = {}) {
       // Every citation the answer prints: a permalink is printed as code, and nothing else printed as
       // code begins with a slash (digests are hex, IRIs are absolute).
       citations: await evaluate("[...new Set([...document.querySelectorAll('[data-live-answer] code')].map((node) => node.textContent.trim()).filter((text) => text.startsWith('/')))]"),
+      // Every quotation the answer shows, with what its article's element prints beside it.
+      quotes: await evaluate("[...document.querySelectorAll('[data-live-answer] [data-article]')].filter((node) => node.querySelector('blockquote') !== null).map((node) => ({ article: node.dataset.article, codes: [...node.querySelectorAll('code')].map((code) => code.textContent.trim()) }))"),
     };
   } finally {
     chrome.kill();

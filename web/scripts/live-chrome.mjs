@@ -80,7 +80,7 @@ const EN = Object.freeze({
       other: "{count} articles quoted, {withoutText} held without text, {notAdmitted} not admitted; {conflicts} with their own date differing from the state's.",
     }),
     validityConflict: "This article's own date is {own}; its state applies from {state}.",
-    digest: "Text digest {digest}, {permalink}",
+    evidence: "Text digest {text}, body digest {body}, official source {source}, {permalink}",
     withoutText: "Held without text: {articles}.",
     notHeldHeading: "What this reading does not hold",
   }),
