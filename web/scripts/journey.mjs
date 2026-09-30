@@ -1,9 +1,9 @@
 // Browser journey steps against a live API, each read in a real browser.
 //
-// Four steps, each run twice. Trust and Coverage: with a mount, the page must end in the coverage
-// answer and show the digests of the corpus and index that mount holds. Search, dossier and reading:
-// once the page has hydrated, the journey types into the form (a phrase; a work identifier; a work
-// identifier and a date) and submits it;
+// Five steps, each run twice. Trust and Coverage: with a mount, the page must end in the coverage
+// answer and show the digests of the corpus and index that mount holds. Search, dossier, reading and
+// provision history: once the page has hydrated, the journey types into the form (a phrase; a work
+// identifier; a work identifier and a date; a work identifier and an article id) and submits it;
 // with a mount, the page must end in the answer, and the one request must carry exactly what was
 // typed and nothing else. Without a mount, each must end in the refusal card for
 // `no_corpus_mounted`. In every run, what the
@@ -47,6 +47,9 @@ export const DOSSIER_IDENTIFIER = "/lu-legilux/loi-1991-08-10-n3";
 /** The date the reading step types beside that identifier: the fixture state's own date. */
 export const READING_DATE = "2024-02-01";
 
+/** The article id the provision history step types beside that identifier. */
+export const HISTORY_ANCHOR = "art_15";
+
 /** The two steps: the page each loads, the operation it must ask, and what it does before waiting. */
 export const JOURNEY_STEPS = Object.freeze({
   coverage: Object.freeze({ path: "/", operation: "coverage", body: null }),
@@ -69,6 +72,15 @@ export const JOURNEY_STEPS = Object.freeze({
     body: Object.freeze({
       operation_id: "evidence_bundle",
       parameters: Object.freeze({ identifier: DOSSIER_IDENTIFIER, date: READING_DATE }),
+    }),
+  }),
+  history: Object.freeze({
+    path: "/history.html",
+    operation: "article_history",
+    typed: Object.freeze([DOSSIER_IDENTIFIER, HISTORY_ANCHOR]),
+    body: Object.freeze({
+      operation_id: "article_history",
+      parameters: Object.freeze({ identifier: DOSSIER_IDENTIFIER, anchor: HISTORY_ANCHOR }),
     }),
   }),
 });
@@ -335,7 +347,7 @@ async function main(argv) {
   // broken page is shown to fail the journey.
   const liveRoot = argv.includes("--live-root") ? argument("--live-root") : await buildLive();
   const browser = await findBrowser();
-  const { coverage, search, dossier, reading } = JOURNEY_STEPS;
+  const { coverage, search, dossier, reading, history } = JOURNEY_STEPS;
   const results = [
     ["coverage, with the fixture mount", await run(apiOutput, mount, { step: coverage, state: "success", corpusSha256: journeyMount.corpus_sha256, indexSha256: journeyMount.index_sha256 }, browser, liveRoot)],
     ["coverage, with no mount", await run(apiOutput, null, { step: coverage, state: "refusal", refusalCode: "no_corpus_mounted" }, browser, liveRoot)],
@@ -345,6 +357,8 @@ async function main(argv) {
     ["dossier, with no mount", await run(apiOutput, null, { step: dossier, state: "refusal", refusalCode: "no_corpus_mounted" }, browser, liveRoot)],
     ["reading, with the fixture mount", await run(apiOutput, mount, { step: reading, state: "success", texts: ["the state applying from 2024-02-01", "49 articles quoted", "Art. 15.", "Text served under agreed_same_run_cc_by"] }, browser, liveRoot)],
     ["reading, with no mount", await run(apiOutput, null, { step: reading, state: "refusal", refusalCode: "no_corpus_mounted" }, browser, liveRoot)],
+    ["history, with the fixture mount", await run(apiOutput, mount, { step: history, state: "success", texts: [`${HISTORY_ANCHOR} in loi-1991-08-10-n3`, "Carried by 1 held state, from 2024-02-01", "first held wording"] }, browser, liveRoot)],
+    ["history, with no mount", await run(apiOutput, null, { step: history, state: "refusal", refusalCode: "no_corpus_mounted" }, browser, liveRoot)],
   ];
   let failed = false;
   for (const [label, { observed, failures }] of results) {
