@@ -245,7 +245,9 @@ ends in the coverage answer showing the mounted corpus and index digests; with n
 the `no_corpus_mounted` refusal card. Both runs: 6 requests, exactly one to the API
 (`POST /api/v3/coverage`, no query string), every other a same-origin asset, the headers the browser
 actually sent (`requestWillBeSentExtraInfo`) with no referrer and no cookie, nothing in storage,
-nothing on the console, the reviewed CSP, hydration clean. The first run caught the journey's own
+nothing on the console and no uncaught exception or unhandled rejection (a page given either fails
+both runs, shown with `--live-root` on a deliberately broken build), the reviewed CSP, hydration
+clean. The first run caught the journey's own
 over-strict check: under `no-referrer` Chrome reports a provisional `Referer: ""`, and the verdict now
 reads the headers actually sent. The journey is a local run, not a CI step (it needs a browser and a
 built API). PR #765 builds the first live

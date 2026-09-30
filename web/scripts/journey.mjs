@@ -4,8 +4,8 @@
 // of the corpus and index that mount holds; without one, it must end in the refusal card for
 // `no_corpus_mounted`. In both, what the browser did is measured, not assumed: exactly one request to
 // the API (`POST /api/v3/coverage`, no query string, no referrer), every other request a same-origin
-// asset, nothing written to storage, nothing logged to the console, the page's CSP the reviewed one,
-// and hydration clean.
+// asset, nothing written to storage, nothing logged to the console and no uncaught exception or
+// unhandled rejection, the page's CSP the reviewed one, and hydration clean.
 //
 // The API is the real `Lex.V3.Api`, run from a copy of its build output so the mount can sit beside
 // it (`AppContext.BaseDirectory/v3-corpus`, which is where the API looks). The page is `dist-live/`,
@@ -13,6 +13,7 @@
 // driven over the DevTools protocol by the same `Session`.
 //
 //   node scripts/journey.mjs --api <Lex.V3.Api build output> --mount <journey mount directory>
+//                            [--live-root <a built live directory>] [--verbose]
 //
 // The mount is written by `V3JourneyMountTests` with `V3_WRITE_JOURNEY_MOUNT=<directory>`; it is the
 // test fixture's mount, so the journey proves the wiring, not a real corpus.
@@ -110,8 +111,10 @@ async function startApi(apiOutput, mount) {
   });
   let stderr = "";
   child.stderr.on("data", (chunk) => { stderr += chunk; });
+  let exited = false;
+  child.on("exit", () => { exited = true; });
   const deadline = Date.now() + 60_000;
-  while (Date.now() < deadline) {
+  while (Date.now() < deadline && !exited) {
     try {
       const answer = await fetch(`${origin}/api/v3/coverage`, {
         method: "POST", headers: { "content-type": "application/json" }, body: '{"operation_id":"coverage","parameters":{}}',
@@ -123,7 +126,11 @@ async function startApi(apiOutput, mount) {
     await new Promise((resolve) => setTimeout(resolve, 250));
   }
   child.kill();
-  throw new Error(`the API did not answer within 60 s: ${stderr}`);
+  await new Promise((resolve) => setTimeout(resolve, 500));
+  await rm(home, { recursive: true, force: true }).catch(() => {});
+  throw new Error(exited
+    ? `the API exited before it answered: ${stderr}`
+    : `the API did not answer within 60 s: ${stderr}`);
 }
 
 async function observe(browser, pageOrigin) {
@@ -157,6 +164,11 @@ async function observe(browser, pageOrigin) {
         consoleMessages.push(message.params.args.map((arg) => arg.value ?? arg.description ?? "").join(" "));
       } else if (message.method === "Log.entryAdded") {
         consoleMessages.push(`${message.params.entry.level}: ${message.params.entry.text}`);
+      } else if (message.method === "Runtime.exceptionThrown") {
+        // An uncaught error or unhandled rejection reaches neither the console API nor the log
+        // (review of #766: a throwing page passed), so it is observed on its own.
+        const details = message.params.exceptionDetails;
+        consoleMessages.push(`exception: ${details.exception?.description ?? details.text}`);
       }
     });
     for (const domain of ["Network", "Runtime", "Log", "Page"]) await session.send(`${domain}.enable`, {}, sessionId);
@@ -217,7 +229,9 @@ async function main(argv) {
   const mount = argument("--mount");
   if (!(await readdir(apiOutput)).includes("Lex.V3.Api.dll")) throw new Error(`${apiOutput} holds no Lex.V3.Api.dll`);
   const journeyMount = JSON.parse(await readFile(join(mount, "journey-mount.json"), "utf8"));
-  const liveRoot = await buildLive();
+  // `--live-root` serves a directory built elsewhere instead of building one: how a deliberately
+  // broken page is shown to fail the journey.
+  const liveRoot = argv.includes("--live-root") ? argument("--live-root") : await buildLive();
   const browser = await findBrowser();
   const results = [
     ["with the fixture mount", await run(apiOutput, mount, { state: "success", corpusSha256: journeyMount.corpus_sha256, indexSha256: journeyMount.index_sha256 }, browser, liveRoot)],
