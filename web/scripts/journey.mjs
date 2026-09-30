@@ -1,10 +1,12 @@
 // Browser journey steps against a live API, each read in a real browser.
 //
-// Seven steps, each run twice. Trust and Coverage: with a mount, the page must end in the coverage
+// Eight steps, each run twice. Trust and Coverage: with a mount, the page must end in the coverage
 // answer and show the digests of the corpus and index that mount holds. Search, dossier, reading,
-// provision history, compare and radar: once the page has hydrated, the journey types into the form
-// (a phrase; a work identifier; a work identifier and a date; a work identifier and an article id; a
-// work identifier and two dates; two dates) and submits it;
+// provision history, compare, radar and the export composer: once the page has hydrated, the journey
+// types into the form (a phrase; a work identifier; a work identifier and a date; a work identifier
+// and an article id; a work identifier and two dates; two dates; a work identifier and a date) and
+// submits it; the export composer then pins the first article and must show the composed export,
+// with no second request;
 // with a mount, the page must end in the answer, and the one request must carry exactly what was
 // typed and nothing else. Without a mount, each must end in the refusal card for
 // `no_corpus_mounted`. In every run, what the
@@ -41,6 +43,7 @@ import { buildLive } from "./build-live.mjs";
 import { createLiveServer } from "./serve-live.mjs";
 import { Session, allocateDebuggerPort, findBrowser, waitForDebugger } from "./browser-evidence.mjs";
 import { cspValue } from "./csp.mjs";
+import { EXPORT_WATERMARK } from "./export-build.mjs";
 
 export const ANSWER_DEADLINE_MS = 30_000;
 
@@ -56,7 +59,7 @@ export const READING_DATE = "2024-02-01";
 /** The article id the provision history step types beside that identifier. */
 export const HISTORY_ANCHOR = "art_15";
 
-/** The two steps: the page each loads, the operation it must ask, and what it does before waiting. */
+/** The steps: the page each loads, the operation it must ask, and what it does before waiting. */
 export const JOURNEY_STEPS = Object.freeze({
   coverage: Object.freeze({ path: "/", operation: "coverage", body: null }),
   search: Object.freeze({
@@ -98,6 +101,17 @@ export const JOURNEY_STEPS = Object.freeze({
       parameters: Object.freeze({ date_from: READING_DATE, date_to: READING_DATE }),
     }),
   }),
+  export: Object.freeze({
+    path: "/export.html",
+    operation: "evidence_bundle",
+    typed: Object.freeze([DOSSIER_IDENTIFIER, READING_DATE]),
+    // Once the reading has answered: pin the first article, and the export must be composed.
+    then: Object.freeze({ click: "input[data-pin]", until: "[data-export-state=composed]" }),
+    body: Object.freeze({
+      operation_id: "evidence_bundle",
+      parameters: Object.freeze({ identifier: DOSSIER_IDENTIFIER, date: READING_DATE }),
+    }),
+  }),
   history: Object.freeze({
     path: "/history.html",
     operation: "article_history",
@@ -130,6 +144,9 @@ export function journeyVerdict(observed, expected) {
     for (const digest of [expected.corpusSha256, expected.indexSha256]) {
       if (!observed.text.includes(digest)) failures.push(`the page does not show the mounted digest ${digest}`);
     }
+  }
+  if (expected.state === "success" && step.then !== undefined && observed.then !== "reached") {
+    failures.push(`the page never showed ${step.then.until} once ${step.then.click} was clicked (${observed.then ?? "not clicked"})`);
   }
   for (const text of expected.texts ?? []) {
     if (!observed.text.includes(text)) failures.push(`the page does not show "${text}"`);
@@ -329,6 +346,16 @@ async function observe(browser, pageOrigin, step) {
       if (answerState !== null && answerState !== "loading" && answerState !== "idle") break;
       await new Promise((resolve) => setTimeout(resolve, 100));
     }
+    // A step that acts on the answer (the export composer's pin) acts only on a success, and must
+    // reach its state before the deadline.
+    let then;
+    if (step.then !== undefined && answerState === "success") {
+      then = await evaluate(`(() => { const node = document.querySelector(${JSON.stringify(step.then.click)}); if (node === null) return "absent"; node.click(); return "clicked"; })()`);
+      while (then === "clicked" && Date.now() < deadline) {
+        if (await evaluate(`document.querySelector(${JSON.stringify(step.then.until)}) !== null`)) then = "reached";
+        else await new Promise((resolve) => setTimeout(resolve, 100));
+      }
+    }
     // Let a late request or log line arrive before the observation is closed.
     await new Promise((resolve) => setTimeout(resolve, 500));
     return {
@@ -351,6 +378,7 @@ async function observe(browser, pageOrigin, step) {
       },
       cookie: await evaluate("document.cookie"),
       pageHeaders,
+      then,
     };
   } finally {
     chrome.kill();
@@ -389,7 +417,7 @@ async function main(argv) {
   const liveRoot = argv.includes("--live-root") ? argument("--live-root") : await buildLive();
   const browser = await findBrowser();
   const servedByApi = argv.includes("--served-by-api");
-  const { coverage, search, dossier, reading, history, compare, radar } = JOURNEY_STEPS;
+  const { coverage, search, dossier, reading, history, compare, radar, export: exporting } = JOURNEY_STEPS;
   const results = [
     ["coverage, with the fixture mount", await run(apiOutput, mount, { servedByApi, step: coverage, state: "success", corpusSha256: journeyMount.corpus_sha256, indexSha256: journeyMount.index_sha256 }, browser, liveRoot)],
     ["coverage, with no mount", await run(apiOutput, null, { servedByApi, step: coverage, state: "refusal", refusalCode: "no_corpus_mounted" }, browser, liveRoot)],
@@ -405,6 +433,8 @@ async function main(argv) {
     ["compare, with no mount", await run(apiOutput, null, { servedByApi, step: compare, state: "refusal", refusalCode: "no_corpus_mounted" }, browser, liveRoot)],
     ["radar, with the fixture mount", await run(apiOutput, mount, { servedByApi, step: radar, state: "success", texts: [`${READING_DATE} to ${READING_DATE}: 1 state of 1 work, of 1 held.`, "not compared: the first state this index holds"] }, browser, liveRoot)],
     ["radar, with no mount", await run(apiOutput, null, { servedByApi, step: radar, state: "refusal", refusalCode: "no_corpus_mounted" }, browser, liveRoot)],
+    ["export, with the fixture mount", await run(apiOutput, mount, { servedByApi, step: exporting, state: "success", texts: ["1 article pinned: 1 exported with text, 0 excluded.", EXPORT_WATERMARK, "Text served under agreed_same_run_cc_by."] }, browser, liveRoot)],
+    ["export, with no mount", await run(apiOutput, null, { servedByApi, step: exporting, state: "refusal", refusalCode: "no_corpus_mounted" }, browser, liveRoot)],
   ];
   let failed = false;
   for (const [label, { observed, failures }] of results) {

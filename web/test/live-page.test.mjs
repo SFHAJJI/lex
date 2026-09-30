@@ -14,7 +14,7 @@ import { createElement as h } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 
 import { renderToString } from "react-dom/server";
-import { Document, LIVE_CONTRACT, LIVE_MARKER, SYNTHETIC_MARKER, liveCompareTree, liveCoverageTree, liveDossierTree, liveHistoryTree, liveRadarTree, liveReadingTree, liveSearchTree, renderLiveComparePage, renderLiveCoveragePage, renderLiveDossierPage, renderLiveHistoryPage, renderLiveRadarPage, renderLiveReadingPage, renderLiveSearchPage } from "../.react-build/app.mjs";
+import { Document, LIVE_CONTRACT, LIVE_MARKER, SYNTHETIC_MARKER, liveCompareTree, liveCoverageTree, liveDossierTree, liveHistoryTree, liveRadarTree, liveReadingTree, liveSearchTree, liveExportTree, renderLiveComparePage, renderLiveExportPage, renderLiveCoveragePage, renderLiveDossierPage, renderLiveHistoryPage, renderLiveRadarPage, renderLiveReadingPage, renderLiveSearchPage } from "../.react-build/app.mjs";
 import { MAXIMUM_REQUEST_BYTES, createLiveServer } from "../scripts/serve-live.mjs";
 import { buildLive } from "../scripts/build-live.mjs";
 
@@ -46,6 +46,14 @@ test("the search page's server render is the tree the browser hydrates", () => {
   const root = html.slice(html.indexOf(open) + open.length);
   assert.ok(root.startsWith(renderToString(liveSearchTree())), "a hydration that changed the markup would re-render silently");
   assert.match(html, new RegExp(`data-live="${LIVE_MARKER}"`), "the search page is a live page, under the live banner");
+});
+
+test("the export composer page's server render is the tree the browser hydrates", () => {
+  const html = renderLiveExportPage();
+  const open = '<div id="live-export-root">';
+  const root = html.slice(html.indexOf(open) + open.length);
+  assert.ok(root.startsWith(renderToString(liveExportTree())), "a hydration that changed the markup would re-render silently");
+  assert.match(html, new RegExp(`data-live="${LIVE_MARKER}"`), "the export composer page is a live page, under the live banner");
 });
 
 test("the radar page's server render is the tree the browser hydrates", () => {
@@ -154,6 +162,15 @@ test("the live build writes its own directory, embeds the contract and nothing e
     assert.ok(radarBundle.includes(census.contract.registry_sha256), "the radar bundle embeds the contract");
     for (const entry of census.envelopes) {
       assert.ok(!radarBundle.includes(entry.scenario), `the census envelope "${entry.scenario}" is not shipped with the radar page`);
+    }
+
+    const exported = await readFile(join(destination, "export.html"), "utf8");
+    const exportBundle = await readFile(join(destination, "client-live-export.js"), "utf8");
+    assert.ok(exported.includes('<script src="/client-live-export.js" defer=""></script>'));
+    assert.match(exported, new RegExp(`data-live="${LIVE_MARKER}"`));
+    assert.ok(exportBundle.includes(census.contract.registry_sha256), "the export bundle embeds the contract");
+    for (const entry of census.envelopes) {
+      assert.ok(!exportBundle.includes(entry.scenario), `the census envelope "${entry.scenario}" is not shipped with the export page`);
     }
   } finally {
     await rm(destination, { recursive: true, force: true });
@@ -351,6 +368,7 @@ test("no live page says synthetic in its text, since a live page may stand over 
   for (const [name, render] of [
     ["coverage", renderLiveCoveragePage], ["search", renderLiveSearchPage], ["dossier", renderLiveDossierPage],
     ["reading", renderLiveReadingPage], ["history", renderLiveHistoryPage], ["compare", renderLiveComparePage], ["radar", renderLiveRadarPage],
+    ["export", renderLiveExportPage],
   ]) {
     const html = render();
     const text = html.slice(html.indexOf("<body")).replace(/<[^>]+>/g, " ");

@@ -1,0 +1,170 @@
+// The live export composer, measured against what the platform really sent.
+//
+// The screen asks `evidence_bundle` through the reading's client module when the reader submits, lists
+// the articles to pin, and composes the export of what is pinned in the page. These tests drive it
+// with an injected fetch that answers the census envelopes (`schemas/v3-platform/envelope-samples.json`:
+// the fixture state's bundle and no mount), and render the panel for the pins a reader would make.
+
+import assert from "node:assert/strict";
+import test from "node:test";
+import { readFile } from "node:fs/promises";
+import { createElement as h } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
+
+import { ExportAnswerView, ExportPanel, LiveExport, RefusalCard, renderLiveExportPage } from "../.react-build/app.mjs";
+import { loadLiveReading, readingOutcome } from "../scripts/live-reading.mjs";
+import { EXPORT_WATERMARK, exportCsv, exportJson } from "../scripts/export-build.mjs";
+import {
+  EXPORT_FORMATS,
+  LIVE_EXPORT_IDLE,
+  NOTHING_PINNED,
+  exportFileName,
+  exportState,
+  pinKey,
+  saveExport,
+} from "../scripts/live-export.mjs";
+
+const census = JSON.parse(await readFile(new URL("../../schemas/v3-platform/envelope-samples.json", import.meta.url), "utf8"));
+const { contract } = census;
+const envelopeOf = (scenarioStart) => {
+  const entry = census.envelopes.find((candidate) => candidate.operation === "evidence_bundle" && candidate.scenario.startsWith(scenarioStart));
+  assert.ok(entry, `the census holds the evidence_bundle envelope "${scenarioStart}..."`);
+  return entry.envelope;
+};
+const ANSWER = "the work on its state's date";
+const REQUEST = { identifier: "/lu-legilux/loi-1991-08-10-n3", date: "2024-02-01", language: "" };
+
+function answering(status, contentType, body) {
+  const calls = [];
+  const fetchImpl = async (url, init) => {
+    calls.push({ url, init });
+    return {
+      status,
+      headers: { get: (name) => (name.toLowerCase() === "content-type" ? contentType : null) },
+      text: async () => (typeof body === "string" ? body : JSON.stringify(body)),
+    };
+  };
+  return { calls, fetchImpl };
+}
+
+const unescape = (markup) => markup.replaceAll("&#x27;", "'").replaceAll("&quot;", '"').replaceAll("&lt;", "<").replaceAll("&gt;", ">").replaceAll("&amp;", "&");
+
+async function answered() {
+  const { calls, fetchImpl } = answering(200, "application/json", envelopeOf(ANSWER));
+  const outcome = await loadLiveReading({ contract, fetchImpl, request: REQUEST });
+  assert.equal(outcome.state, "success", outcome.sentence);
+  return { calls, outcome };
+}
+
+test("the server renders the form in its idle state with no named control and no export, and asks nothing", () => {
+  const { calls, fetchImpl } = answering(200, "application/json", envelopeOf(ANSWER));
+  const markup = renderToStaticMarkup(h(LiveExport, { contract, fetchImpl }));
+  assert.match(markup, /data-answer-state="idle"/);
+  assert.ok(markup.includes(LIVE_EXPORT_IDLE));
+  assert.ok(!markup.includes("data-export-state"), "no export before a reading");
+  assert.equal(calls.length, 0);
+  assert.doesNotMatch(markup.slice(markup.indexOf("<form"), markup.indexOf("</form>")), /\sname=/);
+  assert.ok(markup.includes("Read for export"));
+  assert.ok(renderLiveExportPage().includes('<script src="/client-live-export.js" defer=""></script>'));
+});
+
+test("a reading lists every article with a pin and no name, and nothing pinned says so", async () => {
+  const { calls, outcome } = await answered();
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].url, "/api/v3/evidence_bundle");
+  assert.deepEqual(JSON.parse(calls[0].init.body), { operation_id: "evidence_bundle", parameters: { identifier: REQUEST.identifier, date: REQUEST.date } });
+  const [state] = outcome.view.states;
+  const markup = renderToStaticMarkup(h(ExportAnswerView, { outcome, pins: new Set(), onPin: () => {} }));
+  assert.equal([...markup.matchAll(/data-pin=""/g)].length, state.articles.length + state.articlesWithoutText.length);
+  assert.doesNotMatch(markup, /\sname=/, "a pin carries no name");
+  assert.ok(markup.includes(`<blockquote lang="fr">`), "the text is quoted in its state's language");
+  assert.ok(!markup.includes(" until "), "the next state's date is its start, never this state's end");
+  const panel = renderToStaticMarkup(h(ExportPanel, { outcome, pins: new Set(), onSave: () => {} }));
+  assert.equal(panel, `<section data-export-state="empty"><h2>Export</h2><p role="status">${NOTHING_PINNED}</p></section>`);
+});
+
+test("pinned articles compose the export the file will carry: counts, watermark, rights, citations, digests, and the JSON itself", async () => {
+  const { outcome } = await answered();
+  const [state] = outcome.view.states;
+  const chosen = [state.articles[2], state.articles[0]];
+  const pins = new Set(chosen.map((article) => pinKey(state.stateSha256, article.publisherId)));
+  const panel = exportState(outcome, pins);
+  assert.equal(panel.state, "composed");
+  assert.deepEqual(panel.model.items.map((item) => item.publisherId), [state.articles[0].publisherId, state.articles[2].publisherId], "in the bundle's order");
+  assert.equal(panel.model.observedAt, envelopeOf(ANSWER).context.freshness.observed_at, "the time is the snapshot's observation, as the envelope says");
+
+  const markup = renderToStaticMarkup(h(ExportPanel, { outcome, pins, onSave: () => {} }));
+  const text = unescape(markup);
+  assert.match(markup, /data-export-state="composed"/);
+  assert.ok(text.includes("2 articles pinned: 2 exported with text, 0 excluded."));
+  assert.ok(text.includes(EXPORT_WATERMARK));
+  assert.ok(text.includes(`Text served under ${outcome.view.rightsDisposition}.`));
+  for (const article of chosen) {
+    assert.ok(text.includes(article.permalink), `the citation of ${article.publisherId}`);
+    assert.ok(text.includes(article.textSha256), `the whole text digest of ${article.publisherId}`);
+  }
+  assert.ok(text.includes(`<pre>${exportJson(panel.model)}</pre>`), "the JSON shown is the JSON saved");
+  assert.deepEqual([...markup.matchAll(/data-save="([a-z]+)"/g)].map((match) => match[1]), ["json", "csv"]);
+});
+
+test("a pinned article held without text is shown as excluded with its reason", async () => {
+  const envelope = structuredClone(envelopeOf(ANSWER));
+  const state = envelope.result.value.states[0];
+  const [moved] = state.articles.splice(0, 1);
+  if (moved.validity_conflict) state.validity_conflict_count -= 1;
+  state.articles_without_text = [{ article_identity_sha256: moved.article_identity_sha256, publisher_id: moved.publisher_id, reason: "no_text_tokens" }];
+  const outcome = readingOutcome({ state: "success", envelope });
+  assert.equal(outcome.state, "success", outcome.sentence);
+  const pins = new Set([pinKey(state.state_sha256, moved.publisher_id)]);
+  const list = renderToStaticMarkup(h(ExportAnswerView, { outcome, pins, onPin: () => {} }));
+  assert.ok(list.includes("held without text; an export records it as excluded, with its reason."));
+  const text = unescape(renderToStaticMarkup(h(ExportPanel, { outcome, pins, onSave: () => {} })));
+  assert.ok(text.includes("1 article pinned: 0 exported with text, 1 excluded."));
+  assert.ok(text.includes(`${moved.publisher_id}</strong> (`) && text.includes("excluded, no_text_tokens"));
+});
+
+test("an export that cannot be composed says why instead of failing the page", async () => {
+  const envelope = structuredClone(envelopeOf(ANSWER));
+  delete envelope.context.freshness;
+  const outcome = { ...readingOutcome({ state: "success", envelope }), context: {} };
+  const [state] = outcome.view.states;
+  const panel = exportState(outcome, new Set([pinKey(state.stateSha256, state.articles[0].publisherId)]));
+  assert.equal(panel.state, "failed");
+  assert.equal(panel.sentence, "This export cannot be composed: an export says when the answering snapshot was observed.");
+});
+
+test("no mount is the reading's card, with no export panel", async () => {
+  const outcome = await loadLiveReading({ contract, fetchImpl: answering(200, "application/json", envelopeOf("no corpus mounted")).fetchImpl, request: REQUEST });
+  assert.equal(outcome.card, true);
+  const markup = renderToStaticMarkup(h(ExportAnswerView, { outcome, pins: new Set(), onPin: () => {} }));
+  const card = renderToStaticMarkup(h(RefusalCard, { code: outcome.code, sentence: outcome.sentence, payload: outcome.payload }));
+  assert.equal(markup, `<section data-answer-state="refusal">${card}</section>`);
+  assert.equal(renderToStaticMarkup(h(ExportPanel, { outcome, pins: new Set(["x#y"]), onSave: () => {} })), "");
+});
+
+test("saving hands the page's own file over, named for the work and date, and sends nothing", async () => {
+  const { outcome } = await answered();
+  const [state] = outcome.view.states;
+  const { model } = exportState(outcome, new Set([pinKey(state.stateSha256, state.articles[0].publisherId)]));
+  assert.equal(exportFileName(model, "json"), "lex-v3-export-lu-legilux-loi-1991-08-10-n3-2024-02-01.json");
+
+  for (const format of EXPORT_FORMATS) {
+    const events = [];
+    let blob = null;
+    const anchor = { click: () => events.push("click"), remove: () => events.push("remove") };
+    const doc = { createElement: (tag) => { events.push(`create ${tag}`); return anchor; }, body: { append: (node) => events.push(node === anchor ? "append" : "append other") } };
+    const urls = { createObjectURL: (value) => { blob = value; return "blob:x"; }, revokeObjectURL: (url) => events.push(`revoke ${url}`) };
+    const later = [];
+    const name = saveExport(model, format, { doc, urls, later: (callback, ms) => later.push({ callback, ms }) });
+    assert.equal(name, `lex-v3-export-lu-legilux-loi-1991-08-10-n3-2024-02-01.${format.extension}`);
+    assert.equal(anchor.href, "blob:x");
+    assert.equal(anchor.download, name);
+    assert.equal(blob.type, format.mediaType);
+    assert.equal(await blob.text(), format.id === "json" ? exportJson(model) : exportCsv(model), "the file is the export, byte for byte");
+    assert.deepEqual(events, ["create a", "append", "click", "remove"]);
+    assert.equal(later.length, 1);
+    assert.ok(later[0].ms > 0, "the URL is revoked after the browser has taken the file");
+    later[0].callback();
+    assert.deepEqual(events.slice(-1), ["revoke blob:x"]);
+  }
+});

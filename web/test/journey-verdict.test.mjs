@@ -206,6 +206,28 @@ test("a radar run types two dates and is held to exactly those in the body", () 
   assert.ok(journeyVerdict(observed, expected).some((failure) => /body was/.test(failure)), "a request carrying an identifier nobody typed fails");
 });
 
+test("an export run reads, pins, and is held to the composed export and to its one request", () => {
+  assert.deepEqual(JOURNEY_STEPS.export.typed, [DOSSIER_IDENTIFIER, READING_DATE]);
+  assert.deepEqual(JOURNEY_STEPS.export.body, JOURNEY_STEPS.reading.body, "the export asks the reading, and nothing else");
+  const observed = goodSearch();
+  observed.requests = [
+    { url: `${ORIGIN}/export.html`, method: "GET", headers: {} },
+    { url: `${ORIGIN}/api/v3/evidence_bundle`, method: "POST", headers: {}, headersSent: true, postData: JSON.stringify(JOURNEY_STEPS.export.body) },
+  ];
+  observed.location = `${ORIGIN}/export.html`;
+  observed.text = "1 article pinned: 1 exported with text, 0 excluded.";
+  observed.then = "reached";
+  const expected = { origin: ORIGIN, step: JOURNEY_STEPS.export, state: "success", texts: ["1 article pinned"] };
+  assert.deepEqual(journeyVerdict(observed, expected), []);
+  for (const then of ["clicked", "absent", undefined]) {
+    assert.ok(journeyVerdict({ ...observed, then }, expected).some((failure) => /never showed \[data-export-state=composed\]/.test(failure)), `a run whose pin ${then ?? "was never clicked"} fails`);
+  }
+  const twice = { ...observed, requests: [...observed.requests, observed.requests[1]] };
+  assert.ok(journeyVerdict(twice, expected).some((failure) => /2 requests to the API/.test(failure)), "composing must not ask again");
+  const refused = { ...observed, answerState: "refusal", text: "no_corpus_mounted", then: undefined };
+  assert.deepEqual(journeyVerdict(refused, { origin: ORIGIN, step: JOURNEY_STEPS.export, state: "refusal", refusalCode: "no_corpus_mounted" }), [], "a refusal is not pinned");
+});
+
 test("a run whose page the API served is held to the headers the page arrived with (Decision 95, ruling 3)", () => {
   const policy = `${cspValue()}; frame-ancestors 'none'`;
   const served = () => ({
