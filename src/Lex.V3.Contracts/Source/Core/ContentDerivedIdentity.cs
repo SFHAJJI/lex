@@ -50,15 +50,49 @@ public static class ContentDerivedIdentity
         // can be re-cut to make a different pair with the same hashed input. A zero byte cannot
         // occur in the UTF-8 of a scope, which is what makes the separator sufficient rather than
         // decorative.
-        var scopeBytes = Encoding.UTF8.GetBytes(scope);
-        var input = new byte[scopeBytes.Length + 1 + canonicalBytes.Length];
-        scopeBytes.CopyTo(input, 0);
-        input[scopeBytes.Length] = 0;
-        canonicalBytes.CopyTo(input.AsSpan(scopeBytes.Length + 1));
+        using var hash = StartHash(scope);
+        hash.AppendData(canonicalBytes);
+        return CompleteIdentity(hash);
+    }
 
+    /// <summary>
+    /// Derives the same identity from the stream's remaining bytes without buffering the content.
+    /// Consumes to EOF and leaves the caller's stream open. Callers identifying a complete artifact
+    /// must position its stream at the beginning before this call.
+    /// </summary>
+    public static string DeriveUuidUrnFromStream(
+        string scope, Stream canonicalStream, CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(scope);
+        ArgumentNullException.ThrowIfNull(canonicalStream);
+        if (!canonicalStream.CanRead)
+            throw new ArgumentException("The content stream must be readable.", nameof(canonicalStream));
+        cancellationToken.ThrowIfCancellationRequested();
+        using var hash = StartHash(scope);
+        Span<byte> buffer = stackalloc byte[4096];
+        while (true)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var read = canonicalStream.Read(buffer);
+            if (read == 0) break;
+            hash.AppendData(buffer[..read]);
+        }
+        cancellationToken.ThrowIfCancellationRequested();
+        return CompleteIdentity(hash);
+    }
+
+    private static IncrementalHash StartHash(string scope)
+    {
+        var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
+        hash.AppendData(Encoding.UTF8.GetBytes(scope));
+        hash.AppendData("\0"u8);
+        return hash;
+    }
+
+    private static string CompleteIdentity(IncrementalHash hash)
+    {
         Span<byte> digest = stackalloc byte[32];
-        SHA256.HashData(input, digest);
-
+        hash.GetHashAndReset(digest);
         Span<byte> identifier = stackalloc byte[16];
         digest[..16].CopyTo(identifier);
         identifier[6] = (byte)((identifier[6] & 0x0F) | 0x80);

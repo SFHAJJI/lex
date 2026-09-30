@@ -27,7 +27,53 @@ bounded run may enable a fresh all-seed run with the existing 20,000-request pla
 freeze, evidence hashes, storage checks and the single-heavy-job rule remain launch gates.
 Validation: solution build has zero warnings/errors (74.76s), required fast has 3,071 passed
 plus one platform skip (67.094s), and all 67 affected EU adapter/first-mount tests passed
-(66.964s). Required fresh-context review and exact-head CI remain the merge gates.
+(66.964s). Claude's required review returned MERGE at 346909cb with no blocking or should-fix
+findings. It reproduced all checks; replacing the implementation with the base version failed
+all three diagnostic regressions. The one review follow-up records that evidence and refreshes
+through merged #820. Exact-head green CI remains the merge gate. Empty refusal arrays can
+honestly accompany a duplicate family-key shortfall, which the requested/proven counts explain.
+Long JSON diagnostics and escaped characters remain parseable retained log output.
+
+## Large derived scope artifacts (Codex, 2026-09-30)
+
+The required fresh-context Claude review returned MERGE at efa4092b. Its one documentation
+finding is repaired below. Independent review rebuilt cleanly, passed fast (3,073 plus one
+platform skip), all 29 focused checks including the corrected census partition totals, and
+106 adapter/resolver/Stage 3 checks. PR #820 merged at 5d060767 after green CI on 4955f953.
+Receipt-evidence retention and a public production reopen API remain future release work;
+this slice does not claim a retention floor for the complete artifact closure.
+
+Full Luxembourg acquisition is sized at 1,986,924 subjects and 9,672,378 assertion rows, but
+population delivery remains unproved. Until this change, scope JSON was held as one custody object, whose
+contract limit is 256 MiB. Reversible driver decision: preserve the complete canonical scope while
+storing its bytes in ordered 4 MiB custody chunks above a measured 4 MiB inline threshold.
+Small scope documents retain their current custody representation and logical identities.
+
+The writer uses a bounded channel between canonical serialization and asynchronous custody.
+Each payload and its actual canonical write receipt are held and digest-checked before publishing
+the root. The root binds order, byte lengths, complete raw digest and canonical identity. Reopening
+checks every receipt/payload binding and complete ordered content before exposing a seekable
+stream. Each new read pass checks custody again; PR #819 supplies semantic and exact canonical
+readback. A root's retention class never substitutes for the independently retained chunk receipts.
+Content-derived UUIDs use incremental hashing with the same scope separator and UUID format.
+
+Regressions cover chunk boundaries, equal repeated chunks, missing/reordered chunks,
+foreign receipt substitution, a failed consumer releasing its blocked writer, custody loss on a
+new pass and mixed retention classes. A 3,003-subject production fixture must replay both scope
+manifests and both rights channels. The draft compiled with zero warnings/errors (40.76s), and
+fast passed 3,073 tests with one platform skip (64.773s). It includes PR #819's repaired stream
+reader. All 108 affected ingest checks passed: 27 storage/topology/census checks (39.493s) and
+81 adapter/resolver checks (57.322s). Two independently transcribed census pins add one guarded
+type and three receipt holders, with no removed entries. The large fixture declares xml-akomantoso;
+its initial plain-XML-specific assertion argument was corrected. Both rights channels and complete
+canonical byte replay pass. Full CI found one further stale census total: the independently
+reflected new guarded type raises candidates from 254 to 255 and guarded types from 136 to 137.
+Those totals are corrected; other partitions are unchanged. CI recorded 5,081 passes and 19 skips
+with that one failure. Local census revalidation remains queued behind acquisition.
+The required cross-family review follows the full EU acquisition to
+respect the one-heavy-job limit; the draft will not merge before that review and exact-head CI.
+Record-set persistence and retained typed scope objects remain further limits; this is not a
+full-run memory or storage bound and does not authorize a population-completeness claim.
 
 ## Scope manifest stream readback (Codex, 2026-09-30)
 
