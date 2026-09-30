@@ -1191,7 +1191,8 @@ public sealed record LuxembourgQueryPlan
                 BIND(STR(?predicate) AS ?key_2) BIND(?object_kind AS ?key_3)
                 BIND(IF(isIRI(?object) || isLiteral(?object), STR(?object), "") AS ?key_4)
                 BIND(?datatype_iri AS ?key_5) BIND(?language_tag AS ?key_6)
-                """, "?subject ?predicate ?object ?object_kind ?datatype_iri ?language_tag"),
+                """, "?subject ?predicate ?object ?object_kind ?datatype_iri ?language_tag",
+                countProjection: "?subject ?predicate ?object"),
             Template("controlled-concepts", graph, $"""
                 {rootValues}
                 ?concept a <http://www.w3.org/2004/02/skos/core#Concept> . FILTER(isIRI(?concept))
@@ -1219,7 +1220,7 @@ public sealed record LuxembourgQueryPlan
                 BIND(STR(?subject) AS ?key_1) BIND(STR(?predicate) AS ?key_2)
                 BIND(STR(?object) AS ?key_3) BIND("" AS ?key_4)
                 BIND("" AS ?key_5) BIND("" AS ?key_6)
-                """, "?subject ?predicate ?object"),
+                """, "?subject ?predicate ?object", countProjection: "?subject ?predicate ?object"),
             Template("relation-endpoints", graph, $$"""
                 {{relationValues}}
                 { ?endpoint ?predicate ?other . } UNION { ?other ?predicate ?endpoint . }
@@ -1232,7 +1233,7 @@ public sealed record LuxembourgQueryPlan
                 BIND(STR(?subject) AS ?key_1)
                 BIND("" AS ?key_2) BIND("" AS ?key_3) BIND("" AS ?key_4)
                 BIND("" AS ?key_5) BIND("" AS ?key_6)
-                """),
+                """, countProjection: "?subject"),
             Template("typed-resources", graph, """
                 ?resource a ?type . FILTER(isIRI(?resource) && isIRI(?type))
                 BIND(STR(?type) AS ?key_1) BIND(STR(?resource) AS ?key_2)
@@ -1251,7 +1252,8 @@ public sealed record LuxembourgQueryPlan
         string templateId,
         LuxembourgDatasetGraphIdentity graph,
         string traversal,
-        string projection = "")
+        string projection = "",
+        string? countProjection = null)
     {
         if (graph.Kind != LuxembourgDatasetGraphKind.DefaultGraph)
         {
@@ -1321,10 +1323,16 @@ public sealed record LuxembourgQueryPlan
             ORDER BY ?key_1 ?key_2 ?key_3 ?key_4 ?key_5 ?key_6
             LIMIT {page_limit:uint}
             """.Replace("\r\n", "\n", StringComparison.Ordinal);
+        // S/A/G identify rows by their RDF terms. Their displayed strings, type tags and
+        // cursor keys are deterministic projections of those same terms. Count the compact
+        // RDF tuples rather than also putting every expanded string in DISTINCT's temp table.
+        // The whole-scope publisher queries returned SR319 for those redundant wide rows.
+        // Keep the identical traversal and all six range filters; page projection is unchanged.
+        var countColumns = countProjection ?? $"{projection} ?key_1 ?key_2 ?key_3 ?key_4 ?key_5 ?key_6";
         var count = $$"""
             SELECT (COUNT(*) AS ?count) WHERE {
               {
-                SELECT DISTINCT {{projection}} ?key_1 ?key_2 ?key_3 ?key_4 ?key_5 ?key_6 WHERE {
+                SELECT DISTINCT {{countColumns}} WHERE {
                 {{Indent(Indent(rangeSelection))}}
                 }
               }

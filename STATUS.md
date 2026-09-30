@@ -3,6 +3,31 @@
 Updated 2026-09-30 by the driver. This file replaces the issue-comment ledgers. It is rewritten in
 every pull request that changes what is served, what is next or what is blocked.
 
+## Luxembourg COUNT follow-up (Codex, 2026-09-30)
+
+The first whole-population preflight ended at 12:15 UTC with exit 3, using 53/100 wire
+requests. Vocabulary was delivered; the S/A/G root COUNTs returned HTTP 500 timeout or
+Virtuoso SR319 row-width errors. Custody remains in
+`C:\lex-v3\lu-population-preflight-20260930-1`; no population completeness is claimed.
+Compact COUNT projections retain the distinct RDF tuples and identical traversal/range filters,
+while omitting redundant projected strings. A six-request diagnostic observed S=1,986,924 and
+G=221,852; A still returned a retained timeout. These are observations for sizing.
+
+Reversible driver decision: split only explicit retained initial COUNT capacity errors (HTTP 500
+with the observed timeout JSON or Virtuoso SR319 prefix), alongside saturated counts. Every child
+still needs both enumeration passes and a tiled cover proof. Other statuses, malformed errors and
+challenges stop the cover. The shared wire ceiling includes failed parent attempts. An optional
+smaller leaf target supports bounded live verification; the publisher threshold remains 1,000,000.
+The bounded a439 S cover is running with a five-row target and a 150-request ceiling. Full
+Luxembourg sizing follows its proof and a fresh preflight; production credentials are not used.
+
+Reversible EU decision under standing order section 5: retain one typed outcome for every observed
+expression, but add a language-out-of-scope outcome for non-EN/FRA expressions without claiming
+that their Formex manifestations are absent or ineligible. Current eligibility requires enumeration
+for every expression, so this needs an explicit guarded contract change before use. EN/FRA still
+require the existing proof-bearing enumeration. This is the next slice, not implemented here;
+full EU sizing waits for its tests rather than assuming a 94,000-request language sweep.
+
 ## Heads
 
 - `v3/integration`: `ce2d65ad` (2026-09-30, PR #794 merged). Build 45 s. Fast lane
