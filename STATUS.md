@@ -24,6 +24,11 @@ skips and zero failures in 22m 22.463s. PR #812 merged at
 `9849ab09` after its review, one repair and green CI. No population completeness or full-process memory bound is claimed:
 typed observations, individual large observations, the root metadata and downstream manifests still
 need resource allowance.
+A separate zero-request diagnostic with 100,000 distinct synthetic subjects and no assertions
+retained 61,647,824 managed bytes (about 616 bytes per subject). Together with the earlier
+assertion sample, this confirms that subject diversity needs its own allowance. These samples
+exclude downstream scope resolution and do not establish whole-run memory fit. Frozen evidence:
+`C:\lex-v3\lanes\lu-subject-memory-sample\measurement.json`.
 
 Reversible run decision: validate the merged EN/FRA acquisition and new rights evidence on a
 fresh GDPR/a439 mount before the full EU union run. The bounded plan retains the prior 800-request
