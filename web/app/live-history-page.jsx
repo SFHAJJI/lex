@@ -6,6 +6,7 @@
 // submits.
 
 import { Document } from './Document.jsx';
+import { liveChrome } from '../scripts/live-chrome.mjs';
 import { LiveHistory } from './LiveHistory.jsx';
 import { renderHydratableDocument } from './render-document.mjs';
 import { skinFor } from '../scripts/shells.mjs';
@@ -19,22 +20,18 @@ export function liveHistoryTree() {
 }
 
 export function renderLiveHistoryPage() {
+  const copy = liveChrome().history;
   return renderHydratableDocument(
     <Document
       state="live-history"
-      title="Provision history"
+      title={copy.title}
       shell="dev"
       density={skinFor('dev').density}
       banner="live"
     >
-      <p className="eyebrow">Provision history</p>
-      <h1>One article through its states</h1>
-      <p>
-        Which held states of one Luxembourg work carry the publisher's article id, whether its
-        wording changed from one state to the next, and which held states do not carry it. The
-        identifier and the article id go to this server in the request and nowhere else, and this
-        page keeps nothing.
-      </p>
+      <p className="eyebrow">{copy.eyebrow}</p>
+      <h1>{copy.heading}</h1>
+      <p>{copy.intro}</p>
       <div id={LIVE_HISTORY_ROOT}>{liveHistoryTree()}</div>
       <script src="/client-live-history.js" defer />
     </Document>,

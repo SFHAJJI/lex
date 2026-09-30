@@ -22,6 +22,10 @@ import {
   createReadingSession,
   quotationLanguageTag,
 } from '../scripts/live-reading.mjs';
+import { liveChrome } from '../scripts/live-chrome.mjs';
+
+/** The forms' labels and buttons, from the interface copy table. */
+const FORM = liveChrome().form;
 
 const IDLE = Object.freeze({ state: 'idle', sentence: LIVE_READING_IDLE });
 
@@ -132,7 +136,7 @@ export function ReadingAnswerView({ outcome }) {
  * The reading form: a work identifier, a date and a language, handed to `onAsk` on submit. Shared
  * with the export composer, which asks the same reading.
  */
-export function ReadingForm({ onAsk, submitLabel = 'Read' }) {
+export function ReadingForm({ onAsk, submitLabel = FORM.submit.reading }) {
   const [identifier, setIdentifier] = useState('');
   const [date, setDate] = useState('');
   const [language, setLanguage] = useState('');
@@ -145,7 +149,7 @@ export function ReadingForm({ onAsk, submitLabel = 'Read' }) {
       }}
     >
       <label>
-        Work identifier{' '}
+        {FORM.workIdentifier}{' '}
         <input
           type="text"
           value={identifier}
@@ -155,7 +159,7 @@ export function ReadingForm({ onAsk, submitLabel = 'Read' }) {
         />
       </label>{' '}
       <label>
-        Date{' '}
+        {FORM.date}{' '}
         <input
           type="text"
           inputMode="numeric"
@@ -166,9 +170,9 @@ export function ReadingForm({ onAsk, submitLabel = 'Read' }) {
         />
       </label>{' '}
       <label>
-        Language{' '}
+        {FORM.language}{' '}
         <select value={language} onChange={(event) => setLanguage(event.target.value)}>
-          <option value="">Any held language</option>
+          <option value="">{FORM.anyLanguage}</option>
           {READING_LANGUAGES.map((offered) => (
             <option key={offered.code} value={offered.code}>
               {offered.label}

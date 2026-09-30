@@ -25,6 +25,10 @@ import {
   SEARCH_QUERY_MAX,
   createSearchSession,
 } from '../scripts/live-search.mjs';
+import { liveChrome } from '../scripts/live-chrome.mjs';
+
+/** The forms' labels and buttons, from the interface copy table. */
+const FORM = liveChrome().form;
 
 const IDLE = Object.freeze({ state: 'idle', sentence: LIVE_SEARCH_IDLE });
 
@@ -197,7 +201,7 @@ export function LiveSearch({ contract, fetchImpl }) {
         }}
       >
         <label>
-          Phrase{' '}
+          {FORM.phrase}{' '}
           <input
             type="search"
             value={query}
@@ -207,7 +211,7 @@ export function LiveSearch({ contract, fetchImpl }) {
           />
         </label>{' '}
         <label>
-          Language{' '}
+          {FORM.language}{' '}
           <select value={language} onChange={(event) => setLanguage(event.target.value)}>
             {SEARCH_LANGUAGES.map((offered) => (
               <option key={offered.code} value={offered.code}>
@@ -216,7 +220,7 @@ export function LiveSearch({ contract, fetchImpl }) {
             ))}
           </select>
         </label>{' '}
-        <button type="submit">Search</button>
+        <button type="submit">{FORM.submit.search}</button>
       </form>
       <SearchAnswerView outcome={outcome} onNextPage={(after) => session.current.next(after)} />
     </div>

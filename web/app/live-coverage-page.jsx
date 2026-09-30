@@ -12,6 +12,7 @@
 // handed another, as a release build will be.
 
 import { Document } from './Document.jsx';
+import { liveChrome } from '../scripts/live-chrome.mjs';
 import { LiveCoverage } from './LiveCoverage.jsx';
 import { renderHydratableDocument } from './render-document.mjs';
 import { skinFor } from '../scripts/shells.mjs';
@@ -34,21 +35,19 @@ export function liveCoverageTree() {
 export const CENSUS_EVALUATION_CARD = censusCard;
 
 export function renderLiveCoveragePage({ card = CENSUS_EVALUATION_CARD } = {}) {
+  const copy = liveChrome().coverage;
   const view = readEvaluationCard(card);
   return renderHydratableDocument(
     <Document
       state="live-coverage"
-      title="Trust and Coverage"
+      title={copy.title}
       shell="dev"
       density={skinFor('dev').density}
       banner="live"
     >
-      <p className="eyebrow">Gateway</p>
-      <h1>Trust and Coverage</h1>
-      <p>
-        What the corpus this server mounts holds and what it recorded as missing, asked of the
-        server when the page loads. The request carries no query text.
-      </p>
+      <p className="eyebrow">{copy.eyebrow}</p>
+      <h1>{copy.heading}</h1>
+      <p>{copy.intro}</p>
       <div id={LIVE_COVERAGE_ROOT}>{liveCoverageTree()}</div>
       <EvaluationCardView view={view} />
       <script src="/client-live.js" defer />
