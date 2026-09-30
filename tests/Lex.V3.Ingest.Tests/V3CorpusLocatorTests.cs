@@ -110,7 +110,7 @@ public sealed class V3CorpusLocatorTests
             {
                 var envelope = await PostEnvelopeAsync(europeMount, rawTarget, body(identifier));
                 Assert.AreEqual("identifier_unknown", envelope.Refusal!.Code, $"{identifier} {rawTarget}");
-                StringAssert.Contains(envelope.Refusal.HelpfulPayload.GetProperty("what_would_answer").GetString(),
+                StringAssert.Contains(envelope.Refusal.HelpfulPayload.GetProperty("what_would_answer_detail").GetString(),
                     "no publisher shape", $"{identifier} {rawTarget}");
             }
         }

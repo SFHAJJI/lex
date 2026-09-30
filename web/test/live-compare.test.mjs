@@ -116,10 +116,12 @@ test("two states are listed article by article: the moved ones first, the unchan
 test("the refusals a comparison from this page can meet", async () => {
   const early = await loadLiveCompare({ contract, fetchImpl: answering(200, "application/json", envelopeOf("a from date before the work's history")).fetchImpl, request: REQUEST });
   assert.equal(early.code, "no_version_for_date");
-  assert.equal(early.card, false);
-  assert.match(early.sentence, /begins on 2024-02-01\.$/);
+  assert.equal(early.card, true, "the absence carries its evidence, so it is a card (driver decision (a))");
+  const earlyCard = renderToStaticMarkup(h(RefusalCard, { code: early.code, sentence: early.sentence, payload: early.payload }));
+  assert.ok(earlyCard.includes("2024-02-01") && earlyCard.includes("It is not evidence that the instrument or the law does not exist."), "the card names where the history begins, and the absence note");
   const unknown = await loadLiveCompare({ contract, fetchImpl: answering(200, "application/json", envelopeOf("a work the index does not hold")).fetchImpl, request: REQUEST });
-  assert.equal(unknown.card, false);
+  assert.equal(unknown.card, true);
+  assert.ok(renderToStaticMarkup(h(RefusalCard, { code: unknown.code, sentence: unknown.sentence, payload: unknown.payload })).includes("Luxembourg index holds 1 Luxembourg work"), "the population searched");
   const none = await loadLiveCompare({ contract, fetchImpl: answering(200, "application/json", envelopeOf("no corpus mounted")).fetchImpl, request: REQUEST });
   assert.equal(none.card, true);
   assert.equal(none.sentence, "This build has no Luxembourg index mounted.");

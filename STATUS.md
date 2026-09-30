@@ -5,11 +5,11 @@ every pull request that changes what is served, what is next or what is blocked.
 
 ## Heads
 
-- `v3/integration`: `bb842133` (2026-09-30, PR #790 merged). Build 45 s. Fast lane
+- `v3/integration`: `736e9c03` (2026-09-30, PR #793 merged). Build 45 s. Fast lane
   (`eng/test-fast.ps1`): 3,038 tests, 3,037 pass, 1 skipped. Ingest suite: green on CI for PR #760
   (the CI `dotnet` job runs the whole solution on every pull request, about 7 min on the runner;
-  green for PR #790);
-  locally about 15 min. 922 web tests pass. CI's web job can flake in `keyboard-walk.test.mjs`
+  green for PR #793);
+  locally about 15 min. 927 web tests pass. CI's web job can flake in `keyboard-walk.test.mjs`
   ("browser debugger never answered"); rerunning the failed job is the fix.
 - Driver: Claude Opus 5.5 since 2026-09-29 (the Fable 5.1 driver ran out of tokens on 2026-09-28
   after PR #757; the user default model is now `claude-opus-5-5`).
@@ -235,7 +235,7 @@ schema's `parameters` shape, and whose call runs the same dispatch the REST rout
 endpoint test proves it for all twenty-three. The launch-contract line "REST and MCP derive identical
 envelopes from the registry" is the owner's to tick.
 
-Web: 37 React components, 922 tests. Preview screens render fixtures. The V3 Luxembourg search
+Web: 37 React components, 927 tests. Preview screens render fixtures. The V3 Luxembourg search
 answer has a reader (PR #771). The answer census now samples `search` five ways from the real handler:
 - a phrase with 4 strict hits and 1 relaxed hit;
 - the same phrase one hit per page, with its cursor;
@@ -959,23 +959,26 @@ proves the path, not a corpus.
 - **Attempt 2's blocker is resolved by Decision 95 and PR #780.** Both required changes are
   implemented: the Publications Office Decision receipt replaces the challenged notice, and it is
   fetched before population traffic. Rebinding its retained hops after acquisition avoids a second
-  rights request. The successful live receipt check is recorded above; the full mount run is next.
-- **Attempt 3 is running from merged PR #780 (`1774a774`).** Started 2026-09-30 at 08:32:21 UTC,
+  rights request. The successful live receipt check is recorded above; the completed mount is below.
+- **Attempt 3 was interrupted during the IDE restart.** Started 2026-09-30 at 08:32:21 UTC,
   using PR #750's GDPR/Luxembourg command and the unchanged 800-request ceiling. Its isolated tool,
   custody and log are under `C:\lex-v3\first-mount-decision95`. The Decision receipt completed
   303 -> 200 at 08:32:25 UTC, 48,730 bytes with the SHA-256 recorded above, before census traffic.
-  The mount outcome is pending. `eng/verify-mounted-corpus.ps1` starts a copied API runtime on
-  loopback, retains coverage and both publishers' resolve envelopes, checks their contracts and
-  corpus/index digests, and records response hashes. The real-data smoke run follows a successful
-  build automatically; no production deployment is involved.
+  No exit receipt was written. Its custody remains intact.
 
-- **First-mount restart, 2026-09-30 09:57 UTC (Codex).** The acquisition in
-  `C:\lex-v3\first-mount-decision95` stopped without an exit receipt during the IDE restart;
-  its custody remains intact. The same isolated runtime from `1774a774` is running the same
-  GDPR/Luxembourg selection and 800-request ceiling in the fresh directory
-  `C:\lex-v3\first-mount-decision95-restart-20260930`. The detached runner records its exit
-  code and invokes the local verifier after exit 0. The receipt again completed 303 -> 200
-  before census traffic. No real mount success is claimed while acquisition is pending.
+- **First real mount completed, 2026-09-30 11:19 UTC (Codex).** The restart used the same isolated
+  runtime from `1774a774`, GDPR/Luxembourg selection and 800-request ceiling in
+  `C:\lex-v3\first-mount-decision95-restart-20260930`. It exited 0 after 1 h 21 m 54 s,
+  spending 700 requests. EU: 91 expressions enumerated, 91 Formex-eligible; Luxembourg: 10 corpus
+  records. The combined corpus has 15 members. Corpus, both indexes and both capability manifests
+  built twice with equal bytes; all five written files verified on read-back. Corpus identity:
+  `02d19a2a68cd6a5b37fe9ccf79a21bd0359b1f8d232c578fb129d86ec7e8d313`.
+  The Decision receipt completed 303 -> 200 before census traffic. No EUR-Lex request was sent.
+  At 11:19:23 UTC the local verifier returned HTTP 200/answer for coverage, EU `32016R0679` and
+  Luxembourg `http://data.legilux.public.lu/eli/etat/leg/loi/2017/03/14/a439/jo/fr`, checking their
+  contracts, identifiers and corpus/index digests. Evidence: `v3-corpus/build-report.json`,
+  `smoke-1/smoke-report.json`, raw envelopes and API logs under the restart root. This is a bounded
+  local mount; full populations and production deployment remain outstanding.
   PR #786's cross-family findings are repaired: the verifier has an exact tree-allowlist entry,
   its Luxembourg default names the `/jo/fr` expression, and snapshot/coverage digests are checked.
 
@@ -1002,11 +1005,10 @@ one wire ceiling and corpus identity. Formex acquisition binds each original exp
 own reviewed CELEX, including when a batch spans several works. An expression whose work is not
 an Appendix A root receives `not_acquired / identity_not_admitted`; this does not add consolidated
 wordings. The earlier 82 separate runs remain separate evidence. A complete combined live build
-has not yet run; it follows the bounded first mount below.
+has not yet run; the bounded first mount above is complete.
 
-1. Data lane (Codex, Decision 95). The receipt route is changed and live-verified (PR #780).
-   Run the bounded first mount with PR #750's command, the Codex checkout and the 800-request
-   ceiling; mount the result locally and answer `resolve` from the real data. No EUR-Lex request.
+1. Data lane (Codex, Decision 95): bounded first mount and real-data resolve completed above.
+   Finish PR #786 and population PR #785, then continue the population work below.
 2. Data lane (Codex). Complete the EU and Luxembourg populations under the owner's 2026-09-30
    authorisation, with one typed outcome per discovered body, then acquire French EU bodies.
 3. Data lane (Codex). Formex, the rest: French bodies (Decision 89) so French packages are held and acquired; then
@@ -1055,11 +1057,13 @@ has not yet run; it follows the bounded first mount below.
    live radar screen and journey step; PR #788: the API serves the live pages with the security
    headers (ruling 3); PR #789: the live export composer and its journey step. All eight of the
    launch contract's screens are live and journeyed; PR #790: the PDF export; PR #792: the
-   evaluation card on the Trust and Coverage page (ruling 2). Next: the French and English refusal
-   sentences for the checkpoint (ruling 4). Hosting (ruling 3): `Lex.V3.Api`
+   evaluation card on the Trust and Coverage page (ruling 2); PR #793: the refusal sentence list
+   for the checkpoint (ruling 4); PR #794: the absence refusals carry the card's evidence, so the
+   live pages show them as cards. Next: keyboard and screen-reader paths for the eight screens,
+   then French and English chrome (Decision 41: French copy ships only once reviewed). Hosting
+   (ruling 3): `Lex.V3.Api`
    serves the live pages on the API's origin with `frame-ancestors`, HSTS and `Referrer-Policy`,
-   and a live page never shows the synthetic banner on a real mount. The absence refusals the card
-   will not show: the producer carries the fields (driver decision). J1 to J8 are restated as V3
+   and a live page never shows the synthetic banner on a real mount. J1 to J8 are restated as V3
    steps by the driver (they exist only in the pre-V3 pack, `05-user-journeys.md`).
 7. Release pipeline: build, sign, image, zero-traffic deploy, probes. Then acceptance and promotion.
 8. Machine gates (launch contract, Evaluation): the temporal, refusal and retrieval case sets run
@@ -1092,7 +1096,7 @@ show text (users primarly want a temporal view of eu texts and dont really care 
 3. Web hosting: one server delivers the web bundle and the API (`/api/v3`, `/mcp`) on one origin,
    so the current CSP and no-CORS stand. That server sends `frame-ancestors`, HSTS and
    `Referrer-Policy`. A live page's banner never says "synthetic" on a real mount.
-4. French and English refusal sentences: the owner reviews them himself. The driver prepares one
+4. French and English refusal sentences: the owner reviews them in person. The driver prepares one
    short list for the weekly checkpoint and does not block on it.
 5. EU parity details, the event log, the `ask` card verdict and the four operations with no data:
    the driver's stated defaults (below).
@@ -1129,12 +1133,20 @@ Each is the driver's call under ruling 7 and can be reversed by a later pull req
   code. Three produced refusals therefore fail the card (`refusal-payload-samples.test.mjs`
   `KNOWN_BREAKS`): `identifier_unknown` (free-text `what_would_answer`, no disclosure),
   `no_version_for_date` (the nearest dates, neither absence field) and `anchor_not_in_version`
-  (`nearest_anchors`, neither absence field). `text_not_available` conforms. The producer will add
-  the fields to all three as optional payload keys (`identifier_unknown`'s `what_would_answer`
-  becoming the vocabulary list, a reviewed registry change), because the rule protects the
-  product's oldest invariant (an absence of a record is not an absence of law) and must travel over
-  MCP too. Until then the live pages say those three by their code, with the date or the nearest ids
-  to try next where the payload has them.
+  (`nearest_anchors`, neither absence field). `text_not_available` conforms. Done in PR #794: the
+  mount adds the fields to all three, because the rule protects the product's oldest invariant (an
+  absence of a record is not an absence of law) and must travel over MCP too.
+  - `what_would_answer` is the vocabulary list: `identifier_unknown` corrected identifier and
+    expanded scope, `no_version_for_date` a new official observation, `anchor_not_in_version` a
+    corrected identifier and a new observation. `asserts_absence_of_law: false` on each.
+  - `identifier_unknown`'s prose moves to `what_would_answer_detail` ("a hash-pinned permalink of a
+    state this index holds at that stable coordinate" and the like), and it carries a
+    `population_disclosure` counted from the mounted index ("This build's Luxembourg index holds 1
+    Luxembourg work, with states dated from 2024-02-01 to 2026-04-11"; the EU index counts its
+    members).
+  - The registry lists mandatory field names only and the refusal schema leaves payloads open, so
+    the registry digest and the contract are unchanged; the refusal-payload and envelope censuses
+    are rendered again. `KNOWN_BREAKS` is empty, and the live pages show those refusals as cards.
 - EU parity (PR #761): (a) the Formex act date (`wording_date`) is the EU wording-state date, and
   `official_consolidation_state` fits an answer over an original wording; (b) the original wording
   does not answer EU `as_of` for dates after it when no consolidation is held; consolidation
@@ -1186,13 +1198,18 @@ Repair fast lane: 3,065 pass / 1 Windows skip; repair build: zero warnings/error
 
 ## Waiting on others
 
-- The data lane (Codex, Decision 95): the EU rights receipt on the Publications Office route, then
-  the first real mount. The web lane's mounted-corpus work (the evaluation card over real gates,
-  the journeys with more than one page of hits) follows that mount.
+- The bounded real mount is available at
+  `C:\lex-v3\first-mount-decision95-restart-20260930\v3-corpus` for the web lane's mounted-corpus
+  evaluation and journeys. The data lane continues the full EU and Luxembourg populations.
 
 ## For the weekly checkpoint
 
-- The French and English refusal sentences, one short list (ruling 4).
+- The French and English refusal sentences, one short list (ruling 4): PR #793. The 20 sentences the
+  live pages say by refusal code, each page's two sentences for a refusal named only by its code,
+  and the two hints a card that cannot be shown still carries (the date the history begins, the
+  nearest article ids; review of #793), English as served and French as the driver's draft. Printed from the pages' own sentences by
+  `node web/scripts/refusal-sentences.mjs`; a test holds every served sentence to one draft. Nothing
+  French ships until the owner's reviewed wording replaces the drafts.
 
 ## Blocked on the owner
 
