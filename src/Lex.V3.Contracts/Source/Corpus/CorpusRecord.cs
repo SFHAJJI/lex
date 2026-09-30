@@ -1241,6 +1241,10 @@ public static class CorpusRecordSetCanonicalWriter
 {
     private const string SetDomain = "lex-v3-source-corpus-record-set/1\n";
 
+    /// <summary>
+    /// Writes and flushes incrementally, leaving the caller's stream open. A failure can leave
+    /// partial canonical bytes in the destination; callers must discard that incomplete output.
+    /// </summary>
     public static string Write(Stream destination, CorpusRecordSet set)
     {
         ArgumentNullException.ThrowIfNull(destination);

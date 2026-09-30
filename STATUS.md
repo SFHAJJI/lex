@@ -25,8 +25,13 @@ typed ordinal invariants, canonical substitution and stream preconditions. Exist
 byte/digest pins remain unchanged. Independent reflection confirms211guarded types, with only
 ParseAndVerifyStream added to VerifiedCorpusRecordSet's global/per-type construction pins.
 
-Required cross-family review and exact-head green CI remain pending. The writer still holds
-one complete custody object, and typed records/completion remain in memory. Chunked record-set
+The required Claude review returned MERGE at a4d6fbc9 with no material defect. It reproduced
+build/fast40affected tests, passed52with broader readback/lineage coverage, and compared readers
+over15,039 inputs with zero disagreements (247accepted by both). A5,000-record set also produced
+identical canonical output. The one follow-up uses the persistence MemoryStream backing memory
+instead of ToArray, documents partial output/flush on failure, and refreshes through merged824.
+Fresh repair validation and exact-head CI remain pending. Persistence still buffers one complete
+canonical set and retains reopened bytes; typed records/completion also remain. Chunked record-set
 persistence and measured downstream resources remain required before full Luxembourg. No full
 population-fit claim, publisher traffic or production operation follows this change.
 ## EU population census refusal diagnostics (Codex, 2026-09-30)

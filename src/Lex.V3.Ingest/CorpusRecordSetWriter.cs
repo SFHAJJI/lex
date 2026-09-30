@@ -412,7 +412,8 @@ public sealed class CorpusRecordSetWriter
         var set = new CorpusRecordSet(CorpusRecordSetSchemaIds.Set, manifestRef, runIdentity, records);
         using var buffer = new MemoryStream();
         var setCanonicalSha256 = CorpusRecordSetCanonicalWriter.Write(buffer, set);
-        var setBytes = buffer.ToArray();
+        ReadOnlyMemory<byte> setBytes = buffer.TryGetBuffer(out var segment)
+            ? segment.AsMemory() : buffer.ToArray();
 
         // RULING lex-event-20260904T213727510Z-671a8c2563684ab49048677997ceef1c: the set's observed
         // membership is recorded on the result this writer produces, and the run completes. It used
