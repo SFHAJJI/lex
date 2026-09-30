@@ -173,3 +173,19 @@ test("a provision history run types the identifier and the article id and is hel
   observed.requests[1].url = `${ORIGIN}/api/v3/evidence_bundle`;
   assert.ok(journeyVerdict(observed, expected).some((failure) => /not POST \/api\/v3\/article_history/.test(failure)));
 });
+
+test("a compare run types the identifier and two dates and is held to all three in the body", () => {
+  assert.deepEqual(JOURNEY_STEPS.compare.typed, [DOSSIER_IDENTIFIER, READING_DATE, READING_DATE]);
+  assert.deepEqual(JOURNEY_STEPS.compare.body, { operation_id: "diff", parameters: { identifier: DOSSIER_IDENTIFIER, date_from: READING_DATE, date_to: READING_DATE } });
+  const observed = goodSearch();
+  observed.requests = [
+    { url: `${ORIGIN}/compare.html`, method: "GET", headers: {} },
+    { url: `${ORIGIN}/api/v3/diff`, method: "POST", headers: {}, headersSent: true, postData: JSON.stringify(JOURNEY_STEPS.compare.body) },
+  ];
+  observed.location = `${ORIGIN}/compare.html`;
+  observed.text = "The same version applied on both dates.";
+  const expected = { origin: ORIGIN, step: JOURNEY_STEPS.compare, state: "success", texts: ["The same version applied on both dates."] };
+  assert.deepEqual(journeyVerdict(observed, expected), []);
+  observed.requests[1].postData = JSON.stringify({ operation_id: "diff", parameters: { identifier: DOSSIER_IDENTIFIER, date_from: READING_DATE, date_to: "2025-01-01" } });
+  assert.ok(journeyVerdict(observed, expected).some((failure) => /body was/.test(failure)), "a request with another date fails");
+});

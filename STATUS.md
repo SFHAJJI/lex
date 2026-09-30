@@ -5,11 +5,11 @@ every pull request that changes what is served, what is next or what is blocked.
 
 ## Heads
 
-- `v3/integration`: `a8a53034` (2026-09-30, PR #781 merged). Build 45 s. Fast lane
+- `v3/integration`: `1774a774` (2026-09-30, PR #780 merged). Build 45 s. Fast lane
   (`eng/test-fast.ps1`): 3,038 tests, 3,037 pass, 1 skipped. Ingest suite: green on CI for PR #760
   (the CI `dotnet` job runs the whole solution on every pull request, about 7 min on the runner;
-  green for PR #781);
-  locally about 15 min. 873 web tests pass. CI's web job can flake in `keyboard-walk.test.mjs`
+  green for PR #782);
+  locally about 15 min. 881 web tests pass. CI's web job can flake in `keyboard-walk.test.mjs`
   ("browser debugger never answered"); rerunning the failed job is the fix.
 - Driver: Claude Opus 5.5 since 2026-09-29 (the Fable 5.1 driver ran out of tokens on 2026-09-28
   after PR #757; the user default model is now `claude-opus-5-5`).
@@ -235,7 +235,7 @@ schema's `parameters` shape, and whose call runs the same dispatch the REST rout
 endpoint test proves it for all twenty-three. The launch-contract line "REST and MCP derive identical
 envelopes from the registry" is the owner's to tick.
 
-Web: 33 React components, 873 tests. Preview screens render fixtures. The V3 Luxembourg search
+Web: 34 React components, 881 tests. Preview screens render fixtures. The V3 Luxembourg search
 answer has a reader (PR #771). The answer census now samples `search` five ways from the real handler:
 - a phrase with 4 strict hits and 1 relaxed hit;
 - the same phrase one hit per page, with its cursor;
@@ -453,6 +453,27 @@ own, so every other sample stays the one-state answer. `web/scripts/compare-answ
 - otherwise every article of each side appears in exactly one row, the rows are the ids in ordinal
   order, each row's status is its sides' (added, removed, unchanged when the ordered wording digests
   are equal, changed when they are not), and the counts are the rows'.
+
+The live compare screen and its journey step (PR #783). `dist-live/compare.html` has its own bundle
+`client-live-compare.js`.
+- The form sends the work identifier, two dates written `yyyy-mm-dd`, and a language only when one is
+  chosen. One `POST /api/v3/diff` per submit.
+- The comparison is read by `readDiff` and laid out linearly: each side's state and permalink, the
+  date the next held state applies from (said as that state's start, never as "until"), its
+  article count and how many of its articles carry their own date differing from the state's, the
+  platform's note ("nothing about legal effect is asserted"), the counts, then the changed, added
+  and removed articles (each status a word, with the whole wording digests on each side). The
+  unchanged articles are one disclosure away. The same state on both dates says so, with no counts.
+  The wording rule and the validity conflict rule close the page.
+- The envelope census now holds the same-state comparison and three refusals (a from date before the
+  history, an unknown work, no mount). The two-state comparison from the answer census is rendered
+  in the tests: `art_15` changed, `art_16` removed, `art_16-new` added, 47 unchanged.
+  `ambiguous_version`, `profiles_differ` and `language_not_available` are cards, checked against the
+  refusal census's payloads. `no_version_for_date` and `identifier_unknown` are said by their code,
+  the former with the date the held history begins.
+- `journey.mjs` runs a sixth step: `/compare.html`, typing the fixture work's identifier and
+  `2024-02-01` twice. With the mount the page ends in "The same version applied on both dates";
+  without one, in the card. All twelve runs pass.
 
 **The search journey step passes (PR #773, run locally 2026-09-30).** `node scripts/journey.mjs`
 now runs two steps, each with and without the fixture mount, and all four runs pass.
@@ -866,8 +887,8 @@ proves the path, not a corpus.
    `evidence_bundle`; PR #777: the live reading screen, its page and journey step. The four launch
    screens with V3 readers (coverage, search, dossier, reading) are now live and journeyed. PR
    #778: the provision history reader `readArticleHistory`; PR #781: the live provision history
-   screen and journey step; PR #782: the compare reader `readDiff`. Next: the live compare screen and
-   journey step, then Radar (`changes_in_period`, the change radar). Of the
+   screen and journey step; PR #782: the compare reader `readDiff`; PR #783: the live compare screen
+   and journey step. Next: Radar (`changes_in_period`, the change radar), then Export composer. Of the
    launch contract's eight screens, Export composer is the last. Hosting (ruling 3): `Lex.V3.Api`
    serves the live pages on the API's origin with `frame-ancestors`, HSTS and `Referrer-Policy`,
    and a live page never shows the synthetic banner on a real mount. The absence refusals the card
