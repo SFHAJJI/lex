@@ -34,6 +34,10 @@ public sealed class EuFormexPackagePopulationProducerTests
         var root = json.RootElement;
         Assert.IsFalse(root.GetProperty("delivered").GetBoolean());
         Assert.AreEqual(JsonValueKind.Null, root.GetProperty("expression_count").ValueKind);
+        Assert.AreEqual(JsonValueKind.Null, root.GetProperty("eligible_count").ValueKind);
+        Assert.AreEqual(JsonValueKind.Null, root.GetProperty("acquired_count").ValueKind);
+        Assert.AreEqual(JsonValueKind.Null, root.GetProperty("not_enumerated_language_out_of_scope_count").ValueKind);
+        Assert.AreEqual(0, root.GetProperty("enumerated_count").GetInt32());
         Assert.AreEqual(JsonValueKind.Null, root.GetProperty("outcomes").ValueKind);
         Assert.AreEqual(nameof(EuFormexPackagePopulationRefusal.RunNotComplete), root.GetProperty("refusal").GetString());
         Assert.AreEqual(detail, root.GetProperty("detail").GetString());

@@ -109,9 +109,9 @@ public sealed class EuFormexPackagePopulationResult
         delivered = Delivered,
         expression_count = Reconciliation?.ExpressionCount,
         enumerated_count = Enumerations.Count,
-        eligible_count = EligibleExpressionCount,
-        acquired_count = AcquiredExpressionCount,
-        not_enumerated_language_out_of_scope_count = NotEnumeratedExpressionCount,
+        eligible_count = Delivered ? (int?)EligibleExpressionCount : null,
+        acquired_count = Delivered ? (int?)AcquiredExpressionCount : null,
+        not_enumerated_language_out_of_scope_count = Delivered ? (int?)NotEnumeratedExpressionCount : null,
         refusal = Refusal?.ToString(),
         detail = Detail,
         outcomes = Reconciliation?.Outcomes.Select(static outcome => new
