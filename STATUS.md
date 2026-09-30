@@ -8,8 +8,12 @@ every pull request that changes what is served, what is next or what is blocked.
 Reversible driver decision under standing order section 5: enumerate Formex manifestations for
 English and French expressions only. Every other observed expression remains in the reconciled
 population as `not_enumerated_language_out_of_scope`, with eligibility explicitly unknown and no
-manifestation or package request. This avoids the estimated 94,000-request all-language sweep;
-actual EN/FRA counts and request costs still need measurement before the full EU run is sized.
+manifestation or package request. A digest-checked audit of historical run9 responses found
+15,706 unique expression language assertions: 1,314 EN/FRA and 14,392 other languages, with no
+conflicting language assignments. At the prior six-request enumeration estimate this is 7,884
+rather than 94,236 requests, before packages and the rest of acquisition. These historical counts
+are sizing evidence only; run9 used per-seed runs and a test-double scope resolver. A fresh union
+run must still establish the current population. Audit: `C:\lex-v3\lanes\eu-historical-language-sizing.json`.
 
 The guarded eligibility door requires proven EN/FRA enumerations and records the other expressions
 separately. Closure still requires one outcome per expression, rejects missing/duplicate outcomes,
