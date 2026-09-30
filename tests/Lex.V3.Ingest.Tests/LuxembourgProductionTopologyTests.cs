@@ -536,8 +536,8 @@ public sealed class LuxembourgProductionTopologyTests
     /// <summary>
     /// One real run of the public adapter over the multi-subject fixture graph, with or without a third family of
     /// relation rows, and only HTTP and storage doubled. The requests are numbered as the executor sends them: a
-    /// family is six numbered requests after the session's robots fetch, and a document is one more robots fetch and
-    /// its GET.
+    /// family has a COUNT, correctly sized pages and an empty terminator in each pass after its robots fetch.
+    /// A document is one more robots fetch and its GET.
     /// </summary>
     private static async Task<(ICustodyStore Store,
         VerifiedLuxembourgSourceProfile Profile, LuxembourgQueryExecutionResult Result)> RunFixtureAsync(
@@ -568,27 +568,40 @@ public sealed class LuxembourgProductionTopologyTests
         var subjects = new[] { Work, Expression, Manifestation }.Concat(
             Enumerable.Range(0, extraSubjects).Select(i => Work + "/unused/" + i.ToString("D4", System.Globalization.CultureInfo.InvariantCulture)))
             .Order(StringComparer.Ordinal).ToArray();
-        var censusPage = LuxembourgAcquisitionTestFixture.RowsJson(subjects);
         var relationPage = RelationRows((Work, Jolux + "cites", CitedAct));
         var xml = LuxembourgInFileRightsReaderTests.Document().Replace(
             "http://data.legilux.public.lu/eli/etat/leg/code/civil/20251226/fr/xml", Manifestation, StringComparison.Ordinal);
         var documentBytes = Encoding.UTF8.GetBytes(xml);
-        var firstDocumentRequest = withRelationFamily ? 22 : 15;
+        var responses = new List<Func<HttpRequestMessage, HttpResponseMessage>>();
+        void Json(string body) => responses.Add(request => LuxembourgAcquisitionTestFixture.JsonResponse(request, body));
+        void Robots() => responses.Add(request => Response(request, "User-agent: *\nAllow: /\n"u8.ToArray(), "text/plain"));
+        void Family(int count, IEnumerable<string> firstPages, IEnumerable<string> secondPages, string empty)
+        {
+            Json(LuxembourgAcquisitionTestFixture.CountJson(count));
+            foreach (var page in firstPages) Json(page);
+            Json(empty);
+            Json(LuxembourgAcquisitionTestFixture.CountJson(count));
+            foreach (var page in secondPages) Json(page);
+            Json(empty);
+        }
+        Family(subjects.Length,
+            subjects.Chunk((int)LuxembourgQueryPassPolicy.Pass1PageLimit).Select(page => LuxembourgAcquisitionTestFixture.RowsJson(page)),
+            subjects.Chunk((int)LuxembourgQueryPassPolicy.Pass2PageLimit).Select(page => LuxembourgAcquisitionTestFixture.RowsJson(page)),
+            LuxembourgAcquisitionTestFixture.EmptyRowsJson());
+        Robots();
+        Family(assertions.Length, [assertionPage], [assertionPage], AssertionRows([]));
+        if (withRelationFamily)
+        {
+            Robots();
+            Family(1, [relationPage], [relationPage], RelationRows());
+        }
+        Robots();
+        responses.Add(request => Response(request, documentBytes, "application/xml"));
         var handler = LuxembourgAcquisitionTestFixture.AllowRobotsThenHandler((ordinal, request) =>
         {
-            if (ordinal is 1 or 4) return LuxembourgAcquisitionTestFixture.JsonResponse(request, LuxembourgAcquisitionTestFixture.CountJson(subjects.Length));
-            if (ordinal is 2 or 5) return LuxembourgAcquisitionTestFixture.JsonResponse(request, censusPage);
-            if (ordinal is 3 or 6) return LuxembourgAcquisitionTestFixture.JsonResponse(request, LuxembourgAcquisitionTestFixture.EmptyRowsJson());
-            if (ordinal is 8 or 11) return LuxembourgAcquisitionTestFixture.JsonResponse(request, LuxembourgAcquisitionTestFixture.CountJson(assertions.Length));
-            if (ordinal is 9 or 12) return LuxembourgAcquisitionTestFixture.JsonResponse(request, assertionPage);
-            if (ordinal is 10 or 13) return LuxembourgAcquisitionTestFixture.JsonResponse(request, AssertionRows([]));
-            if (withRelationFamily && ordinal is 15 or 18) return LuxembourgAcquisitionTestFixture.JsonResponse(request, LuxembourgAcquisitionTestFixture.CountJson(1));
-            if (withRelationFamily && ordinal is 16 or 19) return LuxembourgAcquisitionTestFixture.JsonResponse(request, relationPage);
-            if (withRelationFamily && ordinal is 17 or 20) return LuxembourgAcquisitionTestFixture.JsonResponse(request, RelationRows());
-            if (ordinal == 7 || (withRelationFamily && ordinal == 14) || ordinal == firstDocumentRequest - 1)
-                return Response(request, "User-agent: *\nAllow: /\n"u8.ToArray(), "text/plain");
-            if (ordinal == firstDocumentRequest) return Response(request, documentBytes, "application/xml");
-            throw new AssertFailedException($"Unexpected HTTP request {ordinal}: {request.Method} {request.RequestUri}");
+            if (ordinal < 1 || ordinal > responses.Count)
+                throw new AssertFailedException($"Unexpected HTTP request {ordinal}: {request.Method} {request.RequestUri}");
+            return responses[ordinal - 1](request);
         });
         var executor = new LuxembourgRepeatedEnumerationExecutor(
             store, new LuxembourgAcquisitionTestFixture.FixedTimeProvider(), handler);
