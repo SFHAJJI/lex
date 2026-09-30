@@ -1,3 +1,4 @@
+using System.Runtime.InteropServices;
 using Lex.V3.Contracts.Custody;
 using Lex.V3.Contracts.Source.Core;
 using Lex.V3.Contracts.Source.Corpus;
@@ -338,7 +339,7 @@ public sealed class CorpusRecordSetWriteResult
     public DurableBlobWriteReceipt? RetainedSetReceipt { get; }
 
     /// <summary>
-    /// The reopened, checked set -- reopened through <see cref="VerifiedCorpusRecordSet.ParseAndVerify"/>
+    /// The reopened, checked set -- reopened through <see cref="VerifiedCorpusRecordSet.ParseAndVerifyStream"/>
     /// against the exact bytes the custody store returned, never the in-memory set this writer built,
     /// for a written result only.
     /// </summary>
@@ -385,7 +386,7 @@ public sealed class CorpusRecordSetWriteResult
 /// this run's own required floor (<see cref="CustodyClass.NightlyFloor90d"/>, exactly the constant
 /// and floor-check <c>EuQueryExecutionAdapter</c> and <c>LuxembourgQueryExecutionAdapter</c> already
 /// require for a scope manifest's own custody write, reused rather than reinvented), then reopens it
-/// through <see cref="VerifiedCorpusRecordSet.ParseAndVerify"/> the same way those two adapters
+/// through <see cref="VerifiedCorpusRecordSet.ParseAndVerifyStream"/> the same way those two adapters
 /// reopen their own manifest after writing it.
 /// </summary>
 public sealed class CorpusRecordSetWriter
@@ -411,7 +412,8 @@ public sealed class CorpusRecordSetWriter
         var set = new CorpusRecordSet(CorpusRecordSetSchemaIds.Set, manifestRef, runIdentity, records);
         using var buffer = new MemoryStream();
         var setCanonicalSha256 = CorpusRecordSetCanonicalWriter.Write(buffer, set);
-        var setBytes = buffer.ToArray();
+        ReadOnlyMemory<byte> setBytes = buffer.TryGetBuffer(out var segment)
+            ? segment.AsMemory() : buffer.ToArray();
 
         // RULING lex-event-20260904T213727510Z-671a8c2563684ab49048677997ceef1c: the set's observed
         // membership is recorded on the result this writer produces, and the run completes. It used
@@ -445,7 +447,10 @@ public sealed class CorpusRecordSetWriter
             .ConfigureAwait(false);
 
         var setArtifactRef = new SourceArtifactRef($"urn:uuid:{Guid.NewGuid():D}", setCanonicalSha256);
-        var verifiedSet = VerifiedCorpusRecordSet.ParseAndVerify(setArtifactRef, reopenedBytes.Span);
+        using var readback = MemoryMarshal.TryGetArray(reopenedBytes, out var retainedBuffer)
+            ? new MemoryStream(retainedBuffer.Array!, retainedBuffer.Offset, retainedBuffer.Count, writable: false)
+            : new MemoryStream(reopenedBytes.ToArray(), writable: false);
+        var verifiedSet = VerifiedCorpusRecordSet.ParseAndVerifyStream(setArtifactRef, readback);
 
         return CorpusRecordSetWriteResult.Written(
             setArtifactRef,

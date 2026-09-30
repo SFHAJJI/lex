@@ -32,6 +32,62 @@ The full Luxembourg run remains gated on retained-state and persistence sizing. 
 standing order requires space recovery before a large run; cited custody and evidence remain
 preserved. Required cross-family review and green exact-head CI remain merge gates.
 
+## Formex package outcome diagnostics (Codex, 2026-09-30)
+
+The successful three-seed mount holds 34 EU XHTML members but admits only two Formex article
+expressions; 32 members report package_not_acquired. Reversible driver decision: print the existing
+reconciliation as one retained CLI JSON line, with every expression's identity, language, declared
+wire outcome/reason codes, observed status and detail. Acquired packages include the retained ZIP
+digest. A refused population has no reconciled per-expression outcomes: its diagnostic records
+the refusal, detail and observed enumeration count, with unknown totals/outcomes null. It does not
+reconstruct individual package outcomes after reconciliation fails.
+
+Initial validation at a53ae771 passed a clean build (93.27 s), fast (3,076 plus one platform skip),
+and all 29 Formex population/first-mount ingest tests. Required Claude review #830 returned MERGE:
+clean build, the same fast and 29 ingest passes, and two expected failures after mutating unknown
+totals and package-refusal projection. No request, retry, admission or proof behavior changes.
+
+The single repair uses declared wire codes, adds explicit 404/unavailable diagnostic assertions,
+and corrects the test description: the annex case lacks the publisher's annex XHTML convention;
+it is not a missing main-body case. The 500 case tests route_refused. Direct acquisition_refusal
+projection remains unexercised by these scripted cases. Existing checks also cover acquired,
+ineligible, language-out-of-scope, invalid-package and escaped refusal detail. Repair validation
+and green exact-head CI are required before merge. The full EU retry remains subject to its
+storage allowance; cited custody and evidence are preserved.
+
+## Corpus record-set canonical streaming and readback (Codex, 2026-09-30)
+
+The full Luxembourg path still creates a complete corpus record set. Its canonical writer used
+a whole MemoryStream/ToArray copy, and independent readback added a full UTF-8 string and another
+canonical buffer. Reversible driver decision: write records through an incremental domain hash
+and reopen through a strict stream reader. Preserve field order, newline, digest, destination
+prefix and caller stream ownership. Flush at record boundaries after64KiB pending, allowing
+one-record overshoot; this is not a fixed bound on arbitrary records.
+
+The new reader checks the original digest before strict UTF-8, uses the same typed constructors,
+compares canonical output against a fresh read, requires EOF and pins the final digest. Both
+inline custody reader and writer wrap existing retained arrays when possible. Independent
+readback still constructs a new typed record set; it does not trust a graph from the writer.
+
+Validation: clean solution build (0warnings/errors,100.31s); required fast3,080passed plus one
+platform skip (64.133s); all40 affected CorpusRecordSetWriter and EU/LU/V3 FirstMount ingest tests
+passed (49.780s). Seven new regressions cover a3,000-record nonseekable destination, independent
+hash/readback, destination prefix, short reads/ownership, wrong digest/noncanonical/UTF-8/EOF,
+typed ordinal invariants, canonical substitution and stream preconditions. Existing fixture
+byte/digest pins remain unchanged. Independent reflection confirms211guarded types, with only
+ParseAndVerifyStream added to VerifiedCorpusRecordSet's global/per-type construction pins.
+
+The required Claude review returned MERGE at a4d6fbc9 with no material defect. It reproduced
+the clean build, fast suite and all 40 affected tests. It passed 52 tests with broader readback
+and lineage coverage, and compared readers over 15,039 inputs with zero disagreements (247
+accepted by both). A 5,000-record set also produced
+identical canonical output. The one follow-up uses the persistence MemoryStream backing memory
+instead of ToArray, documents partial output/flush on failure, and refreshes through merged824.
+Repair validation passed build/fast (3,083 plus one skip)/40 affected ingest; #827 merged at
+21:10 UTC after green exact-head CI. Persistence still buffers one complete
+canonical set and retains reopened bytes; typed records/completion also remain. Chunked record-set
+persistence and measured downstream resources remain required before full Luxembourg. No full
+population-fit claim, publisher traffic or production operation follows this change.
 ## DATA review and fresh population evidence (Codex, 2026-09-30)
 
 The required Claude review of #824 at99a8e29d returned MERGE, with no blocking finding.
@@ -2142,6 +2198,18 @@ also passed build and fast (3,078 passed, one platform skip).
 
 One follow-up preserves both STATUS sections during the current base merge. The earlier 97-test
 log lacks its filter string, so that historical count alone is not a reproducible command record.
-An explicit affected ingest rerun is queued with:
+The explicit affected ingest rerun passed 101 tests, zero failures/skips, in 74.919 s at
+2678415d. Its command, source and result are retained under C:\lex-v3\lanes\pr-829-explicit-ingest-*.
+The exact filter was:
 `FullyQualifiedName~LuxembourgQueryExecutionAdapterTests|FullyQualifiedName~LuxembourgProductionTopologyTests|FullyQualifiedName~GuardedConstructionCensusTests|FullyQualifiedName~CustodyStoreConformanceTests`.
-Its result will be recorded in the PR before merge; final exact-head CI remains required.
+The result is recorded in the PR. The final base refresh includes merged #827 and #830, with
+both STATUS sections retained; green exact-head CI remains required before merge.
+
+
+DATA lane checkpoint: #827 merged at 21:10 UTC and #830 at 21:23 UTC after their required reviews,
+one repair each and green exact-head CI. The fresh all-82-seed EU retry is prepared but has not
+started. It will use the merged Formex diagnostics and the retained 4,999,959,422-byte launch
+allowance, with checks before and after runtime preparation. Completed ignored checkout outputs
+have been reclaimed. Old EU runs named in STATUS remain intact; selected large files are queued
+for transparent NTFS compression with before/after hashes. A whole-tree hashing attempt was
+stopped before compression because tiny-file I/O delayed validation. No custody was deleted.

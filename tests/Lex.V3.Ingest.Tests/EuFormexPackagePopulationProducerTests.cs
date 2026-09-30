@@ -1,3 +1,4 @@
+using System.Text.Json;
 using System.Net;
 using System.Net.Http;
 using Lex.V3.Contracts.Custody;
@@ -24,6 +25,47 @@ public sealed class EuFormexPackagePopulationProducerTests
     private const string FrenchAuthority = "http://publications.europa.eu/resource/authority/language/FRA";
 
     [TestMethod]
+    public void RefusedPopulationDiagnosticsPreserveUnknownTotalAndEscapedDetail()
+    {
+        const string detail = "The publisher returned \"quoted\" detail\nwith a new line.";
+        var result = EuFormexPackagePopulationResult.Refused(
+            EuFormexPackagePopulationRefusal.RunNotComplete, detail, [], 0);
+        using var json = JsonDocument.Parse(result.CreateOutcomeDiagnosticsJson());
+        var root = json.RootElement;
+        Assert.IsFalse(root.GetProperty("delivered").GetBoolean());
+        Assert.AreEqual(JsonValueKind.Null, root.GetProperty("expression_count").ValueKind);
+        Assert.AreEqual(JsonValueKind.Null, root.GetProperty("eligible_count").ValueKind);
+        Assert.AreEqual(JsonValueKind.Null, root.GetProperty("acquired_count").ValueKind);
+        Assert.AreEqual(JsonValueKind.Null, root.GetProperty("not_enumerated_language_out_of_scope_count").ValueKind);
+        Assert.AreEqual(0, root.GetProperty("enumerated_count").GetInt32());
+        Assert.AreEqual(JsonValueKind.Null, root.GetProperty("outcomes").ValueKind);
+        Assert.AreEqual("run_not_complete", root.GetProperty("refusal").GetString());
+        Assert.AreEqual(detail, root.GetProperty("detail").GetString());
+    }
+
+    private static JsonElement DiagnosticOutcome(
+        EuFormexPackagePopulationResult result, EuFormexPackageOutcome outcome)
+    {
+        using var json = JsonDocument.Parse(result.CreateOutcomeDiagnosticsJson());
+        var root = json.RootElement;
+        Assert.AreEqual("lex-v3-eu-formex-outcome-diagnostic/1", root.GetProperty("schema").GetString());
+        Assert.IsTrue(root.GetProperty("delivered").GetBoolean());
+        Assert.AreEqual(result.Reconciliation!.ExpressionCount, root.GetProperty("expression_count").GetInt32());
+        Assert.AreEqual(result.Enumerations.Count, root.GetProperty("enumerated_count").GetInt32());
+        Assert.AreEqual(result.EligibleExpressionCount, root.GetProperty("eligible_count").GetInt32());
+        Assert.AreEqual(result.AcquiredExpressionCount, root.GetProperty("acquired_count").GetInt32());
+        Assert.AreEqual(result.NotEnumeratedExpressionCount,
+            root.GetProperty("not_enumerated_language_out_of_scope_count").GetInt32());
+        var outcomes = root.GetProperty("outcomes").EnumerateArray().ToArray();
+        Assert.AreEqual(result.Reconciliation.Outcomes.Count, outcomes.Length);
+        var item = outcomes.Single(value =>
+            value.GetProperty("expression").GetString() == outcome.ExpressionIdentity.PublisherExpressionId);
+        Assert.AreEqual(outcome.ExpressionIdentity.PublisherWorkId, item.GetProperty("work").GetString());
+        Assert.AreEqual(outcome.Expression.OfficialLanguage, item.GetProperty("language").GetString());
+        return item.Clone();
+    }
+
+    [TestMethod]
     [DataRow("DEU")]
     [DataRow("SPA")]
     public async Task OtherLanguagesStayInReconciliationWithoutAnyManifestationRequest(string language)
@@ -47,6 +89,12 @@ public sealed class EuFormexPackagePopulationProducerTests
         var outcome = result.Reconciliation.Outcomes.Single(o => o.ExpressionIdentity == other.Identity);
         Assert.AreEqual(EuFormexPackageOutcomeKind.NotEnumeratedLanguageOutOfScope, outcome.Kind);
         Assert.AreSame(other, outcome.Expression);
+        var diagnostic = DiagnosticOutcome(result, outcome);
+        Assert.AreEqual("not_enumerated_language_out_of_scope",
+            diagnostic.GetProperty("kind").GetString());
+        Assert.AreEqual(JsonValueKind.Null, diagnostic.GetProperty("observed_status").ValueKind);
+        Assert.AreEqual(JsonValueKind.Null, diagnostic.GetProperty("retained_package_sha256").ValueKind);
+        StringAssert.Contains(diagnostic.GetProperty("detail").GetString(), "eligibility is unknown");
         var mainBodies = await new EuFormexMainBodyLegalContentProducer(
             new EuAcquisitionTestFixture.EuInMemoryCustodyStore()).RunAsync(
                 result.Reconciliation, CancellationToken.None);
@@ -150,6 +198,10 @@ public sealed class EuFormexPackagePopulationProducerTests
         var frenchOutcome = reconciliation.Outcomes.Single(outcome => outcome.ExpressionIdentity == french.Identity);
         Assert.AreEqual(EuFormexPackageOutcomeKind.NotEligible, frenchOutcome.Kind);
         Assert.IsNull(frenchOutcome.Detail);
+        var acquiredDiagnostic = DiagnosticOutcome(result, englishOutcome);
+        Assert.AreEqual(GdprFmx4Sha256, acquiredDiagnostic.GetProperty("retained_package_sha256").GetString());
+        Assert.AreEqual("not_eligible",
+            DiagnosticOutcome(result, frenchOutcome).GetProperty("kind").GetString());
 
         // Every product request is a manifestation enumeration or the one package route.
         Assert.AreEqual(8, handler.Enumerations.Count);
@@ -254,6 +306,10 @@ public sealed class EuFormexPackagePopulationProducerTests
 
         var outcome = result.Reconciliation!.Outcomes.Single(outcome => outcome.ExpressionIdentity == english.Identity);
         Assert.AreEqual(EuFormexPackageOutcomeKind.Unavailable, outcome.Kind, outcome.Detail);
+        var diagnostic = DiagnosticOutcome(result, outcome);
+        Assert.AreEqual("unavailable", diagnostic.GetProperty("kind").GetString());
+        Assert.AreEqual("requested_representation_not_served", diagnostic.GetProperty("unavailable_reason").GetString());
+        Assert.AreEqual(404, diagnostic.GetProperty("observed_status").GetInt32());
         Assert.AreEqual(404, outcome.ObservedStatus);
         Assert.AreEqual(1, handler.PackageRequests.Count);
         Assert.AreEqual(9, result.ProductRequestCount);
@@ -270,6 +326,9 @@ public sealed class EuFormexPackagePopulationProducerTests
         var outcome = result.Reconciliation!.Outcomes.Single(outcome => outcome.ExpressionIdentity == english.Identity);
         Assert.AreEqual(EuFormexPackageOutcomeKind.RouteRefused, outcome.Kind, outcome.Detail);
         Assert.AreEqual(500, outcome.ObservedStatus);
+        var diagnostic = DiagnosticOutcome(result, outcome);
+        Assert.AreEqual(500, diagnostic.GetProperty("observed_status").GetInt32());
+        Assert.AreEqual("route_refused", diagnostic.GetProperty("kind").GetString());
         StringAssert.Contains(outcome.Detail, "500");
     }
 
@@ -285,6 +344,10 @@ public sealed class EuFormexPackagePopulationProducerTests
         Assert.AreEqual(EuFormexPackageOutcomeKind.PackageRejected, outcome.Kind, outcome.Detail);
         Assert.AreEqual(200, outcome.ObservedStatus);
         Assert.AreEqual(EuFormexAnnexInventoryRefusal.PackageUnreadable, outcome.PackageRefusal);
+        var diagnostic = DiagnosticOutcome(result, outcome);
+        Assert.AreEqual(200, diagnostic.GetProperty("observed_status").GetInt32());
+        Assert.AreEqual("package_unreadable",
+            diagnostic.GetProperty("package_refusal").GetString());
     }
 
     /// <summary>
@@ -305,6 +368,10 @@ public sealed class EuFormexPackagePopulationProducerTests
         var outcome = result.Reconciliation!.Outcomes.Single(outcome => outcome.ExpressionIdentity == english.Identity);
         Assert.AreEqual(EuFormexPackageOutcomeKind.NotAcquired, outcome.Kind, outcome.Detail);
         Assert.AreEqual(EuFormexPackageNotAcquiredReason.AnnexXhtmlNotInventoried, outcome.NotAcquiredReason);
+        var diagnostic = DiagnosticOutcome(result, outcome);
+        Assert.AreEqual("annex_xhtml_not_inventoried",
+            diagnostic.GetProperty("not_acquired_reason").GetString());
+        Assert.AreEqual(outcome.Detail, diagnostic.GetProperty("detail").GetString());
         StringAssert.Contains(outcome.Detail, "1 annex member");
         StringAssert.Contains(outcome.Detail, "PublisherAnnexConventionAbsent");
         Assert.AreEqual(0, handler.PdfRequests.Count, "no PDF is fetched for a body that cannot be inventoried.");

@@ -286,6 +286,205 @@ public sealed class CorpusRecordSetTests
         Assert.AreEqual("canonicalBytes", exception.ParamName);
     }
 
+    [TestMethod]
+    public void PopulationWriterFlushesBeforeTheCompleteSetAndPreservesItsIndependentDigest()
+    {
+        var records = Enumerable.Range(0, 3_000).Select(ordinal => new CorpusRecord(
+            CorpusRecordSchemaIds.Record, ObjectRef(ordinal), ordinal,
+            ScopeDisposition.AcceptedSelected, ScopeDisposition.TypedQuarantine,
+            ScopeDisposition.Point, ScopeDisposition.NeverIngest,
+            CorpusBodyRecord.NotHeld(ScopeDisposition.TypedQuarantine), ManifestRef(), RunIdentity())).ToArray();
+        var set = new CorpusRecordSet(CorpusRecordSetSchemaIds.Set, ManifestRef(), RunIdentity(), records);
+        using var output = new RecordingWriteStream();
+        var digest = CorpusRecordSetCanonicalWriter.Write(output, set);
+        var bytes = output.Bytes;
+        Assert.IsTrue(bytes.Length > 1_000_000);
+        // Each fixture record is below 4 KiB; permit one record beyond the 64 KiB flush threshold.
+        Assert.IsTrue(output.LargestWrite <= 68 * 1024, $"Largest destination write: {output.LargestWrite}");
+        Assert.IsTrue(output.WriteCount > 10);
+        Assert.IsFalse(output.Disposed);
+        using var independent = System.Security.Cryptography.IncrementalHash.CreateHash(
+            System.Security.Cryptography.HashAlgorithmName.SHA256);
+        independent.AppendData(Encoding.ASCII.GetBytes("lex-v3-source-corpus-record-set/1\n"));
+        independent.AppendData(bytes);
+        Assert.AreEqual(Convert.ToHexStringLower(independent.GetHashAndReset()), digest);
+        var reopened = VerifiedCorpusRecordSet.ParseAndVerify(
+            new SourceArtifactRef("urn:uuid:bbbbbbb3-bbbb-4bbb-8bbb-bbbbbbbbbbb3", digest), bytes);
+        Assert.AreEqual(records.Length, reopened.Set.Records.Count);
+        using var readback = new ShortReadStream(bytes);
+        var streamed = VerifiedCorpusRecordSet.ParseAndVerifyStream(SetReference(bytes), readback);
+        Assert.AreEqual(records.Length, streamed.Set.Records.Count);
+    }
+
+    [TestMethod]
+    public void APreexistingDestinationPrefixDoesNotEnterTheSetDigest()
+    {
+        using var destination = new MemoryStream();
+        destination.Write("prefix"u8);
+        var digest = CorpusRecordSetCanonicalWriter.Write(destination, Fixture());
+        Assert.AreEqual(FixtureDigest, digest);
+        CollectionAssert.AreEqual("prefix"u8.ToArray(), destination.ToArray()[..6]);
+        Assert.IsTrue(destination.CanWrite);
+    }
+
+    [TestMethod]
+    public void StreamReadbackAcceptsShortReadsAndLeavesTheCallerStreamOpen()
+    {
+        var bytes = SetBytes(Fixture());
+        using var input = new ShortReadStream(bytes);
+        var verified = VerifiedCorpusRecordSet.ParseAndVerifyStream(SetReference(bytes), input);
+        Assert.AreEqual(2, verified.Set.Records.Count);
+        Assert.AreEqual(FixtureDigest, SetReference(SetBytes(verified.Set)).Sha256);
+        Assert.IsTrue(input.CanRead);
+        Assert.AreEqual(2, input.Rewinds);
+        Assert.AreEqual(input.Length, input.Position);
+    }
+
+    [TestMethod]
+    public void StreamReadbackRejectsForeignDigestNonCanonicalBytesAndInvalidUtf8()
+    {
+        var bytes = SetBytes(Fixture());
+        var spaced = Encoding.UTF8.GetBytes(" " + Encoding.UTF8.GetString(bytes));
+        using var wrongDigest = new ShortReadStream(spaced);
+        StringAssert.Contains(Assert.ThrowsExactly<ArgumentException>(() =>
+            VerifiedCorpusRecordSet.ParseAndVerifyStream(SetReference(bytes), wrongDigest)).Message,
+            "do not match their artifact reference");
+        using var nonCanonical = new ShortReadStream(spaced);
+        StringAssert.Contains(Assert.ThrowsExactly<ArgumentException>(() =>
+            VerifiedCorpusRecordSet.ParseAndVerifyStream(SetReference(spaced), nonCanonical)).Message,
+            "not its exact canonical typed representation");
+        byte[] invalid = [0xff];
+        using var invalidUtf8 = new ShortReadStream(invalid);
+        StringAssert.Contains(Assert.ThrowsExactly<ArgumentException>(() =>
+            VerifiedCorpusRecordSet.ParseAndVerifyStream(SetReference(invalid), invalidUtf8)).Message, "strict UTF-8");
+        using var invalidAndForeign = new ShortReadStream(invalid);
+        StringAssert.Contains(Assert.ThrowsExactly<ArgumentException>(() =>
+            VerifiedCorpusRecordSet.ParseAndVerifyStream(SetReference(bytes), invalidAndForeign)).Message,
+            "do not match their artifact reference");
+        byte[] trailing = [.. bytes, (byte)' '];
+        using var extra = new ShortReadStream(trailing);
+        Assert.ThrowsExactly<ArgumentException>(() =>
+            VerifiedCorpusRecordSet.ParseAndVerifyStream(SetReference(trailing), extra));
+    }
+
+    [TestMethod]
+    public void StreamReadbackKeepsTypedRecordSetInvariants()
+    {
+        var node = JsonNode.Parse(SetBytes(Fixture()))!;
+        node["records"]![0]!["object_ordinal"] = 7;
+        var bytes = Encoding.UTF8.GetBytes(node.ToJsonString());
+        using var input = new ShortReadStream(bytes);
+        Assert.ThrowsExactly<ArgumentException>(() =>
+            VerifiedCorpusRecordSet.ParseAndVerifyStream(SetReference(bytes), input));
+    }
+
+    [TestMethod]
+    public void StreamReadbackRejectsCanonicalSubstitutionAfterTheInitialDigestPass()
+    {
+        var bytes = SetBytes(Fixture());
+        var replacement = SetBytes(new CorpusRecordSet(
+            CorpusRecordSetSchemaIds.Set, ManifestRef(), RunIdentity(), Array.Empty<CorpusRecord>()));
+        using var input = new ShortReadStream(bytes, replacement);
+        StringAssert.Contains(Assert.ThrowsExactly<ArgumentException>(() =>
+            VerifiedCorpusRecordSet.ParseAndVerifyStream(SetReference(bytes), input)).Message,
+            "changed between verification passes");
+    }
+
+    [TestMethod]
+    public void StreamReadbackRequiresAReadableSeekableStreamAtZero()
+    {
+        var bytes = SetBytes(Fixture());
+        using var positioned = new MemoryStream(bytes, writable: false);
+        positioned.Position = 1;
+        Assert.ThrowsExactly<ArgumentException>(() =>
+            VerifiedCorpusRecordSet.ParseAndVerifyStream(SetReference(bytes), positioned));
+        using var writeOnly = new RecordingWriteStream();
+        Assert.ThrowsExactly<ArgumentException>(() =>
+            VerifiedCorpusRecordSet.ParseAndVerifyStream(SetReference(bytes), writeOnly));
+    }
+
+    private static SourceArtifactRef SetReference(byte[] bytes) => new(
+        "urn:uuid:bbbbbbb3-bbbb-4bbb-8bbb-bbbbbbbbbbb3", CorpusRecordSetCanonicalWriter.ComputeSetSha256(bytes));
+
+    private static byte[] SetBytes(CorpusRecordSet set)
+    {
+        using var output = new MemoryStream();
+        CorpusRecordSetCanonicalWriter.Write(output, set);
+        return output.ToArray();
+    }
+
+    private sealed class ShortReadStream(byte[] initial, byte[]? replacement = null) : Stream
+    {
+        private MemoryStream _inner = new(initial, writable: false);
+        public int Rewinds { get; private set; }
+        public override bool CanRead => _inner.CanRead;
+        public override bool CanSeek => true;
+        public override bool CanWrite => false;
+        public override long Length => _inner.Length;
+        public override long Position
+        {
+            get => _inner.Position;
+            set
+            {
+                if (value == 0)
+                {
+                    Rewinds++;
+                    if (Rewinds == 1 && replacement is not null)
+                    {
+                        _inner.Dispose();
+                        _inner = new MemoryStream(replacement, writable: false);
+                    }
+                }
+                _inner.Position = value;
+            }
+        }
+        public override int Read(byte[] buffer, int offset, int count) => Read(buffer.AsSpan(offset, count));
+        public override int Read(Span<byte> buffer) => _inner.Read(buffer[..Math.Min(buffer.Length, 7)]);
+        public override long Seek(long offset, SeekOrigin origin) => _inner.Seek(offset, origin);
+        public override void Flush() { }
+        public override void SetLength(long value) => throw new NotSupportedException();
+        public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing) _inner.Dispose();
+            base.Dispose(disposing);
+        }
+    }
+
+    private sealed class RecordingWriteStream : Stream
+    {
+        private readonly MemoryStream _bytes = new();
+        public byte[] Bytes => _bytes.ToArray();
+        public int LargestWrite { get; private set; }
+        public int WriteCount { get; private set; }
+        public bool Disposed { get; private set; }
+        public override bool CanRead => false;
+        public override bool CanSeek => false;
+        public override bool CanWrite => !Disposed;
+        public override long Length => throw new NotSupportedException();
+        public override long Position
+        {
+            get => throw new NotSupportedException();
+            set => throw new NotSupportedException();
+        }
+        public override void Flush() { }
+        public override int Read(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+        public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
+        public override void SetLength(long value) => throw new NotSupportedException();
+        public override void Write(byte[] buffer, int offset, int count) => Write(buffer.AsSpan(offset, count));
+        public override void Write(ReadOnlySpan<byte> buffer)
+        {
+            LargestWrite = Math.Max(LargestWrite, buffer.Length);
+            WriteCount++;
+            _bytes.Write(buffer);
+        }
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing) { Disposed = true; _bytes.Dispose(); }
+            base.Dispose(disposing);
+        }
+    }
+
     private static CorpusRecordSet Fixture() => new(
         CorpusRecordSetSchemaIds.Set, ManifestRef(), RunIdentity(), new[] { RecordAt(0), RecordAt(1) });
 
