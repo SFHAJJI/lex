@@ -5,11 +5,11 @@ every pull request that changes what is served, what is next or what is blocked.
 
 ## Heads
 
-- `v3/integration`: `b5af2bc5` (2026-09-30, PR #788 merged). Build 45 s. Fast lane
+- `v3/integration`: `736e9c03` (2026-09-30, PR #793 merged). Build 45 s. Fast lane
   (`eng/test-fast.ps1`): 3,038 tests, 3,037 pass, 1 skipped. Ingest suite: green on CI for PR #760
   (the CI `dotnet` job runs the whole solution on every pull request, about 7 min on the runner;
-  green for PR #788);
-  locally about 15 min. 909 web tests pass. CI's web job can flake in `keyboard-walk.test.mjs`
+  green for PR #793);
+  locally about 15 min. 927 web tests pass. CI's web job can flake in `keyboard-walk.test.mjs`
   ("browser debugger never answered"); rerunning the failed job is the fix.
 - Driver: Claude Opus 5.5 since 2026-09-29 (the Fable 5.1 driver ran out of tokens on 2026-09-28
   after PR #757; the user default model is now `claude-opus-5-5`).
@@ -235,7 +235,7 @@ schema's `parameters` shape, and whose call runs the same dispatch the REST rout
 endpoint test proves it for all twenty-three. The launch-contract line "REST and MCP derive identical
 envelopes from the registry" is the owner's to tick.
 
-Web: 36 React components, 909 tests. Preview screens render fixtures. The V3 Luxembourg search
+Web: 37 React components, 927 tests. Preview screens render fixtures. The V3 Luxembourg search
 answer has a reader (PR #771). The answer census now samples `search` five ways from the real handler:
 - a phrase with 4 strict hits and 1 relaxed hit;
 - the same phrase one hit per page, with its cursor;
@@ -542,14 +542,59 @@ has its own bundle `client-live-export.js`.
   included with their status and no text, each row carrying its citation, rights, the watermark,
   the snapshot's observation time, the rights rule and the corpus, index and registry digests, so
   a row copied out alone loses none of it). An excluded article keeps its citation, the state's
-  permalink and its article id, in both formats (review of #789). PDF is not yet made (see the
-  driver decisions).
+  permalink and its article id, in both formats (review of #789). PDF is the next
+  paragraph's.
 - The reading and export pages say the next held state's date as its start ("the next state held
   applies from"), never "until", as the compare page does after its review.
 - `journey.mjs` runs an eighth step: `/export.html`, typing the fixture work's identifier and
   `2024-02-01`, then pinning the first article. With the mount the page ends in the composed export
   ("1 article pinned: 1 exported with text, 0 excluded.", the watermark, the rights); without one, in
   the card. Composing sends no second request (the verdict still counts exactly one).
+
+The PDF export (PR #790). `web/scripts/export-pdf.mjs` sets the same export model as pages, so the
+three formats cannot disagree, and the export composer offers "Save as PDF" beside JSON and CSV.
+- Every page carries the watermark at its head and "Page n of N" at its foot. The first page says
+  what was asked, the snapshot's observation time, the rights served under with the platform's rule,
+  the counts, and the corpus, index and registry digests. Each item carries its citation, state
+  permalink, text and body digests and official source (monospaced, wrapped without losing a
+  character), its rights, its own date where it differs, its notes and its whole text, every byte
+  kept: its lines joined with nothing between them are the text (review of #790). Each exclusion
+  carries its citation and reason. No heading ends a page alone.
+- Written byte by byte with no library: PDF 1.4, A4, uncompressed streams, the standard Helvetica
+  and Courier fonts in WinAnsiEncoding, no embedded font and no time of making, so the same model
+  gives the same bytes. Typographic spaces and hyphens outside WinAnsi are set plainly, and the PDF
+  says so when it did; any other character it cannot set refuses the PDF with the characters named
+  (`pdfRefusal`), and the panel then offers JSON and CSV only and says why.
+- The tests read the file back on its own terms (header, every cross-reference offset, trailer,
+  page tree, stream lengths, each text run decoded from WinAnsi by the test's own table) and check
+  the launch contract's citations, rights, watermark and exclusions on it, every line inside the
+  text width, and page breaks losing nothing. Read independently with pypdf (strict) and PyMuPDF:
+  the fixture's 49 articles make 24 pages, with the watermark, the page numbers and the accented
+  text intact.
+- The launch-contract line "Exports PDF, JSON, CSV preserve citations, rights, watermarks and
+  exclusions" is the owner's to tick.
+
+The evaluation card on the Trust and Coverage page (PR #792, ruling 2). The page carries the card
+below the coverage answer, rendered by the server from the card the build is given (by default the
+one the platform renders, `schemas/v3-platform/evaluation-card.json`; a release build will be handed
+the release card), outside the hydrated tree, so it needs no script and the page still asks one
+request.
+- `web/scripts/evaluation-card.mjs` (`readEvaluationCard`) holds the card's rules and recomputes
+  what it can: each gate's verdict in the closed vocabulary, exactly a not-measured gate carrying a
+  reason and no value, a pass at or above its threshold and a fail below it, each rate's Wilson 95
+  percent interval (recomputed from the value and the stratum; anchor nDCG, a graded mean, has
+  none), the rule-of-three bound beside every 1 (recomputed), each set's own gates and nothing else
+  (temporal exactness; the refusal verdict match; retrieval's three, in order), one shuffled control
+  per case set in order and of that set's kind (a control over fewer cases than its set says why),
+  and every statistical row `not_yet_labelled` (Decision 92). A card that breaks a rule is not
+  printed. The live build takes the card it is handed (`buildLive(destination, { card })`).
+- `EvaluationCardView` prints what the card was run over first, as the card says it ("THE MOUNT IS A
+  FIXTURE ... this card is not a release card"), then whether every gate passes and every control
+  caught its shuffle (or which do not), one captioned table per case set (verdicts as words, values,
+  thresholds, cases, the interval, the bound), the controls, the statistical rows "not yet
+  labelled", and the negative-results register.
+- Not yet: the card as signed JSON at a stable route and beside the release assets, and the gates
+  run over the real mounted corpus; both follow the release pipeline (item 7) and the first mount.
 
 **The search journey step passes (PR #773, run locally 2026-09-30).** `node scripts/journey.mjs`
 now runs two steps, each with and without the fixture mount, and all four runs pass.
@@ -984,16 +1029,20 @@ proves the path, not a corpus.
    and journey step; PR #784: the radar reader `readChanges` over `changes_in_period`; PR #787: the
    live radar screen and journey step; PR #788: the API serves the live pages with the security
    headers (ruling 3); PR #789: the live export composer and its journey step. All eight of the
-   launch contract's screens are live and journeyed. Next: PDF export. Hosting (ruling 3): `Lex.V3.Api`
+   launch contract's screens are live and journeyed; PR #790: the PDF export; PR #792: the
+   evaluation card on the Trust and Coverage page (ruling 2); PR #793: the refusal sentence list
+   for the checkpoint (ruling 4); PR #794: the absence refusals carry the card's evidence, so the
+   live pages show them as cards. Next: keyboard and screen-reader paths for the eight screens,
+   then French and English chrome (Decision 41: French copy ships only once reviewed). Hosting
+   (ruling 3): `Lex.V3.Api`
    serves the live pages on the API's origin with `frame-ancestors`, HSTS and `Referrer-Policy`,
-   and a live page never shows the synthetic banner on a real mount. The absence refusals the card
-   will not show: the producer carries the fields (driver decision). J1 to J8 are restated as V3
+   and a live page never shows the synthetic banner on a real mount. J1 to J8 are restated as V3
    steps by the driver (they exist only in the pre-V3 pack, `05-user-journeys.md`).
 7. Release pipeline: build, sign, image, zero-traffic deploy, probes. Then acceptance and promotion.
 8. Machine gates (launch contract, Evaluation): the temporal, refusal and retrieval case sets run
    against the real handler, and all three shuffled controls are caught (PRs #767 and #768). The
    evaluation card is rendered from them with the statistical rows `not_yet_labelled` (PR #769).
-   Ruling 2: it is served on the Trust and Coverage page and beside the release assets, and the
+   Ruling 2: it is served on the Trust and Coverage page (PR #792) and beside the release assets, and the
    launch card carries the machine gates run over the real mounted corpus, so the gates gain a
    mounted-corpus run once the first mount exists. Replay G1 to G5 (`33-product-spec.md`): G2 snapshot
    determinism and G5 independent verifiability run on the real handler (PR #770). G1 version
@@ -1020,7 +1069,7 @@ show text (users primarly want a temporal view of eu texts and dont really care 
 3. Web hosting: one server delivers the web bundle and the API (`/api/v3`, `/mcp`) on one origin,
    so the current CSP and no-CORS stand. That server sends `frame-ancestors`, HSTS and
    `Referrer-Policy`. A live page's banner never says "synthetic" on a real mount.
-4. French and English refusal sentences: the owner reviews them himself. The driver prepares one
+4. French and English refusal sentences: the owner reviews them in person. The driver prepares one
    short list for the weekly checkpoint and does not block on it.
 5. EU parity details, the event log, the `ask` card verdict and the four operations with no data:
    the driver's stated defaults (below).
@@ -1057,12 +1106,20 @@ Each is the driver's call under ruling 7 and can be reversed by a later pull req
   code. Three produced refusals therefore fail the card (`refusal-payload-samples.test.mjs`
   `KNOWN_BREAKS`): `identifier_unknown` (free-text `what_would_answer`, no disclosure),
   `no_version_for_date` (the nearest dates, neither absence field) and `anchor_not_in_version`
-  (`nearest_anchors`, neither absence field). `text_not_available` conforms. The producer will add
-  the fields to all three as optional payload keys (`identifier_unknown`'s `what_would_answer`
-  becoming the vocabulary list, a reviewed registry change), because the rule protects the
-  product's oldest invariant (an absence of a record is not an absence of law) and must travel over
-  MCP too. Until then the live pages say those three by their code, with the date or the nearest ids
-  to try next where the payload has them.
+  (`nearest_anchors`, neither absence field). `text_not_available` conforms. Done in PR #794: the
+  mount adds the fields to all three, because the rule protects the product's oldest invariant (an
+  absence of a record is not an absence of law) and must travel over MCP too.
+  - `what_would_answer` is the vocabulary list: `identifier_unknown` corrected identifier and
+    expanded scope, `no_version_for_date` a new official observation, `anchor_not_in_version` a
+    corrected identifier and a new observation. `asserts_absence_of_law: false` on each.
+  - `identifier_unknown`'s prose moves to `what_would_answer_detail` ("a hash-pinned permalink of a
+    state this index holds at that stable coordinate" and the like), and it carries a
+    `population_disclosure` counted from the mounted index ("This build's Luxembourg index holds 1
+    Luxembourg work, with states dated from 2024-02-01 to 2026-04-11"; the EU index counts its
+    members).
+  - The registry lists mandatory field names only and the refusal schema leaves payloads open, so
+    the registry digest and the contract are unchanged; the refusal-payload and envelope censuses
+    are rendered again. `KNOWN_BREAKS` is empty, and the live pages show those refusals as cards.
 - EU parity (PR #761): (a) the Formex act date (`wording_date`) is the EU wording-state date, and
   `official_consolidation_state` fits an answer over an original wording; (b) the original wording
   does not answer EU `as_of` for dates after it when no consolidation is held; consolidation
@@ -1078,8 +1135,11 @@ Each is the driver's call under ruling 7 and can be reversed by a later pull req
   operation, that it is not served and which data would serve it.
 - The web hosting shape of ruling 3 is `Lex.V3.Api` serving the built live pages beside `/api/v3` and
   `/mcp`, with the security headers, rather than an ingress split.
-- Exports (PR #789): the export composer saves JSON and CSV first; PDF follows as its own slice
-  (a print rendering of the same model, so the three formats cannot disagree). The export's time is
+- Exports (PRs #789 and #790): JSON, CSV and PDF are written from one model, so they cannot
+  disagree. The PDF uses the standard fonts only (no embedded font), so a text holding a character
+  outside WinAnsi, other than a typographic space or hyphen, is refused as PDF with the characters
+  named rather than set with a substitute; the PDF is not tagged, so it does not mark each text's
+  statute language (the JSON carries the language per item). The export's time is
   the envelope's `context.freshness.observed_at`, the snapshot's observation, labelled as such,
   because the envelope carries no time of answering. The CSV is UTF-8 without a byte-order mark,
   exactly what the tests parse.
@@ -1096,7 +1156,12 @@ Each is the driver's call under ruling 7 and can be reversed by a later pull req
 
 ## For the weekly checkpoint
 
-- The French and English refusal sentences, one short list (ruling 4).
+- The French and English refusal sentences, one short list (ruling 4): PR #793. The 20 sentences the
+  live pages say by refusal code, each page's two sentences for a refusal named only by its code,
+  and the two hints a card that cannot be shown still carries (the date the history begins, the
+  nearest article ids; review of #793), English as served and French as the driver's draft. Printed from the pages' own sentences by
+  `node web/scripts/refusal-sentences.mjs`; a test holds every served sentence to one draft. Nothing
+  French ships until the owner's reviewed wording replaces the drafts.
 
 ## Blocked on the owner
 

@@ -10,7 +10,7 @@
 import { askV3 } from "./v3-client.mjs";
 import { readEvidenceBundle } from "./reading-answer.mjs";
 import { validateRefusal } from "./refusal-card.mjs";
-import { noCorpusMountedSentence } from "./live-refusals.mjs";
+import { noCorpusMountedSentence, historyBeginsHint } from "./live-refusals.mjs";
 import { isCalendarDate } from "./temporal.mjs";
 
 /**
@@ -113,7 +113,7 @@ export function readingOutcome(asked) {
       // The date a reader needs to ask again travels with the refusal even when its card cannot be
       // shown (review of #777): the work's history as this index holds it begins on history_begins.
       const retry = code === "no_version_for_date" && isCalendarDate(payload?.history_begins)
-        ? ` The history this index holds for this work begins on ${payload.history_begins}.`
+        ? ` ${historyBeginsHint(payload.history_begins)}`
         : "";
       return {
         state: "refusal",

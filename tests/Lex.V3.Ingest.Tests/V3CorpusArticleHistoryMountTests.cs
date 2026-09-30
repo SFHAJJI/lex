@@ -424,7 +424,7 @@ public sealed class V3CorpusArticleHistoryMountTests
                     Assert.AreEqual("identifier_unknown", envelope.Refusal!.Code, $"{identifier} {name} {rawTarget}");
                     Assert.AreEqual(PublisherId.LuLegilux, envelope.Context.Publisher, $"{identifier} {name} {rawTarget}");
                     Assert.AreEqual(TimelineSemantics.PublisherApplicability, envelope.Context.TimelineSemantics, $"{identifier} {name} {rawTarget}");
-                    StringAssert.Contains(envelope.Refusal.HelpfulPayload.GetProperty("what_would_answer").GetString(), "no publisher shape");
+                    StringAssert.Contains(envelope.Refusal.HelpfulPayload.GetProperty("what_would_answer_detail").GetString(), "no publisher shape");
                 }
             }
         }
@@ -457,7 +457,7 @@ public sealed class V3CorpusArticleHistoryMountTests
                 var envelope = await HistoryAsync(mount, identifier, "art_1");
                 Assert.AreEqual("identifier_unknown", envelope.Refusal!.Code, identifier);
                 Assert.AreEqual(PublisherId.LuLegilux, envelope.Context.Publisher, identifier);
-                StringAssert.Contains(envelope.Refusal.HelpfulPayload.GetProperty("what_would_answer").GetString(), "present in the mounted index");
+                StringAssert.Contains(envelope.Refusal.HelpfulPayload.GetProperty("what_would_answer_detail").GetString(), "present in the mounted index");
             }
         }
 

@@ -368,10 +368,13 @@ export const REQUIRED_PAYLOAD = Object.freeze({
     // saying what was looked through invites exactly the inference the whole surface exists to
     // prevent.
     //
-    // So the disagreement stands until it is settled where it belongs — the producer carrying the
-    // disclosure, or the reader supplying it from its own census — and the parity test names it
-    // every run rather than letting it be forgotten.
+    // Settled where it belongs (driver decision (a), 2026-09-30): the mount now carries the
+    // disclosure, counted from its own index, beside the registry's mandated fields, with
+    // `what_would_answer` as the closed vocabulary and the prose that says exactly what to ask for
+    // instead as `what_would_answer_detail`. The mandated fields are optional here, not required,
+    // because the preview surfaces produce this code without them; the disclosure stays required.
     keys: Object.freeze(['population_disclosure']),
+    optional: Object.freeze(['requested_identifier', 'official_search_actions', 'what_would_answer_detail']),
     basis:
       '35-ideal-ux: "the card offers the resolver ... and the out-of-corpus explanation ' +
       'with the population disclosure"',

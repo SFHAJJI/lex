@@ -8,6 +8,19 @@
 
 const CORPUS_NAMES = Object.freeze({ lu: "Luxembourg", eu: "EU" });
 
+/**
+ * The hint an absence whose card cannot be shown still carries (review of #777): the date the held history
+ * begins, so the reader can ask again. Said by the reading, export and compare pages.
+ */
+export function historyBeginsHint(date) {
+  return `The history this index holds for this work begins on ${date}.`;
+}
+
+/** The hint for an article id no held state carries: the nearest ids the latest state does carry. */
+export function nearestAnchorsHint(ids) {
+  return `The nearest article ids this index holds are ${ids.join(", ")}.`;
+}
+
 /** The sentence for a `no_corpus_mounted` refusal, naming the index its payload says is missing. */
 export function noCorpusMountedSentence(payload) {
   const name = CORPUS_NAMES[payload?.required_corpus];

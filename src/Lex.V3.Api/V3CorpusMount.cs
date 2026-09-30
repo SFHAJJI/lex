@@ -1605,6 +1605,8 @@ internal sealed class V3CorpusMount : IDisposable
                 requested_anchor = anchor,
                 nearest_anchors = NearestAnchors(_reader!.ResolveArticleIds(selectedStates[^1].StateSha256), anchor),
                 do_not_fall_back_to_full_text_search = true,
+                what_would_answer = AnchorNotInVersionRoutes,
+                asserts_absence_of_law = false,
             });
             return V3PlatformOperationOutcome.Refused(
                 Context("refusal", observedAt),
@@ -1826,6 +1828,8 @@ internal sealed class V3CorpusMount : IDisposable
                         requested_anchor = anchor,
                         nearest_anchors = NearestAnchors(articleIds, anchor),
                         do_not_fall_back_to_full_text_search = true,
+                        what_would_answer = AnchorNotInVersionRoutes,
+                        asserts_absence_of_law = false,
                     });
                     return V3PlatformOperationOutcome.Refused(
                         Context("refusal", observedAt),
@@ -2472,6 +2476,8 @@ internal sealed class V3CorpusMount : IDisposable
         payload["history_begins"] = dates[0];
         payload["nearest_earlier"] = null;
         payload["nearest_later"] = dates.FirstOrDefault(date => string.CompareOrdinal(date, requestedDate) > 0);
+        payload["what_would_answer"] = new JsonArray(NoVersionForDateRoutes.Select(static route => (JsonNode)route).ToArray());
+        payload["asserts_absence_of_law"] = false;
         using var document = JsonSerializer.SerializeToDocument(payload);
         return V3PlatformOperationOutcome.Refused(
             Context("refusal", observedAt),
@@ -4954,6 +4960,8 @@ internal sealed class V3CorpusMount : IDisposable
                 requested_anchor = anchor,
                 nearest_anchors = NearestAnchors(_reader.ResolveArticleIds(scope[^1].StateSha256), anchor),
                 do_not_fall_back_to_full_text_search = true,
+                what_would_answer = AnchorNotInVersionRoutes,
+                asserts_absence_of_law = false,
             });
             return V3PlatformOperationOutcome.Refused(
                 Context("refusal", observedAt),
@@ -5444,6 +5452,19 @@ internal sealed class V3CorpusMount : IDisposable
         value.Length == 64 && value.All(static character =>
             character is >= '0' and <= '9' or >= 'a' and <= 'f');
 
+    /// <summary>
+    /// The routes out of an absence, in the refusal card's closed vocabulary and its declared order
+    /// (<c>web/scripts/refusal-card.mjs</c>, <c>WHAT_WOULD_ANSWER</c>). An absence refusal carries one of these with
+    /// <c>asserts_absence_of_law: false</c>, because the absence of a held record is never evidence that the law does
+    /// not exist; the prose that says exactly what to ask for instead travels beside it as
+    /// <c>what_would_answer_detail</c>.
+    /// </summary>
+    internal static readonly string[] UnknownIdentifierRoutes = ["corrected_identifier", "expanded_official_scope"];
+
+    internal static readonly string[] NoVersionForDateRoutes = ["new_official_observation"];
+
+    internal static readonly string[] AnchorNotInVersionRoutes = ["corrected_identifier", "new_official_observation"];
+
     private V3PlatformOperationOutcome Unknown(
         V3PlatformOperationRequest request,
         string identifier,
@@ -5451,15 +5472,45 @@ internal sealed class V3CorpusMount : IDisposable
         PublisherId? publisher = null,
         string whatWouldAnswer = "an exact identifier present in the mounted corpus")
     {
+        var owner = publisher ?? PublisherFor(identifier);
         using var helpful = JsonSerializer.SerializeToDocument(new
         {
             requested_identifier = identifier,
             official_search_actions = new[] { "search" },
-            what_would_answer = whatWouldAnswer,
+            what_would_answer = UnknownIdentifierRoutes,
+            what_would_answer_detail = whatWouldAnswer,
+            asserts_absence_of_law = false,
+            population_disclosure = PopulationDisclosure(owner),
         });
         return V3PlatformOperationOutcome.Refused(
-            Context("refusal", observedAt, publisher ?? PublisherFor(identifier)),
+            Context("refusal", observedAt, owner),
             new V3PlatformOperationRefusal(request, "identifier_unknown", helpful.RootElement));
+    }
+
+    /// <summary>
+    /// What was searched before an identifier was found unknown, from this build's own index: the size of the
+    /// population the answer covers, so "not found" is read against it (35-ideal-ux; the card requires it). Counts are
+    /// of rows the index holds, never of what the publisher holds.
+    /// </summary>
+    private string PopulationDisclosure(PublisherId publisher)
+    {
+        if (publisher == PublisherId.EuEurLex)
+        {
+            return _europeReader is null
+                ? "This build holds no EU index, so no EU identifier was searched."
+                : $"This build's EU index holds {_europeReader.MemberCount} members of the EU population it acquired; an identifier outside them was not searched further.";
+        }
+
+        if (_reader is null)
+        {
+            return "This build holds no Luxembourg index, so no Luxembourg identifier was searched.";
+        }
+
+        var population = _reader.ResolveStatePopulation();
+        var works = population.Works == 1 ? "1 Luxembourg work" : $"{population.Works} Luxembourg works";
+        return population.FirstDate is null
+            ? $"This build's Luxembourg index holds {works} and no dated state."
+            : $"This build's Luxembourg index holds {works}, with states dated from {population.FirstDate} to {population.LastDate}.";
     }
 
     private PublisherId PublisherFor(string identifier) =>
