@@ -26,6 +26,30 @@ and corpus-chunk-validation.json. Required cross-family review and green exact-h
 merge gates. Typed records and completion remain materialized; this is not a full Luxembourg
 fit or population-completeness claim. No publisher traffic was sent by the validation.
 
+## Formex package outcome diagnostics (Codex, 2026-09-30)
+
+The successful three-seed mount holds 34 EU XHTML members but admits only two Formex article
+expressions; 32 members report package_not_acquired. Reversible driver decision: print the existing
+reconciliation as one retained CLI JSON line, with every expression's identity, language, declared
+wire outcome/reason codes, observed status and detail. Acquired packages include the retained ZIP
+digest. A refused population has no reconciled per-expression outcomes: its diagnostic records
+the refusal, detail and observed enumeration count, with unknown totals/outcomes null. It does not
+reconstruct individual package outcomes after reconciliation fails.
+
+Initial validation at a53ae771 passed a clean build (93.27 s), fast (3,076 plus one platform skip),
+and all 29 Formex population/first-mount ingest tests. Required Claude review #830 returned MERGE:
+clean build, the same fast and 29 ingest passes, and two expected failures after mutating unknown
+totals and package-refusal projection. No request, retry, admission or proof behavior changes.
+
+The single repair uses declared wire codes, adds explicit 404/unavailable diagnostic assertions,
+and corrects the test description: the annex case lacks the publisher's annex XHTML convention;
+it is not a missing main-body case. The 500 case tests route_refused. Direct acquisition_refusal
+projection remains unexercised by these scripted cases. Existing checks also cover acquired,
+ineligible, language-out-of-scope, invalid-package and escaped refusal detail. Repair build
+(81.91 s), fast (3,083 plus one skip) and 29 ingest checks passed; #830 merged at 21:23 UTC
+after green exact-head CI. The full EU retry remains subject to its
+storage allowance; cited custody and evidence are preserved.
+
 ## Corpus record-set canonical streaming and readback (Codex, 2026-09-30)
 
 The full Luxembourg path still creates a complete corpus record set. Its canonical writer used
@@ -54,7 +78,8 @@ and lineage coverage, and compared readers over 15,039 inputs with zero disagree
 accepted by both). A 5,000-record set also produced
 identical canonical output. The one follow-up uses the persistence MemoryStream backing memory
 instead of ToArray, documents partial output/flush on failure, and refreshes through merged824.
-Fresh repair validation and exact-head CI remain pending. Persistence still buffers one complete
+Repair validation passed build/fast (3,083 plus one skip)/40 affected ingest; #827 merged at
+21:10 UTC after green exact-head CI. Persistence still buffers one complete
 canonical set and retains reopened bytes; typed records/completion also remain. Chunked record-set
 persistence and measured downstream resources remain required before full Luxembourg. No full
 population-fit claim, publisher traffic or production operation follows this change.
@@ -483,11 +508,11 @@ CI evidence are recorded in the pull request before merge.
 
 ## Heads
 
-- `v3/integration`: `cc99bbde` (2026-09-30, PR #824 merged). Build 45 s. Fast lane
+- `v3/integration`: `efdf0d5c` (2026-09-30, PR #826 merged). Build 45 s. Fast lane
   (`eng/test-fast.ps1`): 3,074 tests, 3,073 pass, 1 skipped (the review of PR #826). Ingest suite: green on CI for PR #760
   (the CI `dotnet` job runs the whole solution on every pull request, about 7 min on the runner;
-  green for PR #825);
-  locally about 15 min. 968 web tests pass. The web job's "browser debugger never answered" failures
+  green for PR #826);
+  locally about 15 min. 970 web tests pass. The web job's "browser debugger never answered" failures
   (keyboard-walk, and paint-check since #811) are fixed by PR #822: each browser binds its own
   debugging port (`launchBrowser`) instead of a random one another browser starting at the same
   moment could hold.
@@ -715,7 +740,7 @@ schema's `parameters` shape, and whose call runs the same dispatch the REST rout
 endpoint test proves it for all twenty-three. The launch-contract line "REST and MCP derive identical
 envelopes from the registry" is the owner's to tick.
 
-Web: 41 React components, 968 tests. Preview screens render fixtures. The V3 Luxembourg search
+Web: 41 React components, 970 tests. Preview screens render fixtures. The V3 Luxembourg search
 answer has a reader (PR #771). The answer census now samples `search` five ways from the real handler:
 - a phrase with 4 strict hits and 1 relaxed hit;
 - the same phrase one hit per page, with its cursor;
@@ -1376,6 +1401,25 @@ The reproducible image (PR #826).
   8 probes pass against the reproducible image, and the work directory, the artifacts directory and
   the container were removed.
 
+The image probed on the journey's fixture mount (PR #828). On the real bounded mount six of the
+eight screens refuse, because Luxembourg holds no state there. The answers themselves (hits, quotes,
+citations) had been probed only against the host API, never against the image.
+- The rehearsal takes the fixture mount `V3JourneyMountTests` writes (`journey-mount.json`) as well
+  as a real mount. `mountReport` reads either:
+  - the fixture's Luxembourg index is held to the file digest it names;
+  - its corpus digest is a snapshot digest (what the coverage answer shows), not the file's bytes, so
+    the corpus file is held byte for byte to the mount, and its snapshot digest to the coverage probe.
+- On a fixture mount the probes are the journey's fixture steps (`fixtureMountRuns`, the expectations
+  `journey.mjs` now keeps in one list, `fixtureMountExpectations`): every screen must answer with the
+  texts the fixture's one work gives it, and every citation must verify.
+- Against the image: all eight screens answer, and 105 citations verify through the image's own
+  `verify`, each `digest_matches`: reading 50, export 50, and one each for search, dossier, history,
+  compare and radar. The image was reproduced by its second build
+  (`sha256:441853466bf9945f7f61db5ea0ae86f97aecf11c6dc26e8f8c5de215aca3b044` at that commit), and
+  everything was removed.
+- A mutation: a fixture manifest naming another corpus digest fails the coverage probe ("the page
+  does not show the mounted digest").
+
 The live export composer and its journey step (PR #789), the eighth screen. `dist-live/export.html`
 has its own bundle `client-live-export.js`.
 - The page asks what the reading page asks: the same form (`ReadingForm`, now shared), the same one
@@ -1922,8 +1966,9 @@ has not yet run; the bounded first mount above is complete.
    The steps that need no production credential are the web lane's since 2026-09-30 (the owner's proxy).
    PR #821: one command builds, verifies, rehearsal-signs and removes the one-server image; PR #825:
    it runs the image (WSL, read-only root, private /tmp) and probes the eight screens against it; PR
-   #826: the image is reproducible (two builds from scratch, one manifest digest). Next: the probes
-   against the full fixture mount. Production signing,
+   #826: the image is reproducible (two builds from scratch, one manifest digest); PR #828: the
+   image probed on the journey's fixture mount, where every screen answers and 105 citations verify.
+   The credential-free release steps are rehearsed end to end. Production signing,
    credentials and deployment stay with the owner.
 8. Machine gates (launch contract, Evaluation): the temporal, refusal and retrieval case sets run
    against the real handler, and all three shuffled controls are caught (PRs #767 and #768). The
@@ -2138,3 +2183,12 @@ Only money, legal or public claims, credentials and going live (ruling 7):
 
 - The corrigendum tripwire classifies a French corrigendum as `within_served_body_languages` while no
   French body is served (Decision 89 section 4). True once the French expressions land.
+
+
+Disk checkpoint: all 3,652 selected large files in old EU runs 1–8b were transparently compressed
+and checked for identical length and SHA-256 before/after. They total 1,828,552,185 logical bytes;
+no custody was deleted. Evidence: C:\lex-v3\lanes\old-eu-largest-compression-result.json and its
+verified-file manifest (SHA-256 a0c9bd9c8a773df60be98c6dcaad6926897c0256ccc6f06a3e0c163c068f1e73).
+Observed free space rose from 4,015,509,504 to 5,163,757,568 bytes. The abandoned whole-tree
+hashing attempt changed no source files. The fresh EU retry still needs final local-job completion
+and a current storage check before and after its runtime is frozen; it has not started.
