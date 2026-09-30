@@ -117,8 +117,7 @@ public sealed class GuardedConstructionCensusTests
                     + "Lex.V3.Api.V3PlatformSchemaDocuments::.ctor, "
                     + "constructor private static Lex.V3.Api.V3PlatformSchemaDocuments::.cctor, "
                     + "method private static Lex.V3.Api.V3PlatformSchemaDocuments::LoadReviewed",
-                "Lex.V3.Api.V3WebRoot: constructor private instance "
-                    + "Lex.V3.Api.V3WebRoot::.ctor, "
+                "Lex.V3.Api.V3WebRoot: constructor private instance Lex.V3.Api.V3WebRoot::.ctor, "
                     + "constructor private static Lex.V3.Api.V3WebRoot::.cctor, "
                     + "method internal static Lex.V3.Api.V3WebRoot::Open",
                 "Lex.V3.Artifacts.ArtifactAdmissionFailure: by-ref-method public instance "
@@ -1750,7 +1749,9 @@ public sealed class GuardedConstructionCensusTests
                     + "method public static "
                     + "Lex.V3.Contracts.Source.Scope.ScopeReducer::VerifyAndOpen, "
                     + "method public static "
-                    + "Lex.V3.Contracts.Source.Scope.VerifiedScopeManifest::ParseAndVerify",
+                    + "Lex.V3.Contracts.Source.Scope.VerifiedScopeManifest::ParseAndVerify, "
+                    + "method public static "
+                    + "Lex.V3.Contracts.Source.Scope.VerifiedScopeManifest::ParseAndVerifyStream",
                 "Lex.V3.Contracts.SyntheticResolveEnvelope: constructor private-protected instance "
                     + "Lex.V3.Contracts.SyntheticResolveEnvelope::.ctor, "
                     + "constructor public instance "

@@ -20,7 +20,10 @@ still required before the full Luxembourg run. No launch or memory-fit claim fol
 
 Regression drafts cover short reads, identical canonical output, caller ownership of the stream,
 digest failure precedence, malformed UTF-8, noncanonical spacing/trailing bytes, changed canonical
-input between passes and independent evidence refusal. Build and test validation are pending.
+input between passes and independent evidence refusal. Validation passed: solution build with zero
+warnings/errors (39.09s), all 97 affected ingest checks (65.434s), and fast 3,070 passed/one platform
+skip (51.563s). The independently reflected construction census adds the new verified-reader door;
+its initial stale pin was corrected before the successful fast run. Cross-family review is next.
 
 ## Luxembourg rights-evidence payloads (Codex, 2026-09-30)
 
