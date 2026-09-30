@@ -3,6 +3,25 @@
 Updated 2026-09-30 by the driver. This file replaces the issue-comment ledgers. It is rewritten in
 every pull request that changes what is served, what is next or what is blocked.
 
+## Luxembourg rights-evidence payloads (Codex, 2026-09-30)
+
+The semantic memory sample produced 108,361,751 bytes of observation JSON for 100,035
+repeated assertion rows. It is not a population-wide estimate, but it exposes another avoidable
+whole-population allocation: the previous adapter serialized all observations into one byte array.
+Reversible driver decision: retain ordered payloads of at most 256 observations each. A version 3
+rights-evidence root names every batch, the total observation count and all contributing deliveries.
+Delivery metadata is retained once. Each observation continues to cite the complete root, so batches
+containing only unselected subjects remain reachable for complete-population replay.
+
+Every batch must pass custody write and digest-checked readback before the root can be retained.
+The replay checks each referenced batch's digest, schema, ordinal, count and unique subject identity,
+then requires the final manifest to rebuild byte for byte. Historical version 2 roots remain readable
+by the retained-run replay helper. A 257-subject test crosses the batch boundary; an unreadable
+second batch must refuse before publishing a manifest. Validation is pending on the combined
+source with the reviewed PR #812 streaming change. No population completeness or full-process memory bound is claimed:
+typed observations, individual large observations, the root metadata and downstream manifests still
+need resource allowance.
+
 ## French EU expression bodies (Codex, 2026-09-30)
 
 The acquisition adapter now projects French body candidates from this run's proven expression

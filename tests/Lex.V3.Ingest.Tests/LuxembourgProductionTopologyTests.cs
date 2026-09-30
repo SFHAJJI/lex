@@ -344,7 +344,7 @@ public sealed class LuxembourgProductionTopologyTests
         Assert.IsTrue(checkedGraph, "The production graph must be openable in retained SPARQL evidence.");
     }
 
-    private const string RightsIndexSchema = "lex-lu-sparql-rights-evidence/2";
+    private const string RightsIndexSchema = "lex-lu-sparql-rights-evidence/3";
     private const string CitedAct = "http://data.legilux.public.lu/eli/etat/leg/loi/2017/03/14/a439/jo";
 
     /// <summary>
@@ -367,9 +367,10 @@ public sealed class LuxembourgProductionTopologyTests
         CollectionAssert.AreEquivalent(new[] { "assertions", "relations" }, namedDeliveries,
             "The index must name the delivery of the assertion family and of the relation family, by name.");
 
-        var relationsBySubject = index.GetProperty("observations").EnumerateArray().ToDictionary(
-            row => row.GetProperty("ObjectRef").GetProperty("PublisherUri").GetString()!,
-            row => row.GetProperty("Relations").EnumerateArray().ToArray());
+        var relationsBySubject = new Dictionary<string, JsonElement[]>(StringComparer.Ordinal);
+        await foreach (var row in LuxembourgRetainedRunReplay.ReadObservationRowsAsync(store, index))
+            relationsBySubject.Add(row.GetProperty("ObjectRef").GetProperty("PublisherUri").GetString()!,
+                row.GetProperty("Relations").EnumerateArray().Select(value => value.Clone()).ToArray());
         CollectionAssert.AreEquivalent(new[] { Work, Expression, Manifestation }, relationsBySubject.Keys.ToArray());
         var cited = relationsBySubject[Work].Single();
         Assert.AreEqual(Work, cited.GetProperty("SubjectIri").GetString());
@@ -396,10 +397,60 @@ public sealed class LuxembourgProductionTopologyTests
         var (_, index) = await ManifestAndRightsIndexAsync(store, result);
         CollectionAssert.AreEqual(new[] { "assertions" },
             index.GetProperty("deliveries").EnumerateArray().Select(delivery => delivery.GetProperty("PartitionKey").GetString()!).ToArray());
-        Assert.IsTrue(index.GetProperty("observations").EnumerateArray()
-            .All(row => row.GetProperty("Relations").GetArrayLength() == 0));
+        await foreach (var row in LuxembourgRetainedRunReplay.ReadObservationRowsAsync(store, index))
+            Assert.AreEqual(0, row.GetProperty("Relations").GetArrayLength());
 
         await LuxembourgRetainedRunReplay.ReplayAsync(store, profile, result, ["assertions"], [], null);
+    }
+
+    [TestMethod]
+    public async Task EveryObservationBatchIsCitedOnceAndTheWholeManifestReplays()
+    {
+        var (store, profile, result) = await RunFixtureAsync(true, extraSubjects: 254);
+        Assert.IsNull(result.Refusal, result.Refusal?.Detail);
+        var (_, index) = await ManifestAndRightsIndexAsync(store, result);
+        Assert.AreEqual(257, index.GetProperty("observedObjectCount").GetInt32());
+        Assert.AreEqual(2, index.GetProperty("observationBatches").GetArrayLength());
+        var subjects = new List<string>();
+        await foreach (var row in LuxembourgRetainedRunReplay.ReadObservationRowsAsync(store, index))
+            subjects.Add(row.GetProperty("ObjectRef").GetProperty("PublisherUri").GetString()!);
+        CollectionAssert.AreEqual(result.ResourceObservationSubjects.ToArray(), subjects.ToArray());
+        await LuxembourgRetainedRunReplay.ReplayAsync(store, profile, result, ["assertions"], ["relations"], null);
+    }
+
+    [TestMethod]
+    public async Task ASecondBatchThatCannotReopenRefusesBeforePublishingAManifest()
+    {
+        var (_, _, result) = await RunFixtureAsync(true, extraSubjects: 254, refuseSecondBatch: true);
+        Assert.IsNotNull(result.Refusal);
+        Assert.AreEqual(LuxembourgQueryExecutionRefusal.ResourceObservationRowsNotVerified, result.Refusal.Code);
+        Assert.IsNull(result.ScopeManifestReceipt);
+        Assert.IsNull(result.CorpusRecordSet);
+        Assert.IsTrue(result.FamilyOutcomes.All(value => value.Kind == LuxembourgFamilyEnumerationOutcomeKind.Proven));
+    }
+
+    private sealed class UnreadableSecondBatchStore(ICustodyStore inner) : ICustodyStore
+    {
+        private string? _unreadableDigest;
+        public async Task<DurableBlobWriteReceipt> CreateAsync(ReadOnlyMemory<byte> bytes, CustodyClass custodyClass,
+            CancellationToken cancellationToken)
+        {
+            var receipt = await inner.CreateAsync(bytes, custodyClass, cancellationToken);
+            if (bytes.Length > 0 && bytes.Span[0] == (byte)'{')
+            {
+                using var json = JsonDocument.Parse(bytes);
+                if (json.RootElement.TryGetProperty("schema", out var schema) &&
+                    schema.GetString() == "lex-lu-sparql-rights-observations/1" &&
+                    json.RootElement.GetProperty("ordinal").GetInt32() == 1)
+                    _unreadableDigest = receipt.Reference.ContentSha256;
+            }
+            return receipt;
+        }
+        public Task<ReadOnlyMemory<byte>> ReadAsync(DurableBlobRef reference, CancellationToken cancellationToken) =>
+            ReadByDigestAsync(reference.ContentSha256, cancellationToken);
+        public Task<ReadOnlyMemory<byte>> ReadByDigestAsync(string digest, CancellationToken cancellationToken) =>
+            digest == _unreadableDigest ? Task.FromResult<ReadOnlyMemory<byte>>("changed"u8.ToArray()) :
+                inner.ReadByDigestAsync(digest, cancellationToken);
     }
 
     private static async Task<(JsonElement Manifest, JsonElement RightsIndex)> ManifestAndRightsIndexAsync(
@@ -435,10 +486,12 @@ public sealed class LuxembourgProductionTopologyTests
     /// family is six numbered requests after the session's robots fetch, and a document is one more robots fetch and
     /// its GET.
     /// </summary>
-    private static async Task<(RoutedHttpAcquisitionSessionTests.MultiObjectCustodyStore Store,
-        VerifiedLuxembourgSourceProfile Profile, LuxembourgQueryExecutionResult Result)> RunFixtureAsync(bool withRelationFamily)
+    private static async Task<(ICustodyStore Store,
+        VerifiedLuxembourgSourceProfile Profile, LuxembourgQueryExecutionResult Result)> RunFixtureAsync(
+            bool withRelationFamily, int extraSubjects = 0, bool refuseSecondBatch = false)
     {
-        var store = new RoutedHttpAcquisitionSessionTests.MultiObjectCustodyStore();
+        ICustodyStore store = new RoutedHttpAcquisitionSessionTests.MultiObjectCustodyStore();
+        if (refuseSecondBatch) store = new UnreadableSecondBatchStore(store);
         var profileReceipt = await store.CreateAsync(
             "synthetic vocabulary observation for the relation retention regression"u8.ToArray(),
             CustodyClass.NightlyFloor90d, CancellationToken.None);
@@ -459,7 +512,10 @@ public sealed class LuxembourgProductionTopologyTests
             (Manifestation, Jolux + "license", "http://creativecommons.org/licenses/by/4.0/"),
         ];
         var assertionPage = AssertionRows(assertions);
-        var censusPage = LuxembourgAcquisitionTestFixture.RowsJson(Work, Expression, Manifestation);
+        var subjects = new[] { Work, Expression, Manifestation }.Concat(
+            Enumerable.Range(0, extraSubjects).Select(i => Work + "/unused/" + i.ToString("D4", System.Globalization.CultureInfo.InvariantCulture)))
+            .Order(StringComparer.Ordinal).ToArray();
+        var censusPage = LuxembourgAcquisitionTestFixture.RowsJson(subjects);
         var relationPage = RelationRows((Work, Jolux + "cites", CitedAct));
         var xml = LuxembourgInFileRightsReaderTests.Document().Replace(
             "http://data.legilux.public.lu/eli/etat/leg/code/civil/20251226/fr/xml", Manifestation, StringComparison.Ordinal);
@@ -467,7 +523,7 @@ public sealed class LuxembourgProductionTopologyTests
         var firstDocumentRequest = withRelationFamily ? 22 : 15;
         var handler = LuxembourgAcquisitionTestFixture.AllowRobotsThenHandler((ordinal, request) =>
         {
-            if (ordinal is 1 or 4) return LuxembourgAcquisitionTestFixture.JsonResponse(request, LuxembourgAcquisitionTestFixture.CountJson(3));
+            if (ordinal is 1 or 4) return LuxembourgAcquisitionTestFixture.JsonResponse(request, LuxembourgAcquisitionTestFixture.CountJson(subjects.Length));
             if (ordinal is 2 or 5) return LuxembourgAcquisitionTestFixture.JsonResponse(request, censusPage);
             if (ordinal is 3 or 6) return LuxembourgAcquisitionTestFixture.JsonResponse(request, LuxembourgAcquisitionTestFixture.EmptyRowsJson());
             if (ordinal is 8 or 11) return LuxembourgAcquisitionTestFixture.JsonResponse(request, LuxembourgAcquisitionTestFixture.CountJson(assertions.Length));
