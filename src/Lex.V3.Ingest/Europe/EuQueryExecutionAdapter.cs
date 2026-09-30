@@ -1,4 +1,4 @@
-﻿using System.Text.Json.Serialization;
+using System.Text.Json.Serialization;
 using Lex.V3.Contracts;
 using Lex.V3.Contracts.Custody;
 using Lex.V3.Contracts.Source.Absence;
@@ -1654,6 +1654,20 @@ public sealed class EuQueryExecutionAdapter
         }
 
         // ---- Reduce every non-excluded snapshot. Precision four: the reduction never throws. ----
+        IReadOnlyList<EuCellarObjectSnapshot> bodySnapshots;
+        try
+        {
+            bodySnapshots = ProjectFrenchExpressionBodies(allSnapshots, corrigendumTripwires);
+        }
+        catch (Exception exception) when (exception is ArgumentException or InvalidOperationException)
+        {
+            return EuQueryExecutionResult.Refused(
+                topology, outcomes,
+                new EuQueryExecutionRefusalDetail(
+                    EuQueryExecutionRefusal.ObjectDecodeRefused,
+                    "French expression body projection refused: " + exception.Message));
+        }
+
         var scopeProfile = EuScopeProfile.BuildBinding();
         // Family M's own proof joins the manifest's ordered evidence artifacts, because the format
         // selector cites it and ScopeReducer resolves every selector's evidence through this list.
@@ -1668,11 +1682,20 @@ public sealed class EuQueryExecutionAdapter
         // contain EXACTLY the referenced set, so family M's proof joins it if and only if at least
         // one snapshot carries a format observation to cite it. A run where the office listed
         // nothing for every object cites P's proof alone, and that is correct rather than a gap.
-        var anyFormatObserved = allSnapshots.Exists(static snapshot => snapshot.Format is not null);
+        var anyFormatObserved = bodySnapshots.Any(static snapshot => snapshot.Format is not null);
         var distinctEvidence = new List<SourceArtifactRef> { evidenceRef };
         if (anyFormatObserved && CompareEvidenceArtifact(evidenceRef, manifestationEvidenceRef) != 0)
         {
             distinctEvidence.Add(manifestationEvidenceRef);
+        }
+
+        // A French body is selected from its own proven X expression. Admit that exact
+        // observation, alongside the parent Work metadata and manifestation evidence.
+        foreach (var snapshot in bodySnapshots)
+        {
+            if (snapshot.Language is { } language && TryGuardReducible(snapshot, out _, out _) &&
+                !distinctEvidence.Contains(language.EvidenceRef))
+                distinctEvidence.Add(language.EvidenceRef);
         }
 
         distinctEvidence.Sort(CompareEvidenceArtifact);
@@ -1695,7 +1718,7 @@ public sealed class EuQueryExecutionAdapter
         var mintedAddressesByObjectRef =
             new Dictionary<SourceObjectRef, IReadOnlyList<EuDocumentFetchAddress>>();
 
-        foreach (var snapshot in allSnapshots)
+        foreach (var snapshot in bodySnapshots)
         {
             if (!TryGuardReducible(snapshot, out var offendingFamily, out var offendingReason))
             {
@@ -1707,7 +1730,8 @@ public sealed class EuQueryExecutionAdapter
             {
                 var dispositions = EuScopeSnapshotReduction.Reduce(snapshot);
                 var (fetchAddress, mintedLadder) = MintFetchAddress(
-                    dispositions.ObjectRef, dispositions.FormatDisposition);
+                    dispositions.ObjectRef, dispositions.FormatDisposition,
+                    snapshot.Language?.Language ?? EuOfficialLanguage.English);
                 var input = EuScopeProfile.BuildScopeInput(
                     scopeProfile, dispositions, evidenceOrdinals, fetchAddress);
                 observedObjects.Add(snapshot.ObjectRef);
@@ -1740,6 +1764,7 @@ public sealed class EuQueryExecutionAdapter
 
         var scopeEvidenceObservations = pFamilies
             .Concat(mFamilies)
+            .Concat(xFamilies)
             .Select(static family => ScopeEvidenceObservation(family.Proof, family.Receipt))
             .ToArray();
         var resolver = await EuProductionScopeReductionEvidenceResolver.CreateAsync(
@@ -2081,7 +2106,7 @@ public sealed class EuQueryExecutionAdapter
             documentLadderResultsByOrdinal: documentLadderResultsByOrdinal!,
             dateAxioms: dateAxioms,
             locatedAmendmentObservations: locatedAmendmentObservations,
-            decodedSnapshots: allSnapshots,
+            decodedSnapshots: bodySnapshots,
             recordSetResult: recordSetResult,
             corrigendumTripwires: corrigendumTripwires);
     }
@@ -3320,14 +3345,95 @@ public sealed class EuQueryExecutionAdapter
         return comparison != 0 ? comparison : string.CompareOrdinal(left.Sha256, right.Sha256);
     }
 
+    /// <summary>
+    /// Keeps existing English Work bodies and adds each proven French expression under its
+    /// own identity. Work snapshots still drive watermark acquisition and Work counts.
+    /// </summary>
+    private static IReadOnlyList<EuCellarObjectSnapshot> ProjectFrenchExpressionBodies(
+        IReadOnlyList<EuCellarObjectSnapshot> workSnapshots,
+        EuCorrigendumTripwireCompletion completion)
+    {
+        var french = completion.ProductionsByFamilyKey.Values
+            .SelectMany(static production => production.Expressions!.Derivation!.Expressions)
+            .Where(static expression => expression.OfficialLanguage ==
+                "http://publications.europa.eu/resource/authority/language/FRA")
+            .ToArray();
+        if (french.Length == 0) return workSnapshots;
+
+        if (french.GroupBy(static expression => expression.Identity.PublisherExpressionId, StringComparer.Ordinal)
+            .Any(static group => group.Count() != 1))
+            throw new InvalidOperationException("A French expression has more than one production binding.");
+
+        foreach (var expression in french)
+        {
+            if (workSnapshots.Count(snapshot => string.Equals(
+                    snapshot.ObjectRef.PublisherUri, expression.Identity.PublisherWorkId,
+                    StringComparison.Ordinal)) != 1)
+                throw new InvalidOperationException(
+                    $"French expression '{expression.Identity.PublisherExpressionId}' has no unique decoded parent Work.");
+        }
+
+        var projected = new List<EuCellarObjectSnapshot>(workSnapshots.Count + french.Length);
+        foreach (var work in workSnapshots)
+        {
+            var expressions = french.Where(expression => string.Equals(
+                expression.Identity.PublisherWorkId, work.ObjectRef.PublisherUri, StringComparison.Ordinal))
+                .OrderBy(static expression => expression.Identity.PublisherExpressionId, StringComparer.Ordinal)
+                .ToArray();
+
+            // Keep every discovered Work's metadata. If X proves French but no English,
+            // the compatibility Work body has an explicit English-not-observed outcome;
+            // French is acquired only under its expression identity.
+            if (expressions.Length > 0 && work.Language is
+                { Language: EuOfficialLanguage.French, State: EuExpressionObservationState.ExpressionObservedBodyCandidate })
+            {
+                var noEnglish = new EuLanguageExpressionObservation(
+                    EuOfficialLanguage.English, EuExpressionObservationState.NotObserved,
+                    "eu_object_facts_decode.language", "eu_cellar_object_decode.language_not_observed",
+                    expressions[0].SourceObject.IdentityProfileRef);
+                var metadata = EuCellarObjectSnapshot.TryObserve(
+                    work.ObjectRef, work.CanonicalWorkRoot, work.RecordForm,
+                    work.RecordEvidenceRef, work.PredicateObservations, work.Channel,
+                    noEnglish, work.Format, work.Rights, work.RelationObservations,
+                    work.RelationAxisEvidenceRef, work.Supporting, work.SupportingEvidenceRef,
+                    out var metadataRefusal);
+                projected.Add(metadata ?? throw new InvalidOperationException(
+                    $"Work metadata projection refused: {metadataRefusal}."));
+            }
+            else
+                projected.Add(work);
+
+            foreach (var expression in expressions)
+            {
+                var language = new EuLanguageExpressionObservation(
+                    EuOfficialLanguage.French,
+                    EuExpressionObservationState.ExpressionObservedBodyCandidate,
+                    "eu_object_facts_decode.language",
+                    "eu_cellar_object_decode.language_french_observed_body_candidate",
+                    expression.SourceObject.IdentityProfileRef);
+                var snapshot = EuCellarObjectSnapshot.TryObserve(
+                    expression.SourceObject, work.CanonicalWorkRoot, work.RecordForm,
+                    work.RecordEvidenceRef, work.PredicateObservations, work.Channel,
+                    language, work.Format, work.Rights, work.RelationObservations,
+                    work.RelationAxisEvidenceRef, work.Supporting, work.SupportingEvidenceRef,
+                    out var refusal);
+                projected.Add(snapshot ?? throw new InvalidOperationException(
+                    $"French expression '{expression.Identity.PublisherExpressionId}' refused: {refusal}."));
+            }
+        }
+        return projected;
+    }
+
     private static (ScopeManifestFetchAddress Manifest, IReadOnlyList<EuDocumentFetchAddress> Ladder)
-        MintFetchAddress(SourceObjectRef objectRef, EuFormatDisposition? formatDisposition)
+        MintFetchAddress(SourceObjectRef objectRef, EuFormatDisposition? formatDisposition,
+            EuOfficialLanguage language)
     {
         var notMinted = (
             ScopeManifestFetchAddress.NotMinted(ScopeManifestFetchAddressAbsenceReason.NoPublisherRouteYet),
             (IReadOnlyList<EuDocumentFetchAddress>)Array.Empty<EuDocumentFetchAddress>());
 
-        if (objectRef.Authority != SourceAuthority.Cellar ||
+        if (language is not (EuOfficialLanguage.English or EuOfficialLanguage.French) ||
+            objectRef.Authority != SourceAuthority.Cellar ||
             !TryExtractCellarKey(objectRef.PublisherUri, out var cellarKey) ||
             formatDisposition is null || formatDisposition.OrderedCandidates.Count == 0)
         {
@@ -3347,7 +3453,9 @@ public sealed class EuQueryExecutionAdapter
             }
 
             var address = EuDocumentFetchAddress.TryCreate(
-                "cellar", cellarKey, mediaType, EuDocumentLanguage.Eng, out _);
+                "cellar", cellarKey, mediaType,
+                language == EuOfficialLanguage.French ? EuDocumentLanguage.Fra : EuDocumentLanguage.Eng,
+                out _);
             if (address is null)
             {
                 return notMinted;

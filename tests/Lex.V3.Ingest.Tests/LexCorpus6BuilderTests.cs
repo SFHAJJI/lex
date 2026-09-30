@@ -596,7 +596,7 @@ public sealed class LexCorpus6BuilderTests
     }
 
     [TestMethod]
-    public async Task HeldEuMemberWithoutPrimaryFormexOutcomeRefusesBeforeCorpusBytes()
+    public async Task FrenchOnlyWorkRetainsMetadataAndBindsItsExpressionOutcome()
     {
         var europe = await EuAxiomWiringHarness.RunAsync(
             static root => EuAcquisitionTestFixture.AxiomAbsenceScriptFor(root),
@@ -605,9 +605,13 @@ public sealed class LexCorpus6BuilderTests
                 "http://publications.europa.eu/resource/authority/language/FRA");
         var envelope = await CompleteProfileEnvelopeAsync(europeOverride: europe);
 
-        Assert.IsNull(LexCorpus6Builder.TryBuild(envelope, out var refusal, out var detail));
-        Assert.AreEqual(LexCorpus6BuildRefusal.PopulationMismatch, refusal, detail);
-        StringAssert.Contains(detail, "exactly one Formex main-body outcome per member");
+        var built = LexCorpus6Builder.TryBuild(envelope, out var refusal, out var detail);
+        Assert.IsNotNull(built, $"{refusal}: {detail}");
+        Assert.HasCount(2, europe.CorpusRecordSet!.Set.Records);
+        Assert.AreEqual(1, europe.CorpusRecordSet.Set.Records.Count(record =>
+            record.Body.Kind == Lex.V3.Contracts.Source.Corpus.CorpusBodyRecordKind.Held));
+        Assert.HasCount(1, built.VerifiedSet.Set.Members.SelectMany(member => member.Stage3Outcomes)
+            .Where(outcome => outcome.Domain == LexCorpus6Stage3OutcomeDomain.EuropeFormexMainBody).ToArray());
     }
 
     [TestMethod]

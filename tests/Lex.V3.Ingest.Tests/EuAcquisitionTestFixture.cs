@@ -448,6 +448,42 @@ internal static class EuAcquisitionTestFixture
         return Row(fields);
     }
 
+    // Synthetic French package for language/binding tests; no claim of publisher acquisition.
+    internal static byte[] SyntheticFrenchMainBodyPackage()
+    {
+        using var bytes = new MemoryStream();
+        using (var archive = new System.IO.Compression.ZipArchive(bytes,
+            System.IO.Compression.ZipArchiveMode.Create, leaveOpen: true))
+        {
+            var units = new[]
+            {
+                ("test-doc.xml", """
+                    <DOC xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                         xsi:noNamespaceSchemaLocation="http://formex.publications.europa.eu/schema/formex-test.xd">
+                      <BIB.INSTANCE><NO.DOC>TESTFR</NO.DOC></BIB.INSTANCE>
+                    </DOC>
+                    """),
+                ("test-act.xml", """
+                    <ACT xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                         xsi:noNamespaceSchemaLocation="http://formex.publications.europa.eu/schema/formex-test.xd">
+                      <BIB.INSTANCE><LG.DOC>FR</LG.DOC><DATE ISO="20160427"/></BIB.INSTANCE>
+                      <ENACTING.TERMS><ARTICLE IDENTIFIER="001"><TI.ART>Article premier</TI.ART>
+                        <PARAG><ALINEA>Texte français de test.</ALINEA></PARAG>
+                      </ARTICLE></ENACTING.TERMS>
+                    </ACT>
+                    """),
+            };
+            foreach (var (name, xml) in units)
+            {
+                var entry = archive.CreateEntry(name, System.IO.Compression.CompressionLevel.NoCompression);
+                entry.LastWriteTime = new DateTimeOffset(2000, 1, 1, 0, 0, 0, TimeSpan.Zero);
+                using var writer = new StreamWriter(entry.Open(), new System.Text.UTF8Encoding(false));
+                writer.Write(xml);
+            }
+        }
+        return bytes.ToArray();
+    }
+
     /// <summary>
     /// One Expression's two family-X rows in the exact ascending cursor order the real page
     /// template's own ORDER BY produces: key_2 carries the predicate IRI, and

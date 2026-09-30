@@ -186,7 +186,7 @@ public sealed class EuropeIndexBuilderTests
     }
 
     [TestMethod]
-    public async Task AcquiredNonEnglishFormexPackageRemainsTypedWithoutBindingToEnglishWorkBody()
+    public async Task FrenchFormexPackageBindsOnlyItsExpressionAndBuildsDeterministically()
     {
         var envelope = await RetainedGdprEnvelopeAsync(acquireFrenchExpression: true);
         var acquired = envelope.BodyComposition.Envelope.FormexMainBodyLegalContent!.Outcomes
@@ -197,16 +197,48 @@ public sealed class EuropeIndexBuilderTests
 
         var corpus = LexCorpus6Builder.TryBuild(envelope, out var corpusRefusal, out var corpusDetail);
         Assert.IsNotNull(corpus, $"{corpusRefusal}: {corpusDetail}");
-        Assert.IsFalse(corpus.VerifiedSet.Set.Members.SelectMany(static member => member.Stage3Outcomes)
-            .Any(outcome => outcome.SemanticIdentitySha256 == acquired.SemanticIdentitySha256),
-            "An alternate-language Formex package remains typed in the evidence population but is not " +
-            "misrepresented as the selected work-level body outcome.");
+        var frenchMembers = corpus.VerifiedSet.Set.Members.Where(member => member.Stage3Outcomes
+            .Any(outcome => outcome.SemanticIdentitySha256 == acquired.SemanticIdentitySha256)).ToArray();
+        Assert.HasCount(1, frenchMembers,
+            "The French outcome belongs to one expression member and cannot attach to the English Work.");
+        var againCorpus = LexCorpus6Builder.TryBuild(envelope, out _, out _)!;
+        Assert.AreEqual(corpus.ArtifactRef, againCorpus.ArtifactRef);
 
         var built = EuropeIndexBuilder.TryBuild(envelope, out var refusal, out var detail);
         Assert.IsNotNull(built, $"{refusal}: {detail}");
         using var reader = EuropeIndexReader.OpenAndVerify(
             built.IndexRef, built.IndexBytes.Span, corpus.ArtifactRef, built.CapabilityManifest);
+        Assert.AreEqual(1, reader.ArticleCount);
+        var cell = built.CapabilityManifest.Cells.Single();
+        Assert.AreEqual("fra", cell.Language);
+        var hit = reader.Search("fra", cell.PeriodFrom, cell.PeriodTo, "Texte français de test");
+        Assert.AreEqual(V3IndexCapabilityLookupOutcome.Supported, hit.Outcome);
+        Assert.HasCount(1, hit.ArticleIdentities);
+        Assert.AreEqual(V3IndexCapabilityLookupOutcome.FilterNotSupportedByIndex,
+            reader.Search("eng", cell.PeriodFrom, cell.PeriodTo, "data").Outcome);
+        var resolved = reader.ResolveExact(acquired.Source.ExpressionIdentity.PublisherExpressionId);
+        Assert.HasCount(1, resolved);
+        Assert.AreEqual(acquired.Source.ExpressionIdentity.PublisherWorkId, resolved[0].PublisherWorkId);
+        var again = EuropeIndexBuilder.TryBuild(envelope, out _, out _)!;
+        CollectionAssert.AreEqual(built.IndexBytes.ToArray(), again.IndexBytes.ToArray());
+        CollectionAssert.AreEqual(built.CapabilityManifestBytes.ToArray(), again.CapabilityManifestBytes.ToArray());
+    }
+
+    [TestMethod]
+    public async Task EnglishPackageOnFrenchExpressionCannotEnterTheIndex()
+    {
+        var envelope = await RetainedGdprEnvelopeAsync(acquireFrenchExpression: true, mismatchedFrenchPackage: true);
+        var outcome = envelope.BodyComposition.Envelope.FormexMainBodyLegalContent!.Outcomes.Single(
+            value => value.Source.Kind == EuFormexPackageOutcomeKind.Acquired);
+        Assert.AreEqual(EuFormexMainBodyLegalContentDisposition.UnsupportedContentShape, outcome.Disposition);
+        StringAssert.Contains(outcome.Detail, "language does not match");
+        var corpus = LexCorpus6Builder.TryBuild(envelope, out _, out _)!;
+        var built = EuropeIndexBuilder.TryBuild(envelope, out var refusal, out var detail);
+        Assert.IsNotNull(built, $"{refusal}: {detail}");
+        using var reader = EuropeIndexReader.OpenAndVerify(
+            built.IndexRef, built.IndexBytes.Span, corpus.ArtifactRef, built.CapabilityManifest);
         Assert.AreEqual(0, reader.ArticleCount);
+        Assert.IsEmpty(built.CapabilityManifest.Cells);
     }
 
     [TestMethod]
@@ -279,10 +311,13 @@ public sealed class EuropeIndexBuilderTests
 
     internal static async Task<Stage3DerivationProfileEnvelope> RetainedGdprEnvelopeAsync(
         bool reopenRetainedBytes = true,
-        bool acquireFrenchExpression = false)
+        bool acquireFrenchExpression = false,
+        bool mismatchedFrenchPackage = false)
     {
         var bytes = await File.ReadAllBytesAsync(Path.Combine(
             AppContext.BaseDirectory, "Fixtures", "EuDocumentFetch", "gdpr-fmx4-200-body.bin"));
+        if (acquireFrenchExpression && !mismatchedFrenchPackage)
+            bytes = EuAcquisitionTestFixture.SyntheticFrenchMainBodyPackage();
         const string expressionIri =
             "http://publications.europa.eu/resource/cellar/5f2552c2-11bd-11e6-ba9a-01aa75ed71a1.0001";
         const string frenchExpressionIri =
