@@ -1252,7 +1252,8 @@ public sealed class EuScopeProfileTests
                     + "Lex.V3.Contracts.LuScopeDimensions, System.Collections.Generic.IReadOnlyList<"
                     + Lu + "LuxembourgResolvedRelation>, " + Lu + "LuxembourgWemiTopologyResolution, "
                     + Lu + "LuxembourgBodyJoinResolution, System.Collections.Generic.IReadOnlyDictionary<"
-                    + Co + "SourceArtifactRef, System.Int32>) -> " + Sc + "ScopeObjectReductionInput",
+                    + Co + "SourceArtifactRef, System.Int32>, " + Lu
+                    + "LuxembourgScopeResolver+ScopeInputReuse) -> " + Sc + "ScopeObjectReductionInput",
                 "method private static " + Sc + "ScopeManifestCanonicalWriter::OpenSnapshot("
                     + Sc + "OpenCanonicalScopePass, System.Threading.CancellationToken) -> "
                     + "System.Collections.Generic.IEnumerator<" + Sc + "ScopeObjectReductionInput>",
