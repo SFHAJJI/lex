@@ -5,11 +5,11 @@ every pull request that changes what is served, what is next or what is blocked.
 
 ## Heads
 
-- `v3/integration`: `34dac1ac` (2026-09-30, PR #770 merged). Build 45 s. Fast lane
+- `v3/integration`: `acd337de` (2026-09-30, PR #771 merged). Build 45 s. Fast lane
   (`eng/test-fast.ps1`): 3,038 tests, 3,037 pass, 1 skipped. Ingest suite: green on CI for PR #760
   (the CI `dotnet` job runs the whole solution on every pull request, about 7 min on the runner;
-  green for PR #770);
-  locally about 15 min. 812 web tests pass. CI's web job can flake in `keyboard-walk.test.mjs`
+  green for PR #771);
+  locally about 15 min. 822 web tests pass. CI's web job can flake in `keyboard-walk.test.mjs`
   ("browser debugger never answered"); rerunning the failed job is the fix.
 - Driver: Claude Opus 5.5 since 2026-09-29 (the Fable 5.1 driver ran out of tokens on 2026-09-28
   after PR #757; the user default model is now `claude-opus-5-5`).
@@ -235,7 +235,7 @@ schema's `parameters` shape, and whose call runs the same dispatch the REST rout
 endpoint test proves it for all twenty-three. The launch-contract line "REST and MCP derive identical
 envelopes from the registry" is the owner's to tick.
 
-Web: 29 React components, 812 tests. Preview screens render fixtures. The V3 Luxembourg search
+Web: 30 React components, 822 tests. Preview screens render fixtures. The V3 Luxembourg search
 answer has a reader (PR #771). The answer census now samples `search` five ways from the real handler:
 - a phrase with 4 strict hits and 1 relaxed hit;
 - the same phrase one hit per page, with its cursor;
@@ -259,7 +259,32 @@ breaks a rule the answer states about itself:
 An EU search answer (`publisher: "eu-eurlex"`) has another shape and is refused by this reader.
 It reads no text snippet, because the answer carries none. The pre-V3 renderer
 `search-results.mjs` (`lex_id`, `provision_num`, a row set) stays for the preview until the live
-search screen replaces it. **The first browser journey
+search screen replaces it.
+
+The live search screen (PR #772) is built into `dist-live/search.html` beside Trust and Coverage,
+with its own bundle `client-live-search.js`, which embeds the census contract and nothing else of
+the census.
+- The form sends only the phrase as typed (never trimmed or folded, at most 512 characters and 32
+  distinct words, counted as the platform splits them) and a language from French, German and
+  English. That list is a driver default: the platform answers a language it holds no text in
+  with `language_not_available`. The form's controls carry no `name`, so a submit the browser
+  performs itself (before hydration, or without the bundle) sends nothing, and the phrase never
+  reaches the address bar, the history or a referrer.
+- It sends one `POST /api/v3/search` when the reader submits, never while rendering. A new search
+  cancels the one in flight, and "Next page" repeats the search with the cursor the page handed
+  over (`createSearchSession`).
+- An answer is read by `readSearch` and laid out: the population in both lanes, the work
+  resolution, any ambiguous works, and "the first hits in the stated order, not the best hits".
+  Each hit shows its article, work, version date, lane and printed permalink; the permalink is not
+  a link yet, because this origin serves no reading page for it.
+- The two refusals a request from this page can meet (`no_corpus_mounted`, `language_not_available`)
+  are refusal cards. A transport failure, an unreadable envelope, or an answer the reader refuses
+  is each a state with a sentence. A server that was reached and refused the request
+  (`request_schema_invalid`, in practice a cursor from a result the server no longer holds) is said
+  as refused, not as unreachable.
+- The tests drive it with the census's real whole envelopes. The envelope census now holds a
+  search answer with hits in both lanes and a search `no_corpus_mounted` refusal. The screen is not
+  yet driven in a real browser: the journey step for it is next. **The first browser journey
 step passes (PR #766, run locally 2026-09-30):** `node scripts/journey.mjs --api <Lex.V3.Api build
 output> --mount <journey mount>` runs the real `Lex.V3.Api` from a copy of its build output with the
 mount beside it, serves `dist-live/` through `serve-live.mjs`, and drives headless Chrome over the
@@ -646,9 +671,10 @@ proves the path, not a corpus.
    envelope reader and the client module; PR #764: the live Trust and Coverage component; PR #765:
    its page, the live build and the one-origin server; PR #766: the first browser journey step,
    passing against the real API with and without a mount; PR #771: the V3 search reader
-   `readSearch`, held to five search answers the census now samples. Next: the live search
-   screen (a component, its page and a journey step over `readSearch`'s view). Then dossier and
-   reading, whose readers still read pre-V3 shapes and must first be held to served samples. Also
+   `readSearch`, held to five search answers the census now samples; PR #772: the live search
+   screen and its page. Next: the browser journey step for search (type, submit, the answer, the
+   next page). Then dossier and reading, whose readers still read pre-V3 shapes and must first be
+   held to served samples. Also
    J1 to J8 restated as V3 steps (owner question): they exist only in the pre-V3 pack
    (`05-user-journeys.md`).
 7. Release pipeline: build, sign, image, zero-traffic deploy, probes. Then acceptance and promotion.
