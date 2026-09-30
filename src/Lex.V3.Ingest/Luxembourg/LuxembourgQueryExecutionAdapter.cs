@@ -2111,7 +2111,7 @@ public sealed class LuxembourgQueryExecutionAdapter
         // Measure through the canonical writer without retaining its bytes. Small artifacts keep
         // their existing inline custody identity; larger ones use ordered bounded custody objects.
         var byteLength = ChunkedDerivedArtifact.MeasureCanonicalBytes(
-            output => ScopeManifestCanonicalWriter.Write(output, manifest));
+            output => ScopeManifestCanonicalWriter.Write(output, manifest), cancellationToken);
         if (byteLength > ChunkedDerivedArtifact.ChunkSize)
         {
             try

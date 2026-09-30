@@ -42,9 +42,10 @@ internal sealed class ChunkedDerivedArtifact
     internal long ByteLength { get; }
     internal Stream OpenRead() => new ChunkReadStream(this);
 
-    internal static long MeasureCanonicalBytes(Func<Stream, string> writeCanonical)
+    internal static long MeasureCanonicalBytes(Func<Stream, string> writeCanonical, CancellationToken cancellationToken)
     {
-        using var counter = new CountingWriteStream();
+        cancellationToken.ThrowIfCancellationRequested();
+        using var counter = new CountingWriteStream(cancellationToken);
         _ = writeCanonical(counter);
         return counter.Length;
     }
@@ -235,7 +236,7 @@ internal sealed class ChunkedDerivedArtifact
 
     private sealed record Chunk(string Sha256, int ByteLength, string ReceiptSha256);
 
-    private sealed class CountingWriteStream : Stream
+    private sealed class CountingWriteStream(CancellationToken cancellationToken) : Stream
     {
         private long _length;
         public override bool CanRead => false;
@@ -248,7 +249,11 @@ internal sealed class ChunkedDerivedArtifact
         public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
         public override void SetLength(long value) => throw new NotSupportedException();
         public override void Write(byte[] buffer, int offset, int count) => Write(buffer.AsSpan(offset, count));
-        public override void Write(ReadOnlySpan<byte> buffer) => _length = checked(_length + buffer.Length);
+        public override void Write(ReadOnlySpan<byte> buffer)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            _length = checked(_length + buffer.Length);
+        }
     }
 
     private sealed class ChunkReadStream(ChunkedDerivedArtifact artifact) : Stream
