@@ -56,11 +56,11 @@ CI evidence are recorded in the pull request before merge.
 
 ## Heads
 
-- `v3/integration`: `5923d695` (2026-09-30, PR #803 merged). Build 45 s. Fast lane
+- `v3/integration`: `ee2b033d` (2026-09-30, PR #804 merged). Build 45 s. Fast lane
   (`eng/test-fast.ps1`): 3,067 tests, 3,066 pass, 1 skipped (PR #798's validation). Ingest suite: green on CI for PR #760
   (the CI `dotnet` job runs the whole solution on every pull request, about 7 min on the runner;
-  green for PR #803);
-  locally about 15 min. 941 web tests pass. CI's web job can flake in `keyboard-walk.test.mjs`
+  green for PR #804);
+  locally about 15 min. 942 web tests pass. CI's web job can flake in `keyboard-walk.test.mjs`
   ("browser debugger never answered"); rerunning the failed job is the fix.
 - Driver: Claude Opus 5.5 since 2026-09-29 (the Fable 5.1 driver ran out of tokens on 2026-09-28
   after PR #757; the user default model is now `claude-opus-5-5`).
@@ -286,7 +286,7 @@ schema's `parameters` shape, and whose call runs the same dispatch the REST rout
 endpoint test proves it for all twenty-three. The launch-contract line "REST and MCP derive identical
 envelopes from the registry" is the owner's to tick.
 
-Web: 40 React components, 941 tests. Preview screens render fixtures. The V3 Luxembourg search
+Web: 40 React components, 942 tests. Preview screens render fixtures. The V3 Luxembourg search
 answer has a reader (PR #771). The answer census now samples `search` five ways from the real handler:
 - a phrase with 4 strict hits and 1 relaxed hit;
 - the same phrase one hit per page, with its cursor;
@@ -686,6 +686,21 @@ The compare, radar and export screens' sentences join the table (PR #804).
   a list of candidates) are held by the screens' existing tests to their exact markup.
 - The French draft covers every new entry. Trust and Coverage's answer is laid out by the shared
   `Coverage` component, whose copy stays its own for now, and the refusal card's labels come next.
+
+Every citation the journey's pages print verifies (PR #805). This is the launch contract's first
+promise, with its stated evidence: "`verify` resolves every citation the product emitted in the
+journey suite". PR #796 walked the served answers; this walks what the browser actually shows.
+- Each run collects every permalink the answer prints (the code elements beginning with a slash,
+  inside the live regions).
+- Each permalink must be hash-pinned, in the grammar `V3CitationVerificationTests` uses.
+- A step that cites (every screen but Trust and Coverage) must print at least one on an answer.
+- Once the run's recording is closed, each permalink is asked of the API's `verify`. It must answer
+  `digest_matches` for the very state the permalink pins, and for the article it names.
+- The journey's summary line counts the citations verified in each run. All sixteen runs pass, and
+  all sixteen with `--served-by-api` (2026-09-30). The fixture mount's runs verified 57 citations,
+  each `digest_matches`: reading 50 (the state and its 49 articles), export 2, and one each for
+  search, dossier, history, compare and radar. Search's five hits sit in one state, whose permalink
+  is the answer's `resolve.identifier`.
 
 The live export composer and its journey step (PR #789), the eighth screen. `dist-live/export.html`
 has its own bundle `client-live-export.js`.
@@ -1228,8 +1243,9 @@ has not yet run; the bounded first mount above is complete.
    records nothing while a browser asks it; PR #802: the keyboard and screen-reader paths (live
    regions, and the journey's keyboard mode); PR #803: the search, dossier, reading and history
    screens' sentences in the chrome table, with French drafted beside them; PR #804: the compare,
-   radar and export screens' sentences. Next: the refusal card's labels and Trust and Coverage's
-   copy into the table; French ships only once reviewed (Decision 41). Hosting (ruling 3): `Lex.V3.Api`
+   radar and export screens' sentences; PR #805: every citation the journey's pages print verifies.
+   Next: the refusal card's labels and Trust and Coverage's copy into the table; French ships only
+   once reviewed (Decision 41). Hosting (ruling 3): `Lex.V3.Api`
    serves the live pages on the API's origin with `frame-ancestors`, HSTS and `Referrer-Policy`,
    and a live page never shows the synthetic banner on a real mount. J1 to J8 are restated as V3
    steps by the driver (they exist only in the pre-V3 pack, `05-user-journeys.md`).

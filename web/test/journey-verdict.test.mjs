@@ -295,6 +295,33 @@ test("a keyboard run reaches every field by Tab alone, and every stop shows wher
   assert.deepEqual(journeyVerdict({ ...observed, keyboard: undefined }, { ...expected, keyboard: false }), [], "a run not asked to use the keyboard is not judged on it");
 });
 
+test("every citation the page prints is hash-pinned and verifies as the state and article it pins", () => {
+  const digest = "a".repeat(64);
+  const state = `/lu-legilux/loi-1991-08-10-n3/2024-02-01--${digest}`;
+  const article = `${state}#art_15`;
+  const matches = (identifier, anchor = null) => ({ identifier, refusal: null, verdict: "digest_matches", stateSha256: digest, requestedAnchor: anchor });
+  const observed = { ...goodSearch(), citations: [state, article], verifications: [matches(state), matches(article, "art_15")] };
+  const expected = { origin: ORIGIN, step: JOURNEY_STEPS.search, state: "success" };
+  const failing = (change) => journeyVerdict({ ...observed, ...change }, expected);
+  assert.deepEqual(journeyVerdict(observed, expected), [], "pinned citations that verify pass");
+
+  assert.ok(failing({ citations: [...observed.citations, "/lu-legilux/loi-1991-08-10-n3/2024-02-01"] })
+    .includes("the page printed /lu-legilux/loi-1991-08-10-n3/2024-02-01, which is not a hash-pinned permalink"), "an unpinned permalink fails");
+  assert.ok(failing({ citations: [], verifications: [] }).includes("the page printed no citation"), "an answer of a citing step that cites nothing fails");
+  assert.deepEqual(journeyVerdict({ ...goodSearch(), answerState: "refusal", citations: [], verifications: [] }, { ...expected, state: "refusal" })
+    .filter((failure) => failure.includes("citation")), [], "a refusal need not cite");
+  assert.ok(failing({ verifications: [matches(state)] }).includes(`${article} was not verified`), "a citation left unverified fails");
+  assert.ok(failing({ verifications: [matches(state), { ...matches(article, "art_15"), refusal: "no_version_for_date", verdict: null }] })
+    .includes(`verify refused ${article} with no_version_for_date`));
+  assert.ok(failing({ verifications: [matches(state), { ...matches(article, "art_15"), verdict: "digest_mismatch" }] })
+    .includes(`verify found ${article} digest_mismatch, not digest_matches`));
+  assert.ok(failing({ verifications: [matches(state), { ...matches(article, "art_15"), stateSha256: "b".repeat(64) }] })
+    .includes(`verify of ${article} named the state ${"b".repeat(64)}`), "verify must find the state the citation pins");
+  assert.ok(failing({ verifications: [matches(state), matches(article, "art_16")] })
+    .includes(`verify of ${article} named the article art_16`), "and the article it names");
+  assert.deepEqual(journeyVerdict(goodSearch(), expected).filter((failure) => failure.includes("citation")), [], "a run that read no citations is not judged on them");
+});
+
 test("a run whose page the API served is held to the headers the page arrived with (Decision 95, ruling 3)", () => {
   const policy = `${cspValue()}; frame-ancestors 'none'`;
   const served = () => ({

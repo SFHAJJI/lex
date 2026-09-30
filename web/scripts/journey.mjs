@@ -45,6 +45,12 @@
 // (naming the typed text, the browser's user agent or the loopback address if it wrote those), or if
 // any file under its directory was touched, including one written and deleted before the run ended.
 //
+// Every run also holds what the page cites to the launch contract's first promise, "`verify` resolves
+// every citation the product emitted in the journey suite": each permalink the answer prints must be
+// hash-pinned, a step that cites must print one on an answer, and once the run is recorded each is
+// asked of the API's `verify`, which must find the digest it pins (`digest_matches`), that very
+// state, and the article it names.
+//
 // The mount is written by `V3JourneyMountTests` with `V3_WRITE_JOURNEY_MOUNT=<directory>`; it is the
 // test fixture's mount, so the journey proves the wiring, not a real corpus.
 
@@ -75,23 +81,36 @@ export const READING_DATE = "2024-02-01";
 /** The article id the provision history step types beside that identifier. */
 export const HISTORY_ANCHOR = "art_15";
 
-/** The steps: the page each loads, the operation it must ask, and what it does before waiting. */
+/**
+ * A hash-pinned Luxembourg permalink, as `verify` takes it: the stable coordinate, `--` and the state
+ * digest, and an article id after `#` (the grammar `V3CitationVerificationTests` holds the served
+ * answers to).
+ */
+export const PINNED_PERMALINK = /^\/lu-legilux\/[a-z0-9_-]+\/\d{4}-\d{2}-\d{2}--([0-9a-f]{64})(?:#([^#\s]+))?$/;
+
+/**
+ * The steps: the page each loads, the operation it must ask, and what it does before waiting. A step
+ * that `cites` prints at least one citation on an answer.
+ */
 export const JOURNEY_STEPS = Object.freeze({
   coverage: Object.freeze({ path: "/", operation: "coverage", body: null }),
   search: Object.freeze({
     path: "/search.html",
+    cites: true,
     operation: "search",
     typed: SEARCH_PHRASE,
     body: Object.freeze({ operation_id: "search", parameters: Object.freeze({ query: SEARCH_PHRASE, language: "fra" }) }),
   }),
   dossier: Object.freeze({
     path: "/dossier.html",
+    cites: true,
     operation: "dossier",
     typed: DOSSIER_IDENTIFIER,
     body: Object.freeze({ operation_id: "dossier", parameters: Object.freeze({ identifier: DOSSIER_IDENTIFIER }) }),
   }),
   reading: Object.freeze({
     path: "/reading.html",
+    cites: true,
     operation: "evidence_bundle",
     typed: Object.freeze([DOSSIER_IDENTIFIER, READING_DATE]),
     body: Object.freeze({
@@ -101,6 +120,7 @@ export const JOURNEY_STEPS = Object.freeze({
   }),
   compare: Object.freeze({
     path: "/compare.html",
+    cites: true,
     operation: "diff",
     typed: Object.freeze([DOSSIER_IDENTIFIER, READING_DATE, READING_DATE]),
     body: Object.freeze({
@@ -110,6 +130,7 @@ export const JOURNEY_STEPS = Object.freeze({
   }),
   radar: Object.freeze({
     path: "/radar.html",
+    cites: true,
     operation: "changes_in_period",
     typed: Object.freeze([READING_DATE, READING_DATE]),
     body: Object.freeze({
@@ -119,6 +140,7 @@ export const JOURNEY_STEPS = Object.freeze({
   }),
   export: Object.freeze({
     path: "/export.html",
+    cites: true,
     operation: "evidence_bundle",
     typed: Object.freeze([DOSSIER_IDENTIFIER, READING_DATE]),
     // Once the reading has answered: pin the first article, and the export must be composed.
@@ -130,6 +152,7 @@ export const JOURNEY_STEPS = Object.freeze({
   }),
   history: Object.freeze({
     path: "/history.html",
+    cites: true,
     operation: "article_history",
     typed: Object.freeze([DOSSIER_IDENTIFIER, HISTORY_ANCHOR]),
     body: Object.freeze({
@@ -193,6 +216,26 @@ export function journeyVerdict(observed, expected) {
       if (!(keys.keyPresses >= keys.characters)) failures.push(`text arrived without key presses: ${keys.characters} characters typed, ${keys.keyPresses} character keys pressed`);
       for (const stop of keys.stops.filter((candidate) => !candidate.ring)) {
         failures.push(`a focus stop shows no focus indicator: ${stop.tag}${stop.type ? `[type=${stop.type}]` : ""} "${stop.label}"`);
+      }
+    }
+  }
+  if (observed.citations !== undefined) {
+    // The launch contract's first promise, on what the journey suite emitted: every citation a page
+    // prints is hash-pinned, and `verify` finds the very state and article it pins.
+    const pinned = observed.citations.filter((citation) => PINNED_PERMALINK.test(citation));
+    for (const citation of observed.citations.filter((candidate) => !PINNED_PERMALINK.test(candidate))) {
+      failures.push(`the page printed ${citation}, which is not a hash-pinned permalink`);
+    }
+    if (step.cites && expected.state === "success" && observed.citations.length === 0) failures.push("the page printed no citation");
+    if (observed.verifications !== undefined) {
+      const verified = new Set(observed.verifications.map((check) => check.identifier));
+      for (const citation of pinned.filter((candidate) => !verified.has(candidate))) failures.push(`${citation} was not verified`);
+      for (const check of observed.verifications) {
+        const [, digest, anchor = null] = check.identifier.match(PINNED_PERMALINK) ?? [];
+        if (check.refusal !== null) failures.push(`verify refused ${check.identifier} with ${check.refusal}`);
+        else if (check.verdict !== "digest_matches") failures.push(`verify found ${check.identifier} ${check.verdict}, not digest_matches`);
+        else if (check.stateSha256 !== digest) failures.push(`verify of ${check.identifier} named the state ${check.stateSha256}`);
+        else if (anchor !== null && check.requestedAnchor !== anchor) failures.push(`verify of ${check.identifier} named the article ${check.requestedAnchor}`);
       }
     }
   }
@@ -559,12 +602,35 @@ async function observe(browser, pageOrigin, step, { keyboard = false } = {}) {
       userAgent: await evaluate("navigator.userAgent"),
       liveRegion: { atLoad: liveRegionAtLoad, atEnd: await evaluate(ANSWER_LIVE_REGION) },
       keyboard: keys,
+      // Every citation the answer prints: a permalink is printed as code, and nothing else printed as
+      // code begins with a slash (digests are hex, IRIs are absolute).
+      citations: await evaluate("[...new Set([...document.querySelectorAll('[data-live-answer] code')].map((node) => node.textContent.trim()).filter((text) => text.startsWith('/')))]"),
     };
   } finally {
     chrome.kill();
     await new Promise((resolve) => setTimeout(resolve, 500));
     await rm(profile, { recursive: true, force: true }).catch(() => {});
   }
+}
+
+/** Asks the API's `verify` for each citation, as a reader checking one would, and keeps what it said. */
+async function verifyCitations(origin, citations) {
+  const verifications = [];
+  for (const identifier of citations) {
+    const answer = await fetch(`${origin}/api/v3/verify`, {
+      method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ operation_id: "verify", parameters: { identifier } }),
+    });
+    const envelope = await answer.json();
+    const value = envelope.result?.value ?? null;
+    verifications.push({
+      identifier,
+      refusal: envelope.refusal?.code ?? (value === null ? `HTTP ${answer.status}` : null),
+      verdict: value?.verdict ?? null,
+      stateSha256: value?.state_sha256 ?? null,
+      requestedAnchor: value?.requested_anchor ?? null,
+    });
+  }
+  return verifications;
 }
 
 async function run(apiOutput, mount, expected, browser, liveRoot) {
@@ -577,6 +643,8 @@ async function run(apiOutput, mount, expected, browser, liveRoot) {
     const filesAtEnd = await listFiles(api.home);
     const changedFiles = [...filesAtEnd].filter(([path, facts]) => api.filesAtStart.get(path) !== facts).map(([path]) => path);
     observed.api = { startup: api.output().slice(0, api.outputAtStart), output: api.output().slice(api.outputAtStart), changedFiles, fileEvents };
+    // Asked once the run's recording is closed, so checking the citations is not the run's traffic.
+    observed.verifications = await verifyCitations(api.origin, observed.citations.filter((citation) => PINNED_PERMALINK.test(citation)));
     return { observed, failures: journeyVerdict(observed, { ...expected, origin: pageOrigin }) };
   } finally {
     if (live !== null) await new Promise((resolve) => live.close(resolve));
@@ -625,7 +693,7 @@ async function main(argv) {
   for (const [label, { observed, failures }] of results) {
     const toApi = observed.requests.filter((request) => new URL(request.url).pathname.startsWith("/api/")).length;
     console.log(`${label}: ${observed.answerState}; ${observed.requests.length} requests (${toApi} to the API); ` +
-      `console ${observed.console.length}; hydration ${observed.hydrated}; ` +
+      `console ${observed.console.length}; hydration ${observed.hydrated}; ${observed.verifications?.length ?? 0} citations verified; ` +
       `${observed.keyboard ? `${observed.keyboard.keyPresses} of ${observed.keyboard.characters} characters typed by key; ` : ""}` +
       `${failures.length === 0 ? "PASS" : "FAIL"}`);
     for (const failure of failures) console.log(`  - ${failure}`);
