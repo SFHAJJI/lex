@@ -657,7 +657,7 @@ CI evidence are recorded in the pull request before merge.
 
 ## Heads
 
-- `v3/integration`: `4b5c943b` (2026-10-01, PR #838 merged). Build 45 s. Fast lane
+- `v3/integration`: `7144666c` (2026-10-01, PR #835 merged). Build 45 s. Fast lane
   (`eng/test-fast.ps1`): 3,077 tests, 3,076 pass, 1 skipped (the review of PR #828). Ingest suite: green on CI for PR #760
   (the CI `dotnet` job runs the whole solution on every pull request, about 7 min on the runner;
   green for PR #834);
@@ -1903,8 +1903,11 @@ so the one code the registry says answers it follows from the mount's own data:
   - a title two works carry, or a beginning two works' titles share (the resolver's own rule, exact
     first, then prefix): `ambiguous_identifier`;
   - two states whose rule profiles differ: `profiles_differ`;
-  - a state whose every article's licence does not admit redistribution: `text_withheld`;
-  - a state with no text: `text_not_available`;
+  - a state whose text the evidence bundle withholds by its own rule: a source not acquired, or any
+    rights disposition but the admitting `agreed_same_run_cc_by`, with the tokens taken from the
+    contract: `text_withheld`. The review of #839 found that the first version guessed a
+    `non_admitting` prefix and missed a disposition such as `conflict`;
+  - a state whose text is admitted but holds none: `text_not_available`;
   - no EU index: `no_corpus_mounted`.
 - A code the mount cannot produce is named on the card as not produced, with its reason, and never
   faked.
@@ -1921,7 +1924,9 @@ so the one code the registry says answers it follows from the mount's own data:
     produced there, since there is no Luxembourg state. `no_corpus_mounted` is not produced either,
     since the EU index exists.
   EU refusal cases derived from the EU index are a later slice.
-- A mutation, the day-before-history request given the gold `answer`, fails both refusal tests.
+- Two mutations:
+  - the day-before-history request given the gold `answer` fails the refusal tests;
+  - the first version's `non_admitting` guess fails the `conflict` case.
 
 Evaluation card (PR #769): `EvaluationCard` in `Lex.V3.Contracts.Evaluation` prints the machine
 gates as the card of `36-ideal-evaluation.md` section 6 describes, as far as the launch contract

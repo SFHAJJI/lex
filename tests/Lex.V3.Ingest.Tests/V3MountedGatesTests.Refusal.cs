@@ -1,6 +1,8 @@
 using System.Globalization;
 using Lex.V3.Api;
+using Lex.V3.Contracts;
 using Lex.V3.Contracts.Evaluation;
+using Lex.V3.Contracts.Source.Luxembourg;
 using Lex.V3.Ingest.Luxembourg;
 using Microsoft.Data.Sqlite;
 using static Lex.V3.Ingest.Tests.V3CorpusClassificationMountTests;
@@ -24,6 +26,17 @@ public sealed partial class V3MountedGatesTests
     internal sealed record RefusalSet(IReadOnlyDictionary<string, RefusalRequest> Requests, IReadOnlyDictionary<string, string> NotProduced);
 
     private const string NoSuchWork = "/lu-legilux/no-such-work";
+
+    /// <summary>
+    /// The evidence bundle's own rule for a state's text (<c>V3CorpusMount</c>, rights at compose time): its sources are
+    /// the members behind its article identities (<c>StateSources</c>), and the text is withheld when it has none, or
+    /// when any source was not acquired or holds another rights disposition than the one admitting one. As SQL over a
+    /// state <c>s</c>; the tokens are the contract's own.
+    /// </summary>
+    private static readonly string StateWithheld =
+        "(NOT EXISTS (SELECT 1 FROM json_each(s.article_identities_json) j JOIN articles a ON a.article_identity_sha256 = j.value JOIN members m ON m.object_ref_sha256 = a.object_ref_sha256) " +
+        "OR EXISTS (SELECT 1 FROM json_each(s.article_identities_json) j JOIN articles a ON a.article_identity_sha256 = j.value JOIN members m ON m.object_ref_sha256 = a.object_ref_sha256 " +
+        $"WHERE m.outcome IS NOT '{ContractWire.NameOf(LexCorpus6OutcomeKind.Acquired)}' OR m.rights_disposition IS NOT '{ContractWire.NameOf(LuxembourgRightsChannelDisposition.AgreedSameRunCcBy)}'))";
     private static readonly string[] CandidateLanguages = ["eng", "deu", "fra", "ltz"];
 
     internal static RefusalSet RefusalCases(string mountDirectory, IReadOnlyList<Timeline> timelines)
@@ -121,26 +134,27 @@ public sealed partial class V3MountedGatesTests
             notProduced["profiles_differ"] = "no two states of one work differ in rule profile";
         }
 
-        // A state held alone on its date whose every article belongs to a member whose licence does not admit
-        // redistribution; and one whose every article holds no text.
-        var withheld = StateWhere(connection, "NOT EXISTS (SELECT 1 FROM articles a JOIN members m ON m.object_ref_sha256 = a.object_ref_sha256 WHERE a.expression_iri = s.expression_iri AND (m.rights_disposition IS NULL OR m.rights_disposition NOT LIKE 'non_admitting%'))");
+        // A state held alone on its date whose text the bundle withholds by its own rule (review of #839: the first
+        // version guessed a "non_admitting" prefix and missed a disposition such as `conflict`); and one whose text it
+        // does not withhold but whose every article holds none, since rights are decided before any text is read.
+        var withheld = StateWhere(connection, StateWithheld);
         if (withheld is { } blocked)
         {
             requests["rights-not-agreed"] = new("evidence_bundle", new { identifier = $"/lu-legilux/{blocked.Work}", date = blocked.Date, language = blocked.Language }, "text_withheld");
         }
         else
         {
-            notProduced["text_withheld"] = "no member's licence withholds the text of a whole state";
+            notProduced["text_withheld"] = "every state's sources were acquired under the one admitting rights disposition";
         }
 
-        var empty = StateWhere(connection, "NOT EXISTS (SELECT 1 FROM articles a WHERE a.expression_iri = s.expression_iri AND a.searchable_text <> '')");
+        var empty = StateWhere(connection, $"NOT {StateWithheld} AND NOT EXISTS (SELECT 1 FROM articles a WHERE a.expression_iri = s.expression_iri AND a.searchable_text <> '')");
         if (empty is { } textless)
         {
             requests["no-text-held"] = new("evidence_bundle", new { identifier = $"/lu-legilux/{textless.Work}", date = textless.Date, language = textless.Language }, "text_not_available");
         }
         else
         {
-            notProduced["text_not_available"] = "every state holds text";
+            notProduced["text_not_available"] = "every state whose text is admitted holds text";
         }
 
         return new RefusalSet(requests, notProduced);
@@ -249,16 +263,20 @@ public sealed partial class V3MountedGatesTests
     }
 
     [TestMethod]
-    public async Task ALicenceThatWithholdsTextIsDerivedAsTextWithheld()
+    [DataRow("non_admitting_licence_scl")]
+    [DataRow("conflict")]
+    public async Task ARightsDispositionThatWithholdsTextIsDerivedAsTextWithheld(string disposition)
     {
+        // Any disposition but the admitting one withholds the text (review of #839: `conflict` was missed).
         var fixture = await MountedFixture.CreateAsync();
         await using var cleanup = fixture;
-        await fixture.SetMemberRightsDispositionAsync("non_admitting_licence_scl");
+        await fixture.SetMemberRightsDispositionAsync(disposition);
         using var mount = await V3CorpusMount.OpenAsync(fixture.Directory, CancellationToken.None);
         Assert.IsNotNull(mount);
 
         var (set, derived) = RunRefusalGate(mount, fixture.Directory, Timelines(fixture.Directory));
+        Assert.IsFalse(derived.NotProduced.ContainsKey("text_withheld"), string.Join("; ", derived.NotProduced.Select(static pair => pair.Key + " (" + pair.Value + ")")));
         Assert.AreEqual("text_withheld", derived.Requests["rights-not-agreed"].Gold);
-        Assert.AreEqual(GateVerdict.Pass, set.Gates.Single().Verdict);
+        Assert.AreEqual(GateVerdict.Pass, set.Gates.Single().Verdict, "the handler withholds it, as derived");
     }
 }
