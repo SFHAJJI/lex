@@ -2025,6 +2025,119 @@ public sealed class LuxembourgRepeatedEnumerationExecutorTests
     }
 
     [TestMethod]
+    [DataRow("{\"meta\":\"error\",\"title\":\"Read timed out\",\"code\":\"error.unknown\"}")]
+    [DataRow("Virtuoso 22026 Error SR319: Max row length is exceeded when trying to store a string of 75 chars into a temp col")]
+    public async Task AdaptiveCoverSplitsRetainedInitialCountCapacityFailures(string error)
+    {
+        var (request, witness) = BuildRequest();
+        var store = new RoutedHttpAcquisitionSessionAuditTests.RecordingCustodyStore { RefuseFallback = true };
+        var handler = LuxembourgAcquisitionTestFixture.AllowRobotsThenHandler((ordinal, req) =>
+        {
+            var response = JsonResponse(req, ordinal switch
+            {
+                1 => error,
+                2 or 4 or 6 or 8 => LuxembourgAcquisitionTestFixture.CountJson(0),
+                3 or 5 or 7 or 9 => LuxembourgAcquisitionTestFixture.EmptyRowsJson(),
+                _ => throw new AssertFailedException("Unexpected send."),
+            });
+            if (ordinal == 1) response.StatusCode = System.Net.HttpStatusCode.InternalServerError;
+            return response;
+        });
+        var executor = new LuxembourgRepeatedEnumerationExecutor(
+            store, new LuxembourgAcquisitionTestFixture.FixedTimeProvider(), handler);
+        var budget = WireRequestBudget.OfWireRequests(15);
+        var result = await executor.RunAdaptiveCoverAsync(request, witness, budget, CancellationToken.None);
+        Assert.AreEqual(2, result.Chain.Leaves.Count);
+        Assert.IsTrue(result.Results.All(static r => r.Receipt is not null && r.Refusal is null));
+        Assert.AreEqual(9, result.ProductRequestCount);
+        Assert.AreEqual(10, budget.Spent);
+        var cover = LuxembourgPartitionCover.TryCreate(result.Chain,
+            result.Results.Select(static r => r.Receipt!).ToArray(), null, out var refusal);
+        Assert.IsNotNull(cover, refusal.ToString());
+        Assert.AreEqual(0, cover.LeafDeliveredRowCountSum);
+    }
+
+    [TestMethod]
+    [DataRow(500, "<html>challenge</html>")]
+    [DataRow(503, "{\"meta\":\"error\",\"title\":\"Read timed out\",\"code\":\"error.unknown\"}")]
+    [DataRow(500, "{\"meta\":1,\"title\":\"Read timed out\",\"code\":\"error.unknown\"}")]
+    public async Task AdaptiveCoverDoesNotSplitOtherHttpFailures(int status, string error)
+    {
+        var (request, witness) = BuildRequest();
+        var store = new RoutedHttpAcquisitionSessionAuditTests.RecordingCustodyStore { RefuseFallback = true };
+        var handler = LuxembourgAcquisitionTestFixture.AllowRobotsThenHandler((ordinal, req) =>
+        {
+            Assert.AreEqual(1, ordinal);
+            var response = JsonResponse(req, error);
+            response.StatusCode = (System.Net.HttpStatusCode)status;
+            return response;
+        });
+        var executor = new LuxembourgRepeatedEnumerationExecutor(
+            store, new LuxembourgAcquisitionTestFixture.FixedTimeProvider(), handler);
+        var budget = WireRequestBudget.OfWireRequests(15);
+        var result = await executor.RunAdaptiveCoverAsync(request, witness, budget, CancellationToken.None);
+        Assert.AreEqual(1, result.Chain.Leaves.Count);
+        Assert.AreEqual(LuxembourgEnumerationRefusal.StatusNotAdmitted, result.Results.Single().Refusal?.Code);
+        Assert.AreEqual(2, budget.Spent);
+    }
+
+    [TestMethod]
+    public async Task AdaptiveCoverHonoursSmallerLeafTargetWithoutChangingProofRequirements()
+    {
+        var (request, witness) = BuildRequestWithPartition(new LuxembourgQueryPartitionRange("small-target",
+            new LuxembourgQueryCursor("a", "", "", "", "", ""),
+            new LuxembourgQueryCursor("z", "", "", "", "", "")));
+        var store = new RoutedHttpAcquisitionSessionAuditTests.RecordingCustodyStore { RefuseFallback = true };
+        var handler = LuxembourgAcquisitionTestFixture.AllowRobotsThenHandler((ordinal, req) =>
+            JsonResponse(req, ordinal switch
+            {
+                1 => LuxembourgAcquisitionTestFixture.CountJson(2),
+                2 or 5 or 8 or 11 => LuxembourgAcquisitionTestFixture.CountJson(1),
+                3 or 6 => LuxembourgAcquisitionTestFixture.RowsJson("b"),
+                9 or 12 => LuxembourgAcquisitionTestFixture.RowsJson("n"),
+                4 or 7 or 10 or 13 => LuxembourgAcquisitionTestFixture.EmptyRowsJson(),
+                _ => throw new AssertFailedException("Unexpected send."),
+            }));
+        var executor = new LuxembourgRepeatedEnumerationExecutor(
+            store, new LuxembourgAcquisitionTestFixture.FixedTimeProvider(), handler);
+        var result = await executor.RunAdaptiveCoverAsync(request, witness,
+            WireRequestBudget.OfWireRequests(15), CancellationToken.None, maximumLeafRows: 1);
+        Assert.AreEqual(2, result.Chain.Leaves.Count);
+        Assert.IsTrue(result.Results.All(static r => r.Receipt is not null));
+        // Each child reconciles its own count and pages; together they tile the two-row root.
+        var cover = LuxembourgPartitionCover.TryCreate(result.Chain,
+            result.Results.Select(static r => r.Receipt!).ToArray(), null, out var refusal);
+        Assert.IsNotNull(cover, refusal.ToString());
+        Assert.AreEqual(2, cover.LeafDeliveredRowCountSum);
+    }
+
+    [TestMethod]
+    public async Task CapacityFailureAfterTheFirstPassStopsRatherThanSplittingChangedEvidence()
+    {
+        var (request, witness) = BuildRequest();
+        var store = new RoutedHttpAcquisitionSessionAuditTests.RecordingCustodyStore { RefuseFallback = true };
+        var handler = LuxembourgAcquisitionTestFixture.AllowRobotsThenHandler((ordinal, req) =>
+        {
+            var response = JsonResponse(req, ordinal switch
+            {
+                1 => LuxembourgAcquisitionTestFixture.CountJson(0),
+                2 => LuxembourgAcquisitionTestFixture.EmptyRowsJson(),
+                3 => "{\"meta\":\"error\",\"title\":\"Read timed out\",\"code\":\"error.unknown\"}",
+                _ => throw new AssertFailedException("No request after the second-pass failure."),
+            });
+            if (ordinal == 3) response.StatusCode = HttpStatusCode.InternalServerError;
+            return response;
+        });
+        var executor = new LuxembourgRepeatedEnumerationExecutor(
+            store, new LuxembourgAcquisitionTestFixture.FixedTimeProvider(), handler);
+        var result = await executor.RunAdaptiveCoverAsync(request, witness,
+            WireRequestBudget.OfWireRequests(15), CancellationToken.None);
+        Assert.AreEqual(1, result.Chain.Leaves.Count);
+        Assert.AreEqual(LuxembourgEnumerationRefusal.StatusNotAdmitted, result.Results.Single().Refusal?.Code);
+        Assert.AreEqual(3, result.ProductRequestCount);
+    }
+
+    [TestMethod]
     public async Task AdaptiveSplittingStopsAtTheSharedWireBudget()
     {
         var (request, witness) = BuildRequest();

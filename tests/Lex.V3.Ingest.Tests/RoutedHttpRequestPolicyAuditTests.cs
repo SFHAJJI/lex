@@ -437,7 +437,7 @@ public sealed class RoutedHttpRequestPolicyAuditTests
     /// artifact to identify the actual runtime patch on each host.
     /// </summary>
     private const string PinnedNormalizedLuxembourgCountPolicySha256 =
-        "ab7996a2655b243456f51843c9da0ecbd9860560f8ca1c7afcc3a5ab796130d6";
+        "098fbee9972a893e9f402d7c3df5dbd90dcaa38941b74525224fb5dbb8079d02";
 
     [TestMethod]
     public async Task LuxembourgCountSendsAgainstAFreshRealStoreHoldingNothing()

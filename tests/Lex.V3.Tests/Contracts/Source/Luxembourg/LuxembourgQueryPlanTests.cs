@@ -10,6 +10,34 @@ namespace Lex.V3.Tests.Contracts.Source.Luxembourg;
 public sealed class LuxembourgQueryPlanTests
 {
     [TestMethod]
+    public void PopulationCountsDistinctRdfTuplesWithoutDuplicatingExpandedCursorStrings()
+    {
+        var plan = LuxembourgQueryPlan.CreateDefaultGraph(
+            Artifact("44444444-4444-4444-8444-444444444444", '4'));
+        foreach (var (id, columns) in new[]
+                 {
+                     ("subjects", "?subject"),
+                     ("assertion-rows", "?subject ?predicate ?object"),
+                     ("relation-assertions", "?subject ?predicate ?object"),
+                 })
+        {
+            var template = plan.QueryTemplates.Single(value => value.TemplateId == id);
+            StringAssert.Contains(template.Utf8CountTemplate, $"SELECT DISTINCT {columns} WHERE");
+            Assert.IsFalse(template.Utf8CountTemplate.Contains(
+                "SELECT DISTINCT ?subject ?predicate ?object ?key_1", StringComparison.Ordinal));
+            Assert.IsFalse(template.Utf8CountTemplate.Contains(
+                "SELECT DISTINCT ?subject ?predicate ?object ?object_kind", StringComparison.Ordinal));
+            AssertCompositePartitionFilter(template.Utf8CountTemplate);
+            AssertCompositePartitionFilter(template.Utf8QueryTemplate);
+            StringAssert.Contains(template.Utf8QueryTemplate,
+                "ORDER BY ?key_1 ?key_2 ?key_3 ?key_4 ?key_5 ?key_6");
+        }
+        var assertions = plan.QueryTemplates.Single(value => value.TemplateId == "assertion-rows");
+        StringAssert.Contains(assertions.Utf8QueryTemplate,
+            "SELECT DISTINCT ?subject ?predicate ?object ?object_kind ?datatype_iri ?language_tag ?key_1");
+    }
+
+    [TestMethod]
     public void FactoryPinsThePublisherTraversalAndDeterministicTwoPassPolicy()
     {
         var sourceProfileRef = Artifact("33333333-3333-4333-8333-333333333333", '3');
@@ -316,9 +344,9 @@ public sealed class LuxembourgQueryPlanTests
         {
             var plan = Plan();
             var first = LuxembourgQueryPlanIdentity.GetCanonicalBytes(plan);
-            Assert.AreEqual(79_971, first.Length);
+            Assert.AreEqual(79_812, first.Length);
             Assert.AreEqual(
-                "b1aa9f1df23d6654f207005d20c612384977bd7f644e835ffe003d4f8555a979",
+                "ce790dda3ee78f677975b30df76a8812c09462b3b68d5dd2eec6ae19d7e1c383",
                 Sha256(first));
             Assert.IsFalse(first.Contains((byte)'\r'));
             CultureInfo.CurrentCulture = CultureInfo.GetCultureInfo("ar-SA");
