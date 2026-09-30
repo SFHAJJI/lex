@@ -346,3 +346,15 @@ test("an API that accepts and never answers is a timeout the page is told about 
     await rm(root, { recursive: true, force: true });
   }
 });
+
+test("no live page says synthetic in its text, since a live page may stand over a real mount (Decision 95, ruling 3)", () => {
+  for (const [name, render] of [
+    ["coverage", renderLiveCoveragePage], ["search", renderLiveSearchPage], ["dossier", renderLiveDossierPage],
+    ["reading", renderLiveReadingPage], ["history", renderLiveHistoryPage], ["compare", renderLiveComparePage], ["radar", renderLiveRadarPage],
+  ]) {
+    const html = render();
+    const text = html.slice(html.indexOf("<body")).replace(/<[^>]+>/g, " ");
+    assert.doesNotMatch(text, /synthetic/i, `${name}: the visible text never calls the page synthetic`);
+    assert.match(html, new RegExp(`data-live="${LIVE_MARKER}"`), `${name}: under the live banner`);
+  }
+});

@@ -5,11 +5,11 @@ every pull request that changes what is served, what is next or what is blocked.
 
 ## Heads
 
-- `v3/integration`: `783544e9` (2026-09-30, PR #784 merged). Build 45 s. Fast lane
+- `v3/integration`: `12a9e760` (2026-09-30, PR #787 merged). Build 45 s. Fast lane
   (`eng/test-fast.ps1`): 3,038 tests, 3,037 pass, 1 skipped. Ingest suite: green on CI for PR #760
   (the CI `dotnet` job runs the whole solution on every pull request, about 7 min on the runner;
-  green for PR #784);
-  locally about 15 min. 894 web tests pass. CI's web job can flake in `keyboard-walk.test.mjs`
+  green for PR #787);
+  locally about 15 min. 896 web tests pass. CI's web job can flake in `keyboard-walk.test.mjs`
   ("browser debugger never answered"); rerunning the failed job is the fix.
 - Driver: Claude Opus 5.5 since 2026-09-29 (the Fable 5.1 driver ran out of tokens on 2026-09-28
   after PR #757; the user default model is now `claude-opus-5-5`).
@@ -235,7 +235,7 @@ schema's `parameters` shape, and whose call runs the same dispatch the REST rout
 endpoint test proves it for all twenty-three. The launch-contract line "REST and MCP derive identical
 envelopes from the registry" is the owner's to tick.
 
-Web: 35 React components, 894 tests. Preview screens render fixtures. The V3 Luxembourg search
+Web: 35 React components, 896 tests. Preview screens render fixtures. The V3 Luxembourg search
 answer has a reader (PR #771). The answer census now samples `search` five ways from the real handler:
 - a phrase with 4 strict hits and 1 relaxed hit;
 - the same phrase one hit per page, with its cursor;
@@ -508,6 +508,22 @@ The live radar screen and its journey step (PR #787). `dist-live/radar.html` has
 - `journey.mjs` runs a seventh step: `/radar.html`, typing `2024-02-01` twice. With the mount the page
   ends in "2024-02-01 to 2024-02-01: 1 state of 1 work, of 1 held" and the first-held-state reason;
   without one, in the card. All fourteen runs pass.
+
+The API serves the live pages on its own origin (PR #788, ruling 3). `Lex.V3.Api` opens `v3-web`
+beside it (the built `web/dist-live`) through `V3WebRoot` and serves exactly the files it held at
+start, by GET or HEAD, with `/` as `index.html`. A path it does not hold reaches the API's routing as
+before, and another method is 405. Every page response carries:
+- the page's own reviewed Content-Security-Policy, read from `index.html` (entities decoded) so
+  there is one source, plus `frame-ancestors 'none'`, which only a header can carry;
+- `Strict-Transport-Security: max-age=31536000; includeSubDomains`;
+- `Referrer-Policy: no-referrer`, `X-Content-Type-Options: nosniff` and `Cache-Control: no-store`.
+
+A directory with a page lacking its policy, a file of a type it does not serve, or a name outside
+the served pattern is refused, and the API runs without pages rather than serving them wrong. No
+live page's text says "synthetic" (the live banner never does). `journey.mjs --served-by-api`
+places the build as `v3-web` and loads every page from the API's origin, with no Node server, and
+checks the headers the page arrived with. All fourteen runs pass that way too. `serve-live.mjs`
+stays for local development.
 
 **The search journey step passes (PR #773, run locally 2026-09-30).** `node scripts/journey.mjs`
 now runs two steps, each with and without the fixture mount, and all four runs pass.
@@ -923,8 +939,9 @@ proves the path, not a corpus.
    #778: the provision history reader `readArticleHistory`; PR #781: the live provision history
    screen and journey step; PR #782: the compare reader `readDiff`; PR #783: the live compare screen
    and journey step; PR #784: the radar reader `readChanges` over `changes_in_period`; PR #787: the
-   live radar screen and journey step. Seven of the launch contract's eight screens are live and
-   journeyed; Export composer is the last. Hosting (ruling 3): `Lex.V3.Api`
+   live radar screen and journey step; PR #788: the API serves the live pages with the security
+   headers (ruling 3). Seven of the launch contract's eight screens are live and journeyed; Export
+   composer is the last. Hosting (ruling 3): `Lex.V3.Api`
    serves the live pages on the API's origin with `frame-ancestors`, HSTS and `Referrer-Policy`,
    and a live page never shows the synthetic banner on a real mount. The absence refusals the card
    will not show: the producer carries the fields (driver decision). J1 to J8 are restated as V3

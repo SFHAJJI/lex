@@ -21,7 +21,12 @@
 // driven over the DevTools protocol by the same `Session`.
 //
 //   node scripts/journey.mjs --api <Lex.V3.Api build output> --mount <journey mount directory>
-//                            [--live-root <a built live directory>] [--verbose]
+//                            [--live-root <a built live directory>] [--served-by-api] [--verbose]
+//
+// With `--served-by-api` the pages are not served by `serve-live.mjs`: the built directory is placed
+// beside the API as `v3-web` and the API serves it on its own origin (Decision 95, ruling 3), and
+// every run also checks the headers the page arrived with: the page's reviewed CSP plus
+// `frame-ancestors 'none'`, HSTS, `Referrer-Policy: no-referrer` and `nosniff`.
 //
 // The mount is written by `V3JourneyMountTests` with `V3_WRITE_JOURNEY_MOUNT=<directory>`; it is the
 // test fixture's mount, so the journey proves the wiring, not a real corpus.
@@ -139,6 +144,14 @@ export function journeyVerdict(observed, expected) {
     if (observed.history.state !== "null") failures.push(`the page wrote history state: ${observed.history.state}`);
   }
   if (observed.cookie !== undefined && observed.cookie !== "") failures.push(`the page set a cookie: ${observed.cookie}`);
+  if (expected.servedByApi) {
+    const header = (name) => Object.entries(observed.pageHeaders ?? {}).find(([key]) => key.toLowerCase() === name)?.[1] ?? null;
+    const policy = `${cspValue()}; frame-ancestors 'none'`;
+    if (header("content-security-policy") !== policy) failures.push(`the page arrived with the CSP ${header("content-security-policy")}, not ${policy}`);
+    if (!/^max-age=\d+/.test(header("strict-transport-security") ?? "")) failures.push("the page arrived without HSTS");
+    if (header("referrer-policy") !== "no-referrer") failures.push(`the page arrived with Referrer-Policy ${header("referrer-policy")}`);
+    if (header("x-content-type-options") !== "nosniff") failures.push("the page arrived without nosniff");
+  }
   if (expected.state === "refusal" && !observed.text.includes(expected.refusalCode)) {
     failures.push(`the page does not name the refusal ${expected.refusalCode}`);
   }
@@ -201,11 +214,13 @@ async function freePort() {
   return port;
 }
 
-async function startApi(apiOutput, mount) {
+async function startApi(apiOutput, mount, webRoot = null) {
   const home = await mkdtemp(join(tmpdir(), "lex-journey-api-"));
   await cp(apiOutput, home, { recursive: true });
   await rm(join(home, "v3-corpus"), { recursive: true, force: true });
+  await rm(join(home, "v3-web"), { recursive: true, force: true });
   if (mount) await cp(mount, join(home, "v3-corpus"), { recursive: true });
+  if (webRoot) await cp(webRoot, join(home, "v3-web"), { recursive: true });
   const port = await freePort();
   const origin = `http://127.0.0.1:${port}`;
   const child = spawn("dotnet", [join(home, "Lex.V3.Api.dll")], {
@@ -267,9 +282,12 @@ async function observe(browser, pageOrigin, step) {
     const requests = [];
     const sentHeaders = new Map();
     const consoleMessages = [];
+    let documentId = null;
+    let pageHeaders = null;
     session.on((message) => {
       if (message.sessionId !== sessionId) return;
       if (message.method === "Network.requestWillBeSent") {
+        if (documentId === null && message.params.type === "Document") documentId = message.params.requestId;
         requests.push({
           id: message.params.requestId,
           url: message.params.request.url,
@@ -281,6 +299,9 @@ async function observe(browser, pageOrigin, step) {
         // The headers the browser actually sent (cookies and the referrer included), where
         // requestWillBeSent reports only provisional ones.
         sentHeaders.set(message.params.requestId, message.params.headers);
+      } else if (message.method === "Network.responseReceivedExtraInfo" && message.params.requestId === documentId) {
+        // The headers the page's own response carried, as the browser received them.
+        pageHeaders = message.params.headers;
       } else if (message.method === "Runtime.consoleAPICalled") {
         consoleMessages.push(message.params.args.map((arg) => arg.value ?? arg.description ?? "").join(" "));
       } else if (message.method === "Log.entryAdded") {
@@ -329,6 +350,7 @@ async function observe(browser, pageOrigin, step) {
         state: await evaluate("JSON.stringify(history.state)"),
       },
       cookie: await evaluate("document.cookie"),
+      pageHeaders,
     };
   } finally {
     chrome.kill();
@@ -338,14 +360,14 @@ async function observe(browser, pageOrigin, step) {
 }
 
 async function run(apiOutput, mount, expected, browser, liveRoot) {
-  const api = await startApi(apiOutput, mount);
-  const live = createLiveServer({ root: liveRoot, apiOrigin: api.origin });
-  const pageOrigin = await listen(live);
+  const api = await startApi(apiOutput, mount, expected.servedByApi ? liveRoot : null);
+  const live = expected.servedByApi ? null : createLiveServer({ root: liveRoot, apiOrigin: api.origin });
+  const pageOrigin = live === null ? api.origin : await listen(live);
   try {
     const observed = await observe(browser, pageOrigin, expected.step);
     return { observed, failures: journeyVerdict(observed, { ...expected, origin: pageOrigin }) };
   } finally {
-    await new Promise((resolve) => live.close(resolve));
+    if (live !== null) await new Promise((resolve) => live.close(resolve));
     api.child.kill();
     await new Promise((resolve) => setTimeout(resolve, 500));
     await rm(api.home, { recursive: true, force: true }).catch(() => {});
@@ -366,22 +388,23 @@ async function main(argv) {
   // broken page is shown to fail the journey.
   const liveRoot = argv.includes("--live-root") ? argument("--live-root") : await buildLive();
   const browser = await findBrowser();
+  const servedByApi = argv.includes("--served-by-api");
   const { coverage, search, dossier, reading, history, compare, radar } = JOURNEY_STEPS;
   const results = [
-    ["coverage, with the fixture mount", await run(apiOutput, mount, { step: coverage, state: "success", corpusSha256: journeyMount.corpus_sha256, indexSha256: journeyMount.index_sha256 }, browser, liveRoot)],
-    ["coverage, with no mount", await run(apiOutput, null, { step: coverage, state: "refusal", refusalCode: "no_corpus_mounted" }, browser, liveRoot)],
-    ["search, with the fixture mount", await run(apiOutput, mount, { step: search, state: "success", texts: [`“${SEARCH_PHRASE}” in fra: 4 with the exact phrase, 1 with every word, in 1 work.`, "art_15 in", "The first hits in the stated order, not the best hits."] }, browser, liveRoot)],
-    ["search, with no mount", await run(apiOutput, null, { step: search, state: "refusal", refusalCode: "no_corpus_mounted" }, browser, liveRoot)],
-    ["dossier, with the fixture mount", await run(apiOutput, mount, { step: dossier, state: "success", texts: [journeyMount.work_key, "1 state, from 2024-02-01 to 2024-02-01.", "What this dossier does not hold"] }, browser, liveRoot)],
-    ["dossier, with no mount", await run(apiOutput, null, { step: dossier, state: "refusal", refusalCode: "no_corpus_mounted" }, browser, liveRoot)],
-    ["reading, with the fixture mount", await run(apiOutput, mount, { step: reading, state: "success", texts: ["the state applying from 2024-02-01", "49 articles quoted", "Art. 15.", "Text served under agreed_same_run_cc_by"] }, browser, liveRoot)],
-    ["reading, with no mount", await run(apiOutput, null, { step: reading, state: "refusal", refusalCode: "no_corpus_mounted" }, browser, liveRoot)],
-    ["history, with the fixture mount", await run(apiOutput, mount, { step: history, state: "success", texts: [`${HISTORY_ANCHOR} in loi-1991-08-10-n3`, "Carried by 1 held state, from 2024-02-01", "first held wording"] }, browser, liveRoot)],
-    ["history, with no mount", await run(apiOutput, null, { step: history, state: "refusal", refusalCode: "no_corpus_mounted" }, browser, liveRoot)],
-    ["compare, with the fixture mount", await run(apiOutput, mount, { step: compare, state: "success", texts: [`loi-1991-08-10-n3: ${READING_DATE} against ${READING_DATE}.`, "The same version applied on both dates."] }, browser, liveRoot)],
-    ["compare, with no mount", await run(apiOutput, null, { step: compare, state: "refusal", refusalCode: "no_corpus_mounted" }, browser, liveRoot)],
-    ["radar, with the fixture mount", await run(apiOutput, mount, { step: radar, state: "success", texts: [`${READING_DATE} to ${READING_DATE}: 1 state of 1 work, of 1 held.`, "not compared: the first state this index holds"] }, browser, liveRoot)],
-    ["radar, with no mount", await run(apiOutput, null, { step: radar, state: "refusal", refusalCode: "no_corpus_mounted" }, browser, liveRoot)],
+    ["coverage, with the fixture mount", await run(apiOutput, mount, { servedByApi, step: coverage, state: "success", corpusSha256: journeyMount.corpus_sha256, indexSha256: journeyMount.index_sha256 }, browser, liveRoot)],
+    ["coverage, with no mount", await run(apiOutput, null, { servedByApi, step: coverage, state: "refusal", refusalCode: "no_corpus_mounted" }, browser, liveRoot)],
+    ["search, with the fixture mount", await run(apiOutput, mount, { servedByApi, step: search, state: "success", texts: [`“${SEARCH_PHRASE}” in fra: 4 with the exact phrase, 1 with every word, in 1 work.`, "art_15 in", "The first hits in the stated order, not the best hits."] }, browser, liveRoot)],
+    ["search, with no mount", await run(apiOutput, null, { servedByApi, step: search, state: "refusal", refusalCode: "no_corpus_mounted" }, browser, liveRoot)],
+    ["dossier, with the fixture mount", await run(apiOutput, mount, { servedByApi, step: dossier, state: "success", texts: [journeyMount.work_key, "1 state, from 2024-02-01 to 2024-02-01.", "What this dossier does not hold"] }, browser, liveRoot)],
+    ["dossier, with no mount", await run(apiOutput, null, { servedByApi, step: dossier, state: "refusal", refusalCode: "no_corpus_mounted" }, browser, liveRoot)],
+    ["reading, with the fixture mount", await run(apiOutput, mount, { servedByApi, step: reading, state: "success", texts: ["the state applying from 2024-02-01", "49 articles quoted", "Art. 15.", "Text served under agreed_same_run_cc_by"] }, browser, liveRoot)],
+    ["reading, with no mount", await run(apiOutput, null, { servedByApi, step: reading, state: "refusal", refusalCode: "no_corpus_mounted" }, browser, liveRoot)],
+    ["history, with the fixture mount", await run(apiOutput, mount, { servedByApi, step: history, state: "success", texts: [`${HISTORY_ANCHOR} in loi-1991-08-10-n3`, "Carried by 1 held state, from 2024-02-01", "first held wording"] }, browser, liveRoot)],
+    ["history, with no mount", await run(apiOutput, null, { servedByApi, step: history, state: "refusal", refusalCode: "no_corpus_mounted" }, browser, liveRoot)],
+    ["compare, with the fixture mount", await run(apiOutput, mount, { servedByApi, step: compare, state: "success", texts: [`loi-1991-08-10-n3: ${READING_DATE} against ${READING_DATE}.`, "The same version applied on both dates."] }, browser, liveRoot)],
+    ["compare, with no mount", await run(apiOutput, null, { servedByApi, step: compare, state: "refusal", refusalCode: "no_corpus_mounted" }, browser, liveRoot)],
+    ["radar, with the fixture mount", await run(apiOutput, mount, { servedByApi, step: radar, state: "success", texts: [`${READING_DATE} to ${READING_DATE}: 1 state of 1 work, of 1 held.`, "not compared: the first state this index holds"] }, browser, liveRoot)],
+    ["radar, with no mount", await run(apiOutput, null, { servedByApi, step: radar, state: "refusal", refusalCode: "no_corpus_mounted" }, browser, liveRoot)],
   ];
   let failed = false;
   for (const [label, { observed, failures }] of results) {
