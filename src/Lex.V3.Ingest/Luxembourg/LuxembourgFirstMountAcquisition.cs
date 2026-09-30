@@ -103,6 +103,13 @@ public sealed record LuxembourgActRange
         }
     }
 
+    /// <summary>
+    /// The publisher's whole key space, using the same finite upper bound as vocabulary
+    /// enumeration. S, A and G are proven over this range; the existing source profile still
+    /// classifies every discovered object and determines which bodies may be fetched.
+    /// </summary>
+    public static LuxembourgActRange WholePopulation { get; } = new("population", "", "\uffff");
+
     public string Name { get; }
 
     public string StartInclusive { get; }

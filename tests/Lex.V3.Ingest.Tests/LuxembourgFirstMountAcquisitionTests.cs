@@ -106,6 +106,33 @@ public sealed class LuxembourgFirstMountAcquisitionTests
     }
 
     [TestMethod]
+    public async Task TheWholePopulationProvesTwoWorksAndBuildsOneCorpus()
+    {
+        var store = new RoutedHttpAcquisitionSessionTests.MultiObjectCustodyStore();
+        var handler = new LuxembourgFamilyHandler(PdfBytes(), includeSecondWork: true);
+        var renderers = await LuxembourgRendererSources.FromCheckoutAsync(store, CheckoutRoot(), CancellationToken.None);
+        var scope = LuxembourgActRange.WholePopulation;
+        Assert.AreEqual("", scope.StartInclusive);
+        Assert.AreEqual("\uffff", scope.EndExclusive);
+        var result = await Acquisition(store, handler).RunAsync(
+            scope, renderers, LuxembourgAcquisitionTestFixture.TestWireBudget(), CancellationToken.None);
+
+        Assert.IsTrue(result.Delivered, $"{result.Refusal}: {result.Detail}");
+        Assert.AreEqual(LuxembourgQueryExecutionCompletion.AllFamiliesProven, result.Run!.Completion);
+        var held = result.Run.CorpusRecordSet!.Set.Records
+            .Where(record => record.Body.Kind == CorpusBodyRecordKind.Held).ToArray();
+        Assert.AreEqual(2, held.Length);
+        CollectionAssert.AreEquivalent(new[] { Consolidation, Consolidation.Replace("/2026/", "/2025/", StringComparison.Ordinal) },
+            held.Select(record => record.ObjectRef.PublisherUri).ToArray());
+        Assert.AreEqual(2, handler.DocumentRequests.Count);
+        CollectionAssert.AreEquivalent(new[] { "P", "T", "C", "O", "S", "A", "G" }, handler.FamiliesSeen.ToArray());
+        var envelope = await LexCorpus6BuilderTests.CompleteProfileEnvelopeAsync(
+            luxembourgOverride: result.Run, luxembourgStore: store);
+        var built = LexCorpus6Builder.TryBuild(envelope, out var refusal, out var detail);
+        Assert.IsNotNull(built, $"{refusal}: {detail}");
+    }
+
+    [TestMethod]
     public async Task ARefusedVocabularyPartitionIsATypedRefusalBeforeAnyActTraffic()
     {
         var store = new RoutedHttpAcquisitionSessionTests.MultiObjectCustodyStore();
@@ -231,13 +258,20 @@ public sealed class LuxembourgFirstMountAcquisitionTests
     internal sealed class LuxembourgFamilyHandler(
         byte[] pdfBytes,
         string? sparqlRobots = null,
-        string? omitRequiredPredicate = null) : HttpMessageHandler
+        string? omitRequiredPredicate = null,
+        bool includeSecondWork = false) : HttpMessageHandler
     {
         // The page query binds VALUES (?has_cursor ?last_key_1 ...) { (1 "last key" ...) } on a
         // continuation and (0 "" ...) on a first page (LuxembourgQueryPlan, has_cursor:uint).
         private static readonly Regex ContinuationCursor = new(@"\(\s*1\s+""", RegexOptions.CultureInvariant | RegexOptions.Compiled);
         private readonly List<string> _families = [];
         private readonly List<string> _documents = [];
+        private (string Subject, string Predicate, string Value)[] ActAssertions => includeSecondWork
+            ? Assertions.Concat(Assertions.Select(row => (
+                row.Subject.Replace("/2026/", "/2025/", StringComparison.Ordinal), row.Predicate,
+                row.Value.Replace("/2026/", "/2025/", StringComparison.Ordinal)))).ToArray()
+            : Assertions;
+
 
         internal IReadOnlyList<string> FamiliesSeen
         {
@@ -280,7 +314,7 @@ public sealed class LuxembourgFirstMountAcquisitionTests
                 }
 
                 var expected = new Uri(Item.Replace("http://data.legilux.public.lu/", "https://legilux.public.lu/", StringComparison.Ordinal)).AbsoluteUri;
-                return uri.AbsoluteUri == expected
+                return (uri.AbsoluteUri == expected || (includeSecondWork && uri.AbsoluteUri == expected.Replace("/2026/", "/2025/", StringComparison.Ordinal)))
                     ? Binary(request, pdfBytes, "application/pdf")
                     : Binary(request, [], "text/plain", HttpStatusCode.NotFound);
             }
@@ -301,10 +335,15 @@ public sealed class LuxembourgFirstMountAcquisitionTests
             var continuation = ContinuationCursor.IsMatch(body);
             var count = body.Contains("COUNT(*)", StringComparison.Ordinal);
             var rows = RowsFor(family);
+            if (includeSecondWork && family is "S" or "A" or "G")
+            {
+                Assert.IsTrue(body.Contains("\uffff", StringComparison.Ordinal) || body.Contains("\\uFFFF", StringComparison.OrdinalIgnoreCase),
+                    "Both fixture works must be enumerated under the whole-population upper bound.");
+            }
             var page = family switch
             {
-                "A" when count => LuxembourgAcquisitionTestFixture.CountJson(Assertions.Length),
-                "A" => AssertionRows(continuation ? [] : Assertions),
+                "A" when count => LuxembourgAcquisitionTestFixture.CountJson(ActAssertions.Length),
+                "A" => AssertionRows(continuation ? [] : ActAssertions),
                 "G" when count => LuxembourgAcquisitionTestFixture.CountJson(0),
                 "G" => RelationRows(),
                 _ when count => LuxembourgAcquisitionTestFixture.CountJson(rows.Count),
@@ -344,8 +383,8 @@ public sealed class LuxembourgFirstMountAcquisitionTests
                 "O" => required.Where(static value => value.Kind == LuxembourgVocabularyKind.Licence
                         && value.FullIri.StartsWith("http://creativecommons.org/", StringComparison.Ordinal))
                     .Select(static value => value.FullIri),
-                "S" => [Consolidation, Expression, Manifestation, Act],
-                "A" => Assertions.Select(static assertion => assertion.Subject),
+                "S" => ActAssertions.Select(static assertion => assertion.Subject),
+                "A" => ActAssertions.Select(static assertion => assertion.Subject),
                 "G" => [],
                 _ => throw new AssertFailedException(family),
             };
