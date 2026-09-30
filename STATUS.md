@@ -428,11 +428,11 @@ CI evidence are recorded in the pull request before merge.
 
 ## Heads
 
-- `v3/integration`: `cc99bbde` (2026-09-30, PR #824 merged). Build 45 s. Fast lane
+- `v3/integration`: `efdf0d5c` (2026-09-30, PR #826 merged). Build 45 s. Fast lane
   (`eng/test-fast.ps1`): 3,074 tests, 3,073 pass, 1 skipped (the review of PR #826). Ingest suite: green on CI for PR #760
   (the CI `dotnet` job runs the whole solution on every pull request, about 7 min on the runner;
-  green for PR #825);
-  locally about 15 min. 968 web tests pass. The web job's "browser debugger never answered" failures
+  green for PR #826);
+  locally about 15 min. 970 web tests pass. The web job's "browser debugger never answered" failures
   (keyboard-walk, and paint-check since #811) are fixed by PR #822: each browser binds its own
   debugging port (`launchBrowser`) instead of a random one another browser starting at the same
   moment could hold.
@@ -660,7 +660,7 @@ schema's `parameters` shape, and whose call runs the same dispatch the REST rout
 endpoint test proves it for all twenty-three. The launch-contract line "REST and MCP derive identical
 envelopes from the registry" is the owner's to tick.
 
-Web: 41 React components, 968 tests. Preview screens render fixtures. The V3 Luxembourg search
+Web: 41 React components, 970 tests. Preview screens render fixtures. The V3 Luxembourg search
 answer has a reader (PR #771). The answer census now samples `search` five ways from the real handler:
 - a phrase with 4 strict hits and 1 relaxed hit;
 - the same phrase one hit per page, with its cursor;
@@ -1321,6 +1321,25 @@ The reproducible image (PR #826).
   8 probes pass against the reproducible image, and the work directory, the artifacts directory and
   the container were removed.
 
+The image probed on the journey's fixture mount (PR #828). On the real bounded mount six of the
+eight screens refuse, because Luxembourg holds no state there. The answers themselves (hits, quotes,
+citations) had been probed only against the host API, never against the image.
+- The rehearsal takes the fixture mount `V3JourneyMountTests` writes (`journey-mount.json`) as well
+  as a real mount. `mountReport` reads either:
+  - the fixture's Luxembourg index is held to the file digest it names;
+  - its corpus digest is a snapshot digest (what the coverage answer shows), not the file's bytes, so
+    the corpus file is held byte for byte to the mount, and its snapshot digest to the coverage probe.
+- On a fixture mount the probes are the journey's fixture steps (`fixtureMountRuns`, the expectations
+  `journey.mjs` now keeps in one list, `fixtureMountExpectations`): every screen must answer with the
+  texts the fixture's one work gives it, and every citation must verify.
+- Against the image: all eight screens answer, and 105 citations verify through the image's own
+  `verify`, each `digest_matches`: reading 50, export 50, and one each for search, dossier, history,
+  compare and radar. The image was reproduced by its second build
+  (`sha256:441853466bf9945f7f61db5ea0ae86f97aecf11c6dc26e8f8c5de215aca3b044` at that commit), and
+  everything was removed.
+- A mutation: a fixture manifest naming another corpus digest fails the coverage probe ("the page
+  does not show the mounted digest").
+
 The live export composer and its journey step (PR #789), the eighth screen. `dist-live/export.html`
 has its own bundle `client-live-export.js`.
 - The page asks what the reading page asks: the same form (`ReadingForm`, now shared), the same one
@@ -1867,8 +1886,9 @@ has not yet run; the bounded first mount above is complete.
    The steps that need no production credential are the web lane's since 2026-09-30 (the owner's proxy).
    PR #821: one command builds, verifies, rehearsal-signs and removes the one-server image; PR #825:
    it runs the image (WSL, read-only root, private /tmp) and probes the eight screens against it; PR
-   #826: the image is reproducible (two builds from scratch, one manifest digest). Next: the probes
-   against the full fixture mount. Production signing,
+   #826: the image is reproducible (two builds from scratch, one manifest digest); PR #828: the
+   image probed on the journey's fixture mount, where every screen answers and 105 citations verify.
+   The credential-free release steps are rehearsed end to end. Production signing,
    credentials and deployment stay with the owner.
 8. Machine gates (launch contract, Evaluation): the temporal, refusal and retrieval case sets run
    against the real handler, and all three shuffled controls are caught (PRs #767 and #768). The
