@@ -119,8 +119,12 @@ public sealed class CorpusRecordSetReader
         {
             var retained = await CustodyRestore.ReadByDigestCheckedAsync(
                 _custodyStore, retainedSetReceipt.Reference.ContentSha256, cancellationToken).ConfigureAwait(false);
-            if (ChunkedDerivedArtifact.IsRoot(retained.Span))
+            if (ChunkedDerivedArtifact.IsRoot(retained.Span, out var kind))
             {
+                if (kind != CorpusRecordSetWriter.ChunkedKind)
+                    return CorpusRecordSetReadResult.Refused(new CorpusRecordSetReadRefusal(
+                        CorpusRecordSetReadRefusalKind.RetainedBytesAreNotThisSet,
+                        "The retained chunk root is not a corpus record set."));
                 var artifact = await ChunkedDerivedArtifact.OpenAsync(_custodyStore,
                     retainedSetReceipt.Reference.ContentSha256, CorpusRecordSetWriter.ChunkedKind,
                     cancellationToken).ConfigureAwait(false);

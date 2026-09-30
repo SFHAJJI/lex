@@ -136,14 +136,20 @@ internal sealed class ChunkedDerivedArtifact
     }
 
     // Routing only: OpenAsync still verifies the complete root, ordered closure and digests.
-    internal static bool IsRoot(ReadOnlySpan<byte> bytes)
+    internal static bool IsRoot(ReadOnlySpan<byte> bytes, out string? kind)
     {
+        kind = null;
         try
         {
             var reader = new Utf8JsonReader(bytes);
-            return reader.Read() && reader.TokenType == JsonTokenType.StartObject &&
+            if (!(reader.Read() && reader.TokenType == JsonTokenType.StartObject &&
                 reader.Read() && reader.TokenType == JsonTokenType.PropertyName && reader.ValueTextEquals("schema") &&
-                reader.Read() && reader.TokenType == JsonTokenType.String && reader.ValueTextEquals(Schema);
+                reader.Read() && reader.TokenType == JsonTokenType.String && reader.ValueTextEquals(Schema)))
+                return false;
+            if (reader.Read() && reader.TokenType == JsonTokenType.PropertyName && reader.ValueTextEquals("kind") &&
+                reader.Read() && reader.TokenType == JsonTokenType.String)
+                kind = reader.GetString();
+            return true;
         }
         catch (JsonException) { return false; }
     }

@@ -763,7 +763,7 @@ public sealed class CorpusRecordSetWriterTests
     /// this writer has nothing to do with.
     /// </remarks>
     [TestMethod]
-    public async Task TwoIndependentExecutionsRetainByteIdenticalRecordSets()
+    public async Task TwoIndependentSmallExecutionsRetainByteIdenticalInlineRecordSets()
     {
         var firstStore = new EnforcingInMemoryCustodyStore();
         var secondStore = new EnforcingInMemoryCustodyStore();
@@ -789,7 +789,7 @@ public sealed class CorpusRecordSetWriterTests
         Assert.AreEqual(
             first.RetainedSetReceipt!.Reference.ContentSha256,
             second.RetainedSetReceipt!.Reference.ContentSha256,
-            "and custody must therefore address both at the same content digest.");
+            "and inline custody must therefore address both at the same content digest.");
     }
 
     [TestMethod]
@@ -852,6 +852,18 @@ public sealed class CorpusRecordSetWriterTests
             var rejected = await reader.ReadAsync(forged, written.SetRef!, CancellationToken.None);
             Assert.AreEqual(CorpusRecordSetReadRefusalKind.CustodyBytesNotRetained, rejected.Refusal?.Kind, mutation);
         }
+        var foreignBytes = "foreign retained payload"u8.ToArray();
+        var (foreignRoot, _) = await ChunkedDerivedArtifact.WriteAsync(store, "test-foreign-derived/1",
+            output => { output.Write(foreignBytes); return CustodyDigest.Of(foreignBytes); }, CancellationToken.None);
+        var foreignInline = await store.CreateAsync(foreignBytes, CustodyClass.NightlyFloor90d, CancellationToken.None);
+        foreach (var foreignReceipt in new[] { foreignRoot, foreignInline })
+        {
+            var foreign = await reader.ReadAsync(foreignReceipt, written.SetRef!, CancellationToken.None);
+            Assert.AreEqual(CorpusRecordSetReadRefusalKind.RetainedBytesAreNotThisSet, foreign.Refusal?.Kind,
+                "Intact foreign content is not this set in either storage form.");
+            Assert.IsNull(foreign.VerifiedSet);
+        }
+
         var otherRef = new SourceArtifactRef(written.SetRef!.ResourceId, new string('a', 64));
         var wrongSet = await reader.ReadAsync(written.RetainedSetReceipt, otherRef, CancellationToken.None);
         Assert.AreEqual(CorpusRecordSetReadRefusalKind.RetainedBytesAreNotThisSet, wrongSet.Refusal?.Kind);
