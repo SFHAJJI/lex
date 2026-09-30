@@ -9,23 +9,26 @@
 
 import { composeExport, exportCsv, exportJson } from './export-build.mjs';
 import { exportPdf, pdfRefusal } from './export-pdf.mjs';
-import { liveChrome } from './live-chrome.mjs';
+import { fillText, liveChrome } from './live-chrome.mjs';
 
-export const LIVE_EXPORT_IDLE = liveChrome().export.idle;
-export const NOTHING_PINNED = 'Nothing is pinned yet. Pin an article above and its export appears here, with what it carries.';
+const COPY = liveChrome().export;
+
+export const LIVE_EXPORT_IDLE = COPY.idle;
+
+export const NOTHING_PINNED = COPY.nothingPinned;
 
 /**
  * The formats a reader can save, each written from the one model (`export-build.mjs`,
  * `export-pdf.mjs`). `refusal` says why a model cannot be written in that format, or null.
  */
 export const EXPORT_FORMATS = Object.freeze([
-  Object.freeze({ id: 'json', label: 'Save as JSON', extension: 'json', mediaType: 'application/json', write: exportJson, refusal: () => null }),
-  Object.freeze({ id: 'csv', label: 'Save as CSV', extension: 'csv', mediaType: 'text/csv;charset=utf-8', write: exportCsv, refusal: () => null }),
-  Object.freeze({ id: 'pdf', label: 'Save as PDF', extension: 'pdf', mediaType: 'application/pdf', write: exportPdf, refusal: pdfRefusal }),
+  Object.freeze({ id: 'json', label: COPY.save.json, extension: 'json', mediaType: 'application/json', write: exportJson, refusal: () => null }),
+  Object.freeze({ id: 'csv', label: COPY.save.csv, extension: 'csv', mediaType: 'text/csv;charset=utf-8', write: exportCsv, refusal: () => null }),
+  Object.freeze({ id: 'pdf', label: COPY.save.pdf, extension: 'pdf', mediaType: 'application/pdf', write: exportPdf, refusal: pdfRefusal }),
 ]);
 
 export function formatRefusedSentence(format, reason) {
-  return `${format.id.toUpperCase()} is not offered for this export: ${reason}.`;
+  return fillText(COPY.formatRefused, { format: format.id.toUpperCase(), reason });
 }
 
 /** One pin: the state's digest and the article's publisher id, which together name one article. */
@@ -40,7 +43,7 @@ function unpin(key) {
 }
 
 export function composeFailedSentence(reason) {
-  return `This export cannot be composed: ${reason}.`;
+  return fillText(COPY.composeFailed, { reason });
 }
 
 /**

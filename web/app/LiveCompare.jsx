@@ -16,11 +16,12 @@ import { useEffect, useRef, useState } from 'react';
 
 import { RefusalCard } from './RefusalCard.jsx';
 import { COMPARE_LANGUAGES, LIVE_COMPARE_IDLE, createCompareSession } from '../scripts/live-compare.mjs';
-import { liveChrome } from '../scripts/live-chrome.mjs';
-import { LiveAnswer } from './LiveAnswer.jsx';
+import { countedEntry, liveChrome } from '../scripts/live-chrome.mjs';
+import { LiveAnswer, Say } from './LiveAnswer.jsx';
 
-/** The forms' labels and buttons, from the interface copy table. */
+/** The forms' labels and buttons, and this screen's sentences, from the interface copy table. */
 const FORM = liveChrome().form;
+const COPY = liveChrome().compare;
 
 const IDLE = Object.freeze({ state: 'idle', sentence: LIVE_COMPARE_IDLE });
 
@@ -35,20 +36,27 @@ function Side({ label, side }) {
     <p data-side={label}>
       {/* The next state's date is said as that state's start, never as this one's end: "until" would
           leave open whether the boundary day is this state's (review of #783). */}
-      {label}: the state applying from {side.applicabilityDate}
-      {side.nextApplicabilityDate === null ? '' : ` (the next state held applies from ${side.nextApplicabilityDate})`},{' '}
-      {side.articleCount} articles, {side.validityConflictCount} with their own date differing from the state's,{' '}
-      <code>{side.permalink}</code>
+      <Say
+        template={side.nextApplicabilityDate === null ? COPY.side : COPY.sideNext}
+        values={{
+          side: label,
+          from: side.applicabilityDate,
+          ...(side.nextApplicabilityDate === null ? {} : { next: side.nextApplicabilityDate }),
+          articles: side.articleCount,
+          conflicts: side.validityConflictCount,
+          permalink: <code>{side.permalink}</code>,
+        }}
+      />
     </p>
   );
 }
 
 function Row({ row }) {
   // The whole digest, never a prefix: a prefix is not the digest a reader can check (review of #783).
-  const digest = (entries) => (entries.length === 0 ? 'none' : <code>{entries.map((entry) => entry.wordingSha256).join(', ')}</code>);
+  const digest = (entries) => (entries.length === 0 ? COPY.noWording : <code>{entries.map((entry) => entry.wordingSha256).join(', ')}</code>);
   return (
     <li data-status={row.status}>
-      <strong>{row.publisherId}</strong>: {row.status} (wording {digest(row.from)} → {digest(row.to)})
+      <Say template={COPY.row} values={{ article: <strong>{row.publisherId}</strong>, status: COPY.status[row.status], from: digest(row.from), to: digest(row.to) }} />
     </li>
   );
 }
@@ -59,14 +67,16 @@ function Comparison({ comparison }) {
   return (
     <section data-comparison={comparison.language}>
       <h2>{comparison.language}</h2>
-      <Side label="From" side={comparison.from} />
-      <Side label="To" side={comparison.to} />
+      <Side label={COPY.sideFrom} side={comparison.from} />
+      <Side label={COPY.sideTo} side={comparison.to} />
       <p>{asSentence(comparison.note)}</p>
       {comparison.sameState ? null : (
         <>
           <p data-counts="">
-            {comparison.counts.changed} changed, {comparison.counts.added} added, {comparison.counts.removed} removed,{' '}
-            {comparison.counts.unchanged} unchanged.
+            <Say
+              template={COPY.counts}
+              values={{ changed: comparison.counts.changed, added: comparison.counts.added, removed: comparison.counts.removed, unchanged: comparison.counts.unchanged }}
+            />
           </p>
           {moved.length > 0 ? (
             <ol data-moved={moved.length}>
@@ -75,7 +85,7 @@ function Comparison({ comparison }) {
           ) : null}
           {kept.length > 0 ? (
             <details>
-              <summary>{kept.length} unchanged {kept.length === 1 ? 'article' : 'articles'}</summary>
+              <summary><Say template={countedEntry(COPY.kept, kept.length)} values={{ count: kept.length }} /></summary>
               <ol data-kept={kept.length}>
                 {kept.map((row) => <Row key={row.publisherId} row={row} />)}
               </ol>
@@ -92,15 +102,18 @@ export function CompareView({ view }) {
   return (
     <>
       <p data-compare-summary="">
-        {view.workKey}: {view.dateFrom} against {view.dateTo}
-        {view.language === null ? '' : ` in ${view.language}`}.
+        {view.language === null ? (
+          <Say template={COPY.summary} values={{ work: view.workKey, from: view.dateFrom, to: view.dateTo }} />
+        ) : (
+          <Say template={COPY.summaryIn} values={{ work: view.workKey, from: view.dateFrom, to: view.dateTo, language: view.language }} />
+        )}
       </p>
       {view.comparisons.map((comparison) => <Comparison key={comparison.language} comparison={comparison} />)}
       {view.languagesNotCompared.length > 0 ? (
         <ul data-not-compared={view.languagesNotCompared.length}>
           {view.languagesNotCompared.map((entry) => (
             <li key={entry.language}>
-              {entry.language} is not compared: {entry.reason} ({entry.bound} date).
+              <Say template={COPY.notCompared} values={{ language: entry.language, reason: entry.reason, bound: COPY.bound[entry.bound] }} />
             </li>
           ))}
         </ul>
