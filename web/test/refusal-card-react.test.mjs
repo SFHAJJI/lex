@@ -114,3 +114,27 @@ test('the validator is the single source both renderers consult', () => {
     assert.equal(html.includes(one.label), true, `${one.label} was dropped by the React card`);
   }
 });
+
+test('the React card renders the platform\'s own ambiguous_version payload, and says what the string card says', async () => {
+  // The platform sends its candidates as bare hash-pinned reading links with no publication date and
+  // no ranking. The string card normalised them; the React card read the raw strings and threw on
+  // `candidate.hash`, so a live page meeting the ambiguity would have lost its whole state. Found by
+  // the live reading screen's tests (PR #777).
+  const { readFile } = await import('node:fs/promises');
+  const census = JSON.parse(await readFile(new URL('../../schemas/v3-platform/refusal-payload-samples.json', import.meta.url), 'utf8'));
+  const { payload } = census.produced.find((row) => row.code === 'ambiguous_version');
+  assert.ok(payload.candidates.every((candidate) => typeof candidate === 'string'), 'the platform sends bare links');
+  const props = { code: 'ambiguous_version', sentence: 'Several states apply on that date, and none is chosen.', payload };
+
+  const markup = react(props);
+  for (const candidate of payload.candidates) {
+    assert.ok(markup.includes(`href="${candidate}"`), `the card offers ${candidate} to read`);
+  }
+  assert.equal((markup.match(/publication date not stated by the platform/g) ?? []).length, payload.candidates.length);
+  assert.equal((markup.match(/withdrawal not stated by the platform/g) ?? []).length, payload.candidates.length);
+  assert.ok(!markup.includes('published null') && !markup.includes('published undefined'));
+
+  const text = (html) => html.replace(/<[^>]+>/g, '').replace(/&#x27;|&#39;/g, "'").replace(/\s+/g, ' ');
+  const candidatesOf = (html) => text(html.slice(html.indexOf('refusal-candidates'), html.indexOf('</ul>', html.indexOf('refusal-candidates'))));
+  assert.equal(candidatesOf(markup), candidatesOf(renderRefusalCard(props)), 'both renderers say the same thing about each candidate');
+});

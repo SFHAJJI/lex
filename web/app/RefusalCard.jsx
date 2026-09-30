@@ -13,7 +13,7 @@
 // expression's own language, because hardcoding French mislabels every EU expression and makes a
 // screen reader read English law in a French voice.
 
-import { RETRY_SENTENCE, validateRefusal } from '../scripts/refusal-card.mjs';
+import { RETRY_SENTENCE, candidateView, validateRefusal } from '../scripts/refusal-card.mjs';
 import { TOKENS } from '../scripts/design-tokens.mjs';
 import { handoffUri } from '../scripts/routes.mjs';
 
@@ -74,11 +74,12 @@ function Payload({ parts }) {
     <>
       {parts.structured.map((item) => (item.kind === 'candidates' ? (
         <ul className="refusal-candidates" key={item.key}>
-          {item.values.map((candidate) => (
+          {item.values.map(candidateView).map((candidate) => (
             <li className="refusal-candidate" key={candidate.href}>
               <a href={candidate.href}>
-                applicable from {candidate.valid_from}, hash{' '}
-                <code>{candidate.hash.slice(0, 8)}</code>, published {candidate.publication_date}
+                applicable from {candidate.validFrom}, hash{' '}
+                <code>{candidate.hashPrefix}</code>, {candidate.published}
+                {candidate.standing}
               </a>
             </li>
           ))}

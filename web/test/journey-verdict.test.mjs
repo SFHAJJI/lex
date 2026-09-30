@@ -6,7 +6,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { DOSSIER_IDENTIFIER, JOURNEY_STEPS, SEARCH_PHRASE, journeyVerdict } from "../scripts/journey.mjs";
+import { DOSSIER_IDENTIFIER, JOURNEY_STEPS, READING_DATE, SEARCH_PHRASE, journeyVerdict } from "../scripts/journey.mjs";
 import { cspValue } from "../scripts/csp.mjs";
 
 const ORIGIN = "http://127.0.0.1:5000";
@@ -140,4 +140,20 @@ test("a dossier run is held to its own page, operation and exact body", () => {
   assert.deepEqual(journeyVerdict(observed, expected), []);
   observed.requests[1].postData = JSON.stringify({ operation_id: "dossier", parameters: { identifier: DOSSIER_IDENTIFIER, language: "fra" } });
   assert.ok(journeyVerdict(observed, expected).some((failure) => /body was .*"language":"fra"/.test(failure)));
+});
+
+test("a reading run types two fields and is held to the exact body of both", () => {
+  assert.deepEqual(JOURNEY_STEPS.reading.typed, [DOSSIER_IDENTIFIER, READING_DATE]);
+  assert.deepEqual(JOURNEY_STEPS.reading.body, { operation_id: "evidence_bundle", parameters: { identifier: DOSSIER_IDENTIFIER, date: READING_DATE } });
+  const observed = goodSearch();
+  observed.requests = [
+    { url: `${ORIGIN}/reading.html`, method: "GET", headers: {} },
+    { url: `${ORIGIN}/api/v3/evidence_bundle`, method: "POST", headers: {}, headersSent: true, postData: JSON.stringify(JOURNEY_STEPS.reading.body) },
+  ];
+  observed.location = `${ORIGIN}/reading.html`;
+  observed.text = "49 articles quoted";
+  const expected = { origin: ORIGIN, step: JOURNEY_STEPS.reading, state: "success", texts: ["49 articles quoted"] };
+  assert.deepEqual(journeyVerdict(observed, expected), []);
+  observed.requests[1].postData = JSON.stringify({ operation_id: "evidence_bundle", parameters: { identifier: DOSSIER_IDENTIFIER } });
+  assert.ok(journeyVerdict(observed, expected).some((failure) => /body was/.test(failure)), "a request that dropped the date fails");
 });

@@ -1,6 +1,6 @@
 {
   "schema": "lex-v3-envelope-samples/1",
-  "note": "Whole REST envelopes the real handler sent, each verified by V3EnvelopeJson.ParseAndVerify before it was recorded, and the reviewed registry\u0027s contract a reader needs to verify one. The fixture\u0027s per-run corpus and index digests are replaced by aaaaaaaa... and bbbbbbbb... (same shape, every occurrence); nothing else is edited. THE PRODUCER IS REAL AND THE MOUNT IS A FIXTURE.",
+  "note": "Whole REST envelopes the real handler sent, each verified by V3EnvelopeJson.ParseAndVerify before it was recorded, and the reviewed registry\u0027s contract a reader needs to verify one. The fixture\u0027s per-run corpus and index digests are replaced by aaaaaaaa... and bbbbbbbb... (same shape, every occurrence), and every object_ref_sha256 (the corpus\u0027s per-run reference to the object holding a source\u0027s bytes) by cccccccc...; nothing else is edited. THE PRODUCER IS REAL AND THE MOUNT IS A FIXTURE.",
   "contract": {
     "envelope_schema": "lex-v3-envelope/1",
     "version": "v3",
@@ -1202,6 +1202,1154 @@
         },
         "object_type": "envelope",
         "operation_id": "dossier",
+        "refusal": {
+          "code": "no_corpus_mounted",
+          "helpful_payload": {
+            "required_corpus": "lu"
+          },
+          "schema": "lex-v3-refusal/1"
+        },
+        "registry_schema": "lex-v3-operation-registry/1",
+        "registry_sha256": "abe40749a2364dcbcf69a4427b0977e0510500345056eed4042b2e4758a53ef0",
+        "request_ref": "http_fb09fb7191e84f40f48d21b4532a48ef36c84efacd236a30abd075a5a2b2c639",
+        "result": null,
+        "schema": "lex-v3-envelope/1",
+        "verdict": "refuse",
+        "version": "v3"
+      }
+    },
+    {
+      "operation": "evidence_bundle",
+      "scenario": "the work on its state\u0027s date, in the language it is held in: an answer",
+      "http_status": 200,
+      "content_type": "application/json;charset=utf-8",
+      "envelope": {
+        "context": {
+          "freshness": {
+            "observed_at": "2026-09-18T07:00:00.0000000Z",
+            "upstream_health": "stale"
+          },
+          "jurisdiction": "lu",
+          "provisional": false,
+          "publisher": "lu-legilux",
+          "snapshot": {
+            "snapshot_id": "corpus-aaaaaaaaaaaaaaaa",
+            "snapshot_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          "status": "success",
+          "timeline_semantics": "publisher_applicability"
+        },
+        "object_type": "envelope",
+        "operation_id": "evidence_bundle",
+        "refusal": null,
+        "registry_schema": "lex-v3-operation-registry/1",
+        "registry_sha256": "abe40749a2364dcbcf69a4427b0977e0510500345056eed4042b2e4758a53ef0",
+        "request_ref": "http_fb09fb7191e84f40f48d21b4532a48ef36c84efacd236a30abd075a5a2b2c639",
+        "result": {
+          "object_type": "evidence_bundle",
+          "schema": "lex-v3-evidence_bundle-result/1",
+          "value": {
+            "articles_not_admitted_note": "articles_not_admitted counts the articles the corpus recorded for the publisher\u0027s document for this state that this state does not hold; the number of articles in this state plus articles_not_admitted is the number of articles the corpus recorded for that document, which provenance counts by disposition token; which articles they are is not held. An article is not admitted whole when the reviewed profile cannot represent every element in it: that can be an article the publisher struck out, and it can equally be an article whose text is complete but which carries a mark the profile does not accept, such as an empty placeholder where a list item was removed",
+            "available_languages": [
+              "fra"
+            ],
+            "not_held": [
+              {
+                "item": "publisher_signature",
+                "reason": "no signature or attestation of the publisher is held; the digests are this index\u0027s own reading of the retained bytes under the named rule profiles"
+              },
+              {
+                "item": "observation_time",
+                "reason": "when the publisher served the retained bytes is not held, so no observation time is stated"
+              },
+              {
+                "item": "export_formats",
+                "reason": "PDF, JSON and CSV exports are the export composer\u0027s, not this answer\u0027s; this answer is the evidence they compose from"
+              },
+              {
+                "item": "notes_in_wording_digest",
+                "reason": "wording_sha256 covers the article\u0027s text and reference tokens only; the notes travel beside it and are covered by text_sha256 only through the text they were attached to"
+              }
+            ],
+            "publisher": "lu-legilux",
+            "requested_date": "2024-02-01",
+            "requested_identifier": "/lu-legilux/loi-1991-08-10-n3",
+            "requested_language": "fra",
+            "rights_disposition": "agreed_same_run_cc_by",
+            "rights_rule": "rights are enforced when the bundle is composed, before any text is read: every corpus member the state\u0027s articles come from must have been acquired with its two rights channels agreeing CC BY in the same run (rights_disposition agreed_same_run_cc_by); under any other outcome or rights disposition the bundle refuses text_withheld and names the official identity, the official link and the retained body digest, so a derived, unofficial or non-redistributable body never enters a bundle as authoritative text; a state none of whose articles holds text refuses text_not_available",
+            "scope": "the evidence a reader needs to quote a Luxembourg state: for the state selected as as_of selects it, the hash-pinned permalink and stable coordinate, the state digest and its rule profiles, the source documents with their retained body digests (as provenance names them), and every article this state holds with its identity, its wording as the publisher wrote it (text), the digest of that text, the digest of its wording structure, its notes, its official source, the digest of the publisher body it was read from and an article permalink (the state permalink and the article id after #, which verify accepts); the text is the concatenation of the article\u0027s text and reference tokens in publisher order, the same bytes the index searches; an article whose tokens carry no text (the index admits a marker-only article as evidence) is named under articles_without_text and is not served as a quote",
+            "states": [
+              {
+                "applicability_date": "2024-02-01",
+                "article_identities_sha256": "eaf554235d9a3eeb497381255b450a14e5602d3949da58b95eb8023ef7085f91",
+                "articles": [
+                  {
+                    "article_identity_sha256": "05308b0478c8f6bf9ab81db3514594a5bd4098555db06f5a656ab27130f0d7fb",
+                    "article_permalink": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--5bca01f82ef3058cfebe7f8a8a6eb1f1fbeeb32b8a1ea7b2c02ac20963235e3a#art_15",
+                    "article_valid_from": "2021-08-22",
+                    "body_sha256": "3a6bb598a9310f8a31240c1f33ae357d6e1f7a46392ca33d223c2718cdded95c",
+                    "language": "fra",
+                    "notes": [],
+                    "official_source": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo",
+                    "publisher_id": "art_15",
+                    "publisher_wid": null,
+                    "text": "Art. 15.(1)L\u2019Assembl\u00E9e g\u00E9n\u00E9rale annuelle se tient dans la premi\u00E8re quinzaine du mois de juillet.(2)L\u2019ordre du jour de l\u2019assembl\u00E9e g\u00E9n\u00E9rale annuelle comprend notamment la pr\u00E9sentation du rapport d\u2019activit\u00E9s du B\u00E2tonnier et du Conseil de l\u2019Ordre, la pr\u00E9sentation des comptes relatifs \u00E0 l\u2019ann\u00E9e \u00E9coul\u00E9e, l\u2019approbation de ces comptes, la d\u00E9signation parmi les membres de l\u2019Assembl\u00E9e d\u2019un ou de plusieurs r\u00E9viseurs des comptes pour l\u2019exercice \u00E0 venir et, s\u2019il y a lieu, l\u2019\u00E9lection du B\u00E2tonnier, des membres du Conseil de l\u2019Ordre et celle des membres du Conseil disciplinaire et administratif ainsi que la proposition des membres du Conseil disciplinaire et administratif d\u2019appel.(3)L\u2019assembl\u00E9e annuelle fixe, sur proposition du Conseil de l\u2019ordre, les cotisations annuelles respectives \u00E0 charge des avocats inscrits aux listes I, II, III, IV, V et VI du tableau des avocats.A d\u00E9faut de paiement, le B\u00E2tonnier peut requ\u00E9rir l\u2019ex\u00E9cutoire de la cotisation par le Pr\u00E9sident du tribunal d\u2019arrondissement.(4)Des assembl\u00E9es g\u00E9n\u00E9rales extraordinaires peuvent \u00EAtre convoqu\u00E9es avec un ordre du jour \u00E0 fixer par le Conseil de l\u2019ordre.(5)Une assembl\u00E9e g\u00E9n\u00E9rale extraordinaire doit \u00EAtre convoqu\u00E9e dans le mois toutes les fois qu\u2019un cinqui\u00E8me des membres de l\u2019Assembl\u00E9e au moins en fait la demande \u00E9crite et pr\u00E9cise l\u2019ordre du jour.",
+                    "text_byte_length": 1400,
+                    "text_sha256": "ad6654247c3b53a0f9bb0b944b7348e2765e2030618e9f8ec1215eb9f772d835",
+                    "validity_conflict": true,
+                    "wording_sha256": "fa7df678cc734fd6b4d9565e69bbd3dcbbf6248af798b28e08d131b2917c31a2"
+                  },
+                  {
+                    "article_identity_sha256": "09858b46b63bc2137b430ec31647da23bfa65008575b165ff17daa1262cd34a7",
+                    "article_permalink": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--5bca01f82ef3058cfebe7f8a8a6eb1f1fbeeb32b8a1ea7b2c02ac20963235e3a#art_20",
+                    "article_valid_from": "2021-08-22",
+                    "body_sha256": "3a6bb598a9310f8a31240c1f33ae357d6e1f7a46392ca33d223c2718cdded95c",
+                    "language": "fra",
+                    "notes": [],
+                    "official_source": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo",
+                    "publisher_id": "art_20",
+                    "publisher_wid": null,
+                    "text": "Art. 20.Le B\u00E2tonnier est \u00E9lu parmi les avocats inscrits \u00E0 la liste I des avocats au scrutin secret \u00E0 la majorit\u00E9 absolue de ces avocats pr\u00E9sents.",
+                    "text_byte_length": 151,
+                    "text_sha256": "f0c061107312ed4586ebf33d8a9bba4a324e8362bc965c9113763cceb960f54e",
+                    "validity_conflict": true,
+                    "wording_sha256": "9a40e15aae4b2152d96ae58c561731aaebcf2edf4e7066f4f276b4c36082c696"
+                  },
+                  {
+                    "article_identity_sha256": "09bab19edb5e9084cbe3cbc2bf02f4e5e1b58e7bea014bb753b67925d9c27fd3",
+                    "article_permalink": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--5bca01f82ef3058cfebe7f8a8a6eb1f1fbeeb32b8a1ea7b2c02ac20963235e3a#art_13",
+                    "article_valid_from": "2021-08-22",
+                    "body_sha256": "3a6bb598a9310f8a31240c1f33ae357d6e1f7a46392ca33d223c2718cdded95c",
+                    "language": "fra",
+                    "notes": [],
+                    "official_source": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo",
+                    "publisher_id": "art_13",
+                    "publisher_wid": null,
+                    "text": "Art. 13.L\u2019Assembl\u00E9e est pr\u00E9sid\u00E9e par le B\u00E2tonnier ou, en cas d\u2019emp\u00EAchement, par le membre du Conseil de l\u2019ordre le plus ancien en rang. Elle d\u00E9signe deux ou plusieurs membres pour remplir les fonctions de scrutateurs. Le B\u00E2tonnier d\u00E9signe un membre du Conseil de l\u2019ordre pour remplir l\u2019office de secr\u00E9taire.",
+                    "text_byte_length": 326,
+                    "text_sha256": "42c8629c26a0ab1ebeab143be159eff5792ff557cc2d8866eabaa16dc1a8ba3b",
+                    "validity_conflict": true,
+                    "wording_sha256": "f3c0e7ac9bc3e31287c3827ebd82121a65cc978e2328b09309a894bdaa545348"
+                  },
+                  {
+                    "article_identity_sha256": "1085ebb16ee5762fe66b20c89a9b995469be436158a9fdafbe295082f0eff4c4",
+                    "article_permalink": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--5bca01f82ef3058cfebe7f8a8a6eb1f1fbeeb32b8a1ea7b2c02ac20963235e3a#art_33",
+                    "article_valid_from": "2021-08-22",
+                    "body_sha256": "3a6bb598a9310f8a31240c1f33ae357d6e1f7a46392ca33d223c2718cdded95c",
+                    "language": "fra",
+                    "notes": [],
+                    "official_source": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo",
+                    "publisher_id": "art_33",
+                    "publisher_wid": null,
+                    "text": "Art. 33.(1)Dans l\u2019exercice de sa profession, l\u2019avocat est ma\u00EEtre de ses moyens.(2)L\u2019avocat exerce librement son minist\u00E8re pour la d\u00E9fense de la justice et de la v\u00E9rit\u00E9; il s\u2019abstient de toutes alt\u00E9rations de faits et de toute surprise d\u00E9loyale. Il lui est d\u00E9fendu de se livrer \u00E0 des injures et remarques offensantes envers les parties ou leurs d\u00E9fenseurs. Il s\u2019abstient d\u2019avancer aucun fait grave contre l\u2019honneur et la r\u00E9putation des parties, \u00E0 moins que la cause ne l\u2019exige.(3)L\u2019avocat ne s\u2019\u00E9carte pas, soit dans ses discours, soit dans ses \u00E9crits ou de toute autre mani\u00E8re, du respect d\u00FB \u00E0 la justice et aux tribunaux.(4)L\u2019avocat ne peut assister, ni repr\u00E9senter des parties ayant des int\u00E9r\u00EAts oppos\u00E9s. Il en est de m\u00EAme d\u2019une association d\u2019avocats.(5)Si l\u2019avocat, dans ses plaidoiries ou dans ses \u00E9crits, contrevient aux dispositions des paragraphes (2), (3) et (4) du pr\u00E9sent article, le tribunal ou la Cour qui conna\u00EEt de l\u2019affaire peut faire dresser proc\u00E8s-verbal par le greffier et saisir le B\u00E2tonnier du Conseil de l\u2019ordre de l\u2019incident, sans pr\u00E9judice d\u2019autres poursuites s\u2019il y a lieu.",
+                    "text_byte_length": 1162,
+                    "text_sha256": "c0cc2215653afa2d64d412243a296646cab6bcf84f0c9b82b8772d287ede2688",
+                    "validity_conflict": true,
+                    "wording_sha256": "ea97896bd198b4afac24c4f9430fc2798c0b848da418c1d43b00c5756d3f7b84"
+                  },
+                  {
+                    "article_identity_sha256": "1acfd78fefb365ce9ff8e4b6f11f94fbe26a66ddc67ab1f46e9b04b847bb857e",
+                    "article_permalink": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--5bca01f82ef3058cfebe7f8a8a6eb1f1fbeeb32b8a1ea7b2c02ac20963235e3a#art_1er",
+                    "article_valid_from": "2021-08-22",
+                    "body_sha256": "3a6bb598a9310f8a31240c1f33ae357d6e1f7a46392ca33d223c2718cdded95c",
+                    "language": "fra",
+                    "notes": [],
+                    "official_source": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo",
+                    "publisher_id": "art_1er",
+                    "publisher_wid": null,
+                    "text": "Art. 1er.La profession d\u2019avocat est une profession lib\u00E9rale et ind\u00E9pendante.Sont incompatibles avec l\u2019exercice de cette profession:les fonctions de magistrat;les fonctions de greffier et d\u2019huissier de justice;les fonctions de notaire;les professions de r\u00E9viseurs d\u2019entreprises et d\u2019expert-comptable;les emplois salari\u00E9s du secteur public ou du secteur priv\u00E9; sont toutefois compatibles l\u2019emploi en tant qu\u2019avocat aupr\u00E8s d\u2019un avocat et en tant que collaborateur au sens de l\u2019article 126, 9. de la loi \u00E9lectorale modifi\u00E9e du 18 f\u00E9vrier 2003 ainsi que, pendant la dur\u00E9e du stage, l\u2019emploi admis comme \u00E9quivalent au stage judiciaire par la r\u00E9glementation en vigueur, \u00E0 condition que ces emplois ne comportent pas abandon de la libert\u00E9 d\u2019agir selon la conscience professionnelle;les fonctions de directeur d\u2019entreprise, de g\u00E9rant ou d\u2019administrateur-d\u00E9l\u00E9gu\u00E9 de soci\u00E9t\u00E9s commerciales \u00E0 objet commercial, artisanal ou industriel et de mandataire g\u00E9n\u00E9ral ou d\u2019agent de compagnie d\u2019assurances;l\u2019exercice d\u2019une activit\u00E9 commerciale ou artisanale;toute activit\u00E9 de nature \u00E0 porter atteinte \u00E0 l\u2019ind\u00E9pendance de l\u2019avocat ou \u00E0 la dignit\u00E9 de la profession.La profession d\u2019avocat peut \u00EAtre exerc\u00E9e \u00E0 titre individuel. Les avocats peuvent s\u2019associer librement. Ils peuvent encore exercer la profession d\u2019avocat sous forme de personne morale conform\u00E9ment aux dispositions de la pr\u00E9sente loi.",
+                    "text_byte_length": 1452,
+                    "text_sha256": "dee148c7a56d25d6d0ed31dc6483207b5785a894261d0fd983f95a3d21568f86",
+                    "validity_conflict": true,
+                    "wording_sha256": "47e828ee1f2d3c5a5d357ca765a74686b9f912e989a452b940b824bb370ac908"
+                  },
+                  {
+                    "article_identity_sha256": "2a09ae37d170d5008f977ac2119e121e6bcbad4dabb2807b67de8f5e180a2baf",
+                    "article_permalink": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--5bca01f82ef3058cfebe7f8a8a6eb1f1fbeeb32b8a1ea7b2c02ac20963235e3a#art_30-2",
+                    "article_valid_from": "2021-08-22",
+                    "body_sha256": "3a6bb598a9310f8a31240c1f33ae357d6e1f7a46392ca33d223c2718cdded95c",
+                    "language": "fra",
+                    "notes": [],
+                    "official_source": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo",
+                    "publisher_id": "art_30-2",
+                    "publisher_wid": null,
+                    "text": "Art. 30-2.En cas d\u2019urgence d\u00FBment justifi\u00E9e, le b\u00E2tonnier peut prendre les mesures pr\u00E9vues \u00E0 l\u2019article 8-2bis, paragraphe 1er, sans attendre une r\u00E9union du Conseil de l\u2019ordre. Le b\u00E2tonnier fait rapport et soumet les mesures \u00E0 l\u2019approbation du Conseil de l\u2019ordre lors d\u2019une r\u00E9union convoqu\u00E9e sans d\u00E9lai. Les mesures prises par le b\u00E2tonnier sont caduques si le Conseil de l\u2019ordre ne les a pas approuv\u00E9es dans un d\u00E9lai de quinze jours. Si le b\u00E2tonnier a pris plusieurs mesures cons\u00E9cutives, toutes les mesures prises devront \u00EAtre approuv\u00E9es dans le d\u00E9lai de quinze jours \u00E0 compter de la premi\u00E8re mesure.",
+                    "text_byte_length": 635,
+                    "text_sha256": "c8d27aaf1f0218f14324d788291eb1597953b4ca19161cd16952f1ab71c25d8f",
+                    "validity_conflict": true,
+                    "wording_sha256": "661b04b1a92fb2e565c857da934ffa37b8b5ed397f0d48e1c1ceafe545054504"
+                  },
+                  {
+                    "article_identity_sha256": "2ba783abdbe3cfd7736f7e645a19b423fe6940b5e4aa458e01b51d1a555fadc3",
+                    "article_permalink": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--5bca01f82ef3058cfebe7f8a8a6eb1f1fbeeb32b8a1ea7b2c02ac20963235e3a#art_25",
+                    "article_valid_from": "2021-08-22",
+                    "body_sha256": "3a6bb598a9310f8a31240c1f33ae357d6e1f7a46392ca33d223c2718cdded95c",
+                    "language": "fra",
+                    "notes": [],
+                    "official_source": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo",
+                    "publisher_id": "art_25",
+                    "publisher_wid": null,
+                    "text": "Art. 25.Le Conseil disciplinaire et administratif conna\u00EEt, pour les deux Ordres, des affaires disciplinaires et administratives qui lui sont d\u00E9f\u00E9r\u00E9es selon les dispositions et la proc\u00E9dure pr\u00E9vues par la pr\u00E9sente loi et selon les dispositions de la loi du 13 novembre 2002 portant transposition en droit luxembourgeois de la Directive 98/5/CE du Parlement europ\u00E9en et du Conseil du 16 f\u00E9vrier 1998 visant \u00E0 faciliter l\u2019exercice permanent de la profession d\u2019avocat dans un Etat membre autre que celui o\u00F9 la qualification a \u00E9t\u00E9 acquise.",
+                    "text_byte_length": 551,
+                    "text_sha256": "797e746e05156ded965b68a28547c6d5a0ed170091276ef4415cf67a4e95d83d",
+                    "validity_conflict": true,
+                    "wording_sha256": "ff32d53746a938641527bfdbee71a8b22faff98d8ade0cc24af8c4e01e03fb5f"
+                  },
+                  {
+                    "article_identity_sha256": "2bcf7567d4fec6a1a48c08e2007848bf9dbcf548c4e759da1cb252870d2dcfb5",
+                    "article_permalink": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--5bca01f82ef3058cfebe7f8a8a6eb1f1fbeeb32b8a1ea7b2c02ac20963235e3a#art_16",
+                    "article_valid_from": "2021-08-22",
+                    "body_sha256": "3a6bb598a9310f8a31240c1f33ae357d6e1f7a46392ca33d223c2718cdded95c",
+                    "language": "fra",
+                    "notes": [],
+                    "official_source": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo",
+                    "publisher_id": "art_16",
+                    "publisher_wid": null,
+                    "text": "Art. 16.(1)Le Conseil de l\u2019Ordre se compose du B\u00E2tonnier et de deux membres, dont le B\u00E2tonnier sortant; pour chaque tranche suppl\u00E9mentaire enti\u00E8re ou partielle de soixante-quinze avocats inscrits sur chacune des listes I et IV du tableau des avocats, le nombre des membres est augment\u00E9 de deux unit\u00E9s, sans d\u00E9passer le nombre de quinze membres.(2)Le Conseil de l\u2019Ordre \u00E9lu par l\u2019assembl\u00E9e g\u00E9n\u00E9rale annuelle entre en fonction le 15 septembre qui suit l\u2019assembl\u00E9e g\u00E9n\u00E9rale et reste en fonction pendant deux ans.(3)Le B\u00E2tonnier et les membres du Conseil de l\u2019ordre sont r\u00E9\u00E9ligibles.(4)Les membres du Conseil de l\u2019ordre autres que le B\u00E2tonnier et le B\u00E2tonnier sortant sont \u00E9lus parmi les avocats inscrits \u00E0 la liste I des avocats au scrutin secret et \u00E0 la majorit\u00E9 relative; dans les cas de parit\u00E9 de suffrage, le plus ancien en rang est \u00E9lu.En cas de vacance d\u2019un poste, le rempla\u00E7ant est coopt\u00E9 par le Conseil de l\u2019ordre.Le Conseil de l\u2019ordre ne peut comprendre en m\u00EAme temps qu\u2019un seul avocat d\u2019une m\u00EAme personne morale admise au tableau ou association d\u2019avocats.(5)Sur proposition du Conseil de l\u2019ordre, il peut \u00EAtre pourvu \u00E0 l\u2019attribution d\u2019un des si\u00E8ges du Conseil selon les r\u00E8gles de scrutin pr\u00E9vues pour la d\u00E9signation du B\u00E2tonnier, I\u2019attributaire de ce si\u00E8ge \u00E9tant d\u00E9sign\u00E9 comme le vice-b\u00E2tonnier.(6)Le Conseil de l\u2019ordre ne peut d\u00E9lib\u00E9rer que si la majorit\u00E9 des membres qui le composent est pr\u00E9sente. Si cette majorit\u00E9 ne peut \u00EAtre constitu\u00E9e pour cause de maladie, absence ou autres emp\u00EAchements, il est appel\u00E9 par le B\u00E2tonnier, pour compl\u00E9ter le nombre indispensable, des rempla\u00E7ants parmi les avocats inscrits \u00E0 la liste I des avocats. (7)Les d\u00E9cisions du Conseil de l\u2019ordre sont prises \u00E0 la majorit\u00E9 des membres votants. En cas de partage de voix, celle du B\u00E2tonnier est pr\u00E9pond\u00E9rante.",
+                    "text_byte_length": 1891,
+                    "text_sha256": "e87969f9e9db76c969142a112635b667b33b82b796addde79b95cf168676aa01",
+                    "validity_conflict": true,
+                    "wording_sha256": "2c5ff5738d6c501a8fde2ac35e8c8b063b46d0b09b9ca102e95b4cdfaf646da5"
+                  },
+                  {
+                    "article_identity_sha256": "32367ea725c326db7e75a487e2894ca139f791521439fd7800cd99bb76e6ab72",
+                    "article_permalink": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--5bca01f82ef3058cfebe7f8a8a6eb1f1fbeeb32b8a1ea7b2c02ac20963235e3a#art_30",
+                    "article_valid_from": "2023-07-03",
+                    "body_sha256": "3a6bb598a9310f8a31240c1f33ae357d6e1f7a46392ca33d223c2718cdded95c",
+                    "language": "fra",
+                    "notes": [
+                      {
+                        "marker": "16",
+                        "text": "Loi du 29 juin 2023 portant modification : 1\u00B0 de la loi modifi\u00E9e du 4 d\u00E9cembre 1990 portant organisation du service des huissiers de justice ; 2\u00B0 de la loi modifi\u00E9e du 10 ao\u00FBt 1991 sur la profession d\u2019avocat."
+                      }
+                    ],
+                    "official_source": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo",
+                    "publisher_id": "art_30",
+                    "publisher_wid": null,
+                    "text": "Art. 30.(1)Les t\u00E9moins et techniciens appel\u00E9s devant le Conseil disciplinaire et administratif et le Conseil disciplinaire et administratif d\u2019appel ou devant un membre de ces conseils sont entendus sous la foi du serment.(2)Les t\u00E9moins ou techniciens cit\u00E9s qui refusent de compara\u00EEtre ou de d\u00E9poser sont passibles des peines commin\u00E9es par l\u2019article 77, paragraphe (2), du Code de proc\u00E9dure p\u00E9nale \u00E0 prononcer par le Conseil disciplinaire et administratif ou par le Conseil disciplinaire et administratif d\u2019appel.(3)Les articles 220, 223 et 224 du code p\u00E9nal sont applicables en la mati\u00E8re.(4)Les d\u00E9cisions disciplinaires pass\u00E9es en force de chose jug\u00E9e sont ex\u00E9cut\u00E9es \u00E0 la requ\u00EAte du procureur g\u00E9n\u00E9ral d\u2019\u00C9tat. Les amendes prononc\u00E9es en application des articles 27, paragraphe (1), et 30, paragraphe (2), sont recouvr\u00E9es par l\u2019Administration de l\u2019enregistrement, des domaines et de la TVA au profit de l\u2019\u00C9tat.(5)Les notifications qui sont faites par le B\u00E2tonnier, le Conseil de l\u2019ordre, le Conseil disciplinaire et administratif et le Conseil disciplinaire et administratif d\u2019appel contiennent l\u2019information sur les voies de recours \u00E9ventuellement ouvertes contre les d\u00E9cisions notifi\u00E9es.Les d\u00E9lais de recours ne commencent \u00E0 courir qu\u2019\u00E0 partir de cette information.",
+                    "text_byte_length": 1319,
+                    "text_sha256": "73502c2d9f0b5eb40dc23c07343d591c24bc243b273904e6f2160d141feb864c",
+                    "validity_conflict": true,
+                    "wording_sha256": "0f99a46b2de4de21be053af7bc0036037d7af278a84a07df9cd092c0b6aef1f1"
+                  },
+                  {
+                    "article_identity_sha256": "3ae9e0b3a4df533b44bbc1fe8e47e64b07d208b4c0b549429591c0fb56b22ab3",
+                    "article_permalink": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--5bca01f82ef3058cfebe7f8a8a6eb1f1fbeeb32b8a1ea7b2c02ac20963235e3a#art_28",
+                    "article_valid_from": "2023-07-03",
+                    "body_sha256": "3a6bb598a9310f8a31240c1f33ae357d6e1f7a46392ca33d223c2718cdded95c",
+                    "language": "fra",
+                    "notes": [
+                      {
+                        "marker": "14",
+                        "text": "Loi du 29 juin 2023 portant modification : 1\u00B0 de la loi modifi\u00E9e du 4 d\u00E9cembre 1990 portant organisation du service des huissiers de justice ; 2\u00B0 de la loi modifi\u00E9e du 10 ao\u00FBt 1991 sur la profession d\u2019avocat."
+                      }
+                    ],
+                    "official_source": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo",
+                    "publisher_id": "art_28",
+                    "publisher_wid": null,
+                    "text": "Art. 28.(1)Les parties en cause, ainsi que le procureur g\u00E9n\u00E9ral d\u2019\u00C9tat et le Conseil de l\u2019ordre int\u00E9ress\u00E9 peuvent faire appel contre toute d\u00E9cision du Conseil disciplinaire et administratif, \u00E0 l\u2019exception de celle prise selon l\u2019article 22, paragraphe (2).(2)Il est cr\u00E9\u00E9 \u00E0 ces fins un Conseil disciplinaire et administratif d\u2019appel compos\u00E9 de deux magistrats de la Cour d\u2019appel, de deux magistrats de la Cour administrative et de trois assesseurs-avocats inscrits sur la liste I du tableau des avocats dont un inscrit au barreau de Diekirch. Sont \u00E9galement nomm\u00E9s deux\u00A0magistrats de la Cour d\u2019appel suppl\u00E9ants, deux\u00A0magistrats de la Cour administrative suppl\u00E9ants ainsi que trois assesseurs-avocats suppl\u00E9ants dont un inscrit au barreau de Diekirch.Il si\u00E8ge au nombre de trois dont un magistrat de la Cour d\u2019appel, un magistrat de la Cour administrative et un assesseur-avocat.La composition du Conseil disciplinaire et administratif d\u2019appel est arr\u00EAt\u00E9e pour chaque affaire par son pr\u00E9sident ou en cas d\u2019emp\u00EAchement par son vice-pr\u00E9sident.Les membres magistrats de la Cour d\u2019appel et leurs suppl\u00E9ants, ainsi que le greffier affect\u00E9 au Conseil sont nomm\u00E9s par arr\u00EAt\u00E9 grand-ducal, sur pr\u00E9sentation de la Cour sup\u00E9rieure de justice, pour une dur\u00E9e de deux ans. Les membres magistrats de la Cour administrative et leurs suppl\u00E9ants sont nomm\u00E9s par arr\u00EAt\u00E9 grand-ducal, sur pr\u00E9sentation de la Cour administrative, pour une dur\u00E9e de deux ans.Les assesseurs-avocats et leurs suppl\u00E9ants sont nomm\u00E9s par arr\u00EAt\u00E9 grand-ducal pour une dur\u00E9e de deux ans. Ils sont choisis sur une liste de huit avocats \u00E0 la Cour inscrits sur la liste I du tableau des avocats depuis cinq ans au moins pr\u00E9sent\u00E9e par chaque Conseil de l\u2019ordre pour chaque fonction.La fonction d\u2019assesseur est incompatible avec celle de membre d\u2019un Conseil de l\u2019ordre ou avec celle de membre du Conseil disciplinaire et administratif.Une indemnit\u00E9 de vacation est allou\u00E9e aux membres. Son taux est de quarante points indiciaires par audience dans laquelle ils si\u00E8gent. Cette indemnit\u00E9 n\u2019est pas pensionnable.Le Conseil disciplinaire et administratif d\u2019appel si\u00E8ge dans les locaux de la Cour sup\u00E9rieure de justice o\u00F9 est \u00E9galement assur\u00E9 le service du greffe.Le Conseil disciplinaire et administratif d\u2019appel est pr\u00E9sid\u00E9 par le magistrat le plus ancien en rang de la Cour d\u2019appel. Le vice-pr\u00E9sident est le magistrat de la Cour d\u2019appel le second plus ancien en rang.(3)L\u2019appel est d\u00E9clar\u00E9 au greffe de la Cour sup\u00E9rieure de justice dans le d\u00E9lai de quarante jours qui court pour les parties en cause et pour le procureur g\u00E9n\u00E9ral d\u2019\u00C9tat et le Conseil de l\u2019ordre int\u00E9ress\u00E9 du jour o\u00F9 la d\u00E9cision leur a \u00E9t\u00E9 notifi\u00E9e, \u00E0 la diligence du Pr\u00E9sident du Conseil disciplinaire et administratif, par lettre recommand\u00E9e avec accus\u00E9 de r\u00E9ception. En cas d\u2019appel relev\u00E9 par les parties en cause ou par le procureur g\u00E9n\u00E9ral d\u2019\u00C9tat contre une d\u00E9cision rendue \u00E0 l\u2019encontre d\u2019un avocat europ\u00E9en exer\u00E7ant sous son titre professionnel d\u2019origine, le greffe en informe sans d\u00E9lai le Conseil de l\u2019ordre des Avocats du Grand-Duch\u00E9 de Luxembourg aupr\u00E8s duquel cet avocat europ\u00E9en est inscrit.(4)Les dispositions de l\u2019article 26 concernant l\u2019instruction et la proc\u00E9dure sont applicables au Conseil disciplinaire et administratif d\u2019appel.",
+                    "text_byte_length": 3411,
+                    "text_sha256": "a65d124bdd6cd474aa04ad87fd8f2b39d66557d990bbbbaa974e77161aab5506",
+                    "validity_conflict": true,
+                    "wording_sha256": "c9d26645c82cb239f90f7370b8db835a89b8a484b7d2a2bda4277115f329e813"
+                  },
+                  {
+                    "article_identity_sha256": "3e8328f030e6d0aee15cf057465eeb40fe29e1a7abbb4cb3afcf7d41fe58823c",
+                    "article_permalink": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--5bca01f82ef3058cfebe7f8a8a6eb1f1fbeeb32b8a1ea7b2c02ac20963235e3a#art_35-1",
+                    "article_valid_from": "2021-08-22",
+                    "body_sha256": "3a6bb598a9310f8a31240c1f33ae357d6e1f7a46392ca33d223c2718cdded95c",
+                    "language": "fra",
+                    "notes": [],
+                    "official_source": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo",
+                    "publisher_id": "art_35-1",
+                    "publisher_wid": null,
+                    "text": "Art. 35-1.Nonobstant les dispositions de l\u2019article pr\u00E9c\u00E9dent et sous r\u00E9serve de l\u2019article 2 de la loi modifi\u00E9e du 12 novembre 2004 relative \u00E0 la lutte contre le blanchiment et contre le financement du terrorisme, l\u2019avocat est soumis aux obligations professionnelles telles que d\u00E9finies par le titre Ier de cette loi et par les mesures prises pour son ex\u00E9cution.",
+                    "text_byte_length": 374,
+                    "text_sha256": "e3d1028346c036523142b11e0616c9c62953f5fac15253e5b83a103331bf25a6",
+                    "validity_conflict": true,
+                    "wording_sha256": "ad44bc1f4dca26b2ff9a45cd83b1e5472110c0b63c67e6b3acdb5fe2fd5655d5"
+                  },
+                  {
+                    "article_identity_sha256": "3fe7cefa008102ed1dc3d0101c710b082b9d81a36de2d0a950efc800d317426a",
+                    "article_permalink": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--5bca01f82ef3058cfebe7f8a8a6eb1f1fbeeb32b8a1ea7b2c02ac20963235e3a#art_24-1",
+                    "article_valid_from": "2023-07-03",
+                    "body_sha256": "3a6bb598a9310f8a31240c1f33ae357d6e1f7a46392ca33d223c2718cdded95c",
+                    "language": "fra",
+                    "notes": [
+                      {
+                        "marker": "11",
+                        "text": "Loi du 29 juin 2023 portant modification : 1\u00B0 de la loi modifi\u00E9e du 4 d\u00E9cembre 1990 portant organisation du service des huissiers de justice ; 2\u00B0 de la loi modifi\u00E9e du 10 ao\u00FBt 1991 sur la profession d\u2019avocat."
+                      }
+                    ],
+                    "official_source": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo",
+                    "publisher_id": "art_24-1",
+                    "publisher_wid": null,
+                    "text": "Art. 24-1.Le Conseil disciplinaire et administratif peut commettre toute personne de son choix pour l\u2019\u00E9clairer par des constatations, par une consultation ou par une expertise sur une question de fait qui requiert les lumi\u00E8res d\u2019un technicien.En cas d\u2019usage de la facult\u00E9 lui r\u00E9serv\u00E9e par l\u2019alin\u00E9a 1er, le Conseil disciplinaire et administratif fixe un d\u00E9lai dans lequel le technicien doit remettre son rapport.",
+                    "text_byte_length": 426,
+                    "text_sha256": "65e97b416e183c62de5e9c8dd21c271b4a80e278124f51fbd216ec0dda4f633a",
+                    "validity_conflict": true,
+                    "wording_sha256": "4fcc19de7d8d8cbb730fbe24e6da45a0f7c1587b30224bad571a83527449c285"
+                  },
+                  {
+                    "article_identity_sha256": "40519d9855a5144d49478ffcd54b19cda6b3e7351771c5594a164ff8a62525e3",
+                    "article_permalink": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--5bca01f82ef3058cfebe7f8a8a6eb1f1fbeeb32b8a1ea7b2c02ac20963235e3a#art_14",
+                    "article_valid_from": "2021-08-22",
+                    "body_sha256": "3a6bb598a9310f8a31240c1f33ae357d6e1f7a46392ca33d223c2718cdded95c",
+                    "language": "fra",
+                    "notes": [],
+                    "official_source": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo",
+                    "publisher_id": "art_14",
+                    "publisher_wid": null,
+                    "text": "Art. 14.(1)L\u2019Assembl\u00E9e est constitu\u00E9e valablement quel que soit le nombre de membres de l\u2019Assembl\u00E9e pr\u00E9sents.(2)S\u2019il n\u2019est pas autrement dispos\u00E9, les d\u00E9cisions de l\u2019Assembl\u00E9e sont prises valablement \u00E0 la majorit\u00E9 absolue des membres pr\u00E9sents et votants.",
+                    "text_byte_length": 273,
+                    "text_sha256": "eda88e026c9cf78692a7a325d599bf15c1784cd284f6e528d4cd4f6cb45c3369",
+                    "validity_conflict": true,
+                    "wording_sha256": "fc80caa696ccf2f28ca8849328b89300b7f64454b02840aec22ea1d7c289c448"
+                  },
+                  {
+                    "article_identity_sha256": "42ce9b04b4413e84bd5a796e49fdc8ad279cafce5fb7449b3feb9aca89421ee2",
+                    "article_permalink": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--5bca01f82ef3058cfebe7f8a8a6eb1f1fbeeb32b8a1ea7b2c02ac20963235e3a#art_30-1",
+                    "article_valid_from": "2023-07-03",
+                    "body_sha256": "3a6bb598a9310f8a31240c1f33ae357d6e1f7a46392ca33d223c2718cdded95c",
+                    "language": "fra",
+                    "notes": [
+                      {
+                        "marker": "17",
+                        "text": "Loi du 29 juin 2023 portant modification : 1\u00B0 de la loi modifi\u00E9e du 4 d\u00E9cembre 1990 portant organisation du service des huissiers de justice ; 2\u00B0 de la loi modifi\u00E9e du 10 ao\u00FBt 1991 sur la profession d\u2019avocat."
+                      }
+                    ],
+                    "official_source": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo",
+                    "publisher_id": "art_30-1",
+                    "publisher_wid": null,
+                    "text": "Art. 30-1.Aux fins de l\u2019application des attributions r\u00E9sultant\u00A0de l\u2019article 17, troisi\u00E8me tiret, le Conseil de l\u2019ordre est investi des pouvoirs pr\u00E9vus \u00E0 l\u2019article 8-2bis de la loi modifi\u00E9e du 12 novembre 2004 relative \u00E0 la lutte contre le blanchiment et contre le financement du terrorisme.En cas de non-respect des obligations professionnelles d\u00E9coulant de la l\u00E9gislation en mati\u00E8re de lutte contre le blanchiment et contre le financement du terrorisme ou en cas d\u2019obstacle \u00E0 l\u2019exercice des pouvoirs du Conseil de l\u2019ordre d\u00E9finis \u00E0 l\u2019alin\u00E9a 1er les sanctions et mesures pr\u00E9vues \u00E0 l\u2019article 8-10 de la loi modifi\u00E9e du 12 novembre 2004 relative \u00E0 la lutte contre le blanchiment et contre le financement du terrorisme sont appliqu\u00E9es selon la proc\u00E9dure pr\u00E9vue au chapitre IV.Si le Conseil de l\u2019ordre estime que la sanction \u00E0 prononcer ne d\u00E9passe pas la peine de l\u2019avertissement, du bl\u00E2me, de la d\u00E9claration publique qui pr\u00E9cise l\u2019identit\u00E9 de la personne physique ou morale et la nature de la violation, ou d\u2019une amende inf\u00E9rieure \u00E0 25.000 euros, il peut prononcer seul cette sanction. L\u2019avocat sanctionn\u00E9 peut former contredit, par requ\u00EAte, dans les dix jours de la notification de la d\u00E9cision du Conseil de l\u2019ordre, aupr\u00E8s du Conseil disciplinaire et administratif.Lorsqu\u2019ils prononcent une sanction sur le fondement de l\u2019article 8-10 de la loi modifi\u00E9e du 12 novembre 2004 relative \u00E0 la lutte contre le blanchiment et contre le financement du terrorisme, le Conseil disciplinaire et administratif et le Conseil de l\u2019ordre se prononcent sur la publication de la d\u00E9cision conform\u00E9ment au paragraphe 2 de l\u2019article 8-12 de la m\u00EAme loi.",
+                    "text_byte_length": 1708,
+                    "text_sha256": "a81313ff76f77fe5e87ea5eb0270997004dc7184e8ef9fca0341f64161e559d8",
+                    "validity_conflict": true,
+                    "wording_sha256": "df8fb3bb675d7263c919a81504cea59fbe74f87a699a375fbbef50e5441a6e0e"
+                  },
+                  {
+                    "article_identity_sha256": "445f174a513ecde7a6b0be465d89d85792cbaa38e2edb7623583d1de895489e0",
+                    "article_permalink": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--5bca01f82ef3058cfebe7f8a8a6eb1f1fbeeb32b8a1ea7b2c02ac20963235e3a#art_36",
+                    "article_valid_from": "2021-08-22",
+                    "body_sha256": "3a6bb598a9310f8a31240c1f33ae357d6e1f7a46392ca33d223c2718cdded95c",
+                    "language": "fra",
+                    "notes": [],
+                    "official_source": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo",
+                    "publisher_id": "art_36",
+                    "publisher_wid": null,
+                    "text": "Art. 36.(1)Les moyens auxquels il est recouru pour procurer au public l\u2019information n\u00E9cessaire sur l\u2019avocat, sur les conditions d\u2019exercice de sa profession et sur les affaires dont il est charg\u00E9 sont mis en oeuvre dans le respect de l\u2019int\u00E9r\u00EAt de son client et de fa\u00E7on \u00E0 ne pas porter atteinte \u00E0 la dignit\u00E9 de la profession, dans les conditions \u00E0 d\u00E9terminer par le Conseil de l\u2019ordre conform\u00E9ment \u00E0 l\u2019article 19 de la pr\u00E9sente loi.(2)Tout acte de d\u00E9marchage ou de sollicitation est interdit \u00E0 l\u2019avocat.",
+                    "text_byte_length": 531,
+                    "text_sha256": "134b79b57f5ab89537c68635a792bce70b8f94f348783966fbb742929779b7b1",
+                    "validity_conflict": true,
+                    "wording_sha256": "3ad41bf93cc520b9abe47b35e4a2a3430cf70c86dd4bc154bc6088b9f08cbb0b"
+                  },
+                  {
+                    "article_identity_sha256": "46e1dd5e589b19fa58047b5cc423d7ba982e7086ffbb868a75b598f14db4dc42",
+                    "article_permalink": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--5bca01f82ef3058cfebe7f8a8a6eb1f1fbeeb32b8a1ea7b2c02ac20963235e3a#art_5",
+                    "article_valid_from": "2021-08-22",
+                    "body_sha256": "3a6bb598a9310f8a31240c1f33ae357d6e1f7a46392ca33d223c2718cdded95c",
+                    "language": "fra",
+                    "notes": [],
+                    "official_source": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo",
+                    "publisher_id": "art_5",
+                    "publisher_wid": null,
+                    "text": "Art. 5.Nul ne peut exercer la profession d\u2019avocat s\u2019il n\u2019est inscrit au tableau d\u2019un Ordre des avocats \u00E9tabli au Grand-Duch\u00E9 de Luxembourg.",
+                    "text_byte_length": 149,
+                    "text_sha256": "a80c7a6c250e2688a78276b4a99dde5b3c368b4655a3b41b43b0c633f2567094",
+                    "validity_conflict": true,
+                    "wording_sha256": "9081ec00f37e15a52ed3a33b19c6bca99cee5536095762c23faf11789096947e"
+                  },
+                  {
+                    "article_identity_sha256": "46e4579a11a5336953829a453a351220e0cbfec1d360ebd8a3413ea7216ab2f7",
+                    "article_permalink": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--5bca01f82ef3058cfebe7f8a8a6eb1f1fbeeb32b8a1ea7b2c02ac20963235e3a#art_11",
+                    "article_valid_from": "2021-08-22",
+                    "body_sha256": "3a6bb598a9310f8a31240c1f33ae357d6e1f7a46392ca33d223c2718cdded95c",
+                    "language": "fra",
+                    "notes": [],
+                    "official_source": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo",
+                    "publisher_id": "art_11",
+                    "publisher_wid": null,
+                    "text": "Art. 11.Les organes des la profession sont, pour chaque Ordre,l\u2019Assembl\u00E9e,le Conseil de l\u2019ordre,le B\u00E2tonnier,et, pour l\u2019ensemble de la profession,le Conseil disciplinaire et administratif.",
+                    "text_byte_length": 196,
+                    "text_sha256": "bd63d9d62ed2cd350f476aae8e7c065f6c26ea56f35d0969fe86e990b7a1ecc5",
+                    "validity_conflict": true,
+                    "wording_sha256": "835a619b4c14b05f48cf7c15d263d7ef71dd82cc81cd7b3e5fc188d401246842"
+                  },
+                  {
+                    "article_identity_sha256": "479068996300dafdbaeab50031c2c1346bae35bd47bb6c893c81653ca12f6e96",
+                    "article_permalink": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--5bca01f82ef3058cfebe7f8a8a6eb1f1fbeeb32b8a1ea7b2c02ac20963235e3a#art_23",
+                    "article_valid_from": "2023-07-03",
+                    "body_sha256": "3a6bb598a9310f8a31240c1f33ae357d6e1f7a46392ca33d223c2718cdded95c",
+                    "language": "fra",
+                    "notes": [
+                      {
+                        "marker": "9",
+                        "text": "Loi du 29 juin 2023 portant modification : 1\u00B0 de la loi modifi\u00E9e du 4 d\u00E9cembre 1990 portant organisation du service des huissiers de justice ; 2\u00B0 de la loi modifi\u00E9e du 10 ao\u00FBt 1991 sur la profession d\u2019avocat."
+                      }
+                    ],
+                    "official_source": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo",
+                    "publisher_id": "art_23",
+                    "publisher_wid": null,
+                    "text": "Art. 23.Dans le cas o\u00F9 les affaires dont un avocat est charg\u00E9 se trouvent \u00E0 l\u2019abandon pour cause de d\u00E9c\u00E8s, d\u2019absence, de maladie, de suspension ou d\u2019interdiction ou pour toute autre raison et dans tous les cas o\u00F9 la protection des clients, d\u2019un avocat ou des tiers l\u2019exige, le B\u00E2tonnier a qualit\u00E9 pour prendre toute mesure conservatoire que la prudence exige ou pour saisir les organes judiciaires comp\u00E9tents aux fins de voir ordonner les mesures qu\u2019il juge n\u00E9cessaires ou utiles.Dans le cas o\u00F9 des faits reproch\u00E9s \u00E0 un avocat font craindre que l\u2019exercice ult\u00E9rieur de son activit\u00E9 professionnelle soit de nature \u00E0 causer pr\u00E9judice \u00E0 des tiers ou \u00E0 l\u2019honneur de l\u2019Ordre, le B\u00E2tonnier a qualit\u00E9 pour prendre toute mesure conservatoire que la prudence exige et notamment, en cas de besoin, pour faire d\u00E9fense \u00E0 l\u2019avocat de fr\u00E9quenter les cours et tribunaux pendant une p\u00E9riode n\u2019exc\u00E9dant pas trois mois ou pour saisir les organes judiciaires comp\u00E9tents aux fins de voir ordonner les mesures qu\u2019il juge n\u00E9cessaires ou utiles.La p\u00E9riode de trois mois vis\u00E9e \u00E0 l\u2019alin\u00E9a 2 peut \u00EAtre prorog\u00E9e par le Conseil de l\u2019ordre \u00E0 la demande du B\u00E2tonnier, apr\u00E8s avoir proc\u00E9d\u00E9 pr\u00E9alablement \u00E0 l\u2019audition de l\u2019avocat concern\u00E9 d\u00FBment convoqu\u00E9.Les d\u00E9cisions prises par le B\u00E2tonnier en vertu des alin\u00E9as 1er et 2 sont susceptibles de faire l\u2019objet d\u2019un recours devant le Conseil disciplinaire et administratif. Le recours est introduit aupr\u00E8s du Pr\u00E9sident du Conseil disciplinaire et administratif sous forme de lettre recommand\u00E9e dans un d\u00E9lai de dix jours \u00E0 partir de la notification de la d\u00E9cision du B\u00E2tonnier. Le Conseil disciplinaire et administratif ou l\u2019un de ses membres d\u00E9l\u00E9gu\u00E9 \u00E0 cet effet entend sans d\u00E9lai le requ\u00E9rant d\u00FBment convoqu\u00E9 en ses explications.Par d\u00E9rogation \u00E0 l\u2019article 28, paragraphe 3, l\u2019appel est introduit sous forme de lettre recommand\u00E9e dans le d\u00E9lai de quarante jours qui court \u00E0 partir du jour o\u00F9 la d\u00E9cision a \u00E9t\u00E9 notifi\u00E9e aux parties en cause.Le recours vis\u00E9 \u00E0 l\u2019alin\u00E9a 4 n\u2019a pas d\u2019effet suspensif s\u2019il n\u2019en est autrement ordonn\u00E9 par le Pr\u00E9sident du Conseil disciplinaire et administratif ou le membre du Conseil disciplinaire et administratif qui le remplace. Le sursis \u00E0 ex\u00E9cution ne peut \u00EAtre d\u00E9cr\u00E9t\u00E9 qu\u2019\u00E0 la double condition que, d\u2019une part, l\u2019ex\u00E9cution de la d\u00E9cision attaqu\u00E9e risque de causer au requ\u00E9rant un pr\u00E9judice grave et d\u00E9finitif et que, d\u2019autre part, les moyens invoqu\u00E9s \u00E0 l\u2019appui du recours dirig\u00E9 contre la d\u00E9cision apparaissent comme s\u00E9rieux. Le sursis est rejet\u00E9 si l\u2019affaire est en \u00E9tat d\u2019\u00EAtre plaid\u00E9e et d\u00E9cid\u00E9e \u00E0 br\u00E8ve \u00E9ch\u00E9ance.La demande en sursis \u00E0 ex\u00E9cution est \u00E0 pr\u00E9senter par requ\u00EAte distincte \u00E0 adresser au Pr\u00E9sident du Conseil disciplinaire et administratif. La proc\u00E9dure est orale. L\u2019affaire est plaid\u00E9e \u00E0 l\u2019audience \u00E0 laquelle l\u2019avocat a \u00E9t\u00E9 convoqu\u00E9.L\u2019ordonnance est ex\u00E9cutoire d\u00E8s sa notification. Elle n\u2019est susceptible d\u2019aucune voie de recours. Elle cesse ses effets lorsque le Conseil disciplinaire et administratif a tranch\u00E9 le principal ou une partie du principal. Le Pr\u00E9sident du Conseil disciplinaire et administratif ou le membre du Conseil disciplinaire et administratif qui le remplace qui a connu de la demande d\u2019effet suspensif du recours ne peut plus si\u00E9ger au fond.L\u2019appel vis\u00E9 \u00E0 l\u2019alin\u00E9a 5 n\u2019a pas d\u2019effet suspensif.",
+                    "text_byte_length": 3490,
+                    "text_sha256": "be464a3165a64ed6c407f4aaf40dc92ed907067b5b406a9c9b7602f55f23cd6f",
+                    "validity_conflict": true,
+                    "wording_sha256": "d061ae3a36209e5602efc9e85d244871037a3486bb346230c3211b87d9734f6b"
+                  },
+                  {
+                    "article_identity_sha256": "48e3af1e3ef924eab2a94922f8afb48e72efd50a3f673c9c0c2cc322ef432e40",
+                    "article_permalink": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--5bca01f82ef3058cfebe7f8a8a6eb1f1fbeeb32b8a1ea7b2c02ac20963235e3a#art_29",
+                    "article_valid_from": "2021-08-22",
+                    "body_sha256": "3a6bb598a9310f8a31240c1f33ae357d6e1f7a46392ca33d223c2718cdded95c",
+                    "language": "fra",
+                    "notes": [],
+                    "official_source": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo",
+                    "publisher_id": "art_29",
+                    "publisher_wid": null,
+                    "text": "Art. 29.(1)Les parties en cause, ainsi que le procureur g\u00E9n\u00E9ral d\u2019Etat et le Conseil de l\u2019ordre int\u00E9ress\u00E9 peuvent se pourvoir en cassation contre l\u2019arr\u00EAt rendu en appel.(2)Le pourvoi est introduit, instruit et jug\u00E9 comme en mati\u00E8re civile. Le d\u00E9lai pour se pourvoir court du jour o\u00F9 l\u2019arr\u00EAt d\u2019appel a \u00E9t\u00E9 notifi\u00E9 par le greffier par lettre recommand\u00E9e avec accus\u00E9 de r\u00E9ception.",
+                    "text_byte_length": 403,
+                    "text_sha256": "5177690ae3f6db38c11d0efe160348837962e77a60e70b0e57fbd7faf287f074",
+                    "validity_conflict": true,
+                    "wording_sha256": "fd095811dd51c1003740d46ac20c44ab86caf220f1423cda328807e618dc342e"
+                  },
+                  {
+                    "article_identity_sha256": "506deb4c564247a671500688192f12d70afcef93c2ba466029972d9d272e918c",
+                    "article_permalink": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--5bca01f82ef3058cfebe7f8a8a6eb1f1fbeeb32b8a1ea7b2c02ac20963235e3a#art_4",
+                    "article_valid_from": "2021-08-22",
+                    "body_sha256": "3a6bb598a9310f8a31240c1f33ae357d6e1f7a46392ca33d223c2718cdded95c",
+                    "language": "fra",
+                    "notes": [],
+                    "official_source": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo",
+                    "publisher_id": "art_4",
+                    "publisher_wid": null,
+                    "text": "Art. 4.(1)Les avocats habilit\u00E9s \u00E0 exercer leurs activit\u00E9s dans un Etat membre de l\u2019Union europ\u00E9enne pr\u00EAtent les services pr\u00E9vus par la loi du 29 avril 1980 r\u00E9glant l\u2019activit\u00E9 de ces avocats aux conditions de cette loi et des mesures prises en application des trait\u00E9s instituant l\u2019Union europ\u00E9enne.(2)Les dispositions de la pr\u00E9sente loi ne pr\u00E9judicient pas de la d\u00E9termination des conditions d\u2019inscription au tableau des avocats ressortissants des Etats membres auxquelles s\u2019appliquent les dispositions de la Directive 2005/36/CE du Parlement europ\u00E9en et du Conseil du 7 septembre 2005 relative \u00E0 la reconnaissance des qualifications professionnelles telle que modifi\u00E9e par le Directive 2013/55/UE du Parlement europ\u00E9en et du Conseil du 20 novembre 2013 ou les dispositions de la Directive 98/5/CE du Parlement europ\u00E9en et du Conseil du 16 f\u00E9vrier 1998 visant \u00E0 faciliter l\u2019exercice permanent de la profession d\u2019avocat dans un Etat membre autre que celui o\u00F9 la qualification a \u00E9t\u00E9 acquise.",
+                    "text_byte_length": 1025,
+                    "text_sha256": "39766d855b231afbdae1abaf4a7f2d2173ffd579c5bd73022173cd034108f7a0",
+                    "validity_conflict": true,
+                    "wording_sha256": "e3d9d704f772e929529ac98fad6ccd57ba766d4c1cd895a07cde7dd54bb4c2c0"
+                  },
+                  {
+                    "article_identity_sha256": "52f46a3f576269e76df131dddaf3aea72f93a8f8a75c4efa56299f88fb767bcb",
+                    "article_permalink": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--5bca01f82ef3058cfebe7f8a8a6eb1f1fbeeb32b8a1ea7b2c02ac20963235e3a#art_17",
+                    "article_valid_from": "2021-08-22",
+                    "body_sha256": "3a6bb598a9310f8a31240c1f33ae357d6e1f7a46392ca33d223c2718cdded95c",
+                    "language": "fra",
+                    "notes": [],
+                    "official_source": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo",
+                    "publisher_id": "art_17",
+                    "publisher_wid": null,
+                    "text": "Art. 17.Le Conseil de l\u2019ordre est charg\u00E9: de veiller \u00E0 la sauvegarde de l\u2019honneur de l\u2019Ordre, de maintenir les principes de dignit\u00E9, de probit\u00E9 et de d\u00E9licatesse qui forment la base de la profession d\u2019avocat et les usages du barreau qui les consacrent,de veiller \u00E0 l\u2019observation des r\u00E8gles \u00E9dict\u00E9es selon l\u2019article 19, de d\u00E9f\u00E9rer au Conseil disciplinaire et administratif les auteurs des infractions et des manquements, sans pr\u00E9judice de l\u2019action des tribunaux et du minist\u00E8re public, s\u2019il y a lieu,de veiller au respect par les membres de l\u2019ordre de leurs obligations d\u00E9coulant de la l\u00E9gislation en mati\u00E8re de lutte contre le blanchiment et contre le financement du terrorisme. ",
+                    "text_byte_length": 713,
+                    "text_sha256": "a6ebfd34f7afca5fbfbaaa71ebc13b0add361870e72cf7d4c1cbf6f3e33af964",
+                    "validity_conflict": true,
+                    "wording_sha256": "d96665d785596bdfa50cdf19a563d7b03e83c934bc0b59a5282fb93faa1f7918"
+                  },
+                  {
+                    "article_identity_sha256": "5550a5c029011ec8a035da9a6245304c2606f178ccc8e7978d13c760a12c5004",
+                    "article_permalink": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--5bca01f82ef3058cfebe7f8a8a6eb1f1fbeeb32b8a1ea7b2c02ac20963235e3a#art_10",
+                    "article_valid_from": "2021-08-22",
+                    "body_sha256": "3a6bb598a9310f8a31240c1f33ae357d6e1f7a46392ca33d223c2718cdded95c",
+                    "language": "fra",
+                    "notes": [],
+                    "official_source": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo",
+                    "publisher_id": "art_10",
+                    "publisher_wid": null,
+                    "text": "Art. 10.(1)Le fait de ne pas satisfaire aux exigences du stage judiciaire pendant une ann\u00E9e entra\u00EEne l\u2019omission au tableau.(2)Sur demande de l\u2019avocat et par d\u00E9cision du Conseil de l\u2019ordre, le stage judiciaire peut \u00EAtre suspendu pendant un d\u00E9lai ne d\u00E9passant pas trois ans. La suspension entra\u00EEne l\u2019omission au tableau pendant toute sa dur\u00E9e.(3)L\u2019avocat ayant effectu\u00E9 le stage prescrit qui ne s\u2019est pas pr\u00E9sent\u00E9 \u00E0 l\u2019examen de fin de stage judiciaire dans un d\u00E9lai de trois ans apr\u00E8s la fin du stage, ainsi que l\u2019avocat qui n\u2019a pas obtenu le dipl\u00F4me de l\u2019examen de fin de stage judiciaire dans un d\u00E9lai de cinq ans apr\u00E8s la fin du stage, sont omis au tableau. Le Conseil de l\u2019ordre peut prolonger ces d\u00E9lais pour des causes exceptionnelles, d\u00FBment justifi\u00E9es. ",
+                    "text_byte_length": 801,
+                    "text_sha256": "180997b570f36b94de37daeeef311a5b24837125f5b6dbc509f8c51e5c085816",
+                    "validity_conflict": true,
+                    "wording_sha256": "83a5a2b6394e4c4a6bc9713e107cc45b23349b19f8c438902f7494a68060090a"
+                  },
+                  {
+                    "article_identity_sha256": "86598b7a320f856c273cac745edbcaf57a903d36a6056e18167e9481f0109f48",
+                    "article_permalink": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--5bca01f82ef3058cfebe7f8a8a6eb1f1fbeeb32b8a1ea7b2c02ac20963235e3a#art_31-1",
+                    "article_valid_from": "2021-08-22",
+                    "body_sha256": "3a6bb598a9310f8a31240c1f33ae357d6e1f7a46392ca33d223c2718cdded95c",
+                    "language": "fra",
+                    "notes": [],
+                    "official_source": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo",
+                    "publisher_id": "art_31-1",
+                    "publisher_wid": null,
+                    "text": "Art. 31-1.Les avocats inscrits \u00E0 titre individuel doivent ma\u00EEtriser la langue de la l\u00E9gislation au sens de la loi du 24 f\u00E9vrier 1984 sur le r\u00E9gime des langues ainsi que toute autre langue n\u00E9cessaire \u00E0 l\u2019exercice de leurs activit\u00E9s professionnelles, sans pr\u00E9judice de l\u2019article 6. (1) d).Les avocats inscrits \u00E0 la liste II doivent en outre ma\u00EEtriser les langues administratives et judiciaires du Grand-Duch\u00E9 de Luxembourg n\u00E9cessaires pour l\u2019accomplissement de leurs obligations r\u00E9sultant du stage judiciaire.L\u2019avocat qui accepte de se charger d\u2019une affaire doit avoir les comp\u00E9tences professionnelles et linguistiques n\u00E9cessaires sous peine de s\u2019exposer aux sanctions disciplinaires pr\u00E9vues.",
+                    "text_byte_length": 719,
+                    "text_sha256": "a1de11810ff342a6aa2e225b04a1a227c163126441434c947a57b218c31a2150",
+                    "validity_conflict": true,
+                    "wording_sha256": "3b2b74ed003fc6157e236c1f063de54e8554c252a7c78e2006fad4309c5d6176"
+                  },
+                  {
+                    "article_identity_sha256": "8b046b5215fc50f80bbe9572692efa383f597d1f7784248d6de99edff5112078",
+                    "article_permalink": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--5bca01f82ef3058cfebe7f8a8a6eb1f1fbeeb32b8a1ea7b2c02ac20963235e3a#art_34-1",
+                    "article_valid_from": "2021-08-22",
+                    "body_sha256": "3a6bb598a9310f8a31240c1f33ae357d6e1f7a46392ca33d223c2718cdded95c",
+                    "language": "fra",
+                    "notes": [],
+                    "official_source": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo",
+                    "publisher_id": "art_34-1",
+                    "publisher_wid": null,
+                    "text": "Art. 34-1.(1)Les associ\u00E9s d\u2019une association d\u2019avocats arr\u00EAtent la forme juridique et les modalit\u00E9s de leur association, sa repr\u00E9sentation \u00E0 l\u2019\u00E9gard des tiers et les droits et devoirs des associ\u00E9s.(2)Dans la quinzaine de la conclusion du contrat d\u2019association ou de l\u2019acte modificatif, un exemplaire est envoy\u00E9 par lettre recommand\u00E9e au Conseil de l\u2019ordre qui peut, dans le mois de la r\u00E9ception, mettre en demeure les avocats associ\u00E9s de modifier la convention pour qu\u2019elle soit en conformit\u00E9 avec les r\u00E8gles professionnelles. Les avocats associ\u00E9s peuvent interjeter appel devant le Conseil disciplinaire et administratif de cette d\u00E9cision par requ\u00EAte dans un d\u00E9lai de quarante jours de l\u2019envoi de la d\u00E9cision.",
+                    "text_byte_length": 743,
+                    "text_sha256": "9cf250961edbc164fd4129f05b4ff4159da6f04b563ddbb4a352acab6a9debdd",
+                    "validity_conflict": true,
+                    "wording_sha256": "53590624107d89e6b816fa45f16d8849b166008484fed12af50d653d6826784c"
+                  },
+                  {
+                    "article_identity_sha256": "8e52933c1a9ab53149a302147acf2dff609fab85e4958d8412dc4e6d8e611241",
+                    "article_permalink": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--5bca01f82ef3058cfebe7f8a8a6eb1f1fbeeb32b8a1ea7b2c02ac20963235e3a#art_34-2",
+                    "article_valid_from": "2021-08-22",
+                    "body_sha256": "3a6bb598a9310f8a31240c1f33ae357d6e1f7a46392ca33d223c2718cdded95c",
+                    "language": "fra",
+                    "notes": [],
+                    "official_source": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo",
+                    "publisher_id": "art_34-2",
+                    "publisher_wid": null,
+                    "text": "Art. 34-2.(1)Toute personne morale de droit luxembourgeois exer\u00E7ant la profession d\u2019avocat doit \u00EAtre constitu\u00E9e sous forme de soci\u00E9t\u00E9 civile ou de soci\u00E9t\u00E9 ayant la forme d\u2019une des soci\u00E9t\u00E9s pr\u00E9vues \u00E0 l\u2019article 2 de la loi modifi\u00E9e du 10 ao\u00FBt 1915 concernant les soci\u00E9t\u00E9s commerciales y inclus en soci\u00E9t\u00E9 unipersonnelle.(2)L\u2019exercice de la profession d\u2019avocat doit figurer dans l\u2019objet social de toute soci\u00E9t\u00E9 de droit luxembourgeois exer\u00E7ant la profession d\u2019avocat.(3)Les dispositions de la loi concernant les soci\u00E9t\u00E9s commerciales sont applicables aux soci\u00E9t\u00E9s d\u2019avocats qui ont adopt\u00E9 une des formes de soci\u00E9t\u00E9s pr\u00E9vues \u00E0 l\u2019article 2 de la loi concernant les soci\u00E9t\u00E9s commerciales chaque fois qu\u2019il n\u2019y est pas d\u00E9rog\u00E9 express\u00E9ment par la pr\u00E9sente loi.Par d\u00E9rogation \u00E0 l\u2019article 3, alin\u00E9a 3 de la loi concernant les soci\u00E9t\u00E9s commerciales, les soci\u00E9t\u00E9s d\u2019avocats admises au tableau d\u2019un Ordre ont une nature civile malgr\u00E9 l\u2019adoption de la forme d\u2019une soci\u00E9t\u00E9 commerciale. Elles n\u2019ont pas la qualit\u00E9 de commer\u00E7ant et ne sont pas de ce fait sujettes \u00E0 cotisation \u00E0 la Chambre de commerce. L\u2019immatriculation au registre de commerce et des soci\u00E9t\u00E9s n\u2019emporte pas pr\u00E9somption de commercialit\u00E9 dans leur chef.(4)Le tribunal d\u2019arrondissement si\u00E9geant en mati\u00E8re civile, peut, sur requ\u00EAte du Procureur d\u2019Etat, prononcer la dissolution et la liquidation d\u2019une soci\u00E9t\u00E9 de droit luxembourgeois exer\u00E7ant la profession d\u2019avocat et constitu\u00E9e sous la forme d\u2019une des soci\u00E9t\u00E9s pr\u00E9vues \u00E0 l\u2019article 2 de la loi modifi\u00E9e du 10 ao\u00FBt 1915 concernant les soci\u00E9t\u00E9s commerciales, si la soci\u00E9t\u00E9 a cess\u00E9 ses paiements et que son cr\u00E9dit est \u00E9branl\u00E9.En ordonnant la liquidation, le Tribunal nomme un juge-commissaire ainsi qu\u2019un ou plusieurs liquidateurs \u00E0 choisir parmi les avocats inscrits \u00E0 la liste I du tableau de l\u2019Ordre o\u00F9 la soci\u00E9t\u00E9 a \u00E9t\u00E9 inscrite en dernier, \u00E0 l\u2019exception des associ\u00E9s. Il arr\u00EAte le mode de liquidation. Il peut rendre applicable, dans la mesure qu\u2019il d\u00E9termine, les r\u00E8gles r\u00E9gissant la faillite. Le mode de liquidation peut \u00EAtre modifi\u00E9 ult\u00E9rieurement, soit d\u2019office, soit sur requ\u00EAte des liquidateurs.",
+                    "text_byte_length": 2252,
+                    "text_sha256": "d744dfb0624dff41543c9fe07b3adb739fb4791e1d373db6c5cd4f843ab4ab78",
+                    "validity_conflict": true,
+                    "wording_sha256": "31a3e3e7ce3125e5870c6a2b5164131bd1b7a3dd82e7f5089bb9bf2f814371c8"
+                  },
+                  {
+                    "article_identity_sha256": "9261b305d0cf29c4b2dc464e7b7895268f959615e42248c7541f9d3e40199439",
+                    "article_permalink": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--5bca01f82ef3058cfebe7f8a8a6eb1f1fbeeb32b8a1ea7b2c02ac20963235e3a#art_19",
+                    "article_valid_from": "2021-08-22",
+                    "body_sha256": "3a6bb598a9310f8a31240c1f33ae357d6e1f7a46392ca33d223c2718cdded95c",
+                    "language": "fra",
+                    "notes": [],
+                    "official_source": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo",
+                    "publisher_id": "art_19",
+                    "publisher_wid": null,
+                    "text": "Art. 19.Le Conseil de l\u2019ordre peut arr\u00EAter des r\u00E8glements d\u2019ordre int\u00E9rieur qui d\u00E9terminent les r\u00E8gles professionnelles, relatives notamment:\u00E0 la d\u00E9ontologie entre avocats et \u00E0 l\u2019\u00E9gard des clients et des tiers;au secret professionnel;aux honoraires et frais;\u00E0 l\u2019information du public concernant les avocats et leur activit\u00E9 professionnelle;\u00E0 la protection des int\u00E9r\u00EAts des clients et des tiers; les r\u00E8glements y relatifs peuvent pr\u00E9voir des mesures d\u2019assurance individuelle ou collective facultatives ou obligataires ainsi que les prescriptions concernant la conservation des fonds de tiers;aux obligations professionnelles d\u00E9coulant de la l\u00E9gislation en mati\u00E8re de lutte contre le blanchiment et contre le financement du terrorisme ainsi qu\u2019aux proc\u00E9dures de contr\u00F4le, notamment de contr\u00F4le sur place aupr\u00E8s des membres de l\u2019ordre.",
+                    "text_byte_length": 869,
+                    "text_sha256": "df7efa4f0e56fedcd11afa0b18c5f9843a59d637f579c5414badcdd0b2d53b35",
+                    "validity_conflict": true,
+                    "wording_sha256": "286d2eb8567f145f52260808c91d7b1ed5138acfd4cb441627bfa20243c451ab"
+                  },
+                  {
+                    "article_identity_sha256": "9376c79040e6a3873450deaad15f147484d5c5188acf3411d4692d9aa666ae1c",
+                    "article_permalink": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--5bca01f82ef3058cfebe7f8a8a6eb1f1fbeeb32b8a1ea7b2c02ac20963235e3a#art_37",
+                    "article_valid_from": "2021-08-22",
+                    "body_sha256": "3a6bb598a9310f8a31240c1f33ae357d6e1f7a46392ca33d223c2718cdded95c",
+                    "language": "fra",
+                    "notes": [],
+                    "official_source": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo",
+                    "publisher_id": "art_37",
+                    "publisher_wid": null,
+                    "text": "Art. 37.(1)Le Conseil de l\u2019ordre assure l\u2019assistance des personnes qui ne trouvent pas de d\u00E9fenseur ou dont les ressources sont insuffisantes pour la d\u00E9fense de leurs int\u00E9r\u00EAts.(2)Le Conseil de l\u2019ordre collabore avec le service d\u2019accueil et d\u2019information juridique institu\u00E9 par l\u2019article 189 de la loi du 7 mars 1980 sur l\u2019organisation judiciaire. A cet effet le Conseil de l\u2019ordre maintient un bureau de consultation et de d\u00E9fense. Le B\u00E2tonnier d\u00E9signe les avocats qui assurent ce service.(3)Si une partie ne trouve pas de d\u00E9fenseur, le B\u00E2tonnier ou, suivant les circonstances, le juge, lui d\u00E9signe d\u2019office un avocat s\u2019il y a lieu. L\u2019avocat nomm\u00E9 d\u2019office pour d\u00E9fendre un justiciable ne peut refuser son minist\u00E8re sans motif valable.(4)Si, en application de l\u2019article 3-6 du Code de proc\u00E9dure p\u00E9nale une partie ne trouve pas de d\u00E9fenseur, l\u2019avocat est choisi et d\u00E9sign\u00E9 d\u2019office sur base des listes de permanence \u00E0 disposition des cabinets d\u2019instruction, des Parquets ainsi que de la Police grand-ducale, listes \u00E9tablies par le B\u00E2tonnier. Si les conditions l\u00E9gales pr\u00E9vues pour l\u2019attribution de l\u2019assistance judiciaire sont remplies dans le chef de la personne concern\u00E9e, les indemnit\u00E9s de l\u2019avocat sont \u00E0 charge de l\u2019Etat.L\u2019avocat figurant sur cette liste ne peut pas refuser son minist\u00E8re sans motif valable.",
+                    "text_byte_length": 1382,
+                    "text_sha256": "b96a9c1595ed147d7a0de97baeaf4ffc5607c33c56b7884778a8646c39ce7bf0",
+                    "validity_conflict": true,
+                    "wording_sha256": "a61d907a7817ee518058f6bea97898ebffa668bf720128b62e5b286aee2d512a"
+                  },
+                  {
+                    "article_identity_sha256": "99eb9108980fda9a992eac4c011e9208868afbb8248b7eb70c0d7da73e4620e2",
+                    "article_permalink": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--5bca01f82ef3058cfebe7f8a8a6eb1f1fbeeb32b8a1ea7b2c02ac20963235e3a#art_3",
+                    "article_valid_from": "2021-08-22",
+                    "body_sha256": "3a6bb598a9310f8a31240c1f33ae357d6e1f7a46392ca33d223c2718cdded95c",
+                    "language": "fra",
+                    "notes": [],
+                    "official_source": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo",
+                    "publisher_id": "art_3",
+                    "publisher_wid": null,
+                    "text": "Art. 3.La pr\u00E9sente loi ne fait pas obstacle \u00E0 la diffusion en mati\u00E8re juridique de renseignements et d\u2019informations \u00E0 caract\u00E8re documentaire. ",
+                    "text_byte_length": 149,
+                    "text_sha256": "cb9eb4400d3705372e0dfe2fb901743b7f050c4e8c0f2d22860fb415079919ad",
+                    "validity_conflict": true,
+                    "wording_sha256": "fa0ecc7555d730ccfd91c79c6f002a255083661d5c403c084799835108733e03"
+                  },
+                  {
+                    "article_identity_sha256": "9c3876a608dd51d7a9137343e2e05b7a4c3d9a5b13a2b6e1034cadfec607a316",
+                    "article_permalink": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--5bca01f82ef3058cfebe7f8a8a6eb1f1fbeeb32b8a1ea7b2c02ac20963235e3a#art_26",
+                    "article_valid_from": "2023-07-03",
+                    "body_sha256": "3a6bb598a9310f8a31240c1f33ae357d6e1f7a46392ca33d223c2718cdded95c",
+                    "language": "fra",
+                    "notes": [
+                      {
+                        "marker": "12",
+                        "text": "Loi du 29 juin 2023 portant modification : 1\u00B0 de la loi modifi\u00E9e du 4 d\u00E9cembre 1990 portant organisation du service des huissiers de justice ; 2\u00B0 de la loi modifi\u00E9e du 10 ao\u00FBt 1991 sur la profession d\u2019avocat."
+                      }
+                    ],
+                    "official_source": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo",
+                    "publisher_id": "art_26",
+                    "publisher_wid": null,
+                    "text": "Art. 26.(1)Le B\u00E2tonnier instruit les affaires dont il est saisi soit par le procureur d\u2019\u00C9tat ou par le procureur g\u00E9n\u00E9ral d\u2019\u00C9tat, soit sur plainte, soit conform\u00E9ment \u00E0 l\u2019article 33, paragraphe (5), ou dont il se saisit d\u2019office.(2)Le B\u00E2tonnier ou son d\u00E9l\u00E9gu\u00E9 dresse un proc\u00E8s-verbal des faits qui ont motiv\u00E9 l\u2019instruction. Il peut s\u2019adresser au procureur g\u00E9n\u00E9ral d\u2019\u00C9tat pour voir charger un officier de police judiciaire de proc\u00E9der \u00E0 une enqu\u00EAte.(3)Si le B\u00E2tonnier estime, en cas d\u2019infraction ou de manquement \u00E0 la discipline, que la sanction \u00E0 prononcer ne d\u00E9passe pas la peine de l\u2019avertissement, de la r\u00E9primande ou d\u2019une amende inf\u00E9rieure \u00E0 1000 euros, il peut seul prononcer cette sanction. L\u2019avocat sanctionn\u00E9 peut former contredit, par requ\u00EAte, dans les dix jours de la notification de la d\u00E9cision du B\u00E2tonnier, aupr\u00E8s du Conseil disciplinaire et administratif. Dans les autres cas, l\u2019instruction se poursuit conform\u00E9ment aux dispositions qui suivent.(4)L\u2019instruction pr\u00E9alable termin\u00E9e, le B\u00E2tonnier en soumet le r\u00E9sultat au Conseil de l\u2019ordre qui d\u00E9f\u00E8re l\u2019avocat au Conseil disciplinaire et administratif, s\u2019il estime qu\u2019il y a infraction ou manquement \u00E0 la discipline.(5)Une personne morale inscrite au tableau peut faire l\u2019objet de poursuites disciplinaires.(6)Au cas o\u00F9 le Conseil de l\u2019ordre ne d\u00E9f\u00E8re pas au Conseil disciplinaire et administratif les affaires dont le B\u00E2tonnier a \u00E9t\u00E9 saisi par le procureur d\u2019\u00C9tat ou par le procureur g\u00E9n\u00E9ral d\u2019\u00C9tat, ceux-ci peuvent directement saisir le Conseil disciplinaire et administratif.(7)En mati\u00E8re disciplinaire, l\u2019avocat est cit\u00E9 devant le Conseil disciplinaire et administratif \u00E0 la diligence du B\u00E2tonnier, ou, dans le cas du paragraphe (6), \u00E0 la diligence du procureur d\u2019\u00C9tat ou du procureur g\u00E9n\u00E9ral d\u2019\u00C9tat.La citation, sous pli ferm\u00E9, est soit remise en l\u2019\u00E9tude par un d\u00E9l\u00E9gu\u00E9 du Conseil de l\u2019ordre, soit signifi\u00E9e par un huissier, soit envoy\u00E9e sous forme de lettre recommand\u00E9e avec avis de r\u00E9ception.Le d\u00E9lai de citation est de quinze jours au moins \u00E0 partir de la remise, de la signification ou de l\u2019envoi.La citation contient l\u2019\u00E9nonc\u00E9 des griefs.Si l\u2019avocat qui fait l\u2019objet de la citation vis\u00E9e ci-dessus est l\u2019associ\u00E9 d\u2019une personne morale exer\u00E7ant la profession d\u2019avocat, une citation est \u00E9galement adress\u00E9e \u00E0 cette personne morale et les dispositions des paragraphes suivants s\u2019appliquent \u00E9galement \u00E0 elle.(8)En cas de pr\u00E9t\u00E9rition d\u2019un avocat du tableau, le refus d\u2019inscription ou de r\u00E9inscription, de contestation du rang, ainsi que dans les cas pr\u00E9vus aux articles 34-1, paragraphe (2), et 40, paragraphe (1), l\u2019int\u00E9ress\u00E9 peut saisir le Conseil disciplinaire et administratif par requ\u00EAte dans un d\u00E9lai de quarante jours \u00E0 partir soit de la remise, soit de la signification, soit de l\u2019envoi de la d\u00E9cision entreprise op\u00E9r\u00E9s selon l\u2019un des modes pr\u00E9vus au paragraphe (7). La proc\u00E9dure est dispens\u00E9e du minist\u00E8re d\u2019avocat \u00E0 la Cour.(9)Le Conseil disciplinaire et administratif informe, par lettre recommand\u00E9e avec avis de r\u00E9ception, l\u2019avocat int\u00E9ress\u00E9 et le Conseil de l\u2019ordre int\u00E9ress\u00E9 des lieu, date et heure de l\u2019audience.Le Conseil de l\u2019ordre int\u00E9ress\u00E9 peut d\u00E9l\u00E9guer l\u2019un de ses membres pour assister \u00E0 l\u2019audience du Conseil disciplinaire et administratif et y \u00EAtre entendu en son avis et en ses conclusions.Lorsque le Conseil disciplinaire et administratif est saisi par le procureur d\u2019\u00C9tat ou par le procureur g\u00E9n\u00E9ral d\u2019\u00C9tat conform\u00E9ment aux paragraphes (6) et (7), ceux-ci peuvent assister \u00E0 l\u2019audience pour y \u00EAtre entendus en leurs avis ou conclusions.(10)L\u2019avocat peut prendre inspection du dossier ou s\u2019en faire d\u00E9livrer copie \u00E0 ses frais.(11)L\u2019avocat inculp\u00E9 compara\u00EEt en personne. Il peut se faire assister par un avocat.S\u2019il ne compara\u00EEt pas, il est statu\u00E9 par d\u00E9cision par d\u00E9faut non susceptible d\u2019opposition.(12)Le Conseil disciplinaire et administratif instruit l\u2019affaire en audience publique. L\u2019avocat inculp\u00E9 ou int\u00E9ress\u00E9 peut demander que la cause soit entendue en audience non publique.(13)Le Conseil disciplinaire et administratif peut ordonner des enqu\u00EAtes et des expertises. Les enqu\u00EAtes sont faites soit par le Conseil, soit par l\u2019un de ses membres, soit par un officier de police judiciaire.(14)La d\u00E9cision du Conseil disciplinaire et administratif est prise \u00E0 la majorit\u00E9 absolue des voix. Elle est sign\u00E9e par tous les membres du Conseil.(15)La d\u00E9cision est motiv\u00E9e. Elle est lue en audience publique.(16)Une copie de la d\u00E9cision est notifi\u00E9e, \u00E0 la diligence du Pr\u00E9sident du Conseil disciplinaire et administratif, aux parties en cause, ainsi qu\u2019au procureur g\u00E9n\u00E9ral d\u2019\u00C9tat ou au Conseil de l\u2019ordre int\u00E9ress\u00E9, par lettre recommand\u00E9e avec avis de r\u00E9ception \u00E0 la derni\u00E8re adresse professionnelle d\u00E9clar\u00E9e aupr\u00E8s du barreau.Si l\u2019avocat sanctionn\u00E9 ne peut pas \u00EAtre joint \u00E0 la derni\u00E8re adresse professionnelle d\u00E9clar\u00E9e, la notification de la d\u00E9cision est faite par publication sur le site internet du barreau concern\u00E9.(17)Les lettres aux t\u00E9moins et aux techniciens ainsi que les copies des d\u00E9cisions du Conseil sont sign\u00E9es par le Pr\u00E9sident du Conseil disciplinaire et administratif.(18)Les minutes des d\u00E9cisions sont d\u00E9pos\u00E9es et conserv\u00E9es aux archives du Conseil disciplinaire et administratif.",
+                    "text_byte_length": 5471,
+                    "text_sha256": "45689f1a9b1ddcaf4596f19cf8f7b692f254d6a939c63862f40d28498619441f",
+                    "validity_conflict": true,
+                    "wording_sha256": "bbcfa61ad84f445b8fa3fec12a6ad0048e357d5c20fd6191ad222ebf940b4d32"
+                  },
+                  {
+                    "article_identity_sha256": "a5ad2da4adeb2a79bd53bd6bd6ecdae872800e18edcda4ecddf955448a74a3e5",
+                    "article_permalink": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--5bca01f82ef3058cfebe7f8a8a6eb1f1fbeeb32b8a1ea7b2c02ac20963235e3a#art_35",
+                    "article_valid_from": "2023-01-01",
+                    "body_sha256": "3a6bb598a9310f8a31240c1f33ae357d6e1f7a46392ca33d223c2718cdded95c",
+                    "language": "fra",
+                    "notes": [
+                      {
+                        "marker": "3",
+                        "text": "Loi du 30 novembre 2022 relative \u00E0 la concurrence et portant : 1\u00B0 organisation de l\u2019Autorit\u00E9 nationale de concurrence ; 2\u00B0 modification de la loi modifi\u00E9e du 10 ao\u00FBt 1991 sur la profession d\u2019avocat ; 3\u00B0 modification de la loi modifi\u00E9e du 21 juin 1999 portant r\u00E8glement de proc\u00E9dure devant les juridictions administratives ; 4\u00B0 modification de la loi modifi\u00E9e du 10 f\u00E9vrier 2015 relative \u00E0 l\u2019organisation du march\u00E9 de produits p\u00E9troliers ; 5\u00B0 modification de la loi modifi\u00E9e du 25 mars 2015 fixant le r\u00E9gime des traitements et les conditions et modalit\u00E9s d\u2019avancement des fonctionnaires de l\u2019\u00C9tat ; 6\u00B0 modification de la loi modifi\u00E9e du 23 juillet 2016 relative \u00E0 la profession de l\u2019audit ; 7\u00B0 modification de la loi du 5 mars 2021 relative \u00E0 certaines modalit\u00E9s de mise en \u0153uvre du r\u00E8glement (UE) n\u00B0 2019/1150 du Parlement europ\u00E9en et du Conseil du 20 juin 2019 promouvant l\u2019\u00E9quit\u00E9 et la transparence pour les entreprises utilisatrices de services d\u2019interm\u00E9diation en ligne ; 8\u00B0 modification de la loi du 1er juin 2021 sur les relations entre entreprises au sein de la cha\u00EEne d\u2019approvisionnement agricole et alimentaire."
+                      },
+                      {
+                        "marker": "4",
+                        "text": "Loi du 30 novembre 2022 relative \u00E0 la concurrence et portant : 1\u00B0 organisation de l\u2019Autorit\u00E9 nationale de concurrence ; 2\u00B0 modification de la loi modifi\u00E9e du 10 ao\u00FBt 1991 sur la profession d\u2019avocat ; 3\u00B0 modification de la loi modifi\u00E9e du 21 juin 1999 portant r\u00E8glement de proc\u00E9dure devant les juridictions administratives ; 4\u00B0 modification de la loi modifi\u00E9e du 10 f\u00E9vrier 2015 relative \u00E0 l\u2019organisation du march\u00E9 de produits p\u00E9troliers ; 5\u00B0 modification de la loi modifi\u00E9e du 25 mars 2015 fixant le r\u00E9gime des traitements et les conditions et modalit\u00E9s d\u2019avancement des fonctionnaires de l\u2019\u00C9tat ; 6\u00B0 modification de la loi modifi\u00E9e du 23 juillet 2016 relative \u00E0 la profession de l\u2019audit ; 7\u00B0 modification de la loi du 5 mars 2021 relative \u00E0 certaines modalit\u00E9s de mise en \u0153uvre du r\u00E8glement (UE) n\u00B0 2019/1150 du Parlement europ\u00E9en et du Conseil du 20 juin 2019 promouvant l\u2019\u00E9quit\u00E9 et la transparence pour les entreprises utilisatrices de services d\u2019interm\u00E9diation en ligne ; 8\u00B0 modification de la loi du 1er juin 2021 sur les relations entre entreprises au sein de la cha\u00EEne d\u2019approvisionnement agricole et alimentaire."
+                      }
+                    ],
+                    "official_source": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo",
+                    "publisher_id": "art_35",
+                    "publisher_wid": null,
+                    "text": "Art. 35.(1)L\u2019avocat est soumis au secret professionnel conform\u00E9ment \u00E0 l\u2019article 458 du code p\u00E9nal.(2)Sans pr\u00E9judice du droit de communiquer avec son mandant dans le respect des droits de la d\u00E9fense, il doit respecter le secret de l\u2019instruction en mati\u00E8re p\u00E9nale en s\u2019abstenant de communiquer des renseignements extraits du dossier ou de publier ou faire publier des documents, pi\u00E8ces ou lettres int\u00E9ressant une information en cours.(3)Le lieu de travail de l\u2019avocat et le secret des communications, par quelque moyen que ce soit, entre l\u2019avocat et son client, sont inviolables. Lorsqu\u2019une mesure de proc\u00E9dure civile ou d\u2019instruction criminelle ou de contr\u00F4le ou d\u2019inspection pr\u00E9vues respectivement aux articles 24 \u00E0 26 de la loi du 30 novembre 2022 relative \u00E0 la concurrence ou d\u2019inspection pr\u00E9vue par l\u2019article L. 311-8 du Code de la consommation est effectu\u00E9e aupr\u00E8s ou \u00E0 l\u2019\u00E9gard d\u2019un avocat dans les cas pr\u00E9vus par la loi, il ne peut y \u00EAtre proc\u00E9d\u00E9 qu\u2019en pr\u00E9sence du B\u00E2tonnier ou de son repr\u00E9sentant, ou ceux-ci d\u00FBment appel\u00E9s.Le B\u00E2tonnier ou son repr\u00E9sentant peut adresser aux autorit\u00E9s ayant ordonn\u00E9 ces mesures toutes observations concernant la sauvegarde du secret professionnel. Les actes de saisie et les proc\u00E8s-verbaux de perquisition mentionnent \u00E0 peine de nullit\u00E9 la pr\u00E9sence du B\u00E2tonnier ou de son repr\u00E9sentant ou qu\u2019ils ont \u00E9t\u00E9 d\u00FBment appel\u00E9s, ainsi que les observations que le cas \u00E9ch\u00E9ant le B\u00E2tonnier ou son repr\u00E9sentant ont estim\u00E9 devoir faire. Les proc\u00E8s-verbaux de contr\u00F4le pr\u00E9vus \u00E0 l\u2019article 24, paragraphe 6, et de l\u2019inspection pr\u00E9vus \u00E0 l\u2019article 26, paragraphe 8, de la loi du 30 novembre 2022 relative \u00E0 la concurrence mentionnent \u00E0 peine de nullit\u00E9 la pr\u00E9sence du B\u00E2tonnier ou de son repr\u00E9sentant ou le fait qu\u2019ils ont \u00E9t\u00E9 d\u00FBment appel\u00E9s, ainsi que les observations que le B\u00E2tonnier ou son repr\u00E9sentant ont estim\u00E9 devoir faire.",
+                    "text_byte_length": 1955,
+                    "text_sha256": "107a244d0d86c962e1520622868690aa8e3c1e96a99aaaef6aa72920ad8da64e",
+                    "validity_conflict": true,
+                    "wording_sha256": "3086d8733b59cdcba1d719b10a79e6e064e967af15401b0fecf58ed2d83cabe6"
+                  },
+                  {
+                    "article_identity_sha256": "ac7e7172b739d5a9a8dcb787f32ee229b9fe043c57edb68cffd18ce0d1322fa1",
+                    "article_permalink": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--5bca01f82ef3058cfebe7f8a8a6eb1f1fbeeb32b8a1ea7b2c02ac20963235e3a#art_8",
+                    "article_valid_from": "2023-07-03",
+                    "body_sha256": "3a6bb598a9310f8a31240c1f33ae357d6e1f7a46392ca33d223c2718cdded95c",
+                    "language": "fra",
+                    "notes": [
+                      {
+                        "marker": "5",
+                        "text": "Loi du 29 juin 2023 portant modification : 1\u00B0 de la loi modifi\u00E9e du 4 d\u00E9cembre 1990 portant organisation du service des huissiers de justice ; 2\u00B0 de la loi modifi\u00E9e du 10 ao\u00FBt 1991 sur la profession d\u2019avocat."
+                      },
+                      {
+                        "marker": "6",
+                        "text": "Loi du 29 juin 2023 portant modification : 1\u00B0 de la loi modifi\u00E9e du 4 d\u00E9cembre 1990 portant organisation du service des huissiers de justice ; 2\u00B0 de la loi modifi\u00E9e du 10 ao\u00FBt 1991 sur la profession d\u2019avocat."
+                      },
+                      {
+                        "marker": "7",
+                        "text": "Loi du 29 juin 2023 portant modification : 1\u00B0 de la loi modifi\u00E9e du 4 d\u00E9cembre 1990 portant organisation du service des huissiers de justice ; 2\u00B0 de la loi modifi\u00E9e du 10 ao\u00FBt 1991 sur la profession d\u2019avocat."
+                      }
+                    ],
+                    "official_source": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo",
+                    "publisher_id": "art_8",
+                    "publisher_wid": null,
+                    "text": "Art. 8.(1)L\u2019Ordre des avocats est compos\u00E9 des avocats inscrits au tableau.(2)Le tableau des avocats de chaque Ordre est tenu par le Conseil de l\u2019ordre.(3)Le tableau des avocats comprend sept listes:la liste I des avocats qui remplissent les conditions des articles 5 et 6 et qui sont d\u00E9tenteurs du dipl\u00F4me de l\u2019examen de fin de stage judiciaire;la liste II des avocats qui remplissent les conditions des articles 5 et 6;la liste III des avocats honoraires; la liste IV des avocats exer\u00E7ant sous leur titre professionnel d\u2019origine;la liste V des personnes morales exer\u00E7ant la profession d\u2019avocat et ayant un ou plusieurs associ\u00E9s inscrits \u00E0 la liste I exer\u00E7ant une influence significative sur l\u2019activit\u00E9 de la personne morale au Grand-Duch\u00E9 de Luxembourg;la liste VI des autres personnes morales exer\u00E7ant la profession d\u2019avocat ;la liste VII des avocats portant un titre professionnel d\u2019origine tel que vis\u00E9 \u00E0 l\u2019article 193, lettre d), sous ii) de l\u2019Accord de commerce et de coop\u00E9ration entre l\u2019Union europ\u00E9enne et la Communaut\u00E9 europ\u00E9enne de l\u2019\u00E9nergie atomique, d\u2019une part, et le Royaume-Uni de Grande-Bretagne et d\u2019Irlande du Nord, d\u2019autre part, fait \u00E0 Bruxelles et \u00E0 Londres, le 30 d\u00E9cembre 2020, et en date du 24 d\u00E9cembre 2020 autoris\u00E9s, en vertu de l\u2019article 194 de l\u2019accord pr\u00E9cit\u00E9, \u00E0 fournir les services juridiques vis\u00E9s \u00E0 l\u2019article 193, points a) et g) de l\u2019accord pr\u00E9cit\u00E9.(4)Les avocats sont inscrits ou, le cas \u00E9ch\u00E9ant, r\u00E9inscrits aux listes du tableau avec rang \u00E0 partir de leur prestation de serment d\u2019avocat.(5)Les personnes morales exer\u00E7ant la profession d\u2019avocat sont inscrites au tableau des avocats de l\u2019Ordre du lieu de leur \u00E9tablissement au Grand-Duch\u00E9 de Luxembourg.(6)Une demande d\u2019inscription \u00E0 la liste V ou VI du tableau des avocats est adress\u00E9e par lettre recommand\u00E9e au B\u00E2tonnier de l\u2019Ordre des avocats aupr\u00E8s duquel la personne morale sera inscrite. Elle est accompagn\u00E9e d\u2019un dossier qui doit comprendre, \u00E0 peine d\u2019irrecevabilit\u00E9 de la demande:une copie certifi\u00E9e conforme des documents constitutifs; la liste des associ\u00E9s avec, pour chaque associ\u00E9, son nom, pr\u00E9nom, domicile et l\u2019indication de l\u2019Ordre ou de l\u2019autorit\u00E9 comp\u00E9tente \u00E9trang\u00E8re aupr\u00E8s de laquelle il est inscrit;pour les personnes morales de droit \u00E9tranger, une preuve que cette personne morale est habilit\u00E9e \u00E0 exercer la profession d\u2019avocat dans son Etat d\u2019origine.La liste pr\u00E9vue sous le point 2 et la preuve vis\u00E9e sous le point 3 doivent \u00EAtre reproduites tous les ans, au cours du premier mois de l\u2019ann\u00E9e, aupr\u00E8s du B\u00E2tonnier de l\u2019Ordre des avocats aupr\u00E8s duquel la personne morale est inscrite.La preuve vis\u00E9e sous le point 3 ne doit pas dater de plus de deux mois. Le Conseil de l\u2019ordre peut demander \u00E0 tout moment la preuve de l\u2019inscription d\u2019un associ\u00E9 aupr\u00E8s de l\u2019Ordre ou de l\u2019autorit\u00E9 comp\u00E9tente \u00E9trang\u00E8re renseign\u00E9e dans la liste indiqu\u00E9e sous le point 2.Le Conseil de l\u2019ordre statue sur la demande d\u2019inscription au tableau. Une personne morale qui ne satisfait plus les conditions d\u2019inscription \u00E0 la liste \u00E0 laquelle elle est inscrite peut \u00EAtre suspendue ou ray\u00E9e par le Conseil de l\u2019ordre.La personne morale int\u00E9ress\u00E9e dispose contre la d\u00E9cision de refus, de suspension ou de radiation de l\u2019inscription d\u2019un recours devant le Conseil disciplinaire et administratif, conform\u00E9ment \u00E0 l\u2019article 26 de la pr\u00E9sente loi.La personne morale pourra exercer la profession d\u2019avocat \u00E0 partir de son inscription au tableau des avocats. Elle ne pourra pas exercer d\u2019autre profession.Les personnes morales inscrites \u00E0 la liste V du tableau ont la qualit\u00E9 d\u2019\u00ABavocat \u00E0 la Cour\u00BB.(7)En cas d\u2019admission dans une personne morale inscrite au tableau d\u2019un nouvel associ\u00E9 exer\u00E7ant la profession d\u2019avocat au Luxembourg, le B\u00E2tonnier de l\u2019Ordre des avocats aupr\u00E8s duquel la personne morale est inscrite en est inform\u00E9 dans la quinzaine par lettre recommand\u00E9e.(8)Dans la quinzaine de tout acte modificatif aux documents constitutifs d\u2019une personne morale inscrite au tableau, un exemplaire est envoy\u00E9 par lettre recommand\u00E9e au Conseil de l\u2019ordre qui peut, dans le mois de la r\u00E9ception, mettre en demeure cette personne morale de modifier l\u2019acte pour qu\u2019il soit en conformit\u00E9 avec les r\u00E8gles professionnelles. La personne morale inscrite au tableau peut interjeter appel devant le Conseil disciplinaire et administratif de cette d\u00E9cision par requ\u00EAte dans un d\u00E9lai de quarante jours de l\u2019envoi de la d\u00E9cision.(9)Toutes les dispositions l\u00E9gislatives et r\u00E9glementaires relatives \u00E0 l\u2019exercice de la profession d\u2019avocat sont applicables aux soci\u00E9t\u00E9s inscrites au tableau et \u00E0 leurs associ\u00E9s.(10)Un avocat ne peut exercer la profession d\u2019avocat au Luxembourg qu\u2019\u00E0 travers une seule association ou personne morale ayant plusieurs associ\u00E9s. Il peut exercer la profession d\u2019avocat au sein d\u2019une personne morale inscrite au tableau des avocats et \u00E0 titre individuel.(11)Dans tous les actes relevant de l\u2019exercice de la profession d\u2019avocat au Luxembourg, la personne morale devra \u00EAtre repr\u00E9sent\u00E9e par un avocat inscrit \u00E0 un Ordre pr\u00E9vu par la pr\u00E9sente loi. Pour les actes requ\u00E9rant le minist\u00E8re d\u2019avocat \u00E0 la Cour, la personne morale doit \u00EAtre repr\u00E9sent\u00E9e par un avocat inscrit \u00E0 la liste I du tableau. Sa signature devra \u00EAtre identifi\u00E9e par ses nom et pr\u00E9nom suivis de la d\u00E9signation et de la forme de la soci\u00E9t\u00E9 ou association qu\u2019il repr\u00E9sente.(12)L\u2019inscription des associ\u00E9s inscrits au tableau est suivie de la mention de la personne morale dans laquelle il exerce.",
+                    "text_byte_length": 5703,
+                    "text_sha256": "0fe8a6914b2a5b454d6d603f6dd00c8e95e2a7e29804d70aa4515aa56f2be0bf",
+                    "validity_conflict": true,
+                    "wording_sha256": "b0054de6a4f294aedb84267fdfbcf1390251d9d550f034f9a677de0731088966"
+                  },
+                  {
+                    "article_identity_sha256": "adf6a2791abb7e0bf2f203c6ad7c0b3dca9b28c06e490c3e9e9364b5ebcff165",
+                    "article_permalink": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--5bca01f82ef3058cfebe7f8a8a6eb1f1fbeeb32b8a1ea7b2c02ac20963235e3a#art_22",
+                    "article_valid_from": "2021-08-22",
+                    "body_sha256": "3a6bb598a9310f8a31240c1f33ae357d6e1f7a46392ca33d223c2718cdded95c",
+                    "language": "fra",
+                    "notes": [],
+                    "official_source": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo",
+                    "publisher_id": "art_22",
+                    "publisher_wid": null,
+                    "text": "Art. 22.(1)Le B\u00E2tonnier r\u00E8gle les diff\u00E9rends qui peuvent na\u00EEtre entre avocats dans l\u2019exercice de leur profession.(2)L\u2019appel de ses d\u00E9cisions peut \u00EAtre port\u00E9 devant le Conseil disciplinaire et administratif qui statue en dernier ressort.L\u2019appel est introduit aupr\u00E8s du Pr\u00E9sident du Conseil disciplinaire et administratif sous forme de lettre recommand\u00E9e dans un d\u00E9lai de dix jours \u00E0 partir de la notification par lettre recommand\u00E9e de la d\u00E9cision du B\u00E2tonnier.(3)La d\u00E9cision, pass\u00E9e en force de chose jug\u00E9e, lie les avocats impliqu\u00E9s dans un tel diff\u00E9rend et, le cas \u00E9ch\u00E9ant, ceux qui les remplacent ainsi que les tribunaux devant lesquels elle est invoqu\u00E9e.",
+                    "text_byte_length": 686,
+                    "text_sha256": "b9c356be56ff8c20ef86778026058805a200cdc9eab7c8e847f91ff9b10d8195",
+                    "validity_conflict": true,
+                    "wording_sha256": "020f36891f3145161df96b517917aff8c70bf12da5955f3983b2985f9b1da4c0"
+                  },
+                  {
+                    "article_identity_sha256": "bd7099c8b122e0b8d88023376c46e7c83a75d6a55f9d3685d06945bb3847fa02",
+                    "article_permalink": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--5bca01f82ef3058cfebe7f8a8a6eb1f1fbeeb32b8a1ea7b2c02ac20963235e3a#art_41",
+                    "article_valid_from": "2021-08-22",
+                    "body_sha256": "3a6bb598a9310f8a31240c1f33ae357d6e1f7a46392ca33d223c2718cdded95c",
+                    "language": "fra",
+                    "notes": [],
+                    "official_source": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo",
+                    "publisher_id": "art_41",
+                    "publisher_wid": null,
+                    "text": "Art. 41.(1)L\u2019usage non autoris\u00E9 des titres \u00ABavocat\u00BB, \u00ABavocat \u00E0 la Cour\u00BB, \u00ABavocat-avou\u00E9\u00BB, \u00ABavou\u00E9\u00BB, \u00ABavocat honoraire\u00BB ainsi que l\u2019usage de tous autres termes comprenant ces mots ou leur \u00E9quivalent et l\u2019usage non autoris\u00E9 d\u2019un titre professionnel \u00E9tranger pr\u00E9vu par la loi du 13 novembre 2002 portant transposition en droit luxembourgeois de la Directive 98/5/CE du Parlement europ\u00E9en et du Conseil du 16 f\u00E9vrier 1998 visant \u00E0 faciliter l\u2019exercice permanent de la profession d\u2019avocat dans un Etat membre autre que celui o\u00F9 la qualification a \u00E9t\u00E9 acquise, sont punis d\u2019une amende de 500,- \u00E0 25.000,- euros. En cas de r\u00E9cidive, l\u2019amende est port\u00E9e au double.(2)L\u2019exercice ill\u00E9gal de la profession d\u2019avocat ou l\u2019exercice ill\u00E9gal de la profession d\u2019avocat sous le titre professionnel d\u2019origine vis\u00E9e par la loi du 13 novembre 2002 portant transposition en droit luxembourgeois de la Directive 98/5/CE du Parlement europ\u00E9en et du Conseil du 16 f\u00E9vrier 1998 visant \u00E0 faciliter l\u2019exercice permanent de la profession d\u2019avocat dans un Etat membre autre que celui o\u00F9 la qualification a \u00E9t\u00E9 acquise, est puni d\u2019une amende de 500,- \u00E0 25.000,- euros et d\u2019un emprisonnement de huit jours \u00E0 six mois ou d\u2019une de ces peines seulement.(3)Les dispositions du Livre premier du code p\u00E9nal et des articles 130-1 \u00E0 132-1 du code d\u2019instruction criminelle sont applicables aux infractions pr\u00E9vues aux deux paragraphes qui pr\u00E9c\u00E8dent.(4)La violation du secret des communications entre l\u2019avocat et son client et la r\u00E9v\u00E9lation des documents et des secrets confi\u00E9s \u00E0 l\u2019avocat dans l\u2019exercice de ses fonctions, commises par un fonctionnaire ou officier public, par un d\u00E9positaire ou agent de l\u2019autorit\u00E9 et de la force publique sont punies par les peines commin\u00E9es par l\u2019article 151 du code p\u00E9nal, sans pr\u00E9judice des dispositions des articles 152 et 260 du m\u00EAme code.La violation du secret des communications entre l\u2019avocat et son client et la r\u00E9v\u00E9lation des documents et des secrets confi\u00E9s \u00E0 l\u2019avocat dans l\u2019exercice de ses fonctions commises par toutes autres personnes que celles vis\u00E9es dans l\u2019alin\u00E9a qui pr\u00E9c\u00E8de sont punies par les peines commin\u00E9es par l\u2019article 151 du code p\u00E9nal.(5)Les infractions \u00E0 l\u2019article 35, paragraphes (1) \u00E0 (3) sont punies des peines pr\u00E9vues \u00E0 l\u2019article 458 du code p\u00E9nal.",
+                    "text_byte_length": 2401,
+                    "text_sha256": "d430f29bd10b1c8e3c8a97095458dd571dad97f137915044ce22630b196635fd",
+                    "validity_conflict": true,
+                    "wording_sha256": "55d4f72ab6841d838227d0e50306e39418ae2b50697eb0dba1d4093d29d0ed43"
+                  },
+                  {
+                    "article_identity_sha256": "bec3f203c4944135c7ee9ae06563dba6bcda2c03047ecee9d22099dfd9979855",
+                    "article_permalink": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--5bca01f82ef3058cfebe7f8a8a6eb1f1fbeeb32b8a1ea7b2c02ac20963235e3a#art_31",
+                    "article_valid_from": "2021-08-22",
+                    "body_sha256": "3a6bb598a9310f8a31240c1f33ae357d6e1f7a46392ca33d223c2718cdded95c",
+                    "language": "fra",
+                    "notes": [],
+                    "official_source": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo",
+                    "publisher_id": "art_31",
+                    "publisher_wid": null,
+                    "text": "Art. 31.Nul ne peut porter le titre d\u2019avocat s\u2019il ne remplit les conditions pr\u00E9vues par les articles 5 et 6.",
+                    "text_byte_length": 113,
+                    "text_sha256": "481ee096d54b7fd6f5eb44f962703c9efd7ec01303aa1c1cab132cb90f0f0d6a",
+                    "validity_conflict": true,
+                    "wording_sha256": "a822a0f41158bee1da881a9e036e17993a9bc408a5317b73a9717307da81b5c1"
+                  },
+                  {
+                    "article_identity_sha256": "c22f5f46565e5445d5b993a8d8d7c98142d9c04125d081632fb80ab048424ea1",
+                    "article_permalink": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--5bca01f82ef3058cfebe7f8a8a6eb1f1fbeeb32b8a1ea7b2c02ac20963235e3a#art_34-3",
+                    "article_valid_from": "2021-08-22",
+                    "body_sha256": "3a6bb598a9310f8a31240c1f33ae357d6e1f7a46392ca33d223c2718cdded95c",
+                    "language": "fra",
+                    "notes": [],
+                    "official_source": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo",
+                    "publisher_id": "art_34-3",
+                    "publisher_wid": null,
+                    "text": "Art. 34-3.(1)Les personnes morales de droit luxembourgeois ou de droit \u00E9tranger admises au tableau d\u2019un Ordre ont pour seule activit\u00E9 l\u2019exercice de la profession d\u2019avocat.(2)La d\u00E9nomination de la personne morale doit \u00EAtre suivie ou pr\u00E9c\u00E9d\u00E9e de la forme juridique sous laquelle elle est organis\u00E9e et si elle agit \u00E0 travers son \u00E9tablissement au Luxembourg, de la mention \u00ABinscrit au barreau de Luxembourg/Diekirch\u00BB.(3)Les titres repr\u00E9sentant le capital de la personne morale de droit luxembourgeois ou de droit \u00E9tranger exer\u00E7ant la profession d\u2019avocat doivent \u00EAtre nominatifs et ne peuvent \u00EAtre d\u00E9tenus que par une personne remplissant les conditions pour \u00EAtre associ\u00E9e dans une personne morale exer\u00E7ant la profession d\u2019avocat au Grand-Duch\u00E9 de Luxembourg.(4)Les documents constitutifs de toute personne morale exer\u00E7ant la profession d\u2019avocat au Grand-Duch\u00E9 de Luxembourg doivent comporter:les modalit\u00E9s de la cession des parts sociales ou des actions entre vifs ou pour cause de mort;les droits et obligations de l\u2019associ\u00E9 ayant perdu la qualit\u00E9 de professionnel en exercice et de ses ayants droit; etla description de son activit\u00E9 consistant dans le seul exercice de la profession d\u2019avocat.(5)Une personne morale de droit luxembourgeois ou de droit \u00E9tranger exer\u00E7ant la profession d\u2019avocat ne peut \u00EAtre ou rester inscrite \u00E0 la liste V du tableau de l\u2019Ordre de son si\u00E8ge si elle ne comporte pas un ou plusieurs associ\u00E9s inscrits \u00E0 la liste I du tableau de l\u2019Ordre exer\u00E7ant leur profession de fa\u00E7on permanente au Luxembourg qui exercent une influence significative sur l\u2019activit\u00E9 de la personne morale au Luxembourg. Une personne morale de droit luxembourgeois ou de droit \u00E9tranger exer\u00E7ant la profession d\u2019avocat ne peut \u00EAtre ou rester inscrite \u00E0 la liste VI du tableau de l\u2019Ordre de son si\u00E8ge si elle ne comporte pas au moins un associ\u00E9 inscrit \u00E0 la liste I ou \u00E0 la liste IV du tableau de l\u2019Ordre qui exerce sa profession de fa\u00E7on permanente au Luxembourg.(6)Les membres des organes de gestion d\u2019une personne morale exer\u00E7ant la profession d\u2019avocat doivent \u00EAtre des associ\u00E9s de la personne morale.",
+                    "text_byte_length": 2180,
+                    "text_sha256": "eb499a0f3e3359c812e27c8e8c68842ac0ac0343445b8e45943a6d4a46f729b4",
+                    "validity_conflict": true,
+                    "wording_sha256": "6f996421f17ab40f466ee4090aa48ad3ac0d377ad36ee24e1db0adba9a06f4da"
+                  },
+                  {
+                    "article_identity_sha256": "c25d9d4e10be346349d4ce09a504c4fb59bef728bfe8f004395a128d7371edba",
+                    "article_permalink": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--5bca01f82ef3058cfebe7f8a8a6eb1f1fbeeb32b8a1ea7b2c02ac20963235e3a#art_2",
+                    "article_valid_from": "2023-01-01",
+                    "body_sha256": "3a6bb598a9310f8a31240c1f33ae357d6e1f7a46392ca33d223c2718cdded95c",
+                    "language": "fra",
+                    "notes": [
+                      {
+                        "marker": "2",
+                        "text": "Loi du 30 novembre 2022 relative \u00E0 la concurrence et portant : 1\u00B0 organisation de l\u2019Autorit\u00E9 nationale de concurrence ; 2\u00B0 modification de la loi modifi\u00E9e du 10 ao\u00FBt 1991 sur la profession d\u2019avocat ; 3\u00B0 modification de la loi modifi\u00E9e du 21 juin 1999 portant r\u00E8glement de proc\u00E9dure devant les juridictions administratives ; 4\u00B0 modification de la loi modifi\u00E9e du 10 f\u00E9vrier 2015 relative \u00E0 l\u2019organisation du march\u00E9 de produits p\u00E9troliers ; 5\u00B0 modification de la loi modifi\u00E9e du 25 mars 2015 fixant le r\u00E9gime des traitements et les conditions et modalit\u00E9s d\u2019avancement des fonctionnaires de l\u2019\u00C9tat ; 6\u00B0 modification de la loi modifi\u00E9e du 23 juillet 2016 relative \u00E0 la profession de l\u2019audit ; 7\u00B0 modification de la loi du 5 mars 2021 relative \u00E0 certaines modalit\u00E9s de mise en \u0153uvre du r\u00E8glement (UE) n\u00B0 2019/1150 du Parlement europ\u00E9en et du Conseil du 20 juin 2019 promouvant l\u2019\u00E9quit\u00E9 et la transparence pour les entreprises utilisatrices de services d\u2019interm\u00E9diation en ligne ; 8\u00B0 modification de la loi du 1er juin 2021 sur les relations entre entreprises au sein de la cha\u00EEne d\u2019approvisionnement agricole et alimentaire."
+                      }
+                    ],
+                    "official_source": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo",
+                    "publisher_id": "art_2",
+                    "publisher_wid": null,
+                    "text": "Art. 2.(1)Les avocats seuls peuvent assister ou repr\u00E9senter les parties, postuler et plaider pour elles devant les juridictions de quelque nature qu\u2019elles soient, recevoir leurs pi\u00E8ces et titres afin de les repr\u00E9senter aux juges, faire et signer les actes n\u00E9cessaires pour la r\u00E9gularit\u00E9 de la proc\u00E9dure et mettre l\u2019affaire en \u00E9tat de recevoir jugement.Les dispositions de l\u2019alin\u00E9a pr\u00E9c\u00E9dent ne font pas obstacle \u00E0 l\u2019application de dispositions l\u00E9gislatives sp\u00E9ciales et \u00E0 la facult\u00E9:des assur\u00E9s sociaux de se faire repr\u00E9senter ou assister, devant le Conseil arbitral de la s\u00E9curit\u00E9 sociale ou le Conseil sup\u00E9rieur de la s\u00E9curit\u00E9 sociale, par un d\u00E9l\u00E9gu\u00E9 de leur organisation professionnelle ou syndicale, leur conjoint ou partenaire au sens de la loi modifi\u00E9e du 9 juillet 2004 relative aux effets l\u00E9gaux de certains partenariats, leurs parents ou alli\u00E9s en ligne directe ou leurs parents ou alli\u00E9s en ligne collat\u00E9rale jusqu\u2019au troisi\u00E8me degr\u00E9 inclus; les repr\u00E9sentants doivent justifier d\u2019un pouvoir sp\u00E9cial;de la Caisse nationale de sant\u00E9, de la Caisse de maladie des fonctionnaires et employ\u00E9s publics, de la Caisse de maladie des fonctionnaires et employ\u00E9s communaux, de l\u2019Entraide m\u00E9dicale de la soci\u00E9t\u00E9 nationale des chemins de fer luxembourgeois, de la Mutualit\u00E9 des employeurs, de l\u2019Association d\u2019assurance accident, de la Caisse nationale d\u2019assurance pension, du Fonds de compensation, de la Caisse nationale des prestations familiales, du Centre commun de la s\u00E9curit\u00E9 sociale, du Fonds national de solidarit\u00E9, des offices sociaux et de tout autre administration ou service de l\u2019Etat de se faire repr\u00E9senter ou assister par un de leurs agents, d\u00FBment mandat\u00E9 par le ministre du ressort respectivement le pr\u00E9sident de l\u2019organisme concern\u00E9, devant le Conseil arbitral de la s\u00E9curit\u00E9 sociale ou le Conseil sup\u00E9rieur de la s\u00E9curit\u00E9 sociale;des justiciables d\u2019agir par eux-m\u00EAmes ou de se faire repr\u00E9senter ou assister par un expert-comptable ou un r\u00E9viseur d\u2019entreprises, d\u00FBment autoris\u00E9 \u00E0 exercer sa profession, devant le tribunal administratif appel\u00E9 \u00E0 conna\u00EEtre d\u2019un recours en mati\u00E8re de contributions directes;de l\u2019Etat, des communes et des autres personnes morales de droit public de se faire repr\u00E9senter ou assister par un fonctionnaire ou un agent de leur administration, d\u00FBment mandat\u00E9, devant la justice de paix, devant le pr\u00E9sident du tribunal d\u2019arrondissement ou le juge qui le remplace, statuant en mati\u00E8re de r\u00E9f\u00E9r\u00E9;du minist\u00E8re public, de repr\u00E9senter des parties en justice dans les cas pr\u00E9vus par la loi.de l\u2019Autorit\u00E9 de concurrence du Grand-Duch\u00E9 de Luxembourg de se faire repr\u00E9senter par son pr\u00E9sident ou un membre permanent du Coll\u00E8ge ou un agent du groupe de traitement A1 d\u00FBment mandat\u00E9, devant les juridictions de l\u2019ordre administratif appel\u00E9es \u00E0 conna\u00EEtre d\u2019un recours introduit \u00E0 l\u2019encontre d\u2019une d\u00E9cision rendue par l\u2019Autorit\u00E9 de concurrence dans le cadre de l\u2019exercice des pouvoirs lui attribu\u00E9s par les articles 22, 31, 32, 44, 45, 46, 48, 49, 50, 58 et 60 de la loi du 30 novembre 2022 relative \u00E0 la concurrence.(2)Nul ne peut, directement ou par personne interpos\u00E9e, donner, \u00E0 titre habituel et contre r\u00E9mun\u00E9ration, des consultations juridiques, ou r\u00E9diger pour autrui des actes sous seing priv\u00E9, s\u2019il n\u2019est autoris\u00E9, aux termes de la pr\u00E9sente loi, \u00E0 exercer la profession d\u2019avocat. Les consultations \u00E9crites, portant en tout ou en partie sur des mati\u00E8res juridiques, contiennent les noms, pr\u00E9noms et qualit\u00E9s de ceux qui les donnent, ainsi que la date de leur confection.(3)Les dispositions du paragraphe (2) ne font pas obstacle \u00E0 la facult\u00E9:pour les administrations publiques et les personnes de droit public de fournir des renseignements et avis juridiques relevant soit de leurs attributions soit de leurs obligations d\u00E9coulant de conventions internationales;pour les personnes exer\u00E7ant une autre activit\u00E9 professionnelle r\u00E9glement\u00E9e par la loi ou une profession dont l\u2019acc\u00E8s et l\u2019objet sont r\u00E9glement\u00E9s par la loi de donner des renseignements sur le droit applicable au Luxembourg relevant directement de leur activit\u00E9 ou profession et de r\u00E9diger des actes juridiques qui constituent l\u2019accessoire n\u00E9cessaire de la prestation fournie;pour les juristes d\u2019entreprises, exer\u00E7ant leurs activit\u00E9s en ex\u00E9cution d\u2019un contrat d\u2019emploi au sein d\u2019une entreprise, d\u2019une soci\u00E9t\u00E9 ou d\u2019un groupe de soci\u00E9t\u00E9s, de donner tous les conseils et d\u2019effectuer toutes les op\u00E9rations d\u2019ordre juridique n\u00E9cessaires \u00E0 l\u2019activit\u00E9 et en rapport direct avec les activit\u00E9s de leur employeur;pour les personnes morales \u00E0 but non lucratif et pour les syndicats de donner \u00E0 leurs membres les renseignements relatifs aux questions juridiques se rapportant directement \u00E0 leur objet, ces personnes morales \u00E0 but non lucratif ou syndicats devant par ailleurs, au cas o\u00F9 ils re\u00E7oivent des subventions de la part de l\u2019Etat et prennent en charge les frais d\u2019avocat relatifs \u00E0 la repr\u00E9sentation ou l\u2019assistance de leurs membres devant une juridiction, garantir \u00E0 leurs membres le libre choix de l\u2019avocat qui doit les repr\u00E9senter ou les assister;pour les professeurs et ma\u00EEtres de conf\u00E9rence d\u2019un enseignement juridique dans les universit\u00E9s et les unit\u00E9s de formation et de recherche de niveau universitaire ou post-universitaire, actifs ou \u00E9m\u00E9rites, de donner occasionnellement et contre r\u00E9mun\u00E9ration des consultations juridiques et de r\u00E9diger des avis juridiques.",
+                    "text_byte_length": 5597,
+                    "text_sha256": "730397a373dddc7d78f4af32926bc36a9eac46a76fd0383f34df63b76cfa4bba",
+                    "validity_conflict": true,
+                    "wording_sha256": "7ce66fc3eebafb1f1c2b3e83de3205fe12d37c2363c60b2b972d767fb8b38197"
+                  },
+                  {
+                    "article_identity_sha256": "c36ab9a17715d87a5aaf5cf6e1da14266df09bda143ed77eb3b4c5d09f952820",
+                    "article_permalink": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--5bca01f82ef3058cfebe7f8a8a6eb1f1fbeeb32b8a1ea7b2c02ac20963235e3a#art_12",
+                    "article_valid_from": "2021-08-22",
+                    "body_sha256": "3a6bb598a9310f8a31240c1f33ae357d6e1f7a46392ca33d223c2718cdded95c",
+                    "language": "fra",
+                    "notes": [],
+                    "official_source": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo",
+                    "publisher_id": "art_12",
+                    "publisher_wid": null,
+                    "text": "Art. 12.L\u2019Assembl\u00E9e se compose des avocats inscrits aux listes I et IV du tableau des avocats. Ces avocats sont d\u00E9sign\u00E9s comme \u00ABmembres de l\u2019Assembl\u00E9e\u00BB. Les avocats honoraires et les avocats inscrits \u00E0 la liste II des avocats ont le droit d\u2019y assister.",
+                    "text_byte_length": 265,
+                    "text_sha256": "9490d4522ead224b11db5049998d722ae1d562236caeeab4aabc1e3ce77febff",
+                    "validity_conflict": true,
+                    "wording_sha256": "c9ce8e77cdfc8511a6c18882d943b1b0ab733b92359ac817de8c7bb6330dba84"
+                  },
+                  {
+                    "article_identity_sha256": "c86fe9cf34f27d8bc5f65ecb91e33b2a8a0ec9127ea03bfe6aa9ca498e499cd3",
+                    "article_permalink": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--5bca01f82ef3058cfebe7f8a8a6eb1f1fbeeb32b8a1ea7b2c02ac20963235e3a#art_24",
+                    "article_valid_from": "2023-07-03",
+                    "body_sha256": "3a6bb598a9310f8a31240c1f33ae357d6e1f7a46392ca33d223c2718cdded95c",
+                    "language": "fra",
+                    "notes": [
+                      {
+                        "marker": "10",
+                        "text": "Loi du 29 juin 2023 portant modification : 1\u00B0 de la loi modifi\u00E9e du 4 d\u00E9cembre 1990 portant organisation du service des huissiers de justice ; 2\u00B0 de la loi modifi\u00E9e du 10 ao\u00FBt 1991 sur la profession d\u2019avocat."
+                      }
+                    ],
+                    "official_source": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo",
+                    "publisher_id": "art_24",
+                    "publisher_wid": null,
+                    "text": "Art. 24.(1)Il est pourvu par la pr\u00E9sente loi \u00E0 la cr\u00E9ation d\u2019un Conseil disciplinaire et administratif compos\u00E9 de neuf avocats inscrits \u00E0 la liste I des avocats dont huit sont \u00E9lus \u00E0 la majorit\u00E9 relative par l\u2019assembl\u00E9e g\u00E9n\u00E9rale de l\u2019Ordre de Luxembourg et un par l\u2019assembl\u00E9e g\u00E9n\u00E9rale de l\u2019Ordre de Diekirch. L\u2019assembl\u00E9e g\u00E9n\u00E9rale de l\u2019Ordre de Luxembourg \u00E9lit huit suppl\u00E9ants et l\u2019assembl\u00E9e g\u00E9n\u00E9rale de l\u2019Ordre de Diekirch un suppl\u00E9ant. Tout membre effectif est, en cas d\u2019emp\u00EAchement, remplac\u00E9 suivant le rang d\u2019anciennet\u00E9 par un suppl\u00E9ant de l\u2019ordre dont il rel\u00E8ve, et, en cas d\u2019emp\u00EAchement des suppl\u00E9ants de son Ordre, par un suppl\u00E9ant de l\u2019autre Ordre.(2)La dur\u00E9e de fonction des membres est de deux ans \u00E0 partir du 15 septembre qui suit leur \u00E9lection. En cas de vacance d\u2019un poste de membre effectif ou de membre suppl\u00E9ant, son rempla\u00E7ant est coopt\u00E9 par le Conseil disciplinaire et administratif. Les fonctions des membres effectifs et suppl\u00E9ants coopt\u00E9s se terminent \u00E0 la date o\u00F9 les fonctions du membre \u00E9lu qu\u2019ils remplacent auraient pris fin. Les membres du Conseil disciplinaire et administratif sont r\u00E9\u00E9ligibles.(3)Le Conseil disciplinaire et administratif \u00E9lit un pr\u00E9sident et un vice-pr\u00E9sident. Au cas o\u00F9 le pr\u00E9sident et le vice-pr\u00E9sident sont emp\u00EAch\u00E9s, le Conseil est pr\u00E9sid\u00E9 par le membre titulaire le plus ancien en rang. Le membre le plus jeune du Conseil fait office de secr\u00E9taire.(4)Pour \u00EAtre membre du Conseil disciplinaire et administratif, il faut \u00EAtre inscrit \u00E0 la liste I des avocats depuis cinq ans au moins et ne pas \u00EAtre membre d\u2019un Conseil de l\u2019ordre.(5)Lorsque le Conseil disciplinaire et administratif ne peut se composer selon ce qui pr\u00E9c\u00E8de, ses membres sont d\u00E9sign\u00E9s par le Conseil de l\u2019ordre dont rel\u00E8vent les membres \u00E0 suppl\u00E9er.(6)Le Conseil disciplinaire et administratif si\u00E8ge au nombre de 3 membres.La composition du Conseil disciplinaire et administratif est arr\u00EAt\u00E9e pour chaque affaire par son pr\u00E9sident ou en cas d\u2019emp\u00EAchement par son vice-pr\u00E9sident.",
+                    "text_byte_length": 2101,
+                    "text_sha256": "3cfa9ac34adacfbcf09bf4b377a065124f303b4806e1905b7753bc4d48542e57",
+                    "validity_conflict": true,
+                    "wording_sha256": "6b9ac2a6befb9900868e52bd8a2b711aba8fa9bf9a88acd357e969843f19001f"
+                  },
+                  {
+                    "article_identity_sha256": "d2e7dc693512cfcd5cd4a74cbc84d7982c8047823be319bf1508c7acfc59803b",
+                    "article_permalink": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--5bca01f82ef3058cfebe7f8a8a6eb1f1fbeeb32b8a1ea7b2c02ac20963235e3a#art_29-1",
+                    "article_valid_from": "2023-07-03",
+                    "body_sha256": "3a6bb598a9310f8a31240c1f33ae357d6e1f7a46392ca33d223c2718cdded95c",
+                    "language": "fra",
+                    "notes": [
+                      {
+                        "marker": "15",
+                        "text": "Loi du 29 juin 2023 portant modification : 1\u00B0 de la loi modifi\u00E9e du 4 d\u00E9cembre 1990 portant organisation du service des huissiers de justice ; 2\u00B0 de la loi modifi\u00E9e du 10 ao\u00FBt 1991 sur la profession d\u2019avocat."
+                      }
+                    ],
+                    "official_source": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo",
+                    "publisher_id": "art_29-1",
+                    "publisher_wid": null,
+                    "text": "Art. 29-1.(1)Les sanctions suivantes sont effac\u00E9es de plein droit apr\u00E8s une p\u00E9riode de cinq ans \u00E0 compter du moment o\u00F9 elles ont acquis autorit\u00E9 de chose d\u00E9cid\u00E9e :l\u2019avertissement, la r\u00E9primande et l\u2019amende inf\u00E9rieure \u00E0 1000 euros, pr\u00E9vues \u00E0 l\u2019article 27, paragraphe (1) ;l\u2019avertissement, le bl\u00E2me, la d\u00E9claration publique qui pr\u00E9cise l\u2019identit\u00E9 de la personne physique ou morale et la nature de la violation, pr\u00E9vues \u00E0 l\u2019article 8-10 de la loi modifi\u00E9e du 12 novembre 2004 relative \u00E0 la lutte contre le blanchiment et le financement du terrorisme.(2)L\u2019avocat interdit ne peut \u00EAtre inscrit \u00E0 l\u2019une des listes du tableau de l\u2019Ordre vis\u00E9es par l\u2019article 8, paragraphe 3 qu\u2019apr\u00E8s l\u2019expiration d\u2019un d\u00E9lai de dix ans depuis la date o\u00F9 la d\u00E9cision d\u2019interdiction est pass\u00E9e en force de chose jug\u00E9e et si des circonstances exceptionnelles le justifient. L\u2019inscription n\u2019est permise qu\u2019apr\u00E8s avis motiv\u00E9 du Conseil de l\u2019ordre du barreau auquel l\u2019avocat appartenait. Le refus d\u2019inscription est motiv\u00E9.(3)Un avocat suspendu peut, apr\u00E8s un d\u00E9lai de six ans \u00E0 compter de la date o\u00F9 la d\u00E9cision de suspension est pass\u00E9e en force de chose jug\u00E9e, demander sa r\u00E9habilitation au Conseil disciplinaire et administratif ou au Conseil disciplinaire et administratif d\u2019appel qui a prononc\u00E9 la suspension. Le refus de r\u00E9habilitation est motiv\u00E9. La d\u00E9cision n\u2019est pas susceptible d\u2019appel. La demande de r\u00E9habilitation peut \u00EAtre r\u00E9introduite tous les six ans.(4)L\u2019effacement de peine, la r\u00E9inscription ou la r\u00E9habilitation entra\u00EEnent le retrait des mentions vis\u00E9es \u00E0 l\u2019article 27, paragraphe 6.",
+                    "text_byte_length": 1672,
+                    "text_sha256": "d811c5380993a5d656216713345d75a0d9498b49f340cd37d57ddca78c58e662",
+                    "validity_conflict": true,
+                    "wording_sha256": "e595bde281e6139657d0cc363f902caf322c7890abb6352c2df70d1fc23167c5"
+                  },
+                  {
+                    "article_identity_sha256": "d64e53555ed2a62f033950f68d21fbc3fd18083beb7600a0810ca0e15b02d7b0",
+                    "article_permalink": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--5bca01f82ef3058cfebe7f8a8a6eb1f1fbeeb32b8a1ea7b2c02ac20963235e3a#art_39",
+                    "article_valid_from": "2021-08-22",
+                    "body_sha256": "3a6bb598a9310f8a31240c1f33ae357d6e1f7a46392ca33d223c2718cdded95c",
+                    "language": "fra",
+                    "notes": [],
+                    "official_source": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo",
+                    "publisher_id": "art_39",
+                    "publisher_wid": null,
+                    "text": "Art. 39.(1)L\u2019avocat ne peut \u00E9tablir qu\u2019un seul cabinet au Grand-Duch\u00E9 de Luxembourg. Le cabinet de l\u2019avocat est \u00E9tabli dans l\u2019arrondissement judiciaire o\u00F9 se trouve l\u2019Ordre des avocats aupr\u00E8s duquel l\u2019avocat est inscrit.(2)Les publications \u00E0 faire par l\u2019avocat et toutes publications pr\u00E9vues par la pr\u00E9sente loi se font dans le local affect\u00E9 \u00E0 l\u2019usage des avocats.",
+                    "text_byte_length": 390,
+                    "text_sha256": "7001258cd31800a7bb951ab1f60d9e78b20defb1fe131bd02d85f55f4fbfc1fa",
+                    "validity_conflict": true,
+                    "wording_sha256": "5a90ec16b499404f58cb782a790ac62ae9b28fc986b7ce2ea0bc9fe15e548847"
+                  },
+                  {
+                    "article_identity_sha256": "e1d9b67433cd3044d665280d885246a0cff401ccfa7d9f964cb03816914f3a83",
+                    "article_permalink": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--5bca01f82ef3058cfebe7f8a8a6eb1f1fbeeb32b8a1ea7b2c02ac20963235e3a#art_18",
+                    "article_valid_from": "2023-09-16",
+                    "body_sha256": "3a6bb598a9310f8a31240c1f33ae357d6e1f7a46392ca33d223c2718cdded95c",
+                    "language": "fra",
+                    "notes": [
+                      {
+                        "marker": "18",
+                        "text": "Loi du 20 juillet 2023 portant modification de : 1\u00B0 la loi modifi\u00E9e du 10 ao\u00FBt 1991 sur la profession d\u2019avocat ; 2\u00B0 la loi modifi\u00E9e du 7 novembre 1996 portant organisation des juridictions de l\u2019ordre administratif ; 3\u00B0 la loi modifi\u00E9e du 21 juin 1999 portant r\u00E8glement de proc\u00E9dure devant les juridictions administratives ; en vue du renforcement des effectifs de la justice administrative et de la num\u00E9risation des proc\u00E9dures urgentes devant le tribunal administratif."
+                      }
+                    ],
+                    "official_source": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo",
+                    "publisher_id": "art_18",
+                    "publisher_wid": null,
+                    "text": "Art. 18.Les attributions du Conseil de l\u2019ordre comprennent en outre l\u2019administration de l\u2019ordre et notamment la tenue du tableau des avocats et la certification des espaces professionnels \u00E9lectroniques des avocats n\u00E9cessaires pour la connexion aux plateformes d\u2019\u00E9changes s\u00E9curis\u00E9s avec les juridictions, les devoirs requis par l\u2019assistance judiciaire, la taxation des honoraires et des frais des avocats, la r\u00E9daction des avis en mati\u00E8re de l\u00E9gislation et de justice, et plus g\u00E9n\u00E9ralement l\u2019examen de toutes les questions int\u00E9ressant l\u2019exercice de la profession et la d\u00E9fense des droits des avocats.Les attributions qui ne sont pas r\u00E9serv\u00E9es par la loi \u00E0 d\u2019autres organes de l\u2019ordre sont du ressort du Conseil de l\u2019ordre.",
+                    "text_byte_length": 756,
+                    "text_sha256": "27a48480074e59dd2f06591e374ab3966038ac65a0d9286bbea6a68b53711c03",
+                    "validity_conflict": true,
+                    "wording_sha256": "61d09c47a120251c26e076801228b6ff825b88b943731c8da6db0e487c77e861"
+                  },
+                  {
+                    "article_identity_sha256": "e22be08992af33e595a8634239673557fda60035e4521a545ba182b2b81a96ae",
+                    "article_permalink": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--5bca01f82ef3058cfebe7f8a8a6eb1f1fbeeb32b8a1ea7b2c02ac20963235e3a#art_42",
+                    "article_valid_from": "2021-08-22",
+                    "body_sha256": "3a6bb598a9310f8a31240c1f33ae357d6e1f7a46392ca33d223c2718cdded95c",
+                    "language": "fra",
+                    "notes": [],
+                    "official_source": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo",
+                    "publisher_id": "art_42",
+                    "publisher_wid": null,
+                    "text": "Art. 42.Sont abrog\u00E9s:Le d\u00E9cret imp\u00E9rial du 19 juillet 1810 sur la postulation,Le d\u00E9cret imp\u00E9rial du 14 d\u00E9cembre 1810 contenant r\u00E8glement sur l\u2019exercice de la profession d\u2019avocat et la discipline du barreau. Les peines y pr\u00E9vues restent cependant applicables aux faits commis sous son empire.La loi du 23 ao\u00FBt 1882 sur la discipline du barreau,Les articles 30, 31, 40.5 et 91 \u00E0 95 de la loi du 7 mars 1980 sur l\u2019organisation judiciaire,L\u2019article 592 du code de commerce,La loi du 10 avril 1911 sur l\u2019exercice de la profession de fond\u00E9 de pouvoir devant les tribunaux cantonaux et l\u2019arr\u00EAt\u00E9 grand-ducal du 14 ao\u00FBt 1911 portant r\u00E8glement d\u2019ex\u00E9cution de cette loi,Le r\u00E8glement grand-ducal du 27 mars 1964 portant cr\u00E9ation de l\u2019honorariat de la profession d\u2019avocat.",
+                    "text_byte_length": 795,
+                    "text_sha256": "39c8cc8afc3d00b1ad3edc4530d84af3773ded3d7f5bf2a7324aa423899fb75a",
+                    "validity_conflict": true,
+                    "wording_sha256": "4815ec58acb4efb7528a85dc30b0aca2c63dde0a32f498660caa7845075c1660"
+                  },
+                  {
+                    "article_identity_sha256": "e594010cc633d1d993d0b202e0f2490af8fa2a9de4e74f9be4ea4ae8734dbf26",
+                    "article_permalink": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--5bca01f82ef3058cfebe7f8a8a6eb1f1fbeeb32b8a1ea7b2c02ac20963235e3a#art_38",
+                    "article_valid_from": "2021-08-22",
+                    "body_sha256": "3a6bb598a9310f8a31240c1f33ae357d6e1f7a46392ca33d223c2718cdded95c",
+                    "language": "fra",
+                    "notes": [],
+                    "official_source": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo",
+                    "publisher_id": "art_38",
+                    "publisher_wid": null,
+                    "text": "Art. 38.(1)L\u2019avocat arr\u00EAte ses honoraires et met en charge ses frais professionnels. Dans la fixation des honoraires l\u2019avocat prend en compte les diff\u00E9rents \u00E9l\u00E9ments du dossier, tels l\u2019importance de l\u2019affaire, le degr\u00E9 de difficult\u00E9, le r\u00E9sultat obtenu et la situation de fortune du client.(2)Dans les cas o\u00F9 cette fixation exc\u00E9derait des normes raisonnables, le Conseil de l\u2019ordre les r\u00E9duit, eu \u00E9gard aux diff\u00E9rents \u00E9l\u00E9ments du dossier mentionn\u00E9s au paragraphe (1) pr\u00E9c\u00E9dent.",
+                    "text_byte_length": 504,
+                    "text_sha256": "cacb449d96d7c843b037e776d9fee7c843b09a579c768b2d6a0874fca9af8783",
+                    "validity_conflict": true,
+                    "wording_sha256": "9b5f3c44bb62f213cabbd23115c7aa1470c1ff9311460285fb14c34aef1ff92d"
+                  },
+                  {
+                    "article_identity_sha256": "e80e7d5b3ebae94402872fca7340d97c4c69662b471aac7fddec0cd76844474d",
+                    "article_permalink": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--5bca01f82ef3058cfebe7f8a8a6eb1f1fbeeb32b8a1ea7b2c02ac20963235e3a#art_32",
+                    "article_valid_from": "2021-08-22",
+                    "body_sha256": "3a6bb598a9310f8a31240c1f33ae357d6e1f7a46392ca33d223c2718cdded95c",
+                    "language": "fra",
+                    "notes": [],
+                    "official_source": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo",
+                    "publisher_id": "art_32",
+                    "publisher_wid": null,
+                    "text": "Art. 32.(1)L\u2019avocat porte, dans l\u2019exercice de ses fonctions judiciaires, la robe. Seul l\u2019avocat est plac\u00E9 dans l\u2019int\u00E9rieur du parquet. Il plaide debout.(2)Il est appel\u00E9, dans les cas d\u00E9termin\u00E9s par la loi, \u00E0 suppl\u00E9er les juges et ne peut s\u2019y refuser sans motif d\u2019excuse ou d\u2019emp\u00EAchement.",
+                    "text_byte_length": 309,
+                    "text_sha256": "d93ffb1f435658abdb1535852f091161028075055e59509815e7049e2e9a1677",
+                    "validity_conflict": true,
+                    "wording_sha256": "9db3c69d64be0557368a68d33d3b51e236f0ae525d7277cb95306a192eff6d1d"
+                  },
+                  {
+                    "article_identity_sha256": "f1785e7f507de3baa5d281d37c351095b5ca22d2bc13c14c4cc8cd2a7d5df8d2",
+                    "article_permalink": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--5bca01f82ef3058cfebe7f8a8a6eb1f1fbeeb32b8a1ea7b2c02ac20963235e3a#art_34",
+                    "article_valid_from": "2021-08-22",
+                    "body_sha256": "3a6bb598a9310f8a31240c1f33ae357d6e1f7a46392ca33d223c2718cdded95c",
+                    "language": "fra",
+                    "notes": [],
+                    "official_source": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo",
+                    "publisher_id": "art_34",
+                    "publisher_wid": null,
+                    "text": "Art. 34.(1)Les avocats peuvent s\u2019associer entre eux au sein d\u2019une association d\u2019avocats. Ils peuvent \u00E9galement s\u2019associer entre eux au sein d\u2019une personne morale de droit luxembourgeois ou de droit \u00E9tranger.(2)Tous les associ\u00E9s dans une association d\u2019avocats ou dans une personne morale exer\u00E7ant la profession d\u2019avocat doivent \u00EAtre des avocats inscrits \u00E0 un Ordre ou \u00E0 une organisation repr\u00E9sentant l\u2019autorit\u00E9 comp\u00E9tente d\u2019un Etat membre de l\u2019Union europ\u00E9enne.Le Conseil de l\u2019ordre peut permettre l\u2019association avec des avocats inscrits \u00E0 un Ordre ou \u00E0 une organisation repr\u00E9sentant l\u2019autorit\u00E9 professionnelle d\u2019un Etat non membre de l\u2019Union europ\u00E9enne \u00E0 la condition de constater que cet Ordre ou cette organisation assure des conditions d\u2019inscription, d\u2019exercice de la profession et d\u2019association \u00E9quivalentes \u00E0 celles pr\u00E9vues dans la pr\u00E9sente loi.",
+                    "text_byte_length": 907,
+                    "text_sha256": "afedcbcab3eb9ff44db38a22ee8708ce41205effdf86aa692013755d41d86613",
+                    "validity_conflict": true,
+                    "wording_sha256": "199086eb2e6aa78b651a48aff5e2c51430893c3383bce31212412c7c0714c427"
+                  },
+                  {
+                    "article_identity_sha256": "f3c96389f8e28c9a15a4f114bd4506f338444a770fc7a6d17c7910f84ec90b8d",
+                    "article_permalink": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--5bca01f82ef3058cfebe7f8a8a6eb1f1fbeeb32b8a1ea7b2c02ac20963235e3a#art_21",
+                    "article_valid_from": "2021-08-22",
+                    "body_sha256": "3a6bb598a9310f8a31240c1f33ae357d6e1f7a46392ca33d223c2718cdded95c",
+                    "language": "fra",
+                    "notes": [],
+                    "official_source": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo",
+                    "publisher_id": "art_21",
+                    "publisher_wid": null,
+                    "text": "Art. 21.Le B\u00E2tonnier est le chef de l\u2019Ordre. Il repr\u00E9sente l\u2019Ordre judiciairement et extrajudiciairement. Il convoque et pr\u00E9side l\u2019assembl\u00E9e g\u00E9n\u00E9rale et le Conseil de l\u2019ordre. Il peut d\u00E9l\u00E9guer l\u2019exercice de fonctions d\u00E9termin\u00E9es \u00E0 un ou plusieurs membres du Conseil de l\u2019ordre. En cas de d\u00E9c\u00E8s, de d\u00E9mission ou d\u2019emp\u00EAchement du B\u00E2tonnier, ses fonctions sont exerc\u00E9es par le vice-b\u00E2tonnier, ou, \u00E0 d\u00E9faut ou en cas d\u2019emp\u00EAchement du vice-b\u00E2tonnier, par le membre du Conseil de l\u2019ordre d\u00E9sign\u00E9 \u00E0 ces fins par le Conseil de l\u2019ordre.",
+                    "text_byte_length": 572,
+                    "text_sha256": "402630f0d2366799a10fe16c8c49e4812adc0125175af6c12f3727d3ecc33011",
+                    "validity_conflict": true,
+                    "wording_sha256": "2d9f9deeb4aa0c910acbadf8bc2d072c99bdcbad0a1dc33dd2f0a95847476c65"
+                  },
+                  {
+                    "article_identity_sha256": "f4270fe90d947f1c47fb1babfe5b736fc52546e98dd90e74eabf3cdf50998126",
+                    "article_permalink": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--5bca01f82ef3058cfebe7f8a8a6eb1f1fbeeb32b8a1ea7b2c02ac20963235e3a#art_9",
+                    "article_valid_from": "2023-07-03",
+                    "body_sha256": "3a6bb598a9310f8a31240c1f33ae357d6e1f7a46392ca33d223c2718cdded95c",
+                    "language": "fra",
+                    "notes": [
+                      {
+                        "marker": "8",
+                        "text": "Loi du 29 juin 2023 portant modification : 1\u00B0 de la loi modifi\u00E9e du 4 d\u00E9cembre 1990 portant organisation du service des huissiers de justice ; 2\u00B0 de la loi modifi\u00E9e du 10 ao\u00FBt 1991 sur la profession d\u2019avocat."
+                      }
+                    ],
+                    "official_source": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo",
+                    "publisher_id": "art_9",
+                    "publisher_wid": null,
+                    "text": "Art. 9.(1)Les avocats inscrits \u00E0 la liste I et \u00E0 la liste V des avocats sont seuls habilit\u00E9s \u00E0 accomplir les actes pour lesquels les lois et r\u00E8glements prescrivent le minist\u00E8re d\u2019avocat \u00E0 la Cour.(2)Les avocats inscrits aux listes II, IV et VI du tableau des avocats peuvent exercer les activit\u00E9s pr\u00E9vues aux paragraphes (1) et (2) de l\u2019article 2; ils peuvent accomplir les actes \u00E9nonc\u00E9s au paragraphe (1) du pr\u00E9sent article s\u2019ils sont assist\u00E9s d\u2019un avocat \u00E0 la Cour inscrit \u00E0 la liste I ou \u00E0 la liste V des avocats.Ils sont admis \u00E0 conclure \u00E0 l\u2019audience sans cette assistance dans les termes des conclusions sign\u00E9es par un avocat inscrit \u00E0 la liste I ou \u00E0 la liste V des avocats.(3)Par d\u00E9rogation \u00E0 l\u2019article 2, les avocats inscrits \u00E0 la liste VII du tableau des avocats sont uniquement autoris\u00E9s \u00E0 fournir les services juridiques d\u00E9sign\u00E9s tels que d\u00E9finis \u00E0 l\u2019article 193, lettre a), de l\u2019Accord de commerce et de coop\u00E9ration entre l\u2019Union europ\u00E9enne et la Communaut\u00E9 europ\u00E9enne de l\u2019\u00E9nergie atomique, d\u2019une part, et le Royaume-Uni de Grande-Bretagne et d\u2019Irlande du Nord, d\u2019autre part, fait \u00E0 Bruxelles et \u00E0 Londres, le 30 d\u00E9cembre 2020.",
+                    "text_byte_length": 1204,
+                    "text_sha256": "ed60e5bf76834d18dd8fd5f678d71fe7e9360762906407405bf4d303ce4fe926",
+                    "validity_conflict": true,
+                    "wording_sha256": "3b9d1be4f3a8391213c5d85b5a35f59bc27a84b2ac3242366e1d90b846fff815"
+                  },
+                  {
+                    "article_identity_sha256": "fc1c1fda1d6d768931cf296275582a63259fd60b5078b71f7828f8bfee7a7391",
+                    "article_permalink": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--5bca01f82ef3058cfebe7f8a8a6eb1f1fbeeb32b8a1ea7b2c02ac20963235e3a#art_40",
+                    "article_valid_from": "2021-08-22",
+                    "body_sha256": "3a6bb598a9310f8a31240c1f33ae357d6e1f7a46392ca33d223c2718cdded95c",
+                    "language": "fra",
+                    "notes": [],
+                    "official_source": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo",
+                    "publisher_id": "art_40",
+                    "publisher_wid": null,
+                    "text": "Art. 40.(1)Le titre d\u2019avocat honoraire peut \u00EAtre conf\u00E9r\u00E9 par le Conseil de l\u2019ordre \u00E0 l\u2019avocat qui a \u00E9t\u00E9 inscrit au tableau pendant vingt ann\u00E9es au moins et a donn\u00E9 volontairement sa d\u00E9mission. Le temps pendant lequel un avocat n\u2019\u00E9tait pas inscrit n\u2019est pas d\u00E9compt\u00E9 si cet avocat, apr\u00E8s avoir d\u00E9missionn\u00E9, obtient sa r\u00E9inscription avec conservation du rang qu\u2019il avait initialement occup\u00E9 au tableau.La d\u00E9cision du Conseil de l\u2019ordre est notifi\u00E9e \u00E0 l\u2019avocat int\u00E9ress\u00E9 par lettre recommand\u00E9e avec accus\u00E9 de r\u00E9ception. Elle est susceptible d\u2019un recours devant le Conseil disciplinaire et administratif dans un d\u00E9lai de quarante jours \u00E0 partir de la notification \u00E0 l\u2019avocat.(2)L\u2019avocat honoraire reste soumis \u00E0 la juridiction disciplinaire des avocats.(3)L\u2019avocat honoraire est libre d\u2019exercer toute activit\u00E9 autre que celle contraire \u00E0 la dignit\u00E9 de l\u2019Ordre; il ne peut faire aucun acte rentrant dans l\u2019exercice de la profession d\u2019avocat. (4)L\u2019avocat honoraire peut prendre part aux r\u00E9unions et aux c\u00E9r\u00E9monies de l\u2019Ordre; il n\u2019a pas droit de vote aux assembl\u00E9es g\u00E9n\u00E9rales. Il peut rev\u00EAtir la robe au cours des c\u00E9r\u00E9monies de l\u2019Ordre auquel il participe. Il prend la place que lui assigne son anciennet\u00E9 d\u2019inscription au tableau. Il a droit d\u2019acc\u00E8s \u00E0 la biblioth\u00E8que de l\u2019Ordre.",
+                    "text_byte_length": 1365,
+                    "text_sha256": "aa0fdfc78bb365e3d11e4e338825d2d0ba8a4e6301e089d5a836aa9edc4f3a95",
+                    "validity_conflict": true,
+                    "wording_sha256": "954a39837844ca368683b17d13f0c4df2444653ff84f41f76824bcb265815bb1"
+                  },
+                  {
+                    "article_identity_sha256": "fcd91b049213cb0d29bb2be694980805aac372fa1d957a0f964d0fcd5baf3630",
+                    "article_permalink": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--5bca01f82ef3058cfebe7f8a8a6eb1f1fbeeb32b8a1ea7b2c02ac20963235e3a#art_7",
+                    "article_valid_from": "2021-08-22",
+                    "body_sha256": "3a6bb598a9310f8a31240c1f33ae357d6e1f7a46392ca33d223c2718cdded95c",
+                    "language": "fra",
+                    "notes": [],
+                    "official_source": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo",
+                    "publisher_id": "art_7",
+                    "publisher_wid": null,
+                    "text": "Art. 7.Il existe un Ordre des avocats \u00E0 Luxembourg et un Ordre des avocats \u00E0 Diekirch. Chaque Ordre a la personnalit\u00E9 civile.",
+                    "text_byte_length": 128,
+                    "text_sha256": "6a1ba986c321c6ad22242052359cfc173d91eb0eefb8a2734b8904ef9e0a1a91",
+                    "validity_conflict": true,
+                    "wording_sha256": "c688ccfc64f6d05f0d4f8510cc21598611a2b4bce83c5c905536dafd03abb299"
+                  }
+                ],
+                "articles_not_admitted": 5,
+                "articles_without_text": [],
+                "body_sha256s": [
+                  "3a6bb598a9310f8a31240c1f33ae357d6e1f7a46392ca33d223c2718cdded95c"
+                ],
+                "expression_iri": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo/fr",
+                "language": "fra",
+                "next_applicability_date": null,
+                "permalink": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--5bca01f82ef3058cfebe7f8a8a6eb1f1fbeeb32b8a1ea7b2c02ac20963235e3a",
+                "publisher_legal_resource_iri": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo",
+                "publisher_work_iri": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3",
+                "rule_profile_sha256s": [
+                  "70e926111b25a4d364e96b679de0baaa090a869175a82d42e0052572804cf42e",
+                  "dd32d9a59ea33b8c9e9cd51b7b2657a6fa2b716ad00e35db075416ba4cd38a9b"
+                ],
+                "sources": [
+                  {
+                    "article_outcomes": [
+                      {
+                        "disposition": "akn_admitted",
+                        "outcomes": 49
+                      },
+                      {
+                        "disposition": "akn_unsupported_content_shape",
+                        "outcomes": 5
+                      }
+                    ],
+                    "body_byte_length": 231171,
+                    "body_receipt_sha256": "fb59b9fd9372a286c80c90caae9b8676839c85c22f43fcfeec4444bbbf72addb",
+                    "body_sha256": "3a6bb598a9310f8a31240c1f33ae357d6e1f7a46392ca33d223c2718cdded95c",
+                    "gaps": [],
+                    "object_ref_sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+                    "outcome": "acquired",
+                    "rights_disposition": "agreed_same_run_cc_by"
+                  }
+                ],
+                "stable_coordinate": "/lu-legilux/loi-1991-08-10-n3/2024-02-01",
+                "state_sha256": "5bca01f82ef3058cfebe7f8a8a6eb1f1fbeeb32b8a1ea7b2c02ac20963235e3a",
+                "validity_conflict_count": 49,
+                "validity_conflict_rule": "article_valid_from is the publisher\u0027s article-level applicability date; validity_conflict is true when it is stated and differs from the state\u0027s applicability_date"
+              }
+            ],
+            "verified_by": {
+              "corpus_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "index_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+              "registry_sha256": "abe40749a2364dcbcf69a4427b0977e0510500345056eed4042b2e4758a53ef0"
+            },
+            "work_key": "loi-1991-08-10-n3"
+          }
+        },
+        "schema": "lex-v3-envelope/1",
+        "verdict": "answer",
+        "version": "v3"
+      }
+    },
+    {
+      "operation": "evidence_bundle",
+      "scenario": "a date before the work\u0027s history: a refusal with a payload",
+      "http_status": 200,
+      "content_type": "application/json;charset=utf-8",
+      "envelope": {
+        "context": {
+          "freshness": {
+            "observed_at": "2026-09-18T07:00:00.0000000Z",
+            "upstream_health": "stale"
+          },
+          "jurisdiction": "lu",
+          "provisional": false,
+          "publisher": "lu-legilux",
+          "snapshot": {
+            "snapshot_id": "corpus-aaaaaaaaaaaaaaaa",
+            "snapshot_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          "status": "refusal",
+          "timeline_semantics": "publisher_applicability"
+        },
+        "object_type": "envelope",
+        "operation_id": "evidence_bundle",
+        "refusal": {
+          "code": "no_version_for_date",
+          "helpful_payload": {
+            "history_begins": "2024-02-01",
+            "nearest_earlier": null,
+            "nearest_later": "2024-02-01",
+            "requested_date": "1990-01-01"
+          },
+          "schema": "lex-v3-refusal/1"
+        },
+        "registry_schema": "lex-v3-operation-registry/1",
+        "registry_sha256": "abe40749a2364dcbcf69a4427b0977e0510500345056eed4042b2e4758a53ef0",
+        "request_ref": "http_fb09fb7191e84f40f48d21b4532a48ef36c84efacd236a30abd075a5a2b2c639",
+        "result": null,
+        "schema": "lex-v3-envelope/1",
+        "verdict": "refuse",
+        "version": "v3"
+      }
+    },
+    {
+      "operation": "evidence_bundle",
+      "scenario": "a work the index does not hold: a refusal with a payload",
+      "http_status": 200,
+      "content_type": "application/json;charset=utf-8",
+      "envelope": {
+        "context": {
+          "freshness": {
+            "observed_at": "2026-09-18T07:00:00.0000000Z",
+            "upstream_health": "stale"
+          },
+          "jurisdiction": "lu",
+          "provisional": false,
+          "publisher": "lu-legilux",
+          "snapshot": {
+            "snapshot_id": "corpus-aaaaaaaaaaaaaaaa",
+            "snapshot_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          "status": "refusal",
+          "timeline_semantics": "publisher_applicability"
+        },
+        "object_type": "envelope",
+        "operation_id": "evidence_bundle",
+        "refusal": {
+          "code": "identifier_unknown",
+          "helpful_payload": {
+            "official_search_actions": [
+              "search"
+            ],
+            "requested_identifier": "/lu-legilux/no-such-work",
+            "what_would_answer": "a Luxembourg work identifier present in the mounted index"
+          },
+          "schema": "lex-v3-refusal/1"
+        },
+        "registry_schema": "lex-v3-operation-registry/1",
+        "registry_sha256": "abe40749a2364dcbcf69a4427b0977e0510500345056eed4042b2e4758a53ef0",
+        "request_ref": "http_fb09fb7191e84f40f48d21b4532a48ef36c84efacd236a30abd075a5a2b2c639",
+        "result": null,
+        "schema": "lex-v3-envelope/1",
+        "verdict": "refuse",
+        "version": "v3"
+      }
+    },
+    {
+      "operation": "evidence_bundle",
+      "scenario": "an EU identifier on a mount without the EU index: a refusal with a payload",
+      "http_status": 200,
+      "content_type": "application/json;charset=utf-8",
+      "envelope": {
+        "context": {
+          "freshness": {
+            "observed_at": "2026-09-18T07:00:00.0000000Z",
+            "upstream_health": "stale"
+          },
+          "jurisdiction": "eu",
+          "provisional": false,
+          "publisher": "eu-eurlex",
+          "snapshot": {
+            "snapshot_id": "corpus-aaaaaaaaaaaaaaaa",
+            "snapshot_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          "status": "refusal",
+          "timeline_semantics": "official_consolidation_state"
+        },
+        "object_type": "envelope",
+        "operation_id": "evidence_bundle",
+        "refusal": {
+          "code": "retrieval_mode_unavailable",
+          "helpful_payload": {
+            "available_modes": [
+              "r0_exact_coordinate"
+            ],
+            "requested_mode": "r7_evidence_bundle"
+          },
+          "schema": "lex-v3-refusal/1"
+        },
+        "registry_schema": "lex-v3-operation-registry/1",
+        "registry_sha256": "abe40749a2364dcbcf69a4427b0977e0510500345056eed4042b2e4758a53ef0",
+        "request_ref": "http_fb09fb7191e84f40f48d21b4532a48ef36c84efacd236a30abd075a5a2b2c639",
+        "result": null,
+        "schema": "lex-v3-envelope/1",
+        "verdict": "refuse",
+        "version": "v3"
+      }
+    },
+    {
+      "operation": "evidence_bundle",
+      "scenario": "no corpus mounted: a refusal",
+      "http_status": 200,
+      "content_type": "application/json;charset=utf-8",
+      "envelope": {
+        "context": {
+          "freshness": {
+            "observed_at": "2026-09-18T07:00:00.0000000Z",
+            "upstream_health": "unreachable"
+          },
+          "jurisdiction": "lu",
+          "provisional": false,
+          "publisher": "lu-legilux",
+          "snapshot": {
+            "snapshot_id": "no-corpus-mounted",
+            "snapshot_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          "status": "refusal",
+          "timeline_semantics": "publisher_applicability"
+        },
+        "object_type": "envelope",
+        "operation_id": "evidence_bundle",
         "refusal": {
           "code": "no_corpus_mounted",
           "helpful_payload": {

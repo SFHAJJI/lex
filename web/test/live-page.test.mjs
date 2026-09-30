@@ -14,7 +14,7 @@ import { createElement as h } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 
 import { renderToString } from "react-dom/server";
-import { Document, LIVE_CONTRACT, LIVE_MARKER, SYNTHETIC_MARKER, liveCoverageTree, liveDossierTree, liveSearchTree, renderLiveCoveragePage, renderLiveDossierPage, renderLiveSearchPage } from "../.react-build/app.mjs";
+import { Document, LIVE_CONTRACT, LIVE_MARKER, SYNTHETIC_MARKER, liveCoverageTree, liveDossierTree, liveReadingTree, liveSearchTree, renderLiveCoveragePage, renderLiveDossierPage, renderLiveReadingPage, renderLiveSearchPage } from "../.react-build/app.mjs";
 import { MAXIMUM_REQUEST_BYTES, createLiveServer } from "../scripts/serve-live.mjs";
 import { buildLive } from "../scripts/build-live.mjs";
 
@@ -46,6 +46,14 @@ test("the search page's server render is the tree the browser hydrates", () => {
   const root = html.slice(html.indexOf(open) + open.length);
   assert.ok(root.startsWith(renderToString(liveSearchTree())), "a hydration that changed the markup would re-render silently");
   assert.match(html, new RegExp(`data-live="${LIVE_MARKER}"`), "the search page is a live page, under the live banner");
+});
+
+test("the reading page's server render is the tree the browser hydrates", () => {
+  const html = renderLiveReadingPage();
+  const open = '<div id="live-reading-root">';
+  const root = html.slice(html.indexOf(open) + open.length);
+  assert.ok(root.startsWith(renderToString(liveReadingTree())), "a hydration that changed the markup would re-render silently");
+  assert.match(html, new RegExp(`data-live="${LIVE_MARKER}"`), "the reading page is a live page, under the live banner");
 });
 
 test("the dossier page's server render is the tree the browser hydrates", () => {
@@ -86,6 +94,15 @@ test("the live build writes its own directory, embeds the contract and nothing e
     assert.ok(dossierBundle.includes(census.contract.registry_sha256), "the dossier bundle embeds the contract");
     for (const entry of census.envelopes) {
       assert.ok(!dossierBundle.includes(entry.scenario), `the census envelope "${entry.scenario}" is not shipped with the dossier page`);
+    }
+
+    const reading = await readFile(join(destination, "reading.html"), "utf8");
+    const readingBundle = await readFile(join(destination, "client-live-reading.js"), "utf8");
+    assert.ok(reading.includes('<script src="/client-live-reading.js" defer=""></script>'));
+    assert.match(reading, new RegExp(`data-live="${LIVE_MARKER}"`));
+    assert.ok(readingBundle.includes(census.contract.registry_sha256), "the reading bundle embeds the contract");
+    for (const entry of census.envelopes) {
+      assert.ok(!readingBundle.includes(entry.scenario), `the census envelope "${entry.scenario}" is not shipped with the reading page`);
     }
   } finally {
     await rm(destination, { recursive: true, force: true });

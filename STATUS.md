@@ -5,11 +5,11 @@ every pull request that changes what is served, what is next or what is blocked.
 
 ## Heads
 
-- `v3/integration`: `9092219b` (2026-09-30, PR #775 merged). Build 45 s. Fast lane
+- `v3/integration`: `8541ce5d` (2026-09-30, PR #776 merged). Build 45 s. Fast lane
   (`eng/test-fast.ps1`): 3,038 tests, 3,037 pass, 1 skipped. Ingest suite: green on CI for PR #760
   (the CI `dotnet` job runs the whole solution on every pull request, about 7 min on the runner;
-  green for PR #775);
-  locally about 15 min. 844 web tests pass. CI's web job can flake in `keyboard-walk.test.mjs`
+  green for PR #776);
+  locally about 15 min. 856 web tests pass. CI's web job can flake in `keyboard-walk.test.mjs`
   ("browser debugger never answered"); rerunning the failed job is the fix.
 - Driver: Claude Opus 5.5 since 2026-09-29 (the Fable 5.1 driver ran out of tokens on 2026-09-28
   after PR #757; the user default model is now `claude-opus-5-5`).
@@ -235,7 +235,7 @@ schema's `parameters` shape, and whose call runs the same dispatch the REST rout
 endpoint test proves it for all twenty-three. The launch-contract line "REST and MCP derive identical
 envelopes from the registry" is the owner's to tick.
 
-Web: 31 React components, 844 tests. Preview screens render fixtures. The V3 Luxembourg search
+Web: 32 React components, 856 tests. Preview screens render fixtures. The V3 Luxembourg search
 answer has a reader (PR #771). The answer census now samples `search` five ways from the real handler:
 - a phrase with 4 strict hits and 1 relaxed hit;
 - the same phrase one hit per page, with its cursor;
@@ -357,6 +357,46 @@ recomputes them from the publisher's file. The tests also read a bundle in two l
 the producer would send one: German before French, the German state from its own corpus member
 with its own source, body and article identities (review of #776). The pre-V3 `reading.mjs` stays for the
 preview until the live reading screen replaces it.
+
+The live reading screen and its journey step (PR #777). `dist-live/reading.html` has its own bundle
+`client-live-reading.js`.
+- The form sends the work identifier as typed, a date written `yyyy-mm-dd` (a text field, checked as
+  a calendar date), and a language only when one is chosen. The controls carry no `name`.
+- One `POST /api/v3/evidence_bundle` per submit. The answer is read by `readEvidenceBundle` and laid
+  out state by state:
+  - the permalink, and the counts quoted, held without text and not admitted;
+  - each article's text as a quotation in its state's language (`lang="fr"` from `fra`, never the
+    interface's);
+  - both dates where an article's own date differs from its state's;
+  - its notes, its text digest and its permalink;
+  - the articles held without text, named and never quoted empty;
+  - the not-held list.
+
+  The words "in force" never appear.
+- The envelope census now holds the bundle answer and four reading refusals: a date before the
+  history, an unknown work, an EU identifier on a mount without the EU index
+  (`retrieval_mode_unavailable`), and no mount. It replaces each per-run `object_ref_sha256` with a
+  fixed digest, as it does the corpus and index digests, because the corpus mints those per run and
+  the bundle's sources carry them.
+- `retrieval_mode_unavailable` and `no_corpus_mounted` are cards. So are `ambiguous_version`,
+  `text_withheld`, `text_not_available` and `language_not_available`, checked against the payloads
+  the refusal census records.
+- Two absences are said by their code, without the card:
+  - `identifier_unknown`, as on the dossier;
+  - `no_version_for_date`, because the card's contract requires every absence to carry
+    `what_would_answer` from its closed vocabulary (and `asserts_absence_of_law`), and the
+    platform's payload names the nearest earlier and later dates instead. Its status line still
+    carries the date to ask again: "The history this index holds for this work begins on …".
+    `text_not_available`'s payload does carry both, so its card is shown.
+- Found and fixed on the way: the React refusal card threw on the platform's own `ambiguous_version`
+  payload. The platform sends its candidates as bare hash-pinned links, and the string card
+  normalised them while the React card read the raw strings. Both now use one `candidateView`, which
+  says "publication date not stated by the platform" and "withdrawal not stated by the platform". A
+  test renders the real payload and holds the two cards to the same text; it failed on the old card.
+- `journey.mjs` runs a fourth step: `/reading.html`, typing the fixture work's identifier and
+  `2024-02-01` into the two fields. With the mount the page ends in the text ("49 articles quoted",
+  "Art. 15."); without one, in the card. All eight runs pass. A build whose reading request always
+  added a language failed both reading runs on the body check.
 
 **The search journey step passes (PR #773, run locally 2026-09-30).** `node scripts/journey.mjs`
 now runs two steps, each with and without the fixture mount, and all four runs pass.
@@ -773,8 +813,11 @@ proves the path, not a corpus.
    waits for a mount with more hits than one page); PR #774: the V3 dossier reader `readDossier`,
    held to the dossier answer the census now samples; PR #775: the live dossier screen, its page
    and journey step; PR #776: the reading screen's reader `readEvidenceBundle` over
-   `evidence_bundle`. Next: the live reading screen, its page and journey step, and the
-   `identifier_unknown` population disclosure (producer or reader). Also J1 to J8
+   `evidence_bundle`; PR #777: the live reading screen, its page and journey step. The four launch
+   screens with V3 readers (coverage, search, dossier, reading) are now live and journeyed. Next:
+   the absence refusals the card will not show (`identifier_unknown` needs a population disclosure,
+   and it and `no_version_for_date` need `what_would_answer` from the closed vocabulary): the
+   producer carries them, or the reader supplies them. Also J1 to J8
    restated as V3 steps (owner question): they exist only in the pre-V3 pack
    (`05-user-journeys.md`).
 7. Release pipeline: build, sign, image, zero-traffic deploy, probes. Then acceptance and promotion.

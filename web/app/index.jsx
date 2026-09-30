@@ -29,6 +29,8 @@ export { LiveSearch, SearchAnswerView, SearchResultsView } from './LiveSearch.js
 export { LIVE_SEARCH_ROOT, liveSearchTree, renderLiveSearchPage } from './live-search-page.jsx';
 export { DossierAnswerView, DossierView, LiveDossier } from './LiveDossier.jsx';
 export { LIVE_DOSSIER_ROOT, liveDossierTree, renderLiveDossierPage } from './live-dossier-page.jsx';
+export { LiveReading, ReadingAnswerView, ReadingView } from './LiveReading.jsx';
+export { LIVE_READING_ROOT, liveReadingTree, renderLiveReadingPage } from './live-reading-page.jsx';
 export {
   renderTimelineReactPage,
   renderCoverageReactPage,
