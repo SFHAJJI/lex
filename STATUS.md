@@ -9,7 +9,7 @@ every pull request that changes what is served, what is next or what is blocked.
   (`eng/test-fast.ps1`): 3,038 tests, 3,037 pass, 1 skipped. Ingest suite: green on CI for PR #760
   (the CI `dotnet` job runs the whole solution on every pull request, about 7 min on the runner;
   green for PR #763);
-  locally about 15 min. 791 web tests pass. CI's web job can flake in `keyboard-walk.test.mjs`
+  locally about 15 min. 793 web tests pass. CI's web job can flake in `keyboard-walk.test.mjs`
   ("browser debugger never answered"); rerunning the failed job is the fix.
 - Driver: Claude Opus 5.5 since 2026-09-29 (the Fable 5.1 driver ran out of tokens on 2026-09-28
   after PR #757; the user default model is now `claude-opus-5-5`).
@@ -235,13 +235,16 @@ schema's `parameters` shape, and whose call runs the same dispatch the REST rout
 endpoint test proves it for all twenty-three. The launch-contract line "REST and MCP derive identical
 envelopes from the registry" is the owner's to tick.
 
-Web: 29 React components, 791 tests. Screens render fixtures; no page calls `/api/v3` yet. PR #764
+Web: 29 React components, 793 tests. Screens render fixtures; no page calls `/api/v3` yet. PR #764
 adds the first live screen as a component, `LiveCoverage` (Trust and Coverage): the server renders
 its loading state, the browser asks `coverage` with no parameters in an effect through the client
 module, and the answer is the `Coverage` page (read by `readCoverage`, so a served answer the reader
 cannot account for is shown as unreadable, never rendered), the refusal card for a refusal (the one a
 coverage request can meet, `no_corpus_mounted`, in the refusal catalog's words, held equal by a
-test), or a status line for a transport failure or an unreadable answer; the root carries
+test; a refusal whose card the card's own rules will not show is a status line naming its code,
+never a render that throws), or a status line for a transport failure or an unreadable answer; the
+mount's one request is `startLiveCoverage`, which asks once and whose cancel aborts it and silences
+it (tested; the effect itself is proven by the next slice's browser journey); the root carries
 `data-answer-state` for a browser run to wait on. No page mounts it yet (the page, the build that
 embeds the contract, and the same-origin serving are the next slice). PR #763 added the first code
 that can call the API: `web/scripts/v3-envelope.mjs`, a strict reader that mirrors

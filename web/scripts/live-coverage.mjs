@@ -13,6 +13,7 @@
 
 import { askV3 } from "./v3-client.mjs";
 import { readCoverage } from "./coverage.mjs";
+import { validateRefusal } from "./refusal-card.mjs";
 
 /**
  * The one sentence per refusal code a coverage request can meet. `coverage` takes no parameters,
@@ -34,6 +35,11 @@ export function unexpectedRefusalSentence(code) {
 /** The sentence for a transport failure, which carries the problem code the API sent below the envelope. */
 export function transportFailureSentence(code) {
   return `The coverage report could not be reached (${code}).`;
+}
+
+/** The sentence for a refusal whose card the refusal card's own rules will not show. */
+export function unshownRefusalSentence(code, reason) {
+  return `The coverage report was refused with ${code}, and its card cannot be shown: ${reason}.`;
 }
 
 /** The sentence for an answer that is not one this page can read. */
@@ -58,13 +64,23 @@ export function coverageOutcome(asked) {
 
   if (asked.state === "refusal") {
     const { code, helpful_payload: payload } = asked.envelope.refusal;
-    return {
-      state: "refusal",
-      code,
-      sentence: LIVE_COVERAGE_REFUSAL_SENTENCES[code] ?? unexpectedRefusalSentence(code),
-      payload,
-      context: asked.envelope.context,
-    };
+    const sentence = LIVE_COVERAGE_REFUSAL_SENTENCES[code] ?? unexpectedRefusalSentence(code);
+    // The card is checked here, before anything renders, as a success answer is checked by the
+    // coverage reader: a refusal the card's rules refuse (a payload without the evidence the card
+    // requires, a code whose card needs governing text) would otherwise throw during render and
+    // leave no state on the page at all. It is still a refusal, said as one, without the card.
+    try {
+      validateRefusal({ code, sentence, payload });
+    } catch (error) {
+      return {
+        state: "refusal",
+        code,
+        card: false,
+        sentence: unshownRefusalSentence(code, error.message),
+        context: asked.envelope.context,
+      };
+    }
+    return { state: "refusal", code, card: true, sentence, payload, context: asked.envelope.context };
   }
 
   if (asked.state === "transport_failure") {
@@ -78,4 +94,23 @@ export function coverageOutcome(asked) {
 export async function loadLiveCoverage({ contract, fetchImpl, signal }) {
   const asked = await askV3("coverage", {}, { contract, objectType: "coverage_report", fetchImpl, signal });
   return coverageOutcome(asked);
+}
+
+/**
+ * What the screen does when it mounts: asks once, hands the view state to `onOutcome` when it
+ * settles, and returns the cancel the screen calls when it unmounts. After cancel the request is
+ * aborted and `onOutcome` is never called; a failure is handed over as a state, never retried.
+ */
+export function startLiveCoverage({ contract, fetchImpl, onOutcome }) {
+  const controller = new AbortController();
+  loadLiveCoverage({ contract, fetchImpl, signal: controller.signal })
+    .then((next) => {
+      if (!controller.signal.aborted) onOutcome(next);
+    })
+    .catch((error) => {
+      if (error?.name !== "AbortError" && !controller.signal.aborted) {
+        onOutcome({ state: "invalid_envelope", sentence: invalidAnswerSentence(String(error?.message ?? error)) });
+      }
+    });
+  return () => controller.abort();
 }

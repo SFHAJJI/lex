@@ -11,7 +11,7 @@ import { useEffect, useState } from 'react';
 
 import { Coverage } from './Coverage.jsx';
 import { RefusalCard } from './RefusalCard.jsx';
-import { LIVE_COVERAGE_LOADING, loadLiveCoverage } from '../scripts/live-coverage.mjs';
+import { LIVE_COVERAGE_LOADING, startLiveCoverage } from '../scripts/live-coverage.mjs';
 
 const LOADING = Object.freeze({ state: 'loading', sentence: LIVE_COVERAGE_LOADING });
 
@@ -25,7 +25,7 @@ export function CoverageAnswerView({ outcome }) {
     );
   }
 
-  if (outcome.state === 'refusal') {
+  if (outcome.state === 'refusal' && outcome.card) {
     return (
       <section data-answer-state="refusal">
         <RefusalCard code={outcome.code} sentence={outcome.sentence} payload={outcome.payload} />
@@ -42,23 +42,12 @@ export function CoverageAnswerView({ outcome }) {
 
 /**
  * The live screen: loading until the one request settles, then its state. The request is asked once
- * per mount and abandoned when the screen unmounts; a failure is shown, never retried behind the
- * reader's back.
+ * per mount (`startLiveCoverage`) and abandoned when the screen unmounts; a failure is shown, never
+ * retried behind the reader's back. `contract` and `fetchImpl` must be stable for the screen's life:
+ * a new identity asks again (while the previous state stays on screen until the new one settles).
  */
 export function LiveCoverage({ contract, fetchImpl }) {
   const [outcome, setOutcome] = useState(LOADING);
-  useEffect(() => {
-    const controller = new AbortController();
-    loadLiveCoverage({ contract, fetchImpl, signal: controller.signal })
-      .then((next) => {
-        if (!controller.signal.aborted) setOutcome(next);
-      })
-      .catch((error) => {
-        if (error?.name !== 'AbortError') {
-          setOutcome({ state: 'invalid_envelope', sentence: String(error?.message ?? error) });
-        }
-      });
-    return () => controller.abort();
-  }, [contract, fetchImpl]);
+  useEffect(() => startLiveCoverage({ contract, fetchImpl, onOutcome: setOutcome }), [contract, fetchImpl]);
   return <CoverageAnswerView outcome={outcome} />;
 }

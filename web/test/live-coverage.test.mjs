@@ -10,12 +10,13 @@ import { readFile } from "node:fs/promises";
 import { createElement as h } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 
-import { CoverageAnswerView, LiveCoverage } from "../.react-build/app.mjs";
+import { CoverageAnswerView, LiveCoverage, RefusalCard } from "../.react-build/app.mjs";
 import {
   LIVE_COVERAGE_LOADING,
   LIVE_COVERAGE_REFUSAL_SENTENCES,
   coverageOutcome,
   loadLiveCoverage,
+  startLiveCoverage,
 } from "../scripts/live-coverage.mjs";
 import { REFUSAL_EXAMPLES } from "../scripts/refusal-catalog.mjs";
 
@@ -71,9 +72,54 @@ test("no corpus mounted is the refusal card, in the catalog's words", async () =
   assert.equal(outcome.sentence, REFUSAL_EXAMPLES.no_corpus_mounted.sentence, "one sentence, held equal to the catalog's");
   assert.equal(LIVE_COVERAGE_REFUSAL_SENTENCES.no_corpus_mounted, REFUSAL_EXAMPLES.no_corpus_mounted.sentence);
   const markup = view(outcome);
-  assert.match(markup, /data-answer-state="refusal"/);
-  assert.ok(markup.includes("no_corpus_mounted"));
-  assert.ok(markup.includes(outcome.sentence));
+  const card = renderToStaticMarkup(h(RefusalCard, { code: outcome.code, sentence: outcome.sentence, payload: outcome.payload }));
+  assert.equal(markup, `<section data-answer-state="refusal">${card}</section>`, "the refusal card itself, not a line that mentions it");
+  assert.ok(card.includes("required_corpus"), "the card lays out the payload the platform sent");
+});
+
+test("a refusal whose card the card's rules will not show is said by its code, and the page keeps its state (review of #764)", () => {
+  const envelope = structuredClone(envelopeOf("coverage", true));
+  envelope.refusal.code = "identifier_unknown";
+  envelope.refusal.helpful_payload = { requested_identifier: "x", official_search_actions: ["search"], what_would_answer: "y" };
+  const outcome = coverageOutcome({ state: "refusal", envelope });
+  assert.equal(outcome.state, "refusal");
+  assert.equal(outcome.card, false);
+  assert.match(outcome.sentence, /refused with identifier_unknown, and its card cannot be shown/);
+  const markup = view(outcome);
+  assert.match(markup, /^<section data-answer-state="refusal"><p role="status">/, "a status line under the refusal state, never a render that throws");
+});
+
+test("mounting asks once, hands the state over, and a cancel aborts and silences it (review of #764)", async () => {
+  const settled = answering(200, "application/json", envelopeOf("coverage", false));
+  const outcomes = [];
+  let done;
+  const arrived = new Promise((resolve) => { done = resolve; });
+  startLiveCoverage({ contract, fetchImpl: settled.fetchImpl, onOutcome: (outcome) => { outcomes.push(outcome); done(); } });
+  await arrived;
+  assert.equal(settled.calls.length, 1, "asked once");
+  assert.deepEqual(outcomes.map((outcome) => outcome.state), ["success"]);
+
+  let release;
+  const signals = [];
+  const pending = async (url, init) => {
+    signals.push(init.signal);
+    await new Promise((resolve) => { release = resolve; });
+    return {
+      status: 200,
+      headers: { get: () => "application/json" },
+      text: async () => JSON.stringify(envelopeOf("coverage", false)),
+    };
+  };
+  const late = [];
+  const cancel = startLiveCoverage({ contract, fetchImpl: pending, onOutcome: (outcome) => late.push(outcome) });
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(signals.length, 1);
+  cancel();
+  assert.equal(signals[0].aborted, true, "unmounting aborts the request");
+  release();
+  await new Promise((resolve) => setImmediate(resolve));
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.deepEqual(late, [], "no state is handed over after the screen is gone");
 });
 
 test("a transport failure and an unreadable answer are said as what they are", async () => {
