@@ -1701,7 +1701,7 @@ public sealed class LuxembourgQueryExecutionAdapter
             {
                 schema = RightsEvidenceIndexSchema,
                 deliveries = assertionLegs.Concat(relationLegs).Select(static leg => leg.Receipt.Delivery),
-                observedObjectCount = buildResult.Observations.Count,
+                observedObjectCount = buildResult.Observations!.Count,
                 observationBatches,
             });
             var (assertionIndexReceipt, assertionIndexFailure) = await CustodyHold.TryHoldAsync(

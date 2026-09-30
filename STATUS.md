@@ -17,10 +17,19 @@ Every batch must pass custody write and digest-checked readback before the root 
 The replay checks each referenced batch's digest, schema, ordinal, count and unique subject identity,
 then requires the final manifest to rebuild byte for byte. Historical version 2 roots remain readable
 by the retained-run replay helper. A 257-subject test crosses the batch boundary; an unreadable
-second batch must refuse before publishing a manifest. Validation is pending on the combined
-source with the reviewed PR #812 streaming change. No population completeness or full-process memory bound is claimed:
+second batch must refuse before publishing a manifest. The combined source with PR #812 passed
+a clean solution build (zero warnings/errors), all 20 focused topology/custody tests, and the fast
+lane (3,066 passed, one platform skip). The full ingest suite is running. PR #812 merged at
+`9849ab09` after its review, one repair and green CI. No population completeness or full-process memory bound is claimed:
 typed observations, individual large observations, the root metadata and downstream manifests still
 need resource allowance.
+
+Reversible run decision: validate the merged EN/FRA acquisition and new rights evidence on a
+fresh GDPR/a439 mount before the full EU union run. The bounded plan retains the prior 800-request
+ceiling (the older all-language run used 700), with three times that retained mount's logical bytes
+plus 1 GB reserve as a storage allowance. This is a planning allowance, not a bound. Launch follows
+this slice's review/merge, a clean runtime freeze and resource checks. The prior successful custody
+stays intact. Evidence: `C:\lex-v3\lanes\bounded-en-fr-launch-sizing-proposed.json`.
 
 ## Luxembourg population memory prerequisite (Codex, 2026-09-30)
 

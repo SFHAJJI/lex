@@ -139,7 +139,7 @@ public sealed class LuxembourgProductionTopologyTests
             var bytes = await CustodyRestore.ReadByDigestCheckedAsync(store,
                 artifact.GetProperty("sha256").GetString()!, CancellationToken.None);
             var text = Encoding.UTF8.GetString(bytes.Span);
-            if (text.Contains("lex-lu-sparql-rights-evidence/2", StringComparison.Ordinal))
+            if (text.Contains(RightsIndexSchema, StringComparison.Ordinal))
             {
                 using var source = JsonDocument.Parse(bytes);
                 sparqlIndex = source.RootElement.Clone();
@@ -192,20 +192,21 @@ public sealed class LuxembourgProductionTopologyTests
         string[] replayRejected = expectedRead == LuxembourgInFileRightsReadStatus.Observed
             ? []
             : [Manifestation];
-        var replayObservations = sparqlIndex.Value.GetProperty("observations").EnumerateArray().Select(row =>
+        var replayObservations = new List<LuxembourgResourceObservation>();
+        await foreach (var row in LuxembourgRetainedRunReplay.ReadObservationRowsAsync(store, sparqlIndex.Value))
         {
             var objectRef = JsonSerializer.Deserialize<SourceObjectRef>(row.GetProperty("ObjectRef"))!;
             var observed = JsonSerializer.Deserialize<LuxembourgObservedAssertion[]>(row.GetProperty("Assertions"))!;
             var channelOne = LuxembourgQueryExecutionAdapter.BuildSparqlRightsRows(observed, profileEvidence)
                 .Select(channel => new LuxembourgRightsChannelObservation(channel.ManifestationIri,
                     profileEvidence, sparqlRef!, channel.LicenceIris)).ToArray();
-            return new LuxembourgResourceObservation(objectRef, profileEvidence, observed,
+            replayObservations.Add(new LuxembourgResourceObservation(objectRef, profileEvidence, observed,
                 JsonSerializer.Deserialize<LuxembourgObservedRelation[]>(row.GetProperty("Relations"))!,
                 new LuxembourgSparqlRightsChannelObservations(profileEvidence, sparqlRef!, channelOne),
                 new LuxembourgInFileRightsChannelObservations(profileEvidence, inFileRef!,
                     inFileRows.Where(channel => observed.Any(assertion => assertion.SubjectIri == channel.ManifestationIri)).ToArray(), true,
-                    replayRejected.Where(iri => observed.Any(assertion => assertion.SubjectIri == iri)).ToArray()));
-        }).ToArray();
+                    replayRejected.Where(iri => observed.Any(assertion => assertion.SubjectIri == iri)).ToArray())));
+        }
         var replay = Assert.IsInstanceOfType<LuxembourgProfileResolution.Resolved>(profile.Resolve(
             LuxembourgProvenResourceObservations.RequireProven(result.FamilyOutcomes.Single(outcome => outcome.FamilyKey == "assertions").Proof!,
                 replayObservations)));
@@ -331,11 +332,16 @@ public sealed class LuxembourgProductionTopologyTests
         foreach (var artifact in finalManifest.RootElement.GetProperty("ordered_evidence_artifacts").EnumerateArray())
         {
             var bytes = await CustodyRestore.ReadByDigestCheckedAsync(store, artifact.GetProperty("sha256").GetString()!, CancellationToken.None);
-            if (!Encoding.UTF8.GetString(bytes.Span).Contains("lex-lu-sparql-rights-evidence/2", StringComparison.Ordinal)) continue;
+            if (!Encoding.UTF8.GetString(bytes.Span).Contains(RightsIndexSchema, StringComparison.Ordinal)) continue;
             using var index = JsonDocument.Parse(bytes);
-            var workGraph = index.RootElement.GetProperty("observations").EnumerateArray().Single(row =>
-                row.GetProperty("ObjectRef").GetProperty("PublisherUri").GetString() == Work);
-            var delivered = JsonSerializer.Deserialize<LuxembourgObservedAssertion[]>(workGraph.GetProperty("Assertions"))!;
+            LuxembourgObservedAssertion[]? delivered = null;
+            await foreach (var row in LuxembourgRetainedRunReplay.ReadObservationRowsAsync(store, index.RootElement))
+            {
+                if (row.GetProperty("ObjectRef").GetProperty("PublisherUri").GetString() != Work) continue;
+                Assert.IsNull(delivered, "The work must occur in exactly one retained batch.");
+                delivered = JsonSerializer.Deserialize<LuxembourgObservedAssertion[]>(row.GetProperty("Assertions"))!;
+            }
+            Assert.IsNotNull(delivered);
             Assert.IsFalse(delivered.Any(assertion => assertion.SubjectIri == unrelatedOriginal),
                 "Graph collection must not import unrelated original-act assertions.");
             Assert.AreEqual(includeExactOriginal, delivered.Any(assertion => assertion.SubjectIri == original));
