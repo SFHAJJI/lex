@@ -29,4 +29,12 @@
     <Content Include="preview-graph/**/*" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     <Content Include="preview-trust/**/*" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
   </ItemGroup>
+  <!-- The one-server image (web/scripts/image-rehearsal.mjs): the built live pages and a corpus mount,
+       published beside the API where it reads them (v3-web, v3-corpus), only when a build names them. -->
+  <ItemGroup Condition="'$(LexImageWebRoot)' != ''">
+    <Content Include="$(LexImageWebRoot)/**/*" Link="v3-web/%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="Never" CopyToPublishDirectory="PreserveNewest" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(LexImageMount)' != ''">
+    <Content Include="$(LexImageMount)/**/*" Link="v3-corpus/%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="Never" CopyToPublishDirectory="PreserveNewest" />
+  </ItemGroup>
 </Project>

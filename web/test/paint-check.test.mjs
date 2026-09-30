@@ -7,13 +7,12 @@
 // which looked at backgrounds only. Neither fixture is product content and neither is shipped.
 
 import assert from "node:assert/strict";
-import { spawn } from "node:child_process";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 
-import { Session, allocateDebuggerPort, findBrowser, waitForDebugger } from "../scripts/browser-evidence.mjs";
+import { Session, findBrowser, launchBrowser } from "../scripts/browser-evidence.mjs";
 import { PAINT_ONLY } from "../scripts/journey.mjs";
 
 const page = (body) => `<!doctype html><html lang="en"><head><meta charset="utf-8"><style>
@@ -43,18 +42,12 @@ const WORDLESS = page(`
 
 async function main() {
   const browser = await findBrowser();
-  const port = allocateDebuggerPort(9800, 300);
   const profile = await mkdtemp(join(tmpdir(), "lex-paint-selftest-"));
-  const child = spawn(browser, [
-    "--headless=new", `--remote-debugging-port=${port}`, `--user-data-dir=${profile}`,
-    "--no-first-run", "--no-default-browser-check",
-    "--disable-component-update", "--disable-background-networking",
-    "about:blank",
-  ], { stdio: "ignore" });
+  const { child, url } = await launchBrowser(browser, profile);
   try {
     await writeFile(join(profile, "named.html"), NAMED, "utf8");
     await writeFile(join(profile, "wordless.html"), WORDLESS, "utf8");
-    const session = await Session.open(await waitForDebugger(port));
+    const session = await Session.open(url);
     const { targetId } = await session.send("Target.createTarget", { url: "about:blank" });
     const { sessionId } = await session.send("Target.attachToTarget", { targetId, flatten: true });
     await session.send("Runtime.enable", {}, sessionId);
