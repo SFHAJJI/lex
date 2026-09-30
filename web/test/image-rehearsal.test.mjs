@@ -69,7 +69,7 @@ function image({ user = "1654", entrypoint = ["dotnet", "/app/Lex.V3.Api.dll"], 
   const manifest = Buffer.from(JSON.stringify({
     schemaVersion: 2,
     config: { digest: `sha256:${sha256(config)}`, size: config.length },
-    layers: [{ digest: `sha256:${sha256(layer)}`, size: layer.length }],
+    layers: [{ mediaType: "application/vnd.oci.image.layer.v1.tar+gzip", digest: `sha256:${sha256(layer)}`, size: layer.length }],
   }));
   const blobs = new Map([[`sha256:${sha256(manifest)}`, manifest], [`sha256:${sha256(config)}`, config], [`sha256:${sha256(layer)}`, layer]]);
   const index = { manifests: [{ digest: `sha256:${sha256(manifest)}`, size: manifest.length }] };
