@@ -1213,12 +1213,31 @@ public sealed class EuQueryExecutionAdapter
         var censusByFamilyKey = new Dictionary<
             string, (AbsenceFamilyEnumerationProof Proof, RepeatedEnumerationDeliveryReceipt Receipt, string RequestedCelex)>(
             StringComparer.Ordinal);
+        var censusRefusals = new List<string>();
         foreach (var (request, sourceWitness) in seeds)
         {
             var runResult = await _executor.RunCensusPartitionAsync(request, sourceWitness, cancellationToken)
                 .ConfigureAwait(false);
             if (!TryRecordOutcome(runResult, out var familyKey, out var proof, out var receipt, outcomes))
             {
+                // Bind the refusal to the requested seed while that association is still known.
+                // A robots failure has no publisher query input or delivered family key to recover later.
+                var outcome = outcomes[^1];
+                censusRefusals.Add(System.Text.Json.JsonSerializer.Serialize(new
+                {
+                    requested_celex = request.RequestedCelex,
+                    kind = outcome.Kind.ToString(),
+                    executor_code = outcome.ExecutorRefusal?.Code.ToString(),
+                    proof_code = outcome.ProofRefusal?.ToString(),
+                    request_ordinal = outcome.ExecutorRefusal?.RequestOrdinal,
+                    attempt_ordinal_reached = outcome.ExecutorRefusal?.AttemptOrdinalReached,
+                    terminal_status = outcome.ExecutorRefusal?.TerminalStatus,
+                    response_body_sha256 = outcome.ExecutorRefusal?.ResponseBodySha256,
+                    observed_media_type = outcome.ExecutorRefusal?.ObservedMediaType,
+                    observed_count = outcome.ExecutorRefusal?.ObservedCount,
+                    offending_key = outcome.ExecutorRefusal?.OffendingKey,
+                    core_refusal_detail = outcome.ExecutorRefusal?.CoreRefusalDetail,
+                }));
                 continue;
             }
 
@@ -1234,7 +1253,9 @@ public sealed class EuQueryExecutionAdapter
                 topology, outcomes,
                 new EuQueryExecutionRefusalDetail(
                     EuQueryExecutionRefusal.CensusFamilyNotProven,
-                    "one or more requested census-family seeds did not prove this run's enumeration."));
+                    "one or more requested census-family seeds did not prove this run's enumeration. " +
+                    $"Requested seeds={seeds.Length}, proven family keys={censusByFamilyKey.Count}; " +
+                    "refusals=[" + string.Join(",", censusRefusals) + "]"));
         }
 
         // ---- Reopen and independently re-verify every proven family's own delivered rows. ----
