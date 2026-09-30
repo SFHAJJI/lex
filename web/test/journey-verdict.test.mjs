@@ -280,13 +280,17 @@ test("a keyboard run reaches every field by Tab alone, and every stop shows wher
   const stop = (tag, type, ring, label = "") => ({ tag, type, inForm: true, pin: false, label, ring });
   const observed = {
     ...goodSearch(),
-    keyboard: { stops: [stop("a", null, true, "Skip"), stop("input", "text", true, "Phrase")], placed: 1, wanted: 1 },
+    keyboard: { stops: [stop("a", null, true, "Skip"), stop("input", "text", true, "Phrase")], placed: 1, wanted: 1, characters: 18, keyPresses: 18 },
   };
   const expected = { origin: ORIGIN, step: JOURNEY_STEPS.search, state: "success", keyboard: true };
   assert.deepEqual(journeyVerdict(observed, expected), []);
   assert.ok(journeyVerdict({ ...observed, keyboard: { ...observed.keyboard, placed: 0 } }, expected).some((failure) => failure === "Tab reached 0 of the form's 1 text fields"));
   assert.ok(journeyVerdict({ ...observed, keyboard: { ...observed.keyboard, stops: [stop("button", "submit", false, "Search")] } }, expected)
     .some((failure) => failure === 'a focus stop shows no focus indicator: button[type=submit] "Search"'), "a suppressed focus ring fails");
+  assert.ok(journeyVerdict({ ...observed, keyboard: { ...observed.keyboard, keyPresses: 0 } }, expected)
+    .some((failure) => failure === "text arrived without key presses: 18 characters typed, 0 character keys pressed"), "text set without key events is not typing (review of #802)");
+  assert.ok(journeyVerdict({ ...observed, keyboard: { ...observed.keyboard, keyPresses: undefined } }, expected)
+    .some((failure) => failure.startsWith("text arrived without key presses")), "a count the page never kept fails too");
   assert.ok(journeyVerdict({ ...observed, keyboard: undefined }, expected).some((failure) => failure === "the run took no keyboard path"));
   assert.deepEqual(journeyVerdict({ ...observed, keyboard: undefined }, { ...expected, keyboard: false }), [], "a run not asked to use the keyboard is not judged on it");
 });

@@ -621,8 +621,10 @@ accessibility line).
   The export composer's panel is a live region of its own, since pinning changes it and the reading
   above does not. Every journey run now holds the answer to that region, at load and at the end.
 - Keyboard: `journey.mjs --keyboard` drives every form step by the keyboard alone: from the top of
-  the page, Tab until each text field has focus, type, Enter to submit; the export composer's pin is
-  reached by Tab and checked with Space. Every focus stop on the way must show a focus indicator
+  the page, Tab until each text field has focus, type key by key, Enter to submit; the export
+  composer's pin is reached by Tab and checked with Space. Each character is its own key press, and
+  the page counts the character keys it receives: a run whose text arrived without them fails (the
+  review of #802 found CDP's `Input.insertText` sets a field with no key event at all). Every focus stop on the way must show a focus indicator
   (an outline or a shadow), and Tab must reach every field the step types into (a text or a search
   field). All sixteen runs pass with `--keyboard`, and all sixteen with `--keyboard --served-by-api`
   (run 2026-09-30); the first run found the search box is `type="search"`, which the keyboard path

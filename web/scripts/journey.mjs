@@ -189,6 +189,8 @@ export function journeyVerdict(observed, expected) {
     if (keys === undefined) failures.push("the run took no keyboard path");
     else {
       if (keys.placed !== keys.wanted) failures.push(`Tab reached ${keys.placed} of the form's ${keys.wanted} text fields`);
+      // Not `<`: a count the page never kept (undefined) must fail, not pass.
+      if (!(keys.keyPresses >= keys.characters)) failures.push(`text arrived without key presses: ${keys.characters} characters typed, ${keys.keyPresses} character keys pressed`);
       for (const stop of keys.stops.filter((candidate) => !candidate.ring)) {
         failures.push(`a focus stop shows no focus indicator: ${stop.tag}${stop.type ? `[type=${stop.type}]` : ""} "${stop.label}"`);
       }
@@ -377,6 +379,25 @@ async function pressKey(session, sessionId, key) {
   await session.send("Input.dispatchKeyEvent", { type: "keyUp", key, code, windowsVirtualKeyCode: vk, nativeVirtualKeyCode: vk }, sessionId);
 }
 
+/**
+ * Text typed as a keyboard types it: each character its own key press (down, with the character, then
+ * up), so the page receives keydown, keypress and input for every character. `Input.insertText`
+ * changes a field with no key event at all, so a keyboard path built on it proves nothing about typing
+ * (review of #802).
+ */
+async function typeByKeys(session, sessionId, text) {
+  for (const character of text) {
+    await session.send("Input.dispatchKeyEvent", { type: "keyDown", key: character, text: character, unmodifiedText: character }, sessionId);
+    await session.send("Input.dispatchKeyEvent", { type: "keyUp", key: character }, sessionId);
+  }
+}
+
+/** Counts, in the page, the character keys pressed (a key whose name is one character). */
+const COUNT_CHARACTER_KEYS = `(() => {
+  window.__journeyCharacterKeys = 0;
+  document.addEventListener('keydown', (event) => { if ([...event.key].length === 1) window.__journeyCharacterKeys += 1; }, true);
+})()`;
+
 /** What has focus, and whether it shows a focus indicator (an outline or a shadow). */
 const FOCUSED = `(() => {
   const el = document.activeElement;
@@ -388,29 +409,34 @@ const FOCUSED = `(() => {
 
 /**
  * The keyboard path through a form step: from the top of the page, Tab until each of the form's text
- * fields (text or search) has focus in turn, type into it, then press Enter, which submits the form as a keyboard user
- * submits it. Every focus stop on the way is recorded with whether it shows a focus indicator.
+ * fields (text or search) has focus in turn, type into it key by key, then press Enter, which submits
+ * the form as a keyboard user submits it. Every focus stop on the way is recorded with whether it
+ * shows a focus indicator, and the page counts the character keys it received.
  */
 async function keyboardTypeAndSubmit(session, sessionId, evaluate, deadline, typed) {
   while (Date.now() < deadline && (await evaluate("document.documentElement.dataset.hydrated ?? null")) === null) {
     await new Promise((resolve) => setTimeout(resolve, 100));
   }
   await evaluate("document.activeElement && document.activeElement.blur(); window.scrollTo(0, 0)");
+  await evaluate(COUNT_CHARACTER_KEYS);
   const texts = Array.isArray(typed) ? typed : [typed];
   const stops = [];
   let placed = 0;
+  let characters = 0;
   for (let tab = 0; tab < 40 && placed < texts.length; tab += 1) {
     await pressKey(session, sessionId, "Tab");
     const focused = await evaluate(FOCUSED);
     if (focused === null) continue;
     stops.push(focused);
     if (focused.inForm && focused.tag === "input" && (focused.type === "text" || focused.type === "search")) {
-      await session.send("Input.insertText", { text: texts[placed] }, sessionId);
+      await typeByKeys(session, sessionId, texts[placed]);
+      characters += [...texts[placed]].length;
       placed += 1;
     }
   }
+  const keyPresses = await evaluate("window.__journeyCharacterKeys");
   if (placed === texts.length) await pressKey(session, sessionId, "Enter");
-  return { stops, placed, wanted: texts.length };
+  return { stops, placed, wanted: texts.length, characters, keyPresses };
 }
 
 /** The keyboard path to a pin: Tab until a pin has focus, then Space, which checks it. */
@@ -599,7 +625,9 @@ async function main(argv) {
   for (const [label, { observed, failures }] of results) {
     const toApi = observed.requests.filter((request) => new URL(request.url).pathname.startsWith("/api/")).length;
     console.log(`${label}: ${observed.answerState}; ${observed.requests.length} requests (${toApi} to the API); ` +
-      `console ${observed.console.length}; hydration ${observed.hydrated}; ${failures.length === 0 ? "PASS" : "FAIL"}`);
+      `console ${observed.console.length}; hydration ${observed.hydrated}; ` +
+      `${observed.keyboard ? `${observed.keyboard.keyPresses} of ${observed.keyboard.characters} characters typed by key; ` : ""}` +
+      `${failures.length === 0 ? "PASS" : "FAIL"}`);
     for (const failure of failures) console.log(`  - ${failure}`);
     if (argv.includes("--verbose")) {
       for (const request of observed.requests) {
