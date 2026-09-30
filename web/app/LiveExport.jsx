@@ -19,11 +19,14 @@ import { ReadingAnswerView, ReadingForm } from './LiveReading.jsx';
 import { createReadingSession, quotationLanguageTag } from '../scripts/live-reading.mjs';
 import { EXPORT_FORMATS, LIVE_EXPORT_IDLE, exportState, formatRefusedSentence, pinKey, saveExport } from '../scripts/live-export.mjs';
 import { exportJson } from '../scripts/export-build.mjs';
-import { liveChrome } from '../scripts/live-chrome.mjs';
-import { LiveAnswer } from './LiveAnswer.jsx';
+import { countedEntry, fillText, liveChrome } from '../scripts/live-chrome.mjs';
+import { LiveAnswer, Say } from './LiveAnswer.jsx';
 
-/** The forms' labels and buttons, from the interface copy table. */
+/** The forms' labels and buttons, and this screen's sentences, from the interface copy table. */
 const FORM = liveChrome().form;
+const COPY = liveChrome().export;
+// The export reads what the reading screen reads, so a state is headed as the reading screen heads it.
+const READING = liveChrome().reading;
 
 const IDLE = Object.freeze({ state: 'idle', sentence: LIVE_EXPORT_IDLE });
 
@@ -39,8 +42,11 @@ function StatePins({ state, workKey, pins, onPin }) {
   return (
     <section data-state={state.stateSha256}>
       <h2>
-        {workKey}, {state.language}, the state applying from {state.applicabilityDate}
-        {state.nextApplicabilityDate === null ? '' : ` (the next state held applies from ${state.nextApplicabilityDate})`}
+        {state.nextApplicabilityDate === null ? (
+          <Say template={READING.stateHeading} values={{ work: workKey, language: state.language, from: state.applicabilityDate }} />
+        ) : (
+          <Say template={READING.stateHeadingNext} values={{ work: workKey, language: state.language, from: state.applicabilityDate, next: state.nextApplicabilityDate }} />
+        )}
       </h2>
       <p>
         <code>{state.permalink}</code>
@@ -50,7 +56,7 @@ function StatePins({ state, workKey, pins, onPin }) {
           const key = pinKey(state.stateSha256, article.publisherId);
           return (
             <li key={article.articleIdentitySha256} data-article={article.publisherId}>
-              <Pin checked={pins.has(key)} onPin={(on) => onPin(key, on)} label={`Pin ${article.publisherId}`} />
+              <Pin checked={pins.has(key)} onPin={(on) => onPin(key, on)} label={fillText(COPY.pin, { article: article.publisherId })} />
               <blockquote lang={quotationLanguageTag(state.language)}>{article.text}</blockquote>
             </li>
           );
@@ -58,14 +64,14 @@ function StatePins({ state, workKey, pins, onPin }) {
       </ol>
       {state.articlesWithoutText.length > 0 ? (
         <>
-          <h3>Held without text</h3>
+          <h3>{COPY.withoutTextHeading}</h3>
           <ul data-without-text={state.articlesWithoutText.length}>
             {state.articlesWithoutText.map((entry) => {
               const key = pinKey(state.stateSha256, entry.publisherId);
               return (
                 <li key={entry.articleIdentitySha256}>
-                  <Pin checked={pins.has(key)} onPin={(on) => onPin(key, on)} label={`Pin ${entry.publisherId}`} />{' '}
-                  held without text; an export records it as excluded, with its reason.
+                  <Pin checked={pins.has(key)} onPin={(on) => onPin(key, on)} label={fillText(COPY.pin, { article: entry.publisherId })} />{' '}
+                  {COPY.withoutTextNote}
                 </li>
               );
             })}
@@ -87,24 +93,38 @@ export function ExportPreview({ model, onSave }) {
   return (
     <>
       <p data-export-counts="">
-        {total} {total === 1 ? 'article' : 'articles'} pinned: {model.items.length} exported with text,{' '}
-        {model.excluded.length} excluded.
+        <Say template={countedEntry(COPY.counts, total)} values={{ count: total, withText: model.items.length, excluded: model.excluded.length }} />
       </p>
       <p data-watermark="">{model.watermark}</p>
       <p data-rights="">
-        Text served under {model.rightsDisposition}. {model.rightsRule}
+        <Say template={COPY.rights} values={{ rights: model.rightsDisposition }} /> {model.rightsRule}
       </p>
       <p>
-        Read on {model.date}, from the snapshot observed at {model.observedAt}. Corpus{' '}
-        <code>{model.verifiedBy.corpusSha256}</code>, index <code>{model.verifiedBy.indexSha256}</code>, registry{' '}
-        <code>{model.verifiedBy.registrySha256}</code>.
+        <Say
+          template={COPY.snapshot}
+          values={{
+            date: model.date,
+            observedAt: model.observedAt,
+            corpus: <code>{model.verifiedBy.corpusSha256}</code>,
+            index: <code>{model.verifiedBy.indexSha256}</code>,
+            registry: <code>{model.verifiedBy.registrySha256}</code>,
+          }}
+        />
       </p>
       <ol data-export-items={model.items.length}>
         {model.items.map((item) => (
           <li key={item.citation}>
-            <strong>{item.publisherId}</strong> ({item.language}, applying from {item.appliesFrom}):{' '}
-            <code>{item.citation}</code>, text digest <code>{item.textSha256}</code>, official source{' '}
-            <code>{item.officialSource}</code>
+            <Say
+              template={COPY.item}
+              values={{
+                article: <strong>{item.publisherId}</strong>,
+                language: item.language,
+                from: item.appliesFrom,
+                citation: <code>{item.citation}</code>,
+                digest: <code>{item.textSha256}</code>,
+                source: <code>{item.officialSource}</code>,
+              }}
+            />
           </li>
         ))}
       </ol>
@@ -112,8 +132,16 @@ export function ExportPreview({ model, onSave }) {
         <ul data-export-excluded={model.excluded.length}>
           {model.excluded.map((entry) => (
             <li key={`${entry.statePermalink}#${entry.publisherId}`}>
-              <strong>{entry.publisherId}</strong> ({entry.language}, applying from {entry.appliesFrom}): excluded,{' '}
-              {entry.reason}, <code>{entry.citation}</code>
+              <Say
+                template={COPY.excluded}
+                values={{
+                  article: <strong>{entry.publisherId}</strong>,
+                  language: entry.language,
+                  from: entry.appliesFrom,
+                  reason: entry.reason,
+                  citation: <code>{entry.citation}</code>,
+                }}
+              />
             </li>
           ))}
         </ul>
@@ -131,7 +159,7 @@ export function ExportPreview({ model, onSave }) {
         </p>
       ))}
       <details>
-        <summary>The JSON as it will be saved</summary>
+        <summary>{COPY.jsonSummary}</summary>
         <pre>{exportJson(model)}</pre>
       </details>
     </>
@@ -144,7 +172,7 @@ export function ExportPanel({ outcome, pins, onSave }) {
   if (panel.state === 'none') return null;
   return (
     <section data-export-state={panel.state}>
-      <h2>Export</h2>
+      <h2>{COPY.panelHeading}</h2>
       {panel.state === 'composed' ? <ExportPreview model={panel.model} onSave={onSave} /> : <p role="status">{panel.sentence}</p>}
     </section>
   );
@@ -157,8 +185,11 @@ export function ExportAnswerView({ outcome, pins, onPin }) {
   return (
     <section data-answer-state="success">
       <p>
-        Read on {view.date}
-        {view.language === null ? '' : ` in ${view.language}`}. Pin the articles to export.
+        {view.language === null ? (
+          <Say template={COPY.readOn} values={{ date: view.date }} />
+        ) : (
+          <Say template={COPY.readOnIn} values={{ date: view.date, language: view.language }} />
+        )}
       </p>
       {view.states.map((state) => (
         <StatePins key={state.stateSha256} state={state} workKey={view.workKey} pins={pins} onPin={onPin} />

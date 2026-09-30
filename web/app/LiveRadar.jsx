@@ -15,11 +15,12 @@ import { Fragment, useEffect, useRef, useState } from 'react';
 
 import { RefusalCard } from './RefusalCard.jsx';
 import { LIVE_RADAR_IDLE, RADAR_LANGUAGES, createRadarSession } from '../scripts/live-radar.mjs';
-import { liveChrome } from '../scripts/live-chrome.mjs';
-import { LiveAnswer } from './LiveAnswer.jsx';
+import { fillCounted, liveChrome } from '../scripts/live-chrome.mjs';
+import { LiveAnswer, Say } from './LiveAnswer.jsx';
 
-/** The forms' labels and buttons, from the interface copy table. */
+/** The forms' labels and buttons, and this screen's sentences, from the interface copy table. */
 const FORM = liveChrome().form;
+const COPY = liveChrome().radar;
 
 const IDLE = Object.freeze({ state: 'idle', sentence: LIVE_RADAR_IDLE });
 
@@ -29,25 +30,17 @@ function asSentence(text) {
   return /[.!?]$/.test(capitalised) ? capitalised : `${capitalised}.`;
 }
 
-const REASON_SENTENCES = Object.freeze({
-  first_held_state: 'the first state this index holds for the work and language, so there is nothing to compare it with',
-  ambiguous_version: 'several states of the work apply on this date, so none is compared',
-  ambiguous_baseline: 'several states apply on the date before it, so no baseline is chosen',
-  profiles_differ: 'this state and its baseline were read under different rule profiles, so they are not compared',
-});
-
 /** The states a row names besides its own, each by its permalink, so a reader can open either. */
 function Named({ label, permalinks }) {
+  const listed = permalinks.map((permalink, index) => (
+    <Fragment key={permalink}>
+      {index === 0 ? '' : ', '}
+      <code>{permalink}</code>
+    </Fragment>
+  ));
   return (
     <>
-      {' '}({label}{' '}
-      {permalinks.map((permalink, index) => (
-        <Fragment key={permalink}>
-          {index === 0 ? '' : ', '}
-          <code>{permalink}</code>
-        </Fragment>
-      ))}
-      )
+      {' '}<Say template={COPY.named} values={{ label, permalinks: listed }} />
     </>
   );
 }
@@ -55,20 +48,27 @@ function Named({ label, permalinks }) {
 function Verdict({ row }) {
   if (row.reason === null) {
     return (
-      <>
-        {row.wordingChanged ? 'wording changed' : 'wording unchanged'} from the state of {row.baseline.applicabilityDate}
-        <Named label="baseline" permalinks={[row.baseline.permalink]} />:{' '}
-        {row.counts.changed} changed, {row.counts.added} added, {row.counts.removed} removed, {row.counts.unchanged} unchanged
-      </>
+      <Say
+        template={COPY.compared}
+        values={{
+          wording: COPY.wording[row.wordingChanged ? 'changed' : 'unchanged'],
+          date: row.baseline.applicabilityDate,
+          baseline: <Named label={COPY.baseline} permalinks={[row.baseline.permalink]} />,
+          changed: row.counts.changed,
+          added: row.counts.added,
+          removed: row.counts.removed,
+          unchanged: row.counts.unchanged,
+        }}
+      />
     );
   }
-  return (
+  const named = (
     <>
-      not compared: {REASON_SENTENCES[row.reason]}
-      {row.candidates === null ? null : <Named label="candidates" permalinks={row.candidates} />}
-      {row.baseline === null ? null : <Named label="baseline" permalinks={[row.baseline.permalink]} />}
+      {row.candidates === null ? null : <Named label={COPY.candidates} permalinks={row.candidates} />}
+      {row.baseline === null ? null : <Named label={COPY.baseline} permalinks={[row.baseline.permalink]} />}
     </>
   );
+  return <Say template={COPY.notCompared} values={{ reason: COPY.reason[row.reason], named }} />;
 }
 
 /** One radar view, laid out: the window, the population, the rows and the caveat. */
@@ -77,28 +77,45 @@ export function RadarView({ view }) {
   return (
     <>
       <p data-radar-summary="">
-        {view.window.from} to {view.window.to}: {population.versionsInWindow}{' '}
-        {population.versionsInWindow === 1 ? 'state' : 'states'} of {population.worksInWindow}{' '}
-        {population.worksInWindow === 1 ? 'work' : 'works'}, of {population.worksHeld} held.
+        <Say
+          template={COPY.summary}
+          values={{
+            from: view.window.from,
+            to: view.window.to,
+            states: fillCounted(COPY.states, population.versionsInWindow),
+            works: fillCounted(COPY.works, population.worksInWindow),
+            held: population.worksHeld,
+          }}
+        />
       </p>
       <p data-caveat="">{asSentence(view.caveat)}</p>
       {view.rows.length === 0 ? (
         <p data-no-row="">
           {population.windowOverlapsWhatIsHeld
-            ? 'No held state is dated in this window.'
-            : `This window does not meet what this index holds${population.firstDateHeld === null ? '' : `, from ${population.firstDateHeld} to ${population.lastDateHeld}`}.`}
+            ? COPY.noRow
+            : population.firstDateHeld === null
+              ? COPY.windowMisses
+              : <Say template={COPY.windowMissesRange} values={{ first: population.firstDateHeld, last: population.lastDateHeld }} />}
         </p>
       ) : (
         <ol data-rows={view.rows.length}>
           {view.rows.map((row) => (
             <li key={row.state.stateSha256} data-reason={row.reason ?? (row.wordingChanged ? 'changed' : 'unchanged')}>
-              <strong>{row.workKey}</strong>, {row.state.language}, from {row.state.applicabilityDate}: <Verdict row={row} />.{' '}
-              <code>{row.state.permalink}</code>
+              <Say
+                template={COPY.row}
+                values={{
+                  work: <strong>{row.workKey}</strong>,
+                  language: row.state.language,
+                  from: row.state.applicabilityDate,
+                  verdict: <Verdict row={row} />,
+                  permalink: <code>{row.state.permalink}</code>,
+                }}
+              />
             </li>
           ))}
         </ol>
       )}
-      {view.truncated ? <p data-truncated="">The rows stop before {view.continueFrom}; a next request starts there.</p> : null}
+      {view.truncated ? <p data-truncated=""><Say template={COPY.truncated} values={{ date: view.continueFrom }} /></p> : null}
     </>
   );
 }
