@@ -79,6 +79,11 @@ test("an export carries every pinned article's citation, text, digests, official
     assert.equal(record.status, "exported");
     assert.equal(record.watermark, EXPORT_WATERMARK, "each row carries the watermark");
     assert.equal(record.rights_disposition, "agreed_same_run_cc_by");
+    // Review of #789: a row copied out alone still says when the snapshot was observed, under what
+    // rule the text was served, and which corpus, index and registry answered.
+    assert.equal(record.observed_at, OBSERVED);
+    assert.equal(record.rights_rule, view.rightsRule);
+    assert.deepEqual([record.corpus_sha256, record.index_sha256, record.registry_sha256], [view.corpusSha256, view.indexSha256, view.registrySha256]);
   }
 });
 
@@ -95,11 +100,17 @@ test("a pinned article held without text is excluded with its reason in both for
   const json = JSON.parse(exportJson(model));
   assert.deepEqual(json.excluded.map((entry) => entry.article), [moved.publisher_id]);
   assert.ok(!json.items.some((item) => item.article === moved.publisher_id));
+  const citation = `${view.states[0].permalink}#${moved.publisher_id}`;
+  assert.equal(json.excluded[0].citation, citation, "an excluded article keeps its citation");
   const rows = parseCsv(exportCsv(model)).slice(1);
-  const excludedRow = rows.find((row) => row[3] === moved.publisher_id);
-  assert.equal(excludedRow[4], "excluded: no_text_tokens");
-  assert.equal(excludedRow[12], "", "no text for an excluded article");
-  assert.equal(excludedRow[13], EXPORT_WATERMARK);
+  const excludedRow = Object.fromEntries(CSV_COLUMNS.map((column, position) => [column, rows.find((row) => row[3] === moved.publisher_id)[position]]));
+  assert.equal(excludedRow.status, "excluded: no_text_tokens");
+  assert.equal(excludedRow.citation, citation, "review of #789: the excluded row is cited, not left blank");
+  assert.equal(excludedRow.text, "", "no text for an excluded article");
+  assert.equal(excludedRow.watermark, EXPORT_WATERMARK);
+  assert.equal(excludedRow.observed_at, OBSERVED);
+  assert.equal(excludedRow.rights_rule, view.rightsRule);
+  assert.equal(excludedRow.registry_sha256, view.registrySha256);
 });
 
 test("an export never names an article the reader was not shown, and needs a pin and a time", async () => {

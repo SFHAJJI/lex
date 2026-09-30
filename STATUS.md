@@ -539,8 +539,11 @@ has its own bundle `client-live-export.js`.
   CSV" hand over exactly `exportJson` or `exportCsv` of that model, from a Blob in the page, under
   `lex-v3-export-<identifier>-<date>`. A new reading clears the pins.
 - JSON (`lex-v3-export/1`) and CSV (RFC 4180, CRLF, one row per pinned article, the excluded ones
-  included with their status and no text, each row carrying its citation, rights and the
-  watermark). PDF is not yet made (see the driver decisions).
+  included with their status and no text, each row carrying its citation, rights, the watermark,
+  the snapshot's observation time, the rights rule and the corpus, index and registry digests, so
+  a row copied out alone loses none of it). An excluded article keeps its citation, the state's
+  permalink and its article id, in both formats (review of #789). PDF is not yet made (see the
+  driver decisions).
 - The reading and export pages say the next held state's date as its start ("the next state held
   applies from"), never "until", as the compare page does after its review.
 - `journey.mjs` runs an eighth step: `/export.html`, typing the fixture work's identifier and

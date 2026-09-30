@@ -103,7 +103,7 @@ export function ExportPreview({ model, onSave }) {
           {model.excluded.map((entry) => (
             <li key={`${entry.statePermalink}#${entry.publisherId}`}>
               <strong>{entry.publisherId}</strong> ({entry.language}, applying from {entry.appliesFrom}): excluded,{' '}
-              {entry.reason}
+              {entry.reason}, <code>{entry.citation}</code>
             </li>
           ))}
         </ul>

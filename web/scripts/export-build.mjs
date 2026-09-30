@@ -20,10 +20,15 @@ import { WATERMARK_PREVIEW } from './export-composer.mjs';
 export const EXPORT_SCHEMA = 'lex-v3-export/1';
 export const EXPORT_WATERMARK = WATERMARK_PREVIEW;
 
-/** The CSV columns, in order: each row is one pinned article, whole on its own. */
+/**
+ * The CSV columns, in order: each row is one pinned article, whole on its own. The last five repeat on
+ * every row what the export as a whole carries (the snapshot's observation time, the rights rule, the
+ * corpus, index and registry digests), so a row copied out alone loses none of it (review of #789).
+ */
 export const CSV_COLUMNS = Object.freeze([
   'work_key', 'language', 'applies_from', 'article', 'status', 'citation', 'state_permalink',
   'text_sha256', 'body_sha256', 'official_source', 'rights_disposition', 'article_valid_from', 'text', 'watermark',
+  'observed_at', 'rights_rule', 'corpus_sha256', 'index_sha256', 'registry_sha256',
 ]);
 
 /**
@@ -65,6 +70,9 @@ export function composeExport({ view, pinned, observedAt }) {
         language: state.language,
         appliesFrom: state.applicabilityDate,
         publisherId: entry.publisherId,
+        // The article is held in its state, without text, so it is cited as any article of that
+        // state is: the state's hash-pinned permalink and the publisher's article id.
+        citation: `${state.permalink}#${entry.publisherId}`,
         statePermalink: state.permalink,
         reason: 'no_text_tokens',
       }));
@@ -124,6 +132,7 @@ export function exportJson(model) {
       language: entry.language,
       applies_from: entry.appliesFrom,
       article: entry.publisherId,
+      citation: entry.citation,
       state_permalink: entry.statePermalink,
       reason: entry.reason,
     })),
@@ -138,18 +147,22 @@ function csvField(value) {
 
 /**
  * The CSV export (RFC 4180, CRLF line ends): a header, then one row per pinned article, the excluded
- * ones included with their status and no text, and every row carrying its citation, rights and the
- * watermark, so a row copied out on its own still says what it is.
+ * ones included with their status and no text, and every row carrying its citation, rights, the
+ * watermark, the observation time, the rights rule and the three digests, so a row copied out on its
+ * own still says what it is and what answered it.
  */
 export function exportCsv(model) {
+  const provenance = [model.observedAt, model.rightsRule, model.verifiedBy.corpusSha256, model.verifiedBy.indexSha256, model.verifiedBy.registrySha256];
   const rows = [
     ...model.items.map((item) => [
       item.workKey, item.language, item.appliesFrom, item.publisherId, 'exported', item.citation, item.statePermalink,
       item.textSha256, item.bodySha256, item.officialSource, item.rightsDisposition, item.articleValidFrom, item.text, model.watermark,
+      ...provenance,
     ]),
     ...model.excluded.map((entry) => [
-      entry.workKey, entry.language, entry.appliesFrom, entry.publisherId, `excluded: ${entry.reason}`, '', entry.statePermalink,
+      entry.workKey, entry.language, entry.appliesFrom, entry.publisherId, `excluded: ${entry.reason}`, entry.citation, entry.statePermalink,
       '', '', '', model.rightsDisposition, '', '', model.watermark,
+      ...provenance,
     ]),
   ];
   return [CSV_COLUMNS, ...rows].map((row) => row.map(csvField).join(',')).join('\r\n') + '\r\n';
