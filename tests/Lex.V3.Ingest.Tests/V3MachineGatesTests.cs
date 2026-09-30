@@ -12,8 +12,9 @@ namespace Lex.V3.Ingest.Tests;
 /// Two of the launch contract's machine gates, run against the real handler on a mounted corpus: the temporal
 /// case set at 100 percent (a dated request never receives a different date silently: <c>as_of</c> and
 /// <c>in_force_on</c> select the one state that applies, or refuse <c>no_version_for_date</c> or
-/// <c>ambiguous_version</c> rather than choose) and the refusal case set at 100 percent (every absence is typed: each request that must be refused is refused with its
-/// registry code), each with the shuffled control that proves the harness would notice if it were wrong.
+/// <c>ambiguous_version</c> rather than choose) and the refusal case set at 100 percent (every absence is typed:
+/// each request that must be refused is refused with its registry code), each with the shuffled control that
+/// proves the harness would notice if it were wrong.
 /// </summary>
 /// <remarks>
 /// <para>
