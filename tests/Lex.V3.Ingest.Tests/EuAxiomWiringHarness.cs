@@ -230,7 +230,9 @@ internal static class EuAxiomWiringHarness
 
     internal static async Task<EuQueryExecutionResult> RunTwoSeedAsync(
         Func<string, string, EuAcquisitionTestFixture.FamilyScript> axiomScript,
-        bool numericExpressions = false)
+        bool numericExpressions = false,
+        ICustodyStore? custodyStore = null,
+        Func<HttpRequestMessage, HttpResponseMessage>? documentFetchResponse = null)
     {
         // ONE BUDGET FOR THE WHOLE RUN. The adapter refuses a census request
         // carrying a different instance, because two counters reading the same
@@ -240,8 +242,8 @@ internal static class EuAxiomWiringHarness
         var seedOne = EuAppendixASeedMap.SeedsInCelexOrder[0];
         var seedTwo = EuAppendixASeedMap.SeedsInCelexOrder[1];
         var scripts = TwoSeedScripts(axiomScript, numericExpressions);
-        var handler = new EuAcquisitionTestFixture.ClassifyingHandler(scripts);
-        var store = new EuAcquisitionTestFixture.EuInMemoryCustodyStore();
+        var handler = new EuAcquisitionTestFixture.ClassifyingHandler(scripts, documentFetchResponse);
+        var store = custodyStore ?? new EuAcquisitionTestFixture.EuInMemoryCustodyStore();
         var executor = new EuRepeatedEnumerationExecutor(
             store, new EuAcquisitionTestFixture.FixedTimeProvider(), handler);
         var adapter = new EuQueryExecutionAdapter(store, executor);

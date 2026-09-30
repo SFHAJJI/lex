@@ -693,8 +693,9 @@ proves the path, not a corpus.
   `formex_main_body_admitted` for the held EU member and the main-body producer parses its 99
   articles. What is not acquired is stated as its own outcome, never as a transport refusal:
   `not_acquired` with a reason (`body_not_held`: the run holds no body for the expression, today
-  every language but English, Decision 89, and the corpus binds every Formex outcome to one held
-  body; `language_not_addressable`, `manifestation_not_singular`, `identity_not_admitted`; and the
+  non-English original expressions, Decision 89, and the corpus binds every Formex outcome to one held
+  body; `language_not_addressable`, `manifestation_not_singular`, `identity_not_admitted` for works
+  outside the reviewed seed-root map, including consolidated expressions; and the
   four annex reasons below),
   `route_refused` with the status for any answer but 200 or 404 and for a 200 reached on a route
   that does not bind (a hop off the manifestation's path; review repair on this pull request),

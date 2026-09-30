@@ -20,7 +20,7 @@ using Lex.V3.Ingest.Europe;
 using Lex.V3.Ingest.Luxembourg;
 
 const string Usage =
-    "Usage: Lex.V3.Tool build --celex <CELEX> --lu-name <key> --lu-start <IRI> --lu-end <IRI>\n"
+    "Usage: Lex.V3.Tool build --celex <CELEX[,CELEX...]|all> --lu-name <key> --lu-start <IRI> --lu-end <IRI>\n"
     + "                         --custody <directory> --out <directory> --checkout <directory> --wire-ceiling <n>\n"
     + "  --celex        an Appendix A seed, comma-separated seeds, or all for the 82-seed population\n"
     + "  --lu-name      lowercase ASCII key prefixing the act's three family keys\n"

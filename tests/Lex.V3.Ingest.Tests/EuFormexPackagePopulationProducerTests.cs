@@ -26,22 +26,41 @@ public sealed class EuFormexPackagePopulationProducerTests
     [TestMethod]
     public async Task CombinedWorkBatchProducesOneAcquiredOutcomePerOriginalExpression()
     {
+        var store = new EuAcquisitionTestFixture.EuInMemoryCustodyStore();
+        var xhtml = await FixtureAsync("new-xhtml-200-body.bin");
+        var package = await FixtureAsync("new-fmx4-200-body.bin");
         var run = await EuAxiomWiringHarness.RunTwoSeedAsync(
             (first, second) => EuAcquisitionTestFixture.AxiomAbsenceScriptFor(first, second),
-            numericExpressions: true);
+            numericExpressions: true, custodyStore: store,
+            documentFetchResponse: request => EuAcquisitionTestFixture.BinaryResponse(
+                request, HttpStatusCode.OK,
+                [.. xhtml, .. System.Text.Encoding.UTF8.GetBytes($"<!-- fixture work: {request.RequestUri} -->")],
+                "application/xhtml+xml;charset=UTF-8"));
         Assert.IsNull(run.Refusal, run.Refusal?.Detail);
         var expressions = run.CorrigendumTripwires!.ProductionsByFamilyKey.Values
             .SelectMany(production => production.Expressions!.Derivation!.Expressions).ToArray();
         Assert.AreEqual(2, expressions.Select(expression => expression.Identity.PublisherWorkId).Distinct().Count());
         var handler = new FormexEnumerationHandler(expressions.ToDictionary(
-            expression => expression.Identity.PublisherExpressionId, _ => new[] { "fmx4" }), expressions);
-        var result = await Producer(new EuAcquisitionTestFixture.EuInMemoryCustodyStore(), handler).RunAsync(
+            expression => expression.Identity.PublisherExpressionId, _ => new[] { "fmx4", "pdfa2a" }), expressions,
+            packageResponse: request => request.RequestUri!.AbsolutePath.EndsWith("/zip", StringComparison.Ordinal)
+                ? EuAcquisitionTestFixture.BinaryResponse(request, HttpStatusCode.OK, package, "application/zip")
+                : null);
+        var result = await Producer(store, handler).RunAsync(
             run, RendererSource(), RendererSource(), EuAcquisitionTestFixture.SourceWitness(),
             EuAcquisitionTestFixture.TestWireBudget(), CancellationToken.None);
         Assert.IsTrue(result.Delivered, result.Detail);
-        Assert.AreEqual(2, result.AcquiredExpressionCount);
+        Assert.AreEqual(2, result.AcquiredExpressionCount, string.Join("; ", result.Reconciliation!.Outcomes.Select(
+            outcome => $"{outcome.Kind}/{outcome.NotAcquiredReason}: {outcome.Detail}")));
         CollectionAssert.AreEquivalent(expressions.Select(expression => expression.Identity).ToArray(),
             result.Reconciliation!.Outcomes.Select(outcome => outcome.ExpressionIdentity).ToArray());
+        Assert.AreEqual(2, result.AnnexClassifications.Count);
+        foreach (var expression in expressions)
+        {
+            var binding = result.AnnexClassifications.Single(classification =>
+                classification.Binding.FormexBody.PublisherUri == expression.Identity.PublisherExpressionId + ".01").Binding;
+            Assert.AreEqual(EuAppendixASeedMap.SeedsInCelexOrder.Single(seed =>
+                seed.WorkRoot == expression.Identity.PublisherWorkId).Celex, binding.WorkCelex);
+        }
     }
 
     [TestMethod]
@@ -720,8 +739,9 @@ public sealed class EuFormexPackagePopulationProducerTests
                         request, HttpStatusCode.OK, Pdf.Value, "application/pdf;type=pdfa2a;charset=UTF-8");
                 }
 
-                var english = expressions.Single(static candidate =>
-                    candidate.OfficialLanguage == "http://publications.europa.eu/resource/authority/language/ENG");
+                var english = expressions.Single(candidate =>
+                    candidate.OfficialLanguage == "http://publications.europa.eu/resource/authority/language/ENG"
+                    && new Uri(candidate.Identity.PublisherWorkId).AbsolutePath == uri.AbsolutePath);
                 var englishKey = english.Identity.PublisherExpressionId[
                     (english.Identity.PublisherExpressionId.LastIndexOf("/cellar/", StringComparison.Ordinal) + "/cellar/".Length)..];
                 return EuAcquisitionTestFixture.BinaryResponse(

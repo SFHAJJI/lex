@@ -13,7 +13,7 @@ namespace Lex.V3.Ingest.Tests;
 /// <summary>
 /// The EU half of the first mount, driven end to end by real code on one scripted transport: the
 /// adapter run over Appendix A's first seed (the harness's own scripts), the Formex population with
-/// its per-expression manifestation enumerations, and the legal-notice GET on eur-lex, all under one
+/// its per-expression manifestation enumerations, and the Decision receipt on Publications Office, all under one
 /// wire ceiling and with renderer sources read from this checkout's own renderer files. The produced
 /// three inputs then build a corpus through the envelope helper and <see cref="LexCorpus6Builder"/>,
 /// with the real notice route in the rights matrix.
@@ -52,6 +52,16 @@ public sealed class EuFirstMountAcquisitionTests
         Assert.AreSame(result.Run, result.Formex.Reconciliation!.Run);
         Assert.AreEqual(1, handler.RightsRequests.Count(uri => uri == NoticeUri));
         Assert.AreEqual(8, handler.FormexEnumerationRequests);
+
+        var luxembourg = await new Lex.V3.Ingest.Luxembourg.LuxembourgFirstMountAcquisition(
+            store, new LuxembourgAcquisitionTestFixture.FixedTimeProvider(),
+            new LuxembourgFirstMountAcquisitionTests.LuxembourgFamilyHandler(LuxembourgFirstMountAcquisitionTests.PdfBytes()))
+            .RunAsync(LuxembourgFirstMountAcquisitionTests.ActRange,
+                await Lex.V3.Ingest.Luxembourg.LuxembourgRendererSources.FromCheckoutAsync(store, CheckoutRoot(), CancellationToken.None),
+                LuxembourgAcquisitionTestFixture.TestWireBudget(), CancellationToken.None);
+        var build = await new V3FirstMountBuild(store).RunAsync(result, luxembourg, CancellationToken.None);
+        Assert.IsTrue(build.Delivered, $"{build.Refusal}: {build.Detail}");
+        Assert.AreEqual(5, build.Files.Count);
     }
 
     [TestMethod]
@@ -151,7 +161,7 @@ public sealed class EuFirstMountAcquisitionTests
 
         // The publisher saw exactly the traffic the composition describes: adapter families, the
         // Formex enumeration (one expression, two passes), the package route (303, then the ZIP),
-        // and the eur-lex robots and notice GETs.
+        // and the Publications Office robots and Decision GETs.
         Assert.AreEqual(4, handler.FormexEnumerationRequests);
         Assert.AreEqual(2, handler.FormexPackageRequests);
         CollectionAssert.AreEqual(

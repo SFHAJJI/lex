@@ -123,7 +123,7 @@ public enum EuFirstMountAcquisitionRefusal
 }
 
 /// <summary>
-/// The three EU inputs the Stage 3 envelope takes for one work, or one typed refusal. On a refusal
+/// The three EU inputs the Stage 3 envelope takes for the selected works, or one typed refusal. On a refusal
 /// an attempted adapter run and Formex result travel on the result. A receipt refused before
 /// population traffic carries neither; its captured transport evidence remains in custody.
 /// </summary>
@@ -144,7 +144,7 @@ public sealed class EuFirstMountAcquisitionResult
     }
 
     /// <summary>
-    /// The adapter run over the one work: complete on success and when a later step refused, the
+    /// The adapter run over the selected works: complete on success and when a later step refused, the
     /// refused run itself when <see cref="Refusal"/> is <see cref="EuFirstMountAcquisitionRefusal.RunRefused"/>
     /// after the adapter ran. Absent when the CELEX or the initial rights capture was refused.
     /// </summary>
@@ -196,7 +196,7 @@ public sealed class EuFirstMountAcquisitionResult
 
 /// <summary>
 /// The EU half of the first real mount: everything the Stage 3 envelope needs from the Union side
-/// for one Appendix A work, acquired live in one process under one wire ceiling, from production
+/// for selected Appendix A works, acquired live in one process under one wire ceiling, from production
 /// plans, production renderer sources and publicly bound witnesses.
 /// </summary>
 /// <remarks>
