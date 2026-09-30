@@ -56,10 +56,10 @@ CI evidence are recorded in the pull request before merge.
 
 ## Heads
 
-- `v3/integration`: `840b6b2e` (2026-09-30, PR #800 merged). Build 45 s. Fast lane
-  (`eng/test-fast.ps1`): 3,038 tests, 3,037 pass, 1 skipped. Ingest suite: green on CI for PR #760
+- `v3/integration`: `7ccc31ea` (2026-09-30, PR #798 merged). Fast lane
+  (`eng/test-fast.ps1`): 3,067 tests, 3,066 pass, 1 skipped. Ingest suite: green on CI for PR #760
   (the CI `dotnet` job runs the whole solution on every pull request, about 7 min on the runner;
-  green for PR #800);
+  green for PR #798);
   locally about 15 min. 935 web tests pass. CI's web job can flake in `keyboard-walk.test.mjs`
   ("browser debugger never answered"); rerunning the failed job is the fix.
 - Driver: Claude Opus 5.5 since 2026-09-29 (the Fable 5.1 driver ran out of tokens on 2026-09-28
@@ -925,9 +925,10 @@ proves the path, not a corpus.
   the profile, literal robots evaluation and the one wire ceiling.
 - The session now exposes the custody write receipt of every hop an executed attempt sealed
   (`HopWriteReceiptsByObservationId`), which the Formex ZIP binding needs as well.
-- **Formex package population: enumeration (PR #747) and acquisition (this pull request), fixtures
-  only.** `EuFormexPackagePopulationProducer` runs the real manifestation enumeration for every
-  expression of a complete run (all languages, one robots session and four requests each), closes
+- **Formex package population.** `EuFormexPackagePopulationProducer` runs the real manifestation
+  enumeration for English and French expressions only (PR #799), with repeated-enumeration proofs
+  and the shared wire budget. Every other language is `not_enumerated_language_out_of_scope`, with
+  eligibility unknown. For the enumerated expressions it closes
   eligibility, then acquires every eligible package the corpus can serve
   (`EuFormexPackageAcquisitionProducer`): one GET of the exact `fmx4` manifestation the enumeration
   delivered, on the route the office serves (manifestation URI, 303 to `{manifestation}/zip`,
@@ -941,7 +942,7 @@ proves the path, not a corpus.
   `formex_main_body_admitted` for the held EU member and the main-body producer parses its 99
   articles. What is not acquired is stated as its own outcome, never as a transport refusal:
   `not_acquired` with a reason (`body_not_held`: the run holds no body for the expression, today
-  non-English original expressions, Decision 89, and the corpus binds every Formex outcome to one held
+  French original expressions, Decision 89, and the corpus binds every acquired Formex outcome to one held
   body; `language_not_addressable`, `manifestation_not_singular`, `identity_not_admitted` for works
   outside the reviewed seed-root map, including consolidated expressions; and the
   four annex reasons below),
