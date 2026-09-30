@@ -116,13 +116,28 @@ public sealed class CorpusRecordSetReader
         ArgumentNullException.ThrowIfNull(retainedSetReceipt);
         ArgumentNullException.ThrowIfNull(setRef);
 
-        ReadOnlyMemory<byte> retained;
         try
         {
-            retained = await CustodyRestore
-                .ReadByDigestCheckedAsync(
-                    _custodyStore, retainedSetReceipt.Reference.ContentSha256, cancellationToken)
-                .ConfigureAwait(false);
+            var retained = await CustodyRestore.ReadByDigestCheckedAsync(
+                _custodyStore, retainedSetReceipt.Reference.ContentSha256, cancellationToken).ConfigureAwait(false);
+            if (ChunkedDerivedArtifact.IsRoot(retained.Span))
+            {
+                var artifact = await ChunkedDerivedArtifact.OpenAsync(_custodyStore,
+                    retainedSetReceipt.Reference.ContentSha256, CorpusRecordSetWriter.ChunkedKind,
+                    cancellationToken).ConfigureAwait(false);
+                if (artifact.CanonicalSha256 != setRef.Sha256)
+                    return CorpusRecordSetReadResult.Refused(new CorpusRecordSetReadRefusal(
+                        CorpusRecordSetReadRefusalKind.RetainedBytesAreNotThisSet,
+                        "The retained chunk root names a different canonical corpus set."));
+                using var chunks = artifact.OpenRead();
+                return CorpusRecordSetReadResult.Reopened(
+                    VerifiedCorpusRecordSet.ParseAndVerifyStream(setRef, chunks));
+            }
+            using var readback = MemoryMarshal.TryGetArray(retained, out var buffer)
+                ? new MemoryStream(buffer.Array!, buffer.Offset, buffer.Count, writable: false)
+                : new MemoryStream(retained.ToArray(), writable: false);
+            return CorpusRecordSetReadResult.Reopened(
+                VerifiedCorpusRecordSet.ParseAndVerifyStream(setRef, readback));
         }
         catch (CustodyIntegrityException exception)
         {
@@ -134,15 +149,6 @@ public sealed class CorpusRecordSetReader
         {
             return CorpusRecordSetReadResult.Refused(new CorpusRecordSetReadRefusal(
                 CorpusRecordSetReadRefusalKind.CustodyUnavailable, exception.Message));
-        }
-
-        try
-        {
-            using var readback = MemoryMarshal.TryGetArray(retained, out var buffer)
-                ? new MemoryStream(buffer.Array!, buffer.Offset, buffer.Count, writable: false)
-                : new MemoryStream(retained.ToArray(), writable: false);
-            return CorpusRecordSetReadResult.Reopened(
-                VerifiedCorpusRecordSet.ParseAndVerifyStream(setRef, readback));
         }
         catch (ArgumentException exception)
         {

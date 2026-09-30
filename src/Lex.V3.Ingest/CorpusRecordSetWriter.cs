@@ -306,7 +306,7 @@ public sealed class CorpusRecordSetWriteResult
     }
 
     /// <summary>
-    /// The custody class the store actually published for this run's record-set write, derived by
+    /// The weakest custody class observed across this set's complete write closure, derived by
     /// <see cref="CustodyMembershipClassifier"/>. Null on a refusal, where no set was retained.
     /// </summary>
     /// <remarks>
@@ -321,7 +321,7 @@ public sealed class CorpusRecordSetWriteResult
     public SourceArtifactRef? SetRef { get; }
 
     /// <summary>
-    /// The custody write receipt for this set's own bytes, for a written result only: the address
+    /// The custody receipt for inline bytes or the ordered chunk root, for a written result only: the address
     /// by which the retained set can be found again after this run ends.
     /// </summary>
     /// <remarks>
@@ -365,8 +365,8 @@ public sealed class CorpusRecordSetWriteResult
             throw new ArgumentOutOfRangeException(
                 nameof(retainedFloor),
                 retainedFloor,
-                "A written set carries the class its own write receipt derived, and a receipt " +
-                "derives only RetainedUnenforced or Floored.");
+                "A written set carries its write closure's weakest receipt-derived class: " +
+                "RetainedUnenforced or Floored.");
         }
 
         return new CorpusRecordSetWriteResult(
@@ -391,6 +391,7 @@ public sealed class CorpusRecordSetWriteResult
 /// </summary>
 public sealed class CorpusRecordSetWriter
 {
+    internal const string ChunkedKind = "lex-corpus-record-set/1";
     private readonly ICustodyStore _custodyStore;
 
     public CorpusRecordSetWriter(ICustodyStore custodyStore)
@@ -410,6 +411,11 @@ public sealed class CorpusRecordSetWriter
         var completion = BuildCompletion(manifest, records);
 
         var set = new CorpusRecordSet(CorpusRecordSetSchemaIds.Set, manifestRef, runIdentity, records);
+        var byteLength = ChunkedDerivedArtifact.MeasureCanonicalBytes(
+            output => CorpusRecordSetCanonicalWriter.Write(output, set), cancellationToken);
+        if (byteLength > ChunkedDerivedArtifact.ChunkSize)
+            return await WriteChunkedAsync(set, completion, byteLength, cancellationToken).ConfigureAwait(false);
+
         using var buffer = new MemoryStream();
         var setCanonicalSha256 = CorpusRecordSetCanonicalWriter.Write(buffer, set);
         ReadOnlyMemory<byte> setBytes = buffer.TryGetBuffer(out var segment)
@@ -458,6 +464,38 @@ public sealed class CorpusRecordSetWriter
             verifiedSet,
             completion,
             CustodyMembershipClassifier.Classify(writeReceipt));
+    }
+
+    private async Task<CorpusRecordSetWriteResult> WriteChunkedAsync(
+        CorpusRecordSet set, CorpusRecordSetCompletion completion, long byteLength,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var floor = CustodyMembership.Floored;
+            // Includes each data chunk, each retained receipt-evidence object, and the root.
+            // The root receipt alone cannot establish the retention of the complete set.
+            var (rootReceipt, _) = await ChunkedDerivedArtifact.WriteAsync(_custodyStore, ChunkedKind,
+                output => CorpusRecordSetCanonicalWriter.Write(output, set), cancellationToken,
+                receipt =>
+                {
+                    if (CustodyMembershipClassifier.Classify(receipt) == CustodyMembership.RetainedUnenforced)
+                        floor = CustodyMembership.RetainedUnenforced;
+                }).ConfigureAwait(false);
+            var artifact = await ChunkedDerivedArtifact.OpenAsync(_custodyStore,
+                rootReceipt.Reference.ContentSha256, ChunkedKind, cancellationToken).ConfigureAwait(false);
+            if (artifact.ByteLength != byteLength)
+                throw new CustodyIntegrityException("Corpus serialization changed after byte sizing.");
+            var reference = new SourceArtifactRef($"urn:uuid:{Guid.NewGuid():D}", artifact.CanonicalSha256);
+            using var readback = artifact.OpenRead();
+            var verified = VerifiedCorpusRecordSet.ParseAndVerifyStream(reference, readback);
+            return CorpusRecordSetWriteResult.Written(reference, rootReceipt, verified, completion, floor);
+        }
+        catch (Exception exception) when (exception is CustodyIntegrityException or CustodyRequiredException or CustodyPolicyException)
+        {
+            return CorpusRecordSetWriteResult.Refused(new CorpusRecordSetWriteRefusal(
+                CorpusRecordSetWriteRefusalKind.RecordSetNotRetained, exception.Message));
+        }
     }
 
     private static CorpusRecordSetCompletion BuildCompletion(

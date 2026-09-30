@@ -53,7 +53,7 @@ internal sealed class ChunkedDerivedArtifact
     internal static async Task<(DurableBlobWriteReceipt RootReceipt,
         IReadOnlyList<DurableBlobWriteReceipt> ChunkReceipts)> WriteAsync(
         ICustodyStore store, string kind, Func<Stream, string> writeCanonical,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken, Action<DurableBlobWriteReceipt>? observeReceipt = null)
     {
         ArgumentNullException.ThrowIfNull(store);
         ArgumentException.ThrowIfNullOrWhiteSpace(kind);
@@ -97,6 +97,7 @@ internal sealed class ChunkedDerivedArtifact
                 var digest = CustodyDigest.Of(bytes.Span, stop.Token);
                 if (receipt.Reference.ContentSha256 != digest || receipt.Reference.ByteLength != bytes.Length)
                     throw new CustodyIntegrityException("Derived chunk receipt does not name the written bytes.");
+                observeReceipt?.Invoke(receipt);
                 contentHash.AppendData(bytes.Span);
                 byteLength = checked(byteLength + bytes.Length);
                 var (receiptBytes, receiptDigest) = DurableBlobWriteReceiptDigest.Canonicalize(receipt);
@@ -106,6 +107,7 @@ internal sealed class ChunkedDerivedArtifact
                     throw new CustodyRequiredException("Derived chunk receipt was not retained: " + receiptFailure);
                 if (receiptEvidence.Reference.ContentSha256 != receiptDigest || receiptEvidence.Reference.ByteLength != receiptBytes.Length)
                     throw new CustodyIntegrityException("Chunk receipt evidence does not name its written bytes.");
+                observeReceipt?.Invoke(receiptEvidence);
                 chunks.Add(new Chunk(digest, bytes.Length, receiptDigest));
                 receipts.Add(receipt);
             }
@@ -120,6 +122,7 @@ internal sealed class ChunkedDerivedArtifact
             if (rootReceipt is null) throw new CustodyRequiredException("Derived root was not held: " + rootFailure);
             if (rootReceipt.Reference.ContentSha256 != CustodyDigest.Of(root) || rootReceipt.Reference.ByteLength != root.Length)
                 throw new CustodyIntegrityException("Derived root receipt does not name the written root.");
+            observeReceipt?.Invoke(rootReceipt);
             return (rootReceipt, Array.AsReadOnly(receipts.ToArray()));
         }
         finally
@@ -130,6 +133,19 @@ internal sealed class ChunkedDerivedArtifact
             try { await producer.ConfigureAwait(false); }
             catch { /* Preserve the consumer/producer failure already propagated above. */ }
         }
+    }
+
+    // Routing only: OpenAsync still verifies the complete root, ordered closure and digests.
+    internal static bool IsRoot(ReadOnlySpan<byte> bytes)
+    {
+        try
+        {
+            var reader = new Utf8JsonReader(bytes);
+            return reader.Read() && reader.TokenType == JsonTokenType.StartObject &&
+                reader.Read() && reader.TokenType == JsonTokenType.PropertyName && reader.ValueTextEquals("schema") &&
+                reader.Read() && reader.TokenType == JsonTokenType.String && reader.ValueTextEquals(Schema);
+        }
+        catch (JsonException) { return false; }
     }
 
     internal static async Task<ChunkedDerivedArtifact> OpenAsync(

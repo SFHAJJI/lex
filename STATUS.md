@@ -3,6 +3,21 @@
 Updated 2026-09-30 by the driver. This file replaces the issue-comment ledgers. It is rewritten in
 every pull request that changes what is served, what is next or what is blocked.
 
+## Corpus persistence in bounded custody objects (Codex draft, 2026-09-30)
+
+The corpus writer still held one complete canonical byte buffer after the stream-reader change.
+Reversible driver decision: sets larger than 4 MiB use the existing ordered chunk closure; small
+sets keep inline storage. Both paths preserve the same domain-separated logical set digest.
+The public reader independently reopens legacy inline sets and chunked sets, verifies closure and
+canonical bytes, and retains its three typed refusal categories. The storage root receipt identifies
+the root; the write result's retention class takes the weakest observed class across data chunks,
+retained receipt-evidence objects and the root. It does not infer the closure floor from the root.
+
+This code-only draft is uncompiled while required reviews occupy the machine. Regressions are
+prepared for independent public reopen, exact bytes, data/evidence/root retention differences,
+missing/reordered/substituted chunks, wrong canonical references, unavailable custody and failed
+holds. Typed records and completion remain materialized, so full Luxembourg fit is still unproved.
+
 ## Corpus record-set canonical streaming and readback (Codex, 2026-09-30)
 
 The full Luxembourg path still creates a complete corpus record set. Its canonical writer used
