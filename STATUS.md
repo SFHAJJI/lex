@@ -9,7 +9,8 @@ Full Luxembourg sizing exposed both retained scope objects and complete serializ
 Reversible driver decision: add a strict seekable-stream reader and use it for Luxembourg scope
 readback. It checks the original domain-separated digest before deserialization, admits the same
 complete-enumeration and selector/rule evidence, and compares freshly written canonical bytes
-against the retained stream with bounded buffers. A second digest pin rejects a different valid
+against the retained stream with fixed read buffers. Canonical output flushes after array
+elements once 64 KiB is pending; one element or scalar can exceed that threshold. A second digest pin rejects a different valid
 canonical document substituted between passes. The existing span reader remains available.
 
 The production custody restore already freezes its byte array; a read-only stream reuses that array.
@@ -23,7 +24,39 @@ digest failure precedence, malformed UTF-8, noncanonical spacing/trailing bytes,
 input between passes and independent evidence refusal. Validation passed: solution build with zero
 warnings/errors (39.09s), all 97 affected ingest checks (65.434s), and fast 3,070 passed/one platform
 skip (51.563s). The independently reflected construction census adds the new verified-reader door;
-its initial stale pin was corrected before the successful fast run. Cross-family review is next.
+its initial stale pin was corrected before the successful fast run.
+
+The required cross-family review reproduced a material writer-buffer issue: Utf8JsonWriter held
+an entire 4,098,427-byte rewrite until its final flush. The one repair flushes population arrays,
+including ordinal arrays and both canonical writer paths, while preserving exact bytes/digests.
+A 2,000-object regression checks write size, equality between writers, and strict stream reopening.
+Fresh repair build passed with zero warnings/errors (10.09s); fast passed 3,071 tests with one
+platform skip (55.629s), and all 98 affected ingest checks passed (66.556s). Removing the
+periodic flushes makes the regression fail with a 4,088,207-byte write. An initial repair run
+reused that mutation assembly due to a restored source timestamp; its failure log is retained
+and excluded. The successful run rebuilt the restored source. One census line change only rewraps the same renderer string.
+
+## Bilingual canary and full EU launch decision (Codex, 2026-09-30)
+
+The fresh bounded GDPR/Luxembourg canary completed at 18:18:34 UTC, exit 0, in 18m08s with
+191 of 800 wire requests. Its merged source is b0923cb0. It proved 91 EU expressions: six had
+Formex enumeration and 85 retained `not_enumerated_language_out_of_scope` with unknown
+eligibility. The mount holds one English and one French expression with 99 articles each.
+Luxembourg contributed ten records. All five outputs built twice identically and reopened.
+The retained-route audit found no EUR-Lex requests. This proves the bounded canary only.
+Evidence: `C:\lex-v3\bounded-en-fr-canary-20260930-1`; build-report SHA256
+`dc7d5b5bee57090a6ab544e4065b78e2890bf8e7175141d33e0e913a3b83e492`.
+
+Reversible driver decision: launch a fresh all-82-seed EU union run after the stream-reader
+repair is merged and private bilingual API verification passes. Keep Luxembourg bounded to a439
+in that run. The retained sizing plan allows 20,000 wire requests and requires 4,965,958,358 free
+bytes including a 1 GB reserve, checked before and after freezing the merged runtime. Historical
+1,314 served expressions imply 7,884 Formex enumeration requests; all other languages keep the
+typed outcome above. Counts, package sizes and index sizes are planning samples, not bounds.
+The new run must prove its own union and every discovered outcome. Custody will be fresh;
+this decision does not change the served mount or authorize production promotion.
+Sizing evidence: `C:\lex-v3\lanes\eu-population-request-budget-ready-20260930.json`.
+Full Luxembourg remains gated on retained-object and derived-artifact persistence scaling.
 
 ## Luxembourg typed assertion memory (Codex, 2026-09-30)
 

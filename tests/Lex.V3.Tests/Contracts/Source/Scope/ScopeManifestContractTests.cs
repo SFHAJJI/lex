@@ -1521,6 +1521,35 @@ public sealed class ScopeManifestContractTests
     }
 
     [TestMethod]
+    public void CanonicalWritersFlushPopulationArraysWithoutBufferingTheWholeDocument()
+    {
+        var profile = Profile();
+        var evidence = EvidenceArtifacts();
+        var inputs = Enumerable.Range(0, 2_000)
+            .Select(index => ValidInput(profile, Object($"flush-{index}")))
+            .OrderBy(input => ScopeManifestCanonicalWriter.ComputeObjectRefSha256(input.ObjectRef),
+                StringComparer.Ordinal).ToArray();
+        var resolver = ExactResolver.For(profile, evidence, inputs);
+        var verified = ScopeReducer.Reduce(profile, evidence,
+            inputs.Select(input => input.ObjectRef).ToArray(), inputs, resolver);
+        using var direct = new OffsetCountingStream(0);
+        var digest = ScopeManifestCanonicalWriter.Write(direct, verified);
+        using var streaming = new OffsetCountingStream(0);
+        var receipt = ScopeManifestCanonicalWriter.WriteStreaming(
+            streaming, profile, evidence, inputs.Length, _ => inputs, resolver);
+        Assert.AreEqual(digest, receipt.ManifestSha256);
+        Assert.AreEqual(direct.Length, streaming.Length);
+        Assert.IsTrue(direct.Length > 1_000_000);
+        // Fixture elements are smaller than 4 KiB; permit that overshoot above the flush threshold.
+        Assert.IsTrue(direct.LargestWrite <= 68 * 1024, $"Direct write: {direct.LargestWrite}");
+        Assert.IsTrue(streaming.LargestWrite <= 68 * 1024, $"Streaming write: {streaming.LargestWrite}");
+        using var bytes = new MemoryStream(CanonicalBytes(verified));
+        var reopened = VerifiedScopeManifest.ParseAndVerifyStream(
+            ArtifactRefFor(bytes.ToArray()), bytes, resolver);
+        CollectionAssert.AreEqual(CanonicalBytes(verified), CanonicalBytes(reopened));
+    }
+
+    [TestMethod]
     public void StreamReadbackPreservesCanonicalBytesWithShortReadsAndLeavesInputOpen()
     {
         var profile = Profile();
@@ -2089,6 +2118,8 @@ public sealed class ScopeManifestContractTests
 
     private sealed class OffsetCountingStream : Stream
     {
+        public int LargestWrite { get; private set; }
+
         public OffsetCountingStream(long initialPosition)
         {
             Position = initialPosition;
@@ -2117,11 +2148,13 @@ public sealed class ScopeManifestContractTests
 
         public override void Write(byte[] buffer, int offset, int count)
         {
+            LargestWrite = Math.Max(LargestWrite, count);
             Position += count;
         }
 
         public override void Write(ReadOnlySpan<byte> buffer)
         {
+            LargestWrite = Math.Max(LargestWrite, buffer.Length);
             Position += buffer.Length;
         }
 

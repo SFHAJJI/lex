@@ -946,7 +946,8 @@ public sealed class VerifiedScopeManifest
     /// canonical writer's output byte for byte against a fresh read. The writer's digest must also
     /// match the original pin, so changed bytes between passes cannot produce a verified manifest.
     /// Leaves the caller's stream open. The typed manifest is still materialized; byte validation
-    /// and canonical comparison use bounded buffers rather than a complete string or output copy.
+    /// and comparison reads use fixed buffers. Canonical output flushes at array-element boundaries
+    /// after 64 KiB pending; one element or scalar can exceed that threshold.
     /// </summary>
     public static VerifiedScopeManifest ParseAndVerifyStream(
         SourceArtifactRef artifactRef,
@@ -1284,6 +1285,7 @@ public static class ScopeManifestCanonicalWriter
                 input,
                 observationResolver);
             WriteObservedObject(writer, observed);
+            FlushPending(writer);
             WriteProjection(
                 projections.AsSpan(ordinal * ProjectionWidth, ProjectionWidth),
                 reduced.Results,
@@ -1347,6 +1349,7 @@ public static class ScopeManifestCanonicalWriter
             }
 
             WriteRow(writer, reduced.Row);
+            FlushPending(writer);
             AppendInputSequence(sequenceHash, ordinal, observed.ObjectRefSha256, reduced.Row.RowSha256);
             previousObjectSha256 = observed.ObjectRefSha256;
         }
@@ -1542,6 +1545,7 @@ public static class ScopeManifestCanonicalWriter
                         ProjectionDispositionByte(disposition))
                     {
                         writer.WriteNumberValue(ordinal);
+                        FlushPending(writer);
                     }
                 }
 
@@ -1571,6 +1575,7 @@ public static class ScopeManifestCanonicalWriter
             if (projections[(ordinal * ProjectionWidth) + 4] == 1)
             {
                 writer.WriteNumberValue(ordinal);
+                FlushPending(writer);
             }
         }
 
@@ -2123,6 +2128,16 @@ public static class ScopeManifestCanonicalWriter
         writer.WriteEndObject();
     }
 
+    // Utf8JsonWriter over Stream otherwise retains the entire document until its final Flush.
+    // This bounds pending output by the threshold plus one element/scalar, not a hard token limit.
+    private static void FlushPending(Utf8JsonWriter writer)
+    {
+        if (writer.BytesPending >= 64 * 1024)
+        {
+            writer.Flush();
+        }
+    }
+
     private static void WriteArray<T>(
         Utf8JsonWriter writer,
         string name,
@@ -2134,6 +2149,7 @@ public static class ScopeManifestCanonicalWriter
         foreach (var value in values)
         {
             write(writer, value);
+            FlushPending(writer);
         }
 
         writer.WriteEndArray();
@@ -2149,6 +2165,7 @@ public static class ScopeManifestCanonicalWriter
         foreach (var value in values)
         {
             writer.WriteNumberValue(value);
+            FlushPending(writer);
         }
 
         writer.WriteEndArray();
