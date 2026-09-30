@@ -854,13 +854,17 @@ proves the path, not a corpus.
   (`refusal-card.mjs` `ABSENCE_CODES`, from `35-ideal-ux`) requires every absence refusal to carry
   `what_would_answer` from a closed vocabulary (`corrected_identifier`, `new_official_observation`,
   `expanded_official_scope`) and `asserts_absence_of_law`. It also requires `identifier_unknown` to
-  carry a `population_disclosure` (the size of what was searched). The reviewed registry mandates
-  none of this. The platform's `identifier_unknown` sends `what_would_answer` as free text, and its
-  `no_version_for_date` sends the nearest dates and none of the three. `text_not_available`
-  conforms. So those two are said by their code on the live pages, without the card. Which side
-  moves:
-  - (a) the producer adds the fields as optional payload keys, with `identifier_unknown`'s
-    `what_would_answer` becoming the vocabulary list: a reviewed registry change;
+  carry a `population_disclosure` (the size of what was searched). The reviewed registry requires
+  `what_would_answer` (as free text) for `identifier_unknown` only, and neither
+  `asserts_absence_of_law` nor `population_disclosure` for any code. Three produced refusals
+  therefore fail the card (`refusal-payload-samples.test.mjs` `KNOWN_BREAKS`): `identifier_unknown`
+  (free-text `what_would_answer`, no disclosure), `no_version_for_date` (the nearest dates, neither
+  absence field) and `anchor_not_in_version` (`nearest_anchors`, neither absence field).
+  `text_not_available` conforms. So those three are said by their code on the live pages, without
+  the card. Which side moves:
+  - (a) the producer adds the fields to all three as optional payload keys, with
+    `identifier_unknown`'s `what_would_answer` becoming the vocabulary list: a reviewed registry
+    change;
   - (b) the card relaxes to the registry;
   - (c) the reader supplies them from its own census.
 
