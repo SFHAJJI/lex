@@ -369,11 +369,11 @@ CI evidence are recorded in the pull request before merge.
 
 ## Heads
 
-- `v3/integration`: `98119a24` (2026-09-30, PR #822 merged). Build 45 s. Fast lane
+- `v3/integration`: `baccee96` (2026-09-30, PR #821 merged). Build 45 s. Fast lane
   (`eng/test-fast.ps1`): 3,067 tests, 3,066 pass, 1 skipped (PR #798's validation). Ingest suite: green on CI for PR #760
   (the CI `dotnet` job runs the whole solution on every pull request, about 7 min on the runner;
-  green for PR #822);
-  locally about 15 min. 958 web tests pass. The web job's "browser debugger never answered" failures
+  green for PR #821);
+  locally about 15 min. 960 web tests pass. The web job's "browser debugger never answered" failures
   (keyboard-walk, and paint-check since #811) are fixed by PR #822: each browser binds its own
   debugging port (`launchBrowser`) instead of a random one another browser starting at the same
   moment could hold.
@@ -601,7 +601,7 @@ schema's `parameters` shape, and whose call runs the same dispatch the REST rout
 endpoint test proves it for all twenty-three. The launch-contract line "REST and MCP derive identical
 envelopes from the registry" is the owner's to tick.
 
-Web: 41 React components, 958 tests. Preview screens render fixtures. The V3 Luxembourg search
+Web: 41 React components, 960 tests. Preview screens render fixtures. The V3 Luxembourg search
 answer has a reader (PR #771). The answer census now samples `search` five ways from the real handler:
 - a phrase with 4 strict hits and 1 relaxed hit;
 - the same phrase one hit per page, with its cursor;
@@ -1205,6 +1205,35 @@ removed. `image-rehearsal.test.mjs` holds each check to fail on the image it mus
 
 Running the image and probing it (health, API, browser, privacy, security headers) is the next slice.
 
+The image run and its zero-traffic probes (PR #825).
+- The rehearsal's one command now runs the image before removing it, on this machine's WSL Ubuntu,
+  with no daemon and nothing installed (`image-run.mjs`):
+  - the layers are unpacked in the manifest's order into a root filesystem, whiteouts applied;
+  - the API starts as the image says (user 1654, its environment, working directory and entrypoint);
+  - it runs in a private mount namespace, its root filesystem read-only and `/tmp` a private tmpfs,
+    as a hardened deployment runs it.
+- The eight live screens are then probed against the image, served by the image itself, through the
+  journey's real-mount steps (`journey.mjs` `run` now takes a server; the host API and the image are
+  two). The probes:
+  - health: it answers;
+  - API: each page's request, answered from the mount it carries;
+  - browser: every screen, hydration, live regions and colour;
+  - security headers: CSP with `frame-ancestors 'none'`, HSTS, `Referrer-Policy: no-referrer`,
+    `nosniff`;
+  - privacy: nothing written after the first answer, on its output or its `/tmp`, which an inotify
+    watcher in the same namespace records, so a file written and deleted counts. Nothing can be
+    written outside `/tmp`: the start proves the root filesystem refuses a write.
+- On the real bounded mount all eight probes pass (Trust and Coverage and the radar answer; six
+  screens refuse and show their cards). At startup the API wrote 11 events on `/tmp`, none after its
+  first answer. The container's root filesystem is removed with the rest.
+- A deployment requirement it found: the image needs a writable, private `/tmp`. Mounting a corpus
+  verifies its index into a private temporary file (`LuxembourgIndexBuilder`, deleted on dispose). On
+  a fully read-only filesystem the mount is refused and every answer is `no_corpus_mounted`.
+- Not yet reproducible: two builds of the same sources and mount give different manifest digests
+  (the app layer differs). The launch contract asks byte-stable derivation of the corpus and
+  indexes, which the build report proves, and not of the image; making the image reproducible is a
+  release-pipeline item.
+
 The live export composer and its journey step (PR #789), the eighth screen. `dist-live/export.html`
 has its own bundle `client-live-export.js`.
 - The page asks what the reading page asks: the same form (`ReadingForm`, now shared), the same one
@@ -1749,8 +1778,10 @@ has not yet run; the bounded first mount above is complete.
    steps by the driver (they exist only in the pre-V3 pack, `05-user-journeys.md`).
 7. Release pipeline: build, sign, image, zero-traffic deploy, probes. Then acceptance and promotion.
    The steps that need no production credential are the web lane's since 2026-09-30 (the owner's proxy).
-   PR #821: one command builds, verifies, rehearsal-signs and removes the one-server image. Next: run
-   the image and probe it. Production signing, credentials and deployment stay with the owner.
+   PR #821: one command builds, verifies, rehearsal-signs and removes the one-server image; PR #825:
+   it runs the image (WSL, read-only root, private /tmp) and probes the eight screens against it. Next:
+   a reproducible image, and the probes against the full fixture mount. Production signing,
+   credentials and deployment stay with the owner.
 8. Machine gates (launch contract, Evaluation): the temporal, refusal and retrieval case sets run
    against the real handler, and all three shuffled controls are caught (PRs #767 and #768). The
    evaluation card is rendered from them with the statistical rows `not_yet_labelled` (PR #769).
