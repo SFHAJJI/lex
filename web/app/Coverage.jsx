@@ -36,13 +36,11 @@
 
 import { Fragment } from 'react';
 
+import { Say } from './LiveAnswer.jsx';
+import { fillText } from '../scripts/live-chrome.mjs';
 import {
-  COUNTS_PROVENANCE_NOTE,
-  HELD,
-  NO_ARTICLE_OUTCOMES,
-  NO_GAP_TOKENS,
-  NO_LANGUAGE_ROWS,
-  STATE_RANGE_NOTE,
+  COVERAGE_COLUMNS,
+  COVERAGE_COPY,
   capabilityAbsence,
   gapsSentence,
   narrowedNote,
@@ -93,9 +91,9 @@ function Spaced({ values }) {
  * caption says what the table counts and not when it was counted, because nothing on this answer
  * says when.
  */
-function FacetTable({ caption, head, children }) {
+function FacetTable({ caption, head, children, copy }) {
   return (
-    <div className="coverage-scroll" role="region" tabIndex={0} aria-label={`${caption}, scrollable`}>
+    <div className="coverage-scroll" role="region" tabIndex={0} aria-label={fillText(copy.scrollable, { caption })}>
       <table className="coverage-table">
         <caption>{caption}</caption>
         <thead>
@@ -113,14 +111,14 @@ function FacetTable({ caption, head, children }) {
   );
 }
 
-function LanguageRow({ language }) {
+function LanguageRow({ language, copy }) {
   return (
     <tr>
       <td>{language.language}</td>
       <td>{language.works}</td>
       <td>{language.states}</td>
       <td>{language.articles}</td>
-      <td>{HELD[language.searchable_text_held]}</td>
+      <td>{copy.held[language.searchable_text_held]}</td>
       <td>{language.articles_with_searchable_text}</td>
       <td>{language.articles_without_publisher_date}</td>
       <td>{language.first_state_date}</td>
@@ -129,62 +127,65 @@ function LanguageRow({ language }) {
   );
 }
 
-/** The coverage page. */
-export function Coverage({ answer }) {
+/** A table's column headings, in its order, in the copy's words. */
+function heads(table, copy) {
+  return COVERAGE_COLUMNS[table].map((key) => copy.columns[key]);
+}
+
+/**
+ * The coverage page, in the words of `copy`: English from `coverage.mjs` unless a page passes its
+ * chrome table's.
+ */
+export function Coverage({ answer, copy = COVERAGE_COPY }) {
   const view = readCoverage(answer);
   const unserved = unservedCapabilities(view);
   return (
     <section className="coverage">
       <section className="coverage-block">
-        <h2>What this page is about</h2>
+        <h2>{copy.headings.about}</h2>
         <p className="coverage-scope">{view.scope}</p>
         <dl className="coverage-facts">
-          <Row label="publisher"><Evidence value={view.mounted.publisher} /></Row>
-          <Row label="corpus"><Evidence value={view.mounted.corpus_sha256} /></Row>
-          <Row label="index"><Evidence value={view.mounted.index_sha256} /></Row>
-          <Row label="operation registry"><Evidence value={view.mounted.registry_sha256} /></Row>
+          <Row label={copy.facts.publisher}><Evidence value={view.mounted.publisher} /></Row>
+          <Row label={copy.facts.corpus}><Evidence value={view.mounted.corpus_sha256} /></Row>
+          <Row label={copy.facts.index}><Evidence value={view.mounted.index_sha256} /></Row>
+          <Row label={copy.facts.registry}><Evidence value={view.mounted.registry_sha256} /></Row>
         </dl>
-        <p className="coverage-note">{COUNTS_PROVENANCE_NOTE}</p>
+        <p className="coverage-note">{copy.countsProvenance}</p>
       </section>
       <section className="coverage-block">
-        <h2>How these counts are counted</h2>
+        <h2>{copy.headings.counted}</h2>
         <p className="coverage-note">{view.countsNote}</p>
       </section>
       <section className="coverage-block">
-        <h2>What this mount holds</h2>
+        <h2>{copy.headings.holds}</h2>
         <dl className="coverage-facts">
-          <Row label="works">{String(view.totals.works)}</Row>
-          <Row label="states">{String(view.totals.states)}</Row>
-          <Row label="articles">{String(view.totals.articles)}</Row>
-          <Row label="members">{String(view.totals.members)}</Row>
+          <Row label={copy.facts.works}>{String(view.totals.works)}</Row>
+          <Row label={copy.facts.states}>{String(view.totals.states)}</Row>
+          <Row label={copy.facts.articles}>{String(view.totals.articles)}</Row>
+          <Row label={copy.facts.members}>{String(view.totals.members)}</Row>
         </dl>
         {view.requestedLanguage === null ? null : (
-          <p className="coverage-note">{narrowedNote(view.requestedLanguage)}</p>
+          <p className="coverage-note">{narrowedNote(view.requestedLanguage, copy)}</p>
         )}
         <p className="coverage-held">
-          Languages held: <Spaced values={view.languagesHeld} />
+          <Say template={copy.languagesHeld} values={{ languages: <Spaced values={view.languagesHeld} /> }} />
         </p>
         {view.languages.length === 0 ? (
-          <p className="coverage-note">{NO_LANGUAGE_ROWS}</p>
+          <p className="coverage-note">{copy.noLanguageRows}</p>
         ) : (
-          <FacetTable
-            caption="Held works, states and articles by language"
-            head={['language', 'works', 'states', 'articles', 'searchable text held',
-              'articles with searchable text', 'articles with no publisher date', 'first state',
-              'last state']}
-          >
+          <FacetTable caption={copy.captions.languages} head={heads('languages', copy)} copy={copy}>
             {view.languages.map((language) => (
-              <LanguageRow key={language.language} language={language} />
+              <LanguageRow key={language.language} language={language} copy={copy} />
             ))}
           </FacetTable>
         )}
         {view.languages.length === 0 ? null : (
-          <p className="coverage-note">{STATE_RANGE_NOTE}</p>
+          <p className="coverage-note">{copy.stateRange}</p>
         )}
       </section>
       <section className="coverage-block">
-        <h2>What the corpus recorded for its members</h2>
-        <FacetTable caption="Members by the outcome the corpus recorded" head={['outcome', 'members']}>
+        <h2>{copy.headings.recorded}</h2>
+        <FacetTable caption={copy.captions.outcomes} head={heads('outcomes', copy)} copy={copy}>
           {view.members.byOutcome.map((outcome) => (
             <tr key={outcome.outcome}>
               <td><Evidence value={outcome.outcome} /></td>
@@ -193,15 +194,12 @@ export function Coverage({ answer }) {
           ))}
         </FacetTable>
         <p className="coverage-held">
-          {gapsSentence(view.members.withGaps, view.totals.members)}
+          {gapsSentence(view.members.withGaps, view.totals.members, copy)}
         </p>
         {view.members.gaps.length === 0 ? (
-          <p className="coverage-note">{NO_GAP_TOKENS}</p>
+          <p className="coverage-note">{copy.noGapTokens}</p>
         ) : (
-          <FacetTable
-            caption="Gap tokens the corpus recorded, counted by member"
-            head={['gap', 'members']}
-          >
+          <FacetTable caption={copy.captions.gaps} head={heads('gaps', copy)} copy={copy}>
             {view.members.gaps.map((gap) => (
               <tr key={gap.gap}>
                 <td><Evidence value={gap.gap} /></td>
@@ -212,12 +210,9 @@ export function Coverage({ answer }) {
         )}
         <p className="coverage-note">{view.members.gapsNote}</p>
         {view.members.articleOutcomes.length === 0 ? (
-          <p className="coverage-note">{NO_ARTICLE_OUTCOMES}</p>
+          <p className="coverage-note">{copy.noArticleOutcomes}</p>
         ) : (
-          <FacetTable
-            caption="Legal-content outcomes the corpus recorded, by disposition"
-            head={['disposition', 'outcomes']}
-          >
+          <FacetTable caption={copy.captions.articleOutcomes} head={heads('articleOutcomes', copy)} copy={copy}>
             {view.members.articleOutcomes.map((outcome) => (
               <tr key={outcome.disposition}>
                 <td><Evidence value={outcome.disposition} /></td>
@@ -229,29 +224,26 @@ export function Coverage({ answer }) {
         <p className="coverage-note">{view.members.articleOutcomesNote}</p>
       </section>
       <section className="coverage-block">
-        <h2>What can be asked of this mount</h2>
+        <h2>{copy.headings.asked}</h2>
         <p className="coverage-held">
-          {servedSentence(view.operations.served.length, view.operations.registered)}
+          {servedSentence(view.operations.served.length, view.operations.registered, copy)}
         </p>
         <dl className="coverage-facts">
-          <Row label="answered"><Spaced values={view.operations.served} /></Row>
-          <Row label="registered, with no route on this mount">
+          <Row label={copy.facts.answered}><Spaced values={view.operations.served} /></Row>
+          <Row label={copy.facts.notRouted}>
             {view.operations.notServed.length === 0
-              ? 'none'
+              ? copy.none
               : <Spaced values={view.operations.notServed} />}
           </Row>
         </dl>
         <p className="coverage-note">{view.operations.note}</p>
       </section>
       <section className="coverage-block">
-        <h2>What this mount measured it can answer</h2>
+        <h2>{copy.headings.measured}</h2>
         {view.capabilityCells.length === 0 ? (
-          <p className="coverage-note">{capabilityAbsence(view.requestedLanguage)}</p>
+          <p className="coverage-note">{capabilityAbsence(view.requestedLanguage, copy)}</p>
         ) : (
-          <FacetTable
-            caption="Measured capabilities, by operation, column, field, language and period"
-            head={['operation', 'column', 'field', 'language', 'from', 'to', 'population']}
-          >
+          <FacetTable caption={copy.captions.capabilities} head={heads('capabilities', copy)} copy={copy}>
             {view.capabilityCells.map((measured) => (
               <tr
                 key={[measured.operation, measured.column, measured.field, measured.language,
@@ -269,15 +261,15 @@ export function Coverage({ answer }) {
           </FacetTable>
         )}
         {unserved.length === 0 ? null : (
-          <p className="coverage-note">{unservedCapabilityNote(unserved)}</p>
+          <p className="coverage-note">{unservedCapabilityNote(unserved, copy)}</p>
         )}
       </section>
       <section className="coverage-block">
-        <h2>What this mount does not hold</h2>
+        <h2>{copy.headings.notHeld}</h2>
         <ul className="coverage-not-held">
           {view.notHeld.map((held) => (
             <li key={held.item}>
-              <Evidence value={held.item} />: {held.reason}
+              <Say template={copy.notHeldRow} values={{ item: <Evidence value={held.item} />, reason: held.reason }} />
             </li>
           ))}
         </ul>

@@ -727,21 +727,18 @@ export const NO_GAP_TOKENS =
  * Narrowed, it is about the language and says nothing about the mount. Unnarrowed, it is about the
  * mount. The old sentence said the second on both.
  */
-export function capabilityAbsence(language) {
-  return language === null
-    ? 'This mount measured no capability, so nothing here says what it can be asked of any period.'
-    : `No capability is measured for ${language}. This says nothing about the other languages this `
-      + 'mount holds: a narrowed answer carries only the capabilities of the language asked for.';
+export function capabilityAbsence(language, copy = COVERAGE_COPY) {
+  return language === null ? copy.capabilityAbsentAll : fill(copy.capabilityAbsentLanguage, { language });
 }
 
 /** How much of the corpus the members recorded a gap for. */
-export function gapsSentence(withGaps, members) {
-  return `${withGaps} of ${members} members recorded a gap.`;
+export function gapsSentence(withGaps, members, copy = COVERAGE_COPY) {
+  return fill(copy.gaps, { withGaps, members });
 }
 
 /** How much of the registry this mount answers. */
-export function servedSentence(served, registered) {
-  return `${served} of ${registered} registered operations are answered here.`;
+export function servedSentence(served, registered, copy = COVERAGE_COPY) {
+  return fill(copy.served, { served, registered });
 }
 
 /**
@@ -751,21 +748,13 @@ export function servedSentence(served, registered) {
  * sentence, placed beside the numbers it is about, because a note read after the totals is read
  * after the totals are believed.
  */
-export function narrowedNote(language) {
-  return (
-    `This answer was narrowed to ${language} when it was requested. Only the language rows and the `
-    + 'measured capabilities are that language’s. The totals here, the members below and '
-    + 'everything else on this page are the whole mount’s.'
-  );
+export function narrowedNote(language, copy = COVERAGE_COPY) {
+  return fill(copy.narrowed, { language });
 }
 
 /** The mount measured a capability for an operation it does not serve. Said, never hidden. */
-export function unservedCapabilityNote(operations) {
-  return (
-    `The index measured a capability for ${operations.join(', ')}, which this mount does not serve. `
-    + 'What the index measured and what the mount answers are two different facts, and here they '
-    + 'disagree.'
-  );
+export function unservedCapabilityNote(operations, copy = COVERAGE_COPY) {
+  return fill(copy.unserved, { operations: operations.join(', ') });
 }
 
 /** Which measured capabilities name an operation this mount does not serve. Often none. */
@@ -800,7 +789,7 @@ function row(label, value) {
 function table({ caption, head, rows }) {
   return (
     '<div class="coverage-scroll" role="region" tabindex="0" '
-    + `aria-label="${escapeHtml(caption)}, scrollable">`
+    + `aria-label="${escapeHtml(fill(COVERAGE_COPY.scrollable, { caption }))}">`
     + `<table class="coverage-table"><caption>${escapeHtml(caption)}</caption><thead><tr>`
     + head.map((heading) => `<th scope="col">${escapeHtml(heading)}</th>`).join('')
     + `</tr></thead><tbody>${rows}</tbody></table></div>`
@@ -816,6 +805,98 @@ function table({ caption, head, rows }) {
  * rather than take this page's word that it held.
  */
 export const HELD = Object.freeze({ true: 'yes', false: 'no' });
+
+/** A template's `{name}` placeholders filled with text. */
+function fill(template, values) {
+  return template.replace(/\{([A-Za-z]+)\}/g, (whole, name) => {
+    if (!Object.hasOwn(values, name)) throw new Error(`the coverage template ${JSON.stringify(template)} has no value for ${whole}`);
+    return String(values[name]);
+  });
+}
+
+/**
+ * Every word the coverage page says, in English: one source for the string renderer, the React
+ * component and the live pages' chrome table (`live-chrome.mjs`), which drafts the French beside it.
+ * The notes are the constants above; the templates carry `{name}` placeholders.
+ */
+export const COVERAGE_COPY = Object.freeze({
+  headings: Object.freeze({
+    about: 'What this page is about',
+    counted: 'How these counts are counted',
+    holds: 'What this mount holds',
+    recorded: 'What the corpus recorded for its members',
+    asked: 'What can be asked of this mount',
+    measured: 'What this mount measured it can answer',
+    notHeld: 'What this mount does not hold',
+  }),
+  facts: Object.freeze({
+    publisher: 'publisher',
+    corpus: 'corpus',
+    index: 'index',
+    registry: 'operation registry',
+    works: 'works',
+    states: 'states',
+    articles: 'articles',
+    members: 'members',
+    answered: 'answered',
+    notRouted: 'registered, with no route on this mount',
+  }),
+  languagesHeld: 'Languages held: {languages}',
+  captions: Object.freeze({
+    languages: 'Held works, states and articles by language',
+    outcomes: 'Members by the outcome the corpus recorded',
+    gaps: 'Gap tokens the corpus recorded, counted by member',
+    articleOutcomes: 'Legal-content outcomes the corpus recorded, by disposition',
+    capabilities: 'Measured capabilities, by operation, column, field, language and period',
+  }),
+  scrollable: '{caption}, scrollable',
+  columns: Object.freeze({
+    language: 'language',
+    works: 'works',
+    states: 'states',
+    articles: 'articles',
+    searchableTextHeld: 'searchable text held',
+    articlesWithSearchableText: 'articles with searchable text',
+    articlesWithoutPublisherDate: 'articles with no publisher date',
+    firstState: 'first state',
+    lastState: 'last state',
+    outcome: 'outcome',
+    members: 'members',
+    gap: 'gap',
+    disposition: 'disposition',
+    outcomes: 'outcomes',
+    operation: 'operation',
+    column: 'column',
+    field: 'field',
+    from: 'from',
+    to: 'to',
+    population: 'population',
+  }),
+  held: HELD,
+  none: 'none',
+  countsProvenance: COUNTS_PROVENANCE_NOTE,
+  noLanguageRows: NO_LANGUAGE_ROWS,
+  stateRange: STATE_RANGE_NOTE,
+  noArticleOutcomes: NO_ARTICLE_OUTCOMES,
+  noGapTokens: NO_GAP_TOKENS,
+  capabilityAbsentAll: 'This mount measured no capability, so nothing here says what it can be asked of any period.',
+  capabilityAbsentLanguage: 'No capability is measured for {language}. This says nothing about the other languages this mount holds: a narrowed answer carries only the capabilities of the language asked for.',
+  gaps: '{withGaps} of {members} members recorded a gap.',
+  served: '{served} of {registered} registered operations are answered here.',
+  narrowed: 'This answer was narrowed to {language} when it was requested. Only the language rows and the measured capabilities are that language’s. The totals here, the members below and everything else on this page are the whole mount’s.',
+  unserved: 'The index measured a capability for {operations}, which this mount does not serve. What the index measured and what the mount answers are two different facts, and here they disagree.',
+  notHeldRow: '{item}: {reason}',
+});
+
+/** Each table's columns, in order, as keys of `COVERAGE_COPY.columns`. */
+export const COVERAGE_COLUMNS = Object.freeze({
+  languages: Object.freeze(['language', 'works', 'states', 'articles', 'searchableTextHeld', 'articlesWithSearchableText',
+    'articlesWithoutPublisherDate', 'firstState', 'lastState']),
+  outcomes: Object.freeze(['outcome', 'members']),
+  gaps: Object.freeze(['gap', 'members']),
+  articleOutcomes: Object.freeze(['disposition', 'outcomes']),
+  capabilities: Object.freeze(['operation', 'column', 'field', 'language', 'from', 'to', 'population']),
+});
 
 function languageRows(languages) {
   return languages.map((language) => (
@@ -839,43 +920,41 @@ export function renderCoverage(answer) {
   const unserved = unservedCapabilities(view);
   return (
     '<section class="coverage">'
-    + '<section class="coverage-block"><h2>What this page is about</h2>'
+    + `<section class="coverage-block"><h2>${escapeHtml(COVERAGE_COPY.headings.about)}</h2>`
     + `<p class="coverage-scope">${escapeHtml(view.scope)}</p>`
     + '<table class="coverage-facts"><tbody>'
-    + row('publisher', code(view.mounted.publisher))
-    + row('corpus', code(view.mounted.corpus_sha256))
-    + row('index', code(view.mounted.index_sha256))
-    + row('operation registry', code(view.mounted.registry_sha256))
+    + row(COVERAGE_COPY.facts.publisher, code(view.mounted.publisher))
+    + row(COVERAGE_COPY.facts.corpus, code(view.mounted.corpus_sha256))
+    + row(COVERAGE_COPY.facts.index, code(view.mounted.index_sha256))
+    + row(COVERAGE_COPY.facts.registry, code(view.mounted.registry_sha256))
     + '</tbody></table>'
     + `<p class="coverage-note">${escapeHtml(COUNTS_PROVENANCE_NOTE)}</p>`
     + '</section>'
-    + '<section class="coverage-block"><h2>How these counts are counted</h2>'
+    + `<section class="coverage-block"><h2>${escapeHtml(COVERAGE_COPY.headings.counted)}</h2>`
     + `<p class="coverage-note">${escapeHtml(view.countsNote)}</p></section>`
-    + '<section class="coverage-block"><h2>What this mount holds</h2>'
+    + `<section class="coverage-block"><h2>${escapeHtml(COVERAGE_COPY.headings.holds)}</h2>`
     + '<table class="coverage-facts"><tbody>'
-    + row('works', escapeHtml(String(view.totals.works)))
-    + row('states', escapeHtml(String(view.totals.states)))
-    + row('articles', escapeHtml(String(view.totals.articles)))
-    + row('members', escapeHtml(String(view.totals.members)))
+    + row(COVERAGE_COPY.facts.works, escapeHtml(String(view.totals.works)))
+    + row(COVERAGE_COPY.facts.states, escapeHtml(String(view.totals.states)))
+    + row(COVERAGE_COPY.facts.articles, escapeHtml(String(view.totals.articles)))
+    + row(COVERAGE_COPY.facts.members, escapeHtml(String(view.totals.members)))
     + '</tbody></table>'
     + (view.requestedLanguage === null
       ? ''
       : `<p class="coverage-note">${escapeHtml(narrowedNote(view.requestedLanguage))}</p>`)
-    + `<p class="coverage-held">Languages held: ${view.languagesHeld.map(code).join(' ')}</p>`
+    + `<p class="coverage-held">${escapeHtml(COVERAGE_COPY.languagesHeld).replace('{languages}', view.languagesHeld.map(code).join(' '))}</p>`
     + (view.languages.length === 0
       ? `<p class="coverage-note">${escapeHtml(NO_LANGUAGE_ROWS)}</p>`
       : table({
-        caption: 'Held works, states and articles by language',
-        head: ['language', 'works', 'states', 'articles', 'searchable text held',
-          'articles with searchable text', 'articles with no publisher date', 'first state',
-          'last state'],
+        caption: COVERAGE_COPY.captions.languages,
+        head: COVERAGE_COLUMNS.languages.map((key) => COVERAGE_COPY.columns[key]),
         rows: languageRows(view.languages),
       }) + `<p class="coverage-note">${escapeHtml(STATE_RANGE_NOTE)}</p>`)
     + '</section>'
-    + '<section class="coverage-block"><h2>What the corpus recorded for its members</h2>'
+    + `<section class="coverage-block"><h2>${escapeHtml(COVERAGE_COPY.headings.recorded)}</h2>`
     + table({
-      caption: 'Members by the outcome the corpus recorded',
-      head: ['outcome', 'members'],
+      caption: COVERAGE_COPY.captions.outcomes,
+      head: COVERAGE_COLUMNS.outcomes.map((key) => COVERAGE_COPY.columns[key]),
       rows: view.members.byOutcome.map((outcome) => (
         `<tr><td>${code(outcome.outcome)}</td><td>${outcome.members}</td></tr>`)).join(''),
     })
@@ -884,8 +963,8 @@ export function renderCoverage(answer) {
     + (view.members.gaps.length === 0
       ? `<p class="coverage-note">${escapeHtml(NO_GAP_TOKENS)}</p>`
       : table({
-        caption: 'Gap tokens the corpus recorded, counted by member',
-        head: ['gap', 'members'],
+        caption: COVERAGE_COPY.captions.gaps,
+        head: COVERAGE_COLUMNS.gaps.map((key) => COVERAGE_COPY.columns[key]),
         rows: view.members.gaps.map((gap) => (
           `<tr><td>${code(gap.gap)}</td><td>${gap.members}</td></tr>`)).join(''),
       }))
@@ -893,29 +972,29 @@ export function renderCoverage(answer) {
     + (view.members.articleOutcomes.length === 0
       ? `<p class="coverage-note">${escapeHtml(NO_ARTICLE_OUTCOMES)}</p>`
       : table({
-        caption: 'Legal-content outcomes the corpus recorded, by disposition',
-        head: ['disposition', 'outcomes'],
+        caption: COVERAGE_COPY.captions.articleOutcomes,
+        head: COVERAGE_COLUMNS.articleOutcomes.map((key) => COVERAGE_COPY.columns[key]),
         rows: view.members.articleOutcomes.map((outcome) => (
           `<tr><td>${code(outcome.disposition)}</td><td>${outcome.outcomes}</td></tr>`)).join(''),
       }))
     + `<p class="coverage-note">${escapeHtml(view.members.articleOutcomesNote)}</p>`
     + '</section>'
-    + '<section class="coverage-block"><h2>What can be asked of this mount</h2>'
+    + `<section class="coverage-block"><h2>${escapeHtml(COVERAGE_COPY.headings.asked)}</h2>`
     + `<p class="coverage-held">${escapeHtml(
       servedSentence(view.operations.served.length, view.operations.registered))}</p>`
     + '<table class="coverage-facts"><tbody>'
-    + row('answered', view.operations.served.map(code).join(' '))
-    + row('registered, with no route on this mount', view.operations.notServed.length === 0
-      ? 'none'
+    + row(COVERAGE_COPY.facts.answered, view.operations.served.map(code).join(' '))
+    + row(COVERAGE_COPY.facts.notRouted, view.operations.notServed.length === 0
+      ? escapeHtml(COVERAGE_COPY.none)
       : view.operations.notServed.map(code).join(' '))
     + '</tbody></table>'
     + `<p class="coverage-note">${escapeHtml(view.operations.note)}</p></section>`
-    + '<section class="coverage-block"><h2>What this mount measured it can answer</h2>'
+    + `<section class="coverage-block"><h2>${escapeHtml(COVERAGE_COPY.headings.measured)}</h2>`
     + (view.capabilityCells.length === 0
       ? `<p class="coverage-note">${escapeHtml(capabilityAbsence(view.requestedLanguage))}</p>`
       : table({
-        caption: 'Measured capabilities, by operation, column, field, language and period',
-        head: ['operation', 'column', 'field', 'language', 'from', 'to', 'population'],
+        caption: COVERAGE_COPY.captions.capabilities,
+        head: COVERAGE_COLUMNS.capabilities.map((key) => COVERAGE_COPY.columns[key]),
         rows: view.capabilityCells.map((measured) => (
           '<tr>'
           + `<td>${code(measured.operation)}</td>`
@@ -931,9 +1010,9 @@ export function renderCoverage(answer) {
       ? ''
       : `<p class="coverage-note">${escapeHtml(unservedCapabilityNote(unserved))}</p>`)
     + '</section>'
-    + '<section class="coverage-block"><h2>What this mount does not hold</h2>'
-    + `<ul class="coverage-not-held">${view.notHeld.map((held) =>
-      `<li>${code(held.item)}: ${escapeHtml(held.reason)}</li>`).join('')}</ul>`
+    + `<section class="coverage-block"><h2>${escapeHtml(COVERAGE_COPY.headings.notHeld)}</h2>`
+    + `<ul class="coverage-not-held">${view.notHeld.map((held) => `<li>${
+      escapeHtml(COVERAGE_COPY.notHeldRow).replace('{item}', code(held.item)).replace('{reason}', escapeHtml(held.reason))}</li>`).join('')}</ul>`
     + '</section>'
     + '</section>'
   );

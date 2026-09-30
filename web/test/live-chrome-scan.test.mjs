@@ -8,8 +8,8 @@
 // from the table, which a French table could never translate. The pages' structure is untouched by
 // the swap, so the same render proves the table reaches every text node.
 //
-// One surface carries copy of its own and is the next slice, so it is not scanned: Trust and Coverage's
-// `Coverage` component. The refusal card is scanned: its words are the table's (from their one English
+// Every surface of the live pages is scanned. Trust and Coverage's answer (`Coverage`) says the table's
+// words, from their one English source, `coverage.mjs`. The refusal card is scanned: its words are the table's (from their one English
 // source, `refusal-card.mjs`), and the sentence a refusal says is the checkpoint list's (#793), with
 // its own French drafts, so it counts as data here. The evaluation card is scanned too: its words are
 // the table's and its figures the card's. What an export will carry (its
@@ -188,8 +188,6 @@ test("no interface text on a live page or a census answer bypasses the chrome ta
       scan(`${name}: ${entry.scenario}`, renderToStaticMarkup(h(View, { outcome, pins: new Set(), onPin: () => {}, onNextPage: () => {} })), dataOf(entry.envelope, members, [outcome.sentence]));
       refused.add(name);
     }
-    // Trust and Coverage's answer is the `Coverage` component's, the next slice.
-    if (name === "coverage") continue;
     for (const entry of census.envelopes.filter((candidate) => candidate.operation === operation && !candidate.envelope.refusal)) {
       const outcome = scripts[outcomeName]({ state: "success", envelope: entry.envelope });
       assert.equal(outcome.state, "success", `${name}: ${entry.scenario}`);
@@ -208,7 +206,7 @@ test("no interface text on a live page or a census answer bypasses the chrome ta
       }
     }
   }
-  assert.deepEqual([...answered].sort(), screens.map(([name]) => name).sort(), "every screen had a census answer to scan");
+  assert.deepEqual([...answered].sort(), [...screens.map(([name]) => name), "coverage"].sort(), "every screen had a census answer to scan");
   assert.deepEqual([...refused].sort(), [...screens.map(([name]) => name), "coverage"].sort(), "every screen had a census refusal to scan");
   assert.deepEqual(found, [], `interface text outside the chrome table:\n${found.join("\n")}`);
 });
