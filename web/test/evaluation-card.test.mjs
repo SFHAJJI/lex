@@ -12,7 +12,7 @@ import { createElement as h } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 
 import { EvaluationCardView, renderLiveCoveragePage } from "../.react-build/app.mjs";
-import { NOT_YET_LABELLED, readEvaluationCard, ruleOfThree, wilson95 } from "../scripts/evaluation-card.mjs";
+import { CARD_ROUTE, NOT_YET_LABELLED, readEvaluationCard, ruleOfThree, wilson95 } from "../scripts/evaluation-card.mjs";
 
 const card = JSON.parse(await readFile(new URL("../../schemas/v3-platform/evaluation-card.json", import.meta.url), "utf8"));
 const mutate = (change) => { const copy = structuredClone(card); change(copy); return copy; };
@@ -96,6 +96,7 @@ test("the page prints the card after the answer, its target first, every table w
   assert.equal([...section.matchAll(/: not yet labelled\./g)].length, card.statistical_rows.length);
   assert.ok(section.includes(card.negative_results[0].decision));
   assert.ok(!/color|colour/i.test(section), "no verdict is a colour");
+  assert.ok(section.includes(`<a href="${CARD_ROUTE}">The same card for machines, as JSON</a>`), "the card links its JSON at the stable route (36 s6)");
 });
 
 test("the live build carries the card it is handed, as a release build will hand it (review of #792)", async () => {
@@ -110,6 +111,8 @@ test("the live build carries the card it is handed, as a release build will hand
     const index = await readFile(join(destination, "index.html"), "utf8");
     assert.ok(index.includes("RELEASE CARD TARGET: the release"), "the handed card is the one printed");
     assert.ok(!index.includes("THE MOUNT IS A FIXTURE"), "and not the platform's rendered one");
+    const served = JSON.parse(await readFile(join(destination, CARD_ROUTE.slice(1)), "utf8"));
+    assert.deepEqual(served, release, "the stable route holds the same card, for machines");
   } finally {
     await rm(destination, { recursive: true, force: true });
   }
