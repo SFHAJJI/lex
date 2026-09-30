@@ -11,29 +11,19 @@ using Lex.V3.Ingest.Europe;
 namespace Lex.V3.Ingest.Tests;
 
 /// <summary>
-/// The one legal-notice GET per corpus run (Decision 88), produced under the corpus run's own
-/// identity. Real production code end to end (<see cref="EuLegalNoticePlan"/>,
-/// <see cref="OfficialMachineQuerySourceProfiles"/>, <see cref="RoutedHttpAcquisitionSession"/>,
-/// <see cref="EuRepeatedEnumerationExecutor.RunDocumentFetchAsync"/>,
-/// <see cref="EuLegalNoticeRouteProducer"/>) driven by a scripted transport, exactly the discipline
-/// <see cref="EuDocumentFetchReachabilityTests"/> uses for the Cellar route.
+/// Decision 95's rights-policy GET through the production document-fetch session. The robots
+/// fixture is the Publications Office capture under Fixtures/EuDocumentFetch; the rights body
+/// is synthetic. No test contacts a publisher. Redirect, robots, budget and body failures are
+/// retained as typed refusals, and successful routes carry the corpus run identity.
 /// </summary>
-/// <remarks>
-/// The robots answer is the real one: <c>Fixtures/EuLegalNotice/eur-lex-robots-2026-09-27.txt</c>
-/// is the body <c>GET https://eur-lex.europa.eu/robots.txt</c> returned on 2026-09-27 (200, 2,475
-/// bytes, <b>no Content-Type header</b>, <c>Crawl-delay: 10</c>), re-hashed on every run. The
-/// notice page body is synthetic: the real page's bytes are not held in this repository (only their
-/// measured digest and length are, in <c>EuLegalNoticeEvidenceTests</c>), and nothing these tests
-/// prove depends on the notice prose.
-/// </remarks>
 [TestClass]
 [DoNotParallelize]
 public sealed class EuLegalNoticeRouteProducerTests
 {
-    private const string NoticeUri = EuLegalNoticeEvidence.RequestedUri;
-    private const string RobotsUri = "https://eur-lex.europa.eu/robots.txt";
-    private const string RobotsFixtureSha256 = "a5987a744e454da2ba668f26b21ba79b016bb0c13ac42679de95a285e6b7735f";
-    private const string NoticeMediaType = "text/html; charset=UTF-8";
+    private const string NoticeUri = EuLegalNoticeEvidence.ReuseDecisionUri;
+    private const string RobotsUri = "https://publications.europa.eu/robots.txt";
+    private const string RobotsFixtureSha256 = "de63106ad6607ba0bf3e313c31871d96ccc7e949ee0e29fa0b1c85a450305a75";
+    private const string NoticeMediaType = "application/xhtml+xml; charset=UTF-8";
 
     private static readonly byte[] NoticeBody = Encoding.UTF8.GetBytes(
         "<!DOCTYPE html><html lang=\"en\"><head><title>Legal notice</title></head>"
@@ -69,12 +59,12 @@ public sealed class EuLegalNoticeRouteProducerTests
         Assert.AreEqual(Sha256(NoticeBody), route.Hops[0].Sha256);
 
         // The terminal request is the one the hop actually sent, reopened from custody by digest,
-        // and it carried nothing but the crawler identity: this route negotiates nothing.
+        // and it negotiated English XHTML beside the crawler identity.
         Assert.AreEqual(route.Hops[0].LogicalRequestSha256, Sha256(request.CopyCanonicalBytes()));
         Assert.AreEqual(NoticeUri, request.Uri);
         Assert.AreEqual(HttpRequestMethod.Get, request.Method);
-        CollectionAssert.AreEqual(new[] { "user-agent" }, request.Headers.Select(static header => header.Name).ToArray());
-        Assert.AreEqual(OutboundCrawlerIdentity.Token, request.Headers[0].Value);
+        CollectionAssert.AreEquivalent(new[] { "accept", "accept-language", "user-agent" }, request.Headers.Select(static header => header.Name).ToArray());
+        Assert.AreEqual(OutboundCrawlerIdentity.Token, request.Headers.Single(header => header.Name == "user-agent").Value);
 
         // The envelope's own door accepts exactly this pair.
         var notice = EuLegalNoticeEvidence.FromRoute(route, request);
@@ -89,17 +79,16 @@ public sealed class EuLegalNoticeRouteProducerTests
             store, Sha256(route.CopyCanonicalBytes()), CancellationToken.None);
         CollectionAssert.AreEqual(route.CopyCanonicalBytes(), retained.ToArray());
 
-        // Exactly two publisher requests: the robots policy, then the notice.
-        CollectionAssert.AreEqual(new[] { RobotsUri, NoticeUri }, handler.Sends.Select(static send => send.Uri).ToArray());
+        // Two robots hops, then one rights-policy request.
+        CollectionAssert.AreEqual(new[] { RobotsUri, "https://op.europa.eu/robots.txt", NoticeUri }, handler.Sends.Select(static send => send.Uri).ToArray());
         Assert.IsTrue(handler.Sends.All(static send => send.Method == "GET"));
-        Assert.AreEqual(string.Empty, handler.Sends[1].Accept, "the notice GET sends no Accept header.");
-        Assert.AreEqual(OutboundCrawlerIdentity.Token, handler.Sends[1].UserAgent);
+        Assert.AreEqual("application/xhtml+xml", handler.Sends[2].Accept);
+        Assert.AreEqual(EuLegalNoticeSource.CommissionReuseDecision2011833, notice.Source);
+        Assert.AreEqual(OutboundCrawlerIdentity.Token, handler.Sends[2].UserAgent);
     }
 
     /// <summary>
-    /// The robots widening is the legal-notice profile's alone. The same publisher shape (a 200
-    /// robots answer with no Content-Type header) that the notice route admits above is still
-    /// refused for the Cellar document-fetch route, so no other channel's admission moved.
+    /// The replacement uses the Cellar profile: a robots answer with no Content-Type is refused.
     /// </summary>
     [TestMethod]
     public async Task ARobotsPolicyWithoutAContentTypeIsStillRefusedForTheCellarRoute()
@@ -111,7 +100,7 @@ public sealed class EuLegalNoticeRouteProducerTests
                 request, HttpStatusCode.MovedPermanently, [], location: "https://op.europa.eu/robots.txt"),
             1 => EuAcquisitionTestFixture.BinaryResponse(request, HttpStatusCode.OK, RobotsFixtureBytes()),
             _ => throw new InvalidOperationException($"Unexpected request {ordinal}: {request.RequestUri}"),
-        });
+        }, redirectRobots: false);
         var executor = new EuRepeatedEnumerationExecutor(store, Clock(), handler);
         var witness = EuAcquisitionTestFixture.DocumentFetchSourceWitness();
 
@@ -130,7 +119,7 @@ public sealed class EuLegalNoticeRouteProducerTests
         var handler = new ScriptedHandler((ordinal, request) => ordinal switch
         {
             0 => EuAcquisitionTestFixture.BinaryResponse(
-                request, HttpStatusCode.OK, "User-agent: Lex\nDisallow: /\n\nUser-agent: *\nAllow: /\n"u8.ToArray()),
+                request, HttpStatusCode.OK, "User-agent: Lex\nDisallow: /\n\nUser-agent: *\nAllow: /\n"u8.ToArray(), "text/plain"),
             _ => throw new InvalidOperationException($"Unexpected request {ordinal}: {request.RequestUri}"),
         });
 
@@ -139,7 +128,7 @@ public sealed class EuLegalNoticeRouteProducerTests
 
         Assert.IsNull(result.Route);
         Assert.AreEqual(EuLegalNoticeRouteRefusal.RobotsBootstrapRefused, result.Refusal);
-        Assert.AreEqual(1, handler.Sends.Count);
+        Assert.AreEqual(2, handler.Sends.Count);
     }
 
     /// <summary>
@@ -166,7 +155,7 @@ public sealed class EuLegalNoticeRouteProducerTests
         Assert.IsNull(result.Route);
         Assert.AreEqual(EuLegalNoticeRouteRefusal.NoticeRouteInvalid, result.Refusal);
         StringAssert.Contains(result.Detail, "200");
-        Assert.AreEqual(2, handler.Sends.Count);
+        Assert.AreEqual(3, handler.Sends.Count);
     }
 
     /// <summary>
@@ -193,7 +182,7 @@ public sealed class EuLegalNoticeRouteProducerTests
         Assert.IsNull(result.Route, "a body the session sealed as incomplete must not become notice evidence.");
         Assert.AreEqual(EuLegalNoticeRouteRefusal.NoticeRouteInvalid, result.Refusal);
         StringAssert.Contains(result.Detail, "complete route");
-        Assert.AreEqual(2, handler.Sends.Count);
+        Assert.AreEqual(3, handler.Sends.Count);
     }
 
     [TestMethod]
@@ -213,13 +202,13 @@ public sealed class EuLegalNoticeRouteProducerTests
 
         Assert.IsNull(result.Route);
         Assert.AreEqual(EuLegalNoticeRouteRefusal.NoticeRouteInvalid, result.Refusal);
-        Assert.AreEqual(2, handler.Sends.Count, "an off-origin target is refused before it is sent.");
+        Assert.AreEqual(3, handler.Sends.Count, "an off-origin target is refused before it is sent.");
     }
 
     [TestMethod]
     public async Task ASameOriginRedirectIsFollowedAndTheTerminalHopIsTheNoticeEvidence()
     {
-        const string Terminal = "https://eur-lex.europa.eu/content/legal-notice/legal-notice.html?locale=en&session=1";
+        const string Terminal = "https://publications.europa.eu/resource/cellar/cb76d4a0-c886-40bd-99d7-8db018a723d0.0010.03/DOC_1";
         var corpusRunIdentity = CorpusRunIdentity();
         var store = new EuAcquisitionTestFixture.EuInMemoryCustodyStore();
         var handler = new ScriptedHandler((ordinal, request) => ordinal switch
@@ -248,7 +237,7 @@ public sealed class EuLegalNoticeRouteProducerTests
 
         var notice = EuLegalNoticeEvidence.FromRoute(route, result.TerminalRequest);
         Assert.AreEqual(Terminal, notice.EffectiveUri);
-        CollectionAssert.AreEqual(new[] { RobotsUri, NoticeUri, Terminal }, handler.Sends.Select(static send => send.Uri).ToArray());
+        CollectionAssert.AreEqual(new[] { RobotsUri, "https://op.europa.eu/robots.txt", NoticeUri, Terminal }, handler.Sends.Select(static send => send.Uri).ToArray());
     }
 
     [TestMethod]
@@ -261,10 +250,9 @@ public sealed class EuLegalNoticeRouteProducerTests
             _ => throw new InvalidOperationException($"Unexpected request {ordinal}: {request.RequestUri}"),
         });
 
-        // A budget is at least two (robots plus one product request). One reservation already
-        // spent by the run leaves exactly the robots fetch, so the notice request is the one the
+        // One reservation already spent leaves exactly the two robots hops; the rights GET is the one the
         // ceiling stops.
-        var budget = WireRequestBudget.OfWireRequests(2);
+        var budget = WireRequestBudget.OfWireRequests(3);
         Assert.IsTrue(budget.TryReserveAttempt());
 
         var result = await Producer(store, handler).RunAsync(
@@ -272,7 +260,7 @@ public sealed class EuLegalNoticeRouteProducerTests
 
         Assert.IsNull(result.Route);
         Assert.AreEqual(EuLegalNoticeRouteRefusal.WireBudgetExhausted, result.Refusal);
-        Assert.AreEqual(1, handler.Sends.Count);
+        Assert.AreEqual(2, handler.Sends.Count);
     }
 
     /// <summary>
@@ -293,7 +281,7 @@ public sealed class EuLegalNoticeRouteProducerTests
             _ => throw new InvalidOperationException($"Unexpected request {ordinal}: {request.RequestUri}"),
         });
         var executor = new EuRepeatedEnumerationExecutor(store, Clock(), handler);
-        var bound = new EuLegalNoticePlan().Bind(NewUrn(), NewUrn(), RendererSource()).Request;
+        var bound = new EuDocumentFetchPlan(EuDocumentFetchAddress.TryCreate("celex", "32011D0833", EuManifestationMediaType.XhtmlXml, EuDocumentLanguage.Eng, out _)!).Bind(NewUrn(), NewUrn(), RendererSource()).Request;
 
         var attempt = await executor.RunDocumentFetchAsync(
             bound, bound, EuAcquisitionTestFixture.TestWireBudget(), CancellationToken.None);
@@ -373,10 +361,10 @@ public sealed class EuLegalNoticeRouteProducerTests
     public void RobotsFixtureBytesMatchTheLiveCaptureDigest()
     {
         var bytes = RobotsFixtureBytes();
-        Assert.AreEqual(2475, bytes.Length);
+        Assert.IsTrue(bytes.Length > 0);
         var text = Encoding.UTF8.GetString(bytes);
         StringAssert.Contains(text, "User-agent: *");
-        StringAssert.Contains(text, "Crawl-delay: 10");
+        StringAssert.Contains(text, "Allow: /");
         Assert.IsFalse(text.Contains("Disallow: /content", StringComparison.Ordinal), "the pinned notice path is not disallowed.");
     }
 
@@ -384,7 +372,7 @@ public sealed class EuLegalNoticeRouteProducerTests
 
     /// <summary>The real 2026-09-27 robots answer: 200, Content-Length, and no Content-Type header.</summary>
     private static HttpResponseMessage Robots(HttpRequestMessage request) =>
-        EuAcquisitionTestFixture.BinaryResponse(request, HttpStatusCode.OK, RobotsFixtureBytes());
+        EuAcquisitionTestFixture.BinaryResponse(request, HttpStatusCode.OK, RobotsFixtureBytes(), "text/plain");
 
     /// <summary>
     /// A 200 text/html notice whose declared length is the whole page but whose stream fails after
@@ -449,7 +437,7 @@ public sealed class EuLegalNoticeRouteProducerTests
 
     private static byte[] RobotsFixtureBytes()
     {
-        var path = Path.Combine(AppContext.BaseDirectory, "Fixtures", "EuLegalNotice", "eur-lex-robots-2026-09-27.txt");
+        var path = Path.Combine(AppContext.BaseDirectory, "Fixtures", "EuDocumentFetch", "eu-robots.txt");
         var bytes = File.ReadAllBytes(path);
         Assert.AreEqual(RobotsFixtureSha256, Sha256(bytes), "the robots fixture no longer matches its live capture digest.");
         return bytes;
@@ -476,7 +464,7 @@ public sealed class EuLegalNoticeRouteProducerTests
     private sealed record Send(string Method, string Uri, string Accept, string UserAgent);
 
     private sealed class ScriptedHandler(
-        Func<int, HttpRequestMessage, HttpResponseMessage> respond) : HttpMessageHandler
+        Func<int, HttpRequestMessage, HttpResponseMessage> respond, bool redirectRobots = true) : HttpMessageHandler
     {
         private readonly List<Send> _sends = [];
 
@@ -507,7 +495,13 @@ public sealed class EuLegalNoticeRouteProducerTests
                     request.Headers.UserAgent.ToString()));
             }
 
-            return Task.FromResult(respond(ordinal, request));
+            Assert.AreNotEqual("eur-lex.europa.eu", request.RequestUri!.Host);
+            if (redirectRobots && ordinal == 0)
+            {
+                return Task.FromResult(EuAcquisitionTestFixture.BinaryResponse(request,
+                    HttpStatusCode.MovedPermanently, [], location: "https://op.europa.eu/robots.txt"));
+            }
+            return Task.FromResult(respond(redirectRobots ? ordinal - 1 : ordinal, request));
         }
     }
 }

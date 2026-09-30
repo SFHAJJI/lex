@@ -59,7 +59,7 @@ public sealed class LexCorpus6BuilderTests
             [corrigendumProduction],
             [member]);
         var digest = LexCorpus6Builder.ComputeSha256(LexCorpus6Builder.Write(fixedSet));
-        Assert.AreEqual("3043fbe2dd7b23adf13ad9d961608f67df77c5ad27d625f6d9f7ce89667c1781", digest);
+        Assert.AreEqual("0dd94a923be0db040622e31cdbd119b8fba050b86912eb05c617f44ddc2a147c", digest);
     }
 
     [TestMethod]

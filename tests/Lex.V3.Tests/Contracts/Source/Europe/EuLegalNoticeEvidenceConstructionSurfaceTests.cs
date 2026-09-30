@@ -41,7 +41,7 @@ public sealed class EuLegalNoticeEvidenceConstructionSurfaceTests
             new[]
             {
                 "constructor private instance " + N + "::.ctor("
-                + "System.String, System.String, " + Http + "RoutedHttpSingleHeader, "
+                + "Lex.V3.Contracts.Source.Europe.EuLegalNoticeSource, System.String, System.String, " + Http + "RoutedHttpSingleHeader, "
                 + Http + "RoutedHttpHeaderField, " + Http + "RoutedHttpHeaderField, "
                 + Http + "RoutedHttpHeaderField, System.UInt64, System.String, System.String, "
                 + "System.String) -> " + N,

@@ -636,6 +636,25 @@ proves the path, not a corpus.
 
 ## Data
 
+- **Decision 95 rights receipt (Codex data lane, 2026-09-30).** Governance PR #9 is merged.
+  The live receipt now requests Commission Decision 2011/833/EU at
+  `https://publications.europa.eu/resource/celex/32011D0833`, negotiating English XHTML through
+  the existing document-fetch profile. No request goes to EUR-Lex. Evidence schema
+  `lex-eu-legal-notice-evidence/3` records the closed `source` value; the legacy notice URI keeps
+  its profile identity and remains an admitted historical evidence source.
+  The receipt is acquired before the adapter or Formex population. A refused receipt spends one
+  logical product request (plus robots and any admitted redirect hops), then stops. Its retained
+  hops are rebound under the adapter's eventual corpus identity without another request.
+  Live check through the production session: 303 then 200 XHTML, 48,730 bytes, SHA-256
+  `2d5bc877b9a5aad948af21c680aca1d3409f41df5dd0dcc57ef9b1b225f60982`, matching the verified plan.
+  Custody and canonical evidence: `C:\lex-v3\lanes\rights-probe`; log: `rights-probe.log` beside it.
+  This receipt is the Commission policy the notice cites; Decision 95 records the accepted limit
+  for Parliament and Council documents. When EU evidence bundles serve text, they must carry
+  `© European Union, https://eur-lex.europa.eu` and the statement that only the electronic Official
+  Journal is authentic. EU text bundles are still the parity slice; this change acquires the receipt.
+  Next: rerun the bounded first mount with Lex.V3.Tool, using PR #750's command and the Codex
+  checkout. The historical failed attempts below remain evidence of the old route.
+
 - EU: complete 82-seed English population on disk at `C:\lex-v3\eu-population-run-9` (filesystem
   custody, 29,207 files, report `population-report.json`, `isCompletePopulation: true`, 1.9 h run).
   French expressions not acquired (Decision 89).
@@ -976,6 +995,10 @@ Each is the driver's call under ruling 7 and can be reversed by a later pull req
 - The web hosting shape of ruling 3 is `Lex.V3.Api` serving the built live pages beside `/api/v3` and
   `/mcp`, with the security headers, rather than an ingress split.
 
+- Data acquisitions: the owner's 2026-09-30 data-lane instruction authorises the bounded first
+  mount, complete EU and Luxembourg populations, and French EU bodies. Production signing,
+  deployment and promotion remain outside that authorisation.
+
 ## Waiting on others
 
 - The data lane (Codex, Decision 95): the EU rights receipt on the Publications Office route, then
@@ -989,8 +1012,6 @@ Each is the driver's call under ruling 7 and can be reversed by a later pull req
 ## Blocked on the owner
 
 Only money, legal or public claims, credentials and going live (ruling 7):
-- Run authorisation per run: the Luxembourg population, French EU expressions and the complete
-  Stage 7 run. The bounded first-mount run is authorised.
 - Azure production credentials and the signing identity, needed by week 5.
 - The weekly 30-minute checkpoint slot.
 

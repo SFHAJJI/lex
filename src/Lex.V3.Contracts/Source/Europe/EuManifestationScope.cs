@@ -195,6 +195,8 @@ public enum EuReuseBasis
     CcBy40 = 2,
 
     /// <summary>
+    /// Decision 95 permits the receipt to hold the Commission policy the notice cites, not the
+    /// notice itself. Its accepted limit for Parliament and Council documents remains explicit.
     /// The default reuse permission the EUR-Lex legal notice asserts, which cites Commission
     /// Decision 2011/833/EU as its basis.
     /// </summary>

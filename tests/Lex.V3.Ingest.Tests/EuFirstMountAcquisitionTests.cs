@@ -22,8 +22,8 @@ namespace Lex.V3.Ingest.Tests;
 [DoNotParallelize]
 public sealed class EuFirstMountAcquisitionTests
 {
-    private const string NoticeUri = EuLegalNoticeEvidence.RequestedUri;
-    private const string NoticeMediaType = "text/html; charset=UTF-8";
+    private const string NoticeUri = EuLegalNoticeEvidence.ReuseDecisionUri;
+    private const string NoticeMediaType = "application/xhtml+xml; charset=UTF-8";
     private static readonly byte[] NoticeBody = Encoding.UTF8.GetBytes(
         "<!DOCTYPE html><html lang=\"en\"><head><title>Legal notice</title></head><body><h1>Legal notice</h1></body></html>\n");
 
@@ -91,8 +91,8 @@ public sealed class EuFirstMountAcquisitionTests
         Assert.AreEqual(4, handler.FormexEnumerationRequests);
         Assert.AreEqual(2, handler.FormexPackageRequests);
         CollectionAssert.AreEqual(
-            new[] { "https://eur-lex.europa.eu/robots.txt", NoticeUri },
-            handler.EurLexRequests.ToArray());
+            new[] { "https://publications.europa.eu/robots.txt", "https://op.europa.eu/robots.txt", NoticeUri },
+            handler.RightsRequests.ToArray());
         Assert.IsTrue(handler.AdapterRequests > 0);
 
         // And the three inputs build a corpus whose rights matrix names the real route.
@@ -125,11 +125,11 @@ public sealed class EuFirstMountAcquisitionTests
         Assert.AreEqual(EuFirstMountAcquisitionRefusal.RunRefused, result.Refusal);
         StringAssert.Contains(result.Detail, "Appendix A");
         Assert.IsNull(result.Run);
-        Assert.AreEqual(0, handler.AdapterRequests + handler.FormexEnumerationRequests + handler.EurLexRequests.Count);
+        Assert.AreEqual(0, handler.AdapterRequests + handler.FormexEnumerationRequests + handler.RightsRequests.Count);
     }
 
     [TestMethod]
-    public async Task ARefusedLegalNoticeIsATypedRefusalThatStillCarriesTheRunAndTheFormexPopulation()
+    public async Task ARefusedLegalNoticeStopsBeforeTheRunAndFormexPopulation()
     {
         var root = EuAxiomWiringHarness.SeedRoot(null);
         var celex = EuAxiomWiringHarness.Seed(null).Celex;
@@ -140,7 +140,7 @@ public sealed class EuFirstMountAcquisitionTests
                 root, static seedRoot => EuAcquisitionTestFixture.AxiomAbsenceScriptFor(seedRoot),
                 expressionIri: expressionIri),
             new Dictionary<string, string[]>(StringComparer.Ordinal) { [expressionIri] = ["fmx4"] },
-            eurLexRobots: "User-agent: Lex\nDisallow: /\n");
+            rightsRobots: "User-agent: Lex\nDisallow: /\n");
         var renderers = await EuRendererSources.FromCheckoutAsync(store, CheckoutRoot(), CancellationToken.None);
 
         var result = await Acquisition(store, handler).RunAsync(
@@ -149,10 +149,32 @@ public sealed class EuFirstMountAcquisitionTests
         Assert.IsFalse(result.Delivered);
         Assert.AreEqual(EuFirstMountAcquisitionRefusal.LegalNoticeRefused, result.Refusal);
         StringAssert.Contains(result.Detail, nameof(EuLegalNoticeRouteRefusal.RobotsBootstrapRefused));
-        Assert.IsNotNull(result.Run);
-        Assert.IsTrue(result.Formex!.Delivered);
+        Assert.IsNull(result.Run);
+        Assert.IsNull(result.Formex);
+        Assert.AreEqual(0, handler.AdapterRequests + handler.FormexEnumerationRequests + handler.FormexPackageRequests);
         Assert.IsNull(result.LegalNotice);
-        CollectionAssert.AreEqual(new[] { "https://eur-lex.europa.eu/robots.txt" }, handler.EurLexRequests.ToArray());
+        CollectionAssert.AreEqual(new[] { "https://publications.europa.eu/robots.txt", "https://op.europa.eu/robots.txt" }, handler.RightsRequests.ToArray());
+    }
+
+    [TestMethod]
+    public async Task ARefusedRightsBodyCostsOneLogicalRequestAndNoPopulationTraffic()
+    {
+        var store = new EuAcquisitionTestFixture.EuInMemoryCustodyStore();
+        var handler = new CompositeHandler(
+            new Dictionary<string, EuAcquisitionTestFixture.FamilyScript>(StringComparer.Ordinal),
+            new Dictionary<string, string[]>(StringComparer.Ordinal), noticeStatus: HttpStatusCode.Accepted);
+        var renderers = await EuRendererSources.FromCheckoutAsync(store, CheckoutRoot(), CancellationToken.None);
+        var result = await Acquisition(store, handler).RunAsync(
+            EuAxiomWiringHarness.Seed(null).Celex, renderers, EuAcquisitionTestFixture.TestWireBudget(), CancellationToken.None);
+
+        Assert.AreEqual(EuFirstMountAcquisitionRefusal.LegalNoticeRefused, result.Refusal);
+        StringAssert.Contains(result.Detail, nameof(EuLegalNoticeRouteRefusal.NoticeRouteInvalid));
+        Assert.IsNull(result.Run);
+        Assert.IsNull(result.Formex);
+        Assert.AreEqual(0, handler.AdapterRequests + handler.FormexEnumerationRequests + handler.FormexPackageRequests);
+        CollectionAssert.AreEqual(
+            new[] { "https://publications.europa.eu/robots.txt", "https://op.europa.eu/robots.txt", NoticeUri },
+            handler.RightsRequests.ToArray());
     }
 
     [TestMethod]
@@ -200,9 +222,10 @@ public sealed class EuFirstMountAcquisitionTests
     {
         private readonly HttpMessageInvoker _adapter;
         private readonly IReadOnlyDictionary<string, string[]> _formexListedTypesByExpressionIri;
-        private readonly byte[] _eurLexRobots;
+        private readonly byte[] _rightsRobots;
+        private readonly HttpStatusCode _noticeStatus;
         private readonly Dictionary<string, int> _formexCallsByExpression = new(StringComparer.Ordinal);
-        private readonly List<string> _eurLex = [];
+        private readonly List<string> _rights = [];
         private static readonly Lazy<byte[]> GdprPackage = new(() => File.ReadAllBytes(
             Path.Combine(AppContext.BaseDirectory, "Fixtures", "EuDocumentFetch", "gdpr-fmx4-200-body.bin")));
 
@@ -213,14 +236,16 @@ public sealed class EuFirstMountAcquisitionTests
         internal CompositeHandler(
             IReadOnlyDictionary<string, EuAcquisitionTestFixture.FamilyScript> scripts,
             IReadOnlyDictionary<string, string[]> formexListedTypesByExpressionIri,
-            string? eurLexRobots = null)
+            string? rightsRobots = null,
+            HttpStatusCode noticeStatus = HttpStatusCode.OK)
         {
+            _noticeStatus = noticeStatus;
             _adapter = new HttpMessageInvoker(new EuAcquisitionTestFixture.ClassifyingHandler(scripts));
             _formexListedTypesByExpressionIri = formexListedTypesByExpressionIri;
-            _eurLexRobots = eurLexRobots is null
+            _rightsRobots = rightsRobots is null
                 ? File.ReadAllBytes(Path.Combine(
-                    AppContext.BaseDirectory, "Fixtures", "EuLegalNotice", "eur-lex-robots-2026-09-27.txt"))
-                : Encoding.UTF8.GetBytes(eurLexRobots);
+                    AppContext.BaseDirectory, "Fixtures", "EuDocumentFetch", "eu-robots.txt"))
+                : Encoding.UTF8.GetBytes(rightsRobots);
         }
 
         internal int AdapterRequests => Volatile.Read(ref _adapterRequests);
@@ -229,13 +254,13 @@ public sealed class EuFirstMountAcquisitionTests
 
         internal int FormexPackageRequests => Volatile.Read(ref _formexPackageRequests);
 
-        internal IReadOnlyList<string> EurLexRequests
+        internal IReadOnlyList<string> RightsRequests
         {
             get
             {
-                lock (_eurLex)
+                lock (_rights)
                 {
-                    return _eurLex.ToArray();
+                    return _rights.ToArray();
                 }
             }
         }
@@ -244,16 +269,23 @@ public sealed class EuFirstMountAcquisitionTests
             HttpRequestMessage request, CancellationToken cancellationToken)
         {
             var uri = request.RequestUri!;
-            if (uri.Host == "eur-lex.europa.eu")
+            Assert.AreNotEqual("eur-lex.europa.eu", uri.Host, "Decision 95 prohibits every request to EUR-Lex.");
+            if (uri.AbsoluteUri == NoticeUri || (uri.AbsolutePath == "/robots.txt" && _rights.All(value => value != NoticeUri)))
             {
-                lock (_eurLex)
+                lock (_rights)
                 {
-                    _eurLex.Add(uri.AbsoluteUri);
+                    _rights.Add(uri.AbsoluteUri);
                 }
 
-                return uri.AbsolutePath == "/robots.txt"
-                    ? EuAcquisitionTestFixture.BinaryResponse(request, HttpStatusCode.OK, _eurLexRobots)
-                    : EuAcquisitionTestFixture.BinaryResponse(request, HttpStatusCode.OK, NoticeBody, NoticeMediaType);
+                if (uri.AbsolutePath == "/robots.txt")
+                {
+                    return uri.Host == "publications.europa.eu"
+                        ? EuAcquisitionTestFixture.BinaryResponse(request, HttpStatusCode.MovedPermanently, [], location: "https://op.europa.eu/robots.txt")
+                        : EuAcquisitionTestFixture.BinaryResponse(request, HttpStatusCode.OK, _rightsRobots, "text/plain");
+                }
+
+                Assert.AreEqual(0, AdapterRequests + FormexEnumerationRequests + FormexPackageRequests);
+                return EuAcquisitionTestFixture.BinaryResponse(request, _noticeStatus, NoticeBody, NoticeMediaType);
             }
 
             // The package route: 303 from the manifestation to its /zip, then the real GDPR package.

@@ -55,6 +55,62 @@ public sealed class EuLegalNoticeEvidenceTests
     private const ulong SecondCaptureByteLength = 135_427;
 
     [TestMethod]
+    public void ReuseDecisionCaptureNamesItsSourceAndRoundTrips()
+    {
+        var (route, request) = DecisionRoute();
+        var notice = EuLegalNoticeEvidence.FromRoute(route, request);
+        Assert.AreEqual(EuLegalNoticeSource.CommissionReuseDecision2011833, notice.Source);
+        using var json = JsonDocument.Parse(notice.CopyCanonicalBytes());
+        Assert.AreEqual("commission_reuse_decision_2011_833", json.RootElement.GetProperty("source").GetString());
+        Assert.AreEqual(EuLegalNoticeEvidence.ReuseDecisionUri, json.RootElement.GetProperty("requested_uri").GetString());
+        Assert.AreEqual("eng", json.RootElement.GetProperty("language_selection").GetString());
+        CollectionAssert.AreEqual(notice.CopyCanonicalBytes(), EuLegalNoticeEvidence.ParseAndVerify(notice.CopyCanonicalBytes()).CopyCanonicalBytes());
+    }
+
+    [TestMethod]
+    [DataRow(null, "eng", "application/xhtml+xml")]
+    [DataRow("text/html", "eng", "application/xhtml+xml")]
+    [DataRow("application/xhtml+xml", null, "application/xhtml+xml")]
+    [DataRow("application/xhtml+xml", "fra", "application/xhtml+xml")]
+    [DataRow("application/xhtml+xml", "eng", "text/html")]
+    public void DecisionRequiresExactNegotiationAndXhtml(string? accept, string? language, string mediaType)
+    {
+        var (route, request) = DecisionRoute(accept, language, mediaType);
+        Assert.ThrowsExactly<ArgumentException>(() => EuLegalNoticeEvidence.FromRoute(route, request));
+    }
+
+    [TestMethod]
+    [DataRow("commission_reuse_decision_2011_833", "unknown_source")]
+    [DataRow("commission_reuse_decision_2011_833", "eur_lex_legal_notice")]
+    [DataRow("application/xhtml+xml", "text/html")]
+    [DataRow("publications.europa.eu", "example.invalid")]
+    public void DecisionCanonicalEvidenceRejectsSourceAndRepresentationTampering(string oldValue, string newValue)
+    {
+        var (route, request) = DecisionRoute();
+        var json = Encoding.UTF8.GetString(EuLegalNoticeEvidence.FromRoute(route, request).CopyCanonicalBytes());
+        Assert.ThrowsExactly<ArgumentException>(() => EuLegalNoticeEvidence.ParseAndVerify(
+            Encoding.UTF8.GetBytes(json.Replace(oldValue, newValue, StringComparison.Ordinal))));
+    }
+
+    private static (RoutedHttpEvidence, HttpLogicalRequest) DecisionRoute(
+        string? accept = "application/xhtml+xml", string? language = "eng", string mediaType = "application/xhtml+xml")
+    {
+        var headers = new List<HttpLogicalRequestHeader>();
+        if (accept is not null) headers.Add(new("accept", accept));
+        if (language is not null) headers.Add(new("accept-language", language));
+        var request = HttpLogicalRequest.Create(EuLegalNoticeEvidence.ReuseDecisionUri, HttpRequestMethod.Get,
+            headers, new HttpLogicalRequestBody(0, EmptyDigest), Digest('1'), Digest('2'));
+        var hop = RoutedHttpHop.Create(
+            0, Uuid("decision-capture"), null, RequestDigest(request),
+            EuLegalNoticeEvidence.ReuseDecisionUri, 200,
+            Headers(contentType: mediaType, contentLength: RealByteLength.ToString(System.Globalization.CultureInfo.InvariantCulture), date: RealDateHeader),
+            RealCapturedAt, RealCapturedAt,
+            new DeclaredContentLengthHttpCompletion(RealByteLength), RealByteLength, RealSha256,
+            WriteReceiptDigest(RealSha256, RealByteLength), RealByteLength, RealSha256);
+        return (EvidenceForOrdinal(1, hop), request);
+    }
+
+    [TestMethod]
     public void ACleanCaptureHasTheExactClosedShapeAndRoundTrips()
     {
         var (evidence, request) = RealRoute();
@@ -64,7 +120,8 @@ public sealed class EuLegalNoticeEvidenceTests
         var notice = EuLegalNoticeEvidence.FromRoute(evidence, request);
         var bytes = notice.CopyCanonicalBytes();
         var expected =
-            "{\"schema\":\"lex-eu-legal-notice-evidence/2\"," +
+            "{\"schema\":\"lex-eu-legal-notice-evidence/3\"," +
+            "\"source\":\"eur_lex_legal_notice\"," +
             "\"requested_uri\":\"https://eur-lex.europa.eu/content/legal-notice/legal-notice.html?locale=en\"," +
             "\"effective_uri\":\"https://eur-lex.europa.eu/content/legal-notice/legal-notice.html?locale=en\"," +
             "\"language_selection\":\"en\"," +
@@ -83,7 +140,7 @@ public sealed class EuLegalNoticeEvidenceTests
         CollectionAssert.AreEqual(
             new[]
             {
-                "schema", "requested_uri", "effective_uri", "language_selection", "media_type",
+                "schema", "source", "requested_uri", "effective_uri", "language_selection", "media_type",
                 "observed_date", "policy_effective_date", "source_policy_version", "byte_length",
                 "sha256", "durable_write_receipt_sha256", "routed_evidence_sha256", "captured_at",
             },
@@ -236,8 +293,8 @@ public sealed class EuLegalNoticeEvidenceTests
         var json = Encoding.UTF8.GetString(EuLegalNoticeEvidence.FromRoute(evidence, request).CopyCanonicalBytes());
         var tampered = Encoding.UTF8.GetBytes(
             json.Replace(
-                "\"lex-eu-legal-notice-evidence/2\"",
                 "\"lex-eu-legal-notice-evidence/3\"",
+                "\"lex-eu-legal-notice-evidence/2\"",
                 StringComparison.Ordinal));
 
         var thrown = Assert.ThrowsExactly<ArgumentException>(
@@ -668,7 +725,7 @@ public sealed class EuLegalNoticeEvidenceTests
 
         var thrown = Assert.ThrowsExactly<ArgumentException>(
             () => EuLegalNoticeEvidence.FromRoute(EvidenceFor(hop), request));
-        StringAssert.Contains(thrown.Message, "exact R8 URI");
+        StringAssert.Contains(thrown.Message, "exact admitted rights URI");
     }
 
     [TestMethod]
@@ -703,7 +760,7 @@ public sealed class EuLegalNoticeEvidenceTests
 
         var thrown = Assert.ThrowsExactly<ArgumentException>(
             () => EuLegalNoticeEvidence.FromRoute(evidence, request));
-        StringAssert.Contains(thrown.Message, "exact R8 URI");
+        StringAssert.Contains(thrown.Message, "exact admitted rights URI");
     }
 
     [TestMethod]
