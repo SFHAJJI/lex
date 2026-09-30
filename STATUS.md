@@ -539,7 +539,8 @@ least one article permalink, and nothing that is only prose. The journey's own p
 The interface languages on the live pages (PR #797, the launch contract's "DE and LB answer
 `localization_unavailable`"). Every live page carries a language list (`LocaleNav`): English,
 Français, Deutsch, Lëtzebuergesch, each named in itself and tagged with its own `lang`, the page's
-own language marked current. Only English chrome is reviewed (`REVIEWED_CHROME_LOCALES`), so the
+own language marked current, and each link's `hrefLang` the language of the page it leads to
+(English for an unreviewed language; review of #797). Only English chrome is reviewed (`REVIEWED_CHROME_LOCALES`), so the
 other three lead to `locale-fr.html`, `locale-de.html` and `locale-lb.html`, built into `dist-live`:
 the `localization_unavailable` page, in English and labelled English, under the live banner, with
 no script. It says exactly what the preview's page says (`localeUnavailableCopy`, now shared; the
@@ -548,8 +549,10 @@ is reviewed (Decision 41); German and Luxembourgish stay unavailable at launch.
 - Statute language apart from the interface's: the interface is `<html lang="en">`, and every piece
   of publisher text a live page shows carries its own language. That was already true of the
   quotations and notes on the reading and export pages; the dossier's titles (each in its
-  expression's language) and search's matched titles (in the language the search was asked in) now
-  carry it too. History, compare and radar show digests and ids, no publisher text.
+  expression's language) and search's matched titles now carry it too. A matched title is marked in
+  its own language, which the resolver's card now names (`matched_title_language`, from the title
+  row): the resolver searches every language's titles, so the language searched in is not the
+  title's (review of #797). History, compare and radar show digests and ids, no publisher text.
 
 The live export composer and its journey step (PR #789), the eighth screen. `dist-live/export.html`
 has its own bundle `client-live-export.js`.

@@ -185,9 +185,10 @@ test("every live page offers the interface languages, each named in itself; an u
     const nav = html.slice(html.indexOf('<nav aria-label="Interface language"'), html.indexOf("</nav>") + 6);
     assert.deepEqual([...nav.matchAll(/<a href="([^"]+)" lang="([a-z]+)" hrefLang="([a-z]+)"[^>]*>([^<]+)<\/a>/g)].map((m) => [m[1], m[2], m[3], m[4]]), [
       ["/", "en", "en", "English"],
-      ["/locale-fr.html", "fr", "fr", "Français"],
-      ["/locale-de.html", "de", "de", "Deutsch"],
-      ["/locale-lb.html", "lb", "lb", "Lëtzebuergesch"],
+      // The name in its own language; the destination's language, English, as hrefLang (review of #797).
+      ["/locale-fr.html", "fr", "en", "Français"],
+      ["/locale-de.html", "de", "en", "Deutsch"],
+      ["/locale-lb.html", "lb", "en", "Lëtzebuergesch"],
     ]);
     assert.match(nav, /lang="en" hrefLang="en" aria-current="true">English/, "the page's own language is the current one");
   }
@@ -220,10 +221,12 @@ test("the publisher's titles are marked in their own language, apart from the in
   }));
   assert.ok(titles.includes('<span lang="fr">Loi du 10 août 1991</span>') && titles.includes('<span lang="fr">Loi avocats</span> (short title)'));
   assert.ok(titles.includes('<span lang="de">Gesetz vom 10. August 1991</span>'), "each group in its own language");
-  const one = renderToStaticMarkup(h(SearchWorkResolution, { language: "fra", resolution: { outcome: "one_work", work: { matchedTitle: "Loi du 10 août 1991", workIdentifier: "/lu-legilux/x" }, candidates: null } }));
-  assert.ok(one.includes('“<span lang="fr">Loi du 10 août 1991</span>”'), "a matched title is marked in the language the search was asked in");
-  const several = renderToStaticMarkup(h(SearchWorkResolution, { language: "deu", resolution: { outcome: "several_candidates", work: null, candidates: [{ matchedTitle: "Gesetz A", workIdentifier: "/a" }, { matchedTitle: "Gesetz B", workIdentifier: "/b" }] } }));
-  assert.equal([...several.matchAll(/<span lang="de">/g)].length, 2);
+  // Review of #797: a French title found while searching in English is marked French, the language the card
+  // names for the title, not the language the search was asked in.
+  const one = renderToStaticMarkup(h(SearchWorkResolution, { resolution: { outcome: "one_work", work: { matchedTitle: "Loi du 10 août 1991", matchedTitleLanguage: "fra", workIdentifier: "/lu-legilux/x" }, candidates: null } }));
+  assert.ok(one.includes('“<span lang="fr">Loi du 10 août 1991</span>”'), "a matched title is marked in its own language");
+  const several = renderToStaticMarkup(h(SearchWorkResolution, { resolution: { outcome: "several_candidates", work: null, candidates: [{ matchedTitle: "Gesetz A", matchedTitleLanguage: "deu", workIdentifier: "/a" }, { matchedTitle: "Loi B", matchedTitleLanguage: "fra", workIdentifier: "/b" }] } }));
+  assert.ok(several.includes('<span lang="de">Gesetz A</span>') && several.includes('<span lang="fr">Loi B</span>'), "each candidate in its own title's language");
 });
 
 test("every other page keeps the synthetic banner, and a banner nobody named is refused", () => {

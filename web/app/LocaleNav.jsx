@@ -26,7 +26,9 @@ export function LocaleNav({ current = 'en' }) {
       <ul>
         {LOCALES.map((locale) => (
           <li key={locale.code}>
-            <a href={localeHref(locale.code)} lang={locale.code} hrefLang={locale.code} aria-current={locale.code === current ? 'true' : undefined}>
+            {/* The name is in its own language (lang); the destination's language is hrefLang, which for an
+                unreviewed language is English, the page that says so (review of #797). */}
+            <a href={localeHref(locale.code)} lang={locale.code} hrefLang={REVIEWED_CHROME_LOCALES.includes(locale.code) ? locale.code : 'en'} aria-current={locale.code === current ? 'true' : undefined}>
               {locale.name}
             </a>
           </li>

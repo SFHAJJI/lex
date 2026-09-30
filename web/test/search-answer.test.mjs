@@ -102,7 +102,7 @@ test("a dated search names the works it could not place, and a resolved work is 
   });
   assert.deepEqual(readSearch(dated).ambiguousWorks, [{ workKey: "other-work", candidates: [state("2023-01-01", "a"), state("2023-01-01", "b")] }]);
 
-  const card = { work_identifier: `/lu-legilux/${work}`, expressions: ["http://x/fr"], languages: ["fra"], matched_title: "Loi", match_reason: "title_exact" };
+  const card = { work_identifier: `/lu-legilux/${work}`, expressions: ["http://x/fr"], languages: ["fra"], matched_title: "Loi", matched_title_language: "fra", match_reason: "title_exact" };
   const resolved = mutate(both, (a) => { a.work_resolution = { retrieval_lane: "r1_work_discovery", outcome: "one_work", work: card, candidates: null }; });
   assert.equal(readSearch(resolved).workResolution.work.matchedTitle, "Loi");
 

@@ -120,6 +120,8 @@ function readWorkCard(card, where) {
     expressions: requireTexts(requireOwn(card, 'expressions', where), `${where} expressions`, { atLeast: 1 }),
     languages: requireTexts(requireOwn(card, 'languages', where), `${where} languages`),
     matchedTitle: requireText(requireOwn(card, 'matched_title', where), `${where} matched_title`),
+    // The title's own language: the resolver searches every language's titles (review of #797).
+    matchedTitleLanguage: requireText(requireOwn(card, 'matched_title_language', where), `${where} matched_title_language`),
     matchReason: requireText(requireOwn(card, 'match_reason', where), `${where} match_reason`),
   });
 }
