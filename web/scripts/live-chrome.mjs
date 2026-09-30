@@ -13,6 +13,8 @@
 // plural rule (`countedEntry`). The phrases the platform itself sends (a matching rule, a scope, a
 // reason something is not held) are the platform's English and are shown as sent.
 
+import { REFUSAL_CARD_COPY } from './refusal-card.mjs';
+
 const EN = Object.freeze({
   coverage: Object.freeze({
     title: "Trust and Coverage",
@@ -242,6 +244,9 @@ const EN = Object.freeze({
     negativeHeading: "Negative results",
     negative: "Hypothesis: {hypothesis}. Dataset: {dataset}. Result: {result}. Decision: {decision}. What would reverse it: {reverse}.",
   }),
+  // The refusal card's words, from `refusal-card.mjs`, their one English source (the string renderer
+  // says them too); the French is drafted beside them.
+  refusalCard: REFUSAL_CARD_COPY,
   shell: Object.freeze({
     title: "{title} - Lex V3 live",
     bannerLead: "Live development build.",

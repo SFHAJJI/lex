@@ -137,7 +137,7 @@ export function CompareAnswerView({ outcome }) {
   if (outcome.state === 'refusal' && outcome.card) {
     return (
       <section data-answer-state="refusal">
-        <RefusalCard code={outcome.code} sentence={outcome.sentence} payload={outcome.payload} />
+        <RefusalCard code={outcome.code} sentence={outcome.sentence} payload={outcome.payload} copy={liveChrome().refusalCard} />
       </section>
     );
   }

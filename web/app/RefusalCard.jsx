@@ -13,7 +13,9 @@
 // expression's own language, because hardcoding French mislabels every EU expression and makes a
 // screen reader read English law in a French voice.
 
-import { RETRY_SENTENCE, candidateView, validateRefusal } from '../scripts/refusal-card.mjs';
+import { REFUSAL_CARD_COPY, candidateView, validateRefusal } from '../scripts/refusal-card.mjs';
+import { fillText } from '../scripts/live-chrome.mjs';
+import { Say } from './LiveAnswer.jsx';
 import { TOKENS } from '../scripts/design-tokens.mjs';
 import { handoffUri } from '../scripts/routes.mjs';
 
@@ -23,7 +25,7 @@ import { handoffUri } from '../scripts/routes.mjs';
  * The icon is aria-hidden because it repeats the label, and a screen reader announcing an
  * emoji before every refusal is noise that teaches a reader to stop listening.
  */
-export function Mark({ name, children }) {
+export function Mark({ name, label, children }) {
   const token = TOKENS.find((one) => one.name === name);
   if (!token) {
     throw new Error(`unknown semantic token ${name}`);
@@ -33,7 +35,7 @@ export function Mark({ name, children }) {
       <span className="token-icon" aria-hidden="true">
         {token.icon}
       </span>
-      <span className="token-label">{token.label}</span>
+      <span className="token-label">{label ?? token.label}</span>
       <span className="token-text">{children}</span>
     </span>
   );
@@ -46,18 +48,29 @@ export function Mark({ name, children }) {
  * module rather than from a literal here: a card that showed the routes without the note
  * would let a reader read "no state held" as "no such law".
  */
-function AbsenceEvidence({ absence }) {
+function AbsenceEvidence({ absence, copy }) {
   if (absence === null) return null;
   return (
     <div className="refusal-absence">
-      <p className="refusal-absence-note">{absence.note}</p>
-      <h3>{absence.heading}</h3>
+      <p className="refusal-absence-note">{copy.absenceNote}</p>
+      <h3>{copy.absenceHeading}</h3>
       <ul>
-        {absence.routes.map((label) => (
-          <li key={label}>{label}</li>
+        {absence.routeCodes.map((route) => (
+          <li key={route}>{copy.routes[route]}</li>
         ))}
       </ul>
     </div>
+  );
+}
+
+/** One offered state, in the card's words: its date, its hash as code, its publication and standing. */
+function Candidate({ candidate, copy }) {
+  const published = candidate.publicationDate === null ? copy.publicationNotStated : fillText(copy.published, { date: candidate.publicationDate });
+  return (
+    <Say
+      template={candidate.withdrawalStated ? copy.candidate : copy.candidateWithdrawalNotStated}
+      values={{ validFrom: candidate.validFrom, hash: <code>{candidate.hashPrefix}</code>, published }}
+    />
   );
 }
 
@@ -68,7 +81,7 @@ function AbsenceEvidence({ absence }) {
  * A refusal without it is the sterile refusal `validateRefusal` already forbids, and a
  * renderer that dropped it would produce one anyway.
  */
-function Payload({ parts }) {
+function Payload({ parts, copy }) {
   if (parts.structured.length === 0 && parts.rows.length === 0) return null;
   return (
     <>
@@ -77,9 +90,7 @@ function Payload({ parts }) {
           {item.values.map(candidateView).map((candidate) => (
             <li className="refusal-candidate" key={candidate.href}>
               <a href={candidate.href}>
-                applicable from {candidate.validFrom}, hash{' '}
-                <code>{candidate.hashPrefix}</code>, {candidate.published}
-                {candidate.standing}
+                <Candidate candidate={candidate} copy={copy} />
               </a>
             </li>
           ))}
@@ -98,7 +109,7 @@ function Payload({ parts }) {
           {parts.rows.map((row) => (
             <div className="strip-row" key={row.key}>
               <dt>{row.key}</dt>
-              <dd>{row.value}</dd>
+              <dd>{row.declaredNull ? copy.nullSentences[row.key] : row.value}</dd>
             </div>
           ))}
         </dl>
@@ -131,9 +142,10 @@ function Handoff({ handoffs }) {
 /**
  * The refusal card.
  *
- * @param {object} props the same shape `renderRefusalCard` takes, validated identically
+ * @param {object} props the same shape `renderRefusalCard` takes, validated identically, and the
+ *   card's words (`copy`): English from `refusal-card.mjs` unless a page passes its chrome table's
  */
-export function RefusalCard({ code, sentence, payload, governingText, handoff }) {
+export function RefusalCard({ code, sentence, payload, governingText, handoff, copy = REFUSAL_CARD_COPY }) {
   const card = validateRefusal({ code, sentence, payload, governingText, handoff });
 
   // Refused rather than dropped. `advice_boundary` exists to refuse the question and still
@@ -151,13 +163,13 @@ export function RefusalCard({ code, sentence, payload, governingText, handoff })
   return (
     <section className="refusal-card">
       <p className="refusal-head">
-        <Mark name="--refusal">{card.sentence}</Mark>
+        <Mark name="--refusal" label={copy.tokenLabel}>{card.sentence}</Mark>
         <code className="refusal-code">{card.code}</code>
       </p>
-      {card.retryable ? <p className="refusal-retry">{RETRY_SENTENCE}</p> : null}
-      {card.note ? <p className="refusal-note">{card.note}</p> : null}
-      <AbsenceEvidence absence={card.absence} />
-      <Payload parts={card.payloadParts} />
+      {card.retryable ? <p className="refusal-retry">{copy.retry}</p> : null}
+      {card.note ? <p className="refusal-note">{copy.notes[card.code]}</p> : null}
+      <AbsenceEvidence absence={card.absence} copy={copy} />
+      <Payload parts={card.payloadParts} copy={copy} />
       <Handoff handoffs={card.handoffs} />
     </section>
   );

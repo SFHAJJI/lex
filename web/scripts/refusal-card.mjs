@@ -24,7 +24,7 @@
 // A refusal is styled as an answer: neutral ground, shield icon, no alert role. It is not an
 // error toast, and the components here give a caller no way to make it one.
 
-import { mark } from './design-tokens.mjs';
+import { TOKENS, mark } from './design-tokens.mjs';
 import { quotedLaw } from './localization.mjs';
 import { handoffUri } from './routes.mjs';
 import { parseObjectUrl } from './urls.mjs';
@@ -190,6 +190,7 @@ export function absenceEvidenceParts(code, payload) {
     routes: Object.freeze(
       payload.what_would_answer.map((route) => WHAT_WOULD_ANSWER_LABEL.get(route)),
     ),
+    routeCodes: Object.freeze([...payload.what_would_answer]),
   });
 }
 
@@ -783,6 +784,32 @@ const NULL_SENTENCE = new Map([
   ['nearest_later', 'No later state is held: the requested date follows every state held.'],
 ]);
 
+/** How an offered state is described, in the words both renderers use. */
+const CANDIDATE = 'applicable from {validFrom}, hash {hash}, {published}';
+const CANDIDATE_WITHDRAWAL_NOT_STATED = 'applicable from {validFrom}, hash {hash}, {published}, withdrawal not stated by the platform';
+const PUBLISHED = 'published {date}';
+const PUBLICATION_NOT_STATED = 'publication date not stated by the platform';
+
+/**
+ * Every word the card itself says, in English, from the constants above: one source for the string
+ * renderer and for the live pages' chrome table (`live-chrome.mjs`), which drafts the French beside
+ * it. Templates carry `{name}` placeholders; `routes`, `notes` and `nullSentences` are keyed by the
+ * vocabulary value, the refusal code and the payload key they label.
+ */
+export const REFUSAL_CARD_COPY = Object.freeze({
+  tokenLabel: TOKENS.find((token) => token.name === '--refusal').label,
+  retry: RETRY_SENTENCE,
+  absenceNote: ABSENCE_NOTE,
+  absenceHeading: ABSENCE_HEADING,
+  routes: Object.freeze(Object.fromEntries(WHAT_WOULD_ANSWER_LABEL)),
+  notes: MANDATED_NOTE,
+  nullSentences: Object.freeze(Object.fromEntries(NULL_SENTENCE)),
+  candidate: CANDIDATE,
+  candidateWithdrawalNotStated: CANDIDATE_WITHDRAWAL_NOT_STATED,
+  published: PUBLISHED,
+  publicationNotStated: PUBLICATION_NOT_STATED,
+});
+
 function requirePayload(code, payload) {
   const requirement = REQUIRED_PAYLOAD[code];
   if (!requirement) return;
@@ -922,12 +949,15 @@ export function candidateView(candidate) {
     // a missing value in this interface; "not stated by the platform" reads as what it is, and
     // neither of them is a date the publisher never gave us.
     published: one.publication_date
-      ? `published ${one.publication_date}`
-      : 'publication date not stated by the platform',
+      ? PUBLISHED.replace('{date}', one.publication_date)
+      : PUBLICATION_NOT_STATED,
     // And the ranking. Silence is not "still held": the mount holds no status facts, so a card
     // that omitted this would let a reader take two states as both current when the system
     // knows only that both cover the date.
-    standing: typeof one.withdrawn === 'boolean' ? '' : ', withdrawal not stated by the platform',
+    // The words after the plain description, from the one description both renderers use.
+    standing: typeof one.withdrawn === 'boolean' ? '' : CANDIDATE_WITHDRAWAL_NOT_STATED.slice(CANDIDATE.length),
+    publicationDate: one.publication_date || null,
+    withdrawalStated: typeof one.withdrawn === 'boolean',
   });
 }
 
@@ -935,13 +965,15 @@ function renderCandidates(candidates) {
   const items = candidates
     .map(candidateView)
     .map((candidate) => {
-      return (
-        '<li class="refusal-candidate">' +
-        `<a href="${escapeHtml(candidate.href)}">applicable from ` +
-        `${escapeHtml(candidate.validFrom)}, hash ` +
-        `<code>${escapeHtml(candidate.hashPrefix)}</code>, ${escapeHtml(candidate.published)}` +
-        `${escapeHtml(candidate.standing)}</a></li>`
-      );
+      // The description's own words, with the hash set as code, as the React card sets it.
+      const values = {
+        '{validFrom}': escapeHtml(candidate.validFrom),
+        '{hash}': `<code>${escapeHtml(candidate.hashPrefix)}</code>`,
+        '{published}': escapeHtml(candidate.published),
+      };
+      const words = candidate.withdrawalStated ? CANDIDATE : CANDIDATE_WITHDRAWAL_NOT_STATED;
+      const text = words.split(/(\{[a-zA-Z]+\})/).map((part) => values[part] ?? escapeHtml(part)).join('');
+      return `<li class="refusal-candidate"><a href="${escapeHtml(candidate.href)}">${text}</a></li>`;
     })
     .join('');
   return `<ul class="refusal-candidates">${items}</ul>`;
@@ -980,7 +1012,7 @@ export function payloadParts(code, payload) {
     } else if (key === 'nearest_anchors' && Array.isArray(value)) {
       structured.push({ kind: 'chips', key, className: 'refusal-anchors', values: value });
     } else if (value === null) {
-      rows.push({ key, value: NULL_SENTENCE.get(key) });
+      rows.push({ key, value: NULL_SENTENCE.get(key), declaredNull: true });
     } else {
       // Text, not the raw value. `asserts_absence_of_law: false` is the one payload field
       // whose whole job is to be read, and a component tree renders a boolean `false` as
