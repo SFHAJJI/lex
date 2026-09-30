@@ -13,6 +13,7 @@
 import { askV3 } from "./v3-client.mjs";
 import { readDossier } from "./dossier-answer.mjs";
 import { validateRefusal } from "./refusal-card.mjs";
+import { noCorpusMountedSentence } from "./live-refusals.mjs";
 
 /**
  * The languages the form offers besides "any": the platform answers a language the work is not
@@ -26,12 +27,12 @@ export const DOSSIER_LANGUAGES = Object.freeze([
 ]);
 
 /**
- * The one sentence per refusal code a request from this page can meet: no index mounted for the
- * work's publisher (the refusal catalog's sentence, held equal by a test), a work the index does not
- * hold, or a language the work is not held in. Any other code gets a sentence that names it.
+ * The one sentence per refusal code a request from this page can meet besides `no_corpus_mounted`,
+ * whose sentence names the missing index from its payload (`noCorpusMountedSentence`): a work the
+ * index does not hold, or a language the work is not held in. Any other code gets a sentence that
+ * names it.
  */
 export const LIVE_DOSSIER_REFUSAL_SENTENCES = Object.freeze({
-  no_corpus_mounted: "This build has no index mounted.",
   identifier_unknown: "This index holds no work under that identifier.",
   language_not_available: "This work is not held in the language asked for.",
 });
@@ -95,7 +96,9 @@ export function dossierOutcome(asked) {
 
   if (asked.state === "refusal") {
     const { code, helpful_payload: payload } = asked.envelope.refusal;
-    const sentence = LIVE_DOSSIER_REFUSAL_SENTENCES[code] ?? unexpectedRefusalSentence(code);
+    const sentence = code === "no_corpus_mounted"
+      ? noCorpusMountedSentence(payload)
+      : LIVE_DOSSIER_REFUSAL_SENTENCES[code] ?? unexpectedRefusalSentence(code);
     try {
       validateRefusal({ code, sentence, payload });
     } catch (error) {

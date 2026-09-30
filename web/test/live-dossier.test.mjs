@@ -22,7 +22,7 @@ import {
   dossierParameters,
   loadLiveDossier,
 } from "../scripts/live-dossier.mjs";
-import { REFUSAL_EXAMPLES } from "../scripts/refusal-catalog.mjs";
+import { noCorpusMountedSentence } from "../scripts/live-refusals.mjs";
 
 const census = JSON.parse(await readFile(new URL("../../schemas/v3-platform/envelope-samples.json", import.meta.url), "utf8"));
 const { contract } = census;
@@ -124,10 +124,10 @@ test("an unknown work is said by its code: the card needs the population disclos
 });
 
 test("the other refusals a dossier from this page can meet are refusal cards with the platform's payloads", async () => {
-  for (const [scenario, code] of [
-    ["a language the work is not held in", "language_not_available"],
-    ["an EU identifier on a mount without the EU index", "no_corpus_mounted"],
-    ["no corpus mounted", "no_corpus_mounted"],
+  for (const [scenario, code, expected] of [
+    ["a language the work is not held in", "language_not_available", LIVE_DOSSIER_REFUSAL_SENTENCES.language_not_available],
+    ["an EU identifier on a mount without the EU index", "no_corpus_mounted", "This build has no EU index mounted."],
+    ["no corpus mounted", "no_corpus_mounted", "This build has no Luxembourg index mounted."],
   ]) {
     const envelope = envelopeOf(scenario);
     const { fetchImpl } = answering(200, "application/json", envelope);
@@ -135,11 +135,11 @@ test("the other refusals a dossier from this page can meet are refusal cards wit
     assert.equal(outcome.state, "refusal", scenario);
     assert.equal(outcome.code, code, scenario);
     assert.equal(outcome.card, true, `${scenario}: the card's rules accept the payload the platform sent`);
-    assert.equal(outcome.sentence, LIVE_DOSSIER_REFUSAL_SENTENCES[code]);
+    assert.equal(outcome.sentence, expected, `${scenario}: a server holding the Luxembourg index is never said to hold none (review of #775)`);
     const card = renderToStaticMarkup(h(RefusalCard, { code, sentence: outcome.sentence, payload: outcome.payload }));
     assert.equal(view(outcome), `<section data-answer-state="refusal">${card}</section>`, scenario);
   }
-  assert.equal(LIVE_DOSSIER_REFUSAL_SENTENCES.no_corpus_mounted, REFUSAL_EXAMPLES.no_corpus_mounted.sentence);
+  assert.equal(LIVE_DOSSIER_REFUSAL_SENTENCES.no_corpus_mounted, undefined, "the missing index is named from the payload");
 });
 
 test("a transport failure is a state with a sentence, a refused request is said as refused", async () => {
@@ -176,4 +176,11 @@ test("a session asks when told, says a request it will not send, and a new reque
   await new Promise((resolve) => setTimeout(resolve, 10));
   assert.deepEqual(aborted, ["first", "second"]);
   assert.deepEqual(later, ["loading", "loading"], "nothing settles after a cancel");
+});
+
+test("a missing index is named by the corpus the refusal says it needed, never as no index at all (review of #775)", () => {
+  assert.equal(noCorpusMountedSentence({ required_corpus: "lu" }), "This build has no Luxembourg index mounted.");
+  assert.equal(noCorpusMountedSentence({ required_corpus: "eu" }), "This build has no EU index mounted.");
+  assert.equal(noCorpusMountedSentence({ required_corpus: "xx" }), "This build has no index mounted for this request's publisher.");
+  assert.equal(noCorpusMountedSentence(undefined), "This build has no index mounted for this request's publisher.");
 });

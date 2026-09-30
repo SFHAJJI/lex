@@ -9,7 +9,7 @@ every pull request that changes what is served, what is next or what is blocked.
   (`eng/test-fast.ps1`): 3,038 tests, 3,037 pass, 1 skipped. Ingest suite: green on CI for PR #760
   (the CI `dotnet` job runs the whole solution on every pull request, about 7 min on the runner;
   green for PR #774);
-  locally about 15 min. 839 web tests pass. CI's web job can flake in `keyboard-walk.test.mjs`
+  locally about 15 min. 840 web tests pass. CI's web job can flake in `keyboard-walk.test.mjs`
   ("browser debugger never answered"); rerunning the failed job is the fix.
 - Driver: Claude Opus 5.5 since 2026-09-29 (the Fable 5.1 driver ran out of tokens on 2026-09-28
   after PR #757; the user default model is now `claude-opus-5-5`).
@@ -235,7 +235,7 @@ schema's `parameters` shape, and whose call runs the same dispatch the REST rout
 endpoint test proves it for all twenty-three. The launch-contract line "REST and MCP derive identical
 envelopes from the registry" is the owner's to tick.
 
-Web: 31 React components, 839 tests. Preview screens render fixtures. The V3 Luxembourg search
+Web: 31 React components, 840 tests. Preview screens render fixtures. The V3 Luxembourg search
 answer has a reader (PR #771). The answer census now samples `search` five ways from the real handler:
 - a phrase with 4 strict hits and 1 relaxed hit;
 - the same phrase one hit per page, with its cursor;
@@ -317,7 +317,10 @@ bundle `client-live-dossier.js`, which embeds the contract and nothing else of t
 - An EU work's dossier is answered in another shape and is said as not shown on this screen.
 - The envelope census now holds the dossier answer and its four refusals from the real handler. A
   language not held, an EU identifier on a mount without the EU index (`no_corpus_mounted`,
-  `required_corpus: "eu"`), and no mount are refusal cards.
+  `required_corpus: "eu"`), and no mount are refusal cards. A `no_corpus_mounted` sentence names
+  the missing index from its payload, on this screen and on search: "This build has no EU index
+  mounted." or "This build has no Luxembourg index mounted." It never says "no index mounted",
+  which is false on a server that holds the other publisher's index (review of #775).
 - An unknown work (`identifier_unknown`) is said by its code without the card. `refusal-card.mjs`
   keeps its standing requirement that this card carry a `population_disclosure` (the size of what
   was searched, so "not found" is never read as "no such law"), and the platform's payload carries

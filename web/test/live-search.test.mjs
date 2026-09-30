@@ -161,11 +161,12 @@ test("the two refusals a search from this page can meet are refusal cards", asyn
     assert.equal(outcome.state, "refusal", code);
     assert.equal(outcome.code, code);
     assert.equal(outcome.card, true, `${code}: the card's rules accept the payload the platform sent`);
-    assert.equal(outcome.sentence, LIVE_SEARCH_REFUSAL_SENTENCES[code]);
+    assert.equal(outcome.sentence, code === "no_corpus_mounted" ? "This build has no Luxembourg index mounted." : LIVE_SEARCH_REFUSAL_SENTENCES[code]);
     const card = renderToStaticMarkup(h(RefusalCard, { code, sentence: outcome.sentence, payload: outcome.payload }));
     assert.equal(view(outcome), `<section data-answer-state="refusal">${card}</section>`);
   }
-  assert.equal(LIVE_SEARCH_REFUSAL_SENTENCES.no_corpus_mounted, REFUSAL_EXAMPLES.no_corpus_mounted.sentence, "held equal to the catalog's");
+  assert.equal(LIVE_SEARCH_REFUSAL_SENTENCES.no_corpus_mounted, undefined, "the missing index is named from the payload, never a sentence claiming none is mounted (review of #775)");
+  assert.ok(REFUSAL_EXAMPLES.no_corpus_mounted.payload.required_corpus, "the catalog's example carries the corpus the sentence names");
 });
 
 test("a transport failure and an unreadable envelope are each a state with a sentence", async () => {
