@@ -155,9 +155,9 @@ public sealed class EuFormexMainBodyLegalContentPopulation
 public sealed class EuFormexMainBodyLegalContentProducer
 {
     public const string Profile =
-        "lex-v3-eu-formex-main-body-profile/2;root=ACT;units=ARTICLE;" +
+        "lex-v3-eu-formex-main-body-profile/3;root=ACT;units=ARTICLE;" +
         "tokens=text,reference,footnote-with-body;oj-reference-target=publisher-attributes;" +
-        "exclude=recitals,final,annex";
+        "exclude=recitals,final,annex;language=matches-expression-with-en-eng-fr-fra-authority-aliases";
     public static string ProfileSha256 { get; } = Convert.ToHexStringLower(
         SHA256.HashData(Encoding.UTF8.GetBytes(Profile)));
 

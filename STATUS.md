@@ -11,6 +11,8 @@ route is selected explicitly. Original Work metadata remains in the corpus, incl
 Works with an observed absence of an English expression. A missing French response cannot reuse
 an English receipt. Annex binding checks expression lineage even when two held bodies have the
 same bytes. Formex main-body admission also requires the package language to match the expression.
+Its interpretation profile advances to version 3 so that this acceptance rule has its own digest;
+new corpus/index derivations carry that profile.
 
 Offline cases cover bilingual and French-only acquisition, missing French bodies, shared-receipt
 annex binding, and repeatable French corpus/index construction. The French positive Formex fixture
