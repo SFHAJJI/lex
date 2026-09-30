@@ -425,11 +425,37 @@ public sealed class LuxembourgProductionTopologyTests
     }
 
     [TestMethod]
+    public async Task LegacyInlineRightsEvidenceStillReadsEveryObservation()
+    {
+        var (store, _, result) = await RunFixtureAsync(true);
+        Assert.IsNull(result.Refusal, result.Refusal?.Detail);
+        var (_, index) = await ManifestAndRightsIndexAsync(store, result);
+        var original = new List<JsonElement>();
+        await foreach (var row in LuxembourgRetainedRunReplay.ReadObservationRowsAsync(store, index))
+            original.Add(row.Clone());
+        var legacy = JsonSerializer.SerializeToElement(new
+        {
+            schema = "lex-lu-sparql-rights-evidence/2",
+            deliveries = index.GetProperty("deliveries"),
+            observations = original,
+        });
+        var reopened = new List<JsonElement>();
+        await foreach (var row in LuxembourgRetainedRunReplay.ReadObservationRowsAsync(store, legacy))
+            reopened.Add(row.Clone());
+        Assert.AreEqual(result.ResourceObservationSubjects.Count, reopened.Count);
+        Assert.AreEqual(original.Count, reopened.Count);
+        for (var ordinal = 0; ordinal < original.Count; ordinal++)
+            Assert.IsTrue(JsonElement.DeepEquals(original[ordinal], reopened[ordinal]),
+                "Legacy replay must preserve each object's assertions and relations in order.");
+    }
+
+    [TestMethod]
     public async Task ASecondBatchThatCannotReopenRefusesBeforePublishingAManifest()
     {
         var (_, _, result) = await RunFixtureAsync(true, extraSubjects: 254, refuseSecondBatch: true);
         Assert.IsNotNull(result.Refusal);
         Assert.AreEqual(LuxembourgQueryExecutionRefusal.ResourceObservationRowsNotVerified, result.Refusal.Code);
+        StringAssert.Contains(result.Refusal.Detail, "rights evidence batch");
         Assert.IsNull(result.ScopeManifestReceipt);
         Assert.IsNull(result.CorpusRecordSet);
         Assert.IsTrue(result.FamilyOutcomes.All(value => value.Kind == LuxembourgFamilyEnumerationOutcomeKind.Proven));
