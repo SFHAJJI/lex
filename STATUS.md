@@ -719,7 +719,8 @@ French chrome plan asked for).
   - the page title's suffix;
   - the live banner, a driver's draft that makes a claim ("not a release and not legal advice");
   - the locale navigation's label;
-  - the language names in the selects ("French", "German");
+  - the language names in the selects ("French", "German", and "English", which the review of #806
+    found hidden behind a page-wide exemption for the locale navigation's own language names);
   - the date and article-id placeholders.
 
   All of them are now in the table, and the French is drafted.

@@ -21,7 +21,7 @@ import { liveChrome } from "./live-chrome.mjs";
 export const READING_LANGUAGES = Object.freeze([
   Object.freeze({ code: "fra", label: liveChrome().common.languageNames.fra }),
   Object.freeze({ code: "deu", label: liveChrome().common.languageNames.deu }),
-  Object.freeze({ code: "eng", label: "English" }),
+  Object.freeze({ code: "eng", label: liveChrome().common.languageNames.eng }),
 ]);
 
 /**

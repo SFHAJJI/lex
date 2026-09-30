@@ -207,7 +207,7 @@ export const LIVE_CHROME_FR_DRAFT = Object.freeze({
   }),
   common: Object.freeze({
     loading: 'Interrogation de ce serveur.',
-    languageNames: Object.freeze({ fra: 'français', deu: 'allemand' }),
+    languageNames: Object.freeze({ fra: 'français', deu: 'allemand', eng: 'anglais' }),
     language: 'Langue',
     appliesFrom: 'S’applique à partir du',
     nextFrom: 'Version suivante à partir du',

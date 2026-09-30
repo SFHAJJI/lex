@@ -205,7 +205,7 @@ const EN = Object.freeze({
   }),
   common: Object.freeze({
     loading: "Asking this server.",
-    languageNames: Object.freeze({ fra: "French", deu: "German" }),
+    languageNames: Object.freeze({ fra: "French", deu: "German", eng: "English" }),
     language: "Language",
     appliesFrom: "Applies from",
     nextFrom: "Next state from",

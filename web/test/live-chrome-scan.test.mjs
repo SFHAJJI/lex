@@ -75,17 +75,24 @@ function textsOf(markup) {
   return [...texts, ...attributes].filter((text) => text.trim() !== "");
 }
 
-/** A render without one element and everything inside it, found by its opening tag. */
-function without(markup, opening) {
-  const start = markup.indexOf(opening);
-  if (start < 0) throw new Error(`the render has no ${opening}`);
-  const tag = opening.match(/^<([a-z]+)/)[1];
+/**
+ * One element of a render, found by an attribute its opening tag carries, split from the rest: the
+ * element with everything inside it, and the render without it.
+ */
+function split(markup, attribute) {
+  const marker = markup.indexOf(attribute);
+  if (marker < 0) throw new Error(`the render has no element with ${attribute}`);
+  const start = markup.lastIndexOf("<", marker);
+  const tag = markup.slice(start).match(/^<([a-z]+)/)[1];
   let depth = 0;
   for (const match of markup.slice(start).matchAll(new RegExp(`<(/?)${tag}[\\s>]`, "g"))) {
     depth += match[1] === "/" ? -1 : 1;
-    if (depth === 0) return markup.slice(0, start) + markup.slice(start + match.index + `</${tag}>`.length);
+    if (depth === 0) {
+      const end = start + match.index + `</${tag}>`.length;
+      return { inside: markup.slice(start, end), outside: markup.slice(0, start) + markup.slice(end) };
+    }
   }
-  throw new Error(`${opening} is never closed`);
+  throw new Error(`the element with ${attribute} is never closed`);
 }
 
 /** Every string and number an answer carries, longest first, so a longer value is taken out whole. */
@@ -136,9 +143,13 @@ test("no interface text on a live page or a census answer bypasses the chrome ta
     radar: app.renderLiveRadarPage, export: app.renderLiveExportPage,
   };
   for (const [name, render] of Object.entries(pages)) {
-    // The locale names are each language's own name for itself, which no table translates.
-    const markup = name === "coverage" ? without(render(), "<section data-evaluation-card=\"\">") : render();
-    scan(`${name} page`, markup, dataOf(["English", "Français", "Deutsch", "Lëtzebuergesch"]));
+    const page = name === "coverage" ? split(render(), 'data-evaluation-card=""').outside : render();
+    // The locale navigation names each language in that language, which no table translates. Only
+    // there: a language named anywhere else is the interface's word for it (review of #806: the
+    // statute-language selects' "English" hid behind a page-wide exemption).
+    const { inside: nav, outside: rest } = split(page, 'data-locale-nav=""');
+    scan(`${name} page`, rest, []);
+    scan(`${name} locale navigation`, nav, dataOf(["English", "Français", "Deutsch", "Lëtzebuergesch"]));
   }
 
   // Every census answer each screen shows, through its view. Refusals are the checkpoint list's and the
