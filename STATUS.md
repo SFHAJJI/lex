@@ -786,7 +786,9 @@ proves the path, not a corpus.
 1. Data lane (Codex, Decision 95). Unblock the first mount after the EUR-Lex challenge (see Data,
    attempt 2): option (b), ruled on 2026-09-30. EU text is shown, with the rights receipt from
    Commission Decision 2011/833/EU on the Publications Office route (Decision 95); no request goes
-   to eur-lex.europa.eu. Fail fast if a notice stays mandatory (it needs the run identity before the adapter runs; the 619 spent against
+   to eur-lex.europa.eu. The first-mount tool as merged still requests the EUR-Lex robots file and
+   legal notice (the Decision 88 route; `EuFirstMountAcquisitionTests` expects both), so it must not
+   run until the data lane changes that route. Fail fast if a notice stays mandatory (it needs the run identity before the adapter runs; the 619 spent against
    the requests custody holds is reconciled there). Then the bounded live run again with
    the tool: one EU work in EN and
    FR (the manifestation enumerations and the legal-notice GET; no Formex package request), one
