@@ -3,6 +3,29 @@
 Updated 2026-09-30 by the driver. This file replaces the issue-comment ledgers. It is rewritten in
 every pull request that changes what is served, what is next or what is blocked.
 
+## Large derived scope artifacts (Codex, 2026-09-30, preparation)
+
+Full Luxembourg acquisition is sized at 1,986,924 subjects and 9,672,378 assertion rows, but
+population delivery remains unproved. Scope JSON is still held as one custody object, whose
+contract limit is 256 MiB. Reversible driver decision: preserve the complete canonical scope while
+storing its bytes in ordered 4 MiB custody chunks above a measured 4 MiB inline threshold.
+Small scope documents retain their current custody representation and logical identities.
+
+The draft writer uses a bounded channel between canonical serialization and asynchronous custody.
+Each payload and its actual canonical write receipt are held and digest-checked before publishing
+the root. The root binds order, byte lengths, complete raw digest and canonical identity. Reopening
+checks every receipt/payload binding and complete ordered content before exposing a seekable
+stream. Each new read pass checks custody again; PR #819 supplies semantic and exact canonical
+readback. A root's retention class never substitutes for the independently retained chunk receipts.
+Content-derived UUIDs use incremental hashing with the same scope separator and UUID format.
+
+Draft regressions cover chunk boundaries, equal repeated chunks, missing/reordered chunks,
+foreign receipt substitution, a failed consumer releasing its blocked writer, custody loss on a
+new pass and mixed retention classes. A 3,003-subject production fixture must replay both scope
+manifests and both rights channels. This preparation is uncompiled and depends on PR #819.
+Record-set persistence and retained typed scope objects remain further limits; this is not a
+full-run memory or storage bound and does not authorize a population-completeness claim.
+
 ## EU Work resolution across languages (Codex, 2026-09-30)
 
 French acquisition merged in PR #808. Before serving a mount that holds both languages,

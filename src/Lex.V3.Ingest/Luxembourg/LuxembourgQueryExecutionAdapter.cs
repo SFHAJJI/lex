@@ -2108,6 +2108,40 @@ public sealed class LuxembourgQueryExecutionAdapter
         HoldManifestAsync(VerifiedScopeManifest manifest, IScopeReductionEvidenceResolver resolver,
             CancellationToken cancellationToken)
     {
+        // Measure through the canonical writer without retaining its bytes. Small artifacts keep
+        // their existing inline custody identity; larger ones use ordered bounded custody objects.
+        var byteLength = ChunkedDerivedArtifact.MeasureCanonicalBytes(
+            output => ScopeManifestCanonicalWriter.Write(output, manifest));
+        if (byteLength > ChunkedDerivedArtifact.ChunkSize)
+        {
+            try
+            {
+                const string kind = "lex-lu-scope-manifest/1";
+                var (rootReceipt, chunkReceipts) = await ChunkedDerivedArtifact.WriteAsync(_custodyStore,
+                    kind, output => ScopeManifestCanonicalWriter.Write(output, manifest), cancellationToken)
+                    .ConfigureAwait(false);
+                // The root receipt names the storage root only. It does not assert that every
+                // chunk shares the root's retention class. The root retains each actual chunk
+                // receipt by digest, so independent replay can recover every distinct class.
+                _ = chunkReceipts;
+                var artifact = await ChunkedDerivedArtifact.OpenAsync(_custodyStore,
+                    rootReceipt.Reference.ContentSha256, kind, cancellationToken).ConfigureAwait(false);
+                if (artifact.ByteLength != byteLength)
+                    throw new CustodyIntegrityException("Scope serialization changed after byte sizing.");
+                using var retained = artifact.OpenRead();
+                var resourceId = ContentDerivedIdentity.DeriveUuidUrnFromStream(kind, retained, cancellationToken);
+                var reference = new SourceArtifactRef(resourceId, artifact.CanonicalSha256);
+                retained.Position = 0;
+                var reopened = VerifiedScopeManifest.ParseAndVerifyStream(reference, retained, resolver).Manifest;
+                return (reopened, rootReceipt, reference, artifact.CanonicalSha256, null);
+            }
+            catch (Exception exception) when (exception is CustodyIntegrityException or CustodyRequiredException or CustodyPolicyException)
+            {
+                return (null, null, null, null, new LuxembourgQueryExecutionRefusalDetail(
+                    LuxembourgQueryExecutionRefusal.ScopeManifestNotRetained, null,
+                    "The segmented scope manifest could not be retained and reopened: " + exception.Message));
+            }
+        }
         using var stream = new MemoryStream();
         var canonicalSha256 = ScopeManifestCanonicalWriter.Write(stream, manifest);
         var (receipt, failure) = await CustodyHold.TryHoldAsync(

@@ -450,6 +450,27 @@ public sealed class LuxembourgProductionTopologyTests
     }
 
     [TestMethod]
+    public async Task LargeScopeIsRetainedInCheckedChunksAndReplaysFromBothRightsChannels()
+    {
+        var (store, profile, result) = await RunFixtureAsync(true, extraSubjects: 3000);
+        Assert.IsNull(result.Refusal, $"{result.Refusal?.Code}: {result.Refusal?.Detail}");
+        Assert.AreEqual(3003, result.ResourceObservationSubjects.Count);
+        Assert.IsNotNull(result.ScopeManifestReceipt);
+        var rootBytes = await CustodyRestore.ReadByDigestCheckedAsync(store,
+            result.ScopeManifestReceipt.Reference.ContentSha256, CancellationToken.None);
+        using var root = JsonDocument.Parse(rootBytes);
+        Assert.AreEqual(ChunkedDerivedArtifact.Schema, root.RootElement.GetProperty("schema").GetString());
+        Assert.IsTrue(root.RootElement.GetProperty("chunks").GetArrayLength() > 1);
+        var artifact = await ChunkedDerivedArtifact.OpenAsync(store,
+            result.ScopeManifestReceipt.Reference.ContentSha256, "lex-lu-scope-manifest/1", CancellationToken.None);
+        Assert.AreEqual(result.ScopeManifestCanonicalSha256, artifact.CanonicalSha256);
+        using var canonical = artifact.OpenRead();
+        Assert.AreEqual(result.CorpusRecordSet!.Set.ManifestRef.ResourceId,
+            ContentDerivedIdentity.DeriveUuidUrnFromStream("lex-lu-scope-manifest/1", canonical));
+        await LuxembourgRetainedRunReplay.ReplayAsync(store, profile, result, ["assertions"], ["relations"], Manifestation);
+    }
+
+    [TestMethod]
     public async Task ASecondBatchThatCannotReopenRefusesBeforePublishingAManifest()
     {
         var (_, _, result) = await RunFixtureAsync(true, extraSubjects: 254, refuseSecondBatch: true);
