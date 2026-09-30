@@ -1092,7 +1092,7 @@ public sealed class VerifiedCorpusRecordSet
 
     /// <summary>
     /// The verified set's own content. Reading it needs no InternalsVisibleTo; holding an instance
-    /// is itself the evidence that <see cref="ParseAndVerify"/> ran to completion, because the
+    /// is itself evidence that a canonical reader completed verification, because the
     /// constructor above is the only door onto this type and it stays internal.
     /// </summary>
     public CorpusRecordSet Set { get; }

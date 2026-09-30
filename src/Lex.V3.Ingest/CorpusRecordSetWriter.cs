@@ -339,7 +339,7 @@ public sealed class CorpusRecordSetWriteResult
     public DurableBlobWriteReceipt? RetainedSetReceipt { get; }
 
     /// <summary>
-    /// The reopened, checked set -- reopened through <see cref="VerifiedCorpusRecordSet.ParseAndVerify"/>
+    /// The reopened, checked set -- reopened through <see cref="VerifiedCorpusRecordSet.ParseAndVerifyStream"/>
     /// against the exact bytes the custody store returned, never the in-memory set this writer built,
     /// for a written result only.
     /// </summary>
@@ -386,7 +386,7 @@ public sealed class CorpusRecordSetWriteResult
 /// this run's own required floor (<see cref="CustodyClass.NightlyFloor90d"/>, exactly the constant
 /// and floor-check <c>EuQueryExecutionAdapter</c> and <c>LuxembourgQueryExecutionAdapter</c> already
 /// require for a scope manifest's own custody write, reused rather than reinvented), then reopens it
-/// through <see cref="VerifiedCorpusRecordSet.ParseAndVerify"/> the same way those two adapters
+/// through <see cref="VerifiedCorpusRecordSet.ParseAndVerifyStream"/> the same way those two adapters
 /// reopen their own manifest after writing it.
 /// </summary>
 public sealed class CorpusRecordSetWriter
