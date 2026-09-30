@@ -16,8 +16,11 @@ custody, including the last attempt, and require ordinary full proof for the suc
 Other status/body failures, malformed successful replies, capacity errors and challenges retain
 their refusal paths. The draft includes the actual retained deadlock fixture and nine tests for
 count/page recovery, same-request attempt lineage, failed-route custody, exhaustion, budget and
-nonretry cases. Build, fast, affected ingest, review and green CI are pending. No live retry has
-started; the prior run remains refused and its custody is preserved.
+nonretry cases. Validation at 4a37dc2b passed clean build (39.51 s), required fast (3,085 passed,
+one platform skip, 66.989 s), and 126 affected ingest tests (two live canaries skipped, 53.799 s).
+Exact commands/results are retained under C:\lex-v3\lanes\eu-deadlock-*. Required cross-family
+review and green CI remain pending. No live retry has started; the prior run remains refused
+and its custody is preserved.
 
 ## Luxembourg scope input reuse (Codex, 2026-09-30)
 
