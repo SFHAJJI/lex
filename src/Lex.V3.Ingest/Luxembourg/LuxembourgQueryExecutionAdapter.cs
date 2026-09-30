@@ -973,13 +973,18 @@ public sealed class LuxembourgQueryExecutionResult
     public LuxembourgQueryExecutionCompletion? Completion { get; }
 
     /// <summary>
-    /// The custody store's own write receipt for the scope manifest bytes, never a bare
+    /// The custody store's own write receipt for the inline scope manifest or its chunk root, never a bare
     /// <see cref="DurableBlobRef"/>: this type carries the receipt exactly as
     /// <c>RoutedHttpAcquisitionSession</c> carries the ones it holds, so nothing in this assembly
     /// separately re-holds an unreceipted content address (the Decision 80 fence
     /// <c>DurableBlobReceiptFamilyIngestSurfaceTests.NoProducerOfRefOrPolicyEvidenceExistsInIngest</c>
     /// pins). Present if and only if this result is delivered.
     /// </summary>
+    /// <remarks>
+    /// Large manifests retain a canonical root naming the ordered chunks and each actual chunk
+    /// receipt. Reopen that complete checked closure before reading the logical canonical bytes.
+    /// This receipt states the root's retention floor only; it does not upgrade any chunk's floor.
+    /// </remarks>
     public DurableBlobWriteReceipt? ScopeManifestReceipt { get; }
 
     /// <summary>
