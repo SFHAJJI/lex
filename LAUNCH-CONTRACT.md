@@ -47,8 +47,10 @@ product scope. Anything not listed here ships after launch.
       body with one typed outcome.
 - [ ] The Luxembourg population as authorised by the owner, every discovered body with one typed
       outcome.
-- [ ] Robots evaluated literally per requested URL (Decision 83); one legal-notice GET at Stage 7
-      (Decision 88); transport bytes retained before decode.
+- [ ] Robots evaluated literally per requested URL (Decision 83); the EU rights receipt, Commission
+      Decision 2011/833/EU, fetched once per build on the Publications Office route, and no request
+      to eur-lex.europa.eu (Decision 95, replacing Decision 88's legal-notice GET); transport bytes
+      retained before decode.
 
 ## Release path
 

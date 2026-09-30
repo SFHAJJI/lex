@@ -5,10 +5,10 @@ every pull request that changes what is served, what is next or what is blocked.
 
 ## Heads
 
-- `v3/integration`: `3c9fd0c5` (2026-09-30, PR #777 merged). Build 45 s. Fast lane
+- `v3/integration`: `ca046c0d` (2026-09-30, PR #778 merged). Build 45 s. Fast lane
   (`eng/test-fast.ps1`): 3,038 tests, 3,037 pass, 1 skipped. Ingest suite: green on CI for PR #760
   (the CI `dotnet` job runs the whole solution on every pull request, about 7 min on the runner;
-  green for PR #777);
+  green for PR #778);
   locally about 15 min. 860 web tests pass. CI's web job can flake in `keyboard-walk.test.mjs`
   ("browser debugger never answered"); rerunning the failed job is the fix.
 - Driver: Claude Opus 5.5 since 2026-09-29 (the Fable 5.1 driver ran out of tokens on 2026-09-28
@@ -70,7 +70,7 @@ connection without it). Survey of 2026-09-29 (read-only): the EU index holds one
 per expression, no dated state, no consolidation, no article order and no permalink, so EU `as_of`,
 `timeline`, `article_history`, `diff` and `changes_in_period` need consolidation acquisition and an
 EU states table, `in_force_on` and `status_on` need Cellar force facts, and `evidence_bundle` and
-`verify` need an EU permalink grammar (owner questions below). EU `dossier` is the next slice that
+`verify` need an EU permalink grammar (the parity details are driver decisions, below). EU `dossier` is the next slice that
 needs none of those.
 
 `events` and `answer_drift` (PR #760) read a new index table, `events`: the index's append-only
@@ -98,7 +98,7 @@ genesis log holds none, so it answers an empty list with its basis, `asserts_no_
 false`, `asserts_publisher_unrevised: false` and what would answer (a later build compared against
 this one), never "nothing drifted". The code holds twelve event names (`V3EventRegistry`); the Stage
 4 registry's thirteenth, the coverage event, is never minted (B42 finding 5.2; the scope-line gate
-forbids production source naming it) and is an owner question below. The two "not held" sentences
+forbids production source naming it); the mintable registry stays at twelve (driver decision). The two "not held" sentences
 that said no first-sighting event is held (`provenance`, `coverage`) now say no observation time is
 held and what the log's `first_sighting` does and does not mean. Decisions taken by the driver,
 reversible: events are scoped to states (no work-level events); the cursor names its log;
@@ -117,8 +117,8 @@ languages this mount holds searchable text in), `as_of`, `evidence_bundle`, each
 parameters its reviewed request schema requires (read from the schema) and what it answers. The
 request schema is `question` (a non-blank string) and nothing else; the question is not read, stored
 or echoed, so the card is byte-identical for every question. No model is called and no publisher is
-contacted. The same card over MCP (`tools/call ask`). The envelope verdict is `point` for now and is
-an owner question below (review of PR #759: the catalogue's POINT delivers an instrument, an
+contacted. The same card over MCP (`tools/call ask`). The envelope verdict is `point`, a driver
+decision under ruling 5 (review of PR #759: the catalogue's POINT delivers an instrument, an
 official link, a reason and a human counter, and the card has only the reason; Decision 91 cites
 Decision 63(a)'s presentation verdict as the precedent). Decisions taken by the driver, reversible:
 the host takes the verdict from the result (every other operation still answers `answer`); `ask`
@@ -456,7 +456,7 @@ built API). PR #765 builds the first live
 page, Trust and Coverage, into its own directory (`node scripts/build-live.mjs` writes
 `dist-live/`, gitignored, apart from the preview `dist/` and its gates): the loading state under a
 live banner (the synthetic banner's "describes no real legal record" would be false on a real mount;
-the live banner's wording is a driver draft before the owner's), hydrated by its own bundle
+the live banner's wording is the driver's; ruling 3: a live page never says "synthetic" on a real mount), hydrated by its own bundle
 (`client-live.js`, which embeds the census contract and nothing else of the census; the preview
 pages' `client.js` still carries no request). `scripts/serve-live.mjs` serves that directory and the
 API on one origin for a local journey: static files with `nosniff` and `no-store`, and exactly
@@ -557,8 +557,9 @@ compares it byte for byte on every run. The fixture's cases give the same card r
 held today: temporal 8 cases per arm, Wilson [0.6756, 1], rule of three 0.375; refusal 18 cases,
 [0.8241, 1], 0.1667; retrieval nDCG n 9 (rule of three 0.3333), no-hit n 4 ([0.5101, 1], 0.75),
 resolver n 3 ([0.4385, 1], 1, which bounds nothing). The card is not published and is not a release card: it
-has no release, image or snapshot identity (item 7) and no signature. Where it is published is an
-owner question below.
+has no release, image or snapshot identity (item 7) and no signature. Ruling 2: it is served on the
+Trust and Coverage page and beside the release assets, with the gates run over the real mounted
+corpus.
 
 Replay guarantees (PR #770): `V3ReplayGuaranteesTests` runs the two guarantees of
 `33-product-spec.md` G1 to G5 that one build can prove against the real handler.
@@ -782,16 +783,20 @@ proves the path, not a corpus.
 
 ## Next, in order
 
-1. Unblock the first mount after the EUR-Lex challenge (see Data, attempt 2): option (a) or (b) as
-   the owner rules, and fail fast if the notice stays mandatory (it needs the run identity before
-   the adapter runs; the 619 spent against the requests custody holds is reconciled there). Then the bounded live run again with
+1. Data lane (Codex, Decision 95). Unblock the first mount after the EUR-Lex challenge (see Data,
+   attempt 2): option (b), ruled on 2026-09-30. EU text is shown, with the rights receipt from
+   Commission Decision 2011/833/EU on the Publications Office route (Decision 95); no request goes
+   to eur-lex.europa.eu. The first-mount tool as merged still requests the EUR-Lex robots file and
+   legal notice (the Decision 88 route; `EuFirstMountAcquisitionTests` expects both), so it must not
+   run until the data lane changes that route. Fail fast if a notice stays mandatory (it needs the run identity before the adapter runs; the 619 spent against
+   the requests custody holds is reconciled there). Then the bounded live run again with
    the tool: one EU work in EN and
    FR (the manifestation enumerations and the legal-notice GET; no Formex package request), one
    Luxembourg act with a consolidated publisher PDF. Record the wire counts, the refusals met and
    the five digests in STATUS.md; mount the directory under the API and answer `resolve` from it.
    Then decide whether the one-process design carries the full population or needs a
    serialisation boundary between acquisition and build.
-2. Formex, the rest: French bodies (Decision 89) so French packages are held and acquired; then
+2. Data lane (Codex). Formex, the rest: French bodies (Decision 89) so French packages are held and acquired; then
    every acquired main body feeds the EU index for the temporal and search operations (item 5).
    Designed on 2026-09-28 (read-only survey, recorded in the driver's notes): the adapter mints one
    English fetch ladder per work and the corpus record set holds exactly one body per observed
@@ -800,26 +805,28 @@ proves the path, not a corpus.
    and its completion checks, the content-class binding, the annex binder's lineage, the builder,
    the index and `resolve` (a work identifier or CELEX then matches two equally authentic
    expressions and today's `ambiguous_identifier` needs the language rule Decision 89 lists for
-   Stage 4). Two questions for the owner before the driver starts it: (a) the frozen corpus record
-   schema `lex-v3-source-corpus-record/6` holds one body per object; may it change (a body per
-   language, or an expression-keyed record) or must the French body travel beside it; (b) the
-   `resolve` language rule for a work identifier (the driver would default to the English
-   expression with the French one named as an alternate, and a `language` parameter selecting
-   either). The driver proceeds with item 4 meanwhile.
-3. Define and run the Luxembourg population and the complete EU population (owner authorisation per
-   run).
+   Stage 4). Its two design questions are the driver's under ruling 7, decided when the slice
+   starts and recorded as driver decisions: (a) whether the frozen corpus record schema
+   `lex-v3-source-corpus-record/6` (one body per object) changes, to a body per language or an
+   expression-keyed record, or the French body travels beside it; (b) the `resolve` language rule
+   for a work identifier (default: the English expression, the French one named as an alternate,
+   and a `language` parameter selecting either).
+3. Data lane (Codex). Define and run the Luxembourg population and the complete EU population
+   (owner authorisation per run).
 4. Serve the unserved operations for Luxembourg (`verify` and `relations` served by PR #753, MCP
    over streamable HTTP by PR #754, `evidence_bundle` by PR #755, `classification` and
    `manifestation` by PR #756, `status_on` and `browse` by PR #757; a request to an unserved
    operation answers the transport failure `operation_not_served`, PR #758; `ask` answers the
    contained `assistant_v3_unavailable` card, PR #759; `events` and `answer_drift` over a genesis
    log, PR #760). Four remain (`as_observed`, `knowable_on`, `concepts`, `transposition`), all
-   needing data the ingest does not produce; owner question below. The event log's next step,
+   needing data the ingest does not produce; they keep `operation_not_served`, and the capability
+   manifest is to state per operation which data would serve it (driver decision). The event log's next step,
    predecessor chaining with observation times, needs a second build, so it follows the first mount.
-5. EU parity: every temporal and search operation from the EU index; French expressions. EU
+5. Data lane (Codex). EU parity: every temporal and search operation from the EU index; French
+   expressions. EU
    `search` in one work served by PR #761, EU `dossier` by PR #762; the temporal operations,
-   `provenance`, `evidence_bundle` and `verify` wait on consolidation acquisition, an EU permalink
-   grammar and the owner questions below.
+   `provenance`, `evidence_bundle` and `verify` wait on consolidation acquisition and an EU permalink
+   grammar; the parity details are driver decisions (below).
 6. Wire the eight launch screens to `/api/v3`; journeys J1 to J8 in a real browser. PR #763: the
    envelope reader and the client module; PR #764: the live Trust and Coverage component; PR #765:
    its page, the live build and the one-origin server; PR #766: the first browser journey step,
@@ -833,103 +840,118 @@ proves the path, not a corpus.
    screens with V3 readers (coverage, search, dossier, reading) are now live and journeyed. PR
    #778: the provision history reader `readArticleHistory`. Next: the live provision history
    screen and journey step, then Compare (`diff`) and Radar (`events`, `answer_drift`). Of the
-   launch contract's eight screens, Export composer is the last. The absence refusals the card
-   will not show are an owner question below. Also J1 to J8
-   restated as V3 steps (owner question): they exist only in the pre-V3 pack
-   (`05-user-journeys.md`).
+   launch contract's eight screens, Export composer is the last. Hosting (ruling 3): `Lex.V3.Api`
+   serves the live pages on the API's origin with `frame-ancestors`, HSTS and `Referrer-Policy`,
+   and a live page never shows the synthetic banner on a real mount. The absence refusals the card
+   will not show: the producer carries the fields (driver decision). J1 to J8 are restated as V3
+   steps by the driver (they exist only in the pre-V3 pack, `05-user-journeys.md`).
 7. Release pipeline: build, sign, image, zero-traffic deploy, probes. Then acceptance and promotion.
 8. Machine gates (launch contract, Evaluation): the temporal, refusal and retrieval case sets run
    against the real handler, and all three shuffled controls are caught (PRs #767 and #768). The
-   evaluation card is rendered from them with the statistical rows `not_yet_labelled` (PR #769);
-   publishing it waits on the owner. Replay G1 to G5 (`33-product-spec.md`): G2 snapshot
+   evaluation card is rendered from them with the statistical rows `not_yet_labelled` (PR #769).
+   Ruling 2: it is served on the Trust and Coverage page and beside the release assets, and the
+   launch card carries the machine gates run over the real mounted corpus, so the gates gain a
+   mounted-corpus run once the first mount exists. Replay G1 to G5 (`33-product-spec.md`): G2 snapshot
    determinism and G5 independent verifiability run on the real handler (PR #770). G1 version
    immutability, G3 bitemporal completeness and G4 as-observed answering need predecessor
    chaining with observation times, so they follow the first mount and the event-log ruling. What
    is left of the launch contract's machine-gates line after that is "V2 absent from the image",
    which belongs to the release pipeline (item 7).
 
-## Blocked or waiting on the owner
+## Owner rulings, 2026-09-30
 
-- Absence refusals on the live screens (PRs #775, #777). The web refusal card
+Posted on PR #777 (comment 5905743344, the owner's account, relayed by the VS Code panel session).
+The owner's words: "choose whatever you recommended piloted by the high quality asap driving to v3";
+on EUR-Lex: "yes choose b but if you can find a recipt else where i dont really care as long as we
+show text (users primarly want a temporal view of eu texts and dont really care about reciepts)".
+
+1. EUR-Lex legal notice: option (b). EU text in EN and FR is shown. The rights receipt may come
+   from any legitimate official source that states reuse is authorised; withholding EU text
+   (option (a)) is not wanted. The panel session verifies which source answers an automated client
+   and posts the URL, digest and a code-scope note as a second comment on PR #777. No request goes
+   to eur-lex.europa.eu meanwhile. The panel opens a lex-governance PR recording these rulings as
+   Decision 95, which the driver merges.
+2. Evaluation card: served on the Trust and Coverage page and beside the release assets. The launch
+   card carries machine gates run over the real mounted corpus, not fixture-only scores.
+3. Web hosting: one server delivers the web bundle and the API (`/api/v3`, `/mcp`) on one origin,
+   so the current CSP and no-CORS stand. That server sends `frame-ancestors`, HSTS and
+   `Referrer-Policy`. A live page's banner never says "synthetic" on a real mount.
+4. French and English refusal sentences: the owner reviews them himself. The driver prepares one
+   short list for the weekly checkpoint and does not block on it.
+5. EU parity details, the event log, the `ask` card verdict and the four operations with no data:
+   the driver's stated defaults (below).
+6. Codex: a weekly cold read of the week's merges, and a second sign-off at the two release gates
+   when available.
+7. Standing order: the owner is asked only about money, legal or public claims, credentials and
+   going live. Everything else the driver decides, records here as a reversible driver decision,
+   and keeps driving toward V3 at high quality.
+
+Decision 95 (lex-governance PR #9, merged 2026-09-30) records these rulings and adds two things:
+- The EU rights receipt is Commission Decision 2011/833/EU, fetched on the admitted Publications
+  Office route (`https://publications.europa.eu/resource/celex/32011D0833`, `Accept:
+  application/xhtml+xml`, `Accept-Language: eng`; observed 2026-09-30: 303 then 200, 48,730 bytes,
+  sha256 `2d5bc877...`). Decision 88's one-GET exception for `eur-lex.europa.eu` is withdrawn: no
+  request goes to that host. Served EU text carries "© European Union, https://eur-lex.europa.eu"
+  and the statement that only the electronic Official Journal is authentic.
+- Two lanes (amends Decision 94). Codex drives the data lane (the EU rights receipt, the first real
+  mount, the populations, French EU bodies, EU parity, release-pipeline pieces without production
+  credentials) in `C:\lex-v3\worktrees\codex-data`. This driver keeps the web lane. Every pull
+  request is reviewed by the other model family before merge (`C:\lex-v3\lanes\review-by-codex.ps1`
+  for this lane's pull requests), with one repair round and a merge on green CI. Production
+  signing, deployment and promotion still wait for the owner.
+
+## Driver decisions (reversible)
+
+Each is the driver's call under ruling 7 and can be reversed by a later pull request that says why.
+
+- Absence refusals (PRs #775, #777, #778): option (a), the producer carries them. The web refusal card
   (`refusal-card.mjs` `ABSENCE_CODES`, from `35-ideal-ux`) requires every absence refusal to carry
-  `what_would_answer` from a closed vocabulary (`corrected_identifier`, `new_official_observation`,
-  `expanded_official_scope`) and `asserts_absence_of_law`. It also requires `identifier_unknown` to
-  carry a `population_disclosure` (the size of what was searched). The reviewed registry requires
-  `what_would_answer` (as free text) for `identifier_unknown` only, and neither
-  `asserts_absence_of_law` nor `population_disclosure` for any code. Three produced refusals
-  therefore fail the card (`refusal-payload-samples.test.mjs` `KNOWN_BREAKS`): `identifier_unknown`
-  (free-text `what_would_answer`, no disclosure), `no_version_for_date` (the nearest dates, neither
-  absence field) and `anchor_not_in_version` (`nearest_anchors`, neither absence field).
-  `text_not_available` conforms. So those three are said by their code on the live pages, without
-  the card. Which side moves:
-  - (a) the producer adds the fields to all three as optional payload keys, with
-    `identifier_unknown`'s `what_would_answer` becoming the vocabulary list: a reviewed registry
-    change;
-  - (b) the card relaxes to the registry;
-  - (c) the reader supplies them from its own census.
+  `what_would_answer` from its closed vocabulary (`corrected_identifier`, `new_official_observation`,
+  `expanded_official_scope`) and `asserts_absence_of_law`, and `identifier_unknown` to carry a
+  `population_disclosure`. The reviewed registry requires `what_would_answer` (as free text) for
+  `identifier_unknown` only, and neither `asserts_absence_of_law` nor `population_disclosure` for any
+  code. Three produced refusals therefore fail the card (`refusal-payload-samples.test.mjs`
+  `KNOWN_BREAKS`): `identifier_unknown` (free-text `what_would_answer`, no disclosure),
+  `no_version_for_date` (the nearest dates, neither absence field) and `anchor_not_in_version`
+  (`nearest_anchors`, neither absence field). `text_not_available` conforms. The producer will add
+  the fields to all three as optional payload keys (`identifier_unknown`'s `what_would_answer`
+  becoming the vocabulary list, a reviewed registry change), because the rule protects the
+  product's oldest invariant (an absence of a record is not an absence of law) and must travel over
+  MCP too. Until then the live pages say those three by their code, with the date or the nearest ids
+  to try next where the payload has them.
+- EU parity (PR #761): (a) the Formex act date (`wording_date`) is the EU wording-state date, and
+  `official_consolidation_state` fits an answer over an original wording; (b) the original wording
+  does not answer EU `as_of` for dates after it when no consolidation is held; consolidation
+  acquisition follows the first mount; (c) EU search stays scoped to one work at launch (no
+  `jurisdiction` parameter); (d) moot under ruling 1 (EU text is shown).
+- The event log (PR #760): (a) the mintable registry is twelve names (the coverage event is not
+  minted); (b) launch may ship genesis-only logs (append-only within a log; a rebuild or rollback
+  starts a new log with new cursors), with predecessor chaining after the first mount; (c) a cursor
+  from a retired log refuses `snapshot_unknown`.
+- `ask`'s containment card keeps the `point` verdict.
+- The four operations with no data (`as_observed`, `knowable_on`, `concepts`, `transposition`) keep
+  the typed transport failure `operation_not_served`, and the capability manifest will state, per
+  operation, that it is not served and which data would serve it.
+- The web hosting shape of ruling 3 is `Lex.V3.Api` serving the built live pages beside `/api/v3` and
+  `/mcp`, with the security headers, rather than an ingress split.
 
-  The driver's recommendation is (a), because the rule protects the product's oldest invariant (an
-  absence of a record is not an absence of law) and belongs in the payload that travels over MCP
-  too.
+## Waiting on others
 
-- Evaluation card (PR #769): the launch contract says "published". Section 6 of
-  `36-ideal-evaluation.md` names signed JSON at a stable route and an HTML rendering on the Trust
-  surface. Both are public claims. (a) Should the card be served by the API (a new operation or a
-  static route) and shown on the Trust and Coverage page, or published beside the release assets
-  only? (b) May a launch card carry fixture-only machine gates? The alternative is to wait for the
-  first real mount, so that the gates also run over the mounted corpus. (c) Its signature comes
-  from the release pipeline (item 7). Until then the card is an unsigned census in the repository.
+- The data lane (Codex, Decision 95): the EU rights receipt on the Publications Office route, then
+  the first real mount. The web lane's mounted-corpus work (the evaluation card over real gates,
+  the journeys with more than one page of hits) follows that mount.
 
-- Web hosting (PR #763): the page's CSP allows `connect-src 'self'` and the API has no CORS, so the
-  page and the API share an origin. Either the API serves the web bundle, or an ingress routes
-  `/api/v3` and `/mcp` to the API and the rest to static files; which layer sends
-  `frame-ancestors`, HSTS and `Referrer-Policy`; what a live page's banner says (the synthetic
-  banner would be false on a real mount); whether J1 to J8 are restated as V3 steps; who reviews one
-  refusal sentence per code in FR and EN.
+## For the weekly checkpoint
 
-- EU parity (PR #761): (a) is the Formex act date (`wording_date`) the "EU wording-state date" the
-  launch contract means, and does `official_consolidation_state` fit answers over an original
-  wording; (b) may the original wording answer EU `as_of` for dates after it when no consolidation
-  is held (the driver's default is no), and if not, is consolidation acquisition in scope for
-  launch, and which of the twenty codes refuses meanwhile (none says "a later wording may exist and
-  is not held"); (c) search across all EU works needs a `jurisdiction` request parameter (a reviewed
-  schema change) or stays scoped to one work at launch; (d) under the legal-notice option (a), may
-  search match over withheld EU bodies, given that hits carry no text.
+- The French and English refusal sentences, one short list (ruling 4).
 
-- The event log (PR #760): (a) is the mintable registry twelve names, the coverage event never
-  minted under B42 finding 5.2, or should the scope-line gate be amended to admit a name that is
-  never emitted; (b) may launch ship genesis-only logs (append-only within one log; a rebuild or a
-  rollback starts a new log whose cursors are new), or must predecessor chaining land first; (c) a
-  cursor from a retired log refuses `snapshot_unknown` (the driver's default) rather than restarting
-  from seq 1 silently.
+## Blocked on the owner
 
-- The EUR-Lex legal notice answered the tool's one Decision 88 GET with an empty HTTP 202, so no
-  corpus can be built (Data, attempt 2): (a) the builder accepts a typed
-  `eu_rights_evidence_unavailable` disposition, withholds every EU body as text and lets the
-  Luxembourg side mount, or (b) a numbered Decision names an address that does not challenge (the
-  Publications Office legal notice, same Commission reuse policy). The driver recommends (a) now and
-  (b) later, and builds neither before the owner's word.
-- The verdict of `ask`'s containment card: keep `point` (the closed set's only verdict that sends the
-  reader elsewhere, though the catalogue's POINT also names an instrument, a link and a human counter
-  the card does not have, and the scope line requires REFUSE of question 2), or rule a presentation
-  verdict as Decision 63(a) did for `localization_unavailable` (a seventh verdict, an envelope schema
-  change). The driver's default is `point` until the owner rules.
-
-- Four registered operations with no data (`as_observed`, `knowable_on`, `concepts`,
-  `transposition`): the launch contract wants each "served or refusing with a typed reason its
-  capability manifest states". None of the twenty refusal codes means "this mount does not produce
-  that data" (the nearest, `snapshot_unknown`, `retrieval_mode_unavailable`, `not_transposable`,
-  each says something else). Options: (a) keep the typed transport failure `operation_not_served`
-  and have the capability manifest state, per operation, that it is not served and which data would
-  serve it; (b) a twenty-first refusal code, which is a versioned registry change and needs its own
-  ruling on Decision 91's "stays at its twenty"; (c) build the data (`transposition` from the
-  Legilux `jolux:transposes` relations is the nearest). The driver's default is (a); nothing is built
-  for it before the owner answers.
-- Codex role: weekly cold read plus the two release gates, or none.
-- Run authorisation per run: Luxembourg population; French EU expressions; the complete Stage 7 run.
-  The bounded first-mount run is authorised.
+Only money, legal or public claims, credentials and going live (ruling 7):
+- Run authorisation per run: the Luxembourg population, French EU expressions and the complete
+  Stage 7 run. The bounded first-mount run is authorised.
 - Azure production credentials and the signing identity, needed by week 5.
-- Weekly 30-minute checkpoint slot.
+- The weekly 30-minute checkpoint slot.
 
 ## Housekeeping done 2026-09-27 (owner's instruction)
 
