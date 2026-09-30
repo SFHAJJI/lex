@@ -123,7 +123,7 @@ public enum EuFirstMountAcquisitionRefusal
 }
 
 /// <summary>
-/// The three EU inputs the Stage 3 envelope takes for one work, or one typed refusal. On a refusal
+/// The three EU inputs the Stage 3 envelope takes for the selected works, or one typed refusal. On a refusal
 /// an attempted adapter run and Formex result travel on the result. A receipt refused before
 /// population traffic carries neither; its captured transport evidence remains in custody.
 /// </summary>
@@ -144,7 +144,7 @@ public sealed class EuFirstMountAcquisitionResult
     }
 
     /// <summary>
-    /// The adapter run over the one work: complete on success and when a later step refused, the
+    /// The adapter run over the selected works: complete on success and when a later step refused, the
     /// refused run itself when <see cref="Refusal"/> is <see cref="EuFirstMountAcquisitionRefusal.RunRefused"/>
     /// after the adapter ran. Absent when the CELEX or the initial rights capture was refused.
     /// </summary>
@@ -196,7 +196,7 @@ public sealed class EuFirstMountAcquisitionResult
 
 /// <summary>
 /// The EU half of the first real mount: everything the Stage 3 envelope needs from the Union side
-/// for one Appendix A work, acquired live in one process under one wire ceiling, from production
+/// for selected Appendix A works, acquired live in one process under one wire ceiling, from production
 /// plans, production renderer sources and publicly bound witnesses.
 /// </summary>
 /// <remarks>
@@ -244,78 +244,91 @@ public sealed class EuFirstMountAcquisition
     /// <param name="celex">The work, which must be an Appendix A seed for the adapter to admit it.</param>
     /// <param name="rendererSources">The six renderer sources, held in this run's custody.</param>
     /// <param name="wireBudget">The one ceiling for the whole acquisition.</param>
-    public async Task<EuFirstMountAcquisitionResult> RunAsync(
+    public Task<EuFirstMountAcquisitionResult> RunAsync(
         string celex,
         EuRendererSources rendererSources,
         WireRequestBudget wireBudget,
         CancellationToken cancellationToken)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(celex);
+        return RunAsync([celex], rendererSources, wireBudget, cancellationToken);
+    }
+
+    /// <summary>
+    /// Acquires a nonempty set of Appendix A seeds as one adapter run and one Formex population.
+    /// Input is frozen, sorted and validated before the single rights receipt or any census traffic.
+    /// </summary>
+    public async Task<EuFirstMountAcquisitionResult> RunAsync(
+        IReadOnlyList<string> celexes,
+        EuRendererSources rendererSources,
+        WireRequestBudget wireBudget,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(celexes);
         ArgumentNullException.ThrowIfNull(rendererSources);
         ArgumentNullException.ThrowIfNull(wireBudget);
 
-        // The work must be an Appendix A seed: the adapter admits nothing else, so refusing here
-        // costs no traffic. The seed gives the work's Cellar root, which is what the document-fetch
-        // witness is minted from: a CELEX can carry a slash (the treaties: 12012E/TXT) and is not an
-        // admitted resource path, while the run's own fetches address Cellar keys.
-        var seedIndex = -1;
-        for (var index = 0; index < EuAppendixASeedMap.SeedsInCelexOrder.Count; index++)
-        {
-            if (string.Equals(EuAppendixASeedMap.SeedsInCelexOrder[index].Celex, celex, StringComparison.Ordinal))
-            {
-                seedIndex = index;
-                break;
-            }
-        }
-
-        if (seedIndex < 0)
+        var selected = celexes.ToArray();
+        if (selected.Length == 0 || selected.Any(string.IsNullOrWhiteSpace)
+            || selected.Distinct(StringComparer.Ordinal).Count() != selected.Length)
         {
             return EuFirstMountAcquisitionResult.Refused(
                 EuFirstMountAcquisitionRefusal.RunRefused,
-                $"the CELEX '{celex}' is not an Appendix A seed, so the adapter would admit no census family for it");
+                "the run needs a nonempty set of distinct Appendix A CELEX seeds");
         }
 
-        var workRoot = EuPackRootCanonicalForm.TryCanonicalize(
-            EuAppendixASeedMap.SeedsInCelexOrder[seedIndex].WorkRoot, out _);
-        var cellarKey = workRoot?[(workRoot.LastIndexOf('/') + 1)..];
-        if (string.IsNullOrEmpty(cellarKey))
-        {
-            return EuFirstMountAcquisitionResult.Refused(
-                EuFirstMountAcquisitionRefusal.RunRefused,
-                $"Appendix A's root for '{celex}' does not canonicalize to a Cellar key");
-        }
-
-        // Both witnesses are real bound requests of this work. The SPARQL witness is what the
-        // session resolves its source profile from and the path it evaluates robots against
-        // (Decision 83); the document-fetch witness only has to be a valid bound GET of the
-        // admitted channel, because each document-fetch session starts from the request it sends.
-        BoundMachineRequest sparqlWitness;
-        BoundMachineRequest documentFetchWitness;
+        Array.Sort(selected, StringComparer.Ordinal);
         var censusPlan = EuConsolidationDiscoveryPlan.Create();
-        try
+        var censusFamilies = new List<(EuCensusPartitionRunRequest Request, BoundMachineRequest SourceWitness)>();
+        BoundMachineRequest? documentFetchWitness = null;
+        foreach (var celex in selected)
         {
-            sparqlWitness = censusPlan.BindCount(
-                EuConsolidationQuerySet.Family, celex, EuConsolidationQueryPass.Pass1,
-                NewUrn(), NewUrn(), rendererSources.Census).Request;
-            var address = EuDocumentFetchAddress.TryCreate(
-                "cellar", cellarKey, EuManifestationMediaType.XhtmlXml, EuDocumentLanguage.Eng, out var addressRefusal);
-            if (address is null)
+            var seed = EuAppendixASeedMap.SeedsInCelexOrder.SingleOrDefault(seed =>
+                string.Equals(seed.Celex, celex, StringComparison.Ordinal));
+            if (seed.Celex is null)
             {
                 return EuFirstMountAcquisitionResult.Refused(
                     EuFirstMountAcquisitionRefusal.RunRefused,
-                    $"the work root of '{celex}' cannot be a document-fetch address: {addressRefusal}");
+                    $"the CELEX '{celex}' is not an Appendix A seed");
             }
 
-            documentFetchWitness = new EuDocumentFetchPlan(address)
-                .Bind(NewUrn(), NewUrn(), rendererSources.DocumentFetch).Request;
-        }
-        catch (ArgumentException exception)
-        {
-            return EuFirstMountAcquisitionResult.Refused(
-                EuFirstMountAcquisitionRefusal.RunRefused,
-                $"the CELEX '{celex}' cannot be bound into this run's witnesses: {exception.Message}");
+            var workRoot = EuPackRootCanonicalForm.TryCanonicalize(seed.WorkRoot, out _);
+            var cellarKey = workRoot?[(workRoot.LastIndexOf('/') + 1)..];
+            if (string.IsNullOrEmpty(cellarKey))
+            {
+                return EuFirstMountAcquisitionResult.Refused(
+                    EuFirstMountAcquisitionRefusal.RunRefused,
+                    $"Appendix A's root for '{celex}' does not canonicalize to a Cellar key");
+            }
+
+            try
+            {
+                var witness = censusPlan.BindCount(
+                    EuConsolidationQuerySet.Family, celex, EuConsolidationQueryPass.Pass1,
+                    NewUrn(), NewUrn(), rendererSources.Census).Request;
+                censusFamilies.Add((new EuCensusPartitionRunRequest(
+                    censusPlan, NewUrn(), celex, rendererSources.Census, wireBudget), witness));
+                var address = EuDocumentFetchAddress.TryCreate(
+                    "cellar", cellarKey, EuManifestationMediaType.XhtmlXml, EuDocumentLanguage.Eng, out var addressRefusal);
+                if (address is null)
+                {
+                    return EuFirstMountAcquisitionResult.Refused(
+                        EuFirstMountAcquisitionRefusal.RunRefused,
+                        $"the work root of '{celex}' cannot be a document-fetch address: {addressRefusal}");
+                }
+
+                documentFetchWitness ??= new EuDocumentFetchPlan(address)
+                    .Bind(NewUrn(), NewUrn(), rendererSources.DocumentFetch).Request;
+            }
+            catch (ArgumentException exception)
+            {
+                return EuFirstMountAcquisitionResult.Refused(
+                    EuFirstMountAcquisitionRefusal.RunRefused,
+                    $"the CELEX '{celex}' cannot be bound into this run's witnesses: {exception.Message}");
+            }
         }
 
+        var sparqlWitness = censusFamilies[0].SourceWitness;
         // Decision 95: acquire the rights receipt before population traffic. Rebinding below
         // retains the same hops under the adapter's eventual identity without another GET.
         var noticeProducer = new EuLegalNoticeRouteProducer(_custodyStore, _timeProvider, _testHandlerOverride);
@@ -331,13 +344,13 @@ public sealed class EuFirstMountAcquisition
         var executor = new EuRepeatedEnumerationExecutor(_custodyStore, _timeProvider, _testHandlerOverride);
         var adapter = new EuQueryExecutionAdapter(_custodyStore, executor);
         var run = await adapter.RunAsync(
-                [(new EuCensusPartitionRunRequest(censusPlan, NewUrn(), celex, rendererSources.Census, wireBudget), sparqlWitness)],
+                censusFamilies,
                 new EuObjectFactsBatchPolicy(
                     EuObjectFactsDiscoveryPlan.Create(), NewUrn(), rendererSources.ObjectFacts, sparqlWitness),
                 rendererSources.Witness,
                 sparqlWitness,
                 rendererSources.DocumentFetch,
-                documentFetchWitness,
+                documentFetchWitness!,
                 wireBudget,
                 cancellationToken)
             .ConfigureAwait(false);
@@ -350,7 +363,7 @@ public sealed class EuFirstMountAcquisition
         }
 
         var formex = await new EuFormexPackagePopulationProducer(_custodyStore, _timeProvider, _testHandlerOverride)
-            .RunAsync(run, rendererSources.FormexManifestation, rendererSources.DocumentFetch, celex, sparqlWitness, wireBudget, cancellationToken)
+            .RunAsync(run, rendererSources.FormexManifestation, rendererSources.DocumentFetch, sparqlWitness, wireBudget, cancellationToken)
             .ConfigureAwait(false);
         if (!formex.Delivered)
         {

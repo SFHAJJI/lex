@@ -846,8 +846,9 @@ proves the path, not a corpus.
   `formex_main_body_admitted` for the held EU member and the main-body producer parses its 99
   articles. What is not acquired is stated as its own outcome, never as a transport refusal:
   `not_acquired` with a reason (`body_not_held`: the run holds no body for the expression, today
-  every language but English, Decision 89, and the corpus binds every Formex outcome to one held
-  body; `language_not_addressable`, `manifestation_not_singular`, `identity_not_admitted`; and the
+  non-English original expressions, Decision 89, and the corpus binds every Formex outcome to one held
+  body; `language_not_addressable`, `manifestation_not_singular`, `identity_not_admitted` for works
+  outside the reviewed seed-root map, including consolidated expressions; and the
   four annex reasons below),
   `route_refused` with the status for any answer but 200 or 404 and for a 200 reached on a route
   that does not bind (a hop off the manifestation's path; review repair on this pull request),
@@ -992,6 +993,15 @@ proves the path, not a corpus.
   PR #786's cross-family findings are repaired: the verifier has an exact tree-allowlist entry,
   its Luxembourg default names the `/jo/fr` expression, and snapshot/coverage digests are checked.
 ## Next, in order
+
+Population preparation (data lane): `Lex.V3.Tool build --celex all` selects all 82 reviewed
+Appendix A seeds; a comma-separated selection also binds one combined run. The entire selection
+is validated before traffic, one Decision 95 receipt precedes the census, and all families share
+one wire ceiling and corpus identity. Formex acquisition binds each original expression to its
+own reviewed CELEX, including when a batch spans several works. An expression whose work is not
+an Appendix A root receives `not_acquired / identity_not_admitted`; this does not add consolidated
+wordings. The earlier 82 separate runs remain separate evidence. A complete combined live build
+has not yet run; the bounded first mount above is complete.
 
 1. Data lane (Codex, Decision 95): bounded first mount and real-data resolve completed above.
    Finish PR #786 and population PR #785, then continue the population work below.
