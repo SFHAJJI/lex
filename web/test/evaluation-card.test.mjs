@@ -12,7 +12,7 @@ import { createElement as h } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 
 import { EvaluationCardView, renderLiveCoveragePage } from "../.react-build/app.mjs";
-import { CARD_ROUTE, NOT_YET_LABELLED, readEvaluationCard, ruleOfThree, wilson95 } from "../scripts/evaluation-card.mjs";
+import { CARD_ROUTE, EMPTY_CASES_SHA256, NOT_YET_LABELLED, readEvaluationCard, ruleOfThree, wilson95 } from "../scripts/evaluation-card.mjs";
 
 const card = JSON.parse(await readFile(new URL("../../schemas/v3-platform/evaluation-card.json", import.meta.url), "utf8"));
 const mutate = (change) => { const copy = structuredClone(card); change(copy); return copy; };
@@ -131,13 +131,13 @@ test("a card whose gate fails says so above its tables, and the page will not pr
   assert.throws(() => renderLiveCoveragePage({ card: mutate((c) => { c.statistical_rows[0].status = "labelled"; }) }), /Decision 92/);
 });
 
-test("a set the gates found nothing to ask of reads as not measured, and only that way (the gates over a mounted corpus)", () => {
+test("a set the gates found nothing to ask of reads as not measured, and only that way (the gates over a mounted corpus)", async () => {
   // The first temporal set emptied as a mount with no Luxembourg state empties it: no case, every gate not measured
   // for no measurable query, and the control not applicable, saying why.
   const empty = (change = () => {}) => mutate((c) => {
-    Object.assign(c.machine_gates[0], { cases: 0 });
+    Object.assign(c.machine_gates[0], { cases: 0, cases_sha256: EMPTY_CASES_SHA256 });
     c.machine_gates[0].gates = c.machine_gates[0].gates.map((gate) => ({ gate: gate.gate, verdict: "not_measured", value: null, threshold: gate.threshold, n: 0, not_measured_reason: "no_measurable_query" }));
-    Object.assign(c.shuffled_controls[0], { verdict: "not_applicable", cases: 0, reason: "there is no temporal case to shift: the mount holds no Luxembourg state for this arm" });
+    Object.assign(c.shuffled_controls[0], { verdict: "not_applicable", cases: 0, cases_sha256: EMPTY_CASES_SHA256, reason: "there is no temporal case to shift: the mount holds no Luxembourg state for this arm" });
     delete c.shuffled_controls[0].note;
     change(c);
   });
@@ -154,6 +154,11 @@ test("a set the gates found nothing to ask of reads as not measured, and only th
     /not a whole number of at least 1/, "only no measurable query counts no case");
   assert.throws(() => readEvaluationCard(empty((c) => { Object.assign(c.shuffled_controls[0], { verdict: "caught_the_shuffle" }); })),
     /cases is not a whole number of at least 1/, "a control over no case cannot have caught anything");
+  // The review of #841: no case carries the digest of no case, and nothing else.
+  const { createHash } = await import("node:crypto");
+  assert.equal(EMPTY_CASES_SHA256, createHash("sha256").update("[]").digest("hex"), "the SHA-256 of the empty case list");
+  assert.throws(() => readEvaluationCard(empty((c) => { c.machine_gates[0].cases_sha256 = "f".repeat(64); })), /holds no case, so its cases_sha256 is 4f53cda1/);
+  assert.throws(() => readEvaluationCard(empty((c) => { c.shuffled_controls[0].cases_sha256 = "e".repeat(64); })), /ran over no case, so its cases_sha256 is 4f53cda1/);
   assert.throws(() => readEvaluationCard(mutate((c) => { c.machine_gates[0].cases = 0; })), /counts \d+ cases in its stratum, and its set holds 0|holds no case/,
     "a set of no case whose gates are measured");
 });

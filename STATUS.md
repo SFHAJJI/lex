@@ -1933,10 +1933,15 @@ bounded first mount the temporal no-language arms and the retrieval set have no 
 card reader refused a set of no case. `readEvaluationCard` now accepts one only as honest emptiness:
 - a gate may count no case only when it is not measured for `no_measurable_query`;
 - a set of no case must have every gate that way;
-- a control over no case can only be `not_applicable`, with its reason.
-A scored gate over no case, another not-measured reason over no case, and a control over no case that
-"caught" something are refused. The first mount's card reads and renders ("5 gates do not pass",
-each named not measured), as do the journey and licence-blocked mounts' cards and the platform card.
+- a control over no case can only be `not_applicable`, with its reason;
+- a set or control of no case carries the digest of no case, `EMPTY_CASES_SHA256` (the SHA-256 of
+  `[]`, as the platform renders it). The review of #841 found another digest was accepted.
+A scored gate over no case, another not-measured reason over no case, a control over no case that
+"caught" something, and a no-case digest that is not the empty list's are refused.
+The first mount's card reads and renders. At this head it has 3 sets (the two temporal no-language
+arms and the refusal set) and says "2 gates do not pass", each named not measured. With #842's
+retrieval set it has 4 sets and says 5, as the review of #841 counted. The journey and
+licence-blocked mounts' cards and the platform card read too.
 
 Evaluation card (PR #769): `EvaluationCard` in `Lex.V3.Contracts.Evaluation` prints the machine
 gates as the card of `36-ideal-evaluation.md` section 6 describes, as far as the launch contract

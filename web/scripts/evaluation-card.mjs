@@ -39,6 +39,11 @@ export const SET_GATES = Object.freeze({
 });
 export const SET_CONTROLS = Object.freeze({ temporal: 'date_shuffle', refusal: 'verdict_shuffle', retrieval: 'qrels_shuffle' });
 const DIGEST = /^[0-9a-f]{64}$/;
+/**
+ * The case digest of no case: the SHA-256 of the canonical empty case list, `[]`, as the platform renders it. A set
+ * or control of no case carries it and nothing else (review of #841: another digest would contradict "no case").
+ */
+export const EMPTY_CASES_SHA256 = '4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945';
 const Z95 = 1.959963984540054;
 
 function round4(value) {
@@ -160,6 +165,9 @@ function readSet(set, index) {
   if (caseCount === 0 && !gates.every((gate) => gate.verdict === 'not_measured' && gate.reason === 'no_measurable_query')) {
     throw new Error(`${where} holds no case, so every gate of it is not measured for no measurable query`);
   }
+  if (caseCount === 0 && casesSha256 !== EMPTY_CASES_SHA256) {
+    throw new Error(`${where} holds no case, so its cases_sha256 is ${EMPTY_CASES_SHA256}, the digest of no case`);
+  }
   return Object.freeze({
     set: name,
     arm: requireText(requireOwn(set, 'arm', where), `${where} arm`),
@@ -182,6 +190,9 @@ function readControl(control, index, set) {
   const controlVerdict = requireOneOf(requireOwn(control, 'verdict', where), CONTROL_VERDICTS, `${where}'s verdict`);
   const cases = requireCount(requireOwn(control, 'cases', where), `${where} cases`, controlVerdict === 'not_applicable' ? 0 : 1);
   if (cases > set.cases) throw new Error(`${where} ran over ${cases} cases, and its set holds ${set.cases}`);
+  if (cases === 0 && casesSha256 !== EMPTY_CASES_SHA256) {
+    throw new Error(`${where} ran over no case, so its cases_sha256 is ${EMPTY_CASES_SHA256}, the digest of no case`);
+  }
   if (cases < set.cases && !Object.hasOwn(control, 'note')) {
     throw new Error(`${where} ran over fewer cases than its set, and does not say why`);
   }
