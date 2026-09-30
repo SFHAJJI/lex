@@ -969,13 +969,32 @@ proves the path, not a corpus.
 - **Attempt 2's blocker is resolved by Decision 95 and PR #780.** Both required changes are
   implemented: the Publications Office Decision receipt replaces the challenged notice, and it is
   fetched before population traffic. Rebinding its retained hops after acquisition avoids a second
-  rights request. The successful live receipt check is recorded above; the full mount run is next.
+  rights request. The successful live receipt check is recorded above; the completed mount is below.
+- **Attempt 3 was interrupted during the IDE restart.** Started 2026-09-30 at 08:32:21 UTC,
+  using PR #750's GDPR/Luxembourg command and the unchanged 800-request ceiling. Its isolated tool,
+  custody and log are under `C:\lex-v3\first-mount-decision95`. The Decision receipt completed
+  303 -> 200 at 08:32:25 UTC, 48,730 bytes with the SHA-256 recorded above, before census traffic.
+  No exit receipt was written. Its custody remains intact.
 
+- **First real mount completed, 2026-09-30 11:19 UTC (Codex).** The restart used the same isolated
+  runtime from `1774a774`, GDPR/Luxembourg selection and 800-request ceiling in
+  `C:\lex-v3\first-mount-decision95-restart-20260930`. It exited 0 after 1 h 21 m 54 s,
+  spending 700 requests. EU: 91 expressions enumerated, 91 Formex-eligible; Luxembourg: 10 corpus
+  records. The combined corpus has 15 members. Corpus, both indexes and both capability manifests
+  built twice with equal bytes; all five written files verified on read-back. Corpus identity:
+  `02d19a2a68cd6a5b37fe9ccf79a21bd0359b1f8d232c578fb129d86ec7e8d313`.
+  The Decision receipt completed 303 -> 200 before census traffic. No EUR-Lex request was sent.
+  At 11:19:23 UTC the local verifier returned HTTP 200/answer for coverage, EU `32016R0679` and
+  Luxembourg `http://data.legilux.public.lu/eli/etat/leg/loi/2017/03/14/a439/jo/fr`, checking their
+  contracts, identifiers and corpus/index digests. Evidence: `v3-corpus/build-report.json`,
+  `smoke-1/smoke-report.json`, raw envelopes and API logs under the restart root. This is a bounded
+  local mount; full populations and production deployment remain outstanding.
+  PR #786's cross-family findings are repaired: the verifier has an exact tree-allowlist entry,
+  its Luxembourg default names the `/jo/fr` expression, and snapshot/coverage digests are checked.
 ## Next, in order
 
-1. Data lane (Codex, Decision 95). The receipt route is changed and live-verified (PR #780).
-   Run the bounded first mount with PR #750's command, the Codex checkout and the 800-request
-   ceiling; mount the result locally and answer `resolve` from the real data. No EUR-Lex request.
+1. Data lane (Codex, Decision 95): bounded first mount and real-data resolve completed above.
+   Finish PR #786 and population PR #785, then continue the population work below.
 2. Data lane (Codex). Complete the EU and Luxembourg populations under the owner's 2026-09-30
    authorisation, with one typed outcome per discovered body, then acquire French EU bodies.
 3. Data lane (Codex). Formex, the rest: French bodies (Decision 89) so French packages are held and acquired; then
@@ -1144,9 +1163,9 @@ Each is the driver's call under ruling 7 and can be reversed by a later pull req
 
 ## Waiting on others
 
-- The data lane (Codex, Decision 95): the EU rights receipt on the Publications Office route, then
-  the first real mount. The web lane's mounted-corpus work (the evaluation card over real gates,
-  the journeys with more than one page of hits) follows that mount.
+- The bounded real mount is available at
+  `C:\lex-v3\first-mount-decision95-restart-20260930\v3-corpus` for the web lane's mounted-corpus
+  evaluation and journeys. The data lane continues the full EU and Luxembourg populations.
 
 ## For the weekly checkpoint
 
