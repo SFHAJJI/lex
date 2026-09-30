@@ -5,11 +5,11 @@ every pull request that changes what is served, what is next or what is blocked.
 
 ## Heads
 
-- `v3/integration`: `bb842133` (2026-09-30, PR #790 merged). Build 45 s. Fast lane
+- `v3/integration`: `192535ee` (2026-09-30, PR #792 merged). Build 45 s. Fast lane
   (`eng/test-fast.ps1`): 3,038 tests, 3,037 pass, 1 skipped. Ingest suite: green on CI for PR #760
   (the CI `dotnet` job runs the whole solution on every pull request, about 7 min on the runner;
-  green for PR #790);
-  locally about 15 min. 922 web tests pass. CI's web job can flake in `keyboard-walk.test.mjs`
+  green for PR #792);
+  locally about 15 min. 926 web tests pass. CI's web job can flake in `keyboard-walk.test.mjs`
   ("browser debugger never answered"); rerunning the failed job is the fix.
 - Driver: Claude Opus 5.5 since 2026-09-29 (the Fable 5.1 driver ran out of tokens on 2026-09-28
   after PR #757; the user default model is now `claude-opus-5-5`).
@@ -235,7 +235,7 @@ schema's `parameters` shape, and whose call runs the same dispatch the REST rout
 endpoint test proves it for all twenty-three. The launch-contract line "REST and MCP derive identical
 envelopes from the registry" is the owner's to tick.
 
-Web: 37 React components, 922 tests. Preview screens render fixtures. The V3 Luxembourg search
+Web: 37 React components, 926 tests. Preview screens render fixtures. The V3 Luxembourg search
 answer has a reader (PR #771). The answer census now samples `search` five ways from the real handler:
 - a phrase with 4 strict hits and 1 relaxed hit;
 - the same phrase one hit per page, with its cursor;
@@ -1013,8 +1013,9 @@ proves the path, not a corpus.
    live radar screen and journey step; PR #788: the API serves the live pages with the security
    headers (ruling 3); PR #789: the live export composer and its journey step. All eight of the
    launch contract's screens are live and journeyed; PR #790: the PDF export; PR #792: the
-   evaluation card on the Trust and Coverage page (ruling 2). Next: the French and English refusal
-   sentences for the checkpoint (ruling 4). Hosting (ruling 3): `Lex.V3.Api`
+   evaluation card on the Trust and Coverage page (ruling 2); PR #793: the refusal sentence list
+   for the checkpoint (ruling 4). Next: the absence refusals' fields in the producer (the driver
+   decision below). Hosting (ruling 3): `Lex.V3.Api`
    serves the live pages on the API's origin with `frame-ancestors`, HSTS and `Referrer-Policy`,
    and a live page never shows the synthetic banner on a real mount. The absence refusals the card
    will not show: the producer carries the fields (driver decision). J1 to J8 are restated as V3
@@ -1050,7 +1051,7 @@ show text (users primarly want a temporal view of eu texts and dont really care 
 3. Web hosting: one server delivers the web bundle and the API (`/api/v3`, `/mcp`) on one origin,
    so the current CSP and no-CORS stand. That server sends `frame-ancestors`, HSTS and
    `Referrer-Policy`. A live page's banner never says "synthetic" on a real mount.
-4. French and English refusal sentences: the owner reviews them himself. The driver prepares one
+4. French and English refusal sentences: the owner reviews them in person. The driver prepares one
    short list for the weekly checkpoint and does not block on it.
 5. EU parity details, the event log, the `ask` card verdict and the four operations with no data:
    the driver's stated defaults (below).
@@ -1129,7 +1130,11 @@ Each is the driver's call under ruling 7 and can be reversed by a later pull req
 
 ## For the weekly checkpoint
 
-- The French and English refusal sentences, one short list (ruling 4).
+- The French and English refusal sentences, one short list (ruling 4): PR #793. The 20 sentences the
+  live pages say by refusal code, and each page's two sentences for a refusal named only by its code,
+  English as served and French as the driver's draft. Printed from the pages' own sentences by
+  `node web/scripts/refusal-sentences.mjs`; a test holds every served sentence to one draft. Nothing
+  French ships until the owner's reviewed wording replaces the drafts.
 
 ## Blocked on the owner
 
