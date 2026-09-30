@@ -17,8 +17,11 @@ Reversible driver decision: permit the existing four-attempt session retry only 
 digest. Retain each failed route using the existing deadlock path; charge each wire attempt and
 keep session backoff. Different bodies, bot challenges, statuses and publishers remain refused.
 The draft adds10cases for count/page recovery, attempt/route lineage, exhaustion, wire budget,
-changed maintenance bytes, wrong statuses and the same exact page from Luxembourg. Build,
-required fast/ingest tests and cross-family review remain pending. Before the next full run,
+changed maintenance bytes, wrong statuses and the same exact page from Luxembourg. Validation
+at8fad46c9 passed a clean build(44.91s), required fast(3,085passed/1platformskip,65.046s)
+and137affected ingest tests(2liveEUskips,51.204s). Exact commands/results are retained under
+C:/lex-v3/lanes/eu-maintenance-*. Required cross-family review and greenCI remain gates.
+Before the next full run,
 prove/reopen the three affected census families with fresh custody and a bounded wire ceiling.
 
 The offline combined Luxembourg diagnostic completed at merged7144666c, without publisher
