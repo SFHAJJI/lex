@@ -3,6 +3,20 @@
 Updated 2026-09-30 by the driver. This file replaces the issue-comment ledgers. It is rewritten in
 every pull request that changes what is served, what is next or what is blocked.
 
+## Publisher annex IDs and subtitles (Codex, 2026-10-01)
+
+The completed three-seed run retains English and French 2024/1620 XHTML with Roman annex IDs
+(including a nonbreaking space) and two title paragraphs. The parser currently admits only numeric
+IDs and one paragraph. Reversible driver decision: recognize canonical uppercase Roman IDs with
+the observed optional nonbreaking space, preserve the exact publisher ID, and concatenate a title
+and subtitle in publisher order as the independently retained Formex TITLE.Value does. The binder
+must still match complete package entries and exact titles; no annex or PDF admission is bypassed.
+
+The draft includes four exact retained XHTML/ZIP fixtures with SHA-256 pins and tests comparing
+both languages' titles against their Formex entries, plus valid/invalid identifier cases. Build,
+fast, affected ingest and cross-family review remain pending. This fixes a concrete parser limit;
+it does not claim to explain all 32 prior package-not-acquired outcomes or complete the annex chain.
+
 ## Luxembourg scope input reuse (Codex, 2026-09-30)
 
 Scope resolution retains four rule-evaluation objects and multiple not-applicable selectors per
