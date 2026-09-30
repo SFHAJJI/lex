@@ -14,7 +14,7 @@ import { createElement as h } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 
 import { renderToString } from "react-dom/server";
-import { Document, LIVE_CONTRACT, LIVE_MARKER, SYNTHETIC_MARKER, liveCompareTree, liveCoverageTree, liveDossierTree, liveHistoryTree, liveRadarTree, liveReadingTree, liveSearchTree, liveExportTree, renderLiveComparePage, renderLiveExportPage, renderLiveCoveragePage, renderLiveDossierPage, renderLiveHistoryPage, renderLiveRadarPage, renderLiveReadingPage, renderLiveSearchPage } from "../.react-build/app.mjs";
+import { Document, DossierTitles, LIVE_CONTRACT, LIVE_MARKER, SYNTHETIC_MARKER, SearchWorkResolution, liveCompareTree, liveCoverageTree, liveDossierTree, liveHistoryTree, liveRadarTree, liveReadingTree, liveSearchTree, liveExportTree, renderLiveComparePage, renderLiveExportPage, renderLiveCoveragePage, renderLiveDossierPage, renderLiveHistoryPage, renderLiveRadarPage, renderLiveReadingPage, renderLiveSearchPage } from "../.react-build/app.mjs";
 import { MAXIMUM_REQUEST_BYTES, createLiveServer } from "../scripts/serve-live.mjs";
 import { buildLive } from "../scripts/build-live.mjs";
 
@@ -177,6 +177,53 @@ test("the live build writes its own directory, embeds the contract and nothing e
   } finally {
     await rm(destination, { recursive: true, force: true });
   }
+});
+
+test("every live page offers the interface languages, each named in itself; an unreviewed one leads to localization_unavailable", async () => {
+  for (const render of [renderLiveCoveragePage, renderLiveSearchPage, renderLiveReadingPage, renderLiveExportPage]) {
+    const html = render();
+    const nav = html.slice(html.indexOf('<nav aria-label="Interface language"'), html.indexOf("</nav>") + 6);
+    assert.deepEqual([...nav.matchAll(/<a href="([^"]+)" lang="([a-z]+)" hrefLang="([a-z]+)"[^>]*>([^<]+)<\/a>/g)].map((m) => [m[1], m[2], m[3], m[4]]), [
+      ["/", "en", "en", "English"],
+      ["/locale-fr.html", "fr", "fr", "Français"],
+      ["/locale-de.html", "de", "de", "Deutsch"],
+      ["/locale-lb.html", "lb", "lb", "Lëtzebuergesch"],
+    ]);
+    assert.match(nav, /lang="en" hrefLang="en" aria-current="true">English/, "the page's own language is the current one");
+  }
+  assert.ok(!renderToStaticMarkup(h(Document, { state: "x", title: "X" }, h("p", null, "x"))).includes("Interface language"), "a preview page offers no live language");
+
+  const destination = await mkdtemp(join(tmpdir(), "lex-live-locales-"));
+  try {
+    await buildLive(new URL(`file:///${destination.replaceAll("\\", "/")}/`));
+    await assert.rejects(readFile(join(destination, "locale-en.html")), "English chrome is reviewed: no refusal page for it");
+    for (const [code, name] of [["fr", "French"], ["de", "German"], ["lb", "Luxembourgish"]]) {
+      const html = await readFile(join(destination, `locale-${code}.html`), "utf8");
+      assert.match(html, /<html lang="en"/, `${code}: written in English and labelled English`);
+      assert.ok(html.includes(`This interface has no reviewed copy in ${name}`));
+      assert.ok(html.includes("<code>localization_unavailable</code>"));
+      assert.match(html, new RegExp(`data-live="${LIVE_MARKER}"`), `${code}: under the live banner`);
+      assert.ok(!html.includes("<script"), `${code}: no script, nothing asked`);
+      assert.doesNotMatch(html.slice(html.indexOf("<body")).replace(/<[^>]+>/g, " "), /synthetic/i);
+    }
+  } finally {
+    await rm(destination, { recursive: true, force: true });
+  }
+});
+
+test("the publisher's titles are marked in their own language, apart from the interface's", () => {
+  const titles = renderToStaticMarkup(h(DossierTitles, {
+    titles: [
+      { language: "fra", expressionIri: "e-fr", titles: [{ title: "Loi du 10 août 1991" }], shortTitles: [{ title: "Loi avocats" }] },
+      { language: "deu", expressionIri: "e-de", titles: [{ title: "Gesetz vom 10. August 1991" }], shortTitles: [] },
+    ],
+  }));
+  assert.ok(titles.includes('<span lang="fr">Loi du 10 août 1991</span>') && titles.includes('<span lang="fr">Loi avocats</span> (short title)'));
+  assert.ok(titles.includes('<span lang="de">Gesetz vom 10. August 1991</span>'), "each group in its own language");
+  const one = renderToStaticMarkup(h(SearchWorkResolution, { language: "fra", resolution: { outcome: "one_work", work: { matchedTitle: "Loi du 10 août 1991", workIdentifier: "/lu-legilux/x" }, candidates: null } }));
+  assert.ok(one.includes('“<span lang="fr">Loi du 10 août 1991</span>”'), "a matched title is marked in the language the search was asked in");
+  const several = renderToStaticMarkup(h(SearchWorkResolution, { language: "deu", resolution: { outcome: "several_candidates", work: null, candidates: [{ matchedTitle: "Gesetz A", workIdentifier: "/a" }, { matchedTitle: "Gesetz B", workIdentifier: "/b" }] } }));
+  assert.equal([...several.matchAll(/<span lang="de">/g)].length, 2);
 });
 
 test("every other page keeps the synthetic banner, and a banner nobody named is refused", () => {

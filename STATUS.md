@@ -5,11 +5,11 @@ every pull request that changes what is served, what is next or what is blocked.
 
 ## Heads
 
-- `v3/integration`: `ce2d65ad` (2026-09-30, PR #794 merged). Build 45 s. Fast lane
+- `v3/integration`: `592cd701` (2026-09-30, PR #795 merged). Build 45 s. Fast lane
   (`eng/test-fast.ps1`): 3,038 tests, 3,037 pass, 1 skipped. Ingest suite: green on CI for PR #760
   (the CI `dotnet` job runs the whole solution on every pull request, about 7 min on the runner;
-  green for PR #794);
-  locally about 15 min. 927 web tests pass. CI's web job can flake in `keyboard-walk.test.mjs`
+  green for PR #796);
+  locally about 15 min. 929 web tests pass. CI's web job can flake in `keyboard-walk.test.mjs`
   ("browser debugger never answered"); rerunning the failed job is the fix.
 - Driver: Claude Opus 5.5 since 2026-09-29 (the Fable 5.1 driver ran out of tokens on 2026-09-28
   after PR #757; the user default model is now `claude-opus-5-5`).
@@ -235,7 +235,7 @@ schema's `parameters` shape, and whose call runs the same dispatch the REST rout
 endpoint test proves it for all twenty-three. The launch-contract line "REST and MCP derive identical
 envelopes from the registry" is the owner's to tick.
 
-Web: 37 React components, 927 tests. Preview screens render fixtures. The V3 Luxembourg search
+Web: 38 React components, 929 tests. Preview screens render fixtures. The V3 Luxembourg search
 answer has a reader (PR #771). The answer census now samples `search` five ways from the real handler:
 - a phrase with 4 strict hits and 1 relaxed hit;
 - the same phrase one hit per page, with its cursor;
@@ -535,6 +535,21 @@ review of #796), and any other permalink wherever it sits, and asks `verify` for
 that emitted it: each must answer `digest_matches` for the state its digest names, and an article
 permalink must name its article. The walk is held to find a permalink in every screen's answer, at
 least one article permalink, and nothing that is only prose. The journey's own pages add the browser half when the journey runs next.
+
+The interface languages on the live pages (PR #797, the launch contract's "DE and LB answer
+`localization_unavailable`"). Every live page carries a language list (`LocaleNav`): English,
+Français, Deutsch, Lëtzebuergesch, each named in itself and tagged with its own `lang`, the page's
+own language marked current. Only English chrome is reviewed (`REVIEWED_CHROME_LOCALES`), so the
+other three lead to `locale-fr.html`, `locale-de.html` and `locale-lb.html`, built into `dist-live`:
+the `localization_unavailable` page, in English and labelled English, under the live banner, with
+no script. It says exactly what the preview's page says (`localeUnavailableCopy`, now shared; the
+preview pages are byte-identical after the change). French chrome replaces its page once its copy
+is reviewed (Decision 41); German and Luxembourgish stay unavailable at launch.
+- Statute language apart from the interface's: the interface is `<html lang="en">`, and every piece
+  of publisher text a live page shows carries its own language. That was already true of the
+  quotations and notes on the reading and export pages; the dossier's titles (each in its
+  expression's language) and search's matched titles (in the language the search was asked in) now
+  carry it too. History, compare and radar show digests and ids, no publisher text.
 
 The live export composer and its journey step (PR #789), the eighth screen. `dist-live/export.html`
 has its own bundle `client-live-export.js`.
@@ -1070,9 +1085,11 @@ has not yet run; the bounded first mount above is complete.
    launch contract's screens are live and journeyed; PR #790: the PDF export; PR #792: the
    evaluation card on the Trust and Coverage page (ruling 2); PR #793: the refusal sentence list
    for the checkpoint (ruling 4); PR #794: the absence refusals carry the card's evidence, so the
-   live pages show them as cards; PR #796: every citation the served answers emit verifies. Next:
-   keyboard and screen-reader paths for the eight screens, then French and English chrome
-   (Decision 41: French copy ships only once reviewed). Hosting (ruling 3): `Lex.V3.Api`
+   live pages show them as cards; PR #796: every citation the served answers emit verifies; PR #797:
+   the interface languages, German and Luxembourgish (and French until reviewed) answering
+   `localization_unavailable`. Next: keyboard and screen-reader paths for the eight screens, then
+   French chrome, which ships only once its copy is reviewed (Decision 41): the driver drafts it
+   for the owner as the refusal sentences were. Hosting (ruling 3): `Lex.V3.Api`
    serves the live pages on the API's origin with `frame-ancestors`, HSTS and `Referrer-Policy`,
    and a live page never shows the synthetic banner on a real mount. J1 to J8 are restated as V3
    steps by the driver (they exist only in the pre-V3 pack, `05-user-journeys.md`).

@@ -16,6 +16,7 @@
 
 import { CHROME_LOCALES } from '../scripts/localization.mjs';
 import { cspValue } from '../scripts/csp.mjs';
+import { LocaleNav } from './LocaleNav.jsx';
 
 /** The marker that says, in the DOM, that nothing on this page is law. */
 export const SYNTHETIC_MARKER = 'lex-v3-synthetic-preview';
@@ -128,6 +129,8 @@ export function Document({
       </head>
       <body>
         {banner === 'live' ? <LiveBanner /> : <SyntheticBanner />}
+        {/* The live pages offer the interface languages; an unreviewed one answers localization_unavailable. */}
+        {banner === 'live' ? <LocaleNav current={locale} /> : null}
         <main id="main">{children}</main>
       </body>
     </html>
