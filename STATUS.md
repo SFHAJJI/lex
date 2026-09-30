@@ -14,13 +14,18 @@ four-attempt limit, session backoff and shared wire budget. Keep every recognize
 custody, including the last attempt, and require ordinary full proof for the successful response.
 
 Other status/body failures, malformed successful replies, capacity errors and challenges retain
-their refusal paths. The draft includes the actual retained deadlock fixture and nine tests for
+their refusal paths. The draft includes the actual retained deadlock fixture and ten new test cases for
 count/page recovery, same-request attempt lineage, failed-route custody, exhaustion, budget and
-nonretry cases. Validation at 4a37dc2b passed clean build (39.51 s), required fast (3,085 passed,
+nonretry cases, including the same signature from Luxembourg. Validation at 4a37dc2b passed clean build (39.51 s), required fast (3,085 passed,
 one platform skip, 66.989 s), and 126 affected ingest tests (two live canaries skipped, 53.799 s).
-Exact commands/results are retained under C:\lex-v3\lanes\eu-deadlock-*. Required cross-family
-review and green CI remain pending. No live retry has started; the prior run remains refused
-and its custody is preserved.
+Exact commands/results are retained under C:\lex-v3\lanes\eu-deadlock-*. Required Claude review
+returned MERGE with no material findings and reproduced the focused tests and fast suite. The one
+repair adds the missing Luxembourg endpoint regression and records that failed-route digests are
+currently discoverable by scanning custody; they are not linked from the final refusal or receipt.
+The review stopped its optional full local ingest run after 21 minutes because another lane's
+review was competing for memory: 1,774 passed, four skipped, no failed tests, incomplete suite.
+Initial exact-head CI36784354147 passed 5,105 tests with 19 skips. Fresh repair validation and final
+CI remain gates. No live retry has started; the prior run remains refused and its custody is preserved.
 
 ## Luxembourg scope input reuse (Codex, 2026-09-30)
 
