@@ -3,6 +3,21 @@
 Updated 2026-09-30 by the driver. This file replaces the issue-comment ledgers. It is rewritten in
 every pull request that changes what is served, what is next or what is blocked.
 
+## Corpus record-set stream readback draft (Codex, 2026-09-30)
+
+Reversible driver decision: make independent corpus record-set readback stream through its
+original domain digest and strict UTF-8 check, the same typed constructors, exact canonical
+comparison and final digest pin. Both inline custody reader and writer wrap existing arrays
+where available, avoiding full UTF-8 strings and comparison buffers. The canonical writer
+flushes at record boundaries after 64 KiB pending, allowing one-record overshoot.
+
+This draft is uncompiled and unvalidated. Regression drafts cover short reads/caller ownership,
+foreign digest, noncanonical spacing/trailing bytes, invalid UTF-8, typed ordinal invariants,
+canonical substitution between passes and stream preconditions. The existing large writer
+fixture also reopens through the stream path. Construction censuses need independent reflection.
+Record-set writes still use a single custody object, and typed records/completion remain in
+memory. Chunked persistence and full-process sizing remain required before full Luxembourg.
+
 ## Corpus record-set canonical streaming (Codex, 2026-09-30, preparation)
 
 The full Luxembourg path still serializes every corpus record into one artifact. Its canonical

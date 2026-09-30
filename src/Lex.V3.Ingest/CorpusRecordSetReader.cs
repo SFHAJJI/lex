@@ -1,3 +1,4 @@
+using System.Runtime.InteropServices;
 using System.Text.Json.Serialization;
 using Lex.V3.Contracts.Custody;
 using Lex.V3.Contracts.Source.Core;
@@ -137,8 +138,11 @@ public sealed class CorpusRecordSetReader
 
         try
         {
+            using var readback = MemoryMarshal.TryGetArray(retained, out var buffer)
+                ? new MemoryStream(buffer.Array!, buffer.Offset, buffer.Count, writable: false)
+                : new MemoryStream(retained.ToArray(), writable: false);
             return CorpusRecordSetReadResult.Reopened(
-                VerifiedCorpusRecordSet.ParseAndVerify(setRef, retained.Span));
+                VerifiedCorpusRecordSet.ParseAndVerifyStream(setRef, readback));
         }
         catch (ArgumentException exception)
         {

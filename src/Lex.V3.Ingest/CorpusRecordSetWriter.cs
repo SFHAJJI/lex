@@ -1,3 +1,4 @@
+using System.Runtime.InteropServices;
 using Lex.V3.Contracts.Custody;
 using Lex.V3.Contracts.Source.Core;
 using Lex.V3.Contracts.Source.Corpus;
@@ -445,7 +446,10 @@ public sealed class CorpusRecordSetWriter
             .ConfigureAwait(false);
 
         var setArtifactRef = new SourceArtifactRef($"urn:uuid:{Guid.NewGuid():D}", setCanonicalSha256);
-        var verifiedSet = VerifiedCorpusRecordSet.ParseAndVerify(setArtifactRef, reopenedBytes.Span);
+        using var readback = MemoryMarshal.TryGetArray(reopenedBytes, out var retainedBuffer)
+            ? new MemoryStream(retainedBuffer.Array!, retainedBuffer.Offset, retainedBuffer.Count, writable: false)
+            : new MemoryStream(reopenedBytes.ToArray(), writable: false);
+        var verifiedSet = VerifiedCorpusRecordSet.ParseAndVerifyStream(setArtifactRef, readback);
 
         return CorpusRecordSetWriteResult.Written(
             setArtifactRef,

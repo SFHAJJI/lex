@@ -1138,6 +1138,94 @@ public sealed class VerifiedCorpusRecordSet
 
         return new VerifiedCorpusRecordSet(set);
     }
+
+    /// <summary>
+    /// Verifies a readable, seekable canonical stream positioned at zero. Checks its original
+    /// domain-separated digest and strict UTF-8, admits the same typed record-set invariants,
+    /// and compares canonical output against a fresh read with a final digest pin. Leaves the
+    /// caller's stream open. The typed records remain materialized; byte checks use fixed buffers.
+    /// </summary>
+    public static VerifiedCorpusRecordSet ParseAndVerifyStream(
+        SourceArtifactRef artifactRef, Stream canonicalStream)
+    {
+        ArgumentNullException.ThrowIfNull(artifactRef);
+        ArgumentNullException.ThrowIfNull(canonicalStream);
+        if (!canonicalStream.CanRead || !canonicalStream.CanSeek || canonicalStream.Position != 0)
+        {
+            throw new ArgumentException(
+                "The corpus record set stream must be readable, seekable and positioned at zero.",
+                nameof(canonicalStream));
+        }
+        var observedDigest = CorpusRecordSetCanonicalWriter.ComputeSetSha256(canonicalStream, out var validUtf8);
+        if (!string.Equals(observedDigest, artifactRef.Sha256, StringComparison.Ordinal))
+        {
+            throw new ArgumentException("The corpus record set bytes do not match their artifact reference.",
+                nameof(canonicalStream));
+        }
+        if (!validUtf8)
+        {
+            throw new ArgumentException("The corpus record set stream is not strict UTF-8.", nameof(canonicalStream));
+        }
+        canonicalStream.Position = 0;
+        CorpusRecordSet set;
+        try
+        {
+            set = ContractJson.DeserializeFromStream<CorpusRecordSet>(canonicalStream);
+        }
+        catch (JsonException exception)
+        {
+            throw new ArgumentException("The corpus record set bytes are not one valid typed canonical document.",
+                nameof(canonicalStream), exception);
+        }
+        canonicalStream.Position = 0;
+        using var comparison = new CanonicalComparisonStream(canonicalStream);
+        var rebuiltDigest = CorpusRecordSetCanonicalWriter.Write(comparison, set);
+        comparison.RequireEnd();
+        if (!string.Equals(rebuiltDigest, artifactRef.Sha256, StringComparison.Ordinal))
+        {
+            throw new ArgumentException("The corpus record set changed between verification passes.",
+                nameof(canonicalStream));
+        }
+        return new VerifiedCorpusRecordSet(set);
+    }
+
+    private sealed class CanonicalComparisonStream(Stream expected) : Stream
+    {
+        public override bool CanRead => false;
+        public override bool CanSeek => false;
+        public override bool CanWrite => true;
+        public override long Length => throw new NotSupportedException();
+        public override long Position
+        {
+            get => throw new NotSupportedException();
+            set => throw new NotSupportedException();
+        }
+        public override void Flush() { }
+        public override int Read(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+        public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
+        public override void SetLength(long value) => throw new NotSupportedException();
+        public override void Write(byte[] buffer, int offset, int count) => Write(buffer.AsSpan(offset, count));
+        public override void Write(ReadOnlySpan<byte> buffer)
+        {
+            Span<byte> actual = stackalloc byte[4096];
+            while (!buffer.IsEmpty)
+            {
+                var count = expected.Read(actual[..Math.Min(actual.Length, buffer.Length)]);
+                if (count == 0 || !buffer[..count].SequenceEqual(actual[..count]))
+                {
+                    throw NonCanonical();
+                }
+                buffer = buffer[count..];
+            }
+        }
+        public void RequireEnd()
+        {
+            if (expected.ReadByte() != -1) throw NonCanonical();
+        }
+        private static ArgumentException NonCanonical() => new(
+            "The corpus record set is not its exact canonical typed representation.", "canonicalStream");
+    }
+
 }
 
 /// <summary>
@@ -1204,6 +1292,29 @@ public static class CorpusRecordSetCanonicalWriter
         Span<byte> digest = stackalloc byte[SHA256.HashSizeInBytes];
         incremental.GetHashAndReset(digest);
         return Convert.ToHexStringLower(digest);
+    }
+
+    internal static string ComputeSetSha256(Stream canonicalStream, out bool validUtf8)
+    {
+        using var hashing = new CanonicalSetWriteStream(Stream.Null);
+        var decoder = new UTF8Encoding(false, true).GetDecoder();
+        Span<byte> buffer = stackalloc byte[4096];
+        Span<char> characters = stackalloc char[4098];
+        validUtf8 = true;
+        int read;
+        while ((read = canonicalStream.Read(buffer)) != 0)
+        {
+            hashing.Write(buffer[..read]);
+            if (!validUtf8) continue;
+            try { _ = decoder.GetChars(buffer[..read], characters, flush: false); }
+            catch (DecoderFallbackException) { validUtf8 = false; }
+        }
+        if (validUtf8)
+        {
+            try { _ = decoder.GetChars(ReadOnlySpan<byte>.Empty, characters, flush: true); }
+            catch (DecoderFallbackException) { validUtf8 = false; }
+        }
+        return hashing.CompleteDigest();
     }
 
     // The domain participates in the digest only. The caller receives canonical bytes and keeps
