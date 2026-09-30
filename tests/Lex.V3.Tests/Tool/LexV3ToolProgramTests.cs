@@ -72,6 +72,26 @@ public sealed class LexV3ToolProgramTests
     }
 
     [TestMethod]
+    public void TheWholeLuxembourgPopulationArgumentsAreAcceptedBeforeAnInvalidEuSeedRefuses()
+    {
+        var run = Run("build", "--celex", "NOTASEED", "--lu-population", "all", "--wire-ceiling", "5");
+        Assert.AreEqual(3, run.ExitCode, run.Transcript);
+        StringAssert.Contains(run.StandardError, "(spent 0 of 5)", run.Transcript);
+    }
+
+    [TestMethod]
+    [DataRow("other", false)]
+    [DataRow("all", true)]
+    public void AnInvalidOrMixedPopulationSelectionIsRejectedBeforeTraffic(string population, bool mixed)
+    {
+        var arguments = new List<string> { "build", "--celex", "NOTASEED", "--lu-population", population, "--wire-ceiling", "5" };
+        if (mixed) arguments.AddRange(["--lu-name", "act"]);
+        var run = Run(arguments.ToArray());
+        Assert.AreEqual(2, run.ExitCode, run.Transcript);
+        Assert.DoesNotContain("renderer sources held", run.StandardOutput, run.Transcript);
+    }
+
+    [TestMethod]
     public void AnUnknownARepeatedOrAMissingOptionExitsTwo()
     {
         var unknown = Run("build", "--celex", "NOTASEED", "--lu-name", "act", "--lu-start", ValidStart, "--lu-end", ValidEnd,

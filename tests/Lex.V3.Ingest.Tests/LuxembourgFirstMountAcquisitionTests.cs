@@ -106,6 +106,48 @@ public sealed class LuxembourgFirstMountAcquisitionTests
     }
 
     [TestMethod]
+    public async Task TheWholePopulationProvesTwoWorksAndBuildsOneCorpus()
+    {
+        var store = new RoutedHttpAcquisitionSessionTests.MultiObjectCustodyStore();
+        var handler = new LuxembourgFamilyHandler(PdfBytes(), includeSecondWork: true, includeBlankNode: true);
+        var renderers = await LuxembourgRendererSources.FromCheckoutAsync(store, CheckoutRoot(), CancellationToken.None);
+        var scope = LuxembourgActRange.WholePopulation;
+        Assert.AreEqual("A", scope.StartInclusive);
+        Assert.AreEqual("\uffff", scope.EndExclusive);
+        var result = await Acquisition(store, handler).RunAsync(
+            scope, renderers, LuxembourgAcquisitionTestFixture.TestWireBudget(), CancellationToken.None);
+
+        Assert.IsTrue(result.Delivered, $"{result.Refusal}: {result.Detail}");
+        Assert.AreEqual(LuxembourgQueryExecutionCompletion.AllFamiliesProven, result.Run!.Completion);
+        var held = result.Run.CorpusRecordSet!.Set.Records
+            .Where(record => record.Body.Kind == CorpusBodyRecordKind.Held).ToArray();
+        Assert.AreEqual(2, held.Length);
+        CollectionAssert.AreEquivalent(new[] { Consolidation, Consolidation.Replace("/2026/", "/2025/", StringComparison.Ordinal) },
+            held.Select(record => record.ObjectRef.PublisherUri).ToArray());
+        Assert.AreEqual(2, handler.DocumentRequests.Count);
+        CollectionAssert.AreEquivalent(new[] { "P", "T", "C", "O", "S", "A", "G" }, handler.FamiliesSeen.ToArray());
+        var envelope = await LexCorpus6BuilderTests.CompleteProfileEnvelopeAsync(
+            luxembourgOverride: result.Run, luxembourgStore: store);
+        var built = LexCorpus6Builder.TryBuild(envelope, out var refusal, out var detail);
+        Assert.IsNotNull(built, $"{refusal}: {detail}");
+    }
+
+    [TestMethod]
+    public async Task AnEmptyPopulationLowerBoundIncludesUnstableBlankNodesAndRefuses()
+    {
+        var store = new RoutedHttpAcquisitionSessionTests.MultiObjectCustodyStore();
+        var handler = new LuxembourgFamilyHandler(PdfBytes(), includeBlankNode: true);
+        var renderers = await LuxembourgRendererSources.FromCheckoutAsync(store, CheckoutRoot(), CancellationToken.None);
+        var result = await Acquisition(store, handler).RunAsync(
+            new LuxembourgActRange("old-population", "", "\uffff"), renderers,
+            LuxembourgAcquisitionTestFixture.TestWireBudget(), CancellationToken.None);
+        Assert.IsFalse(result.Delivered);
+        Assert.AreEqual(LuxembourgFirstMountAcquisitionRefusal.RunRefused, result.Refusal);
+        StringAssert.Contains(result.Detail, "old-population-a");
+        Assert.AreEqual(0, handler.DocumentRequests.Count);
+    }
+
+    [TestMethod]
     public async Task ARefusedVocabularyPartitionIsATypedRefusalBeforeAnyActTraffic()
     {
         var store = new RoutedHttpAcquisitionSessionTests.MultiObjectCustodyStore();
@@ -231,13 +273,21 @@ public sealed class LuxembourgFirstMountAcquisitionTests
     internal sealed class LuxembourgFamilyHandler(
         byte[] pdfBytes,
         string? sparqlRobots = null,
-        string? omitRequiredPredicate = null) : HttpMessageHandler
+        string? omitRequiredPredicate = null,
+        bool includeSecondWork = false,
+        bool includeBlankNode = false) : HttpMessageHandler
     {
         // The page query binds VALUES (?has_cursor ?last_key_1 ...) { (1 "last key" ...) } on a
         // continuation and (0 "" ...) on a first page (LuxembourgQueryPlan, has_cursor:uint).
         private static readonly Regex ContinuationCursor = new(@"\(\s*1\s+""", RegexOptions.CultureInvariant | RegexOptions.Compiled);
         private readonly List<string> _families = [];
         private readonly List<string> _documents = [];
+        private (string Subject, string Predicate, string Value)[] ActAssertions => includeSecondWork
+            ? Assertions.Concat(Assertions.Select(row => (
+                row.Subject.Replace("/2026/", "/2025/", StringComparison.Ordinal), row.Predicate,
+                row.Value.Replace("/2026/", "/2025/", StringComparison.Ordinal)))).ToArray()
+            : Assertions;
+
 
         internal IReadOnlyList<string> FamiliesSeen
         {
@@ -280,7 +330,7 @@ public sealed class LuxembourgFirstMountAcquisitionTests
                 }
 
                 var expected = new Uri(Item.Replace("http://data.legilux.public.lu/", "https://legilux.public.lu/", StringComparison.Ordinal)).AbsoluteUri;
-                return uri.AbsoluteUri == expected
+                return (uri.AbsoluteUri == expected || (includeSecondWork && uri.AbsoluteUri == expected.Replace("/2026/", "/2025/", StringComparison.Ordinal)))
                     ? Binary(request, pdfBytes, "application/pdf")
                     : Binary(request, [], "text/plain", HttpStatusCode.NotFound);
             }
@@ -301,10 +351,22 @@ public sealed class LuxembourgFirstMountAcquisitionTests
             var continuation = ContinuationCursor.IsMatch(body);
             var count = body.Contains("COUNT(*)", StringComparison.Ordinal);
             var rows = RowsFor(family);
+            // The A template gives a blank-node subject key_1="". Honour its lower range bound:
+            // the old empty bound includes it, whereas every nonempty IRI bound excludes it.
+            var lowerBound = Regex.Match(body,
+                """VALUES\s*\(\?partition_start_1[^)]*\)\s*\{\s*\(\s*"(?<start>[^"]*)""",
+                RegexOptions.CultureInvariant);
+            Assert.IsTrue(lowerBound.Success, "The fixture must read the bound sent to the publisher.");
+            var blankInRange = includeBlankNode && lowerBound.Groups["start"].Value.Length == 0;
+            if (includeSecondWork && family is "S" or "A" or "G")
+            {
+                Assert.IsTrue(body.Contains("\uffff", StringComparison.Ordinal) || body.Contains("\\uFFFF", StringComparison.OrdinalIgnoreCase),
+                    "Both fixture works must be enumerated under the whole-population upper bound.");
+            }
             var page = family switch
             {
-                "A" when count => LuxembourgAcquisitionTestFixture.CountJson(Assertions.Length),
-                "A" => AssertionRows(continuation ? [] : Assertions),
+                "A" when count => LuxembourgAcquisitionTestFixture.CountJson(ActAssertions.Length + (blankInRange ? 1 : 0)),
+                "A" => AssertionRows(continuation ? [] : ActAssertions, !continuation && blankInRange),
                 "G" when count => LuxembourgAcquisitionTestFixture.CountJson(0),
                 "G" => RelationRows(),
                 _ when count => LuxembourgAcquisitionTestFixture.CountJson(rows.Count),
@@ -344,15 +406,15 @@ public sealed class LuxembourgFirstMountAcquisitionTests
                 "O" => required.Where(static value => value.Kind == LuxembourgVocabularyKind.Licence
                         && value.FullIri.StartsWith("http://creativecommons.org/", StringComparison.Ordinal))
                     .Select(static value => value.FullIri),
-                "S" => [Consolidation, Expression, Manifestation, Act],
-                "A" => Assertions.Select(static assertion => assertion.Subject),
+                "S" => ActAssertions.Select(static assertion => assertion.Subject),
+                "A" => ActAssertions.Select(static assertion => assertion.Subject),
                 "G" => [],
                 _ => throw new AssertFailedException(family),
             };
             return values.Distinct(StringComparer.Ordinal).OrderBy(static value => value, StringComparer.Ordinal).ToArray();
         }
 
-        private static string AssertionRows((string Subject, string Predicate, string Value)[] rows)
+        private static string AssertionRows((string Subject, string Predicate, string Value)[] rows, bool includeBlank = false)
         {
             var variables = new[]
             {
@@ -366,7 +428,15 @@ public sealed class LuxembourgFirstMountAcquisitionTests
                     var values = new[] { row.Subject, row.Predicate, row.Value, "iri", "", "", row.Subject, row.Predicate, "iri", row.Value, "", "" };
                     return variables.Select((name, index) => (name, term: new { type = index < 3 ? "uri" : "literal", value = values[index] }))
                         .ToDictionary(static field => field.name, static field => field.term);
-                });
+                }).ToList();
+            if (includeBlank)
+            {
+                var restriction = "http://www.w3.org/2002/07/owl#Restriction";
+                var values = new[] { "b0", RdfType, restriction, "iri", "", "", "", RdfType, "iri", restriction, "", "" };
+                bindings.Insert(0, variables.Select((name, index) => (name,
+                        term: new { type = index == 0 ? "bnode" : index < 3 ? "uri" : "literal", value = values[index] }))
+                    .ToDictionary(static field => field.name, static field => field.term));
+            }
             return JsonSerializer.Serialize(new
             {
                 head = new { link = Array.Empty<string>(), vars = variables },

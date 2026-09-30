@@ -992,6 +992,21 @@ proves the path, not a corpus.
   local mount; full populations and production deployment remain outstanding.
   PR #786's cross-family findings are repaired: the verifier has an exact tree-allowlist entry,
   its Luxembourg default names the `/jo/fr` expression, and snapshot/coverage digests are checked.
+
+- **Luxembourg population selector (Codex data lane).** `Lex.V3.Tool build --lu-population all`
+  selects every absolute publisher IRI for the existing S, A and G families, from `A` to U+FFFF.
+  An IRI scheme starts with an ASCII letter; blank-node subjects have an empty assertion key
+  and remain outside the range, matching S's IRI-only subject universe. It is an alternative to
+  the three `--lu-name`, `--lu-start`, `--lu-end` arguments; mixing them or naming an unknown population is rejected
+  before acquisition. The selected range is retained in the scope receipt before traffic.
+  Vocabulary proofs, source-profile classification, rights decisions, typed body outcomes and
+  the one wire ceiling remain on the acquisition path. This is a selector for discovered
+  publisher data, not a claim that every discovered object is authoritative or redistributable.
+  A two-work offline acquisition exercises both bodies and builds one corpus. The review repair
+  proves that blank-node assertions refuse under the old empty bound and stay outside the new one.
+  No complete live Luxembourg population has been acquired yet. The bulk run follows the bounded first mount
+  and EU population preparation (#786 then #785), under an explicit shared wire ceiling.
+
 ## Next, in order
 
 Population preparation (data lane): `Lex.V3.Tool build --celex all` selects all 82 reviewed

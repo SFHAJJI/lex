@@ -103,6 +103,14 @@ public sealed record LuxembourgActRange
         }
     }
 
+    /// <summary>
+    /// Every absolute publisher IRI: a scheme starts with an ASCII letter, so A is the least
+    /// possible first character. Blank-node subjects have an empty assertion key and remain
+    /// outside this range, as they do in S's IRI-only subject universe. S, A and G are proven
+    /// over the range; the source profile classifies which discovered bodies may be fetched.
+    /// </summary>
+    public static LuxembourgActRange WholePopulation { get; } = new("population", "A", "\uffff");
+
     public string Name { get; }
 
     public string StartInclusive { get; }
