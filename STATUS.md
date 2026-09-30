@@ -835,8 +835,9 @@ proves the path, not a corpus.
   `formex_main_body_admitted` for the held EU member and the main-body producer parses its 99
   articles. What is not acquired is stated as its own outcome, never as a transport refusal:
   `not_acquired` with a reason (`body_not_held`: the run holds no body for the expression, today
-  every language but English, Decision 89, and the corpus binds every Formex outcome to one held
-  body; `language_not_addressable`, `manifestation_not_singular`, `identity_not_admitted`; and the
+  non-English original expressions, Decision 89, and the corpus binds every Formex outcome to one held
+  body; `language_not_addressable`, `manifestation_not_singular`, `identity_not_admitted` for works
+  outside the reviewed seed-root map, including consolidated expressions; and the
   four annex reasons below),
   `route_refused` with the status for any answer but 200 or 404 and for a 200 reached on a route
   that does not bind (a hop off the manifestation's path; review repair on this pull request),
@@ -959,8 +960,49 @@ proves the path, not a corpus.
   implemented: the Publications Office Decision receipt replaces the challenged notice, and it is
   fetched before population traffic. Rebinding its retained hops after acquisition avoids a second
   rights request. The successful live receipt check is recorded above; the full mount run is next.
+- **Attempt 3 is running from merged PR #780 (`1774a774`).** Started 2026-09-30 at 08:32:21 UTC,
+  using PR #750's GDPR/Luxembourg command and the unchanged 800-request ceiling. Its isolated tool,
+  custody and log are under `C:\lex-v3\first-mount-decision95`. The Decision receipt completed
+  303 -> 200 at 08:32:25 UTC, 48,730 bytes with the SHA-256 recorded above, before census traffic.
+  The mount outcome is pending. `eng/verify-mounted-corpus.ps1` starts a copied API runtime on
+  loopback, retains coverage and both publishers' resolve envelopes, checks their contracts and
+  corpus/index digests, and records response hashes. The real-data smoke run follows a successful
+  build automatically; no production deployment is involved.
+
+- **First-mount restart, 2026-09-30 09:57 UTC (Codex).** The acquisition in
+  `C:\lex-v3\first-mount-decision95` stopped without an exit receipt during the IDE restart;
+  its custody remains intact. The same isolated runtime from `1774a774` is running the same
+  GDPR/Luxembourg selection and 800-request ceiling in the fresh directory
+  `C:\lex-v3\first-mount-decision95-restart-20260930`. The detached runner records its exit
+  code and invokes the local verifier after exit 0. The receipt again completed 303 -> 200
+  before census traffic. No real mount success is claimed while acquisition is pending.
+  PR #786's cross-family findings are repaired: the verifier has an exact tree-allowlist entry,
+  its Luxembourg default names the `/jo/fr` expression, and snapshot/coverage digests are checked.
+
+- **Luxembourg population selector (Codex data lane).** `Lex.V3.Tool build --lu-population all`
+  selects every absolute publisher IRI for the existing S, A and G families, from `A` to U+FFFF.
+  An IRI scheme starts with an ASCII letter; blank-node subjects have an empty assertion key
+  and remain outside the range, matching S's IRI-only subject universe. It is an alternative to
+  the three `--lu-name`, `--lu-start`, `--lu-end` arguments; mixing them or naming an unknown population is rejected
+  before acquisition. The selected range is retained in the scope receipt before traffic.
+  Vocabulary proofs, source-profile classification, rights decisions, typed body outcomes and
+  the one wire ceiling remain on the acquisition path. This is a selector for discovered
+  publisher data, not a claim that every discovered object is authoritative or redistributable.
+  A two-work offline acquisition exercises both bodies and builds one corpus. The review repair
+  proves that blank-node assertions refuse under the old empty bound and stay outside the new one.
+  No complete live Luxembourg population has been acquired yet. The bulk run follows the bounded first mount
+  and EU population preparation (#786 then #785), under an explicit shared wire ceiling.
 
 ## Next, in order
+
+Population preparation (data lane): `Lex.V3.Tool build --celex all` selects all 82 reviewed
+Appendix A seeds; a comma-separated selection also binds one combined run. The entire selection
+is validated before traffic, one Decision 95 receipt precedes the census, and all families share
+one wire ceiling and corpus identity. Formex acquisition binds each original expression to its
+own reviewed CELEX, including when a batch spans several works. An expression whose work is not
+an Appendix A root receives `not_acquired / identity_not_admitted`; this does not add consolidated
+wordings. The earlier 82 separate runs remain separate evidence. A complete combined live build
+has not yet run; it follows the bounded first mount below.
 
 1. Data lane (Codex, Decision 95). The receipt route is changed and live-verified (PR #780).
    Run the bounded first mount with PR #750's command, the Codex checkout and the 800-request

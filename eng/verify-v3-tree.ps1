@@ -36,6 +36,7 @@ function Test-V3TrackedPath {
         $normalized -ceq '.github/scripts/test_dual_review.py' -or
         $normalized -cmatch '^eng/verify-v3-[a-z0-9-]+\.ps1$' -or
         $normalized -ceq 'eng/test-fast.ps1' -or
+        $normalized -ceq 'eng/verify-mounted-corpus.ps1' -or
         $normalized -ceq 'eng/verify-s0-05-preview.ps1' -or
         $normalized -cmatch '^schemas/v3-[a-z0-9-]+/[a-z0-9-]+\.schema\.json$' -or
         # The four censuses: real payloads, real answers and whole envelopes the platform sends, and the evaluation card the

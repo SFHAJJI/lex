@@ -24,6 +24,46 @@ public sealed class EuFormexPackagePopulationProducerTests
     private const string FrenchAuthority = "http://publications.europa.eu/resource/authority/language/FRA";
 
     [TestMethod]
+    public async Task CombinedWorkBatchProducesOneAcquiredOutcomePerOriginalExpression()
+    {
+        var store = new EuAcquisitionTestFixture.EuInMemoryCustodyStore();
+        var xhtml = await FixtureAsync("new-xhtml-200-body.bin");
+        var package = await FixtureAsync("new-fmx4-200-body.bin");
+        var run = await EuAxiomWiringHarness.RunTwoSeedAsync(
+            (first, second) => EuAcquisitionTestFixture.AxiomAbsenceScriptFor(first, second),
+            numericExpressions: true, custodyStore: store,
+            documentFetchResponse: request => EuAcquisitionTestFixture.BinaryResponse(
+                request, HttpStatusCode.OK,
+                [.. xhtml, .. System.Text.Encoding.UTF8.GetBytes($"<!-- fixture work: {request.RequestUri} -->")],
+                "application/xhtml+xml;charset=UTF-8"));
+        Assert.IsNull(run.Refusal, run.Refusal?.Detail);
+        var expressions = run.CorrigendumTripwires!.ProductionsByFamilyKey.Values
+            .SelectMany(production => production.Expressions!.Derivation!.Expressions).ToArray();
+        Assert.AreEqual(2, expressions.Select(expression => expression.Identity.PublisherWorkId).Distinct().Count());
+        var handler = new FormexEnumerationHandler(expressions.ToDictionary(
+            expression => expression.Identity.PublisherExpressionId, _ => new[] { "fmx4", "pdfa2a" }), expressions,
+            packageResponse: request => request.RequestUri!.AbsolutePath.EndsWith("/zip", StringComparison.Ordinal)
+                ? EuAcquisitionTestFixture.BinaryResponse(request, HttpStatusCode.OK, package, "application/zip")
+                : null);
+        var result = await Producer(store, handler).RunAsync(
+            run, RendererSource(), RendererSource(), EuAcquisitionTestFixture.SourceWitness(),
+            EuAcquisitionTestFixture.TestWireBudget(), CancellationToken.None);
+        Assert.IsTrue(result.Delivered, result.Detail);
+        Assert.AreEqual(2, result.AcquiredExpressionCount, string.Join("; ", result.Reconciliation!.Outcomes.Select(
+            outcome => $"{outcome.Kind}/{outcome.NotAcquiredReason}: {outcome.Detail}")));
+        CollectionAssert.AreEquivalent(expressions.Select(expression => expression.Identity).ToArray(),
+            result.Reconciliation!.Outcomes.Select(outcome => outcome.ExpressionIdentity).ToArray());
+        Assert.AreEqual(2, result.AnnexClassifications.Count);
+        foreach (var expression in expressions)
+        {
+            var binding = result.AnnexClassifications.Single(classification =>
+                classification.Binding.FormexBody.PublisherUri == expression.Identity.PublisherExpressionId + ".01").Binding;
+            Assert.AreEqual(EuAppendixASeedMap.SeedsInCelexOrder.Single(seed =>
+                seed.WorkRoot == expression.Identity.PublisherWorkId).Celex, binding.WorkCelex);
+        }
+    }
+
+    [TestMethod]
     public async Task EveryExpressionOfTheRunGetsOneTypedOutcomeAndTheReconciliationBindsToTheRun()
     {
         var (run, english, french) = await RunWithTwoExpressionsAsync();
@@ -254,7 +294,9 @@ public sealed class EuFormexPackagePopulationProducerTests
     /// and the corpus carries the main body and the annex outcome for the held member.
     /// </summary>
     [TestMethod]
-    public async Task AnAnnexPackageIsAcquiredWithItsAnnexesClassifiedAgainstTheHeldXhtmlAndTheWorkPdf()
+    [DataRow(false)]
+    [DataRow(true)]
+    public async Task AnAnnexPackageIsAcquiredWithItsAnnexesClassifiedAgainstTheHeldXhtmlAndTheWorkPdf(bool bindCelexFromExpression)
     {
         var annexPackage = await FixtureAsync("new-fmx4-200-body.bin");
         var (result, handler, english, store) = await AcquireEnglishAsync(request =>
@@ -262,7 +304,7 @@ public sealed class EuFormexPackagePopulationProducerTests
                     ? EuAcquisitionTestFixture.BinaryResponse(request, HttpStatusCode.OK, annexPackage, "application/zip")
                     : null,
             heldXhtml: await FixtureAsync("new-xhtml-200-body.bin"),
-            englishTypes: ["fmx4", "pdfa2a"]);
+            englishTypes: ["fmx4", "pdfa2a"], bindCelexFromExpression: bindCelexFromExpression);
 
         var outcome = result.Reconciliation!.Outcomes.Single(outcome => outcome.ExpressionIdentity == english.Identity);
         Assert.AreEqual(EuFormexPackageOutcomeKind.Acquired, outcome.Kind, $"{outcome.NotAcquiredReason}: {outcome.Detail}");
@@ -418,7 +460,8 @@ public sealed class EuFormexPackagePopulationProducerTests
     private static async Task<(EuFormexPackagePopulationResult Result, FormexEnumerationHandler Handler, LanguageScopedExpression English, EuAcquisitionTestFixture.EuInMemoryCustodyStore Store)> AcquireEnglishAsync(
         Func<HttpRequestMessage, HttpResponseMessage?> packageResponse,
         byte[]? heldXhtml = null,
-        string[]? englishTypes = null)
+        string[]? englishTypes = null,
+        bool bindCelexFromExpression = false)
     {
         // One store for the run and the acquisition, as in production: the annex chain reads the
         // held work body the run retained.
@@ -429,9 +472,13 @@ public sealed class EuFormexPackagePopulationProducerTests
             [english.Identity.PublisherExpressionId] = englishTypes ?? ["fmx4"],
             [french.Identity.PublisherExpressionId] = ["xhtml"],
         }, [english, french], packageResponse);
-        var result = await Producer(store, handler).RunAsync(
-            run, RendererSource(), RendererSource(), WorkCelex, EuAcquisitionTestFixture.SourceWitness(),
-            EuAcquisitionTestFixture.TestWireBudget(), CancellationToken.None);
+        var result = bindCelexFromExpression
+            ? await Producer(store, handler).RunAsync(
+                run, RendererSource(), RendererSource(), EuAcquisitionTestFixture.SourceWitness(),
+                EuAcquisitionTestFixture.TestWireBudget(), CancellationToken.None)
+            : await Producer(store, handler).RunAsync(
+                run, RendererSource(), RendererSource(), WorkCelex, EuAcquisitionTestFixture.SourceWitness(),
+                EuAcquisitionTestFixture.TestWireBudget(), CancellationToken.None);
         Assert.IsTrue(result.Delivered, $"{result.Refusal}: {result.Detail}");
         return (result, handler, english, store);
     }
@@ -692,8 +739,9 @@ public sealed class EuFormexPackagePopulationProducerTests
                         request, HttpStatusCode.OK, Pdf.Value, "application/pdf;type=pdfa2a;charset=UTF-8");
                 }
 
-                var english = expressions.Single(static candidate =>
-                    candidate.OfficialLanguage == "http://publications.europa.eu/resource/authority/language/ENG");
+                var english = expressions.Single(candidate =>
+                    candidate.OfficialLanguage == "http://publications.europa.eu/resource/authority/language/ENG"
+                    && new Uri(candidate.Identity.PublisherWorkId).AbsolutePath == uri.AbsolutePath);
                 var englishKey = english.Identity.PublisherExpressionId[
                     (english.Identity.PublisherExpressionId.LastIndexOf("/cellar/", StringComparison.Ordinal) + "/cellar/".Length)..];
                 return EuAcquisitionTestFixture.BinaryResponse(

@@ -1,4 +1,4 @@
-// The V3 build tool: one verb, `build`, which acquires one EU work and one Luxembourg act live in
+// The V3 build tool acquires selected EU works and a selected Luxembourg population live in
 // one process under one wire ceiling, builds the corpus, the two indexes and the two capability
 // manifests (each twice, compared), writes the five files Lex.V3.Api mounts, and reads them back.
 //
@@ -14,23 +14,28 @@
 
 using System.Runtime.InteropServices;
 using Lex.V3.Artifacts;
+using Lex.V3.Contracts.Source.Europe;
 using Lex.V3.Ingest;
 using Lex.V3.Ingest.Europe;
 using Lex.V3.Ingest.Luxembourg;
 
 const string Usage =
-    "Usage: Lex.V3.Tool build --celex <CELEX> --lu-name <key> --lu-start <IRI> --lu-end <IRI>\n"
+    "Usage: Lex.V3.Tool build --celex <CELEX[,CELEX...]|all> --lu-name <key> --lu-start <IRI> --lu-end <IRI>\n"
+    + "   or: Lex.V3.Tool build --celex <CELEX[,CELEX...]|all> --lu-population all\n"
     + "                         --custody <directory> --out <directory> --checkout <directory> --wire-ceiling <n>\n"
-    + "  --celex        an Appendix A seed, the one EU work to acquire\n"
+    + "  --celex        an Appendix A seed, comma-separated seeds, or all for the 82-seed population\n"
+    + "  --lu-population all  all publisher IRI keys through S/A/G, with existing scope and rights rules\n"
     + "  --lu-name      lowercase ASCII key prefixing the act's three family keys\n"
-    + "  --lu-start/--lu-end  the act's ELI key range on the publisher's key order (start inclusive, end exclusive)\n"
+    + "  --lu-start/--lu-end  an ELI key range on the publisher's key order (start inclusive, end exclusive)\n"
     + "  --custody      the run's custody root (FileSystemCustodyStore); everything the run holds goes here\n"
     + "  --out          the v3-corpus directory to write\n"
     + "  --checkout     the repository root holding the renderer source files\n"
     + "  --wire-ceiling the one ceiling on publisher requests for the whole run, robots included\n"
     + "Exit codes: 0 built and verified, 1 unexpected failure, 2 usage, 3 typed refusal, 4 written directory did not verify, 130 cancelled";
 
-string[] required = ["--celex", "--lu-name", "--lu-start", "--lu-end", "--custody", "--out", "--checkout", "--wire-ceiling"];
+string[] required = ["--celex", "--custody", "--out", "--checkout", "--wire-ceiling"];
+string[] rangeOptions = ["--lu-name", "--lu-start", "--lu-end"];
+string[] admitted = [.. required, .. rangeOptions, "--lu-population"];
 
 if (args.Length == 0 || !string.Equals(args[0], "build", StringComparison.Ordinal) || (args.Length - 1) % 2 != 0)
 {
@@ -42,7 +47,7 @@ var options = new Dictionary<string, string>(StringComparer.Ordinal);
 for (var index = 1; index + 1 < args.Length; index += 2)
 {
     var name = args[index];
-    if (!required.Contains(name, StringComparer.Ordinal))
+    if (!admitted.Contains(name, StringComparer.Ordinal))
     {
         Console.Error.WriteLine($"Unknown option: {name}");
         Console.Error.WriteLine(Usage);
@@ -57,10 +62,21 @@ for (var index = 1; index + 1 < args.Length; index += 2)
     }
 }
 
-var missing = required.Where(name => !options.ContainsKey(name)).ToArray();
+var wholePopulation = options.TryGetValue("--lu-population", out var population);
+if (wholePopulation && (population != "all" || rangeOptions.Any(options.ContainsKey)))
+{
+    Console.Error.WriteLine("--lu-population must be all and cannot be combined with --lu-name, --lu-start or --lu-end.");
+    return 2;
+}
+var expected = wholePopulation ? required : rangeOptions.Concat(required).ToArray();
+var missing = expected.Where(name => !options.ContainsKey(name)).ToArray();
 if (missing.Length != 0)
 {
     Console.Error.WriteLine("Missing: " + string.Join(", ", missing));
+    if (!wholePopulation && rangeOptions.All(name => !options.ContainsKey(name)))
+    {
+        Console.Error.WriteLine("Use --lu-population all instead of the three range options to select all publisher IRIs.");
+    }
     Console.Error.WriteLine(Usage);
     return 2;
 }
@@ -81,7 +97,9 @@ if (!Directory.Exists(checkout))
 LuxembourgActRange act;
 try
 {
-    act = new LuxembourgActRange(options["--lu-name"], options["--lu-start"], options["--lu-end"]);
+    act = wholePopulation
+        ? LuxembourgActRange.WholePopulation
+        : new LuxembourgActRange(options["--lu-name"], options["--lu-start"], options["--lu-end"]);
 }
 catch (ArgumentException exception)
 {
@@ -115,8 +133,12 @@ try
     var luxembourgRenderers = await LuxembourgRendererSources.FromCheckoutAsync(store, checkout, token);
     Console.WriteLine("renderer sources held: 6 Europe, 2 Luxembourg");
 
+    var celexes = options["--celex"] == "all"
+        ? EuAppendixASeedMap.SeedsInCelexOrder.Select(seed => seed.Celex).ToArray()
+        : options["--celex"].Split(',', StringSplitOptions.None);
+    Console.WriteLine($"europe selection: {celexes.Length} seed(s)");
     var europe = await new EuFirstMountAcquisition(store, TimeProvider.System)
-        .RunAsync(options["--celex"], europeRenderers, budget, token);
+        .RunAsync(celexes, europeRenderers, budget, token);
     if (!europe.Delivered)
     {
         Console.Error.WriteLine($"refused: europe: {europe.Refusal}: {europe.Detail} (spent {budget.Spent} of {budget.Limit})");
