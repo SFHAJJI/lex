@@ -3,6 +3,19 @@
 Updated 2026-09-30 by the driver. This file replaces the issue-comment ledgers. It is rewritten in
 every pull request that changes what is served, what is next or what is blocked.
 
+## Luxembourg typed assertion memory (Codex, 2026-09-30)
+
+The measured assertion count is 9,672,378. Typed projection previously built eight whole-population
+sort-key arrays and allocated an immutable predicate/evidence disposition for every distinct row.
+Reversible driver decision: sort the distinct array in place using the same complete ordinal tuple,
+and reuse dispositions by the exact predicate and evidence reference within one projection.
+Date facts retain their separate accepted contracts and each assertion retains its own evidence.
+
+A focused projection regression pins every ordering key, including UTF-16 ordinal ordering,
+duplicate removal, evidence resource-id/digest separation and cache lifetime. Existing acquired-row
+and date-refusal tests remain in scope. Build, tests and allocation measurement are pending; this
+change does not establish full Luxembourg memory fit or population proof.
+
 ## Luxembourg population memory prerequisite (Codex, 2026-09-30)
 
 The four bounded COUNT diagnostics now cover all assertion ranges: 9,672,378 A rows
