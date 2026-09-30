@@ -22,6 +22,56 @@ Regression drafts cover short reads, identical canonical output, caller ownershi
 digest failure precedence, malformed UTF-8, noncanonical spacing/trailing bytes, changed canonical
 input between passes and independent evidence refusal. Build and test validation are pending.
 
+## Luxembourg rights-evidence payloads (Codex, 2026-09-30)
+
+The semantic memory sample produced 108,361,751 bytes of observation JSON for 100,035
+repeated assertion rows. It is not a population-wide estimate, but it exposes another avoidable
+whole-population allocation: the previous adapter serialized all observations into one byte array.
+Reversible driver decision: retain ordered payloads of at most 256 observations each. A version 3
+rights-evidence root names every batch, the total observation count and all contributing deliveries.
+Delivery metadata is retained once. Each observation continues to cite the complete root, so batches
+containing only unselected subjects remain reachable for complete-population replay.
+
+Every batch must pass custody write and digest-checked readback before the root can be retained.
+The replay checks each referenced batch's digest, schema, ordinal, count and unique subject identity,
+then requires the final manifest to rebuild byte for byte. Historical version 2 roots remain readable
+by the retained-run replay helper. A 257-subject test crosses the batch boundary; an unreadable
+second batch must refuse before publishing a manifest. The combined source with PR #812 passed
+a clean solution build (zero warnings/errors), all 20 focused topology/custody tests, and the fast
+lane (3,066 passed, one platform skip). The full ingest suite passed 1,995 tests with 19 opt-in
+skips and zero failures in 22m 22.463s. PR #812 merged at
+`9849ab09` after its review, one repair and green CI. No population completeness or full-process memory bound is claimed:
+typed observations, individual large observations, the root metadata and downstream manifests still
+need resource allowance.
+A separate zero-request diagnostic with 100,000 distinct synthetic subjects and no assertions
+retained 61,647,824 managed bytes (about 616 bytes per subject). Together with the earlier
+assertion sample, this confirms that subject diversity needs its own allowance. These samples
+exclude downstream scope resolution and do not establish whole-run memory fit. Frozen evidence:
+`C:\lex-v3\lanes\lu-subject-memory-sample\measurement.json`.
+
+Reversible run decision: validate the merged EN/FRA acquisition and new rights evidence on a
+fresh GDPR/a439 mount before the full EU union run. The bounded plan retains the prior 800-request
+ceiling (the older all-language run used 700), with three times that retained mount's logical bytes
+plus 1 GB reserve as a storage allowance. This is a planning allowance, not a bound. Publisher
+traffic is covered by the owner's 2026-09-30 standing authorisation for population and French-body
+runs (`C:\lex-v3\lanes\STANDING-ORDERS.md`, section 2). Launch follows
+this slice's review/merge, a clean runtime freeze and resource checks. The prior successful custody
+stays intact. Evidence: `C:\lex-v3\lanes\bounded-en-fr-launch-sizing-proposed.json`.
+
+The cross-family review of PR #814 returned MERGE with no blocking or should-fix findings.
+It independently reproduced the build, fast lane, all 1,995 ingest passes/19 opt-in skips and tree
+verification. Its mutation removing checked batch readback made the negative test fail. The one
+repair adds a batch-specific refusal assertion and a legacy inline-observation replay regression,
+and corrects the historical constraint/traffic-authority wording. Repair validation passed the fast
+lane (3,066 passed, one platform skip; 63.735s) and all 21 topology/custody checks (29.332s).
+
+A further zero-request diagnostic retained 27,887,016 bytes of additional scope resolution for
+10,000 empty synthetic subjects (about 2,789 bytes each). It excludes later reduction/serialization
+and is not a population bound. The production manifest reader also materializes complete bytes,
+text and canonical readback. Full Luxembourg resource fit remains unresolved after this slice.
+Evidence: `C:\lex-v3\lanes\lu-scope-memory-sample\measurement.json` and
+`C:\lex-v3\lanes\lu-retained-scope-size-samples.json`.
+
 ## Luxembourg population memory prerequisite (Codex, 2026-09-30)
 
 The four bounded COUNT diagnostics now cover all assertion ranges: 9,672,378 A rows
@@ -48,7 +98,8 @@ of that page and a synthetic nine-subject census: 100,035 input rows retained 26
 bytes in typed results, with zero surviving sampled raw rows. The observation JSON alone measured
 108,361,751 bytes. This repeated small sample is not representative of all subject counts or graph
 shapes, and excludes proof, relation and downstream allocations. The single rights-index byte array
-is a further scaling constraint to address before a full Luxembourg launch.
+was the next constraint identified by that measurement; the batched-evidence section above now
+addresses it. Downstream scope reduction and whole-manifest readback still need sizing.
 Evidence: `C:\lex-v3\lanes\lu-typed-memory-sample\measurement.json` (0 requests).
 
 Validation: clean full solution build; fast 3,066 passed/1 platform skip. Broader Luxembourg/census

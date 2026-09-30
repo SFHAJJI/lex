@@ -1667,16 +1667,43 @@ public sealed class LuxembourgQueryExecutionAdapter
             // vocabulary snapshot is profile evidence, not evidence of a SPARQL response.
             // The manifest's relation selector is read from the relation rows, so they and the delivery they came from are
             // retained with the assertions: a reader holding the cited evidence must be able to re-derive the selector.
+            // Keep one cited root for the complete population, but retain observation payloads
+            // in ordered batches. Repeating all delivery metadata in every batch would itself
+            // make a whole-population run too large; the root carries it exactly once.
+            var observationBatches = new List<SourceArtifactRef>();
+            foreach (var batch in buildResult.Observations!.Chunk(256))
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                var batchBytes = JsonSerializer.SerializeToUtf8Bytes(new
+                {
+                    schema = RightsEvidenceBatchSchema,
+                    ordinal = observationBatches.Count,
+                    observations = batch.Select(static observation => new
+                    {
+                        observation.ObjectRef,
+                        observation.Assertions,
+                        observation.Relations,
+                    }),
+                });
+                var (batchReceipt, batchFailure) = await CustodyHold.TryHoldAsync(
+                    _custodyStore, batchBytes, cancellationToken).ConfigureAwait(false);
+                if (batchReceipt is null)
+                {
+                    return LuxembourgQueryExecutionResult.Refused(topology, outcomes, relationAcquisitions,
+                        new LuxembourgQueryExecutionRefusalDetail(
+                            LuxembourgQueryExecutionRefusal.ResourceObservationRowsNotVerified, null,
+                            $"SPARQL rights evidence batch could not be retained: {batchFailure}"));
+                }
+                observationBatches.Add(new SourceArtifactRef(
+                    ContentDerivedIdentity.DeriveUuidUrn(RightsEvidenceBatchSchema, batchBytes),
+                    batchReceipt.Reference.ContentSha256));
+            }
             var assertionIndexBytes = JsonSerializer.SerializeToUtf8Bytes(new
             {
                 schema = RightsEvidenceIndexSchema,
                 deliveries = assertionLegs.Concat(relationLegs).Select(static leg => leg.Receipt.Delivery),
-                observations = buildResult.Observations!.Select(static observation => new
-                {
-                    observation.ObjectRef,
-                    observation.Assertions,
-                    observation.Relations,
-                }),
+                observedObjectCount = buildResult.Observations!.Count,
+                observationBatches,
             });
             var (assertionIndexReceipt, assertionIndexFailure) = await CustodyHold.TryHoldAsync(
                 _custodyStore, assertionIndexBytes, cancellationToken).ConfigureAwait(false);
@@ -3377,7 +3404,8 @@ public sealed class LuxembourgQueryExecutionAdapter
     private const string AssertionDatatypeProjectionVariable = "datatype_iri";
     private const string AssertionLanguageProjectionVariable = "language_tag";
 
-    internal const string RightsEvidenceIndexSchema = "lex-lu-sparql-rights-evidence/2";
+    internal const string RightsEvidenceIndexSchema = "lex-lu-sparql-rights-evidence/3";
+    internal const string RightsEvidenceBatchSchema = "lex-lu-sparql-rights-observations/1";
 
     private const string RelationSubjectProjectionVariable = "subject";
 
