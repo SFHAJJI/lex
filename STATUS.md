@@ -915,7 +915,24 @@ proves the path, not a corpus.
   implemented: the Publications Office Decision receipt replaces the challenged notice, and it is
   fetched before population traffic. Rebinding its retained hops after acquisition avoids a second
   rights request. The successful live receipt check is recorded above; the full mount run is next.
+- **Attempt 3 is running from merged PR #780 (`1774a774`).** Started 2026-09-30 at 08:32:21 UTC,
+  using PR #750's GDPR/Luxembourg command and the unchanged 800-request ceiling. Its isolated tool,
+  custody and log are under `C:\lex-v3\first-mount-decision95`. The Decision receipt completed
+  303 -> 200 at 08:32:25 UTC, 48,730 bytes with the SHA-256 recorded above, before census traffic.
+  The mount outcome is pending. `eng/verify-mounted-corpus.ps1` starts a copied API runtime on
+  loopback, retains coverage and both publishers' resolve envelopes, checks their contracts and
+  corpus/index digests, and records response hashes. The real-data smoke run follows a successful
+  build automatically; no production deployment is involved.
 
+- **First-mount restart, 2026-09-30 09:57 UTC (Codex).** The acquisition in
+  `C:\lex-v3\first-mount-decision95` stopped without an exit receipt during the IDE restart;
+  its custody remains intact. The same isolated runtime from `1774a774` is running the same
+  GDPR/Luxembourg selection and 800-request ceiling in the fresh directory
+  `C:\lex-v3\first-mount-decision95-restart-20260930`. The detached runner records its exit
+  code and invokes the local verifier after exit 0. The receipt again completed 303 -> 200
+  before census traffic. No real mount success is claimed while acquisition is pending.
+  PR #786's cross-family findings are repaired: the verifier has an exact tree-allowlist entry,
+  its Luxembourg default names the `/jo/fr` expression, and snapshot/coverage digests are checked.
 ## Next, in order
 
 Population preparation (data lane): `Lex.V3.Tool build --celex all` selects all 82 reviewed
