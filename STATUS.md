@@ -369,11 +369,11 @@ CI evidence are recorded in the pull request before merge.
 
 ## Heads
 
-- `v3/integration`: `6d8756a2` (2026-09-30, PR #823 merged). Build 45 s. Fast lane
+- `v3/integration`: `98119a24` (2026-09-30, PR #822 merged). Build 45 s. Fast lane
   (`eng/test-fast.ps1`): 3,067 tests, 3,066 pass, 1 skipped (PR #798's validation). Ingest suite: green on CI for PR #760
   (the CI `dotnet` job runs the whole solution on every pull request, about 7 min on the runner;
-  green for PR #823);
-  locally about 15 min. 954 web tests pass. The web job's "browser debugger never answered" failures
+  green for PR #822);
+  locally about 15 min. 958 web tests pass. The web job's "browser debugger never answered" failures
   (keyboard-walk, and paint-check since #811) are fixed by PR #822: each browser binds its own
   debugging port (`launchBrowser`) instead of a random one another browser starting at the same
   moment could hold.
@@ -601,7 +601,7 @@ schema's `parameters` shape, and whose call runs the same dispatch the REST rout
 endpoint test proves it for all twenty-three. The launch-contract line "REST and MCP derive identical
 envelopes from the registry" is the owner's to tick.
 
-Web: 41 React components, 952 tests. Preview screens render fixtures. The V3 Luxembourg search
+Web: 41 React components, 958 tests. Preview screens render fixtures. The V3 Luxembourg search
 answer has a reader (PR #771). The answer census now samples `search` five ways from the real handler:
 - a phrase with 4 strict hits and 1 relaxed hit;
 - the same phrase one hit per page, with its cursor;
@@ -1175,6 +1175,36 @@ first real build the pages have met; until now every journey ran on the test fix
   Now a page that says it is empty while the API's answer holds something fails, and every other
   answer of a citing step must still cite.
 
+The release pipeline's image steps, rehearsed with no production credential (PR #821; item 7, which
+the owner's proxy gave the web lane on 2026-09-30 while the data lane works on the populations).
+`node web/scripts/image-rehearsal.mjs --mount <v3-corpus>` is one command that:
+- builds the live pages;
+- builds the one-server OCI image without a container daemon (`dotnet publish -t:PublishContainer`),
+  with the API, the live pages under `v3-web` and the mount under `v3-corpus`, on the base image
+  `Lex.V3.Api.csproj` pins by digest (chiseled Ubuntu, non-root user 1654). `LexImageWebRoot` and
+  `LexImageMount` are inert unless a build names them;
+- verifies what the image holds:
+  - every blob named by the digest and size it carries;
+  - the API, every live page file and every mount file in the app layer, byte for byte;
+  - each file of the mount's build report at its recorded digest;
+  - linux/amd64, a non-root user, the API as the entrypoint, and the base named by digest;
+- signs the manifest digest with a rehearsal identity (an ECDSA P-256 key made for the run and never
+  kept, over a container-signature payload that says it is a rehearsal) and verifies the signature,
+  the digest and that label;
+- removes the archive, its work directory and the publish directory, and records that they are gone.
+
+On the real bounded mount: a 61 MB image of 6 layers (manifest
+`sha256:1029adee894c12831e1abc2d5668af02f8ab4a85a13eb8d9d76159c05ecf7a0d`), 25 live page files and
+6 mount files verified, the build report's 5 digests matched, the signature verified, everything
+removed. `image-rehearsal.test.mjs` holds each check to fail on the image it must refuse:
+- a layer whose bytes changed, a missing blob, and two manifests;
+- a live page left out, a mount file that is not the one built from, and a digest that is not the
+  build report's;
+- a root user, another entrypoint, and a base not named by digest;
+- another image's digest, a payload changed after signing, and another key.
+
+Running the image and probing it (health, API, browser, privacy, security headers) is the next slice.
+
 The live export composer and its journey step (PR #789), the eighth screen. `dist-live/export.html`
 has its own bundle `client-live-export.js`.
 - The page asks what the reading page asks: the same form (`ReadingForm`, now shared), the same one
@@ -1718,6 +1748,9 @@ has not yet run; the bounded first mount above is complete.
    and a live page never shows the synthetic banner on a real mount. J1 to J8 are restated as V3
    steps by the driver (they exist only in the pre-V3 pack, `05-user-journeys.md`).
 7. Release pipeline: build, sign, image, zero-traffic deploy, probes. Then acceptance and promotion.
+   The steps that need no production credential are the web lane's since 2026-09-30 (the owner's proxy).
+   PR #821: one command builds, verifies, rehearsal-signs and removes the one-server image. Next: run
+   the image and probe it. Production signing, credentials and deployment stay with the owner.
 8. Machine gates (launch contract, Evaluation): the temporal, refusal and retrieval case sets run
    against the real handler, and all three shuffled controls are caught (PRs #767 and #768). The
    evaluation card is rendered from them with the statistical rows `not_yet_labelled` (PR #769).
@@ -1775,6 +1808,16 @@ Decision 95 (lex-governance PR #9, merged 2026-09-30) records these rulings and 
 ## Driver decisions (reversible)
 
 Each is the driver's call under ruling 7 and can be reversed by a later pull request that says why.
+
+- The image rehearsal (PR #821):
+  - It builds with the .NET SDK's container support, needing no daemon: this machine has no
+    container runtime, and the base image stays pinned by digest in the project.
+  - It bakes the mount into the image, so the image digest pins the corpus it serves.
+  - It signs with a key made for the run and never kept, labelled a rehearsal. The release identity
+    is the owner's.
+  - Running the image comes next: the image's own filesystem under this machine's WSL Ubuntu, with
+    no install and no daemon. The alternative, a CI runner with Docker, is kept for when a hosted
+    run is wanted.
 
 - The refusal card's payload rows keep the payload's own member names (`requested_identifier`,
   `asserts_absence_of_law`) as their labels, in every interface language (PR #809). They are the
