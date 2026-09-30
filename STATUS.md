@@ -13,8 +13,17 @@ Date facts retain their separate accepted contracts and each assertion retains i
 
 A focused projection regression pins every ordering key, including UTF-16 ordinal ordering,
 duplicate removal, evidence resource-id/digest separation and cache lifetime. Existing acquired-row
-and date-refusal tests remain in scope. Build, tests and allocation measurement are pending; this
-change does not establish full Luxembourg memory fit or population proof.
+and date-refusal tests remain in scope. Validation passed: clean solution build (zero warnings/errors,
+38.01s), fast 3,066 passed/one platform skip (60.946s), and all 97 affected ingest checks (64.676s).
+
+An offline comparison of the actual projection on 100,000 synthetic assertions retained identical
+71,400,001-byte output (SHA256 f954e733f20457b2d8702ffe39b3ee9ec44f90f116a3de90877a71956fc9acea).
+Allocations fell from 22,871,728 to 12,469,696 bytes; retained output from 8,802,024 to 5,602,016 bytes.
+This one-predicate/one-evidence sample shares one disposition instead of 100,000. The runtime
+assembly digests were checked: the initial paired build had incorrectly reused the baseline and
+is excluded from this comparison. Evidence: `C:\lex-v3\lanes\lu-typed-projection-comparison-verified.json`.
+The sample excludes dates and scope/persistence stages; it does not establish full Luxembourg
+memory fit or population proof.
 
 ## Luxembourg population memory prerequisite (Codex, 2026-09-30)
 
