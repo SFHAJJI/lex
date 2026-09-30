@@ -94,10 +94,10 @@ CI evidence are recorded in the pull request before merge.
 
 ## Heads
 
-- `v3/integration`: `663abd79` (2026-09-30, PR #807 merged). Build 45 s. Fast lane
+- `v3/integration`: `1ef8d665` (2026-09-30, PR #809 merged). Build 45 s. Fast lane
   (`eng/test-fast.ps1`): 3,067 tests, 3,066 pass, 1 skipped (PR #798's validation). Ingest suite: green on CI for PR #760
   (the CI `dotnet` job runs the whole solution on every pull request, about 7 min on the runner;
-  green for PR #807);
+  green for PR #809);
   locally about 15 min. 944 web tests pass. CI's web job can flake in `keyboard-walk.test.mjs`
   ("browser debugger never answered"); rerunning the failed job is the fix.
 - Driver: Claude Opus 5.5 since 2026-09-29 (the Fable 5.1 driver ran out of tokens on 2026-09-28
@@ -809,6 +809,21 @@ The refusal card's words join the chrome table (PR #809).
 - All 18 census refusals render byte-identically before and after. The chrome scan now leaves out
   only Trust and Coverage's `Coverage` component.
 
+Trust and Coverage's answer joins the chrome table, and the scan exempts nothing (PR #810).
+- `coverage.mjs` exports `COVERAGE_COPY`: the page's headings, fact labels, captions, column names
+  and yes/no, its five notes, and templates for its five sentences (the gaps, the operations
+  served, a narrowed answer, an absent capability, an unserved capability). `COVERAGE_COLUMNS`
+  gives each table's column order.
+- The string renderer and `Coverage.jsx` both take their words from it. The two copies of every
+  heading and caption that stood in both renderers are gone.
+- The sentence functions take an optional copy, English by default. `Coverage` takes a `copy`
+  prop, and the live page passes the chrome table's `coverageAnswer`. The French is drafted.
+- The census coverage answer through both renderers, and the live page, are byte-identical before
+  and after.
+- The chrome scan now renders Trust and Coverage's answer too and has no exemption left: every
+  word on the eight live pages, answers and refusals included, comes from the table. The only
+  exceptions are data and each language's own name in the locale navigation.
+
 The live export composer and its journey step (PR #789), the eighth screen. `dist-live/export.html`
 has its own bundle `client-live-export.js`.
 - The page asks what the reading page asks: the same form (`ReadingForm`, now shared), the same one
@@ -1351,9 +1366,11 @@ has not yet run; the bounded first mount above is complete.
    screens' sentences in the chrome table, with French drafted beside them; PR #804: the compare,
    radar and export screens' sentences; PR #805: every citation the journey's pages print verifies;
    PR #806: no interface text on a live page bypasses the chrome table (a pseudo-locale scan); PR
-   #807: the evaluation card's words in the table; PR #809: the refusal card's words in the table.
-   Next: Trust and Coverage's `Coverage` copy into the table; French ships only once reviewed
-   (Decision 41). Hosting (ruling 3): `Lex.V3.Api`
+   #807: the evaluation card's words in the table; PR #809: the refusal card's words in the table;
+   PR #810: Trust and Coverage's words in the table, so the chrome scan exempts nothing. Next: the
+   owner's review of the French drafts (`node web/scripts/live-chrome-fr-draft.mjs`), then the
+   reviewed French build (`/fr/*.html`, `REVIEWED_CHROME_LOCALES` gains `fr`). French ships only once
+   reviewed (Decision 41). Hosting (ruling 3): `Lex.V3.Api`
    serves the live pages on the API's origin with `frame-ancestors`, HSTS and `Referrer-Policy`,
    and a live page never shows the synthetic banner on a real mount. J1 to J8 are restated as V3
    steps by the driver (they exist only in the pre-V3 pack, `05-user-journeys.md`).
@@ -1517,7 +1534,8 @@ Repair fast lane: 3,065 pass / 1 Windows skip; repair build: zero warnings/error
   once reviewed): every entry of the chrome table so far (each page's title, eyebrow, heading and
   introduction, the forms' labels and buttons), printed by `node web/scripts/live-chrome-fr-draft.mjs`
   (PR #800). Since then it has grown to every sentence of the live screens (PRs #803, #804, #806),
-  the evaluation card (PR #807) and the refusal card (PR #809). That includes the absence note
+  the evaluation card (PR #807), the refusal card (PR #809) and Trust and Coverage (PR #810): the
+  whole of the live pages' interface, as the chrome scan holds it. That includes the absence note
   ("This is what this service holds, and does not hold. It is not evidence that the instrument or the
   law does not exist.") and the live banner, both claims the owner reviews.
 

@@ -22,7 +22,7 @@ export function CoverageAnswerView({ outcome }) {
   if (outcome.state === 'success') {
     return (
       <section data-answer-state="success">
-        <Coverage answer={outcome.answer} />
+        <Coverage answer={outcome.answer} copy={liveChrome().coverageAnswer} />
       </section>
     );
   }
