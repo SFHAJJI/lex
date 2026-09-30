@@ -5,10 +5,10 @@ every pull request that changes what is served, what is next or what is blocked.
 
 ## Heads
 
-- `v3/integration`: `d1272226` (2026-09-30, PR #767 merged). Build 45 s. Fast lane
+- `v3/integration`: `4fe6ff2e` (2026-09-30, PR #768 merged). Build 45 s. Fast lane
   (`eng/test-fast.ps1`): 3,038 tests, 3,037 pass, 1 skipped. Ingest suite: green on CI for PR #760
   (the CI `dotnet` job runs the whole solution on every pull request, about 7 min on the runner;
-  green for PR #767);
+  green for PR #768);
   locally about 15 min. 806 web tests pass. CI's web job can flake in `keyboard-walk.test.mjs`
   ("browser debugger never answered"); rerunning the failed job is the fix.
 - Driver: Claude Opus 5.5 since 2026-09-29 (the Fable 5.1 driver ran out of tokens on 2026-09-28
@@ -293,7 +293,7 @@ platform renders from the reviewed registry beside four whole envelopes the real
 `ParseAndVerify` before it is recorded (render with `V3_RENDER_ENVELOPE_SAMPLES=1`). The client's
 served list is pinned to the platform's own list in the coverage answer sample.
 
-Machine gates (PRs #767 and #768): the evaluation harness in `Lex.V3.Contracts.Evaluation`
+Machine gates (PRs #767, #768 and #769): the evaluation harness in `Lex.V3.Contracts.Evaluation`
 (`TemporalEvaluation`, `VerdictEvaluation`, `ShuffledControls`), which nothing outside its own tests
 called, now runs against the real handler on a mounted corpus (`V3MachineGatesTests`). The temporal
 case set (8 cases on one work with a single first state, two states on one later date and a single
@@ -334,6 +334,29 @@ the real handler. Three production mutations each fail the retrieval gate: `sear
 relaxed hits before strict ones, a scoped search matching no work, and `verify` answering an
 anchor the state does not hold. The cases come from the fixture, so the gates prove the path
 until a real mount exists.
+
+Evaluation card (PR #769): `EvaluationCard` in `Lex.V3.Contracts.Evaluation` prints the machine
+gates as the card of `36-ideal-evaluation.md` section 6 describes, as far as the launch contract
+asks. Each case set and arm is a row with its case count and `cases_sha256`. Each gate carries
+its verdict (`pass`, `fail` or `not_measured` with its reason), value, threshold and stratum `n`.
+Every rate carries its Wilson 95 percent interval, and every value of exactly 1.0 carries the
+rule-of-three bound on the failure rate, so a pass on a small set is never oversold. Anchor nDCG
+is a graded mean, so it has no Wilson interval. Its 1.0 still carries the bound: each case scores
+at most 1, so 1.0 means every case ranked perfectly. Each shuffled control result is printed like
+any other number, with the count and digest of the cases it ran over. The date control runs over
+6 of the 8 temporal cases, and its note says why: the cases at or after the latest held state
+cannot break under a forward shift. The 8 statistical rows (D1 to D8 of section 2) are all
+`not_yet_labelled` under Decision 92. The negative-results register holds its standing entry:
+hybrid retrieval is not activated, and search refuses a ranked mode `retrieval_mode_unavailable`.
+What would reverse that is the activation gate as section 2 (D6) and section 1.4 (repair 6) state
+it. The machine gates test renders the
+card to `schemas/v3-platform/evaluation-card.json` (census, `V3_RENDER_EVALUATION_CARD=1`) and
+compares it byte for byte on every run. The fixture's cases give the same card run after run. As
+held today: temporal 8 cases per arm, Wilson [0.6756, 1], rule of three 0.375; refusal 18 cases,
+[0.8241, 1], 0.1667; retrieval nDCG n 9 (rule of three 0.3333), no-hit n 4 ([0.5101, 1], 0.75),
+resolver n 3 ([0.4385, 1], 1, which bounds nothing). The card is not published and is not a release card: it
+has no release, image or snapshot identity (item 7) and no signature. Where it is published is an
+owner question below.
 
 ## Data
 
@@ -571,12 +594,22 @@ until a real mount exists.
    exist only in the pre-V3 pack (`05-user-journeys.md`) and need restating as V3 steps.
 7. Release pipeline: build, sign, image, zero-traffic deploy, probes. Then acceptance and promotion.
 8. Machine gates (launch contract, Evaluation): the temporal, refusal and retrieval case sets run
-   against the real handler, and all three shuffled controls are caught (PRs #767 and #768). Next:
-   the evaluation card with the statistical rows marked "not yet labelled" (Decision 92). After it
-   comes replay G1 to G5, the replay guarantees of `33-product-spec.md` in the specification pack,
-   which this repository does not restate yet.
+   against the real handler, and all three shuffled controls are caught (PRs #767 and #768). The
+   evaluation card is rendered from them with the statistical rows `not_yet_labelled` (PR #769);
+   publishing it waits on the owner. Next: replay G1 to G5, the replay guarantees of
+   `33-product-spec.md` in the specification pack (G1 version immutability, G2 snapshot
+   determinism, G3 bitemporal completeness, G4 as-observed answering, G5 independent
+   verifiability), which this repository does not restate yet.
 
 ## Blocked or waiting on the owner
+
+- Evaluation card (PR #769): the launch contract says "published". Section 6 of
+  `36-ideal-evaluation.md` names signed JSON at a stable route and an HTML rendering on the Trust
+  surface. Both are public claims. (a) Should the card be served by the API (a new operation or a
+  static route) and shown on the Trust and Coverage page, or published beside the release assets
+  only? (b) May a launch card carry fixture-only machine gates? The alternative is to wait for the
+  first real mount, so that the gates also run over the mounted corpus. (c) Its signature comes
+  from the release pipeline (item 7). Until then the card is an unsigned census in the repository.
 
 - Web hosting (PR #763): the page's CSP allows `connect-src 'self'` and the API has no CORS, so the
   page and the API share an origin. Either the API serves the web bundle, or an ingress routes

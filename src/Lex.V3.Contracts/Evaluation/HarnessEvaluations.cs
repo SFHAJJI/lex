@@ -88,12 +88,12 @@ public static class RetrievalEvaluation
             cases.Select(value => RetrievalMetrics.NdcgAtK(value.Judgments, rankings[value.CaseId], cutoff)).ToArray(),
             floor);
         var noHit = RetrievalMetrics.Mean(
-            cases.Where(static value => !value.Judgments.Anchors.Any(static anchor => anchor.Grade > 0))
+            cases.Where(IsNoHit)
                 .Select(value => MetricResult.Measured(rankings[value.CaseId].Count == 0 ? 1.0 : 0.0))
                 .ToArray(),
             floor);
         var resolver = RetrievalMetrics.Mean(
-            cases.Where(static value => value.Kind == EvaluationCaseKind.ExactIdentifier)
+            cases.Where(IsExactIdentifier)
                 .Select(value => MetricResult.Measured(ResolvesExactly(value, rankings[value.CaseId]) ? 1.0 : 0.0))
                 .ToArray(),
             floor);
@@ -108,6 +108,15 @@ public static class RetrievalEvaluation
                 EvaluationGates.AtLeast(EvaluationGateNames.ResolverExactness, resolver, invariantThreshold),
             ]);
     }
+
+    /// <summary>The nDCG stratum: a case that judges at least one anchor relevant (the others are not measured).</summary>
+    internal static bool JudgesAnyRelevant(EvaluationCase value) => value.Judgments.Anchors.Any(static anchor => anchor.Grade > 0);
+
+    /// <summary>The no-hit stratum: a case with nothing judged relevant, whatever its kind.</summary>
+    internal static bool IsNoHit(EvaluationCase value) => !JudgesAnyRelevant(value);
+
+    /// <summary>The resolver stratum: a case of the exact-identifier kind.</summary>
+    internal static bool IsExactIdentifier(EvaluationCase value) => value.Kind == EvaluationCaseKind.ExactIdentifier;
 
     // An exact-identifier case is resolved when the first result is its one supporting anchor. A case that does not have
     // exactly one supporting anchor is a defect of the dataset and counts as not resolved, never as skipped.

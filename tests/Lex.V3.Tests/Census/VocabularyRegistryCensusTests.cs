@@ -80,6 +80,8 @@ public sealed class VocabularyRegistryCensusTests
                     + "const PlainLiteralDriftProbeCelex, const PlainLiteralDriftProbeSparql, "
                     + "const SeedListSha256, static property PositiveControlCelex, "
                     + "static property XsdStringDatatypeIri",
+                "Lex.V3.Contracts.Evaluation.EvaluationCard: StatisticalRows=8, "
+                    + "const NotYetLabelled, const Schema",
                 "Lex.V3.Contracts.Evaluation.EvaluationGateNames: const AnchorNdcgAt10, "
                     + "const NoHitAccuracy, const ResolverExactness, const TemporalExactness, "
                     + "const VerdictExactMatch",
