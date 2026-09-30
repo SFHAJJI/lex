@@ -9,7 +9,7 @@ every pull request that changes what is served, what is next or what is blocked.
   (`eng/test-fast.ps1`): 3,038 tests, 3,037 pass, 1 skipped. Ingest suite: green on CI for PR #760
   (the CI `dotnet` job runs the whole solution on every pull request, about 7 min on the runner;
   green for PR #800);
-  locally about 15 min. 934 web tests pass. CI's web job can flake in `keyboard-walk.test.mjs`
+  locally about 15 min. 935 web tests pass. CI's web job can flake in `keyboard-walk.test.mjs`
   ("browser debugger never answered"); rerunning the failed job is the fix.
 - Driver: Claude Opus 5.5 since 2026-09-29 (the Fable 5.1 driver ran out of tokens on 2026-09-28
   after PR #757; the user default model is now `claude-opus-5-5`).
@@ -235,7 +235,7 @@ schema's `parameters` shape, and whose call runs the same dispatch the REST rout
 endpoint test proves it for all twenty-three. The launch-contract line "REST and MCP derive identical
 envelopes from the registry" is the owner's to tick.
 
-Web: 38 React components, 934 tests. Preview screens render fixtures. The V3 Luxembourg search
+Web: 38 React components, 935 tests. Preview screens render fixtures. The V3 Luxembourg search
 answer has a reader (PR #771). The answer census now samples `search` five ways from the real handler:
 - a phrase with 4 strict hits and 1 relaxed hit;
 - the same phrase one hit per page, with its cursor;
@@ -569,10 +569,11 @@ The API process records nothing while a browser asks it (PR #801, the launch con
 text, IP or user agent recorded", on the journey host). In source, `PublicRequestRecordingTests`
 already bounds the process to three startup messages, cleared logging providers, a pinned package
 set and no write-capable file open. At run time, every journey run now captures the process's
-standard output and error from its first byte and lists every file under its directory when it
-first answers and after the page has asked: after the first answer it must write nothing and add
-or change no file, and its startup output must carry none of the run's text (the query, the
-browser's user agent). The first run of the check caught the synthetic bootstrap's startup
+standard output and error from its first byte, and watches its directory from when it first
+answers until the page has asked, listing every file at both ends: after the first answer it must
+write nothing and touch no file under its directory, including a file written and deleted within
+the run (the review of #801 found two listings alone could not see one), and its startup output
+must carry none of the run's text (the query, the browser's user agent). The first run of the check caught the synthetic bootstrap's startup
 diagnostic (`lex_v3_preview_bootstrap_failed reason=immutable_custody`), which is why startup is
 judged apart rather than admitted by its text. With the check, all sixteen journey runs pass, and
 all sixteen again with `--served-by-api` (run 2026-09-30 on the journey mount written again that

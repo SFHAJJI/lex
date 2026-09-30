@@ -6,7 +6,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { DOSSIER_IDENTIFIER, HISTORY_ANCHOR, JOURNEY_STEPS, READING_DATE, SEARCH_PHRASE, journeyVerdict } from "../scripts/journey.mjs";
+import { DOSSIER_IDENTIFIER, HISTORY_ANCHOR, JOURNEY_STEPS, READING_DATE, SEARCH_PHRASE, journeyVerdict, watchFiles } from "../scripts/journey.mjs";
 import { cspValue } from "../scripts/csp.mjs";
 
 const ORIGIN = "http://127.0.0.1:5000";
@@ -242,7 +242,29 @@ test("a run is held to the API process recording nothing: no query text, user ag
   assert.ok(failing({ output: "client 127.0.0.1:53211", changedFiles: [] }).some((failure) => failure.includes("recorded an address")));
   assert.ok(failing({ output: "info: request served\n", changedFiles: [] }).some((failure) => failure.startsWith("the API process wrote output during the run")), "any output at all fails");
   assert.ok(failing({ output: "", changedFiles: ["logs/requests.log"] }).some((failure) => failure === "the API process wrote files: logs/requests.log"));
+  assert.ok(failing({ output: "", changedFiles: [], fileEvents: [["rename", "request.log"]] }).some((failure) => failure === "the API process touched files while serving the run: request.log"));
   assert.deepEqual(journeyVerdict(observed, expected), [], "a run that observed no process is judged on the page alone");
+});
+
+test("a file written and deleted while the run is watched fails it, though both listings match (review of #801)", async () => {
+  const { mkdtemp, rm, unlink, writeFile } = await import("node:fs/promises");
+  const { tmpdir } = await import("node:os");
+  const { join } = await import("node:path");
+  const home = await mkdtemp(join(tmpdir(), "lex-journey-watch-"));
+  try {
+    const observed = goodSearch();
+    const expected = { origin: ORIGIN, step: JOURNEY_STEPS.search, state: "success" };
+    const quiet = watchFiles(home);
+    assert.deepEqual(journeyVerdict({ ...observed, api: { output: "", changedFiles: [], fileEvents: await quiet.stop() } }, expected), [], "an untouched directory passes");
+    const watched = watchFiles(home);
+    await writeFile(join(home, "request.log"), `POST /api/v3/search ${SEARCH_PHRASE}\n`);
+    await unlink(join(home, "request.log"));
+    const fileEvents = await watched.stop();
+    const failures = journeyVerdict({ ...observed, api: { output: "", changedFiles: [], fileEvents } }, expected);
+    assert.ok(failures.some((failure) => failure.startsWith("the API process touched files while serving the run") && failure.includes("request.log")), failures.join("; "));
+  } finally {
+    await rm(home, { recursive: true, force: true });
+  }
 });
 
 test("a run whose page the API served is held to the headers the page arrived with (Decision 95, ruling 3)", () => {
