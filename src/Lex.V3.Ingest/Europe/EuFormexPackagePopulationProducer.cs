@@ -87,6 +87,10 @@ public sealed class EuFormexPackagePopulationResult
     public int AcquiredExpressionCount => Reconciliation?.Outcomes.Count(static outcome =>
         outcome.Kind == EuFormexPackageOutcomeKind.Acquired) ?? 0;
 
+    /// <summary>Expressions explicitly left unenumerated because their language is outside EN/FRA.</summary>
+    public int NotEnumeratedExpressionCount => Reconciliation?.Outcomes.Count(static outcome =>
+        outcome.Kind == EuFormexPackageOutcomeKind.NotEnumeratedLanguageOutOfScope) ?? 0;
+
     public EuFormexPackagePopulationRefusal? Refusal { get; }
 
     public string? Detail { get; }
@@ -135,21 +139,21 @@ public sealed class EuFormexPackagePopulationResult
 /// </summary>
 /// <remarks>
 /// <para>
-/// What it does for real: for every expression of every production the run holds, it runs the
+/// What it does for real: for every English or French expression of every production the run holds, it runs the
 /// manifestation enumeration (<see cref="EuFormexManifestationEnumerationProducer"/>, its own robots
 /// session, two count and page passes, retained evidence), so "this expression has a Formex
 /// manifestation" and "this expression has none" are both publisher facts with proofs, never
-/// assumptions. Every language the publisher lists is enumerated: the eligibility population
-/// requires exactly one delivered enumeration per expression of the production, and the run's
-/// own expression count is what the reconciliation checks against.
+/// assumptions for English and French. Other languages receive an explicit unenumerated,
+/// language-out-of-scope outcome with no eligibility claim. The reconciliation still checks
+/// the complete run expression count, including these outcomes.
 /// </para>
 /// <para>
 /// Then, for every eligible expression, it acquires the package
 /// (<see cref="EuFormexPackageAcquisitionProducer"/>): the one GET of the exact <c>fmx4</c>
 /// manifestation the enumeration delivered, through the acquisition session, bound as a package
 /// transport and read into an annex inventory. What is not acquired is stated as its own outcome
-/// kind with its reason (<c>not_acquired</c>: the run holds no body for the expression, which today
-/// means every language but English, Decision 89; an identity or manifestation the grammar refuses;
+/// kind with its reason (<c>not_acquired</c>: the run holds no body for an enumerated expression;
+/// an identity or manifestation the grammar refuses;
 /// an annex-bearing package whose annex chain does not close), and a publisher answer that is not
 /// a package is <c>route_refused</c> or <c>package_rejected</c>, never a transport refusal it was
 /// not. A package that names annexes is acquired together with the classification of those annexes
@@ -271,6 +275,8 @@ public sealed class EuFormexPackagePopulationProducer
             var requests = new List<EuFormexManifestationRunRequest>(expressions.Derivation.Expressions.Count);
             foreach (var expression in expressions.Derivation.Expressions)
             {
+                cancellationToken.ThrowIfCancellationRequested();
+                if (!EuFormexEligibilityPopulation.IsServedLanguage(expression)) continue;
                 try
                 {
                     requests.Add(new EuFormexManifestationRunRequest(
@@ -304,7 +310,7 @@ public sealed class EuFormexPackagePopulationProducer
                 enumerations.Add(enumeration);
             }
 
-            var eligibility = EuFormexEligibilityPopulation.TryCreate(
+            var eligibility = EuFormexEligibilityPopulation.TryCreateForServedLanguages(
                 expressions, batch, out var eligibilityRefusal, out var eligibilityDetail);
             if (eligibility is null)
             {
@@ -315,7 +321,8 @@ public sealed class EuFormexPackagePopulationProducer
                     productRequests);
             }
 
-            var outcomes = new List<EuFormexPackageOutcome>(eligibility.Enumerations.Count);
+            var outcomes = eligibility.NotEnumeratedExpressions
+                .Select(EuFormexPackageOutcome.NotEnumeratedLanguageOutOfScope).ToList();
             foreach (var enumeration in eligibility.Enumerations)
             {
                 if (!enumeration.IsFormexEligible)

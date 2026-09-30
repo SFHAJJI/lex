@@ -3,6 +3,24 @@
 Updated 2026-09-30 by the driver. This file replaces the issue-comment ledgers. It is rewritten in
 every pull request that changes what is served, what is next or what is blocked.
 
+## EU Formex language scope (Codex, 2026-09-30)
+
+Reversible driver decision under standing order section 5: enumerate Formex manifestations for
+English and French expressions only. Every other observed expression remains in the reconciled
+population as `not_enumerated_language_out_of_scope`, with eligibility explicitly unknown and no
+manifestation or package request. A digest-checked audit of historical run9 responses found
+15,706 unique expression language assertions: 1,314 EN/FRA and 14,392 other languages, with no
+conflicting language assignments. At the prior six-request enumeration estimate this is 7,884
+rather than 94,236 requests, before packages and the rest of acquisition. These historical counts
+are sizing evidence only; run9 used per-seed runs and a test-double scope resolver. A fresh union
+run must still establish the current population. Audit: `C:\lex-v3\lanes\eu-historical-language-sizing.json`.
+
+The guarded eligibility door requires proven EN/FRA enumerations and records the other expressions
+separately. Closure still requires one outcome per expression, rejects missing/duplicate outcomes,
+and cannot label an unenumerated expression ineligible. The older all-language door remains strict.
+Main-body processing preserves the typed source outcome and maps it to package-not-acquired.
+French bodies are the following slice; this change does not claim they are already acquired.
+
 ## Luxembourg COUNT follow-up (Codex, 2026-09-30)
 
 The first whole-population preflight ended at 12:15 UTC with exit 3, using 53/100 wire
@@ -963,9 +981,10 @@ proves the path, not a corpus.
   the profile, literal robots evaluation and the one wire ceiling.
 - The session now exposes the custody write receipt of every hop an executed attempt sealed
   (`HopWriteReceiptsByObservationId`), which the Formex ZIP binding needs as well.
-- **Formex package population: enumeration (PR #747) and acquisition (this pull request), fixtures
-  only.** `EuFormexPackagePopulationProducer` runs the real manifestation enumeration for every
-  expression of a complete run (all languages, one robots session and four requests each), closes
+- **Formex package population.** `EuFormexPackagePopulationProducer` runs the real manifestation
+  enumeration for English and French expressions only (PR #799), with repeated-enumeration proofs
+  and the shared wire budget. Every other language is `not_enumerated_language_out_of_scope`, with
+  eligibility unknown. For the enumerated expressions it closes
   eligibility, then acquires every eligible package the corpus can serve
   (`EuFormexPackageAcquisitionProducer`): one GET of the exact `fmx4` manifestation the enumeration
   delivered, on the route the office serves (manifestation URI, 303 to `{manifestation}/zip`,
@@ -979,7 +998,7 @@ proves the path, not a corpus.
   `formex_main_body_admitted` for the held EU member and the main-body producer parses its 99
   articles. What is not acquired is stated as its own outcome, never as a transport refusal:
   `not_acquired` with a reason (`body_not_held`: the run holds no body for the expression, today
-  non-English original expressions, Decision 89, and the corpus binds every Formex outcome to one held
+  French original expressions, Decision 89, and the corpus binds every acquired Formex outcome to one held
   body; `language_not_addressable`, `manifestation_not_singular`, `identity_not_admitted` for works
   outside the reviewed seed-root map, including consolidated expressions; and the
   four annex reasons below),
