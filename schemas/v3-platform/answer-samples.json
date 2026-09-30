@@ -761,6 +761,82 @@
       }
     },
     {
+      "operation": "dossier",
+      "object_type": "work_record",
+      "scenario": "the work, in the language it is held in: its identity, its held states and what the dossier does not hold",
+      "answer": {
+        "articles_not_admitted_note": "articles_not_admitted counts the articles the corpus recorded for the publisher\u0027s document for this state that this state does not hold; the number of articles in this state plus articles_not_admitted is the number of articles the corpus recorded for that document, which provenance counts by disposition token; which articles they are is not held. An article is not admitted whole when the reviewed profile cannot represent every element in it: that can be an article the publisher struck out, and it can equally be an article whose text is complete but which carries a mark the profile does not accept, such as an empty placeholder where a list item was removed",
+        "available_languages": [
+          "fra"
+        ],
+        "corpus_sha256": "\u003Cvaries-per-run\u003E",
+        "history_begins": "2024-02-01",
+        "index_sha256": "\u003Cvaries-per-run\u003E",
+        "latest_applicability_date": "2024-02-01",
+        "not_held": [
+          {
+            "item": "document_type",
+            "reason": "the publisher\u0027s document type is not part of this record; classification serves the typeDocument facts the publisher asserted, verbatim"
+          },
+          {
+            "item": "current_state_flag",
+            "reason": "no current-state flag is part of this record; status_on serves the publisher\u0027s force assertions for a date, and a flag about now would not be a statement about any date listed here"
+          },
+          {
+            "item": "publication_date",
+            "reason": "no publication date is held; the document date the index stores beside a title falls back to an article\u0027s applicability date, so it is not served as one"
+          },
+          {
+            "item": "entry_into_force",
+            "reason": "no entry-into-force date is part of this record; status_on serves the publisher\u0027s dateEntryInForce when asserted; a state\u0027s applicability date is the date that state applies from, which is a different fact"
+          },
+          {
+            "item": "application",
+            "reason": "no application date is held; a state\u0027s applicability date is the date that state applies from, which is a different fact"
+          },
+          {
+            "item": "historical_identifiers",
+            "reason": "no historical identifier is held, so no earlier or later identifier of this work is mapped to it"
+          },
+          {
+            "item": "responsible_ministry",
+            "reason": "no responsible ministry is held"
+          },
+          {
+            "item": "first_observed",
+            "reason": "no observation time is held, so nothing here says when this work was first seen; the event log\u0027s first_sighting (events) says only that a state is first present in that log"
+          },
+          {
+            "item": "coverage_gaps",
+            "reason": "each state carries the date it applies from and no end date, so no gap between states can be stated, and this answer never says there is none"
+          }
+        ],
+        "publisher": "lu-legilux",
+        "publisher_work_iri": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3",
+        "requested_identifier": "/lu-legilux/loi-1991-08-10-n3",
+        "requested_language": "fra",
+        "scope": "The titles and the publisher-dated states the mounted index holds for this work. It is a record of what this corpus holds and not of what the publisher holds: a title or a state absent here may exist at the publisher, and absence from this corpus is neither absence from the publisher\u0027s record nor absence of law. When a language is requested, the titles, the states, the state count and the first and latest applicability dates are that language\u0027s alone, and available_languages still lists every language the work has.",
+        "state_count": 1,
+        "states": [
+          {
+            "applicability_date": "2024-02-01",
+            "article_count": 49,
+            "articles_not_admitted": 5,
+            "expression_iri": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo/fr",
+            "language": "fra",
+            "next_applicability_date": null,
+            "permalink": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--5bca01f82ef3058cfebe7f8a8a6eb1f1fbeeb32b8a1ea7b2c02ac20963235e3a",
+            "publisher_legal_resource_iri": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo",
+            "publisher_work_iri": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3",
+            "stable_coordinate": "/lu-legilux/loi-1991-08-10-n3/2024-02-01",
+            "state_sha256": "5bca01f82ef3058cfebe7f8a8a6eb1f1fbeeb32b8a1ea7b2c02ac20963235e3a"
+          }
+        ],
+        "titles": [],
+        "work_key": "loi-1991-08-10-n3"
+      }
+    },
+    {
       "operation": "events",
       "object_type": "event",
       "scenario": "the whole log from its start: a genesis log, one first_sighting per held state",
@@ -2592,10 +2668,6 @@
     },
     {
       "operation": "diff",
-      "reason": "sampled when a reader is built against it"
-    },
-    {
-      "operation": "dossier",
       "reason": "sampled when a reader is built against it"
     },
     {
