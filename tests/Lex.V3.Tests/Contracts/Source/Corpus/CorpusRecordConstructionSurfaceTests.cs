@@ -276,16 +276,24 @@ public sealed class CorpusRecordConstructionSurfaceTests
     }
 
     [TestMethod]
-    public void VerifiedRecordSetHasExactlyOneCheckedDoor()
+    public void VerifiedRecordSetHasExactlyTheseCheckedDoors()
     {
         CollectionAssert.AreEqual(
             new[]
             {
-                "constructor internal instance " + N + "VerifiedCorpusRecordSet::.ctor("
-                    + N + "CorpusRecordSet) -> " + N + "VerifiedCorpusRecordSet",
-                "method public static " + N + "VerifiedCorpusRecordSet::ParseAndVerify("
-                    + Core + "SourceArtifactRef, System.ReadOnlySpan<System.Byte>) -> "
-                    + N + "VerifiedCorpusRecordSet",
+                "constructor internal instance "
+                    + "Lex.V3.Contracts.Source.Corpus.VerifiedCorpusRecordSet::.ctor(Lex.V3.Contrac"
+                    + "ts.Source.Corpus.CorpusRecordSet) -> "
+                    + "Lex.V3.Contracts.Source.Corpus.VerifiedCorpusRecordSet",
+                "method public static "
+                    + "Lex.V3.Contracts.Source.Corpus.VerifiedCorpusRecordSet::ParseAndVerify(Lex.V"
+                    + "3.Contracts.Source.Core.SourceArtifactRef, "
+                    + "System.ReadOnlySpan<System.Byte>) -> "
+                    + "Lex.V3.Contracts.Source.Corpus.VerifiedCorpusRecordSet",
+                "method public static "
+                    + "Lex.V3.Contracts.Source.Corpus.VerifiedCorpusRecordSet::ParseAndVerifyStream"
+                    + "(Lex.V3.Contracts.Source.Core.SourceArtifactRef, "
+                    + "System.IO.Stream) -> Lex.V3.Contracts.Source.Corpus.VerifiedCorpusRecordSet",
             },
             ConstructionSurface.Of(typeof(VerifiedCorpusRecordSet)).ToArray());
 

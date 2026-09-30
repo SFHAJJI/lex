@@ -3,34 +3,32 @@
 Updated 2026-09-30 by the driver. This file replaces the issue-comment ledgers. It is rewritten in
 every pull request that changes what is served, what is next or what is blocked.
 
-## Corpus record-set stream readback draft (Codex, 2026-09-30)
+## Corpus record-set canonical streaming and readback (Codex, 2026-09-30)
 
-Reversible driver decision: make independent corpus record-set readback stream through its
-original domain digest and strict UTF-8 check, the same typed constructors, exact canonical
-comparison and final digest pin. Both inline custody reader and writer wrap existing arrays
-where available, avoiding full UTF-8 strings and comparison buffers. The canonical writer
-flushes at record boundaries after 64 KiB pending, allowing one-record overshoot.
+The full Luxembourg path still creates a complete corpus record set. Its canonical writer used
+a whole MemoryStream/ToArray copy, and independent readback added a full UTF-8 string and another
+canonical buffer. Reversible driver decision: write records through an incremental domain hash
+and reopen through a strict stream reader. Preserve field order, newline, digest, destination
+prefix and caller stream ownership. Flush at record boundaries after64KiB pending, allowing
+one-record overshoot; this is not a fixed bound on arbitrary records.
 
-This draft is uncompiled and unvalidated. Regression drafts cover short reads/caller ownership,
-foreign digest, noncanonical spacing/trailing bytes, invalid UTF-8, typed ordinal invariants,
-canonical substitution between passes and stream preconditions. The existing large writer
-fixture also reopens through the stream path. Construction censuses need independent reflection.
-Record-set writes still use a single custody object, and typed records/completion remain in
-memory. Chunked persistence and full-process sizing remain required before full Luxembourg.
+The new reader checks the original digest before strict UTF-8, uses the same typed constructors,
+compares canonical output against a fresh read, requires EOF and pins the final digest. Both
+inline custody reader and writer wrap existing retained arrays when possible. Independent
+readback still constructs a new typed record set; it does not trust a graph from the writer.
 
-## Corpus record-set canonical streaming (Codex, 2026-09-30, preparation)
+Validation: clean solution build (0warnings/errors,100.31s); required fast3,080passed plus one
+platform skip (64.133s); all40 affected CorpusRecordSetWriter and EU/LU/V3 FirstMount ingest tests
+passed (49.780s). Seven new regressions cover a3,000-record nonseekable destination, independent
+hash/readback, destination prefix, short reads/ownership, wrong digest/noncanonical/UTF-8/EOF,
+typed ordinal invariants, canonical substitution and stream preconditions. Existing fixture
+byte/digest pins remain unchanged. Independent reflection confirms211guarded types, with only
+ParseAndVerifyStream added to VerifiedCorpusRecordSet's global/per-type construction pins.
 
-The full Luxembourg path still serializes every corpus record into one artifact. Its canonical
-writer additionally accumulated a complete MemoryStream and ToArray copy before writing to the
-caller's destination. Reversible driver decision: stream canonical records into a domain-separated
-hashing destination and flush after records once 64 KiB is pending. One record can exceed that
-threshold. Keep the existing byte format, digest, destination prefix and caller stream ownership.
-
-This code-only draft is uncompiled while the full EU acquisition occupies the heavy-job slot.
-Regressions are prepared for a 3,000-record nonseekable destination, write-size observations,
-independent domain hash/readback and a preexisting destination prefix. Existing fixture digest
-pins remain unchanged. Record-set chunk storage/readback and typed object retention still need
-separate work; no full-population memory-fit claim follows this preparation.
+Required cross-family review and exact-head green CI remain pending. The writer still holds
+one complete custody object, and typed records/completion remain in memory. Chunked record-set
+persistence and measured downstream resources remain required before full Luxembourg. No full
+population-fit claim, publisher traffic or production operation follows this change.
 
 ## Large derived scope artifacts (Codex, 2026-09-30)
 
