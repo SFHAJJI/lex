@@ -6,6 +6,7 @@
 // submits.
 
 import { Document } from './Document.jsx';
+import { liveChrome } from '../scripts/live-chrome.mjs';
 import { LiveDossier } from './LiveDossier.jsx';
 import { renderHydratableDocument } from './render-document.mjs';
 import { skinFor } from '../scripts/shells.mjs';
@@ -19,21 +20,18 @@ export function liveDossierTree() {
 }
 
 export function renderLiveDossierPage() {
+  const copy = liveChrome().dossier;
   return renderHydratableDocument(
     <Document
       state="live-dossier"
-      title="Dossier"
+      title={copy.title}
       shell="dev"
       density={skinFor('dev').density}
       banner="live"
     >
-      <p className="eyebrow">Dossier</p>
-      <h1>A work's dossier</h1>
-      <p>
-        What this server holds for one Luxembourg work: its titles, its publisher-dated states and
-        what the dossier does not hold. The identifier goes to this server in the request and nowhere
-        else, and this page keeps nothing.
-      </p>
+      <p className="eyebrow">{copy.eyebrow}</p>
+      <h1>{copy.heading}</h1>
+      <p>{copy.intro}</p>
       <div id={LIVE_DOSSIER_ROOT}>{liveDossierTree()}</div>
       <script src="/client-live-dossier.js" defer />
     </Document>,

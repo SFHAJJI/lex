@@ -6,6 +6,7 @@
 // submits.
 
 import { Document } from './Document.jsx';
+import { liveChrome } from '../scripts/live-chrome.mjs';
 import { LiveCompare } from './LiveCompare.jsx';
 import { renderHydratableDocument } from './render-document.mjs';
 import { skinFor } from '../scripts/shells.mjs';
@@ -19,21 +20,18 @@ export function liveCompareTree() {
 }
 
 export function renderLiveComparePage() {
+  const copy = liveChrome().compare;
   return renderHydratableDocument(
     <Document
       state="live-compare"
-      title="Compare"
+      title={copy.title}
       shell="dev"
       density={skinFor('dev').density}
       banner="live"
     >
-      <p className="eyebrow">Compare</p>
-      <h1>Two states, article by article</h1>
-      <p>
-        The states of one Luxembourg work that applied on two dates, compared by the publisher's
-        article ids and wording, with nothing said about legal effect. The identifier and the dates go
-        to this server in the request and nowhere else, and this page keeps nothing.
-      </p>
+      <p className="eyebrow">{copy.eyebrow}</p>
+      <h1>{copy.heading}</h1>
+      <p>{copy.intro}</p>
       <div id={LIVE_COMPARE_ROOT}>{liveCompareTree()}</div>
       <script src="/client-live-compare.js" defer />
     </Document>,

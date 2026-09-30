@@ -6,6 +6,7 @@
 // submits.
 
 import { Document } from './Document.jsx';
+import { liveChrome } from '../scripts/live-chrome.mjs';
 import { LiveReading } from './LiveReading.jsx';
 import { renderHydratableDocument } from './render-document.mjs';
 import { skinFor } from '../scripts/shells.mjs';
@@ -19,21 +20,18 @@ export function liveReadingTree() {
 }
 
 export function renderLiveReadingPage() {
+  const copy = liveChrome().reading;
   return renderHydratableDocument(
     <Document
       state="live-reading"
-      title="Reading"
+      title={copy.title}
       shell="dev"
       density={skinFor('dev').density}
       banner="live"
     >
-      <p className="eyebrow">Reading</p>
-      <h1>The text on a date</h1>
-      <p>
-        The text of one Luxembourg work as it stood on one date, article by article, as the publisher
-        wrote it, with what a quotation of it needs. The identifier and the date go to this server in
-        the request and nowhere else, and this page keeps nothing.
-      </p>
+      <p className="eyebrow">{copy.eyebrow}</p>
+      <h1>{copy.heading}</h1>
+      <p>{copy.intro}</p>
       <div id={LIVE_READING_ROOT}>{liveReadingTree()}</div>
       <script src="/client-live-reading.js" defer />
     </Document>,

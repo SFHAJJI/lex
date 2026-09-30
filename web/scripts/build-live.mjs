@@ -15,6 +15,8 @@ import { cp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { pathToFileURL } from "node:url";
 
 import { tokenCss } from "./design-tokens.mjs";
+import { CHROME_LOCALES } from "./localization.mjs";
+import { REVIEWED_CHROME_LOCALES } from "./locale-unavailable.mjs";
 
 const source = new URL("../src/", import.meta.url);
 export const LIVE_DESTINATION = new URL("../dist-live/", import.meta.url);
@@ -62,6 +64,12 @@ ${tokenCss()}`, "utf8");
   const exportSsr = await import(pathToFileURL(await bundle("app/live-export-page.jsx", "live-export-page.mjs")).href);
   await writeFile(new URL("export.html", destination), exportSsr.renderLiveExportPage(), "utf8");
   await cp(await bundleClient("app/client-live-export-entry.jsx", "client-live-export.js"), new URL("client-live-export.js", destination));
+  // One static page per chrome locale without reviewed copy: localization_unavailable, in English and
+  // labelled English, with no script (Decision 41; the launch contract's DE and LB line).
+  const localeSsr = await import(pathToFileURL(await bundle("app/live-locale-page.jsx", "live-locale-page.mjs")).href);
+  for (const locale of CHROME_LOCALES.filter((code) => !REVIEWED_CHROME_LOCALES.includes(code))) {
+    await writeFile(new URL(`locale-${locale}.html`, destination), localeSsr.renderLiveLocaleUnavailablePage(locale), "utf8");
+  }
   return destination;
 }
 
