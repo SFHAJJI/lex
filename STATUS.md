@@ -5,8 +5,15 @@ every pull request that changes what is served, what is next or what is blocked.
 
 ## Large derived scope artifacts (Codex, 2026-09-30)
 
+The required fresh-context Claude review returned MERGE at efa4092b. Its one documentation
+finding is repaired below. Independent review rebuilt cleanly, passed fast (3,073 plus one
+platform skip), all 29 focused checks including the corrected census partition totals, and
+106 adapter/resolver/Stage 3 checks. Exact-head green CI remains the merge gate.
+Receipt-evidence retention and a public production reopen API remain future release work;
+this slice does not claim a retention floor for the complete artifact closure.
+
 Full Luxembourg acquisition is sized at 1,986,924 subjects and 9,672,378 assertion rows, but
-population delivery remains unproved. Scope JSON is still held as one custody object, whose
+population delivery remains unproved. Until this change, scope JSON was held as one custody object, whose
 contract limit is 256 MiB. Reversible driver decision: preserve the complete canonical scope while
 storing its bytes in ordered 4 MiB custody chunks above a measured 4 MiB inline threshold.
 Small scope documents retain their current custody representation and logical identities.
