@@ -38,6 +38,25 @@ public static class ContractJson
         }
     }
 
+    internal static T DeserializeFromStream<T>(Stream json)
+    {
+        try
+        {
+            var requestedType = typeof(T);
+            var contractType = FindRegisteredPolymorphicContract(requestedType) ?? requestedType;
+            var value = JsonSerializer.Deserialize(json, contractType, Options)
+                ?? throw new JsonException("The contract document cannot be null.");
+            return value is T typed
+                ? typed
+                : throw new JsonException(
+                    $"The contract discriminator does not name {requestedType.Name}.");
+        }
+        catch (ArgumentException exception)
+        {
+            throw new JsonException("The contract document violates a typed invariant.", exception);
+        }
+    }
+
     public static JsonSerializerOptions CreateSchemaOptions() => CreateOptions(exactEnums: false);
 
     private static Type? FindRegisteredPolymorphicContract(Type type)
