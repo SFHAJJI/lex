@@ -9,8 +9,9 @@
 // Every rule here is one the answer states about itself, so an answer that breaks one is drift and
 // is thrown, never rendered:
 //  - text is served only under the admitting rights disposition, and every source says so;
-//  - one state per served language, the one that applies on the date asked (from on or before it,
-//    to a next date after it or none), in the language asked when one was asked;
+//  - one state per served language, in the languages' ordinal order, the one that applies on the
+//    date asked (from on or before it, to a next date after it or none), in the language asked when
+//    one was asked;
 //  - each state's coordinate and permalink name its work, date and digest, and each article's
 //    permalink is the state's with the publisher's article id after `#`;
 //  - each quoted article has text, in its state's language, whose UTF-8 length is the one stated,
@@ -265,9 +266,12 @@ export function readEvidenceBundle(answer) {
     throw new Error('a bundle is answered with the state that applies in each served language; none is refused, not answered');
   }
   const languages = new Set();
-  for (const state of states) {
+  for (const [index, state] of states.entries()) {
     if (languages.has(state.language)) throw new Error(`the bundle holds two states in ${state.language}; it selects one per language`);
     languages.add(state.language);
+    if (index > 0 && state.language < states[index - 1].language) {
+      throw new Error(`the state in ${state.language} follows the one in ${states[index - 1].language}; the states are in the languages' order`);
+    }
     if (!availableLanguages.includes(state.language)) {
       throw new Error(`a state is in ${state.language}, which the work is not said to be held in`);
     }

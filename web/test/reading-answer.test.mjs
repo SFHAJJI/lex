@@ -2,8 +2,10 @@
 //
 // The answer comes from `schemas/v3-platform/answer-samples.json` (operation `evidence_bundle`),
 // captured by driving the real handler on the fixture mount: one state in French, 49 quoted articles.
-// A bundle in two languages is built from it the way the producer builds one (one state per served
-// language), and each rule the answer states about itself is then broken once.
+// A bundle in two languages is built from it as the producer would send one: one state per served
+// language, in the languages' ordinal order, each state from its own corpus member (its own source
+// and body) with its own article identities. Each rule the answer states about itself is then
+// broken once.
 
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
@@ -41,20 +43,32 @@ function mutate(answer, change) {
   return copy;
 }
 
-/** The captured bundle with a German state beside the French one, as the producer selects one per language. */
+const sha256 = (text) => createHash("sha256").update(text, "utf8").digest("hex");
+
+/**
+ * The captured bundle with a German state before the French one, as the producer sends two: the
+ * languages sorted, and the German state from its own corpus member, so its source, body digest and
+ * article identities are its own (review of #776: a copy sharing the French ones cannot be sent).
+ */
 function twoLanguages(base) {
   return mutate(base, (answer) => {
     const german = structuredClone(answer.states[0]);
     const sha = "d".repeat(64);
+    const body = sha256(`de:${german.body_sha256s[0]}`);
     german.language = "deu";
     german.state_sha256 = sha;
     german.expression_iri = german.expression_iri.replace(/\/fr$/, "/de");
     german.permalink = `${german.stable_coordinate}--${sha}`;
+    german.sources = german.sources.map((source) => ({ ...source, body_sha256: body, object_ref_sha256: sha256(`de:${source.object_ref_sha256}`) }));
+    german.body_sha256s = [body];
+    german.article_identities_sha256 = sha256(`de:${german.article_identities_sha256}`);
     for (const article of german.articles) {
       article.language = "deu";
+      article.article_identity_sha256 = sha256(`de:${article.article_identity_sha256}`);
+      article.body_sha256 = body;
       article.article_permalink = `${german.permalink}#${article.publisher_id}`;
     }
-    answer.states.push(german);
+    answer.states.unshift(german);
     answer.available_languages = ["deu", "fra"];
     answer.requested_language = null;
   });
@@ -78,10 +92,11 @@ test("the captured bundle reads: one state, its quoted articles, and what the bu
   assert.deepEqual(view.notHeld.map((row) => row.item), answer.not_held.map((row) => row.item));
 });
 
-test("a bundle in two languages reads, one state per language", async () => {
+test("a bundle in two languages reads, one state per language in the languages' order", async () => {
   const view = readEvidenceBundle(twoLanguages(await capturedAnswer()));
-  assert.deepEqual(view.states.map((state) => state.language), ["fra", "deu"]);
-  assert.ok(view.states[1].articles.every((article) => article.language === "deu"));
+  assert.deepEqual(view.states.map((state) => state.language), ["deu", "fra"], "the producer adds states in its sorted language list");
+  assert.ok(view.states[0].articles.every((article) => article.language === "deu"));
+  assert.notEqual(view.states[0].sources[0].bodySha256, view.states[1].sources[0].bodySha256, "each state from its own member");
 });
 
 test("each rule the bundle states about itself is refused when broken, with that rule's reason", async () => {
@@ -115,8 +130,9 @@ test("each rule the bundle states about itself is refused when broken, with that
   for (const [what, change, reason] of cases) {
     assert.throws(() => readEvidenceBundle(mutate(answer, change)), reason, what);
   }
-  assert.throws(() => readEvidenceBundle(mutate(two, (a) => { a.states[1].language = "fra"; for (const x of a.states[1].articles) x.language = "fra"; })), /two states in fra/);
+  assert.throws(() => readEvidenceBundle(mutate(two, (a) => { a.states[0].language = "fra"; for (const x of a.states[0].articles) x.language = "fra"; })), /two states in fra/);
   assert.throws(() => readEvidenceBundle(mutate(two, (a) => { a.requested_language = "fra"; })), /is in deu, and the bundle was asked in fra/);
+  assert.throws(() => readEvidenceBundle(mutate(two, (a) => { a.states.reverse(); })), /the state in deu follows the one in fra/);
   assert.throws(() => readEvidenceBundle(mutate(answer, (a) => { a.states = []; })), /none is refused, not answered/);
 });
 

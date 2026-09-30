@@ -338,8 +338,9 @@ needs, is the `evidence_bundle` answer, which the answer census already samples 
 in `fra`, 49 quoted articles). `web/scripts/reading-answer.mjs` (`readEvidenceBundle`) reads it
 and throws on any answer that breaks a rule it states about itself:
 - text only under the admitting rights disposition, stated by the bundle and by every source;
-- one state per served language: the one applying on the date asked, from on or before it to a
-  next date after it or none, and in the language asked when one was asked;
+- one state per served language, in the languages' ordinal order: the one applying on the date
+  asked, from on or before it to a next date after it or none, and in the language asked when one
+  was asked;
 - state coordinates and permalinks as the dossier's, and each article's permalink is the state's
   with the publisher's article id after `#`;
 - each quoted article has text in its state's language, with the UTF-8 byte length stated, read
@@ -352,8 +353,9 @@ and throws on any answer that breaks a rule it states about itself:
 
 The reader does not recompute text digests: it is synchronous, and the browser's digest is not.
 Its tests check every captured text digest with Node's SHA-256, and `V3ReplayGuaranteesTests`
-recomputes them from the publisher's file. The tests also read a bundle in two languages, built
-the way the producer selects one state per language. The pre-V3 `reading.mjs` stays for the
+recomputes them from the publisher's file. The tests also read a bundle in two languages built as
+the producer would send one: German before French, the German state from its own corpus member
+with its own source, body and article identities (review of #776). The pre-V3 `reading.mjs` stays for the
 preview until the live reading screen replaces it.
 
 **The search journey step passes (PR #773, run locally 2026-09-30).** `node scripts/journey.mjs`
