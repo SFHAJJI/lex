@@ -317,27 +317,27 @@ public sealed class EuAnnexEvidenceBinder
         }
 
         var expression = package.ExpressionRef;
-        var heldSources = corpusRecordSet.Set.Records.Where(record =>
+        var publisherWork = TryGetPublisherWork(identityBoundary, expression);
+        var receiptSources = corpusRecordSet.Set.Records.Where(record =>
                 record.Body.Kind == CorpusBodyRecordKind.Held
-                && record.Body.Receipt == xhtmlInventory.SourceReceipt)
-            .Take(2)
-            .ToArray();
+                && record.Body.Receipt == xhtmlInventory.SourceReceipt).ToArray();
+        var heldSources = receiptSources.Where(record =>
+                BodyBelongsToExpression(record, expression, publisherWork, package.Language))
+            .Take(2).ToArray();
         if (heldSources.Length != 1)
         {
-            return Refused(EuAnnexEvidenceBindingRefusal.SourceEvidenceMissingOrAmbiguous,
-                "the retained XHTML inventory must be exactly one selected held work body");
+            return Refused(heldSources.Length == 0 && receiptSources.Length > 0
+                    ? EuAnnexEvidenceBindingRefusal.SourceLineageMismatch
+                    : EuAnnexEvidenceBindingRefusal.SourceEvidenceMissingOrAmbiguous,
+                "the retained XHTML inventory must select exactly one body in this expression's lineage");
         }
         var workSource = heldSources[0];
-        var publisherWork = TryGetPublisherWork(identityBoundary, expression);
 
         if (!IsAdmitted(identityBoundary, package.BodyRef, EuWemiRole.Item)
             || !IsAdmitted(identityBoundary, package.ManifestationRef, EuWemiRole.Manifestation)
             || !IsAdmitted(identityBoundary, expression, EuWemiRole.Expression)
             || publisherWork is null
-            || !string.Equals(
-                workSource.ObjectRef.PublisherUri,
-                publisherWork.PublisherUri,
-                StringComparison.Ordinal)
+            || !BodyBelongsToExpression(workSource, expression, publisherWork, package.Language)
             || !IsAdmitted(identityBoundary, expectedPdfManifestation, EuWemiRole.Manifestation)
             || !HasParent(package.ManifestationRef, expression)
             || !HasParent(package.BodyRef, package.ManifestationRef)
@@ -422,26 +422,26 @@ public sealed class EuAnnexEvidenceBinder
 
         var expression = transport.Expression;
         var formexManifestation = transport.FormexBody;
-        var heldSources = corpusRecordSet.Set.Records.Where(record =>
+        var publisherWork = TryGetPublisherWork(identityBoundary, expression);
+        var receiptSources = corpusRecordSet.Set.Records.Where(record =>
                 record.Body.Kind == CorpusBodyRecordKind.Held
-                && record.Body.Receipt == xhtmlInventory.SourceReceipt)
-            .Take(2)
-            .ToArray();
+                && record.Body.Receipt == xhtmlInventory.SourceReceipt).ToArray();
+        var heldSources = receiptSources.Where(record =>
+                BodyBelongsToExpression(record, expression, publisherWork, language))
+            .Take(2).ToArray();
         if (heldSources.Length != 1)
         {
-            return Refused(EuAnnexEvidenceBindingRefusal.SourceEvidenceMissingOrAmbiguous,
-                "the retained XHTML inventory must be exactly one selected held work body");
+            return Refused(heldSources.Length == 0 && receiptSources.Length > 0
+                    ? EuAnnexEvidenceBindingRefusal.SourceLineageMismatch
+                    : EuAnnexEvidenceBindingRefusal.SourceEvidenceMissingOrAmbiguous,
+                "the retained XHTML inventory must select exactly one body in this expression's lineage");
         }
 
         var workSource = heldSources[0];
-        var publisherWork = TryGetPublisherWork(identityBoundary, expression);
         if (!IsAdmitted(identityBoundary, formexManifestation, EuWemiRole.Manifestation)
             || !IsAdmitted(identityBoundary, expression, EuWemiRole.Expression)
             || publisherWork is null
-            || !string.Equals(
-                workSource.ObjectRef.PublisherUri,
-                publisherWork.PublisherUri,
-                StringComparison.Ordinal)
+            || !BodyBelongsToExpression(workSource, expression, publisherWork, language)
             || !IsAdmitted(identityBoundary, expectedPdfManifestation, EuWemiRole.Manifestation)
             || !HasParent(formexManifestation, expression)
             || !HasParent(expectedPdfManifestation, expression))
@@ -459,6 +459,12 @@ public sealed class EuAnnexEvidenceBinder
                 cancellationToken)
             .ConfigureAwait(false);
     }
+
+    private static bool BodyBelongsToExpression(
+        CorpusRecord record, SourceObjectRef expression, SourceObjectRef? publisherWork, string language) =>
+        string.Equals(record.ObjectRef.PublisherUri, expression.PublisherUri, StringComparison.Ordinal)
+        || (language is "EN" or "ENG" && publisherWork is not null
+            && string.Equals(record.ObjectRef.PublisherUri, publisherWork.PublisherUri, StringComparison.Ordinal));
 
     /// <summary>The population agreement, the PDF page labels and the member pairing, shared by both forms.</summary>
     private async Task<EuAnnexEvidenceBindingResult> ReconcileAsync(

@@ -167,8 +167,7 @@ public sealed class EuFormexPackagePopulationProducerTests
     /// <summary>
     /// The mount path: the produced reconciliation feeds the main-body producer, the Stage 3
     /// envelope, the body composition, the derivation profile envelope and the corpus builder
-    /// exactly as the fixture composition does, with a run whose second expression is French and
-    /// therefore an unbound alternate language for the one held record.
+    /// with independently bound English Work and French expression bodies.
     /// </summary>
     [TestMethod]
     public async Task TheProducedReconciliationBuildsACorpusThroughTheEnvelopeAndTheBuilder()
@@ -185,15 +184,15 @@ public sealed class EuFormexPackagePopulationProducerTests
             EuAcquisitionTestFixture.TestWireBudget(), CancellationToken.None);
         Assert.IsTrue(result.Delivered, $"{result.Refusal}: {result.Detail}");
         Assert.AreEqual(2, result.EligibleExpressionCount);
-        Assert.AreEqual(1, result.AcquiredExpressionCount);
+        Assert.AreEqual(2, result.AcquiredExpressionCount);
 
-        // The French expression is eligible, and the run holds no French body (Decision 89), so the
-        // corpus could bind no outcome to it: not acquired, stated as such, and no request sent.
         var frenchOutcome = result.Reconciliation!.Outcomes.Single(outcome => outcome.ExpressionIdentity == french.Identity);
-        Assert.AreEqual(EuFormexPackageOutcomeKind.NotAcquired, frenchOutcome.Kind);
-        Assert.AreEqual(EuFormexPackageNotAcquiredReason.BodyNotHeld, frenchOutcome.NotAcquiredReason);
-        Assert.AreEqual(2, handler.PackageRequests.Count, "only the English package route was sent.");
-        Assert.IsTrue(handler.PackageRequests.All(uri => uri.Contains(Key(english), StringComparison.Ordinal)));
+        Assert.AreEqual(EuFormexPackageOutcomeKind.Acquired, frenchOutcome.Kind, frenchOutcome.Detail);
+        Assert.AreEqual(french.Identity.PublisherExpressionId,
+            frenchOutcome.AcquiredInventory!.TransportBinding.Expression.PublisherUri);
+        Assert.AreEqual(4, handler.PackageRequests.Count, "each language follows its own 303 and 200.");
+        Assert.AreEqual(2, handler.PackageRequests.Count(uri => uri.Contains(Key(english), StringComparison.Ordinal)));
+        Assert.AreEqual(2, handler.PackageRequests.Count(uri => uri.Contains(Key(french), StringComparison.Ordinal)));
 
         var envelope = await LexCorpus6BuilderTests.CompleteProfileEnvelopeAsync(
             europeOverride: run,
@@ -209,8 +208,13 @@ public sealed class EuFormexPackagePopulationProducerTests
             .SelectMany(static member => member.Stage3Outcomes)
             .Where(static outcome => outcome.Domain == LexCorpus6Stage3OutcomeDomain.EuropeFormexMainBody)
             .ToArray();
-        Assert.AreEqual(1, formexOutcomes.Length, "the produced reconciliation reaches the one held EU member.");
-        Assert.AreEqual(LexCorpus6Stage3Disposition.FormexMainBodyAdmitted, formexOutcomes[0].Disposition);
+        Assert.AreEqual(2, formexOutcomes.Length, "each language has its own held EU member.");
+        Assert.IsTrue(formexOutcomes.All(outcome =>
+            outcome.Disposition == LexCorpus6Stage3Disposition.FormexMainBodyAdmitted));
+        foreach (var outcome in formexOutcomes)
+            Assert.AreEqual(1, built.VerifiedSet.Set.Members.Count(member => member.Stage3Outcomes.Contains(outcome)));
+        var again = LexCorpus6Builder.TryBuild(envelope, out _, out _)!;
+        Assert.AreEqual(built.ArtifactRef, again.ArtifactRef);
         var mainBody = await new EuFormexMainBodyLegalContentProducer(store).RunAsync(result.Reconciliation, CancellationToken.None);
         var admitted = mainBody.Outcomes.Single(outcome => outcome.Source.ExpressionIdentity == english.Identity);
         Assert.AreEqual(EuFormexMainBodyLegalContentDisposition.Admitted, admitted.Disposition, admitted.Detail);
@@ -318,7 +322,10 @@ public sealed class EuFormexPackagePopulationProducerTests
         Assert.IsNotNull(built, $"{refusal}: {detail}");
         var disposition = built.VerifiedSet.Set.Members
             .SelectMany(static member => member.Stage3Outcomes)
-            .Single(static outcome => outcome.Domain == LexCorpus6Stage3OutcomeDomain.EuropeFormexMainBody)
+            .Single(candidate => candidate.Domain == LexCorpus6Stage3OutcomeDomain.EuropeFormexMainBody
+                && candidate.SemanticIdentitySha256 == envelope.BodyComposition.Envelope
+                    .FormexMainBodyLegalContent!.Outcomes.Single(source =>
+                        source.Source.ExpressionIdentity == outcome.ExpressionIdentity).SemanticIdentitySha256)
             .Disposition;
         Assert.AreEqual(LexCorpus6Stage3Disposition.FormexMainBodyPackageNotAcquired, disposition);
     }
@@ -379,8 +386,11 @@ public sealed class EuFormexPackagePopulationProducerTests
         var built = LexCorpus6Builder.TryBuild(envelope, out var refusal, out var detail);
         Assert.IsNotNull(built, $"{refusal}: {detail}");
         var outcomes = built.VerifiedSet.Set.Members.SelectMany(static member => member.Stage3Outcomes).ToArray();
+        var englishMainBody = envelope.BodyComposition.Envelope.FormexMainBodyLegalContent!.Outcomes
+            .Single(value => value.Source.ExpressionIdentity == english.Identity);
         Assert.AreEqual(LexCorpus6Stage3Disposition.FormexMainBodyAdmitted,
-            outcomes.Single(static outcome => outcome.Domain == LexCorpus6Stage3OutcomeDomain.EuropeFormexMainBody).Disposition);
+            outcomes.Single(value => value.Domain == LexCorpus6Stage3OutcomeDomain.EuropeFormexMainBody
+                && value.SemanticIdentitySha256 == englishMainBody.SemanticIdentitySha256).Disposition);
         Assert.Contains(
             LexCorpus6Builder.Stage3Outcome(classification.Members.Single()),
             outcomes.Where(static outcome => outcome.Domain == LexCorpus6Stage3OutcomeDomain.EuropeAnnexBody).ToArray());
@@ -486,6 +496,37 @@ public sealed class EuFormexPackagePopulationProducerTests
         Assert.AreEqual(EuFormexPackageNotAcquiredReason.AnnexPdfNotServed, outcome.NotAcquiredReason);
         StringAssert.Contains(outcome.Detail, "lists no pdf");
         Assert.AreEqual(0, handler.PdfRequests.Count);
+    }
+
+    [TestMethod]
+    public async Task FrenchAnnexBindingSelectsItsExpressionWhenBothBodiesShareAReceipt()
+    {
+        // Transport/lineage fixture: shared retained bytes exercise identity selection.
+        // Main-body language admission is tested separately; these English specimen bytes
+        // are not asserted to be French statutory content.
+        var store = new EuAcquisitionTestFixture.EuInMemoryCustodyStore();
+        var (run, english, french) = await RunWithTwoExpressionsAsync(
+            await FixtureAsync("new-xhtml-200-body.bin"), store);
+        var package = await FixtureAsync("new-fmx4-200-body.bin");
+        var handler = new FormexEnumerationHandler(new Dictionary<string, string[]>(StringComparer.Ordinal)
+        {
+            [english.Identity.PublisherExpressionId] = ["xhtml"],
+            [french.Identity.PublisherExpressionId] = ["fmx4", "pdfa2a"],
+        }, [english, french], request => request.RequestUri!.AbsolutePath.EndsWith("/zip", StringComparison.Ordinal)
+            ? EuAcquisitionTestFixture.BinaryResponse(request, HttpStatusCode.OK, package, "application/zip")
+            : null);
+        var result = await Producer(store, handler).RunAsync(
+            run, RendererSource(), RendererSource(), WorkCelex, EuAcquisitionTestFixture.SourceWitness(),
+            EuAcquisitionTestFixture.TestWireBudget(), CancellationToken.None);
+        Assert.IsTrue(result.Delivered, $"{result.Refusal}: {result.Detail}");
+        var outcome = result.Reconciliation!.Outcomes.Single(value => value.ExpressionIdentity == french.Identity);
+        Assert.AreEqual(EuFormexPackageOutcomeKind.Acquired, outcome.Kind, outcome.Detail);
+        var binding = result.AnnexClassifications.Single().Binding;
+        Assert.AreEqual("FR", binding.Language);
+        Assert.AreEqual(french.Identity.PublisherExpressionId, binding.WorkSource.ObjectRef.PublisherUri);
+        Assert.AreEqual(french.Identity.PublisherExpressionId + ".03", binding.PdfManifestation.PublisherUri);
+        Assert.AreEqual(2, run.CorpusRecordSet!.Set.Records.Count(record =>
+            record.Body.Receipt == binding.WorkSource.Body.Receipt));
     }
 
     private const string GdprFmx4Sha256 = "4cbf7280014b0bd3d20fc8c1d6a7c08cdcd8aaacab5ee356c07ed7d840994541";
@@ -751,7 +792,10 @@ public sealed class EuFormexPackagePopulationProducerTests
                 }
 
                 return uri.AbsolutePath.EndsWith("/zip", StringComparison.Ordinal)
-                    ? EuAcquisitionTestFixture.BinaryResponse(request, HttpStatusCode.OK, GdprPackage.Value, "application/zip")
+                    ? EuAcquisitionTestFixture.BinaryResponse(request, HttpStatusCode.OK,
+                        request.Headers.AcceptLanguage.ToString() == "fra"
+                            ? EuAcquisitionTestFixture.SyntheticFrenchMainBodyPackage() : GdprPackage.Value,
+                        "application/zip")
                     : EuAcquisitionTestFixture.BinaryResponse(
                         request, HttpStatusCode.SeeOther, [], location: "http://publications.europa.eu" + uri.AbsolutePath + "/zip");
             }
@@ -778,14 +822,14 @@ public sealed class EuFormexPackagePopulationProducerTests
                         request, HttpStatusCode.OK, Pdf.Value, "application/pdf;type=pdfa2a;charset=UTF-8");
                 }
 
-                var english = expressions.Single(candidate =>
-                    candidate.OfficialLanguage == "http://publications.europa.eu/resource/authority/language/ENG"
+                var authority = request.Headers.AcceptLanguage.ToString() == "fra"
+                    ? FrenchAuthority : EuAcquisitionTestFixture.EnglishLanguageAuthority;
+                var selected = expressions.Single(candidate =>
+                    candidate.OfficialLanguage == authority
                     && new Uri(candidate.Identity.PublisherWorkId).AbsolutePath == uri.AbsolutePath);
-                var englishKey = english.Identity.PublisherExpressionId[
-                    (english.Identity.PublisherExpressionId.LastIndexOf("/cellar/", StringComparison.Ordinal) + "/cellar/".Length)..];
                 return EuAcquisitionTestFixture.BinaryResponse(
                     request, HttpStatusCode.SeeOther, [],
-                    location: "http://publications.europa.eu/resource/cellar/" + englishKey + ".03/DOC_1");
+                    location: "http://publications.europa.eu/resource/cellar/" + Key(selected) + ".03/DOC_1");
             }
 
             if (request.Method != HttpMethod.Post || request.Content is null)
