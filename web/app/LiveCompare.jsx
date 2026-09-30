@@ -182,11 +182,11 @@ export function LiveCompare({ contract, fetchImpl }) {
         </label>{' '}
         <label>
           {FORM.from}{' '}
-          <input type="text" inputMode="numeric" placeholder="yyyy-mm-dd" value={dateFrom} autoComplete="off" onChange={(event) => setDateFrom(event.target.value)} />
+          <input type="text" inputMode="numeric" placeholder={FORM.datePlaceholder} value={dateFrom} autoComplete="off" onChange={(event) => setDateFrom(event.target.value)} />
         </label>{' '}
         <label>
           {FORM.to}{' '}
-          <input type="text" inputMode="numeric" placeholder="yyyy-mm-dd" value={dateTo} autoComplete="off" onChange={(event) => setDateTo(event.target.value)} />
+          <input type="text" inputMode="numeric" placeholder={FORM.datePlaceholder} value={dateTo} autoComplete="off" onChange={(event) => setDateTo(event.target.value)} />
         </label>{' '}
         <label>
           {FORM.language}{' '}

@@ -39,6 +39,10 @@ async function main() {
       `--user-data-dir=${profile}`,
       "--no-first-run",
       "--no-default-browser-check",
+      // No component or background downloads: a fresh profile per run otherwise leaves Chrome's
+      // component packages in the temporary directory, about 12 MB each, never removed.
+      "--disable-component-update",
+      "--disable-background-networking",
       "about:blank",
     ],
     { stdio: "ignore" },

@@ -7,6 +7,7 @@
 // labelled English (`live-locale-page.jsx`), never to English copy under another language's tag.
 
 import { REVIEWED_CHROME_LOCALES } from '../scripts/locale-unavailable.mjs';
+import { liveChrome } from '../scripts/live-chrome.mjs';
 
 const LOCALES = Object.freeze([
   Object.freeze({ code: 'en', name: 'English' }),
@@ -22,7 +23,7 @@ export function localeHref(code) {
 
 export function LocaleNav({ current = 'en' }) {
   return (
-    <nav aria-label="Interface language" className="locale-nav" data-locale-nav="">
+    <nav aria-label={liveChrome().shell.localeNav} className="locale-nav" data-locale-nav="">
       <ul>
         {LOCALES.map((locale) => (
           <li key={locale.code}>

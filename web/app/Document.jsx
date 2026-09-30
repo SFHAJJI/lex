@@ -17,6 +17,7 @@
 import { CHROME_LOCALES } from '../scripts/localization.mjs';
 import { cspValue } from '../scripts/csp.mjs';
 import { LocaleNav } from './LocaleNav.jsx';
+import { fillText, liveChrome } from '../scripts/live-chrome.mjs';
 
 /** The marker that says, in the DOM, that nothing on this page is law. */
 export const SYNTHETIC_MARKER = 'lex-v3-synthetic-preview';
@@ -45,12 +46,11 @@ export const LIVE_MARKER = 'lex-v3-live-mount';
  * it claims only what the page does, and names the digests as the way to know which corpus it is.
  */
 export function LiveBanner() {
+  const shell = liveChrome().shell;
   return (
     <aside className="synthetic" role="note" data-live={LIVE_MARKER}>
-      <strong>Live development build.</strong> This page shows what the server it was loaded from
-      answers. When a coverage report arrives, its digests name the corpus it counted; until then,
-      or when no corpus is mounted, nothing below describes one. It is not a release and not legal
-      advice.
+      {/* One text node after the lead, as before the move to the table, so the markup is unchanged. */}
+      <strong>{shell.bannerLead}</strong>{` ${shell.banner}`}
     </aside>
   );
 }
@@ -123,7 +123,7 @@ export function Document({
             of anything; what has to hold is that nothing executes which was not reviewed
             and served from this origin. */}
         <meta httpEquiv="Content-Security-Policy" content={cspValue()} />
-        <title>{`${title} - Lex V3 ${banner === 'live' ? 'live' : 'preview'}`}</title>
+        <title>{banner === 'live' ? fillText(liveChrome().shell.title, { title }) : `${title} - Lex V3 preview`}</title>
         <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
         <link rel="stylesheet" href="/styles.css" />
       </head>
