@@ -49,8 +49,8 @@ const SCOPE =
   + 'first-sighting event and no signature, so none is claimed';
 
 const DERIVATION =
-  'state_sha256 is a SHA-256 over the domain tag lex-v3-luxembourg-expression-state/1 and then, '
-  + 'each as UTF-8 preceded by its length as four bytes big-endian, the publisher, the work key, '
+  'state_sha256 is a SHA-256 over these values, each as UTF-8 preceded by its length as four '
+  + 'bytes big-endian: the domain tag lex-v3-luxembourg-expression-state/1, the publisher, the work key, '
   + 'the applicability date, the expression, the publisher work IRI, the publisher legal-resource '
   + 'IRI, the language, each rule-profile digest in sorted order and each article identity in '
   + 'sorted order; the article identities are not carried here (they are article_identities in '
