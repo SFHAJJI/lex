@@ -34,6 +34,29 @@ identity for future inputs. The probe's single elapsed sample rose from 125.5 to
 slice claims reduced allocations, with no speed claim. The reflection regression fails loudly if
 its private target is renamed or overloaded.
 
+## EU Work resolution across languages (Codex, 2026-09-30)
+
+French acquisition merged in PR #808. Before serving a mount that holds both languages,
+Decision 89 requires an explicit resolution rule. Reversible driver decision: a Work/CELEX naming
+one EU work with one held expression per language returns an ordered list of expression identifiers
+and their languages. The response says expression selection is required. A caller selects a
+language with the existing exact-expression resolve request; no default language is assumed.
+An identifier with only one held expression still resolves directly, including a French-only work.
+Several works, several expressions in the same language, or a Luxembourg/EU collision remain
+`ambiguous_identifier`. Expression and provision coordinates keep their exact identity.
+
+API regressions cover bilingual choices and following each expression identifier, a French-only
+mount built from the synthetic French package, and different works whose languages differ.
+Existing same-language and cross-publisher ambiguity tests remain in scope. Validation passed:
+clean solution build (zero warnings/errors, 39.43s), fast lane 3,066 passed/one platform skip
+(63.566s), and all 53 affected resolve/Europe mount ingest checks (91.839s). The served mount and
+complete-population acceptance remain separate work.
+
+The required cross-family review returned MERGE and independently passed the clean build,
+3,066 fast tests/one platform skip and 57 resolve/Europe/answer-sample checks. Its one repair
+updates the two obsolete language-rule passages below and identifies the French fixture as
+synthetic in the PR evidence. Product code is unchanged by this documentation repair.
+
 ## Luxembourg rights-evidence payloads (Codex, 2026-09-30)
 
 The semantic memory sample produced 108,361,751 bytes of observation JSON for 100,035
@@ -155,9 +178,9 @@ all-seed EU build, so one union run can retain English and French bodies. This a
 whole acquisition merely to add the second served language. Population completion remains the
 next live objective. The full EU run is prepared with a 20,000-wire planning cap, separately from
 the full Luxembourg run; storage and frozen-source checks still precede launch.
-Before a French-bearing mount is served, EU resolve must apply the Decision 89 language rule:
-the current CELEX/Work resolver treats two held language expressions as `ambiguous_identifier`.
-The EU parity slice must close that prerequisite; expression-specific resolution remains available.
+PR #817 closes the Decision 89 resolution prerequisite for a French-bearing mount: a Work/CELEX
+with one expression per language offers the exact expression choices, as recorded above.
+The caller selects a language through the existing expression-specific request.
 
 The cross-family review at 12d58871 reported MERGE with two should-fix findings. The repair counts
 French expression objects in the population total and tests closure for bilingual and French-only
@@ -1509,21 +1532,11 @@ has not yet run; the bounded first mount above is complete.
    Finish PR #786 and population PR #785, then continue the population work below.
 2. Data lane (Codex). Complete the EU and Luxembourg populations under the owner's 2026-09-30
    authorisation, with one typed outcome per discovered body, then acquire French EU bodies.
-3. Data lane (Codex). Formex, the rest: French bodies (Decision 89) so French packages are held and acquired; then
-   every acquired main body feeds the EU index for the temporal and search operations (item 5).
-   Designed on 2026-09-28 (read-only survey, recorded in the driver's notes): the adapter mints one
-   English fetch ladder per work and the corpus record set holds exactly one body per observed
-   object (the work), so a held French body means a second fetch pass with `Accept-Language: fra`
-   and a second held record per work keyed by the French expression, which touches the record set
-   and its completion checks, the content-class binding, the annex binder's lineage, the builder,
-   the index and `resolve` (a work identifier or CELEX then matches two equally authentic
-   expressions and today's `ambiguous_identifier` needs the language rule Decision 89 lists for
-   Stage 4). Its two design questions are the driver's under ruling 7, decided when the slice
-   starts and recorded as driver decisions: (a) whether the frozen corpus record schema
-   `lex-v3-source-corpus-record/6` (one body per object) changes, to a body per language or an
-   expression-keyed record, or the French body travels beside it; (b) the `resolve` language rule
-   for a work identifier (default: the English expression, the French one named as an alternate,
-   and a `language` parameter selecting either).
+3. Data lane (Codex). French body acquisition merged in PR #808, using expression-keyed
+   records with the exact language and receipt binding. PR #817 records the Decision 89 resolve
+   rule above: offer held expressions and select one through its existing exact identifier.
+   Prove the merged acquisition on a fresh bounded live run, then complete the EU population;
+   every acquired main body feeds the EU index for temporal and search operations (item 5).
 4. Serve the unserved operations for Luxembourg (`verify` and `relations` served by PR #753, MCP
    over streamable HTTP by PR #754, `evidence_bundle` by PR #755, `classification` and
    `manifestation` by PR #756, `status_on` and `browse` by PR #757; a request to an unserved
