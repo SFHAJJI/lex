@@ -12,7 +12,9 @@
 // - the app layer must hold the API, every file of the live pages under `app/v3-web/` and every file of
 //   the mount under `app/v3-corpus/`, byte for byte, and each file the mount's build report lists with
 //   its recorded digest;
-// - the image must run as a non-root user, start the API, and name its base image by digest.
+// - the image must run as a non-root user, start the API, and name its base image by digest;
+// - V2, the retired product, must be absent: no Lex assembly that is not V3's in any layer, no V2
+//   library among the API's dependencies, and (with the probes) each of V2's routes answering 404.
 // The signature is the rehearsal's own: an ECDSA P-256 key made for the run and never kept, over a
 // signing payload in the shape container signatures use, naming the manifest digest and saying it is a
 // rehearsal. Verifying it checks the signature, the digest and that rehearsal label.
@@ -148,6 +150,99 @@ export function imageFailures(image, { web, mount, report }) {
   }
   if ((report.files ?? []).length === 0) failures.push("the build report lists no file");
   return failures;
+}
+
+/**
+ * The retired product, V2 (the `main` line), by what would betray it in an image: its projects (`src/`
+ * on `main`, 2026-09-30), and every route its `Lex.Web` served. The routes are every `MapGet` and
+ * `MapPost` of `Lex.Web` on `main`, the pages its `/built` table maps, its publisher document routes
+ * (`/{publisher}/{work}...` for `lu-legilux` and `eu-eurlex`) and its `/built/diagrams/{name}.svg` with
+ * values it held, its `/mcp/{*rest}` fallback, and the static files of its `wwwroot`. The first list
+ * left out `/built` and its table (review of #831). The launch contract's machine gates ask "V2
+ * absent from the image".
+ */
+export const V2_PROJECTS = Object.freeze([
+  "Lex.Ask", "Lex.Derive", "Lex.Index", "Lex.Ingest", "Lex.Law", "Lex.Mcp", "Lex.Mcp.Stdio",
+  "Lex.Sources.EurLex", "Lex.Sources.Legilux", "Lex.Temporal", "Lex.Web",
+]);
+export const V2_ROUTES = Object.freeze([
+  ...[
+    // Its pages and documents.
+    "/", "/about", "/ai", "/architecture", "/architecture/dossier", "/architecture/next", "/ask", "/attestation.json",
+    "/benchmarks", "/benchmarks/cases.json", "/benchmarks/latest.json", "/browse", "/changed", "/coverage", "/decisions",
+    "/developers", "/find", "/go-asof?work=loi-1991-08-10-n3&date=2024-02-01", "/healthz", "/how-it-works", "/in-force-on",
+    "/provenance/lu-legilux", "/pubkey.pem", "/readyz", "/robots.txt", "/search", "/sitemap.xml", "/stories", "/verify",
+    // The /built table, its release status and its diagrams.
+    "/built", "/built/model", "/built/data", "/built/retrieval", "/built/assistant", "/built/release", "/built/decisions",
+    "/built/incidents", "/built/limits", "/built/repositories", "/built/release/evaluation.json", "/built/diagrams/system.svg",
+    // One law: its timeline, its text on a date, a comparison, per publisher.
+    "/lu-legilux/loi-1991-08-10-n3", "/lu-legilux/loi-1991-08-10-n3/2024-02-01", "/lu-legilux/loi-1991-08-10-n3/diff/2024-02-01/2024-02-01",
+    "/eu-eurlex/32016R0679", "/eu-eurlex/32016R0679/2016-05-04", "/eu-eurlex/32016R0679/diff/2016-05-04/2016-05-04",
+    // Its MCP fallback (V3's own MCP endpoint is /mcp itself) and its static files.
+    "/mcp/tools", "/.well-known/glama.json", "/dossier.css", "/make-og.py", "/og.png", "/site.js",
+    ...["IBMPlexMono-latin-ext", "IBMPlexMono-latin", "IBMPlexSans-latin-ext", "IBMPlexSans-latin", "SourceSerif4-latin-ext", "SourceSerif4-latin"]
+      .map((font) => `/fonts/${font}.woff2`),
+  ].map((path) => ["GET", path]),
+  // Its assistant.
+  ...["/api/ask", "/api/ask/stream", "/api/ask/thread/reset", "/api/ask/evaluation/admission"].map((path) => ["POST", path]),
+]);
+
+/** A Lex assembly, symbol file or documentation file that is not V3's. */
+const NOT_V3 = /^Lex\.(?!V3\.)[^/]*\.(?:dll|exe|pdb|xml)$/;
+
+/**
+ * Where V2 shows in the image, as failures (empty when it is absent): in any layer, a Lex assembly,
+ * symbol or documentation file that is not `Lex.V3.*`; and in the API's dependency manifest, a Lex
+ * library that is not V3's (a V3 assembly that referenced V2 would name it there).
+ */
+export function v2Failures(image) {
+  const failures = [];
+  for (const [position, layer] of image.layers.entries()) {
+    for (const entry of readTar(layerTar(layer))) {
+      const name = entry.path.replace(/\/+$/, "").split("/").at(-1);
+      if (NOT_V3.test(name)) failures.push(`layer ${position + 1} holds ${entry.path}, which is not V3`);
+    }
+  }
+  const app = image.layers.at(-1);
+  const deps = app ? readTar(layerTar(app)).find((entry) => entry.path === "app/Lex.V3.Api.deps.json") : undefined;
+  if (!deps) return [...failures, "the app layer holds no app/Lex.V3.Api.deps.json to read the API's dependencies from"];
+  const manifest = JSON.parse(deps.bytes.toString("utf8"));
+  const libraries = new Set([
+    ...Object.keys(manifest.libraries ?? {}),
+    ...Object.values(manifest.targets ?? {}).flatMap((target) => Object.keys(target ?? {})),
+  ].map((key) => key.split("/")[0]));
+  for (const library of [...libraries].sort()) {
+    if (/^Lex\.(?!V3\.)/.test(library)) failures.push(`the API depends on ${library}, which is not V3`);
+  }
+  return failures;
+}
+
+/**
+ * The V2 routes a running image answers, as failures (empty when V2 answers none), asked of the image's
+ * own origin. Each must answer 404, except a path V3 serves itself from its live pages (`v3Files`, URL
+ * path to bytes: `/` and a font V2 also had), which must answer 200 with V3's own file, byte for byte.
+ * Redirects are not followed: a V2 redirect is an answer.
+ */
+export async function v2RouteFailures(origin, { v3Files = new Map(), routes = V2_ROUTES } = {}) {
+  const failures = [];
+  for (const [method, path] of routes) {
+    const response = await fetch(`${origin}${path}`, { method, headers: { "content-type": "application/json" }, body: method === "POST" ? "{}" : undefined, redirect: "manual" });
+    const body = Buffer.from(await response.arrayBuffer());
+    const own = method === "GET" ? v3Files.get(path.split("?")[0]) : undefined;
+    if (own === undefined) {
+      if (response.status !== 404) failures.push(`${method} ${path} answered ${response.status}, not 404`);
+    } else if (response.status !== 200 || !body.equals(own)) {
+      failures.push(`${method} ${path} answered ${response.status} with bytes that are not V3's own file at that path`);
+    }
+  }
+  return failures;
+}
+
+/** The live pages as the image serves them, URL path to bytes: each file at `/<path>`, and `/` as `index.html`. */
+export function servedPaths(web) {
+  const served = new Map(web.map(([path, bytes]) => [`/${path}`, bytes]));
+  if (served.has("/index.html")) served.set("/", served.get("/index.html"));
+  return served;
 }
 
 /**
@@ -318,6 +413,10 @@ export async function rehearse({ mount, keep = false, probe = true, reproduce = 
       imageFailures: failures,
     });
     if (failures.length > 0) throw new Error(`the image does not hold what it must:\n- ${failures.join("\n- ")}`);
+    const v2 = v2Failures(image);
+    // How many entries the check read, so an empty list of failures cannot hide an empty scan.
+    result.v2Absent = { entriesScanned: image.layers.reduce((count, layer) => count + readTar(layerTar(layer)).length, 0), failures: v2 };
+    if (v2.length > 0) throw new Error(`V2 is in the image:\n- ${v2.join("\n- ")}`);
 
     log("signing with the rehearsal identity and verifying");
     const signed = signRehearsal({ manifestDigest: image.manifestDigest, reference: "lex-v3-rehearsal:rehearsal" });
@@ -355,6 +454,17 @@ export async function rehearse({ mount, keep = false, probe = true, reproduce = 
       }));
       const failing = result.probes.filter((one) => one.failures.length > 0);
       if (failing.length > 0) throw new Error(`the image failed its probes:\n${failing.map((one) => `- ${one.step}: ${one.failures.join("; ")}`).join("\n")}`);
+
+      // V2 unreachable in the image: each route the retired product served answers 404, or V3's own
+      // file where V3 serves the same path.
+      const server = await startImage({ run: container, config: image.config });
+      try {
+        const routeFailures = await v2RouteFailures(server.origin, { v3Files: servedPaths(web) });
+        Object.assign(result.v2Absent, { routesAsked: V2_ROUTES.length, routeFailures });
+        if (routeFailures.length > 0) throw new Error(`the image answers V2's routes:\n- ${routeFailures.join("\n- ")}`);
+      } finally {
+        await server.close();
+      }
     }
     return result;
   } finally {

@@ -7,13 +7,14 @@
 
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
+import { createServer } from "node:http";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 import { gzipSync } from "node:zlib";
 
-import { REHEARSAL_IDENTITY, imageFailures, mountReport, readOciImage, readTar, rehearsalSignatureFailures, signRehearsal } from "../scripts/image-rehearsal.mjs";
+import { REHEARSAL_IDENTITY, V2_ROUTES, imageFailures, mountReport, readOciImage, readTar, rehearsalSignatureFailures, servedPaths, signRehearsal, v2Failures, v2RouteFailures } from "../scripts/image-rehearsal.mjs";
 
 const sha256 = (bytes) => createHash("sha256").update(bytes).digest("hex");
 
@@ -55,6 +56,12 @@ function tar(files) {
 const WEB = [["index.html", Buffer.from("<!doctype html><title>Trust and Coverage</title>")], ["client-live.js", Buffer.from("hydrate()")]];
 const MOUNT_FILE = Buffer.from("{\"schema\":\"lex-v3-source-corpus/6\"}");
 const LONG = `preview-graph/${"a".repeat(96)}.sqlite3`;
+/** The API's dependency manifest, as the SDK writes it: V3's own projects and third-party packages. */
+const deps = (extra = []) => Buffer.from(JSON.stringify({
+  targets: { ".NETCoreApp,Version=v10.0/linux-x64": Object.fromEntries(["Lex.V3.Api/1.0.0", "Lex.V3.Contracts/1.0.0", "Humanizer.Core/2.14.1", ...extra].map((key) => [key, {}])) },
+  libraries: Object.fromEntries(["Lex.V3.Api/1.0.0", "Lex.V3.Contracts/1.0.0", "Humanizer.Core/2.14.1"].map((key) => [key, { type: "project" }])),
+}));
+const DEPS = deps();
 
 /** A good image: its layout, and what it was built from. */
 function image({ user = "1654", entrypoint = ["dotnet", "/app/Lex.V3.Api.dll"], base = `mcr.microsoft.com/dotnet/aspnet:10.0@sha256:${"c".repeat(64)}`, appFiles } = {}) {
@@ -66,6 +73,7 @@ function image({ user = "1654", entrypoint = ["dotnet", "/app/Lex.V3.Api.dll"], 
     ...WEB.map(([path, bytes]) => [`app/v3-web/${path}`, bytes]),
     ["app/v3-corpus/lex-corpus-6.json", MOUNT_FILE],
     ["app/v3-corpus/build-report.json", reportBytes],
+    ["app/Lex.V3.Api.deps.json", DEPS],
   ];
   const layer = gzipSync(tar(files));
   const config = Buffer.from(JSON.stringify({ architecture: "amd64", os: "linux", config: { User: user, Entrypoint: entrypoint, Labels: { "org.opencontainers.image.base.name": base } } }));
@@ -160,5 +168,54 @@ test("a real mount is held to its build report; the journey's fixture mount to t
     assert.equal(fixture.report.corpus.Sha256, "a".repeat(64), "the snapshot digest the coverage probe holds the page to");
   } finally {
     await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("V2 is absent from the image: no Lex assembly that is not V3's, and no V2 library among the API's dependencies", () => {
+  const good = image();
+  assert.deepEqual(v2Failures(readOciImage(good)), [], "V3's assemblies, its corpus files and third-party packages pass");
+  const files = (extra, depsBytes = DEPS) => image({ appFiles: [["app/Lex.V3.Api.dll", Buffer.from("MZ")], ["app/v3-corpus/lex-corpus-6.json", MOUNT_FILE], ["app/Lex.V3.Api.deps.json", depsBytes], ...extra] });
+  assert.deepEqual(v2Failures(readOciImage(files([["app/Lex.Web.dll", Buffer.from("MZ")]]))), ["layer 1 holds app/Lex.Web.dll, which is not V3"]);
+  assert.deepEqual(v2Failures(readOciImage(files([["usr/lib/Lex.Temporal.pdb", Buffer.from("pdb")]]))), ["layer 1 holds usr/lib/Lex.Temporal.pdb, which is not V3"], "anywhere in the image");
+  assert.deepEqual(v2Failures(readOciImage(files([], deps(["Lex.Temporal/1.0.0"])))), ["the API depends on Lex.Temporal, which is not V3"], "a V3 assembly that references V2 names it in the dependency manifest");
+  assert.deepEqual(v2Failures(readOciImage(image({ appFiles: [["app/Lex.V3.Api.dll", Buffer.from("MZ")]] }))), ["the app layer holds no app/Lex.V3.Api.deps.json to read the API's dependencies from"]);
+});
+
+test("V2's routes must each answer 404 from the running image, or V3's own file where V3 serves that path", async () => {
+  const paths = V2_ROUTES.map(([method, path]) => `${method} ${path}`);
+  for (const route of ["GET /built", "GET /built/model", "GET /built/repositories", "GET /built/diagrams/system.svg", "GET /lu-legilux/loi-1991-08-10-n3",
+    "GET /dossier.css", "GET /fonts/IBMPlexSans-latin.woff2", "GET /", "GET /pubkey.pem", "POST /api/ask"]) {
+    assert.ok(paths.includes(route), `${route} is asked (the first list left out /built and its table, review of #831)`);
+  }
+  const index = Buffer.from("<!doctype html><title>Lex</title>");
+  const answering = new Map();
+  const server = createServer((request, response) => {
+    request.resume();
+    request.on("end", () => {
+      const answer = answering.get(`${request.method} ${request.url}`);
+      response.statusCode = answer?.status ?? 404;
+      response.end(answer?.body ?? "");
+    });
+  });
+  await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+  try {
+    const origin = `http://127.0.0.1:${server.address().port}`;
+    const v3Files = servedPaths([["index.html", index], ["client-live.js", Buffer.from("hydrate()")]]);
+    assert.deepEqual(await v2RouteFailures(origin, { v3Files }), ["GET / answered 404 with bytes that are not V3's own file at that path"], "V3's own page must be there");
+    answering.set("GET /", { status: 200, body: index });
+    assert.deepEqual(await v2RouteFailures(origin, { v3Files }), [], "every V2 route answers 404, and / is V3's own page");
+    answering.set("GET /built", { status: 200, body: "<h1>Overview</h1>" });
+    assert.deepEqual(await v2RouteFailures(origin, { v3Files }), ["GET /built answered 200, not 404"], "the reviewer's reproduction: /built served by V2 is caught");
+    answering.delete("GET /built");
+    answering.set("GET /", { status: 200, body: "<h1>V2 home</h1>" });
+    answering.set("POST /api/ask", { status: 405 });
+    answering.set("GET /ai", { status: 301 });
+    assert.deepEqual(await v2RouteFailures(origin, { v3Files }), [
+      "GET / answered 200 with bytes that are not V3's own file at that path",
+      "GET /ai answered 301, not 404",
+      "POST /api/ask answered 405, not 404",
+    ], "V2's home in V3's place, a V2 redirect and a V2 method refusal are each caught");
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
   }
 });
