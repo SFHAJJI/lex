@@ -91,6 +91,23 @@ ${WATCHER}WATCHER
   return run;
 }
 
+/**
+ * The devices the container is given, each bound alone: the runtime reads random numbers and writes
+ * to /dev/null. Binding the host's whole /dev gave it /dev/shm, a writable tmpfs the /tmp watcher did
+ * not see (review of #825).
+ */
+export const DEVICES = Object.freeze(["null", "zero", "random", "urandom"]);
+
+/**
+ * An awk program over `findmnt -R -rn -o TARGET,OPTIONS <root>` that prints every mount a process in
+ * the container could write to other than the watched /tmp and the devices: the start refuses to run
+ * the image while any is left.
+ */
+export const WRITABLE_MOUNTS_AWK = [
+  "{ split($2, options, \",\"); ro = 0; for (i in options) if (options[i] == \"ro\") ro = 1 }",
+  "ro == 0 && $1 != root \"/tmp\" && $1 !~ (\"^\" root \"/dev/(" + "null|zero|random|urandom" + ")$\") { print $1 }",
+].join(" ");
+
 /** A free TCP port on this machine. */
 async function freePort() {
   const probe = createServer();
@@ -112,11 +129,15 @@ export async function startImage({ run, config, deadlineMs = 90000 }) {
   const script = `set -e
 R=${run}/rootfs
 mount --bind "$R" "$R"
-mount -t proc proc "$R/proc"
-mount --rbind /dev "$R/dev"
-mount -t tmpfs -o size=256m,mode=1777 tmpfs "$R/tmp"
+mount -t proc -o ro,nosuid,nodev,noexec proc "$R/proc"
+mount -t tmpfs -o size=64k,mode=755,nosuid,noexec tmpfs "$R/dev"
+for device in ${DEVICES.join(" ")}; do touch "$R/dev/$device"; mount --bind "/dev/$device" "$R/dev/$device"; done
+mount -o remount,bind,ro "$R/dev"
+mount -t tmpfs -o size=256m,mode=1777,nosuid,nodev tmpfs "$R/tmp"
 mount -o remount,bind,ro "$R"
 if touch "$R/app/.lex-written" 2>/dev/null; then echo "the root filesystem is writable"; exit 3; fi
+writable=$(findmnt -R -rn -o TARGET,OPTIONS "$R" | awk -v root="$R" '${WRITABLE_MOUNTS_AWK}')
+if [ -n "$writable" ]; then echo "writable mounts the watcher does not cover: $writable"; exit 5; fi
 python3 ${run}/watch.py "$R/tmp" ${run}/events.log &
 while ! grep -q '^ready$' ${run}/events.log; do sleep 0.1; done
 cd "$R${image.WorkingDir ?? "/"}"

@@ -373,7 +373,7 @@ CI evidence are recorded in the pull request before merge.
   (`eng/test-fast.ps1`): 3,067 tests, 3,066 pass, 1 skipped (PR #798's validation). Ingest suite: green on CI for PR #760
   (the CI `dotnet` job runs the whole solution on every pull request, about 7 min on the runner;
   green for PR #821);
-  locally about 15 min. 960 web tests pass. The web job's "browser debugger never answered" failures
+  locally about 15 min. 961 web tests pass. The web job's "browser debugger never answered" failures
   (keyboard-walk, and paint-check since #811) are fixed by PR #822: each browser binds its own
   debugging port (`launchBrowser`) instead of a random one another browser starting at the same
   moment could hold.
@@ -601,7 +601,7 @@ schema's `parameters` shape, and whose call runs the same dispatch the REST rout
 endpoint test proves it for all twenty-three. The launch-contract line "REST and MCP derive identical
 envelopes from the registry" is the owner's to tick.
 
-Web: 41 React components, 960 tests. Preview screens render fixtures. The V3 Luxembourg search
+Web: 41 React components, 961 tests. Preview screens render fixtures. The V3 Luxembourg search
 answer has a reader (PR #771). The answer census now samples `search` five ways from the real handler:
 - a phrase with 4 strict hits and 1 relaxed hit;
 - the same phrase one hit per page, with its cursor;
@@ -1211,7 +1211,11 @@ The image run and its zero-traffic probes (PR #825).
   - the layers are unpacked in the manifest's order into a root filesystem, whiteouts applied;
   - the API starts as the image says (user 1654, its environment, working directory and entrypoint);
   - it runs in a private mount namespace, its root filesystem read-only and `/tmp` a private tmpfs,
-    as a hardened deployment runs it.
+    as a hardened deployment runs it. `/proc` is read-only, and `/dev` is a read-only tmpfs holding
+    only `null`, `zero`, `random` and `urandom`. Binding the host's whole `/dev` gave the container a
+    writable `/dev/shm` the watcher did not see (review of #825). Before the API starts, the mount
+    table under the root is checked: any writable mount but the watched `/tmp` and those devices
+    refuses the start.
 - The eight live screens are then probed against the image, served by the image itself, through the
   journey's real-mount steps (`journey.mjs` `run` now takes a server; the host API and the image are
   two). The probes:
