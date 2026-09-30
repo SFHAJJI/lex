@@ -3,6 +3,23 @@
 Updated 2026-09-30 by the driver. This file replaces the issue-comment ledgers. It is rewritten in
 every pull request that changes what is served, what is next or what is blocked.
 
+## Luxembourg scope input reuse draft (Codex, 2026-09-30)
+
+Scope resolution retains four rule-evaluation objects and multiple not-applicable selectors per
+resource even when their values are identical. Reversible driver decision: reuse only immutable
+values with no object identity or observation/evidence ordinal, within one profile resolution.
+The table is bounded by four axes and seven terminal states (at most 28 projections), plus four
+not-applicable selectors. Evidence-bearing selectors retain their existing per-object construction.
+No static cache crosses runs or profiles; projection rules, evidence admission and ordering stay
+unchanged.
+
+This draft is uncompiled and unvalidated while the three-seed EU diagnostic run occupies the
+heavy-job slot. Regression drafts cover 128 distinct objects sharing identity-free values,
+immutable collections, a separate cache per resolution, unchanged repeated serialization and
+mixed missing/accepted record dispositions with exact publisher evidence. Retained-memory
+measurement and affected ingest tests remain required. This is not a full-process fit claim;
+record-set chunking and other retained scope/observation state remain unresolved.
+
 ## EU population census refusal diagnostics (Codex, 2026-09-30)
 
 The fresh all-82-seed EU run at `C:\lex-v3\eu-population-20260930-1` ended with
