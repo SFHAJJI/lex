@@ -1,36 +1,45 @@
 # Lex V3 status
 
-Updated 2026-09-30 by the driver. This file replaces the issue-comment ledgers. It is rewritten in
+Updated 2026-10-01 by the driver. This file replaces the issue-comment ledgers. It is rewritten in
 every pull request that changes what is served, what is next or what is blocked.
 
-## Retained EU maintenance response retry (Codex draft, 2026-10-01)
+## Retained EU maintenance response retry (Codex, 2026-10-01)
 
-The fresh full-EU retry3 ended after490/20,000requests with79/82census families proven.
-Three typed refusals bind HTTP503 to the same retained2,005-byte maintenance page for
-12016E/TXT,32022L2555 and32023R1115. Its SHA-256 is
+The fresh full EU retry ended after 490 of 20,000 requests with 79 of 82 census families proven.
+Three refusals bind HTTP 503 to the same retained 2,005-byte maintenance page for
+12016E/TXT, 32022L2555 and 32023R1115. Its SHA-256 is
 e7fab335ce5367cfe359f9f7e0ad6ce1838bec9189a216bc3faf437ce169d404.
-The previous run remains refused; custody and resource samples are preserved at
-C:/lex-v3/eu-population-20261001-1. No Formex or full-population result was produced.
+The run remains refused; custody and resource samples are preserved at
+C:/lex-v3/eu-population-20261001-1. It produced no Formex or full population result.
 
-Reversible driver decision: permit the existing four-attempt session retry only for a complete
-503 from the exact Publications Office SPARQL endpoint with that independently reopened body
-digest. Retain each failed route using the existing deadlock path; charge each wire attempt and
-keep session backoff. Different bodies, bot challenges, statuses and publishers remain refused.
-The draft adds10cases for count/page recovery, attempt/route lineage, exhaustion, wire budget,
-changed maintenance bytes, wrong statuses and the same exact page from Luxembourg. Validation
-at8fad46c9 passed a clean build(44.91s), required fast(3,085passed/1platformskip,65.046s)
-and137affected ingest tests(2liveEUskips,51.204s). Exact commands/results are retained under
-C:/lex-v3/lanes/eu-maintenance-*. Required cross-family review and greenCI remain gates.
-Before the next full run,
-prove/reopen the three affected census families with fresh custody and a bounded wire ceiling.
+Reversible driver decision: permit the existing four-attempt retry only for a complete 503 from
+the exact Publications Office SPARQL endpoint with that independently reopened body digest.
+Retain each failed route, charge every wire attempt, and keep the session's 1, 2 and 4 second
+backoff. This adds no Retry-After handling. Longer maintenance still refuses after the existing
+attempt allowance. Different bodies, challenges, statuses and publishers keep their refusal paths.
+The 503 test double labels the body text/plain; recognition depends on the complete body digest,
+not media type. No recovery during a real maintenance window is claimed.
 
-The offline combined Luxembourg diagnostic completed at merged7144666c, without publisher
-traffic. In its largest synthetic case,9,000subjects and61,000admitted assertions retained
-70,855,000additional managed bytes across semantic, typed and scope results, with an OS peak
-working set of160,976,896bytes. Evidence: C:/lex-v3/lu-combined-graph-20261001-2.
-It repeats one retained assertion pattern, excludes relations and later reduction/corpus/indexes,
-and does not establish full-population fit. The initial diagnostic refused an unadmitted predicate;
-its complete frozen source/runtime/error remain preserved separately in run1.
+Validation at 8fad46c9 passed a clean build (44.91 s), required fast suite (3,085 passed, one
+platform skip, 65.046 s), and 137 affected ingest tests (two live EU skips, 51.204 s). The ten new
+cases cover count/page recovery, attempt lineage and route custody, exhaustion, wire budget,
+changed bytes, wrong statuses and the exact page from Luxembourg. Claude's required review of
+5cfba613 returned MERGE with no material findings, reproduced these checks and caught four
+mutations when the digest guard was removed and two when the endpoint guard was removed.
+The one repair corrects prose and records the retry limits; production and test code are unchanged.
+Initial CI36792824118 passed; the refreshed head still requires green CI before exact-head merge.
+Commands, results and review remain under C:/lex-v3/lanes/eu-maintenance-* and reviews/claude-pr-840-*.
+
+Before another full attempt, prove and independently reopen the three affected census families in
+fresh custody with a shared 60-request ceiling. Keep at least 3 GB free during runs, as the panel
+ordered. No production signing, credentials, deployment or promotion.
+
+The separate offline Luxembourg diagnostic at merged 7144666c used no publisher traffic. Its
+largest synthetic case retained 70,855,000 additional managed bytes across semantic, typed and
+scope results for 9,000 subjects and 61,000 admitted assertions; OS peak working set was
+160,976,896 bytes. Evidence: C:/lex-v3/lu-combined-graph-20261001-2. It repeats one assertion
+pattern, excludes relations and later stages, and establishes no full population fit. The initial
+probe's unadmitted-predicate refusal remains preserved with its frozen source and runtime in run1.
 
 ## Luxembourg identity canonical output (Codex, 2026-09-30)
 

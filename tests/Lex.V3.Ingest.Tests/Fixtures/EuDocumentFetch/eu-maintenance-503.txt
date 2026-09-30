@@ -1,6 +1,7 @@
 Exact Publications Office maintenance HTML from eu-population-20261001-1.
-Response2005bytes SHA256e7fab335ce5367cfe359f9f7e0ad6ce1838bec9189a216bc3faf437ce169d404.
-Product refusals bind HTTP503 at SPARQL to12016E/TXT,32022L2555,32023R1115.
-Run exited3 after490/20000wire and79/82proven census families. No failed-route retention in that version for503; response bytes and typed failure diagnostics are retained.
+Response: 2,005 bytes, SHA-256 e7fab335ce5367cfe359f9f7e0ad6ce1838bec9189a216bc3faf437ce169d404.
+Product refusals bind HTTP 503 at the SPARQL endpoint to 12016E/TXT, 32022L2555 and 32023R1115.
+The run exited 3 after 490 of 20,000 wire requests with 79 of 82 census families proven.
+That runtime retained response bytes and typed failure diagnostics, but not failed 503 route documents.
 Source: C:/lex-v3/eu-population-20261001-1/custody/nightly-floor-90d/e7fab335ce5367cfe359f9f7e0ad6ce1838bec9189a216bc3faf437ce169d404
-No live request in these tests. Only exact503body at Publications Office SPARQL gains the existing bounded retry.
+These tests make no live requests. Only this exact 503 body at Publications Office SPARQL gains the existing bounded retry.
