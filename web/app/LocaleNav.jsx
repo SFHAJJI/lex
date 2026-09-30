@@ -18,7 +18,9 @@ const LOCALES = Object.freeze([
 
 /** Where a language's chrome is: the page itself when reviewed, else the page that says it is not. */
 export function localeHref(code) {
-  return REVIEWED_CHROME_LOCALES.includes(code) ? '/' : `/locale-${code}.html`;
+  // A reviewed language's pages are built under its own path (`build-live.mjs`); English is the root.
+  if (!REVIEWED_CHROME_LOCALES.includes(code)) return `/locale-${code}.html`;
+  return code === 'en' ? '/' : `/${code}/`;
 }
 
 export function LocaleNav({ current = 'en' }) {
