@@ -5,7 +5,7 @@
 // `client-live-radar-entry.jsx` hydrates the same tree; a radar is asked only when the reader submits.
 
 import { Document } from './Document.jsx';
-import { liveChrome } from '../scripts/live-chrome.mjs';
+import { liveChrome, livePath } from '../scripts/live-chrome.mjs';
 import { LiveRadar } from './LiveRadar.jsx';
 import { renderHydratableDocument } from './render-document.mjs';
 import { skinFor } from '../scripts/shells.mjs';
@@ -32,7 +32,7 @@ export function renderLiveRadarPage() {
       <h1>{copy.heading}</h1>
       <p>{copy.intro}</p>
       <div id={LIVE_RADAR_ROOT}>{liveRadarTree()}</div>
-      <script src="/client-live-radar.js" defer />
+      <script src={livePath('client-live-radar.js')} defer />
     </Document>,
   );
 }

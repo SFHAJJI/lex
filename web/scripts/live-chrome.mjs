@@ -292,8 +292,20 @@ const EN = Object.freeze({
 
 export const LIVE_CHROME = Object.freeze({ en: EN });
 
+/**
+ * The interface language this bundle was built for: English, unless the live build compiled it for
+ * another reviewed language (`build-live.mjs` defines `__LEX_CHROME_LOCALE__`). One bundle, one
+ * language: a page and the script that hydrates it are built together, so they say the same words.
+ */
+export const CHROME_LOCALE = typeof __LEX_CHROME_LOCALE__ === 'string' ? __LEX_CHROME_LOCALE__ : 'en';
+
+/** Where a live page's own file is served for this bundle's language: `/` for English, `/fr/` for French. */
+export function livePath(file) {
+  return CHROME_LOCALE === 'en' ? `/${file}` : `/${CHROME_LOCALE}/${file}`;
+}
+
 /** The interface copy for a reviewed language; any other throws, since serving it would be a substitution. */
-export function liveChrome(locale = 'en') {
+export function liveChrome(locale = CHROME_LOCALE) {
   const table = LIVE_CHROME[locale];
   if (table === undefined) throw new Error(`no reviewed interface copy in ${JSON.stringify(locale)}: it answers localization_unavailable`);
   return table;
@@ -304,7 +316,7 @@ export function liveChrome(locale = 'en') {
  * rule: French says "0 version" where English says "0 states", so the rule is the language's, never a
  * comparison with 1.
  */
-export function countedEntry(entry, count, locale = 'en') {
+export function countedEntry(entry, count, locale = CHROME_LOCALE) {
   const chosen = entry[new Intl.PluralRules(locale).select(count)] ?? entry.other;
   if (typeof chosen !== 'string') throw new Error(`a counted entry has no "other" sentence: ${JSON.stringify(entry)}`);
   return chosen;
@@ -343,6 +355,6 @@ export function fillText(template, values = {}) {
 }
 
 /** A counted sentence for `count`, filled with the count as `{count}` and the other values as text. */
-export function fillCounted(entry, count, values = {}, locale = 'en') {
+export function fillCounted(entry, count, values = {}, locale = CHROME_LOCALE) {
   return fillText(countedEntry(entry, count, locale), { count, ...values });
 }

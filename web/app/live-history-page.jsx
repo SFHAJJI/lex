@@ -6,7 +6,7 @@
 // submits.
 
 import { Document } from './Document.jsx';
-import { liveChrome } from '../scripts/live-chrome.mjs';
+import { liveChrome, livePath } from '../scripts/live-chrome.mjs';
 import { LiveHistory } from './LiveHistory.jsx';
 import { renderHydratableDocument } from './render-document.mjs';
 import { skinFor } from '../scripts/shells.mjs';
@@ -33,7 +33,7 @@ export function renderLiveHistoryPage() {
       <h1>{copy.heading}</h1>
       <p>{copy.intro}</p>
       <div id={LIVE_HISTORY_ROOT}>{liveHistoryTree()}</div>
-      <script src="/client-live-history.js" defer />
+      <script src={livePath('client-live-history.js')} defer />
     </Document>,
   );
 }
