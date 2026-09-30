@@ -104,11 +104,12 @@ public sealed record LuxembourgActRange
     }
 
     /// <summary>
-    /// The publisher's whole key space, using the same finite upper bound as vocabulary
-    /// enumeration. S, A and G are proven over this range; the existing source profile still
-    /// classifies every discovered object and determines which bodies may be fetched.
+    /// Every absolute publisher IRI: a scheme starts with an ASCII letter, so A is the least
+    /// possible first character. Blank-node subjects have an empty assertion key and remain
+    /// outside this range, as they do in S's IRI-only subject universe. S, A and G are proven
+    /// over the range; the source profile classifies which discovered bodies may be fetched.
     /// </summary>
-    public static LuxembourgActRange WholePopulation { get; } = new("population", "", "\uffff");
+    public static LuxembourgActRange WholePopulation { get; } = new("population", "A", "\uffff");
 
     public string Name { get; }
 

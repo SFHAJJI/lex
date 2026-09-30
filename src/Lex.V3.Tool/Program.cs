@@ -23,7 +23,7 @@ const string Usage =
     + "   or: Lex.V3.Tool build --celex <CELEX> --lu-population all\n"
     + "                         --custody <directory> --out <directory> --checkout <directory> --wire-ceiling <n>\n"
     + "  --celex        an Appendix A seed, the one EU work to acquire\n"
-    + "  --lu-population all  all publisher keys through S/A/G, with existing scope and rights rules\n"
+    + "  --lu-population all  all publisher IRI keys through S/A/G, with existing scope and rights rules\n"
     + "  --lu-name      lowercase ASCII key prefixing the act's three family keys\n"
     + "  --lu-start/--lu-end  an ELI key range on the publisher's key order (start inclusive, end exclusive)\n"
     + "  --custody      the run's custody root (FileSystemCustodyStore); everything the run holds goes here\n"
@@ -72,6 +72,10 @@ var missing = expected.Where(name => !options.ContainsKey(name)).ToArray();
 if (missing.Length != 0)
 {
     Console.Error.WriteLine("Missing: " + string.Join(", ", missing));
+    if (!wholePopulation && rangeOptions.All(name => !options.ContainsKey(name)))
+    {
+        Console.Error.WriteLine("Use --lu-population all instead of the three range options to select all publisher IRIs.");
+    }
     Console.Error.WriteLine(Usage);
     return 2;
 }

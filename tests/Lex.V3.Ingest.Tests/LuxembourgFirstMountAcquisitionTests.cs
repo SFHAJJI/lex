@@ -109,10 +109,10 @@ public sealed class LuxembourgFirstMountAcquisitionTests
     public async Task TheWholePopulationProvesTwoWorksAndBuildsOneCorpus()
     {
         var store = new RoutedHttpAcquisitionSessionTests.MultiObjectCustodyStore();
-        var handler = new LuxembourgFamilyHandler(PdfBytes(), includeSecondWork: true);
+        var handler = new LuxembourgFamilyHandler(PdfBytes(), includeSecondWork: true, includeBlankNode: true);
         var renderers = await LuxembourgRendererSources.FromCheckoutAsync(store, CheckoutRoot(), CancellationToken.None);
         var scope = LuxembourgActRange.WholePopulation;
-        Assert.AreEqual("", scope.StartInclusive);
+        Assert.AreEqual("A", scope.StartInclusive);
         Assert.AreEqual("\uffff", scope.EndExclusive);
         var result = await Acquisition(store, handler).RunAsync(
             scope, renderers, LuxembourgAcquisitionTestFixture.TestWireBudget(), CancellationToken.None);
@@ -130,6 +130,21 @@ public sealed class LuxembourgFirstMountAcquisitionTests
             luxembourgOverride: result.Run, luxembourgStore: store);
         var built = LexCorpus6Builder.TryBuild(envelope, out var refusal, out var detail);
         Assert.IsNotNull(built, $"{refusal}: {detail}");
+    }
+
+    [TestMethod]
+    public async Task AnEmptyPopulationLowerBoundIncludesUnstableBlankNodesAndRefuses()
+    {
+        var store = new RoutedHttpAcquisitionSessionTests.MultiObjectCustodyStore();
+        var handler = new LuxembourgFamilyHandler(PdfBytes(), includeBlankNode: true);
+        var renderers = await LuxembourgRendererSources.FromCheckoutAsync(store, CheckoutRoot(), CancellationToken.None);
+        var result = await Acquisition(store, handler).RunAsync(
+            new LuxembourgActRange("old-population", "", "\uffff"), renderers,
+            LuxembourgAcquisitionTestFixture.TestWireBudget(), CancellationToken.None);
+        Assert.IsFalse(result.Delivered);
+        Assert.AreEqual(LuxembourgFirstMountAcquisitionRefusal.RunRefused, result.Refusal);
+        StringAssert.Contains(result.Detail, "old-population-a");
+        Assert.AreEqual(0, handler.DocumentRequests.Count);
     }
 
     [TestMethod]
@@ -259,7 +274,8 @@ public sealed class LuxembourgFirstMountAcquisitionTests
         byte[] pdfBytes,
         string? sparqlRobots = null,
         string? omitRequiredPredicate = null,
-        bool includeSecondWork = false) : HttpMessageHandler
+        bool includeSecondWork = false,
+        bool includeBlankNode = false) : HttpMessageHandler
     {
         // The page query binds VALUES (?has_cursor ?last_key_1 ...) { (1 "last key" ...) } on a
         // continuation and (0 "" ...) on a first page (LuxembourgQueryPlan, has_cursor:uint).
@@ -335,6 +351,13 @@ public sealed class LuxembourgFirstMountAcquisitionTests
             var continuation = ContinuationCursor.IsMatch(body);
             var count = body.Contains("COUNT(*)", StringComparison.Ordinal);
             var rows = RowsFor(family);
+            // The A template gives a blank-node subject key_1="". Honour its lower range bound:
+            // the old empty bound includes it, whereas every nonempty IRI bound excludes it.
+            var lowerBound = Regex.Match(body,
+                """VALUES\s*\(\?partition_start_1[^)]*\)\s*\{\s*\(\s*"(?<start>[^"]*)""",
+                RegexOptions.CultureInvariant);
+            Assert.IsTrue(lowerBound.Success, "The fixture must read the bound sent to the publisher.");
+            var blankInRange = includeBlankNode && lowerBound.Groups["start"].Value.Length == 0;
             if (includeSecondWork && family is "S" or "A" or "G")
             {
                 Assert.IsTrue(body.Contains("\uffff", StringComparison.Ordinal) || body.Contains("\\uFFFF", StringComparison.OrdinalIgnoreCase),
@@ -342,8 +365,8 @@ public sealed class LuxembourgFirstMountAcquisitionTests
             }
             var page = family switch
             {
-                "A" when count => LuxembourgAcquisitionTestFixture.CountJson(ActAssertions.Length),
-                "A" => AssertionRows(continuation ? [] : ActAssertions),
+                "A" when count => LuxembourgAcquisitionTestFixture.CountJson(ActAssertions.Length + (blankInRange ? 1 : 0)),
+                "A" => AssertionRows(continuation ? [] : ActAssertions, !continuation && blankInRange),
                 "G" when count => LuxembourgAcquisitionTestFixture.CountJson(0),
                 "G" => RelationRows(),
                 _ when count => LuxembourgAcquisitionTestFixture.CountJson(rows.Count),
@@ -391,7 +414,7 @@ public sealed class LuxembourgFirstMountAcquisitionTests
             return values.Distinct(StringComparer.Ordinal).OrderBy(static value => value, StringComparer.Ordinal).ToArray();
         }
 
-        private static string AssertionRows((string Subject, string Predicate, string Value)[] rows)
+        private static string AssertionRows((string Subject, string Predicate, string Value)[] rows, bool includeBlank = false)
         {
             var variables = new[]
             {
@@ -405,7 +428,15 @@ public sealed class LuxembourgFirstMountAcquisitionTests
                     var values = new[] { row.Subject, row.Predicate, row.Value, "iri", "", "", row.Subject, row.Predicate, "iri", row.Value, "", "" };
                     return variables.Select((name, index) => (name, term: new { type = index < 3 ? "uri" : "literal", value = values[index] }))
                         .ToDictionary(static field => field.name, static field => field.term);
-                });
+                }).ToList();
+            if (includeBlank)
+            {
+                var restriction = "http://www.w3.org/2002/07/owl#Restriction";
+                var values = new[] { "b0", RdfType, restriction, "iri", "", "", "", RdfType, "iri", restriction, "", "" };
+                bindings.Insert(0, variables.Select((name, index) => (name,
+                        term: new { type = index == 0 ? "bnode" : index < 3 ? "uri" : "literal", value = values[index] }))
+                    .ToDictionary(static field => field.name, static field => field.term));
+            }
             return JsonSerializer.Serialize(new
             {
                 head = new { link = Array.Empty<string>(), vars = variables },

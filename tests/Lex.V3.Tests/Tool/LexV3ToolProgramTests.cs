@@ -60,7 +60,7 @@ public sealed class LexV3ToolProgramTests
     }
 
     [TestMethod]
-    public void TheWholeLuxembourgPopulationSelectionReachesAcquisitionWithoutSpendingOnAnInvalidEuSeed()
+    public void TheWholeLuxembourgPopulationArgumentsAreAcceptedBeforeAnInvalidEuSeedRefuses()
     {
         var run = Run("build", "--celex", "NOTASEED", "--lu-population", "all", "--wire-ceiling", "5");
         Assert.AreEqual(3, run.ExitCode, run.Transcript);

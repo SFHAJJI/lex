@@ -915,18 +915,21 @@ proves the path, not a corpus.
   fetched before population traffic. Rebinding its retained hops after acquisition avoids a second
   rights request. The successful live receipt check is recorded above; the full mount run is next.
 
-
 - **Luxembourg population selector (Codex data lane).** `Lex.V3.Tool build --lu-population all`
-  selects the whole publisher key space for the existing S, A and G families, with the same
-  empty-to-U+FFFF bounds used by vocabulary enumeration. It replaces the three `--lu-name`,
+  selects every absolute publisher IRI for the existing S, A and G families, from `A` to U+FFFF.
+  An IRI scheme starts with an ASCII letter; blank-node subjects have an empty assertion key
+  and remain outside the range, matching S's IRI-only subject universe. It is an alternative to
+  the three `--lu-name`,
   `--lu-start`, `--lu-end` arguments; mixing them or naming an unknown population is rejected
   before acquisition. The selected range is retained in the scope receipt before traffic.
   Vocabulary proofs, source-profile classification, rights decisions, typed body outcomes and
   the one wire ceiling remain on the acquisition path. This is a selector for discovered
   publisher data, not a claim that every discovered object is authoritative or redistributable.
-  A two-work offline acquisition exercises both bodies and builds one corpus. No complete live
+  A two-work offline acquisition exercises both bodies and builds one corpus. The review repair
+  proves that blank-node assertions refuse under the old empty bound and stay outside the new one. No complete live
   Luxembourg population has been acquired yet. The bulk run follows the bounded first mount
   and EU population preparation (#786 then #785), under an explicit shared wire ceiling.
+
 ## Next, in order
 
 1. Data lane (Codex, Decision 95). The receipt route is changed and live-verified (PR #780).
