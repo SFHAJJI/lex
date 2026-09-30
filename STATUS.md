@@ -859,14 +859,15 @@ table is reviewed, with no other change.
   script from that language's path.
 - `build-live.mjs` builds English at the root as before, and every other reviewed language under its
   own path (`/fr/`), each page and its hydrating script compiled together for it. The locale
-  navigation links a reviewed language to its pages.
+  navigation links a reviewed language to its home by file (`/fr/index.html`): both servers map only
+  the root to an index page, and the review of #813 found `/fr/` was a 404.
 - None but English is reviewed, so the product build is unchanged: its HTML pages are byte-identical,
   and its scripts differ only by the locale code they now carry. The journey passes with them, plain
   and served.
 - `live-locale-build.test.mjs` builds a stand-in second language from the French draft, which the
   product never imports or serves. It holds:
   - every page and script under `/fr/`, labelled `fr`, saying the table's words and loading its own
-    script;
+    script, and each served by the live server, the language's home included;
   - the English pages byte-identical whether or not a second language is built;
   - no `fr/` directory from a product build.
 

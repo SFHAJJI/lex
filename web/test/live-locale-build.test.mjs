@@ -16,7 +16,9 @@ import { join } from "node:path";
 import test from "node:test";
 import { pathToFileURL } from "node:url";
 
+import { localeHome } from "../.react-build/app.mjs";
 import { buildLive } from "../scripts/build-live.mjs";
+import { createLiveServer } from "../scripts/serve-live.mjs";
 import { LIVE_CHROME_FR_DRAFT } from "../scripts/live-chrome-fr-draft.mjs";
 
 const PAGES = {
@@ -58,6 +60,23 @@ test("a reviewed language builds every page and script under its own path, in it
     }
     // The script says the same language as its page: the French search script carries the French words.
     assert.ok((await readFile(join(withFrench, "fr", "client-live-search.js"), "utf8")).includes(LIVE_CHROME_FR_DRAFT.search.nextPage));
+
+    // Through the live server, as a reader reaches them: the language's home, where the locale
+    // navigation links it once reviewed, and every page and script under it (review of #813: the first
+    // link, `/fr/`, was a 404 on both servers).
+    const server = createLiveServer({ root: pathToFileURL(`${withFrench}/`), apiOrigin: "http://127.0.0.1:9" });
+    const origin = await new Promise((resolve) => server.listen(0, "127.0.0.1", () => resolve(`http://127.0.0.1:${server.address().port}`)));
+    try {
+      assert.equal(localeHome("fr"), "/fr/index.html");
+      for (const path of [localeHome("fr"), ...Object.entries(PAGES).flatMap(([page, [, script]]) => [`/fr/${page}`, `/fr/${script}`])]) {
+        const answer = await fetch(`${origin}${path}`);
+        assert.equal(answer.status, 200, `${path} is served`);
+        await answer.arrayBuffer();
+      }
+      assert.equal((await fetch(`${origin}/fr/`)).status, 404, "a directory is not a page, which is why the link names the file");
+    } finally {
+      await new Promise((resolve) => server.close(resolve));
+    }
   } finally {
     await rm(plain, { recursive: true, force: true });
     await rm(withFrench, { recursive: true, force: true });
