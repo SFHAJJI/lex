@@ -19,7 +19,8 @@ then requires the final manifest to rebuild byte for byte. Historical version 2 
 by the retained-run replay helper. A 257-subject test crosses the batch boundary; an unreadable
 second batch must refuse before publishing a manifest. The combined source with PR #812 passed
 a clean solution build (zero warnings/errors), all 20 focused topology/custody tests, and the fast
-lane (3,066 passed, one platform skip). The full ingest suite is running. PR #812 merged at
+lane (3,066 passed, one platform skip). The full ingest suite passed 1,995 tests with 19 opt-in
+skips and zero failures in 22m 22.463s. PR #812 merged at
 `9849ab09` after its review, one repair and green CI. No population completeness or full-process memory bound is claimed:
 typed observations, individual large observations, the root metadata and downstream manifests still
 need resource allowance.
