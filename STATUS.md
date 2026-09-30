@@ -29,9 +29,12 @@ retained503maintenance responses. PR840 narrowly retries that exact body within 
 its reviewed merge and a fresh60wire three-family proof/reopen remain gates before the next full run.
 Offline LU run2 measured70,855,000additional retained bytes for9,000synthetic subjects and61,000
 admitted assertions through semantic/typed/scope stages. It excludes later stages and proves no full fit.
-Question Q-20261001-0049-codex is recorded in C:/lex-v3/lanes/QUESTIONS.md: an existing larger
-non-production worker, or an explicit spending cap, for bounded measurement before full Luxembourg.
-No spending or credentials are assumed; local work continues. No production signing, deployment or promotion.
+Panel answer Q-20261001-0049-codex: no spending or new worker. Finish EU on this host, audit
+Luxembourg's admitted publisher families against Stage1/S1-A01/S1-A02/PR420, then implement bounded
+disk-backed partition acquisition/derivation/verification and assembly. Every other family must have
+an explicit typed scope disposition; this is applying the existing scope, never a silent omission.
+Keep at least3GBfree during runs. These are reversible driver choices; partitioning is not implemented
+yet. No production signing, credentials, deployment or promotion.
 
 ## Luxembourg identity canonical output (Codex, 2026-09-30)
 
