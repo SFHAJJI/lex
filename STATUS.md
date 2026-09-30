@@ -5,11 +5,11 @@ every pull request that changes what is served, what is next or what is blocked.
 
 ## Heads
 
-- `v3/integration`: `8541ce5d` (2026-09-30, PR #776 merged). Build 45 s. Fast lane
+- `v3/integration`: `3c9fd0c5` (2026-09-30, PR #777 merged). Build 45 s. Fast lane
   (`eng/test-fast.ps1`): 3,038 tests, 3,037 pass, 1 skipped. Ingest suite: green on CI for PR #760
   (the CI `dotnet` job runs the whole solution on every pull request, about 7 min on the runner;
-  green for PR #776);
-  locally about 15 min. 856 web tests pass. CI's web job can flake in `keyboard-walk.test.mjs`
+  green for PR #777);
+  locally about 15 min. 860 web tests pass. CI's web job can flake in `keyboard-walk.test.mjs`
   ("browser debugger never answered"); rerunning the failed job is the fix.
 - Driver: Claude Opus 5.5 since 2026-09-29 (the Fable 5.1 driver ran out of tokens on 2026-09-28
   after PR #757; the user default model is now `claude-opus-5-5`).
@@ -235,7 +235,7 @@ schema's `parameters` shape, and whose call runs the same dispatch the REST rout
 endpoint test proves it for all twenty-three. The launch-contract line "REST and MCP derive identical
 envelopes from the registry" is the owner's to tick.
 
-Web: 32 React components, 856 tests. Preview screens render fixtures. The V3 Luxembourg search
+Web: 32 React components, 860 tests. Preview screens render fixtures. The V3 Luxembourg search
 answer has a reader (PR #771). The answer census now samples `search` five ways from the real handler:
 - a phrase with 4 strict hits and 1 relaxed hit;
 - the same phrase one hit per page, with its cursor;
@@ -397,6 +397,22 @@ The live reading screen and its journey step (PR #777). `dist-live/reading.html`
   `2024-02-01` into the two fields. With the mount the page ends in the text ("49 articles quoted",
   "Art. 15."); without one, in the card. All eight runs pass. A build whose reading request always
   added a language failed both reading runs on the body check.
+
+The provision history screen's V3 source has a reader (PR #778). The answer census now samples
+`article_history` (the fixture work's `art_15` in `fra`: one row, no absence).
+`web/scripts/history-answer.mjs` (`readArticleHistory`) reads it and recomputes everything the
+answer derives from its rows, throwing where they disagree:
+- rows and absent states together are the states in scope, each once, each in date order, each
+  pinned by its permalink, in the language asked when one was asked;
+- every article in a row carries the anchor asked for, and its validity flag follows its dates;
+- `wording_changed` is true exactly when a row's wording digests differ from the previous row of
+  its language; `wording_runs` are each language's first row and every change;
+  `distinct_wordings` are each language's distinct digests; `history_begins` is the first row;
+- a row's next date is the next later state of its language in scope, whether or not that state
+  carries the anchor.
+
+The tests also read a lineage with an absent state between two rows, a changed wording and a
+second language, built the way `V3CorpusMount.ArticleHistory` builds one.
 
 **The search journey step passes (PR #773, run locally 2026-09-30).** `node scripts/journey.mjs`
 now runs two steps, each with and without the fixture mount, and all four runs pass.
@@ -814,10 +830,11 @@ proves the path, not a corpus.
    held to the dossier answer the census now samples; PR #775: the live dossier screen, its page
    and journey step; PR #776: the reading screen's reader `readEvidenceBundle` over
    `evidence_bundle`; PR #777: the live reading screen, its page and journey step. The four launch
-   screens with V3 readers (coverage, search, dossier, reading) are now live and journeyed. Next:
-   the absence refusals the card will not show (`identifier_unknown` needs a population disclosure,
-   and it and `no_version_for_date` need `what_would_answer` from the closed vocabulary): the
-   producer carries them, or the reader supplies them. Also J1 to J8
+   screens with V3 readers (coverage, search, dossier, reading) are now live and journeyed. PR
+   #778: the provision history reader `readArticleHistory`. Next: the live provision history
+   screen and journey step, then Compare (`diff`) and Radar (`events`, `answer_drift`). Of the
+   launch contract's eight screens, Export composer is the last. The absence refusals the card
+   will not show are an owner question below. Also J1 to J8
    restated as V3 steps (owner question): they exist only in the pre-V3 pack
    (`05-user-journeys.md`).
 7. Release pipeline: build, sign, image, zero-traffic deploy, probes. Then acceptance and promotion.
@@ -832,6 +849,24 @@ proves the path, not a corpus.
    which belongs to the release pipeline (item 7).
 
 ## Blocked or waiting on the owner
+
+- Absence refusals on the live screens (PRs #775, #777). The web refusal card
+  (`refusal-card.mjs` `ABSENCE_CODES`, from `35-ideal-ux`) requires every absence refusal to carry
+  `what_would_answer` from a closed vocabulary (`corrected_identifier`, `new_official_observation`,
+  `expanded_official_scope`) and `asserts_absence_of_law`. It also requires `identifier_unknown` to
+  carry a `population_disclosure` (the size of what was searched). The reviewed registry mandates
+  none of this. The platform's `identifier_unknown` sends `what_would_answer` as free text, and its
+  `no_version_for_date` sends the nearest dates and none of the three. `text_not_available`
+  conforms. So those two are said by their code on the live pages, without the card. Which side
+  moves:
+  - (a) the producer adds the fields as optional payload keys, with `identifier_unknown`'s
+    `what_would_answer` becoming the vocabulary list: a reviewed registry change;
+  - (b) the card relaxes to the registry;
+  - (c) the reader supplies them from its own census.
+
+  The driver's recommendation is (a), because the rule protects the product's oldest invariant (an
+  absence of a record is not an absence of law) and belongs in the payload that travels over MCP
+  too.
 
 - Evaluation card (PR #769): the launch contract says "published". Section 6 of
   `36-ideal-evaluation.md` names signed JSON at a stable route and an HTML rendering on the Trust
