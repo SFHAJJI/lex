@@ -3,6 +3,40 @@
 Updated 2026-09-30 by the driver. This file replaces the issue-comment ledgers. It is rewritten in
 every pull request that changes what is served, what is next or what is blocked.
 
+## DATA review and fresh population evidence (Codex, 2026-09-30)
+
+The required Claude review of #824 at99a8e29d returned MERGE, with no blocking finding.
+It independently rebuilt (0 warnings/errors,68s), passed fast (3,076 plus one platform skip,68s)
+and all97 affected Luxembourg ingest checks (69s). Forcing the body-role bit true failed the new
+partition regression; the reviewer restored source and rebuilt. This one follow-up corrects the
+adapter comment and lists both stream entry points in the verified manifest documentation.
+
+Readback tradeoff: hold-time verification compares custody bytes with the held immutable graph
+and repeats evidence admission; independent deserialization happens on later custody replay.
+Both independent parser doors remain available, and the retained-run topology replay passed.
+No writer/parser disagreement was reproduced; no full-process memory claim is made.
+
+The fresh three-seed retry (32019R2088,32024L1760,32024R1620 plus Luxembourg a439) completed
+at20:07 UTC with506/600 requests in38m39s. It proved399EU expressions:34Formex enumerations
+eligible and365explicit language-out-of-scope outcomes. Luxembourg produced10records. All five
+mount files were built twice identically and reopened. The read-only audit checked their hashes,
+rights batches and323retained HTTP observations on Publications Office/Legilux only.
+
+Coverage remains explicit:34EU XHTML bodies were held, but only32019R2088ENG/FRA has admitted
+Formex articles (20 each). The other32 held bodies carry formex_main_body_package_not_acquired;
+those outcomes are not article-index coverage. The six retained ZIP candidates include the two
+2024 acts' annex files; their exact package refusal causes are not reconstructed by this audit.
+Evidence: C:\lex-v3\eu-three-seed-retry-20260930-1, report SHA
+`e15f7a247c7e813d7b0ab5d918c9f17c68c4ae53339a5db988a52aa3c8d270a4`.
+
+Reversible driver decision: prepare a fresh all82-seed EU retry with the existing20,000-request
+ceiling, EN/FRA-only Formex enumeration and typed outcomes for every other language. Use the
+larger package sample107,385bytes with the original4x factor, retain the larger earlier index
+sample, and require4,999,959,422free bytes including reserve before/after runtime freeze. The
+plan in lanes/eu-population-retry-sizing-proposed-20260930.json remains unlaunched until queued
+heavy work finishes and clean merged source/storage guards pass. These factors are estimates,
+not bounds; neither full population is yet proved. No served mount or production setting changes.
+
 ## Reuse verified scope objects during retained readback (Codex, 2026-09-30)
 
 Even after chunked storage, parsing scope JSON again constructs a second complete typed graph.
@@ -28,6 +62,36 @@ per row (four dispositions and the exact accepted-body-role bit). Accounting com
 ordinal sequences, avoiding whole expected-partition arrays. A 32-object mixed-disposition fixture
 cross-checks all 16 partitions against the unchanged builder, role-gated body membership and a
 corrupted partition refusal. No measured savings or full-process memory bound is claimed.
+## EU population census refusal diagnostics (Codex, 2026-09-30)
+
+The fresh all-82-seed EU run at `C:\lex-v3\eu-population-20260930-1` ended with
+`CensusFamilyNotProven` after 487 of 20,000 wire requests. Custody remains intact. Offline inspection
+found complete four-input sequences for 79 seeds, an interrupted sequence for 32019R2088, and no
+query inputs for 32024L1760 or 32024R1620. Retained service-unavailable and maintenance pages
+suggest transient publisher failures, but the old CLI summary did not preserve exact per-seed
+refusals. No complete EU population or full Luxembourg result is claimed.
+
+Reversible driver decision: include each requested CELEX and the executor/proof refusal in the
+existing run detail, with available request/attempt ordinals, status, retained body digest, media
+type, count, offending key and underlying detail. Bind the seed before an early robots refusal
+loses that association. Keep the existing refusal code and all proof, robots, budget and transport
+rules. No automatic retries are added. The Tool already retains this detail in its build log.
+
+Regressions cover two denied seeds before any query, unequal proof passes and the count-cap
+refusal. After review and merge, the next live check uses only 32019R2088, 32024L1760 and
+32024R1620, fresh custody and a 600-request diagnostic cap. It keeps the conservative complete-EU
+storage allowance (4,965,958,358 free bytes including reserve). This cap does not guarantee
+completion. Preserve and diagnose another refusal; do not add automatic retries. A successful
+bounded run may enable a fresh all-seed run with the existing 20,000-request plan. Source/runtime
+freeze, evidence hashes, storage checks and the single-heavy-job rule remain launch gates.
+Validation: solution build has zero warnings/errors (74.76s), required fast has 3,071 passed
+plus one platform skip (67.094s), and all 67 affected EU adapter/first-mount tests passed
+(66.964s). Claude's required review returned MERGE at 346909cb with no blocking or should-fix
+findings. It reproduced all checks; replacing the implementation with the base version failed
+all three diagnostic regressions. The one review follow-up records that evidence and refreshes
+through merged #820. Exact-head green CI remains the merge gate. Empty refusal arrays can
+honestly accompany a duplicate family-key shortfall, which the requested/proven counts explain.
+Long JSON diagnostics and escaped characters remain parseable retained log output.
 
 ## Large derived scope artifacts (Codex, 2026-09-30)
 
@@ -364,12 +428,14 @@ CI evidence are recorded in the pull request before merge.
 
 ## Heads
 
-- `v3/integration`: `ae4030d4` (2026-09-30, PR #815 merged). Build 45 s. Fast lane
+- `v3/integration`: `baccee96` (2026-09-30, PR #821 merged). Build 45 s. Fast lane
   (`eng/test-fast.ps1`): 3,067 tests, 3,066 pass, 1 skipped (PR #798's validation). Ingest suite: green on CI for PR #760
   (the CI `dotnet` job runs the whole solution on every pull request, about 7 min on the runner;
-  green for PR #815);
-  locally about 15 min. 952 web tests pass. CI's web job can flake in `keyboard-walk.test.mjs`
-  ("browser debugger never answered"); rerunning the failed job is the fix.
+  green for PR #821);
+  locally about 15 min. 961 web tests pass. The web job's "browser debugger never answered" failures
+  (keyboard-walk, and paint-check since #811) are fixed by PR #822: each browser binds its own
+  debugging port (`launchBrowser`) instead of a random one another browser starting at the same
+  moment could hold.
 - Driver: Claude Opus 5.5 since 2026-09-29 (the Fable 5.1 driver ran out of tokens on 2026-09-28
   after PR #757; the user default model is now `claude-opus-5-5`).
 - Plan: `C:\lex-v3\V3-FINISH-PLAN-2026-09-27.md` (owner's copy). Decision 94 (one driver, one queue,
@@ -594,7 +660,7 @@ schema's `parameters` shape, and whose call runs the same dispatch the REST rout
 endpoint test proves it for all twenty-three. The launch-contract line "REST and MCP derive identical
 envelopes from the registry" is the owner's to tick.
 
-Web: 41 React components, 952 tests. Preview screens render fixtures. The V3 Luxembourg search
+Web: 41 React components, 961 tests. Preview screens render fixtures. The V3 Luxembourg search
 answer has a reader (PR #771). The answer census now samples `search` five ways from the real handler:
 - a phrase with 4 strict hits and 1 relaxed hit;
 - the same phrase one hit per page, with its cursor;
@@ -1168,6 +1234,69 @@ first real build the pages have met; until now every journey ran on the test fix
   Now a page that says it is empty while the API's answer holds something fails, and every other
   answer of a citing step must still cite.
 
+The release pipeline's image steps, rehearsed with no production credential (PR #821; item 7, which
+the owner's proxy gave the web lane on 2026-09-30 while the data lane works on the populations).
+`node web/scripts/image-rehearsal.mjs --mount <v3-corpus>` is one command that:
+- builds the live pages;
+- builds the one-server OCI image without a container daemon (`dotnet publish -t:PublishContainer`),
+  with the API, the live pages under `v3-web` and the mount under `v3-corpus`, on the base image
+  `Lex.V3.Api.csproj` pins by digest (chiseled Ubuntu, non-root user 1654). `LexImageWebRoot` and
+  `LexImageMount` are inert unless a build names them;
+- verifies what the image holds:
+  - every blob named by the digest and size it carries;
+  - the API, every live page file and every mount file in the app layer, byte for byte;
+  - each file of the mount's build report at its recorded digest;
+  - linux/amd64, a non-root user, the API as the entrypoint, and the base named by digest;
+- signs the manifest digest with a rehearsal identity (an ECDSA P-256 key made for the run and never
+  kept, over a container-signature payload that says it is a rehearsal) and verifies the signature,
+  the digest and that label;
+- removes the archive, its work directory and the publish directory, and records that they are gone.
+
+On the real bounded mount: a 61 MB image of 6 layers (manifest
+`sha256:1029adee894c12831e1abc2d5668af02f8ab4a85a13eb8d9d76159c05ecf7a0d`), 25 live page files and
+6 mount files verified, the build report's 5 digests matched, the signature verified, everything
+removed. `image-rehearsal.test.mjs` holds each check to fail on the image it must refuse:
+- a layer whose bytes changed, a missing blob, and two manifests;
+- a live page left out, a mount file that is not the one built from, and a digest that is not the
+  build report's;
+- a root user, another entrypoint, and a base not named by digest;
+- another image's digest, a payload changed after signing, and another key.
+
+Running the image and probing it (health, API, browser, privacy, security headers) is the next slice.
+
+The image run and its zero-traffic probes (PR #825).
+- The rehearsal's one command now runs the image before removing it, on this machine's WSL Ubuntu,
+  with no daemon and nothing installed (`image-run.mjs`):
+  - the layers are unpacked in the manifest's order into a root filesystem, whiteouts applied;
+  - the API starts as the image says (user 1654, its environment, working directory and entrypoint);
+  - it runs in a private mount namespace, its root filesystem read-only and `/tmp` a private tmpfs,
+    as a hardened deployment runs it. `/proc` is read-only, and `/dev` is a read-only tmpfs holding
+    only `null`, `zero`, `random` and `urandom`. Binding the host's whole `/dev` gave the container a
+    writable `/dev/shm` the watcher did not see (review of #825). Before the API starts, the mount
+    table under the root is checked: any writable mount but the watched `/tmp` and those devices
+    refuses the start.
+- The eight live screens are then probed against the image, served by the image itself, through the
+  journey's real-mount steps (`journey.mjs` `run` now takes a server; the host API and the image are
+  two). The probes:
+  - health: it answers;
+  - API: each page's request, answered from the mount it carries;
+  - browser: every screen, hydration, live regions and colour;
+  - security headers: CSP with `frame-ancestors 'none'`, HSTS, `Referrer-Policy: no-referrer`,
+    `nosniff`;
+  - privacy: nothing written after the first answer, on its output or its `/tmp`, which an inotify
+    watcher in the same namespace records, so a file written and deleted counts. Nothing can be
+    written outside `/tmp`: the start proves the root filesystem refuses a write.
+- On the real bounded mount all eight probes pass (Trust and Coverage and the radar answer; six
+  screens refuse and show their cards). At startup the API wrote 11 events on `/tmp`, none after its
+  first answer. The container's root filesystem is removed with the rest.
+- A deployment requirement it found: the image needs a writable, private `/tmp`. Mounting a corpus
+  verifies its index into a private temporary file (`LuxembourgIndexBuilder`, deleted on dispose). On
+  a fully read-only filesystem the mount is refused and every answer is `no_corpus_mounted`.
+- Not yet reproducible: two builds of the same sources and mount give different manifest digests
+  (the app layer differs). The launch contract asks byte-stable derivation of the corpus and
+  indexes, which the build report proves, and not of the image; making the image reproducible is a
+  release-pipeline item.
+
 The live export composer and its journey step (PR #789), the eighth screen. `dist-live/export.html`
 has its own bundle `client-live-export.js`.
 - The page asks what the reading page asks: the same form (`ReadingForm`, now shared), the same one
@@ -1711,6 +1840,11 @@ has not yet run; the bounded first mount above is complete.
    and a live page never shows the synthetic banner on a real mount. J1 to J8 are restated as V3
    steps by the driver (they exist only in the pre-V3 pack, `05-user-journeys.md`).
 7. Release pipeline: build, sign, image, zero-traffic deploy, probes. Then acceptance and promotion.
+   The steps that need no production credential are the web lane's since 2026-09-30 (the owner's proxy).
+   PR #821: one command builds, verifies, rehearsal-signs and removes the one-server image; PR #825:
+   it runs the image (WSL, read-only root, private /tmp) and probes the eight screens against it. Next:
+   a reproducible image, and the probes against the full fixture mount. Production signing,
+   credentials and deployment stay with the owner.
 8. Machine gates (launch contract, Evaluation): the temporal, refusal and retrieval case sets run
    against the real handler, and all three shuffled controls are caught (PRs #767 and #768). The
    evaluation card is rendered from them with the statistical rows `not_yet_labelled` (PR #769).
@@ -1768,6 +1902,16 @@ Decision 95 (lex-governance PR #9, merged 2026-09-30) records these rulings and 
 ## Driver decisions (reversible)
 
 Each is the driver's call under ruling 7 and can be reversed by a later pull request that says why.
+
+- The image rehearsal (PR #821):
+  - It builds with the .NET SDK's container support, needing no daemon: this machine has no
+    container runtime, and the base image stays pinned by digest in the project.
+  - It bakes the mount into the image, so the image digest pins the corpus it serves.
+  - It signs with a key made for the run and never kept, labelled a rehearsal. The release identity
+    is the owner's.
+  - Running the image comes next: the image's own filesystem under this machine's WSL Ubuntu, with
+    no install and no daemon. The alternative, a CI runner with Docker, is kept for when a hosted
+    run is wanted.
 
 - The refusal card's payload rows keep the payload's own member names (`requested_identifier`,
   `asserts_absence_of_law`) as their labels, in every interface language (PR #809). They are the

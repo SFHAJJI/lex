@@ -69,7 +69,7 @@ import { pathToFileURL } from "node:url";
 
 import { buildLive } from "./build-live.mjs";
 import { createLiveServer } from "./serve-live.mjs";
-import { Session, allocateDebuggerPort, findBrowser, waitForDebugger } from "./browser-evidence.mjs";
+import { Session, findBrowser, launchBrowser } from "./browser-evidence.mjs";
 import { cspValue } from "./csp.mjs";
 import { EXPORT_WATERMARK } from "./export-build.mjs";
 
@@ -413,7 +413,20 @@ async function startApi(apiOutput, mount, webRoot = null) {
         method: "POST", headers: { "content-type": "application/json" }, body: '{"operation_id":"coverage","parameters":{}}',
       });
       if (answer.status === 200) {
-        return { origin, child, home, stderr: () => stderr, output: () => output, outputAtStart: output.length, filesAtStart: await listFiles(home), fileWatch: watchFiles(home) };
+        const filesAtStart = await listFiles(home);
+        return {
+          origin, child, stderr: () => stderr, output: () => output, outputAtStart: output.length, fileWatch: watchFiles(home),
+          /** The files under the API's directory that were added or changed since it first answered. */
+          async changedFiles() {
+            const filesAtEnd = await listFiles(home);
+            return [...filesAtEnd].filter(([path, facts]) => filesAtStart.get(path) !== facts).map(([path]) => path);
+          },
+          async close() {
+            child.kill();
+            await new Promise((resolve) => setTimeout(resolve, 500));
+            await rm(home, { recursive: true, force: true }).catch(() => {});
+          },
+        };
       }
     } catch {
       // Not listening yet.
@@ -570,19 +583,10 @@ export const PAINT_ONLY = `(() => {
 const ANSWER_LIVE_REGION = "document.querySelector('[data-answer-state]')?.closest('[aria-live]')?.getAttribute('aria-live') ?? null";
 
 async function observe(browser, pageOrigin, step, { keyboard = false } = {}) {
-  const port = allocateDebuggerPort(9800, 300);
   const profile = await mkdtemp(join(tmpdir(), "lex-journey-cdp-"));
-  const chrome = spawn(browser, [
-    "--headless=new", `--remote-debugging-port=${port}`, `--user-data-dir=${profile}`,
-    "--no-first-run", "--no-default-browser-check",
-    // No component or background downloads: a fresh profile per run otherwise leaves Chrome's component
-    // packages in the temporary directory, about 12 MB each, never removed (1,581 of them, 4.4 GB, by
-    // 2026-09-30).
-    "--disable-component-update", "--disable-background-networking",
-    "about:blank",
-  ], { stdio: "ignore" });
+  const { child: chrome, url } = await launchBrowser(browser, profile);
   try {
-    const session = await Session.open(await waitForDebugger(port));
+    const session = await Session.open(url);
     const { targetId } = await session.send("Target.createTarget", { url: "about:blank" });
     const { sessionId } = await session.send("Target.attachToTarget", { targetId, flatten: true });
     const requests = [];
@@ -732,8 +736,13 @@ async function verifyCitations(origin, citations) {
   return verifications;
 }
 
-async function run(apiOutput, mount, expected, browser, liveRoot) {
-  const api = await startApi(apiOutput, mount, expected.servedByApi ? liveRoot : null);
+/**
+ * One step: a server (the API from its build output, or whatever `expected.startServer` starts, such as
+ * the release image), the page asked through the browser, and the verdict. A server answers
+ * `{ origin, output(), outputAtStart, fileWatch, changedFiles(), close() }`.
+ */
+export async function run(apiOutput, mount, expected, browser, liveRoot) {
+  const api = expected.startServer ? await expected.startServer() : await startApi(apiOutput, mount, expected.servedByApi ? liveRoot : null);
   if (expected.fromApi) {
     // Asked before the browser, of the same server, with the page's own request.
     const body = expected.step.body ?? COVERAGE_BODY;
@@ -745,17 +754,14 @@ async function run(apiOutput, mount, expected, browser, liveRoot) {
   try {
     const observed = await observe(browser, pageOrigin, expected.step, { keyboard: expected.keyboard === true });
     const fileEvents = await api.fileWatch.stop();
-    const filesAtEnd = await listFiles(api.home);
-    const changedFiles = [...filesAtEnd].filter(([path, facts]) => api.filesAtStart.get(path) !== facts).map(([path]) => path);
+    const changedFiles = await api.changedFiles();
     observed.api = { startup: api.output().slice(0, api.outputAtStart), output: api.output().slice(api.outputAtStart), changedFiles, fileEvents };
     // Asked once the run's recording is closed, so checking the citations is not the run's traffic.
     observed.verifications = await verifyCitations(api.origin, observed.citations.filter((citation) => PINNED_PERMALINK.test(citation)));
     return { observed, failures: journeyVerdict(observed, { ...expected, origin: pageOrigin }) };
   } finally {
     if (live !== null) await new Promise((resolve) => live.close(resolve));
-    api.child.kill();
-    await new Promise((resolve) => setTimeout(resolve, 500));
-    await rm(api.home, { recursive: true, force: true }).catch(() => {});
+    await api.close();
   }
 }
 
@@ -764,7 +770,7 @@ async function run(apiOutput, mount, expected, browser, liveRoot) {
  * request, and to every invariant a run checks. The coverage page must name the mounted corpus and
  * Luxembourg index by the digests the mount's build report records.
  */
-async function realMountRuns(apiOutput, mount, options, browser, liveRoot) {
+export async function realMountRuns(apiOutput, mount, options, browser, liveRoot) {
   const report = JSON.parse(await readFile(join(mount, "build-report.json"), "utf8"));
   const runs = [];
   for (const [name, step] of Object.entries(JOURNEY_STEPS)) {

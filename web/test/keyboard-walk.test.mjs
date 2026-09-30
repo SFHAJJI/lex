@@ -12,10 +12,9 @@ import assert from "node:assert/strict";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { spawn } from "node:child_process";
 import { pathToFileURL } from "node:url";
 
-import { Session, allocateDebuggerPort, findBrowser, keyboardWalk, waitForDebugger } from "../scripts/browser-evidence.mjs";
+import { Session, findBrowser, keyboardWalk, launchBrowser } from "../scripts/browser-evidence.mjs";
 
 const GOOD = `<!doctype html><html lang="en"><head><meta charset="utf-8"><style>
   a:focus-visible { outline: 3px solid #05f; outline-offset: 2px; }
@@ -29,30 +28,16 @@ const NO_RING = GOOD.replace("outline: 3px solid #05f; outline-offset: 2px;", "o
 
 async function main() {
   const browser = await findBrowser();
-  const port = allocateDebuggerPort(9800, 300);
   const profile = await mkdtemp(join(tmpdir(), "lex-cdp-selftest-"));
-  const child = spawn(
-    browser,
-    [
-      "--headless=new",
-      `--remote-debugging-port=${port}`,
-      `--user-data-dir=${profile}`,
-      "--no-first-run",
-      "--no-default-browser-check",
-      // No component or background downloads: a fresh profile per run otherwise leaves Chrome's
-      // component packages in the temporary directory, about 12 MB each, never removed.
-      "--disable-component-update",
-      "--disable-background-networking",
-      "about:blank",
-    ],
-    { stdio: "ignore" },
-  );
+  // The browser binds its own debugging port (`launchBrowser`): a port chosen for it could be taken
+  // by the other browser test starting at the same moment.
+  const { child, url } = await launchBrowser(browser, profile);
 
   try {
     await writeFile(join(profile, "good.html"), GOOD, "utf8");
     await writeFile(join(profile, "no-ring.html"), NO_RING, "utf8");
 
-    const session = await Session.open(await waitForDebugger(port));
+    const session = await Session.open(url);
     const { targetId } = await session.send("Target.createTarget", { url: "about:blank" });
     const { sessionId } = await session.send("Target.attachToTarget", { targetId, flatten: true });
     await session.send("Runtime.enable", {}, sessionId);
