@@ -3389,6 +3389,211 @@
         "verdict": "refuse",
         "version": "v3"
       }
+    },
+    {
+      "operation": "changes_in_period",
+      "scenario": "a window holding the work\u0027s first held state: an answer",
+      "http_status": 200,
+      "content_type": "application/json;charset=utf-8",
+      "envelope": {
+        "context": {
+          "freshness": {
+            "observed_at": "2026-09-18T07:00:00.0000000Z",
+            "upstream_health": "stale"
+          },
+          "jurisdiction": "lu",
+          "provisional": false,
+          "publisher": "lu-legilux",
+          "snapshot": {
+            "snapshot_id": "corpus-aaaaaaaaaaaaaaaa",
+            "snapshot_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          "status": "success",
+          "timeline_semantics": "publisher_applicability"
+        },
+        "object_type": "envelope",
+        "operation_id": "changes_in_period",
+        "refusal": null,
+        "registry_schema": "lex-v3-operation-registry/1",
+        "registry_sha256": "abe40749a2364dcbcf69a4427b0977e0510500345056eed4042b2e4758a53ef0",
+        "request_ref": "http_fb09fb7191e84f40f48d21b4532a48ef36c84efacd236a30abd075a5a2b2c639",
+        "result": {
+          "object_type": "change_list",
+          "schema": "lex-v3-changes_in_period-result/1",
+          "value": {
+            "caveat": "a version row does not by itself assert a wording change, legal effect, or entry into force",
+            "changes": [
+              {
+                "baseline": null,
+                "candidates": null,
+                "counts": null,
+                "diff": null,
+                "publisher_work_iri": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3",
+                "reason": "first_held_state",
+                "resolve": {
+                  "identifier": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--5bca01f82ef3058cfebe7f8a8a6eb1f1fbeeb32b8a1ea7b2c02ac20963235e3a"
+                },
+                "state": {
+                  "applicability_date": "2024-02-01",
+                  "article_count": 49,
+                  "expression_iri": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo/fr",
+                  "language": "fra",
+                  "next_applicability_date": null,
+                  "permalink": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--5bca01f82ef3058cfebe7f8a8a6eb1f1fbeeb32b8a1ea7b2c02ac20963235e3a",
+                  "rule_profile_sha256s": [
+                    "70e926111b25a4d364e96b679de0baaa090a869175a82d42e0052572804cf42e",
+                    "dd32d9a59ea33b8c9e9cd51b7b2657a6fa2b716ad00e35db075416ba4cd38a9b"
+                  ],
+                  "stable_coordinate": "/lu-legilux/loi-1991-08-10-n3/2024-02-01",
+                  "state_sha256": "5bca01f82ef3058cfebe7f8a8a6eb1f1fbeeb32b8a1ea7b2c02ac20963235e3a"
+                },
+                "wording_changed": null,
+                "work_key": "loi-1991-08-10-n3"
+              }
+            ],
+            "continue_from": null,
+            "corpus_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "index_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            "limit": 200,
+            "population": {
+              "first_date_held": "2024-02-01",
+              "languages_held": [
+                "fra"
+              ],
+              "last_date_held": "2024-02-01",
+              "scope": {
+                "identifier": null,
+                "language": null
+              },
+              "versions_in_window": 1,
+              "window_overlaps_what_is_held": true,
+              "works_held": 1,
+              "works_in_window": 1
+            },
+            "publisher": "lu-legilux",
+            "requested_date_from": "2024-02-01",
+            "requested_date_to": "2024-02-01",
+            "requested_identifier": null,
+            "requested_language": null,
+            "truncated": false,
+            "whole_date_over_limit": false,
+            "window_from": "2024-02-01",
+            "window_to": "2024-02-01",
+            "wording_rule": "wording_sha256 is the SHA-256 of a canonical JSON array of [kind, text, target] for the Text and Reference tokens of the article\u0027s stored token stream, in order, with consecutive text merged into one entry (reference labels and targets included; note references, note bodies and modification markers excluded); wording_changed is true when it differs from the previous state of the same language, and any byte difference in the merged text or in a reference counts; paragraph and inline-formatting boundaries and whitespace-only nodes are not compared; wording_runs counts the first state and every change per language; distinct_wordings counts distinct digests per language"
+          }
+        },
+        "schema": "lex-v3-envelope/1",
+        "verdict": "answer",
+        "version": "v3"
+      }
+    },
+    {
+      "operation": "changes_in_period",
+      "scenario": "a window before anything held: an answer with no row",
+      "http_status": 200,
+      "content_type": "application/json;charset=utf-8",
+      "envelope": {
+        "context": {
+          "freshness": {
+            "observed_at": "2026-09-18T07:00:00.0000000Z",
+            "upstream_health": "stale"
+          },
+          "jurisdiction": "lu",
+          "provisional": false,
+          "publisher": "lu-legilux",
+          "snapshot": {
+            "snapshot_id": "corpus-aaaaaaaaaaaaaaaa",
+            "snapshot_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          "status": "success",
+          "timeline_semantics": "publisher_applicability"
+        },
+        "object_type": "envelope",
+        "operation_id": "changes_in_period",
+        "refusal": null,
+        "registry_schema": "lex-v3-operation-registry/1",
+        "registry_sha256": "abe40749a2364dcbcf69a4427b0977e0510500345056eed4042b2e4758a53ef0",
+        "request_ref": "http_fb09fb7191e84f40f48d21b4532a48ef36c84efacd236a30abd075a5a2b2c639",
+        "result": {
+          "object_type": "change_list",
+          "schema": "lex-v3-changes_in_period-result/1",
+          "value": {
+            "caveat": "a version row does not by itself assert a wording change, legal effect, or entry into force",
+            "changes": [],
+            "continue_from": null,
+            "corpus_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "index_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            "limit": 200,
+            "population": {
+              "first_date_held": "2024-02-01",
+              "languages_held": [
+                "fra"
+              ],
+              "last_date_held": "2024-02-01",
+              "scope": {
+                "identifier": null,
+                "language": null
+              },
+              "versions_in_window": 0,
+              "window_overlaps_what_is_held": false,
+              "works_held": 1,
+              "works_in_window": 0
+            },
+            "publisher": "lu-legilux",
+            "requested_date_from": "1990-01-01",
+            "requested_date_to": "1990-12-31",
+            "requested_identifier": null,
+            "requested_language": null,
+            "truncated": false,
+            "whole_date_over_limit": false,
+            "window_from": "1990-01-01",
+            "window_to": "1990-12-31",
+            "wording_rule": "wording_sha256 is the SHA-256 of a canonical JSON array of [kind, text, target] for the Text and Reference tokens of the article\u0027s stored token stream, in order, with consecutive text merged into one entry (reference labels and targets included; note references, note bodies and modification markers excluded); wording_changed is true when it differs from the previous state of the same language, and any byte difference in the merged text or in a reference counts; paragraph and inline-formatting boundaries and whitespace-only nodes are not compared; wording_runs counts the first state and every change per language; distinct_wordings counts distinct digests per language"
+          }
+        },
+        "schema": "lex-v3-envelope/1",
+        "verdict": "answer",
+        "version": "v3"
+      }
+    },
+    {
+      "operation": "changes_in_period",
+      "scenario": "no corpus mounted: a refusal",
+      "http_status": 200,
+      "content_type": "application/json;charset=utf-8",
+      "envelope": {
+        "context": {
+          "freshness": {
+            "observed_at": "2026-09-18T07:00:00.0000000Z",
+            "upstream_health": "unreachable"
+          },
+          "jurisdiction": "lu",
+          "provisional": false,
+          "publisher": "lu-legilux",
+          "snapshot": {
+            "snapshot_id": "no-corpus-mounted",
+            "snapshot_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          "status": "refusal",
+          "timeline_semantics": "publisher_applicability"
+        },
+        "object_type": "envelope",
+        "operation_id": "changes_in_period",
+        "refusal": {
+          "code": "no_corpus_mounted",
+          "helpful_payload": {
+            "required_corpus": "lu"
+          },
+          "schema": "lex-v3-refusal/1"
+        },
+        "registry_schema": "lex-v3-operation-registry/1",
+        "registry_sha256": "abe40749a2364dcbcf69a4427b0977e0510500345056eed4042b2e4758a53ef0",
+        "request_ref": "http_fb09fb7191e84f40f48d21b4532a48ef36c84efacd236a30abd075a5a2b2c639",
+        "result": null,
+        "schema": "lex-v3-envelope/1",
+        "verdict": "refuse",
+        "version": "v3"
+      }
     }
   ]
 }

@@ -70,6 +70,9 @@ public sealed class V3EnvelopeSamplesTests
             await CaptureAsync(fixture, mount, "diff", "a from date before the work's history: a refusal with a payload", new { identifier = $"/lu-legilux/{fixture.WorkKey}", date_from = "1990-01-01", date_to = fixture.ApplicabilityDate }),
             await CaptureAsync(fixture, mount, "diff", "a work the index does not hold: a refusal with a payload", new { identifier = "/lu-legilux/no-such-work", date_from = fixture.ApplicabilityDate, date_to = fixture.ApplicabilityDate }),
             await CaptureAsync(fixture, null, "diff", "no corpus mounted: a refusal", new { identifier = $"/lu-legilux/{fixture.WorkKey}", date_from = fixture.ApplicabilityDate, date_to = fixture.ApplicabilityDate }),
+            await CaptureAsync(fixture, mount, "changes_in_period", "a window holding the work's first held state: an answer", new { date_from = fixture.ApplicabilityDate, date_to = fixture.ApplicabilityDate }),
+            await CaptureAsync(fixture, mount, "changes_in_period", "a window before anything held: an answer with no row", new { date_from = "1990-01-01", date_to = "1990-12-31" }),
+            await CaptureAsync(fixture, null, "changes_in_period", "no corpus mounted: a refusal", new { date_from = fixture.ApplicabilityDate, date_to = fixture.ApplicabilityDate }),
         };
 
         var document = new JsonObject

@@ -7,8 +7,8 @@
 // preview build does. The pages are `index.html` (Trust and Coverage, script `client-live.js`),
 // `search.html` (search, script `client-live-search.js`), `dossier.html` (dossier, script
 // `client-live-dossier.js`), `reading.html` (reading, script `client-live-reading.js`) and `history.html`
-// (provision history, script `client-live-history.js`) and `compare.html` (compare, script
-// `client-live-compare.js`).
+// (provision history, script `client-live-history.js`), `compare.html` (compare, script
+// `client-live-compare.js`) and `radar.html` (change radar, script `client-live-radar.js`).
 
 import { cp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { pathToFileURL } from "node:url";
@@ -51,6 +51,9 @@ ${tokenCss()}`, "utf8");
   const compareSsr = await import(pathToFileURL(await bundle("app/live-compare-page.jsx", "live-compare-page.mjs")).href);
   await writeFile(new URL("compare.html", destination), compareSsr.renderLiveComparePage(), "utf8");
   await cp(await bundleClient("app/client-live-compare-entry.jsx", "client-live-compare.js"), new URL("client-live-compare.js", destination));
+  const radarSsr = await import(pathToFileURL(await bundle("app/live-radar-page.jsx", "live-radar-page.mjs")).href);
+  await writeFile(new URL("radar.html", destination), radarSsr.renderLiveRadarPage(), "utf8");
+  await cp(await bundleClient("app/client-live-radar-entry.jsx", "client-live-radar.js"), new URL("client-live-radar.js", destination));
   return destination;
 }
 

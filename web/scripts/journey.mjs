@@ -1,10 +1,10 @@
 // Browser journey steps against a live API, each read in a real browser.
 //
-// Six steps, each run twice. Trust and Coverage: with a mount, the page must end in the coverage
+// Seven steps, each run twice. Trust and Coverage: with a mount, the page must end in the coverage
 // answer and show the digests of the corpus and index that mount holds. Search, dossier, reading,
-// provision history and compare: once the page has hydrated, the journey types into the form (a
-// phrase; a work identifier; a work identifier and a date; a work identifier and an article id; a
-// work identifier and two dates) and submits it;
+// provision history, compare and radar: once the page has hydrated, the journey types into the form
+// (a phrase; a work identifier; a work identifier and a date; a work identifier and an article id; a
+// work identifier and two dates; two dates) and submits it;
 // with a mount, the page must end in the answer, and the one request must carry exactly what was
 // typed and nothing else. Without a mount, each must end in the refusal card for
 // `no_corpus_mounted`. In every run, what the
@@ -82,6 +82,15 @@ export const JOURNEY_STEPS = Object.freeze({
     body: Object.freeze({
       operation_id: "diff",
       parameters: Object.freeze({ identifier: DOSSIER_IDENTIFIER, date_from: READING_DATE, date_to: READING_DATE }),
+    }),
+  }),
+  radar: Object.freeze({
+    path: "/radar.html",
+    operation: "changes_in_period",
+    typed: Object.freeze([READING_DATE, READING_DATE]),
+    body: Object.freeze({
+      operation_id: "changes_in_period",
+      parameters: Object.freeze({ date_from: READING_DATE, date_to: READING_DATE }),
     }),
   }),
   history: Object.freeze({
@@ -357,7 +366,7 @@ async function main(argv) {
   // broken page is shown to fail the journey.
   const liveRoot = argv.includes("--live-root") ? argument("--live-root") : await buildLive();
   const browser = await findBrowser();
-  const { coverage, search, dossier, reading, history, compare } = JOURNEY_STEPS;
+  const { coverage, search, dossier, reading, history, compare, radar } = JOURNEY_STEPS;
   const results = [
     ["coverage, with the fixture mount", await run(apiOutput, mount, { step: coverage, state: "success", corpusSha256: journeyMount.corpus_sha256, indexSha256: journeyMount.index_sha256 }, browser, liveRoot)],
     ["coverage, with no mount", await run(apiOutput, null, { step: coverage, state: "refusal", refusalCode: "no_corpus_mounted" }, browser, liveRoot)],
@@ -371,6 +380,8 @@ async function main(argv) {
     ["history, with no mount", await run(apiOutput, null, { step: history, state: "refusal", refusalCode: "no_corpus_mounted" }, browser, liveRoot)],
     ["compare, with the fixture mount", await run(apiOutput, mount, { step: compare, state: "success", texts: [`loi-1991-08-10-n3: ${READING_DATE} against ${READING_DATE}.`, "The same version applied on both dates."] }, browser, liveRoot)],
     ["compare, with no mount", await run(apiOutput, null, { step: compare, state: "refusal", refusalCode: "no_corpus_mounted" }, browser, liveRoot)],
+    ["radar, with the fixture mount", await run(apiOutput, mount, { step: radar, state: "success", texts: [`${READING_DATE} to ${READING_DATE}: 1 state of 1 work, of 1 held.`, "not compared: the first state this index holds"] }, browser, liveRoot)],
+    ["radar, with no mount", await run(apiOutput, null, { step: radar, state: "refusal", refusalCode: "no_corpus_mounted" }, browser, liveRoot)],
   ];
   let failed = false;
   for (const [label, { observed, failures }] of results) {
