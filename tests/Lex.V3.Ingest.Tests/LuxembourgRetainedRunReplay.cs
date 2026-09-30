@@ -23,7 +23,9 @@ namespace Lex.V3.Ingest.Tests;
 /// </remarks>
 internal static class LuxembourgRetainedRunReplay
 {
-    internal const string RightsIndexSchema = "lex-lu-sparql-rights-evidence/2";
+    internal const string RightsIndexSchema = "lex-lu-sparql-rights-evidence/3";
+    private const string LegacyRightsIndexSchema = "lex-lu-sparql-rights-evidence/2";
+    private const string ObservationBatchSchema = "lex-lu-sparql-rights-observations/1";
     internal const string InFileIndexSchema = "lex-lu-in-file-rights-evidence/1";
 
     internal static async Task ReplayAsync(ICustodyStore store,
@@ -45,9 +47,9 @@ internal static class LuxembourgRetainedRunReplay
             if (document.RootElement.TryGetProperty("schema", out var schema) && schema.ValueKind == JsonValueKind.String)
                 indexes[schema.GetString()!] = (reference, document.RootElement.Clone());
         }
-        Assert.IsTrue(indexes.ContainsKey(RightsIndexSchema),
+        Assert.IsTrue(indexes.ContainsKey(RightsIndexSchema) || indexes.ContainsKey(LegacyRightsIndexSchema),
             $"The final manifest must cite a retained rights index of schema {RightsIndexSchema}; it cites {string.Join(", ", indexes.Keys)}.");
-        var sparql = indexes[RightsIndexSchema];
+        var sparql = indexes.TryGetValue(RightsIndexSchema, out var current) ? current : indexes[LegacyRightsIndexSchema];
         var inFile = indexes[InFileIndexSchema];
 
         var citedDeliveries = sparql.Json.GetProperty("deliveries").EnumerateArray()
@@ -77,18 +79,19 @@ internal static class LuxembourgRetainedRunReplay
         foreach (var acquisition in result.DocumentAcquisitionOutcomesByOrdinal!.Values.Where(value => value.Receipt is not null))
             Assert.IsTrue(channelTwo.Any(channel => channel.EvidenceRef.Sha256 == acquisition.Receipt!.Reference.ContentSha256),
                 "Every held body must have this run's retained in-file channel reading.");
-        var observations = sparql.Json.GetProperty("observations").EnumerateArray().Select(row =>
+        var observations = new List<LuxembourgResourceObservation>();
+        await foreach (var row in ReadObservationRowsAsync(store, sparql.Json))
         {
             var objectRef = JsonSerializer.Deserialize<SourceObjectRef>(row.GetProperty("ObjectRef"))!;
             var assertions = JsonSerializer.Deserialize<LuxembourgObservedAssertion[]>(row.GetProperty("Assertions"))!;
             var relations = JsonSerializer.Deserialize<LuxembourgObservedRelation[]>(row.GetProperty("Relations"))!;
             var channelOne = LuxembourgQueryExecutionAdapter.BuildSparqlRightsRows(assertions, run)
                 .Select(value => new LuxembourgRightsChannelObservation(value.ManifestationIri, run, sparql.Ref, value.LicenceIris)).ToArray();
-            return new LuxembourgResourceObservation(objectRef, run, assertions, relations,
+            observations.Add(new LuxembourgResourceObservation(objectRef, run, assertions, relations,
                 new LuxembourgSparqlRightsChannelObservations(run, sparql.Ref, channelOne),
                 new LuxembourgInFileRightsChannelObservations(run, inFile.Ref,
-                    channelTwo.Where(value => assertions.Any(assertion => assertion.SubjectIri == value.ManifestationIri)).ToArray(), true));
-        }).ToArray();
+                    channelTwo.Where(value => assertions.Any(assertion => assertion.SubjectIri == value.ManifestationIri)).ToArray(), true)));
+        }
         var proofs = assertionFamilyKeys.Select(key => result.FamilyOutcomes.Single(outcome => outcome.FamilyKey == key).Proof).ToArray();
         Assert.IsTrue(proofs.All(proof => proof is not null));
         var replay = Assert.IsInstanceOfType<LuxembourgProfileResolution.Resolved>(profile.Resolve(
@@ -122,4 +125,37 @@ internal static class LuxembourgRetainedRunReplay
         var finalRef = result.CorpusRecordSet!.Set.ManifestRef;
         VerifiedScopeManifest.ParseAndVerify(finalRef, finalBytes.Span, resolver);
     }
+    internal static async IAsyncEnumerable<JsonElement> ReadObservationRowsAsync(ICustodyStore store, JsonElement root)
+    {
+        if (root.GetProperty("schema").GetString() == LegacyRightsIndexSchema)
+        {
+            foreach (var row in root.GetProperty("observations").EnumerateArray()) yield return row;
+            yield break;
+        }
+        Assert.AreEqual(RightsIndexSchema, root.GetProperty("schema").GetString());
+        var expectedCount = root.GetProperty("observedObjectCount").GetInt32();
+        var references = root.GetProperty("observationBatches").EnumerateArray().ToArray();
+        Assert.AreEqual((expectedCount + 255L) / 256, references.LongLength);
+        var identities = new HashSet<SourceObjectRef>();
+        var batchDigests = new HashSet<string>(StringComparer.Ordinal);
+        for (var ordinal = 0; ordinal < references.Length; ordinal++)
+        {
+            var reference = JsonSerializer.Deserialize<SourceArtifactRef>(references[ordinal])!;
+            Assert.IsTrue(batchDigests.Add(reference.Sha256), "Repeated batch reference.");
+            var bytes = await CustodyRestore.ReadByDigestCheckedAsync(store, reference.Sha256, CancellationToken.None);
+            using var batch = JsonDocument.Parse(bytes);
+            Assert.AreEqual(ObservationBatchSchema, batch.RootElement.GetProperty("schema").GetString());
+            Assert.AreEqual(ordinal, batch.RootElement.GetProperty("ordinal").GetInt32());
+            var rows = batch.RootElement.GetProperty("observations");
+            Assert.AreEqual(Math.Min(256, expectedCount - ordinal * 256), rows.GetArrayLength());
+            foreach (var row in rows.EnumerateArray())
+            {
+                Assert.IsTrue(identities.Add(JsonSerializer.Deserialize<SourceObjectRef>(row.GetProperty("ObjectRef"))!),
+                    "A subject must not occur in multiple evidence batches.");
+                yield return row;
+            }
+        }
+        Assert.AreEqual(expectedCount, identities.Count, "All observed subjects must reopen from the cited root.");
+    }
+
 }
