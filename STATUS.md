@@ -3,6 +3,19 @@
 Updated 2026-09-30 by the driver. This file replaces the issue-comment ledgers. It is rewritten in
 every pull request that changes what is served, what is next or what is blocked.
 
+## Luxembourg identity canonical output (Codex, 2026-09-30)
+
+The observed-object identity writer builds a full canonical buffer and copies it again for the
+schema-domain digest. Reversible driver decision: write directly to the caller's stream and hash
+incrementally, with periodic JSON flushes. Preserve exact ordering, escaping, newline, digest,
+caller ownership and destination prefixes. Document partial writes and flush failures explicitly.
+The independent reader and persistence store remain buffered; this does not establish full-run fit.
+
+Two draft regressions cover 3,000 identities on a nonseekable stream, maximum observed write size,
+independent canonical bytes/hash/readback, prefix handling and stream ownership. This slice is
+prepared from current integration using the preserved draft. Build, required fast and affected
+ingest tests, cross-family review and green CI remain pending while the earlier local job runs.
+
 ## Luxembourg scope input reuse (Codex, 2026-09-30)
 
 Scope resolution retains four rule-evaluation objects and multiple not-applicable selectors per

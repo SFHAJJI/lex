@@ -1,3 +1,4 @@
+using System.Security.Cryptography;
 using System.Text;
 using System.Text.Encodings.Web;
 using System.Text.Json;
@@ -104,6 +105,13 @@ public static class LuxembourgObservedObjectIdentitySetCanonicalWriter
     private const string SetDomain = "lex-v3-luxembourg-observed-object-identity-set/1\n";
 
     /// <summary>Writes the canonical bytes and returns their domain-separated digest.</summary>
+    /// <remarks>
+    /// Appends at the current destination position and leaves the caller's stream open. The digest
+    /// covers only the bytes written by this call. JSON is flushed after an identity takes pending
+    /// output past 64 KiB, so a write can exceed that threshold by one encoded identity. The initial
+    /// run-reference envelope is not bounded by that threshold. Destination writes and Flush may
+    /// throw after partial output; callers must discard that output and must not publish a digest.
+    /// </remarks>
     public static string Write(Stream destination, LuxembourgObservedObjectIdentitySet set)
     {
         ArgumentNullException.ThrowIfNull(destination);
@@ -114,8 +122,8 @@ public static class LuxembourgObservedObjectIdentitySetCanonicalWriter
                 "The canonical destination must be writable.", nameof(destination));
         }
 
-        using var buffer = new MemoryStream();
-        using (var writer = NewWriter(buffer))
+        using var output = new CanonicalSetWriteStream(destination);
+        using (var writer = NewWriter(output))
         {
             writer.WriteStartObject();
             writer.WriteString("schema", LuxembourgObservedObjectIdentitySet.SchemaId);
@@ -129,6 +137,7 @@ public static class LuxembourgObservedObjectIdentitySetCanonicalWriter
             foreach (var value in set.ObjectRefSha256Values)
             {
                 writer.WriteStringValue(value);
+                if (writer.BytesPending >= 64 * 1024) writer.Flush();
             }
 
             writer.WriteEndArray();
@@ -136,10 +145,8 @@ public static class LuxembourgObservedObjectIdentitySetCanonicalWriter
             writer.Flush();
         }
 
-        buffer.WriteByte((byte)'\n');
-        var bytes = buffer.ToArray();
-        destination.Write(bytes, 0, bytes.Length);
-        return ComputeSetSha256(bytes);
+        output.WriteByte((byte)'\n');
+        return output.CompleteDigest();
     }
 
     /// <summary>
@@ -150,11 +157,67 @@ public static class LuxembourgObservedObjectIdentitySetCanonicalWriter
     /// </summary>
     public static string ComputeSetSha256(ReadOnlySpan<byte> canonicalBytes)
     {
-        var domain = Encoding.UTF8.GetBytes(SetDomain);
-        var buffer = new byte[domain.Length + canonicalBytes.Length];
-        domain.CopyTo(buffer.AsSpan());
-        canonicalBytes.CopyTo(buffer.AsSpan(domain.Length));
-        return Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(buffer));
+        using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
+        hash.AppendData(Encoding.UTF8.GetBytes(SetDomain));
+        hash.AppendData(canonicalBytes);
+        return Convert.ToHexStringLower(hash.GetHashAndReset());
+    }
+
+
+    private sealed class CanonicalSetWriteStream : Stream
+    {
+        private readonly Stream _destination;
+        private readonly IncrementalHash _hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
+        private bool _completed;
+
+        public CanonicalSetWriteStream(Stream destination)
+        {
+            _destination = destination;
+            _hash.AppendData(Encoding.ASCII.GetBytes(SetDomain));
+        }
+
+        public string CompleteDigest()
+        {
+            ObjectDisposedException.ThrowIf(_completed, this);
+            _completed = true;
+            return Convert.ToHexStringLower(_hash.GetHashAndReset());
+        }
+
+        public override bool CanRead => false;
+        public override bool CanSeek => false;
+        public override bool CanWrite => !_completed;
+        public override long Length => throw new NotSupportedException();
+        public override long Position
+        {
+            get => throw new NotSupportedException();
+            set => throw new NotSupportedException();
+        }
+        public override void Flush() => _destination.Flush();
+        public override int Read(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+        public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
+        public override void SetLength(long value) => throw new NotSupportedException();
+        public override void Write(byte[] buffer, int offset, int count) => Write(buffer.AsSpan(offset, count));
+        public override void Write(ReadOnlySpan<byte> buffer)
+        {
+            ObjectDisposedException.ThrowIf(_completed, this);
+            _destination.Write(buffer);
+            _hash.AppendData(buffer);
+        }
+        public override void WriteByte(byte value)
+        {
+            Span<byte> one = stackalloc byte[1];
+            one[0] = value;
+            Write(one);
+        }
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing)
+            {
+                _completed = true;
+                _hash.Dispose();
+            }
+            base.Dispose(disposing);
+        }
     }
 
     internal static Utf8JsonWriter NewWriter(Stream output) => new(
