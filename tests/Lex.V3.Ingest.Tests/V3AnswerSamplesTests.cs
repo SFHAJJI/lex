@@ -107,7 +107,6 @@ public sealed class V3AnswerSamplesTests
     {
         ["resolve"] = "sampled when a reader is built against it",
         ["timeline"] = "sampled when a reader is built against it",
-        ["diff"] = "sampled when a reader is built against it",
         ["changes_in_period"] = "sampled when a reader is built against it",
         ["in_force_on"] = "sampled when a reader is built against it",
         ["citation"] = "sampled when a reader is built against it",
@@ -301,6 +300,20 @@ public sealed class V3AnswerSamplesTests
         using var mount = await V3CorpusMount.OpenAsync(fixture.Directory, CancellationToken.None);
         Assert.IsNotNull(mount);
 
+        // A second mount for `diff` between two states, so the compare screen's reader sees a comparison with
+        // articles and counts: a later state in which one article's wording changed (its text amended) and one
+        // article id was renamed, the rest unchanged. Its own fixture, so every other sample stays the one-state answer.
+        var compared = await MountedFixture.CreateAsync();
+        await using var cleanupCompared = compared;
+        var own = compared.ArticlesOfOwnState().OrderBy(static article => article.PublisherId, StringComparer.Ordinal).ToArray();
+        var changedArticle = own.Single(static article => article.PublisherId == "art_15");
+        var laterDate = DateOnly.ParseExact(compared.ApplicabilityDate, "yyyy-MM-dd").AddDays(400).ToString("yyyy-MM-dd");
+        var later = await compared.AddStateAsync(laterDate, "later");
+        await compared.RewriteArticleTextAsync(later.ExpressionIri, changedArticle.PublisherId, changedArticle.Text + " amended");
+        await compared.RenameArticleIdAsync(later.ExpressionIri, "art_16", "art_16-new");
+        using var comparedMount = await V3CorpusMount.OpenAsync(compared.Directory, CancellationToken.None);
+        Assert.IsNotNull(comparedMount);
+
         var parameters = new
         {
             identifier = $"/lu-legilux/{fixture.WorkKey}",
@@ -340,6 +353,10 @@ public sealed class V3AnswerSamplesTests
             await DriveAsync(mount, "dossier", "the work, in the language it is held in: its identity, its held states and what the dossier does not hold", new { parameters.identifier, parameters.language }),
             // `article_history` is sampled for the live provision history screen's reader: one article of the work, in its language.
             await DriveAsync(mount, "article_history", "one article of the work, in the language it is held in: its lineage through the held states", new { parameters.identifier, anchor = "art_15", parameters.language }),
+            // `diff` is sampled for the live compare screen's reader: the work's one state against itself, and two
+            // states with one article reworded and one id renamed, in its language.
+            await DriveAsync(mount, "diff", "the work's state on one date against the state on the same date: the same version, nothing compared", new { parameters.identifier, date_from = parameters.date, date_to = parameters.date, parameters.language }),
+            await DriveAsync(comparedMount, "diff", "two states a year apart: one article's wording changed, one article id renamed, the rest unchanged", new { identifier = $"/lu-legilux/{compared.WorkKey}", date_from = compared.ApplicabilityDate, date_to = laterDate, language = "fra" }),
         ];
     }
 

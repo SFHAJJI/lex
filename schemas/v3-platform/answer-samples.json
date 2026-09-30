@@ -815,6 +815,2112 @@
       }
     },
     {
+      "operation": "diff",
+      "object_type": "diff",
+      "scenario": "the work\u0027s state on one date against the state on the same date: the same version, nothing compared",
+      "answer": {
+        "articles_not_admitted_note": "articles_not_admitted counts the articles the corpus recorded for the publisher\u0027s document for this state that this state does not hold; the number of articles in this state plus articles_not_admitted is the number of articles the corpus recorded for that document, which provenance counts by disposition token; which articles they are is not held. An article is not admitted whole when the reviewed profile cannot represent every element in it: that can be an article the publisher struck out, and it can equally be an article whose text is complete but which carries a mark the profile does not accept, such as an empty placeholder where a list item was removed",
+        "available_languages": [
+          "fra"
+        ],
+        "comparisons": [
+          {
+            "articles": null,
+            "counts": null,
+            "from": {
+              "applicability_date": "2024-02-01",
+              "article_identities": [
+                "05308b0478c8f6bf9ab81db3514594a5bd4098555db06f5a656ab27130f0d7fb",
+                "09858b46b63bc2137b430ec31647da23bfa65008575b165ff17daa1262cd34a7",
+                "09bab19edb5e9084cbe3cbc2bf02f4e5e1b58e7bea014bb753b67925d9c27fd3",
+                "1085ebb16ee5762fe66b20c89a9b995469be436158a9fdafbe295082f0eff4c4",
+                "1acfd78fefb365ce9ff8e4b6f11f94fbe26a66ddc67ab1f46e9b04b847bb857e",
+                "2a09ae37d170d5008f977ac2119e121e6bcbad4dabb2807b67de8f5e180a2baf",
+                "2ba783abdbe3cfd7736f7e645a19b423fe6940b5e4aa458e01b51d1a555fadc3",
+                "2bcf7567d4fec6a1a48c08e2007848bf9dbcf548c4e759da1cb252870d2dcfb5",
+                "32367ea725c326db7e75a487e2894ca139f791521439fd7800cd99bb76e6ab72",
+                "3ae9e0b3a4df533b44bbc1fe8e47e64b07d208b4c0b549429591c0fb56b22ab3",
+                "3e8328f030e6d0aee15cf057465eeb40fe29e1a7abbb4cb3afcf7d41fe58823c",
+                "3fe7cefa008102ed1dc3d0101c710b082b9d81a36de2d0a950efc800d317426a",
+                "40519d9855a5144d49478ffcd54b19cda6b3e7351771c5594a164ff8a62525e3",
+                "42ce9b04b4413e84bd5a796e49fdc8ad279cafce5fb7449b3feb9aca89421ee2",
+                "445f174a513ecde7a6b0be465d89d85792cbaa38e2edb7623583d1de895489e0",
+                "46e1dd5e589b19fa58047b5cc423d7ba982e7086ffbb868a75b598f14db4dc42",
+                "46e4579a11a5336953829a453a351220e0cbfec1d360ebd8a3413ea7216ab2f7",
+                "479068996300dafdbaeab50031c2c1346bae35bd47bb6c893c81653ca12f6e96",
+                "48e3af1e3ef924eab2a94922f8afb48e72efd50a3f673c9c0c2cc322ef432e40",
+                "506deb4c564247a671500688192f12d70afcef93c2ba466029972d9d272e918c",
+                "52f46a3f576269e76df131dddaf3aea72f93a8f8a75c4efa56299f88fb767bcb",
+                "5550a5c029011ec8a035da9a6245304c2606f178ccc8e7978d13c760a12c5004",
+                "86598b7a320f856c273cac745edbcaf57a903d36a6056e18167e9481f0109f48",
+                "8b046b5215fc50f80bbe9572692efa383f597d1f7784248d6de99edff5112078",
+                "8e52933c1a9ab53149a302147acf2dff609fab85e4958d8412dc4e6d8e611241",
+                "9261b305d0cf29c4b2dc464e7b7895268f959615e42248c7541f9d3e40199439",
+                "9376c79040e6a3873450deaad15f147484d5c5188acf3411d4692d9aa666ae1c",
+                "99eb9108980fda9a992eac4c011e9208868afbb8248b7eb70c0d7da73e4620e2",
+                "9c3876a608dd51d7a9137343e2e05b7a4c3d9a5b13a2b6e1034cadfec607a316",
+                "a5ad2da4adeb2a79bd53bd6bd6ecdae872800e18edcda4ecddf955448a74a3e5",
+                "ac7e7172b739d5a9a8dcb787f32ee229b9fe043c57edb68cffd18ce0d1322fa1",
+                "adf6a2791abb7e0bf2f203c6ad7c0b3dca9b28c06e490c3e9e9364b5ebcff165",
+                "bd7099c8b122e0b8d88023376c46e7c83a75d6a55f9d3685d06945bb3847fa02",
+                "bec3f203c4944135c7ee9ae06563dba6bcda2c03047ecee9d22099dfd9979855",
+                "c22f5f46565e5445d5b993a8d8d7c98142d9c04125d081632fb80ab048424ea1",
+                "c25d9d4e10be346349d4ce09a504c4fb59bef728bfe8f004395a128d7371edba",
+                "c36ab9a17715d87a5aaf5cf6e1da14266df09bda143ed77eb3b4c5d09f952820",
+                "c86fe9cf34f27d8bc5f65ecb91e33b2a8a0ec9127ea03bfe6aa9ca498e499cd3",
+                "d2e7dc693512cfcd5cd4a74cbc84d7982c8047823be319bf1508c7acfc59803b",
+                "d64e53555ed2a62f033950f68d21fbc3fd18083beb7600a0810ca0e15b02d7b0",
+                "e1d9b67433cd3044d665280d885246a0cff401ccfa7d9f964cb03816914f3a83",
+                "e22be08992af33e595a8634239673557fda60035e4521a545ba182b2b81a96ae",
+                "e594010cc633d1d993d0b202e0f2490af8fa2a9de4e74f9be4ea4ae8734dbf26",
+                "e80e7d5b3ebae94402872fca7340d97c4c69662b471aac7fddec0cd76844474d",
+                "f1785e7f507de3baa5d281d37c351095b5ca22d2bc13c14c4cc8cd2a7d5df8d2",
+                "f3c96389f8e28c9a15a4f114bd4506f338444a770fc7a6d17c7910f84ec90b8d",
+                "f4270fe90d947f1c47fb1babfe5b736fc52546e98dd90e74eabf3cdf50998126",
+                "fc1c1fda1d6d768931cf296275582a63259fd60b5078b71f7828f8bfee7a7391",
+                "fcd91b049213cb0d29bb2be694980805aac372fa1d957a0f964d0fcd5baf3630"
+              ],
+              "articles": [
+                {
+                  "article_identity_sha256": "05308b0478c8f6bf9ab81db3514594a5bd4098555db06f5a656ab27130f0d7fb",
+                  "article_valid_from": "2021-08-22",
+                  "validity_conflict": true
+                },
+                {
+                  "article_identity_sha256": "09858b46b63bc2137b430ec31647da23bfa65008575b165ff17daa1262cd34a7",
+                  "article_valid_from": "2021-08-22",
+                  "validity_conflict": true
+                },
+                {
+                  "article_identity_sha256": "09bab19edb5e9084cbe3cbc2bf02f4e5e1b58e7bea014bb753b67925d9c27fd3",
+                  "article_valid_from": "2021-08-22",
+                  "validity_conflict": true
+                },
+                {
+                  "article_identity_sha256": "1085ebb16ee5762fe66b20c89a9b995469be436158a9fdafbe295082f0eff4c4",
+                  "article_valid_from": "2021-08-22",
+                  "validity_conflict": true
+                },
+                {
+                  "article_identity_sha256": "1acfd78fefb365ce9ff8e4b6f11f94fbe26a66ddc67ab1f46e9b04b847bb857e",
+                  "article_valid_from": "2021-08-22",
+                  "validity_conflict": true
+                },
+                {
+                  "article_identity_sha256": "2a09ae37d170d5008f977ac2119e121e6bcbad4dabb2807b67de8f5e180a2baf",
+                  "article_valid_from": "2021-08-22",
+                  "validity_conflict": true
+                },
+                {
+                  "article_identity_sha256": "2ba783abdbe3cfd7736f7e645a19b423fe6940b5e4aa458e01b51d1a555fadc3",
+                  "article_valid_from": "2021-08-22",
+                  "validity_conflict": true
+                },
+                {
+                  "article_identity_sha256": "2bcf7567d4fec6a1a48c08e2007848bf9dbcf548c4e759da1cb252870d2dcfb5",
+                  "article_valid_from": "2021-08-22",
+                  "validity_conflict": true
+                },
+                {
+                  "article_identity_sha256": "32367ea725c326db7e75a487e2894ca139f791521439fd7800cd99bb76e6ab72",
+                  "article_valid_from": "2023-07-03",
+                  "validity_conflict": true
+                },
+                {
+                  "article_identity_sha256": "3ae9e0b3a4df533b44bbc1fe8e47e64b07d208b4c0b549429591c0fb56b22ab3",
+                  "article_valid_from": "2023-07-03",
+                  "validity_conflict": true
+                },
+                {
+                  "article_identity_sha256": "3e8328f030e6d0aee15cf057465eeb40fe29e1a7abbb4cb3afcf7d41fe58823c",
+                  "article_valid_from": "2021-08-22",
+                  "validity_conflict": true
+                },
+                {
+                  "article_identity_sha256": "3fe7cefa008102ed1dc3d0101c710b082b9d81a36de2d0a950efc800d317426a",
+                  "article_valid_from": "2023-07-03",
+                  "validity_conflict": true
+                },
+                {
+                  "article_identity_sha256": "40519d9855a5144d49478ffcd54b19cda6b3e7351771c5594a164ff8a62525e3",
+                  "article_valid_from": "2021-08-22",
+                  "validity_conflict": true
+                },
+                {
+                  "article_identity_sha256": "42ce9b04b4413e84bd5a796e49fdc8ad279cafce5fb7449b3feb9aca89421ee2",
+                  "article_valid_from": "2023-07-03",
+                  "validity_conflict": true
+                },
+                {
+                  "article_identity_sha256": "445f174a513ecde7a6b0be465d89d85792cbaa38e2edb7623583d1de895489e0",
+                  "article_valid_from": "2021-08-22",
+                  "validity_conflict": true
+                },
+                {
+                  "article_identity_sha256": "46e1dd5e589b19fa58047b5cc423d7ba982e7086ffbb868a75b598f14db4dc42",
+                  "article_valid_from": "2021-08-22",
+                  "validity_conflict": true
+                },
+                {
+                  "article_identity_sha256": "46e4579a11a5336953829a453a351220e0cbfec1d360ebd8a3413ea7216ab2f7",
+                  "article_valid_from": "2021-08-22",
+                  "validity_conflict": true
+                },
+                {
+                  "article_identity_sha256": "479068996300dafdbaeab50031c2c1346bae35bd47bb6c893c81653ca12f6e96",
+                  "article_valid_from": "2023-07-03",
+                  "validity_conflict": true
+                },
+                {
+                  "article_identity_sha256": "48e3af1e3ef924eab2a94922f8afb48e72efd50a3f673c9c0c2cc322ef432e40",
+                  "article_valid_from": "2021-08-22",
+                  "validity_conflict": true
+                },
+                {
+                  "article_identity_sha256": "506deb4c564247a671500688192f12d70afcef93c2ba466029972d9d272e918c",
+                  "article_valid_from": "2021-08-22",
+                  "validity_conflict": true
+                },
+                {
+                  "article_identity_sha256": "52f46a3f576269e76df131dddaf3aea72f93a8f8a75c4efa56299f88fb767bcb",
+                  "article_valid_from": "2021-08-22",
+                  "validity_conflict": true
+                },
+                {
+                  "article_identity_sha256": "5550a5c029011ec8a035da9a6245304c2606f178ccc8e7978d13c760a12c5004",
+                  "article_valid_from": "2021-08-22",
+                  "validity_conflict": true
+                },
+                {
+                  "article_identity_sha256": "86598b7a320f856c273cac745edbcaf57a903d36a6056e18167e9481f0109f48",
+                  "article_valid_from": "2021-08-22",
+                  "validity_conflict": true
+                },
+                {
+                  "article_identity_sha256": "8b046b5215fc50f80bbe9572692efa383f597d1f7784248d6de99edff5112078",
+                  "article_valid_from": "2021-08-22",
+                  "validity_conflict": true
+                },
+                {
+                  "article_identity_sha256": "8e52933c1a9ab53149a302147acf2dff609fab85e4958d8412dc4e6d8e611241",
+                  "article_valid_from": "2021-08-22",
+                  "validity_conflict": true
+                },
+                {
+                  "article_identity_sha256": "9261b305d0cf29c4b2dc464e7b7895268f959615e42248c7541f9d3e40199439",
+                  "article_valid_from": "2021-08-22",
+                  "validity_conflict": true
+                },
+                {
+                  "article_identity_sha256": "9376c79040e6a3873450deaad15f147484d5c5188acf3411d4692d9aa666ae1c",
+                  "article_valid_from": "2021-08-22",
+                  "validity_conflict": true
+                },
+                {
+                  "article_identity_sha256": "99eb9108980fda9a992eac4c011e9208868afbb8248b7eb70c0d7da73e4620e2",
+                  "article_valid_from": "2021-08-22",
+                  "validity_conflict": true
+                },
+                {
+                  "article_identity_sha256": "9c3876a608dd51d7a9137343e2e05b7a4c3d9a5b13a2b6e1034cadfec607a316",
+                  "article_valid_from": "2023-07-03",
+                  "validity_conflict": true
+                },
+                {
+                  "article_identity_sha256": "a5ad2da4adeb2a79bd53bd6bd6ecdae872800e18edcda4ecddf955448a74a3e5",
+                  "article_valid_from": "2023-01-01",
+                  "validity_conflict": true
+                },
+                {
+                  "article_identity_sha256": "ac7e7172b739d5a9a8dcb787f32ee229b9fe043c57edb68cffd18ce0d1322fa1",
+                  "article_valid_from": "2023-07-03",
+                  "validity_conflict": true
+                },
+                {
+                  "article_identity_sha256": "adf6a2791abb7e0bf2f203c6ad7c0b3dca9b28c06e490c3e9e9364b5ebcff165",
+                  "article_valid_from": "2021-08-22",
+                  "validity_conflict": true
+                },
+                {
+                  "article_identity_sha256": "bd7099c8b122e0b8d88023376c46e7c83a75d6a55f9d3685d06945bb3847fa02",
+                  "article_valid_from": "2021-08-22",
+                  "validity_conflict": true
+                },
+                {
+                  "article_identity_sha256": "bec3f203c4944135c7ee9ae06563dba6bcda2c03047ecee9d22099dfd9979855",
+                  "article_valid_from": "2021-08-22",
+                  "validity_conflict": true
+                },
+                {
+                  "article_identity_sha256": "c22f5f46565e5445d5b993a8d8d7c98142d9c04125d081632fb80ab048424ea1",
+                  "article_valid_from": "2021-08-22",
+                  "validity_conflict": true
+                },
+                {
+                  "article_identity_sha256": "c25d9d4e10be346349d4ce09a504c4fb59bef728bfe8f004395a128d7371edba",
+                  "article_valid_from": "2023-01-01",
+                  "validity_conflict": true
+                },
+                {
+                  "article_identity_sha256": "c36ab9a17715d87a5aaf5cf6e1da14266df09bda143ed77eb3b4c5d09f952820",
+                  "article_valid_from": "2021-08-22",
+                  "validity_conflict": true
+                },
+                {
+                  "article_identity_sha256": "c86fe9cf34f27d8bc5f65ecb91e33b2a8a0ec9127ea03bfe6aa9ca498e499cd3",
+                  "article_valid_from": "2023-07-03",
+                  "validity_conflict": true
+                },
+                {
+                  "article_identity_sha256": "d2e7dc693512cfcd5cd4a74cbc84d7982c8047823be319bf1508c7acfc59803b",
+                  "article_valid_from": "2023-07-03",
+                  "validity_conflict": true
+                },
+                {
+                  "article_identity_sha256": "d64e53555ed2a62f033950f68d21fbc3fd18083beb7600a0810ca0e15b02d7b0",
+                  "article_valid_from": "2021-08-22",
+                  "validity_conflict": true
+                },
+                {
+                  "article_identity_sha256": "e1d9b67433cd3044d665280d885246a0cff401ccfa7d9f964cb03816914f3a83",
+                  "article_valid_from": "2023-09-16",
+                  "validity_conflict": true
+                },
+                {
+                  "article_identity_sha256": "e22be08992af33e595a8634239673557fda60035e4521a545ba182b2b81a96ae",
+                  "article_valid_from": "2021-08-22",
+                  "validity_conflict": true
+                },
+                {
+                  "article_identity_sha256": "e594010cc633d1d993d0b202e0f2490af8fa2a9de4e74f9be4ea4ae8734dbf26",
+                  "article_valid_from": "2021-08-22",
+                  "validity_conflict": true
+                },
+                {
+                  "article_identity_sha256": "e80e7d5b3ebae94402872fca7340d97c4c69662b471aac7fddec0cd76844474d",
+                  "article_valid_from": "2021-08-22",
+                  "validity_conflict": true
+                },
+                {
+                  "article_identity_sha256": "f1785e7f507de3baa5d281d37c351095b5ca22d2bc13c14c4cc8cd2a7d5df8d2",
+                  "article_valid_from": "2021-08-22",
+                  "validity_conflict": true
+                },
+                {
+                  "article_identity_sha256": "f3c96389f8e28c9a15a4f114bd4506f338444a770fc7a6d17c7910f84ec90b8d",
+                  "article_valid_from": "2021-08-22",
+                  "validity_conflict": true
+                },
+                {
+                  "article_identity_sha256": "f4270fe90d947f1c47fb1babfe5b736fc52546e98dd90e74eabf3cdf50998126",
+                  "article_valid_from": "2023-07-03",
+                  "validity_conflict": true
+                },
+                {
+                  "article_identity_sha256": "fc1c1fda1d6d768931cf296275582a63259fd60b5078b71f7828f8bfee7a7391",
+                  "article_valid_from": "2021-08-22",
+                  "validity_conflict": true
+                },
+                {
+                  "article_identity_sha256": "fcd91b049213cb0d29bb2be694980805aac372fa1d957a0f964d0fcd5baf3630",
+                  "article_valid_from": "2021-08-22",
+                  "validity_conflict": true
+                }
+              ],
+              "articles_not_admitted": 5,
+              "expression_iri": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo/fr",
+              "language": "fra",
+              "next_applicability_date": null,
+              "permalink": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--5bca01f82ef3058cfebe7f8a8a6eb1f1fbeeb32b8a1ea7b2c02ac20963235e3a",
+              "publisher_legal_resource_iri": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo",
+              "publisher_work_iri": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3",
+              "stable_coordinate": "/lu-legilux/loi-1991-08-10-n3/2024-02-01",
+              "state_sha256": "5bca01f82ef3058cfebe7f8a8a6eb1f1fbeeb32b8a1ea7b2c02ac20963235e3a",
+              "validity_conflict_count": 49,
+              "validity_conflict_rule": "article_valid_from is the publisher\u0027s article-level applicability date; validity_conflict is true when it is stated and differs from the state\u0027s applicability_date"
+            },
+            "language": "fra",
+            "note": "the same version applied on both dates",
+            "same_state": true,
+            "to": {
+              "applicability_date": "2024-02-01",
+              "article_identities": [
+                "05308b0478c8f6bf9ab81db3514594a5bd4098555db06f5a656ab27130f0d7fb",
+                "09858b46b63bc2137b430ec31647da23bfa65008575b165ff17daa1262cd34a7",
+                "09bab19edb5e9084cbe3cbc2bf02f4e5e1b58e7bea014bb753b67925d9c27fd3",
+                "1085ebb16ee5762fe66b20c89a9b995469be436158a9fdafbe295082f0eff4c4",
+                "1acfd78fefb365ce9ff8e4b6f11f94fbe26a66ddc67ab1f46e9b04b847bb857e",
+                "2a09ae37d170d5008f977ac2119e121e6bcbad4dabb2807b67de8f5e180a2baf",
+                "2ba783abdbe3cfd7736f7e645a19b423fe6940b5e4aa458e01b51d1a555fadc3",
+                "2bcf7567d4fec6a1a48c08e2007848bf9dbcf548c4e759da1cb252870d2dcfb5",
+                "32367ea725c326db7e75a487e2894ca139f791521439fd7800cd99bb76e6ab72",
+                "3ae9e0b3a4df533b44bbc1fe8e47e64b07d208b4c0b549429591c0fb56b22ab3",
+                "3e8328f030e6d0aee15cf057465eeb40fe29e1a7abbb4cb3afcf7d41fe58823c",
+                "3fe7cefa008102ed1dc3d0101c710b082b9d81a36de2d0a950efc800d317426a",
+                "40519d9855a5144d49478ffcd54b19cda6b3e7351771c5594a164ff8a62525e3",
+                "42ce9b04b4413e84bd5a796e49fdc8ad279cafce5fb7449b3feb9aca89421ee2",
+                "445f174a513ecde7a6b0be465d89d85792cbaa38e2edb7623583d1de895489e0",
+                "46e1dd5e589b19fa58047b5cc423d7ba982e7086ffbb868a75b598f14db4dc42",
+                "46e4579a11a5336953829a453a351220e0cbfec1d360ebd8a3413ea7216ab2f7",
+                "479068996300dafdbaeab50031c2c1346bae35bd47bb6c893c81653ca12f6e96",
+                "48e3af1e3ef924eab2a94922f8afb48e72efd50a3f673c9c0c2cc322ef432e40",
+                "506deb4c564247a671500688192f12d70afcef93c2ba466029972d9d272e918c",
+                "52f46a3f576269e76df131dddaf3aea72f93a8f8a75c4efa56299f88fb767bcb",
+                "5550a5c029011ec8a035da9a6245304c2606f178ccc8e7978d13c760a12c5004",
+                "86598b7a320f856c273cac745edbcaf57a903d36a6056e18167e9481f0109f48",
+                "8b046b5215fc50f80bbe9572692efa383f597d1f7784248d6de99edff5112078",
+                "8e52933c1a9ab53149a302147acf2dff609fab85e4958d8412dc4e6d8e611241",
+                "9261b305d0cf29c4b2dc464e7b7895268f959615e42248c7541f9d3e40199439",
+                "9376c79040e6a3873450deaad15f147484d5c5188acf3411d4692d9aa666ae1c",
+                "99eb9108980fda9a992eac4c011e9208868afbb8248b7eb70c0d7da73e4620e2",
+                "9c3876a608dd51d7a9137343e2e05b7a4c3d9a5b13a2b6e1034cadfec607a316",
+                "a5ad2da4adeb2a79bd53bd6bd6ecdae872800e18edcda4ecddf955448a74a3e5",
+                "ac7e7172b739d5a9a8dcb787f32ee229b9fe043c57edb68cffd18ce0d1322fa1",
+                "adf6a2791abb7e0bf2f203c6ad7c0b3dca9b28c06e490c3e9e9364b5ebcff165",
+                "bd7099c8b122e0b8d88023376c46e7c83a75d6a55f9d3685d06945bb3847fa02",
+                "bec3f203c4944135c7ee9ae06563dba6bcda2c03047ecee9d22099dfd9979855",
+                "c22f5f46565e5445d5b993a8d8d7c98142d9c04125d081632fb80ab048424ea1",
+                "c25d9d4e10be346349d4ce09a504c4fb59bef728bfe8f004395a128d7371edba",
+                "c36ab9a17715d87a5aaf5cf6e1da14266df09bda143ed77eb3b4c5d09f952820",
+                "c86fe9cf34f27d8bc5f65ecb91e33b2a8a0ec9127ea03bfe6aa9ca498e499cd3",
+                "d2e7dc693512cfcd5cd4a74cbc84d7982c8047823be319bf1508c7acfc59803b",
+                "d64e53555ed2a62f033950f68d21fbc3fd18083beb7600a0810ca0e15b02d7b0",
+                "e1d9b67433cd3044d665280d885246a0cff401ccfa7d9f964cb03816914f3a83",
+                "e22be08992af33e595a8634239673557fda60035e4521a545ba182b2b81a96ae",
+                "e594010cc633d1d993d0b202e0f2490af8fa2a9de4e74f9be4ea4ae8734dbf26",
+                "e80e7d5b3ebae94402872fca7340d97c4c69662b471aac7fddec0cd76844474d",
+                "f1785e7f507de3baa5d281d37c351095b5ca22d2bc13c14c4cc8cd2a7d5df8d2",
+                "f3c96389f8e28c9a15a4f114bd4506f338444a770fc7a6d17c7910f84ec90b8d",
+                "f4270fe90d947f1c47fb1babfe5b736fc52546e98dd90e74eabf3cdf50998126",
+                "fc1c1fda1d6d768931cf296275582a63259fd60b5078b71f7828f8bfee7a7391",
+                "fcd91b049213cb0d29bb2be694980805aac372fa1d957a0f964d0fcd5baf3630"
+              ],
+              "articles": [
+                {
+                  "article_identity_sha256": "05308b0478c8f6bf9ab81db3514594a5bd4098555db06f5a656ab27130f0d7fb",
+                  "article_valid_from": "2021-08-22",
+                  "validity_conflict": true
+                },
+                {
+                  "article_identity_sha256": "09858b46b63bc2137b430ec31647da23bfa65008575b165ff17daa1262cd34a7",
+                  "article_valid_from": "2021-08-22",
+                  "validity_conflict": true
+                },
+                {
+                  "article_identity_sha256": "09bab19edb5e9084cbe3cbc2bf02f4e5e1b58e7bea014bb753b67925d9c27fd3",
+                  "article_valid_from": "2021-08-22",
+                  "validity_conflict": true
+                },
+                {
+                  "article_identity_sha256": "1085ebb16ee5762fe66b20c89a9b995469be436158a9fdafbe295082f0eff4c4",
+                  "article_valid_from": "2021-08-22",
+                  "validity_conflict": true
+                },
+                {
+                  "article_identity_sha256": "1acfd78fefb365ce9ff8e4b6f11f94fbe26a66ddc67ab1f46e9b04b847bb857e",
+                  "article_valid_from": "2021-08-22",
+                  "validity_conflict": true
+                },
+                {
+                  "article_identity_sha256": "2a09ae37d170d5008f977ac2119e121e6bcbad4dabb2807b67de8f5e180a2baf",
+                  "article_valid_from": "2021-08-22",
+                  "validity_conflict": true
+                },
+                {
+                  "article_identity_sha256": "2ba783abdbe3cfd7736f7e645a19b423fe6940b5e4aa458e01b51d1a555fadc3",
+                  "article_valid_from": "2021-08-22",
+                  "validity_conflict": true
+                },
+                {
+                  "article_identity_sha256": "2bcf7567d4fec6a1a48c08e2007848bf9dbcf548c4e759da1cb252870d2dcfb5",
+                  "article_valid_from": "2021-08-22",
+                  "validity_conflict": true
+                },
+                {
+                  "article_identity_sha256": "32367ea725c326db7e75a487e2894ca139f791521439fd7800cd99bb76e6ab72",
+                  "article_valid_from": "2023-07-03",
+                  "validity_conflict": true
+                },
+                {
+                  "article_identity_sha256": "3ae9e0b3a4df533b44bbc1fe8e47e64b07d208b4c0b549429591c0fb56b22ab3",
+                  "article_valid_from": "2023-07-03",
+                  "validity_conflict": true
+                },
+                {
+                  "article_identity_sha256": "3e8328f030e6d0aee15cf057465eeb40fe29e1a7abbb4cb3afcf7d41fe58823c",
+                  "article_valid_from": "2021-08-22",
+                  "validity_conflict": true
+                },
+                {
+                  "article_identity_sha256": "3fe7cefa008102ed1dc3d0101c710b082b9d81a36de2d0a950efc800d317426a",
+                  "article_valid_from": "2023-07-03",
+                  "validity_conflict": true
+                },
+                {
+                  "article_identity_sha256": "40519d9855a5144d49478ffcd54b19cda6b3e7351771c5594a164ff8a62525e3",
+                  "article_valid_from": "2021-08-22",
+                  "validity_conflict": true
+                },
+                {
+                  "article_identity_sha256": "42ce9b04b4413e84bd5a796e49fdc8ad279cafce5fb7449b3feb9aca89421ee2",
+                  "article_valid_from": "2023-07-03",
+                  "validity_conflict": true
+                },
+                {
+                  "article_identity_sha256": "445f174a513ecde7a6b0be465d89d85792cbaa38e2edb7623583d1de895489e0",
+                  "article_valid_from": "2021-08-22",
+                  "validity_conflict": true
+                },
+                {
+                  "article_identity_sha256": "46e1dd5e589b19fa58047b5cc423d7ba982e7086ffbb868a75b598f14db4dc42",
+                  "article_valid_from": "2021-08-22",
+                  "validity_conflict": true
+                },
+                {
+                  "article_identity_sha256": "46e4579a11a5336953829a453a351220e0cbfec1d360ebd8a3413ea7216ab2f7",
+                  "article_valid_from": "2021-08-22",
+                  "validity_conflict": true
+                },
+                {
+                  "article_identity_sha256": "479068996300dafdbaeab50031c2c1346bae35bd47bb6c893c81653ca12f6e96",
+                  "article_valid_from": "2023-07-03",
+                  "validity_conflict": true
+                },
+                {
+                  "article_identity_sha256": "48e3af1e3ef924eab2a94922f8afb48e72efd50a3f673c9c0c2cc322ef432e40",
+                  "article_valid_from": "2021-08-22",
+                  "validity_conflict": true
+                },
+                {
+                  "article_identity_sha256": "506deb4c564247a671500688192f12d70afcef93c2ba466029972d9d272e918c",
+                  "article_valid_from": "2021-08-22",
+                  "validity_conflict": true
+                },
+                {
+                  "article_identity_sha256": "52f46a3f576269e76df131dddaf3aea72f93a8f8a75c4efa56299f88fb767bcb",
+                  "article_valid_from": "2021-08-22",
+                  "validity_conflict": true
+                },
+                {
+                  "article_identity_sha256": "5550a5c029011ec8a035da9a6245304c2606f178ccc8e7978d13c760a12c5004",
+                  "article_valid_from": "2021-08-22",
+                  "validity_conflict": true
+                },
+                {
+                  "article_identity_sha256": "86598b7a320f856c273cac745edbcaf57a903d36a6056e18167e9481f0109f48",
+                  "article_valid_from": "2021-08-22",
+                  "validity_conflict": true
+                },
+                {
+                  "article_identity_sha256": "8b046b5215fc50f80bbe9572692efa383f597d1f7784248d6de99edff5112078",
+                  "article_valid_from": "2021-08-22",
+                  "validity_conflict": true
+                },
+                {
+                  "article_identity_sha256": "8e52933c1a9ab53149a302147acf2dff609fab85e4958d8412dc4e6d8e611241",
+                  "article_valid_from": "2021-08-22",
+                  "validity_conflict": true
+                },
+                {
+                  "article_identity_sha256": "9261b305d0cf29c4b2dc464e7b7895268f959615e42248c7541f9d3e40199439",
+                  "article_valid_from": "2021-08-22",
+                  "validity_conflict": true
+                },
+                {
+                  "article_identity_sha256": "9376c79040e6a3873450deaad15f147484d5c5188acf3411d4692d9aa666ae1c",
+                  "article_valid_from": "2021-08-22",
+                  "validity_conflict": true
+                },
+                {
+                  "article_identity_sha256": "99eb9108980fda9a992eac4c011e9208868afbb8248b7eb70c0d7da73e4620e2",
+                  "article_valid_from": "2021-08-22",
+                  "validity_conflict": true
+                },
+                {
+                  "article_identity_sha256": "9c3876a608dd51d7a9137343e2e05b7a4c3d9a5b13a2b6e1034cadfec607a316",
+                  "article_valid_from": "2023-07-03",
+                  "validity_conflict": true
+                },
+                {
+                  "article_identity_sha256": "a5ad2da4adeb2a79bd53bd6bd6ecdae872800e18edcda4ecddf955448a74a3e5",
+                  "article_valid_from": "2023-01-01",
+                  "validity_conflict": true
+                },
+                {
+                  "article_identity_sha256": "ac7e7172b739d5a9a8dcb787f32ee229b9fe043c57edb68cffd18ce0d1322fa1",
+                  "article_valid_from": "2023-07-03",
+                  "validity_conflict": true
+                },
+                {
+                  "article_identity_sha256": "adf6a2791abb7e0bf2f203c6ad7c0b3dca9b28c06e490c3e9e9364b5ebcff165",
+                  "article_valid_from": "2021-08-22",
+                  "validity_conflict": true
+                },
+                {
+                  "article_identity_sha256": "bd7099c8b122e0b8d88023376c46e7c83a75d6a55f9d3685d06945bb3847fa02",
+                  "article_valid_from": "2021-08-22",
+                  "validity_conflict": true
+                },
+                {
+                  "article_identity_sha256": "bec3f203c4944135c7ee9ae06563dba6bcda2c03047ecee9d22099dfd9979855",
+                  "article_valid_from": "2021-08-22",
+                  "validity_conflict": true
+                },
+                {
+                  "article_identity_sha256": "c22f5f46565e5445d5b993a8d8d7c98142d9c04125d081632fb80ab048424ea1",
+                  "article_valid_from": "2021-08-22",
+                  "validity_conflict": true
+                },
+                {
+                  "article_identity_sha256": "c25d9d4e10be346349d4ce09a504c4fb59bef728bfe8f004395a128d7371edba",
+                  "article_valid_from": "2023-01-01",
+                  "validity_conflict": true
+                },
+                {
+                  "article_identity_sha256": "c36ab9a17715d87a5aaf5cf6e1da14266df09bda143ed77eb3b4c5d09f952820",
+                  "article_valid_from": "2021-08-22",
+                  "validity_conflict": true
+                },
+                {
+                  "article_identity_sha256": "c86fe9cf34f27d8bc5f65ecb91e33b2a8a0ec9127ea03bfe6aa9ca498e499cd3",
+                  "article_valid_from": "2023-07-03",
+                  "validity_conflict": true
+                },
+                {
+                  "article_identity_sha256": "d2e7dc693512cfcd5cd4a74cbc84d7982c8047823be319bf1508c7acfc59803b",
+                  "article_valid_from": "2023-07-03",
+                  "validity_conflict": true
+                },
+                {
+                  "article_identity_sha256": "d64e53555ed2a62f033950f68d21fbc3fd18083beb7600a0810ca0e15b02d7b0",
+                  "article_valid_from": "2021-08-22",
+                  "validity_conflict": true
+                },
+                {
+                  "article_identity_sha256": "e1d9b67433cd3044d665280d885246a0cff401ccfa7d9f964cb03816914f3a83",
+                  "article_valid_from": "2023-09-16",
+                  "validity_conflict": true
+                },
+                {
+                  "article_identity_sha256": "e22be08992af33e595a8634239673557fda60035e4521a545ba182b2b81a96ae",
+                  "article_valid_from": "2021-08-22",
+                  "validity_conflict": true
+                },
+                {
+                  "article_identity_sha256": "e594010cc633d1d993d0b202e0f2490af8fa2a9de4e74f9be4ea4ae8734dbf26",
+                  "article_valid_from": "2021-08-22",
+                  "validity_conflict": true
+                },
+                {
+                  "article_identity_sha256": "e80e7d5b3ebae94402872fca7340d97c4c69662b471aac7fddec0cd76844474d",
+                  "article_valid_from": "2021-08-22",
+                  "validity_conflict": true
+                },
+                {
+                  "article_identity_sha256": "f1785e7f507de3baa5d281d37c351095b5ca22d2bc13c14c4cc8cd2a7d5df8d2",
+                  "article_valid_from": "2021-08-22",
+                  "validity_conflict": true
+                },
+                {
+                  "article_identity_sha256": "f3c96389f8e28c9a15a4f114bd4506f338444a770fc7a6d17c7910f84ec90b8d",
+                  "article_valid_from": "2021-08-22",
+                  "validity_conflict": true
+                },
+                {
+                  "article_identity_sha256": "f4270fe90d947f1c47fb1babfe5b736fc52546e98dd90e74eabf3cdf50998126",
+                  "article_valid_from": "2023-07-03",
+                  "validity_conflict": true
+                },
+                {
+                  "article_identity_sha256": "fc1c1fda1d6d768931cf296275582a63259fd60b5078b71f7828f8bfee7a7391",
+                  "article_valid_from": "2021-08-22",
+                  "validity_conflict": true
+                },
+                {
+                  "article_identity_sha256": "fcd91b049213cb0d29bb2be694980805aac372fa1d957a0f964d0fcd5baf3630",
+                  "article_valid_from": "2021-08-22",
+                  "validity_conflict": true
+                }
+              ],
+              "articles_not_admitted": 5,
+              "expression_iri": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo/fr",
+              "language": "fra",
+              "next_applicability_date": null,
+              "permalink": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--5bca01f82ef3058cfebe7f8a8a6eb1f1fbeeb32b8a1ea7b2c02ac20963235e3a",
+              "publisher_legal_resource_iri": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo",
+              "publisher_work_iri": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3",
+              "stable_coordinate": "/lu-legilux/loi-1991-08-10-n3/2024-02-01",
+              "state_sha256": "5bca01f82ef3058cfebe7f8a8a6eb1f1fbeeb32b8a1ea7b2c02ac20963235e3a",
+              "validity_conflict_count": 49,
+              "validity_conflict_rule": "article_valid_from is the publisher\u0027s article-level applicability date; validity_conflict is true when it is stated and differs from the state\u0027s applicability_date"
+            }
+          }
+        ],
+        "corpus_sha256": "\u003Cvaries-per-run\u003E",
+        "index_sha256": "\u003Cvaries-per-run\u003E",
+        "languages_not_compared": [],
+        "publisher": "lu-legilux",
+        "requested_date_from": "2024-02-01",
+        "requested_date_to": "2024-02-01",
+        "requested_identifier": "/lu-legilux/loi-1991-08-10-n3",
+        "requested_language": "fra",
+        "validity_conflict_rule": "article_valid_from is the publisher\u0027s article-level applicability date; validity_conflict is true when it is stated and differs from the state\u0027s applicability_date",
+        "wording_rule": "wording_sha256 is the SHA-256 of a canonical JSON array of [kind, text, target] for the Text and Reference tokens of the article\u0027s stored token stream, in order, with consecutive text merged into one entry (reference labels and targets included; note references, note bodies and modification markers excluded); wording_changed is true when it differs from the previous state of the same language, and any byte difference in the merged text or in a reference counts; paragraph and inline-formatting boundaries and whitespace-only nodes are not compared; wording_runs counts the first state and every change per language; distinct_wordings counts distinct digests per language",
+        "work_key": "loi-1991-08-10-n3"
+      }
+    },
+    {
+      "operation": "diff",
+      "object_type": "diff",
+      "scenario": "two states a year apart: one article\u0027s wording changed, one article id renamed, the rest unchanged",
+      "answer": {
+        "articles_not_admitted_note": "articles_not_admitted counts the articles the corpus recorded for the publisher\u0027s document for this state that this state does not hold; the number of articles in this state plus articles_not_admitted is the number of articles the corpus recorded for that document, which provenance counts by disposition token; which articles they are is not held. An article is not admitted whole when the reviewed profile cannot represent every element in it: that can be an article the publisher struck out, and it can equally be an article whose text is complete but which carries a mark the profile does not accept, such as an empty placeholder where a list item was removed",
+        "available_languages": [
+          "fra"
+        ],
+        "comparisons": [
+          {
+            "articles": [
+              {
+                "from": [
+                  {
+                    "article_identity_sha256": "5550a5c029011ec8a035da9a6245304c2606f178ccc8e7978d13c760a12c5004",
+                    "wording_sha256": "83a5a2b6394e4c4a6bc9713e107cc45b23349b19f8c438902f7494a68060090a"
+                  }
+                ],
+                "publisher_id": "art_10",
+                "status": "unchanged",
+                "to": [
+                  {
+                    "article_identity_sha256": "257e4c58a2efc61f3ee8ca69e488bf2cc684cbce44091f37c32d7ce6841cf55b",
+                    "wording_sha256": "83a5a2b6394e4c4a6bc9713e107cc45b23349b19f8c438902f7494a68060090a"
+                  }
+                ]
+              },
+              {
+                "from": [
+                  {
+                    "article_identity_sha256": "46e4579a11a5336953829a453a351220e0cbfec1d360ebd8a3413ea7216ab2f7",
+                    "wording_sha256": "835a619b4c14b05f48cf7c15d263d7ef71dd82cc81cd7b3e5fc188d401246842"
+                  }
+                ],
+                "publisher_id": "art_11",
+                "status": "unchanged",
+                "to": [
+                  {
+                    "article_identity_sha256": "485a82d6404496ba2014460fe45a7ec5775e0d26f559a412d8a02067259f1704",
+                    "wording_sha256": "835a619b4c14b05f48cf7c15d263d7ef71dd82cc81cd7b3e5fc188d401246842"
+                  }
+                ]
+              },
+              {
+                "from": [
+                  {
+                    "article_identity_sha256": "c36ab9a17715d87a5aaf5cf6e1da14266df09bda143ed77eb3b4c5d09f952820",
+                    "wording_sha256": "c9ce8e77cdfc8511a6c18882d943b1b0ab733b92359ac817de8c7bb6330dba84"
+                  }
+                ],
+                "publisher_id": "art_12",
+                "status": "unchanged",
+                "to": [
+                  {
+                    "article_identity_sha256": "fed2bf28d96e76322611b7a57bd04fc73c3db8d1ee899dbebffd66af4e9ec832",
+                    "wording_sha256": "c9ce8e77cdfc8511a6c18882d943b1b0ab733b92359ac817de8c7bb6330dba84"
+                  }
+                ]
+              },
+              {
+                "from": [
+                  {
+                    "article_identity_sha256": "09bab19edb5e9084cbe3cbc2bf02f4e5e1b58e7bea014bb753b67925d9c27fd3",
+                    "wording_sha256": "f3c0e7ac9bc3e31287c3827ebd82121a65cc978e2328b09309a894bdaa545348"
+                  }
+                ],
+                "publisher_id": "art_13",
+                "status": "unchanged",
+                "to": [
+                  {
+                    "article_identity_sha256": "bf005d0e20507c39dce4ad8e428c2be706238ade65dee7416a0dc5f7d9a10fc1",
+                    "wording_sha256": "f3c0e7ac9bc3e31287c3827ebd82121a65cc978e2328b09309a894bdaa545348"
+                  }
+                ]
+              },
+              {
+                "from": [
+                  {
+                    "article_identity_sha256": "40519d9855a5144d49478ffcd54b19cda6b3e7351771c5594a164ff8a62525e3",
+                    "wording_sha256": "fc80caa696ccf2f28ca8849328b89300b7f64454b02840aec22ea1d7c289c448"
+                  }
+                ],
+                "publisher_id": "art_14",
+                "status": "unchanged",
+                "to": [
+                  {
+                    "article_identity_sha256": "c20b199b6498025470730a346939f68ec8b6ebe4f365c4c0cdd2e8c2a4b6732c",
+                    "wording_sha256": "fc80caa696ccf2f28ca8849328b89300b7f64454b02840aec22ea1d7c289c448"
+                  }
+                ]
+              },
+              {
+                "from": [
+                  {
+                    "article_identity_sha256": "05308b0478c8f6bf9ab81db3514594a5bd4098555db06f5a656ab27130f0d7fb",
+                    "wording_sha256": "fa7df678cc734fd6b4d9565e69bbd3dcbbf6248af798b28e08d131b2917c31a2"
+                  }
+                ],
+                "publisher_id": "art_15",
+                "status": "changed",
+                "to": [
+                  {
+                    "article_identity_sha256": "3a6f7c284b20a46b3ecbec71fc085aed1c068b2e56f62896836bfb3ab4878632",
+                    "wording_sha256": "5dd1c0fcf0106cc7d076d4358695d4a733ded1a9f61f9626c8504fad70da1128"
+                  }
+                ]
+              },
+              {
+                "from": [
+                  {
+                    "article_identity_sha256": "2bcf7567d4fec6a1a48c08e2007848bf9dbcf548c4e759da1cb252870d2dcfb5",
+                    "wording_sha256": "2c5ff5738d6c501a8fde2ac35e8c8b063b46d0b09b9ca102e95b4cdfaf646da5"
+                  }
+                ],
+                "publisher_id": "art_16",
+                "status": "removed",
+                "to": []
+              },
+              {
+                "from": [],
+                "publisher_id": "art_16-new",
+                "status": "added",
+                "to": [
+                  {
+                    "article_identity_sha256": "89cfc38e229314684b90651b5822e44951d744a747705d5bac74260905401021",
+                    "wording_sha256": "2c5ff5738d6c501a8fde2ac35e8c8b063b46d0b09b9ca102e95b4cdfaf646da5"
+                  }
+                ]
+              },
+              {
+                "from": [
+                  {
+                    "article_identity_sha256": "52f46a3f576269e76df131dddaf3aea72f93a8f8a75c4efa56299f88fb767bcb",
+                    "wording_sha256": "d96665d785596bdfa50cdf19a563d7b03e83c934bc0b59a5282fb93faa1f7918"
+                  }
+                ],
+                "publisher_id": "art_17",
+                "status": "unchanged",
+                "to": [
+                  {
+                    "article_identity_sha256": "0907a909a5ad79fc8aa8942d152702b353a1ec8cc818d94135b115f355bc539f",
+                    "wording_sha256": "d96665d785596bdfa50cdf19a563d7b03e83c934bc0b59a5282fb93faa1f7918"
+                  }
+                ]
+              },
+              {
+                "from": [
+                  {
+                    "article_identity_sha256": "e1d9b67433cd3044d665280d885246a0cff401ccfa7d9f964cb03816914f3a83",
+                    "wording_sha256": "61d09c47a120251c26e076801228b6ff825b88b943731c8da6db0e487c77e861"
+                  }
+                ],
+                "publisher_id": "art_18",
+                "status": "unchanged",
+                "to": [
+                  {
+                    "article_identity_sha256": "1a2440e2492fbc08f3da111e30212897fa47bb4685b6317373207f90e79f89cf",
+                    "wording_sha256": "61d09c47a120251c26e076801228b6ff825b88b943731c8da6db0e487c77e861"
+                  }
+                ]
+              },
+              {
+                "from": [
+                  {
+                    "article_identity_sha256": "9261b305d0cf29c4b2dc464e7b7895268f959615e42248c7541f9d3e40199439",
+                    "wording_sha256": "286d2eb8567f145f52260808c91d7b1ed5138acfd4cb441627bfa20243c451ab"
+                  }
+                ],
+                "publisher_id": "art_19",
+                "status": "unchanged",
+                "to": [
+                  {
+                    "article_identity_sha256": "2435e51dbdca94ef724c1649fc54fed820c3773febb4fc65172ed5a44527acff",
+                    "wording_sha256": "286d2eb8567f145f52260808c91d7b1ed5138acfd4cb441627bfa20243c451ab"
+                  }
+                ]
+              },
+              {
+                "from": [
+                  {
+                    "article_identity_sha256": "1acfd78fefb365ce9ff8e4b6f11f94fbe26a66ddc67ab1f46e9b04b847bb857e",
+                    "wording_sha256": "47e828ee1f2d3c5a5d357ca765a74686b9f912e989a452b940b824bb370ac908"
+                  }
+                ],
+                "publisher_id": "art_1er",
+                "status": "unchanged",
+                "to": [
+                  {
+                    "article_identity_sha256": "438b9f334e50e21612c21e45a23276f12a1698da1cfe0230d82fe6bbe59b8d4f",
+                    "wording_sha256": "47e828ee1f2d3c5a5d357ca765a74686b9f912e989a452b940b824bb370ac908"
+                  }
+                ]
+              },
+              {
+                "from": [
+                  {
+                    "article_identity_sha256": "c25d9d4e10be346349d4ce09a504c4fb59bef728bfe8f004395a128d7371edba",
+                    "wording_sha256": "7ce66fc3eebafb1f1c2b3e83de3205fe12d37c2363c60b2b972d767fb8b38197"
+                  }
+                ],
+                "publisher_id": "art_2",
+                "status": "unchanged",
+                "to": [
+                  {
+                    "article_identity_sha256": "adb35b698cfcc116937a53247e082411a9e781b1f4df8260e45181f1a07a2e70",
+                    "wording_sha256": "7ce66fc3eebafb1f1c2b3e83de3205fe12d37c2363c60b2b972d767fb8b38197"
+                  }
+                ]
+              },
+              {
+                "from": [
+                  {
+                    "article_identity_sha256": "09858b46b63bc2137b430ec31647da23bfa65008575b165ff17daa1262cd34a7",
+                    "wording_sha256": "9a40e15aae4b2152d96ae58c561731aaebcf2edf4e7066f4f276b4c36082c696"
+                  }
+                ],
+                "publisher_id": "art_20",
+                "status": "unchanged",
+                "to": [
+                  {
+                    "article_identity_sha256": "cf4f2ff079a97cf7d10263b44a7f150662cd3baccc0c8932e3f0f458cd822f49",
+                    "wording_sha256": "9a40e15aae4b2152d96ae58c561731aaebcf2edf4e7066f4f276b4c36082c696"
+                  }
+                ]
+              },
+              {
+                "from": [
+                  {
+                    "article_identity_sha256": "f3c96389f8e28c9a15a4f114bd4506f338444a770fc7a6d17c7910f84ec90b8d",
+                    "wording_sha256": "2d9f9deeb4aa0c910acbadf8bc2d072c99bdcbad0a1dc33dd2f0a95847476c65"
+                  }
+                ],
+                "publisher_id": "art_21",
+                "status": "unchanged",
+                "to": [
+                  {
+                    "article_identity_sha256": "fb396969401849c499dff45c06c99e5607dcc73fea53348820737475cce2d63b",
+                    "wording_sha256": "2d9f9deeb4aa0c910acbadf8bc2d072c99bdcbad0a1dc33dd2f0a95847476c65"
+                  }
+                ]
+              },
+              {
+                "from": [
+                  {
+                    "article_identity_sha256": "adf6a2791abb7e0bf2f203c6ad7c0b3dca9b28c06e490c3e9e9364b5ebcff165",
+                    "wording_sha256": "020f36891f3145161df96b517917aff8c70bf12da5955f3983b2985f9b1da4c0"
+                  }
+                ],
+                "publisher_id": "art_22",
+                "status": "unchanged",
+                "to": [
+                  {
+                    "article_identity_sha256": "38e1bbdc98065b9f4e12a23fde87c56667960a6c295e589859c667e8056bbbe4",
+                    "wording_sha256": "020f36891f3145161df96b517917aff8c70bf12da5955f3983b2985f9b1da4c0"
+                  }
+                ]
+              },
+              {
+                "from": [
+                  {
+                    "article_identity_sha256": "479068996300dafdbaeab50031c2c1346bae35bd47bb6c893c81653ca12f6e96",
+                    "wording_sha256": "d061ae3a36209e5602efc9e85d244871037a3486bb346230c3211b87d9734f6b"
+                  }
+                ],
+                "publisher_id": "art_23",
+                "status": "unchanged",
+                "to": [
+                  {
+                    "article_identity_sha256": "0f2a000443299ecdcc99a670fdf7e65460d645532f36221736dc356052c866db",
+                    "wording_sha256": "d061ae3a36209e5602efc9e85d244871037a3486bb346230c3211b87d9734f6b"
+                  }
+                ]
+              },
+              {
+                "from": [
+                  {
+                    "article_identity_sha256": "c86fe9cf34f27d8bc5f65ecb91e33b2a8a0ec9127ea03bfe6aa9ca498e499cd3",
+                    "wording_sha256": "6b9ac2a6befb9900868e52bd8a2b711aba8fa9bf9a88acd357e969843f19001f"
+                  }
+                ],
+                "publisher_id": "art_24",
+                "status": "unchanged",
+                "to": [
+                  {
+                    "article_identity_sha256": "bcbca0bb204f98cac3a06968e7da2b28ed92821271fca5a81e1f9a07dc3a39ad",
+                    "wording_sha256": "6b9ac2a6befb9900868e52bd8a2b711aba8fa9bf9a88acd357e969843f19001f"
+                  }
+                ]
+              },
+              {
+                "from": [
+                  {
+                    "article_identity_sha256": "3fe7cefa008102ed1dc3d0101c710b082b9d81a36de2d0a950efc800d317426a",
+                    "wording_sha256": "4fcc19de7d8d8cbb730fbe24e6da45a0f7c1587b30224bad571a83527449c285"
+                  }
+                ],
+                "publisher_id": "art_24-1",
+                "status": "unchanged",
+                "to": [
+                  {
+                    "article_identity_sha256": "a890d6b817d1e17401a73385908c72e4e30c9cdbdd0c64123f32562fac6d11fd",
+                    "wording_sha256": "4fcc19de7d8d8cbb730fbe24e6da45a0f7c1587b30224bad571a83527449c285"
+                  }
+                ]
+              },
+              {
+                "from": [
+                  {
+                    "article_identity_sha256": "2ba783abdbe3cfd7736f7e645a19b423fe6940b5e4aa458e01b51d1a555fadc3",
+                    "wording_sha256": "ff32d53746a938641527bfdbee71a8b22faff98d8ade0cc24af8c4e01e03fb5f"
+                  }
+                ],
+                "publisher_id": "art_25",
+                "status": "unchanged",
+                "to": [
+                  {
+                    "article_identity_sha256": "57924de9917e441b23a5dfab3b67686dab0b8186a11fd99a22e577c5c8d1e5b6",
+                    "wording_sha256": "ff32d53746a938641527bfdbee71a8b22faff98d8ade0cc24af8c4e01e03fb5f"
+                  }
+                ]
+              },
+              {
+                "from": [
+                  {
+                    "article_identity_sha256": "9c3876a608dd51d7a9137343e2e05b7a4c3d9a5b13a2b6e1034cadfec607a316",
+                    "wording_sha256": "bbcfa61ad84f445b8fa3fec12a6ad0048e357d5c20fd6191ad222ebf940b4d32"
+                  }
+                ],
+                "publisher_id": "art_26",
+                "status": "unchanged",
+                "to": [
+                  {
+                    "article_identity_sha256": "30e59286b1793355346b28bfb3dc093cd867b504831c886cc637966efb09e24d",
+                    "wording_sha256": "bbcfa61ad84f445b8fa3fec12a6ad0048e357d5c20fd6191ad222ebf940b4d32"
+                  }
+                ]
+              },
+              {
+                "from": [
+                  {
+                    "article_identity_sha256": "3ae9e0b3a4df533b44bbc1fe8e47e64b07d208b4c0b549429591c0fb56b22ab3",
+                    "wording_sha256": "c9d26645c82cb239f90f7370b8db835a89b8a484b7d2a2bda4277115f329e813"
+                  }
+                ],
+                "publisher_id": "art_28",
+                "status": "unchanged",
+                "to": [
+                  {
+                    "article_identity_sha256": "a0556439cc2d9cabc4ae1ca5e3840e21c31b8e67061b029e8563c625132d7614",
+                    "wording_sha256": "c9d26645c82cb239f90f7370b8db835a89b8a484b7d2a2bda4277115f329e813"
+                  }
+                ]
+              },
+              {
+                "from": [
+                  {
+                    "article_identity_sha256": "48e3af1e3ef924eab2a94922f8afb48e72efd50a3f673c9c0c2cc322ef432e40",
+                    "wording_sha256": "fd095811dd51c1003740d46ac20c44ab86caf220f1423cda328807e618dc342e"
+                  }
+                ],
+                "publisher_id": "art_29",
+                "status": "unchanged",
+                "to": [
+                  {
+                    "article_identity_sha256": "142f06f1eb7956fc56cdc0fb33173e220eab4ce70221d069b361255671d660d9",
+                    "wording_sha256": "fd095811dd51c1003740d46ac20c44ab86caf220f1423cda328807e618dc342e"
+                  }
+                ]
+              },
+              {
+                "from": [
+                  {
+                    "article_identity_sha256": "d2e7dc693512cfcd5cd4a74cbc84d7982c8047823be319bf1508c7acfc59803b",
+                    "wording_sha256": "e595bde281e6139657d0cc363f902caf322c7890abb6352c2df70d1fc23167c5"
+                  }
+                ],
+                "publisher_id": "art_29-1",
+                "status": "unchanged",
+                "to": [
+                  {
+                    "article_identity_sha256": "23e14ea38f55ecb8b5fb67a5b514291bf789020ae65b3b093a348ca3a885d98b",
+                    "wording_sha256": "e595bde281e6139657d0cc363f902caf322c7890abb6352c2df70d1fc23167c5"
+                  }
+                ]
+              },
+              {
+                "from": [
+                  {
+                    "article_identity_sha256": "99eb9108980fda9a992eac4c011e9208868afbb8248b7eb70c0d7da73e4620e2",
+                    "wording_sha256": "fa0ecc7555d730ccfd91c79c6f002a255083661d5c403c084799835108733e03"
+                  }
+                ],
+                "publisher_id": "art_3",
+                "status": "unchanged",
+                "to": [
+                  {
+                    "article_identity_sha256": "6ae3454dd7faf78b91f4f9014baf58e276f622ffc907400b5fad690ab810880b",
+                    "wording_sha256": "fa0ecc7555d730ccfd91c79c6f002a255083661d5c403c084799835108733e03"
+                  }
+                ]
+              },
+              {
+                "from": [
+                  {
+                    "article_identity_sha256": "32367ea725c326db7e75a487e2894ca139f791521439fd7800cd99bb76e6ab72",
+                    "wording_sha256": "0f99a46b2de4de21be053af7bc0036037d7af278a84a07df9cd092c0b6aef1f1"
+                  }
+                ],
+                "publisher_id": "art_30",
+                "status": "unchanged",
+                "to": [
+                  {
+                    "article_identity_sha256": "53aacb54ac5ada01e08250360e07b2097de16dca9cee0a7901214e073a62325c",
+                    "wording_sha256": "0f99a46b2de4de21be053af7bc0036037d7af278a84a07df9cd092c0b6aef1f1"
+                  }
+                ]
+              },
+              {
+                "from": [
+                  {
+                    "article_identity_sha256": "42ce9b04b4413e84bd5a796e49fdc8ad279cafce5fb7449b3feb9aca89421ee2",
+                    "wording_sha256": "df8fb3bb675d7263c919a81504cea59fbe74f87a699a375fbbef50e5441a6e0e"
+                  }
+                ],
+                "publisher_id": "art_30-1",
+                "status": "unchanged",
+                "to": [
+                  {
+                    "article_identity_sha256": "59d3c5a1b431504e6c7bcba82c028bb92be0ba1f06dd11089e94a4bf7407c2a8",
+                    "wording_sha256": "df8fb3bb675d7263c919a81504cea59fbe74f87a699a375fbbef50e5441a6e0e"
+                  }
+                ]
+              },
+              {
+                "from": [
+                  {
+                    "article_identity_sha256": "2a09ae37d170d5008f977ac2119e121e6bcbad4dabb2807b67de8f5e180a2baf",
+                    "wording_sha256": "661b04b1a92fb2e565c857da934ffa37b8b5ed397f0d48e1c1ceafe545054504"
+                  }
+                ],
+                "publisher_id": "art_30-2",
+                "status": "unchanged",
+                "to": [
+                  {
+                    "article_identity_sha256": "5f24b31f95cdfde01458102e778d446250c41db0be0230bbf86f89aa8a9c275a",
+                    "wording_sha256": "661b04b1a92fb2e565c857da934ffa37b8b5ed397f0d48e1c1ceafe545054504"
+                  }
+                ]
+              },
+              {
+                "from": [
+                  {
+                    "article_identity_sha256": "bec3f203c4944135c7ee9ae06563dba6bcda2c03047ecee9d22099dfd9979855",
+                    "wording_sha256": "a822a0f41158bee1da881a9e036e17993a9bc408a5317b73a9717307da81b5c1"
+                  }
+                ],
+                "publisher_id": "art_31",
+                "status": "unchanged",
+                "to": [
+                  {
+                    "article_identity_sha256": "b95bd1087ba6e692d93ecb372dd37fed39e4a86537df9c1db85175e5b6e30b62",
+                    "wording_sha256": "a822a0f41158bee1da881a9e036e17993a9bc408a5317b73a9717307da81b5c1"
+                  }
+                ]
+              },
+              {
+                "from": [
+                  {
+                    "article_identity_sha256": "86598b7a320f856c273cac745edbcaf57a903d36a6056e18167e9481f0109f48",
+                    "wording_sha256": "3b2b74ed003fc6157e236c1f063de54e8554c252a7c78e2006fad4309c5d6176"
+                  }
+                ],
+                "publisher_id": "art_31-1",
+                "status": "unchanged",
+                "to": [
+                  {
+                    "article_identity_sha256": "bfa706c6a3f8ac1479c2d6927954017123b676fee51d68c51e3ec28fe8983767",
+                    "wording_sha256": "3b2b74ed003fc6157e236c1f063de54e8554c252a7c78e2006fad4309c5d6176"
+                  }
+                ]
+              },
+              {
+                "from": [
+                  {
+                    "article_identity_sha256": "e80e7d5b3ebae94402872fca7340d97c4c69662b471aac7fddec0cd76844474d",
+                    "wording_sha256": "9db3c69d64be0557368a68d33d3b51e236f0ae525d7277cb95306a192eff6d1d"
+                  }
+                ],
+                "publisher_id": "art_32",
+                "status": "unchanged",
+                "to": [
+                  {
+                    "article_identity_sha256": "fb24498c534e3bef51bba54f0ece7dcec146ef9d16c4cc6dff0f397c4dd212fc",
+                    "wording_sha256": "9db3c69d64be0557368a68d33d3b51e236f0ae525d7277cb95306a192eff6d1d"
+                  }
+                ]
+              },
+              {
+                "from": [
+                  {
+                    "article_identity_sha256": "1085ebb16ee5762fe66b20c89a9b995469be436158a9fdafbe295082f0eff4c4",
+                    "wording_sha256": "ea97896bd198b4afac24c4f9430fc2798c0b848da418c1d43b00c5756d3f7b84"
+                  }
+                ],
+                "publisher_id": "art_33",
+                "status": "unchanged",
+                "to": [
+                  {
+                    "article_identity_sha256": "036cd43b1a600d7c75210b129c865fccc518873e7e3ae2ecb227f5b94c2dedd0",
+                    "wording_sha256": "ea97896bd198b4afac24c4f9430fc2798c0b848da418c1d43b00c5756d3f7b84"
+                  }
+                ]
+              },
+              {
+                "from": [
+                  {
+                    "article_identity_sha256": "f1785e7f507de3baa5d281d37c351095b5ca22d2bc13c14c4cc8cd2a7d5df8d2",
+                    "wording_sha256": "199086eb2e6aa78b651a48aff5e2c51430893c3383bce31212412c7c0714c427"
+                  }
+                ],
+                "publisher_id": "art_34",
+                "status": "unchanged",
+                "to": [
+                  {
+                    "article_identity_sha256": "9efd3ebb4192dd7392c309ec6944e3faf3e3e184d54fa14cd0caca868227f9f0",
+                    "wording_sha256": "199086eb2e6aa78b651a48aff5e2c51430893c3383bce31212412c7c0714c427"
+                  }
+                ]
+              },
+              {
+                "from": [
+                  {
+                    "article_identity_sha256": "8b046b5215fc50f80bbe9572692efa383f597d1f7784248d6de99edff5112078",
+                    "wording_sha256": "53590624107d89e6b816fa45f16d8849b166008484fed12af50d653d6826784c"
+                  }
+                ],
+                "publisher_id": "art_34-1",
+                "status": "unchanged",
+                "to": [
+                  {
+                    "article_identity_sha256": "42432facc9ccde5e4dd26f7de8e93637ceccbfa7710f8e77d9bc851486122ced",
+                    "wording_sha256": "53590624107d89e6b816fa45f16d8849b166008484fed12af50d653d6826784c"
+                  }
+                ]
+              },
+              {
+                "from": [
+                  {
+                    "article_identity_sha256": "8e52933c1a9ab53149a302147acf2dff609fab85e4958d8412dc4e6d8e611241",
+                    "wording_sha256": "31a3e3e7ce3125e5870c6a2b5164131bd1b7a3dd82e7f5089bb9bf2f814371c8"
+                  }
+                ],
+                "publisher_id": "art_34-2",
+                "status": "unchanged",
+                "to": [
+                  {
+                    "article_identity_sha256": "b8b565658ec939e8c8cdf29499f46280c0db0638498d133a8c7f2d0de847d118",
+                    "wording_sha256": "31a3e3e7ce3125e5870c6a2b5164131bd1b7a3dd82e7f5089bb9bf2f814371c8"
+                  }
+                ]
+              },
+              {
+                "from": [
+                  {
+                    "article_identity_sha256": "c22f5f46565e5445d5b993a8d8d7c98142d9c04125d081632fb80ab048424ea1",
+                    "wording_sha256": "6f996421f17ab40f466ee4090aa48ad3ac0d377ad36ee24e1db0adba9a06f4da"
+                  }
+                ],
+                "publisher_id": "art_34-3",
+                "status": "unchanged",
+                "to": [
+                  {
+                    "article_identity_sha256": "ce28a66d8dd3a63eda7026b91ccbdfa83c38f54b885bb7d2b9ea09b64aed42fe",
+                    "wording_sha256": "6f996421f17ab40f466ee4090aa48ad3ac0d377ad36ee24e1db0adba9a06f4da"
+                  }
+                ]
+              },
+              {
+                "from": [
+                  {
+                    "article_identity_sha256": "a5ad2da4adeb2a79bd53bd6bd6ecdae872800e18edcda4ecddf955448a74a3e5",
+                    "wording_sha256": "3086d8733b59cdcba1d719b10a79e6e064e967af15401b0fecf58ed2d83cabe6"
+                  }
+                ],
+                "publisher_id": "art_35",
+                "status": "unchanged",
+                "to": [
+                  {
+                    "article_identity_sha256": "5959705616c69b8a4013a49ce8ca6f2ab6f85216a73deda2770762bbdfaf752c",
+                    "wording_sha256": "3086d8733b59cdcba1d719b10a79e6e064e967af15401b0fecf58ed2d83cabe6"
+                  }
+                ]
+              },
+              {
+                "from": [
+                  {
+                    "article_identity_sha256": "3e8328f030e6d0aee15cf057465eeb40fe29e1a7abbb4cb3afcf7d41fe58823c",
+                    "wording_sha256": "ad44bc1f4dca26b2ff9a45cd83b1e5472110c0b63c67e6b3acdb5fe2fd5655d5"
+                  }
+                ],
+                "publisher_id": "art_35-1",
+                "status": "unchanged",
+                "to": [
+                  {
+                    "article_identity_sha256": "48ab4f03ea92d822923779effbd9704885c34a8bc80bae9db7eca6650873252b",
+                    "wording_sha256": "ad44bc1f4dca26b2ff9a45cd83b1e5472110c0b63c67e6b3acdb5fe2fd5655d5"
+                  }
+                ]
+              },
+              {
+                "from": [
+                  {
+                    "article_identity_sha256": "445f174a513ecde7a6b0be465d89d85792cbaa38e2edb7623583d1de895489e0",
+                    "wording_sha256": "3ad41bf93cc520b9abe47b35e4a2a3430cf70c86dd4bc154bc6088b9f08cbb0b"
+                  }
+                ],
+                "publisher_id": "art_36",
+                "status": "unchanged",
+                "to": [
+                  {
+                    "article_identity_sha256": "94cf047d6ff6490ce8d4b9209d2f2b6837e2be21d29cb5a970d8fa9160877cb6",
+                    "wording_sha256": "3ad41bf93cc520b9abe47b35e4a2a3430cf70c86dd4bc154bc6088b9f08cbb0b"
+                  }
+                ]
+              },
+              {
+                "from": [
+                  {
+                    "article_identity_sha256": "9376c79040e6a3873450deaad15f147484d5c5188acf3411d4692d9aa666ae1c",
+                    "wording_sha256": "a61d907a7817ee518058f6bea97898ebffa668bf720128b62e5b286aee2d512a"
+                  }
+                ],
+                "publisher_id": "art_37",
+                "status": "unchanged",
+                "to": [
+                  {
+                    "article_identity_sha256": "cea018605ed4f1d2b94bc15508768154444a11454e299e080e727fd9e48c88e1",
+                    "wording_sha256": "a61d907a7817ee518058f6bea97898ebffa668bf720128b62e5b286aee2d512a"
+                  }
+                ]
+              },
+              {
+                "from": [
+                  {
+                    "article_identity_sha256": "e594010cc633d1d993d0b202e0f2490af8fa2a9de4e74f9be4ea4ae8734dbf26",
+                    "wording_sha256": "9b5f3c44bb62f213cabbd23115c7aa1470c1ff9311460285fb14c34aef1ff92d"
+                  }
+                ],
+                "publisher_id": "art_38",
+                "status": "unchanged",
+                "to": [
+                  {
+                    "article_identity_sha256": "4e1991fe8264a860285abe8bfe1b0e93a27437318265353d9ead083ec000df9e",
+                    "wording_sha256": "9b5f3c44bb62f213cabbd23115c7aa1470c1ff9311460285fb14c34aef1ff92d"
+                  }
+                ]
+              },
+              {
+                "from": [
+                  {
+                    "article_identity_sha256": "d64e53555ed2a62f033950f68d21fbc3fd18083beb7600a0810ca0e15b02d7b0",
+                    "wording_sha256": "5a90ec16b499404f58cb782a790ac62ae9b28fc986b7ce2ea0bc9fe15e548847"
+                  }
+                ],
+                "publisher_id": "art_39",
+                "status": "unchanged",
+                "to": [
+                  {
+                    "article_identity_sha256": "5d6515705fdfa4a59c533844de0740af75fe9ef752f06fba31a9385b97cab660",
+                    "wording_sha256": "5a90ec16b499404f58cb782a790ac62ae9b28fc986b7ce2ea0bc9fe15e548847"
+                  }
+                ]
+              },
+              {
+                "from": [
+                  {
+                    "article_identity_sha256": "506deb4c564247a671500688192f12d70afcef93c2ba466029972d9d272e918c",
+                    "wording_sha256": "e3d9d704f772e929529ac98fad6ccd57ba766d4c1cd895a07cde7dd54bb4c2c0"
+                  }
+                ],
+                "publisher_id": "art_4",
+                "status": "unchanged",
+                "to": [
+                  {
+                    "article_identity_sha256": "2b5f88dcc23dc90b3aa6f267182656228be8354755fffafbf251af47b2f545b3",
+                    "wording_sha256": "e3d9d704f772e929529ac98fad6ccd57ba766d4c1cd895a07cde7dd54bb4c2c0"
+                  }
+                ]
+              },
+              {
+                "from": [
+                  {
+                    "article_identity_sha256": "fc1c1fda1d6d768931cf296275582a63259fd60b5078b71f7828f8bfee7a7391",
+                    "wording_sha256": "954a39837844ca368683b17d13f0c4df2444653ff84f41f76824bcb265815bb1"
+                  }
+                ],
+                "publisher_id": "art_40",
+                "status": "unchanged",
+                "to": [
+                  {
+                    "article_identity_sha256": "83a8aab5396b5c70ce17d1d3ba0637ae60948a3e601eafb1e24c8f9cb0b6695e",
+                    "wording_sha256": "954a39837844ca368683b17d13f0c4df2444653ff84f41f76824bcb265815bb1"
+                  }
+                ]
+              },
+              {
+                "from": [
+                  {
+                    "article_identity_sha256": "bd7099c8b122e0b8d88023376c46e7c83a75d6a55f9d3685d06945bb3847fa02",
+                    "wording_sha256": "55d4f72ab6841d838227d0e50306e39418ae2b50697eb0dba1d4093d29d0ed43"
+                  }
+                ],
+                "publisher_id": "art_41",
+                "status": "unchanged",
+                "to": [
+                  {
+                    "article_identity_sha256": "c43ddbd64865a9c648f4c6287ae72f7a0e154a4655c67c7eb110f3712a2ac627",
+                    "wording_sha256": "55d4f72ab6841d838227d0e50306e39418ae2b50697eb0dba1d4093d29d0ed43"
+                  }
+                ]
+              },
+              {
+                "from": [
+                  {
+                    "article_identity_sha256": "e22be08992af33e595a8634239673557fda60035e4521a545ba182b2b81a96ae",
+                    "wording_sha256": "4815ec58acb4efb7528a85dc30b0aca2c63dde0a32f498660caa7845075c1660"
+                  }
+                ],
+                "publisher_id": "art_42",
+                "status": "unchanged",
+                "to": [
+                  {
+                    "article_identity_sha256": "0b231f984bd98b28705d03c88bbb630fbb559152232ad002177743fd9378c6a2",
+                    "wording_sha256": "4815ec58acb4efb7528a85dc30b0aca2c63dde0a32f498660caa7845075c1660"
+                  }
+                ]
+              },
+              {
+                "from": [
+                  {
+                    "article_identity_sha256": "46e1dd5e589b19fa58047b5cc423d7ba982e7086ffbb868a75b598f14db4dc42",
+                    "wording_sha256": "9081ec00f37e15a52ed3a33b19c6bca99cee5536095762c23faf11789096947e"
+                  }
+                ],
+                "publisher_id": "art_5",
+                "status": "unchanged",
+                "to": [
+                  {
+                    "article_identity_sha256": "9f9df51b0de73ebe89a6a843757a089b2d9c21d8a12cf611184f0d51f4ed0a6f",
+                    "wording_sha256": "9081ec00f37e15a52ed3a33b19c6bca99cee5536095762c23faf11789096947e"
+                  }
+                ]
+              },
+              {
+                "from": [
+                  {
+                    "article_identity_sha256": "fcd91b049213cb0d29bb2be694980805aac372fa1d957a0f964d0fcd5baf3630",
+                    "wording_sha256": "c688ccfc64f6d05f0d4f8510cc21598611a2b4bce83c5c905536dafd03abb299"
+                  }
+                ],
+                "publisher_id": "art_7",
+                "status": "unchanged",
+                "to": [
+                  {
+                    "article_identity_sha256": "a7e4d4afb279c266fcec2bd934d1003bb75dc3d25d7f6a2671622a03e84ee96e",
+                    "wording_sha256": "c688ccfc64f6d05f0d4f8510cc21598611a2b4bce83c5c905536dafd03abb299"
+                  }
+                ]
+              },
+              {
+                "from": [
+                  {
+                    "article_identity_sha256": "ac7e7172b739d5a9a8dcb787f32ee229b9fe043c57edb68cffd18ce0d1322fa1",
+                    "wording_sha256": "b0054de6a4f294aedb84267fdfbcf1390251d9d550f034f9a677de0731088966"
+                  }
+                ],
+                "publisher_id": "art_8",
+                "status": "unchanged",
+                "to": [
+                  {
+                    "article_identity_sha256": "bc264a3d1b2c151082f281ea01beeb7e3ea0b3555011e106ba6a33d79dcdb01a",
+                    "wording_sha256": "b0054de6a4f294aedb84267fdfbcf1390251d9d550f034f9a677de0731088966"
+                  }
+                ]
+              },
+              {
+                "from": [
+                  {
+                    "article_identity_sha256": "f4270fe90d947f1c47fb1babfe5b736fc52546e98dd90e74eabf3cdf50998126",
+                    "wording_sha256": "3b9d1be4f3a8391213c5d85b5a35f59bc27a84b2ac3242366e1d90b846fff815"
+                  }
+                ],
+                "publisher_id": "art_9",
+                "status": "unchanged",
+                "to": [
+                  {
+                    "article_identity_sha256": "dfa25504ec6d94d848586759bef36d7b4ebc8a08d82b26106452ac5ebb8aa74c",
+                    "wording_sha256": "3b9d1be4f3a8391213c5d85b5a35f59bc27a84b2ac3242366e1d90b846fff815"
+                  }
+                ]
+              }
+            ],
+            "counts": {
+              "added": 1,
+              "changed": 1,
+              "removed": 1,
+              "unchanged": 47
+            },
+            "from": {
+              "applicability_date": "2024-02-01",
+              "article_identities": [
+                "05308b0478c8f6bf9ab81db3514594a5bd4098555db06f5a656ab27130f0d7fb",
+                "09858b46b63bc2137b430ec31647da23bfa65008575b165ff17daa1262cd34a7",
+                "09bab19edb5e9084cbe3cbc2bf02f4e5e1b58e7bea014bb753b67925d9c27fd3",
+                "1085ebb16ee5762fe66b20c89a9b995469be436158a9fdafbe295082f0eff4c4",
+                "1acfd78fefb365ce9ff8e4b6f11f94fbe26a66ddc67ab1f46e9b04b847bb857e",
+                "2a09ae37d170d5008f977ac2119e121e6bcbad4dabb2807b67de8f5e180a2baf",
+                "2ba783abdbe3cfd7736f7e645a19b423fe6940b5e4aa458e01b51d1a555fadc3",
+                "2bcf7567d4fec6a1a48c08e2007848bf9dbcf548c4e759da1cb252870d2dcfb5",
+                "32367ea725c326db7e75a487e2894ca139f791521439fd7800cd99bb76e6ab72",
+                "3ae9e0b3a4df533b44bbc1fe8e47e64b07d208b4c0b549429591c0fb56b22ab3",
+                "3e8328f030e6d0aee15cf057465eeb40fe29e1a7abbb4cb3afcf7d41fe58823c",
+                "3fe7cefa008102ed1dc3d0101c710b082b9d81a36de2d0a950efc800d317426a",
+                "40519d9855a5144d49478ffcd54b19cda6b3e7351771c5594a164ff8a62525e3",
+                "42ce9b04b4413e84bd5a796e49fdc8ad279cafce5fb7449b3feb9aca89421ee2",
+                "445f174a513ecde7a6b0be465d89d85792cbaa38e2edb7623583d1de895489e0",
+                "46e1dd5e589b19fa58047b5cc423d7ba982e7086ffbb868a75b598f14db4dc42",
+                "46e4579a11a5336953829a453a351220e0cbfec1d360ebd8a3413ea7216ab2f7",
+                "479068996300dafdbaeab50031c2c1346bae35bd47bb6c893c81653ca12f6e96",
+                "48e3af1e3ef924eab2a94922f8afb48e72efd50a3f673c9c0c2cc322ef432e40",
+                "506deb4c564247a671500688192f12d70afcef93c2ba466029972d9d272e918c",
+                "52f46a3f576269e76df131dddaf3aea72f93a8f8a75c4efa56299f88fb767bcb",
+                "5550a5c029011ec8a035da9a6245304c2606f178ccc8e7978d13c760a12c5004",
+                "86598b7a320f856c273cac745edbcaf57a903d36a6056e18167e9481f0109f48",
+                "8b046b5215fc50f80bbe9572692efa383f597d1f7784248d6de99edff5112078",
+                "8e52933c1a9ab53149a302147acf2dff609fab85e4958d8412dc4e6d8e611241",
+                "9261b305d0cf29c4b2dc464e7b7895268f959615e42248c7541f9d3e40199439",
+                "9376c79040e6a3873450deaad15f147484d5c5188acf3411d4692d9aa666ae1c",
+                "99eb9108980fda9a992eac4c011e9208868afbb8248b7eb70c0d7da73e4620e2",
+                "9c3876a608dd51d7a9137343e2e05b7a4c3d9a5b13a2b6e1034cadfec607a316",
+                "a5ad2da4adeb2a79bd53bd6bd6ecdae872800e18edcda4ecddf955448a74a3e5",
+                "ac7e7172b739d5a9a8dcb787f32ee229b9fe043c57edb68cffd18ce0d1322fa1",
+                "adf6a2791abb7e0bf2f203c6ad7c0b3dca9b28c06e490c3e9e9364b5ebcff165",
+                "bd7099c8b122e0b8d88023376c46e7c83a75d6a55f9d3685d06945bb3847fa02",
+                "bec3f203c4944135c7ee9ae06563dba6bcda2c03047ecee9d22099dfd9979855",
+                "c22f5f46565e5445d5b993a8d8d7c98142d9c04125d081632fb80ab048424ea1",
+                "c25d9d4e10be346349d4ce09a504c4fb59bef728bfe8f004395a128d7371edba",
+                "c36ab9a17715d87a5aaf5cf6e1da14266df09bda143ed77eb3b4c5d09f952820",
+                "c86fe9cf34f27d8bc5f65ecb91e33b2a8a0ec9127ea03bfe6aa9ca498e499cd3",
+                "d2e7dc693512cfcd5cd4a74cbc84d7982c8047823be319bf1508c7acfc59803b",
+                "d64e53555ed2a62f033950f68d21fbc3fd18083beb7600a0810ca0e15b02d7b0",
+                "e1d9b67433cd3044d665280d885246a0cff401ccfa7d9f964cb03816914f3a83",
+                "e22be08992af33e595a8634239673557fda60035e4521a545ba182b2b81a96ae",
+                "e594010cc633d1d993d0b202e0f2490af8fa2a9de4e74f9be4ea4ae8734dbf26",
+                "e80e7d5b3ebae94402872fca7340d97c4c69662b471aac7fddec0cd76844474d",
+                "f1785e7f507de3baa5d281d37c351095b5ca22d2bc13c14c4cc8cd2a7d5df8d2",
+                "f3c96389f8e28c9a15a4f114bd4506f338444a770fc7a6d17c7910f84ec90b8d",
+                "f4270fe90d947f1c47fb1babfe5b736fc52546e98dd90e74eabf3cdf50998126",
+                "fc1c1fda1d6d768931cf296275582a63259fd60b5078b71f7828f8bfee7a7391",
+                "fcd91b049213cb0d29bb2be694980805aac372fa1d957a0f964d0fcd5baf3630"
+              ],
+              "articles": [
+                {
+                  "article_identity_sha256": "05308b0478c8f6bf9ab81db3514594a5bd4098555db06f5a656ab27130f0d7fb",
+                  "article_valid_from": "2021-08-22",
+                  "validity_conflict": true
+                },
+                {
+                  "article_identity_sha256": "09858b46b63bc2137b430ec31647da23bfa65008575b165ff17daa1262cd34a7",
+                  "article_valid_from": "2021-08-22",
+                  "validity_conflict": true
+                },
+                {
+                  "article_identity_sha256": "09bab19edb5e9084cbe3cbc2bf02f4e5e1b58e7bea014bb753b67925d9c27fd3",
+                  "article_valid_from": "2021-08-22",
+                  "validity_conflict": true
+                },
+                {
+                  "article_identity_sha256": "1085ebb16ee5762fe66b20c89a9b995469be436158a9fdafbe295082f0eff4c4",
+                  "article_valid_from": "2021-08-22",
+                  "validity_conflict": true
+                },
+                {
+                  "article_identity_sha256": "1acfd78fefb365ce9ff8e4b6f11f94fbe26a66ddc67ab1f46e9b04b847bb857e",
+                  "article_valid_from": "2021-08-22",
+                  "validity_conflict": true
+                },
+                {
+                  "article_identity_sha256": "2a09ae37d170d5008f977ac2119e121e6bcbad4dabb2807b67de8f5e180a2baf",
+                  "article_valid_from": "2021-08-22",
+                  "validity_conflict": true
+                },
+                {
+                  "article_identity_sha256": "2ba783abdbe3cfd7736f7e645a19b423fe6940b5e4aa458e01b51d1a555fadc3",
+                  "article_valid_from": "2021-08-22",
+                  "validity_conflict": true
+                },
+                {
+                  "article_identity_sha256": "2bcf7567d4fec6a1a48c08e2007848bf9dbcf548c4e759da1cb252870d2dcfb5",
+                  "article_valid_from": "2021-08-22",
+                  "validity_conflict": true
+                },
+                {
+                  "article_identity_sha256": "32367ea725c326db7e75a487e2894ca139f791521439fd7800cd99bb76e6ab72",
+                  "article_valid_from": "2023-07-03",
+                  "validity_conflict": true
+                },
+                {
+                  "article_identity_sha256": "3ae9e0b3a4df533b44bbc1fe8e47e64b07d208b4c0b549429591c0fb56b22ab3",
+                  "article_valid_from": "2023-07-03",
+                  "validity_conflict": true
+                },
+                {
+                  "article_identity_sha256": "3e8328f030e6d0aee15cf057465eeb40fe29e1a7abbb4cb3afcf7d41fe58823c",
+                  "article_valid_from": "2021-08-22",
+                  "validity_conflict": true
+                },
+                {
+                  "article_identity_sha256": "3fe7cefa008102ed1dc3d0101c710b082b9d81a36de2d0a950efc800d317426a",
+                  "article_valid_from": "2023-07-03",
+                  "validity_conflict": true
+                },
+                {
+                  "article_identity_sha256": "40519d9855a5144d49478ffcd54b19cda6b3e7351771c5594a164ff8a62525e3",
+                  "article_valid_from": "2021-08-22",
+                  "validity_conflict": true
+                },
+                {
+                  "article_identity_sha256": "42ce9b04b4413e84bd5a796e49fdc8ad279cafce5fb7449b3feb9aca89421ee2",
+                  "article_valid_from": "2023-07-03",
+                  "validity_conflict": true
+                },
+                {
+                  "article_identity_sha256": "445f174a513ecde7a6b0be465d89d85792cbaa38e2edb7623583d1de895489e0",
+                  "article_valid_from": "2021-08-22",
+                  "validity_conflict": true
+                },
+                {
+                  "article_identity_sha256": "46e1dd5e589b19fa58047b5cc423d7ba982e7086ffbb868a75b598f14db4dc42",
+                  "article_valid_from": "2021-08-22",
+                  "validity_conflict": true
+                },
+                {
+                  "article_identity_sha256": "46e4579a11a5336953829a453a351220e0cbfec1d360ebd8a3413ea7216ab2f7",
+                  "article_valid_from": "2021-08-22",
+                  "validity_conflict": true
+                },
+                {
+                  "article_identity_sha256": "479068996300dafdbaeab50031c2c1346bae35bd47bb6c893c81653ca12f6e96",
+                  "article_valid_from": "2023-07-03",
+                  "validity_conflict": true
+                },
+                {
+                  "article_identity_sha256": "48e3af1e3ef924eab2a94922f8afb48e72efd50a3f673c9c0c2cc322ef432e40",
+                  "article_valid_from": "2021-08-22",
+                  "validity_conflict": true
+                },
+                {
+                  "article_identity_sha256": "506deb4c564247a671500688192f12d70afcef93c2ba466029972d9d272e918c",
+                  "article_valid_from": "2021-08-22",
+                  "validity_conflict": true
+                },
+                {
+                  "article_identity_sha256": "52f46a3f576269e76df131dddaf3aea72f93a8f8a75c4efa56299f88fb767bcb",
+                  "article_valid_from": "2021-08-22",
+                  "validity_conflict": true
+                },
+                {
+                  "article_identity_sha256": "5550a5c029011ec8a035da9a6245304c2606f178ccc8e7978d13c760a12c5004",
+                  "article_valid_from": "2021-08-22",
+                  "validity_conflict": true
+                },
+                {
+                  "article_identity_sha256": "86598b7a320f856c273cac745edbcaf57a903d36a6056e18167e9481f0109f48",
+                  "article_valid_from": "2021-08-22",
+                  "validity_conflict": true
+                },
+                {
+                  "article_identity_sha256": "8b046b5215fc50f80bbe9572692efa383f597d1f7784248d6de99edff5112078",
+                  "article_valid_from": "2021-08-22",
+                  "validity_conflict": true
+                },
+                {
+                  "article_identity_sha256": "8e52933c1a9ab53149a302147acf2dff609fab85e4958d8412dc4e6d8e611241",
+                  "article_valid_from": "2021-08-22",
+                  "validity_conflict": true
+                },
+                {
+                  "article_identity_sha256": "9261b305d0cf29c4b2dc464e7b7895268f959615e42248c7541f9d3e40199439",
+                  "article_valid_from": "2021-08-22",
+                  "validity_conflict": true
+                },
+                {
+                  "article_identity_sha256": "9376c79040e6a3873450deaad15f147484d5c5188acf3411d4692d9aa666ae1c",
+                  "article_valid_from": "2021-08-22",
+                  "validity_conflict": true
+                },
+                {
+                  "article_identity_sha256": "99eb9108980fda9a992eac4c011e9208868afbb8248b7eb70c0d7da73e4620e2",
+                  "article_valid_from": "2021-08-22",
+                  "validity_conflict": true
+                },
+                {
+                  "article_identity_sha256": "9c3876a608dd51d7a9137343e2e05b7a4c3d9a5b13a2b6e1034cadfec607a316",
+                  "article_valid_from": "2023-07-03",
+                  "validity_conflict": true
+                },
+                {
+                  "article_identity_sha256": "a5ad2da4adeb2a79bd53bd6bd6ecdae872800e18edcda4ecddf955448a74a3e5",
+                  "article_valid_from": "2023-01-01",
+                  "validity_conflict": true
+                },
+                {
+                  "article_identity_sha256": "ac7e7172b739d5a9a8dcb787f32ee229b9fe043c57edb68cffd18ce0d1322fa1",
+                  "article_valid_from": "2023-07-03",
+                  "validity_conflict": true
+                },
+                {
+                  "article_identity_sha256": "adf6a2791abb7e0bf2f203c6ad7c0b3dca9b28c06e490c3e9e9364b5ebcff165",
+                  "article_valid_from": "2021-08-22",
+                  "validity_conflict": true
+                },
+                {
+                  "article_identity_sha256": "bd7099c8b122e0b8d88023376c46e7c83a75d6a55f9d3685d06945bb3847fa02",
+                  "article_valid_from": "2021-08-22",
+                  "validity_conflict": true
+                },
+                {
+                  "article_identity_sha256": "bec3f203c4944135c7ee9ae06563dba6bcda2c03047ecee9d22099dfd9979855",
+                  "article_valid_from": "2021-08-22",
+                  "validity_conflict": true
+                },
+                {
+                  "article_identity_sha256": "c22f5f46565e5445d5b993a8d8d7c98142d9c04125d081632fb80ab048424ea1",
+                  "article_valid_from": "2021-08-22",
+                  "validity_conflict": true
+                },
+                {
+                  "article_identity_sha256": "c25d9d4e10be346349d4ce09a504c4fb59bef728bfe8f004395a128d7371edba",
+                  "article_valid_from": "2023-01-01",
+                  "validity_conflict": true
+                },
+                {
+                  "article_identity_sha256": "c36ab9a17715d87a5aaf5cf6e1da14266df09bda143ed77eb3b4c5d09f952820",
+                  "article_valid_from": "2021-08-22",
+                  "validity_conflict": true
+                },
+                {
+                  "article_identity_sha256": "c86fe9cf34f27d8bc5f65ecb91e33b2a8a0ec9127ea03bfe6aa9ca498e499cd3",
+                  "article_valid_from": "2023-07-03",
+                  "validity_conflict": true
+                },
+                {
+                  "article_identity_sha256": "d2e7dc693512cfcd5cd4a74cbc84d7982c8047823be319bf1508c7acfc59803b",
+                  "article_valid_from": "2023-07-03",
+                  "validity_conflict": true
+                },
+                {
+                  "article_identity_sha256": "d64e53555ed2a62f033950f68d21fbc3fd18083beb7600a0810ca0e15b02d7b0",
+                  "article_valid_from": "2021-08-22",
+                  "validity_conflict": true
+                },
+                {
+                  "article_identity_sha256": "e1d9b67433cd3044d665280d885246a0cff401ccfa7d9f964cb03816914f3a83",
+                  "article_valid_from": "2023-09-16",
+                  "validity_conflict": true
+                },
+                {
+                  "article_identity_sha256": "e22be08992af33e595a8634239673557fda60035e4521a545ba182b2b81a96ae",
+                  "article_valid_from": "2021-08-22",
+                  "validity_conflict": true
+                },
+                {
+                  "article_identity_sha256": "e594010cc633d1d993d0b202e0f2490af8fa2a9de4e74f9be4ea4ae8734dbf26",
+                  "article_valid_from": "2021-08-22",
+                  "validity_conflict": true
+                },
+                {
+                  "article_identity_sha256": "e80e7d5b3ebae94402872fca7340d97c4c69662b471aac7fddec0cd76844474d",
+                  "article_valid_from": "2021-08-22",
+                  "validity_conflict": true
+                },
+                {
+                  "article_identity_sha256": "f1785e7f507de3baa5d281d37c351095b5ca22d2bc13c14c4cc8cd2a7d5df8d2",
+                  "article_valid_from": "2021-08-22",
+                  "validity_conflict": true
+                },
+                {
+                  "article_identity_sha256": "f3c96389f8e28c9a15a4f114bd4506f338444a770fc7a6d17c7910f84ec90b8d",
+                  "article_valid_from": "2021-08-22",
+                  "validity_conflict": true
+                },
+                {
+                  "article_identity_sha256": "f4270fe90d947f1c47fb1babfe5b736fc52546e98dd90e74eabf3cdf50998126",
+                  "article_valid_from": "2023-07-03",
+                  "validity_conflict": true
+                },
+                {
+                  "article_identity_sha256": "fc1c1fda1d6d768931cf296275582a63259fd60b5078b71f7828f8bfee7a7391",
+                  "article_valid_from": "2021-08-22",
+                  "validity_conflict": true
+                },
+                {
+                  "article_identity_sha256": "fcd91b049213cb0d29bb2be694980805aac372fa1d957a0f964d0fcd5baf3630",
+                  "article_valid_from": "2021-08-22",
+                  "validity_conflict": true
+                }
+              ],
+              "articles_not_admitted": 5,
+              "expression_iri": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo/fr",
+              "language": "fra",
+              "next_applicability_date": "2025-03-07",
+              "permalink": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--5bca01f82ef3058cfebe7f8a8a6eb1f1fbeeb32b8a1ea7b2c02ac20963235e3a",
+              "publisher_legal_resource_iri": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo",
+              "publisher_work_iri": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3",
+              "stable_coordinate": "/lu-legilux/loi-1991-08-10-n3/2024-02-01",
+              "state_sha256": "5bca01f82ef3058cfebe7f8a8a6eb1f1fbeeb32b8a1ea7b2c02ac20963235e3a",
+              "validity_conflict_count": 49,
+              "validity_conflict_rule": "article_valid_from is the publisher\u0027s article-level applicability date; validity_conflict is true when it is stated and differs from the state\u0027s applicability_date"
+            },
+            "language": "fra",
+            "note": "two publisher-dated states; each article is compared by its publisher-minted id and wording digest, and nothing about legal effect is asserted",
+            "same_state": false,
+            "to": {
+              "applicability_date": "2025-03-07",
+              "article_identities": [
+                "036cd43b1a600d7c75210b129c865fccc518873e7e3ae2ecb227f5b94c2dedd0",
+                "0907a909a5ad79fc8aa8942d152702b353a1ec8cc818d94135b115f355bc539f",
+                "0b231f984bd98b28705d03c88bbb630fbb559152232ad002177743fd9378c6a2",
+                "0f2a000443299ecdcc99a670fdf7e65460d645532f36221736dc356052c866db",
+                "142f06f1eb7956fc56cdc0fb33173e220eab4ce70221d069b361255671d660d9",
+                "1a2440e2492fbc08f3da111e30212897fa47bb4685b6317373207f90e79f89cf",
+                "23e14ea38f55ecb8b5fb67a5b514291bf789020ae65b3b093a348ca3a885d98b",
+                "2435e51dbdca94ef724c1649fc54fed820c3773febb4fc65172ed5a44527acff",
+                "257e4c58a2efc61f3ee8ca69e488bf2cc684cbce44091f37c32d7ce6841cf55b",
+                "2b5f88dcc23dc90b3aa6f267182656228be8354755fffafbf251af47b2f545b3",
+                "30e59286b1793355346b28bfb3dc093cd867b504831c886cc637966efb09e24d",
+                "38e1bbdc98065b9f4e12a23fde87c56667960a6c295e589859c667e8056bbbe4",
+                "3a6f7c284b20a46b3ecbec71fc085aed1c068b2e56f62896836bfb3ab4878632",
+                "42432facc9ccde5e4dd26f7de8e93637ceccbfa7710f8e77d9bc851486122ced",
+                "438b9f334e50e21612c21e45a23276f12a1698da1cfe0230d82fe6bbe59b8d4f",
+                "485a82d6404496ba2014460fe45a7ec5775e0d26f559a412d8a02067259f1704",
+                "48ab4f03ea92d822923779effbd9704885c34a8bc80bae9db7eca6650873252b",
+                "4e1991fe8264a860285abe8bfe1b0e93a27437318265353d9ead083ec000df9e",
+                "53aacb54ac5ada01e08250360e07b2097de16dca9cee0a7901214e073a62325c",
+                "57924de9917e441b23a5dfab3b67686dab0b8186a11fd99a22e577c5c8d1e5b6",
+                "5959705616c69b8a4013a49ce8ca6f2ab6f85216a73deda2770762bbdfaf752c",
+                "59d3c5a1b431504e6c7bcba82c028bb92be0ba1f06dd11089e94a4bf7407c2a8",
+                "5d6515705fdfa4a59c533844de0740af75fe9ef752f06fba31a9385b97cab660",
+                "5f24b31f95cdfde01458102e778d446250c41db0be0230bbf86f89aa8a9c275a",
+                "6ae3454dd7faf78b91f4f9014baf58e276f622ffc907400b5fad690ab810880b",
+                "83a8aab5396b5c70ce17d1d3ba0637ae60948a3e601eafb1e24c8f9cb0b6695e",
+                "89cfc38e229314684b90651b5822e44951d744a747705d5bac74260905401021",
+                "94cf047d6ff6490ce8d4b9209d2f2b6837e2be21d29cb5a970d8fa9160877cb6",
+                "9efd3ebb4192dd7392c309ec6944e3faf3e3e184d54fa14cd0caca868227f9f0",
+                "9f9df51b0de73ebe89a6a843757a089b2d9c21d8a12cf611184f0d51f4ed0a6f",
+                "a0556439cc2d9cabc4ae1ca5e3840e21c31b8e67061b029e8563c625132d7614",
+                "a7e4d4afb279c266fcec2bd934d1003bb75dc3d25d7f6a2671622a03e84ee96e",
+                "a890d6b817d1e17401a73385908c72e4e30c9cdbdd0c64123f32562fac6d11fd",
+                "adb35b698cfcc116937a53247e082411a9e781b1f4df8260e45181f1a07a2e70",
+                "b8b565658ec939e8c8cdf29499f46280c0db0638498d133a8c7f2d0de847d118",
+                "b95bd1087ba6e692d93ecb372dd37fed39e4a86537df9c1db85175e5b6e30b62",
+                "bc264a3d1b2c151082f281ea01beeb7e3ea0b3555011e106ba6a33d79dcdb01a",
+                "bcbca0bb204f98cac3a06968e7da2b28ed92821271fca5a81e1f9a07dc3a39ad",
+                "bf005d0e20507c39dce4ad8e428c2be706238ade65dee7416a0dc5f7d9a10fc1",
+                "bfa706c6a3f8ac1479c2d6927954017123b676fee51d68c51e3ec28fe8983767",
+                "c20b199b6498025470730a346939f68ec8b6ebe4f365c4c0cdd2e8c2a4b6732c",
+                "c43ddbd64865a9c648f4c6287ae72f7a0e154a4655c67c7eb110f3712a2ac627",
+                "ce28a66d8dd3a63eda7026b91ccbdfa83c38f54b885bb7d2b9ea09b64aed42fe",
+                "cea018605ed4f1d2b94bc15508768154444a11454e299e080e727fd9e48c88e1",
+                "cf4f2ff079a97cf7d10263b44a7f150662cd3baccc0c8932e3f0f458cd822f49",
+                "dfa25504ec6d94d848586759bef36d7b4ebc8a08d82b26106452ac5ebb8aa74c",
+                "fb24498c534e3bef51bba54f0ece7dcec146ef9d16c4cc6dff0f397c4dd212fc",
+                "fb396969401849c499dff45c06c99e5607dcc73fea53348820737475cce2d63b",
+                "fed2bf28d96e76322611b7a57bd04fc73c3db8d1ee899dbebffd66af4e9ec832"
+              ],
+              "articles": [
+                {
+                  "article_identity_sha256": "036cd43b1a600d7c75210b129c865fccc518873e7e3ae2ecb227f5b94c2dedd0",
+                  "article_valid_from": "2025-03-07",
+                  "validity_conflict": false
+                },
+                {
+                  "article_identity_sha256": "0907a909a5ad79fc8aa8942d152702b353a1ec8cc818d94135b115f355bc539f",
+                  "article_valid_from": "2025-03-07",
+                  "validity_conflict": false
+                },
+                {
+                  "article_identity_sha256": "0b231f984bd98b28705d03c88bbb630fbb559152232ad002177743fd9378c6a2",
+                  "article_valid_from": "2025-03-07",
+                  "validity_conflict": false
+                },
+                {
+                  "article_identity_sha256": "0f2a000443299ecdcc99a670fdf7e65460d645532f36221736dc356052c866db",
+                  "article_valid_from": "2025-03-07",
+                  "validity_conflict": false
+                },
+                {
+                  "article_identity_sha256": "142f06f1eb7956fc56cdc0fb33173e220eab4ce70221d069b361255671d660d9",
+                  "article_valid_from": "2025-03-07",
+                  "validity_conflict": false
+                },
+                {
+                  "article_identity_sha256": "1a2440e2492fbc08f3da111e30212897fa47bb4685b6317373207f90e79f89cf",
+                  "article_valid_from": "2025-03-07",
+                  "validity_conflict": false
+                },
+                {
+                  "article_identity_sha256": "23e14ea38f55ecb8b5fb67a5b514291bf789020ae65b3b093a348ca3a885d98b",
+                  "article_valid_from": "2025-03-07",
+                  "validity_conflict": false
+                },
+                {
+                  "article_identity_sha256": "2435e51dbdca94ef724c1649fc54fed820c3773febb4fc65172ed5a44527acff",
+                  "article_valid_from": "2025-03-07",
+                  "validity_conflict": false
+                },
+                {
+                  "article_identity_sha256": "257e4c58a2efc61f3ee8ca69e488bf2cc684cbce44091f37c32d7ce6841cf55b",
+                  "article_valid_from": "2025-03-07",
+                  "validity_conflict": false
+                },
+                {
+                  "article_identity_sha256": "2b5f88dcc23dc90b3aa6f267182656228be8354755fffafbf251af47b2f545b3",
+                  "article_valid_from": "2025-03-07",
+                  "validity_conflict": false
+                },
+                {
+                  "article_identity_sha256": "30e59286b1793355346b28bfb3dc093cd867b504831c886cc637966efb09e24d",
+                  "article_valid_from": "2025-03-07",
+                  "validity_conflict": false
+                },
+                {
+                  "article_identity_sha256": "38e1bbdc98065b9f4e12a23fde87c56667960a6c295e589859c667e8056bbbe4",
+                  "article_valid_from": "2025-03-07",
+                  "validity_conflict": false
+                },
+                {
+                  "article_identity_sha256": "3a6f7c284b20a46b3ecbec71fc085aed1c068b2e56f62896836bfb3ab4878632",
+                  "article_valid_from": "2025-03-07",
+                  "validity_conflict": false
+                },
+                {
+                  "article_identity_sha256": "42432facc9ccde5e4dd26f7de8e93637ceccbfa7710f8e77d9bc851486122ced",
+                  "article_valid_from": "2025-03-07",
+                  "validity_conflict": false
+                },
+                {
+                  "article_identity_sha256": "438b9f334e50e21612c21e45a23276f12a1698da1cfe0230d82fe6bbe59b8d4f",
+                  "article_valid_from": "2025-03-07",
+                  "validity_conflict": false
+                },
+                {
+                  "article_identity_sha256": "485a82d6404496ba2014460fe45a7ec5775e0d26f559a412d8a02067259f1704",
+                  "article_valid_from": "2025-03-07",
+                  "validity_conflict": false
+                },
+                {
+                  "article_identity_sha256": "48ab4f03ea92d822923779effbd9704885c34a8bc80bae9db7eca6650873252b",
+                  "article_valid_from": "2025-03-07",
+                  "validity_conflict": false
+                },
+                {
+                  "article_identity_sha256": "4e1991fe8264a860285abe8bfe1b0e93a27437318265353d9ead083ec000df9e",
+                  "article_valid_from": "2025-03-07",
+                  "validity_conflict": false
+                },
+                {
+                  "article_identity_sha256": "53aacb54ac5ada01e08250360e07b2097de16dca9cee0a7901214e073a62325c",
+                  "article_valid_from": "2025-03-07",
+                  "validity_conflict": false
+                },
+                {
+                  "article_identity_sha256": "57924de9917e441b23a5dfab3b67686dab0b8186a11fd99a22e577c5c8d1e5b6",
+                  "article_valid_from": "2025-03-07",
+                  "validity_conflict": false
+                },
+                {
+                  "article_identity_sha256": "5959705616c69b8a4013a49ce8ca6f2ab6f85216a73deda2770762bbdfaf752c",
+                  "article_valid_from": "2025-03-07",
+                  "validity_conflict": false
+                },
+                {
+                  "article_identity_sha256": "59d3c5a1b431504e6c7bcba82c028bb92be0ba1f06dd11089e94a4bf7407c2a8",
+                  "article_valid_from": "2025-03-07",
+                  "validity_conflict": false
+                },
+                {
+                  "article_identity_sha256": "5d6515705fdfa4a59c533844de0740af75fe9ef752f06fba31a9385b97cab660",
+                  "article_valid_from": "2025-03-07",
+                  "validity_conflict": false
+                },
+                {
+                  "article_identity_sha256": "5f24b31f95cdfde01458102e778d446250c41db0be0230bbf86f89aa8a9c275a",
+                  "article_valid_from": "2025-03-07",
+                  "validity_conflict": false
+                },
+                {
+                  "article_identity_sha256": "6ae3454dd7faf78b91f4f9014baf58e276f622ffc907400b5fad690ab810880b",
+                  "article_valid_from": "2025-03-07",
+                  "validity_conflict": false
+                },
+                {
+                  "article_identity_sha256": "83a8aab5396b5c70ce17d1d3ba0637ae60948a3e601eafb1e24c8f9cb0b6695e",
+                  "article_valid_from": "2025-03-07",
+                  "validity_conflict": false
+                },
+                {
+                  "article_identity_sha256": "89cfc38e229314684b90651b5822e44951d744a747705d5bac74260905401021",
+                  "article_valid_from": "2025-03-07",
+                  "validity_conflict": false
+                },
+                {
+                  "article_identity_sha256": "94cf047d6ff6490ce8d4b9209d2f2b6837e2be21d29cb5a970d8fa9160877cb6",
+                  "article_valid_from": "2025-03-07",
+                  "validity_conflict": false
+                },
+                {
+                  "article_identity_sha256": "9efd3ebb4192dd7392c309ec6944e3faf3e3e184d54fa14cd0caca868227f9f0",
+                  "article_valid_from": "2025-03-07",
+                  "validity_conflict": false
+                },
+                {
+                  "article_identity_sha256": "9f9df51b0de73ebe89a6a843757a089b2d9c21d8a12cf611184f0d51f4ed0a6f",
+                  "article_valid_from": "2025-03-07",
+                  "validity_conflict": false
+                },
+                {
+                  "article_identity_sha256": "a0556439cc2d9cabc4ae1ca5e3840e21c31b8e67061b029e8563c625132d7614",
+                  "article_valid_from": "2025-03-07",
+                  "validity_conflict": false
+                },
+                {
+                  "article_identity_sha256": "a7e4d4afb279c266fcec2bd934d1003bb75dc3d25d7f6a2671622a03e84ee96e",
+                  "article_valid_from": "2025-03-07",
+                  "validity_conflict": false
+                },
+                {
+                  "article_identity_sha256": "a890d6b817d1e17401a73385908c72e4e30c9cdbdd0c64123f32562fac6d11fd",
+                  "article_valid_from": "2025-03-07",
+                  "validity_conflict": false
+                },
+                {
+                  "article_identity_sha256": "adb35b698cfcc116937a53247e082411a9e781b1f4df8260e45181f1a07a2e70",
+                  "article_valid_from": "2025-03-07",
+                  "validity_conflict": false
+                },
+                {
+                  "article_identity_sha256": "b8b565658ec939e8c8cdf29499f46280c0db0638498d133a8c7f2d0de847d118",
+                  "article_valid_from": "2025-03-07",
+                  "validity_conflict": false
+                },
+                {
+                  "article_identity_sha256": "b95bd1087ba6e692d93ecb372dd37fed39e4a86537df9c1db85175e5b6e30b62",
+                  "article_valid_from": "2025-03-07",
+                  "validity_conflict": false
+                },
+                {
+                  "article_identity_sha256": "bc264a3d1b2c151082f281ea01beeb7e3ea0b3555011e106ba6a33d79dcdb01a",
+                  "article_valid_from": "2025-03-07",
+                  "validity_conflict": false
+                },
+                {
+                  "article_identity_sha256": "bcbca0bb204f98cac3a06968e7da2b28ed92821271fca5a81e1f9a07dc3a39ad",
+                  "article_valid_from": "2025-03-07",
+                  "validity_conflict": false
+                },
+                {
+                  "article_identity_sha256": "bf005d0e20507c39dce4ad8e428c2be706238ade65dee7416a0dc5f7d9a10fc1",
+                  "article_valid_from": "2025-03-07",
+                  "validity_conflict": false
+                },
+                {
+                  "article_identity_sha256": "bfa706c6a3f8ac1479c2d6927954017123b676fee51d68c51e3ec28fe8983767",
+                  "article_valid_from": "2025-03-07",
+                  "validity_conflict": false
+                },
+                {
+                  "article_identity_sha256": "c20b199b6498025470730a346939f68ec8b6ebe4f365c4c0cdd2e8c2a4b6732c",
+                  "article_valid_from": "2025-03-07",
+                  "validity_conflict": false
+                },
+                {
+                  "article_identity_sha256": "c43ddbd64865a9c648f4c6287ae72f7a0e154a4655c67c7eb110f3712a2ac627",
+                  "article_valid_from": "2025-03-07",
+                  "validity_conflict": false
+                },
+                {
+                  "article_identity_sha256": "ce28a66d8dd3a63eda7026b91ccbdfa83c38f54b885bb7d2b9ea09b64aed42fe",
+                  "article_valid_from": "2025-03-07",
+                  "validity_conflict": false
+                },
+                {
+                  "article_identity_sha256": "cea018605ed4f1d2b94bc15508768154444a11454e299e080e727fd9e48c88e1",
+                  "article_valid_from": "2025-03-07",
+                  "validity_conflict": false
+                },
+                {
+                  "article_identity_sha256": "cf4f2ff079a97cf7d10263b44a7f150662cd3baccc0c8932e3f0f458cd822f49",
+                  "article_valid_from": "2025-03-07",
+                  "validity_conflict": false
+                },
+                {
+                  "article_identity_sha256": "dfa25504ec6d94d848586759bef36d7b4ebc8a08d82b26106452ac5ebb8aa74c",
+                  "article_valid_from": "2025-03-07",
+                  "validity_conflict": false
+                },
+                {
+                  "article_identity_sha256": "fb24498c534e3bef51bba54f0ece7dcec146ef9d16c4cc6dff0f397c4dd212fc",
+                  "article_valid_from": "2025-03-07",
+                  "validity_conflict": false
+                },
+                {
+                  "article_identity_sha256": "fb396969401849c499dff45c06c99e5607dcc73fea53348820737475cce2d63b",
+                  "article_valid_from": "2025-03-07",
+                  "validity_conflict": false
+                },
+                {
+                  "article_identity_sha256": "fed2bf28d96e76322611b7a57bd04fc73c3db8d1ee899dbebffd66af4e9ec832",
+                  "article_valid_from": "2025-03-07",
+                  "validity_conflict": false
+                }
+              ],
+              "articles_not_admitted": 5,
+              "expression_iri": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo/later",
+              "language": "fra",
+              "next_applicability_date": null,
+              "permalink": "/lu-legilux/loi-1991-08-10-n3/2025-03-07--732ebe7c7b4ba3cb176449faa917082793b8fb2dc828485bb49845dd92790a9a",
+              "publisher_legal_resource_iri": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo",
+              "publisher_work_iri": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3",
+              "stable_coordinate": "/lu-legilux/loi-1991-08-10-n3/2025-03-07",
+              "state_sha256": "732ebe7c7b4ba3cb176449faa917082793b8fb2dc828485bb49845dd92790a9a",
+              "validity_conflict_count": 0,
+              "validity_conflict_rule": "article_valid_from is the publisher\u0027s article-level applicability date; validity_conflict is true when it is stated and differs from the state\u0027s applicability_date"
+            }
+          }
+        ],
+        "corpus_sha256": "\u003Cvaries-per-run\u003E",
+        "index_sha256": "\u003Cvaries-per-run\u003E",
+        "languages_not_compared": [],
+        "publisher": "lu-legilux",
+        "requested_date_from": "2024-02-01",
+        "requested_date_to": "2025-03-07",
+        "requested_identifier": "/lu-legilux/loi-1991-08-10-n3",
+        "requested_language": "fra",
+        "validity_conflict_rule": "article_valid_from is the publisher\u0027s article-level applicability date; validity_conflict is true when it is stated and differs from the state\u0027s applicability_date",
+        "wording_rule": "wording_sha256 is the SHA-256 of a canonical JSON array of [kind, text, target] for the Text and Reference tokens of the article\u0027s stored token stream, in order, with consecutive text merged into one entry (reference labels and targets included; note references, note bodies and modification markers excluded); wording_changed is true when it differs from the previous state of the same language, and any byte difference in the merged text or in a reference counts; paragraph and inline-formatting boundaries and whitespace-only nodes are not compared; wording_runs counts the first state and every change per language; distinct_wordings counts distinct digests per language",
+        "work_key": "loi-1991-08-10-n3"
+      }
+    },
+    {
       "operation": "dossier",
       "object_type": "work_record",
       "scenario": "the work, in the language it is held in: its identity, its held states and what the dossier does not hold",
@@ -2714,10 +4820,6 @@
     },
     {
       "operation": "cited_by",
-      "reason": "sampled when a reader is built against it"
-    },
-    {
-      "operation": "diff",
       "reason": "sampled when a reader is built against it"
     },
     {
