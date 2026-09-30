@@ -812,6 +812,61 @@ public sealed partial class LuxembourgQueryExecutionAdapterTests
     }
 
     [TestMethod]
+    public void TypedAssertionProjectionKeepsEveryTupleKeyAndNeverSharesDifferentEvidence()
+    {
+        const string subject = "http://data.legilux.public.lu/eli/etat/leg/loi/2026/01/01/a0";
+        const string predicate = "http://data.legilux.public.lu/resource/ontology/jolux#historicalLegalId";
+        var (profile, observationRef, _) = BuildProfile();
+        var first = new SourceArtifactRef("urn:uuid:00000000-0000-4000-8000-000000000001", new string('1', 64));
+        var nextDigest = new SourceArtifactRef(first.ResourceId, new string('2', 64));
+        var nextId = new SourceArtifactRef("urn:uuid:00000000-0000-4000-8000-000000000002", first.Sha256);
+        LuxembourgObservedAssertion Literal(string lexical, string datatype = "", string language = "",
+            SourceArtifactRef? evidence = null) => new(subject, predicate, LuxembourgAssertionObjectKind.Literal,
+                lexical, datatype, language, evidence ?? first);
+        // Explicit expected order: kind, lexical value, datatype, language, resource id, digest;
+        // the final two rows separately distinguish predicate and subject. This is projection
+        // input only, not a synthetic enumeration proof or a claimed population.
+        LuxembourgObservedAssertion[] expected =
+        [
+            new(subject, predicate, LuxembourgAssertionObjectKind.Iri, "https://example.invalid/value", "", "", first),
+            Literal("alpha"),
+            Literal("alpha", evidence: nextDigest),
+            Literal("alpha", evidence: nextId),
+            Literal("alpha", language: "en"),
+            Literal("alpha", datatype: "http://www.w3.org/2001/XMLSchema#string"),
+            Literal("beta"),
+            Literal("\U00010000"),
+            Literal("\uE000"),
+            new(subject, RdfType, LuxembourgAssertionObjectKind.Iri, JoluxAct, "", "", first),
+            new(subject + "b", predicate, LuxembourgAssertionObjectKind.Literal, "alpha", "", "", first),
+        ];
+        var objectRef = new SourceObjectRef(SourceCoreSchemaIds.SourceObjectRef, SourceAuthority.Jolux,
+            new SourceRegistryMemberRef(profile.ScopeBinding.SourceProfileRef, "legal_resource"),
+            subject, subject, Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(subject))),
+            profile.ScopeBinding.SourceProfileRef, null);
+        var observation = new LuxembourgResourceObservation(objectRef, observationRef,
+            expected.Reverse().Concat([expected[1]]).ToArray(), [],
+            new LuxembourgSparqlRightsChannelObservations(observationRef, observationRef, []),
+            new LuxembourgInFileRightsChannelObservations(observationRef, observationRef, []));
+        var method = typeof(LuxembourgQueryExecutionAdapter).GetMethod("TryBuildTypedAssertions",
+            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)!;
+        object?[] arguments = { new[] { observation }, null };
+        var typed = (IReadOnlyList<LuxembourgTypedAssertion>)method.Invoke(null, arguments)!;
+        Assert.IsNull(arguments[1]);
+        CollectionAssert.AreEqual(expected, typed.Select(static value => value.Assertion).ToArray());
+        Assert.AreSame(typed[0].FactDisposition, typed[1].FactDisposition,
+            "Identical immutable predicate/evidence dispositions can be reused inside one projection.");
+        Assert.AreNotSame(typed[1].FactDisposition, typed[2].FactDisposition);
+        Assert.AreNotSame(typed[1].FactDisposition, typed[3].FactDisposition);
+        Assert.AreNotSame(typed[0].FactDisposition, typed[9].FactDisposition);
+        foreach (var value in typed) Assert.AreEqual(value.Assertion.ObservationRef, value.FactDisposition.EvidenceRef);
+        var secondProjection = (IReadOnlyList<LuxembourgTypedAssertion>)method.Invoke(null,
+            new object?[] { new[] { observation }, null })!;
+        Assert.AreNotSame(typed[0].FactDisposition, secondProjection[0].FactDisposition,
+            "The cache belongs to one projection and cannot retain a run globally.");
+    }
+
+    [TestMethod]
     public async Task ProvenAssertionRowsProduceTheAcceptedTypedDispositionsWithoutCollapsingDateFamilies()
     {
         const string subjectUri = "http://data.legilux.public.lu/eli/etat/leg/loi/2026/01/01/a0";

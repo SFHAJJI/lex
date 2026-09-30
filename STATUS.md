@@ -3,6 +3,37 @@
 Updated 2026-09-30 by the driver. This file replaces the issue-comment ledgers. It is rewritten in
 every pull request that changes what is served, what is next or what is blocked.
 
+## Luxembourg typed assertion memory (Codex, 2026-09-30)
+
+The measured assertion count is 9,672,378. Typed projection previously built eight whole-population
+sort-key arrays and allocated an immutable predicate/evidence disposition for every distinct row.
+Reversible driver decision: sort the distinct array in place using the same complete ordinal tuple,
+and reuse dispositions by the exact predicate and evidence reference within one projection.
+Date facts retain their separate accepted contracts and each assertion retains its own evidence.
+
+A focused projection regression pins every ordering key, including UTF-16 ordinal ordering,
+duplicate removal, evidence resource-id/digest separation and cache lifetime. Existing acquired-row
+and date-refusal tests remain in scope. Validation passed: clean solution build (zero warnings/errors,
+38.01s), fast 3,066 passed/one platform skip (60.946s), and all 97 affected ingest checks (64.676s).
+
+An offline comparison of the actual projection on 100,000 synthetic assertions retained identical
+71,400,001-byte output (SHA256 f954e733f20457b2d8702ffe39b3ee9ec44f90f116a3de90877a71956fc9acea).
+Allocations fell from 22,871,728 to 12,469,696 bytes; retained output from 8,802,024 to 5,602,016 bytes.
+This one-predicate/one-evidence sample shares one disposition instead of 100,000. The runtime
+assembly digests were checked: the initial paired build had incorrectly reused the baseline and
+is excluded from this comparison. Evidence: `C:\lex-v3\lanes\lu-typed-projection-comparison-verified.json`.
+The sample excludes dates and scope/persistence stages; it does not establish full Luxembourg
+memory fit or population proof.
+
+The required cross-family review returned MERGE with no blockers or should-fix findings. It
+independently passed the clean build, 3,066 fast tests/one skip, all 97 affected ingest checks and
+400 randomized ordering comparisons. Removing the final digest key made the new regression fail.
+The one documentation repair records that current acquisition shares one profile observation ref,
+so its cache is bounded by the 26 recognized predicates. The cache still keys complete evidence
+identity for future inputs. The probe's single elapsed sample rose from 125.5 to 138.4 ms; this
+slice claims reduced allocations, with no speed claim. The reflection regression fails loudly if
+its private target is renamed or overloaded.
+
 ## EU Work resolution across languages (Codex, 2026-09-30)
 
 French acquisition merged in PR #808. Before serving a mount that holds both languages,
