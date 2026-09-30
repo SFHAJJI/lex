@@ -440,8 +440,8 @@ internal sealed class V3CorpusMount : IDisposable
         "the chain from the publisher's identifiers to the digests this mount verified; it holds no first-sighting event and no signature, so none is claimed";
 
     internal const string ProvenanceDerivation =
-        "state_sha256 is a SHA-256 over the domain tag lex-v3-luxembourg-expression-state/1 and then, each as UTF-8 preceded by its " +
-        "length as four bytes big-endian, the publisher, the work key, the applicability date, the expression, the publisher work IRI, " +
+        "state_sha256 is a SHA-256 over these values, each as UTF-8 preceded by its length as four bytes big-endian: the domain tag " +
+        "lex-v3-luxembourg-expression-state/1, the publisher, the work key, the applicability date, the expression, the publisher work IRI, " +
         "the publisher legal-resource IRI, the language, each rule-profile digest in sorted order and each article identity in sorted " +
         "order; the article identities are not carried here (they are article_identities in as_of's answer to the same request, and " +
         "article_identities_sha256 is the SHA-256 of them in sorted order, each preceded by its length in the same way, so a caller can check " +

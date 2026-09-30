@@ -5,10 +5,10 @@ every pull request that changes what is served, what is next or what is blocked.
 
 ## Heads
 
-- `v3/integration`: `4fe6ff2e` (2026-09-30, PR #768 merged). Build 45 s. Fast lane
+- `v3/integration`: `b84244eb` (2026-09-30, PR #769 merged). Build 45 s. Fast lane
   (`eng/test-fast.ps1`): 3,038 tests, 3,037 pass, 1 skipped. Ingest suite: green on CI for PR #760
   (the CI `dotnet` job runs the whole solution on every pull request, about 7 min on the runner;
-  green for PR #768);
+  green for PR #769);
   locally about 15 min. 806 web tests pass. CI's web job can flake in `keyboard-walk.test.mjs`
   ("browser debugger never answered"); rerunning the failed job is the fix.
 - Driver: Claude Opus 5.5 since 2026-09-29 (the Fable 5.1 driver ran out of tokens on 2026-09-28
@@ -358,6 +358,39 @@ resolver n 3 ([0.4385, 1], 1, which bounds nothing). The card is not published a
 has no release, image or snapshot identity (item 7) and no signature. Where it is published is an
 owner question below.
 
+Replay guarantees (PR #770): `V3ReplayGuaranteesTests` runs the two guarantees of
+`33-product-spec.md` G1 to G5 that one build can prove against the real handler.
+- G2, snapshot determinism: each of the 23 served operations (pinned to `V3RestRouteBinding.Served`,
+  so a new operation fails until it has a case) answers the same canonical bytes to the same
+  request asked again and to a mount opened from a byte copy of the directory. Asked 30 days later
+  by another request, the answer is the same bytes apart from the two fields that belong to the
+  request: `context.freshness.observed_at` and `request_ref`, the digest of the request's own
+  trace identity. Every envelope is also verified canonical by `V3EnvelopeJson.ParseAndVerify`.
+  `resolve` is asked with the fixture's permalink, so the check covers its answer path and not
+  only a refusal.
+- G5, independent verifiability: a reader holding one `evidence_bundle` answer and the
+  publisher's file checks each served article's text against that file. The text of the article
+  with that id is its non-blank text nodes in order, outside the publisher's `scl:` annotations
+  and the authorial notes, and it equals the served text for every article. The reader then
+  recomputes the digests whose derivations are published. The file hashes to the source's
+  `body_sha256` and length, and each article's `text_sha256` and byte length are its text's.
+  `article_identities_sha256` and `state_sha256` recompute from the derivation `provenance`
+  publishes, and the permalink pins that digest. Not recomputed: `wording_sha256`, whose input
+  is the stored token stream the bundle does not serve, and the article identities, rule-profile
+  digests and body receipt, whose derivations are not published.
+
+Running G5 found a defect: the published derivation put the domain tag outside "each as UTF-8
+preceded by its length", while the builder length-prefixes it. A reader who followed the sentence
+got another digest. The sentence now reads "over these values, each as UTF-8 preceded by its
+length as four bytes big-endian: the domain tag lex-v3-luxembourg-expression-state/1, the
+publisher, ...". The same wording is in the provenance answer, its test pin, the answer-samples
+census and the web preview's copy. G1 (a replaced publisher file mints a new version and a
+`file_replaced` event), G3 (nothing hard-deleted across builds) and G4 (as-observed answering;
+`as_observed` and `knowable_on` are registered and not served) need predecessor chaining with
+observation times, which follows the first mount; see the event-log question (b) below. G2's
+detached signature comes from the release pipeline (item 7). The mount is the fixture, so this
+proves the path, not a corpus.
+
 ## Data
 
 - EU: complete 82-seed English population on disk at `C:\lex-v3\eu-population-run-9` (filesystem
@@ -596,10 +629,12 @@ owner question below.
 8. Machine gates (launch contract, Evaluation): the temporal, refusal and retrieval case sets run
    against the real handler, and all three shuffled controls are caught (PRs #767 and #768). The
    evaluation card is rendered from them with the statistical rows `not_yet_labelled` (PR #769);
-   publishing it waits on the owner. Next: replay G1 to G5, the replay guarantees of
-   `33-product-spec.md` in the specification pack (G1 version immutability, G2 snapshot
-   determinism, G3 bitemporal completeness, G4 as-observed answering, G5 independent
-   verifiability), which this repository does not restate yet.
+   publishing it waits on the owner. Replay G1 to G5 (`33-product-spec.md`): G2 snapshot
+   determinism and G5 independent verifiability run on the real handler (PR #770). G1 version
+   immutability, G3 bitemporal completeness and G4 as-observed answering need predecessor
+   chaining with observation times, so they follow the first mount and the event-log ruling. What
+   is left of the launch contract's machine-gates line after that is "V2 absent from the image",
+   which belongs to the release pipeline (item 7).
 
 ## Blocked or waiting on the owner
 
