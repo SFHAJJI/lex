@@ -6,7 +6,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { DOSSIER_IDENTIFIER, JOURNEY_STEPS, READING_DATE, SEARCH_PHRASE, journeyVerdict } from "../scripts/journey.mjs";
+import { DOSSIER_IDENTIFIER, HISTORY_ANCHOR, JOURNEY_STEPS, READING_DATE, SEARCH_PHRASE, journeyVerdict } from "../scripts/journey.mjs";
 import { cspValue } from "../scripts/csp.mjs";
 
 const ORIGIN = "http://127.0.0.1:5000";
@@ -156,4 +156,20 @@ test("a reading run types two fields and is held to the exact body of both", () 
   assert.deepEqual(journeyVerdict(observed, expected), []);
   observed.requests[1].postData = JSON.stringify({ operation_id: "evidence_bundle", parameters: { identifier: DOSSIER_IDENTIFIER } });
   assert.ok(journeyVerdict(observed, expected).some((failure) => /body was/.test(failure)), "a request that dropped the date fails");
+});
+
+test("a provision history run types the identifier and the article id and is held to both in the body", () => {
+  assert.deepEqual(JOURNEY_STEPS.history.typed, [DOSSIER_IDENTIFIER, HISTORY_ANCHOR]);
+  assert.deepEqual(JOURNEY_STEPS.history.body, { operation_id: "article_history", parameters: { identifier: DOSSIER_IDENTIFIER, anchor: HISTORY_ANCHOR } });
+  const observed = goodSearch();
+  observed.requests = [
+    { url: `${ORIGIN}/history.html`, method: "GET", headers: {} },
+    { url: `${ORIGIN}/api/v3/article_history`, method: "POST", headers: {}, headersSent: true, postData: JSON.stringify(JOURNEY_STEPS.history.body) },
+  ];
+  observed.location = `${ORIGIN}/history.html`;
+  observed.text = "art_15 in loi-1991-08-10-n3";
+  const expected = { origin: ORIGIN, step: JOURNEY_STEPS.history, state: "success", texts: ["art_15 in"] };
+  assert.deepEqual(journeyVerdict(observed, expected), []);
+  observed.requests[1].url = `${ORIGIN}/api/v3/evidence_bundle`;
+  assert.ok(journeyVerdict(observed, expected).some((failure) => /not POST \/api\/v3\/article_history/.test(failure)));
 });

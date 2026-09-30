@@ -5,11 +5,11 @@ every pull request that changes what is served, what is next or what is blocked.
 
 ## Heads
 
-- `v3/integration`: `ca046c0d` (2026-09-30, PR #778 merged). Build 45 s. Fast lane
+- `v3/integration`: `3fb2e905` (2026-09-30, PR #779 merged). Build 45 s. Fast lane
   (`eng/test-fast.ps1`): 3,038 tests, 3,037 pass, 1 skipped. Ingest suite: green on CI for PR #760
   (the CI `dotnet` job runs the whole solution on every pull request, about 7 min on the runner;
-  green for PR #778);
-  locally about 15 min. 860 web tests pass. CI's web job can flake in `keyboard-walk.test.mjs`
+  green for PR #779);
+  locally about 15 min. 869 web tests pass. CI's web job can flake in `keyboard-walk.test.mjs`
   ("browser debugger never answered"); rerunning the failed job is the fix.
 - Driver: Claude Opus 5.5 since 2026-09-29 (the Fable 5.1 driver ran out of tokens on 2026-09-28
   after PR #757; the user default model is now `claude-opus-5-5`).
@@ -235,7 +235,7 @@ schema's `parameters` shape, and whose call runs the same dispatch the REST rout
 endpoint test proves it for all twenty-three. The launch-contract line "REST and MCP derive identical
 envelopes from the registry" is the owner's to tick.
 
-Web: 32 React components, 860 tests. Preview screens render fixtures. The V3 Luxembourg search
+Web: 33 React components, 869 tests. Preview screens render fixtures. The V3 Luxembourg search
 answer has a reader (PR #771). The answer census now samples `search` five ways from the real handler:
 - a phrase with 4 strict hits and 1 relaxed hit;
 - the same phrase one hit per page, with its cursor;
@@ -413,6 +413,31 @@ answer derives from its rows, throwing where they disagree:
 
 The tests also read a lineage with an absent state between two rows, a changed wording and a
 second language, built the way `V3CorpusMount.ArticleHistory` builds one.
+
+The live provision history screen and its journey step (PR #781). `dist-live/history.html` has its
+own bundle `client-live-history.js`.
+- The form sends the work identifier and the publisher's article id as typed, and a language only
+  when one is chosen. The controls carry no `name`.
+- One `POST /api/v3/article_history` per submit. The answer is read by `readArticleHistory` and laid
+  out:
+  - how many held states carry the id, from when, and how many do not;
+  - each language's wording runs and distinct wordings;
+  - a table of rows: language, applies from, next state, "first held wording", "wording changed" or
+    "wording unchanged", the article's own date (marked where it differs from the state's), and the
+    permalink;
+  - the held states that do not carry the id;
+  - the wording rule.
+
+  Nothing is derived: no end date, no "in force", no diff text.
+- The envelope census now holds the lineage answer and three refusals: an article id no held state
+  carries (`anchor_not_in_version`, `art_44`), an unknown work, and no mount.
+  `anchor_not_in_version` is the third absence the card rejects (driver decision: the producer will
+  carry the fields); its status line carries the nearest ids to try, "art_4, art_40, art_41,
+  art_42".
+- `journey.mjs` runs a fifth step: `/history.html`, typing the fixture work's identifier and
+  `art_15`. With the mount the page ends in the lineage ("Carried by 1 held state, from
+  2024-02-01", "first held wording"); without one, in the card. All ten runs pass, 6 requests each,
+  exactly one to the API.
 
 **The search journey step passes (PR #773, run locally 2026-09-30).** `node scripts/journey.mjs`
 now runs two steps, each with and without the fixture mount, and all four runs pass.
@@ -838,8 +863,8 @@ proves the path, not a corpus.
    and journey step; PR #776: the reading screen's reader `readEvidenceBundle` over
    `evidence_bundle`; PR #777: the live reading screen, its page and journey step. The four launch
    screens with V3 readers (coverage, search, dossier, reading) are now live and journeyed. PR
-   #778: the provision history reader `readArticleHistory`. Next: the live provision history
-   screen and journey step, then Compare (`diff`) and Radar (`events`, `answer_drift`). Of the
+   #778: the provision history reader `readArticleHistory`; PR #781: the live provision history
+   screen and journey step. Next: Compare (`diff`), then Radar (`events`, `answer_drift`). Of the
    launch contract's eight screens, Export composer is the last. Hosting (ruling 3): `Lex.V3.Api`
    serves the live pages on the API's origin with `frame-ancestors`, HSTS and `Referrer-Policy`,
    and a live page never shows the synthetic banner on a real mount. The absence refusals the card

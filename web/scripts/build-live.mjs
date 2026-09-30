@@ -6,7 +6,8 @@
 // fonts, favicon) is the same, copied from `src/` with the generated tokens appended, as the
 // preview build does. The pages are `index.html` (Trust and Coverage, script `client-live.js`),
 // `search.html` (search, script `client-live-search.js`), `dossier.html` (dossier, script
-// `client-live-dossier.js`) and `reading.html` (reading, script `client-live-reading.js`).
+// `client-live-dossier.js`), `reading.html` (reading, script `client-live-reading.js`) and `history.html`
+// (provision history, script `client-live-history.js`).
 
 import { cp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { pathToFileURL } from "node:url";
@@ -43,6 +44,9 @@ ${tokenCss()}`, "utf8");
   const readingSsr = await import(pathToFileURL(await bundle("app/live-reading-page.jsx", "live-reading-page.mjs")).href);
   await writeFile(new URL("reading.html", destination), readingSsr.renderLiveReadingPage(), "utf8");
   await cp(await bundleClient("app/client-live-reading-entry.jsx", "client-live-reading.js"), new URL("client-live-reading.js", destination));
+  const historySsr = await import(pathToFileURL(await bundle("app/live-history-page.jsx", "live-history-page.mjs")).href);
+  await writeFile(new URL("history.html", destination), historySsr.renderLiveHistoryPage(), "utf8");
+  await cp(await bundleClient("app/client-live-history-entry.jsx", "client-live-history.js"), new URL("client-live-history.js", destination));
   return destination;
 }
 
