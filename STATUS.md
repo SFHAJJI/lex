@@ -5,10 +5,10 @@ every pull request that changes what is served, what is next or what is blocked.
 
 ## Heads
 
-- `v3/integration`: `736e9c03` (2026-09-30, PR #793 merged). Build 45 s. Fast lane
+- `v3/integration`: `ce2d65ad` (2026-09-30, PR #794 merged). Build 45 s. Fast lane
   (`eng/test-fast.ps1`): 3,038 tests, 3,037 pass, 1 skipped. Ingest suite: green on CI for PR #760
   (the CI `dotnet` job runs the whole solution on every pull request, about 7 min on the runner;
-  green for PR #793);
+  green for PR #794);
   locally about 15 min. 927 web tests pass. CI's web job can flake in `keyboard-walk.test.mjs`
   ("browser debugger never answered"); rerunning the failed job is the fix.
 - Driver: Claude Opus 5.5 since 2026-09-29 (the Fable 5.1 driver ran out of tokens on 2026-09-28
@@ -525,6 +525,17 @@ places the build as `v3-web` and loads every page from the API's origin, with no
 checks the headers the page arrived with. All fourteen runs pass that way too. `serve-live.mjs`
 stays for local development.
 
+Every citation the served answers emit verifies (PR #796, the launch contract's first promise:
+"verify resolves every citation the product emitted"). `V3CitationVerificationTests` drives the
+operations the live screens read on the answer census's two fixture mounts (search, dossier, as_of,
+evidence_bundle, provenance, status_on, article_history, diff and changes_in_period, the last two on
+both), walks each answer whole and takes every citation by its role (a `permalink` or `*_permalink`
+property, a `resolve.identifier`), which must be a hash-pinned permalink (a malformed one fails,
+review of #796), and any other permalink wherever it sits, and asks `verify` for each on the mount
+that emitted it: each must answer `digest_matches` for the state its digest names, and an article
+permalink must name its article. The walk is held to find a permalink in every screen's answer, at
+least one article permalink, and nothing that is only prose. The journey's own pages add the browser half when the journey runs next.
+
 The live export composer and its journey step (PR #789), the eighth screen. `dist-live/export.html`
 has its own bundle `client-live-export.js`.
 - The page asks what the reading page asks: the same form (`ReadingForm`, now shared), the same one
@@ -1015,9 +1026,9 @@ proves the path, not a corpus.
    launch contract's screens are live and journeyed; PR #790: the PDF export; PR #792: the
    evaluation card on the Trust and Coverage page (ruling 2); PR #793: the refusal sentence list
    for the checkpoint (ruling 4); PR #794: the absence refusals carry the card's evidence, so the
-   live pages show them as cards. Next: keyboard and screen-reader paths for the eight screens,
-   then French and English chrome (Decision 41: French copy ships only once reviewed). Hosting
-   (ruling 3): `Lex.V3.Api`
+   live pages show them as cards; PR #796: every citation the served answers emit verifies. Next:
+   keyboard and screen-reader paths for the eight screens, then French and English chrome
+   (Decision 41: French copy ships only once reviewed). Hosting (ruling 3): `Lex.V3.Api`
    serves the live pages on the API's origin with `frame-ancestors`, HSTS and `Referrer-Policy`,
    and a live page never shows the synthetic banner on a real mount. J1 to J8 are restated as V3
    steps by the driver (they exist only in the pre-V3 pack, `05-user-journeys.md`).
