@@ -636,6 +636,26 @@ proves the path, not a corpus.
 
 ## Data
 
+- **Decision 95 rights receipt (Codex data lane, 2026-09-30).** Governance PR #9 is merged.
+  The live receipt now requests Commission Decision 2011/833/EU at
+  `https://publications.europa.eu/resource/celex/32011D0833`, negotiating English XHTML through
+  the existing document-fetch profile. No request goes to EUR-Lex. Evidence schema
+  `lex-eu-legal-notice-evidence/3` records the closed `source` value; the legacy notice URI keeps
+  its profile identity. Retained legacy routes can be reconstructed into /3; serialized /2 receipts
+  are not accepted by the /3 reader.
+  The receipt is acquired before the adapter or Formex population. A refused receipt spends one
+  logical product request (plus robots and any admitted redirect hops), then stops. Its retained
+  hops are rebound under the adapter's eventual corpus identity without another request.
+  Live check through the production session: 303 then 200 XHTML, 48,730 bytes, SHA-256
+  `2d5bc877b9a5aad948af21c680aca1d3409f41df5dd0dcc57ef9b1b225f60982`, matching the verified plan.
+  Custody and canonical evidence: `C:\lex-v3\lanes\rights-probe`; log: `rights-probe.log` beside it.
+  This receipt is the Commission policy the notice cites; Decision 95 records the accepted limit
+  for Parliament and Council documents. When EU evidence bundles serve text, they must carry
+  `© European Union, https://eur-lex.europa.eu` and the statement that only the electronic Official
+  Journal is authentic. EU text bundles are still the parity slice; this change acquires the receipt.
+  Next: rerun the bounded first mount with Lex.V3.Tool, using PR #750's command and the Codex
+  checkout. The historical failed attempts below remain evidence of the old route.
+
 - EU: complete 82-seed English population on disk at `C:\lex-v3\eu-population-run-9` (filesystem
   custody, 29,207 files, report `population-report.json`, `isCompletePopulation: true`, 1.9 h run).
   French expressions not acquired (Decision 89).
@@ -649,21 +669,12 @@ proves the path, not a corpus.
   never acquired: Formex packages (the only source of EU articles for the index) and the EUR-Lex
   legal-notice evidence. A Luxembourg delivered run is mandatory in every envelope. Building the
   corpus therefore means a fresh, live, one-process acquisition run.
-- **EUR-Lex legal notice (Decision 88): producer built (PR #746), fixtures only.** `EuLegalNoticeRouteProducer`
-  issues the one GET through the acquisition session under a new source profile
-  (`european_union_legal_notice`) and hands back the route under the corpus run identity, which is
-  what the Stage 3 envelope checks. Live facts observed 2026-09-27 and pinned in the profile:
-  `GET https://eur-lex.europa.eu/robots.txt` answers 200 directly, with no `Content-Type` header
-  and `Crawl-delay: 10`; the notice path is not disallowed. Unknown until the bounded live run:
-  whether the notice page itself answers 200 `text/html` to the `Lex/0.1` user agent behind the
-  EUR-Lex WAF (Decision 23). A challenge page, a block, an off-origin redirect and a truncated body
-  are all the typed refusal `notice_route_invalid` (`EuLegalNoticeEvidence.FromRoute` now requires
-  a complete route; review finding on this pull request).
-- Decision taken by the driver, reversible: the legal-notice route follows same-origin redirects
-  (as `FromRoute` already admitted and as the Cellar route does); the terminal is pinned to the
-  host and port and robots is evaluated for the redirected path. Decision 88's "one GET" is read
-  as one logical request whose hops count against the wire budget. Say the word and the profile
-  refuses redirects instead.
+- **Historical Decision 88 producer (PR #746), superseded by Decision 95 and PR #780.**
+  It used the `european_union_legal_notice` profile on EUR-Lex. The old route's robots response
+  and its eventual empty HTTP 202 are recorded below as evidence of the failed attempts.
+  The current producer uses the existing Publications Office document-fetch profile, captures the
+  Decision receipt first, and rebinds it after the adapter completes. Redirects remain subject to
+  the profile, literal robots evaluation and the one wire ceiling.
 - The session now exposes the custody write receipt of every hop an executed attempt sealed
   (`HopWriteReceiptsByObservationId`), which the Formex ZIP binding needs as well.
 - **Formex package population: enumeration (PR #747) and acquisition (this pull request), fixtures
@@ -802,41 +813,19 @@ proves the path, not a corpus.
   content-addressed, so its file counts are not request counts). Memory was not a problem this time (the
   process stayed near 90 MB). Because the build is one process, the acquisition is spent and nothing
   was written; the Luxembourg act was never reached.
-- **What this means.** Decision 88's one legal-notice GET cannot succeed from an automated client
-  while EUR-Lex challenges it, and `LexCorpus6Builder` refuses the whole corpus without that
-  evidence (`EuropeRightsEvidenceMissing`), so no mount, Luxembourg included, can be built. Two
-  fixes, neither built yet:
-  1. Fail fast (driver's call, no scope change): send the legal-notice GET first, before the EU
-     acquisition, so a challenge costs one request instead of the whole EU acquisition. Not a
-     reorder: the notice route binds the corpus run identity, which the adapter mints during the
-     EU run, so the identity has to exist before the adapter runs (a preflight GET would be a
-     second notice request, against Decision 88's one). Under option (a) below a refused notice no
-     longer stops the build, which lowers this fix's value.
-  2. A way past the missing notice (owner's call, it touches Decision 88): either (a) the builder
-     accepts a typed `eu_rights_evidence_unavailable` disposition and withholds every EU body as
-     text while still serving EU identity and `resolve`, which keeps rights fail-closed and lets the
-     Luxembourg side mount; or (b) the rights evidence comes from the same Commission reuse policy
-     (Decision 2011/833/EU) at an address that does not challenge, such as the Publications Office
-     legal notice, which needs a numbered Decision replacing Decision 88's exact URL. The driver
-     recommends (a) now and (b) later. Sending a browser user agent or solving the challenge is not
-     an option: it would evade the publisher's protection.
+- **Attempt 2's blocker is resolved by Decision 95 and PR #780.** Both required changes are
+  implemented: the Publications Office Decision receipt replaces the challenged notice, and it is
+  fetched before population traffic. Rebinding its retained hops after acquisition avoids a second
+  rights request. The successful live receipt check is recorded above; the full mount run is next.
 
 ## Next, in order
 
-1. Data lane (Codex, Decision 95). Unblock the first mount after the EUR-Lex challenge (see Data,
-   attempt 2): option (b), ruled on 2026-09-30. EU text is shown, with the rights receipt from
-   Commission Decision 2011/833/EU on the Publications Office route (Decision 95); no request goes
-   to eur-lex.europa.eu. The first-mount tool as merged still requests the EUR-Lex robots file and
-   legal notice (the Decision 88 route; `EuFirstMountAcquisitionTests` expects both), so it must not
-   run until the data lane changes that route. Fail fast if a notice stays mandatory (it needs the run identity before the adapter runs; the 619 spent against
-   the requests custody holds is reconciled there). Then the bounded live run again with
-   the tool: one EU work in EN and
-   FR (the manifestation enumerations and the legal-notice GET; no Formex package request), one
-   Luxembourg act with a consolidated publisher PDF. Record the wire counts, the refusals met and
-   the five digests in STATUS.md; mount the directory under the API and answer `resolve` from it.
-   Then decide whether the one-process design carries the full population or needs a
-   serialisation boundary between acquisition and build.
-2. Data lane (Codex). Formex, the rest: French bodies (Decision 89) so French packages are held and acquired; then
+1. Data lane (Codex, Decision 95). The receipt route is changed and live-verified (PR #780).
+   Run the bounded first mount with PR #750's command, the Codex checkout and the 800-request
+   ceiling; mount the result locally and answer `resolve` from the real data. No EUR-Lex request.
+2. Data lane (Codex). Complete the EU and Luxembourg populations under the owner's 2026-09-30
+   authorisation, with one typed outcome per discovered body, then acquire French EU bodies.
+3. Data lane (Codex). Formex, the rest: French bodies (Decision 89) so French packages are held and acquired; then
    every acquired main body feeds the EU index for the temporal and search operations (item 5).
    Designed on 2026-09-28 (read-only survey, recorded in the driver's notes): the adapter mints one
    English fetch ladder per work and the corpus record set holds exactly one body per observed
@@ -851,8 +840,6 @@ proves the path, not a corpus.
    expression-keyed record, or the French body travels beside it; (b) the `resolve` language rule
    for a work identifier (default: the English expression, the French one named as an alternate,
    and a `language` parameter selecting either).
-3. Data lane (Codex). Define and run the Luxembourg population and the complete EU population
-   (owner authorisation per run).
 4. Serve the unserved operations for Luxembourg (`verify` and `relations` served by PR #753, MCP
    over streamable HTTP by PR #754, `evidence_bundle` by PR #755, `classification` and
    `manifestation` by PR #756, `status_on` and `browse` by PR #757; a request to an unserved
@@ -976,6 +963,10 @@ Each is the driver's call under ruling 7 and can be reversed by a later pull req
 - The web hosting shape of ruling 3 is `Lex.V3.Api` serving the built live pages beside `/api/v3` and
   `/mcp`, with the security headers, rather than an ingress split.
 
+- Data acquisitions: the owner's 2026-09-30 data-lane instruction authorises the bounded first
+  mount, complete EU and Luxembourg populations, and French EU bodies. Production signing,
+  deployment and promotion remain outside that authorisation.
+
 ## Waiting on others
 
 - The data lane (Codex, Decision 95): the EU rights receipt on the Publications Office route, then
@@ -989,8 +980,6 @@ Each is the driver's call under ruling 7 and can be reversed by a later pull req
 ## Blocked on the owner
 
 Only money, legal or public claims, credentials and going live (ruling 7):
-- Run authorisation per run: the Luxembourg population, French EU expressions and the complete
-  Stage 7 run. The bounded first-mount run is authorised.
 - Azure production credentials and the signing identity, needed by week 5.
 - The weekly 30-minute checkpoint slot.
 

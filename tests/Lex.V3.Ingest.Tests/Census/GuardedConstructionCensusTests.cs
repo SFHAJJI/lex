@@ -373,6 +373,9 @@ public sealed class GuardedConstructionCensusTests
                     + "Lex.V3.Ingest.Europe.EuLanguageScopedExpressionProducer::RunAsync",
                 "Lex.V3.Ingest.Europe.EuLegalNoticeRouteResult: constructor private instance "
                     + "Lex.V3.Ingest.Europe.EuLegalNoticeRouteResult::.ctor, "
+                    + "method internal instance Lex.V3.Ingest.Europe.EuLegalNoticeRouteProducer::CaptureAsync, "
+                    + "method internal instance Lex.V3.Ingest.Europe.EuLegalNoticeRouteProducer::RebindAsync, "
+                    + "method internal instance Lex.V3.Ingest.Europe.EuLegalNoticeRouteResult::WithReceipts, "
                     + "method public instance "
                     + "Lex.V3.Ingest.Europe.EuLegalNoticeRouteProducer::RunAsync, "
                     + "method public static "

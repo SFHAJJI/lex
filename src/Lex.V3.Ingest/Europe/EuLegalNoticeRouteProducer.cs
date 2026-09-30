@@ -31,7 +31,7 @@ public enum EuLegalNoticeRouteRefusal
     /// <summary>
     /// The publisher answered, the bytes are retained, and the route is not legal-notice evidence:
     /// a non-200 terminal (a challenge page, a block, a redirect the route could not follow), a
-    /// terminal that is not <c>text/html</c>, a terminal off the pinned origin, or a route the
+    /// terminal with the wrong source media type, a terminal off the pinned origin, or a route the
     /// session sealed as incomplete (a body it could not read to the end). The detail is
     /// <see cref="EuLegalNoticeEvidence.FromRoute"/>'s own reason.
     /// </summary>
@@ -69,12 +69,17 @@ public sealed class EuLegalNoticeRouteResult
     /// </summary>
     public RoutedHttpEvidence? Route { get; }
 
+    internal IReadOnlyDictionary<string, DurableBlobWriteReceipt>? HopReceipts { get; init; }
+
     /// <summary>The logical request the terminal hop actually sent, reopened from custody by its digest.</summary>
     public HttpLogicalRequest? TerminalRequest { get; }
 
     public EuLegalNoticeRouteRefusal? Refusal { get; }
 
     public string? Detail { get; }
+
+    internal EuLegalNoticeRouteResult WithReceipts(IReadOnlyDictionary<string, DurableBlobWriteReceipt> receipts) =>
+        new(Route, TerminalRequest, Refusal, Detail) { HopReceipts = receipts };
 
     public static EuLegalNoticeRouteResult Delivered(RoutedHttpEvidence route, HttpLogicalRequest terminalRequest)
     {
@@ -95,7 +100,7 @@ public sealed class EuLegalNoticeRouteResult
 }
 
 /// <summary>
-/// Produces the one legal-notice route a corpus run needs (Decision 88: one GET per run, as rights
+/// Produces the one rights-policy route a corpus run needs (Decision 95: one logical GET per run, as rights
 /// evidence only), bound to the corpus run's own identity so that
 /// <c>Stage3EvidenceEnvelope.TryCreateWithEuropeLegalNoticeRoute</c> accepts it beside the EU corpus
 /// records.
@@ -104,7 +109,7 @@ public sealed class EuLegalNoticeRouteResult
 /// <para>
 /// The GET is sent through the same session every other EU document fetch uses
 /// (<see cref="EuRepeatedEnumerationExecutor.RunDocumentFetchAsync"/>): its own robots bootstrap
-/// on <c>eur-lex.europa.eu</c>, the profile's pacing, retained transport bytes, and route evidence
+/// on <c>publications.europa.eu</c>, the profile's pacing, retained transport bytes, and route evidence
 /// sealed under the session's run identity. A session mints its own run identity; the corpus
 /// records carry the adapter's. The two cannot be the same object, so this producer re-presents
 /// the session's hops under the corpus identity through the public, receipt-checked
@@ -146,7 +151,7 @@ public sealed class EuLegalNoticeRouteProducer
     /// <param name="corpusRunIdentity">
     /// The run identity the EU corpus records of this run carry; the delivered route names it.
     /// </param>
-    /// <param name="rendererSource">The renderer-source artifact for <c>EuLegalNoticeRenderer</c>.</param>
+    /// <param name="rendererSource">The renderer-source artifact for <c>EuDocumentFetchRenderer</c>.</param>
     /// <param name="wireBudget">The run's enforced ceiling; charged for robots and every attempt.</param>
     public async Task<EuLegalNoticeRouteResult> RunAsync(
         SourceArtifactRef corpusRunIdentity,
@@ -155,10 +160,20 @@ public sealed class EuLegalNoticeRouteProducer
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(corpusRunIdentity);
+        var captured = await CaptureAsync(rendererSource, wireBudget, cancellationToken).ConfigureAwait(false);
+        return captured.Route is null ? captured :
+            await RebindAsync(corpusRunIdentity, captured, cancellationToken).ConfigureAwait(false);
+    }
+
+    internal async Task<EuLegalNoticeRouteResult> CaptureAsync(
+        MachineQueryRendererSource rendererSource, WireRequestBudget wireBudget, CancellationToken cancellationToken)
+    {
         ArgumentNullException.ThrowIfNull(rendererSource);
         ArgumentNullException.ThrowIfNull(wireBudget);
 
-        var bound = new EuLegalNoticePlan().Bind(NewUrn(), NewUrn(), rendererSource);
+        var address = EuDocumentFetchAddress.TryCreate(
+            "celex", "32011D0833", EuManifestationMediaType.XhtmlXml, EuDocumentLanguage.Eng, out _)!;
+        var bound = new EuDocumentFetchPlan(address).Bind(NewUrn(), NewUrn(), rendererSource);
 
         // The session starts from the request it is about to send (Decision 83): robots is
         // evaluated against the pinned notice path itself, never a placeholder.
@@ -199,8 +214,25 @@ public sealed class EuLegalNoticeRouteProducer
             return EuLegalNoticeRouteResult.Refused(EuLegalNoticeRouteRefusal.RouteNotRetained, exception.Message);
         }
 
-        // Re-present the same hops under the corpus identity. Create re-verifies every receipt
-        // against its hop, so a receipt naming other bytes is refused here, not trusted.
+        try
+        {
+            _ = EuLegalNoticeEvidence.FromRoute(sessionRoute, terminalRequest);
+        }
+        catch (ArgumentException exception)
+        {
+            return EuLegalNoticeRouteResult.Refused(EuLegalNoticeRouteRefusal.NoticeRouteInvalid, exception.Message);
+        }
+
+        return EuLegalNoticeRouteResult.Delivered(sessionRoute, terminalRequest).WithReceipts(receipts);
+    }
+
+    // No network: bind the already retained capture to the adapter's identity once it exists.
+    internal async Task<EuLegalNoticeRouteResult> RebindAsync(
+        SourceArtifactRef corpusRunIdentity, EuLegalNoticeRouteResult captured, CancellationToken cancellationToken)
+    {
+        var sessionRoute = captured.Route!;
+        var terminalRequest = captured.TerminalRequest!;
+        var receipts = captured.HopReceipts!;
         var corpusRoute = RoutedHttpEvidence.Create(
             corpusRunIdentity,
             sessionRoute.RequestOrdinal,
@@ -231,7 +263,7 @@ public sealed class EuLegalNoticeRouteProducer
                     _custodyStore, routeReceipt.Reference.ContentSha256, cancellationToken)
                 .ConfigureAwait(false);
             return EuLegalNoticeRouteResult.Delivered(
-                RoutedHttpEvidence.ParseAndVerify(reopened.Span), terminalRequest);
+                RoutedHttpEvidence.ParseAndVerify(reopened.Span), terminalRequest).WithReceipts(receipts);
         }
         catch (Exception exception) when (exception is CustodyIntegrityException or CustodyRequiredException)
         {

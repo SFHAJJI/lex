@@ -378,6 +378,7 @@ public sealed class ClosedVocabularyCensusTests
                     + "PageReceiptDoesNotBindItsBytes",
                 "Lex.V3.Contracts.Source.Europe.EuLanguageScopedExpressionDerivationRefusal: None, "
                     + "DecodeRefused",
+                "Lex.V3.Contracts.Source.Europe.EuLegalNoticeSource: EurLexLegalNotice, CommissionReuseDecision2011833",
                 "Lex.V3.Contracts.Source.Europe.EuManifestationFormat: Formex4, Xhtml, Xhtml5, Html, "
                     + "Pdf, PdfA1a, PdfA1b, PdfA2a, Print, NoneAdmitted",
                 "Lex.V3.Contracts.Source.Europe.EuManifestationListingRefusal: None, "

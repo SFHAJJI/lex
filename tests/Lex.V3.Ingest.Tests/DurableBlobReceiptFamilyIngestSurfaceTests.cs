@@ -110,6 +110,10 @@ public sealed class DurableBlobReceiptFamilyIngestSurfaceTests
                 // than inside it, so the production holds two receipts and not one.
                 "field private instance " + ExpressionProductionResult + "::<RetainedEpisode>k__BackingField -> "
                 + Receipt + "?",
+                // Decision 95 carries the session's receipts until the adapter identity exists.
+                // Rebinding checks them through RoutedHttpEvidence.Create; no receipt is minted here.
+                "field private instance Lex.V3.Ingest.Europe.EuLegalNoticeRouteResult::<HopReceipts>k__BackingField -> "
+                    + "System.Collections.Generic.IReadOnlyDictionary<System.String, " + Receipt + ">?",
                 "field private instance " + EuQueryExecutionResult + "::<CorpusRecordSetReceipt>k__BackingField -> "
                     + Receipt + "?",
                 "field private instance " + EuQueryExecutionResult + "::<ScopeManifestReceipt>k__BackingField -> " + Receipt + "?",
@@ -203,6 +207,8 @@ public sealed class DurableBlobReceiptFamilyIngestSurfaceTests
                 "method private instance " + Session + "::BuildHopWriteReceipts(System.UInt64, System.UInt64, "
                 + "System.Collections.Generic.IReadOnlyList<Lex.V3.Contracts.Source.Http.RoutedHttpHop>) "
                 + "-> System.Collections.Generic.Dictionary<System.String, " + Receipt + ">",
+                "property internal instance Lex.V3.Ingest.Europe.EuLegalNoticeRouteResult::HopReceipts() -> "
+                    + "System.Collections.Generic.IReadOnlyDictionary<System.String, " + Receipt + ">?",
                 "property internal instance " + Session + "+AttemptResult::HopWriteReceiptsByObservationId() -> "
                     + "System.Collections.Generic.IReadOnlyDictionary<System.String, " + Receipt + ">?",
                 "property public instance " + CorpusAcquisitionOutcome + "::Receipt() -> " + Receipt + "?",

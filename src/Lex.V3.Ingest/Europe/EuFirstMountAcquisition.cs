@@ -59,6 +59,7 @@ public sealed class EuRendererSources
 
     public MachineQueryRendererSource FormexManifestation { get; }
 
+    /// <summary>Legacy renderer retained by this source-set API; the rights producer uses DocumentFetch.</summary>
     public MachineQueryRendererSource LegalNotice { get; }
 
     /// <summary>
@@ -116,14 +117,15 @@ public enum EuFirstMountAcquisitionRefusal
     [JsonStringEnumMemberName("formex_refused")]
     FormexRefused = 2,
 
-    /// <summary>The run and its Formex population closed but the legal-notice route was refused.</summary>
+    /// <summary>The rights capture refused before population traffic, or its later corpus-identity rebind refused.</summary>
     [JsonStringEnumMemberName("legal_notice_refused")]
     LegalNoticeRefused = 3,
 }
 
 /// <summary>
 /// The three EU inputs the Stage 3 envelope takes for one work, or one typed refusal. On a refusal
-/// the steps that did complete travel on the result, so a refused build can still be read.
+/// an attempted adapter run and Formex result travel on the result. A receipt refused before
+/// population traffic carries neither; its captured transport evidence remains in custody.
 /// </summary>
 public sealed class EuFirstMountAcquisitionResult
 {
@@ -144,11 +146,11 @@ public sealed class EuFirstMountAcquisitionResult
     /// <summary>
     /// The adapter run over the one work: complete on success and when a later step refused, the
     /// refused run itself when <see cref="Refusal"/> is <see cref="EuFirstMountAcquisitionRefusal.RunRefused"/>
-    /// after the adapter ran. Absent when the CELEX was refused before traffic.
+    /// after the adapter ran. Absent when the CELEX or the initial rights capture was refused.
     /// </summary>
     public EuQueryExecutionResult? Run { get; }
 
-    /// <summary>The Formex population bound to <see cref="Run"/>. Present on success and after the notice refused.</summary>
+    /// <summary>The Formex population bound to <see cref="Run"/>. Present once its acquisition completed.</summary>
     public EuFormexPackagePopulationResult? Formex { get; }
 
     /// <summary>The legal-notice route under the run's corpus identity, with its terminal request. Present iff delivered.</summary>
@@ -199,14 +201,14 @@ public sealed class EuFirstMountAcquisitionResult
 /// </summary>
 /// <remarks>
 /// <para>
-/// Order: the census and object-facts run through <see cref="EuQueryExecutionAdapter"/> (the same
+/// Order: the rights receipt first (Decision 95), then the census and object-facts run through <see cref="EuQueryExecutionAdapter"/> (the same
 /// call the Stage 1 population run made, with the fixture placeholders replaced: the SPARQL
 /// witness, which selects the source profile and the path robots is checked against, is a real
 /// bound count query of this work's own census family; the document-fetch witness the adapter's
 /// signature requires is a real bound GET of this work's Cellar root, although every document-fetch
 /// session starts from the request it is about to send, so that witness selects nothing),
 /// then <see cref="EuFormexPackagePopulationProducer"/>
-/// over that run, then <see cref="EuLegalNoticeRouteProducer"/> under the run's corpus identity.
+/// over that run, then rebind the retained rights receipt under the run's corpus identity.
 /// The three results are the arguments of
 /// <c>Stage3EvidenceEnvelope.TryCreateWithEuropeLegalNoticeRouteAndFormexMainBody</c>, held in the
 /// same process because the envelope checks them by reference.
@@ -314,6 +316,18 @@ public sealed class EuFirstMountAcquisition
                 $"the CELEX '{celex}' cannot be bound into this run's witnesses: {exception.Message}");
         }
 
+        // Decision 95: acquire the rights receipt before population traffic. Rebinding below
+        // retains the same hops under the adapter's eventual identity without another GET.
+        var noticeProducer = new EuLegalNoticeRouteProducer(_custodyStore, _timeProvider, _testHandlerOverride);
+        var capturedNotice = await noticeProducer.CaptureAsync(
+            rendererSources.DocumentFetch, wireBudget, cancellationToken).ConfigureAwait(false);
+        if (capturedNotice.Route is null)
+        {
+            return EuFirstMountAcquisitionResult.Refused(
+                EuFirstMountAcquisitionRefusal.LegalNoticeRefused,
+                $"{capturedNotice.Refusal}: {capturedNotice.Detail}");
+        }
+
         var executor = new EuRepeatedEnumerationExecutor(_custodyStore, _timeProvider, _testHandlerOverride);
         var adapter = new EuQueryExecutionAdapter(_custodyStore, executor);
         var run = await adapter.RunAsync(
@@ -357,8 +371,8 @@ public sealed class EuFirstMountAcquisition
                 formex);
         }
 
-        var legalNotice = await new EuLegalNoticeRouteProducer(_custodyStore, _timeProvider, _testHandlerOverride)
-            .RunAsync(records[0].RunIdentity, rendererSources.LegalNotice, wireBudget, cancellationToken)
+        var legalNotice = await noticeProducer
+            .RebindAsync(records[0].RunIdentity, capturedNotice, cancellationToken)
             .ConfigureAwait(false);
         if (legalNotice.Route is null)
         {

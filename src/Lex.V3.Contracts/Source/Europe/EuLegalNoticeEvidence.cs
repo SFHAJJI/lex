@@ -1,114 +1,43 @@
 using System.Security.Cryptography;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using Lex.V3.Contracts.Source.Core;
 using Lex.V3.Contracts.Source.Http;
 
 namespace Lex.V3.Contracts.Source.Europe;
 
+/// <summary>The two admitted rights-policy evidence sources. Closed.</summary>
+public enum EuLegalNoticeSource
+{
+    [JsonStringEnumMemberName("eur_lex_legal_notice")]
+    EurLexLegalNotice = 1,
+    [JsonStringEnumMemberName("commission_reuse_decision_2011_833")]
+    CommissionReuseDecision2011833 = 2,
+}
+
 /// <summary>
-/// One bounded GET of the reviewed EUR-Lex legal notice, frozen as the class-level evidence R8
-/// requires before any content class or exception channel may carry a positive rights disposition.
+/// One retained rights-policy capture. Decision 95 uses Commission Decision 2011/833/EU on the
+/// Publications Office route. Retained legacy notice routes can be reconstructed into schema /3;
+/// serialized /2 receipts are not accepted by the /3 reader.
 /// </summary>
 /// <remarks>
-/// <para>
-/// <b>What this is.</b> D1-01 Candidate 5 R8 (lines 763-784) names one exact request as policy
-/// evidence: a bounded GET of
-/// <c>https://eur-lex.europa.eu/content/legal-notice/legal-notice.html?locale=en</c>, binding its
-/// requested and effective URI, redirect edges, response bytes, digest, media type, language
-/// selection, observation time, effective-or-observed date, and source-policy version. It says this
-/// request "is allowed solely as legal-policy evidence even though EUR-Lex is forbidden as an
-/// automated legal-body fallback" under Decision 23 (<c>DECISIONS.md</c> item 23: EUR-Lex sits
-/// behind an AWS WAF challenge for non-browser clients, so the Union corpus goes Cellar-native via
-/// <c>publications.europa.eu</c> instead; EUR-Lex itself is never a body source).
-/// </para>
-/// <para>
-/// <b>Refreeze, 2026-09-03 (coordination/EVENTS.md event
-/// lex-event-20260903T173221003Z-887bf79258394fe8a8791f77effa758e).</b> The prior version at
-/// 93673f1e was returned NOT READY: it bound a digest of bytes that nothing held, because it carried
-/// no custody receipt, no robots hop and no redirect policy of its own, while the session already
-/// produces held routed evidence with exactly those facts proven. Decisions 75 and 78 hold that a
-/// run retains what it depends on; this type stops re-deriving a parallel, unheld observation and
-/// becomes a door over a proven route instead, the same shape
-/// <see cref="RepresentationChainObservation.FromRoute"/> already established for item 9: the only
-/// production path is <see cref="FromRoute"/>, and it takes a real <see cref="RoutedHttpEvidence"/>
-/// together with the <see cref="HttpLogicalRequest"/> that produced it. A route that never actually
-/// happened, or whose bytes were never actually retained, cannot reach this type; <c>RoutedHttpHop</c>
-/// and <see cref="RoutedHttpEvidence.Create"/> (Decision 80's receipt gate) already proved both
-/// before a <see cref="RoutedHttpEvidence"/> could exist at all.
-/// </para>
-/// <para>
-/// <b>What was deleted.</b> The prior version's own parallel <c>EuLegalNoticeRedirectHop</c> model,
-/// with its own ordinal, Location-chain and termination checks, is gone: <see cref="RoutedHttpEvidence.Create"/>
-/// (via <c>RoutedHttpEvidenceDocument.CreateFromVerifiedHops</c>) already enforces hop ordering,
-/// antecedent linkage, exact Location causality, and redirect-loop refusal for the route that
-/// produces the evidence this type now takes as input, so re-checking any of that here would only be
-/// restating a fact the route already proved. <see cref="FromRoute"/> reads the redirect chain's
-/// start and end (the first hop's <c>RequestUri</c> and the terminal hop's own facts) and nothing in
-/// between.
-/// </para>
-/// <para>
-/// <b>The R8 field list, placed with typed absence.</b> R8 requires "byte count, SHA-256, media
-/// type, language selection, observation time, effective or observed date, and source-policy
-/// version." This type places each field as follows, per the refreeze objection:
-/// <list type="bullet">
-/// <item><description><see cref="LanguageSelection"/> is stated explicitly as the fixed constant
-/// <c>"en"</c>, not parsed: <see cref="RequestedUri"/> is pinned to <c>locale=en</c>, so the
-/// language this request selects is a structural fact of the pinned URI, not a caller's claim.
-/// </description></item>
-/// <item><description><see cref="ObservedDate"/> is read directly from the terminal hop's own
-/// <c>Date</c> response header, present or absent exactly as the publisher sent it. The live capture
-/// behind this type (<c>coordination/measurements/2026-09-03-eu-legal-notice-capture.md</c>)
-/// observed a <c>Date</c> header and no <c>Last-Modified</c>; that measurement is why this type
-/// reads R8's "observation time" and the "observed" half of "effective or observed date" from the
-/// one date-shaped fact the publisher actually supplied, rather than from a caller-asserted capture
-/// clock nothing checks against the route.</description></item>
-/// <item><description><see cref="PolicyEffectiveDate"/> and <see cref="SourcePolicyVersion"/> are
-/// present-or-typed-absent fields, following the same closed union
-/// (<see cref="RoutedHttpAbsentHeader"/> / <see cref="RoutedHttpSingleHeader"/>) this codebase
-/// already uses for a header the publisher may or may not send, so "not observed" is recorded rather
-/// than silently defaulted. <see cref="FromRoute"/> has no page-content parser to read a policy's own
-/// effective date or version out of the notice prose, so every instance it mints today carries both
-/// as <see cref="RoutedHttpAbsentHeader"/>; this is honest for what one bounded GET without a body
-/// parser can support, and the union gives the "effective or observed date" alternative and the
-/// version a place to be filled in later without widening this type's closed shape. The R8 matrix
-/// slice's carried condition (change detection needs an identity that survives per-request token
-/// churn, plus maximum policy age and a revalidation rule) is explicitly not addressed here; it
-/// stays open at the matrix layer this type does not own.</description></item>
-/// </list>
-/// </para>
-/// <para>
-/// <b>The new custody-proof fields.</b> <see cref="DurableWriteReceiptSha256"/> is taken directly
-/// from the terminal hop, which Decision 80's receipt gate at <see cref="RoutedHttpEvidence.Create"/>
-/// already proved names bytes actually held in custody; this is exactly the fact the prior version
-/// could not carry, because it was never routed through that pipeline.
-/// <see cref="RoutedEvidenceSha256"/> references the routed evidence this record was minted from, by
-/// its own canonical digest, computed by <see cref="FromRoute"/> from the real
-/// <see cref="RoutedHttpEvidence"/> object rather than accepted as a caller-supplied string, so the
-/// reference cannot be forged independently of the object it names: see
-/// <c>RoutedEvidenceSha256ChangesWithTheReferencedRouteRatherThanBeingACopiedLiteral</c> for the
-/// driving test.
-/// </para>
-/// <para>
-/// <b>What one bounded GET proves and what it does not.</b> A single request establishes only what
-/// was observed at one instant: this exact status, these exact bytes, this exact digest. It proves
-/// nothing about whether a second request would return the same bytes. Two independent captures of
-/// this exact URI taken 10.6 seconds apart on 2026-09-03 in fact returned different bytes and
-/// different SHA-256 digests, one byte apart in length: the page embeds a per-session analytics
-/// agent id and a per-request CSRF token in three hidden form fields, and both differ between
-/// requests even though the surrounding legal prose did not visibly change between the two captures
-/// compared. So <see cref="Sha256"/> is the digest of this exact captured observation and is
-/// deliberately never described here as a stable content fingerprint, a change-detection key, or
-/// proof that the notice is byte-stable across time or requests: this type does not claim any of
-/// those, because one bounded GET, or even two, cannot establish them.
-/// </para>
+/// The Decision receipt is the policy the EUR-Lex notice cites, not the notice itself. Decision 95
+/// records the accepted limit for Parliament and Council documents. No new EUR-Lex request is made.
+/// FromRoute requires the exact source URI, a complete 200 on that origin, the source's media type
+/// and, for the Decision, English XHTML negotiation. RoutedHttpEvidence already proves redirect
+/// causality, robots and custody receipts. This type binds the terminal request by digest.
+/// The body digest identifies this capture, not a stable policy version. The publisher's Date and
+/// the observation clock are distinct; policy effective date and version remain typed absent
+/// because no parser reads them from the page. ParseAndVerify reopens the canonical record; it
+/// does not independently reopen the route or repeat its custody checks.
 /// </remarks>
 public sealed class EuLegalNoticeEvidence
 {
-    public const string SchemaId = "lex-eu-legal-notice-evidence/2";
+    public const string SchemaId = "lex-eu-legal-notice-evidence/3";
 
     /// <summary>
-    /// The exact request R8 names. <see cref="FromRoute"/> refuses any route whose first hop was not
-    /// requested at this exact URI: a legal-notice evidence type that could target an arbitrary
+    /// The legacy request R8 named, kept for retained-route reconstruction and source-profile identity.
+    /// A legal-notice evidence type that could target an arbitrary
     /// EUR-Lex URI could just as easily be pointed at a law-body page, which is exactly the
     /// corpus-source use Decision 23 forbids.
     /// </summary>
@@ -129,10 +58,32 @@ public sealed class EuLegalNoticeEvidence
     /// </summary>
     public const int MaximumNoticeBytes = 4 * 1024 * 1024;
 
+    public const string ReuseDecisionUri = "https://publications.europa.eu/resource/celex/32011D0833";
+
+    public EuLegalNoticeSource Source { get; }
+
+    private static string SourceToken(EuLegalNoticeSource source) => source switch
+    {
+        EuLegalNoticeSource.EurLexLegalNotice => "eur_lex_legal_notice",
+        EuLegalNoticeSource.CommissionReuseDecision2011833 => "commission_reuse_decision_2011_833",
+        _ => throw new ArgumentOutOfRangeException(nameof(source)),
+    };
+
+    private static string SourceUri(EuLegalNoticeSource source) => source switch
+    {
+        EuLegalNoticeSource.EurLexLegalNotice => RequestedUri,
+        EuLegalNoticeSource.CommissionReuseDecision2011833 => ReuseDecisionUri,
+        _ => throw new ArgumentOutOfRangeException(nameof(source)),
+    };
+
+    private static string SourceLanguage(EuLegalNoticeSource source) =>
+        source == EuLegalNoticeSource.EurLexLegalNotice ? LanguageSelection : "eng";
+
     private readonly byte[] _canonicalBytes;
     private readonly string _canonicalSha256;
 
     private EuLegalNoticeEvidence(
+        EuLegalNoticeSource source,
         string routedEvidenceSha256,
         string effectiveUri,
         RoutedHttpSingleHeader mediaType,
@@ -144,6 +95,8 @@ public sealed class EuLegalNoticeEvidence
         string durableWriteReceiptSha256,
         string capturedAt)
     {
+        Source = source;
+        _ = SourceToken(source);
         RoutedEvidenceSha256 = RoutedHttpValidation.RequireSha256(
             routedEvidenceSha256,
             nameof(routedEvidenceSha256));
@@ -155,6 +108,14 @@ public sealed class EuLegalNoticeEvidence
         // ParseHeaderField and the mediaTypeElement branch likewise always return a non-null instance
         // or throw first. Left as documented guards rather than assumptions.
         MediaType = mediaType ?? throw new ArgumentNullException(nameof(mediaType));
+        var origin = RoutedHttpNetworkOrigin.FromUri(EffectiveUri);
+        var pinnedOrigin = RoutedHttpNetworkOrigin.FromUri(SourceUri(source));
+        var expectedMediaType = source == EuLegalNoticeSource.EurLexLegalNotice ? "text/html" : "application/xhtml+xml";
+        if (origin.Host != pinnedOrigin.Host || origin.EffectivePort != pinnedOrigin.EffectivePort ||
+            mediaType.Value.Split(';')[0].Trim() != expectedMediaType)
+        {
+            throw new ArgumentException("Rights evidence must retain its source's origin and media type.");
+        }
         ObservedDate = observedDate ?? throw new ArgumentNullException(nameof(observedDate));
         PolicyEffectiveDate =
             policyEffectiveDate ?? throw new ArgumentNullException(nameof(policyEffectiveDate));
@@ -289,13 +250,21 @@ public sealed class EuLegalNoticeEvidence
                 nameof(request));
         }
 
-        if (!string.Equals(evidence.Hops[0].RequestUri, RequestedUri, StringComparison.Ordinal))
+        var source = evidence.Hops[0].RequestUri switch
         {
-            throw new ArgumentException(
-                $"Legal-notice evidence must route from the exact R8 URI; " +
-                $"{evidence.Hops[0].RequestUri} is not {RequestedUri}.",
-                nameof(evidence));
+            RequestedUri => EuLegalNoticeSource.EurLexLegalNotice,
+            ReuseDecisionUri => EuLegalNoticeSource.CommissionReuseDecision2011833,
+            _ => throw new ArgumentException("Legal-notice evidence must route from an exact admitted rights URI.", nameof(evidence)),
+        };
+        if (source == EuLegalNoticeSource.CommissionReuseDecision2011833 &&
+            (!HasHeader("accept", "application/xhtml+xml") || !HasHeader("accept-language", "eng")))
+        {
+            throw new ArgumentException("The reuse Decision requires exactly accept=application/xhtml+xml and accept-language=eng.", nameof(request));
         }
+
+        bool HasHeader(string name, string value) =>
+            request.Headers.Count(header => header.Name == name) == 1 &&
+            request.Headers.Any(header => header.Name == name && header.Value == value);
 
         // The first-hop pin above only proves where the route started. A route that redirects away
         // to any other host or port would still pass it, and that other host's bytes would become
@@ -318,7 +287,7 @@ public sealed class EuLegalNoticeEvidence
         // comparing the two Scheme values can never be false and would be exactly the
         // compares-a-constant-to-itself shape this project refuses to keep. It still appears in the
         // message below purely as a readable origin string, not as a condition.
-        var pinnedOrigin = RoutedHttpNetworkOrigin.FromUri(RequestedUri);
+        var pinnedOrigin = RoutedHttpNetworkOrigin.FromUri(SourceUri(source));
         if (!string.Equals(terminalHop.NetworkOrigin.Host, pinnedOrigin.Host, StringComparison.Ordinal) ||
             terminalHop.NetworkOrigin.EffectivePort != pinnedOrigin.EffectivePort)
         {
@@ -356,11 +325,11 @@ public sealed class EuLegalNoticeEvidence
         if (terminalHop.Headers.ContentType is not RoutedHttpSingleHeader mediaType ||
             !string.Equals(
                 mediaType.Value.Split(';')[0].Trim(),
-                "text/html",
+                source == EuLegalNoticeSource.EurLexLegalNotice ? "text/html" : "application/xhtml+xml",
                 StringComparison.Ordinal))
         {
             throw new ArgumentException(
-                "Legal-notice evidence must observe exactly one text/html media type on the terminal hop.",
+                $"Legal-notice evidence must observe exactly one {(source == EuLegalNoticeSource.EurLexLegalNotice ? "text/html" : "application/xhtml+xml")} media type on the terminal hop.",
                 nameof(evidence));
         }
 
@@ -368,6 +337,7 @@ public sealed class EuLegalNoticeEvidence
             SHA256.HashData(evidence.CopyCanonicalBytes())).ToLowerInvariant();
 
         return new EuLegalNoticeEvidence(
+            source,
             routedEvidenceSha256,
             terminalHop.RequestUri,
             mediaType,
@@ -406,7 +376,7 @@ public sealed class EuLegalNoticeEvidence
             RoutedHttpValidation.RequireExactPropertyNames(
                 root,
                 [
-                    "schema", "requested_uri", "effective_uri", "language_selection", "media_type",
+                    "schema", "source", "requested_uri", "effective_uri", "language_selection", "media_type",
                     "observed_date", "policy_effective_date", "source_policy_version", "byte_length",
                     "sha256", "durable_write_receipt_sha256", "routed_evidence_sha256", "captured_at",
                 ],
@@ -418,9 +388,16 @@ public sealed class EuLegalNoticeEvidence
                     nameof(canonicalBytes));
             }
 
+            var source = root.GetProperty("source").GetString() switch
+            {
+                "eur_lex_legal_notice" => EuLegalNoticeSource.EurLexLegalNotice,
+                "commission_reuse_decision_2011_833" => EuLegalNoticeSource.CommissionReuseDecision2011833,
+                _ => throw new ArgumentException("Unknown rights evidence source.", nameof(canonicalBytes)),
+            };
+
             if (!string.Equals(
                     root.GetProperty("requested_uri").GetString(),
-                    RequestedUri,
+                    SourceUri(source),
                     StringComparison.Ordinal))
             {
                 throw new ArgumentException(
@@ -430,7 +407,7 @@ public sealed class EuLegalNoticeEvidence
 
             if (!string.Equals(
                     root.GetProperty("language_selection").GetString(),
-                    LanguageSelection,
+                    SourceLanguage(source),
                     StringComparison.Ordinal))
             {
                 throw new ArgumentException(
@@ -454,6 +431,7 @@ public sealed class EuLegalNoticeEvidence
             }
 
             var rebuilt = new EuLegalNoticeEvidence(
+                source,
                 root.GetProperty("routed_evidence_sha256").GetString()!,
                 root.GetProperty("effective_uri").GetString()!,
                 new RoutedHttpSingleHeader(mediaTypeElement.GetProperty("value").GetString()!),
@@ -492,12 +470,14 @@ public sealed class EuLegalNoticeEvidence
         var writer = new RoutedHttpTextWriter();
         writer.Raw("{\"schema\":");
         writer.String(SchemaId);
+        writer.Raw(",\"source\":");
+        writer.String(SourceToken(value.Source));
         writer.Raw(",\"requested_uri\":");
-        writer.String(RequestedUri);
+        writer.String(SourceUri(value.Source));
         writer.Raw(",\"effective_uri\":");
         writer.String(value.EffectiveUri);
         writer.Raw(",\"language_selection\":");
-        writer.String(LanguageSelection);
+        writer.String(SourceLanguage(value.Source));
         writer.Raw(",\"media_type\":{\"kind\":\"single\",\"value\":");
         writer.String(value.MediaType.Value);
         writer.Raw("},\"observed_date\":");
