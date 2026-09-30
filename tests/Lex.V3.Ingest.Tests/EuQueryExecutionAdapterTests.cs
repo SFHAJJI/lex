@@ -1,5 +1,6 @@
 using System.Net;
 using System.Text;
+using System.Text.Json;
 using Lex.V3.Contracts;
 using Lex.V3.Contracts.Source.Absence;
 using Lex.V3.Contracts.Source.Core;
@@ -1300,6 +1301,50 @@ public sealed class EuQueryExecutionAdapterTests
         Assert.AreEqual(CorpusAcquisitionRefusalReason.RobotsDisallowed, outcome.Refusal);
     }
 
+    [TestMethod]
+    public async Task CensusRefusalDiagnosticsNameEachSeedEvenBeforeAnyQueryIsSent()
+    {
+        var budget = EuAcquisitionTestFixture.TestWireBudget();
+        var seeds = EuAppendixASeedMap.SeedsInCelexOrder.Take(2).ToArray();
+        var store = new EuAcquisitionTestFixture.EuInMemoryCustodyStore();
+        // This existing handler denies every path and throws if any product request reaches it.
+        var executor = new EuRepeatedEnumerationExecutor(store,
+            new EuAcquisitionTestFixture.FixedTimeProvider(), new DocumentFetchRobotsDenyingHandler());
+        var adapter = new EuQueryExecutionAdapter(store, executor);
+        var (plan, planId) = EuAcquisitionTestFixture.BuildCensusPlan();
+        var requests = seeds.Select(seed => (
+            new EuCensusPartitionRunRequest(plan, planId, seed.Celex,
+                EuAcquisitionTestFixture.BuildRendererSource(51), budget),
+            EuAcquisitionTestFixture.SourceWitness())).ToArray();
+        var (facts, factsId) = EuAcquisitionTestFixture.BuildObjectFactsPlan();
+        var result = await adapter.RunAsync(requests,
+            new EuObjectFactsBatchPolicy(facts, factsId, EuAcquisitionTestFixture.BuildRendererSource(2),
+                EuAcquisitionTestFixture.SourceWitness()),
+            EuAcquisitionTestFixture.BuildRendererSource(52), EuAcquisitionTestFixture.SourceWitness(),
+            EuAcquisitionTestFixture.BuildRendererSource(1052), EuAcquisitionTestFixture.DocumentFetchSourceWitness(),
+            budget, CancellationToken.None);
+        Assert.AreEqual(EuQueryExecutionRefusal.CensusFamilyNotProven, result.Refusal!.Code);
+        using var diagnostics = CensusRefusalDiagnostics(result);
+        Assert.AreEqual(2, diagnostics.RootElement.GetArrayLength());
+        for (var index = 0; index < seeds.Length; index++)
+        {
+            var row = diagnostics.RootElement[index];
+            Assert.AreEqual(seeds[index].Celex, row.GetProperty("requested_celex").GetString());
+            Assert.AreEqual(nameof(EuEnumerationRefusal.RobotsBootstrapRefused), row.GetProperty("executor_code").GetString());
+            Assert.AreEqual(JsonValueKind.Null, row.GetProperty("response_body_sha256").ValueKind);
+        }
+        Assert.AreEqual(4L, (long)budget.Spent, "Only the two robots hops per seed may be sent.");
+    }
+
+    private static JsonDocument CensusRefusalDiagnostics(EuQueryExecutionResult result)
+    {
+        var detail = result.Refusal!.Detail!;
+        const string marker = "; refusals=";
+        var position = detail.IndexOf(marker, StringComparison.Ordinal);
+        Assert.IsTrue(position >= 0, detail);
+        return JsonDocument.Parse(detail[(position + marker.Length)..]);
+    }
+
     /// <summary>
     /// Answers the EU robots route with an unconditional <c>Disallow: /</c> for every agent, mirroring
     /// <c>EuRepeatedEnumerationExecutorTests.DocumentFetchRobotsDenyingHandler</c> exactly (same two
@@ -2147,6 +2192,13 @@ public sealed class EuQueryExecutionAdapterTests
         Assert.AreEqual(EuFamilyEnumerationOutcomeKind.ProofRefused, outcome.Kind);
         Assert.AreEqual(
             AbsenceFamilyEnumerationProofRefusal.PassesDeliveredDifferentSelections, outcome.ProofRefusal);
+        using var diagnostics = CensusRefusalDiagnostics(result);
+        var row = diagnostics.RootElement[0];
+        Assert.AreEqual(seed.Celex, row.GetProperty("requested_celex").GetString());
+        Assert.AreEqual(nameof(EuFamilyEnumerationOutcomeKind.ProofRefused), row.GetProperty("kind").GetString());
+        Assert.AreEqual(nameof(AbsenceFamilyEnumerationProofRefusal.PassesDeliveredDifferentSelections),
+            row.GetProperty("proof_code").GetString());
+        Assert.AreEqual(JsonValueKind.Null, row.GetProperty("executor_code").ValueKind);
     }
 
     /// <summary>
@@ -2204,6 +2256,13 @@ public sealed class EuQueryExecutionAdapterTests
         Assert.AreEqual(EuFamilyEnumerationOutcomeKind.ExecutorRefused, outcome.Kind);
         Assert.IsNotNull(outcome.ExecutorRefusal);
         Assert.AreEqual(EuEnumerationRefusal.PartitionRequired, outcome.ExecutorRefusal!.Code);
+        using var diagnostics = CensusRefusalDiagnostics(result);
+        var row = diagnostics.RootElement[0];
+        Assert.AreEqual(seed.Celex, row.GetProperty("requested_celex").GetString());
+        Assert.AreEqual(nameof(EuEnumerationRefusal.PartitionRequired), row.GetProperty("executor_code").GetString());
+        Assert.AreEqual(outcome.ExecutorRefusal.ResponseBodySha256, row.GetProperty("response_body_sha256").GetString());
+        Assert.AreEqual(1_000_000L, row.GetProperty("observed_count").GetInt64());
+        Assert.AreEqual(JsonValueKind.Null, row.GetProperty("proof_code").ValueKind);
     }
 
     /// <summary>

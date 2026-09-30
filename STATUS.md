@@ -3,12 +3,43 @@
 Updated 2026-09-30 by the driver. This file replaces the issue-comment ledgers. It is rewritten in
 every pull request that changes what is served, what is next or what is blocked.
 
+## EU population census refusal diagnostics (Codex, 2026-09-30)
+
+The fresh all-82-seed EU run at `C:\lex-v3\eu-population-20260930-1` ended with
+`CensusFamilyNotProven` after 487 of 20,000 wire requests. Custody remains intact. Offline inspection
+found complete four-input sequences for 79 seeds, an interrupted sequence for 32019R2088, and no
+query inputs for 32024L1760 or 32024R1620. Retained service-unavailable and maintenance pages
+suggest transient publisher failures, but the old CLI summary did not preserve exact per-seed
+refusals. No complete EU population or full Luxembourg result is claimed.
+
+Reversible driver decision: include each requested CELEX and the executor/proof refusal in the
+existing run detail, with available request/attempt ordinals, status, retained body digest, media
+type, count, offending key and underlying detail. Bind the seed before an early robots refusal
+loses that association. Keep the existing refusal code and all proof, robots, budget and transport
+rules. No automatic retries are added. The Tool already retains this detail in its build log.
+
+Regressions cover two denied seeds before any query, unequal proof passes and the count-cap
+refusal. After review and merge, the next live check uses only 32019R2088, 32024L1760 and
+32024R1620, fresh custody and a 600-request diagnostic cap. It keeps the conservative complete-EU
+storage allowance (4,965,958,358 free bytes including reserve). This cap does not guarantee
+completion. Preserve and diagnose another refusal; do not add automatic retries. A successful
+bounded run may enable a fresh all-seed run with the existing 20,000-request plan. Source/runtime
+freeze, evidence hashes, storage checks and the single-heavy-job rule remain launch gates.
+Validation: solution build has zero warnings/errors (74.76s), required fast has 3,071 passed
+plus one platform skip (67.094s), and all 67 affected EU adapter/first-mount tests passed
+(66.964s). Claude's required review returned MERGE at 346909cb with no blocking or should-fix
+findings. It reproduced all checks; replacing the implementation with the base version failed
+all three diagnostic regressions. The one review follow-up records that evidence and refreshes
+through merged #820. Exact-head green CI remains the merge gate. Empty refusal arrays can
+honestly accompany a duplicate family-key shortfall, which the requested/proven counts explain.
+Long JSON diagnostics and escaped characters remain parseable retained log output.
+
 ## Large derived scope artifacts (Codex, 2026-09-30)
 
 The required fresh-context Claude review returned MERGE at efa4092b. Its one documentation
 finding is repaired below. Independent review rebuilt cleanly, passed fast (3,073 plus one
 platform skip), all 29 focused checks including the corrected census partition totals, and
-106 adapter/resolver/Stage 3 checks. Exact-head green CI remains the merge gate.
+106 adapter/resolver/Stage 3 checks. PR #820 merged at 5d060767 after green CI on 4955f953.
 Receipt-evidence retention and a public production reopen API remain future release work;
 this slice does not claim a retention floor for the complete artifact closure.
 
