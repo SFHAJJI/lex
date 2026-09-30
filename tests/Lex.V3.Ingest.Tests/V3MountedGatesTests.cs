@@ -4,6 +4,7 @@ using Lex.V3.Contracts.Evaluation;
 using Lex.V3.Ingest.Luxembourg;
 using Microsoft.Data.Sqlite;
 using static Lex.V3.Ingest.Tests.LuxembourgIndexBuilderTests;
+using static Lex.V3.Ingest.Tests.V3CorpusClassificationMountTests;
 using static Lex.V3.Ingest.Tests.V3CorpusResolveMountTests;
 
 namespace Lex.V3.Ingest.Tests;
@@ -22,8 +23,11 @@ namespace Lex.V3.Ingest.Tests;
 /// <c>ambiguous_version</c> where two states share that date. The cases are the day before the first date,
 /// each date, a day inside and the last day of each window, and a day long after the latest date, for a
 /// seeded sample of works. They run through <c>as_of</c> and <c>in_force_on</c> in each language the sample
-/// holds, and with no language for the works held in one language only (with several, the default request
-/// serves every language, so it selects no single state).
+/// holds, and with no language for every work. A request with no language selects in every language the work
+/// holds (the mount's rule): <c>ambiguous_version</c> if any language's date holds two states,
+/// <c>no_version_for_date</c> if no language holds a state yet, and otherwise the state of each language that
+/// holds one. So a work's timelines together say what it must select, the key being the sorted set of those
+/// states (review of #838: the first version left multilingual works out of the no-language arms).
 /// </para>
 /// <para>
 /// The date control shifts every case forward by one interval, the median gap between held dates, and must
@@ -52,6 +56,29 @@ public sealed class V3MountedGatesTests
         {
             var held = Dates.LastOrDefault(value => value.Date <= day);
             return held.States is null ? NoVersion : held.States.Count == 1 ? held.States[0] : Ambiguous;
+        }
+    }
+
+    /// <summary>
+    /// One work's timelines in every language it is held in, and what a request with no language must select:
+    /// the ambiguity if any language is ambiguous, nothing before every language's first date, and otherwise
+    /// the sorted states of the languages that hold one.
+    /// </summary>
+    internal sealed record WorkTimeline(string WorkKey, IReadOnlyList<Timeline> Languages)
+    {
+        public IReadOnlyList<DateOnly> Dates =>
+            Languages.SelectMany(static language => language.Dates.Select(static date => date.Date)).Distinct().Order().ToArray();
+
+        public string Expected(DateOnly day)
+        {
+            var each = Languages.Select(language => language.Expected(day)).ToArray();
+            if (each.Contains(Ambiguous, StringComparer.Ordinal))
+            {
+                return Ambiguous;
+            }
+
+            var states = each.Where(static value => value != NoVersion).Order(StringComparer.Ordinal).ToArray();
+            return states.Length == 0 ? NoVersion : string.Join('+', states);
         }
     }
 
@@ -93,16 +120,23 @@ public sealed class V3MountedGatesTests
     }
 
     /// <summary>The temporal cases a timeline gives, each with what the timeline says it must select.</summary>
-    internal static IReadOnlyList<TemporalCase> Cases(Timeline timeline)
+    internal static IReadOnlyList<TemporalCase> Cases(Timeline timeline) =>
+        Cases($"{timeline.WorkKey}/{timeline.Language}", timeline.WorkKey, timeline.Dates.Select(static date => date.Date).ToArray(), timeline.Expected);
+
+    /// <summary>The cases of a request with no language, over the dates of every language the work is held in.</summary>
+    internal static IReadOnlyList<TemporalCase> Cases(WorkTimeline work) =>
+        Cases($"{work.WorkKey}/any", work.WorkKey, work.Dates, work.Expected);
+
+    private static IReadOnlyList<TemporalCase> Cases(string id, string workKey, IReadOnlyList<DateOnly> dates, Func<DateOnly, string> expected)
     {
-        var days = new List<(string Label, DateOnly Day)> { ("before-first", timeline.Dates[0].Date.AddDays(-1)) };
-        for (var at = 0; at < timeline.Dates.Count; at++)
+        var days = new List<(string Label, DateOnly Day)> { ("before-first", dates[0].AddDays(-1)) };
+        for (var at = 0; at < dates.Count; at++)
         {
-            var date = timeline.Dates[at].Date;
+            var date = dates[at];
             days.Add(($"on-{date:yyyy-MM-dd}", date));
-            if (at + 1 < timeline.Dates.Count)
+            if (at + 1 < dates.Count)
             {
-                var next = timeline.Dates[at + 1].Date;
+                var next = dates[at + 1];
                 var gap = next.DayNumber - date.DayNumber;
                 if (gap > 2)
                 {
@@ -116,10 +150,39 @@ public sealed class V3MountedGatesTests
             }
         }
 
-        days.Add(("after-latest", timeline.Dates[^1].Date.AddDays(AfterLatestDays)));
-        return days.Select(value => new TemporalCase(
-            $"{timeline.WorkKey}/{timeline.Language}/{value.Label}", timeline.WorkKey, value.Day, timeline.Expected(value.Day))).ToArray();
+        days.Add(("after-latest", dates[^1].AddDays(AfterLatestDays)));
+        return days.Select(value => new TemporalCase($"{id}/{value.Label}", workKey, value.Day, expected(value.Day))).ToArray();
     }
+
+    /// <summary>
+    /// <c>as_of</c> asked with no language, keyed as a work timeline keys it: a refusal by its code, an answer by the
+    /// sorted states it serves (one per language that holds one).
+    /// </summary>
+    internal static TemporalArm DefaultAsOfArm(V3CorpusMount mount) => (workKey, asOf) =>
+    {
+        var envelope = EnvelopeAsync(mount, "/api/v3/as_of", "as_of", new { identifier = $"/lu-legilux/{workKey}", date = asOf.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) })
+            .GetAwaiter().GetResult();
+        return envelope.Refusal is { } refusal
+            ? "refusal:" + refusal.Code
+            : string.Join('+', envelope.Result!.Value.GetProperty("states").EnumerateArray()
+                .Select(static state => state.GetProperty("state_sha256").GetString()!).Order(StringComparer.Ordinal));
+    };
+
+    /// <summary><c>in_force_on</c> for one work with no language, keyed the same way; a row without its one state is a defect (null).</summary>
+    internal static TemporalArm DefaultInForceOnArm(V3CorpusMount mount) => (workKey, asOf) =>
+    {
+        var envelope = EnvelopeAsync(mount, "/api/v3/in_force_on", "in_force_on", new { identifier = $"/lu-legilux/{workKey}", date = asOf.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) })
+            .GetAwaiter().GetResult();
+        if (envelope.Refusal is { } refusal)
+        {
+            return "refusal:" + refusal.Code;
+        }
+
+        var rows = envelope.Result!.Value.GetProperty("states").EnumerateArray().ToArray();
+        return rows.Any(static row => row.GetProperty("state").ValueKind != System.Text.Json.JsonValueKind.Object)
+            ? null
+            : string.Join('+', rows.Select(static row => row.GetProperty("state").GetProperty("state_sha256").GetString()!).Order(StringComparer.Ordinal));
+    };
 
     /// <summary>The date control's one interval: the median gap between a timeline's held dates, or a year when none has two.</summary>
     internal static int ShiftDays(IReadOnlyList<Timeline> timelines)
@@ -130,8 +193,8 @@ public sealed class V3MountedGatesTests
     }
 
     /// <summary>
-    /// The temporal gate over a mount: one card set per arm, each over the cases of its language (or of the
-    /// single-language works, with no language), with its date control.
+    /// The temporal gate over a mount: one card set per arm, each over the cases of its language, or of every
+    /// work with no language, with its date control.
     /// </summary>
     internal static EvaluationCardSet[] RunTemporalGate(V3CorpusMount mount, string mountDirectory) =>
         RunTemporalGate(mount, Sample(Timelines(mountDirectory), WorkSample, Seed));
@@ -139,28 +202,29 @@ public sealed class V3MountedGatesTests
     internal static EvaluationCardSet[] RunTemporalGate(V3CorpusMount mount, IReadOnlyList<Timeline> timelines)
     {
         var shift = ShiftDays(timelines);
-        var languagesOfWork = timelines.GroupBy(static value => value.WorkKey, StringComparer.Ordinal)
-            .ToDictionary(static group => group.Key, static group => group.Count(), StringComparer.Ordinal);
-        var arms = new List<(string Name, TemporalArm Arm, IReadOnlyList<Timeline> Timelines)>();
+        var arms = new List<(string Name, TemporalArm Arm, IReadOnlyList<TemporalCase> Cases, Func<string, DateOnly, string> ExpectedAt)>();
         foreach (var language in timelines.Select(static value => value.Language).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal))
         {
-            var ofLanguage = timelines.Where(value => value.Language == language).ToArray();
-            arms.Add(($"as_of in {language}", V3MachineGatesTests.AsOfArm(mount, language), ofLanguage));
-            arms.Add(($"in_force_on in {language}", V3MachineGatesTests.InForceOnArm(mount, language), ofLanguage));
+            var ofLanguage = timelines.Where(value => value.Language == language).ToDictionary(static value => value.WorkKey, StringComparer.Ordinal);
+            var cases = ofLanguage.Values.SelectMany(Cases).ToArray();
+            string ExpectedAt(string work, DateOnly day) => ofLanguage[work].Expected(day);
+            arms.Add(($"as_of in {language}", V3MachineGatesTests.AsOfArm(mount, language), cases, ExpectedAt));
+            arms.Add(($"in_force_on in {language}", V3MachineGatesTests.InForceOnArm(mount, language), cases, ExpectedAt));
         }
 
-        var single = timelines.Where(value => languagesOfWork[value.WorkKey] == 1).ToArray();
-        arms.Add(("as_of with no language", V3MachineGatesTests.AsOfArm(mount, null), single));
-        arms.Add(("in_force_on with no language", V3MachineGatesTests.InForceOnArm(mount, null), single));
+        var works = timelines.GroupBy(static value => value.WorkKey, StringComparer.Ordinal)
+            .ToDictionary(static group => group.Key, static group => new WorkTimeline(group.Key, group.ToArray()), StringComparer.Ordinal);
+        var workCases = works.Values.SelectMany(Cases).ToArray();
+        string WorkExpectedAt(string work, DateOnly day) => works[work].Expected(day);
+        arms.Add(("as_of with no language", DefaultAsOfArm(mount), workCases, WorkExpectedAt));
+        arms.Add(("in_force_on with no language", DefaultInForceOnArm(mount), workCases, WorkExpectedAt));
 
         var sets = new List<EvaluationCardSet>();
-        foreach (var (name, arm, armTimelines) in arms)
+        foreach (var (name, arm, cases, expectedAt) in arms)
         {
-            var cases = armTimelines.SelectMany(Cases).ToArray();
-            var report = TemporalEvaluation.Evaluate(cases, arm, floor: Math.Max(1, cases.Length));
-            var byCase = armTimelines.ToDictionary(static value => value.WorkKey, StringComparer.Ordinal);
-            var controlCases = cases.Where(value => byCase[value.WorkKey].Expected(value.AsOf.AddDays(shift)) != value.ExpectedStateKey).ToArray();
-            var control = cases.Length == 0
+            var report = TemporalEvaluation.Evaluate(cases, arm, floor: Math.Max(1, cases.Count));
+            var controlCases = cases.Where(value => expectedAt(value.WorkKey, value.AsOf.AddDays(shift)) != value.ExpectedStateKey).ToArray();
+            var control = cases.Count == 0
                 ? new ControlResult(ShuffledControlNames.DateShuffle, ControlVerdict.NotApplicable, "there is no temporal case to shift: the mount holds no Luxembourg state for this arm", Seed)
                 : ShuffledControls.DateShuffle(
                     controlCases, arm, (set, run) => TemporalEvaluation.Evaluate(set, run, floor: Math.Max(1, set.Count)), [shift], Seed);
@@ -223,6 +287,38 @@ public sealed class V3MountedGatesTests
             Assert.AreEqual(ControlVerdict.CaughtTheShuffle, set.Control.Verdict, $"{set.Arm}: {set.Control.Reason}");
             Assert.AreEqual(9, set.CaseCount);
         }
+    }
+
+    [TestMethod]
+    public async Task AMultilingualWorkIsHeldToEveryLanguageOnARequestWithNoLanguage()
+    {
+        // The fixture's French state, and a German one 200 days later: with no language, the work must select
+        // French alone until the German date and both from it (review of #838: the first version left such a
+        // work out of the no-language arms).
+        var fixture = await MountedFixture.CreateAsync();
+        await using var cleanup = fixture;
+        var first = Day(fixture.ApplicabilityDate);
+        var german = await fixture.AddSecondLanguageStateAsync(first.AddDays(200).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
+        using var mount = await V3CorpusMount.OpenAsync(fixture.Directory, CancellationToken.None);
+        Assert.IsNotNull(mount);
+
+        var timelines = Timelines(fixture.Directory);
+        CollectionAssert.AreEqual(new[] { "deu", "fra" }, timelines.Select(static value => value.Language).ToArray());
+        var work = new WorkTimeline(fixture.WorkKey, timelines);
+        Assert.AreEqual(fixture.StateSha256, work.Expected(first.AddDays(100)), "French alone before the German date");
+        Assert.AreEqual(string.Join('+', new[] { fixture.StateSha256, german.StateSha256 }.Order(StringComparer.Ordinal)), work.Expected(first.AddDays(300)), "both from it");
+
+        var sets = RunTemporalGate(mount, timelines);
+        CollectionAssert.AreEqual(
+            new[] { "as_of in deu", "in_force_on in deu", "as_of in fra", "in_force_on in fra", "as_of with no language", "in_force_on with no language" },
+            sets.Select(static set => set.Arm).ToArray());
+        foreach (var set in sets)
+        {
+            Assert.IsTrue(set.Gates.All(static gate => gate.Verdict == GateVerdict.Pass), $"{set.Arm}: {set.CaseCount} cases");
+            Assert.AreEqual(ControlVerdict.CaughtTheShuffle, set.Control.Verdict, $"{set.Arm}: {set.Control.Reason}");
+        }
+
+        Assert.AreEqual(6, sets.Single(static set => set.Arm == "as_of with no language").CaseCount, "the no-language arm holds the multilingual work: both dates, inside, last day, before and after");
     }
 
     [TestMethod]

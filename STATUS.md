@@ -602,7 +602,7 @@ CI evidence are recorded in the pull request before merge.
 
 ## Heads
 
-- `v3/integration`: `24c59015` (2026-10-01, PR #836 merged). Build 45 s. Fast lane
+- `v3/integration`: `933fe8e3` (2026-10-01, PR #834 merged). Build 45 s. Fast lane
   (`eng/test-fast.ps1`): 3,077 tests, 3,076 pass, 1 skipped (the review of PR #828). Ingest suite: green on CI for PR #760
   (the CI `dotnet` job runs the whole solution on every pull request, about 7 min on the runner;
   green for PR #834);
@@ -1806,7 +1806,11 @@ mount they are given.
   - each date, a day inside and the last day of each window;
   - a day 1,000 days after the latest date.
 - The arms are `as_of` and `in_force_on`, in each language the sample holds, and with no language
-  for the works held in one language only.
+  for every work. With no language the mount selects in every language the work holds:
+  `ambiguous_version` if any language's date holds two states, `no_version_for_date` if none holds
+  one yet, and otherwise each language's state. The work's timelines together give that key (the
+  sorted states). The review of #838 found that the first version left multilingual works out of
+  the no-language arms.
 - The date control shifts every case by the median gap between held dates. It runs over the cases
   whose selection the timeline says the shift changes, which always includes each day before a first
   date.
@@ -1819,8 +1823,11 @@ mount they are given.
 - Over the real bounded first mount, which holds no Luxembourg state: not measured, and it says why.
   Over the journey mount, written by another test with one state: 3 cases per arm, all pass, and every
   control catches the shift.
-- A mutation, a timeline that ignores two states on one date, fails the timeline test and the fixture
-  gate: the handler refuses `ambiguous_version` where the mutated timeline expected a state.
+- A French work with a German state 200 days later gives 6 no-language cases: French alone before
+  the German date and both from it. All pass, and every control catches the shift.
+- Two mutations:
+  - a timeline that ignores two states on one date fails the timeline test and the fixture gate;
+  - the first version's single-state arm used for no language fails the multilingual test.
 - Next slices: the refusal and retrieval sets derived from a mount, then the card over the release's
   mount in the rehearsal.
 
