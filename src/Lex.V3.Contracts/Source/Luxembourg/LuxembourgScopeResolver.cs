@@ -186,6 +186,7 @@ internal static class LuxembourgScopeResolver
 
         var resources = new LuxembourgResourceResolution[classified.Length];
         var scopeInputs = new ScopeObjectReductionInput[classified.Length];
+        var inputReuse = new ScopeInputReuse(profile);
         for (var ordinal = 0; ordinal < classified.Length; ordinal++)
         {
             var observation = classified[ordinal].Observation;
@@ -209,7 +210,8 @@ internal static class LuxembourgScopeResolver
                 relations,
                 classified[ordinal].WemiTopology,
                 classified[ordinal].BodyJoin,
-                evidenceOrdinals);
+                evidenceOrdinals,
+                inputReuse);
         }
 
         return new LuxembourgProfileResolution.Resolved(
@@ -1509,7 +1511,8 @@ internal static class LuxembourgScopeResolver
         IReadOnlyList<LuxembourgResolvedRelation> relations,
         LuxembourgWemiTopologyResolution wemiTopology,
         LuxembourgBodyJoinResolution bodyJoin,
-        IReadOnlyDictionary<SourceArtifactRef, int> evidenceOrdinals)
+        IReadOnlyDictionary<SourceArtifactRef, int> evidenceOrdinals,
+        ScopeInputReuse inputReuse)
     {
         var classes = IriValues(
             observation.Assertions,
@@ -1547,28 +1550,28 @@ internal static class LuxembourgScopeResolver
                 // it here was representing one assertion twice and aligning with neither.
                 [.. classes],
                 observation.ObservationRef,
-                evidenceOrdinals),
+                evidenceOrdinals, inputReuse),
             Selector(
                 profile,
                 ScopeAxis.Relation,
                 dimensions.Relation,
                 relations.Select(RelationDigest).ToArray(),
                 observation.ObservationRef,
-                evidenceOrdinals),
+                evidenceOrdinals, inputReuse),
             Selector(
                 profile,
                 ScopeAxis.SupportingDocument,
                 dimensions.SupportingDocument,
                 classes,
                 observation.ObservationRef,
-                evidenceOrdinals),
+                evidenceOrdinals, inputReuse),
             Selector(
                 profile,
                 ScopeAxis.Body,
                 dimensions.PublicationFamily,
                 types,
                 observation.ObservationRef,
-                evidenceOrdinals),
+                evidenceOrdinals, inputReuse),
             Selector(
                 profile,
                 ScopeAxis.Body,
@@ -1578,7 +1581,7 @@ internal static class LuxembourgScopeResolver
                     Language,
                     observation.ObjectRef.PublisherUri),
                 observation.ObservationRef,
-                evidenceOrdinals),
+                evidenceOrdinals, inputReuse),
             Selector(
                 profile,
                 ScopeAxis.Body,
@@ -1588,7 +1591,7 @@ internal static class LuxembourgScopeResolver
                     UserFormat,
                     observation.ObjectRef.PublisherUri),
                 observation.ObservationRef,
-                evidenceOrdinals),
+                evidenceOrdinals, inputReuse),
             Selector(
                 profile,
                 ScopeAxis.Body,
@@ -1598,14 +1601,14 @@ internal static class LuxembourgScopeResolver
                     LegalValue,
                     observation.ObjectRef.PublisherUri),
                 observation.ObservationRef,
-                evidenceOrdinals),
+                evidenceOrdinals, inputReuse),
             Selector(
                 profile,
                 ScopeAxis.Body,
                 dimensions.Body,
                 ["body_join_sha256:" + BodyJoinDigest(wemiTopology, bodyJoin)],
                 observation.ObservationRef,
-                evidenceOrdinals),
+                evidenceOrdinals, inputReuse),
             // THE ENUMERATION DIGEST IS EVIDENCE, NOT A PUBLISHER VALUE, AND IT USED TO BE BOTH.
             // Both rights selectors prepended $"enumeration:{...Sha256}" to their value set. The
             // canonicaliser drops only empty strings, so that element always survived, and
@@ -1645,7 +1648,7 @@ internal static class LuxembourgScopeResolver
                         .SelectMany(static row => row.LicenceIris),
                 ],
                 observation.SparqlRightsObservations.EnumerationRef,
-                evidenceOrdinals),
+                evidenceOrdinals, inputReuse),
             Selector(
                 profile,
                 ScopeAxis.Body,
@@ -1656,7 +1659,7 @@ internal static class LuxembourgScopeResolver
                         .SelectMany(static row => row.LicenceIris),
                 ],
                 observation.InFileRightsObservations.EnumerationRef,
-                evidenceOrdinals),
+                evidenceOrdinals, inputReuse),
             Selector(
                 profile,
                 ScopeAxis.Body,
@@ -1665,7 +1668,7 @@ internal static class LuxembourgScopeResolver
                     ? []
                     : ["manifestation_transport_uri_unbound"],
                 observation.ObservationRef,
-                evidenceOrdinals),
+                evidenceOrdinals, inputReuse),
             Selector(
                 profile,
                 ScopeAxis.Body,
@@ -1674,7 +1677,7 @@ internal static class LuxembourgScopeResolver
                     ? []
                     : ["manifestation_robots_evidence_unbound"],
                 observation.ObservationRef,
-                evidenceOrdinals),
+                evidenceOrdinals, inputReuse),
             Selector(
                 profile,
                 ScopeAxis.Body,
@@ -1683,14 +1686,14 @@ internal static class LuxembourgScopeResolver
                     ? []
                     : ["manifestation_http_observation_unbound"],
                 observation.ObservationRef,
-                evidenceOrdinals),
+                evidenceOrdinals, inputReuse),
         };
         var evaluations = new[]
         {
-            Projection(profile, ScopeAxis.Record, dimensions.Record),
-            Projection(profile, ScopeAxis.Body, dimensions.Body),
-            Projection(profile, ScopeAxis.Relation, dimensions.Relation),
-            Projection(profile, ScopeAxis.SupportingDocument, dimensions.SupportingDocument),
+            inputReuse.Projection(ScopeAxis.Record, dimensions.Record),
+            inputReuse.Projection(ScopeAxis.Body, dimensions.Body),
+            inputReuse.Projection(ScopeAxis.Relation, dimensions.Relation),
+            inputReuse.Projection(ScopeAxis.SupportingDocument, dimensions.SupportingDocument),
         };
         return new ScopeObjectReductionInput(observation.ObjectRef, selectors, evaluations);
     }
@@ -1701,7 +1704,8 @@ internal static class LuxembourgScopeResolver
         LuScopeDimensionDisposition dimension,
         IReadOnlyList<string> values,
         SourceArtifactRef evidenceRef,
-        IReadOnlyDictionary<SourceArtifactRef, int> evidenceOrdinals)
+        IReadOnlyDictionary<SourceArtifactRef, int> evidenceOrdinals,
+        ScopeInputReuse inputReuse)
     {
         var canonicalValues = values
             .Where(static value => value.Length != 0)
@@ -1710,13 +1714,7 @@ internal static class LuxembourgScopeResolver
             .ToArray();
         if (dimension.State == LuScopeTerminalState.NotApplicable)
         {
-            return new ScopeSelectorEvidence(
-                ScopeSelectorState.SelectorNotApplicable,
-                [],
-                null,
-                null,
-                profile.RuleOrdinal(projectionAxis),
-                null);
+            return inputReuse.NotApplicable(projectionAxis);
         }
 
         if (dimension.State == LuScopeTerminalState.TypedQuarantine &&
@@ -1756,6 +1754,38 @@ internal static class LuxembourgScopeResolver
             evidenceOrdinals[evidenceRef],
             null,
             null);
+    }
+
+    // These immutable values contain no object identity or observation/evidence ordinal. Keep
+    // reuse local to this profile resolution: at most four axes times seven terminal states,
+    // plus four not-applicable selectors. Evidence-bearing selectors are never interned here.
+    private sealed class ScopeInputReuse(VerifiedLuxembourgSourceProfile profile)
+    {
+        private readonly Dictionary<(ScopeAxis Axis, LuScopeTerminalState State), ScopeRuleEvaluation>
+            _projections = new();
+        private readonly Dictionary<ScopeAxis, ScopeSelectorEvidence> _notApplicable = new();
+
+        public ScopeRuleEvaluation Projection(ScopeAxis axis, LuScopeDimensionDisposition dimension)
+        {
+            var key = (axis, dimension.State);
+            if (!_projections.TryGetValue(key, out var value))
+            {
+                value = LuxembourgScopeResolver.Projection(profile, axis, dimension);
+                _projections.Add(key, value);
+            }
+            return value;
+        }
+
+        public ScopeSelectorEvidence NotApplicable(ScopeAxis axis)
+        {
+            if (!_notApplicable.TryGetValue(axis, out var value))
+            {
+                value = new ScopeSelectorEvidence(ScopeSelectorState.SelectorNotApplicable,
+                    [], null, null, profile.RuleOrdinal(axis), null);
+                _notApplicable.Add(axis, value);
+            }
+            return value;
+        }
     }
 
     private static ScopeRuleEvaluation Projection(

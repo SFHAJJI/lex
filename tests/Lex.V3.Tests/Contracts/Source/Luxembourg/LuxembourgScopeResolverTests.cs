@@ -20,6 +20,76 @@ public sealed class LuxembourgScopeResolverTests
     private const string N = "Lex.V3.Contracts.Source.Luxembourg.";
 
     [TestMethod]
+    public void RepeatedScopeInputsShareOnlyImmutableIdentityFreeValuesWithinOneResolution()
+    {
+        var profile = Profile();
+        var observations = Enumerable.Range(0, 128).Select(EmptyPopulationObservation).ToArray();
+        var resolved = Assert.IsInstanceOfType<LuxembourgProfileResolution.Resolved>(profile.Resolve(Proven(observations)));
+        var first = resolved.ScopeInputs[0];
+        Assert.AreEqual(128, resolved.ScopeInputs.Count);
+        for (var axis = 0; axis < 4; axis++)
+        {
+            Assert.IsTrue(resolved.ScopeInputs.All(input =>
+                ReferenceEquals(first.RuleEvaluations[axis], input.RuleEvaluations[axis])));
+        }
+        var notApplicable = first.Selectors.Select((selector, ordinal) => (selector, ordinal))
+            .Where(value => value.selector.State == ScopeSelectorState.SelectorNotApplicable).ToArray();
+        Assert.IsTrue(notApplicable.Length > 0);
+        foreach (var (selector, ordinal) in notApplicable)
+        {
+            Assert.IsTrue(resolved.ScopeInputs.All(input => ReferenceEquals(selector, input.Selectors[ordinal])));
+            Assert.IsNull(selector.EvidenceArtifactOrdinal);
+            Assert.AreEqual(0, selector.CanonicalValues.Count);
+        }
+        Assert.ThrowsExactly<NotSupportedException>(() =>
+            ((IList<int>)first.RuleEvaluations[0].RoleMemberOrdinals).Add(999));
+        Assert.ThrowsExactly<NotSupportedException>(() =>
+            ((IList<string>)notApplicable[0].selector.CanonicalValues).Add("foreign"));
+
+        var repeated = Assert.IsInstanceOfType<LuxembourgProfileResolution.Resolved>(profile.Resolve(Proven(observations)));
+        Assert.AreNotSame(first.RuleEvaluations[0], repeated.ScopeInputs[0].RuleEvaluations[0],
+            "Values are owned by this resolution, without a cross-run cache.");
+        Assert.AreEqual(ContractJson.Serialize(resolved.ScopeInputs), ContractJson.Serialize(repeated.ScopeInputs));
+    }
+
+    [TestMethod]
+    public void SharedScopeInputsKeepDifferentDispositionsAndPublisherEvidenceSeparate()
+    {
+        var profile = Profile();
+        var empty = EmptyPopulationObservation(0);
+        var typed = TypedRoleObservation("LOI");
+        var resolved = Assert.IsInstanceOfType<LuxembourgProfileResolution.Resolved>(
+            profile.Resolve(Proven(empty, typed)));
+        var byObject = resolved.ScopeInputs.ToDictionary(input => input.ObjectRef.PublisherUri);
+        var emptyInput = byObject[empty.ObjectRef.PublisherUri];
+        var typedInput = byObject[typed.ObjectRef.PublisherUri];
+        var recordRule = profile.RuleOrdinal(ScopeAxis.Record);
+        var missingRule = emptyInput.RuleEvaluations.Single(rule => rule.RuleOrdinal == recordRule);
+        var acceptedRule = typedInput.RuleEvaluations.Single(rule => rule.RuleOrdinal == recordRule);
+        Assert.AreEqual(ScopeDisposition.TypedQuarantine, missingRule.Disposition);
+        Assert.AreEqual(ScopeDisposition.AcceptedSelected, acceptedRule.Disposition);
+        Assert.AreNotSame(missingRule, acceptedRule);
+        var keys = profile.ScopeBinding.OrderedSelectorMemberOrdinals
+            .Select(ordinal => profile.ScopeBinding.OrderedMembers[ordinal].MemberKey).ToArray();
+        var recordIndex = Array.IndexOf(keys, "selector.record");
+        Assert.IsTrue(recordIndex >= 0);
+        var missingSelector = emptyInput.Selectors[recordIndex];
+        var presentSelector = typedInput.Selectors[recordIndex];
+        Assert.AreNotSame(missingSelector, presentSelector);
+        Assert.AreEqual(ScopeSelectorState.PublisherValueAbsent, missingSelector.State);
+        Assert.AreEqual(ScopeSelectorState.PublisherValuePresent, presentSelector.State);
+        CollectionAssert.AreEqual(new[] { Jolux + "Act" }, presentSelector.CanonicalValues.ToArray());
+        Assert.AreEqual(ObservationRef, resolved.OrderedEvidenceArtifacts[presentSelector.EvidenceArtifactOrdinal!.Value]);
+    }
+
+    private static LuxembourgResourceObservation EmptyPopulationObservation(int ordinal) => new(
+        ObjectRef("http://data.legilux.public.lu/eli/etat/leg/loi/2000/01/01/synthetic-" +
+            ordinal.ToString("D8", System.Globalization.CultureInfo.InvariantCulture) + "/jo"),
+        ObservationRef, [], [],
+        new LuxembourgSparqlRightsChannelObservations(ObservationRef, SparqlEnumerationRef, []),
+        new LuxembourgInFileRightsChannelObservations(ObservationRef, InFileEnumerationRef, []));
+
+    [TestMethod]
     public void EmptyExactObservationStaysFailClosedAndAccountsForEveryDimensionState()
     {
         var resolved = Assert.IsInstanceOfType<LuxembourgProfileResolution.Resolved>(

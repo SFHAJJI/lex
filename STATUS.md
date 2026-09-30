@@ -26,6 +26,64 @@ and corpus-chunk-validation.json. Required cross-family review and green exact-h
 merge gates. Typed records and completion remain materialized; this is not a full Luxembourg
 fit or population-completeness claim. No publisher traffic was sent by the validation.
 
+Required Claude review #832 returned MERGE after a clean build, fast (3,083 passed, one
+platform skip), and 140 broader ingest passes (two live canaries skipped). Its two findings are
+addressed in the single repair: intact foreign chunk roots now return RetainedBytesAreNotThisSet,
+matching foreign inline objects, with paired regression coverage; STATUS is strict UTF-8 again.
+The code/test repair is commit 816d4f09; its title mentioned the encoding repair prematurely,
+which is completed in this follow-up after a failed text-edit script.
+
+Large roots include retained receipt digests and write times, so their physical addresses may
+vary between executions. Canonical record-set bytes and the logical SetRef.Sha256 remain stable;
+the existing raw-storage equality test explicitly covers small inline sets. Opening and independent
+verification reread chunks, and all writes include a canonical sizing pass. This adds I/O and
+requires measurement before any full Luxembourg fit claim. Repair validation and exact-head CI
+remain required; no production Azure operation or publisher traffic is part of these checks.
+
+## Luxembourg scope input reuse (Codex, 2026-09-30)
+
+Scope resolution retains four rule-evaluation objects and multiple not-applicable selectors per
+resource even when their values are identical. Reversible driver decision: reuse only immutable
+values with no object identity or observation/evidence ordinal, within one profile resolution.
+The table is bounded by four axes and seven terminal states (at most 28 projections), plus four
+not-applicable selectors. Evidence-bearing selectors retain their existing per-object construction.
+No static cache crosses runs or profiles; projection rules, evidence admission and ordering stay
+unchanged.
+
+Validation: clean Release build (85.99 s), `pwsh -File eng/test-fast.ps1` (3,075 passed,
+one platform skip), and 97 affected Luxembourg ingest tests passed. Two regressions cover 128
+objects sharing immutable values, isolation between resolutions, repeated serialization and mixed
+missing/accepted dispositions with exact evidence. Independent reflection kept the global census
+at 211 types and supplied the changed private producer signature pin.
+
+The frozen comparison at `C:\lex-v3\lanes\lu-scope-input-comparison-20260930\comparison.json`
+checks actual loaded assembly hashes and source stamps for baseline 66371006 and candidate
+6209ce9d. For the same 10,000 synthetic empty subjects, retained scope memory after GC fell from
+27,854,264 to 19,280,128 bytes (8,574,136 fewer, about 30.8%). Both diagnostic JSON files have
+SHA-256 `c03f7c39759b4043581cddb58e69e60a789ff2978d4576f4ec6ebb9d0653f643`.
+Projection instances fell from 40,000 to four; not-applicable selectors from 100,000 to three.
+This measures retained synthetic scope results, not transient peaks or full-process fit. Real
+assertion graphs, reduction, corpus persistence and indexes remain outside this measurement.
+
+The full Luxembourg run remains gated on retained-state and persistence sizing. The new disk
+standing order requires space recovery before a large run; cited custody and evidence remain
+preserved. Required cross-family review and green exact-head CI remain merge gates.
+
+Required Claude review #829 returned MERGE with no blocking defect. It checked the cache keys,
+immutability and per-resolution isolation, reproduced the memory figures and identical JSON
+hashes, and made the disposition regression fail by mutating the cache key. Its clean build and
+fast suite passed; its broader offline ingest selection passed 137 tests. A trial integration merge
+also passed build and fast (3,078 passed, one platform skip).
+
+One follow-up preserves both STATUS sections during the current base merge. The earlier 97-test
+log lacks its filter string, so that historical count alone is not a reproducible command record.
+The explicit affected ingest rerun passed 101 tests, zero failures/skips, in 74.919 s at
+2678415d. Its command, source and result are retained under C:\lex-v3\lanes\pr-829-explicit-ingest-*.
+The exact filter was:
+`FullyQualifiedName~LuxembourgQueryExecutionAdapterTests|FullyQualifiedName~LuxembourgProductionTopologyTests|FullyQualifiedName~GuardedConstructionCensusTests|FullyQualifiedName~CustodyStoreConformanceTests`.
+The result is recorded in the PR. The final base refresh includes merged #827 and #830, with
+both STATUS sections retained. PR #829 merged at 21:33 UTC after green exact-head CI.
+
 ## Formex package outcome diagnostics (Codex, 2026-09-30)
 
 The successful three-seed mount holds 34 EU XHTML members but admits only two Formex article
@@ -2184,11 +2242,15 @@ Only money, legal or public claims, credentials and going live (ruling 7):
 - The corrigendum tripwire classifies a French corrigendum as `within_served_body_languages` while no
   French body is served (Decision 89 section 4). True once the French expressions land.
 
+## DATA lane disk and launch checkpoint (2026-09-30)
 
-Disk checkpoint: all 3,652 selected large files in old EU runs 1–8b were transparently compressed
+Disk checkpoint: all 3,652 selected large files in old EU runs 1-8b were transparently compressed
 and checked for identical length and SHA-256 before/after. They total 1,828,552,185 logical bytes;
 no custody was deleted. Evidence: C:\lex-v3\lanes\old-eu-largest-compression-result.json and its
 verified-file manifest (SHA-256 a0c9bd9c8a773df60be98c6dcaad6926897c0256ccc6f06a3e0c163c068f1e73).
 Observed free space rose from 4,015,509,504 to 5,163,757,568 bytes. The abandoned whole-tree
 hashing attempt changed no source files. The fresh EU retry still needs final local-job completion
 and a current storage check before and after its runtime is frozen; it has not started.
+
+PRs #827, #829 and #830 are merged. The all-82-seed EU retry remains prepared, with a
+4,999,959,422-byte launch allowance and checks before and after freezing its runtime.
