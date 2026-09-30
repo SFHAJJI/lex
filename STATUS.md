@@ -137,10 +137,10 @@ CI evidence are recorded in the pull request before merge.
 
 ## Heads
 
-- `v3/integration`: `9849ab09` (2026-09-30, PR #812 merged). Build 45 s. Fast lane
+- `v3/integration`: `ae4030d4` (2026-09-30, PR #815 merged). Build 45 s. Fast lane
   (`eng/test-fast.ps1`): 3,067 tests, 3,066 pass, 1 skipped (PR #798's validation). Ingest suite: green on CI for PR #760
   (the CI `dotnet` job runs the whole solution on every pull request, about 7 min on the runner;
-  green for PR #812);
+  green for PR #815);
   locally about 15 min. 952 web tests pass. CI's web job can flake in `keyboard-walk.test.mjs`
   ("browser debugger never answered"); rerunning the failed job is the fix.
 - Driver: Claude Opus 5.5 since 2026-09-29 (the Fable 5.1 driver ran out of tokens on 2026-09-28
@@ -1642,6 +1642,14 @@ Repair fast lane: 3,065 pass / 1 Windows skip; repair build: zero warnings/error
   `C:\lex-v3\first-mount-decision95-restart-20260930\v3-corpus`; the web lane's journeys run on it
   (PR #815). The machine gates' mounted-corpus run needs case sets written for a real corpus, whose
   Luxembourg side holds no state yet. The data lane continues the full EU and Luxembourg populations.
+- EU search on the live search screen waits on an EU permalink grammar (item 5). The real mount's
+  EU index answers `search` in one work (for example `32016R0679`, 60 hits for "personal data"), and
+  the web search reader refuses the answer by design, reading Luxembourg's only. Each EU hit cites
+  its expression IRI and provision (`…/3e485e15-…-01aa75ed71a1.0006#lex-provision=001`), not a
+  hash-pinned permalink. A screen showing those citations would break the launch contract's first
+  promise, which the journey holds. Once the grammar exists: the search screen gains the optional
+  work identifier, the reader reads the EU answer, and the journey searches the EU work on the real
+  mount.
 
 ## For the weekly checkpoint
 
@@ -1679,8 +1687,5 @@ Only money, legal or public claims, credentials and going live (ruling 7):
 
 ## Known defects carried
 
-- `V3PlatformSchemaTests` renders the tracked schemas and then verifies them when
-  `V3_RENDER_PLATFORM_SCHEMAS=1`, so a render passes unconditionally. CI never sets it. Fix: fail after
-  rendering.
 - The corrigendum tripwire classifies a French corrigendum as `within_served_body_languages` while no
   French body is served (Decision 89 section 4). True once the French expressions land.
