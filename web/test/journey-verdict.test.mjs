@@ -228,6 +228,23 @@ test("an export run reads, pins, and is held to the composed export and to its o
   assert.deepEqual(journeyVerdict(refused, { origin: ORIGIN, step: JOURNEY_STEPS.export, state: "refusal", refusalCode: "no_corpus_mounted" }), [], "a refusal is not pinned");
 });
 
+test("a run is held to the API process recording nothing: no query text, user agent, address, output or file", () => {
+  const observed = goodSearch();
+  observed.userAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) HeadlessChrome/140.0.0.0";
+  const expected = { origin: ORIGIN, step: JOURNEY_STEPS.search, state: "success" };
+  assert.deepEqual(journeyVerdict({ ...observed, api: { output: "", changedFiles: [] } }, expected), [], "silent and file-less passes");
+  const startup = "lex_v3_preview_bootstrap_failed reason=immutable_custody\n";
+  assert.deepEqual(journeyVerdict({ ...observed, api: { startup, output: "", changedFiles: [] } }, expected), [], "a startup message written before the first answer is the process's startup, not the run's");
+  assert.ok(journeyVerdict({ ...observed, api: { startup: `${startup}${SEARCH_PHRASE}`, output: "", changedFiles: [] } }, expected).some((failure) => failure.includes("recorded the query text")), "startup output is still held to carrying none of the run's text");
+  const failing = (api) => journeyVerdict({ ...observed, api }, expected);
+  assert.ok(failing({ output: `POST /api/v3/search ${SEARCH_PHRASE}\n`, changedFiles: [] }).some((failure) => failure.includes(`recorded the query text "${SEARCH_PHRASE}"`)));
+  assert.ok(failing({ output: `ua=${observed.userAgent}`, changedFiles: [] }).some((failure) => failure.includes("recorded the browser's user agent")));
+  assert.ok(failing({ output: "client 127.0.0.1:53211", changedFiles: [] }).some((failure) => failure.includes("recorded an address")));
+  assert.ok(failing({ output: "info: request served\n", changedFiles: [] }).some((failure) => failure.startsWith("the API process wrote output during the run")), "any output at all fails");
+  assert.ok(failing({ output: "", changedFiles: ["logs/requests.log"] }).some((failure) => failure === "the API process wrote files: logs/requests.log"));
+  assert.deepEqual(journeyVerdict(observed, expected), [], "a run that observed no process is judged on the page alone");
+});
+
 test("a run whose page the API served is held to the headers the page arrived with (Decision 95, ruling 3)", () => {
   const policy = `${cspValue()}; frame-ancestors 'none'`;
   const served = () => ({
