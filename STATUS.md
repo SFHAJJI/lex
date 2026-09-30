@@ -37,6 +37,15 @@ checks passed 833 and skipped 12, with one stale construction-surface pin. Its i
 reflected diff adds exactly the new private async builder; both focused construction tests passed. S/A changed
 custody and cancellation after preliminary verification are covered.
 
+The cross-family review of PR #812 returned MERGE and independently passed all 834 affected
+checks with 12 opt-in skips. Its repair corrects the older leaf-target wording below and adds adapter
+boundary tests at 100,000/100,001 rows. Full CI also found an unregistered fault-injection test store;
+the repair records its explicit custody-conformance exemption and the observed implementation count.
+Repair validation passed 3,066 fast tests/1 platform skip (70.717s) and all 84 focused tests
+(68.363s), including custody conformance and the adapter threshold. Final CI remains required.
+The extra local S/A verification pass remains an intentional
+CPU/read cost for lower retained memory; the in-memory compatibility wrapper performs no I/O.
+
 ## French EU expression bodies (Codex, 2026-09-30)
 
 The acquisition adapter now projects French body candidates from this run's proven expression
@@ -1527,13 +1536,14 @@ Each is the driver's call under ruling 7 and can be reversed by a later pull req
 ## Luxembourg population partitioning (2026-09-30)
 
 The whole-population acquisition now drives adaptive covers for S, A and G when the existing
-executor reports `PartitionRequired` at its 1,000,000-row delivery ceiling. It splits six-part
+executor reports `PartitionRequired`: at the publisher's 1,000,000-row delivery ceiling or
+above the adapter's lower 100,000-row memory target (PR #812). It splits six-part
 cursor ranges, retains empty leaves, and runs all leaves of a family in one session and under the
 same wire budget. The adapter reconciles each cover and independently reopens every leaf before
 scope reduction, body acquisition or corpus construction. Explicit act ranges keep their current
 path. This adds no publisher traffic by itself. The bounded mount completed; full-population
 acquisition follows the reviewed selector and adaptive-cover changes.
-Adaptive covers use midpoint boundaries and the existing executor's delivery ceiling. The query
+Adaptive covers use midpoint boundaries, the 100,000-row adapter target and the publisher ceiling. The query
 plan still records a legacy 900-row accumulated-slice rule that this executor does not apply;
 its renderer bytes were unchanged in that slice. PR #798 subsequently added compact COUNTs and
 splitting for narrowly recognized, retained initial COUNT capacity errors. The live bounded S

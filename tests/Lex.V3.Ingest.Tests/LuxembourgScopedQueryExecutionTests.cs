@@ -10,6 +10,33 @@ namespace Lex.V3.Ingest.Tests;
 public sealed partial class LuxembourgQueryExecutionAdapterTests
 {
     [TestMethod]
+    [DataRow(100_000, false)]
+    [DataRow(100_001, true)]
+    public async Task PopulationAdapterSplitsAboveItsMemoryTargetBeforeRequestingRows(int count, bool splits)
+    {
+        var (profile, _, _) = BuildProfile();
+        var store = new InMemoryCustodyStore();
+        var (families, members, _) = DisjointScopeRequests();
+        var handler = LuxembourgAcquisitionTestFixture.AllowRobotsThenHandler((ordinal, request) =>
+        {
+            Assert.AreEqual(1, ordinal, "The budget permits only robots and the root COUNT.");
+            return LuxembourgAcquisitionTestFixture.JsonResponse(request, LuxembourgAcquisitionTestFixture.CountJson(count));
+        });
+        var budget = WireRequestBudget.OfWireRequests(2);
+        var adapter = new LuxembourgQueryExecutionAdapter(store, NewExecutor(store, handler), profile);
+        var result = await adapter.RunAdaptiveScopedAsync(families, members, DocumentFetchRendererSource(), budget,
+            CancellationToken.None);
+        var outcome = result.FamilyOutcomes.Single(value => value.FamilyKey == "first-s");
+        Assert.AreEqual(LuxembourgFamilyEnumerationOutcomeKind.CoverRefused, outcome.Kind);
+        Assert.IsNotNull(outcome.CoverRefusal);
+        Assert.AreEqual(splits, outcome.CoverRefusal.LeafPartitionId != "first-s",
+            "Above the memory target, exhaustion must occur on a child leaf; at the target, on the root page.");
+        Assert.AreEqual(LuxembourgEnumerationRefusal.WireBudgetExhausted, outcome.CoverRefusal.LeafExecutorRefusal?.Code);
+        Assert.AreEqual(2, budget.Spent);
+        Assert.IsNull(result.ScopeManifestReceipt);
+    }
+
+    [TestMethod]
     public async Task TwoDisjointDeclaredScopesContributeTheirOwnRowsAndAllRelationProofs()
     {
         var (profile, _, enumerationRef) = BuildProfile();
