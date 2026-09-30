@@ -5,10 +5,10 @@ every pull request that changes what is served, what is next or what is blocked.
 
 ## Heads
 
-- `v3/integration`: `192535ee` (2026-09-30, PR #792 merged). Build 45 s. Fast lane
+- `v3/integration`: `736e9c03` (2026-09-30, PR #793 merged). Build 45 s. Fast lane
   (`eng/test-fast.ps1`): 3,038 tests, 3,037 pass, 1 skipped. Ingest suite: green on CI for PR #760
   (the CI `dotnet` job runs the whole solution on every pull request, about 7 min on the runner;
-  green for PR #792);
+  green for PR #793);
   locally about 15 min. 927 web tests pass. CI's web job can flake in `keyboard-walk.test.mjs`
   ("browser debugger never answered"); rerunning the failed job is the fix.
 - Driver: Claude Opus 5.5 since 2026-09-29 (the Fable 5.1 driver ran out of tokens on 2026-09-28
@@ -1014,11 +1014,12 @@ proves the path, not a corpus.
    headers (ruling 3); PR #789: the live export composer and its journey step. All eight of the
    launch contract's screens are live and journeyed; PR #790: the PDF export; PR #792: the
    evaluation card on the Trust and Coverage page (ruling 2); PR #793: the refusal sentence list
-   for the checkpoint (ruling 4). Next: the absence refusals' fields in the producer (the driver
-   decision below). Hosting (ruling 3): `Lex.V3.Api`
+   for the checkpoint (ruling 4); PR #794: the absence refusals carry the card's evidence, so the
+   live pages show them as cards. Next: keyboard and screen-reader paths for the eight screens,
+   then French and English chrome (Decision 41: French copy ships only once reviewed). Hosting
+   (ruling 3): `Lex.V3.Api`
    serves the live pages on the API's origin with `frame-ancestors`, HSTS and `Referrer-Policy`,
-   and a live page never shows the synthetic banner on a real mount. The absence refusals the card
-   will not show: the producer carries the fields (driver decision). J1 to J8 are restated as V3
+   and a live page never shows the synthetic banner on a real mount. J1 to J8 are restated as V3
    steps by the driver (they exist only in the pre-V3 pack, `05-user-journeys.md`).
 7. Release pipeline: build, sign, image, zero-traffic deploy, probes. Then acceptance and promotion.
 8. Machine gates (launch contract, Evaluation): the temporal, refusal and retrieval case sets run
@@ -1088,12 +1089,20 @@ Each is the driver's call under ruling 7 and can be reversed by a later pull req
   code. Three produced refusals therefore fail the card (`refusal-payload-samples.test.mjs`
   `KNOWN_BREAKS`): `identifier_unknown` (free-text `what_would_answer`, no disclosure),
   `no_version_for_date` (the nearest dates, neither absence field) and `anchor_not_in_version`
-  (`nearest_anchors`, neither absence field). `text_not_available` conforms. The producer will add
-  the fields to all three as optional payload keys (`identifier_unknown`'s `what_would_answer`
-  becoming the vocabulary list, a reviewed registry change), because the rule protects the
-  product's oldest invariant (an absence of a record is not an absence of law) and must travel over
-  MCP too. Until then the live pages say those three by their code, with the date or the nearest ids
-  to try next where the payload has them.
+  (`nearest_anchors`, neither absence field). `text_not_available` conforms. Done in PR #794: the
+  mount adds the fields to all three, because the rule protects the product's oldest invariant (an
+  absence of a record is not an absence of law) and must travel over MCP too.
+  - `what_would_answer` is the vocabulary list: `identifier_unknown` corrected identifier and
+    expanded scope, `no_version_for_date` a new official observation, `anchor_not_in_version` a
+    corrected identifier and a new observation. `asserts_absence_of_law: false` on each.
+  - `identifier_unknown`'s prose moves to `what_would_answer_detail` ("a hash-pinned permalink of a
+    state this index holds at that stable coordinate" and the like), and it carries a
+    `population_disclosure` counted from the mounted index ("This build's Luxembourg index holds 1
+    Luxembourg work, with states dated from 2024-02-01 to 2026-04-11"; the EU index counts its
+    members).
+  - The registry lists mandatory field names only and the refusal schema leaves payloads open, so
+    the registry digest and the contract are unchanged; the refusal-payload and envelope censuses
+    are rendered again. `KNOWN_BREAKS` is empty, and the live pages show those refusals as cards.
 - EU parity (PR #761): (a) the Formex act date (`wording_date`) is the EU wording-state date, and
   `official_consolidation_state` fits an answer over an original wording; (b) the original wording
   does not answer EU `as_of` for dates after it when no consolidation is held; consolidation

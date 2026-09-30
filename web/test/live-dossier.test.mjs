@@ -108,19 +108,20 @@ test("an EU work's dossier is said as not shown here, and an answer the reader r
   assert.match(unreadable.sentence, /state_count is 2/);
 });
 
-test("an unknown work is said by its code: the card needs the population disclosure the platform does not send yet", async () => {
-  // The standing disagreement `refusal-card.mjs` records for identifier_unknown: the card will not say
-  // "not found" without the size of what was searched, and the platform's payload carries no
-  // `population_disclosure`. The page keeps the refusal state and says it by its code, as it was
-  // built to for a card its rules refuse, until the producer carries the disclosure.
+test("an unknown work is a card that says how much the index searched", async () => {
+  // The disagreement `refusal-card.mjs` recorded for identifier_unknown is settled where it belongs:
+  // the platform's payload now carries `population_disclosure`, counted from the mounted index, and
+  // the absence evidence, so "not found" is said against the size of what was searched.
   const envelope = envelopeOf("a work the index does not hold");
   const { fetchImpl } = answering(200, "application/json", envelope);
   const outcome = await loadLiveDossier({ contract, fetchImpl, request: { identifier: "/lu-legilux/no-such-work" } });
   assert.equal(outcome.state, "refusal");
   assert.equal(outcome.code, "identifier_unknown");
-  assert.equal(outcome.card, false);
-  assert.match(outcome.sentence, /refused with identifier_unknown, and its card cannot be shown: .*population_disclosure/);
-  assert.match(view(outcome), /^<section data-answer-state="refusal"><p role="status">/);
+  assert.equal(outcome.card, true);
+  const card = renderToStaticMarkup(h(RefusalCard, { code: outcome.code, sentence: outcome.sentence, payload: outcome.payload }));
+  assert.equal(view(outcome), `<section data-answer-state="refusal">${card}</section>`);
+  assert.ok(card.includes(envelope.refusal.helpful_payload.population_disclosure.replaceAll("'", "&#x27;")), "the population the index searched");
+  assert.ok(card.includes("It is not evidence that the instrument or the law does not exist."));
 });
 
 test("the other refusals a dossier from this page can meet are refusal cards with the platform's payloads", async () => {
