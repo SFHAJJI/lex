@@ -14,6 +14,7 @@
 import { askV3 } from "./v3-client.mjs";
 import { readCoverage } from "./coverage.mjs";
 import { validateRefusal } from "./refusal-card.mjs";
+import { liveChrome } from "./live-chrome.mjs";
 
 /**
  * The one sentence per refusal code a coverage request can meet. `coverage` takes no parameters,
@@ -25,7 +26,7 @@ export const LIVE_COVERAGE_REFUSAL_SENTENCES = Object.freeze({
   no_corpus_mounted: "This build has no index mounted.",
 });
 
-export const LIVE_COVERAGE_LOADING = "Asking this server for its coverage report.";
+export const LIVE_COVERAGE_LOADING = liveChrome().coverage.loading;
 
 /** The sentence for a refusal this page names only by its code. */
 export function unexpectedRefusalSentence(code) {

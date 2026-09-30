@@ -18,7 +18,7 @@
 import { useEffect, useRef, useState } from 'react';
 
 import { RefusalCard } from './RefusalCard.jsx';
-import { LiveAnswer } from './LiveAnswer.jsx';
+import { LiveAnswer, Say } from './LiveAnswer.jsx';
 import { quotationLanguageTag } from '../scripts/live-reading.mjs';
 import {
   LIVE_SEARCH_IDLE,
@@ -26,14 +26,13 @@ import {
   SEARCH_QUERY_MAX,
   createSearchSession,
 } from '../scripts/live-search.mjs';
-import { liveChrome } from '../scripts/live-chrome.mjs';
+import { countedEntry, liveChrome } from '../scripts/live-chrome.mjs';
 
-/** The forms' labels and buttons, from the interface copy table. */
+/** The forms' labels and buttons, and this screen's sentences, from the interface copy table. */
 const FORM = liveChrome().form;
+const COPY = liveChrome().search;
 
 const IDLE = Object.freeze({ state: 'idle', sentence: LIVE_SEARCH_IDLE });
-
-const LANE_LABEL = Object.freeze({ strict: 'exact phrase', relaxed: 'every word' });
 
 /** A platform phrase as the start of a sentence: its first letter capitalised, a full stop after it. */
 function asSentence(text) {
@@ -41,38 +40,38 @@ function asSentence(text) {
 }
 
 function laneCount(count) {
-  return count === null ? 'not counted' : String(count);
+  return count === null ? COPY.notCounted : String(count);
 }
 
 export function SearchWorkResolution({ resolution }) {
   // A matched title is the publisher's text, marked in the language that title is written in, which the
   // card names: the resolver searches every language's titles, so the search's language is not it (review
   // of #797).
+  const titled = (card) => ({
+    title: <span lang={quotationLanguageTag(card.matchedTitleLanguage)}>{card.matchedTitle}</span>,
+    identifier: card.workIdentifier,
+  });
   if (resolution.outcome === 'one_work') {
     return (
       <p data-work-resolution="one_work">
-        The phrase names the work “<span lang={quotationLanguageTag(resolution.work.matchedTitleLanguage)}>{resolution.work.matchedTitle}</span>” ({resolution.work.workIdentifier}).
+        <Say template={COPY.namesWork} values={titled(resolution.work)} />
       </p>
     );
   }
   if (resolution.outcome === 'several_candidates') {
     return (
       <div data-work-resolution="several_candidates">
-        <p>The phrase matches the titles of several works:</p>
+        <p>{COPY.severalWorks}</p>
         <ul>
           {resolution.candidates.map((card) => (
-            <li key={card.workIdentifier}>“<span lang={quotationLanguageTag(card.matchedTitleLanguage)}>{card.matchedTitle}</span>” ({card.workIdentifier})</li>
+            <li key={card.workIdentifier}><Say template={COPY.candidate} values={titled(card)} /></li>
           ))}
         </ul>
       </div>
     );
   }
   if (resolution.outcome === 'no_titles_held') {
-    return (
-      <p data-work-resolution="no_titles_held">
-        This index holds no work titles, so the phrase was matched against article text only.
-      </p>
-    );
+    return <p data-work-resolution="no_titles_held">{COPY.noTitlesHeld}</p>;
   }
   return null;
 }
@@ -81,8 +80,8 @@ function AmbiguousWorks({ works, date }) {
   if (works.length === 0) return null;
   return (
     <section data-ambiguous-works={works.length}>
-      <h2>Works with several versions on {date}</h2>
-      <p>These works have more than one version that applies on that date, so none is chosen and none contributes a hit.</p>
+      <h2><Say template={COPY.ambiguousHeading} values={{ date }} /></h2>
+      <p>{COPY.ambiguousNote}</p>
       <ul>
         {works.map((work) => (
           <li key={work.workKey}>
@@ -103,8 +102,8 @@ function AmbiguousWorks({ works, date }) {
 function Hit({ hit }) {
   return (
     <li data-lane={hit.lane}>
-      <strong>{hit.publisherId}</strong> in {hit.workKey}, version of {hit.applicabilityDate}{' '}
-      <span className="badge">{LANE_LABEL[hit.lane]}</span>
+      <Say template={COPY.hit} values={{ article: <strong>{hit.publisherId}</strong>, work: hit.workKey, date: hit.applicabilityDate }} />{' '}
+      <span className="badge">{COPY.lane[hit.lane]}</span>
       <br />
       <code>{hit.permalink}</code>
     </li>
@@ -117,18 +116,25 @@ export function SearchResultsView({ view, onNextPage }) {
   return (
     <>
       <p data-population="">
-        “{view.query}” in {view.language}: {laneCount(population.strictHits)} with the exact phrase,{' '}
-        {laneCount(population.relaxedHits)} with every word, in {population.worksWithHits}{' '}
-        {population.worksWithHits === 1 ? 'work' : 'works'}.
+        <Say
+          template={countedEntry(COPY.population, population.worksWithHits)}
+          values={{
+            query: view.query,
+            language: view.language,
+            strict: laneCount(population.strictHits),
+            relaxed: laneCount(population.relaxedHits),
+            works: population.worksWithHits,
+          }}
+        />
       </p>
       <SearchWorkResolution resolution={view.workResolution} />
       <AmbiguousWorks works={view.ambiguousWorks} date={view.date} />
       {view.hits.length === 0 ? (
         view.searchableTextHeld ? (
-          <p data-no-hit="">No article of the text this server holds contains “{view.query}”. {asSentence(view.matching)}</p>
+          <p data-no-hit=""><Say template={COPY.noHit} values={{ query: view.query }} /> {asSentence(view.matching)}</p>
         ) : (
           <p data-no-hit="">
-            This index holds no searchable text in {view.language}; it holds text in {view.searchableLanguages.join(', ')}.
+            <Say template={COPY.noText} values={{ language: view.language, languages: view.searchableLanguages.join(', ') }} />
           </p>
         )
       ) : (
@@ -143,7 +149,7 @@ export function SearchResultsView({ view, onNextPage }) {
       )}
       {view.truncated && onNextPage ? (
         <button type="button" onClick={() => onNextPage(view.continueAfter)}>
-          Next page
+          {COPY.nextPage}
         </button>
       ) : null}
     </>

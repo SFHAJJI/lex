@@ -11,6 +11,7 @@ import { askV3 } from "./v3-client.mjs";
 import { readArticleHistory } from "./history-answer.mjs";
 import { validateRefusal } from "./refusal-card.mjs";
 import { noCorpusMountedSentence, nearestAnchorsHint } from "./live-refusals.mjs";
+import { liveChrome } from "./live-chrome.mjs";
 
 /**
  * The languages the form offers besides "any": the platform answers a language the work is not held
@@ -34,8 +35,8 @@ export const LIVE_HISTORY_REFUSAL_SENTENCES = Object.freeze({
   retrieval_mode_unavailable: "This index cannot trace this work's articles.",
 });
 
-export const LIVE_HISTORY_IDLE = "Type a work identifier and the publisher's article id to trace it through the held states.";
-export const LIVE_HISTORY_LOADING = "Asking this server.";
+export const LIVE_HISTORY_IDLE = liveChrome().history.idle;
+export const LIVE_HISTORY_LOADING = liveChrome().common.loading;
 
 export function unexpectedRefusalSentence(code) {
   return `The provision history was refused with ${code}.`;

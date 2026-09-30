@@ -12,6 +12,7 @@ import { readEvidenceBundle } from "./reading-answer.mjs";
 import { validateRefusal } from "./refusal-card.mjs";
 import { noCorpusMountedSentence, historyBeginsHint } from "./live-refusals.mjs";
 import { isCalendarDate } from "./temporal.mjs";
+import { liveChrome } from "./live-chrome.mjs";
 
 /**
  * The languages the form offers besides "any": the platform answers a language the work is not held
@@ -48,8 +49,8 @@ export const LIVE_READING_REFUSAL_SENTENCES = Object.freeze({
   retrieval_mode_unavailable: "This index cannot read this work's text.",
 });
 
-export const LIVE_READING_IDLE = "Type a work identifier and a date to read the text that applied on it.";
-export const LIVE_READING_LOADING = "Asking this server.";
+export const LIVE_READING_IDLE = liveChrome().reading.idle;
+export const LIVE_READING_LOADING = liveChrome().common.loading;
 
 export function unexpectedRefusalSentence(code) {
   return `The reading was refused with ${code}.`;

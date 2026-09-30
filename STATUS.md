@@ -38,11 +38,11 @@ CI evidence are recorded in the pull request before merge.
 
 ## Heads
 
-- `v3/integration`: `7ccc31ea` (2026-09-30, PR #798 merged). Build 45 s. Fast lane
+- `v3/integration`: `de1052b2` (2026-09-30, PR #802 merged). Build 45 s. Fast lane
   (`eng/test-fast.ps1`): 3,067 tests, 3,066 pass, 1 skipped (PR #798's validation). Ingest suite: green on CI for PR #760
   (the CI `dotnet` job runs the whole solution on every pull request, about 7 min on the runner;
-  green for PR #798);
-  locally about 15 min. 937 web tests pass. CI's web job can flake in `keyboard-walk.test.mjs`
+  green for PR #802);
+  locally about 15 min. 940 web tests pass. CI's web job can flake in `keyboard-walk.test.mjs`
   ("browser debugger never answered"); rerunning the failed job is the fix.
 - Driver: Claude Opus 5.5 since 2026-09-29 (the Fable 5.1 driver ran out of tokens on 2026-09-28
   after PR #757; the user default model is now `claude-opus-5-5`).
@@ -268,7 +268,7 @@ schema's `parameters` shape, and whose call runs the same dispatch the REST rout
 endpoint test proves it for all twenty-three. The launch-contract line "REST and MCP derive identical
 envelopes from the registry" is the owner's to tick.
 
-Web: 39 React components, 937 tests. Preview screens render fixtures. The V3 Luxembourg search
+Web: 40 React components, 940 tests. Preview screens render fixtures. The V3 Luxembourg search
 answer has a reader (PR #771). The answer census now samples `search` five ways from the real handler:
 - a phrase with 4 strict hits and 1 relaxed hit;
 - the same phrase one hit per page, with its cursor;
@@ -595,8 +595,7 @@ for any other, since serving it would be a substitution; a test holds each page 
 the table to the reviewed languages. French is drafted beside it for review
 (`live-chrome-fr-draft.mjs`, printed by `node web/scripts/live-chrome-fr-draft.mjs`): never
 imported by the product, and held by a test to the English table's exact shape, so an English
-entry without a draft is caught. Next into the table: the screens' answer sentences, drafted
-the same way; French ships once reviewed (Decision 41).
+entry without a draft is caught.
 
 The API process records nothing while a browser asks it (PR #801, the launch contract's "no query
 text, IP or user agent recorded", on the journey host). In source, `PublicRequestRecordingTests`
@@ -629,6 +628,28 @@ accessibility line).
   field). All sixteen runs pass with `--keyboard`, and all sixteen with `--keyboard --served-by-api`
   (run 2026-09-30); the first run found the search box is `type="search"`, which the keyboard path
   now types into as well.
+
+The screens' sentences join the chrome table (PR #803, the second step toward French chrome).
+- `live-chrome.mjs` now also holds each screen's idle sentence, the loading sentences, and every
+  sentence the search, dossier, reading and history screens say about an answer: the counts, the
+  headings, the table columns, the work resolution and the lines a row is made of.
+- A sentence that carries values is a template with `{name}` placeholders, filled in place
+  (`fillParts`, laid out by `Say` in `LiveAnswer.jsx`), so a translation can put a quotation, a
+  date or a permalink where its grammar needs it. A placeholder without a value, or a value without
+  a placeholder, throws.
+- A sentence that counts is `{ one, other }`, chosen by the language's own plural rule
+  (`Intl.PluralRules`): French counts zero as one ("0 version"), which a comparison with 1 would
+  get wrong.
+- The phrases the platform itself sends (a matching rule, a scope, why something is not held) stay
+  the platform's English, shown as sent. Compare, radar, export and Trust and Coverage keep their
+  answer sentences in their components for the next slice.
+- Every census envelope of the four screens, rendered through its answer view before and after the
+  move, and each idle page: 21 renders, byte-identical except one. History's per-row wording marker
+  is now a language-free code (`data-wording="first"`, `"changed"`, `"unchanged"`), not the English
+  label.
+- The French draft covers every new entry. A test holds each draft template to its English
+  template's placeholders and each counted entry to both forms. French still ships only once
+  reviewed (Decision 41).
 
 The live export composer and its journey step (PR #789), the eighth screen. `dist-live/export.html`
 has its own bundle `client-live-export.js`.
@@ -1168,9 +1189,10 @@ has not yet run; the bounded first mount above is complete.
    the interface languages, German and Luxembourgish (and French until reviewed) answering
    `localization_unavailable`; PR #800: the live pages' chrome in one table; PR #801: the API process
    records nothing while a browser asks it; PR #802: the keyboard and screen-reader paths (live
-   regions, and the journey's keyboard mode). Next: the screens' labels and sentences into the
-   chrome table, then French drafted beside it for review; French ships only once reviewed
-   (Decision 41). Hosting (ruling 3): `Lex.V3.Api`
+   regions, and the journey's keyboard mode); PR #803: the search, dossier, reading and history
+   screens' sentences in the chrome table, with French drafted beside them. Next: the compare,
+   radar, export and Trust and Coverage screens' sentences and the refusal card's labels into the
+   table; French ships only once reviewed (Decision 41). Hosting (ruling 3): `Lex.V3.Api`
    serves the live pages on the API's origin with `frame-ancestors`, HSTS and `Referrer-Policy`,
    and a live page never shows the synthetic banner on a real mount. J1 to J8 are restated as V3
    steps by the driver (they exist only in the pre-V3 pack, `05-user-journeys.md`).

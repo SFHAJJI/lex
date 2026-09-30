@@ -75,7 +75,7 @@ test("a served lineage is its rows, the states that do not carry the id, and the
   const markup = view(outcome);
   const row = envelope.result.value.states[0];
   assert.ok(markup.includes(row.permalink));
-  assert.match(markup, /data-wording="first held wording"/);
+  assert.match(markup, /data-wording="first"/);
   assert.ok(markup.includes("Carried by 1 held state in fra, from 2024-02-01; 0 held states do not carry it."));
   assert.ok(!markup.includes("in force"));
 });
@@ -104,7 +104,7 @@ test("a longer lineage shows the change, the next state counting an absent one, 
   const outcome = historyOutcome({ state: "success", envelope });
   assert.equal(outcome.state, "success", outcome.sentence);
   const markup = view(outcome);
-  assert.deepEqual([...markup.matchAll(/data-wording="([^"]+)"/g)].map((match) => match[1]), ["first held wording", "wording changed"]);
+  assert.deepEqual([...markup.matchAll(/data-wording="([^"]+)"/g)].map((match) => match[1]), ["first", "changed"]);
   assert.ok(markup.includes(absent.permalink), "the state that does not carry the id is shown");
   assert.ok(markup.includes("<td>2025-01-01</td>"), "the first row's next state is the absent one");
   assert.ok(markup.includes("fra: 2 wording runs, 2 distinct"));

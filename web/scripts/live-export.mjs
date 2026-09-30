@@ -9,8 +9,9 @@
 
 import { composeExport, exportCsv, exportJson } from './export-build.mjs';
 import { exportPdf, pdfRefusal } from './export-pdf.mjs';
+import { liveChrome } from './live-chrome.mjs';
 
-export const LIVE_EXPORT_IDLE = 'Type a work identifier and a date, then pin the articles to take away.';
+export const LIVE_EXPORT_IDLE = liveChrome().export.idle;
 export const NOTHING_PINNED = 'Nothing is pinned yet. Pin an article above and its export appears here, with what it carries.';
 
 /**

@@ -17,11 +17,13 @@ import { useEffect, useRef, useState } from 'react';
 
 import { RefusalCard } from './RefusalCard.jsx';
 import { HISTORY_LANGUAGES, LIVE_HISTORY_IDLE, createHistorySession } from '../scripts/live-history.mjs';
-import { liveChrome } from '../scripts/live-chrome.mjs';
-import { LiveAnswer } from './LiveAnswer.jsx';
+import { fillCounted, fillText, liveChrome } from '../scripts/live-chrome.mjs';
+import { LiveAnswer, Say } from './LiveAnswer.jsx';
 
-/** The forms' labels and buttons, from the interface copy table. */
+/** The forms' labels and buttons, and this screen's sentences, from the interface copy table. */
 const FORM = liveChrome().form;
+const COPY = liveChrome().history;
+const COMMON = liveChrome().common;
 
 const IDLE = Object.freeze({ state: 'idle', sentence: LIVE_HISTORY_IDLE });
 
@@ -31,52 +33,56 @@ function asSentence(text) {
   return /[.!?]$/.test(capitalised) ? capitalised : `${capitalised}.`;
 }
 
-function wordingLabel(row, firstOfLanguage) {
-  if (firstOfLanguage) return 'first held wording';
-  return row.wordingChanged ? 'wording changed' : 'wording unchanged';
+/** Which wording a row has: the first its language holds, or changed or unchanged from the row before. */
+function wordingKind(row, firstOfLanguage) {
+  if (firstOfLanguage) return 'first';
+  return row.wordingChanged ? 'changed' : 'unchanged';
 }
 
 /** One lineage view, laid out: the rows that carry the id, the states that do not, and the counts. */
 export function HistoryView({ view }) {
   const seen = new Set();
   const runs = Object.entries(view.wordingRuns);
+  const carried = view.language === null
+    ? fillCounted(COPY.carried, view.rows.length, { from: view.historyBegins })
+    : fillCounted(COPY.carriedIn, view.rows.length, { language: view.language, from: view.historyBegins });
   return (
     <>
       <h2>
-        {view.anchor} in {view.workKey}
+        <Say template={COPY.anchorHeading} values={{ anchor: view.anchor, work: view.workKey }} />
       </h2>
       <p data-history-summary="">
-        Carried by {view.rows.length} held {view.rows.length === 1 ? 'state' : 'states'}
-        {view.language === null ? '' : ` in ${view.language}`}, from {view.historyBegins};{' '}
-        {view.absent.length} held {view.absent.length === 1 ? 'state does' : 'states do'} not carry it.{' '}
-        {runs.map(([language, count]) => `${language}: ${count} ${count === 1 ? 'wording run' : 'wording runs'}, ${view.distinctWordings[language]} distinct`).join('; ')}.
+        {carried}{' '}
+        {fillCounted(COPY.absent, view.absent.length, {})}{' '}
+        {runs.map(([language, count]) => fillCounted(COPY.runs, count, { language, distinct: view.distinctWordings[language] })).join('; ')}.
       </p>
       <table>
         <thead>
           <tr>
-            <th scope="col">Language</th>
-            <th scope="col">Applies from</th>
-            <th scope="col">Next state from</th>
-            <th scope="col">Wording</th>
-            <th scope="col">Article's own date</th>
-            <th scope="col">Permalink</th>
+            <th scope="col">{COMMON.language}</th>
+            <th scope="col">{COMMON.appliesFrom}</th>
+            <th scope="col">{COMMON.nextFrom}</th>
+            <th scope="col">{COPY.wordingColumn}</th>
+            <th scope="col">{COPY.ownDateColumn}</th>
+            <th scope="col">{COMMON.permalink}</th>
           </tr>
         </thead>
         <tbody>
           {view.rows.map((row) => {
             const first = !seen.has(row.language);
             seen.add(row.language);
+            const kind = wordingKind(row, first);
             return (
-              <tr key={row.stateSha256} data-row={row.stateSha256} data-wording={wordingLabel(row, first)}>
+              <tr key={row.stateSha256} data-row={row.stateSha256} data-wording={kind}>
                 <td>{row.language}</td>
                 <td>{row.applicabilityDate}</td>
-                <td>{row.nextApplicabilityDate ?? 'none held'}</td>
-                <td>{wordingLabel(row, first)}</td>
+                <td>{row.nextApplicabilityDate ?? COMMON.noneHeld}</td>
+                <td>{COPY.wording[kind]}</td>
                 <td>
                   {row.articles
                     .map((article) => (article.validFrom === null
-                      ? 'not stated'
-                      : article.validityConflict ? `${article.validFrom} (differs from the state's)` : article.validFrom))
+                      ? COPY.ownDateNotStated
+                      : article.validityConflict ? fillText(COPY.ownDateDiffers, { date: article.validFrom }) : article.validFrom))
                     .join('; ')}
                 </td>
                 <td><code>{row.permalink}</code></td>
@@ -87,11 +93,11 @@ export function HistoryView({ view }) {
       </table>
       {view.absent.length > 0 ? (
         <>
-          <h3>Held states that do not carry {view.anchor}</h3>
+          <h3><Say template={COPY.absentHeading} values={{ anchor: view.anchor }} /></h3>
           <ul data-absent={view.absent.length}>
             {view.absent.map((state) => (
               <li key={state.stateSha256}>
-                {state.language}, from {state.applicabilityDate}: <code>{state.permalink}</code>
+                <Say template={COPY.absentRow} values={{ language: state.language, from: state.applicabilityDate, permalink: <code>{state.permalink}</code> }} />
               </li>
             ))}
           </ul>
