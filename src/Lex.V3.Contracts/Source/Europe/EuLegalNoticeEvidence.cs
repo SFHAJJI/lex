@@ -17,7 +17,8 @@ public enum EuLegalNoticeSource
 
 /// <summary>
 /// One retained rights-policy capture. Decision 95 uses Commission Decision 2011/833/EU on the
-/// Publications Office route. The older notice source remains readable for historical evidence.
+/// Publications Office route. Retained legacy notice routes can be reconstructed into schema /3;
+/// serialized /2 receipts are not accepted by the /3 reader.
 /// </summary>
 /// <remarks>
 /// The Decision receipt is the policy the EUR-Lex notice cites, not the notice itself. Decision 95
@@ -35,7 +36,7 @@ public sealed class EuLegalNoticeEvidence
     public const string SchemaId = "lex-eu-legal-notice-evidence/3";
 
     /// <summary>
-    /// The legacy request R8 named, kept for historical evidence and source-profile identity.
+    /// The legacy request R8 named, kept for retained-route reconstruction and source-profile identity.
     /// A legal-notice evidence type that could target an arbitrary
     /// EUR-Lex URI could just as easily be pointed at a law-body page, which is exactly the
     /// corpus-source use Decision 23 forbids.
@@ -328,7 +329,7 @@ public sealed class EuLegalNoticeEvidence
                 StringComparison.Ordinal))
         {
             throw new ArgumentException(
-                "Legal-notice evidence must observe its source media type (text/html for the notice, application/xhtml+xml for the Decision).",
+                $"Legal-notice evidence must observe exactly one {(source == EuLegalNoticeSource.EurLexLegalNotice ? "text/html" : "application/xhtml+xml")} media type on the terminal hop.",
                 nameof(evidence));
         }
 

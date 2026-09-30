@@ -59,6 +59,7 @@ public sealed class EuRendererSources
 
     public MachineQueryRendererSource FormexManifestation { get; }
 
+    /// <summary>Legacy renderer retained by this source-set API; the rights producer uses DocumentFetch.</summary>
     public MachineQueryRendererSource LegalNotice { get; }
 
     /// <summary>
@@ -116,14 +117,15 @@ public enum EuFirstMountAcquisitionRefusal
     [JsonStringEnumMemberName("formex_refused")]
     FormexRefused = 2,
 
-    /// <summary>The run and its Formex population closed but the legal-notice route was refused.</summary>
+    /// <summary>The rights capture refused before population traffic, or its later corpus-identity rebind refused.</summary>
     [JsonStringEnumMemberName("legal_notice_refused")]
     LegalNoticeRefused = 3,
 }
 
 /// <summary>
 /// The three EU inputs the Stage 3 envelope takes for one work, or one typed refusal. On a refusal
-/// the steps that did complete travel on the result, so a refused build can still be read.
+/// an attempted adapter run and Formex result travel on the result. A receipt refused before
+/// population traffic carries neither; its captured transport evidence remains in custody.
 /// </summary>
 public sealed class EuFirstMountAcquisitionResult
 {
@@ -144,7 +146,7 @@ public sealed class EuFirstMountAcquisitionResult
     /// <summary>
     /// The adapter run over the one work: complete on success and when a later step refused, the
     /// refused run itself when <see cref="Refusal"/> is <see cref="EuFirstMountAcquisitionRefusal.RunRefused"/>
-    /// after the adapter ran. Absent when the CELEX was refused before traffic.
+    /// after the adapter ran. Absent when the CELEX or the initial rights capture was refused.
     /// </summary>
     public EuQueryExecutionResult? Run { get; }
 
