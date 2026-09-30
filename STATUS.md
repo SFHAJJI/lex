@@ -9,7 +9,7 @@ every pull request that changes what is served, what is next or what is blocked.
   (`eng/test-fast.ps1`): 3,038 tests, 3,037 pass, 1 skipped. Ingest suite: green on CI for PR #760
   (the CI `dotnet` job runs the whole solution on every pull request, about 7 min on the runner;
   green for PR #792);
-  locally about 15 min. 926 web tests pass. CI's web job can flake in `keyboard-walk.test.mjs`
+  locally about 15 min. 927 web tests pass. CI's web job can flake in `keyboard-walk.test.mjs`
   ("browser debugger never answered"); rerunning the failed job is the fix.
 - Driver: Claude Opus 5.5 since 2026-09-29 (the Fable 5.1 driver ran out of tokens on 2026-09-28
   after PR #757; the user default model is now `claude-opus-5-5`).
@@ -235,7 +235,7 @@ schema's `parameters` shape, and whose call runs the same dispatch the REST rout
 endpoint test proves it for all twenty-three. The launch-contract line "REST and MCP derive identical
 envelopes from the registry" is the owner's to tick.
 
-Web: 37 React components, 926 tests. Preview screens render fixtures. The V3 Luxembourg search
+Web: 37 React components, 927 tests. Preview screens render fixtures. The V3 Luxembourg search
 answer has a reader (PR #771). The answer census now samples `search` five ways from the real handler:
 - a phrase with 4 strict hits and 1 relaxed hit;
 - the same phrase one hit per page, with its cursor;
@@ -1131,8 +1131,9 @@ Each is the driver's call under ruling 7 and can be reversed by a later pull req
 ## For the weekly checkpoint
 
 - The French and English refusal sentences, one short list (ruling 4): PR #793. The 20 sentences the
-  live pages say by refusal code, and each page's two sentences for a refusal named only by its code,
-  English as served and French as the driver's draft. Printed from the pages' own sentences by
+  live pages say by refusal code, each page's two sentences for a refusal named only by its code,
+  and the two hints a card that cannot be shown still carries (the date the history begins, the
+  nearest article ids; review of #793), English as served and French as the driver's draft. Printed from the pages' own sentences by
   `node web/scripts/refusal-sentences.mjs`; a test holds every served sentence to one draft. Nothing
   French ships until the owner's reviewed wording replaces the drafts.
 

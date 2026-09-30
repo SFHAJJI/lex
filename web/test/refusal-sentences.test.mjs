@@ -11,6 +11,8 @@ import test from "node:test";
 
 import {
   FRENCH_DRAFTS,
+  FRENCH_HINT_DRAFTS,
+  SERVED_HINTS,
   FRENCH_TEMPLATE_DRAFTS,
   SCREENS,
   renderCheckpointList,
@@ -42,6 +44,39 @@ test("the printed list carries every sentence with its draft, and no row without
   const list = renderCheckpointList();
   for (const row of servedRefusalSentences()) assert.ok(list.includes(`| ${row.sentence} | ${FRENCH_DRAFTS[row.sentence]} |`), row.sentence);
   assert.ok(!list.includes("(no draft)"));
+});
+
+test("the hints a card that cannot be shown still carries are in the list, as the pages say them (review of #793)", async () => {
+  const { readingOutcome } = await import("../scripts/live-reading.mjs");
+  const { compareOutcome } = await import("../scripts/live-compare.mjs");
+  const { historyOutcome } = await import("../scripts/live-history.mjs");
+  const census = JSON.parse(await readFile(new URL("../../schemas/v3-platform/envelope-samples.json", import.meta.url), "utf8"));
+  // An absence whose card cannot be shown: the census refusal without the absence evidence the card requires.
+  const unshowable = (operation, scenarioStart) => {
+    const envelope = structuredClone(census.envelopes.find((entry) => entry.operation === operation && entry.scenario.startsWith(scenarioStart)).envelope);
+    delete envelope.refusal.helpful_payload.what_would_answer;
+    delete envelope.refusal.helpful_payload.asserts_absence_of_law;
+    return envelope;
+  };
+  const fill = (template, values) => Object.entries(values).reduce((text, [key, value]) => text.replace(`{${key}}`, value), template);
+  const [historyBegins, nearestIds] = SERVED_HINTS;
+  const cases = [
+    [readingOutcome, unshowable("evidence_bundle", "a date before the work's history"), historyBegins, (payload) => ({ date: payload.history_begins })],
+    [compareOutcome, unshowable("diff", "a from date before the work's history"), historyBegins, (payload) => ({ date: payload.history_begins })],
+    [historyOutcome, unshowable("article_history", "an article id no held state carries"), nearestIds, (payload) => ({ ids: payload.nearest_anchors.join(", ") })],
+  ];
+  for (const [outcome, envelope, hint, values] of cases) {
+    const result = outcome({ state: "refusal", envelope });
+    assert.equal(result.card, false);
+    assert.ok(result.sentence.endsWith(` ${fill(hint.template, values(envelope.refusal.helpful_payload))}`), `${hint.code}: the page says the listed hint (${result.sentence})`);
+  }
+  const list = renderCheckpointList();
+  for (const hint of SERVED_HINTS) {
+    assert.ok(list.includes(`| ${hint.template} | ${FRENCH_HINT_DRAFTS[hint.template]} |`), hint.template);
+    const placeholders = (text) => [...text.matchAll(/\{[a-z]+\}/g)].map((match) => match[0]);
+    assert.deepEqual(placeholders(FRENCH_HINT_DRAFTS[hint.template]), placeholders(hint.template));
+  }
+  assert.deepEqual(Object.keys(FRENCH_HINT_DRAFTS).sort(), SERVED_HINTS.map((hint) => hint.template).sort(), "no hint draft stands for a hint the pages no longer say");
 });
 
 test("nothing the product ships imports the drafts", async () => {

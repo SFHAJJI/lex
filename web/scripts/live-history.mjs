@@ -10,7 +10,7 @@
 import { askV3 } from "./v3-client.mjs";
 import { readArticleHistory } from "./history-answer.mjs";
 import { validateRefusal } from "./refusal-card.mjs";
-import { noCorpusMountedSentence } from "./live-refusals.mjs";
+import { noCorpusMountedSentence, nearestAnchorsHint } from "./live-refusals.mjs";
 
 /**
  * The languages the form offers besides "any": the platform answers a language the work is not held
@@ -82,7 +82,7 @@ export function historyParameters({ identifier, anchor, language = "" }) {
 function retryHint(code, payload) {
   if (code === "anchor_not_in_version" && Array.isArray(payload?.nearest_anchors) && payload.nearest_anchors.length > 0
     && payload.nearest_anchors.every((anchor) => typeof anchor === "string" && anchor.length > 0)) {
-    return ` The nearest article ids this index holds are ${payload.nearest_anchors.join(", ")}.`;
+    return ` ${nearestAnchorsHint(payload.nearest_anchors)}`;
   }
   return "";
 }

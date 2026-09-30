@@ -21,7 +21,7 @@ import * as reading from './live-reading.mjs';
 import * as history from './live-history.mjs';
 import * as compare from './live-compare.mjs';
 import * as radar from './live-radar.mjs';
-import { noCorpusMountedSentence } from './live-refusals.mjs';
+import { historyBeginsHint, nearestAnchorsHint, noCorpusMountedSentence } from './live-refusals.mjs';
 
 /** The live screens, in the launch contract's order, each with its refusal table. */
 export const SCREENS = Object.freeze([
@@ -97,6 +97,20 @@ export const FRENCH_TEMPLATE_DRAFTS = Object.freeze({
     unexpected: 'Le radar des modifications a été refusé avec le code {code}.',
     unshown: 'Le radar des modifications a été refusé avec le code {code}, et sa fiche ne peut pas être affichée : {reason}.',
   }),
+});
+
+/**
+ * The hints a refusal whose card cannot be shown carries after its sentence, with the pages that say
+ * them, as templates, and their French drafts (review of #793: the list left them out).
+ */
+export const SERVED_HINTS = Object.freeze([
+  Object.freeze({ template: historyBeginsHint('{date}'), code: 'no_version_for_date', screens: Object.freeze(['reading', 'compare']) }),
+  Object.freeze({ template: nearestAnchorsHint(['{ids}']), code: 'anchor_not_in_version', screens: Object.freeze(['history']) }),
+]);
+
+export const FRENCH_HINT_DRAFTS = Object.freeze({
+  'The history this index holds for this work begins on {date}.': 'L’historique que cet index contient pour cet acte commence le {date}.',
+  'The nearest article ids this index holds are {ids}.': 'Les identifiants d’article les plus proches que cet index contient sont {ids}.',
 });
 
 /**
@@ -183,6 +197,14 @@ export function renderCheckpointList() {
         `| ${name} | ${row.unshown} | ${drafts.unshown ?? '(no draft)'} |`,
       ];
     }),
+    '',
+    '## The hint a card that cannot be shown still carries',
+    '',
+    'Said after the sentence above, so the reader can ask again. `{date}` and `{ids}` are filled when said.',
+    '',
+    '| Code | Pages | English (served) | French (draft) |',
+    '|------|-------|------------------|----------------|',
+    ...SERVED_HINTS.map((hint) => `| \`${hint.code}\` | ${pagesOf(hint.screens.map((screen) => ({ screen })))} | ${hint.template} | ${FRENCH_HINT_DRAFTS[hint.template] ?? '(no draft)'} |`),
     '',
   ];
   return lines.join('\n');
