@@ -10,6 +10,10 @@
 // A hit carries no text snippet (the answer holds none), so a row says which article of which work
 // and version matched, in which lane, and the permalink that pins it. The permalink is printed, not
 // linked: this origin serves no reading page for it yet.
+//
+// The form's controls carry no `name`: a submit the browser performs itself (before the bundle has
+// hydrated the page, or without it) then sends nothing, so the phrase never reaches the address bar,
+// the history or a referrer. Only the hydrated screen sends it, in a request body.
 
 import { useEffect, useRef, useState } from 'react';
 
@@ -192,7 +196,6 @@ export function LiveSearch({ contract, fetchImpl }) {
           Phrase{' '}
           <input
             type="search"
-            name="query"
             value={query}
             maxLength={SEARCH_QUERY_MAX}
             autoComplete="off"
@@ -201,7 +204,7 @@ export function LiveSearch({ contract, fetchImpl }) {
         </label>{' '}
         <label>
           Language{' '}
-          <select name="language" value={language} onChange={(event) => setLanguage(event.target.value)}>
+          <select value={language} onChange={(event) => setLanguage(event.target.value)}>
             {SEARCH_LANGUAGES.map((offered) => (
               <option key={offered.code} value={offered.code}>
                 {offered.label}

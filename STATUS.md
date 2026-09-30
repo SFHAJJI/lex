@@ -264,9 +264,12 @@ search screen replaces it.
 The live search screen (PR #772) is built into `dist-live/search.html` beside Trust and Coverage,
 with its own bundle `client-live-search.js`, which embeds the census contract and nothing else of
 the census.
-- The form sends only the phrase as typed (never trimmed or folded, at most 512 characters) and a
-  language from French, German and English. That list is a driver default: the platform answers
-  a language it holds no text in with `language_not_available`.
+- The form sends only the phrase as typed (never trimmed or folded, at most 512 characters and 32
+  distinct words, counted as the platform splits them) and a language from French, German and
+  English. That list is a driver default: the platform answers a language it holds no text in
+  with `language_not_available`. The form's controls carry no `name`, so a submit the browser
+  performs itself (before hydration, or without the bundle) sends nothing, and the phrase never
+  reaches the address bar, the history or a referrer.
 - It sends one `POST /api/v3/search` when the reader submits, never while rendering. A new search
   cancels the one in flight, and "Next page" repeats the search with the cursor the page handed
   over (`createSearchSession`).
@@ -276,7 +279,9 @@ the census.
   a link yet, because this origin serves no reading page for it.
 - The two refusals a request from this page can meet (`no_corpus_mounted`, `language_not_available`)
   are refusal cards. A transport failure, an unreadable envelope, or an answer the reader refuses
-  is each a state with a sentence.
+  is each a state with a sentence. A server that was reached and refused the request
+  (`request_schema_invalid`, in practice a cursor from a result the server no longer holds) is said
+  as refused, not as unreachable.
 - The tests drive it with the census's real whole envelopes. The envelope census now holds a
   search answer with hits in both lanes and a search `no_corpus_mounted` refusal. The screen is not
   yet driven in a real browser: the journey step for it is next. **The first browser journey

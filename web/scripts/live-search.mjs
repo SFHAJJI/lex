@@ -18,6 +18,19 @@ import { validateRefusal } from "./refusal-card.mjs";
 /** The ceiling on a query's characters, the platform's own (`SearchMaxQueryCharacters`). */
 export const SEARCH_QUERY_MAX = 512;
 
+/** The ceiling on a query's distinct terms, the platform's own (`SearchMaxTerms`). */
+export const SEARCH_TERMS_MAX = 32;
+
+// What .NET's `string.Split(null)` splits on (`Char.IsWhiteSpace`): the Unicode space, line and
+// paragraph separators and the control whitespace. Not JavaScript's `\s`, which also splits on
+// U+FEFF, where the platform does not.
+const PLATFORM_WHITESPACE = /[\p{Zs}\p{Zl}\p{Zp}\t\n\v\f\r\u0085]+/u;
+
+/** The distinct terms the platform will count in a query, as it counts them. */
+export function searchTerms(query) {
+  return [...new Set(query.split(PLATFORM_WHITESPACE).filter((term) => term.length > 0))];
+}
+
 /**
  * The languages the form offers. A language the mount holds no text in is answered by the
  * platform (a `language_not_available` refusal naming the ones it holds), so the list is what a
@@ -47,6 +60,11 @@ export function unexpectedRefusalSentence(code) {
 }
 
 export function transportFailureSentence(code) {
+  // The server was reached and refused the request as asked: in practice a cursor from a result this
+  // server no longer holds, since the form checks the phrase's own limits before sending it.
+  if (code === "request_schema_invalid") {
+    return "This server refused the search as it was asked (request_schema_invalid); ask it again from the first page.";
+  }
   return `The search could not be reached (${code}).`;
 }
 
@@ -60,8 +78,8 @@ export function invalidAnswerSentence(reason) {
 
 /**
  * The request parameters for one search, checked before anything is sent: a query that is not
- * blank and within the platform's ceiling, a language the form offers, and a cursor only when a
- * later page is asked for. Nothing else is sent.
+ * blank and within the platform's two ceilings (characters and distinct terms), a language the form
+ * offers, and a cursor only when a later page is asked for. Nothing else is sent.
  */
 export function searchParameters({ query, language, after = null }) {
   if (typeof query !== "string" || query.trim().length === 0) {
@@ -69,6 +87,10 @@ export function searchParameters({ query, language, after = null }) {
   }
   if (query.length > SEARCH_QUERY_MAX) {
     throw new Error(`a phrase is at most ${SEARCH_QUERY_MAX} characters`);
+  }
+  const terms = searchTerms(query).length;
+  if (terms > SEARCH_TERMS_MAX) {
+    throw new Error(`a phrase is at most ${SEARCH_TERMS_MAX} different words, and this one has ${terms}`);
   }
   if (!SEARCH_LANGUAGES.some((offered) => offered.code === language)) {
     throw new Error(`${JSON.stringify(language)} is not a language this form offers`);

@@ -12,15 +12,17 @@ import { readFile } from "node:fs/promises";
 import { createElement as h } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 
-import { LiveSearch, RefusalCard, SearchAnswerView, renderLiveSearchPage } from "../.react-build/app.mjs";
+import { LiveSearch, RefusalCard, SearchAnswerView, SearchResultsView, renderLiveSearchPage } from "../.react-build/app.mjs";
 import {
   LIVE_SEARCH_IDLE,
   LIVE_SEARCH_REFUSAL_SENTENCES,
   SEARCH_QUERY_MAX,
+  SEARCH_TERMS_MAX,
   createSearchSession,
   loadLiveSearch,
   searchOutcome,
   searchParameters,
+  searchTerms,
   startLiveSearch,
 } from "../scripts/live-search.mjs";
 import { REFUSAL_EXAMPLES } from "../scripts/refusal-catalog.mjs";
@@ -62,13 +64,22 @@ test("the server renders the form in its idle state, and asks nothing", () => {
   const page = renderLiveSearchPage();
   assert.match(page, /<script src="\/client-live-search.js" defer=""><\/script>/);
   assert.match(page, /id="live-search-root"/);
+  const form = page.slice(page.indexOf('<form role="search"'), page.indexOf("</form>"));
+  assert.ok(form.length > 0);
+  assert.doesNotMatch(form, /\sname=/, "no control is named, so a submit the browser performs before hydration sends nothing (review of #772)");
 });
 
 test("the request carries the phrase as typed and the language, and nothing else", () => {
   assert.deepEqual(searchParameters(REQUEST), REQUEST);
   assert.deepEqual(searchParameters({ ...REQUEST, query: "  Loyer " }), { query: "  Loyer ", language: "fra" }, "never trimmed or folded: the platform matches bytes");
   assert.deepEqual(searchParameters({ ...REQUEST, after: "strict.a.b" }), { ...REQUEST, after: "strict.a.b" });
+  const words = (count) => Array.from({ length: count }, (_, index) => `w${index}`).join(" ");
+  assert.equal(searchParameters({ ...REQUEST, query: words(SEARCH_TERMS_MAX) }).query, words(SEARCH_TERMS_MAX));
+  assert.ok(searchParameters({ ...REQUEST, query: `${words(SEARCH_TERMS_MAX)} w0` }), "a repeated word is one term, as the platform counts it");
+  assert.equal(searchTerms("a\u00a0b\u0085c\u2028d e\t\ta").length, 5, "split where .NET splits: no-break space, NEL, line separator, tabs");
+  assert.equal(searchTerms("a\ufeffb").length, 1, "and not where it does not: U+FEFF is not whitespace to the platform");
   for (const [what, request, reason] of [
+    ["more distinct words than the platform counts", { ...REQUEST, query: words(SEARCH_TERMS_MAX + 1) }, /at most 32 different words, and this one has 33/],
     ["a blank phrase", { ...REQUEST, query: "   " }, /needs a phrase/],
     ["no phrase", { language: "fra" }, /needs a phrase/],
     ["a phrase over the ceiling", { ...REQUEST, query: "x".repeat(SEARCH_QUERY_MAX + 1) }, /at most 512/],
@@ -115,10 +126,22 @@ test("a truncated page offers the next page with its own cursor, and a whole-res
   const outcome = searchOutcome({ state: "success", envelope });
   assert.equal(outcome.state, "success");
   let asked = null;
-  const markup = renderToStaticMarkup(h(SearchAnswerView, { outcome, onNextPage: (after) => { asked = after; } }));
+  const onNextPage = (after) => { asked = after; };
+  const markup = renderToStaticMarkup(h(SearchAnswerView, { outcome, onNextPage }));
   assert.match(markup, /<button type="button">Next page<\/button>/);
-  assert.equal(outcome.view.continueAfter, value.continue_after);
   assert.equal(asked, null, "rendering asks nothing");
+
+  // The button itself, pressed: it hands over the cursor the page carries, and nothing else (review of #772).
+  const find = (node) => {
+    if (node === null || typeof node !== "object") return null;
+    if (Array.isArray(node)) return node.map(find).find(Boolean) ?? null;
+    if (node.type === "button") return node;
+    return find(node.props?.children);
+  };
+  const button = find(SearchResultsView({ view: outcome.view, onNextPage }));
+  assert.ok(button, "the truncated page renders a button");
+  button.props.onClick();
+  assert.equal(asked, value.continue_after, "the next page is asked with this page's own cursor");
 });
 
 test("an answer the search reader refuses is an invalid answer, said, never rendered", () => {
@@ -149,7 +172,10 @@ test("a transport failure and an unreadable envelope are each a state with a sen
   const problem = answering(400, "application/problem+json", { type: "about:blank", title: "bad", status: 400, code: "request_schema_invalid" });
   const failed = await loadLiveSearch({ contract, fetchImpl: problem.fetchImpl, request: REQUEST });
   assert.equal(failed.state, "transport_failure");
-  assert.match(failed.sentence, /could not be reached \(request_schema_invalid\)/);
+  assert.match(failed.sentence, /refused the search as it was asked \(request_schema_invalid\); ask it again from the first page/,
+    "a server that was reached and refused is not one that could not be reached (review of #772)");
+  const offline = await loadLiveSearch({ contract, fetchImpl: async () => { throw new TypeError("failed to fetch"); }, request: REQUEST });
+  assert.match(offline.sentence, /could not be reached \(network_error\)/);
 
   const garbled = answering(200, "application/json", "{");
   const unreadable = await loadLiveSearch({ contract, fetchImpl: garbled.fetchImpl, request: REQUEST });
