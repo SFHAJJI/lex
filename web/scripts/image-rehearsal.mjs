@@ -180,13 +180,14 @@ function run(command, args, options = {}) {
 }
 
 /** The rehearsal, end to end. Returns its report; throws on the first step that fails. */
-export async function rehearse({ mount, keep = false, log = () => {} }) {
+export async function rehearse({ mount, keep = false, probe = true, log = () => {} }) {
   const mountPath = resolve(mount);
   const report = JSON.parse(await readFile(join(mountPath, "build-report.json"), "utf8"));
   const work = await mkdtemp(join(tmpdir(), "lex-image-rehearsal-"));
   const publishDirectory = join(repository, "src", "Lex.V3.Api", "bin", "Release", "net10.0", "linux-x64", "publish");
   const archive = join(work, "lex-v3-rehearsal.tar");
   const result = { mount: mountPath, corpusSha256: report.corpus?.Sha256 ?? null };
+  let container = null;
   try {
     log("building the live pages");
     const { buildLive } = await import("./build-live.mjs");
@@ -228,12 +229,35 @@ export async function rehearse({ mount, keep = false, log = () => {} }) {
     const signatureFailures = rehearsalSignatureFailures({ ...signed, manifestDigest: image.manifestDigest });
     Object.assign(result, { signer: REHEARSAL_IDENTITY, signatureVerified: signatureFailures.length === 0, publicKeyPem: signed.publicKeyPem });
     if (signatureFailures.length > 0) throw new Error(`the rehearsal signature does not hold:\n- ${signatureFailures.join("\n- ")}`);
+
+    if (probe) {
+      // The zero-traffic probes, against the image itself: health (it answers), the API (each page's
+      // request, answered from the mount it carries), the browser (every live screen, served by the
+      // image), privacy (nothing written after its first answer, on its output or its /tmp) and the
+      // security headers the page arrives with.
+      log("running the image in WSL and probing it");
+      const { unpackImage, startImage } = await import("./image-run.mjs");
+      const { realMountRuns } = await import("./journey.mjs");
+      const { findBrowser } = await import("./browser-evidence.mjs");
+      container = unpackImage({ archive, layers: image.layers.map((layer) => layer.digest) });
+      const runs = await realMountRuns(null, mountPath, { servedByApi: true, keyboard: false, startServer: () => startImage({ run: container, config: image.config }) }, await findBrowser(), null);
+      result.probes = runs.map(([label, { observed, failures }]) => ({
+        step: label, state: observed.answerState, failures,
+        paintedElements: observed.paint?.painted ?? 0, citationsVerified: observed.verifications?.length ?? 0,
+      }));
+      const failing = result.probes.filter((one) => one.failures.length > 0);
+      if (failing.length > 0) throw new Error(`the image failed its probes:\n${failing.map((one) => `- ${one.step}: ${one.failures.join("; ")}`).join("\n")}`);
+    }
     return result;
   } finally {
     if (!keep) {
       await rm(work, { recursive: true, force: true });
       await rm(publishDirectory, { recursive: true, force: true });
       result.removed = { archive: !existsSync(archive), work: !existsSync(work), publish: !existsSync(publishDirectory) };
+      if (container !== null) {
+        const { removeRun } = await import("./image-run.mjs");
+        result.removed.container = removeRun(container);
+      }
     }
   }
 }
@@ -245,7 +269,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
     console.error("usage: node scripts/image-rehearsal.mjs --mount <v3-corpus directory> [--keep]");
     process.exit(2);
   }
-  rehearse({ mount: argv[at + 1], keep: argv.includes("--keep"), log: (line) => console.error(`- ${line}`) }).then(
+  rehearse({ mount: argv[at + 1], keep: argv.includes("--keep"), probe: !argv.includes("--no-probe"), log: (line) => console.error(`- ${line}`) }).then(
     (result) => { console.log(JSON.stringify(result, null, 2)); },
     (error) => { console.error(error.message); process.exit(1); },
   );
