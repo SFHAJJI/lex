@@ -5,11 +5,11 @@ every pull request that changes what is served, what is next or what is blocked.
 
 ## Heads
 
-- `v3/integration`: `d8ec55dd` (2026-09-30, PR #774 merged). Build 45 s. Fast lane
+- `v3/integration`: `9092219b` (2026-09-30, PR #775 merged). Build 45 s. Fast lane
   (`eng/test-fast.ps1`): 3,038 tests, 3,037 pass, 1 skipped. Ingest suite: green on CI for PR #760
   (the CI `dotnet` job runs the whole solution on every pull request, about 7 min on the runner;
-  green for PR #774);
-  locally about 15 min. 840 web tests pass. CI's web job can flake in `keyboard-walk.test.mjs`
+  green for PR #775);
+  locally about 15 min. 844 web tests pass. CI's web job can flake in `keyboard-walk.test.mjs`
   ("browser debugger never answered"); rerunning the failed job is the fix.
 - Driver: Claude Opus 5.5 since 2026-09-29 (the Fable 5.1 driver ran out of tokens on 2026-09-28
   after PR #757; the user default model is now `claude-opus-5-5`).
@@ -235,7 +235,7 @@ schema's `parameters` shape, and whose call runs the same dispatch the REST rout
 endpoint test proves it for all twenty-three. The launch-contract line "REST and MCP derive identical
 envelopes from the registry" is the owner's to tick.
 
-Web: 31 React components, 840 tests. Preview screens render fixtures. The V3 Luxembourg search
+Web: 31 React components, 844 tests. Preview screens render fixtures. The V3 Luxembourg search
 answer has a reader (PR #771). The answer census now samples `search` five ways from the real handler:
 - a phrase with 4 strict hits and 1 relaxed hit;
 - the same phrase one hit per page, with its cursor;
@@ -332,6 +332,29 @@ bundle `client-live-dossier.js`, which embeds the contract and nothing else of t
   pass: 6 requests each, exactly one to the API with exactly the typed body, the page at its own
   address, no history entry, history state or cookie, and hydration clean. A build whose request
   always added a language failed both dossier runs on the body check.
+
+The reading screen's V3 source has a reader (PR #776). The text of a state, with what a quotation
+needs, is the `evidence_bundle` answer, which the answer census already samples (the fixture state
+in `fra`, 49 quoted articles). `web/scripts/reading-answer.mjs` (`readEvidenceBundle`) reads it
+and throws on any answer that breaks a rule it states about itself:
+- text only under the admitting rights disposition, stated by the bundle and by every source;
+- one state per served language: the one applying on the date asked, from on or before it to a
+  next date after it or none, and in the language asked when one was asked;
+- state coordinates and permalinks as the dossier's, and each article's permalink is the state's
+  with the publisher's article id after `#`;
+- each quoted article has text in its state's language, with the UTF-8 byte length stated, read
+  from one of the state's sources (`body_sha256s` are exactly the sources' bodies) and pointing at
+  the state's official source;
+- each article's validity flag is exactly "its own date is stated and differs from the state's",
+  and the state's count is theirs;
+- articles without text are named apart (`no_text_tokens`), never quoted and never also listed as
+  quoted; a state with no quoted article is refused, not answered.
+
+The reader does not recompute text digests: it is synchronous, and the browser's digest is not.
+Its tests check every captured text digest with Node's SHA-256, and `V3ReplayGuaranteesTests`
+recomputes them from the publisher's file. The tests also read a bundle in two languages, built
+the way the producer selects one state per language. The pre-V3 `reading.mjs` stays for the
+preview until the live reading screen replaces it.
 
 **The search journey step passes (PR #773, run locally 2026-09-30).** `node scripts/journey.mjs`
 now runs two steps, each with and without the fixture mount, and all four runs pass.
@@ -747,7 +770,8 @@ proves the path, not a corpus.
    screen and its page; PR #773: the search journey step (type, submit, the answer; the next page
    waits for a mount with more hits than one page); PR #774: the V3 dossier reader `readDossier`,
    held to the dossier answer the census now samples; PR #775: the live dossier screen, its page
-   and journey step. Next: the reading screen, whose reader still reads a pre-V3 shape, and the
+   and journey step; PR #776: the reading screen's reader `readEvidenceBundle` over
+   `evidence_bundle`. Next: the live reading screen, its page and journey step, and the
    `identifier_unknown` population disclosure (producer or reader). Also J1 to J8
    restated as V3 steps (owner question): they exist only in the pre-V3 pack
    (`05-user-journeys.md`).
