@@ -1550,6 +1550,54 @@ public sealed class ScopeManifestContractTests
     }
 
     [TestMethod]
+    public void ScopeVerificationPreservesEveryPartitionAndRequiresTheAcceptedBodyRole()
+    {
+        var profile = Profile();
+        var evidence = EvidenceArtifacts();
+        var dispositions = Enum.GetValues<ScopeDisposition>();
+        Assert.AreEqual(4, dispositions.Length);
+        var inputs = Enumerable.Range(0, 32).Select(index =>
+        {
+            var input = ValidInput(profile, Object($"projection-{index}"));
+            var evaluations = input.RuleEvaluations.ToArray();
+            for (var axis = 0; axis < 4; axis++)
+            {
+                var disposition = dispositions[(index + axis) % dispositions.Length];
+                var keepRoles = disposition == ScopeDisposition.AcceptedSelected &&
+                    (axis != 1 || (index / 4) % 2 == 0);
+                evaluations[axis] = Matched(axis, ScopeRuleEffect.Positive, disposition,
+                    keepRoles ? evaluations[axis].RoleMemberOrdinals : [], []);
+            }
+            return Change(input, evaluations: evaluations);
+        }).ToArray();
+        var resolver = ExactResolver.For(profile, evidence, inputs);
+        // Reduce builds accounting directly from axis results; verification independently rebuilds
+        // every partition, so this exercises the compact verifier against the unchanged builder.
+        var verified = ScopeReducer.Reduce(profile, evidence,
+            inputs.Select(input => input.ObjectRef).ToArray(), inputs, resolver);
+        Assert.AreEqual(16, verified.Manifest.Accounting.Count);
+        Assert.IsTrue(verified.Manifest.Accounting.All(partition => partition.ObjectOrdinals.Count == 8));
+        var expectedBodies = inputs.Where(input =>
+                input.RuleEvaluations[1].Disposition == ScopeDisposition.AcceptedSelected &&
+                input.RuleEvaluations[1].RoleMemberOrdinals.Contains(profile.BodyCandidateRoleMemberOrdinal))
+            .Select(input => input.ObjectRef.CanonicalKey).Order(StringComparer.Ordinal).ToArray();
+        var actualBodies = verified.Manifest.BodyCandidateOrdinals
+            .Select(ordinal => verified.Manifest.ObservedObjects[ordinal].ObjectRef.CanonicalKey)
+            .Order(StringComparer.Ordinal).ToArray();
+        Assert.AreEqual(4, expectedBodies.Length);
+        CollectionAssert.AreEqual(expectedBodies, actualBodies);
+        var manifest = verified.Manifest;
+        var wrongAccounting = manifest.Accounting.ToArray();
+        wrongAccounting[0] = new ScopeAccountingSet(wrongAccounting[0].Axis,
+            wrongAccounting[0].Disposition, []);
+        var wrong = new ScopeManifest(manifest.Schema, manifest.Profile, manifest.CompleteEnumerationRef,
+            manifest.OrderedEvidenceArtifacts, manifest.ObservedObjects, manifest.Rows,
+            wrongAccounting, manifest.BodyCandidateOrdinals);
+        var refusal = Assert.ThrowsExactly<InvalidOperationException>(() => ScopeReducer.VerifyAndOpen(wrong, resolver));
+        StringAssert.Contains(refusal.Message, "exact derived partition");
+    }
+
+    [TestMethod]
     public void KnownScopeReadbackSharesTheTypedGraphAndRequiresFreshEvidenceAdmission()
     {
         var profile = Profile();

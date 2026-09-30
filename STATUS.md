@@ -18,6 +18,13 @@ noncanonical whitespace and substitution of another valid document between read 
 pins must be independently regenerated after compilation. Reducer scratch arrays, the original typed
 scope graph and corpus record-set persistence remain full-Luxembourg memory constraints.
 
+The same draft also replaces the verifier's retained per-row axis-result objects with five bytes
+per row (four dispositions and the exact accepted-body-role bit). Accounting compares streamed
+ordinal sequences, avoiding whole expected-partition arrays. A 32-object mixed-disposition fixture
+cross-checks all 16 partitions against the unchanged builder, role-gated body membership and a
+corrupted partition refusal. This is an unvalidated allocation reduction, with no measured savings
+or full-process memory bound yet.
+
 ## Large derived scope artifacts (Codex, 2026-09-30)
 
 Full Luxembourg acquisition is sized at 1,986,924 subjects and 9,672,378 assertion rows, but
