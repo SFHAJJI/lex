@@ -14,6 +14,7 @@ import { askV3 } from "./v3-client.mjs";
 import { readDossier } from "./dossier-answer.mjs";
 import { validateRefusal } from "./refusal-card.mjs";
 import { noCorpusMountedSentence } from "./live-refusals.mjs";
+import { liveChrome } from "./live-chrome.mjs";
 
 /**
  * The languages the form offers besides "any": the platform answers a language the work is not
@@ -37,8 +38,8 @@ export const LIVE_DOSSIER_REFUSAL_SENTENCES = Object.freeze({
   language_not_available: "This work is not held in the language asked for.",
 });
 
-export const LIVE_DOSSIER_IDLE = "Type a work identifier to read what this server holds for it.";
-export const LIVE_DOSSIER_LOADING = "Asking this server.";
+export const LIVE_DOSSIER_IDLE = liveChrome().dossier.idle;
+export const LIVE_DOSSIER_LOADING = liveChrome().common.loading;
 export const EU_DOSSIER_NOT_SHOWN =
   "This work is an EU work. The server answered its dossier, and this screen lays out Luxembourg dossiers only.";
 

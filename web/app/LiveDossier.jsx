@@ -14,12 +14,14 @@ import { useEffect, useRef, useState } from 'react';
 
 import { RefusalCard } from './RefusalCard.jsx';
 import { DOSSIER_LANGUAGES, LIVE_DOSSIER_IDLE, createDossierSession } from '../scripts/live-dossier.mjs';
-import { LiveAnswer } from './LiveAnswer.jsx';
+import { LiveAnswer, Say } from './LiveAnswer.jsx';
 import { quotationLanguageTag } from '../scripts/live-reading.mjs';
-import { liveChrome } from '../scripts/live-chrome.mjs';
+import { countedEntry, liveChrome } from '../scripts/live-chrome.mjs';
 
-/** The forms' labels and buttons, from the interface copy table. */
+/** The forms' labels and buttons, and this screen's sentences, from the interface copy table. */
 const FORM = liveChrome().form;
+const COPY = liveChrome().dossier;
+const COMMON = liveChrome().common;
 
 const IDLE = Object.freeze({ state: 'idle', sentence: LIVE_DOSSIER_IDLE });
 
@@ -31,7 +33,7 @@ function asSentence(text) {
 
 export function DossierTitles({ titles }) {
   if (titles.length === 0) {
-    return <p data-titles="none">This index holds no title for this work.</p>;
+    return <p data-titles="none">{COPY.noTitle}</p>;
   }
   return (
     <ul data-titles={titles.length}>
@@ -43,13 +45,15 @@ export function DossierTitles({ titles }) {
           {[
             ...group.titles.map((entry) => ({ title: entry.title, short: false })),
             ...group.shortTitles.map((entry) => ({ title: entry.title, short: true })),
-          ].map((entry, index) => (
-            <span key={`${index}.${entry.title}`}>
-              {index === 0 ? '' : '; '}
-              <span lang={quotationLanguageTag(group.language)}>{entry.title}</span>
-              {entry.short ? ' (short title)' : ''}
-            </span>
-          ))}
+          ].map((entry, index) => {
+            const title = <span lang={quotationLanguageTag(group.language)}>{entry.title}</span>;
+            return (
+              <span key={`${index}.${entry.title}`}>
+                {index === 0 ? '' : '; '}
+                {entry.short ? <Say template={COPY.shortTitle} values={{ title }} /> : title}
+              </span>
+            );
+          })}
         </li>
       ))}
     </ul>
@@ -62,22 +66,25 @@ export function DossierView({ view }) {
     <>
       <h2>{view.workKey}</h2>
       <p>
-        <code>{view.publisherWorkIri}</code>, held in {view.availableLanguages.join(', ')}.
+        <Say template={COPY.heldIn} values={{ iri: <code>{view.publisherWorkIri}</code>, languages: view.availableLanguages.join(', ') }} />
       </p>
       <DossierTitles titles={view.titles} />
       <p data-history="">
-        {view.stateCount} {view.stateCount === 1 ? 'state' : 'states'}
-        {view.language === null ? '' : ` in ${view.language}`}, from {view.historyBegins} to {view.latestApplicabilityDate}.
+        {view.language === null ? (
+          <Say template={countedEntry(COPY.states, view.stateCount)} values={{ count: view.stateCount, from: view.historyBegins, to: view.latestApplicabilityDate }} />
+        ) : (
+          <Say template={countedEntry(COPY.statesIn, view.stateCount)} values={{ count: view.stateCount, language: view.language, from: view.historyBegins, to: view.latestApplicabilityDate }} />
+        )}
       </p>
       <table>
         <thead>
           <tr>
-            <th scope="col">Language</th>
-            <th scope="col">Applies from</th>
-            <th scope="col">Next state from</th>
-            <th scope="col">Articles held</th>
-            <th scope="col">Articles not admitted</th>
-            <th scope="col">Permalink</th>
+            <th scope="col">{COMMON.language}</th>
+            <th scope="col">{COMMON.appliesFrom}</th>
+            <th scope="col">{COMMON.nextFrom}</th>
+            <th scope="col">{COPY.articlesHeld}</th>
+            <th scope="col">{COPY.articlesNotAdmitted}</th>
+            <th scope="col">{COMMON.permalink}</th>
           </tr>
         </thead>
         <tbody>
@@ -85,7 +92,7 @@ export function DossierView({ view }) {
             <tr key={state.stateSha256} data-state={state.stateSha256}>
               <td>{state.language}</td>
               <td>{state.applicabilityDate}</td>
-              <td>{state.nextApplicabilityDate ?? 'none held'}</td>
+              <td>{state.nextApplicabilityDate ?? COMMON.noneHeld}</td>
               <td>{state.articleCount}</td>
               <td>{state.articlesNotAdmitted}</td>
               <td><code>{state.permalink}</code></td>
@@ -94,11 +101,11 @@ export function DossierView({ view }) {
         </tbody>
       </table>
       <p>{asSentence(view.articlesNotAdmittedNote)}</p>
-      <h3>What this dossier does not hold</h3>
+      <h3>{COPY.notHeldHeading}</h3>
       <ul data-not-held={view.notHeld.length}>
         {view.notHeld.map((row) => (
           <li key={row.item}>
-            <strong>{row.item}</strong>: {row.reason}
+            <Say template={COMMON.notHeldRow} values={{ item: <strong>{row.item}</strong>, reason: row.reason }} />
           </li>
         ))}
       </ul>

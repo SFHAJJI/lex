@@ -15,6 +15,7 @@ import { askV3 } from "./v3-client.mjs";
 import { readSearch } from "./search-answer.mjs";
 import { validateRefusal } from "./refusal-card.mjs";
 import { noCorpusMountedSentence } from "./live-refusals.mjs";
+import { liveChrome } from "./live-chrome.mjs";
 
 /** The ceiling on a query's characters, the platform's own (`SearchMaxQueryCharacters`). */
 export const SEARCH_QUERY_MAX = 512;
@@ -52,8 +53,8 @@ export const LIVE_SEARCH_REFUSAL_SENTENCES = Object.freeze({
   language_not_available: "This index holds no searchable text in the language asked for.",
 });
 
-export const LIVE_SEARCH_IDLE = "Type a phrase to search the article text this server holds.";
-export const LIVE_SEARCH_LOADING = "Asking this server.";
+export const LIVE_SEARCH_IDLE = liveChrome().search.idle;
+export const LIVE_SEARCH_LOADING = liveChrome().common.loading;
 
 export function unexpectedRefusalSentence(code) {
   return `The search was refused with ${code}.`;
