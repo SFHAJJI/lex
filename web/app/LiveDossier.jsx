@@ -14,6 +14,7 @@ import { useEffect, useRef, useState } from 'react';
 
 import { RefusalCard } from './RefusalCard.jsx';
 import { DOSSIER_LANGUAGES, LIVE_DOSSIER_IDLE, createDossierSession } from '../scripts/live-dossier.mjs';
+import { LiveAnswer } from './LiveAnswer.jsx';
 import { quotationLanguageTag } from '../scripts/live-reading.mjs';
 import { liveChrome } from '../scripts/live-chrome.mjs';
 
@@ -180,7 +181,9 @@ export function LiveDossier({ contract, fetchImpl }) {
         </label>{' '}
         <button type="submit">{FORM.submit.dossier}</button>
       </form>
-      <DossierAnswerView outcome={outcome} />
+      <LiveAnswer>
+        <DossierAnswerView outcome={outcome} />
+      </LiveAnswer>
     </div>
   );
 }

@@ -12,6 +12,7 @@ import { useEffect, useState } from 'react';
 import { Coverage } from './Coverage.jsx';
 import { RefusalCard } from './RefusalCard.jsx';
 import { LIVE_COVERAGE_LOADING, startLiveCoverage } from '../scripts/live-coverage.mjs';
+import { LiveAnswer } from './LiveAnswer.jsx';
 
 const LOADING = Object.freeze({ state: 'loading', sentence: LIVE_COVERAGE_LOADING });
 
@@ -49,5 +50,9 @@ export function CoverageAnswerView({ outcome }) {
 export function LiveCoverage({ contract, fetchImpl }) {
   const [outcome, setOutcome] = useState(LOADING);
   useEffect(() => startLiveCoverage({ contract, fetchImpl, onOutcome: setOutcome }), [contract, fetchImpl]);
-  return <CoverageAnswerView outcome={outcome} />;
+  return (
+    <LiveAnswer>
+      <CoverageAnswerView outcome={outcome} />
+    </LiveAnswer>
+  );
 }

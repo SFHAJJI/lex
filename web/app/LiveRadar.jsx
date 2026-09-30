@@ -16,6 +16,7 @@ import { Fragment, useEffect, useRef, useState } from 'react';
 import { RefusalCard } from './RefusalCard.jsx';
 import { LIVE_RADAR_IDLE, RADAR_LANGUAGES, createRadarSession } from '../scripts/live-radar.mjs';
 import { liveChrome } from '../scripts/live-chrome.mjs';
+import { LiveAnswer } from './LiveAnswer.jsx';
 
 /** The forms' labels and buttons, from the interface copy table. */
 const FORM = liveChrome().form;
@@ -179,7 +180,9 @@ export function LiveRadar({ contract, fetchImpl }) {
         </label>{' '}
         <button type="submit">{FORM.submit.radar}</button>
       </form>
-      <RadarAnswerView outcome={outcome} />
+      <LiveAnswer>
+        <RadarAnswerView outcome={outcome} />
+      </LiveAnswer>
     </div>
   );
 }

@@ -267,6 +267,30 @@ test("a file written and deleted while the run is watched fails it, though both 
   }
 });
 
+test("the answer is held to a polite live region that exists before it arrives (the screen-reader path)", () => {
+  const observed = { ...goodSearch(), liveRegion: { atLoad: "polite", atEnd: "polite" } };
+  const expected = { origin: ORIGIN, step: JOURNEY_STEPS.search, state: "success" };
+  assert.deepEqual(journeyVerdict(observed, expected), []);
+  assert.ok(journeyVerdict({ ...observed, liveRegion: { atLoad: null, atEnd: "polite" } }, expected).some((failure) => failure.includes("at load is in no live region")), "a region created with the answer is not announced");
+  assert.ok(journeyVerdict({ ...observed, liveRegion: { atLoad: "polite", atEnd: null } }, expected).some((failure) => failure.includes("arrived outside any live region")));
+  assert.ok(journeyVerdict({ ...observed, liveRegion: { atLoad: "assertive", atEnd: "assertive" } }, expected).some((failure) => failure.includes("aria-live=assertive, not polite")), "nothing here is urgent enough to interrupt");
+});
+
+test("a keyboard run reaches every field by Tab alone, and every stop shows where focus is", () => {
+  const stop = (tag, type, ring, label = "") => ({ tag, type, inForm: true, pin: false, label, ring });
+  const observed = {
+    ...goodSearch(),
+    keyboard: { stops: [stop("a", null, true, "Skip"), stop("input", "text", true, "Phrase")], placed: 1, wanted: 1 },
+  };
+  const expected = { origin: ORIGIN, step: JOURNEY_STEPS.search, state: "success", keyboard: true };
+  assert.deepEqual(journeyVerdict(observed, expected), []);
+  assert.ok(journeyVerdict({ ...observed, keyboard: { ...observed.keyboard, placed: 0 } }, expected).some((failure) => failure === "Tab reached 0 of the form's 1 text fields"));
+  assert.ok(journeyVerdict({ ...observed, keyboard: { ...observed.keyboard, stops: [stop("button", "submit", false, "Search")] } }, expected)
+    .some((failure) => failure === 'a focus stop shows no focus indicator: button[type=submit] "Search"'), "a suppressed focus ring fails");
+  assert.ok(journeyVerdict({ ...observed, keyboard: undefined }, expected).some((failure) => failure === "the run took no keyboard path"));
+  assert.deepEqual(journeyVerdict({ ...observed, keyboard: undefined }, { ...expected, keyboard: false }), [], "a run not asked to use the keyboard is not judged on it");
+});
+
 test("a run whose page the API served is held to the headers the page arrived with (Decision 95, ruling 3)", () => {
   const policy = `${cspValue()}; frame-ancestors 'none'`;
   const served = () => ({
