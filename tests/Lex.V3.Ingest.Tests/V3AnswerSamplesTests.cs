@@ -309,6 +309,7 @@ public sealed class V3AnswerSamplesTests
             date = fixture.ApplicabilityDate,
             language = "fra",
         };
+        var firstPage = await DriveAsync(mount, "search", "the same phrase, one hit per page: the first hit and the cursor to the next page", new { query = "assemblée générale", language = "fra", limit = 1 });
         return
         [
             await DriveAsync(mount, "provenance", "one work, one state, asked in the language it is held in", parameters),
@@ -330,9 +331,12 @@ public sealed class V3AnswerSamplesTests
             // The census is what makes a gap like that visible rather than something a person notices.
             await DriveAsync(mount, "coverage", "the whole mount, no language asked", new { }),
             // `search` is sampled for the live search screen's reader: a phrase with hits in both lanes, the
-            // first page of one hit with its cursor, and a query the held text does not carry.
+            // first page of one hit with its cursor, the page that cursor leads to, the relaxed lane alone,
+            // and a query the held text does not carry.
             await DriveAsync(mount, "search", "a phrase the held text carries, in its language: strict hits, then relaxed hits that carry every term", new { query = "assemblée générale", language = "fra" }),
-            await DriveAsync(mount, "search", "the same phrase, one hit per page: the first hit and the cursor to the next page", new { query = "assemblée générale", language = "fra", limit = 1 }),
+            firstPage,
+            await DriveAsync(mount, "search", "the page after the first one-hit page, no limit: the rest of the result, whose population is still the whole result's", new { query = "assemblée générale", language = "fra", after = firstPage.Body["continue_after"]!.GetValue<string>() }),
+            await DriveAsync(mount, "search", "the same phrase in the relaxed lane only: every hit relaxed, and the strict lane not counted (null, not zero)", new { query = "assemblée générale", language = "fra", mode = "relaxed" }),
             await DriveAsync(mount, "search", "a word the held text does not carry: no hit is an answer, not a refusal", new { query = "zéphyr", language = "fra" }),
         ];
     }

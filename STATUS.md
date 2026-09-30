@@ -9,7 +9,7 @@ every pull request that changes what is served, what is next or what is blocked.
   (`eng/test-fast.ps1`): 3,038 tests, 3,037 pass, 1 skipped. Ingest suite: green on CI for PR #760
   (the CI `dotnet` job runs the whole solution on every pull request, about 7 min on the runner;
   green for PR #770);
-  locally about 15 min. 810 web tests pass. CI's web job can flake in `keyboard-walk.test.mjs`
+  locally about 15 min. 812 web tests pass. CI's web job can flake in `keyboard-walk.test.mjs`
   ("browser debugger never answered"); rerunning the failed job is the fix.
 - Driver: Claude Opus 5.5 since 2026-09-29 (the Fable 5.1 driver ran out of tokens on 2026-09-28
   after PR #757; the user default model is now `claude-opus-5-5`).
@@ -235,20 +235,28 @@ schema's `parameters` shape, and whose call runs the same dispatch the REST rout
 endpoint test proves it for all twenty-three. The launch-contract line "REST and MCP derive identical
 envelopes from the registry" is the owner's to tick.
 
-Web: 29 React components, 810 tests. Preview screens render fixtures. The V3 search answer has a
-reader (PR #771). The answer census now samples `search` three ways from the real handler: a
-phrase with 4 strict hits and 1 relaxed hit, the same phrase one hit per page with its cursor,
-and a word the held text does not carry (no hit is an answer). `web/scripts/search-answer.mjs`
-(`readSearch`) reads that shape and throws on any answer that breaks a rule the answer states
-about itself:
-- strict hits before relaxed ones, and a hit's one reason is its lane's (`exact_phrase` or
-  `all_terms`);
-- each article of a state appears once;
-- no more hits than the limit;
-- a cursor exactly when the page is truncated, and the cursor names the last hit;
-- the population's strict and relaxed counts add up to an untruncated page;
-- each hit's permalink is the work, date and state digest the hit names.
+Web: 29 React components, 812 tests. Preview screens render fixtures. The V3 Luxembourg search
+answer has a reader (PR #771). The answer census now samples `search` five ways from the real handler:
+- a phrase with 4 strict hits and 1 relaxed hit;
+- the same phrase one hit per page, with its cursor;
+- the page that cursor leads to, 4 hits against a population of 5, because the population counts
+  the whole result and not the page;
+- the relaxed lane alone, where the strict count is null (not scanned), not zero;
+- a word the held text does not carry: no hit is an answer.
 
+`web/scripts/search-answer.mjs` (`readSearch`) reads that shape and throws on any answer that
+breaks a rule the answer states about itself:
+- strict hits before relaxed ones, and a hit's one reason is its lane's; with a mode, every hit is
+  in that lane and the other lane's count is null;
+- each article of a state appears once, and there are no more hits than the limit;
+- a cursor exactly when the page is truncated, and the cursor names the last hit;
+- the population holds all of an untruncated first page, and at least one hit more than a page
+  after a cursor or before one;
+- each hit's permalink is the work, date and state digest the hit names;
+- `ambiguous_works` (a dated search's works with several applicable states, which contribute no
+  hits) and `work_resolution` are read into the view.
+
+An EU search answer (`publisher: "eu-eurlex"`) has another shape and is refused by this reader.
 It reads no text snippet, because the answer carries none. The pre-V3 renderer
 `search-results.mjs` (`lex_id`, `provision_num`, a row set) stays for the preview until the live
 search screen replaces it. **The first browser journey
@@ -638,7 +646,7 @@ proves the path, not a corpus.
    envelope reader and the client module; PR #764: the live Trust and Coverage component; PR #765:
    its page, the live build and the one-origin server; PR #766: the first browser journey step,
    passing against the real API with and without a mount; PR #771: the V3 search reader
-   `readSearch`, held to three search answers the census now samples. Next: the live search
+   `readSearch`, held to five search answers the census now samples. Next: the live search
    screen (a component, its page and a journey step over `readSearch`'s view). Then dossier and
    reading, whose readers still read pre-V3 shapes and must first be held to served samples. Also
    J1 to J8 restated as V3 steps (owner question): they exist only in the pre-V3 pack
