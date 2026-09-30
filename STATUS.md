@@ -3,6 +3,36 @@
 Updated 2026-09-30 by the driver. This file replaces the issue-comment ledgers. It is rewritten in
 every pull request that changes what is served, what is next or what is blocked.
 
+## Retained EU transaction deadlock retry (Codex, 2026-10-01)
+
+The fresh full-EU retry2 refused after 494 requests with 81 of 82 census families proven.
+The retained HTTP 500 body for 32023R2854 names a Virtuoso 40001 transaction deadlock
+(SHA-256 70769075fe4617e11288eda6ac3120c1b10b7f5e64d90149ff9e8c28431b3627).
+Reversible driver decision: retry only complete 500 responses from the exact Publications Office
+SPARQL endpoint whose hash-checked first line carries that signature. Use the existing plan item's
+four-attempt limit, session backoff and shared wire budget. Keep every recognized failed route in
+custody, including the last attempt, and require ordinary full proof for the successful response.
+
+Other status/body failures, malformed successful replies, capacity errors and challenges retain
+their refusal paths. The draft includes the actual retained deadlock fixture and ten new test cases for
+count/page recovery, same-request attempt lineage, failed-route custody, exhaustion, budget and
+nonretry cases, including the same signature from Luxembourg. Validation at 4a37dc2b passed clean build (39.51 s), required fast (3,085 passed,
+one platform skip, 66.989 s), and 126 affected ingest tests (two live canaries skipped, 53.799 s).
+Exact commands/results are retained under C:\lex-v3\lanes\eu-deadlock-*. Required Claude review
+returned MERGE with no material findings and reproduced the focused tests and fast suite. The one
+repair adds the missing Luxembourg endpoint regression and records that failed-route digests are
+currently discoverable by scanning custody; they are not linked from the final refusal or receipt.
+The review stopped its optional full local ingest run after 21 minutes because another lane's
+review was competing for memory: 1,774 passed, four skipped, no failed tests, incomplete suite.
+Initial exact-head CI36784354147 passed 5,105 tests with 19 skips. Fresh repair validation and final
+CI remain gates. No live retry has started; the prior run remains refused and its custody is preserved.
+
+The next recovery run will use fresh custody and a shared 20-request ceiling to prove/reopen only
+32023R2854's census. The following full EU attempt keeps the 20,000-wire ceiling and original
+4,999,959,422-byte free-space allowance before and after freeze. A byte-verified transparent
+compression pass over local SDK/tool files is queued after reviews; no cited evidence is deleted.
+Launchers are prepared but unrun. Full Luxembourg still lacks a measured whole-process/storage fit.
+
 ## Publisher annex IDs and subtitles (Codex, 2026-10-01)
 
 The completed three-seed run retains English and French 2024/1620 XHTML with Roman annex IDs
@@ -20,7 +50,8 @@ C:\lex-v3\lanes\eu-annex-publisher-*. Required Claude review returned MERGE with
 material findings. It independently reproduced the 106 ingest passes and fast suite, and exercised
 both production inventory producers on the retained English and French fixtures: exact titles
 agreed in both languages. Empty or whitespace-only title paragraphs now refuse explicitly; the
-joined title is used for binding and identity, not display. Green exact-head CI remains a merge gate.
+joined title is used for binding and identity, not display. PR836 merged at 24c59015 after all
+exact-head checks passed (CI36785179485).
 This fixes a concrete parser limit;
 it does not claim to explain all 32 prior package-not-acquired outcomes or complete the annex chain.
 
@@ -73,7 +104,7 @@ The live all-82-seed EU retry began at 21:51 UTC from merged 7e90e943, in fresh 
 C:\lex-v3\eu-population-20260930-2. Its 20,000-wire ceiling, frozen inputs and unchanged
 storage allowance were verified. It ended with exit 3 after 494 requests and 81 of 82 proven
 census families: seed 32023R2854 returned a retained Virtuoso 40001 transaction deadlock. PR837
-adds a narrowly bounded retry and is under review; a fresh bounded census run must precede the
+adds a narrowly bounded retry and has a MERGE review; a fresh bounded census run must precede the
 next full attempt. Full Luxembourg remains resource-gated.
 
 ## Luxembourg scope input reuse (Codex, 2026-09-30)

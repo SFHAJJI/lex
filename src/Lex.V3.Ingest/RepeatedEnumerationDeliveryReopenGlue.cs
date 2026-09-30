@@ -196,6 +196,23 @@ public sealed class RepeatedEnumerationDeliveryReopenGlue
             setCount(currentCount() + 1);
             if (attempt.Kind == OfficialHttpAcquisitionOutcomeKind.ExecutedObservation)
             {
+                if (await IsRetainedEuropeDeadlockAsync(attempt, cancellationToken).ConfigureAwait(false))
+                {
+                    // Preserve the rejected attempt's complete route before consuming the same
+                    // plan item's already-declared 500 retry allowance. The session applies its
+                    // backoff; the next loop iteration reserves the shared wire budget again.
+                    var failedBytes = attempt.Evidence!.CopyCanonicalBytes();
+                    var failedReceipt = await _custodyStore.CreateAsync(
+                        failedBytes, CustodyClass.NightlyFloor90d, cancellationToken).ConfigureAwait(false);
+                    var failedDigest = failedReceipt.Reference.ContentSha256;
+                    var failedRetained = await CustodyRestore.ReadByDigestCheckedAsync(
+                        _custodyStore, failedDigest, cancellationToken).ConfigureAwait(false);
+                    if (!failedRetained.Span.SequenceEqual(failedBytes))
+                        throw new CustodyIntegrityException("The retained deadlock route differs from its attempted evidence.");
+                    _ = RoutedHttpEvidence.ParseAndVerify(failedRetained.Span);
+                    executorWrittenMembership[failedDigest] = CustodyMembershipClassifier.Classify(failedReceipt);
+                    if (attemptOrdinal < maximumAttempts) continue;
+                }
                 break;
             }
 
@@ -275,6 +292,28 @@ public sealed class RepeatedEnumerationDeliveryReopenGlue
         var transport = new RepeatedEnumerationObservedTransport(
             logicalRequest, reopenedEvidence, writeReceipt, payload);
         return new ObservationAttemptOutcome(transport, item.RequestOrdinal, null);
+    }
+
+    // A completed Publications Office 500 with the retained Virtuoso serialization-deadlock
+    // signature is the observed transient failure. Do not widen this to arbitrary 5xx bodies,
+    // HTML challenges, capacity refusals, malformed successful responses or another publisher.
+    private async Task<bool> IsRetainedEuropeDeadlockAsync(
+        RoutedHttpAcquisitionSession.AttemptResult attempt, CancellationToken cancellationToken)
+    {
+        if (attempt.Evidence is not { Outcome: CompleteHttpRouteOutcome } evidence) return false;
+        var terminal = evidence.Hops[^1];
+        if (terminal.Status != 500 ||
+            terminal.RequestUri != "https://publications.europa.eu/webapi/rdf/sparql") return false;
+        var payload = await CustodyRestore.ReadByDigestCheckedAsync(
+            _custodyStore, terminal.Sha256, cancellationToken).ConfigureAwait(false);
+        var newline = payload.Span.IndexOf((byte)'\n');
+        var length = newline < 0 ? payload.Length : newline;
+        if (length > 256) return false;
+        string firstLine;
+        try { firstLine = new UTF8Encoding(false, true).GetString(payload.Span[..length]); }
+        catch (DecoderFallbackException) { return false; }
+        return firstLine.StartsWith("Virtuoso 40001 Error ", StringComparison.Ordinal)
+            && firstLine.Contains("Transaction deadlock", StringComparison.Ordinal);
     }
 
     /// <summary>
