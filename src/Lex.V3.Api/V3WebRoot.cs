@@ -25,7 +25,7 @@ namespace Lex.V3.Api;
 /// <c>Cache-Control: no-store</c>, so a page never outlives the corpus it was answered from.
 /// </para>
 /// </remarks>
-internal sealed partial class V3WebRoot
+internal sealed class V3WebRoot
 {
     internal const string DirectoryName = "v3-web";
 
@@ -76,7 +76,7 @@ internal sealed partial class V3WebRoot
         foreach (var file in Directory.EnumerateFiles(root, "*", SearchOption.AllDirectories))
         {
             var relative = Path.GetRelativePath(root, file).Replace('\\', '/');
-            if (!SafePath().IsMatch(relative))
+            if (!SafePath.IsMatch(relative))
             {
                 throw new InvalidDataException($"The web directory holds '{relative}', a path this server does not serve.");
             }
@@ -90,7 +90,7 @@ internal sealed partial class V3WebRoot
         }
 
         files["/"] = files["/index.html"];
-        var policy = PolicyMeta().Match(File.ReadAllText(index));
+        var policy = PolicyMeta.Match(File.ReadAllText(index));
         if (!policy.Success || string.IsNullOrWhiteSpace(policy.Groups["policy"].Value))
         {
             throw new InvalidDataException("The web directory's index.html carries no Content-Security-Policy, so no page is served.");
@@ -141,9 +141,9 @@ internal sealed partial class V3WebRoot
         return true;
     }
 
-    [GeneratedRegex(@"^[a-z0-9-]+(/[a-z0-9-]+)*\.[a-z0-9]+$")]
-    private static partial Regex SafePath();
+    // Plain patterns, not source-generated ones: the generator adds types of its own to the assembly, with names
+    // derived from this file, which the closed-surface census would then have to pin (review of #788's CI).
+    private static readonly Regex SafePath = new(@"^[a-z0-9-]+(/[a-z0-9-]+)*\.[a-z0-9]+$", RegexOptions.CultureInvariant);
 
-    [GeneratedRegex("<meta http-equiv=\"Content-Security-Policy\" content=\"(?<policy>[^\"]*)\"")]
-    private static partial Regex PolicyMeta();
+    private static readonly Regex PolicyMeta = new("<meta http-equiv=\"Content-Security-Policy\" content=\"(?<policy>[^\"]*)\"", RegexOptions.CultureInvariant);
 }
