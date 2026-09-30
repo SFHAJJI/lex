@@ -18,10 +18,11 @@ public sealed class EuVirtuosoDeadlockRetryTests
     [DataRow(2)]
     public async Task RetainedDeadlockRetriesTheSameCountOrPageAndProvesBothPasses(int faultAt)
     {
-        var body = await File.ReadAllTextAsync(Path.Combine(AppContext.BaseDirectory,
-            "Fixtures", "EuDocumentFetch", "eu-virtuoso-deadlock-500.txt"));
+        var retained = await File.ReadAllBytesAsync(Path.Combine(AppContext.BaseDirectory,
+            "Fixtures", "EuDocumentFetch", "eu-virtuoso-deadlock-500.bin"));
         Assert.AreEqual("70769075fe4617e11288eda6ac3120c1b10b7f5e64d90149ff9e8c28431b3627",
-            Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(body))));
+            Convert.ToHexStringLower(SHA256.HashData(retained)));
+        var body = Encoding.UTF8.GetString(retained);
         var handler = new DeadlockHandler(faultAt, 1, 500, body);
         var budget = WireRequestBudget.OfWireRequests(20);
         var (result, store) = await RunAsync(handler, budget);
