@@ -5,11 +5,11 @@ every pull request that changes what is served, what is next or what is blocked.
 
 ## Heads
 
-- `v3/integration`: `12a9e760` (2026-09-30, PR #787 merged). Build 45 s. Fast lane
+- `v3/integration`: `b5af2bc5` (2026-09-30, PR #788 merged). Build 45 s. Fast lane
   (`eng/test-fast.ps1`): 3,038 tests, 3,037 pass, 1 skipped. Ingest suite: green on CI for PR #760
   (the CI `dotnet` job runs the whole solution on every pull request, about 7 min on the runner;
-  green for PR #787);
-  locally about 15 min. 896 web tests pass. CI's web job can flake in `keyboard-walk.test.mjs`
+  green for PR #788);
+  locally about 15 min. 909 web tests pass. CI's web job can flake in `keyboard-walk.test.mjs`
   ("browser debugger never answered"); rerunning the failed job is the fix.
 - Driver: Claude Opus 5.5 since 2026-09-29 (the Fable 5.1 driver ran out of tokens on 2026-09-28
   after PR #757; the user default model is now `claude-opus-5-5`).
@@ -235,7 +235,7 @@ schema's `parameters` shape, and whose call runs the same dispatch the REST rout
 endpoint test proves it for all twenty-three. The launch-contract line "REST and MCP derive identical
 envelopes from the registry" is the owner's to tick.
 
-Web: 35 React components, 896 tests. Preview screens render fixtures. The V3 Luxembourg search
+Web: 36 React components, 909 tests. Preview screens render fixtures. The V3 Luxembourg search
 answer has a reader (PR #771). The answer census now samples `search` five ways from the real handler:
 - a phrase with 4 strict hits and 1 relaxed hit;
 - the same phrase one hit per page, with its cursor;
@@ -524,6 +524,29 @@ live page's text says "synthetic" (the live banner never does). `journey.mjs --s
 places the build as `v3-web` and loads every page from the API's origin, with no Node server, and
 checks the headers the page arrived with. All fourteen runs pass that way too. `serve-live.mjs`
 stays for local development.
+
+The live export composer and its journey step (PR #789), the eighth screen. `dist-live/export.html`
+has its own bundle `client-live-export.js`.
+- The page asks what the reading page asks: the same form (`ReadingForm`, now shared), the same one
+  `POST /api/v3/evidence_bundle`, the same outcome mapping and refusal sentences. It lists each
+  state's articles with a pin each (a checkbox with no `name`), the text quoted in its state's
+  language, and the articles held without text, pinnable so their exclusion travels.
+- Pinning composes the export in the page (`export-build.mjs`) and asks nothing. The panel shows,
+  before anything is saved: the counts, the watermark (the composer's own sentence), the rights
+  disposition and rule, the date read, the snapshot's observation time, the corpus, index and
+  registry digests, each item's citation (the hash-pinned article permalink), whole text digest and
+  official source, each exclusion with its reason, and the JSON itself. "Save as JSON" and "Save as
+  CSV" hand over exactly `exportJson` or `exportCsv` of that model, from a Blob in the page, under
+  `lex-v3-export-<identifier>-<date>`. A new reading clears the pins.
+- JSON (`lex-v3-export/1`) and CSV (RFC 4180, CRLF, one row per pinned article, the excluded ones
+  included with their status and no text, each row carrying its citation, rights and the
+  watermark). PDF is not yet made (see the driver decisions).
+- The reading and export pages say the next held state's date as its start ("the next state held
+  applies from"), never "until", as the compare page does after its review.
+- `journey.mjs` runs an eighth step: `/export.html`, typing the fixture work's identifier and
+  `2024-02-01`, then pinning the first article. With the mount the page ends in the composed export
+  ("1 article pinned: 1 exported with text, 0 excluded.", the watermark, the rights); without one, in
+  the card. Composing sends no second request (the verdict still counts exactly one).
 
 **The search journey step passes (PR #773, run locally 2026-09-30).** `node scripts/journey.mjs`
 now runs two steps, each with and without the fixture mount, and all four runs pass.
@@ -940,8 +963,8 @@ proves the path, not a corpus.
    screen and journey step; PR #782: the compare reader `readDiff`; PR #783: the live compare screen
    and journey step; PR #784: the radar reader `readChanges` over `changes_in_period`; PR #787: the
    live radar screen and journey step; PR #788: the API serves the live pages with the security
-   headers (ruling 3). Seven of the launch contract's eight screens are live and journeyed; Export
-   composer is the last. Hosting (ruling 3): `Lex.V3.Api`
+   headers (ruling 3); PR #789: the live export composer and its journey step. All eight of the
+   launch contract's screens are live and journeyed. Next: PDF export. Hosting (ruling 3): `Lex.V3.Api`
    serves the live pages on the API's origin with `frame-ancestors`, HSTS and `Referrer-Policy`,
    and a live page never shows the synthetic banner on a real mount. The absence refusals the card
    will not show: the producer carries the fields (driver decision). J1 to J8 are restated as V3
@@ -1035,6 +1058,11 @@ Each is the driver's call under ruling 7 and can be reversed by a later pull req
   operation, that it is not served and which data would serve it.
 - The web hosting shape of ruling 3 is `Lex.V3.Api` serving the built live pages beside `/api/v3` and
   `/mcp`, with the security headers, rather than an ingress split.
+- Exports (PR #789): the export composer saves JSON and CSV first; PDF follows as its own slice
+  (a print rendering of the same model, so the three formats cannot disagree). The export's time is
+  the envelope's `context.freshness.observed_at`, the snapshot's observation, labelled as such,
+  because the envelope carries no time of answering. The CSV is UTF-8 without a byte-order mark,
+  exactly what the tests parse.
 
 - Data acquisitions: the owner's 2026-09-30 data-lane instruction authorises the bounded first
   mount, complete EU and Luxembourg populations, and French EU bodies. Production signing,
