@@ -187,7 +187,7 @@ public sealed class EuFormexPackagePopulationProducer
     /// <param name="workCelex">The CELEX of the work the run acquired, carried on every annex binding.</param>
     /// <param name="sourceWitness">The bound SPARQL witness each enumeration session starts from.</param>
     /// <param name="wireBudget">One ceiling for every enumeration, package and PDF request of this run, robots included.</param>
-    public async Task<EuFormexPackagePopulationResult> RunAsync(
+    public Task<EuFormexPackagePopulationResult> RunAsync(
         EuQueryExecutionResult run,
         MachineQueryRendererSource manifestationRendererSource,
         MachineQueryRendererSource documentFetchRendererSource,
@@ -196,10 +196,37 @@ public sealed class EuFormexPackagePopulationProducer
         WireRequestBudget wireBudget,
         CancellationToken cancellationToken)
     {
+        ArgumentException.ThrowIfNullOrWhiteSpace(workCelex);
+        return RunCoreAsync(run, manifestationRendererSource, documentFetchRendererSource,
+            workCelex, sourceWitness, wireBudget, cancellationToken);
+    }
+
+    /// <summary>
+    /// Acquires a combined run, binding each original work to its own reviewed Appendix A CELEX.
+    /// An expression outside that map receives a typed outcome rather than another work's identifier.
+    /// </summary>
+    public Task<EuFormexPackagePopulationResult> RunAsync(
+        EuQueryExecutionResult run,
+        MachineQueryRendererSource manifestationRendererSource,
+        MachineQueryRendererSource documentFetchRendererSource,
+        BoundMachineRequest sourceWitness,
+        WireRequestBudget wireBudget,
+        CancellationToken cancellationToken) =>
+        RunCoreAsync(run, manifestationRendererSource, documentFetchRendererSource,
+            null, sourceWitness, wireBudget, cancellationToken);
+
+    private async Task<EuFormexPackagePopulationResult> RunCoreAsync(
+        EuQueryExecutionResult run,
+        MachineQueryRendererSource manifestationRendererSource,
+        MachineQueryRendererSource documentFetchRendererSource,
+        string? workCelex,
+        BoundMachineRequest sourceWitness,
+        WireRequestBudget wireBudget,
+        CancellationToken cancellationToken)
+    {
         ArgumentNullException.ThrowIfNull(run);
         ArgumentNullException.ThrowIfNull(manifestationRendererSource);
         ArgumentNullException.ThrowIfNull(documentFetchRendererSource);
-        ArgumentException.ThrowIfNullOrWhiteSpace(workCelex);
         ArgumentNullException.ThrowIfNull(sourceWitness);
         ArgumentNullException.ThrowIfNull(wireBudget);
 
@@ -298,8 +325,25 @@ public sealed class EuFormexPackagePopulationProducer
                 }
 
                 eligible++;
+                var expressionCelex = workCelex;
+                if (expressionCelex is null)
+                {
+                    var matches = EuAppendixASeedMap.SeedsInCelexOrder.Where(seed =>
+                        string.Equals(seed.WorkRoot, enumeration.Expression.Identity.PublisherWorkId,
+                            StringComparison.Ordinal)).Take(2).ToArray();
+                    if (matches.Length != 1)
+                    {
+                        outcomes.Add(EuFormexPackageOutcome.NotAcquired(
+                            enumeration.Expression, EuFormexPackageNotAcquiredReason.IdentityNotAdmitted,
+                            "the expression's work does not bind to exactly one reviewed Appendix A CELEX"));
+                        continue;
+                    }
+
+                    expressionCelex = matches[0].Celex;
+                }
+
                 var acquisition = await _acquisitions.RunAsync(
-                        enumeration, run.CorpusRecordSet, workCelex, documentFetchRendererSource, wireBudget, cancellationToken)
+                        enumeration, run.CorpusRecordSet, expressionCelex, documentFetchRendererSource, wireBudget, cancellationToken)
                     .ConfigureAwait(false);
                 productRequests += acquisition.ProductRequestCount;
                 outcomes.Add(acquisition.Outcome);

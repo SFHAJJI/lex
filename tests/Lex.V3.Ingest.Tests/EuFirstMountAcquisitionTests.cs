@@ -28,6 +28,70 @@ public sealed class EuFirstMountAcquisitionTests
         "<!DOCTYPE html><html lang=\"en\"><head><title>Legal notice</title></head><body><h1>Legal notice</h1></body></html>\n");
 
     [TestMethod]
+    public async Task TwoWorksShareOneRunIdentityAndOneRightsReceipt()
+    {
+        var store = new EuAcquisitionTestFixture.EuInMemoryCustodyStore();
+        var seeds = EuAppendixASeedMap.SeedsInCelexOrder.Take(2).ToArray();
+        var roots = seeds.Select(seed => EuPackRootCanonicalForm.TryCanonicalize(seed.WorkRoot, out _)!)
+            .Order(StringComparer.Ordinal).ToArray();
+        var handler = new CompositeHandler(
+            EuAxiomWiringHarness.TwoSeedScripts(
+                (first, second) => EuAcquisitionTestFixture.AxiomAbsenceScriptFor(first, second), true),
+            roots.Select((root, index) => $"{root}.000{index + 1}").ToDictionary(
+                expression => expression, _ => new[] { "fmx4" }));
+        var renderers = await EuRendererSources.FromCheckoutAsync(store, CheckoutRoot(), CancellationToken.None);
+        var result = await Acquisition(store, handler).RunAsync(
+            seeds.Reverse().Select(seed => seed.Celex).ToArray(), renderers,
+            EuAcquisitionTestFixture.TestWireBudget(), CancellationToken.None);
+
+        Assert.IsTrue(result.Delivered, $"{result.Refusal}: {result.Detail}");
+        Assert.AreEqual(2, result.Run!.ObservedExpressionCount);
+        Assert.AreEqual(2, result.Formex!.AcquiredExpressionCount);
+        var identity = result.Run.CorpusRecordSet!.Set.Records.Select(record => record.RunIdentity).Distinct().Single();
+        Assert.AreEqual(identity, result.LegalNotice!.Route!.RunIdentity);
+        Assert.AreSame(result.Run, result.Formex.Reconciliation!.Run);
+        Assert.AreEqual(1, handler.RightsRequests.Count(uri => uri == NoticeUri));
+        Assert.AreEqual(8, handler.FormexEnumerationRequests);
+    }
+
+    [TestMethod]
+    public async Task InvalidPopulationSelectionsRefuseBeforeRightsOrCensusTraffic()
+    {
+        var store = new EuAcquisitionTestFixture.EuInMemoryCustodyStore();
+        var handler = new CompositeHandler(
+            new Dictionary<string, EuAcquisitionTestFixture.FamilyScript>(StringComparer.Ordinal),
+            new Dictionary<string, string[]>(StringComparer.Ordinal));
+        var renderers = await EuRendererSources.FromCheckoutAsync(store, CheckoutRoot(), CancellationToken.None);
+        var seed = EuAxiomWiringHarness.Seed(null).Celex;
+        foreach (var selection in new string[][] { [], [seed, seed], [seed, "32099R9999"], [seed, ""] })
+        {
+            var result = await Acquisition(store, handler).RunAsync(
+                selection, renderers, EuAcquisitionTestFixture.TestWireBudget(), CancellationToken.None);
+            Assert.AreEqual(EuFirstMountAcquisitionRefusal.RunRefused, result.Refusal);
+            Assert.IsNull(result.Run);
+        }
+
+        Assert.AreEqual(0, handler.AdapterRequests + handler.FormexEnumerationRequests + handler.RightsRequests.Count);
+    }
+
+    [TestMethod]
+    public async Task AllAppendixASeedsBindBeforeOneRightsRefusalStopsThePopulation()
+    {
+        var store = new EuAcquisitionTestFixture.EuInMemoryCustodyStore();
+        var handler = new CompositeHandler(
+            new Dictionary<string, EuAcquisitionTestFixture.FamilyScript>(StringComparer.Ordinal),
+            new Dictionary<string, string[]>(StringComparer.Ordinal),
+            rightsRobots: "User-agent: Lex\nDisallow: /\n");
+        var renderers = await EuRendererSources.FromCheckoutAsync(store, CheckoutRoot(), CancellationToken.None);
+        var result = await Acquisition(store, handler).RunAsync(
+            EuAppendixASeedMap.SeedsInCelexOrder.Select(seed => seed.Celex).ToArray(),
+            renderers, EuAcquisitionTestFixture.TestWireBudget(), CancellationToken.None);
+        Assert.AreEqual(EuFirstMountAcquisitionRefusal.LegalNoticeRefused, result.Refusal, result.Detail);
+        Assert.AreEqual(0, handler.AdapterRequests + handler.FormexEnumerationRequests);
+        Assert.AreEqual(2, handler.RightsRequests.Count, "only the two-hop robots bootstrap ran");
+    }
+
+    [TestMethod]
     public async Task OneWorkIsAcquiredEndToEndAndBuildsACorpusWithTheRealNoticeRoute()
     {
         var root = EuAxiomWiringHarness.SeedRoot(null);

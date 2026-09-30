@@ -820,6 +820,15 @@ proves the path, not a corpus.
 
 ## Next, in order
 
+Population preparation (data lane): `Lex.V3.Tool build --celex all` selects all 82 reviewed
+Appendix A seeds; a comma-separated selection also binds one combined run. The entire selection
+is validated before traffic, one Decision 95 receipt precedes the census, and all families share
+one wire ceiling and corpus identity. Formex acquisition binds each original expression to its
+own reviewed CELEX, including when a batch spans several works. An expression whose work is not
+an Appendix A root receives `not_acquired / identity_not_admitted`; this does not add consolidated
+wordings. The earlier 82 separate runs remain separate evidence. A complete combined live build
+has not yet run; it follows the bounded first mount below.
+
 1. Data lane (Codex, Decision 95). The receipt route is changed and live-verified (PR #780).
    Run the bounded first mount with PR #750's command, the Codex checkout and the 800-request
    ceiling; mount the result locally and answer `resolve` from the real data. No EUR-Lex request.

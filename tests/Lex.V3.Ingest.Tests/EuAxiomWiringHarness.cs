@@ -165,14 +165,10 @@ internal static class EuAxiomWiringHarness
     /// which the adapter's per-seed narrowing is the only thing separating one work's axioms from
     /// another's. <paramref name="axiomScript"/> receives both canonical roots in ordinal order.
     /// </remarks>
-    internal static async Task<EuQueryExecutionResult> RunTwoSeedAsync(
-        Func<string, string, EuAcquisitionTestFixture.FamilyScript> axiomScript)
+    internal static Dictionary<string, EuAcquisitionTestFixture.FamilyScript> TwoSeedScripts(
+        Func<string, string, EuAcquisitionTestFixture.FamilyScript> axiomScript,
+        bool numericExpressions)
     {
-        // ONE BUDGET FOR THE WHOLE RUN. The adapter refuses a census request
-        // carrying a different instance, because two counters reading the same
-        // limit bound that many requests each and neither bounds the run.
-        var runWireBudget = EuAcquisitionTestFixture.TestWireBudget();
-
         var seedOne = EuAppendixASeedMap.SeedsInCelexOrder[0];
         var seedTwo = EuAppendixASeedMap.SeedsInCelexOrder[1];
         var rootOne = EuPackRootCanonicalForm.TryCanonicalize(seedOne.WorkRoot, out _)!;
@@ -194,7 +190,7 @@ internal static class EuAxiomWiringHarness
             EuAcquisitionTestFixture.SortedObjectFactRows(root, outcomes)).ToArray();
         var xRows = roots
             .SelectMany((root, index) => EuAcquisitionTestFixture.EnglishExpressionFactRows(
-                root, $"{root}.000{index + 1}.01/DOC_1"))
+                root, numericExpressions ? $"{root}.000{index + 1}" : $"{root}.000{index + 1}.01/DOC_1"))
             .ToArray();
         var wRows = roots
             .Select(root => EuAcquisitionTestFixture.RootWatermarkRow(root, WatermarkLexical))
@@ -203,7 +199,7 @@ internal static class EuAxiomWiringHarness
             .OrderBy(static type => type, StringComparer.Ordinal)
             .Select(type => EuAcquisitionTestFixture.ManifestationFactsRow(root, type))).ToArray();
 
-        var scripts = new Dictionary<string, EuAcquisitionTestFixture.FamilyScript>(StringComparer.Ordinal)
+        return new Dictionary<string, EuAcquisitionTestFixture.FamilyScript>(StringComparer.Ordinal)
         {
             // One census script pass is consumed per seed, so two seeds need the single-seed
             // script's bodies twice over.
@@ -230,6 +226,20 @@ internal static class EuAxiomWiringHarness
                 EuAcquisitionTestFixture.WitnessEmptyTraversalScript(roots[1], WatermarkLexical)),
         };
 
+    }
+
+    internal static async Task<EuQueryExecutionResult> RunTwoSeedAsync(
+        Func<string, string, EuAcquisitionTestFixture.FamilyScript> axiomScript,
+        bool numericExpressions = false)
+    {
+        // ONE BUDGET FOR THE WHOLE RUN. The adapter refuses a census request
+        // carrying a different instance, because two counters reading the same
+        // limit bound that many requests each and neither bounds the run.
+        var runWireBudget = EuAcquisitionTestFixture.TestWireBudget();
+
+        var seedOne = EuAppendixASeedMap.SeedsInCelexOrder[0];
+        var seedTwo = EuAppendixASeedMap.SeedsInCelexOrder[1];
+        var scripts = TwoSeedScripts(axiomScript, numericExpressions);
         var handler = new EuAcquisitionTestFixture.ClassifyingHandler(scripts);
         var store = new EuAcquisitionTestFixture.EuInMemoryCustodyStore();
         var executor = new EuRepeatedEnumerationExecutor(
