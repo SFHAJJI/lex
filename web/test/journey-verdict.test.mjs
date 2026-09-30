@@ -6,7 +6,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { journeyVerdict } from "../scripts/journey.mjs";
+import { JOURNEY_STEPS, SEARCH_PHRASE, journeyVerdict } from "../scripts/journey.mjs";
 import { cspValue } from "../scripts/csp.mjs";
 
 const ORIGIN = "http://127.0.0.1:5000";
@@ -72,4 +72,52 @@ test("each way a run can fail is a failure, named", () => {
   const refused = { ...good(), answerState: "refusal", text: "a refusal" };
   assert.ok(journeyVerdict(refused, { origin: ORIGIN, state: "refusal", refusalCode: "no_corpus_mounted" })
     .some((failure) => /does not name the refusal no_corpus_mounted/.test(failure)));
+});
+
+function goodSearch() {
+  return {
+    ...good(),
+    text: `“${SEARCH_PHRASE}” in fra: 4 with the exact phrase, 1 with every word, in 1 work. art_15 in x`,
+    requests: [
+      { url: `${ORIGIN}/search.html`, method: "GET", headers: {} },
+      { url: `${ORIGIN}/client-live-search.js`, method: "GET", headers: {} },
+      {
+        url: `${ORIGIN}/api/v3/search`,
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        headersSent: true,
+        postData: JSON.stringify(JOURNEY_STEPS.search.body),
+      },
+    ],
+    location: `${ORIGIN}/search.html`,
+  };
+}
+
+const SEARCH = { origin: ORIGIN, step: JOURNEY_STEPS.search, state: "success", texts: ["4 with the exact phrase", "art_15 in"] };
+
+test("a search run that typed, submitted and read the answer passes", () => {
+  assert.deepEqual(journeyVerdict(goodSearch(), SEARCH), []);
+});
+
+test("each way a search run can fail is a failure, named", () => {
+  const cases = [
+    ["another body", (o) => { o.requests[2].postData = JSON.stringify({ operation_id: "search", parameters: { query: SEARCH_PHRASE, language: "fra", echo: 1 } }); }, /body was .*echo/],
+    ["no body observed", (o) => { delete o.requests[2].postData; }, /body was not observed/],
+    ["the phrase in the address", (o) => { o.location = `${ORIGIN}/search.html?query=x`; }, /ended at .*\?query=x/],
+    ["the coverage operation", (o) => { o.requests[2].url = `${ORIGIN}/api/v3/coverage`; }, /not POST \/api\/v3\/search/],
+    ["a text missing", (o) => { o.text = "nothing"; }, /does not show "4 with the exact phrase"/],
+    ["two searches", (o) => { o.requests.push({ ...o.requests[2] }); }, /2 requests to the API/],
+  ];
+  for (const [what, mutate, reason] of cases) {
+    const observed = goodSearch();
+    mutate(observed);
+    const failures = journeyVerdict(observed, SEARCH);
+    assert.ok(failures.some((failure) => reason.test(failure)), `${what}: ${failures.join(" | ")}`);
+  }
+});
+
+test("a coverage run is still judged as one, with no body required", () => {
+  assert.equal(JOURNEY_STEPS.coverage.body, null);
+  assert.deepEqual(journeyVerdict({ ...good(), location: `${ORIGIN}/` }, SUCCESS), []);
+  assert.ok(journeyVerdict({ ...good(), location: `${ORIGIN}/?x=1` }, SUCCESS).some((failure) => /ended at/.test(failure)));
 });
