@@ -298,16 +298,24 @@ Machine gates (PR #767): the evaluation harness in `Lex.V3.Contracts.Evaluation`
 called, now runs against the real handler on a mounted corpus (`V3MachineGatesTests`). The temporal
 case set (8 cases on one work with a single first state, two states on one later date and a single
 latest state: before history, the first day, inside, the last day before the twins, the twin day,
-inside the twins, the latest day, after it) is answered by `as_of`, a selected state as its digest
-and a refusal as `refusal:{code}`: exactness 1.0, gate `temporal_exactness` passes, and the date-shift
-control (every case moved forward by the held interval) breaks every expectation and is caught (the
-cases at the latest state cannot break under a forward shift and are outside the control, by its
-design). The refusal case set (10 requests: `identifier_unknown`, `language_not_available`,
-`no_version_for_date`, `ambiguous_version`, `retrieval_mode_unavailable`, `snapshot_unknown`,
-`format_not_available`, `no_corpus_mounted`, and two that must be answered) is answered by the served
-operations: exact match 1.0, gate passes, and the verdict-shuffle control is caught. A production
-mutation (`as_of` picking one of two states on an ambiguous date instead of refusing) fails both
-gates (0.75 and 0.9). The cases are the fixture's: the gates prove the path until a real mount exists.
+inside the twins, the latest day, after it) is asked four ways: `as_of` and `in_force_on` (the work
+named), each with `language: "fra"` and with no language. A selected state is its digest and a
+refusal is `refusal:{code}`. All four arms reach exactness 1.0 and pass gate `temporal_exactness`,
+and each arm's date-shift control is caught: every case moves forward by the held interval and every
+expectation breaks. The cases at the latest state cannot break under a forward shift, so by the
+control's design they sit outside it. The refusal case set (18 requests over three fixture mounts)
+covers each of the 14 codes the refusal census records as produced (`ambiguous_identifier`,
+`ambiguous_version`, `anchor_not_in_version`, `format_not_available`, `identifier_unknown`,
+`language_not_available`, `no_corpus_mounted`, `no_version_for_date`, `pinned_digest_mismatch`,
+`profiles_differ`, `retrieval_mode_unavailable`, `snapshot_unknown`, `text_not_available`,
+`text_withheld`), and the test pins that list to the census. Three requests must be answered. The
+served operations reach exact match 1.0, the gate passes, and the verdict-shuffle control is caught.
+The six codes nothing produces yet (`advice_boundary`, `derivation_refused`, `not_transposable`,
+`out_of_corpus_scope`, `rate_limited`, `upstream_unreachable`) are outside the set. Two production
+mutations were each caught: `as_of` choosing one of two states on an ambiguous date fails both
+gates, and `in_force_on` answering the twin date for a named work instead of refusing fails the
+temporal gate. The cases come from the fixture, so the gates prove the path until a real mount
+exists.
 
 ## Data
 
