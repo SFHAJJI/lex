@@ -49,6 +49,19 @@ catch (Exception exception)
     Console.Error.WriteLine($"V3 corpus mount refused: {exception.GetType().Name}: {exception.Message}");
 }
 
+// The live pages beside the API, one origin for both (Decision 95, ruling 3). A directory this server
+// refuses to serve (a page without its policy, a file of a type it does not serve) leaves the API
+// running without pages rather than serving them wrong.
+V3WebRoot? webRoot = null;
+try
+{
+    webRoot = V3WebRoot.Open(Path.Combine(AppContext.BaseDirectory, V3WebRoot.DirectoryName));
+}
+catch (Exception exception)
+{
+    Console.Error.WriteLine($"V3 web pages refused: {exception.GetType().Name}: {exception.Message}");
+}
+
 app.Lifetime.ApplicationStopped.Register(() =>
 {
     corpusMount?.Dispose();
@@ -57,7 +70,8 @@ app.Lifetime.ApplicationStopped.Register(() =>
 app.Run(V3ApiHandler.CreateRequestDelegate(
     state,
     static () => DateTimeOffset.UtcNow,
-    corpusMount));
+    corpusMount,
+    webRoot));
 await app.RunAsync();
 
 public partial class Program;

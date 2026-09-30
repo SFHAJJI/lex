@@ -173,3 +173,85 @@ test("a provision history run types the identifier and the article id and is hel
   observed.requests[1].url = `${ORIGIN}/api/v3/evidence_bundle`;
   assert.ok(journeyVerdict(observed, expected).some((failure) => /not POST \/api\/v3\/article_history/.test(failure)));
 });
+
+test("a compare run types the identifier and two dates and is held to all three in the body", () => {
+  assert.deepEqual(JOURNEY_STEPS.compare.typed, [DOSSIER_IDENTIFIER, READING_DATE, READING_DATE]);
+  assert.deepEqual(JOURNEY_STEPS.compare.body, { operation_id: "diff", parameters: { identifier: DOSSIER_IDENTIFIER, date_from: READING_DATE, date_to: READING_DATE } });
+  const observed = goodSearch();
+  observed.requests = [
+    { url: `${ORIGIN}/compare.html`, method: "GET", headers: {} },
+    { url: `${ORIGIN}/api/v3/diff`, method: "POST", headers: {}, headersSent: true, postData: JSON.stringify(JOURNEY_STEPS.compare.body) },
+  ];
+  observed.location = `${ORIGIN}/compare.html`;
+  observed.text = "The same version applied on both dates.";
+  const expected = { origin: ORIGIN, step: JOURNEY_STEPS.compare, state: "success", texts: ["The same version applied on both dates."] };
+  assert.deepEqual(journeyVerdict(observed, expected), []);
+  observed.requests[1].postData = JSON.stringify({ operation_id: "diff", parameters: { identifier: DOSSIER_IDENTIFIER, date_from: READING_DATE, date_to: "2025-01-01" } });
+  assert.ok(journeyVerdict(observed, expected).some((failure) => /body was/.test(failure)), "a request with another date fails");
+});
+
+test("a radar run types two dates and is held to exactly those in the body", () => {
+  assert.deepEqual(JOURNEY_STEPS.radar.typed, [READING_DATE, READING_DATE]);
+  assert.deepEqual(JOURNEY_STEPS.radar.body, { operation_id: "changes_in_period", parameters: { date_from: READING_DATE, date_to: READING_DATE } });
+  const observed = goodSearch();
+  observed.requests = [
+    { url: `${ORIGIN}/radar.html`, method: "GET", headers: {} },
+    { url: `${ORIGIN}/api/v3/changes_in_period`, method: "POST", headers: {}, headersSent: true, postData: JSON.stringify(JOURNEY_STEPS.radar.body) },
+  ];
+  observed.location = `${ORIGIN}/radar.html`;
+  observed.text = "1 state of 1 work";
+  const expected = { origin: ORIGIN, step: JOURNEY_STEPS.radar, state: "success", texts: ["1 state of 1 work"] };
+  assert.deepEqual(journeyVerdict(observed, expected), []);
+  observed.requests[1].postData = JSON.stringify({ operation_id: "changes_in_period", parameters: { date_from: READING_DATE, date_to: READING_DATE, identifier: "x" } });
+  assert.ok(journeyVerdict(observed, expected).some((failure) => /body was/.test(failure)), "a request carrying an identifier nobody typed fails");
+});
+
+test("an export run reads, pins, and is held to the composed export and to its one request", () => {
+  assert.deepEqual(JOURNEY_STEPS.export.typed, [DOSSIER_IDENTIFIER, READING_DATE]);
+  assert.deepEqual(JOURNEY_STEPS.export.body, JOURNEY_STEPS.reading.body, "the export asks the reading, and nothing else");
+  const observed = goodSearch();
+  observed.requests = [
+    { url: `${ORIGIN}/export.html`, method: "GET", headers: {} },
+    { url: `${ORIGIN}/api/v3/evidence_bundle`, method: "POST", headers: {}, headersSent: true, postData: JSON.stringify(JOURNEY_STEPS.export.body) },
+  ];
+  observed.location = `${ORIGIN}/export.html`;
+  observed.text = "1 article pinned: 1 exported with text, 0 excluded.";
+  observed.then = "reached";
+  const expected = { origin: ORIGIN, step: JOURNEY_STEPS.export, state: "success", texts: ["1 article pinned"] };
+  assert.deepEqual(journeyVerdict(observed, expected), []);
+  for (const then of ["clicked", "absent", undefined]) {
+    assert.ok(journeyVerdict({ ...observed, then }, expected).some((failure) => /never showed \[data-export-state=composed\]/.test(failure)), `a run whose pin ${then ?? "was never clicked"} fails`);
+  }
+  const twice = { ...observed, requests: [...observed.requests, observed.requests[1]] };
+  assert.ok(journeyVerdict(twice, expected).some((failure) => /2 requests to the API/.test(failure)), "composing must not ask again");
+  const refused = { ...observed, answerState: "refusal", text: "no_corpus_mounted", then: undefined };
+  assert.deepEqual(journeyVerdict(refused, { origin: ORIGIN, step: JOURNEY_STEPS.export, state: "refusal", refusalCode: "no_corpus_mounted" }), [], "a refusal is not pinned");
+});
+
+test("a run whose page the API served is held to the headers the page arrived with (Decision 95, ruling 3)", () => {
+  const policy = `${cspValue()}; frame-ancestors 'none'`;
+  const served = () => ({
+    ...goodSearch(),
+    pageHeaders: {
+      "Content-Security-Policy": policy,
+      "Strict-Transport-Security": "max-age=31536000; includeSubDomains",
+      "Referrer-Policy": "no-referrer",
+      "X-Content-Type-Options": "nosniff",
+    },
+  });
+  const expected = { ...SEARCH, servedByApi: true };
+  assert.deepEqual(journeyVerdict(served(), expected), []);
+  const cases = [
+    ["no frame-ancestors", (o) => { o.pageHeaders["Content-Security-Policy"] = cspValue(); }, /arrived with the CSP/],
+    ["no HSTS", (o) => { delete o.pageHeaders["Strict-Transport-Security"]; }, /without HSTS/],
+    ["a referrer policy that sends one", (o) => { o.pageHeaders["Referrer-Policy"] = "origin"; }, /Referrer-Policy origin/],
+    ["no nosniff", (o) => { delete o.pageHeaders["X-Content-Type-Options"]; }, /without nosniff/],
+    ["headers never observed", (o) => { o.pageHeaders = null; }, /arrived with the CSP null/],
+  ];
+  for (const [what, mutate, reason] of cases) {
+    const observed = served();
+    mutate(observed);
+    assert.ok(journeyVerdict(observed, expected).some((failure) => reason.test(failure)), what);
+  }
+  assert.deepEqual(journeyVerdict({ ...goodSearch(), pageHeaders: null }, SEARCH), [], "a page served by serve-live is not held to them");
+});

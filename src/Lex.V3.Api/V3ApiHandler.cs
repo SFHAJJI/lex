@@ -16,6 +16,7 @@ internal sealed class V3ApiHandler
     private readonly V3PlatformHost _host;
     private readonly Func<DateTimeOffset> _utcNow;
     private readonly V3CorpusMount? _corpusMount;
+    private readonly V3WebRoot? _webRoot;
 
     public V3ApiHandler(SyntheticApiState syntheticState, Func<DateTimeOffset> utcNow)
         : this(syntheticState, new V3PlatformHost(), utcNow, null)
@@ -34,20 +35,23 @@ internal sealed class V3ApiHandler
         SyntheticApiState syntheticState,
         V3PlatformHost host,
         Func<DateTimeOffset> utcNow,
-        V3CorpusMount? corpusMount)
+        V3CorpusMount? corpusMount,
+        V3WebRoot? webRoot = null)
     {
         _syntheticState = syntheticState ?? throw new ArgumentNullException(nameof(syntheticState));
         _host = host ?? throw new ArgumentNullException(nameof(host));
         _utcNow = utcNow ?? throw new ArgumentNullException(nameof(utcNow));
         _corpusMount = corpusMount;
+        _webRoot = webRoot;
     }
 
     internal static RequestDelegate CreateRequestDelegate(
         SyntheticApiState syntheticState,
         Func<DateTimeOffset> utcNow,
-        V3CorpusMount? corpusMount = null)
+        V3CorpusMount? corpusMount = null,
+        V3WebRoot? webRoot = null)
     {
-        var api = new V3ApiHandler(syntheticState, new V3PlatformHost(), utcNow, corpusMount);
+        var api = new V3ApiHandler(syntheticState, new V3PlatformHost(), utcNow, corpusMount, webRoot);
         return context => api.HandleAsync(context, context.RequestAborted);
     }
 
@@ -116,6 +120,13 @@ internal sealed class V3ApiHandler
                     registeredAndNotServed ? V3TransportFailureKind.OperationNotServed : V3TransportFailureKind.UnknownRoute,
                     cancellationToken)
                 .ConfigureAwait(false);
+            return;
+        }
+
+        // The live pages, when this server holds them: only the files its web root recorded, so every
+        // other path reaches the synthetic routes exactly as before.
+        if (_webRoot is not null && await _webRoot.TryServeAsync(context, rawTarget, cancellationToken).ConfigureAwait(false))
+        {
             return;
         }
 
