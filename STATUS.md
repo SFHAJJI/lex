@@ -3,7 +3,7 @@
 Updated 2026-09-30 by the driver. This file replaces the issue-comment ledgers. It is rewritten in
 every pull request that changes what is served, what is next or what is blocked.
 
-## Reuse verified scope objects during retained readback (Codex, 2026-09-30, preparation)
+## Reuse verified scope objects during retained readback (Codex, 2026-09-30)
 
 Even after chunked storage, parsing scope JSON again constructs a second complete typed graph.
 The writer already holds a verified scope. Reversible driver decision: compare retained canonical
@@ -12,25 +12,29 @@ evidence checks. Initial digest/strict UTF-8 checks, exact canonical byte compar
 pin stay shared with the independent parsing reader. The returned wrapper shares the immutable
 manifest, and the independent reader remains available when no verified object is already held.
 
-This code-only draft depends on PR #820 and is uncompiled during the full EU acquisition.
-Prepared regressions cover object sharing, fresh evidence refusal, foreign canonical bytes,
+This change builds on merged PR #820 and compiles with zero warnings/errors (71.99s).
+Regressions cover object sharing, fresh evidence refusal, foreign canonical bytes,
 noncanonical whitespace and substitution of another valid document between read passes. Construction
-pins must be independently regenerated after compilation. Reducer scratch arrays, the original typed
-scope graph and corpus record-set persistence remain full-Luxembourg memory constraints.
+pins were independently reflected: the verified type adds one public comparison door and one
+private shared comparison helper. Its global type count remains 211. The reducer's private
+scratch-layout constant makes it a census candidate, explicitly classified as not a token registry
+or vocabulary (610 candidates, 53 declined). All 97 affected Luxembourg ingest checks passed
+(67.582s). The initial fast run failed four census checks; corrected fast passed all 3,076 tests plus
+one platform skip (57.694s). Required review and exact-head green CI remain merge gates.
+The original typed scope graph and corpus record-set persistence remain full-Luxembourg constraints.
 
 The same draft also replaces the verifier's retained per-row axis-result objects with five bytes
 per row (four dispositions and the exact accepted-body-role bit). Accounting compares streamed
 ordinal sequences, avoiding whole expected-partition arrays. A 32-object mixed-disposition fixture
 cross-checks all 16 partitions against the unchanged builder, role-gated body membership and a
-corrupted partition refusal. This is an unvalidated allocation reduction, with no measured savings
-or full-process memory bound yet.
+corrupted partition refusal. No measured savings or full-process memory bound is claimed.
 
 ## Large derived scope artifacts (Codex, 2026-09-30)
 
 The required fresh-context Claude review returned MERGE at efa4092b. Its one documentation
 finding is repaired below. Independent review rebuilt cleanly, passed fast (3,073 plus one
 platform skip), all 29 focused checks including the corrected census partition totals, and
-106 adapter/resolver/Stage 3 checks. Exact-head green CI remains the merge gate.
+106 adapter/resolver/Stage 3 checks. PR #820 merged at 5d060767 after green CI on 4955f953.
 Receipt-evidence retention and a public production reopen API remain future release work;
 this slice does not claim a retention floor for the complete artifact closure.
 
