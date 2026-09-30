@@ -1,3 +1,6 @@
+using System.Text.Json;
+using System.Text.Json.Nodes;
+using static Lex.V3.Ingest.Tests.EuAcquisitionTestFixture;
 using Lex.V3.Artifacts;
 using Lex.V3.Contracts.Custody;
 using Lex.V3.Contracts.Source.Core;
@@ -760,7 +763,7 @@ public sealed class CorpusRecordSetWriterTests
     /// this writer has nothing to do with.
     /// </remarks>
     [TestMethod]
-    public async Task TwoIndependentExecutionsRetainByteIdenticalRecordSets()
+    public async Task TwoIndependentSmallExecutionsRetainByteIdenticalInlineRecordSets()
     {
         var firstStore = new EnforcingInMemoryCustodyStore();
         var secondStore = new EnforcingInMemoryCustodyStore();
@@ -786,7 +789,138 @@ public sealed class CorpusRecordSetWriterTests
         Assert.AreEqual(
             first.RetainedSetReceipt!.Reference.ContentSha256,
             second.RetainedSetReceipt!.Reference.ContentSha256,
-            "and custody must therefore address both at the same content digest.");
+            "and inline custody must therefore address both at the same content digest.");
+    }
+
+    [TestMethod]
+    [DataRow(0)]
+    [DataRow(1)]
+    [DataRow(2)]
+    [DataRow(5)]
+    public async Task LargeSetsReopenThroughThePublicReaderWithTheWholeWriteClosureFloor(int weakWrite)
+    {
+        var store = new EuInMemoryCustodyStore(unenforceCallOrdinal: weakWrite);
+        var manifest = LargeManifestFixture();
+        var expected = new CorpusRecordSet(CorpusRecordSetSchemaIds.Set, ManifestRef(), RunIdentity(),
+            CorpusRecordBuilder.BuildRecords(manifest, ManifestRef(), RunIdentity()));
+        using var expectedBytes = new MemoryStream();
+        var expectedHash = CorpusRecordSetCanonicalWriter.Write(expectedBytes, expected);
+        Assert.IsGreaterThan(ChunkedDerivedArtifact.ChunkSize, expectedBytes.Length);
+        var written = await new CorpusRecordSetWriter(store).WriteAsync(
+            manifest, ManifestRef(), RunIdentity(), null, CancellationToken.None);
+        Assert.IsNull(written.Refusal, written.Refusal?.Detail);
+        Assert.AreEqual(5, store.CreateCallCount, "Two data chunks, their two receipt objects, and one root.");
+        Assert.AreEqual(expectedHash, written.SetRef!.Sha256);
+        Assert.AreEqual(weakWrite == 0 ? CustodyMembership.Floored : CustodyMembership.RetainedUnenforced,
+            written.RetainedFloor);
+        if (weakWrite is 1 or 2)
+            Assert.AreEqual(CustodyMembership.Floored, CustodyMembershipClassifier.Classify(written.RetainedSetReceipt!),
+                "A floored root must not upgrade weaker data or receipt-evidence retention.");
+        foreach (var digest in store.WrittenDigestsInOrder)
+            Assert.IsLessThanOrEqualTo(ChunkedDerivedArtifact.ChunkSize,
+                (await store.ReadByDigestAsync(digest, CancellationToken.None)).Length);
+        var receipt = written.RetainedSetReceipt!;
+        var reference = written.SetRef;
+        written = null!; // The independent reader receives no writer-held record graph.
+        var reopened = await new CorpusRecordSetReader(store).ReadAsync(receipt, reference, CancellationToken.None);
+        Assert.IsNull(reopened.Refusal, reopened.Refusal?.Detail);
+        CollectionAssert.AreEqual(expectedBytes.ToArray(), Canonical(reopened.VerifiedSet!));
+    }
+
+    [TestMethod]
+    public async Task ChunkedPublicReaderRejectsMissingReorderedAndSubstitutedClosureAndWrongSetReferences()
+    {
+        var store = new EuInMemoryCustodyStore();
+        var written = await new CorpusRecordSetWriter(store).WriteAsync(
+            LargeManifestFixture(), ManifestRef(), RunIdentity(), null, CancellationToken.None);
+        Assert.IsNull(written.Refusal, written.Refusal?.Detail);
+        var reader = new CorpusRecordSetReader(store);
+        var bytes = await store.ReadByDigestAsync(written.RetainedSetReceipt!.Reference.ContentSha256, CancellationToken.None);
+        foreach (var mutation in new[] { "missing", "reordered", "receipt-substitution" })
+        {
+            var root = JsonNode.Parse(bytes.Span)!.AsObject();
+            var chunks = root["chunks"]!.AsArray();
+            if (mutation == "missing") chunks.RemoveAt(0);
+            else if (mutation == "reordered")
+            {
+                var first = chunks[0]!.DeepClone();
+                chunks[0] = chunks[1]!.DeepClone();
+                chunks[1] = first;
+            }
+            else chunks[0]!["receiptSha256"] = chunks[1]!["receiptSha256"]!.DeepClone();
+            var forged = await store.CreateAsync(JsonSerializer.SerializeToUtf8Bytes(root), CustodyClass.NightlyFloor90d, CancellationToken.None);
+            var rejected = await reader.ReadAsync(forged, written.SetRef!, CancellationToken.None);
+            Assert.AreEqual(CorpusRecordSetReadRefusalKind.CustodyBytesNotRetained, rejected.Refusal?.Kind, mutation);
+        }
+        var foreignBytes = "foreign retained payload"u8.ToArray();
+        var (foreignRoot, _) = await ChunkedDerivedArtifact.WriteAsync(store, "test-foreign-derived/1",
+            output => { output.Write(foreignBytes); return CustodyDigest.Of(foreignBytes); }, CancellationToken.None);
+        var foreignInline = await store.CreateAsync(foreignBytes, CustodyClass.NightlyFloor90d, CancellationToken.None);
+        foreach (var foreignReceipt in new[] { foreignRoot, foreignInline })
+        {
+            var foreign = await reader.ReadAsync(foreignReceipt, written.SetRef!, CancellationToken.None);
+            Assert.AreEqual(CorpusRecordSetReadRefusalKind.RetainedBytesAreNotThisSet, foreign.Refusal?.Kind,
+                "Intact foreign content is not this set in either storage form.");
+            Assert.IsNull(foreign.VerifiedSet);
+        }
+
+        var otherRef = new SourceArtifactRef(written.SetRef!.ResourceId, new string('a', 64));
+        var wrongSet = await reader.ReadAsync(written.RetainedSetReceipt, otherRef, CancellationToken.None);
+        Assert.AreEqual(CorpusRecordSetReadRefusalKind.RetainedBytesAreNotThisSet, wrongSet.Refusal?.Kind);
+        var lyingRoot = JsonNode.Parse(bytes.Span)!.AsObject();
+        lyingRoot["canonicalSha256"] = otherRef.Sha256;
+        var lyingReceipt = await store.CreateAsync(JsonSerializer.SerializeToUtf8Bytes(lyingRoot), CustodyClass.NightlyFloor90d, CancellationToken.None);
+        var lied = await reader.ReadAsync(lyingReceipt, otherRef, CancellationToken.None);
+        Assert.AreEqual(CorpusRecordSetReadRefusalKind.RetainedBytesAreNotThisSet, lied.Refusal?.Kind,
+            "Root metadata cannot replace the independent canonical stream digest.");
+
+        var firstChunk = JsonNode.Parse(bytes.Span)!["chunks"]![0]!["sha256"]!.GetValue<string>();
+        foreach (var unavailable in new[] { false, true })
+        {
+            var faulting = new ChunkReadFaultStore(store, firstChunk, unavailable);
+            var refused = await new CorpusRecordSetReader(faulting).ReadAsync(
+                written.RetainedSetReceipt, written.SetRef, CancellationToken.None);
+            Assert.AreEqual(unavailable ? CorpusRecordSetReadRefusalKind.CustodyUnavailable :
+                CorpusRecordSetReadRefusalKind.CustodyBytesNotRetained, refused.Refusal?.Kind);
+        }
+    }
+
+    [TestMethod]
+    public async Task AFailedChunkHoldDoesNotPublishACompletedCorpusSet()
+    {
+        var attempts = 0;
+        var store = new EuInMemoryCustodyStore(failWriteDigest: (_, _) => ++attempts == 3);
+        var result = await new CorpusRecordSetWriter(store).WriteAsync(
+            LargeManifestFixture(), ManifestRef(), RunIdentity(), null, CancellationToken.None);
+        Assert.AreEqual(CorpusRecordSetWriteRefusalKind.RecordSetNotRetained, result.Refusal?.Kind);
+        Assert.IsNull(result.VerifiedSet);
+        Assert.IsNull(result.RetainedSetReceipt);
+        Assert.IsNull(result.RetainedFloor);
+        Assert.AreEqual(3, attempts);
+    }
+
+    private static ScopeManifest LargeManifestFixture()
+    {
+        const int count = 4000;
+        var ordinals = Enumerable.Range(0, count).ToArray();
+        return new ScopeManifest(ScopeManifestSchemaIds.Manifest, Profile(), CompleteEnumerationRef(),
+            Array.Empty<SourceArtifactRef>(), ordinals.Select(ObservedObject).ToArray(),
+            Array.Empty<ScopeManifestRow>(), Enum.GetValues<ScopeAxis>().Select(axis =>
+                new ScopeAccountingSet(axis, ScopeDisposition.AcceptedSelected, ordinals)).ToArray(), Array.Empty<int>());
+    }
+
+    private sealed class ChunkReadFaultStore(ICustodyStore inner, string digest, bool unavailable) : ICustodyStore
+    {
+        public Task<DurableBlobWriteReceipt> CreateAsync(ReadOnlyMemory<byte> bytes, CustodyClass custodyClass, CancellationToken token) =>
+            inner.CreateAsync(bytes, custodyClass, token);
+        public Task<ReadOnlyMemory<byte>> ReadAsync(DurableBlobRef reference, CancellationToken token) =>
+            ReadByDigestAsync(reference.ContentSha256, token);
+        public Task<ReadOnlyMemory<byte>> ReadByDigestAsync(string contentSha256, CancellationToken token)
+        {
+            if (contentSha256 != digest) return inner.ReadByDigestAsync(contentSha256, token);
+            if (unavailable) throw new TimeoutException("Chunk store unavailable.");
+            return Task.FromResult<ReadOnlyMemory<byte>>("wrong retained chunk"u8.ToArray());
+        }
     }
 
     private static byte[] Canonical(VerifiedCorpusRecordSet set)

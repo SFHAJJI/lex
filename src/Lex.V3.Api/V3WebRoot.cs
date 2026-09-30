@@ -40,6 +40,7 @@ internal sealed class V3WebRoot
         [".css"] = "text/css; charset=utf-8",
         [".svg"] = "image/svg+xml",
         [".woff2"] = "font/woff2",
+        [".json"] = "application/json; charset=utf-8",
     };
 
     private readonly IReadOnlyDictionary<string, string> _files;
