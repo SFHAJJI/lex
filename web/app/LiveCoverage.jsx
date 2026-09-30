@@ -13,6 +13,7 @@ import { Coverage } from './Coverage.jsx';
 import { RefusalCard } from './RefusalCard.jsx';
 import { LIVE_COVERAGE_LOADING, startLiveCoverage } from '../scripts/live-coverage.mjs';
 import { LiveAnswer } from './LiveAnswer.jsx';
+import { liveChrome } from '../scripts/live-chrome.mjs';
 
 const LOADING = Object.freeze({ state: 'loading', sentence: LIVE_COVERAGE_LOADING });
 
@@ -29,7 +30,7 @@ export function CoverageAnswerView({ outcome }) {
   if (outcome.state === 'refusal' && outcome.card) {
     return (
       <section data-answer-state="refusal">
-        <RefusalCard code={outcome.code} sentence={outcome.sentence} payload={outcome.payload} />
+        <RefusalCard code={outcome.code} sentence={outcome.sentence} payload={outcome.payload} copy={liveChrome().refusalCard} />
       </section>
     );
   }

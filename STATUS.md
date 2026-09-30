@@ -56,10 +56,10 @@ CI evidence are recorded in the pull request before merge.
 
 ## Heads
 
-- `v3/integration`: `925d280e` (2026-09-30, PR #806 merged). Build 45 s. Fast lane
+- `v3/integration`: `663abd79` (2026-09-30, PR #807 merged). Build 45 s. Fast lane
   (`eng/test-fast.ps1`): 3,067 tests, 3,066 pass, 1 skipped (PR #798's validation). Ingest suite: green on CI for PR #760
   (the CI `dotnet` job runs the whole solution on every pull request, about 7 min on the runner;
-  green for PR #806);
+  green for PR #807);
   locally about 15 min. 944 web tests pass. CI's web job can flake in `keyboard-walk.test.mjs`
   ("browser debugger never answered"); rerunning the failed job is the fix.
 - Driver: Claude Opus 5.5 since 2026-09-29 (the Fable 5.1 driver ran out of tokens on 2026-09-28
@@ -748,6 +748,29 @@ The evaluation card's words join the chrome table (PR #807).
   out is the refusal card and the `Coverage` component. The French is drafted. The card beside the release assets belongs to the
   release pipeline.
 
+The refusal card's words join the chrome table (PR #809).
+- `refusal-card.mjs` exports `REFUSAL_CARD_COPY`, the card's words built from its own constants,
+  so there is still one English source for the string renderer and the live pages:
+  - the token label;
+  - the retry sentence;
+  - the absence note and its heading;
+  - the three route labels;
+  - the per-code notes;
+  - the declared-null sentences;
+  - the description of an offered state.
+- The string renderer now builds its candidate line from the same words.
+- `live-chrome.mjs` takes `refusalCard` from that export, and the French is drafted beside it.
+- `RefusalCard` takes an optional `copy` prop (English by default, so the previews are unchanged),
+  and every live screen passes the table's. The card now receives the codes behind each label
+  (route codes, declared-null rows, the raw publication date and withdrawal). No rule moved:
+  `validateRefusal` decides as before.
+- The scan now renders every census refusal of the eight screens through its view. Putting one
+  heading back as a literal fails it. The sentence a refusal says is the checkpoint list's (#793)
+  and counts as data. So do the payload's member names, which the card shows as sent (driver
+  decision below).
+- All 18 census refusals render byte-identically before and after. The chrome scan now leaves out
+  only Trust and Coverage's `Coverage` component.
+
 The live export composer and its journey step (PR #789), the eighth screen. `dist-live/export.html`
 has its own bundle `client-live-export.js`.
 - The page asks what the reading page asks: the same form (`ReadingForm`, now shared), the same one
@@ -1291,8 +1314,9 @@ has not yet run; the bounded first mount above is complete.
    screens' sentences in the chrome table, with French drafted beside them; PR #804: the compare,
    radar and export screens' sentences; PR #805: every citation the journey's pages print verifies;
    PR #806: no interface text on a live page bypasses the chrome table (a pseudo-locale scan); PR
-   #807: the evaluation card's words in the table. Next: the refusal card's labels and Trust and
-   Coverage's copy into the table; French ships only once reviewed (Decision 41). Hosting (ruling 3): `Lex.V3.Api`
+   #807: the evaluation card's words in the table; PR #809: the refusal card's words in the table.
+   Next: Trust and Coverage's `Coverage` copy into the table; French ships only once reviewed
+   (Decision 41). Hosting (ruling 3): `Lex.V3.Api`
    serves the live pages on the API's origin with `frame-ancestors`, HSTS and `Referrer-Policy`,
    and a live page never shows the synthetic banner on a real mount. J1 to J8 are restated as V3
    steps by the driver (they exist only in the pre-V3 pack, `05-user-journeys.md`).
@@ -1354,6 +1378,12 @@ Decision 95 (lex-governance PR #9, merged 2026-09-30) records these rulings and 
 ## Driver decisions (reversible)
 
 Each is the driver's call under ruling 7 and can be reversed by a later pull request that says why.
+
+- The refusal card's payload rows keep the payload's own member names (`requested_identifier`,
+  `asserts_absence_of_law`) as their labels, in every interface language (PR #809). They are the
+  contract's names, shown with the refusal code beside them, and a reader who quotes them can find
+  them in the envelope. A labelled form would be a translation of the contract, which the owner can
+  ask for.
 
 - Absence refusals (PRs #775, #777, #778): option (a), the producer carries them. The web refusal card
   (`refusal-card.mjs` `ABSENCE_CODES`, from `35-ideal-ux`) requires every absence refusal to carry
@@ -1444,7 +1474,10 @@ Repair fast lane: 3,065 pass / 1 Windows skip; repair build: zero warnings/error
 - The live pages' French interface copy, drafted for review (Decision 41: French chrome ships only
   once reviewed): every entry of the chrome table so far (each page's title, eyebrow, heading and
   introduction, the forms' labels and buttons), printed by `node web/scripts/live-chrome-fr-draft.mjs`
-  (PR #800).
+  (PR #800). Since then it has grown to every sentence of the live screens (PRs #803, #804, #806),
+  the evaluation card (PR #807) and the refusal card (PR #809). That includes the absence note
+  ("This is what this service holds, and does not hold. It is not evidence that the instrument or the
+  law does not exist.") and the live banner, both claims the owner reviews.
 
 ## Blocked on the owner
 

@@ -244,6 +244,30 @@ export const LIVE_CHROME_FR_DRAFT = Object.freeze({
     negativeHeading: 'Résultats négatifs',
     negative: 'Hypothèse : {hypothesis}. Jeu de données : {dataset}. Résultat : {result}. Décision : {decision}. Ce qui l’infirmerait : {reverse}.',
   }),
+  refusalCard: Object.freeze({
+    tokenLabel: 'refus typé',
+    retry: 'Cette demande mérite d’être réessayée.',
+    absenceNote: 'Voici ce que ce service contient, et ne contient pas. Ce n’est pas la preuve que l’acte ou la règle de droit n’existe pas.',
+    absenceHeading: 'Ce qui permettrait de répondre',
+    routes: Object.freeze({
+      corrected_identifier: 'un identifiant corrigé, si vous pensiez à un autre acte',
+      new_official_observation: 'une nouvelle observation, si l’éditeur publie ce texte',
+      expanded_official_scope: 'une extension du corpus examiné à cette catégorie d’actes',
+    }),
+    notes: Object.freeze({
+      anchor_not_in_version: 'Lex ne se rabat pas sur une recherche en texte intégral pour une disposition d’un acte connu. Une autre disposition n’est pas une réponse approchée.',
+      ambiguous_version: 'L’éditeur ne classe aucune des deux versions. Il n’y a ni choix par défaut ni choix mémorisé.',
+      profiles_differ: 'Ce refus ne peut pas être contourné. Les deux versions ont été extraites selon des profils différents : une différence entre elles traduirait un désaccord entre analyseurs, non une modification législative.',
+    }),
+    nullSentences: Object.freeze({
+      nearest_earlier: 'Aucune version antérieure n’est détenue : la date demandée précède cet historique.',
+      nearest_later: 'Aucune version postérieure n’est détenue : la date demandée suit toutes les versions détenues.',
+    }),
+    candidate: 'applicable à partir du {validFrom}, empreinte {hash}, {published}',
+    candidateWithdrawalNotStated: 'applicable à partir du {validFrom}, empreinte {hash}, {published}, retrait non indiqué par la plateforme',
+    published: 'publiée le {date}',
+    publicationNotStated: 'date de publication non indiquée par la plateforme',
+  }),
   shell: Object.freeze({
     title: '{title} - Lex V3 en direct',
     bannerLead: 'Version de développement en direct.',
