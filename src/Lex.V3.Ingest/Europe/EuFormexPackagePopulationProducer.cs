@@ -1,3 +1,5 @@
+using Lex.V3.Contracts;
+using System.Text.Json;
 using System.Text.Json.Serialization;
 using Lex.V3.Contracts.Custody;
 using Lex.V3.Contracts.Source.Core;
@@ -96,6 +98,41 @@ public sealed class EuFormexPackagePopulationResult
     public string? Detail { get; }
 
     public bool Delivered => Reconciliation is not null;
+
+    /// <summary>
+    /// Diagnostic projection of the existing reconciliation for retained CLI logs. It creates no
+    /// proof or acquisition outcome. On refusal, the expression total is unknown and outcomes null.
+    /// Enum values use their declared wire codes; publisher identities and details are JSON-escaped.
+    /// </summary>
+    public string CreateOutcomeDiagnosticsJson() => JsonSerializer.Serialize(new
+    {
+        schema = "lex-v3-eu-formex-outcome-diagnostic/1",
+        delivered = Delivered,
+        expression_count = Reconciliation?.ExpressionCount,
+        enumerated_count = Enumerations.Count,
+        eligible_count = Delivered ? (int?)EligibleExpressionCount : null,
+        acquired_count = Delivered ? (int?)AcquiredExpressionCount : null,
+        not_enumerated_language_out_of_scope_count = Delivered ? (int?)NotEnumeratedExpressionCount : null,
+        refusal = Refusal is { } refusal ? ContractWire.NameOf(refusal) : null,
+        detail = Detail,
+        outcomes = Reconciliation?.Outcomes.Select(static outcome => new
+        {
+            work = outcome.ExpressionIdentity.PublisherWorkId,
+            expression = outcome.ExpressionIdentity.PublisherExpressionId,
+            language = outcome.Expression.OfficialLanguage,
+            kind = ContractWire.NameOf(outcome.Kind),
+            not_acquired_reason = outcome.NotAcquiredReason == EuFormexPackageNotAcquiredReason.None
+                ? null : ContractWire.NameOf(outcome.NotAcquiredReason),
+            package_refusal = outcome.PackageRefusal == EuFormexAnnexInventoryRefusal.None
+                ? null : ContractWire.NameOf(outcome.PackageRefusal),
+            acquisition_refusal = outcome.AcquisitionRefusal is { } acquisitionRefusal ? ContractWire.NameOf(acquisitionRefusal) : null,
+            unavailable_reason = outcome.UnavailableReason is { } unavailableReason ? ContractWire.NameOf(unavailableReason) : null,
+            observed_status = outcome.ObservedStatus,
+            retained_package_sha256 = outcome.AcquiredInventory?.SourceReceipt.Reference.ContentSha256,
+            detail = outcome.Detail,
+        }),
+    });
+
 
     public static EuFormexPackagePopulationResult Success(
         EuFormexRunOutcomeReconciliation reconciliation,

@@ -3,6 +3,29 @@
 Updated 2026-09-30 by the driver. This file replaces the issue-comment ledgers. It is rewritten in
 every pull request that changes what is served, what is next or what is blocked.
 
+## Formex package outcome diagnostics (Codex, 2026-09-30)
+
+The successful three-seed mount holds 34 EU XHTML members but admits only two Formex article
+expressions; 32 members report package_not_acquired. Reversible driver decision: print the existing
+reconciliation as one retained CLI JSON line, with every expression's identity, language, declared
+wire outcome/reason codes, observed status and detail. Acquired packages include the retained ZIP
+digest. A refused population has no reconciled per-expression outcomes: its diagnostic records
+the refusal, detail and observed enumeration count, with unknown totals/outcomes null. It does not
+reconstruct individual package outcomes after reconciliation fails.
+
+Initial validation at a53ae771 passed a clean build (93.27 s), fast (3,076 plus one platform skip),
+and all 29 Formex population/first-mount ingest tests. Required Claude review #830 returned MERGE:
+clean build, the same fast and 29 ingest passes, and two expected failures after mutating unknown
+totals and package-refusal projection. No request, retry, admission or proof behavior changes.
+
+The single repair uses declared wire codes, adds explicit 404/unavailable diagnostic assertions,
+and corrects the test description: the annex case lacks the publisher's annex XHTML convention;
+it is not a missing main-body case. The 500 case tests route_refused. Direct acquisition_refusal
+projection remains unexercised by these scripted cases. Existing checks also cover acquired,
+ineligible, language-out-of-scope, invalid-package and escaped refusal detail. Repair validation
+and green exact-head CI are required before merge. The full EU retry remains subject to its
+storage allowance; cited custody and evidence are preserved.
+
 ## Corpus record-set canonical streaming and readback (Codex, 2026-09-30)
 
 The full Luxembourg path still creates a complete corpus record set. Its canonical writer used
@@ -31,7 +54,8 @@ and lineage coverage, and compared readers over 15,039 inputs with zero disagree
 accepted by both). A 5,000-record set also produced
 identical canonical output. The one follow-up uses the persistence MemoryStream backing memory
 instead of ToArray, documents partial output/flush on failure, and refreshes through merged824.
-Fresh repair validation and exact-head CI remain pending. Persistence still buffers one complete
+Repair validation passed build/fast (3,083 plus one skip)/40 affected ingest; #827 merged at
+21:10 UTC after green exact-head CI. Persistence still buffers one complete
 canonical set and retains reopened bytes; typed records/completion also remain. Chunked record-set
 persistence and measured downstream resources remain required before full Luxembourg. No full
 population-fit claim, publisher traffic or production operation follows this change.
