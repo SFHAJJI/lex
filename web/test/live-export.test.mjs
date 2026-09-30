@@ -14,6 +14,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { ExportAnswerView, ExportPanel, LiveExport, RefusalCard, renderLiveExportPage } from "../.react-build/app.mjs";
 import { loadLiveReading, readingOutcome } from "../scripts/live-reading.mjs";
 import { EXPORT_WATERMARK, exportCsv, exportJson } from "../scripts/export-build.mjs";
+import { exportPdf } from "../scripts/export-pdf.mjs";
 import {
   EXPORT_FORMATS,
   LIVE_EXPORT_IDLE,
@@ -104,7 +105,23 @@ test("pinned articles compose the export the file will carry: counts, watermark,
     assert.ok(text.includes(article.textSha256), `the whole text digest of ${article.publisherId}`);
   }
   assert.ok(text.includes(`<pre>${exportJson(panel.model)}</pre>`), "the JSON shown is the JSON saved");
-  assert.deepEqual([...markup.matchAll(/data-save="([a-z]+)"/g)].map((match) => match[1]), ["json", "csv"]);
+  assert.deepEqual([...markup.matchAll(/data-save="([a-z]+)"/g)].map((match) => match[1]), ["json", "csv", "pdf"]);
+  assert.ok(!markup.includes("data-format-refused"));
+});
+
+test("a PDF the standard fonts cannot set is not offered, and the panel says why", async () => {
+  const envelope = structuredClone(envelopeOf(ANSWER));
+  const article = envelope.result.value.states[0].articles[0];
+  const { createHash } = await import("node:crypto");
+  article.text = "Art. 1 漢";
+  article.text_byte_length = Buffer.byteLength(article.text, "utf8");
+  article.text_sha256 = createHash("sha256").update(article.text, "utf8").digest("hex");
+  const outcome = readingOutcome({ state: "success", envelope });
+  assert.equal(outcome.state, "success", outcome.sentence);
+  const pins = new Set([pinKey(outcome.view.states[0].stateSha256, article.publisher_id)]);
+  const markup = renderToStaticMarkup(h(ExportPanel, { outcome, pins, onSave: () => {} }));
+  assert.deepEqual([...markup.matchAll(/data-save="([a-z]+)"/g)].map((match) => match[1]), ["json", "csv"], "JSON and CSV carry any text");
+  assert.ok(markup.includes('<p data-format-refused="pdf">PDF is not offered for this export: its text holds characters the standard PDF fonts cannot set (U+6F22).</p>'));
 });
 
 test("a pinned article held without text is shown as excluded with its reason", async () => {
@@ -160,7 +177,9 @@ test("saving hands the page's own file over, named for the work and date, and se
     assert.equal(anchor.href, "blob:x");
     assert.equal(anchor.download, name);
     assert.equal(blob.type, format.mediaType);
-    assert.equal(await blob.text(), format.id === "json" ? exportJson(model) : exportCsv(model), "the file is the export, byte for byte");
+    const expected = { json: exportJson(model), csv: exportCsv(model), pdf: exportPdf(model) }[format.id];
+    const saved = new Uint8Array(await blob.arrayBuffer());
+    assert.deepEqual(saved, typeof expected === "string" ? new TextEncoder().encode(expected) : expected, "the file is the export, byte for byte");
     assert.deepEqual(events, ["create a", "append", "click", "remove"]);
     assert.equal(later.length, 1);
     assert.ok(later[0].ms > 0, "the URL is revoked after the browser has taken the file");

@@ -127,23 +127,24 @@ test("the refusals a reading from this page can meet: cards where the card's rul
     assert.equal(view(outcome), `<section data-answer-state="refusal">${card}</section>`, scenario);
   }
 
-  // The two absences whose platform payload the card's contract refuses are said by their code, not as
-  // cards: the card requires every absence to name what would answer it (`what_would_answer`, from a
-  // closed vocabulary) and identifier_unknown to disclose the population searched, and the platform's
-  // payloads carry neither (no_version_for_date names the nearest earlier and later dates instead).
-  for (const [scenario, code, rule] of [
-    ["a work the index does not hold", "identifier_unknown", /population_disclosure/],
-    ["a date before the work's history", "no_version_for_date", /must say what would answer it/],
+  // The two absences the platform sends are cards now that its payloads carry the absence evidence
+  // (driver decision (a)): what would answer them, in the closed vocabulary, `asserts_absence_of_law:
+  // false`, and for identifier_unknown the population the index searched. The card says the absence
+  // note, the routes out and, for no_version_for_date, the date the held history begins.
+  for (const [scenario, code, shows] of [
+    ["a work the index does not hold", "identifier_unknown", ["This build&#x27;s Luxembourg index holds 1 Luxembourg work", "a corrected identifier"]],
+    ["a date before the work's history", "no_version_for_date", ["2024-02-01", "a new observation, if the publisher publishes this"]],
   ]) {
     const outcome = await loadLiveReading({ contract, fetchImpl: answering(200, "application/json", envelopeOf(scenario)).fetchImpl, request: REQUEST });
     assert.equal(outcome.state, "refusal", scenario);
     assert.equal(outcome.code, code);
-    assert.equal(outcome.card, false, `${code} is said by its code until the absence contract is settled`);
-    assert.match(outcome.sentence, rule);
-    assert.match(view(outcome), /^<section data-answer-state="refusal"><p role="status">/);
+    assert.equal(outcome.card, true, `${code} is a card: its payload carries the absence evidence`);
+    const card = renderToStaticMarkup(h(RefusalCard, { code: outcome.code, sentence: outcome.sentence, payload: outcome.payload }));
+    assert.equal(view(outcome), `<section data-answer-state="refusal">${card}</section>`);
+    for (const text of [...shows, "It is not evidence that the instrument or the law does not exist."]) {
+      assert.ok(card.includes(text), `${code}: the card shows "${text}"`);
+    }
   }
-  const early = await loadLiveReading({ contract, fetchImpl: answering(200, "application/json", envelopeOf("a date before the work's history")).fetchImpl, request: REQUEST });
-  assert.match(early.sentence, /The history this index holds for this work begins on 2024-02-01\.$/, "the date to ask again travels with the refusal (review of #777)");
 
   // The codes the fixture's envelopes do not reach, held to the payloads the platform sends for them.
   for (const code of ["ambiguous_version", "text_withheld", "text_not_available", "language_not_available"]) {

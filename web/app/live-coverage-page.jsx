@@ -4,12 +4,21 @@
 // preview pages the browser gates measure, because it is the one page whose content is not a
 // fixture: served beside the API on one origin, it shows that server's answer. The server render is
 // the loading state and `client-live-entry.jsx` hydrates the same tree, which then asks.
+//
+// Below the answer, the page carries the evaluation card (Decision 95, ruling 2), read by
+// `readEvaluationCard` and rendered by the server alone, outside the hydrated tree: it is the card the
+// build was given, not an answer of the server, so it needs no script and asks nothing. The build
+// gives it the card the platform renders (`schemas/v3-platform/evaluation-card.json`) unless it is
+// handed another, as a release build will be.
 
 import { Document } from './Document.jsx';
 import { LiveCoverage } from './LiveCoverage.jsx';
 import { renderHydratableDocument } from './render-document.mjs';
 import { skinFor } from '../scripts/shells.mjs';
+import { EvaluationCardView } from './EvaluationCardView.jsx';
+import { readEvaluationCard } from '../scripts/evaluation-card.mjs';
 import { contract } from '../../schemas/v3-platform/envelope-samples.json';
+import censusCard from '../../schemas/v3-platform/evaluation-card.json';
 
 /** The contract the page reads envelopes against, from the census the platform renders. */
 export const LIVE_CONTRACT = contract;
@@ -21,7 +30,11 @@ export function liveCoverageTree() {
   return <LiveCoverage contract={LIVE_CONTRACT} />;
 }
 
-export function renderLiveCoveragePage() {
+/** The card the page carries when the build is handed none: the one the platform renders. */
+export const CENSUS_EVALUATION_CARD = censusCard;
+
+export function renderLiveCoveragePage({ card = CENSUS_EVALUATION_CARD } = {}) {
+  const view = readEvaluationCard(card);
   return renderHydratableDocument(
     <Document
       state="live-coverage"
@@ -37,6 +50,7 @@ export function renderLiveCoveragePage() {
         server when the page loads. The request carries no query text.
       </p>
       <div id={LIVE_COVERAGE_ROOT}>{liveCoverageTree()}</div>
+      <EvaluationCardView view={view} />
       <script src="/client-live.js" defer />
     </Document>,
   );

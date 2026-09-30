@@ -270,7 +270,7 @@ public sealed class V3CorpusTimelineMountTests
             Assert.AreEqual(identifier,
                 envelope.Refusal.HelpfulPayload.GetProperty("requested_identifier").GetString());
             StringAssert.Contains(
-                envelope.Refusal.HelpfulPayload.GetProperty("what_would_answer").GetString(),
+                envelope.Refusal.HelpfulPayload.GetProperty("what_would_answer_detail").GetString(),
                 "Luxembourg work identifier");
         }
     }
