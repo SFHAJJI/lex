@@ -11,16 +11,19 @@
 //   digest, and each asset by name, size and SHA-256;
 // - `release-manifest.sig.json`: a signature over the release manifest's bytes.
 // Both signatures are the rehearsal identity's, one key for the run. Reading back trusts nothing the
-// directory says about itself: the key is the caller's, every asset is hashed again, the image is read
-// blob by blob, its signature is checked against the digest the archive gives, and the card is read by
-// the same rules the page applies.
+// directory says about itself: the key is the caller's; the directory, the version and the source the
+// manifest signs must name each other; every asset is hashed again; the image is read blob by blob and
+// its signature checked against the digest the archive gives; and the card must be the very card the
+// image serves at its route, and read by the same rules the page applies (review of #833: each was
+// checked alone, so a release could carry a card the image does not serve, or a version naming another
+// commit than the source it signs).
 
 import { createHash, createPublicKey, sign, verify } from "node:crypto";
 import { existsSync } from "node:fs";
 import { mkdir, readFile, readdir, writeFile } from "node:fs/promises";
-import { join } from "node:path";
-import { REHEARSAL_IDENTITY, readLayout, readOciImage, rehearsalSignatureFailures } from "./image-rehearsal.mjs";
-import { readEvaluationCard } from "./evaluation-card.mjs";
+import { basename, join } from "node:path";
+import { REHEARSAL_IDENTITY, layerTar, readLayout, readOciImage, readTar, rehearsalSignatureFailures } from "./image-rehearsal.mjs";
+import { CARD_ROUTE, readEvaluationCard } from "./evaluation-card.mjs";
 
 const sha256 = (bytes) => createHash("sha256").update(bytes).digest("hex");
 
@@ -98,6 +101,9 @@ export async function releaseFailures(directory, { publicKeyPem }) {
   const manifest = JSON.parse(manifestBytes.toString("utf8"));
   if (manifest.schema !== RELEASE_SCHEMA) failures.push(`the release manifest is not ${RELEASE_SCHEMA}`);
   if (manifest.rehearsal !== true || manifest.signer !== REHEARSAL_IDENTITY || signed.signer !== REHEARSAL_IDENTITY) failures.push("the release does not say it is the rehearsal's");
+  const named = manifest.source && Number.isInteger(manifest.source.epoch) ? releaseVersion(manifest.source) : null;
+  if (manifest.version !== named) failures.push(`the manifest's version ${manifest.version} is not the one its source names, ${named}`);
+  if (basename(directory) !== manifest.version) failures.push(`the release is published as ${basename(directory)}, not as its version ${manifest.version}`);
 
   const listed = new Map((manifest.assets ?? []).map((asset) => [asset.name, asset]));
   const present = new Set(await readdir(directory));
@@ -116,10 +122,16 @@ export async function releaseFailures(directory, { publicKeyPem }) {
 
   const archive = held.get(ASSETS.image);
   let manifestDigest = null;
+  let servedCard;
   if (archive) {
     try {
-      manifestDigest = readOciImage(readLayout(archive)).manifestDigest;
+      const image = readOciImage(readLayout(archive));
+      manifestDigest = image.manifestDigest;
       if (manifestDigest !== manifest.image?.manifest_digest) failures.push(`the image read back is ${manifestDigest}, not the ${manifest.image?.manifest_digest} the manifest names`);
+      // The card the image serves at its route: the live pages sit under app/v3-web in the app layer.
+      const app = image.layers.at(-1);
+      servedCard = app ? readTar(layerTar(app)).find((entry) => entry.path === `app/v3-web${CARD_ROUTE}`)?.bytes : undefined;
+      if (servedCard === undefined) failures.push(`the image serves no card: its app layer holds no app/v3-web${CARD_ROUTE}`);
     } catch (error) {
       failures.push(`the image does not read back: ${error.message}`);
     }
@@ -135,6 +147,7 @@ export async function releaseFailures(directory, { publicKeyPem }) {
   const card = held.get(ASSETS.card);
   if (card) {
     try { readEvaluationCard(JSON.parse(card.toString("utf8"))); } catch (error) { failures.push(`the evaluation card does not read: ${error.message}`); }
+    if (servedCard !== undefined && !servedCard.equals(card)) failures.push(`the release's card is not the card the image serves at ${CARD_ROUTE}`);
   }
   return failures;
 }

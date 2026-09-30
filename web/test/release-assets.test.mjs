@@ -7,7 +7,7 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
@@ -20,9 +20,10 @@ const sha256 = (bytes) => createHash("sha256").update(bytes).digest("hex");
 const CARD = readFileSync(new URL("../../schemas/v3-platform/evaluation-card.json", import.meta.url));
 const SOURCE = { epoch: 1790799760, from: "commit", commit: "23af798d9c78602726280978edcedf07f9408e98", clean: true };
 
-/** A small image layout archive and its manifest digest. */
-function imageArchive(content = "MZ the api") {
-  const layer = writeTar([{ path: "app/Lex.V3.Api.dll", type: "file", mode: 0o644, uid: 0, gid: 0, bytes: Buffer.from(content) }], { mtime: SOURCE.epoch });
+/** A small image layout archive and its manifest digest: the API and, unless `servedCard` is null, the card at its route. */
+function imageArchive(content = "MZ the api", servedCard = CARD) {
+  const file = (path, bytes) => ({ path, type: "file", mode: 0o644, uid: 0, gid: 0, bytes });
+  const layer = writeTar([file("app/Lex.V3.Api.dll", Buffer.from(content)), ...(servedCard === null ? [] : [file("app/v3-web/evaluation-card.json", servedCard)])], { mtime: SOURCE.epoch });
   const config = Buffer.from(JSON.stringify({ architecture: "amd64", os: "linux", rootfs: { type: "layers", diff_ids: [`sha256:${sha256(layer)}`] } }));
   const manifest = Buffer.from(JSON.stringify({
     schemaVersion: 2,
@@ -36,10 +37,10 @@ function imageArchive(content = "MZ the api") {
 }
 
 /** Publishes a release into a fresh directory; `change` may alter what is published. Answers where, and the key. */
-async function published(change = (release) => release) {
+async function published(change = (release) => release, image = imageArchive()) {
   const root = await mkdtemp(join(tmpdir(), "lex-release-"));
   const key = rehearsalKey();
-  const { archive, manifestDigest } = imageArchive();
+  const { archive, manifestDigest } = image;
   const signed = signRehearsal({ manifestDigest, reference: "lex-v3-rehearsal:rehearsal", key });
   const release = change({
     version: releaseVersion(SOURCE), source: SOURCE, manifestDigest, corpusSha256: "c".repeat(64), key,
@@ -121,5 +122,34 @@ test("the image must be the one the manifest and its signature name, and the car
       "a card the page could not print");
   } finally {
     for (const one of [wrongDigest, otherSignature, badCard]) await rm(one.root, { recursive: true, force: true });
+  }
+});
+
+test("the release's card must be the card the image serves at its route (review of #833)", async () => {
+  const otherCard = Buffer.from(CARD.toString("utf8").replace(/"target": "[^"]*"/, "\"target\": \"A different card than the image serves\""));
+  assert.notDeepEqual(otherCard, CARD);
+  const imageServesAnother = await published(undefined, imageArchive("MZ the api", otherCard));
+  const imageServesNone = await published(undefined, imageArchive("MZ the api", null));
+  try {
+    assert.deepEqual(await releaseFailures(imageServesAnother.directory, { publicKeyPem: imageServesAnother.key.publicKeyPem }), ["the release's card is not the card the image serves at /evaluation-card.json"],
+      "the reviewer's reproduction: a valid card beside an image that serves another");
+    assert.deepEqual(await releaseFailures(imageServesNone.directory, { publicKeyPem: imageServesNone.key.publicKeyPem }), ["the image serves no card: its app layer holds no app/v3-web/evaluation-card.json"]);
+  } finally {
+    for (const one of [imageServesAnother, imageServesNone]) await rm(one.root, { recursive: true, force: true });
+  }
+});
+
+test("the directory, the version and the source the manifest signs must name each other (review of #833)", async () => {
+  const otherCommit = await published((release) => ({ ...release, source: { ...SOURCE, commit: "0".repeat(40) } }));
+  const moved = await published();
+  try {
+    assert.deepEqual(await releaseFailures(otherCommit.directory, { publicKeyPem: otherCommit.key.publicKeyPem }),
+      [`the manifest's version ${releaseVersion(SOURCE)} is not the one its source names, ${releaseVersion({ ...SOURCE, commit: "0".repeat(40) })}`],
+      "the reviewer's reproduction: a version naming one commit over a signed source naming another");
+    const elsewhere = join(moved.root, "v3-rehearsal-20260101T000000Z-000000000000");
+    await rename(moved.directory, elsewhere);
+    assert.deepEqual(await releaseFailures(elsewhere, { publicKeyPem: moved.key.publicKeyPem }), [`the release is published as v3-rehearsal-20260101T000000Z-000000000000, not as its version ${releaseVersion(SOURCE)}`]);
+  } finally {
+    for (const one of [otherCommit, moved]) await rm(one.root, { recursive: true, force: true });
   }
 });

@@ -517,7 +517,7 @@ CI evidence are recorded in the pull request before merge.
   (`eng/test-fast.ps1`): 3,077 tests, 3,076 pass, 1 skipped (the review of PR #828). Ingest suite: green on CI for PR #760
   (the CI `dotnet` job runs the whole solution on every pull request, about 7 min on the runner;
   green for PR #831);
-  locally about 15 min. 976 web tests pass. The web job's "browser debugger never answered" failures
+  locally about 15 min. 978 web tests pass. The web job's "browser debugger never answered" failures
   (keyboard-walk, and paint-check since #811) are fixed by PR #822: each browser binds its own
   debugging port (`launchBrowser`) instead of a random one another browser starting at the same
   moment could hold.
@@ -745,7 +745,7 @@ schema's `parameters` shape, and whose call runs the same dispatch the REST rout
 endpoint test proves it for all twenty-three. The launch-contract line "REST and MCP derive identical
 envelopes from the registry" is the owner's to tick.
 
-Web: 41 React components, 976 tests. Preview screens render fixtures. The V3 Luxembourg search
+Web: 41 React components, 978 tests. Preview screens render fixtures. The V3 Luxembourg search
 answer has a reader (PR #771). The answer census now samples `search` five ways from the real handler:
 - a phrase with 4 strict hits and 1 relaxed hit;
 - the same phrase one hit per page, with its cursor;
@@ -1467,7 +1467,11 @@ beside the release assets, and 36 s6's card for machines at a stable route.
   - every asset is hashed again: nothing unlisted, nothing missing;
   - the image is read blob by blob and must be the digest the manifest names, and its signature must
     name that digest;
-  - the card must read by the page's rules.
+  - the card must be the very card the image serves (`app/v3-web/evaluation-card.json` in its app
+    layer), and read by the page's rules;
+  - the directory, the manifest's version and the source it signs must name each other.
+  The review of #833 found the last two were checked alone. A release could carry a valid card the
+  image does not serve, or a version naming another commit than its signed source.
 - On the real bounded mount: release `v3-rehearsal-20260930T213833Z-23d939b6e63c`, six files, read
   back with no failure, after the image was reproduced, V2 found absent, the 8 probes passed and the
   image served the release's card at `/evaluation-card.json` (200, `application/json`, the same
