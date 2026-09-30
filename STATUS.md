@@ -21,6 +21,39 @@ and cannot label an unenumerated expression ineligible. The older all-language d
 Main-body processing preserves the typed source outcome and maps it to package-not-acquired.
 French bodies are the following slice; this change does not claim they are already acquired.
 
+## Luxembourg COUNT follow-up (Codex, 2026-09-30)
+
+The first whole-population preflight ended at 12:15 UTC with exit 3, using 53/100 wire
+requests. Vocabulary was delivered; the S/A/G root COUNTs returned HTTP 500 timeout or
+Virtuoso SR319 row-width errors. Custody remains in
+`C:\lex-v3\lu-population-preflight-20260930-1`; no population completeness is claimed.
+Compact COUNT projections retain the distinct RDF tuples and identical traversal/range filters,
+while omitting redundant projected strings. A six-request diagnostic observed S=1,986,924 and
+G=221,852; A still returned a retained timeout. These are observations for sizing.
+
+Reversible driver decision: split only explicit retained initial COUNT capacity errors (HTTP 500
+with the observed timeout JSON or Virtuoso SR319 prefix), alongside saturated counts. Every child
+still needs both enumeration passes and a tiled cover proof. Other statuses, malformed errors and
+challenges stop the cover. The shared wire ceiling includes failed parent attempts. An optional
+smaller leaf target supports bounded live verification; the publisher threshold remains 1,000,000.
+Single-partition callers also report these initial COUNT capacity errors as PartitionRequired;
+they still refuse unless a supplied or automatic cover proves every leaf. Compact counts do not
+remove the page projection: a page containing an over-wide row can still fail with SR319. The
+fresh preflight will retain and inspect page failures before sizing a complete run.
+The bounded a439 S cover completed at 13:00:09 UTC: 12 proven leaves (including empty ranges),
+10 delivered rows and 10 rows reopened from custody, using 68/150 wire requests in 30 minutes.
+Its five-row target exercised automatic splitting and the existing leaf-tiling proof; it proves
+only that bounded S range. Evidence: `C:\lex-v3\lu-cover-probe-20260930-1\summary.json`,
+`routes-final.json`, `counts-final.json`, and `runtime-audit.json`. The lexical strategy's empty
+leaves cost requests too; full Luxembourg sizing must include this measured overhead. The fresh
+whole-population preflight follows merge; no production credentials are used.
+
+Validation: solution build passed with zero warnings/errors; fast lane 3,066 passed and one
+Windows symlink skip. Affected ingest/census and request-policy tests passed: 840 passed, 12
+opt-in live skips. Initial CI found only the two expected identity/surface pin changes; both were
+regenerated or transcribed from the observed candidate and corrected. Review and final exact-head
+CI evidence are recorded in the pull request before merge.
+
 ## Heads
 
 - `v3/integration`: `840b6b2e` (2026-09-30, PR #800 merged). Build 45 s. Fast lane

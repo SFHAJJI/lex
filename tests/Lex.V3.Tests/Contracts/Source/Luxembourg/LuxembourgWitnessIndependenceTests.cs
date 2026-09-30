@@ -70,12 +70,19 @@ public sealed class LuxembourgWitnessIndependenceTests
             Assert.IsTrue(count.EndsWith(" } }", StringComparison.Ordinal));
 
             // Strip the wrapper and the inner SELECT's own closing brace. What is left is the
-            // projection, the key variables and the range selection, verbatim.
+            // range selection, verbatim. COUNT may omit deterministic projected keys.
             var inner = count[Wrapper.Length..^" } }".Length];
             Assert.IsTrue(
                 inner.EndsWith(" }", StringComparison.Ordinal),
                 $"{template.TemplateId}: the inner select is not brace-closed as expected");
-            var sharedSelection = inner[..^" }".Length];
+            Assert.IsTrue(inner.StartsWith("SELECT DISTINCT ", StringComparison.Ordinal));
+            Assert.IsTrue(page.StartsWith("SELECT DISTINCT ", StringComparison.Ordinal));
+            const string Where = " WHERE { ";
+            var countWhere = inner.IndexOf(Where, StringComparison.Ordinal);
+            var pageWhere = page.IndexOf(Where, StringComparison.Ordinal);
+            Assert.IsTrue(countWhere > 0 && pageWhere > 0);
+            var sharedSelection = inner[countWhere..^" }".Length];
+            page = page[pageWhere..];
 
             // And that is character for character how the page query starts. The page then adds
             // the cursor and the ordering; it selects from the same graph pattern.

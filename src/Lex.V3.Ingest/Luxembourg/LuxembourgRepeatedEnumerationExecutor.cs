@@ -539,7 +539,8 @@ public sealed class LuxembourgRepeatedEnumerationExecutor
         RoutedHttpAcquisitionSession runner,
         SourceArtifactRef? sharedProfileRef,
         WireRequestBudget wireBudget,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        long maximumLeafRows = long.MaxValue)
     {
         ArgumentNullException.ThrowIfNull(wireBudget);
 
@@ -600,7 +601,7 @@ public sealed class LuxembourgRepeatedEnumerationExecutor
                 var passResult = await RunPassAsync(
                         runner, request, profile, pass, budget, executorWrittenMembership,
                         () => productRequestCount, count => productRequestCount = count,
-                        wireBudget, cancellationToken)
+                        wireBudget, cancellationToken, maximumLeafRows)
                     .ConfigureAwait(false);
                 if (passResult.Refusal is not null)
                 {
@@ -863,7 +864,8 @@ public sealed class LuxembourgRepeatedEnumerationExecutor
             adaptive: false, cancellationToken).ConfigureAwait(false)).Results;
 
     /// <summary>
-    /// Splits selections at or above the publisher ceiling until every leaf can be enumerated
+    /// Splits selections above the requested leaf size, at the publisher ceiling, or after a
+    /// retained initial COUNT capacity failure until every leaf can be enumerated
     /// twice. All attempts, including saturated ancestors and empty leaves, use one wire budget
     /// and one acquisition session. This returns evidence; the caller must still prove the cover.
     /// </summary>
@@ -872,11 +874,13 @@ public sealed class LuxembourgRepeatedEnumerationExecutor
         LuxembourgPartitionRunRequest rootRequest,
         BoundMachineRequest sourceWitness,
         WireRequestBudget wireBudget,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        long maximumLeafRows = long.MaxValue)
     {
         ArgumentNullException.ThrowIfNull(rootRequest);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(maximumLeafRows);
         return RunCoverCoreAsync(rootRequest, LuxembourgPartitionChain.Root(rootRequest.Partition),
-            sourceWitness, wireBudget, adaptive: true, cancellationToken);
+            sourceWitness, wireBudget, adaptive: true, cancellationToken, maximumLeafRows);
     }
 
     private async Task<(LuxembourgPartitionChain Chain, IReadOnlyList<LuxembourgEnumerationRunResult> Results,
@@ -886,7 +890,8 @@ public sealed class LuxembourgRepeatedEnumerationExecutor
         BoundMachineRequest sourceWitness,
         WireRequestBudget wireBudget,
         bool adaptive,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        long maximumLeafRows = long.MaxValue)
     {
         ArgumentNullException.ThrowIfNull(rootRequest);
         ArgumentNullException.ThrowIfNull(chain);
@@ -952,7 +957,7 @@ public sealed class LuxembourgRepeatedEnumerationExecutor
                 var leaf = chain.Leaves[index];
                 var leafRequest = rootRequest with { Partition = leaf };
                 var result = await RunPartitionOnSessionAsync(
-                        leafRequest, runner, sharedProfileRef, wireBudget, cancellationToken)
+                        leafRequest, runner, sharedProfileRef, wireBudget, cancellationToken, maximumLeafRows)
                     .ConfigureAwait(false);
                 productRequests = checked(productRequests + result.ProductRequestCount);
                 if (adaptive && result.Refusal?.Code == LuxembourgEnumerationRefusal.PartitionRequired &&
@@ -996,6 +1001,30 @@ public sealed class LuxembourgRepeatedEnumerationExecutor
         }
     }
 
+    private async Task<bool> IsCountCapacityFailureAsync(
+        LuxembourgEnumerationRefusalDetail refusal, CancellationToken cancellationToken)
+    {
+        if (refusal.Code != LuxembourgEnumerationRefusal.StatusNotAdmitted ||
+            refusal.TerminalStatus != 500 || refusal.ResponseBodySha256 is not { } digest)
+            return false;
+
+        var bytes = await CustodyRestore.ReadByDigestCheckedAsync(_custodyStore, digest, cancellationToken)
+            .ConfigureAwait(false);
+        var text = System.Text.Encoding.UTF8.GetString(bytes.Span);
+        if (text.StartsWith("Virtuoso 22026 Error SR319: Max row length is exceeded", StringComparison.Ordinal))
+            return true;
+        try
+        {
+            using var json = System.Text.Json.JsonDocument.Parse(bytes);
+            var root = json.RootElement;
+            return root.ValueKind == System.Text.Json.JsonValueKind.Object &&
+                root.TryGetProperty("meta", out var meta) && meta.ValueKind == System.Text.Json.JsonValueKind.String && meta.ValueEquals("error") &&
+                root.TryGetProperty("title", out var title) && title.ValueKind == System.Text.Json.JsonValueKind.String && title.ValueEquals("Read timed out") &&
+                root.TryGetProperty("code", out var code) && code.ValueKind == System.Text.Json.JsonValueKind.String && code.ValueEquals("error.unknown");
+        }
+        catch (System.Text.Json.JsonException) { return false; }
+    }
+
     private sealed record PassOutcome(LuxembourgDeliveryPass? Pass, LuxembourgEnumerationRefusalDetail? Refusal);
 
     private async Task<PassOutcome> RunPassAsync(
@@ -1008,7 +1037,8 @@ public sealed class LuxembourgRepeatedEnumerationExecutor
         Func<int> currentCount,
         Action<int> setCount,
         WireRequestBudget wireBudget,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        long maximumLeafRows)
     {
         var countBound = request.InvariantPlan.BindCount(
             request.InvariantPlanResourceId, NewUrn(), NewUrn(), request.SetId, pass, request.Partition,
@@ -1020,6 +1050,18 @@ public sealed class LuxembourgRepeatedEnumerationExecutor
             .ConfigureAwait(false));
         if (countOutcome.Refusal is not null)
         {
+            // A retained, explicit query-capacity failure is a reason to subdivide, never
+            // evidence of any rows. Other HTTP errors and challenges remain hard refusals.
+            if (pass == LuxembourgQueryPass.Pass1 &&
+                await IsCountCapacityFailureAsync(countOutcome.Refusal, cancellationToken).ConfigureAwait(false))
+            {
+                var failure = countOutcome.Refusal;
+                return new PassOutcome(null, new LuxembourgEnumerationRefusalDetail(
+                    LuxembourgEnumerationRefusal.PartitionRequired, failure.RequestOrdinal,
+                    failure.AttemptOrdinalReached, failure.TerminalStatus, failure.ResponseBodySha256,
+                    failure.ObservedMediaType, null, failure.UnenforcedDigests,
+                    "retained initial COUNT reports publisher query capacity failure; smaller proven leaves required"));
+            }
             return new PassOutcome(null, countOutcome.Refusal);
         }
 
@@ -1047,7 +1089,7 @@ public sealed class LuxembourgRepeatedEnumerationExecutor
         }
 
         if (EnumerationDeliveryComparison.AssessThreshold(selected, profile) ==
-            RepeatedEnumerationThresholdAssessment.PartitionRequired)
+            RepeatedEnumerationThresholdAssessment.PartitionRequired || selected > maximumLeafRows)
         {
             return new PassOutcome(
                 null,
