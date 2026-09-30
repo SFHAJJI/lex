@@ -15,8 +15,9 @@ namespace Lex.V3.Ingest.Tests;
 /// <summary>
 /// The launch contract's first promise to the reader: "verify resolves every citation the product emitted". Every
 /// answer the live screens read (the operations the answer census samples, driven the same way on the same two fixture
-/// mounts) is walked whole, every hash-pinned permalink it carries is collected, wherever it sits, and each is asked of
-/// <c>verify</c> on the mount that emitted it. Each must answer <c>digest_matches</c> for the state its digest names,
+/// mounts) is walked whole. Every citation is taken by its role (a <c>permalink</c> or <c>*_permalink</c> property, a
+/// <c>resolve.identifier</c>) and must be a hash-pinned permalink, and any other permalink is taken wherever it sits; each
+/// is asked of <c>verify</c> on the mount that emitted it. Each must answer <c>digest_matches</c> for the state its digest names,
 /// and a permalink with an article fragment must name that article. A citation the product prints and cannot vouch for
 /// is the failure this exists to catch.
 /// </summary>
@@ -56,9 +57,10 @@ public sealed class V3CitationVerificationTests
         async Task CollectAsync(V3CorpusMount from, string operation, object request)
         {
             var answer = await AnswerAsync(from, operation, request);
-            foreach (var permalink in PermalinksIn(answer))
+            foreach (var (path, value, _) in CitationsIn(answer))
             {
-                emitted.Add((from, operation, permalink));
+                Assert.IsTrue(Permalink.IsMatch(value), $"{operation} emitted {value} at {path} as a citation, and it is not a hash-pinned permalink");
+                emitted.Add((from, operation, value));
             }
         }
 
@@ -97,36 +99,84 @@ public sealed class V3CitationVerificationTests
     }
 
     [TestMethod]
-    public void TheWalkFindsAPermalinkWhereverItSitsAndNothingThatIsNotOne()
+    public void TheWalkTakesEveryCitationByItsRoleAndAnyOtherPermalinkWhereverItSits()
     {
         var digest = new string('a', 64);
         var node = JsonNode.Parse($$"""
             {
               "permalink": "/lu-legilux/loi-x/2024-02-01--{{digest}}",
               "rows": [{ "nested": { "article_permalink": "/lu-legilux/loi-x/2024-02-01--{{digest}}#art_1" } }],
+              "broken": { "article_permalink": "/lu-legilux/loi-x/2024-02-01--{{digest}}?broken#art_2" },
+              "hits": [{ "resolve": { "identifier": "/lu-legilux/loi-x/2024-02-01" } }],
+              "baseline": { "permalink": null },
               "candidates": ["/lu-legilux/loi-x/2024-02-01--{{digest}}", "/lu-legilux/loi-x/2024-02-01"],
               "note": "a sentence mentioning /lu-legilux/loi-x/2024-02-01--{{digest}} is prose, not a citation",
               "short": "/lu-legilux/loi-x/2024-02-01--abc"
             }
             """)!;
+        var found = CitationsIn(node).ToArray();
         CollectionAssert.AreEquivalent(
             new[]
             {
-                $"/lu-legilux/loi-x/2024-02-01--{digest}",
-                $"/lu-legilux/loi-x/2024-02-01--{digest}#art_1",
-                $"/lu-legilux/loi-x/2024-02-01--{digest}",
+                ($"$.permalink", $"/lu-legilux/loi-x/2024-02-01--{digest}", true),
+                ($"$.rows[0].nested.article_permalink", $"/lu-legilux/loi-x/2024-02-01--{digest}#art_1", true),
+                ($"$.broken.article_permalink", $"/lu-legilux/loi-x/2024-02-01--{digest}?broken#art_2", true),
+                ($"$.hits[0].resolve.identifier", "/lu-legilux/loi-x/2024-02-01", true),
+                ($"$.candidates[0]", $"/lu-legilux/loi-x/2024-02-01--{digest}", false),
             },
-            PermalinksIn(node).ToArray());
+            found,
+            "a citation is taken by its role whatever it holds, so a malformed one is a finding rather than a skip (review of #796)");
+        Assert.IsFalse(Permalink.IsMatch(found.Single(static entry => entry.Path == "$.broken.article_permalink").Value));
     }
 
-    /// <summary>Every string value in the answer that is exactly a hash-pinned permalink, in document order.</summary>
-    private static IEnumerable<string> PermalinksIn(JsonNode? node) => node switch
+    /// <summary>
+    /// Every citation the answer carries, with where it sits. By role: every value of a property named <c>permalink</c>
+    /// or ending <c>_permalink</c>, and every <c>resolve.identifier</c> (the state a search hit or a radar row sends a
+    /// reader to), whatever it holds, so a malformed citation is caught rather than skipped (review of #796). And any
+    /// other string that is exactly a hash-pinned permalink, such as a candidate list.
+    /// </summary>
+    private static IEnumerable<(string Path, string Value, bool ByRole)> CitationsIn(JsonNode? node, string path = "$")
     {
-        JsonObject value => value.SelectMany(static property => PermalinksIn(property.Value)),
-        JsonArray value => value.SelectMany(PermalinksIn),
-        JsonValue value when value.TryGetValue<string>(out var text) && Permalink.IsMatch(text) => [text],
-        _ => [],
-    };
+        switch (node)
+        {
+            case JsonObject value:
+                foreach (var (key, child) in value)
+                {
+                    var at = $"{path}.{key}";
+                    var byRole = key == "permalink" || key.EndsWith("_permalink", StringComparison.Ordinal)
+                        || (key == "identifier" && path.EndsWith(".resolve", StringComparison.Ordinal));
+                    if (byRole)
+                    {
+                        if (child is not null)
+                        {
+                            yield return (at, child.GetValueKind() == JsonValueKind.String ? child.GetValue<string>() : child.ToJsonString(), true);
+                        }
+
+                        continue;
+                    }
+
+                    foreach (var found in CitationsIn(child, at))
+                    {
+                        yield return found;
+                    }
+                }
+
+                break;
+            case JsonArray value:
+                for (var index = 0; index < value.Count; index++)
+                {
+                    foreach (var found in CitationsIn(value[index], $"{path}[{index}]"))
+                    {
+                        yield return found;
+                    }
+                }
+
+                break;
+            case JsonValue value when value.TryGetValue<string>(out var text) && Permalink.IsMatch(text):
+                yield return (path, text, false);
+                break;
+        }
+    }
 
     private static async Task<JsonNode> AnswerAsync(V3CorpusMount mount, string operation, object parameters)
     {

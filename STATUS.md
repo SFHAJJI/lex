@@ -529,11 +529,12 @@ Every citation the served answers emit verifies (PR #796, the launch contract's 
 "verify resolves every citation the product emitted"). `V3CitationVerificationTests` drives the
 operations the live screens read on the answer census's two fixture mounts (search, dossier, as_of,
 evidence_bundle, provenance, status_on, article_history, diff and changes_in_period, the last two on
-both), walks each answer whole for every string that is exactly a hash-pinned permalink, wherever it
-sits, and asks `verify` for each on the mount that emitted it: each must answer `digest_matches` for
-the state its digest names, and an article permalink must name its article. The walk is held to find
-a permalink in every screen's answer, at least one article permalink, and nothing that is only prose
-or an unpinned coordinate. The journey's own pages add the browser half when the journey runs next.
+both), walks each answer whole and takes every citation by its role (a `permalink` or `*_permalink`
+property, a `resolve.identifier`), which must be a hash-pinned permalink (a malformed one fails,
+review of #796), and any other permalink wherever it sits, and asks `verify` for each on the mount
+that emitted it: each must answer `digest_matches` for the state its digest names, and an article
+permalink must name its article. The walk is held to find a permalink in every screen's answer, at
+least one article permalink, and nothing that is only prose. The journey's own pages add the browser half when the journey runs next.
 
 The live export composer and its journey step (PR #789), the eighth screen. `dist-live/export.html`
 has its own bundle `client-live-export.js`.
