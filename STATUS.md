@@ -3,6 +3,20 @@
 Updated 2026-09-30 by the driver. This file replaces the issue-comment ledgers. It is rewritten in
 every pull request that changes what is served, what is next or what is blocked.
 
+## EU Formex language scope (Codex, 2026-09-30)
+
+Reversible driver decision under standing order section 5: enumerate Formex manifestations for
+English and French expressions only. Every other observed expression remains in the reconciled
+population as `not_enumerated_language_out_of_scope`, with eligibility explicitly unknown and no
+manifestation or package request. This avoids the estimated 94,000-request all-language sweep;
+actual EN/FRA counts and request costs still need measurement before the full EU run is sized.
+
+The guarded eligibility door requires proven EN/FRA enumerations and records the other expressions
+separately. Closure still requires one outcome per expression, rejects missing/duplicate outcomes,
+and cannot label an unenumerated expression ineligible. The older all-language door remains strict.
+Main-body processing preserves the typed source outcome and maps it to package-not-acquired.
+French bodies are the following slice; this change does not claim they are already acquired.
+
 ## Heads
 
 - `v3/integration`: `ce2d65ad` (2026-09-30, PR #794 merged). Build 45 s. Fast lane

@@ -121,11 +121,11 @@ public sealed class ClosedVocabularyCensusTests
                     + "AnnexXhtmlNotInventoried, AnnexPdfNotServed, AnnexEvidenceNotBound, "
                     + "AnnexBodyNotClassified",
                 "Lex.V3.Ingest.Europe.EuFormexPackageOutcomeKind: NotEligible, Acquired, "
-                    + "Unavailable, Refused, NotAcquired, RouteRefused, PackageRejected",
+                    + "Unavailable, Refused, NotAcquired, RouteRefused, PackageRejected, NotEnumeratedLanguageOutOfScope",
                 "Lex.V3.Ingest.Europe.EuFormexPackageOutcomePopulationRefusal: None, "
                     + "OutcomeOutsideExpressionPopulation, ExpressionContentDisagrees, "
                     + "ExpressionDisposedTwice, OutcomeMissing, EligibleExpressionMarkedIneligible, "
-                    + "IneligibleExpressionHasPackageOutcome",
+                    + "IneligibleExpressionHasPackageOutcome, EnumerationDispositionDisagrees",
                 "Lex.V3.Ingest.Europe.EuFormexPackagePopulationRefusal: None, RunNotComplete, "
                     + "ExpressionSelectionInvalid, EligibilityRefused, OutcomePopulationRefused, "
                     + "ReconciliationRefused",

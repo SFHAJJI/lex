@@ -107,27 +107,54 @@ public enum EuFormexEligibilityPopulationRefusal
 }
 
 /// <summary>
-/// A proof-complete eligibility projection over every expression in one proven expression production.
+/// Eligibility evidence and explicit language exclusions over one proven expression production.
 /// </summary>
 public sealed class EuFormexEligibilityPopulation
 {
     private EuFormexEligibilityPopulation(
         EuLanguageScopedExpressionProductionResult expressionProduction,
         IReadOnlyList<EuFormexManifestationEnumerationResult> enumerations,
-        IReadOnlyList<LanguageScopedExpression> eligibleExpressions)
+        IReadOnlyList<LanguageScopedExpression> eligibleExpressions,
+        IReadOnlyList<LanguageScopedExpression> notEnumeratedExpressions)
     {
         ExpressionProduction = expressionProduction;
         Enumerations = Array.AsReadOnly(enumerations.ToArray());
         EligibleExpressions = Array.AsReadOnly(eligibleExpressions.ToArray());
+        NotEnumeratedExpressions = Array.AsReadOnly(notEnumeratedExpressions.ToArray());
     }
 
     public EuLanguageScopedExpressionProductionResult ExpressionProduction { get; }
     public IReadOnlyList<EuFormexManifestationEnumerationResult> Enumerations { get; }
     public IReadOnlyList<LanguageScopedExpression> EligibleExpressions { get; }
 
+    /// <summary>Non-EN/FRA expressions whose Formex eligibility was not examined.</summary>
+    public IReadOnlyList<LanguageScopedExpression> NotEnumeratedExpressions { get; }
+
+    internal static bool IsServedLanguage(LanguageScopedExpression expression) => expression.OfficialLanguage is
+        "http://publications.europa.eu/resource/authority/language/ENG" or
+        "http://publications.europa.eu/resource/authority/language/FRA";
+
+    /// <summary>Requires proven enumeration for every expression, in every language.</summary>
     public static EuFormexEligibilityPopulation? TryCreate(
         EuLanguageScopedExpressionProductionResult expressionProduction,
         IReadOnlyList<EuFormexManifestationEnumerationResult> enumerations,
+        out EuFormexEligibilityPopulationRefusal refusal,
+        out string? detail) => TryCreateCore(expressionProduction, enumerations, true, out refusal, out detail);
+
+    /// <summary>
+    /// Requires proven enumeration for English and French. Missing enumerations for other
+    /// languages remain explicitly unexamined, never a claim of Formex absence.
+    /// </summary>
+    public static EuFormexEligibilityPopulation? TryCreateForServedLanguages(
+        EuLanguageScopedExpressionProductionResult expressionProduction,
+        IReadOnlyList<EuFormexManifestationEnumerationResult> enumerations,
+        out EuFormexEligibilityPopulationRefusal refusal,
+        out string? detail) => TryCreateCore(expressionProduction, enumerations, false, out refusal, out detail);
+
+    private static EuFormexEligibilityPopulation? TryCreateCore(
+        EuLanguageScopedExpressionProductionResult expressionProduction,
+        IReadOnlyList<EuFormexManifestationEnumerationResult> enumerations,
+        bool requireAllLanguages,
         out EuFormexEligibilityPopulationRefusal refusal,
         out string? detail)
     {
@@ -174,7 +201,8 @@ public sealed class EuFormexEligibilityPopulation
             }
         }
 
-        var missing = expressions.FirstOrDefault(value => !delivered.ContainsKey(value.Identity));
+        var missing = expressions.FirstOrDefault(value => !delivered.ContainsKey(value.Identity)
+            && (requireAllLanguages || IsServedLanguage(value)));
         if (missing is not null)
         {
             refusal = EuFormexEligibilityPopulationRefusal.ExpressionEnumerationMissing;
@@ -182,11 +210,14 @@ public sealed class EuFormexEligibilityPopulation
             return null;
         }
 
-        var ordered = expressions.Select(value => delivered[value.Identity]).ToArray();
+        var ordered = expressions.Where(value => delivered.ContainsKey(value.Identity))
+            .Select(value => delivered[value.Identity]).ToArray();
         return new EuFormexEligibilityPopulation(
             expressionProduction,
             ordered,
-            expressions.Where(value => delivered[value.Identity].IsFormexEligible).ToArray());
+            expressions.Where(value => delivered.TryGetValue(value.Identity, out var enumeration)
+                && enumeration.IsFormexEligible).ToArray(),
+            expressions.Where(value => !delivered.ContainsKey(value.Identity)).ToArray());
     }
 }
 

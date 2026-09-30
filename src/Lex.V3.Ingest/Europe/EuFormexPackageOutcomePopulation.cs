@@ -5,8 +5,8 @@ using Lex.V3.Contracts.Source.Europe;
 namespace Lex.V3.Ingest.Europe;
 
 /// <summary>
-/// The three package-acquisition terminals, plus the explicit disposition for a proven ineligible
-/// expression that must remain visible in the whole expression population.
+/// Package-acquisition terminals, proven ineligibility, and an explicit unexamined-language
+/// disposition. Every observed expression remains visible in the population.
 /// </summary>
 public enum EuFormexPackageOutcomeKind
 {
@@ -42,6 +42,10 @@ public enum EuFormexPackageOutcomeKind
     /// <summary>The office answered 200 and the retained bytes are not an admissible Formex package (<see cref="EuFormexAnnexInventoryRefusal"/>).</summary>
     [JsonStringEnumMemberName("package_rejected")]
     PackageRejected = 7,
+
+    /// <summary>Outside English/French body scope; no manifestation enumeration or eligibility claim.</summary>
+    [JsonStringEnumMemberName("not_enumerated_language_out_of_scope")]
+    NotEnumeratedLanguageOutOfScope = 8,
 }
 
 /// <summary>
@@ -94,6 +98,16 @@ public sealed class EuFormexPackageOutcome
 
     /// <summary>The inventory producer's refusal of a <see cref="EuFormexPackageOutcomeKind.PackageRejected"/> outcome; <c>None</c> otherwise.</summary>
     public EuFormexAnnexInventoryRefusal PackageRefusal { get; }
+
+    public static EuFormexPackageOutcome NotEnumeratedLanguageOutOfScope(LanguageScopedExpression expression)
+    {
+        ArgumentNullException.ThrowIfNull(expression);
+        if (EuFormexEligibilityPopulation.IsServedLanguage(expression))
+            throw new ArgumentException("English and French require manifestation enumeration.", nameof(expression));
+        return new EuFormexPackageOutcome(expression, EuFormexPackageOutcomeKind.NotEnumeratedLanguageOutOfScope,
+            null, null, null, null,
+            "Language outside English/French body scope; Formex manifestations were not enumerated and eligibility is unknown.");
+    }
 
     public static EuFormexPackageOutcome NotEligible(LanguageScopedExpression expression)
     {
@@ -238,10 +252,13 @@ public enum EuFormexPackageOutcomePopulationRefusal
 
     [JsonStringEnumMemberName("ineligible_expression_has_package_outcome")]
     IneligibleExpressionHasPackageOutcome = 6,
+
+    [JsonStringEnumMemberName("enumeration_disposition_disagrees")]
+    EnumerationDispositionDisagrees = 7,
 }
 
 /// <summary>
-/// The total package-acquisition disposition over one proof-complete Formex eligibility population.
+/// The total disposition over one proven expression population, including any unexamined languages.
 /// </summary>
 public sealed class EuFormexPackageOutcomePopulation
 {
@@ -256,9 +273,12 @@ public sealed class EuFormexPackageOutcomePopulation
     public EuFormexEligibilityPopulation Eligibility { get; }
 
     /// <summary>
-    /// Exactly one disposition per enumerated expression, in proven expression-population order.
+    /// Exactly one disposition per run-observed expression, in proven expression-population order.
     /// </summary>
     public IReadOnlyList<EuFormexPackageOutcome> Outcomes { get; }
+
+    public int NotEnumeratedLanguageOutOfScopeCount => Outcomes.Count(static outcome =>
+        outcome.Kind == EuFormexPackageOutcomeKind.NotEnumeratedLanguageOutOfScope);
 
     public int NotEligibleCount => Outcomes.Count(static outcome =>
         outcome.Kind == EuFormexPackageOutcomeKind.NotEligible);
@@ -292,13 +312,15 @@ public sealed class EuFormexPackageOutcomePopulation
         refusal = EuFormexPackageOutcomePopulationRefusal.None;
         detail = null;
 
-        var expected = eligibility.Enumerations.ToDictionary(
-            static enumeration => enumeration.ExpressionIdentity);
+        var expressions = eligibility.ExpressionProduction.Derivation!.Expressions;
+        var expected = expressions.ToDictionary(static expression => expression.Identity);
+        var enumerations = eligibility.Enumerations.ToDictionary(static enumeration => enumeration.ExpressionIdentity);
+        var notEnumerated = eligibility.NotEnumeratedExpressions.Select(static expression => expression.Identity).ToHashSet();
         var delivered = new Dictionary<LanguageScopedExpressionIdentity, EuFormexPackageOutcome>();
         foreach (var outcome in outcomes)
         {
             ArgumentNullException.ThrowIfNull(outcome, nameof(outcomes));
-            if (!expected.TryGetValue(outcome.ExpressionIdentity, out var enumeration))
+            if (!expected.TryGetValue(outcome.ExpressionIdentity, out var expression))
             {
                 refusal = EuFormexPackageOutcomePopulationRefusal.OutcomeOutsideExpressionPopulation;
                 detail = outcome.ExpressionIdentity.PublisherExpressionId;
@@ -306,7 +328,7 @@ public sealed class EuFormexPackageOutcomePopulation
             }
 
             if (!string.Equals(
-                    enumeration.Expression.CanonicalContentSha256,
+                    expression.CanonicalContentSha256,
                     outcome.Expression.CanonicalContentSha256,
                     StringComparison.Ordinal))
             {
@@ -315,20 +337,36 @@ public sealed class EuFormexPackageOutcomePopulation
                 return null;
             }
 
-            if (enumeration.IsFormexEligible
-                && outcome.Kind == EuFormexPackageOutcomeKind.NotEligible)
+            if (!enumerations.TryGetValue(outcome.ExpressionIdentity, out var enumeration))
             {
-                refusal = EuFormexPackageOutcomePopulationRefusal.EligibleExpressionMarkedIneligible;
-                detail = outcome.ExpressionIdentity.PublisherExpressionId;
-                return null;
+                if (!notEnumerated.Contains(outcome.ExpressionIdentity) ||
+                    outcome.Kind != EuFormexPackageOutcomeKind.NotEnumeratedLanguageOutOfScope)
+                {
+                    refusal = EuFormexPackageOutcomePopulationRefusal.EnumerationDispositionDisagrees;
+                    detail = outcome.ExpressionIdentity.PublisherExpressionId;
+                    return null;
+                }
             }
-
-            if (!enumeration.IsFormexEligible
-                && outcome.Kind != EuFormexPackageOutcomeKind.NotEligible)
+            else
             {
-                refusal = EuFormexPackageOutcomePopulationRefusal.IneligibleExpressionHasPackageOutcome;
-                detail = outcome.ExpressionIdentity.PublisherExpressionId;
-                return null;
+                if (outcome.Kind == EuFormexPackageOutcomeKind.NotEnumeratedLanguageOutOfScope)
+                {
+                    refusal = EuFormexPackageOutcomePopulationRefusal.EnumerationDispositionDisagrees;
+                    detail = outcome.ExpressionIdentity.PublisherExpressionId;
+                    return null;
+                }
+                if (enumeration.IsFormexEligible && outcome.Kind == EuFormexPackageOutcomeKind.NotEligible)
+                {
+                    refusal = EuFormexPackageOutcomePopulationRefusal.EligibleExpressionMarkedIneligible;
+                    detail = outcome.ExpressionIdentity.PublisherExpressionId;
+                    return null;
+                }
+                if (!enumeration.IsFormexEligible && outcome.Kind != EuFormexPackageOutcomeKind.NotEligible)
+                {
+                    refusal = EuFormexPackageOutcomePopulationRefusal.IneligibleExpressionHasPackageOutcome;
+                    detail = outcome.ExpressionIdentity.PublisherExpressionId;
+                    return null;
+                }
             }
 
             if (!delivered.TryAdd(outcome.ExpressionIdentity, outcome))
@@ -339,17 +377,16 @@ public sealed class EuFormexPackageOutcomePopulation
             }
         }
 
-        var missing = eligibility.Enumerations.FirstOrDefault(enumeration =>
-            !delivered.ContainsKey(enumeration.ExpressionIdentity));
+        var missing = expressions.FirstOrDefault(expression => !delivered.ContainsKey(expression.Identity));
         if (missing is not null)
         {
             refusal = EuFormexPackageOutcomePopulationRefusal.OutcomeMissing;
-            detail = missing.ExpressionIdentity.PublisherExpressionId;
+            detail = missing.Identity.PublisherExpressionId;
             return null;
         }
 
         return new EuFormexPackageOutcomePopulation(
             eligibility,
-            eligibility.Enumerations.Select(enumeration => delivered[enumeration.ExpressionIdentity]).ToArray());
+            expressions.Select(expression => delivered[expression.Identity]).ToArray());
     }
 }

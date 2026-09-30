@@ -214,6 +214,7 @@ public sealed class EuFormexMainBodyLegalContentProducer
         EuFormexPackageOutcomeKind.NotEligible => EuFormexMainBodyLegalContentDisposition.NotEligible,
         EuFormexPackageOutcomeKind.Unavailable => EuFormexMainBodyLegalContentDisposition.PackageUnavailable,
         EuFormexPackageOutcomeKind.Refused => EuFormexMainBodyLegalContentDisposition.PackageRefused,
+        EuFormexPackageOutcomeKind.NotEnumeratedLanguageOutOfScope => EuFormexMainBodyLegalContentDisposition.PackageNotAcquired,
         EuFormexPackageOutcomeKind.NotAcquired => EuFormexMainBodyLegalContentDisposition.PackageNotAcquired,
         EuFormexPackageOutcomeKind.RouteRefused => EuFormexMainBodyLegalContentDisposition.RouteRefused,
         EuFormexPackageOutcomeKind.PackageRejected => EuFormexMainBodyLegalContentDisposition.PackageRejected,

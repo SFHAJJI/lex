@@ -172,6 +172,66 @@ public sealed class EuFormexPackageOutcomePopulationTests
             EuFormexPackageOutcome.Acquired(expression, otherInventory));
     }
 
+    [TestMethod]
+    public void UnenumeratedOtherLanguageRequiresItsOwnOutcomeAndCannotClaimIneligibility()
+    {
+        var english = Expression(First);
+        var german = Expression(Second, "http://publications.europa.eu/resource/authority/language/DEU");
+        var production = Production([english, german]);
+        Assert.IsNull(EuFormexEligibilityPopulation.TryCreate(production, [FormexEnumeration(english)],
+            out var strictFailure, out _));
+        Assert.AreEqual(EuFormexEligibilityPopulationRefusal.ExpressionEnumerationMissing, strictFailure);
+        var eligibility = EuFormexEligibilityPopulation.TryCreateForServedLanguages(
+            production, [FormexEnumeration(english)], out var failure, out var detail);
+        Assert.IsNotNull(eligibility, $"{failure}: {detail}");
+        Assert.AreSame(german, eligibility.NotEnumeratedExpressions.Single());
+        Assert.AreEqual(1, eligibility.Enumerations.Count);
+        Assert.AreEqual(1, eligibility.EligibleExpressions.Count);
+        var englishOutcome = EuFormexPackageOutcome.NotAcquired(english,
+            EuFormexPackageNotAcquiredReason.BodyNotHeld, "fixture");
+        var germanOutcome = EuFormexPackageOutcome.NotEnumeratedLanguageOutOfScope(german);
+        var population = EuFormexPackageOutcomePopulation.TryClose(
+            eligibility, [germanOutcome, englishOutcome], out var closeFailure, out detail);
+        Assert.IsNotNull(population, $"{closeFailure}: {detail}");
+        CollectionAssert.AreEqual(new[] { english.Identity, german.Identity },
+            population.Outcomes.Select(static o => o.ExpressionIdentity).ToArray());
+        Assert.AreEqual(1, population.NotEnumeratedLanguageOutOfScopeCount);
+        Assert.AreEqual(0, population.NotEligibleCount);
+        Assert.IsNull(germanOutcome.ObservedStatus);
+        Assert.IsNull(germanOutcome.AcquiredInventory);
+        Assert.IsNull(EuFormexPackageOutcomePopulation.TryClose(eligibility, [englishOutcome],
+            out closeFailure, out _));
+        Assert.AreEqual(EuFormexPackageOutcomePopulationRefusal.OutcomeMissing, closeFailure);
+        Assert.IsNull(EuFormexPackageOutcomePopulation.TryClose(eligibility,
+            [englishOutcome, EuFormexPackageOutcome.NotEligible(german)], out closeFailure, out _));
+        Assert.AreEqual(EuFormexPackageOutcomePopulationRefusal.EnumerationDispositionDisagrees, closeFailure);
+        Assert.IsNull(EuFormexPackageOutcomePopulation.TryClose(eligibility,
+            [englishOutcome, germanOutcome, germanOutcome], out closeFailure, out _));
+        Assert.AreEqual(EuFormexPackageOutcomePopulationRefusal.ExpressionDisposedTwice, closeFailure);
+    }
+
+    [TestMethod]
+    [DataRow("ENG")]
+    [DataRow("FRA")]
+    public void ServedLanguagesCannotSkipTheirEnumeration(string language)
+    {
+        var expression = Expression(First, "http://publications.europa.eu/resource/authority/language/" + language);
+        Assert.IsNull(EuFormexEligibilityPopulation.TryCreateForServedLanguages(Production([expression]), [],
+            out var failure, out _));
+        Assert.AreEqual(EuFormexEligibilityPopulationRefusal.ExpressionEnumerationMissing, failure);
+        Assert.ThrowsExactly<ArgumentException>(() => EuFormexPackageOutcome.NotEnumeratedLanguageOutOfScope(expression));
+    }
+
+    [TestMethod]
+    public void EnumeratedOtherLanguageCannotBeRelabelledUnenumerated()
+    {
+        var german = Expression(First, "http://publications.europa.eu/resource/authority/language/DEU");
+        var eligibility = Eligibility(german);
+        Assert.IsNull(EuFormexPackageOutcomePopulation.TryClose(eligibility,
+            [EuFormexPackageOutcome.NotEnumeratedLanguageOutOfScope(german)], out var failure, out _));
+        Assert.AreEqual(EuFormexPackageOutcomePopulationRefusal.EnumerationDispositionDisagrees, failure);
+    }
+
     private static EuFormexEligibilityPopulation Eligibility(params LanguageScopedExpression[] expressions)
     {
         var production = Production(expressions);

@@ -147,7 +147,9 @@ try
 
     Console.WriteLine(
         $"europe: run complete, {europe.Run!.ObservedExpressionCount} expression(s), "
-        + $"formex eligible {europe.Formex!.EligibleExpressionCount}, notice route {europe.LegalNotice!.Route!.Hops.Count} hop(s); "
+        + $"formex enumerated {europe.Formex!.Enumerations.Count}, eligible {europe.Formex.EligibleExpressionCount}, "
+        + $"not_enumerated_language_out_of_scope {europe.Formex.NotEnumeratedExpressionCount}; "
+        + $"notice route {europe.LegalNotice!.Route!.Hops.Count} hop(s); "
         + $"spent {budget.Spent} of {budget.Limit}");
 
     var luxembourg = await new LuxembourgFirstMountAcquisition(store, TimeProvider.System)

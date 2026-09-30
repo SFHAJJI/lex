@@ -24,6 +24,44 @@ public sealed class EuFormexPackagePopulationProducerTests
     private const string FrenchAuthority = "http://publications.europa.eu/resource/authority/language/FRA";
 
     [TestMethod]
+    [DataRow("DEU")]
+    [DataRow("SPA")]
+    public async Task OtherLanguagesStayInReconciliationWithoutAnyManifestationRequest(string language)
+    {
+        var (run, english, other) = await RunWithTwoExpressionsAsync(
+            additionalLanguage: "http://publications.europa.eu/resource/authority/language/" + language);
+        // No answer for the other expression: any accidental request fails this scripted transport.
+        var handler = new FormexEnumerationHandler(new Dictionary<string, string[]>(StringComparer.Ordinal)
+        {
+            [english.Identity.PublisherExpressionId] = ["xhtml"],
+        }, [english]);
+        var result = await Producer(new EuAcquisitionTestFixture.EuInMemoryCustodyStore(), handler).RunAsync(
+            run, RendererSource(), RendererSource(), WorkCelex, EuAcquisitionTestFixture.SourceWitness(),
+            EuAcquisitionTestFixture.TestWireBudget(), CancellationToken.None);
+        Assert.IsTrue(result.Delivered, $"{result.Refusal}: {result.Detail}");
+        Assert.AreEqual(1, result.Enumerations.Count);
+        Assert.AreEqual(1, result.NotEnumeratedExpressionCount);
+        Assert.AreEqual(0, result.EligibleExpressionCount);
+        Assert.AreEqual(2, result.Reconciliation!.ExpressionCount);
+        Assert.AreSame(run, result.Reconciliation.Run);
+        var outcome = result.Reconciliation.Outcomes.Single(o => o.ExpressionIdentity == other.Identity);
+        Assert.AreEqual(EuFormexPackageOutcomeKind.NotEnumeratedLanguageOutOfScope, outcome.Kind);
+        Assert.AreSame(other, outcome.Expression);
+        var mainBodies = await new EuFormexMainBodyLegalContentProducer(
+            new EuAcquisitionTestFixture.EuInMemoryCustodyStore()).RunAsync(
+                result.Reconciliation, CancellationToken.None);
+        Assert.AreEqual(2, mainBodies.Outcomes.Count);
+        var unexamined = mainBodies.Outcomes.Single(o => o.Source.ExpressionIdentity == other.Identity);
+        Assert.AreEqual(EuFormexMainBodyLegalContentDisposition.PackageNotAcquired, unexamined.Disposition);
+        StringAssert.Contains(unexamined.Detail, "eligibility is unknown");
+        var envelope = await LexCorpus6BuilderTests.CompleteProfileEnvelopeAsync(
+            europeOverride: run, formexOverride: result.Reconciliation,
+            formexStore: new EuAcquisitionTestFixture.EuInMemoryCustodyStore());
+        var corpus = LexCorpus6Builder.TryBuild(envelope, out var buildRefusal, out var buildDetail);
+        Assert.IsNotNull(corpus, $"{buildRefusal}: {buildDetail}");
+    }
+
+    [TestMethod]
     public async Task CombinedWorkBatchProducesOneAcquiredOutcomePerOriginalExpression()
     {
         var store = new EuAcquisitionTestFixture.EuInMemoryCustodyStore();
@@ -570,7 +608,8 @@ public sealed class EuFormexPackagePopulationProducerTests
     /// children of the work (the shape the manifestation enumeration binds): one English, one French.
     /// </summary>
     private static async Task<(EuQueryExecutionResult Run, LanguageScopedExpression English, LanguageScopedExpression French)>
-        RunWithTwoExpressionsAsync(byte[]? heldXhtml = null, EuAcquisitionTestFixture.EuInMemoryCustodyStore? store = null)
+        RunWithTwoExpressionsAsync(byte[]? heldXhtml = null, EuAcquisitionTestFixture.EuInMemoryCustodyStore? store = null,
+            string additionalLanguage = FrenchAuthority)
     {
         var root = EuPackRootCanonicalForm.TryCanonicalize(EuAppendixASeedMap.SeedsInCelexOrder[0].WorkRoot, out _)
             ?? throw new AssertFailedException("Appendix A's own seed root failed to canonicalize.");
@@ -585,7 +624,7 @@ public sealed class EuFormexPackagePopulationProducerTests
                     request, HttpStatusCode.OK, heldXhtml, "application/xhtml+xml;charset=UTF-8"),
             expressionIri: englishIri,
             additionalExpressionIri: frenchIri,
-            additionalExpressionLanguageAuthority: FrenchAuthority);
+            additionalExpressionLanguageAuthority: additionalLanguage);
         Assert.IsNull(run.Refusal, $"{run.Refusal?.Code}: {run.Refusal?.Detail}");
         var expressions = run.CorrigendumTripwires!.ProductionsByFamilyKey.Values
             .SelectMany(static production => production.Expressions!.Derivation!.Expressions)
