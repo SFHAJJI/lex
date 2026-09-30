@@ -6,7 +6,7 @@
 // submits.
 
 import { Document } from './Document.jsx';
-import { liveChrome } from '../scripts/live-chrome.mjs';
+import { liveChrome, livePath } from '../scripts/live-chrome.mjs';
 import { LiveReading } from './LiveReading.jsx';
 import { renderHydratableDocument } from './render-document.mjs';
 import { skinFor } from '../scripts/shells.mjs';
@@ -33,7 +33,7 @@ export function renderLiveReadingPage() {
       <h1>{copy.heading}</h1>
       <p>{copy.intro}</p>
       <div id={LIVE_READING_ROOT}>{liveReadingTree()}</div>
-      <script src="/client-live-reading.js" defer />
+      <script src={livePath('client-live-reading.js')} defer />
     </Document>,
   );
 }

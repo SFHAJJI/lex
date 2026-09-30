@@ -23,7 +23,7 @@ const work = new URL('.react-build/', root);
  * @param {string} entry   path relative to the workspace root
  * @param {string} outfile path relative to the build directory
  */
-export async function bundle(entry, outfile, { platform = 'node' } = {}) {
+export async function bundle(entry, outfile, { platform = 'node', define = undefined, plugins = undefined } = {}) {
   const out = fileURLToPath(new URL(outfile, work));
   await build({
     entryPoints: [fileURLToPath(new URL(entry, root))],
@@ -38,6 +38,9 @@ export async function bundle(entry, outfile, { platform = 'node' } = {}) {
     packages: platform === 'node' ? 'external' : undefined,
     minify: platform === 'browser',
     logLevel: 'silent',
+    // A live bundle built for another reviewed interface language names it (`__LEX_CHROME_LOCALE__`).
+    define,
+    plugins,
   });
   return out;
 }
@@ -56,8 +59,8 @@ export async function resetWork() {
  * script that never loads. Minified because the bundle is shipped, and the reviewable artefact is
  * the source in app/, not the bytes.
  */
-export async function bundleClient(entry, outfile) {
-  return bundle(entry, outfile, { platform: 'browser' });
+export async function bundleClient(entry, outfile, options = {}) {
+  return bundle(entry, outfile, { ...options, platform: 'browser' });
 }
 
 /** Write one built page and return its file name. */

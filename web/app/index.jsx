@@ -26,7 +26,7 @@ export { Coverage } from './Coverage.jsx';
 export { CoverageAnswerView, LiveCoverage } from './LiveCoverage.jsx';
 export { CENSUS_EVALUATION_CARD, LIVE_CONTRACT, LIVE_COVERAGE_ROOT, liveCoverageTree, renderLiveCoveragePage } from './live-coverage-page.jsx';
 export { EvaluationCardView } from './EvaluationCardView.jsx';
-export { LocaleNav, localeHref } from './LocaleNav.jsx';
+export { LocaleNav, localeHome, localeHref } from './LocaleNav.jsx';
 export { renderLiveLocaleUnavailablePage } from './live-locale-page.jsx';
 export { LiveSearch, SearchAnswerView, SearchResultsView, SearchWorkResolution } from './LiveSearch.jsx';
 export { LIVE_SEARCH_ROOT, liveSearchTree, renderLiveSearchPage } from './live-search-page.jsx';
