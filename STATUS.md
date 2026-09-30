@@ -444,10 +444,11 @@ from the real handler: the fixture's one state against itself, and a second fixt
 year apart with `art_15` reworded and `art_16` renamed to `art_16-new`. The second fixture is its
 own, so every other sample stays the one-state answer. `web/scripts/compare-answer.mjs`
 (`readDiff`) reads both and recomputes what the comparison derives:
-- each side is the state that applies on its date, pinned by its permalink, with its validity flags
-  and count following its dates;
+- each side is the state that applies on its date, pinned by its permalink, with its dated articles
+  exactly its article identities and its validity flags and count following its dates;
 - one comparison per compared language and one entry per language not compared (with its bound),
-  each language once and in order, in the language asked;
+  each language once and in order, and together exactly the scope: the language asked, or every
+  language the work is held in;
 - the same state on both dates carries no articles and no counts;
 - otherwise every article of each side appears in exactly one row, the rows are the ids in ordinal
   order, each row's status is its sides' (added, removed, unchanged when the ordered wording digests

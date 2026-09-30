@@ -86,13 +86,20 @@ test("each rule the comparison states about itself is refused when broken, with 
     ["a validity count against the flags", two, (a) => { a.comparisons[0].from.validity_conflict_count -= 1; }, /validity_conflict_count is/],
     ["a language compared twice", two, (a) => { a.languages_not_compared = [{ language: "fra", bound: "from", reason: "no state at or before the date" }]; }, /compared or listed as not compared twice/],
     ["a bound that is not one", two, (a) => { a.available_languages = ["deu", "fra"]; a.requested_language = null; a.languages_not_compared = [{ language: "deu", bound: "both", reason: "x" }]; }, /a bound is from or to/],
+    ["a language not compared, accounted for", two, (a) => { a.available_languages = ["deu", "fra"]; a.requested_language = null; a.languages_not_compared = [{ language: "deu", bound: "from", reason: "no state at or before the date" }]; }, null],
     ["a language asked that is not held", two, (a) => { a.requested_language = "eng"; }, /not one the work is held in/],
     ["nothing compared", two, (a) => { a.comparisons = []; }, /refused no_version_for_date, not answered/],
+    ["a held language compared nowhere", two, (a) => { a.requested_language = null; a.available_languages = ["deu", "fra"]; }, /accounts for fra, and its scope is deu, fra/],
+    ["a side's dated article not among its identities", two, (a) => { a.comparisons[0].from.articles[0].article_identity_sha256 = "f".repeat(64); }, /dated articles are not its article_identities/],
     ["a missing member", two, (a) => { delete rowOf(a, "art_15").to[0].wording_sha256; }, /does not carry wording_sha256/],
     ["a digest the census left unfilled", two, (a) => { a.index_sha256 = PLACEHOLDER; }, /index_sha256 is not a SHA-256 digest/],
   ];
   for (const [what, base, change, reason] of cases) {
-    assert.throws(() => readDiff(mutate(base, change)), reason, what);
+    if (reason === null) {
+      assert.doesNotThrow(() => readDiff(mutate(base, change)), what);
+    } else {
+      assert.throws(() => readDiff(mutate(base, change)), reason, what);
+    }
   }
 });
 

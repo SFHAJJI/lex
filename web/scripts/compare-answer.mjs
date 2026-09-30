@@ -114,6 +114,11 @@ function readSide(side, where, context) {
     }
     return { identity: requireDigest(requireOwn(article, 'article_identity_sha256', at), `${at} article_identity_sha256`), conflict };
   });
+  const dated = articles.map((article) => article.identity).sort();
+  const listed = [...identities].sort();
+  if (dated.length !== listed.length || dated.some((identity, position) => identity !== listed[position])) {
+    throw new Error(`${where}'s dated articles are not its article_identities, each once (review of #782)`);
+  }
   const conflictCount = requireCount(requireOwn(side, 'validity_conflict_count', where), `${where} validity_conflict_count`);
   if (conflictCount !== articles.filter((article) => article.conflict).length) {
     throw new Error(`${where}'s validity_conflict_count is ${conflictCount}, and its articles say otherwise`);
@@ -250,6 +255,14 @@ export function readDiff(answer) {
     if (language !== null && item.language !== language) {
       throw new Error(`${item.language} is in the answer, and the comparison was asked in ${language}`);
     }
+  }
+  // Every language in scope is accounted for: compared, or listed as not compared with its bound.
+  // The scope is the language asked, or every language the work is held in (review of #782: a held
+  // language that vanished from both lists would leave its reader with no answer and no reason).
+  const scope = language === null ? [...availableLanguages] : [language];
+  const accounted = [...seen];
+  if (scope.length !== accounted.length || scope.some((item) => !seen.has(item))) {
+    throw new Error(`the comparison accounts for ${accounted.join(', ') || 'no language'}, and its scope is ${scope.join(', ')}`);
   }
   for (const list of [comparisons, notCompared]) {
     for (let index = 1; index < list.length; index += 1) {
