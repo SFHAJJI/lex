@@ -73,7 +73,8 @@ test("the French draft has the English table's exact shape, and the product neve
   for (const directory of ["../app/", "../scripts/"]) {
     for (const name of await readdir(new URL(directory, import.meta.url))) {
       if (!/\.(mjs|jsx)$/.test(name) || name === "live-chrome-fr-draft.mjs") continue;
-      assert.ok(!(await readFile(new URL(`${directory}${name}`, import.meta.url), "utf8")).includes("live-chrome-fr-draft"), `${name} imports the unreviewed French draft`);
+      // An import of the module, not a mention of it: a comment may name the draft's file.
+      assert.doesNotMatch(await readFile(new URL(`${directory}${name}`, import.meta.url), "utf8"), /(?:from\s+|import\s*\(\s*)["'][^"']*live-chrome-fr-draft(?:\.mjs)?["']/, `${name} imports the unreviewed French draft`);
     }
   }
 });
