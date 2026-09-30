@@ -5,11 +5,11 @@ every pull request that changes what is served, what is next or what is blocked.
 
 ## Heads
 
-- `v3/integration`: `86b83cc9` (2026-09-30, PR #772 merged). Build 45 s. Fast lane
+- `v3/integration`: `ad285481` (2026-09-30, PR #773 merged). Build 45 s. Fast lane
   (`eng/test-fast.ps1`): 3,038 tests, 3,037 pass, 1 skipped. Ingest suite: green on CI for PR #760
   (the CI `dotnet` job runs the whole solution on every pull request, about 7 min on the runner;
-  green for PR #772);
-  locally about 15 min. 825 web tests pass. CI's web job can flake in `keyboard-walk.test.mjs`
+  green for PR #773);
+  locally about 15 min. 829 web tests pass. CI's web job can flake in `keyboard-walk.test.mjs`
   ("browser debugger never answered"); rerunning the failed job is the fix.
 - Driver: Claude Opus 5.5 since 2026-09-29 (the Fable 5.1 driver ran out of tokens on 2026-09-28
   after PR #757; the user default model is now `claude-opus-5-5`).
@@ -235,7 +235,7 @@ schema's `parameters` shape, and whose call runs the same dispatch the REST rout
 endpoint test proves it for all twenty-three. The launch-contract line "REST and MCP derive identical
 envelopes from the registry" is the owner's to tick.
 
-Web: 30 React components, 825 tests. Preview screens render fixtures. The V3 Luxembourg search
+Web: 30 React components, 829 tests. Preview screens render fixtures. The V3 Luxembourg search
 answer has a reader (PR #771). The answer census now samples `search` five ways from the real handler:
 - a phrase with 4 strict hits and 1 relaxed hit;
 - the same phrase one hit per page, with its cursor;
@@ -284,6 +284,25 @@ the census.
   as refused, not as unreachable.
 - The tests drive it with the census's real whole envelopes. The envelope census now holds a
   search answer with hits in both lanes and a search `no_corpus_mounted` refusal.
+
+The V3 Luxembourg dossier answer has a reader (PR #774). The answer census now samples
+`dossier` (the fixture work in `fra`: one state, no titles, 9 items not held).
+`web/scripts/dossier-answer.mjs` (`readDossier`) reads that shape and throws on any answer that
+breaks a rule the answer states about itself:
+- the states are the work's own (its work key and publisher work IRI), in the language asked
+  when one was asked, in date order, each listed once and holding at least one article;
+- each state's stable coordinate names its work and date, and its permalink pins that coordinate
+  and its digest;
+- a state's next date is the next later date in its own language, or null;
+- `state_count`, `history_begins` and `latest_applicability_date` are the states';
+- each title group belongs to one of the states' expressions, in the language asked;
+- `not_held` names each item once with its reason. It is carried whole: it is the V3 form of the
+  pre-V3 screen's unfilled slots.
+
+An EU dossier (`publisher: "eu-eurlex"`) has another shape and is refused. The fixture holds one
+state and no titles, so the tests also read a work with three states in two languages and a
+titled work, built from the captured answer the way `V3CorpusMount.Dossier` builds them. The
+pre-V3 `dossier.mjs` renderer stays for the preview until the live dossier screen replaces it.
 
 **The search journey step passes (PR #773, run locally 2026-09-30).** `node scripts/journey.mjs`
 now runs two steps, each with and without the fixture mount, and all four runs pass.
@@ -697,8 +716,9 @@ proves the path, not a corpus.
    passing against the real API with and without a mount; PR #771: the V3 search reader
    `readSearch`, held to five search answers the census now samples; PR #772: the live search
    screen and its page; PR #773: the search journey step (type, submit, the answer; the next page
-   waits for a mount with more hits than one page). Next: dossier and reading, whose
-   readers still read pre-V3 shapes and must first be held to served samples. Also J1 to J8
+   waits for a mount with more hits than one page); PR #774: the V3 dossier reader `readDossier`,
+   held to the dossier answer the census now samples. Next: the live dossier screen, its page
+   and journey step; then reading, whose reader still reads a pre-V3 shape. Also J1 to J8
    restated as V3 steps (owner question): they exist only in the pre-V3 pack
    (`05-user-journeys.md`).
 7. Release pipeline: build, sign, image, zero-traffic deploy, probes. Then acceptance and promotion.

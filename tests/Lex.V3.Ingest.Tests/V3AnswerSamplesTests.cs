@@ -111,7 +111,6 @@ public sealed class V3AnswerSamplesTests
         ["diff"] = "sampled when a reader is built against it",
         ["changes_in_period"] = "sampled when a reader is built against it",
         ["in_force_on"] = "sampled when a reader is built against it",
-        ["dossier"] = "sampled when a reader is built against it",
         ["citation"] = "sampled when a reader is built against it",
         ["cited_by"] = "sampled when a reader is built against it",
         ["verify"] = "sampled when a reader is built against it",
@@ -338,6 +337,8 @@ public sealed class V3AnswerSamplesTests
             await DriveAsync(mount, "search", "the page after the first one-hit page, no limit: the rest of the result, whose population is still the whole result's", new { query = "assemblée générale", language = "fra", after = firstPage.Body["continue_after"]!.GetValue<string>() }),
             await DriveAsync(mount, "search", "the same phrase in the relaxed lane only: every hit relaxed, and the strict lane not counted (null, not zero)", new { query = "assemblée générale", language = "fra", mode = "relaxed" }),
             await DriveAsync(mount, "search", "a word the held text does not carry: no hit is an answer, not a refusal", new { query = "zéphyr", language = "fra" }),
+            // `dossier` is sampled for the live dossier screen's reader: the work, in the language it is held in.
+            await DriveAsync(mount, "dossier", "the work, in the language it is held in: its identity, its held states and what the dossier does not hold", new { parameters.identifier, parameters.language }),
         ];
     }
 
