@@ -3,6 +3,27 @@
 Updated 2026-09-30 by the driver. This file replaces the issue-comment ledgers. It is rewritten in
 every pull request that changes what is served, what is next or what is blocked.
 
+## Publisher annex IDs and subtitles (Codex, 2026-10-01)
+
+The completed three-seed run retains English and French 2024/1620 XHTML with Roman annex IDs
+(including a nonbreaking space) and two title paragraphs. The previous parser admitted only numeric
+IDs and one paragraph. Reversible driver decision: recognize canonical uppercase Roman IDs with
+the observed optional nonbreaking space, preserve the exact publisher ID, and concatenate a title
+and subtitle in publisher order as the independently retained Formex TITLE.Value does. The binder
+must still match complete package entries and exact titles; no annex or PDF admission is bypassed.
+
+The draft includes four exact retained XHTML/ZIP fixtures with SHA-256 pins and tests comparing
+both languages' titles against their Formex entries, plus valid/invalid identifier cases. Validation
+at 752f6ff3 passed clean build (41.41 s), required fast (3,085 plus one platform skip, 97.513 s),
+and 106 affected ingest tests (two live skips, 44.695 s). Commands and results are retained under
+C:\lex-v3\lanes\eu-annex-publisher-*. Required Claude review returned MERGE with no
+material findings. It independently reproduced the 106 ingest passes and fast suite, and exercised
+both production inventory producers on the retained English and French fixtures: exact titles
+agreed in both languages. Empty or whitespace-only title paragraphs now refuse explicitly; the
+joined title is used for binding and identity, not display. Green exact-head CI remains a merge gate.
+This fixes a concrete parser limit;
+it does not claim to explain all 32 prior package-not-acquired outcomes or complete the annex chain.
+
 ## Corpus persistence in bounded custody objects (Codex, 2026-09-30)
 
 The corpus writer still held one complete canonical byte buffer after the stream-reader change.
@@ -46,10 +67,14 @@ The subsequent full CI run 36782023846 found two custody-store census failures: 
 ChunkReadFaultStore test double was not declared exempt. The affected local filter and review
 had omitted that census. This follow-up names its constructor-configured corruption/timeout
 behavior and updates the observed inventory from 28 to 29 stores (nine driven, 20 exempt).
-Production behavior is unchanged; fresh full CI must verify the test-inventory correction.
+Production behavior is unchanged. Full CI passed after the test-inventory correction; PR832
+merged at 5d6055ca after the final base refresh and green exact-head checks.
 The live all-82-seed EU retry began at 21:51 UTC from merged 7e90e943, in fresh custody at
 C:\lex-v3\eu-population-20260930-2. Its 20,000-wire ceiling, frozen inputs and unchanged
-storage allowance were verified. It has not completed; full Luxembourg remains resource-gated.
+storage allowance were verified. It ended with exit 3 after 494 requests and 81 of 82 proven
+census families: seed 32023R2854 returned a retained Virtuoso 40001 transaction deadlock. PR837
+adds a narrowly bounded retry and is under review; a fresh bounded census run must precede the
+next full attempt. Full Luxembourg remains resource-gated.
 
 ## Luxembourg scope input reuse (Codex, 2026-09-30)
 

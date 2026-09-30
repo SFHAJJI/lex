@@ -2,6 +2,7 @@ using System.Buffers.Binary;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json.Serialization;
+using System.Text.RegularExpressions;
 using System.Xml;
 using System.Xml.Linq;
 using Lex.V3.Contracts.Custody;
@@ -322,18 +323,21 @@ public sealed class EuXhtmlAnnexInventoryProducer
             var annexId = annexes[0].Attribute("id")!.Value;
             var titles = annexes[0].Elements(xhtml + "p")
                 .Where(static element => HasClass(element, "oj-doc-ti"))
-                .Select(static element => element.Value.Trim())
-                .Where(static value => value.Length > 0)
-                .Take(2)
+                .Select(static element => element.Value)
+                .Take(3)
                 .ToArray();
-            if (titles.Length != 1 || !unitIds.Add(unitId) || !annexIds.Add(annexId))
+            // Publisher TITLE/TI and TITLE/STI render as two title paragraphs. Keep their
+            // text in document order, as Formex TITLE.Value does; the binder still requires
+            // exact agreement with the independently retained Formex entry.
+            if (titles.Length is < 1 or > 2 || titles.Any(string.IsNullOrWhiteSpace)
+                || !unitIds.Add(unitId) || !annexIds.Add(annexId))
             {
                 return Refused(EuXhtmlAnnexInventoryRefusal.PublisherAnnexConventionInvalid,
                     "publisher annex identifiers or titles are absent or ambiguous");
             }
 
             members.Add(new EuXhtmlAnnexInventoryMember(
-                unitId, unitId + ".xml", annexId, titles[0]));
+                unitId, unitId + ".xml", annexId, string.Concat(titles).Trim()));
         }
 
         members.Sort(static (left, right) =>
@@ -352,11 +356,19 @@ public sealed class EuXhtmlAnnexInventoryProducer
         && value.All(static character =>
             char.IsAsciiLetterOrDigit(character) || character is '.' or '_' or '-');
 
-    private static bool IsPublisherAnnexId(string? value) =>
-        value is not null
-        && value.StartsWith("anx_", StringComparison.Ordinal)
-        && value.Length > "anx_".Length
-        && value["anx_".Length..].All(static character => character is >= '0' and <= '9');
+    private static bool IsPublisherAnnexId(string? value)
+    {
+        if (value is null || !value.StartsWith("anx_", StringComparison.Ordinal)
+            || value.Length == "anx_".Length) return false;
+        var suffix = value["anx_".Length..];
+        if (suffix.All(static character => character is >= '0' and <= '9')) return true;
+        // Retained EN/FRA 2024/1620 renditions use a nonbreaking space before Roman
+        // annex numbers. Validate the observed convention without normalizing the ID.
+        if (suffix[0] == '\u00a0') suffix = suffix[1..];
+        return suffix.Length is > 0 and <= 15 && Regex.IsMatch(suffix,
+            @"\AM{0,3}(CM|CD|D?C{0,3})(XC|XL|L?X{0,3})(IX|IV|V?I{0,3})\z",
+            RegexOptions.CultureInvariant | RegexOptions.NonBacktracking);
+    }
 
     private static bool TryReadProfile(
         ReadOnlySpan<byte> bytes,
