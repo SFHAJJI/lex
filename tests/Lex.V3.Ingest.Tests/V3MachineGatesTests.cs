@@ -406,7 +406,7 @@ public sealed class V3MachineGatesTests
     }
 
     /// <summary>as_of's selection: the one state it serves, its digest; a refusal, its code; anything else, null.</summary>
-    private static TemporalArm AsOfArm(V3CorpusMount mount, string? language) => (workKey, asOf) =>
+    internal static TemporalArm AsOfArm(V3CorpusMount mount, string? language) => (workKey, asOf) =>
     {
         var envelope = EnvelopeAsync(mount, "/api/v3/as_of", "as_of", DatedRequest(workKey, asOf, language)).GetAwaiter().GetResult();
         if (envelope.Refusal is { } refusal)
@@ -419,7 +419,7 @@ public sealed class V3MachineGatesTests
     };
 
     /// <summary>in_force_on's selection for one named work: its one row's state, its digest; a refusal, its code; anything else, null.</summary>
-    private static TemporalArm InForceOnArm(V3CorpusMount mount, string? language) => (workKey, asOf) =>
+    internal static TemporalArm InForceOnArm(V3CorpusMount mount, string? language) => (workKey, asOf) =>
     {
         var envelope = EnvelopeAsync(mount, "/api/v3/in_force_on", "in_force_on", DatedRequest(workKey, asOf, language)).GetAwaiter().GetResult();
         if (envelope.Refusal is { } refusal)
