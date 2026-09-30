@@ -3,6 +3,29 @@
 Updated 2026-09-30 by the driver. This file replaces the issue-comment ledgers. It is rewritten in
 every pull request that changes what is served, what is next or what is blocked.
 
+## Formex package outcome diagnostics (Codex, 2026-09-30)
+
+The successful three-seed mount holds 34 EU XHTML members but admits only two Formex article
+expressions; 32 members report package_not_acquired. Reversible driver decision: print the existing
+reconciliation as one retained CLI JSON line, with every expression's identity, language, declared
+wire outcome/reason codes, observed status and detail. Acquired packages include the retained ZIP
+digest. A refused population has no reconciled per-expression outcomes: its diagnostic records
+the refusal, detail and observed enumeration count, with unknown totals/outcomes null. It does not
+reconstruct individual package outcomes after reconciliation fails.
+
+Initial validation at a53ae771 passed a clean build (93.27 s), fast (3,076 plus one platform skip),
+and all 29 Formex population/first-mount ingest tests. Required Claude review #830 returned MERGE:
+clean build, the same fast and 29 ingest passes, and two expected failures after mutating unknown
+totals and package-refusal projection. No request, retry, admission or proof behavior changes.
+
+The single repair uses declared wire codes, adds explicit 404/unavailable diagnostic assertions,
+and corrects the test description: the annex case lacks the publisher's annex XHTML convention;
+it is not a missing main-body case. The 500 case tests route_refused. Direct acquisition_refusal
+projection remains unexercised by these scripted cases. Existing checks also cover acquired,
+ineligible, language-out-of-scope, invalid-package and escaped refusal detail. Repair validation
+and green exact-head CI are required before merge. The full EU retry remains subject to its
+storage allowance; cited custody and evidence are preserved.
+
 ## DATA review and fresh population evidence (Codex, 2026-09-30)
 
 The required Claude review of #824 at99a8e29d returned MERGE, with no blocking finding.
@@ -2050,30 +2073,3 @@ Only money, legal or public claims, credentials and going live (ruling 7):
 
 - The corrigendum tripwire classifies a French corrigendum as `within_served_body_languages` while no
   French body is served (Decision 89 section 4). True once the French expressions land.
-
-## DATA: retain Formex package outcome diagnostics
-
-The successful three-seed mount holds34EU XHTML members but admits only two Formex article
-expressions;32members report package_not_acquired. The mount's coarse Stage3 disposition omits
-the exact package reason and detail, so diagnosing it later would otherwise need reconstruction
-or another acquisition. Reversible driver decision: print the existing reconciliation as one
-JSON diagnostic line in Lex.V3.Tool, including every expression's work/language, typed outcome,
-not-acquired/inventory/transport reasons, observed status and original detail. Acquired packages
-include their retained content digest. Refused populations retain null totals/outcomes rather
-than claiming a complete empty population.
-
-This draft adds no requests, retries or eligibility/admission changes. The projection is diagnostic
-output, not proof or a new acquisition outcome. All out-of-scope-language outcomes remain explicit.
-Tests extend real scripted population cases for acquired/ineligible/out-of-scope, annex rejection,
-malformed package and unexpected status; one new case checks refused totals and escaped detail.
-Build, required fast/affected ingest, review and CI remain pending while PR827 review runs.
-
-
-Formex diagnostic validation completed at a53ae771: clean Release build (93.27 s),
-`pwsh -File eng/test-fast.ps1` (3,076 passed, one platform skip), and all 29 affected
-EuFormexPackagePopulationProducer/EuFirstMountAcquisition ingest tests passed. Refused runs
-report unknown reconciliation totals as null; attempted enumeration remains an observed count.
-Tests cover acquired, language-out-of-scope, ineligible, invalid package, missing inventoried
-main body, acquisition failure and escaped refusal detail. Required Claude review and green
-exact-head CI remain merge gates. Full EU retry also requires the disk reserve in its plan;
-cited custody and evidence are preserved under the new disk standing order.

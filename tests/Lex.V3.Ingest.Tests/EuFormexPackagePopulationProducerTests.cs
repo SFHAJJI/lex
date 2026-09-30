@@ -39,7 +39,7 @@ public sealed class EuFormexPackagePopulationProducerTests
         Assert.AreEqual(JsonValueKind.Null, root.GetProperty("not_enumerated_language_out_of_scope_count").ValueKind);
         Assert.AreEqual(0, root.GetProperty("enumerated_count").GetInt32());
         Assert.AreEqual(JsonValueKind.Null, root.GetProperty("outcomes").ValueKind);
-        Assert.AreEqual(nameof(EuFormexPackagePopulationRefusal.RunNotComplete), root.GetProperty("refusal").GetString());
+        Assert.AreEqual("run_not_complete", root.GetProperty("refusal").GetString());
         Assert.AreEqual(detail, root.GetProperty("detail").GetString());
     }
 
@@ -90,7 +90,7 @@ public sealed class EuFormexPackagePopulationProducerTests
         Assert.AreEqual(EuFormexPackageOutcomeKind.NotEnumeratedLanguageOutOfScope, outcome.Kind);
         Assert.AreSame(other, outcome.Expression);
         var diagnostic = DiagnosticOutcome(result, outcome);
-        Assert.AreEqual(nameof(EuFormexPackageOutcomeKind.NotEnumeratedLanguageOutOfScope),
+        Assert.AreEqual("not_enumerated_language_out_of_scope",
             diagnostic.GetProperty("kind").GetString());
         Assert.AreEqual(JsonValueKind.Null, diagnostic.GetProperty("observed_status").ValueKind);
         Assert.AreEqual(JsonValueKind.Null, diagnostic.GetProperty("retained_package_sha256").ValueKind);
@@ -200,7 +200,7 @@ public sealed class EuFormexPackagePopulationProducerTests
         Assert.IsNull(frenchOutcome.Detail);
         var acquiredDiagnostic = DiagnosticOutcome(result, englishOutcome);
         Assert.AreEqual(GdprFmx4Sha256, acquiredDiagnostic.GetProperty("retained_package_sha256").GetString());
-        Assert.AreEqual(nameof(EuFormexPackageOutcomeKind.NotEligible),
+        Assert.AreEqual("not_eligible",
             DiagnosticOutcome(result, frenchOutcome).GetProperty("kind").GetString());
 
         // Every product request is a manifestation enumeration or the one package route.
@@ -306,6 +306,10 @@ public sealed class EuFormexPackagePopulationProducerTests
 
         var outcome = result.Reconciliation!.Outcomes.Single(outcome => outcome.ExpressionIdentity == english.Identity);
         Assert.AreEqual(EuFormexPackageOutcomeKind.Unavailable, outcome.Kind, outcome.Detail);
+        var diagnostic = DiagnosticOutcome(result, outcome);
+        Assert.AreEqual("unavailable", diagnostic.GetProperty("kind").GetString());
+        Assert.AreEqual("requested_representation_not_served", diagnostic.GetProperty("unavailable_reason").GetString());
+        Assert.AreEqual(404, diagnostic.GetProperty("observed_status").GetInt32());
         Assert.AreEqual(404, outcome.ObservedStatus);
         Assert.AreEqual(1, handler.PackageRequests.Count);
         Assert.AreEqual(9, result.ProductRequestCount);
@@ -324,7 +328,7 @@ public sealed class EuFormexPackagePopulationProducerTests
         Assert.AreEqual(500, outcome.ObservedStatus);
         var diagnostic = DiagnosticOutcome(result, outcome);
         Assert.AreEqual(500, diagnostic.GetProperty("observed_status").GetInt32());
-        Assert.AreEqual(nameof(EuFormexPackageOutcomeKind.RouteRefused), diagnostic.GetProperty("kind").GetString());
+        Assert.AreEqual("route_refused", diagnostic.GetProperty("kind").GetString());
         StringAssert.Contains(outcome.Detail, "500");
     }
 
@@ -342,7 +346,7 @@ public sealed class EuFormexPackagePopulationProducerTests
         Assert.AreEqual(EuFormexAnnexInventoryRefusal.PackageUnreadable, outcome.PackageRefusal);
         var diagnostic = DiagnosticOutcome(result, outcome);
         Assert.AreEqual(200, diagnostic.GetProperty("observed_status").GetInt32());
-        Assert.AreEqual(nameof(EuFormexAnnexInventoryRefusal.PackageUnreadable),
+        Assert.AreEqual("package_unreadable",
             diagnostic.GetProperty("package_refusal").GetString());
     }
 
@@ -365,7 +369,7 @@ public sealed class EuFormexPackagePopulationProducerTests
         Assert.AreEqual(EuFormexPackageOutcomeKind.NotAcquired, outcome.Kind, outcome.Detail);
         Assert.AreEqual(EuFormexPackageNotAcquiredReason.AnnexXhtmlNotInventoried, outcome.NotAcquiredReason);
         var diagnostic = DiagnosticOutcome(result, outcome);
-        Assert.AreEqual(nameof(EuFormexPackageNotAcquiredReason.AnnexXhtmlNotInventoried),
+        Assert.AreEqual("annex_xhtml_not_inventoried",
             diagnostic.GetProperty("not_acquired_reason").GetString());
         Assert.AreEqual(outcome.Detail, diagnostic.GetProperty("detail").GetString());
         StringAssert.Contains(outcome.Detail, "1 annex member");

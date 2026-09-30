@@ -1,3 +1,4 @@
+using Lex.V3.Contracts;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Lex.V3.Contracts.Custody;
@@ -101,7 +102,7 @@ public sealed class EuFormexPackagePopulationResult
     /// <summary>
     /// Diagnostic projection of the existing reconciliation for retained CLI logs. It creates no
     /// proof or acquisition outcome. On refusal, the expression total is unknown and outcomes null.
-    /// Enum names are diagnostic codes; publisher identities and details are JSON-escaped.
+    /// Enum values use their declared wire codes; publisher identities and details are JSON-escaped.
     /// </summary>
     public string CreateOutcomeDiagnosticsJson() => JsonSerializer.Serialize(new
     {
@@ -112,20 +113,20 @@ public sealed class EuFormexPackagePopulationResult
         eligible_count = Delivered ? (int?)EligibleExpressionCount : null,
         acquired_count = Delivered ? (int?)AcquiredExpressionCount : null,
         not_enumerated_language_out_of_scope_count = Delivered ? (int?)NotEnumeratedExpressionCount : null,
-        refusal = Refusal?.ToString(),
+        refusal = Refusal is { } refusal ? ContractWire.NameOf(refusal) : null,
         detail = Detail,
         outcomes = Reconciliation?.Outcomes.Select(static outcome => new
         {
             work = outcome.ExpressionIdentity.PublisherWorkId,
             expression = outcome.ExpressionIdentity.PublisherExpressionId,
             language = outcome.Expression.OfficialLanguage,
-            kind = outcome.Kind.ToString(),
+            kind = ContractWire.NameOf(outcome.Kind),
             not_acquired_reason = outcome.NotAcquiredReason == EuFormexPackageNotAcquiredReason.None
-                ? null : outcome.NotAcquiredReason.ToString(),
+                ? null : ContractWire.NameOf(outcome.NotAcquiredReason),
             package_refusal = outcome.PackageRefusal == EuFormexAnnexInventoryRefusal.None
-                ? null : outcome.PackageRefusal.ToString(),
-            acquisition_refusal = outcome.AcquisitionRefusal?.ToString(),
-            unavailable_reason = outcome.UnavailableReason?.ToString(),
+                ? null : ContractWire.NameOf(outcome.PackageRefusal),
+            acquisition_refusal = outcome.AcquisitionRefusal is { } acquisitionRefusal ? ContractWire.NameOf(acquisitionRefusal) : null,
+            unavailable_reason = outcome.UnavailableReason is { } unavailableReason ? ContractWire.NameOf(unavailableReason) : null,
             observed_status = outcome.ObservedStatus,
             retained_package_sha256 = outcome.AcquiredInventory?.SourceReceipt.Reference.ContentSha256,
             detail = outcome.Detail,
