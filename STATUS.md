@@ -13,8 +13,11 @@ and subtitle in publisher order as the independently retained Formex TITLE.Value
 must still match complete package entries and exact titles; no annex or PDF admission is bypassed.
 
 The draft includes four exact retained XHTML/ZIP fixtures with SHA-256 pins and tests comparing
-both languages' titles against their Formex entries, plus valid/invalid identifier cases. Build,
-fast, affected ingest and cross-family review remain pending. This fixes a concrete parser limit;
+both languages' titles against their Formex entries, plus valid/invalid identifier cases. Validation
+at 752f6ff3 passed clean build (41.41 s), required fast (3,085 plus one platform skip, 97.513 s),
+and 106 affected ingest tests (two live skips, 44.695 s). Commands and results are retained under
+C:\lex-v3\lanes\eu-annex-publisher-*. Required review and green CI remain pending.
+This fixes a concrete parser limit;
 it does not claim to explain all 32 prior package-not-acquired outcomes or complete the annex chain.
 
 ## Luxembourg scope input reuse (Codex, 2026-09-30)
