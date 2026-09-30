@@ -106,8 +106,13 @@ export function imageFailures(image, { web, mount, report }) {
   const failures = [];
   const { config } = image;
   if (config.os !== "linux" || config.architecture !== "amd64") failures.push(`the image is ${config.os}/${config.architecture}, not linux/amd64`);
+  // A user is `user[:group]`, by name or number; root is the name `root` or the number 0, whatever group
+  // follows (review of #821: `0:1654` and `root:1654` run as root).
   const user = config.config?.User ?? "";
-  if (user === "" || user === "0" || user === "root") failures.push(`the image runs as ${user === "" ? "root (no user set)" : user}, not a non-root user`);
+  const who = user.split(":")[0];
+  if (who === "" || who === "root" || (/^\d+$/.test(who) && Number(who) === 0)) {
+    failures.push(`the image runs as ${user === "" ? "root (no user set)" : user}, not a non-root user`);
+  }
   if (JSON.stringify(config.config?.Entrypoint) !== JSON.stringify(["dotnet", "/app/Lex.V3.Api.dll"])) failures.push(`the image starts ${JSON.stringify(config.config?.Entrypoint)}, not the API`);
   const base = config.config?.Labels?.["org.opencontainers.image.base.name"] ?? "";
   if (!/@sha256:[0-9a-f]{64}$/.test(base)) failures.push(`the base image is not named by digest: ${JSON.stringify(base)}`);

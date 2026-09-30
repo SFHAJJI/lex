@@ -120,6 +120,10 @@ test("the image must hold the API, the live pages and the mount byte for byte, a
     .some((failure) => failure.startsWith("lex-corpus-6.json in the image is sha256:")), "a file whose digest is not the build report's");
   assert.ok(failing({ user: "0" }).includes("the image runs as 0, not a non-root user"));
   assert.ok(failing({ user: "" }).includes("the image runs as root (no user set), not a non-root user"));
+  for (const root of ["0:1654", "root:1654", "00", "root"]) {
+    assert.ok(failing({ user: root }).includes(`the image runs as ${root}, not a non-root user`), `${root} runs as root, whatever group follows (review of #821)`);
+  }
+  assert.deepEqual(failing({ user: "1654:1654" }), [], "a non-root user with its group passes");
   assert.ok(failing({ entrypoint: ["sh"] }).some((failure) => failure.startsWith("the image starts")));
   assert.ok(failing({ base: "mcr.microsoft.com/dotnet/aspnet:10.0" }).some((failure) => failure.startsWith("the base image is not named by digest")));
   assert.ok(failing({ appFiles: [["app/v3-web/index.html", WEB[0][1]]] }).includes("the app layer holds no app/Lex.V3.Api.dll"));
