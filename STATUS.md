@@ -743,8 +743,9 @@ The evaluation card's words join the chrome table (PR #807).
 - The card rendered clean, and failing with one gate failed and one control missed, is
   byte-identical before and after. The Trust and Coverage page differs only in React's hydration
   boundaries.
-- The chrome scan now covers the card as well, so what it still leaves out is the refusal card and
-  the `Coverage` component. The French is drafted. The card beside the release assets belongs to the
+- The chrome scan now covers the card as well. It exempts the card's values but not its verdicts
+  (review of #807: the card's own "pass" had let a hard-coded "pass" through). What it still leaves
+  out is the refusal card and the `Coverage` component. The French is drafted. The card beside the release assets belongs to the
   release pipeline.
 
 The live export composer and its journey step (PR #789), the eighth screen. `dist-live/export.html`

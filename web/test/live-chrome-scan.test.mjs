@@ -95,6 +95,17 @@ function split(markup, attribute) {
   throw new Error(`the element with ${attribute} is never closed`);
 }
 
+/**
+ * The evaluation card as the data it shows: every value but its verdicts, which the page says in the
+ * table's words ("pass", "caught the shuffle"), so a verdict written into the page by hand is caught
+ * (review of #807: the card's "pass" exempted a hard-coded "pass").
+ */
+function withoutVerdicts(node) {
+  if (Array.isArray(node)) return node.map(withoutVerdicts);
+  if (node === null || typeof node !== "object") return node;
+  return Object.fromEntries(Object.entries(node).filter(([key]) => key !== "verdict").map(([key, value]) => [key, withoutVerdicts(value)]));
+}
+
 /** Every string and number an answer carries, longest first, so a longer value is taken out whole. */
 function dataOf(...values) {
   const found = new Set();
@@ -148,7 +159,7 @@ test("no interface text on a live page or a census answer bypasses the chrome ta
     // statute-language selects' "English" hid behind a page-wide exemption). The evaluation card's own
     // values (its target sentence, set names, figures) are the card's.
     const { inside: nav, outside: rest } = split(render(), 'data-locale-nav=""');
-    scan(`${name} page`, rest, name === "coverage" ? dataOf(app.CENSUS_EVALUATION_CARD) : []);
+    scan(`${name} page`, rest, name === "coverage" ? dataOf(withoutVerdicts(app.CENSUS_EVALUATION_CARD)) : []);
     scan(`${name} locale navigation`, nav, dataOf(["English", "Français", "Deutsch", "Lëtzebuergesch"]));
   }
 
