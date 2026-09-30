@@ -82,6 +82,8 @@ public sealed class GuardedConstructionCensusTests
                     + "method public static Lex.V3.Ingest.CorpusRecordSetReadResult::Reopened",
                 "Lex.V3.Ingest.CorpusRecordSetWriteResult: constructor private instance "
                     + "Lex.V3.Ingest.CorpusRecordSetWriteResult::.ctor, "
+                    + "method private instance "
+                    + "Lex.V3.Ingest.CorpusRecordSetWriter::WriteChunkedAsync, "
                     + "method public instance Lex.V3.Ingest.CorpusRecordSetWriter::WriteAsync, "
                     + "method public static Lex.V3.Ingest.CorpusRecordSetWriteResult::Refused, "
                     + "method public static Lex.V3.Ingest.CorpusRecordSetWriteResult::Written",

@@ -1015,7 +1015,7 @@ public sealed class EuQueryExecutionResult
     public SourceArtifactRef? CorpusRecordSetRef { get; }
 
     /// <summary>
-    /// The custody address of this run's retained corpus/6 record set. Present if and only if the
+    /// The custody address of this run's inline corpus/6 bytes or ordered chunk root. Present if and only if the
     /// result is delivered. Consumers reopen the set with this receipt and verify its independent,
     /// domain-separated identity with <see cref="CorpusRecordSetRef"/>.
     /// </summary>
@@ -1023,7 +1023,7 @@ public sealed class EuQueryExecutionResult
 
     /// <summary>
     /// D1-06c-EU fix two: the corpus/6 record set this run wrote, reopened and verified through its
-    /// own checked door (<see cref="Lex.V3.Contracts.Source.Corpus.VerifiedCorpusRecordSet.ParseAndVerify"/>)
+    /// own checked door (<see cref="Lex.V3.Contracts.Source.Corpus.VerifiedCorpusRecordSet.ParseAndVerifyStream"/>)
     /// by <see cref="Lex.V3.Ingest.CorpusRecordSetWriter.WriteAsync"/> itself, never the in-memory set
     /// this run built. Present iff this result is delivered.
     /// </summary>

@@ -403,3 +403,33 @@ test("on the fixture mount every step must answer, and coverage must name the mo
   assert.ok(expectations.slice(1).every(([, expected]) => expected.texts.length > 0), "every other step names the texts it must show");
   assert.ok(expectations.find(([name]) => name === "dossier")[1].texts.includes(mount.work_key), "the dossier names the mount's work");
 });
+
+test("on the licence-blocked mount no page may show or carry an article's words, and reading and export must refuse text_withheld", () => {
+  const withheld = "L’Assemblée générale annuelle se tient";
+  const expected = { ...SEARCH, absentTexts: [withheld] };
+  assert.deepEqual(journeyVerdict(goodSearch(), expected), [], "a page without the words passes");
+  const shown = { ...goodSearch(), text: `${goodSearch().text}
+L’Assemblée  générale
+annuelle se tient le premier lundi` };
+  assert.ok(journeyVerdict(shown, expected).includes(`the page shows withheld text "${withheld}"`), "shown, whatever the whitespace");
+  const carried = { ...goodSearch(), html: `<div hidden>${withheld}</div>` };
+  assert.ok(journeyVerdict(carried, expected).includes(`the page's markup carries withheld text "${withheld}"`), "carried in hidden markup");
+
+  const refusal = { ...goodSearch(), answerState: "refusal", text: `${goodSearch().text} text_withheld`, refusalCodes: ["text_withheld"] };
+  assert.ok(!journeyVerdict(refusal, { ...SEARCH, state: "refusal", refusalCode: "text_withheld", mustRefuse: "text_withheld" }).some((failure) => failure.startsWith("the step must refuse")), "the refusal the licence demands");
+  assert.ok(journeyVerdict(goodSearch(), { ...SEARCH, mustRefuse: "text_withheld" }).includes("the step must refuse text_withheld, and it was held to an answer"), "an answer where the licence must withhold the text");
+  assert.ok(journeyVerdict(refusal, { ...SEARCH, state: "refusal", refusalCode: "identifier_unknown", mustRefuse: "text_withheld" })
+    .includes("the step must refuse text_withheld, and it was held to the refusal identifier_unknown"), "another refusal is not the licence's");
+
+  // The review of #834's two reproductions: another card with the code mentioned elsewhere, and a passage past an article's opening.
+  const otherCard = { ...refusal, text: "identifier_unknown; diagnostic mentions text_withheld", refusalCodes: ["identifier_unknown"] };
+  const held = { ...SEARCH, state: "refusal", refusalCode: "text_withheld", mustRefuse: "text_withheld" };
+  const failures = journeyVerdict(otherCard, held);
+  assert.ok(failures.includes("the page's refusal card shows [\"identifier_unknown\"], not text_withheld"), failures.join("\n"));
+  assert.ok(failures.includes("the step must show the refusal card text_withheld, and it shows [\"identifier_unknown\"]"));
+  assert.ok(journeyVerdict({ ...refusal, refusalCodes: [] }, held).includes("the step must show the refusal card text_withheld, and it shows []"), "no card at all");
+  const later = "confidential later article words are expo";
+  const leaked = { ...refusal, text: `text_withheld; ${later}sed here` };
+  assert.ok(journeyVerdict(leaked, { ...held, absentTexts: ["Opening forty characters of the article", later] }).includes(`the page shows withheld text "${later}"`),
+    "a window past the opening is looked for too");
+});
