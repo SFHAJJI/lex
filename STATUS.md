@@ -40,6 +40,17 @@ verification reread chunks, and all writes include a canonical sizing pass. This
 requires measurement before any full Luxembourg fit claim. Repair validation and exact-head CI
 remain required; no production Azure operation or publisher traffic is part of these checks.
 
+Repair validation at 45de557f passed clean build (75.17 s), required fast (3,085 passed,
+one platform skip, 65.608 s), and 140 broader ingest tests (two live skips, 87.773 s).
+The subsequent full CI run 36782023846 found two custody-store census failures: the new
+ChunkReadFaultStore test double was not declared exempt. The affected local filter and review
+had omitted that census. This follow-up names its constructor-configured corruption/timeout
+behavior and updates the observed inventory from 28 to 29 stores (nine driven, 20 exempt).
+Production behavior is unchanged; fresh full CI must verify the test-inventory correction.
+The live all-82-seed EU retry began at 21:51 UTC from merged 7e90e943, in fresh custody at
+C:\lex-v3\eu-population-20260930-2. Its 20,000-wire ceiling, frozen inputs and unchanged
+storage allowance were verified. It has not completed; full Luxembourg remains resource-gated.
+
 ## Luxembourg scope input reuse (Codex, 2026-09-30)
 
 Scope resolution retains four rule-evaluation objects and multiple not-applicable selectors per
