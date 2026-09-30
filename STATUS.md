@@ -38,10 +38,10 @@ CI evidence are recorded in the pull request before merge.
 
 ## Heads
 
-- `v3/integration`: `66bdcb6a` (2026-09-30, PR #801 merged). Build 45 s. Fast lane
-  (`eng/test-fast.ps1`): 3,038 tests, 3,037 pass, 1 skipped. Ingest suite: green on CI for PR #760
+- `v3/integration`: `7ccc31ea` (2026-09-30, PR #798 merged). Build 45 s. Fast lane
+  (`eng/test-fast.ps1`): 3,067 tests, 3,066 pass, 1 skipped (PR #798's validation). Ingest suite: green on CI for PR #760
   (the CI `dotnet` job runs the whole solution on every pull request, about 7 min on the runner;
-  green for PR #801);
+  green for PR #798);
   locally about 15 min. 937 web tests pass. CI's web job can flake in `keyboard-walk.test.mjs`
   ("browser debugger never answered"); rerunning the failed job is the fix.
 - Driver: Claude Opus 5.5 since 2026-09-29 (the Fable 5.1 driver ran out of tokens on 2026-09-28
