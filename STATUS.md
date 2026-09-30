@@ -314,20 +314,26 @@ The six codes nothing produces yet (`advice_boundary`, `derivation_refused`, `no
 `out_of_corpus_scope`, `rate_limited`, `upstream_unreachable`) are outside the set. Two production
 mutations were each caught: `as_of` choosing one of two states on an ambiguous date fails both
 gates, and `in_force_on` answering the twin date for a named work instead of refusing fails the
-temporal gate. The retrieval case set (PR #768) has 11 cases in one collection over two works of
-one date, and the test writes every article's text: 5 searches with judged provisions, among them a
-strict hit graded 3 above a relaxed hit graded 1, and one query that hits both works. It also has
-3 searches that must find nothing (a word held nowhere, and a word asked with the `identifier`
-scope of the other work, in each direction) and 3 exact identifiers asked through `verify` with an
-article anchor, which is the one operation that resolves a provision. Anchor nDCG@10 is 1.0, and
-no-hit accuracy and resolver exactness are 1.0. The test declares the nDCG threshold at 1.0
-because the judgments are written from the corpus the test builds: it measures the path's
-exactness, not retrieval quality, and the labelled statistical row stays "not yet labelled". The
-judgments-shuffle control is caught: nDCG@10 falls below 0.15 and both invariant gates stop
-passing. The launch contract's three shuffled controls are now each shown to fail on the real
-handler. A production mutation (`search` serving relaxed hits before strict ones) fails the
-retrieval gate. The cases come from the fixture, so the gates prove the path until a real mount
-exists.
+temporal gate. The retrieval case set (PR #768) has 13 cases in one collection over two works of one date, and
+the test writes every article's text. There are 6 judged searches: a strict hit graded 3 above a
+relaxed hit graded 1, one query both works answer, and one search scoped by `identifier` to the
+second work that must find that work's article and not the first's. There are 4 cases that must
+find nothing: a word held nowhere; a word asked with the `identifier` scope of the other work, in
+each direction; and a near-miss article permalink naming an anchor the state does not hold, which
+`verify` must refuse `anchor_not_in_version`. The last 3 cases are exact article permalinks
+(`permalink#anchor`), the form only `verify` accepts; it answers each held anchor with its work.
+`verify` names the requested anchor back rather than serving a provision, so what the resolver
+stratum measures is that each held permalink is accepted under its own work and a missing anchor
+is refused. A refused search fails the test: search answers zero hits, never a refusal. Anchor
+nDCG@10 is 1.0, and no-hit accuracy and resolver exactness are 1.0. The test declares the nDCG
+threshold at 1.0 because the judgments are written from the corpus the test builds: it measures
+the path's exactness, not retrieval quality, and the labelled statistical row stays "not yet
+labelled". The judgments-shuffle control is caught: nDCG@10 falls below 0.15 and both invariant
+gates stop passing. The launch contract's three shuffled controls are now each shown to fail on
+the real handler. Three production mutations each fail the retrieval gate: `search` serving
+relaxed hits before strict ones, a scoped search matching no work, and `verify` answering an
+anchor the state does not hold. The cases come from the fixture, so the gates prove the path
+until a real mount exists.
 
 ## Data
 

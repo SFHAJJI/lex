@@ -201,11 +201,13 @@ public sealed class V3MachineGatesTests
             ["art_3"] = "Le membre suppléant remplace le titulaire empeche.",
             ["art_4"] = "Le délai de recours est d'un mois.",
             ["art_5"] = "Le préavis est de trois mois.",
+            ["art_8"] = "Le mandat est renouvelable une fois.",
         });
         await WriteTextsAsync(fixture, second.ExpressionIri, new Dictionary<string, string>(StringComparer.Ordinal)
         {
             ["art_4"] = "Le recours est introduit dans un délai raisonnable, de bonne foi.",
             ["art_5"] = "Aucun préavis n'est requis.",
+            ["art_8"] = "Le mandat prend fin a l'assemblee suivante.",
             ["art_7"] = "La cotisation annuelle est fixee par le conseil.",
         });
         using var mount = await V3CorpusMount.OpenAsync(fixture.Directory, CancellationToken.None);
@@ -213,9 +215,12 @@ public sealed class V3MachineGatesTests
         var permalinkA = await PermalinkAsync(mount, workA, fixture.ApplicabilityDate);
         var permalinkB = await PermalinkAsync(mount, workB, fixture.ApplicabilityDate);
 
-        // Search cases are asked through `search` (a strict hit, the phrase, above a relaxed one, every term); the
-        // exact-identifier cases through `verify` with an article anchor, the one operation that resolves a
-        // provision. Grades: 3 supports, 1 is context (the relaxed hit that holds the terms but not the phrase).
+        // Search cases are asked through `search` (a strict hit, the phrase, above a relaxed one, every term). A scoped
+        // search must find the scoped work's article and not the other's, so scope that is ignored and scope that
+        // finds nothing both fail. The exact-identifier cases are article permalinks (`permalink#anchor`), the form
+        // only `verify` accepts: it answers a held anchor with its work and must refuse an anchor the state does not
+        // hold, which the near-miss case (no hit) holds it to. Grades: 3 supports, 1 is context (the relaxed hit that
+        // holds the terms but not the phrase).
         const string Collection = "lu-fixture";
         var requests = new Dictionary<string, (EvaluationCaseKind Kind, string Operation, object Parameters, JudgedAnchor[] Judged)>(StringComparer.Ordinal)
         {
@@ -232,6 +237,9 @@ public sealed class V3MachineGatesTests
             ["no-hit-word"] = (EvaluationCaseKind.Retrieval, "search", new { query = "zéphyr", language = "fra" }, []),
             ["no-hit-scoped-to-b"] = (EvaluationCaseKind.Retrieval, "search", new { query = "quorum", language = "fra", identifier = $"/lu-legilux/{workB}" }, []),
             ["no-hit-scoped-to-a"] = (EvaluationCaseKind.Retrieval, "search", new { query = "cotisation", language = "fra", identifier = $"/lu-legilux/{workA}" }, []),
+            ["scoped-to-b"] = (EvaluationCaseKind.Retrieval, "search", new { query = "mandat", language = "fra", identifier = $"/lu-legilux/{workB}" },
+                [Supporting(workB, "art_8")]),
+            ["near-miss-anchor-not-held"] = (EvaluationCaseKind.Retrieval, "verify", new { identifier = permalinkA + "#art_44", language = "fra" }, []),
             ["exact-first-article"] = (EvaluationCaseKind.ExactIdentifier, "verify", new { identifier = permalinkA + "#art_1er", language = "fra" },
                 [Supporting(workA, "art_1er")]),
             ["exact-numbered-sub-article"] = (EvaluationCaseKind.ExactIdentifier, "verify", new { identifier = permalinkA + "#art_24-1", language = "fra" },
@@ -239,10 +247,9 @@ public sealed class V3MachineGatesTests
             ["exact-in-second-work"] = (EvaluationCaseKind.ExactIdentifier, "verify", new { identifier = permalinkB + "#art_10", language = "fra" },
                 [Supporting(workB, "art_10")]),
         };
-        CollectionAssert.IsSubsetOf(
-            new[] { "art_1er", "art_24-1", "art_10" },
-            fixture.ArticlesOfOwnState().Select(static article => article.PublisherId).ToArray(),
-            "every anchor an exact case names is held.");
+        var held = fixture.ArticlesOfOwnState().Select(static article => article.PublisherId).ToArray();
+        CollectionAssert.IsSubsetOf(new[] { "art_1er", "art_24-1", "art_10" }, held, "every anchor an exact case names is held.");
+        CollectionAssert.DoesNotContain(held, "art_44", "the near-miss anchor is one the fixture's reviewed profile does not admit.");
         var cases = requests
             .Select(static pair => new EvaluationCase(pair.Key, Collection, pair.Value.Kind, new QueryJudgments(pair.Key, pair.Value.Judged)))
             .ToArray();
@@ -250,8 +257,12 @@ public sealed class V3MachineGatesTests
         {
             var (_, operation, parameters, _) = requests[caseId];
             var envelope = EnvelopeAsync(mount, "/api/v3/" + operation, operation, parameters).GetAwaiter().GetResult();
-            if (envelope.Refusal is not null)
+            if (envelope.Refusal is { } refusal)
             {
+                // Search serves zero hits as an answer, so a refused search is a defect, never "found nothing";
+                // verify's only "no hit" is the anchor the state does not hold.
+                Assert.AreEqual("verify", operation, $"{caseId}: search refused {refusal.Code}.");
+                Assert.AreEqual("anchor_not_in_version", refusal.Code, caseId);
                 return [];
             }
 
@@ -294,7 +305,7 @@ public sealed class V3MachineGatesTests
     private static async Task WriteTextsAsync(MountedFixture fixture, string expressionIri, IReadOnlyDictionary<string, string> texts)
     {
         var held = fixture.ArticlesOfOwnState().Select(static article => article.PublisherId).ToArray();
-        CollectionAssert.IsSubsetOf(texts.Keys.ToArray(), held, "every article the set writes is held by the fixture's state.");
+        CollectionAssert.IsSubsetOf(texts.Keys.ToArray(), held, $"every article the set writes is held by the fixture's state ({string.Join(", ", held)}).");
         foreach (var publisherId in held)
         {
             await fixture.RewriteArticleTextAsync(
