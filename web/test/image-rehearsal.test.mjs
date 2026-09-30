@@ -158,11 +158,15 @@ test("a real mount is held to its build report; the journey's fixture mount to t
   try {
     const report = { corpus: { Sha256: "c".repeat(64) }, files: [{ Name: "lex-corpus-6.json", Sha256: "c".repeat(64) }] };
     await writeFile(join(directory, "build-report.json"), JSON.stringify(report));
-    assert.deepEqual(await mountReport(directory), { kind: "real", report });
+    const real = await mountReport(directory);
+    assert.equal(real.kind, "real");
+    assert.deepEqual(real.report, report);
+    assert.equal(real.bytes.toString(), JSON.stringify(report), "the bytes it read, which the release carries");
 
     await writeFile(join(directory, "journey-mount.json"), JSON.stringify({ schema: "lex-v3-journey-mount/1", corpus_sha256: "a".repeat(64), index_sha256: "b".repeat(64), work_key: "w" }));
     const fixture = await mountReport(directory);
     assert.equal(fixture.kind, "fixture", "a mount with journey-mount.json is the fixture mount");
+    assert.equal(JSON.parse(fixture.bytes.toString()).schema, "lex-v3-journey-mount/1", "the fixture's own manifest is what the release carries");
     assert.deepEqual(fixture.report.files, [{ Name: "luxembourg-index.sqlite3", Sha256: "b".repeat(64) }],
       "the index is held to the file digest the fixture names; the corpus digest it names is a snapshot digest, not its file's");
     assert.equal(fixture.report.corpus.Sha256, "a".repeat(64), "the snapshot digest the coverage probe holds the page to");
