@@ -23,6 +23,7 @@ export { VerifyCluster } from './VerifyCluster.jsx';
 export { Reading } from './Reading.jsx';
 export { Timeline, DERIVED_HOLE, DERIVED_OVERLAP, DERIVED_TITLE } from './Timeline.jsx';
 export { Coverage } from './Coverage.jsx';
+export { CoverageAnswerView, LiveCoverage } from './LiveCoverage.jsx';
 export {
   renderTimelineReactPage,
   renderCoverageReactPage,
