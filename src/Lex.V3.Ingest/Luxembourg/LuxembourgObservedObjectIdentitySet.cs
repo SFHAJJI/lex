@@ -108,7 +108,9 @@ public static class LuxembourgObservedObjectIdentitySetCanonicalWriter
     /// <remarks>
     /// Appends at the current destination position and leaves the caller's stream open. The digest
     /// covers only the bytes written by this call. JSON is flushed after an identity takes pending
-    /// output past 64 KiB, so a write can exceed that threshold by one encoded identity. The initial
+    /// output to 64 KiB, so a write can exceed that threshold by one encoded identity. Each JSON
+    /// flush also calls Flush on the caller's stream, including the final JSON flush before the
+    /// trailing newline is appended. The initial
     /// run-reference envelope is not bounded by that threshold. Destination writes and Flush may
     /// throw after partial output; callers must discard that output and must not publish a digest.
     /// </remarks>

@@ -5,7 +5,7 @@ every pull request that changes what is served, what is next or what is blocked.
 
 ## Luxembourg identity canonical output (Codex, 2026-09-30)
 
-The observed-object identity writer builds a full canonical buffer and copies it again for the
+The previous observed-object identity writer built a full canonical buffer and copied it again for the
 schema-domain digest. Reversible driver decision: write directly to the caller's stream and hash
 incrementally, with periodic JSON flushes. Preserve exact ordering, escaping, newline, digest,
 caller ownership and destination prefixes. Document partial writes and flush failures explicitly.
@@ -13,12 +13,18 @@ Persistence and canonical round-trip comparison use their owned MemoryStream bac
 instead of copying it with ToArray. The independent reader and persistence store remain buffered;
 this does not establish full-run fit.
 
-Two draft regressions cover 3,000 identities on a nonseekable stream, maximum observed write size,
+Two regressions cover 3,000 identities on a nonseekable stream, maximum observed write size,
 independent canonical bytes/hash/readback, prefix handling and stream ownership. This slice is
 prepared from current integration using the preserved draft. Validation at fb30816a passed a clean
 Release build (43.22 s), required fast (3,085 passed, one platform skip, 65.379 s), and 124 affected
-ingest tests (two live canaries skipped, 81.681 s). Exact commands and results are retained under
-C:\lex-v3\lanes\lu-identity-stream-*. Required cross-family review and green CI remain pending.
+ingest tests (two live EU tests skipped, 81.681 s). Exact commands and results are retained under
+C:\lex-v3\lanes\lu-identity-stream-*. Required Claude review returned MERGE with no material
+findings. It reproduced the fast and affected suites; adding the third caller, Stage3EvidenceLineage,
+passed 134 ingest tests with two live EU skips. Restoring the base writer made the new bounded-write
+regression fail as intended. The documentation repair now states that every JSON flush forwards
+Flush to the caller's stream, including the last JSON flush before the newline. All production
+callers currently own MemoryStreams. No production behavior changed after review; final CI remains
+a merge gate. No measured whole-run memory-fit claim is made.
 
 ## Luxembourg scope input reuse (Codex, 2026-09-30)
 
