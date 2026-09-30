@@ -16,17 +16,19 @@
 import { useEffect, useRef, useState } from 'react';
 
 import { RefusalCard } from './RefusalCard.jsx';
-import { LiveAnswer } from './LiveAnswer.jsx';
+import { LiveAnswer, Say } from './LiveAnswer.jsx';
 import {
   LIVE_READING_IDLE,
   READING_LANGUAGES,
   createReadingSession,
   quotationLanguageTag,
 } from '../scripts/live-reading.mjs';
-import { liveChrome } from '../scripts/live-chrome.mjs';
+import { countedEntry, liveChrome } from '../scripts/live-chrome.mjs';
 
-/** The forms' labels and buttons, from the interface copy table. */
+/** The forms' labels and buttons, and this screen's sentences, from the interface copy table. */
 const FORM = liveChrome().form;
+const COPY = liveChrome().reading;
+const COMMON = liveChrome().common;
 
 const IDLE = Object.freeze({ state: 'idle', sentence: LIVE_READING_IDLE });
 
@@ -37,7 +39,7 @@ function Article({ article, state }) {
       <blockquote lang={quotationLanguageTag(state.language)}>{article.text}</blockquote>
       {article.validityConflict ? (
         <p data-validity-conflict="">
-          This article's own date is {article.validFrom}; its state applies from {state.applicabilityDate}.
+          <Say template={COPY.validityConflict} values={{ own: article.validFrom, state: state.applicabilityDate }} />
         </p>
       ) : null}
       {article.notes.length > 0 ? (
@@ -50,7 +52,7 @@ function Article({ article, state }) {
         </ol>
       ) : null}
       <p>
-        Text digest <code>{article.textSha256}</code>, <code>{article.permalink}</code>
+        <Say template={COPY.digest} values={{ digest: <code>{article.textSha256}</code>, permalink: <code>{article.permalink}</code> }} />
       </p>
     </li>
   );
@@ -60,16 +62,25 @@ function StateReading({ state, workKey }) {
   return (
     <section data-state={state.stateSha256}>
       <h2>
-        {workKey}, {state.language}, the state applying from {state.applicabilityDate}
-        {state.nextApplicabilityDate === null ? '' : ` (the next state held applies from ${state.nextApplicabilityDate})`}
+        {state.nextApplicabilityDate === null ? (
+          <Say template={COPY.stateHeading} values={{ work: workKey, language: state.language, from: state.applicabilityDate }} />
+        ) : (
+          <Say template={COPY.stateHeadingNext} values={{ work: workKey, language: state.language, from: state.applicabilityDate, next: state.nextApplicabilityDate }} />
+        )}
       </h2>
       <p>
         <code>{state.permalink}</code>
       </p>
       <p data-counts="">
-        {state.articles.length} {state.articles.length === 1 ? 'article' : 'articles'} quoted,{' '}
-        {state.articlesWithoutText.length} held without text, {state.articlesNotAdmitted} not admitted;{' '}
-        {state.validityConflictCount} with their own date differing from the state's.
+        <Say
+          template={countedEntry(COPY.counts, state.articles.length)}
+          values={{
+            count: state.articles.length,
+            withoutText: state.articlesWithoutText.length,
+            notAdmitted: state.articlesNotAdmitted,
+            conflicts: state.validityConflictCount,
+          }}
+        />
       </p>
       <ol className="articles">
         {state.articles.map((article) => (
@@ -78,7 +89,7 @@ function StateReading({ state, workKey }) {
       </ol>
       {state.articlesWithoutText.length > 0 ? (
         <p data-without-text="">
-          Held without text: {state.articlesWithoutText.map((entry) => entry.publisherId).join(', ')}.
+          <Say template={COPY.withoutText} values={{ articles: state.articlesWithoutText.map((entry) => entry.publisherId).join(', ') }} />
         </p>
       ) : null}
     </section>
@@ -90,17 +101,20 @@ export function ReadingView({ view }) {
   return (
     <>
       <p data-rights="">
-        Text served under {view.rightsDisposition}. Read on {view.date}
-        {view.language === null ? '' : ` in ${view.language}`}.
+        {view.language === null ? (
+          <Say template={COPY.rights} values={{ rights: view.rightsDisposition, date: view.date }} />
+        ) : (
+          <Say template={COPY.rightsIn} values={{ rights: view.rightsDisposition, date: view.date, language: view.language }} />
+        )}
       </p>
       {view.states.map((state) => (
         <StateReading key={state.stateSha256} state={state} workKey={view.workKey} />
       ))}
-      <h3>What this reading does not hold</h3>
+      <h3>{COPY.notHeldHeading}</h3>
       <ul data-not-held={view.notHeld.length}>
         {view.notHeld.map((row) => (
           <li key={row.item}>
-            <strong>{row.item}</strong>: {row.reason}
+            <Say template={COMMON.notHeldRow} values={{ item: <strong>{row.item}</strong>, reason: row.reason }} />
           </li>
         ))}
       </ul>

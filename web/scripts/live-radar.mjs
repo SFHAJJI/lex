@@ -12,6 +12,7 @@ import { readChanges } from "./radar-answer.mjs";
 import { validateRefusal } from "./refusal-card.mjs";
 import { noCorpusMountedSentence } from "./live-refusals.mjs";
 import { isCalendarDate } from "./temporal.mjs";
+import { liveChrome } from "./live-chrome.mjs";
 
 /**
  * The languages the form offers besides "any": the platform answers a language it holds no state in
@@ -34,8 +35,8 @@ export const LIVE_RADAR_REFUSAL_SENTENCES = Object.freeze({
   retrieval_mode_unavailable: "This index cannot list this work's changes.",
 });
 
-export const LIVE_RADAR_IDLE = "Type two dates to list the publisher-dated states in that window.";
-export const LIVE_RADAR_LOADING = "Asking this server.";
+export const LIVE_RADAR_IDLE = liveChrome().radar.idle;
+export const LIVE_RADAR_LOADING = liveChrome().common.loading;
 
 export function unexpectedRefusalSentence(code) {
   return `The change radar was refused with ${code}.`;
