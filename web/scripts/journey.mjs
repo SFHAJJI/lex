@@ -30,11 +30,21 @@
 // every run also checks the headers the page arrived with: the page's reviewed CSP plus
 // `frame-ancestors 'none'`, HSTS, `Referrer-Policy: no-referrer` and `nosniff`.
 //
+// Every run also holds the API process to the launch contract's "no query text, IP or user agent
+// recorded": its standard output and error are captured from start to end, and its directory is
+// watched from when it first answers until the page has asked, with every file listed at both ends.
+// What it writes before it first answers is its startup, bounded in source by
+// `PublicRequestRecordingTests` (three startup messages, logging providers cleared) and held here to
+// carry none of the run's text. From then on the run fails if the process wrote anything at all
+// (naming the typed text, the browser's user agent or the loopback address if it wrote those), or if
+// any file under its directory was touched, including one written and deleted before the run ended.
+//
 // The mount is written by `V3JourneyMountTests` with `V3_WRITE_JOURNEY_MOUNT=<directory>`; it is the
 // test fixture's mount, so the journey proves the wiring, not a real corpus.
 
 import { spawn } from "node:child_process";
-import { cp, mkdtemp, readFile, readdir, rm } from "node:fs/promises";
+import { watch } from "node:fs";
+import { cp, mkdtemp, readFile, readdir, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -161,6 +171,20 @@ export function journeyVerdict(observed, expected) {
     if (observed.history.state !== "null") failures.push(`the page wrote history state: ${observed.history.state}`);
   }
   if (observed.cookie !== undefined && observed.cookie !== "") failures.push(`the page set a cookie: ${observed.cookie}`);
+  if (observed.api !== undefined) {
+    // What the API process recorded while serving the run: nothing, on its outputs or in its files.
+    const typed = step.typed === undefined ? [] : [step.typed].flat();
+    const everything = `${observed.api.startup ?? ""}${observed.api.output}`;
+    for (const text of typed) {
+      if (everything.includes(text)) failures.push(`the API process recorded the query text "${text}"`);
+    }
+    if (observed.userAgent && everything.includes(observed.userAgent)) failures.push("the API process recorded the browser's user agent");
+    if (observed.api.output.includes("127.0.0.1")) failures.push("the API process recorded an address");
+    if (observed.api.output.trim() !== "") failures.push(`the API process wrote output during the run: ${observed.api.output.trim().slice(0, 200)}`);
+    if (observed.api.changedFiles.length > 0) failures.push(`the API process wrote files: ${observed.api.changedFiles.join(", ")}`);
+    const touched = [...new Set((observed.api.fileEvents ?? []).map(([, path]) => path))];
+    if (touched.length > 0) failures.push(`the API process touched files while serving the run: ${touched.join(", ")}`);
+  }
   if (expected.servedByApi) {
     const header = (name) => Object.entries(observed.pageHeaders ?? {}).find(([key]) => key.toLowerCase() === name)?.[1] ?? null;
     const policy = `${cspValue()}; frame-ancestors 'none'`;
@@ -231,6 +255,36 @@ async function freePort() {
   return port;
 }
 
+/**
+ * Every change the file system reports under a directory from now until `stop()`, as `[event, path]`.
+ * Two listings, one before and one after, cannot see a file written and deleted between them (review
+ * of #801); a watch held for the whole interval does.
+ */
+export function watchFiles(root) {
+  const events = [];
+  const watcher = watch(root, { recursive: true }, (event, name) => { events.push([event, String(name ?? "")]); });
+  return {
+    async stop() {
+      // The system reports a change after it happens; a short wait lets the last ones arrive.
+      await new Promise((resolve) => setTimeout(resolve, 250));
+      watcher.close();
+      return events;
+    },
+  };
+}
+
+/** Every file under a directory, as its relative path and its size and modification time. */
+async function listFiles(root) {
+  const files = new Map();
+  for (const entry of await readdir(root, { recursive: true, withFileTypes: true })) {
+    if (!entry.isFile()) continue;
+    const path = join(entry.parentPath ?? entry.path, entry.name);
+    const facts = await stat(path);
+    files.set(path.slice(root.length + 1), `${facts.size}:${facts.mtimeMs}`);
+  }
+  return files;
+}
+
 async function startApi(apiOutput, mount, webRoot = null) {
   const home = await mkdtemp(join(tmpdir(), "lex-journey-api-"));
   await cp(apiOutput, home, { recursive: true });
@@ -243,10 +297,13 @@ async function startApi(apiOutput, mount, webRoot = null) {
   const child = spawn("dotnet", [join(home, "Lex.V3.Api.dll")], {
     cwd: home,
     env: { ...process.env, ASPNETCORE_URLS: origin, DOTNET_NOLOGO: "1" },
-    stdio: ["ignore", "ignore", "pipe"],
+    stdio: ["ignore", "pipe", "pipe"],
   });
+  // Both outputs, from the first byte: what the process records is measured, not assumed.
   let stderr = "";
-  child.stderr.on("data", (chunk) => { stderr += chunk; });
+  let output = "";
+  child.stdout.on("data", (chunk) => { output += chunk; });
+  child.stderr.on("data", (chunk) => { stderr += chunk; output += chunk; });
   let exited = false;
   child.on("exit", () => { exited = true; });
   const deadline = Date.now() + 60_000;
@@ -255,7 +312,9 @@ async function startApi(apiOutput, mount, webRoot = null) {
       const answer = await fetch(`${origin}/api/v3/coverage`, {
         method: "POST", headers: { "content-type": "application/json" }, body: '{"operation_id":"coverage","parameters":{}}',
       });
-      if (answer.status === 200) return { origin, child, home, stderr: () => stderr };
+      if (answer.status === 200) {
+        return { origin, child, home, stderr: () => stderr, output: () => output, outputAtStart: output.length, filesAtStart: await listFiles(home), fileWatch: watchFiles(home) };
+      }
     } catch {
       // Not listening yet.
     }
@@ -379,6 +438,7 @@ async function observe(browser, pageOrigin, step) {
       cookie: await evaluate("document.cookie"),
       pageHeaders,
       then,
+      userAgent: await evaluate("navigator.userAgent"),
     };
   } finally {
     chrome.kill();
@@ -393,6 +453,10 @@ async function run(apiOutput, mount, expected, browser, liveRoot) {
   const pageOrigin = live === null ? api.origin : await listen(live);
   try {
     const observed = await observe(browser, pageOrigin, expected.step);
+    const fileEvents = await api.fileWatch.stop();
+    const filesAtEnd = await listFiles(api.home);
+    const changedFiles = [...filesAtEnd].filter(([path, facts]) => api.filesAtStart.get(path) !== facts).map(([path]) => path);
+    observed.api = { startup: api.output().slice(0, api.outputAtStart), output: api.output().slice(api.outputAtStart), changedFiles, fileEvents };
     return { observed, failures: journeyVerdict(observed, { ...expected, origin: pageOrigin }) };
   } finally {
     if (live !== null) await new Promise((resolve) => live.close(resolve));

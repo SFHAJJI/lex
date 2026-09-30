@@ -14,6 +14,11 @@ import { useEffect, useRef, useState } from 'react';
 
 import { RefusalCard } from './RefusalCard.jsx';
 import { DOSSIER_LANGUAGES, LIVE_DOSSIER_IDLE, createDossierSession } from '../scripts/live-dossier.mjs';
+import { quotationLanguageTag } from '../scripts/live-reading.mjs';
+import { liveChrome } from '../scripts/live-chrome.mjs';
+
+/** The forms' labels and buttons, from the interface copy table. */
+const FORM = liveChrome().form;
 
 const IDLE = Object.freeze({ state: 'idle', sentence: LIVE_DOSSIER_IDLE });
 
@@ -23,7 +28,7 @@ function asSentence(text) {
   return /[.!?]$/.test(capitalised) ? capitalised : `${capitalised}.`;
 }
 
-function Titles({ titles }) {
+export function DossierTitles({ titles }) {
   if (titles.length === 0) {
     return <p data-titles="none">This index holds no title for this work.</p>;
   }
@@ -31,8 +36,19 @@ function Titles({ titles }) {
     <ul data-titles={titles.length}>
       {titles.map((group) => (
         <li key={`${group.language}.${group.expressionIri}`}>
+          {/* The publisher's titles are statute text, marked in their own language, apart from the
+              interface's (the launch contract's statute-language line). */}
           {group.language}:{' '}
-          {[...group.titles.map((entry) => entry.title), ...group.shortTitles.map((entry) => `${entry.title} (short title)`)].join('; ')}
+          {[
+            ...group.titles.map((entry) => ({ title: entry.title, short: false })),
+            ...group.shortTitles.map((entry) => ({ title: entry.title, short: true })),
+          ].map((entry, index) => (
+            <span key={`${index}.${entry.title}`}>
+              {index === 0 ? '' : '; '}
+              <span lang={quotationLanguageTag(group.language)}>{entry.title}</span>
+              {entry.short ? ' (short title)' : ''}
+            </span>
+          ))}
         </li>
       ))}
     </ul>
@@ -47,7 +63,7 @@ export function DossierView({ view }) {
       <p>
         <code>{view.publisherWorkIri}</code>, held in {view.availableLanguages.join(', ')}.
       </p>
-      <Titles titles={view.titles} />
+      <DossierTitles titles={view.titles} />
       <p data-history="">
         {view.stateCount} {view.stateCount === 1 ? 'state' : 'states'}
         {view.language === null ? '' : ` in ${view.language}`}, from {view.historyBegins} to {view.latestApplicabilityDate}.
@@ -142,7 +158,7 @@ export function LiveDossier({ contract, fetchImpl }) {
         }}
       >
         <label>
-          Work identifier{' '}
+          {FORM.workIdentifier}{' '}
           <input
             type="text"
             value={identifier}
@@ -152,9 +168,9 @@ export function LiveDossier({ contract, fetchImpl }) {
           />
         </label>{' '}
         <label>
-          Language{' '}
+          {FORM.language}{' '}
           <select value={language} onChange={(event) => setLanguage(event.target.value)}>
-            <option value="">Any held language</option>
+            <option value="">{FORM.anyLanguage}</option>
             {DOSSIER_LANGUAGES.map((offered) => (
               <option key={offered.code} value={offered.code}>
                 {offered.label}
@@ -162,7 +178,7 @@ export function LiveDossier({ contract, fetchImpl }) {
             ))}
           </select>
         </label>{' '}
-        <button type="submit">Read the dossier</button>
+        <button type="submit">{FORM.submit.dossier}</button>
       </form>
       <DossierAnswerView outcome={outcome} />
     </div>

@@ -84,7 +84,8 @@ test("nothing the product ships imports the drafts", async () => {
     for (const name of await readdir(new URL(directory, import.meta.url))) {
       if (!/\.(mjs|jsx)$/.test(name) || name === "refusal-sentences.mjs") continue;
       const source = await readFile(new URL(`${directory}${name}`, import.meta.url), "utf8");
-      assert.ok(!source.includes("refusal-sentences"), `${name} imports the unreviewed French drafts`);
+      // An import of the module, not a mention of it: a comment may name the drafts' file.
+      assert.doesNotMatch(source, /(?:from\s+|import\s*\(\s*)["'][^"']*refusal-sentences(?:\.mjs)?["']/, `${name} imports the unreviewed French drafts`);
     }
   }
 });

@@ -16,6 +16,10 @@ import { useEffect, useRef, useState } from 'react';
 
 import { RefusalCard } from './RefusalCard.jsx';
 import { COMPARE_LANGUAGES, LIVE_COMPARE_IDLE, createCompareSession } from '../scripts/live-compare.mjs';
+import { liveChrome } from '../scripts/live-chrome.mjs';
+
+/** The forms' labels and buttons, from the interface copy table. */
+const FORM = liveChrome().form;
 
 const IDLE = Object.freeze({ state: 'idle', sentence: LIVE_COMPARE_IDLE });
 
@@ -159,21 +163,21 @@ export function LiveCompare({ contract, fetchImpl }) {
         }}
       >
         <label>
-          Work identifier{' '}
+          {FORM.workIdentifier}{' '}
           <input type="text" value={identifier} autoComplete="off" spellCheck={false} onChange={(event) => setIdentifier(event.target.value)} />
         </label>{' '}
         <label>
-          From{' '}
+          {FORM.from}{' '}
           <input type="text" inputMode="numeric" placeholder="yyyy-mm-dd" value={dateFrom} autoComplete="off" onChange={(event) => setDateFrom(event.target.value)} />
         </label>{' '}
         <label>
-          To{' '}
+          {FORM.to}{' '}
           <input type="text" inputMode="numeric" placeholder="yyyy-mm-dd" value={dateTo} autoComplete="off" onChange={(event) => setDateTo(event.target.value)} />
         </label>{' '}
         <label>
-          Language{' '}
+          {FORM.language}{' '}
           <select value={language} onChange={(event) => setLanguage(event.target.value)}>
-            <option value="">Any held language</option>
+            <option value="">{FORM.anyLanguage}</option>
             {COMPARE_LANGUAGES.map((offered) => (
               <option key={offered.code} value={offered.code}>
                 {offered.label}
@@ -181,7 +185,7 @@ export function LiveCompare({ contract, fetchImpl }) {
             ))}
           </select>
         </label>{' '}
-        <button type="submit">Compare</button>
+        <button type="submit">{FORM.submit.compare}</button>
       </form>
       <CompareAnswerView outcome={outcome} />
     </div>

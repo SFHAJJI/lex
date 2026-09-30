@@ -5,6 +5,7 @@
 // `client-live-radar-entry.jsx` hydrates the same tree; a radar is asked only when the reader submits.
 
 import { Document } from './Document.jsx';
+import { liveChrome } from '../scripts/live-chrome.mjs';
 import { LiveRadar } from './LiveRadar.jsx';
 import { renderHydratableDocument } from './render-document.mjs';
 import { skinFor } from '../scripts/shells.mjs';
@@ -18,21 +19,18 @@ export function liveRadarTree() {
 }
 
 export function renderLiveRadarPage() {
+  const copy = liveChrome().radar;
   return renderHydratableDocument(
     <Document
       state="live-radar"
-      title="Radar"
+      title={copy.title}
       shell="dev"
       density={skinFor('dev').density}
       banner="live"
     >
-      <p className="eyebrow">Radar</p>
-      <h1>The change radar</h1>
-      <p>
-        The publisher-dated states of Luxembourg works that this server holds in a window of dates,
-        each with the state it replaced and whether its wording changed. The dates and any identifier
-        go to this server in the request and nowhere else, and this page keeps nothing.
-      </p>
+      <p className="eyebrow">{copy.eyebrow}</p>
+      <h1>{copy.heading}</h1>
+      <p>{copy.intro}</p>
       <div id={LIVE_RADAR_ROOT}>{liveRadarTree()}</div>
       <script src="/client-live-radar.js" defer />
     </Document>,

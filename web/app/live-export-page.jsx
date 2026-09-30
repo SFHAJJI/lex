@@ -6,6 +6,7 @@
 // submits, and pinning and saving ask nothing.
 
 import { Document } from './Document.jsx';
+import { liveChrome } from '../scripts/live-chrome.mjs';
 import { LiveExport } from './LiveExport.jsx';
 import { renderHydratableDocument } from './render-document.mjs';
 import { skinFor } from '../scripts/shells.mjs';
@@ -19,23 +20,18 @@ export function liveExportTree() {
 }
 
 export function renderLiveExportPage() {
+  const copy = liveChrome().export;
   return renderHydratableDocument(
     <Document
       state="live-export"
-      title="Export composer"
+      title={copy.title}
       shell="dev"
       density={skinFor('dev').density}
       banner="live"
     >
-      <p className="eyebrow">Export composer</p>
-      <h1>Take articles away, with their citations</h1>
-      <p>
-        Read one Luxembourg work on one date, pin the articles you need, and save them as JSON, CSV or PDF.
-        Each exported article carries its citation, its text digest, its official source and the rights
-        it was served under, and every export carries the watermark. The identifier and the date go to
-        this server in the request and nowhere else; the file is made in this page, and this page keeps
-        nothing.
-      </p>
+      <p className="eyebrow">{copy.eyebrow}</p>
+      <h1>{copy.heading}</h1>
+      <p>{copy.intro}</p>
       <div id={LIVE_EXPORT_ROOT}>{liveExportTree()}</div>
       <script src="/client-live-export.js" defer />
     </Document>,

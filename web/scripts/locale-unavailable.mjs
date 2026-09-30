@@ -41,12 +41,13 @@ function escapeHtml(value) {
 }
 
 /**
- * The page a request for an unreviewed locale gets.
+ * What the page says to a reader who asked for an unreviewed locale, as plain text: the heading, the code,
+ * and the paragraphs, in English. The preview page and the live page (`live-locale-page.jsx`) both say
+ * exactly this, so the two cannot drift on the words that explain why a language is refused.
  *
- * @param {object} input
- * @param {string} input.requested  the chrome locale the reader asked for
+ * @param {string} requested  the chrome locale the reader asked for
  */
-export function renderLocaleUnavailable({ requested }) {
+export function localeUnavailableCopy(requested) {
   if (!CHROME_LOCALES.includes(requested)) {
     throw new Error(
       `${JSON.stringify(requested)} is not one of the four chrome locales, so this page has ` +
@@ -67,26 +68,43 @@ export function renderLocaleUnavailable({ requested }) {
     (one) => `${LOCALE_NAME[one]} (${one})`,
   ).join(', ');
 
+  return Object.freeze({
+    title: 'Interface language unavailable',
+    heading: `This interface has no reviewed copy in ${name}`,
+    code: LOCALIZATION_UNAVAILABLE,
+    paragraphs: Object.freeze([
+      `You asked for ${name}. This page is in English and is labelled as ` +
+        'English, because showing you English under a ' +
+        `${requested} tag would be handing you a language you did not ask for while ` +
+        'telling your browser and your screen reader it was the one you did.',
+      'Interface copy in French, German, Luxembourgish and Portuguese requires ' +
+        'evidence-based legal-language review before it is served. Machine translation is not ' +
+        'sufficient for it, because the words that carry the most risk here are the ones that ' +
+        'say what this service will not tell you.',
+      `Reviewed interface languages today: ${available}.`,
+      'This affects the interface around the law. It does not affect the law: ' +
+        'publisher text is always served in the language the publisher published it in, with ' +
+        'that language on the text itself.',
+    ]),
+  });
+}
+
+/**
+ * The preview page a request for an unreviewed locale gets.
+ *
+ * @param {object} input
+ * @param {string} input.requested  the chrome locale the reader asked for
+ */
+export function renderLocaleUnavailable({ requested }) {
+  const copy = localeUnavailableCopy(requested);
   return page({
     state: 'localization-unavailable',
-    title: 'Interface language unavailable',
+    title: copy.title,
     locale: 'en',
     copyLocale: 'en',
     main:
-      '      <h1>This interface has no reviewed copy in ' +
-      `${escapeHtml(name)}</h1>\n` +
-      `      <p class="locale-code"><code>${escapeHtml(LOCALIZATION_UNAVAILABLE)}</code></p>\n` +
-      `      <p>You asked for ${escapeHtml(name)}. This page is in English and is labelled as ` +
-      'English, because showing you English under a ' +
-      `${escapeHtml(requested)} tag would be handing you a language you did not ask for while ` +
-      'telling your browser and your screen reader it was the one you did.</p>\n' +
-      '      <p>Interface copy in French, German, Luxembourgish and Portuguese requires ' +
-      'evidence-based legal-language review before it is served. Machine translation is not ' +
-      'sufficient for it, because the words that carry the most risk here are the ones that ' +
-      'say what this service will not tell you.</p>\n' +
-      `      <p>Reviewed interface languages today: ${escapeHtml(available)}.</p>\n` +
-      '      <p>This affects the interface around the law. It does not affect the law: ' +
-      'publisher text is always served in the language the publisher published it in, with ' +
-      'that language on the text itself.</p>\n',
+      `      <h1>${escapeHtml(copy.heading)}</h1>\n` +
+      `      <p class="locale-code"><code>${escapeHtml(copy.code)}</code></p>\n` +
+      copy.paragraphs.map((paragraph) => `      <p>${escapeHtml(paragraph)}</p>\n`).join(''),
   });
 }
