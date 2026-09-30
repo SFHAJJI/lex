@@ -282,10 +282,13 @@ public sealed class GuardedConstructionCensusTests
                     + "Lex.V3.Ingest.Europe.EuFormexAnnexInventoryProducer::RunAsync",
                 "Lex.V3.Ingest.Europe.EuFormexEligibilityPopulation: constructor private instance "
                     + "Lex.V3.Ingest.Europe.EuFormexEligibilityPopulation::.ctor, "
+                    + "method private static "
+                    + "Lex.V3.Ingest.Europe.EuFormexEligibilityPopulation::TryCreateCore, "
                     + "method public static "
                     + "Lex.V3.Ingest.Europe.EuFormexEligibilityPopulation::TryCreate, "
-                    + "method private static Lex.V3.Ingest.Europe.EuFormexEligibilityPopulation::TryCreateCore, "
-                    + "method public static Lex.V3.Ingest.Europe.EuFormexEligibilityPopulation::TryCreateForServedLanguages",
+                    + "method public static "
+                    + "Lex.V3.Ingest.Europe.EuFormexEligibilityPopulation::TryCreateForServedLangua"
+                    + "ges",
                 "Lex.V3.Ingest.Europe.EuFormexMainBodyArticle: constructor internal instance "
                     + "Lex.V3.Ingest.Europe.EuFormexMainBodyArticle::.ctor, "
                     + "method private static "
@@ -316,7 +319,8 @@ public sealed class GuardedConstructionCensusTests
                     + "Lex.V3.Ingest.Europe.EuFormexPackageOutcome::NotAcquired, "
                     + "method public static "
                     + "Lex.V3.Ingest.Europe.EuFormexPackageOutcome::NotEligible, "
-                    + "method public static Lex.V3.Ingest.Europe.EuFormexPackageOutcome::NotEnumeratedLanguageOutOfScope, "
+                    + "method public static "
+                    + "Lex.V3.Ingest.Europe.EuFormexPackageOutcome::NotEnumeratedLanguageOutOfScope, "
                     + "method public static "
                     + "Lex.V3.Ingest.Europe.EuFormexPackageOutcome::PackageRejected, "
                     + "method public static Lex.V3.Ingest.Europe.EuFormexPackageOutcome::Refused, "
