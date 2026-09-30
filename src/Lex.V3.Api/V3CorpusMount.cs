@@ -271,6 +271,50 @@ internal sealed class V3CorpusMount : IDisposable
                 new V3PlatformOperationResult(request, "work_resolution", workResult.RootElement));
         }
 
+        // One work can hold equally authentic language expressions. Resolve its work
+        // coordinate to those choices; the existing exact-expression request selects one.
+        // Multiple expressions in the same language still need a version rule.
+        if (candidates.Count == 0 && europeCandidates.Count > 1 &&
+            europeCandidates.Select(static candidate => candidate.PublisherWorkId)
+                .Distinct(StringComparer.Ordinal).Count() == 1 &&
+            europeCandidates.Select(static candidate => candidate.Language)
+                .Distinct(StringComparer.Ordinal).Count() == europeCandidates.Count &&
+            europeCandidates.Select(static candidate => candidate.PublisherExpressionId)
+                .Distinct(StringComparer.Ordinal).Count() == europeCandidates.Count)
+        {
+            var europeWork = europeCandidates[0].PublisherWorkId;
+            var isWorkCoordinate = string.Equals(identifier, europeWork, StringComparison.Ordinal) ||
+                _europeReader!.ResolveWorkExpressions(europeWork).Any(expression =>
+                    string.Equals(identifier, expression.PublisherWorkCelex, StringComparison.Ordinal));
+            if (isWorkCoordinate)
+            {
+                var choices = europeCandidates.OrderBy(static candidate => candidate.Language,
+                    StringComparer.Ordinal).ThenBy(static candidate => candidate.PublisherExpressionId,
+                    StringComparer.Ordinal).ToArray();
+                using var workChoices = JsonSerializer.SerializeToDocument(new
+                {
+                    requested_identifier = identifier,
+                    publisher = "eu-eurlex",
+                    publisher_work_id = europeWork,
+                    resolution_scope = "work",
+                    expression_selection_required = true,
+                    language_selection = "Select a held expression by its identifier to resolve that language.",
+                    available_languages = choices.Select(static candidate => candidate.Language).ToArray(),
+                    expressions = choices.Select(static candidate => new
+                    {
+                        expression_iri = candidate.PublisherExpressionId,
+                        language = candidate.Language,
+                        resolve = new { identifier = candidate.PublisherExpressionId },
+                    }).ToArray(),
+                    corpus_sha256 = _corpus.ArtifactRef.Sha256,
+                    index_sha256 = _europeReader!.IndexRef.Sha256,
+                });
+                return V3PlatformOperationOutcome.Success(
+                    Context("success", observedAt, PublisherId.EuEurLex),
+                    new V3PlatformOperationResult(request, "work_resolution", workChoices.RootElement));
+            }
+        }
+
         if (exactCandidateCount > 1)
         {
             var ambiguityPublisher = candidates.Count == 0
