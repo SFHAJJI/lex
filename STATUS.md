@@ -16,8 +16,10 @@ Several works, several expressions in the same language, or a Luxembourg/EU coll
 
 API regressions cover bilingual choices and following each expression identifier, a French-only
 mount built from the synthetic French package, and different works whose languages differ.
-Existing same-language and cross-publisher ambiguity tests remain in scope. Validation is pending;
-this preparation does not change the served mount or claim either complete population.
+Existing same-language and cross-publisher ambiguity tests remain in scope. Validation passed:
+clean solution build (zero warnings/errors, 39.43s), fast lane 3,066 passed/one platform skip
+(63.566s), and all 53 affected resolve/Europe mount ingest checks (91.839s). The served mount and
+complete-population acceptance remain separate work.
 
 ## Luxembourg population memory prerequisite (Codex, 2026-09-30)
 
