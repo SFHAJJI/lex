@@ -24,6 +24,12 @@
 //
 //   node scripts/journey.mjs --api <Lex.V3.Api build output> --mount <journey mount directory>
 //                            [--live-root <a built live directory>] [--served-by-api] [--keyboard] [--verbose]
+//                            [--real-mount]
+//
+// With `--real-mount` the mount is a real build's (`v3-corpus` with its `build-report.json`), whose
+// contents are not known in advance: each of the eight steps asks the API its page's request first
+// and holds the page to that answer, a success or that refusal by its code, and to every invariant
+// below. The coverage page must name the corpus and Luxembourg index the build report records.
 //
 // With `--keyboard` every form step is driven by the keyboard alone (the launch contract's keyboard
 // path): from the top of the page, Tab until each text field has focus, type, Enter to submit; the
@@ -226,7 +232,16 @@ export function journeyVerdict(observed, expected) {
     for (const citation of observed.citations.filter((candidate) => !PINNED_PERMALINK.test(candidate))) {
       failures.push(`the page printed ${citation}, which is not a hash-pinned permalink`);
     }
-    if (step.cites && expected.state === "success" && observed.citations.length === 0) failures.push("the page printed no citation");
+    // An answer that holds nothing to cite (the radar's empty window, a search with no hit) prints none,
+    // when the API's own answer holds nothing and the page says so; any other answer of a citing step
+    // must cite (the real mount's empty radar window found the first; the review of #815 the second).
+    const excused = expected.nothingToCite === true && observed.emptyAnswer === true;
+    if (step.cites && expected.state === "success" && observed.citations.length === 0 && !excused) {
+      failures.push("the page printed no citation");
+    }
+    if (observed.emptyAnswer === true && expected.state === "success" && expected.nothingToCite !== true) {
+      failures.push("the page says it holds nothing to cite, and the API's answer holds something");
+    }
     if (observed.verifications !== undefined) {
       const verified = new Set(observed.verifications.map((check) => check.identifier));
       for (const citation of pinned.filter((candidate) => !verified.has(candidate))) failures.push(`${citation} was not verified`);
@@ -666,6 +681,7 @@ async function observe(browser, pageOrigin, step, { keyboard = false } = {}) {
       citations: await evaluate("[...new Set([...document.querySelectorAll('[data-live-answer] code')].map((node) => node.textContent.trim()).filter((text) => text.startsWith('/')))]"),
       // Every quotation the answer shows, with what its article's element prints beside it.
       paint: await evaluate(PAINT_ONLY),
+      emptyAnswer: await evaluate("document.querySelector('[data-live-answer] [data-no-row], [data-live-answer] [data-no-hit]') !== null"),
       quotes: await evaluate("[...document.querySelectorAll('[data-live-answer] [data-article]')].filter((node) => node.querySelector('blockquote') !== null).map((node) => ({ article: node.dataset.article, codes: [...node.querySelectorAll('code')].map((code) => code.textContent.trim()) }))"),
     };
   } finally {
@@ -674,6 +690,27 @@ async function observe(browser, pageOrigin, step, { keyboard = false } = {}) {
     await rm(profile, { recursive: true, force: true }).catch(() => {});
   }
 }
+
+/**
+ * What a page must end in, from what the API answers the same request: an answer is a success, a
+ * refusal is that refusal by its code. A real mount's contents are not known in advance, so the run
+ * asks the API first and holds the page to its answer (`--real-mount`).
+ */
+export function expectedFromEnvelope(envelope) {
+  if (envelope?.verdict === "answer") {
+    // Whether the answer itself holds nothing a page could cite: a search with no hit, a radar window
+    // with no row. Only then may the page print no citation (review of #815: the page's own "no hit"
+    // is not evidence that there was none).
+    const value = envelope.result?.value ?? {};
+    const listed = Array.isArray(value.hits) ? value.hits : Array.isArray(value.changes) ? value.changes : null;
+    return { state: "success", nothingToCite: listed !== null && listed.length === 0 };
+  }
+  if (envelope?.verdict === "refuse" && typeof envelope.refusal?.code === "string") return { state: "refusal", refusalCode: envelope.refusal.code };
+  throw new Error(`the API answered neither an answer nor a typed refusal: ${JSON.stringify(envelope).slice(0, 200)}`);
+}
+
+/** The request a step's page asks: its body, or coverage's, which the page asks as it loads. */
+const COVERAGE_BODY = Object.freeze({ operation_id: "coverage", parameters: Object.freeze({}) });
 
 /** Asks the API's `verify` for each citation, as a reader checking one would, and keeps what it said. */
 async function verifyCitations(origin, citations) {
@@ -697,6 +734,12 @@ async function verifyCitations(origin, citations) {
 
 async function run(apiOutput, mount, expected, browser, liveRoot) {
   const api = await startApi(apiOutput, mount, expected.servedByApi ? liveRoot : null);
+  if (expected.fromApi) {
+    // Asked before the browser, of the same server, with the page's own request.
+    const body = expected.step.body ?? COVERAGE_BODY;
+    const answer = await fetch(`${api.origin}/api/v3/${body.operation_id}`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+    expected = { ...expected, ...expectedFromEnvelope(await answer.json()) };
+  }
   const live = expected.servedByApi ? null : createLiveServer({ root: liveRoot, apiOrigin: api.origin });
   const pageOrigin = live === null ? api.origin : await listen(live);
   try {
@@ -716,6 +759,21 @@ async function run(apiOutput, mount, expected, browser, liveRoot) {
   }
 }
 
+/**
+ * The eight steps against a real mount (`--real-mount`): each page is held to what the API answers its
+ * request, and to every invariant a run checks. The coverage page must name the mounted corpus and
+ * Luxembourg index by the digests the mount's build report records.
+ */
+async function realMountRuns(apiOutput, mount, options, browser, liveRoot) {
+  const report = JSON.parse(await readFile(join(mount, "build-report.json"), "utf8"));
+  const runs = [];
+  for (const [name, step] of Object.entries(JOURNEY_STEPS)) {
+    const digests = name === "coverage" ? { corpusSha256: report.corpus.Sha256, indexSha256: report.luxembourgIndex.Sha256 } : {};
+    runs.push([`${name}, with the real mount`, await run(apiOutput, mount, { ...options, step, fromApi: true, ...digests }, browser, liveRoot)]);
+  }
+  return runs;
+}
+
 async function main(argv) {
   const argument = (name) => {
     const index = argv.indexOf(name);
@@ -725,7 +783,8 @@ async function main(argv) {
   const apiOutput = argument("--api");
   const mount = argument("--mount");
   if (!(await readdir(apiOutput)).includes("Lex.V3.Api.dll")) throw new Error(`${apiOutput} holds no Lex.V3.Api.dll`);
-  const journeyMount = JSON.parse(await readFile(join(mount, "journey-mount.json"), "utf8"));
+  const realMount = argv.includes("--real-mount");
+  const journeyMount = realMount ? null : JSON.parse(await readFile(join(mount, "journey-mount.json"), "utf8"));
   // `--live-root` serves a directory built elsewhere instead of building one: how a deliberately
   // broken page is shown to fail the journey.
   const liveRoot = argv.includes("--live-root") ? argument("--live-root") : await buildLive();
@@ -733,7 +792,7 @@ async function main(argv) {
   const servedByApi = argv.includes("--served-by-api");
   const keyboard = argv.includes("--keyboard");
   const { coverage, search, dossier, reading, history, compare, radar, export: exporting } = JOURNEY_STEPS;
-  const results = [
+  const results = realMount ? await realMountRuns(apiOutput, mount, { servedByApi, keyboard }, browser, liveRoot) : [
     ["coverage, with the fixture mount", await run(apiOutput, mount, { servedByApi, keyboard, step: coverage, state: "success", corpusSha256: journeyMount.corpus_sha256, indexSha256: journeyMount.index_sha256 }, browser, liveRoot)],
     ["coverage, with no mount", await run(apiOutput, null, { servedByApi, keyboard, step: coverage, state: "refusal", refusalCode: "no_corpus_mounted" }, browser, liveRoot)],
     ["search, with the fixture mount", await run(apiOutput, mount, { servedByApi, keyboard, step: search, state: "success", texts: [`“${SEARCH_PHRASE}” in fra: 4 with the exact phrase, 1 with every word, in 1 work.`, "art_15 in", "The first hits in the stated order, not the best hits."] }, browser, liveRoot)],
