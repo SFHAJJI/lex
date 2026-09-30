@@ -971,6 +971,21 @@ public sealed class LuxembourgRepeatedEnumerationExecutor
 
                 results.Add(result);
                 index++;
+                if (adaptive && result.Refusal is { } failedLeaf)
+                {
+                    // A cover requires every leaf. Keep the ordered result shape without sending
+                    // requests for leaves that can no longer make this cover provable.
+                    for (; index < chain.Leaves.Count; index++)
+                    {
+                        results.Add(LuxembourgEnumerationRunResult.Refused(
+                            new LuxembourgEnumerationRefusalDetail(
+                                LuxembourgEnumerationRefusal.ObservationNotExecuted,
+                                null, null, null, null, null, null, [],
+                                $"not attempted: preceding leaf '{leaf.PartitionId}' refused with {failedLeaf.Code}"),
+                            productRequestCount: 0));
+                    }
+                    break;
+                }
             }
 
             return (chain, results, productRequests);

@@ -582,19 +582,15 @@ public sealed class LuxembourgQueryExecutionAdapterConstructionSurfaceTests
         CollectionAssert.AreEqual(
             new[]
             {
-                // The first-mount composition root carries the run it produced (the refused run
-                // after run_refused), beside the profile and the AKN populations, for the envelope
-                // to take. It HOLDS the result the adapter returned and constructs none.
                 "field private instance "
-                    + "Lex.V3.Ingest.Luxembourg.LuxembourgFirstMountAcquisitionResult::<Run>k__BackingField -> "
-                    + "Lex.V3.Ingest.Luxembourg.LuxembourgQueryExecutionResult?",
+                    + "Lex.V3.Ingest.Luxembourg.LuxembourgFirstMountAcquisitionResult::<Run>k__Back"
+                    + "ingField -> Lex.V3.Ingest.Luxembourg.LuxembourgQueryExecutionResult?",
                 "field private instance "
                     + "Lex.V3.Ingest.Stage3EvidenceEnvelope::<Luxembourg>k__BackingField -> "
                     + "Lex.V3.Ingest.Luxembourg.LuxembourgQueryExecutionResult",
                 "field private instance "
-                    + "Lex.V3.Ingest.Stage3FidelityPreservationReconciliation::"
-                    + "<Luxembourg>k__BackingField -> "
-                    + "Lex.V3.Ingest.Luxembourg.LuxembourgQueryExecutionResult",
+                    + "Lex.V3.Ingest.Stage3FidelityPreservationReconciliation::<Luxembourg>k__Backi"
+                    + "ngField -> Lex.V3.Ingest.Luxembourg.LuxembourgQueryExecutionResult",
                 "method internal instance "
                     + "Lex.V3.Ingest.Luxembourg.LuxembourgQueryExecutionAdapter::RunAsync(System.Co"
                     + "llections.Generic.IReadOnlyList<System.ValueTuple<Lex.V3.Ingest.Luxembourg.L"
@@ -604,13 +600,9 @@ public sealed class LuxembourgQueryExecutionAdapterConstructionSurfaceTests
                     + "System.String?, System.String?, System.String?, "
                     + "Lex.V3.Contracts.Source.Scope.IScopeReductionEvidenceResolver?, "
                     + "Lex.V3.Contracts.Source.Core.MachineQueryRendererSource, "
-                    + "Lex.V3.Ingest.WireRequestBudget, "
-                    + "System.Threading.CancellationToken, "
-                    // #419 slice 7: the three doors that already took the internal evidence
-                    // seam also take the per-act consolidation results the population ledger
-                    // folds. The two public doors below are unchanged. Re-printed, not guessed.
-                    + "System.Collections.Generic.IReadOnlyList<Lex.V3.Ingest.Luxembourg.Lux"
-                    + "embourgConsolidationByActResult>?) -> "
+                    + "Lex.V3.Ingest.WireRequestBudget, System.Threading.CancellationToken, "
+                    + "System.Collections.Generic.IReadOnlyList<Lex.V3.Ingest.Luxembourg.Luxembourg"
+                    + "ConsolidationByActResult>?) -> "
                     + "System.Threading.Tasks.Task<Lex.V3.Ingest.Luxembourg.LuxembourgQueryExecutio"
                     + "nResult>",
                 "method internal instance "
@@ -623,13 +615,10 @@ public sealed class LuxembourgQueryExecutionAdapterConstructionSurfaceTests
                     + "ScopePartitionFamilies>, "
                     + "Lex.V3.Contracts.Source.Scope.IScopeReductionEvidenceResolver?, "
                     + "Lex.V3.Contracts.Source.Core.MachineQueryRendererSource, "
-                    + "Lex.V3.Ingest.WireRequestBudget, "
-                    + "System.Threading.CancellationToken, "
-                    // #419 slice 7: the three doors that already took the internal evidence
-                    // seam also take the per-act consolidation results the population ledger
-                    // folds. The two public doors below are unchanged. Re-printed, not guessed.
-                    + "System.Collections.Generic.IReadOnlyList<Lex.V3.Ingest.Luxembourg.Lux"
-                    + "embourgConsolidationByActResult>?) -> "
+                    + "Lex.V3.Ingest.WireRequestBudget, System.Threading.CancellationToken, "
+                    + "System.Collections.Generic.IReadOnlyList<Lex.V3.Ingest.Luxembourg.Luxembourg"
+                    + "ConsolidationByActResult>?, "
+                    + "System.Boolean) -> "
                     + "System.Threading.Tasks.Task<Lex.V3.Ingest.Luxembourg.LuxembourgQueryExecutio"
                     + "nResult>",
                 "method private instance "
@@ -643,13 +632,23 @@ public sealed class LuxembourgQueryExecutionAdapterConstructionSurfaceTests
                     + "System.Collections.Generic.IReadOnlyList<System.String>, "
                     + "Lex.V3.Contracts.Source.Scope.IScopeReductionEvidenceResolver?, "
                     + "Lex.V3.Contracts.Source.Core.MachineQueryRendererSource, System.Boolean, "
+                    + "Lex.V3.Ingest.WireRequestBudget, System.Threading.CancellationToken, "
+                    + "System.Collections.Generic.IReadOnlyList<Lex.V3.Ingest.Luxembourg.Luxembourg"
+                    + "ConsolidationByActResult>?, "
+                    + "System.Boolean) -> "
+                    + "System.Threading.Tasks.Task<Lex.V3.Ingest.Luxembourg.LuxembourgQueryExecutio"
+                    + "nResult>",
+                "method public instance "
+                    + "Lex.V3.Ingest.Luxembourg.LuxembourgQueryExecutionAdapter::RunAdaptiveScopedA"
+                    + "sync(System.Collections.Generic.IReadOnlyList<System.ValueTuple<Lex.V3.Inges"
+                    + "t.Luxembourg.LuxembourgPartitionRunRequest, "
+                    + "Lex.V3.Contracts.Source.Core.BoundMachineRequest, "
+                    + "Lex.V3.Contracts.Source.Luxembourg.LuxembourgPartitionChain>>, "
+                    + "System.Collections.Generic.IReadOnlyList<Lex.V3.Ingest.Luxembourg.Luxembourg"
+                    + "ScopePartitionFamilies>, "
+                    + "Lex.V3.Contracts.Source.Core.MachineQueryRendererSource, "
                     + "Lex.V3.Ingest.WireRequestBudget, "
-                    + "System.Threading.CancellationToken, "
-                    // #419 slice 7: the three doors that already took the internal evidence
-                    // seam also take the per-act consolidation results the population ledger
-                    // folds. The two public doors below are unchanged. Re-printed, not guessed.
-                    + "System.Collections.Generic.IReadOnlyList<Lex.V3.Ingest.Luxembourg.Lux"
-                    + "embourgConsolidationByActResult>?) -> "
+                    + "System.Threading.CancellationToken) -> "
                     + "System.Threading.Tasks.Task<Lex.V3.Ingest.Luxembourg.LuxembourgQueryExecutio"
                     + "nResult>",
                 "method public instance "
@@ -677,7 +676,8 @@ public sealed class LuxembourgQueryExecutionAdapterConstructionSurfaceTests
                     + "System.Threading.CancellationToken) -> "
                     + "System.Threading.Tasks.Task<Lex.V3.Ingest.Luxembourg.LuxembourgQueryExecutio"
                     + "nResult>",
-                "property public instance Lex.V3.Ingest.Luxembourg.LuxembourgFirstMountAcquisitionResult::Run() -> "
+                "property public instance "
+                    + "Lex.V3.Ingest.Luxembourg.LuxembourgFirstMountAcquisitionResult::Run() -> "
                     + "Lex.V3.Ingest.Luxembourg.LuxembourgQueryExecutionResult?",
                 "property public instance Lex.V3.Ingest.Stage3EvidenceEnvelope::Luxembourg() -> "
                     + "Lex.V3.Ingest.Luxembourg.LuxembourgQueryExecutionResult",

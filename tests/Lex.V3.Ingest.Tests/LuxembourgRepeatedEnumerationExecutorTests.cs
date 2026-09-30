@@ -2039,8 +2039,38 @@ public sealed class LuxembourgRepeatedEnumerationExecutorTests
         Assert.AreEqual(5, budget.Spent);
         Assert.AreEqual(4, result.ProductRequestCount);
         Assert.AreEqual(result.Chain.Leaves.Count, result.Results.Count);
-        Assert.IsTrue(result.Results.All(static r => r.Receipt is null &&
-            r.Refusal?.Code == LuxembourgEnumerationRefusal.WireBudgetExhausted));
+        Assert.AreEqual(LuxembourgEnumerationRefusal.WireBudgetExhausted, result.Results[0].Refusal?.Code);
+        Assert.IsTrue(result.Results.Skip(1).All(static r => r.Receipt is null &&
+            r.Refusal?.Code == LuxembourgEnumerationRefusal.ObservationNotExecuted && r.ProductRequestCount == 0));
+    }
+
+    [TestMethod]
+    public async Task AdaptiveCoverStopsBeforeLaterLeavesWhenAnEarlierLeafCannotBeProven()
+    {
+        var (request, witness) = BuildRequest();
+        var store = new RoutedHttpAcquisitionSessionAuditTests.RecordingCustodyStore { RefuseFallback = true };
+        var handler = LuxembourgAcquisitionTestFixture.AllowRobotsThenHandler((ordinal, req) => ordinal switch
+        {
+            1 => JsonResponse(req, LuxembourgAcquisitionTestFixture.CountJson(1_000_000)),
+            2 => JsonResponse(req, "{}"),
+            _ => throw new AssertFailedException("No request may follow the unprovable leaf."),
+        });
+        var executor = new LuxembourgRepeatedEnumerationExecutor(
+            store, new LuxembourgAcquisitionTestFixture.FixedTimeProvider(), handler);
+        var budget = WireRequestBudget.OfWireRequests(100);
+        var result = await executor.RunAdaptiveCoverAsync(request, witness, budget, CancellationToken.None);
+        Assert.AreEqual(2, result.Chain.Leaves.Count);
+        Assert.AreEqual(2, result.Results.Count);
+        Assert.AreEqual(3, handler.SendCount, "robots, saturated root count, malformed left count");
+        Assert.AreEqual(3, budget.Spent);
+        Assert.AreEqual(2, result.ProductRequestCount);
+        Assert.AreEqual(LuxembourgEnumerationRefusal.CountNotOneNonNegativeInteger, result.Results[0].Refusal?.Code);
+        var skipped = result.Results[1];
+        Assert.IsNull(skipped.Receipt);
+        Assert.AreEqual(LuxembourgEnumerationRefusal.ObservationNotExecuted, skipped.Refusal?.Code);
+        Assert.AreEqual(0, skipped.ProductRequestCount);
+        Assert.IsNull(skipped.Refusal!.RequestOrdinal);
+        StringAssert.Contains(skipped.Refusal.CoreRefusalDetail, result.Chain.Leaves[0].PartitionId);
     }
 
     private static ByteArrayContent RobotsContent()

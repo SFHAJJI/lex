@@ -1170,10 +1170,19 @@ executor reports `PartitionRequired` at its 1,000,000-row delivery ceiling. It s
 cursor ranges, retains empty leaves, and runs all leaves of a family in one session and under the
 same wire budget. The adapter reconciles each cover and independently reopens every leaf before
 scope reduction, body acquisition or corpus construction. Explicit act ranges keep their current
-path. This adds no publisher traffic by itself; the bounded mount remains the only active live run.
-The query plan's separate 900-row accumulated-slice policy and renderer bytes are unchanged.
+path. This adds no publisher traffic by itself. The bounded mount completed; full-population
+acquisition follows the reviewed selector and adaptive-cover changes.
+Adaptive covers use midpoint boundaries and the existing executor's delivery ceiling. The query
+plan still records a legacy 900-row accumulated-slice rule that this executor does not apply;
+its renderer bytes are unchanged. Automatic covers have offline proof only so far. A root COUNT
+timeout still refuses, and publisher handling of control characters in split boundaries remains
+unverified. Review repair stops at the first unprovable leaf and records later leaves as not
+attempted, with no further requests for that cover.
 Validation: solution build with zero warnings/errors; fast lane 3,065 pass / 1 Windows skip;
-153 affected ingest tests pass, including a two-work corpus through split S/A/G families.
+153 initial affected ingest tests pass, including a two-work corpus through split S/A/G families.
+The one review repair updates all four construction census pins and adds the stop-after-failure
+regression. Full unfiltered ingest: 1,964 pass, 19 opt-in skips, zero failures (1,983 total).
+Repair fast lane: 3,065 pass / 1 Windows skip; repair build: zero warnings/errors.
 
 ## Waiting on others
 
