@@ -1113,18 +1113,12 @@ public sealed class LuxembourgQueryExecutionResult
 /// as an ordinary refused family outcome exactly as before.
 /// </para>
 /// <para>
-/// Said plainly, because it is easy to read the cover-chain machinery above as more than it is:
-/// this adapter has no split strategy of its own. A caller-supplied <see cref="LuxembourgPartitionChain"/>
-/// is exactly as much of a caller-supplied input as <paramref name="families"/> itself; nothing here
-/// computes where to split a partition that saturates. So a census or assertion family that refuses
-/// <see cref="LuxembourgEnumerationRefusal.PartitionRequired"/> with no cover supplied, or whose
-/// supplied cover does not reconcile, is refused with a typed outcome
-/// (<see cref="LuxembourgFamilyEnumerationOutcomeKind.ExecutorRefused"/> or
-/// <see cref="LuxembourgFamilyEnumerationOutcomeKind.CoverRefused"/> respectively) -- production
-/// cannot and does not paper over a family this large today. That remains true until D1-04d (queued
-/// separately, not this slice) builds a real production split strategy: the simplest one on the
-/// table bisects the refused partition at the last cursor of its first delivered page and recurses
-/// on the right leaf, documented as correct and slow.
+/// <see cref="RunAdaptiveScopedAsync"/> supplies the population path: the executor splits saturated
+/// ranges at interior six-part UTF-8 cursors and returns a complete adjacent cover, including empty
+/// leaves. S, A and G all use the same cover reconciliation and custody reopening before reduction.
+/// Saturated ancestors are not proof receipts. Every attempted query remains charged to the shared
+/// wire budget, which bounds planning as well as successful enumeration. <c>RunAsync</c> retains
+/// its caller-supplied-cover behavior.
 /// </para>
 /// </remarks>
 public sealed class LuxembourgQueryExecutionAdapter
@@ -1178,11 +1172,8 @@ public sealed class LuxembourgQueryExecutionAdapter
     /// supplied chain and reconciles the leaves through <see cref="LuxembourgPartitionCover.TryCreate"/>;
     /// the family's own rows are then the union of every leaf's own independently reopened and
     /// re-verified rows (see <see cref="LuxembourgFamilyEnumerationOutcomeKind.CoverProven"/>). This
-    /// adapter never computes a split boundary itself -- no such computation exists anywhere in this
-    /// codebase today (<c>LuxembourgPartitionChain.SplitLeaf</c> takes an explicit caller-supplied
-    /// boundary cursor, and every existing chain in this codebase's own tests is built the same way);
-    /// a chain is exactly as much of a caller-supplied input as <paramref name="families"/> itself,
-    /// never invented here. A cover supplied for a family whose pass does NOT refuse
+    /// method uses caller-supplied boundaries. Automatic planning is available through
+    /// <see cref="RunAdaptiveScopedAsync"/>. A cover supplied for a family whose pass does NOT refuse
     /// <c>PartitionRequired</c>, or for the relation-assertions family, is simply unused: only a
     /// census or assertion family's own <c>PartitionRequired</c> refusal drives it, per the scope
     /// ruling this slice implements.
@@ -1303,6 +1294,17 @@ public sealed class LuxembourgQueryExecutionAdapter
         CancellationToken cancellationToken) => RunScopedAsync(
             families, scopeMembers, null, documentFetchRendererSource, wireBudget, cancellationToken);
 
+    /// <summary>Enumerates the declared scope, splitting saturated S, A and G families as needed.</summary>
+    public Task<LuxembourgQueryExecutionResult> RunAdaptiveScopedAsync(
+        IReadOnlyList<(LuxembourgPartitionRunRequest PartitionRequest, BoundMachineRequest SourceWitness,
+            LuxembourgPartitionChain? Cover)> families,
+        IReadOnlyList<LuxembourgScopePartitionFamilies> scopeMembers,
+        MachineQueryRendererSource documentFetchRendererSource,
+        WireRequestBudget wireBudget,
+        CancellationToken cancellationToken) => RunScopedAsync(
+            families, scopeMembers, null, documentFetchRendererSource, wireBudget, cancellationToken,
+            adaptive: true);
+
     internal Task<LuxembourgQueryExecutionResult> RunScopedAsync(
         IReadOnlyList<(LuxembourgPartitionRunRequest PartitionRequest, BoundMachineRequest SourceWitness,
             LuxembourgPartitionChain? Cover)> families,
@@ -1311,7 +1313,8 @@ public sealed class LuxembourgQueryExecutionAdapter
         MachineQueryRendererSource documentFetchRendererSource,
         WireRequestBudget wireBudget,
         CancellationToken cancellationToken,
-        IReadOnlyList<LuxembourgConsolidationByActResult>? consolidationsByAct = null)
+        IReadOnlyList<LuxembourgConsolidationByActResult>? consolidationsByAct = null,
+        bool adaptive = false)
     {
         ArgumentNullException.ThrowIfNull(families);
         ArgumentNullException.ThrowIfNull(scopeMembers);
@@ -1323,12 +1326,14 @@ public sealed class LuxembourgQueryExecutionAdapter
         families = families.ToArray();
         scopeMembers = scopeMembers.ToArray();
         LuxembourgScopePartitionFamilies.Validate(families, scopeMembers);
+        if (adaptive && families.Any(static family => family.Cover is not null))
+            throw new ArgumentException("Adaptive scope execution plans its own covers.", nameof(families));
         return RunCoreAsync(families,
             scopeMembers.Select(static member => member.RelationFamilyKey).ToArray(),
             scopeMembers.Select(static member => member.CensusFamilyKey).ToArray(),
             scopeMembers.Select(static member => member.AssertionFamilyKey).ToArray(),
             evidenceResolver, documentFetchRendererSource, scoped: true, wireBudget, cancellationToken,
-            consolidationsByAct);
+            consolidationsByAct, adaptive);
     }
 
     private async Task<LuxembourgQueryExecutionResult> RunCoreAsync(
@@ -1342,7 +1347,8 @@ public sealed class LuxembourgQueryExecutionAdapter
         bool scoped,
         WireRequestBudget wireBudget,
         CancellationToken cancellationToken,
-        IReadOnlyList<LuxembourgConsolidationByActResult>? consolidationsByAct)
+        IReadOnlyList<LuxembourgConsolidationByActResult>? consolidationsByAct,
+        bool adaptive = false)
     {
         ArgumentNullException.ThrowIfNull(families);
         // ONE CEILING FOR THE RUN, AND EVERY DOOR BELOW CHARGES IT. This run enumerates N families,
@@ -1390,6 +1396,25 @@ public sealed class LuxembourgQueryExecutionAdapter
             var isRelationFamily = relationFamilyKeys.Contains(familyKey, StringComparer.Ordinal);
             var isCensusFamily = censusFamilyKeys.Contains(familyKey, StringComparer.Ordinal);
             var isAssertionFamily = assertionFamilyKeys.Contains(familyKey, StringComparer.Ordinal);
+
+            if (adaptive)
+            {
+                var execution = await _executor.RunAdaptiveCoverAsync(
+                    partitionRequest, sourceWitness, wireBudget, cancellationToken).ConfigureAwait(false);
+                var reconciled = ReconcileCover(partitionRequest, execution.Chain, execution.Results);
+                if (reconciled.Legs is { } adaptiveLegs)
+                {
+                    outcomes.Add(LuxembourgFamilyEnumerationOutcome.CoverProven(familyKey, reconciled.LeafProofs!));
+                    if (isCensusFamily) censusLegs.AddRange(adaptiveLegs);
+                    if (isAssertionFamily) assertionLegs.AddRange(adaptiveLegs);
+                    if (isRelationFamily) relationLegs.AddRange(adaptiveLegs);
+                }
+                else
+                {
+                    outcomes.Add(LuxembourgFamilyEnumerationOutcome.CoverRefused(familyKey, reconciled.Refusal!));
+                }
+                continue;
+            }
 
             var runResult = await _executor.RunPartitionAsync(
                     partitionRequest, sourceWitness, wireBudget, cancellationToken)
@@ -3140,6 +3165,14 @@ public sealed class LuxembourgQueryExecutionAdapter
         var leafResults = await _executor.RunCoverAsync(
                 rootRequest, chain, sourceWitness, wireBudget, cancellationToken)
             .ConfigureAwait(false);
+        return ReconcileCover(rootRequest, chain, leafResults);
+    }
+
+    private static CoverReconciliationOutcome ReconcileCover(
+        LuxembourgPartitionRunRequest rootRequest,
+        LuxembourgPartitionChain chain,
+        IReadOnlyList<LuxembourgEnumerationRunResult> leafResults)
+    {
 
         // RunCoverAsync's own contract: exactly one result per chain leaf, in leaf order, whether or
         // not it delivered.
@@ -3154,14 +3187,9 @@ public sealed class LuxembourgQueryExecutionAdapter
             }
         }
 
-        // This adapter never holds a root receipt to hand TryCreate here: the root pass refused
-        // PartitionRequired before delivering (that refusal is exactly what routed this method's own
-        // caller here), so rootReceipt is always null and cover.Basis is therefore always
-        // LuxembourgPartitionCoverBasis.LeafTilingOnly, never the root-reconciled alternative -- an
-        // inherent constraint of this call path, not a choice made here. cover itself is discarded
-        // immediately below once non-null: only its refusal (when null) and, through leafReceipts
-        // directly, each leaf's own proof are read; nothing here consumes cover.Basis or any other
-        // field of the minted cover object.
+        // Saturated ancestors have no delivery receipt. Coverage rests on adjacent ranges and
+        // independently proven leaves, including empty leaves. An unsplit adaptive root is itself
+        // the sole leaf; it follows the same proof and custody-reopen path.
         var leafReceipts = leafResults.Select(static result => result.Receipt!).ToArray();
         var cover = LuxembourgPartitionCover.TryCreate(chain, leafReceipts, rootReceipt: null, out var coverRefusal);
         if (cover is null)

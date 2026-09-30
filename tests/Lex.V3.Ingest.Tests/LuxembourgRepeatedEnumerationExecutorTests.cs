@@ -1988,6 +1988,61 @@ public sealed class LuxembourgRepeatedEnumerationExecutorTests
         }
     }
 
+    [TestMethod]
+    public async Task AdaptiveCoverRetainsEmptyLeavesAndSharesProofIdentityAfterNestedSplits()
+    {
+        var (request, witness) = BuildRequest();
+        var store = new RoutedHttpAcquisitionSessionAuditTests.RecordingCustodyStore { RefuseFallback = true };
+        // Saturated ancestors have no usable receipt. Their synthetic counts trigger splitting;
+        // only the independently delivered leaves can support the LeafTilingOnly proof.
+        var handler = LuxembourgAcquisitionTestFixture.AllowRobotsThenHandler((ordinal, req) =>
+            JsonResponse(req, ordinal switch
+            {
+                1 or 6 => LuxembourgAcquisitionTestFixture.CountJson(1_000_000),
+                2 or 4 or 7 or 9 => LuxembourgAcquisitionTestFixture.CountJson(0),
+                11 or 14 => LuxembourgAcquisitionTestFixture.CountJson(2),
+                12 or 15 => LuxembourgAcquisitionTestFixture.RowsJson("b", "n"),
+                3 or 5 or 8 or 10 or 13 or 16 => LuxembourgAcquisitionTestFixture.EmptyRowsJson(),
+                _ => throw new AssertFailedException("Unexpected send after the final leaf."),
+            }));
+        var executor = new LuxembourgRepeatedEnumerationExecutor(
+            store, new LuxembourgAcquisitionTestFixture.FixedTimeProvider(), handler);
+        var budget = WireRequestBudget.OfWireRequests(30);
+        var result = await executor.RunAdaptiveCoverAsync(request, witness, budget, CancellationToken.None);
+
+        Assert.AreEqual(3, result.Chain.Leaves.Count);
+        Assert.AreEqual(3, result.Results.Count);
+        Assert.IsTrue(result.Results.All(static r => r.Receipt is not null && r.Refusal is null),
+            string.Join(",", result.Results.Select(static r => r.Refusal?.Code.ToString())));
+        Assert.AreEqual(16, result.ProductRequestCount, "includes both saturated ancestor counts");
+        Assert.AreEqual(17, budget.Spent, "one robots fetch for the whole adaptive cover");
+        Assert.AreEqual(17, handler.SendCount);
+        var cover = LuxembourgPartitionCover.TryCreate(result.Chain,
+            result.Results.Select(static r => r.Receipt!).ToArray(), null, out var refusal);
+        Assert.IsNotNull(cover, refusal.ToString());
+        Assert.AreEqual(LuxembourgPartitionCoverBasis.LeafTilingOnly, cover.Basis);
+        Assert.AreEqual(2, cover.LeafDeliveredRowCountSum);
+    }
+
+    [TestMethod]
+    public async Task AdaptiveSplittingStopsAtTheSharedWireBudget()
+    {
+        var (request, witness) = BuildRequest();
+        var store = new RoutedHttpAcquisitionSessionAuditTests.RecordingCustodyStore { RefuseFallback = true };
+        var handler = LuxembourgAcquisitionTestFixture.AllowRobotsThenHandler((_, req) =>
+            JsonResponse(req, LuxembourgAcquisitionTestFixture.CountJson(1_000_000)));
+        var executor = new LuxembourgRepeatedEnumerationExecutor(
+            store, new LuxembourgAcquisitionTestFixture.FixedTimeProvider(), handler);
+        var budget = WireRequestBudget.OfWireRequests(5);
+        var result = await executor.RunAdaptiveCoverAsync(request, witness, budget, CancellationToken.None);
+        Assert.AreEqual(5, handler.SendCount);
+        Assert.AreEqual(5, budget.Spent);
+        Assert.AreEqual(4, result.ProductRequestCount);
+        Assert.AreEqual(result.Chain.Leaves.Count, result.Results.Count);
+        Assert.IsTrue(result.Results.All(static r => r.Receipt is null &&
+            r.Refusal?.Code == LuxembourgEnumerationRefusal.WireBudgetExhausted));
+    }
+
     private static ByteArrayContent RobotsContent()
     {
         var bytes = System.Text.Encoding.UTF8.GetBytes("User-agent: *\nAllow: /\n");

@@ -1163,6 +1163,18 @@ Each is the driver's call under ruling 7 and can be reversed by a later pull req
   mount, complete EU and Luxembourg populations, and French EU bodies. Production signing,
   deployment and promotion remain outside that authorisation.
 
+## Luxembourg population partitioning (2026-09-30)
+
+The whole-population acquisition now drives adaptive covers for S, A and G when the existing
+executor reports `PartitionRequired` at its 1,000,000-row delivery ceiling. It splits six-part
+cursor ranges, retains empty leaves, and runs all leaves of a family in one session and under the
+same wire budget. The adapter reconciles each cover and independently reopens every leaf before
+scope reduction, body acquisition or corpus construction. Explicit act ranges keep their current
+path. This adds no publisher traffic by itself; the bounded mount remains the only active live run.
+The query plan's separate 900-row accumulated-slice policy and renderer bytes are unchanged.
+Validation: solution build with zero warnings/errors; fast lane 3,065 pass / 1 Windows skip;
+153 affected ingest tests pass, including a two-work corpus through split S/A/G families.
+
 ## Waiting on others
 
 - The data lane (Codex, Decision 95): the EU rights receipt on the Publications Office route, then

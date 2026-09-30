@@ -408,7 +408,11 @@ public sealed class LuxembourgFirstMountAcquisition
         }
 
         var adapter = new LuxembourgQueryExecutionAdapter(_custodyStore, executor, profile);
-        var run = await adapter.RunAsync(
+        var run = act == LuxembourgActRange.WholePopulation
+            ? await adapter.RunAdaptiveScopedAsync(families,
+                [new LuxembourgScopePartitionFamilies(act.Name + "-s", act.Name + "-a", act.Name + "-g")],
+                rendererSources.DocumentFetch, wireBudget, cancellationToken).ConfigureAwait(false)
+            : await adapter.RunAsync(
                 families, act.Name + "-g", act.Name + "-s", act.Name + "-a",
                 rendererSources.DocumentFetch, wireBudget, cancellationToken)
             .ConfigureAwait(false);
