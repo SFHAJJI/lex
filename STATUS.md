@@ -1,14 +1,14 @@
 # Lex V3 status
 
-Updated 2026-09-29 by the driver. This file replaces the issue-comment ledgers. It is rewritten in
+Updated 2026-09-30 by the driver. This file replaces the issue-comment ledgers. It is rewritten in
 every pull request that changes what is served, what is next or what is blocked.
 
 ## Heads
 
-- `v3/integration`: `16ab9659` (2026-09-30, PR #766 merged). Build 45 s. Fast lane
+- `v3/integration`: `d1272226` (2026-09-30, PR #767 merged). Build 45 s. Fast lane
   (`eng/test-fast.ps1`): 3,038 tests, 3,037 pass, 1 skipped. Ingest suite: green on CI for PR #760
   (the CI `dotnet` job runs the whole solution on every pull request, about 7 min on the runner;
-  green for PR #766);
+  green for PR #767);
   locally about 15 min. 806 web tests pass. CI's web job can flake in `keyboard-walk.test.mjs`
   ("browser debugger never answered"); rerunning the failed job is the fix.
 - Driver: Claude Opus 5.5 since 2026-09-29 (the Fable 5.1 driver ran out of tokens on 2026-09-28
@@ -293,7 +293,7 @@ platform renders from the reviewed registry beside four whole envelopes the real
 `ParseAndVerify` before it is recorded (render with `V3_RENDER_ENVELOPE_SAMPLES=1`). The client's
 served list is pinned to the platform's own list in the coverage answer sample.
 
-Machine gates (PR #767): the evaluation harness in `Lex.V3.Contracts.Evaluation`
+Machine gates (PRs #767 and #768): the evaluation harness in `Lex.V3.Contracts.Evaluation`
 (`TemporalEvaluation`, `VerdictEvaluation`, `ShuffledControls`), which nothing outside its own tests
 called, now runs against the real handler on a mounted corpus (`V3MachineGatesTests`). The temporal
 case set (8 cases on one work with a single first state, two states on one later date and a single
@@ -314,8 +314,26 @@ The six codes nothing produces yet (`advice_boundary`, `derivation_refused`, `no
 `out_of_corpus_scope`, `rate_limited`, `upstream_unreachable`) are outside the set. Two production
 mutations were each caught: `as_of` choosing one of two states on an ambiguous date fails both
 gates, and `in_force_on` answering the twin date for a named work instead of refusing fails the
-temporal gate. The cases come from the fixture, so the gates prove the path until a real mount
-exists.
+temporal gate. The retrieval case set (PR #768) has 13 cases in one collection over two works of one date, and
+the test writes every article's text. There are 6 judged searches: a strict hit graded 3 above a
+relaxed hit graded 1, one query both works answer, and one search scoped by `identifier` to the
+second work that must find that work's article and not the first's. There are 4 cases that must
+find nothing: a word held nowhere; a word asked with the `identifier` scope of the other work, in
+each direction; and a near-miss article permalink naming an anchor the state does not hold, which
+`verify` must refuse `anchor_not_in_version`. The last 3 cases are exact article permalinks
+(`permalink#anchor`), the form only `verify` accepts; it answers each held anchor with its work.
+`verify` names the requested anchor back rather than serving a provision, so what the resolver
+stratum measures is that each held permalink is accepted under its own work and a missing anchor
+is refused. A refused search fails the test: search answers zero hits, never a refusal. Anchor
+nDCG@10 is 1.0, and no-hit accuracy and resolver exactness are 1.0. The test declares the nDCG
+threshold at 1.0 because the judgments are written from the corpus the test builds: it measures
+the path's exactness, not retrieval quality, and the labelled statistical row stays "not yet
+labelled". The judgments-shuffle control is caught: nDCG@10 falls below 0.15 and both invariant
+gates stop passing. The launch contract's three shuffled controls are now each shown to fail on
+the real handler. Three production mutations each fail the retrieval gate: `search` serving
+relaxed hits before strict ones, a scoped search matching no work, and `verify` answering an
+anchor the state does not hold. The cases come from the fixture, so the gates prove the path
+until a real mount exists.
 
 ## Data
 
@@ -552,11 +570,11 @@ exists.
    read pre-V3 shapes), and J1 to J8 restated as V3 steps (owner question). J1 to J8
    exist only in the pre-V3 pack (`05-user-journeys.md`) and need restating as V3 steps.
 7. Release pipeline: build, sign, image, zero-traffic deploy, probes. Then acceptance and promotion.
-8. Machine gates (launch contract, Evaluation): the temporal and refusal case sets run against the
-   real handler at 100 percent with their shuffled controls caught (PR #767). Next: the retrieval
-   gate (anchor nDCG@10, no-hit accuracy, resolver exactness over a judged search case set) with
-   the judgments-shuffle control, which completes "three shuffled controls shown to fail"; then the
-   evaluation card with the statistical rows marked "not yet labelled" (Decision 92).
+8. Machine gates (launch contract, Evaluation): the temporal, refusal and retrieval case sets run
+   against the real handler, and all three shuffled controls are caught (PRs #767 and #768). Next:
+   the evaluation card with the statistical rows marked "not yet labelled" (Decision 92). After it
+   comes replay G1 to G5, the replay guarantees of `33-product-spec.md` in the specification pack,
+   which this repository does not restate yet.
 
 ## Blocked or waiting on the owner
 
