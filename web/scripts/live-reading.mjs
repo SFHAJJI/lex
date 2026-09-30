@@ -110,11 +110,16 @@ export function readingOutcome(asked) {
     try {
       validateRefusal({ code, sentence, payload });
     } catch (error) {
+      // The date a reader needs to ask again travels with the refusal even when its card cannot be
+      // shown (review of #777): the work's history as this index holds it begins on history_begins.
+      const retry = code === "no_version_for_date" && isCalendarDate(payload?.history_begins)
+        ? ` The history this index holds for this work begins on ${payload.history_begins}.`
+        : "";
       return {
         state: "refusal",
         code,
         card: false,
-        sentence: unshownRefusalSentence(code, error.message),
+        sentence: `${unshownRefusalSentence(code, error.message)}${retry}`,
         context: asked.envelope.context,
       };
     }

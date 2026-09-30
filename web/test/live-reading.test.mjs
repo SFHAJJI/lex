@@ -142,6 +142,8 @@ test("the refusals a reading from this page can meet: cards where the card's rul
     assert.match(outcome.sentence, rule);
     assert.match(view(outcome), /^<section data-answer-state="refusal"><p role="status">/);
   }
+  const early = await loadLiveReading({ contract, fetchImpl: answering(200, "application/json", envelopeOf("a date before the work's history")).fetchImpl, request: REQUEST });
+  assert.match(early.sentence, /The history this index holds for this work begins on 2024-02-01\.$/, "the date to ask again travels with the refusal (review of #777)");
 
   // The codes the fixture's envelopes do not reach, held to the payloads the platform sends for them.
   for (const code of ["ambiguous_version", "text_withheld", "text_not_available", "language_not_available"]) {
@@ -200,4 +202,28 @@ test("a quotation's language tag is the shortest ISO 639 code", () => {
   assert.equal(quotationLanguageTag("deu"), "de");
   assert.equal(quotationLanguageTag("ltz"), "lb");
   assert.equal(quotationLanguageTag("xyz"), "xyz");
+});
+
+test("a work read in two languages keeps each article's element id unique (review of #777)", () => {
+  const envelope = structuredClone(envelopeOf(ANSWER));
+  const value = envelope.result.value;
+  const german = structuredClone(value.states[0]);
+  const sha = "d".repeat(64);
+  german.language = "deu";
+  german.state_sha256 = sha;
+  german.permalink = `${german.stable_coordinate}--${sha}`;
+  german.articles.forEach((article, index) => {
+    article.language = "deu";
+    article.article_identity_sha256 = index.toString(16).padStart(64, "e");
+    article.article_permalink = `${german.permalink}#${article.publisher_id}`;
+  });
+  value.states.unshift(german);
+  value.available_languages = ["deu", "fra"];
+  value.requested_language = null;
+  const outcome = readingOutcome({ state: "success", envelope });
+  assert.equal(outcome.state, "success", outcome.sentence);
+  const ids = [...view(outcome).matchAll(/<li id="([^"]+)"/g)].map((match) => match[1]);
+  assert.equal(ids.length, 2 * value.states[1].articles.length);
+  assert.equal(new Set(ids).size, ids.length);
+  assert.ok(ids.includes("deu-art_15") && ids.includes("fra-art_15"));
 });

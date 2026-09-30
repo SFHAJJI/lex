@@ -27,7 +27,7 @@ const IDLE = Object.freeze({ state: 'idle', sentence: LIVE_READING_IDLE });
 
 function Article({ article, state }) {
   return (
-    <li id={article.publisherId} data-article={article.publisherId}>
+    <li id={`${state.language}-${article.publisherId}`} data-article={article.publisherId}>
       <h3>{article.publisherId}</h3>
       <blockquote lang={quotationLanguageTag(state.language)}>{article.text}</blockquote>
       {article.validityConflict ? (

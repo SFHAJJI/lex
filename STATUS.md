@@ -9,7 +9,7 @@ every pull request that changes what is served, what is next or what is blocked.
   (`eng/test-fast.ps1`): 3,038 tests, 3,037 pass, 1 skipped. Ingest suite: green on CI for PR #760
   (the CI `dotnet` job runs the whole solution on every pull request, about 7 min on the runner;
   green for PR #776);
-  locally about 15 min. 853 web tests pass. CI's web job can flake in `keyboard-walk.test.mjs`
+  locally about 15 min. 856 web tests pass. CI's web job can flake in `keyboard-walk.test.mjs`
   ("browser debugger never answered"); rerunning the failed job is the fix.
 - Driver: Claude Opus 5.5 since 2026-09-29 (the Fable 5.1 driver ran out of tokens on 2026-09-28
   after PR #757; the user default model is now `claude-opus-5-5`).
@@ -235,7 +235,7 @@ schema's `parameters` shape, and whose call runs the same dispatch the REST rout
 endpoint test proves it for all twenty-three. The launch-contract line "REST and MCP derive identical
 envelopes from the registry" is the owner's to tick.
 
-Web: 32 React components, 853 tests. Preview screens render fixtures. The V3 Luxembourg search
+Web: 32 React components, 856 tests. Preview screens render fixtures. The V3 Luxembourg search
 answer has a reader (PR #771). The answer census now samples `search` five ways from the real handler:
 - a phrase with 4 strict hits and 1 relaxed hit;
 - the same phrase one hit per page, with its cursor;
@@ -385,8 +385,9 @@ The live reading screen and its journey step (PR #777). `dist-live/reading.html`
   - `identifier_unknown`, as on the dossier;
   - `no_version_for_date`, because the card's contract requires every absence to carry
     `what_would_answer` from its closed vocabulary (and `asserts_absence_of_law`), and the
-    platform's payload names the nearest earlier and later dates instead. `text_not_available`'s
-    payload does carry both, so its card is shown.
+    platform's payload names the nearest earlier and later dates instead. Its status line still
+    carries the date to ask again: "The history this index holds for this work begins on …".
+    `text_not_available`'s payload does carry both, so its card is shown.
 - Found and fixed on the way: the React refusal card threw on the platform's own `ambiguous_version`
   payload. The platform sends its candidates as bare hash-pinned links, and the string card
   normalised them while the React card read the raw strings. Both now use one `candidateView`, which
