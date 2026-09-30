@@ -18,15 +18,18 @@ with the observed timeout JSON or Virtuoso SR319 prefix), alongside saturated co
 still needs both enumeration passes and a tiled cover proof. Other statuses, malformed errors and
 challenges stop the cover. The shared wire ceiling includes failed parent attempts. An optional
 smaller leaf target supports bounded live verification; the publisher threshold remains 1,000,000.
-The bounded a439 S cover is running with a five-row target and a 150-request ceiling. Full
-Luxembourg sizing follows its proof and a fresh preflight; production credentials are not used.
+The bounded a439 S cover completed at 13:00:09 UTC: 12 proven leaves (including empty ranges),
+10 delivered rows and 10 rows reopened from custody, using 68/150 wire requests in 30 minutes.
+Its five-row target exercised automatic splitting and the existing leaf-tiling proof; it proves
+only that bounded S range. Evidence: `C:\lex-v3\lu-cover-probe-20260930-1\summary.json`,
+`routes-final.json`, `counts-final.json`, and `runtime-audit.json`. The lexical strategy's empty
+leaves cost requests too; full Luxembourg sizing must include this measured overhead. The fresh
+whole-population preflight follows merge; no production credentials are used.
 
-Reversible EU decision under standing order section 5: retain one typed outcome for every observed
-expression, but add a language-out-of-scope outcome for non-EN/FRA expressions without claiming
-that their Formex manifestations are absent or ineligible. Current eligibility requires enumeration
-for every expression, so this needs an explicit guarded contract change before use. EN/FRA still
-require the existing proof-bearing enumeration. This is the next slice, not implemented here;
-full EU sizing waits for its tests rather than assuming a 94,000-request language sweep.
+Validation: solution build passed with zero warnings/errors; fast lane 3,066 passed and one
+Windows symlink skip. Affected ingest/census and request-policy tests are running. Initial CI
+found only the two expected identity/surface pin changes; both were regenerated or transcribed
+from the observed candidate and corrected. Cross-family review follows local validation.
 
 ## Heads
 
