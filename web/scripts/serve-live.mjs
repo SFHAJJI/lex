@@ -21,6 +21,8 @@ import { fileURLToPath } from "node:url";
 
 const OPERATION_PATH = /^\/api\/v3\/[a-z_]+$/;
 export const MAXIMUM_REQUEST_BYTES = 1024 * 1024;
+/** How long an answer from the API may take before the page is told it timed out. */
+export const API_DEADLINE_MS = 30_000;
 
 const CONTENT_TYPES = Object.freeze({
   ".html": "text/html; charset=utf-8",
@@ -51,13 +53,14 @@ async function readBounded(request) {
   return Buffer.concat(chunks);
 }
 
-function forward(apiOrigin, path, body) {
+function forward(apiOrigin, path, body, deadlineMs) {
   const target = new URL(path, apiOrigin);
   return new Promise((resolveAnswer, reject) => {
     const outgoing = httpRequest(target, {
       method: "POST",
       // The body's media type and length, and nothing else about the request or its sender.
       headers: { "content-type": "application/json", "content-length": body.length },
+      timeout: deadlineMs,
     }, (answer) => {
       const chunks = [];
       answer.on("data", (chunk) => chunks.push(chunk));
@@ -67,6 +70,11 @@ function forward(apiOrigin, path, body) {
         body: Buffer.concat(chunks),
       }));
       answer.on("error", reject);
+    });
+    outgoing.on("timeout", () => {
+      const error = new Error("the API did not answer in time");
+      error.code = "api_timeout";
+      outgoing.destroy(error);
     });
     outgoing.on("error", reject);
     outgoing.end(body);
@@ -106,11 +114,17 @@ async function serveStatic(response, root, pathname, method) {
  * The server. `root` is the built live directory (`dist-live/`), `apiOrigin` the origin of a
  * running `Lex.V3.Api` (for example `http://127.0.0.1:5075`). It is returned unstarted.
  */
-export function createLiveServer({ root, apiOrigin }) {
+export function createLiveServer({ root, apiOrigin, apiDeadlineMs = API_DEADLINE_MS }) {
   const rootPath = resolve(root instanceof URL ? fileURLToPath(root) : root);
   return createServer(async (request, response) => {
     try {
-      const url = new URL(request.url, "http://live.invalid");
+      let url;
+      try {
+        url = new URL(request.url, "http://live.invalid");
+      } catch {
+        problem(response, 404, "not_found");
+        return;
+      }
       if (request.url.startsWith("/api/") || request.url.startsWith("/mcp")) {
         if (request.method !== "POST" || url.search !== "" || !OPERATION_PATH.test(request.url)) {
           problem(response, 404, "not_forwarded");
@@ -123,9 +137,10 @@ export function createLiveServer({ root, apiOrigin }) {
         }
         let answer;
         try {
-          answer = await forward(apiOrigin, request.url, body);
-        } catch {
-          problem(response, 502, "api_unreachable");
+          answer = await forward(apiOrigin, request.url, body, apiDeadlineMs);
+        } catch (error) {
+          if (error?.code === "api_timeout") problem(response, 504, "api_timeout");
+          else problem(response, 502, "api_unreachable");
           return;
         }
         const headers = { ...BASE_HEADERS, "content-length": answer.body.length };

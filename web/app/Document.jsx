@@ -47,8 +47,9 @@ export function LiveBanner() {
   return (
     <aside className="synthetic" role="note" data-live={LIVE_MARKER}>
       <strong>Live development build.</strong> This page shows what the server it was loaded from
-      answers, from the corpus it mounts; the digests below name that corpus. It is not a release
-      and not legal advice.
+      answers. When a coverage report arrives, its digests name the corpus it counted; until then,
+      or when no corpus is mounted, nothing below describes one. It is not a release and not legal
+      advice.
     </aside>
   );
 }
@@ -121,7 +122,7 @@ export function Document({
             of anything; what has to hold is that nothing executes which was not reviewed
             and served from this origin. */}
         <meta httpEquiv="Content-Security-Policy" content={cspValue()} />
-        <title>{`${title} - Lex V3 preview`}</title>
+        <title>{`${title} - Lex V3 ${banner === 'live' ? 'live' : 'preview'}`}</title>
         <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
         <link rel="stylesheet" href="/styles.css" />
       </head>

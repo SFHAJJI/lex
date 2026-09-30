@@ -9,7 +9,7 @@ every pull request that changes what is served, what is next or what is blocked.
   (`eng/test-fast.ps1`): 3,038 tests, 3,037 pass, 1 skipped. Ingest suite: green on CI for PR #760
   (the CI `dotnet` job runs the whole solution on every pull request, about 7 min on the runner;
   green for PR #764);
-  locally about 15 min. 800 web tests pass. CI's web job can flake in `keyboard-walk.test.mjs`
+  locally about 15 min. 803 web tests pass. CI's web job can flake in `keyboard-walk.test.mjs`
   ("browser debugger never answered"); rerunning the failed job is the fix.
 - Driver: Claude Opus 5.5 since 2026-09-29 (the Fable 5.1 driver ran out of tokens on 2026-09-28
   after PR #757; the user default model is now `claude-opus-5-5`).
@@ -235,7 +235,7 @@ schema's `parameters` shape, and whose call runs the same dispatch the REST rout
 endpoint test proves it for all twenty-three. The launch-contract line "REST and MCP derive identical
 envelopes from the registry" is the owner's to tick.
 
-Web: 29 React components, 800 tests. Preview screens render fixtures. PR #765 builds the first live
+Web: 29 React components, 803 tests. Preview screens render fixtures. PR #765 builds the first live
 page, Trust and Coverage, into its own directory (`node scripts/build-live.mjs` writes
 `dist-live/`, gitignored, apart from the preview `dist/` and its gates): the loading state under a
 live banner (the synthetic banner's "describes no real legal record" would be false on a real mount;
@@ -246,8 +246,9 @@ API on one origin for a local journey: static files with `nosniff` and `no-store
 `POST /api/v3/{operation}` forwarded (no query string, case variant, deeper path, `/mcp` or other
 method), carrying the body and its media type and nothing about the caller (no cookie, user agent,
 referrer or forwarded address), a body over 1 MiB refused before it is forwarded, an unreachable API
-a `502` problem; the traversal guard is tested with raw requests, since `fetch` normalises dot
-segments. PR #764
+a `502` problem, an API that never answers a `504` after 30 s; the traversal guard and the chunked
+body ceiling are tested with raw requests, since `fetch` normalises dot segments and always declares
+a length. PR #764
 adds the first live screen as a component, `LiveCoverage` (Trust and Coverage): the server renders
 its loading state, the browser asks `coverage` with no parameters in an effect through the client
 module, and the answer is the `Coverage` page (read by `readCoverage`, so a served answer the reader

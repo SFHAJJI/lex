@@ -25,9 +25,11 @@ export async function buildLive(destination = LIVE_DESTINATION) {
 /* Semantic tokens, generated from scripts/design-tokens.mjs. */
 ${tokenCss()}`, "utf8");
 
-  const { bundle, bundleClient, resetWork } = await import("./react-build.mjs");
-  await resetWork();
-  const ssr = await import(pathToFileURL(await bundle("app/index.jsx", "app.mjs")).href);
+  // Its own outputs in the intermediate directory, never `app.mjs` and never a reset of the
+  // directory: the tests import `app.mjs` from there in parallel processes, and rewriting it under
+  // them (as this build first did) fails whichever test file loads it mid-write.
+  const { bundle, bundleClient } = await import("./react-build.mjs");
+  const ssr = await import(pathToFileURL(await bundle("app/live-coverage-page.jsx", "live-coverage-page.mjs")).href);
   await writeFile(new URL("index.html", destination), ssr.renderLiveCoveragePage(), "utf8");
   await cp(await bundleClient("app/client-live-entry.jsx", "client-live.js"), new URL("client-live.js", destination));
   return destination;
