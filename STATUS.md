@@ -3,6 +3,21 @@
 Updated 2026-09-30 by the driver. This file replaces the issue-comment ledgers. It is rewritten in
 every pull request that changes what is served, what is next or what is blocked.
 
+## Reuse verified scope objects during retained readback (Codex, 2026-09-30, preparation)
+
+Even after chunked storage, parsing scope JSON again constructs a second complete typed graph.
+The writer already holds a verified scope. Reversible driver decision: compare retained canonical
+bytes against that object while re-running the reducer's complete enumeration, selector and rule
+evidence checks. Initial digest/strict UTF-8 checks, exact canonical byte comparison and final digest
+pin stay shared with the independent parsing reader. The returned wrapper shares the immutable
+manifest, and the independent reader remains available when no verified object is already held.
+
+This code-only draft depends on PR #820 and is uncompiled during the full EU acquisition.
+Prepared regressions cover object sharing, fresh evidence refusal, foreign canonical bytes,
+noncanonical whitespace and substitution of another valid document between read passes. Construction
+pins must be independently regenerated after compilation. Reducer scratch arrays, the original typed
+scope graph and corpus record-set persistence remain full-Luxembourg memory constraints.
+
 ## Large derived scope artifacts (Codex, 2026-09-30)
 
 Full Luxembourg acquisition is sized at 1,986,924 subjects and 9,672,378 assertion rows, but

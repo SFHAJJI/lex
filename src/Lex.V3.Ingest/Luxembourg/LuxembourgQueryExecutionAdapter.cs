@@ -2157,7 +2157,7 @@ public sealed class LuxembourgQueryExecutionAdapter
                 var resourceId = ContentDerivedIdentity.DeriveUuidUrnFromStream(kind, retained, cancellationToken);
                 var reference = new SourceArtifactRef(resourceId, artifact.CanonicalSha256);
                 retained.Position = 0;
-                var reopened = VerifiedScopeManifest.ParseAndVerifyStream(reference, retained, resolver).Manifest;
+                var reopened = VerifiedScopeManifest.VerifyStreamAgainst(reference, retained, manifest, resolver).Manifest;
                 return (reopened, rootReceipt, reference, artifact.CanonicalSha256, null);
             }
             catch (Exception exception) when (exception is CustodyIntegrityException or CustodyRequiredException or CustodyPolicyException)
@@ -2187,7 +2187,7 @@ public sealed class LuxembourgQueryExecutionAdapter
             using var readback = MemoryMarshal.TryGetArray(bytes, out var buffer)
                 ? new MemoryStream(buffer.Array!, buffer.Offset, buffer.Count, writable: false)
                 : new MemoryStream(bytes.ToArray(), writable: false);
-            var reopened = VerifiedScopeManifest.ParseAndVerifyStream(artifactRef, readback, resolver).Manifest;
+            var reopened = VerifiedScopeManifest.VerifyStreamAgainst(artifactRef, readback, manifest, resolver).Manifest;
             return (reopened, receipt, artifactRef, canonicalSha256, null);
         }
         catch (CustodyIntegrityException exception)

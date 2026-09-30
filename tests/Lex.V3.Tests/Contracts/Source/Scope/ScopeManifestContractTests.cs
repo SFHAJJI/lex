@@ -1550,6 +1550,51 @@ public sealed class ScopeManifestContractTests
     }
 
     [TestMethod]
+    public void KnownScopeReadbackSharesTheTypedGraphAndRequiresFreshEvidenceAdmission()
+    {
+        var profile = Profile();
+        var evidence = EvidenceArtifacts();
+        var input = ValidInput(profile, Object("known-scope"));
+        var resolver = ExactResolver.For(profile, evidence, [input]);
+        var expected = ScopeReducer.Reduce(profile, evidence, [input.ObjectRef], [input], resolver);
+        var bytes = CanonicalBytes(expected);
+        using var retained = new ShortReadStream(bytes);
+        var reopened = VerifiedScopeManifest.VerifyStreamAgainst(ArtifactRefFor(bytes), retained, expected, resolver);
+        Assert.AreSame(expected.Manifest, reopened.Manifest);
+        Assert.IsTrue(retained.CanRead);
+        retained.Position = 0;
+        Assert.ThrowsExactly<InvalidOperationException>(() => VerifiedScopeManifest.VerifyStreamAgainst(
+            ArtifactRefFor(bytes), retained, expected,
+            new CompleteEnumerationRefusingResolver(expected.Manifest.CompleteEnumerationRef)));
+    }
+
+    [TestMethod]
+    public void KnownScopeReadbackRejectsOtherCanonicalContentAndSubstitutionBetweenPasses()
+    {
+        var profile = Profile();
+        var evidence = EvidenceArtifacts();
+        var a = ValidInput(profile, Object("known-a"));
+        var b = ValidInput(profile, Object("known-b"));
+        var resolverA = ExactResolver.For(profile, evidence, [a]);
+        var resolverB = ExactResolver.For(profile, evidence, [b]);
+        var knownA = ScopeReducer.Reduce(profile, evidence, [a.ObjectRef], [a], resolverA);
+        var knownB = ScopeReducer.Reduce(profile, evidence, [b.ObjectRef], [b], resolverB);
+        var bytesA = CanonicalBytes(knownA);
+        var bytesB = CanonicalBytes(knownB);
+        using var other = new ShortReadStream(bytesB);
+        Assert.ThrowsExactly<ArgumentException>(() => VerifiedScopeManifest.VerifyStreamAgainst(
+            ArtifactRefFor(bytesB), other, knownA, resolverA));
+        using var substituted = new ShortReadStream(bytesA, bytesB);
+        var failure = Assert.ThrowsExactly<ArgumentException>(() => VerifiedScopeManifest.VerifyStreamAgainst(
+            ArtifactRefFor(bytesA), substituted, knownB, resolverB));
+        StringAssert.Contains(failure.Message, "changed between verification passes");
+        var noncanonical = new byte[] { (byte)' ' }.Concat(bytesA).ToArray();
+        using var spaced = new ShortReadStream(noncanonical);
+        Assert.ThrowsExactly<ArgumentException>(() => VerifiedScopeManifest.VerifyStreamAgainst(
+            ArtifactRefFor(noncanonical), spaced, knownA, resolverA));
+    }
+
+    [TestMethod]
     public void StreamReadbackPreservesCanonicalBytesWithShortReadsAndLeavesInputOpen()
     {
         var profile = Profile();
