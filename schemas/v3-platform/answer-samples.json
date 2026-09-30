@@ -570,6 +570,188 @@
       }
     },
     {
+      "operation": "changes_in_period",
+      "object_type": "change_list",
+      "scenario": "a window holding the work\u0027s first held state: one row, no baseline to compare with",
+      "answer": {
+        "caveat": "a version row does not by itself assert a wording change, legal effect, or entry into force",
+        "changes": [
+          {
+            "baseline": null,
+            "candidates": null,
+            "counts": null,
+            "diff": null,
+            "publisher_work_iri": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3",
+            "reason": "first_held_state",
+            "resolve": {
+              "identifier": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--5bca01f82ef3058cfebe7f8a8a6eb1f1fbeeb32b8a1ea7b2c02ac20963235e3a"
+            },
+            "state": {
+              "applicability_date": "2024-02-01",
+              "article_count": 49,
+              "expression_iri": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo/fr",
+              "language": "fra",
+              "next_applicability_date": null,
+              "permalink": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--5bca01f82ef3058cfebe7f8a8a6eb1f1fbeeb32b8a1ea7b2c02ac20963235e3a",
+              "rule_profile_sha256s": [
+                "70e926111b25a4d364e96b679de0baaa090a869175a82d42e0052572804cf42e",
+                "dd32d9a59ea33b8c9e9cd51b7b2657a6fa2b716ad00e35db075416ba4cd38a9b"
+              ],
+              "stable_coordinate": "/lu-legilux/loi-1991-08-10-n3/2024-02-01",
+              "state_sha256": "5bca01f82ef3058cfebe7f8a8a6eb1f1fbeeb32b8a1ea7b2c02ac20963235e3a"
+            },
+            "wording_changed": null,
+            "work_key": "loi-1991-08-10-n3"
+          }
+        ],
+        "continue_from": null,
+        "corpus_sha256": "\u003Cvaries-per-run\u003E",
+        "index_sha256": "\u003Cvaries-per-run\u003E",
+        "limit": 200,
+        "population": {
+          "first_date_held": "2024-02-01",
+          "languages_held": [
+            "fra"
+          ],
+          "last_date_held": "2024-02-01",
+          "scope": {
+            "identifier": null,
+            "language": null
+          },
+          "versions_in_window": 1,
+          "window_overlaps_what_is_held": true,
+          "works_held": 1,
+          "works_in_window": 1
+        },
+        "publisher": "lu-legilux",
+        "requested_date_from": "2024-02-01",
+        "requested_date_to": "2024-02-01",
+        "requested_identifier": null,
+        "requested_language": null,
+        "truncated": false,
+        "whole_date_over_limit": false,
+        "window_from": "2024-02-01",
+        "window_to": "2024-02-01",
+        "wording_rule": "wording_sha256 is the SHA-256 of a canonical JSON array of [kind, text, target] for the Text and Reference tokens of the article\u0027s stored token stream, in order, with consecutive text merged into one entry (reference labels and targets included; note references, note bodies and modification markers excluded); wording_changed is true when it differs from the previous state of the same language, and any byte difference in the merged text or in a reference counts; paragraph and inline-formatting boundaries and whitespace-only nodes are not compared; wording_runs counts the first state and every change per language; distinct_wordings counts distinct digests per language"
+      }
+    },
+    {
+      "operation": "changes_in_period",
+      "object_type": "change_list",
+      "scenario": "a window holding both states of the two-state work: the first without a baseline, the later compared with it",
+      "answer": {
+        "caveat": "a version row does not by itself assert a wording change, legal effect, or entry into force",
+        "changes": [
+          {
+            "baseline": null,
+            "candidates": null,
+            "counts": null,
+            "diff": null,
+            "publisher_work_iri": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3",
+            "reason": "first_held_state",
+            "resolve": {
+              "identifier": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--5bca01f82ef3058cfebe7f8a8a6eb1f1fbeeb32b8a1ea7b2c02ac20963235e3a"
+            },
+            "state": {
+              "applicability_date": "2024-02-01",
+              "article_count": 49,
+              "expression_iri": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo/fr",
+              "language": "fra",
+              "next_applicability_date": "2025-03-07",
+              "permalink": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--5bca01f82ef3058cfebe7f8a8a6eb1f1fbeeb32b8a1ea7b2c02ac20963235e3a",
+              "rule_profile_sha256s": [
+                "70e926111b25a4d364e96b679de0baaa090a869175a82d42e0052572804cf42e",
+                "dd32d9a59ea33b8c9e9cd51b7b2657a6fa2b716ad00e35db075416ba4cd38a9b"
+              ],
+              "stable_coordinate": "/lu-legilux/loi-1991-08-10-n3/2024-02-01",
+              "state_sha256": "5bca01f82ef3058cfebe7f8a8a6eb1f1fbeeb32b8a1ea7b2c02ac20963235e3a"
+            },
+            "wording_changed": null,
+            "work_key": "loi-1991-08-10-n3"
+          },
+          {
+            "baseline": {
+              "applicability_date": "2024-02-01",
+              "article_count": 49,
+              "expression_iri": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo/fr",
+              "language": "fra",
+              "next_applicability_date": "2025-03-07",
+              "permalink": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--5bca01f82ef3058cfebe7f8a8a6eb1f1fbeeb32b8a1ea7b2c02ac20963235e3a",
+              "rule_profile_sha256s": [
+                "70e926111b25a4d364e96b679de0baaa090a869175a82d42e0052572804cf42e",
+                "dd32d9a59ea33b8c9e9cd51b7b2657a6fa2b716ad00e35db075416ba4cd38a9b"
+              ],
+              "stable_coordinate": "/lu-legilux/loi-1991-08-10-n3/2024-02-01",
+              "state_sha256": "5bca01f82ef3058cfebe7f8a8a6eb1f1fbeeb32b8a1ea7b2c02ac20963235e3a"
+            },
+            "candidates": null,
+            "counts": {
+              "added": 1,
+              "changed": 1,
+              "removed": 1,
+              "unchanged": 47
+            },
+            "diff": {
+              "date_from": "2024-02-01",
+              "date_to": "2025-03-07",
+              "identifier": "/lu-legilux/loi-1991-08-10-n3",
+              "language": "fra"
+            },
+            "publisher_work_iri": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3",
+            "reason": null,
+            "resolve": {
+              "identifier": "/lu-legilux/loi-1991-08-10-n3/2025-03-07--732ebe7c7b4ba3cb176449faa917082793b8fb2dc828485bb49845dd92790a9a"
+            },
+            "state": {
+              "applicability_date": "2025-03-07",
+              "article_count": 49,
+              "expression_iri": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo/later",
+              "language": "fra",
+              "next_applicability_date": null,
+              "permalink": "/lu-legilux/loi-1991-08-10-n3/2025-03-07--732ebe7c7b4ba3cb176449faa917082793b8fb2dc828485bb49845dd92790a9a",
+              "rule_profile_sha256s": [
+                "70e926111b25a4d364e96b679de0baaa090a869175a82d42e0052572804cf42e",
+                "dd32d9a59ea33b8c9e9cd51b7b2657a6fa2b716ad00e35db075416ba4cd38a9b"
+              ],
+              "stable_coordinate": "/lu-legilux/loi-1991-08-10-n3/2025-03-07",
+              "state_sha256": "732ebe7c7b4ba3cb176449faa917082793b8fb2dc828485bb49845dd92790a9a"
+            },
+            "wording_changed": true,
+            "work_key": "loi-1991-08-10-n3"
+          }
+        ],
+        "continue_from": null,
+        "corpus_sha256": "\u003Cvaries-per-run\u003E",
+        "index_sha256": "\u003Cvaries-per-run\u003E",
+        "limit": 200,
+        "population": {
+          "first_date_held": "2024-02-01",
+          "languages_held": [
+            "fra"
+          ],
+          "last_date_held": "2025-03-07",
+          "scope": {
+            "identifier": null,
+            "language": null
+          },
+          "versions_in_window": 2,
+          "window_overlaps_what_is_held": true,
+          "works_held": 1,
+          "works_in_window": 1
+        },
+        "publisher": "lu-legilux",
+        "requested_date_from": "2024-02-01",
+        "requested_date_to": "2025-03-07",
+        "requested_identifier": null,
+        "requested_language": null,
+        "truncated": false,
+        "whole_date_over_limit": false,
+        "window_from": "2024-02-01",
+        "window_to": "2025-03-07",
+        "wording_rule": "wording_sha256 is the SHA-256 of a canonical JSON array of [kind, text, target] for the Text and Reference tokens of the article\u0027s stored token stream, in order, with consecutive text merged into one entry (reference labels and targets included; note references, note bodies and modification markers excluded); wording_changed is true when it differs from the previous state of the same language, and any byte difference in the merged text or in a reference counts; paragraph and inline-formatting boundaries and whitespace-only nodes are not compared; wording_runs counts the first state and every change per language; distinct_wordings counts distinct digests per language"
+      }
+    },
+    {
       "operation": "classification",
       "object_type": "classification",
       "scenario": "the work, in the language it is held in: the publisher\u0027s typed facts",
@@ -4810,10 +4992,6 @@
     }
   ],
   "not_sampled": [
-    {
-      "operation": "changes_in_period",
-      "reason": "sampled when a reader is built against it"
-    },
     {
       "operation": "citation",
       "reason": "sampled when a reader is built against it"

@@ -5,11 +5,11 @@ every pull request that changes what is served, what is next or what is blocked.
 
 ## Heads
 
-- `v3/integration`: `1774a774` (2026-09-30, PR #780 merged). Build 45 s. Fast lane
+- `v3/integration`: `60bf3dce` (2026-09-30, PR #783 merged). Build 45 s. Fast lane
   (`eng/test-fast.ps1`): 3,038 tests, 3,037 pass, 1 skipped. Ingest suite: green on CI for PR #760
   (the CI `dotnet` job runs the whole solution on every pull request, about 7 min on the runner;
-  green for PR #782);
-  locally about 15 min. 881 web tests pass. CI's web job can flake in `keyboard-walk.test.mjs`
+  green for PR #783);
+  locally about 15 min. 884 web tests pass. CI's web job can flake in `keyboard-walk.test.mjs`
   ("browser debugger never answered"); rerunning the failed job is the fix.
 - Driver: Claude Opus 5.5 since 2026-09-29 (the Fable 5.1 driver ran out of tokens on 2026-09-28
   after PR #757; the user default model is now `claude-opus-5-5`).
@@ -235,7 +235,7 @@ schema's `parameters` shape, and whose call runs the same dispatch the REST rout
 endpoint test proves it for all twenty-three. The launch-contract line "REST and MCP derive identical
 envelopes from the registry" is the owner's to tick.
 
-Web: 34 React components, 881 tests. Preview screens render fixtures. The V3 Luxembourg search
+Web: 34 React components, 884 tests. Preview screens render fixtures. The V3 Luxembourg search
 answer has a reader (PR #771). The answer census now samples `search` five ways from the real handler:
 - a phrase with 4 strict hits and 1 relaxed hit;
 - the same phrase one hit per page, with its cursor;
@@ -474,6 +474,22 @@ The live compare screen and its journey step (PR #783). `dist-live/compare.html`
 - `journey.mjs` runs a sixth step: `/compare.html`, typing the fixture work's identifier and
   `2024-02-01` twice. With the mount the page ends in "The same version applied on both dates";
   without one, in the card. All twelve runs pass.
+
+The radar screen's V3 source has a reader (PR #784). The launch contract's Radar is the change radar,
+`changes_in_period`. The answer census samples it twice from the real handler: a window holding the
+one-state fixture's first held state, and a window holding both states of the two-state fixture.
+`web/scripts/radar-answer.mjs` (`readChanges`) reads both and holds every rule the answer states
+about its rows:
+- each row's state lies in the window (the closed interval between the two dates), pinned by the
+  permalink that `resolve` serves; rows are in date order, then work;
+- a compared row has one baseline of its work and language, dated before it and followed by it,
+  with the same rule profiles; its wording change is exactly "an article changed, was added or was
+  removed"; it has its counts, and `diff` parameters that ask for that pair;
+- an uncompared row carries one of four reasons: `first_held_state` (no baseline),
+  `ambiguous_version` and `ambiguous_baseline` (each with its candidates, its own state among them
+  for the first), or `profiles_differ` (with the baseline whose profiles differ);
+- the page names the first date not served exactly when it is truncated, and an untruncated page
+  holds every version the population counts.
 
 **The search journey step passes (PR #773, run locally 2026-09-30).** `node scripts/journey.mjs`
 now runs two steps, each with and without the fixture mount, and all four runs pass.
@@ -888,7 +904,8 @@ proves the path, not a corpus.
    screens with V3 readers (coverage, search, dossier, reading) are now live and journeyed. PR
    #778: the provision history reader `readArticleHistory`; PR #781: the live provision history
    screen and journey step; PR #782: the compare reader `readDiff`; PR #783: the live compare screen
-   and journey step. Next: Radar (`changes_in_period`, the change radar), then Export composer. Of the
+   and journey step; PR #784: the radar reader `readChanges` over `changes_in_period`. Next: the live
+   radar screen and journey step, then Export composer. Of the
    launch contract's eight screens, Export composer is the last. Hosting (ruling 3): `Lex.V3.Api`
    serves the live pages on the API's origin with `frame-ancestors`, HSTS and `Referrer-Policy`,
    and a live page never shows the synthetic banner on a real mount. The absence refusals the card
