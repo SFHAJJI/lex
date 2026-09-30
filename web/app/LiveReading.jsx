@@ -56,7 +56,7 @@ function StateReading({ state, workKey }) {
     <section data-state={state.stateSha256}>
       <h2>
         {workKey}, {state.language}, the state applying from {state.applicabilityDate}
-        {state.nextApplicabilityDate === null ? '' : ` until ${state.nextApplicabilityDate}`}
+        {state.nextApplicabilityDate === null ? '' : ` (the next state held applies from ${state.nextApplicabilityDate})`}
       </h2>
       <p>
         <code>{state.permalink}</code>
@@ -129,14 +129,64 @@ export function ReadingAnswerView({ outcome }) {
 }
 
 /**
+ * The reading form: a work identifier, a date and a language, handed to `onAsk` on submit. Shared
+ * with the export composer, which asks the same reading.
+ */
+export function ReadingForm({ onAsk, submitLabel = 'Read' }) {
+  const [identifier, setIdentifier] = useState('');
+  const [date, setDate] = useState('');
+  const [language, setLanguage] = useState('');
+  return (
+    <form
+      role="search"
+      onSubmit={(event) => {
+        event.preventDefault();
+        onAsk({ identifier, date, language });
+      }}
+    >
+      <label>
+        Work identifier{' '}
+        <input
+          type="text"
+          value={identifier}
+          autoComplete="off"
+          spellCheck={false}
+          onChange={(event) => setIdentifier(event.target.value)}
+        />
+      </label>{' '}
+      <label>
+        Date{' '}
+        <input
+          type="text"
+          inputMode="numeric"
+          placeholder="yyyy-mm-dd"
+          value={date}
+          autoComplete="off"
+          onChange={(event) => setDate(event.target.value)}
+        />
+      </label>{' '}
+      <label>
+        Language{' '}
+        <select value={language} onChange={(event) => setLanguage(event.target.value)}>
+          <option value="">Any held language</option>
+          {READING_LANGUAGES.map((offered) => (
+            <option key={offered.code} value={offered.code}>
+              {offered.label}
+            </option>
+          ))}
+        </select>
+      </label>{' '}
+      <button type="submit">{submitLabel}</button>
+    </form>
+  );
+}
+
+/**
  * The live screen: a form, and the state of the last reading asked. A reading is asked when the
  * reader submits, never while rendering; the session cancels the one in flight when another is
  * asked, and unmounting cancels whatever is left.
  */
 export function LiveReading({ contract, fetchImpl }) {
-  const [identifier, setIdentifier] = useState('');
-  const [date, setDate] = useState('');
-  const [language, setLanguage] = useState('');
   const [outcome, setOutcome] = useState(IDLE);
   const session = useRef(null);
   if (session.current === null) {
@@ -147,47 +197,7 @@ export function LiveReading({ contract, fetchImpl }) {
 
   return (
     <div>
-      <form
-        role="search"
-        onSubmit={(event) => {
-          event.preventDefault();
-          session.current.ask({ identifier, date, language });
-        }}
-      >
-        <label>
-          Work identifier{' '}
-          <input
-            type="text"
-            value={identifier}
-            autoComplete="off"
-            spellCheck={false}
-            onChange={(event) => setIdentifier(event.target.value)}
-          />
-        </label>{' '}
-        <label>
-          Date{' '}
-          <input
-            type="text"
-            inputMode="numeric"
-            placeholder="yyyy-mm-dd"
-            value={date}
-            autoComplete="off"
-            onChange={(event) => setDate(event.target.value)}
-          />
-        </label>{' '}
-        <label>
-          Language{' '}
-          <select value={language} onChange={(event) => setLanguage(event.target.value)}>
-            <option value="">Any held language</option>
-            {READING_LANGUAGES.map((offered) => (
-              <option key={offered.code} value={offered.code}>
-                {offered.label}
-              </option>
-            ))}
-          </select>
-        </label>{' '}
-        <button type="submit">Read</button>
-      </form>
+      <ReadingForm onAsk={(request) => session.current.ask(request)} />
       <ReadingAnswerView outcome={outcome} />
     </div>
   );

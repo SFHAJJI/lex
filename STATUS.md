@@ -5,11 +5,11 @@ every pull request that changes what is served, what is next or what is blocked.
 
 ## Heads
 
-- `v3/integration`: `a8a53034` (2026-09-30, PR #781 merged). Build 45 s. Fast lane
+- `v3/integration`: `b5af2bc5` (2026-09-30, PR #788 merged). Build 45 s. Fast lane
   (`eng/test-fast.ps1`): 3,038 tests, 3,037 pass, 1 skipped. Ingest suite: green on CI for PR #760
   (the CI `dotnet` job runs the whole solution on every pull request, about 7 min on the runner;
-  green for PR #781);
-  locally about 15 min. 873 web tests pass. CI's web job can flake in `keyboard-walk.test.mjs`
+  green for PR #788);
+  locally about 15 min. 909 web tests pass. CI's web job can flake in `keyboard-walk.test.mjs`
   ("browser debugger never answered"); rerunning the failed job is the fix.
 - Driver: Claude Opus 5.5 since 2026-09-29 (the Fable 5.1 driver ran out of tokens on 2026-09-28
   after PR #757; the user default model is now `claude-opus-5-5`).
@@ -235,7 +235,7 @@ schema's `parameters` shape, and whose call runs the same dispatch the REST rout
 endpoint test proves it for all twenty-three. The launch-contract line "REST and MCP derive identical
 envelopes from the registry" is the owner's to tick.
 
-Web: 33 React components, 873 tests. Preview screens render fixtures. The V3 Luxembourg search
+Web: 36 React components, 909 tests. Preview screens render fixtures. The V3 Luxembourg search
 answer has a reader (PR #771). The answer census now samples `search` five ways from the real handler:
 - a phrase with 4 strict hits and 1 relaxed hit;
 - the same phrase one hit per page, with its cursor;
@@ -453,6 +453,103 @@ own, so every other sample stays the one-state answer. `web/scripts/compare-answ
 - otherwise every article of each side appears in exactly one row, the rows are the ids in ordinal
   order, each row's status is its sides' (added, removed, unchanged when the ordered wording digests
   are equal, changed when they are not), and the counts are the rows'.
+
+The live compare screen and its journey step (PR #783). `dist-live/compare.html` has its own bundle
+`client-live-compare.js`.
+- The form sends the work identifier, two dates written `yyyy-mm-dd`, and a language only when one is
+  chosen. One `POST /api/v3/diff` per submit.
+- The comparison is read by `readDiff` and laid out linearly: each side's state and permalink, the
+  date the next held state applies from (said as that state's start, never as "until"), its
+  article count and how many of its articles carry their own date differing from the state's, the
+  platform's note ("nothing about legal effect is asserted"), the counts, then the changed, added
+  and removed articles (each status a word, with the whole wording digests on each side). The
+  unchanged articles are one disclosure away. The same state on both dates says so, with no counts.
+  The wording rule and the validity conflict rule close the page.
+- The envelope census now holds the same-state comparison and three refusals (a from date before the
+  history, an unknown work, no mount). The two-state comparison from the answer census is rendered
+  in the tests: `art_15` changed, `art_16` removed, `art_16-new` added, 47 unchanged.
+  `ambiguous_version`, `profiles_differ` and `language_not_available` are cards, checked against the
+  refusal census's payloads. `no_version_for_date` and `identifier_unknown` are said by their code,
+  the former with the date the held history begins.
+- `journey.mjs` runs a sixth step: `/compare.html`, typing the fixture work's identifier and
+  `2024-02-01` twice. With the mount the page ends in "The same version applied on both dates";
+  without one, in the card. All twelve runs pass.
+
+The radar screen's V3 source has a reader (PR #784). The launch contract's Radar is the change radar,
+`changes_in_period`. The answer census samples it twice from the real handler: a window holding the
+one-state fixture's first held state, and a window holding both states of the two-state fixture.
+`web/scripts/radar-answer.mjs` (`readChanges`) reads both and holds every rule the answer states
+about its rows:
+- each row's state lies in the window (the closed interval between the two dates), pinned by the
+  permalink that `resolve` serves; rows are in date order, then work;
+- a compared row has one baseline of its work and language, dated before it and followed by it,
+  with the same rule profiles; its wording change is exactly "an article changed, was added or was
+  removed"; it has its counts, and `diff` parameters that ask for that pair;
+- an uncompared row carries one of four reasons: `first_held_state` (no baseline),
+  `ambiguous_version` and `ambiguous_baseline` (each with its candidates, its own state among them
+  for the first), or `profiles_differ` (with the baseline whose profiles differ);
+- the page names the first date not served exactly when it is truncated, and an untruncated page
+  holds every version the population counts.
+
+The live radar screen and its journey step (PR #787). `dist-live/radar.html` has its own bundle
+`client-live-radar.js`.
+- The form sends two dates written `yyyy-mm-dd`, plus a work identifier and a language only when
+  given. One `POST /api/v3/changes_in_period` per submit.
+- The radar is read by `readChanges` and laid out: the window and its population; the platform's
+  caveat (a version row asserts no wording change, legal effect or entry into force); and each row's
+  work, language, date and permalink. A compared row says whether its wording changed from its
+  baseline, with the counts and the baseline's permalink; an uncompared row says why in words (the
+  first held state, an ambiguity, different rule profiles), an ambiguity lists its candidate states
+  and a row whose profiles differ names its baseline, each by permalink. An empty window says
+  whether it meets what is held.
+- The envelope census now holds a one-row window, an empty window before anything held, and no
+  mount. The two-state radar from the answer census is rendered in the tests (the later state
+  "wording changed" from its baseline).
+- `journey.mjs` runs a seventh step: `/radar.html`, typing `2024-02-01` twice. With the mount the page
+  ends in "2024-02-01 to 2024-02-01: 1 state of 1 work, of 1 held" and the first-held-state reason;
+  without one, in the card. All fourteen runs pass.
+
+The API serves the live pages on its own origin (PR #788, ruling 3). `Lex.V3.Api` opens `v3-web`
+beside it (the built `web/dist-live`) through `V3WebRoot` and serves exactly the files it held at
+start, by GET or HEAD, with `/` as `index.html`. A path it does not hold reaches the API's routing as
+before, and another method is 405. Every page response carries:
+- the page's own reviewed Content-Security-Policy, read from `index.html` (entities decoded) so
+  there is one source, plus `frame-ancestors 'none'`, which only a header can carry;
+- `Strict-Transport-Security: max-age=31536000; includeSubDomains`;
+- `Referrer-Policy: no-referrer`, `X-Content-Type-Options: nosniff` and `Cache-Control: no-store`.
+
+A directory with a page lacking its policy, a file of a type it does not serve, or a name outside
+the served pattern is refused, and the API runs without pages rather than serving them wrong. No
+live page's text says "synthetic" (the live banner never does). `journey.mjs --served-by-api`
+places the build as `v3-web` and loads every page from the API's origin, with no Node server, and
+checks the headers the page arrived with. All fourteen runs pass that way too. `serve-live.mjs`
+stays for local development.
+
+The live export composer and its journey step (PR #789), the eighth screen. `dist-live/export.html`
+has its own bundle `client-live-export.js`.
+- The page asks what the reading page asks: the same form (`ReadingForm`, now shared), the same one
+  `POST /api/v3/evidence_bundle`, the same outcome mapping and refusal sentences. It lists each
+  state's articles with a pin each (a checkbox with no `name`), the text quoted in its state's
+  language, and the articles held without text, pinnable so their exclusion travels.
+- Pinning composes the export in the page (`export-build.mjs`) and asks nothing. The panel shows,
+  before anything is saved: the counts, the watermark (the composer's own sentence), the rights
+  disposition and rule, the date read, the snapshot's observation time, the corpus, index and
+  registry digests, each item's citation (the hash-pinned article permalink), whole text digest and
+  official source, each exclusion with its reason, and the JSON itself. "Save as JSON" and "Save as
+  CSV" hand over exactly `exportJson` or `exportCsv` of that model, from a Blob in the page, under
+  `lex-v3-export-<identifier>-<date>`. A new reading clears the pins.
+- JSON (`lex-v3-export/1`) and CSV (RFC 4180, CRLF, one row per pinned article, the excluded ones
+  included with their status and no text, each row carrying its citation, rights, the watermark,
+  the snapshot's observation time, the rights rule and the corpus, index and registry digests, so
+  a row copied out alone loses none of it). An excluded article keeps its citation, the state's
+  permalink and its article id, in both formats (review of #789). PDF is not yet made (see the
+  driver decisions).
+- The reading and export pages say the next held state's date as its start ("the next state held
+  applies from"), never "until", as the compare page does after its review.
+- `journey.mjs` runs an eighth step: `/export.html`, typing the fixture work's identifier and
+  `2024-02-01`, then pinning the first article. With the mount the page ends in the composed export
+  ("1 article pinned: 1 exported with text, 0 excluded.", the watermark, the rights); without one, in
+  the card. Composing sends no second request (the verdict still counts exactly one).
 
 **The search journey step passes (PR #773, run locally 2026-09-30).** `node scripts/journey.mjs`
 now runs two steps, each with and without the fixture mount, and all four runs pass.
@@ -876,9 +973,11 @@ has not yet run; it follows the bounded first mount below.
    `evidence_bundle`; PR #777: the live reading screen, its page and journey step. The four launch
    screens with V3 readers (coverage, search, dossier, reading) are now live and journeyed. PR
    #778: the provision history reader `readArticleHistory`; PR #781: the live provision history
-   screen and journey step; PR #782: the compare reader `readDiff`. Next: the live compare screen and
-   journey step, then Radar (`changes_in_period`, the change radar). Of the
-   launch contract's eight screens, Export composer is the last. Hosting (ruling 3): `Lex.V3.Api`
+   screen and journey step; PR #782: the compare reader `readDiff`; PR #783: the live compare screen
+   and journey step; PR #784: the radar reader `readChanges` over `changes_in_period`; PR #787: the
+   live radar screen and journey step; PR #788: the API serves the live pages with the security
+   headers (ruling 3); PR #789: the live export composer and its journey step. All eight of the
+   launch contract's screens are live and journeyed. Next: PDF export. Hosting (ruling 3): `Lex.V3.Api`
    serves the live pages on the API's origin with `frame-ancestors`, HSTS and `Referrer-Policy`,
    and a live page never shows the synthetic banner on a real mount. The absence refusals the card
    will not show: the producer carries the fields (driver decision). J1 to J8 are restated as V3
@@ -972,6 +1071,11 @@ Each is the driver's call under ruling 7 and can be reversed by a later pull req
   operation, that it is not served and which data would serve it.
 - The web hosting shape of ruling 3 is `Lex.V3.Api` serving the built live pages beside `/api/v3` and
   `/mcp`, with the security headers, rather than an ingress split.
+- Exports (PR #789): the export composer saves JSON and CSV first; PDF follows as its own slice
+  (a print rendering of the same model, so the three formats cannot disagree). The export's time is
+  the envelope's `context.freshness.observed_at`, the snapshot's observation, labelled as such,
+  because the envelope carries no time of answering. The CSV is UTF-8 without a byte-order mark,
+  exactly what the tests parse.
 
 - Data acquisitions: the owner's 2026-09-30 data-lane instruction authorises the bounded first
   mount, complete EU and Luxembourg populations, and French EU bodies. Production signing,

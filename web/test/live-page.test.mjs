@@ -14,7 +14,7 @@ import { createElement as h } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 
 import { renderToString } from "react-dom/server";
-import { Document, LIVE_CONTRACT, LIVE_MARKER, SYNTHETIC_MARKER, liveCoverageTree, liveDossierTree, liveHistoryTree, liveReadingTree, liveSearchTree, renderLiveCoveragePage, renderLiveDossierPage, renderLiveHistoryPage, renderLiveReadingPage, renderLiveSearchPage } from "../.react-build/app.mjs";
+import { Document, LIVE_CONTRACT, LIVE_MARKER, SYNTHETIC_MARKER, liveCompareTree, liveCoverageTree, liveDossierTree, liveHistoryTree, liveRadarTree, liveReadingTree, liveSearchTree, liveExportTree, renderLiveComparePage, renderLiveExportPage, renderLiveCoveragePage, renderLiveDossierPage, renderLiveHistoryPage, renderLiveRadarPage, renderLiveReadingPage, renderLiveSearchPage } from "../.react-build/app.mjs";
 import { MAXIMUM_REQUEST_BYTES, createLiveServer } from "../scripts/serve-live.mjs";
 import { buildLive } from "../scripts/build-live.mjs";
 
@@ -46,6 +46,30 @@ test("the search page's server render is the tree the browser hydrates", () => {
   const root = html.slice(html.indexOf(open) + open.length);
   assert.ok(root.startsWith(renderToString(liveSearchTree())), "a hydration that changed the markup would re-render silently");
   assert.match(html, new RegExp(`data-live="${LIVE_MARKER}"`), "the search page is a live page, under the live banner");
+});
+
+test("the export composer page's server render is the tree the browser hydrates", () => {
+  const html = renderLiveExportPage();
+  const open = '<div id="live-export-root">';
+  const root = html.slice(html.indexOf(open) + open.length);
+  assert.ok(root.startsWith(renderToString(liveExportTree())), "a hydration that changed the markup would re-render silently");
+  assert.match(html, new RegExp(`data-live="${LIVE_MARKER}"`), "the export composer page is a live page, under the live banner");
+});
+
+test("the radar page's server render is the tree the browser hydrates", () => {
+  const html = renderLiveRadarPage();
+  const open = '<div id="live-radar-root">';
+  const root = html.slice(html.indexOf(open) + open.length);
+  assert.ok(root.startsWith(renderToString(liveRadarTree())), "a hydration that changed the markup would re-render silently");
+  assert.match(html, new RegExp(`data-live="${LIVE_MARKER}"`), "the radar page is a live page, under the live banner");
+});
+
+test("the compare page's server render is the tree the browser hydrates", () => {
+  const html = renderLiveComparePage();
+  const open = '<div id="live-compare-root">';
+  const root = html.slice(html.indexOf(open) + open.length);
+  assert.ok(root.startsWith(renderToString(liveCompareTree())), "a hydration that changed the markup would re-render silently");
+  assert.match(html, new RegExp(`data-live="${LIVE_MARKER}"`), "the compare page is a live page, under the live banner");
 });
 
 test("the provision history page's server render is the tree the browser hydrates", () => {
@@ -120,6 +144,33 @@ test("the live build writes its own directory, embeds the contract and nothing e
     assert.ok(historyBundle.includes(census.contract.registry_sha256), "the history bundle embeds the contract");
     for (const entry of census.envelopes) {
       assert.ok(!historyBundle.includes(entry.scenario), `the census envelope "${entry.scenario}" is not shipped with the history page`);
+    }
+
+    const compare = await readFile(join(destination, "compare.html"), "utf8");
+    const compareBundle = await readFile(join(destination, "client-live-compare.js"), "utf8");
+    assert.ok(compare.includes('<script src="/client-live-compare.js" defer=""></script>'));
+    assert.match(compare, new RegExp(`data-live="${LIVE_MARKER}"`));
+    assert.ok(compareBundle.includes(census.contract.registry_sha256), "the compare bundle embeds the contract");
+    for (const entry of census.envelopes) {
+      assert.ok(!compareBundle.includes(entry.scenario), `the census envelope "${entry.scenario}" is not shipped with the compare page`);
+    }
+
+    const radar = await readFile(join(destination, "radar.html"), "utf8");
+    const radarBundle = await readFile(join(destination, "client-live-radar.js"), "utf8");
+    assert.ok(radar.includes('<script src="/client-live-radar.js" defer=""></script>'));
+    assert.match(radar, new RegExp(`data-live="${LIVE_MARKER}"`));
+    assert.ok(radarBundle.includes(census.contract.registry_sha256), "the radar bundle embeds the contract");
+    for (const entry of census.envelopes) {
+      assert.ok(!radarBundle.includes(entry.scenario), `the census envelope "${entry.scenario}" is not shipped with the radar page`);
+    }
+
+    const exported = await readFile(join(destination, "export.html"), "utf8");
+    const exportBundle = await readFile(join(destination, "client-live-export.js"), "utf8");
+    assert.ok(exported.includes('<script src="/client-live-export.js" defer=""></script>'));
+    assert.match(exported, new RegExp(`data-live="${LIVE_MARKER}"`));
+    assert.ok(exportBundle.includes(census.contract.registry_sha256), "the export bundle embeds the contract");
+    for (const entry of census.envelopes) {
+      assert.ok(!exportBundle.includes(entry.scenario), `the census envelope "${entry.scenario}" is not shipped with the export page`);
     }
   } finally {
     await rm(destination, { recursive: true, force: true });
@@ -310,5 +361,18 @@ test("an API that accepts and never answers is a timeout the page is told about 
     silent.closeAllConnections();
     await new Promise((resolve) => silent.close(resolve));
     await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("no live page says synthetic in its text, since a live page may stand over a real mount (Decision 95, ruling 3)", () => {
+  for (const [name, render] of [
+    ["coverage", renderLiveCoveragePage], ["search", renderLiveSearchPage], ["dossier", renderLiveDossierPage],
+    ["reading", renderLiveReadingPage], ["history", renderLiveHistoryPage], ["compare", renderLiveComparePage], ["radar", renderLiveRadarPage],
+    ["export", renderLiveExportPage],
+  ]) {
+    const html = render();
+    const text = html.slice(html.indexOf("<body")).replace(/<[^>]+>/g, " ");
+    assert.doesNotMatch(text, /synthetic/i, `${name}: the visible text never calls the page synthetic`);
+    assert.match(html, new RegExp(`data-live="${LIVE_MARKER}"`), `${name}: under the live banner`);
   }
 });

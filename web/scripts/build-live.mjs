@@ -7,7 +7,9 @@
 // preview build does. The pages are `index.html` (Trust and Coverage, script `client-live.js`),
 // `search.html` (search, script `client-live-search.js`), `dossier.html` (dossier, script
 // `client-live-dossier.js`), `reading.html` (reading, script `client-live-reading.js`) and `history.html`
-// (provision history, script `client-live-history.js`).
+// (provision history, script `client-live-history.js`), `compare.html` (compare, script
+// `client-live-compare.js`), `radar.html` (change radar, script `client-live-radar.js`) and
+// `export.html` (export composer, script `client-live-export.js`).
 
 import { cp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { pathToFileURL } from "node:url";
@@ -47,6 +49,15 @@ ${tokenCss()}`, "utf8");
   const historySsr = await import(pathToFileURL(await bundle("app/live-history-page.jsx", "live-history-page.mjs")).href);
   await writeFile(new URL("history.html", destination), historySsr.renderLiveHistoryPage(), "utf8");
   await cp(await bundleClient("app/client-live-history-entry.jsx", "client-live-history.js"), new URL("client-live-history.js", destination));
+  const compareSsr = await import(pathToFileURL(await bundle("app/live-compare-page.jsx", "live-compare-page.mjs")).href);
+  await writeFile(new URL("compare.html", destination), compareSsr.renderLiveComparePage(), "utf8");
+  await cp(await bundleClient("app/client-live-compare-entry.jsx", "client-live-compare.js"), new URL("client-live-compare.js", destination));
+  const radarSsr = await import(pathToFileURL(await bundle("app/live-radar-page.jsx", "live-radar-page.mjs")).href);
+  await writeFile(new URL("radar.html", destination), radarSsr.renderLiveRadarPage(), "utf8");
+  await cp(await bundleClient("app/client-live-radar-entry.jsx", "client-live-radar.js"), new URL("client-live-radar.js", destination));
+  const exportSsr = await import(pathToFileURL(await bundle("app/live-export-page.jsx", "live-export-page.mjs")).href);
+  await writeFile(new URL("export.html", destination), exportSsr.renderLiveExportPage(), "utf8");
+  await cp(await bundleClient("app/client-live-export-entry.jsx", "client-live-export.js"), new URL("client-live-export.js", destination));
   return destination;
 }
 

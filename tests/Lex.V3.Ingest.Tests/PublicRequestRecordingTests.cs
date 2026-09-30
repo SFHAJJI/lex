@@ -786,7 +786,7 @@ public sealed class PublicRequestRecordingTests
     }
 
     [TestMethod]
-    public void TheOnlyOutputTheApiProcessWritesIsTwoStartupMessagesAndItsLoggingProvidersAreCleared()
+    public void TheOnlyOutputTheApiProcessWritesIsThreeStartupMessagesAndItsLoggingProvidersAreCleared()
     {
         var sources = ApiSources();
         var console = sources
@@ -794,9 +794,11 @@ public sealed class PublicRequestRecordingTests
             .ToArray();
 
         CollectionAssert.AreEqual(
-            new[] { "Program.cs", "Program.cs" },
+            // The synthetic bootstrap diagnostic, the corpus mount refused and the live pages refused (PR #788): each
+            // written once at startup, before any request exists, so none can carry one.
+            new[] { "Program.cs", "Program.cs", "Program.cs" },
             console.Select(static value => value.File).ToArray(),
-            "A Console write appeared outside Program.cs, or one of the two startup writes moved.");
+            "A Console write appeared outside Program.cs, or one of the three startup writes moved.");
         Assert.IsTrue(console.All(static value => value.Text.StartsWith("Console.Error.WriteLine(", StringComparison.Ordinal)), string.Join(" | ", console.Select(static value => value.Text)));
 
         var program = sources.Single(static source => source.File == "Program.cs").Code;
