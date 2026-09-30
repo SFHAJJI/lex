@@ -26,6 +26,37 @@ Flush to the caller's stream, including the last JSON flush before the newline. 
 callers currently own MemoryStreams. No production behavior changed after review; final CI remains
 a merge gate. No measured whole-run memory-fit claim is made.
 
+## Retained EU transaction deadlock retry (Codex, 2026-10-01)
+
+The fresh full-EU retry2 refused after 494 requests with 81 of 82 census families proven.
+The retained HTTP 500 body for 32023R2854 names a Virtuoso 40001 transaction deadlock
+(SHA-256 70769075fe4617e11288eda6ac3120c1b10b7f5e64d90149ff9e8c28431b3627).
+Reversible driver decision: retry only complete 500 responses from the exact Publications Office
+SPARQL endpoint whose hash-checked first line carries that signature. Use the existing plan item's
+four-attempt limit, session backoff and shared wire budget. Keep every recognized failed route in
+custody, including the last attempt, and require ordinary full proof for the successful response.
+
+Other status/body failures, malformed successful replies, capacity errors and challenges retain
+their refusal paths. The draft includes the actual retained deadlock fixture and ten new test cases for
+count/page recovery, same-request attempt lineage, failed-route custody, exhaustion, budget and
+nonretry cases, including the same signature from Luxembourg. Validation at 4a37dc2b passed clean build (39.51 s), required fast (3,085 passed,
+one platform skip, 66.989 s), and 126 affected ingest tests (two live canaries skipped, 53.799 s).
+Exact commands/results are retained under C:\lex-v3\lanes\eu-deadlock-*. Required Claude review
+returned MERGE with no material findings and reproduced the focused tests and fast suite. The one
+repair adds the missing Luxembourg endpoint regression and records that failed-route digests are
+currently discoverable by scanning custody; they are not linked from the final refusal or receipt.
+The review stopped its optional full local ingest run after 21 minutes because another lane's
+review was competing for memory: 1,774 passed, four skipped, no failed tests, incomplete suite.
+Initial exact-head CI36784354147 passed 5,105 tests with 19 skips. The repair build, required fast and affected ingest validation passed; final
+exact-head CI passed and PR837 merged at 40004a69. The prior run remains refused and its custody is preserved. Fresh acquisition follows the
+bounded census and storage gates recorded in the lane notes.
+
+The next recovery run will use fresh custody and a shared 20-request ceiling to prove/reopen only
+32023R2854's census. The following full EU attempt keeps the 20,000-wire ceiling and original
+4,999,959,422-byte free-space allowance before and after freeze. A byte-verified transparent
+compression pass over local SDK/tool files is queued after reviews; no cited evidence is deleted.
+Prepared launchers enforce those gates and preserve any refused run. Full Luxembourg still lacks a measured whole-process/storage fit.
+
 ## Publisher annex IDs and subtitles (Codex, 2026-10-01)
 
 The completed three-seed run retains English and French 2024/1620 XHTML with Roman annex IDs
@@ -626,10 +657,10 @@ CI evidence are recorded in the pull request before merge.
 
 ## Heads
 
-- `v3/integration`: `24c59015` (2026-10-01, PR #836 merged). Build 45 s. Fast lane
+- `v3/integration`: `933fe8e3` (2026-10-01, PR #834 merged). Build 45 s. Fast lane
   (`eng/test-fast.ps1`): 3,077 tests, 3,076 pass, 1 skipped (the review of PR #828). Ingest suite: green on CI for PR #760
   (the CI `dotnet` job runs the whole solution on every pull request, about 7 min on the runner;
-  green for PR #833);
+  green for PR #834);
   locally about 15 min. 979 web tests pass. The web job's "browser debugger never answered" failures
   (keyboard-walk, and paint-check since #811) are fixed by PR #822: each browser binds its own
   debugging port (`launchBrowser`) instead of a random one another browser starting at the same
@@ -1816,6 +1847,45 @@ relaxed hits before strict ones, a scoped search matching no work, and `verify` 
 anchor the state does not hold. The cases come from the fixture, so the gates prove the path
 until a real mount exists.
 
+The temporal gate over any mount (PR #838), the first slice of ruling 2's machine gates over the
+real mounted corpus. The fixture's gates build their own states; these derive their cases from the
+mount they are given.
+- `V3MountedGatesTests` reads the mount's Luxembourg index: each work's held states in one language,
+  by applicability date, form a timeline. The timeline says what a dated request must select on any
+  day:
+  - nothing before the first date (`no_version_for_date`);
+  - the one state of the latest date on or before it;
+  - `ambiguous_version` where two states share that date.
+- The cases, for a seeded sample of up to 40 works:
+  - the day before the first date;
+  - each date, a day inside and the last day of each window;
+  - a day 1,000 days after the latest date.
+- The arms are `as_of` and `in_force_on`, in each language the sample holds, and with no language
+  for every work. With no language the mount selects in every language the work holds:
+  `ambiguous_version` if any language's date holds two states, `no_version_for_date` if none holds
+  one yet, and otherwise each language's state. The work's timelines together give that key (the
+  sorted states). The review of #838 found that the first version left multilingual works out of
+  the no-language arms.
+- The date control shifts every case by the median gap between held dates. It runs over the cases
+  whose selection the timeline says the shift changes, which always includes each day before a first
+  date.
+- An arm with no case is `not_measured` (`no_measurable_query`), and its control says there was no
+  case to shift. An empty stratum is reported, never scored.
+- With no variable it runs on the fixture: the fixture's state, two states on one date and a latest
+  state give 9 cases per arm, all passing, and every control catches the shift. When
+  `V3_EVALUATE_MOUNT` names a mount it runs there, and `V3_EVALUATION_CARD_OUT` receives the card
+  sets.
+- Over the real bounded first mount, which holds no Luxembourg state: not measured, and it says why.
+  Over the journey mount, written by another test with one state: 3 cases per arm, all pass, and every
+  control catches the shift.
+- A French work with a German state 200 days later gives 6 no-language cases: French alone before
+  the German date and both from it. All pass, and every control catches the shift.
+- Two mutations:
+  - a timeline that ignores two states on one date fails the timeline test and the fixture gate;
+  - the first version's single-state arm used for no language fails the multilingual test.
+- Next slices: the refusal and retrieval sets derived from a mount, then the card over the release's
+  mount in the rehearsal.
+
 Evaluation card (PR #769): `EvaluationCard` in `Lex.V3.Contracts.Evaluation` prints the machine
 gates as the card of `36-ideal-evaluation.md` section 6 describes, as far as the launch contract
 asks. Each case set and arm is a row with its case count and `cases_sha256`. Each gate carries
@@ -2187,7 +2257,9 @@ has not yet run; the bounded first mount above is complete.
    immutability, G3 bitemporal completeness and G4 as-observed answering need predecessor
    chaining with observation times, so they follow the first mount and the event-log ruling. What
    is left of the launch contract's machine-gates line after that was "V2 absent from the image",
-   which the image rehearsal now checks (PR #831, item 7).
+   which the image rehearsal now checks (PR #831, item 7). Ruling 2's gates over the real mounted
+   corpus: PR #838 derives the temporal set from any mount; the refusal and retrieval sets and the
+   release card follow.
 
 ## Owner rulings, 2026-09-30
 
