@@ -14,7 +14,7 @@ import { createElement as h } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 
 import { renderToString } from "react-dom/server";
-import { Document, LIVE_CONTRACT, LIVE_MARKER, SYNTHETIC_MARKER, liveCompareTree, liveCoverageTree, liveDossierTree, liveHistoryTree, liveReadingTree, liveSearchTree, renderLiveComparePage, renderLiveCoveragePage, renderLiveDossierPage, renderLiveHistoryPage, renderLiveReadingPage, renderLiveSearchPage } from "../.react-build/app.mjs";
+import { Document, LIVE_CONTRACT, LIVE_MARKER, SYNTHETIC_MARKER, liveCompareTree, liveCoverageTree, liveDossierTree, liveHistoryTree, liveRadarTree, liveReadingTree, liveSearchTree, renderLiveComparePage, renderLiveCoveragePage, renderLiveDossierPage, renderLiveHistoryPage, renderLiveRadarPage, renderLiveReadingPage, renderLiveSearchPage } from "../.react-build/app.mjs";
 import { MAXIMUM_REQUEST_BYTES, createLiveServer } from "../scripts/serve-live.mjs";
 import { buildLive } from "../scripts/build-live.mjs";
 
@@ -46,6 +46,14 @@ test("the search page's server render is the tree the browser hydrates", () => {
   const root = html.slice(html.indexOf(open) + open.length);
   assert.ok(root.startsWith(renderToString(liveSearchTree())), "a hydration that changed the markup would re-render silently");
   assert.match(html, new RegExp(`data-live="${LIVE_MARKER}"`), "the search page is a live page, under the live banner");
+});
+
+test("the radar page's server render is the tree the browser hydrates", () => {
+  const html = renderLiveRadarPage();
+  const open = '<div id="live-radar-root">';
+  const root = html.slice(html.indexOf(open) + open.length);
+  assert.ok(root.startsWith(renderToString(liveRadarTree())), "a hydration that changed the markup would re-render silently");
+  assert.match(html, new RegExp(`data-live="${LIVE_MARKER}"`), "the radar page is a live page, under the live banner");
 });
 
 test("the compare page's server render is the tree the browser hydrates", () => {
@@ -137,6 +145,15 @@ test("the live build writes its own directory, embeds the contract and nothing e
     assert.ok(compareBundle.includes(census.contract.registry_sha256), "the compare bundle embeds the contract");
     for (const entry of census.envelopes) {
       assert.ok(!compareBundle.includes(entry.scenario), `the census envelope "${entry.scenario}" is not shipped with the compare page`);
+    }
+
+    const radar = await readFile(join(destination, "radar.html"), "utf8");
+    const radarBundle = await readFile(join(destination, "client-live-radar.js"), "utf8");
+    assert.ok(radar.includes('<script src="/client-live-radar.js" defer=""></script>'));
+    assert.match(radar, new RegExp(`data-live="${LIVE_MARKER}"`));
+    assert.ok(radarBundle.includes(census.contract.registry_sha256), "the radar bundle embeds the contract");
+    for (const entry of census.envelopes) {
+      assert.ok(!radarBundle.includes(entry.scenario), `the census envelope "${entry.scenario}" is not shipped with the radar page`);
     }
   } finally {
     await rm(destination, { recursive: true, force: true });

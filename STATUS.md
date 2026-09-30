@@ -5,11 +5,11 @@ every pull request that changes what is served, what is next or what is blocked.
 
 ## Heads
 
-- `v3/integration`: `60bf3dce` (2026-09-30, PR #783 merged). Build 45 s. Fast lane
+- `v3/integration`: `783544e9` (2026-09-30, PR #784 merged). Build 45 s. Fast lane
   (`eng/test-fast.ps1`): 3,038 tests, 3,037 pass, 1 skipped. Ingest suite: green on CI for PR #760
   (the CI `dotnet` job runs the whole solution on every pull request, about 7 min on the runner;
-  green for PR #783);
-  locally about 15 min. 884 web tests pass. CI's web job can flake in `keyboard-walk.test.mjs`
+  green for PR #784);
+  locally about 15 min. 894 web tests pass. CI's web job can flake in `keyboard-walk.test.mjs`
   ("browser debugger never answered"); rerunning the failed job is the fix.
 - Driver: Claude Opus 5.5 since 2026-09-29 (the Fable 5.1 driver ran out of tokens on 2026-09-28
   after PR #757; the user default model is now `claude-opus-5-5`).
@@ -235,7 +235,7 @@ schema's `parameters` shape, and whose call runs the same dispatch the REST rout
 endpoint test proves it for all twenty-three. The launch-contract line "REST and MCP derive identical
 envelopes from the registry" is the owner's to tick.
 
-Web: 34 React components, 884 tests. Preview screens render fixtures. The V3 Luxembourg search
+Web: 35 React components, 894 tests. Preview screens render fixtures. The V3 Luxembourg search
 answer has a reader (PR #771). The answer census now samples `search` five ways from the real handler:
 - a phrase with 4 strict hits and 1 relaxed hit;
 - the same phrase one hit per page, with its cursor;
@@ -490,6 +490,24 @@ about its rows:
   for the first), or `profiles_differ` (with the baseline whose profiles differ);
 - the page names the first date not served exactly when it is truncated, and an untruncated page
   holds every version the population counts.
+
+The live radar screen and its journey step (PR #787). `dist-live/radar.html` has its own bundle
+`client-live-radar.js`.
+- The form sends two dates written `yyyy-mm-dd`, plus a work identifier and a language only when
+  given. One `POST /api/v3/changes_in_period` per submit.
+- The radar is read by `readChanges` and laid out: the window and its population; the platform's
+  caveat (a version row asserts no wording change, legal effect or entry into force); and each row's
+  work, language, date and permalink. A compared row says whether its wording changed from its
+  baseline, with the counts and the baseline's permalink; an uncompared row says why in words (the
+  first held state, an ambiguity, different rule profiles), an ambiguity lists its candidate states
+  and a row whose profiles differ names its baseline, each by permalink. An empty window says
+  whether it meets what is held.
+- The envelope census now holds a one-row window, an empty window before anything held, and no
+  mount. The two-state radar from the answer census is rendered in the tests (the later state
+  "wording changed" from its baseline).
+- `journey.mjs` runs a seventh step: `/radar.html`, typing `2024-02-01` twice. With the mount the page
+  ends in "2024-02-01 to 2024-02-01: 1 state of 1 work, of 1 held" and the first-held-state reason;
+  without one, in the card. All fourteen runs pass.
 
 **The search journey step passes (PR #773, run locally 2026-09-30).** `node scripts/journey.mjs`
 now runs two steps, each with and without the fixture mount, and all four runs pass.
@@ -904,9 +922,9 @@ proves the path, not a corpus.
    screens with V3 readers (coverage, search, dossier, reading) are now live and journeyed. PR
    #778: the provision history reader `readArticleHistory`; PR #781: the live provision history
    screen and journey step; PR #782: the compare reader `readDiff`; PR #783: the live compare screen
-   and journey step; PR #784: the radar reader `readChanges` over `changes_in_period`. Next: the live
-   radar screen and journey step, then Export composer. Of the
-   launch contract's eight screens, Export composer is the last. Hosting (ruling 3): `Lex.V3.Api`
+   and journey step; PR #784: the radar reader `readChanges` over `changes_in_period`; PR #787: the
+   live radar screen and journey step. Seven of the launch contract's eight screens are live and
+   journeyed; Export composer is the last. Hosting (ruling 3): `Lex.V3.Api`
    serves the live pages on the API's origin with `frame-ancestors`, HSTS and `Referrer-Policy`,
    and a live page never shows the synthetic banner on a real mount. The absence refusals the card
    will not show: the producer carries the fields (driver decision). J1 to J8 are restated as V3

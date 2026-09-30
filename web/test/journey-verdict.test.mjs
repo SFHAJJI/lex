@@ -189,3 +189,19 @@ test("a compare run types the identifier and two dates and is held to all three 
   observed.requests[1].postData = JSON.stringify({ operation_id: "diff", parameters: { identifier: DOSSIER_IDENTIFIER, date_from: READING_DATE, date_to: "2025-01-01" } });
   assert.ok(journeyVerdict(observed, expected).some((failure) => /body was/.test(failure)), "a request with another date fails");
 });
+
+test("a radar run types two dates and is held to exactly those in the body", () => {
+  assert.deepEqual(JOURNEY_STEPS.radar.typed, [READING_DATE, READING_DATE]);
+  assert.deepEqual(JOURNEY_STEPS.radar.body, { operation_id: "changes_in_period", parameters: { date_from: READING_DATE, date_to: READING_DATE } });
+  const observed = goodSearch();
+  observed.requests = [
+    { url: `${ORIGIN}/radar.html`, method: "GET", headers: {} },
+    { url: `${ORIGIN}/api/v3/changes_in_period`, method: "POST", headers: {}, headersSent: true, postData: JSON.stringify(JOURNEY_STEPS.radar.body) },
+  ];
+  observed.location = `${ORIGIN}/radar.html`;
+  observed.text = "1 state of 1 work";
+  const expected = { origin: ORIGIN, step: JOURNEY_STEPS.radar, state: "success", texts: ["1 state of 1 work"] };
+  assert.deepEqual(journeyVerdict(observed, expected), []);
+  observed.requests[1].postData = JSON.stringify({ operation_id: "changes_in_period", parameters: { date_from: READING_DATE, date_to: READING_DATE, identifier: "x" } });
+  assert.ok(journeyVerdict(observed, expected).some((failure) => /body was/.test(failure)), "a request carrying an identifier nobody typed fails");
+});

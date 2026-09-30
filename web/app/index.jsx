@@ -35,6 +35,8 @@ export { HistoryAnswerView, HistoryView, LiveHistory } from './LiveHistory.jsx';
 export { LIVE_HISTORY_ROOT, liveHistoryTree, renderLiveHistoryPage } from './live-history-page.jsx';
 export { CompareAnswerView, CompareView, LiveCompare } from './LiveCompare.jsx';
 export { LIVE_COMPARE_ROOT, liveCompareTree, renderLiveComparePage } from './live-compare-page.jsx';
+export { LiveRadar, RadarAnswerView, RadarView } from './LiveRadar.jsx';
+export { LIVE_RADAR_ROOT, liveRadarTree, renderLiveRadarPage } from './live-radar-page.jsx';
 export {
   renderTimelineReactPage,
   renderCoverageReactPage,
