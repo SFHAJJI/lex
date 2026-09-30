@@ -9,6 +9,7 @@
 
 import { Say } from './LiveAnswer.jsx';
 import { fillCounted, fillText, liveChrome } from '../scripts/live-chrome.mjs';
+import { CARD_ROUTE } from '../scripts/evaluation-card.mjs';
 
 /** The card's words, from the interface copy table. */
 const CARD = liveChrome().card;
@@ -57,6 +58,7 @@ export function EvaluationCardView({ view }) {
     <section data-evaluation-card="">
       <h2>{CARD.heading}</h2>
       <p data-card-target=""><Say template={CARD.target} values={{ target: view.target }} /></p>
+      <p data-card-json=""><a href={CARD_ROUTE}>{CARD.machineReadable}</a></p>
       <Summary view={view} />
       {view.sets.map((set) => (
         <table key={`${set.set}/${set.arm}`} data-set={set.set}>

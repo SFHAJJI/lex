@@ -17,6 +17,8 @@
 // It renders nothing itself.
 
 export const CARD_SCHEMA = 'lex-v3-evaluation-card/1';
+/** Where the card is served as JSON for machines, beside the page that renders it for people (36 s6). */
+export const CARD_ROUTE = '/evaluation-card.json';
 export const GATE_VERDICTS = Object.freeze(['pass', 'fail', 'not_measured']);
 export const NOT_MEASURED_REASONS = Object.freeze(['no_relevant_judgment', 'no_measurable_query', 'stratum_below_floor']);
 export const CONTROL_VERDICTS = Object.freeze(['caught_the_shuffle', 'missed_the_shuffle', 'not_applicable']);

@@ -203,6 +203,7 @@ const EN = Object.freeze({
   card: Object.freeze({
     heading: "Evaluation card",
     target: "Run over: {target}",
+    machineReadable: "The same card for machines, as JSON",
     clean: "Every machine gate on this card passes, and every shuffled control caught its shuffle.",
     notClean: "{gates}, and {controls}.",
     gatesNotPassing: Object.freeze({

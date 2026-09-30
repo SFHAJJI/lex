@@ -513,11 +513,11 @@ CI evidence are recorded in the pull request before merge.
 
 ## Heads
 
-- `v3/integration`: `1a16009b` (2026-09-30, PR #829 merged). Build 45 s. Fast lane
+- `v3/integration`: `3b9d04cf` (2026-09-30, PR #831 merged). Build 45 s. Fast lane
   (`eng/test-fast.ps1`): 3,077 tests, 3,076 pass, 1 skipped (the review of PR #828). Ingest suite: green on CI for PR #760
   (the CI `dotnet` job runs the whole solution on every pull request, about 7 min on the runner;
-  green for PR #828);
-  locally about 15 min. 972 web tests pass. The web job's "browser debugger never answered" failures
+  green for PR #831);
+  locally about 15 min. 976 web tests pass. The web job's "browser debugger never answered" failures
   (keyboard-walk, and paint-check since #811) are fixed by PR #822: each browser binds its own
   debugging port (`launchBrowser`) instead of a random one another browser starting at the same
   moment could hold.
@@ -745,7 +745,7 @@ schema's `parameters` shape, and whose call runs the same dispatch the REST rout
 endpoint test proves it for all twenty-three. The launch-contract line "REST and MCP derive identical
 envelopes from the registry" is the owner's to tick.
 
-Web: 41 React components, 972 tests. Preview screens render fixtures. The V3 Luxembourg search
+Web: 41 React components, 976 tests. Preview screens render fixtures. The V3 Luxembourg search
 answer has a reader (PR #771). The answer census now samples `search` five ways from the real handler:
 - a phrase with 4 strict hits and 1 relaxed hit;
 - the same phrase one hit per page, with its cursor;
@@ -1442,6 +1442,44 @@ release pipeline's. V2 is the retired product on `main` (`Lex.Ask` to `Lex.Web`)
   `/` answering V3's own page and every other 404; the 8 probes pass; the image reproduced by its
   second build; everything removed.
 
+The release assets published, read back and verified, and the evaluation card at its stable route
+(PR #833): the release path's first line without its production credential, ruling 2's card
+beside the release assets, and 36 s6's card for machines at a stable route.
+- The card is served as JSON at `/evaluation-card.json`, the same card the Trust and Coverage page
+  renders, and the page links it ("The same card for machines, as JSON"; drafted in French). The
+  live build writes it beside the pages, and the API's web root now serves `.json`
+  (`application/json`). The probes fetch it from the running image and require the bytes the
+  release carries and signs.
+- Once everything else has held (build, verification, V2 absence, signature, reproduction, probes),
+  the rehearsal publishes a release into a directory named by its version
+  (`v3-rehearsal-<source date>-<commit>`), which is never overwritten (`release-assets.mjs`):
+  - `lex-v3-image.oci.tar` (the image) and `lex-v3-image.sig.json` (its signature);
+  - `evaluation-card.json`: the card the image serves at its route. The rehearsal reads the
+    platform's card once, checks it by the page's rules, hands it to the live build and holds the
+    served file to it;
+  - `mount-report.json`: the mount's build report, or the fixture's own manifest;
+  - `release-manifest.json`, naming the version, the source commit, the image's manifest digest, the
+    corpus digest and each asset by size and SHA-256, and `release-manifest.sig.json`. One key for
+    the run signs the image and the manifest.
+- Reading back (`releaseFailures`) trusts nothing the directory says about itself:
+  - the key is the caller's: a manifest or image signed by another key fails, even one re-signed
+    after a change;
+  - every asset is hashed again: nothing unlisted, nothing missing;
+  - the image is read blob by blob and must be the digest the manifest names, and its signature must
+    name that digest;
+  - the card must read by the page's rules.
+- On the real bounded mount: release `v3-rehearsal-20260930T213833Z-23d939b6e63c`, six files, read
+  back with no failure, after the image was reproduced, V2 found absent, the 8 probes passed and the
+  image served the release's card at `/evaluation-card.json` (200, `application/json`, the same
+  bytes).
+  Tampering with a kept release was caught:
+  - a card with a statistical row rewritten to `pass` failed its size, its hash and the card's rule
+    (Decision 92);
+  - one flipped image byte failed the asset's hash and the blob digest of layer 3.
+- Not in this step: building the corpus from custody in the same command, which is the data lane's
+  build (`Lex.V3.Tool build`), and publishing anywhere but a local directory, which needs the owner's
+  release identity and storage.
+
 The live export composer and its journey step (PR #789), the eighth screen. `dist-live/export.html`
 has its own bundle `client-live-export.js`.
 - The page asks what the reading page asks: the same form (`ReadingForm`, now shared), the same one
@@ -1510,8 +1548,8 @@ request.
   caught its shuffle (or which do not), one captioned table per case set (verdicts as words, values,
   thresholds, cases, the interval, the bound), the controls, the statistical rows "not yet
   labelled", and the negative-results register.
-- Not yet: the card as signed JSON at a stable route and beside the release assets, and the gates
-  run over the real mounted corpus; both follow the release pipeline (item 7) and the first mount.
+- Since PR #833: served as JSON at `/evaluation-card.json` and beside the release assets, signed
+  through the release manifest. Not yet: the gates run over the real mounted corpus.
 
 **The search journey step passes (PR #773, run locally 2026-09-30).** `node scripts/journey.mjs`
 now runs two steps, each with and without the fixture mount, and all four runs pass.
@@ -1990,8 +2028,11 @@ has not yet run; the bounded first mount above is complete.
    it runs the image (WSL, read-only root, private /tmp) and probes the eight screens against it; PR
    #826: the image is reproducible (two builds from scratch, one manifest digest); PR #828: the
    image probed on the journey's fixture mount, where every screen answers and 105 citations verify;
-   PR #831: V2 absent from the image (no V2 assembly or dependency, V2's 63 routes 404). The
-   credential-free release steps are rehearsed end to end. Production signing,
+   PR #831: V2 absent from the image (no V2 assembly or dependency, V2's 63 routes 404); PR #833:
+   the release assets (the image, its signature, the evaluation card, the mount's report, a signed
+   manifest) published under a version, read back and verified, and the card served at
+   `/evaluation-card.json`. The credential-free release steps
+   are rehearsed end to end. Production signing,
    credentials and deployment stay with the owner.
 8. Machine gates (launch contract, Evaluation): the temporal, refusal and retrieval case sets run
    against the real handler, and all three shuffled controls are caught (PRs #767 and #768). The

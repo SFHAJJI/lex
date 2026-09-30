@@ -18,6 +18,9 @@
 // The signature is the rehearsal's own: an ECDSA P-256 key made for the run and never kept, over a
 // signing payload in the shape container signatures use, naming the manifest digest and saying it is a
 // rehearsal. Verifying it checks the signature, the digest and that rehearsal label.
+// Last, the release assets are published into a versioned directory (the image, its signature, the
+// evaluation card the image serves at its stable route `/evaluation-card.json`, which the probes fetch, the mount's report, and a signed release manifest naming each by
+// hash), read back and verified (`release-assets.mjs`).
 // The image is reproducible: each build restores and compiles every project afresh in its own directory,
 // the SDK's time stamps are replaced by the source date (`image-reproducible.mjs`), and a second build
 // from scratch must give the same manifest digest (`--no-reproduce` skips it). The image then runs in
@@ -245,12 +248,18 @@ export function servedPaths(web) {
   return served;
 }
 
+/** A key for one run of the rehearsal, ECDSA P-256, never written anywhere: `{ privateKey, publicKeyPem }`. */
+export function rehearsalKey() {
+  const { privateKey, publicKey } = generateKeyPairSync("ec", { namedCurve: "P-256" });
+  return { privateKey, publicKeyPem: publicKey.export({ type: "spki", format: "pem" }).toString() };
+}
+
 /**
  * A rehearsal signature over the image's manifest digest: a key made for the run, a signing payload in
  * the shape container signatures use, and the payload signed with ECDSA P-256 over SHA-256.
  */
-export function signRehearsal({ manifestDigest, reference }) {
-  const { privateKey, publicKey } = generateKeyPairSync("ec", { namedCurve: "P-256" });
+export function signRehearsal({ manifestDigest, reference, key = rehearsalKey() }) {
+  const { privateKey, publicKeyPem } = key;
   const payload = Buffer.from(JSON.stringify({
     critical: {
       identity: { "docker-reference": reference },
@@ -262,7 +271,7 @@ export function signRehearsal({ manifestDigest, reference }) {
   return {
     payload,
     signature: sign("sha256", payload, privateKey).toString("base64"),
-    publicKeyPem: publicKey.export({ type: "spki", format: "pem" }).toString(),
+    publicKeyPem,
   };
 }
 
@@ -336,11 +345,11 @@ const ARTIFACTS = join(repository, "artifacts", "image-rehearsal");
  * the checkout are mapped (a directory per build outside it gave each build its own assemblies). The
  * SDK's image is then made reproducible (`reproducibleImage`). Answers `{ webRoot, archive, image }`.
  */
-async function buildImage({ into, mountPath, epoch, log }) {
+async function buildImage({ into, mountPath, epoch, card, log }) {
   log("building the live pages");
   const { buildLive } = await import("./build-live.mjs");
   const webRoot = join(into, "v3-web");
-  await buildLive(pathToFileURL(`${webRoot}/`), { buildTag: "image-rehearsal" });
+  await buildLive(pathToFileURL(`${webRoot}/`), { card, buildTag: "image-rehearsal" });
 
   log("building the image (dotnet publish -t:PublishContainer)");
   const sdkArchive = join(into, "sdk-image.tar");
@@ -362,7 +371,8 @@ async function buildImage({ into, mountPath, epoch, log }) {
 }
 
 /**
- * What a mount says it holds, as `{ kind, report }`: a real mount's build report (`build-report.json`),
+ * What a mount says it holds, as `{ kind, report, bytes }` (`bytes`: the file it was read from, which
+ * the release carries): a real mount's build report (`build-report.json`),
  * or, for the journey's fixture mount (`journey-mount.json`, written by `V3JourneyMountTests`), what it
  * names in the build report's shape. The fixture names its corpus by the snapshot digest the coverage
  * answer shows, not by its file's bytes, so only its Luxembourg index is held to a file digest; the
@@ -371,11 +381,14 @@ async function buildImage({ into, mountPath, epoch, log }) {
  */
 export async function mountReport(mountPath) {
   if (!existsSync(join(mountPath, "journey-mount.json"))) {
-    return { kind: "real", report: JSON.parse(await readFile(join(mountPath, "build-report.json"), "utf8")) };
+    const bytes = await readFile(join(mountPath, "build-report.json"));
+    return { kind: "real", report: JSON.parse(bytes.toString("utf8")), bytes };
   }
-  const fixture = JSON.parse(await readFile(join(mountPath, "journey-mount.json"), "utf8"));
+  const bytes = await readFile(join(mountPath, "journey-mount.json"));
+  const fixture = JSON.parse(bytes.toString("utf8"));
   return {
     kind: "fixture",
+    bytes,
     report: {
       corpus: { Sha256: fixture.corpus_sha256 },
       luxembourgIndex: { Sha256: fixture.index_sha256 },
@@ -387,18 +400,27 @@ export async function mountReport(mountPath) {
 /** The rehearsal, end to end. Returns its report; throws on the first step that fails. */
 export async function rehearse({ mount, keep = false, probe = true, reproduce = true, log = () => {} }) {
   const mountPath = resolve(mount);
-  const { kind: mountKind, report } = await mountReport(mountPath);
+  const { kind: mountKind, report, bytes: mountBytes } = await mountReport(mountPath);
+  // The evaluation card the Trust and Coverage page carries, and the release beside it (ruling 2).
+  const card = JSON.parse(await readFile(join(repository, "schemas", "v3-platform", "evaluation-card.json"), "utf8"));
+  const { readEvaluationCard } = await import("./evaluation-card.mjs");
+  readEvaluationCard(card);
   const work = await mkdtemp(join(tmpdir(), "lex-image-rehearsal-"));
   const { sourceDate } = await import("./image-reproducible.mjs");
   const source = sourceDate();
   const result = { mount: mountPath, mountKind, corpusSha256: report.corpus?.Sha256 ?? null, source };
   let container = null;
   try {
-    const { webRoot, archive, image } = await buildImage({ into: join(work, "first"), mountPath, epoch: source.epoch, log });
+    const { webRoot, archive, image } = await buildImage({ into: join(work, "first"), mountPath, epoch: source.epoch, card, log });
     result.archiveBytes = (await stat(archive)).size;
 
     log("verifying the image");
     const web = await filesUnder(webRoot);
+    // The card the image serves at its stable route, which the release carries beside it.
+    const { CARD_ROUTE } = await import("./evaluation-card.mjs");
+    const servedCard = web.find(([path]) => `/${path}` === CARD_ROUTE)?.[1];
+    if (!servedCard) throw new Error(`the live pages hold no ${CARD_ROUTE}`);
+    if (JSON.stringify(JSON.parse(servedCard.toString("utf8"))) !== JSON.stringify(card)) throw new Error(`${CARD_ROUTE} is not the card the pages were built with`);
     const corpus = await filesUnder(mountPath);
     const failures = imageFailures(image, { web, mount: corpus, report });
     Object.assign(result, {
@@ -419,7 +441,8 @@ export async function rehearse({ mount, keep = false, probe = true, reproduce = 
     if (v2.length > 0) throw new Error(`V2 is in the image:\n- ${v2.join("\n- ")}`);
 
     log("signing with the rehearsal identity and verifying");
-    const signed = signRehearsal({ manifestDigest: image.manifestDigest, reference: "lex-v3-rehearsal:rehearsal" });
+    const key = rehearsalKey();
+    const signed = signRehearsal({ manifestDigest: image.manifestDigest, reference: "lex-v3-rehearsal:rehearsal", key });
     const signatureFailures = rehearsalSignatureFailures({ ...signed, manifestDigest: image.manifestDigest });
     Object.assign(result, { signer: REHEARSAL_IDENTITY, signatureVerified: signatureFailures.length === 0, publicKeyPem: signed.publicKeyPem });
     if (signatureFailures.length > 0) throw new Error(`the rehearsal signature does not hold:\n- ${signatureFailures.join("\n- ")}`);
@@ -427,7 +450,7 @@ export async function rehearse({ mount, keep = false, probe = true, reproduce = 
     if (reproduce) {
       // Reproducible: a second build, from scratch in its own directory, must give the same image.
       log("building the image a second time, from scratch, to check it is reproducible");
-      const second = await buildImage({ into: join(work, "second"), mountPath, epoch: source.epoch, log });
+      const second = await buildImage({ into: join(work, "second"), mountPath, epoch: source.epoch, card, log });
       const differences = reproductionFailures(image, second.image);
       result.reproduced = { manifestDigest: second.image.manifestDigest, identical: differences.length === 0 };
       await rm(join(work, "second"), { recursive: true, force: true });
@@ -462,10 +485,28 @@ export async function rehearse({ mount, keep = false, probe = true, reproduce = 
         const routeFailures = await v2RouteFailures(server.origin, { v3Files: servedPaths(web) });
         Object.assign(result.v2Absent, { routesAsked: V2_ROUTES.length, routeFailures });
         if (routeFailures.length > 0) throw new Error(`the image answers V2's routes:\n- ${routeFailures.join("\n- ")}`);
+        // The card for machines at its stable route: the bytes the release carries and signs.
+        const answer = await fetch(`${server.origin}${CARD_ROUTE}`);
+        const bytes = Buffer.from(await answer.arrayBuffer());
+        result.cardRoute = { route: CARD_ROUTE, status: answer.status, contentType: answer.headers.get("content-type"), sha256: sha256(bytes), isTheReleaseCard: bytes.equals(servedCard) };
+        if (answer.status !== 200 || !bytes.equals(servedCard) || !/^application\/json/.test(answer.headers.get("content-type") ?? "")) {
+          throw new Error(`the image does not serve the card at ${CARD_ROUTE}: ${JSON.stringify(result.cardRoute)}`);
+        }
       } finally {
         await server.close();
       }
     }
+
+    log("publishing the release assets, reading them back and verifying them");
+    const { ASSETS, imageSignatureAsset, publishRelease, releaseFailures, releaseVersion } = await import("./release-assets.mjs");
+    const version = releaseVersion(source);
+    const published = await publishRelease(join(work, "release"), {
+      version, source, manifestDigest: image.manifestDigest, corpusSha256: report.corpus?.Sha256 ?? null, key,
+      assets: [[ASSETS.image, await readFile(archive)], [ASSETS.imageSignature, imageSignatureAsset(signed)], [ASSETS.card, servedCard], [ASSETS.mountReport, mountBytes]],
+    });
+    const readBack = await releaseFailures(published.directory, { publicKeyPem: key.publicKeyPem });
+    result.release = { version, manifestSha256: published.manifestSha256, assets: (await readdir(published.directory)).sort(), readBackFailures: readBack };
+    if (readBack.length > 0) throw new Error(`the release does not read back:\n- ${readBack.join("\n- ")}`);
     return result;
   } finally {
     if (!keep) {

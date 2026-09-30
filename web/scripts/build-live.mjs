@@ -94,6 +94,11 @@ ${tokenCss()}`, "utf8");
   // directory: the tests import `app.mjs` from there in parallel processes, and rewriting it under
   // them (as this build first did) fails whichever test file loads it mid-write.
   await buildPages(destination, { card, locale: "en", buildTag });
+  // The card as JSON at its stable route, for machines (36 s6): the same card the page renders.
+  const { CARD_ROUTE } = await import("./evaluation-card.mjs");
+  const platformCard = JSON.parse(await readFile(new URL("../../schemas/v3-platform/evaluation-card.json", import.meta.url), "utf8"));
+  await writeFile(new URL(CARD_ROUTE.slice(1), destination), `${JSON.stringify(card ?? platformCard, null, 2)}
+`, "utf8");
   // Every other reviewed interface language, under its own path, its bundles compiled for it
   // (Decision 41: none but English is reviewed today, so this builds nothing yet). `tables` lets a
   // test build a stand-in language without it being reviewed; the product build passes none.
