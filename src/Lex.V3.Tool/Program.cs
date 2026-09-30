@@ -1,4 +1,4 @@
-// The V3 build tool: one verb, `build`, which acquires an EU work and a selected Luxembourg population live in
+// The V3 build tool acquires selected EU works and a selected Luxembourg population live in
 // one process under one wire ceiling, builds the corpus, the two indexes and the two capability
 // manifests (each twice, compared), writes the five files Lex.V3.Api mounts, and reads them back.
 //
@@ -14,15 +14,16 @@
 
 using System.Runtime.InteropServices;
 using Lex.V3.Artifacts;
+using Lex.V3.Contracts.Source.Europe;
 using Lex.V3.Ingest;
 using Lex.V3.Ingest.Europe;
 using Lex.V3.Ingest.Luxembourg;
 
 const string Usage =
-    "Usage: Lex.V3.Tool build --celex <CELEX> --lu-name <key> --lu-start <IRI> --lu-end <IRI>\n"
-    + "   or: Lex.V3.Tool build --celex <CELEX> --lu-population all\n"
+    "Usage: Lex.V3.Tool build --celex <CELEX[,CELEX...]|all> --lu-name <key> --lu-start <IRI> --lu-end <IRI>\n"
+    + "   or: Lex.V3.Tool build --celex <CELEX[,CELEX...]|all> --lu-population all\n"
     + "                         --custody <directory> --out <directory> --checkout <directory> --wire-ceiling <n>\n"
-    + "  --celex        an Appendix A seed, the one EU work to acquire\n"
+    + "  --celex        an Appendix A seed, comma-separated seeds, or all for the 82-seed population\n"
     + "  --lu-population all  all publisher IRI keys through S/A/G, with existing scope and rights rules\n"
     + "  --lu-name      lowercase ASCII key prefixing the act's three family keys\n"
     + "  --lu-start/--lu-end  an ELI key range on the publisher's key order (start inclusive, end exclusive)\n"
@@ -132,8 +133,12 @@ try
     var luxembourgRenderers = await LuxembourgRendererSources.FromCheckoutAsync(store, checkout, token);
     Console.WriteLine("renderer sources held: 6 Europe, 2 Luxembourg");
 
+    var celexes = options["--celex"] == "all"
+        ? EuAppendixASeedMap.SeedsInCelexOrder.Select(seed => seed.Celex).ToArray()
+        : options["--celex"].Split(',', StringSplitOptions.None);
+    Console.WriteLine($"europe selection: {celexes.Length} seed(s)");
     var europe = await new EuFirstMountAcquisition(store, TimeProvider.System)
-        .RunAsync(options["--celex"], europeRenderers, budget, token);
+        .RunAsync(celexes, europeRenderers, budget, token);
     if (!europe.Delivered)
     {
         Console.Error.WriteLine($"refused: europe: {europe.Refusal}: {europe.Detail} (spent {budget.Spent} of {budget.Limit})");

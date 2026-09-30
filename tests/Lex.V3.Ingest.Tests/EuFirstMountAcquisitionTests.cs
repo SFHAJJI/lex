@@ -13,7 +13,7 @@ namespace Lex.V3.Ingest.Tests;
 /// <summary>
 /// The EU half of the first mount, driven end to end by real code on one scripted transport: the
 /// adapter run over Appendix A's first seed (the harness's own scripts), the Formex population with
-/// its per-expression manifestation enumerations, and the legal-notice GET on eur-lex, all under one
+/// its per-expression manifestation enumerations, and the Decision receipt on Publications Office, all under one
 /// wire ceiling and with renderer sources read from this checkout's own renderer files. The produced
 /// three inputs then build a corpus through the envelope helper and <see cref="LexCorpus6Builder"/>,
 /// with the real notice route in the rights matrix.
@@ -26,6 +26,80 @@ public sealed class EuFirstMountAcquisitionTests
     private const string NoticeMediaType = "application/xhtml+xml; charset=UTF-8";
     private static readonly byte[] NoticeBody = Encoding.UTF8.GetBytes(
         "<!DOCTYPE html><html lang=\"en\"><head><title>Legal notice</title></head><body><h1>Legal notice</h1></body></html>\n");
+
+    [TestMethod]
+    public async Task TwoWorksShareOneRunIdentityAndOneRightsReceipt()
+    {
+        var store = new EuAcquisitionTestFixture.EuInMemoryCustodyStore();
+        var seeds = EuAppendixASeedMap.SeedsInCelexOrder.Take(2).ToArray();
+        var roots = seeds.Select(seed => EuPackRootCanonicalForm.TryCanonicalize(seed.WorkRoot, out _)!)
+            .Order(StringComparer.Ordinal).ToArray();
+        var handler = new CompositeHandler(
+            EuAxiomWiringHarness.TwoSeedScripts(
+                (first, second) => EuAcquisitionTestFixture.AxiomAbsenceScriptFor(first, second), true),
+            roots.Select((root, index) => $"{root}.000{index + 1}").ToDictionary(
+                expression => expression, _ => new[] { "fmx4" }));
+        var renderers = await EuRendererSources.FromCheckoutAsync(store, CheckoutRoot(), CancellationToken.None);
+        var result = await Acquisition(store, handler).RunAsync(
+            seeds.Reverse().Select(seed => seed.Celex).ToArray(), renderers,
+            EuAcquisitionTestFixture.TestWireBudget(), CancellationToken.None);
+
+        Assert.IsTrue(result.Delivered, $"{result.Refusal}: {result.Detail}");
+        Assert.AreEqual(2, result.Run!.ObservedExpressionCount);
+        Assert.AreEqual(2, result.Formex!.AcquiredExpressionCount);
+        var identity = result.Run.CorpusRecordSet!.Set.Records.Select(record => record.RunIdentity).Distinct().Single();
+        Assert.AreEqual(identity, result.LegalNotice!.Route!.RunIdentity);
+        Assert.AreSame(result.Run, result.Formex.Reconciliation!.Run);
+        Assert.AreEqual(1, handler.RightsRequests.Count(uri => uri == NoticeUri));
+        Assert.AreEqual(8, handler.FormexEnumerationRequests);
+
+        var luxembourg = await new Lex.V3.Ingest.Luxembourg.LuxembourgFirstMountAcquisition(
+            store, new LuxembourgAcquisitionTestFixture.FixedTimeProvider(),
+            new LuxembourgFirstMountAcquisitionTests.LuxembourgFamilyHandler(LuxembourgFirstMountAcquisitionTests.PdfBytes()))
+            .RunAsync(LuxembourgFirstMountAcquisitionTests.ActRange,
+                await Lex.V3.Ingest.Luxembourg.LuxembourgRendererSources.FromCheckoutAsync(store, CheckoutRoot(), CancellationToken.None),
+                LuxembourgAcquisitionTestFixture.TestWireBudget(), CancellationToken.None);
+        var build = await new V3FirstMountBuild(store).RunAsync(result, luxembourg, CancellationToken.None);
+        Assert.IsTrue(build.Delivered, $"{build.Refusal}: {build.Detail}");
+        Assert.AreEqual(5, build.Files.Count);
+    }
+
+    [TestMethod]
+    public async Task InvalidPopulationSelectionsRefuseBeforeRightsOrCensusTraffic()
+    {
+        var store = new EuAcquisitionTestFixture.EuInMemoryCustodyStore();
+        var handler = new CompositeHandler(
+            new Dictionary<string, EuAcquisitionTestFixture.FamilyScript>(StringComparer.Ordinal),
+            new Dictionary<string, string[]>(StringComparer.Ordinal));
+        var renderers = await EuRendererSources.FromCheckoutAsync(store, CheckoutRoot(), CancellationToken.None);
+        var seed = EuAxiomWiringHarness.Seed(null).Celex;
+        foreach (var selection in new string[][] { [], [seed, seed], [seed, "32099R9999"], [seed, ""] })
+        {
+            var result = await Acquisition(store, handler).RunAsync(
+                selection, renderers, EuAcquisitionTestFixture.TestWireBudget(), CancellationToken.None);
+            Assert.AreEqual(EuFirstMountAcquisitionRefusal.RunRefused, result.Refusal);
+            Assert.IsNull(result.Run);
+        }
+
+        Assert.AreEqual(0, handler.AdapterRequests + handler.FormexEnumerationRequests + handler.RightsRequests.Count);
+    }
+
+    [TestMethod]
+    public async Task AllAppendixASeedsBindBeforeOneRightsRefusalStopsThePopulation()
+    {
+        var store = new EuAcquisitionTestFixture.EuInMemoryCustodyStore();
+        var handler = new CompositeHandler(
+            new Dictionary<string, EuAcquisitionTestFixture.FamilyScript>(StringComparer.Ordinal),
+            new Dictionary<string, string[]>(StringComparer.Ordinal),
+            rightsRobots: "User-agent: Lex\nDisallow: /\n");
+        var renderers = await EuRendererSources.FromCheckoutAsync(store, CheckoutRoot(), CancellationToken.None);
+        var result = await Acquisition(store, handler).RunAsync(
+            EuAppendixASeedMap.SeedsInCelexOrder.Select(seed => seed.Celex).ToArray(),
+            renderers, EuAcquisitionTestFixture.TestWireBudget(), CancellationToken.None);
+        Assert.AreEqual(EuFirstMountAcquisitionRefusal.LegalNoticeRefused, result.Refusal, result.Detail);
+        Assert.AreEqual(0, handler.AdapterRequests + handler.FormexEnumerationRequests);
+        Assert.AreEqual(2, handler.RightsRequests.Count, "only the two-hop robots bootstrap ran");
+    }
 
     [TestMethod]
     public async Task OneWorkIsAcquiredEndToEndAndBuildsACorpusWithTheRealNoticeRoute()
@@ -87,7 +161,7 @@ public sealed class EuFirstMountAcquisitionTests
 
         // The publisher saw exactly the traffic the composition describes: adapter families, the
         // Formex enumeration (one expression, two passes), the package route (303, then the ZIP),
-        // and the eur-lex robots and notice GETs.
+        // and the Publications Office robots and Decision GETs.
         Assert.AreEqual(4, handler.FormexEnumerationRequests);
         Assert.AreEqual(2, handler.FormexPackageRequests);
         CollectionAssert.AreEqual(
