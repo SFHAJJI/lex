@@ -30,10 +30,15 @@ public enum V3IndexCapabilityManifestRefusal
 }
 
 /// <summary>
-/// One registered operation the platform does not serve, with the data that would serve it, as an index's capability
-/// manifest states it (<see cref="Platform.V3UnservedOperations"/> is the platform's table the builders write).
+/// One registered operation the platform does not serve, as an index's capability manifest states it: the operation, the
+/// typed reason a request for it answers (<see cref="OperationNotServed"/>, the transport failure), and the data that would
+/// serve it (<see cref="Platform.V3UnservedOperations"/> is the platform's table the builders write).
 /// </summary>
-public sealed record V3UnservedOperation(string Operation, string DataNeeded);
+public sealed record V3UnservedOperation(string Operation, string Reason, string DataNeeded)
+{
+    /// <summary>The typed reason a request for a registered operation with no route answers: the transport failure.</summary>
+    public const string OperationNotServed = "operation_not_served";
+}
 
 public enum V3IndexCapabilityLookupOutcome
 {
@@ -158,7 +163,8 @@ public sealed class V3IndexCapabilityManifest
 
     /// <summary>
     /// The manifest with the operations not served stated beside the cells: each a registered operation, at most once, with
-    /// non-blank data that would serve it; held in operation order.
+    /// the typed reason a request for it answers (<see cref="V3UnservedOperation.OperationNotServed"/>) and non-blank data
+    /// that would serve it; held in operation order.
     /// </summary>
     public static bool TryCreate(
         PublisherId publisher,
@@ -172,6 +178,7 @@ public sealed class V3IndexCapabilityManifest
         ArgumentNullException.ThrowIfNull(notServed);
         var unserved = notServed.ToArray();
         if (unserved.Any(static row => row is null || string.IsNullOrWhiteSpace(row.Operation) || string.IsNullOrWhiteSpace(row.DataNeeded) ||
+                                       !string.Equals(row.Reason, V3UnservedOperation.OperationNotServed, StringComparison.Ordinal) ||
                                        !V3ContractVocabulary.OperationIds.Contains(row.Operation, StringComparer.Ordinal)) ||
             unserved.Select(static row => row.Operation).Distinct(StringComparer.Ordinal).Count() != unserved.Length)
         {

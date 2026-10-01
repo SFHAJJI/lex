@@ -65,6 +65,7 @@ public static class V3IndexCapabilityManifestArtifact
                 {
                     writer.WriteStartObject();
                     writer.WriteString("operation", row.Operation);
+                    writer.WriteString("reason", row.Reason);
                     writer.WriteString("data_needed", row.DataNeeded);
                     writer.WriteEndObject();
                 }
@@ -186,7 +187,7 @@ public static class V3IndexCapabilityManifestArtifact
                 wire.Publisher,
                 wire.IndexSha256,
                 cells,
-                (wire.NotServed ?? []).Select(static row => new V3UnservedOperation(row.Operation, row.DataNeeded)),
+                (wire.NotServed ?? []).Select(static row => new V3UnservedOperation(row.Operation, row.Reason, row.DataNeeded)),
                 out var manifest,
                 out var refusal))
         {
@@ -215,7 +216,7 @@ public static class V3IndexCapabilityManifestArtifact
         IReadOnlyList<WireCell> Cells,
         IReadOnlyList<WireUnserved>? NotServed = null);
 
-    private sealed record WireUnserved(string Operation, string DataNeeded);
+    private sealed record WireUnserved(string Operation, string Reason, string DataNeeded);
 
     private sealed record WireCell(
         string Operation,

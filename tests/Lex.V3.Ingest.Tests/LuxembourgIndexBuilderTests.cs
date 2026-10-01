@@ -46,7 +46,7 @@ public sealed class LuxembourgIndexBuilderTests
         CollectionAssert.AreEqual(
             Lex.V3.Contracts.Platform.V3UnservedOperations.Rows.ToArray(),
             built.CapabilityManifest.NotServed.ToArray());
-        StringAssert.Contains(Encoding.UTF8.GetString(built.CapabilityManifestBytes.Span), "\"not_served\":[{\"operation\":\"concepts\"");
+        StringAssert.Contains(Encoding.UTF8.GetString(built.CapabilityManifestBytes.Span), "\"not_served\":[{\"operation\":\"concepts\",\"reason\":\"operation_not_served\"");
     }
 
     [TestMethod]

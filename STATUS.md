@@ -1144,7 +1144,7 @@ CI evidence are recorded in the pull request before merge.
 
 ## Heads
 
-- `v3/integration`: `046e650f` (2026-10-01, PR #881 merged). Build 45 s. Fast lane
+- `v3/integration`: `d623bd51` (2026-10-01, PR #900 merged). Build 45 s. Fast lane
   (`eng/test-fast.ps1`): 3,077 tests, 3,076 pass, 1 skipped (the review of PR #828). Ingest suite: green on CI for PR #760
   (the CI `dotnet` job runs the whole solution on every pull request, about 7 min on the runner;
   green for PR #834);
@@ -3745,6 +3745,9 @@ Each is the driver's call under ruling 7 and can be reversed by a later pull req
   (`33-product-spec.md`). The index manifest can carry the same rows later without changing them.
   PR #891 makes it so: the table is `V3UnservedOperations` in Contracts, which the API's `coverage`
   reads and both index builders state in every capability manifest they write (`not_served`).
+  - Each row states the operation, the typed reason a request for it answers (`operation_not_served`,
+    the transport failure; any other reason is refused) and the data that would serve it. The reason
+    was added by the review of #891, since the launch line asks for the reason to be in the manifest.
   - The manifest schema stays `/1`: the field is additive and written only when stated, so an
     earlier manifest keeps its exact bytes and reads back with none. That covers the real bounded
     first mount's manifest and the data lane's running EU population's.
@@ -3754,7 +3757,8 @@ Each is the driver's call under ruling 7 and can be reversed by a later pull req
     reporting today's routes.
   - With this, the launch line "all 27 registered names, each either served or refusing with a typed
     reason its capability manifest states" holds on a fresh build: the three unserved operations
-    answer `operation_not_served`, and each manifest states the data that would serve them.
+    answer `operation_not_served`, and each manifest states that reason and the data that would serve
+    them.
 - The web hosting shape of ruling 3 is `Lex.V3.Api` serving the built live pages beside `/api/v3` and
   `/mcp`, with the security headers, rather than an ingress split.
 - Exports (PRs #789 and #790): JSON, CSV and PDF are written from one model, so they cannot
