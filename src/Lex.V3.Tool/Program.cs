@@ -32,12 +32,15 @@ const string Usage =
     + "  --out          the v3-corpus directory to write\n"
     + "  --checkout     the repository root holding the renderer source files\n"
     + "  --wire-ceiling the one ceiling on publisher requests for the whole run, robots included\n"
-    + "  --predecessor  a previous build's v3-corpus directory: its Luxembourg event log is carried forward and this build appends to it\n"
+    + "  --predecessor  a previous build's v3-corpus directory: its Luxembourg event log is carried forward and this build appends to it,\n"
+    + "                 and the earlier generations the retention line keeps are copied from it into <out>/generations\n"
+    + "  --referenced   with --predecessor: a JSON array of Luxembourg index digests a published permalink or evidence bundle references,\n"
+    + "                 each kept indefinitely (none is recorded anywhere else)\n"
     + "Exit codes: 0 built and verified, 1 unexpected failure, 2 usage, 3 typed refusal, 4 written directory did not verify, 130 cancelled";
 
 string[] required = ["--celex", "--custody", "--out", "--checkout", "--wire-ceiling"];
 string[] rangeOptions = ["--lu-name", "--lu-start", "--lu-end"];
-string[] admitted = [.. required, .. rangeOptions, "--lu-population", "--custody-encoding", "--predecessor"];
+string[] admitted = [.. required, .. rangeOptions, "--lu-population", "--custody-encoding", "--predecessor", "--referenced"];
 
 if (args.Length == 0 || !string.Equals(args[0], "build", StringComparison.Ordinal) || (args.Length - 1) % 2 != 0)
 {
@@ -108,6 +111,35 @@ if (options.TryGetValue("--predecessor", out var predecessorDirectory))
     }
 
     Console.WriteLine($"predecessor: luxembourg index {predecessor.IndexSha256[..12]}, its event log carried forward");
+}
+
+// The generations a published permalink or evidence bundle references: a JSON array of index digests, read before the
+// first request too. Only a chained build keeps generations.
+IReadOnlySet<string> referenced = new HashSet<string>(StringComparer.Ordinal);
+if (options.TryGetValue("--referenced", out var referencedPath))
+{
+    if (predecessor is null)
+    {
+        Console.Error.WriteLine("--referenced needs --predecessor: only a chained build keeps generations.");
+        return 2;
+    }
+
+    try
+    {
+        var digests = System.Text.Json.JsonSerializer.Deserialize<string[]>(File.ReadAllText(Path.GetFullPath(referencedPath))) ?? [];
+        if (digests.Any(static digest => digest is null || digest.Length != 64 || !digest.All(static c => c is (>= '0' and <= '9') or (>= 'a' and <= 'f'))))
+        {
+            Console.Error.WriteLine("--referenced must be a JSON array of 64-character lower-case hex index digests.");
+            return 2;
+        }
+
+        referenced = digests.ToHashSet(StringComparer.Ordinal);
+    }
+    catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or System.Text.Json.JsonException)
+    {
+        Console.Error.WriteLine($"--referenced does not read: {exception.Message}");
+        return 2;
+    }
 }
 
 var checkout = Path.GetFullPath(options["--checkout"]);
@@ -204,7 +236,11 @@ try
         $"built: corpus {build.Corpus!.ArtifactRef.Sha256[..12]} ({build.Corpus.VerifiedSet.Set.Members.Count} member(s)), "
         + $"luxembourg index {build.LuxembourgIndex!.IndexRef.Sha256[..12]}, europe index {build.EuropeIndex!.IndexRef.Sha256[..12]}; each built twice and equal");
 
-    var write = await V3CorpusMountWriter.WriteAsync(build, options["--out"], token);
+    var write = await V3CorpusMountWriter.WriteAsync(
+        build,
+        options["--out"],
+        predecessor is null ? null : new V3GenerationSource(Path.GetFullPath(predecessorDirectory!), referenced),
+        token);
     foreach (var file in write.Files)
     {
         Console.WriteLine($"wrote {file.Name} {file.ByteLength} bytes sha256={file.Sha256}");
