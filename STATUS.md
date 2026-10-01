@@ -14,14 +14,18 @@ subject or run observation is rejected.
 
 The acquisition adapter now uses this component. Eight new cases cover range boundaries, cycles,
 shared descendants, literal/non-WEMI links, missing targets, original-Act qualification and lookup
-substitution. Local build, fast and affected ingest validation are queued after the active EU run;
-no validation success is claimed yet. The existing whole-population acquisition/corpus tests remain
-part of that validation. This is a dependency boundary for disk-backed derivation: dictionaries and
+substitution. Clean Release build passed with no warnings/errors; required fast tests passed
+(3,085 succeeded, one skipped), and affected ingest tests passed (133 succeeded, two skipped),
+including the existing population acquisition/corpus cases. This is a dependency boundary for disk-backed derivation: dictionaries and
 the complete scope graph are still retained. It does not establish full Luxembourg memory fit or
 permit separate range corpora to be concatenated without complete enumeration verification.
 
-Full EU retry 4 is running from frozen source 18b53941 in
-C:/lex-v3/eu-population-20261001-2, all 82 seeds and a 20,000-request ceiling. The fresh three-family
+Full EU retry 4 ended with ObjectFactsFamilyNotProven after 1,359 wire requests from frozen
+source 18b53941 in
+C:/lex-v3/eu-population-20261001-2, all 82 requested seeds and a 20,000-request ceiling. No complete population was produced.
+One retained object-facts batch has equal COUNT values of 678 and equal unique row sets, but
+its second pass repeats seven rows across the continuation boundary; the cause is under investigation.
+The disk guard did not stop the run (minimum sampled free space 5,981,491,200 bytes). The fresh three-family
 maintenance census passed with 22 of 60 allowed wire requests; every attempt was zero, so it did
 not exercise a live retry. All proof rows and retained HTTP body hashes were independently reopened.
 PRs #840 and #843 are merged after cross-family review and exact-head green CI. The full run started
