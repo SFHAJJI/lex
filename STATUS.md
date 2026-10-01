@@ -19,11 +19,13 @@ Receipt restoration obtains current write/readback receipts for every dependency
 existing receipt factory. It carries the current store floor, including a weaker copied store, and
 performs no publisher requests. Failure or receipt substitution refuses.
 
-Initial CI36828530216 at35da3bf1 compiled but failed714 tests (4560 passed,22 skipped): the checkpoint
-writer used a descriptive URN where SourceArtifactRef requires a UUID URN, causing broad downstream
-failures. The UUID format is corrected; construction/conformance changes are being captured from
-compiled diagnostics. Six added restoration/custody cases are not yet run. Local Release, required
-fast tests, affected ingests and Claude review remain pending behind active EU acquisition.
+CI36829231978 atc043f234 built and passed all20 new cases:5278 passed,22 skipped,2 census
+failures. Initial35da's invalid UUID URN caused broad downstream failures and is corrected.
+The remaining compiled census differences are the new internal completion factory and32 store
+implementations, including two named fault decorators. The literal pins are transcribed from the
+compiled log; pr-869-pin-transcription.json records the exact entry and log digest. Fresh CI must
+verify the pin repair. Local Release, required fast tests, affected ingests and Claude review
+remain pending behind active EU acquisition.
 
 No acquisition-completion or custody-floor claim is read from the checkpoint. This does not yet
 restore the complete EU/LU acquisition, Formex/rights/body outcomes, or rebuild a mount offline;

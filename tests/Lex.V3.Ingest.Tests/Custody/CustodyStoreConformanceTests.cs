@@ -154,14 +154,14 @@ public sealed class CustodyStoreConformanceTests
     public void TheImplementationCountsAreExactlyThese()
     {
         var types = CustodyStoreConformance.ImplementationTypes(Scope);
-        Assert.AreEqual(30, types.Count, "implementations swept");
+        Assert.AreEqual(32, types.Count, "implementations swept");
         Assert.AreEqual(
             9,
             types.Count(static type =>
                 CustodyStoreConformance.IsDrivenByDefault(type)
                 || CustodyStoreConformance.HasRecipe(type)),
             "implementations driven");
-        Assert.AreEqual(21, Exempt.Length, "implementations exempt");
+        Assert.AreEqual(23, Exempt.Length, "implementations exempt");
     }
 
     [TestMethod]
