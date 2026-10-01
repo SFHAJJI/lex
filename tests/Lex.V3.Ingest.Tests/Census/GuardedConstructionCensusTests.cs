@@ -522,6 +522,8 @@ public sealed class GuardedConstructionCensusTests
                     + "Lex.V3.Ingest.Luxembourg.LuxembourgRepeatedEnumerationExecutor::RunDocumentG"
                     + "etAsync, "
                     + "method public static "
+                    + "Lex.V3.Ingest.Luxembourg.LuxembourgDocumentFetchRouteReader::ReopenAsync, "
+                    + "method public static "
                     + "Lex.V3.Ingest.Luxembourg.LuxembourgDocumentGetAttemptResult::Executed, "
                     + "method public static "
                     + "Lex.V3.Ingest.Luxembourg.LuxembourgDocumentGetAttemptResult::Refused, "

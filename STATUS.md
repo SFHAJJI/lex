@@ -3,6 +3,22 @@
 Updated 2026-10-01 by the driver. This file replaces the issue-comment ledgers. It is rewritten in
 every pull request that changes what is served, what is next or what is blocked.
 
+## Offline Luxembourg document attempts (Codex, 2026-10-01)
+
+Reversible driver decision: reopen the final retained LU document attempt from its original
+run, logical-request digest and selected file identity. Check the single-hop GET, absence of
+negotiation, format/provenance binding, supported profile and retry limit, write receipt and
+body. RetryAllowanceSpent is reproduced from the original attempt ordinal and final status.
+Previous attempts are not re-proved. Policy bytes are digest checked; only profile, address
+and retry fields are interpreted. Historical receipts do not claim current retention protection.
+Unretained bootstrap/budget refusals are outside this reader's scope.
+
+Twenty-six drafted cases cover copied/weaker stores, terminal outcomes, status and pre-header
+retries, missing dependencies, different run/request/file/format/provenance, receipt and policy
+substitutions, negotiation and cancellation. CI and official Claude review are pending. No local
+build or fast/ingest tests run under the active-acquisition memory guard. This is a component;
+full LU restoration, independent offline mounts and full-population memory fit remain pending.
+
 ## Offline EU document routes (Codex, 2026-10-01)
 
 Reopen a retained document route using its original acquisition run, logical-request digest and
