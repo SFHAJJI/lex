@@ -24,7 +24,16 @@ public enum V3IndexCapabilityManifestRefusal
 
     [JsonStringEnumMemberName("overlapping_period")]
     OverlappingPeriod,
+
+    [JsonStringEnumMemberName("malformed_not_served")]
+    MalformedNotServed,
 }
+
+/// <summary>
+/// One registered operation the platform does not serve, with the data that would serve it, as an index's capability
+/// manifest states it (<see cref="Platform.V3UnservedOperations"/> is the platform's table the builders write).
+/// </summary>
+public sealed record V3UnservedOperation(string Operation, string DataNeeded);
 
 public enum V3IndexCapabilityLookupOutcome
 {
@@ -118,11 +127,13 @@ public sealed class V3IndexCapabilityManifest
     private V3IndexCapabilityManifest(
         PublisherId publisher,
         string indexSha256,
-        V3IndexCapabilityCell[] cells)
+        V3IndexCapabilityCell[] cells,
+        V3UnservedOperation[] notServed)
     {
         Publisher = publisher;
         IndexSha256 = indexSha256;
         Cells = Array.AsReadOnly(cells);
+        NotServed = Array.AsReadOnly(notServed);
     }
 
     public PublisherId Publisher { get; }
@@ -131,14 +142,45 @@ public sealed class V3IndexCapabilityManifest
 
     public IReadOnlyList<V3IndexCapabilityCell> Cells { get; }
 
+    /// <summary>
+    /// The registered operations the platform did not serve when the index was built, each with the data that would serve
+    /// it, in operation order; empty for a manifest written before manifests stated them.
+    /// </summary>
+    public IReadOnlyList<V3UnservedOperation> NotServed { get; }
+
     public static bool TryCreate(
         PublisherId publisher,
         string indexSha256,
         IEnumerable<V3IndexCapabilityCell> cells,
         out V3IndexCapabilityManifest? manifest,
+        out V3IndexCapabilityManifestRefusal refusal) =>
+        TryCreate(publisher, indexSha256, cells, [], out manifest, out refusal);
+
+    /// <summary>
+    /// The manifest with the operations not served stated beside the cells: each a registered operation, at most once, with
+    /// non-blank data that would serve it; held in operation order.
+    /// </summary>
+    public static bool TryCreate(
+        PublisherId publisher,
+        string indexSha256,
+        IEnumerable<V3IndexCapabilityCell> cells,
+        IEnumerable<V3UnservedOperation> notServed,
+        out V3IndexCapabilityManifest? manifest,
         out V3IndexCapabilityManifestRefusal refusal)
     {
         ArgumentNullException.ThrowIfNull(cells);
+        ArgumentNullException.ThrowIfNull(notServed);
+        var unserved = notServed.ToArray();
+        if (unserved.Any(static row => row is null || string.IsNullOrWhiteSpace(row.Operation) || string.IsNullOrWhiteSpace(row.DataNeeded) ||
+                                       !V3ContractVocabulary.OperationIds.Contains(row.Operation, StringComparer.Ordinal)) ||
+            unserved.Select(static row => row.Operation).Distinct(StringComparer.Ordinal).Count() != unserved.Length)
+        {
+            manifest = null;
+            refusal = V3IndexCapabilityManifestRefusal.MalformedNotServed;
+            return false;
+        }
+
+        Array.Sort(unserved, static (left, right) => string.CompareOrdinal(left.Operation, right.Operation));
         manifest = null;
         indexSha256 = ContractValidation.RequireSha256(indexSha256, nameof(indexSha256));
 
@@ -190,7 +232,7 @@ public sealed class V3IndexCapabilityManifest
             }
         }
 
-        manifest = new V3IndexCapabilityManifest(publisher, indexSha256, ordered);
+        manifest = new V3IndexCapabilityManifest(publisher, indexSha256, ordered, unserved);
         refusal = V3IndexCapabilityManifestRefusal.None;
         return true;
     }

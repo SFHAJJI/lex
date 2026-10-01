@@ -4150,19 +4150,8 @@ internal sealed class V3CorpusMount : IDisposable
     /// bitemporal replay, the EuroVoc concepts and the transposition bridge). A served operation never appears here, and
     /// an unserved one without an entry fails the coverage tests.
     /// </summary>
-    internal static readonly IReadOnlyDictionary<string, string> NotServedDataNeeded = new Dictionary<string, string>(StringComparer.Ordinal)
-    {
-        ["knowable_on"] =
-            "each held state's publication date beside its observation time (observed_from), so a date is answered with what a reader " +
-            "could have known on it, never with the publisher's valid-from date; the observation times need each Luxembourg body's capture time " +
-            "in the corpus, which no build records yet: a build's time bounds observation only from above",
-        ["concepts"] =
-            "the concept data attached to EU works: EuroVoc descriptors, EU directory codes and subject matters as the Publications Office " +
-            "records them; the EU index holds none of them",
-        ["transposition"] =
-            "the transposition links: Legilux's transposes and draftTransposes assertions and the Publications Office's national implementing " +
-            "measures for Luxembourg, each kept as its publisher asserts it and never merged; neither is acquired",
-    };
+    internal static readonly IReadOnlyDictionary<string, string> NotServedDataNeeded =
+        V3UnservedOperations.Rows.ToDictionary(static row => row.Operation, static row => row.DataNeeded, StringComparer.Ordinal);
 
     /// <summary>The build-time row on a mount whose Luxembourg index is schema 6, which records no build time at all.</summary>
     internal static readonly string[] CoverageLegacyBuildTimeRow =

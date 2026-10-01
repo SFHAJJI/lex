@@ -5,6 +5,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using Lex.V3.Contracts;
 using Lex.V3.Contracts.Index;
+using Lex.V3.Contracts.Platform;
 using Lex.V3.Contracts.Source.Core;
 using Lex.V3.Contracts.Source.Corpus;
 using Lex.V3.Contracts.Source.Europe;
@@ -510,7 +511,7 @@ public static class EuropeIndexBuilder
                 group.LongCount()))
             .ToArray();
         if (!V3IndexCapabilityManifest.TryCreate(
-                PublisherId.EuEurLex, digest, cells, out var manifest, out var refusal))
+                PublisherId.EuEurLex, digest, cells, V3UnservedOperations.Rows, out var manifest, out var refusal))
             throw new InvalidDataException($"Measured EU capabilities are invalid: {refusal}.");
         return manifest!;
     }
