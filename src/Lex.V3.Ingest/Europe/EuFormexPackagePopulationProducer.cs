@@ -1,3 +1,4 @@
+using Lex.V3.Contracts.Derivation;
 using Lex.V3.Contracts;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -38,6 +39,10 @@ public enum EuFormexPackagePopulationRefusal
     /// <summary><see cref="EuFormexRunOutcomeReconciliation.TryClose"/> refused the run's populations.</summary>
     [JsonStringEnumMemberName("reconciliation_refused")]
     ReconciliationRefused = 5,
+
+    /// <summary>The successful population's original associations could not be retained.</summary>
+    [JsonStringEnumMemberName("checkpoint_not_retained")]
+    CheckpointNotRetained = 6,
 }
 
 /// <summary>The run's Formex reconciliation, or one typed refusal; every enumeration attempted travels with either.</summary>
@@ -66,6 +71,28 @@ public sealed class EuFormexPackagePopulationResult
     /// take, bound by reference to the run it was produced for. Present iff delivered.
     /// </summary>
     public EuFormexRunOutcomeReconciliation? Reconciliation { get; }
+
+    public SourceArtifactRef? CheckpointRef { get; private init; }
+
+    internal EuFormexPackagePopulationResult WithCheckpoint(SourceArtifactRef reference) =>
+        new(Reconciliation, Enumerations, AnnexClassifications, EligibleExpressionCount, ProductRequestCount, Refusal, Detail)
+            { Acquisitions = this.Acquisitions, CheckpointRef = reference };
+
+
+    /// <summary>Successful population's original package results, retaining their checkpoint associations.</summary>
+    public IReadOnlyList<EuFormexPackageAcquisitionResult> Acquisitions { get; private init; } = [];
+
+    internal EuFormexPackagePopulationResult WithAcquisitions(IReadOnlyList<EuFormexPackageAcquisitionResult> acquisitions)
+    {
+        ArgumentNullException.ThrowIfNull(acquisitions);
+        if (Reconciliation is null || acquisitions.Any(acquisition => acquisition is null ||
+            !Reconciliation.Outcomes.Any(outcome => ReferenceEquals(outcome, acquisition.Outcome))) ||
+            acquisitions.Select(static acquisition => acquisition.Outcome.ExpressionIdentity).Distinct().Count() != acquisitions.Count)
+            throw new ArgumentException("Package results must belong to this exact successful population.", nameof(acquisitions));
+        return new(Reconciliation, Enumerations, AnnexClassifications, EligibleExpressionCount, ProductRequestCount, Refusal, Detail)
+            { Acquisitions = Array.AsReadOnly(acquisitions.ToArray()), CheckpointRef = this.CheckpointRef };
+    }
+
 
     /// <summary>
     /// Every manifestation enumeration this run attempted, in production order: the publisher
@@ -200,8 +227,9 @@ public sealed class EuFormexPackagePopulationResult
 /// the corpus as <c>formex_main_body_admitted</c> with its articles in the Europe index.
 /// </para>
 /// </remarks>
-public sealed class EuFormexPackagePopulationProducer
+public sealed partial class EuFormexPackagePopulationProducer
 {
+    private readonly ICustodyStore _custodyStore;
     private readonly EuFormexManifestationEnumerationProducer _enumerations;
     private readonly EuFormexPackageAcquisitionProducer _acquisitions;
 
@@ -216,7 +244,7 @@ public sealed class EuFormexPackagePopulationProducer
         TimeProvider timeProvider,
         System.Net.Http.HttpMessageHandler? testHandlerOverride)
     {
-        ArgumentNullException.ThrowIfNull(custodyStore);
+        _custodyStore = custodyStore ?? throw new ArgumentNullException(nameof(custodyStore));
         ArgumentNullException.ThrowIfNull(timeProvider);
         _enumerations = new EuFormexManifestationEnumerationProducer(custodyStore, timeProvider, testHandlerOverride);
         _acquisitions = new EuFormexPackageAcquisitionProducer(custodyStore, timeProvider, testHandlerOverride);
@@ -261,14 +289,16 @@ public sealed class EuFormexPackagePopulationProducer
         MachineQueryRendererSource manifestationRendererSource,
         MachineQueryRendererSource documentFetchRendererSource,
         string? workCelex,
-        BoundMachineRequest sourceWitness,
+        BoundMachineRequest? sourceWitness,
         WireRequestBudget wireBudget,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        PopulationReplay? replay = null)
     {
         ArgumentNullException.ThrowIfNull(run);
         ArgumentNullException.ThrowIfNull(manifestationRendererSource);
         ArgumentNullException.ThrowIfNull(documentFetchRendererSource);
-        ArgumentNullException.ThrowIfNull(sourceWitness);
+        if (replay is null) ArgumentNullException.ThrowIfNull(sourceWitness);
+        var context = replay ?? new PopulationReplay(null);
         ArgumentNullException.ThrowIfNull(wireBudget);
 
         var enumerations = new List<EuFormexManifestationEnumerationResult>();
@@ -295,7 +325,7 @@ public sealed class EuFormexPackagePopulationProducer
         // refuses the run before any family's traffic is spent on a result that is refused anyway.
         var plan = EuFormexManifestationDiscoveryPlan.Create();
         var families = new List<(string FamilyKey, EuLanguageScopedExpressionProductionResult Production,
-            IReadOnlyList<EuFormexManifestationRunRequest> Requests)>();
+            IReadOnlyList<(LanguageScopedExpression Expression, EuFormexManifestationRunRequest? Request)> Requests)>();
         foreach (var (familyKey, production) in run.CorrigendumTripwires.ProductionsByFamilyKey
                      .OrderBy(static pair => pair.Key, StringComparer.Ordinal))
         {
@@ -309,15 +339,15 @@ public sealed class EuFormexPackagePopulationProducer
                     productRequests);
             }
 
-            var requests = new List<EuFormexManifestationRunRequest>(expressions.Derivation.Expressions.Count);
+            var requests = new List<(LanguageScopedExpression Expression, EuFormexManifestationRunRequest? Request)>(expressions.Derivation.Expressions.Count);
             foreach (var expression in expressions.Derivation.Expressions)
             {
                 cancellationToken.ThrowIfCancellationRequested();
                 if (!EuFormexEligibilityPopulation.IsServedLanguage(expression)) continue;
                 try
                 {
-                    requests.Add(new EuFormexManifestationRunRequest(
-                        plan, expression, NewUrn(), manifestationRendererSource, wireBudget));
+                    requests.Add((expression, context.IsReplay ? null : new EuFormexManifestationRunRequest(
+                        plan, expression, NewUrn(), manifestationRendererSource, wireBudget)));
                 }
                 catch (ArgumentException exception)
                 {
@@ -334,14 +364,17 @@ public sealed class EuFormexPackagePopulationProducer
 
         var populations = new List<EuFormexPackageOutcomePopulation>(families.Count);
         var classifications = new List<EuBoundAnnexBodyClassification>();
+        var acquisitions = new List<EuFormexPackageAcquisitionResult>();
         var eligible = 0;
         foreach (var (familyKey, expressions, requests) in families)
         {
             var batch = new List<EuFormexManifestationEnumerationResult>(requests.Count);
             foreach (var request in requests)
             {
-                var enumeration = await _enumerations.RunAsync(request, sourceWitness, cancellationToken)
-                    .ConfigureAwait(false);
+                var enumeration = context.IsReplay
+                    ? await context.EnumerateAsync(_custodyStore, familyKey, request.Expression, cancellationToken).ConfigureAwait(false)
+                    : await _enumerations.RunAsync(request.Request!, sourceWitness!, cancellationToken).ConfigureAwait(false);
+                if (!context.IsReplay && enumeration.Delivered) context.CaptureEnumeration(familyKey, enumeration);
                 productRequests += enumeration.ProductRequestCount;
                 batch.Add(enumeration);
                 enumerations.Add(enumeration);
@@ -386,9 +419,12 @@ public sealed class EuFormexPackagePopulationProducer
                     expressionCelex = matches[0].Celex;
                 }
 
-                var acquisition = await _acquisitions.RunAsync(
-                        enumeration, run.CorpusRecordSet, expressionCelex, documentFetchRendererSource, wireBudget, cancellationToken)
-                    .ConfigureAwait(false);
+                var acquisition = context.IsReplay
+                    ? await context.AcquireAsync(_custodyStore, enumeration, run, expressionCelex, documentFetchRendererSource, cancellationToken).ConfigureAwait(false)
+                    : await _acquisitions.RunAsync(enumeration, run.CorpusRecordSet, expressionCelex,
+                        documentFetchRendererSource, wireBudget, cancellationToken).ConfigureAwait(false);
+                if (!context.IsReplay) context.CapturePackage(acquisition);
+                acquisitions.Add(acquisition);
                 productRequests += acquisition.ProductRequestCount;
                 outcomes.Add(acquisition.Outcome);
                 if (acquisition.AnnexClassification is { } classification)
@@ -422,7 +458,24 @@ public sealed class EuFormexPackagePopulationProducer
                 productRequests);
         }
 
-        return EuFormexPackagePopulationResult.Success(reconciliation, enumerations, classifications, eligible, productRequests);
+        var result = EuFormexPackagePopulationResult.Success(reconciliation, enumerations, classifications, eligible, productRequests)
+            .WithAcquisitions(acquisitions);
+        if (context.IsReplay)
+        {
+            context.RequireEnd();
+            return result;
+        }
+        try
+        {
+            var checkpoint = await RetainPopulationAsync(run, result, manifestationRendererSource,
+                documentFetchRendererSource, workCelex, context, cancellationToken).ConfigureAwait(false);
+            return result.WithCheckpoint(checkpoint);
+        }
+        catch (Exception exception) when (exception is CustodyRequiredException or CustodyIntegrityException)
+        {
+            return EuFormexPackagePopulationResult.Refused(EuFormexPackagePopulationRefusal.CheckpointNotRetained,
+                exception.Message, enumerations, productRequests);
+        }
     }
 
     private static string NewUrn() => $"urn:uuid:{Guid.NewGuid():D}";

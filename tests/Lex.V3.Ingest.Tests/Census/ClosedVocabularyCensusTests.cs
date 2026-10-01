@@ -111,14 +111,12 @@ public sealed class ClosedVocabularyCensusTests
                     + "PackageUnreadable, XmlRejected, MainBodyMissing, UnsupportedContentShape, "
                     + "PackageNotAcquired, RouteRefused, PackageRejected",
                 "Lex.V3.Ingest.Europe.EuFormexMainBodyTokenKind: Text, Reference, Footnote",
-                "Lex.V3.Ingest.Europe.EuFormexManifestationEnumerationRefusal: None, "
-                    + "EnumerationRefused, EnumerationProofRefused, VerifiedRowsRefused, "
-                    + "RowNotAdmitted, RowNamesAnotherExpression, "
-                    + "ManifestationBindingDeliveredTwice",
-                "Lex.V3.Ingest.Europe.EuFormexPackageNotAcquiredReason: None, BodyNotHeld, "
-                    + "LanguageNotAddressable, ManifestationNotSingular, IdentityNotAdmitted, "
-                    + "AnnexXhtmlNotInventoried, AnnexPdfNotServed, AnnexEvidenceNotBound, "
-                    + "AnnexBodyNotClassified",
+                "Lex.V3.Ingest.Europe.EuFormexManifestationEnumerationRefusal: None, EnumerationRefused, Enumeratio"
+                    + "nProofRefused, VerifiedRowsRefused, RowNotAdmitted, RowNamesAnotherExpression, ManifestationBindin"
+                    + "gDeliveredTwice, CheckpointNotRetained",
+                "Lex.V3.Ingest.Europe.EuFormexPackageNotAcquiredReason: None, BodyNotHeld, LanguageNotAddressable, "
+                    + "ManifestationNotSingular, IdentityNotAdmitted, AnnexXhtmlNotInventoried, AnnexPdfNotServed, AnnexE"
+                    + "videnceNotBound, AnnexBodyNotClassified, CheckpointNotRetained",
                 "Lex.V3.Ingest.Europe.EuFormexPackageOutcomeKind: NotEligible, Acquired, "
                     + "Unavailable, Refused, NotAcquired, RouteRefused, PackageRejected, "
                     + "NotEnumeratedLanguageOutOfScope",
@@ -126,9 +124,8 @@ public sealed class ClosedVocabularyCensusTests
                     + "OutcomeOutsideExpressionPopulation, ExpressionContentDisagrees, "
                     + "ExpressionDisposedTwice, OutcomeMissing, EligibleExpressionMarkedIneligible, "
                     + "IneligibleExpressionHasPackageOutcome, EnumerationDispositionDisagrees",
-                "Lex.V3.Ingest.Europe.EuFormexPackagePopulationRefusal: None, RunNotComplete, "
-                    + "ExpressionSelectionInvalid, EligibilityRefused, OutcomePopulationRefused, "
-                    + "ReconciliationRefused",
+                "Lex.V3.Ingest.Europe.EuFormexPackagePopulationRefusal: None, RunNotComplete, ExpressionSelectionIn"
+                    + "valid, EligibilityRefused, OutcomePopulationRefused, ReconciliationRefused, CheckpointNotRetained",
                 "Lex.V3.Ingest.Europe.EuFormexRunOutcomeReconciliationRefusal: None, RunNotComplete, "
                     + "RunExpressionProductionInvalid, PopulationOutsideRun, "
                     + "PopulationProductionDisagrees, PopulationSuppliedTwice, PopulationMissing, "
