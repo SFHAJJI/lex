@@ -974,7 +974,7 @@ CI evidence are recorded in the pull request before merge.
 
 ## Heads
 
-- `v3/integration`: `a1a46b33` (2026-10-01, PR #857 merged). Build 45 s. Fast lane
+- `v3/integration`: `7acd4462` (2026-10-01, PR #859 merged). Build 45 s. Fast lane
   (`eng/test-fast.ps1`): 3,077 tests, 3,076 pass, 1 skipped (the review of PR #828). Ingest suite: green on CI for PR #760
   (the CI `dotnet` job runs the whole solution on every pull request, about 7 min on the runner;
   green for PR #834);
@@ -2150,6 +2150,17 @@ On the real bounded first mount the refusal set is 8 cases (5 before), passing, 
 control caught; those two codes are no longer listed as not produced there. A mutant that lets EU
 `verify` answer a provision not held fails the gate.
 
+The retrieval set measures EU resolver exactness (PR #860). For each sampled EU work whose
+expression holds one wording date, the retrieval set adds:
+- its first three provisions' permalinks (the digest recomputed by the stated rule): exact cases,
+  each judged to resolve to exactly that provision (`verify` names the CELEX and the provision);
+- a provision the wording does not hold: a near miss, judged to find nothing.
+On the real bounded first mount the card's retrieval set is 13 cases, and every gate is measured
+and passes: anchor nDCG@10 1 over 9, no-hit accuracy 1 over 4, resolver exactness 1 over 3. The
+judgments control now applies and catches the shuffle. Only the temporal arms are not measured
+there, since the mount holds no Luxembourg state. A mutant whose EU `verify` names the first
+provision for every request fails the fixture's resolver gate.
+
 The live export composer and its journey step (PR #789), the eighth screen. `dist-live/export.html`
 has its own bundle `client-live-export.js`.
 - The page asks what the reading page asks: the same form (`ReadingForm`, now shared), the same one
@@ -2441,7 +2452,8 @@ so the one code the registry says answers it follows from the mount's own data:
   - the real bounded first mount: 1 (coverage, answered). Every Luxembourg code is listed as not
     produced there, since there is no Luxembourg state. `no_corpus_mounted` is not produced either,
     since the EU index exists.
-  EU refusal cases derived from the EU index are a later slice.
+  EU refusal cases derived from the EU index came later: EU search's in PR #846, and EU `verify`'s
+  in PR #860. The real bounded first mount now has 8 cases.
 - Two mutations:
   - the day-before-history request given the gold `answer` fails the refusal tests;
   - the first version's `non_admitting` guess fails the `conflict` case.
@@ -2468,10 +2480,11 @@ leave a language unsearched):
 - words held by one to five provisions are judged to find exactly those (the CELEX and the
   publisher's provision id, as an EU hit names them), searched with the work as scope;
 - strings the work holds nowhere find nothing.
-EU `verify` is not served, so the EU gives no exact-identifier case. On the GDPR fixture and on the
-real first mount, anchor nDCG@10 is 1 over 6 EU word cases and no-hit accuracy 1 over 3. Resolver
-exactness is not measured (no measurable query). So the judgments control does not apply: its rule
-needs every required gate to pass first, and the card says so. A French-held work gives French
+EU `verify` was not served then, so the EU gave no exact-identifier case. On the GDPR fixture and on
+the real first mount, anchor nDCG@10 was 1 over 6 EU word cases and no-hit accuracy 1 over 3.
+Resolver exactness was not measured (no measurable query), so the judgments control did not apply:
+its rule needs every required gate to pass first, and the card said so. Since PR #860 the EU gives
+exact cases over the EU permalink grammar, and every retrieval gate is measured there (below). A French-held work gives French
 cases, which pass. Two mutations:
 - EU judgments naming another provision drop nDCG@10 to 0 and fail;
 - the first version's sampling (three English works and a French one) leaves French out and fails
