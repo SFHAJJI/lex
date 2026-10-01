@@ -306,6 +306,7 @@ export const LIVE_CHROME_FR_DRAFT = Object.freeze({
       gaps: 'Lacunes consignées par le corpus, comptées par membre',
       articleOutcomes: 'Résultats de contenu juridique consignés par le corpus, par disposition',
       capabilities: 'Capacités mesurées, par opération, colonne, champ, langue et période',
+      notServedData: 'Les données qui serviraient chaque opération sans route',
     }),
     scrollable: '{caption}, défilant',
     columns: Object.freeze({
@@ -329,6 +330,7 @@ export const LIVE_CHROME_FR_DRAFT = Object.freeze({
       from: 'du',
       to: 'au',
       population: 'population',
+      dataNeeded: 'données qui la serviraient',
     }),
     held: Object.freeze({ true: 'oui', false: 'non' }),
     none: 'aucune',
