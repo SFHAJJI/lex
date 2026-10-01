@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
 using Lex.V3.Contracts;
@@ -18,10 +19,24 @@ public sealed class LuxembourgIndexBuilderTests
     {
         var digest = Convert.ToHexStringLower(SHA256.HashData(
             LuxembourgIndexBuilder.BuildFixedInputDeterminismEvidence()));
-        Assert.AreEqual("7d898d3fddfb60d6df81cf4180ad6c08813bbd76994ea5e519338f1df1f52956", digest);
+        Assert.AreEqual("97c536e9646dc834758427071ed3df26bed6b44ea40ade7d3b366a4b9e231b02", digest);
     }
 
     internal const string Retained1991 = "loi-1991-08-10-n3--2024-02-01--fr.bin";
+
+    /// <summary>
+    /// The build time every genesis build here records, later than any fixture's EU capture; a chained build records
+    /// <see cref="Later"/> and a build chained to that one <see cref="Latest"/>, as builds of one log run in time order.
+    /// </summary>
+    internal static readonly DateTimeOffset BuiltAt = new(2026, 10, 1, 8, 0, 0, TimeSpan.Zero);
+
+    internal const string BuiltAtText = "2026-10-01T08:00:00Z";
+
+    internal static readonly DateTimeOffset Later = BuiltAt.AddHours(1);
+
+    internal const string LaterText = "2026-10-01T09:00:00Z";
+
+    internal static readonly DateTimeOffset Latest = BuiltAt.AddHours(2);
 
     [TestMethod]
     public void BuilderAndStrictReaderShipAsOneTerminalSlice()
@@ -29,8 +44,8 @@ public sealed class LuxembourgIndexBuilderTests
         var schema = (string)typeof(LuxembourgIndexBuilder)
             .GetField(nameof(LuxembourgIndexBuilder.Schema))!
             .GetRawConstantValue()!;
-        Assert.AreEqual("lex-v3-luxembourg-index/6", schema);
-        Assert.IsNotNull(typeof(LuxembourgIndexBuilder).GetMethod(nameof(LuxembourgIndexBuilder.TryBuild)));
+        Assert.AreEqual("lex-v3-luxembourg-index/8", schema);
+        Assert.IsTrue(typeof(LuxembourgIndexBuilder).GetMethods().Any(static method => method.Name == nameof(LuxembourgIndexBuilder.TryBuild)));
         Assert.IsNotNull(typeof(LuxembourgIndexReader).GetMethod(nameof(LuxembourgIndexReader.OpenAndVerify)));
     }
 
@@ -49,8 +64,8 @@ public sealed class LuxembourgIndexBuilderTests
         var envelope = await LexCorpus6BuilderTests.CompleteProfileEnvelopeAsync();
         var corpus = LexCorpus6Builder.TryBuild(envelope, out var corpusRefusal, out var corpusDetail);
         Assert.IsNotNull(corpus, $"{corpusRefusal}: {corpusDetail}");
-        var first = LuxembourgIndexBuilder.TryBuild(envelope, out var firstRefusal, out var firstDetail);
-        var second = LuxembourgIndexBuilder.TryBuild(envelope, out var secondRefusal, out var secondDetail);
+        var first = LuxembourgIndexBuilder.TryBuild(envelope, BuiltAt, out var firstRefusal, out var firstDetail);
+        var second = LuxembourgIndexBuilder.TryBuild(envelope, BuiltAt, out var secondRefusal, out var secondDetail);
 
         Assert.IsNotNull(first, $"{firstRefusal}: {firstDetail}");
         Assert.IsNotNull(second, $"{secondRefusal}: {secondDetail}");
@@ -126,7 +141,7 @@ public sealed class LuxembourgIndexBuilderTests
         Assert.HasCount(54, inventory.Articles);
         Assert.IsTrue(inventory.Articles.All(static article => article.PublisherApplicability is not null));
 
-        var built = LuxembourgIndexBuilder.TryBuild(envelope, out var refusal, out var detail);
+        var built = LuxembourgIndexBuilder.TryBuild(envelope, BuiltAt, out var refusal, out var detail);
 
         Assert.IsNotNull(built, $"{refusal}: {detail}");
         var luxembourgMembers = corpus.VerifiedSet.Set.Members.Where(static value =>
@@ -210,7 +225,7 @@ public sealed class LuxembourgIndexBuilderTests
         Assert.AreEqual(1, outcomes.Count(static value => value.Disposition == LuxembourgAknLegalContentDisposition.MarkerOnlyEvidence));
         Assert.AreEqual(5, outcomes.Count(static value => value.Disposition == LuxembourgAknLegalContentDisposition.UnsupportedContentShape));
 
-        var built = LuxembourgIndexBuilder.TryBuild(envelope, out var refusal, out var detail);
+        var built = LuxembourgIndexBuilder.TryBuild(envelope, BuiltAt, out var refusal, out var detail);
 
         Assert.IsNotNull(built, $"{refusal}: {detail}");
         using var reader = LuxembourgIndexReader.OpenAndVerify(
@@ -262,7 +277,7 @@ public sealed class LuxembourgIndexBuilderTests
             value.Coordinate?.PublisherId == "art_3" &&
             value.Disposition == LuxembourgAknLegalContentDisposition.UnsupportedContentShape));
 
-        var built = LuxembourgIndexBuilder.TryBuild(envelope, out var refusal, out var detail);
+        var built = LuxembourgIndexBuilder.TryBuild(envelope, BuiltAt, out var refusal, out var detail);
 
         Assert.IsNotNull(built, $"{refusal}: {detail}");
         using var reader = LuxembourgIndexReader.OpenAndVerify(
@@ -313,7 +328,7 @@ public sealed class LuxembourgIndexBuilderTests
             value.Publisher == PublisherId.LuLegilux &&
             value.Outcome == LexCorpus6OutcomeKind.RightsWithheld));
 
-        var built = LuxembourgIndexBuilder.TryBuild(envelope, out var refusal, out var detail);
+        var built = LuxembourgIndexBuilder.TryBuild(envelope, BuiltAt, out var refusal, out var detail);
 
         Assert.IsNotNull(built, $"{refusal}: {detail}");
         using var reader = LuxembourgIndexReader.OpenAndVerify(
@@ -389,7 +404,7 @@ public sealed class LuxembourgIndexBuilderTests
             envelope.BodyComposition.Envelope.LuxembourgAknLegalContentPopulation.Outcomes
                 .Select(static value => value.Disposition).ToArray());
 
-        var built = LuxembourgIndexBuilder.TryBuild(envelope, out var refusal, out var detail);
+        var built = LuxembourgIndexBuilder.TryBuild(envelope, BuiltAt, out var refusal, out var detail);
 
         Assert.IsNotNull(built, $"{refusal}: {detail}");
         using var reader = LuxembourgIndexReader.OpenAndVerify(
@@ -409,7 +424,7 @@ public sealed class LuxembourgIndexBuilderTests
     {
         var envelope = await LexCorpus6BuilderTests.CompleteProfileEnvelopeAsync(includeLegalNotice: false);
 
-        var result = LuxembourgIndexBuilder.TryBuild(envelope, out var refusal, out var detail);
+        var result = LuxembourgIndexBuilder.TryBuild(envelope, BuiltAt, out var refusal, out var detail);
 
         Assert.IsNull(result);
         Assert.AreEqual(LuxembourgIndexBuildRefusal.CorpusRefused, refusal, detail);
@@ -421,7 +436,7 @@ public sealed class LuxembourgIndexBuilderTests
         var envelope = await LexCorpus6BuilderTests.CompleteProfileEnvelopeAsync();
         var corpus = LexCorpus6Builder.TryBuild(envelope, out var corpusRefusal, out var corpusDetail);
         Assert.IsNotNull(corpus, $"{corpusRefusal}: {corpusDetail}");
-        var built = LuxembourgIndexBuilder.TryBuild(envelope, out var refusal, out var detail);
+        var built = LuxembourgIndexBuilder.TryBuild(envelope, BuiltAt, out var refusal, out var detail);
         Assert.IsNotNull(built, $"{refusal}: {detail}");
 
         var changedBytes = built.IndexBytes.ToArray();
@@ -479,7 +494,8 @@ public sealed class LuxembourgIndexBuilderTests
     }
 
     [TestMethod]
-    [DataRow("PRAGMA user_version=2", "schema identity")]
+    [DataRow("PRAGMA user_version=2", "schema differs from the exact terminal schema")]
+    [DataRow("PRAGMA user_version=6", "schema differs from the exact terminal schema")]
     [DataRow("UPDATE states SET state_sha256='aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'", "digest is not derived")]
     [DataRow("UPDATE articles SET expression_iri=expression_iri || '/other'", "does not bind its exact article population")]
     [DataRow("UPDATE states SET work_key='wrong-work-key'", "not canonical")]
@@ -499,16 +515,16 @@ public sealed class LuxembourgIndexBuilderTests
     /// time and any name but first_sighting are refused by the table's own checks.)
     /// </summary>
     [TestMethod]
-    [DataRow("UPDATE events SET detail_json='{\"state_sha256\":\"0000000000000000000000000000000000000000000000000000000000000000\"}'", DisplayName = "a wrong state digest")]
-    [DataRow("UPDATE events SET seq=2", DisplayName = "a renumbered event")]
-    [DataRow("UPDATE events SET key='[\"other-work\",\"2024-01-01\",\"https://example.invalid/e\",\"fra\"]'", DisplayName = "a rewritten key")]
-    [DataRow("INSERT INTO events VALUES(2,'state','[\"extra\"]','first_sighting',NULL,'{}')", DisplayName = "an extra event")]
-    [DataRow("DELETE FROM events", DisplayName = "an emptied log")]
-    public async Task StrictReaderRejectsAnEventLogThatIsNotTheGenesisLogOfItsStates(string sql)
+    [DataRow("UPDATE events SET detail_json='{\"state_sha256\":\"0000000000000000000000000000000000000000000000000000000000000000\"}'", "not the log of its states", DisplayName = "a wrong state digest")]
+    [DataRow("UPDATE events SET seq=2", "do not number its events", DisplayName = "a renumbered event")]
+    [DataRow("UPDATE events SET key='[\"other-work\",\"2024-01-01\",\"https://example.invalid/e\",\"fra\"]'", "not the log of its states", DisplayName = "a rewritten key")]
+    [DataRow("INSERT INTO events VALUES(2,'state','[\"extra\"]','first_sighting',NULL,'{}')", "do not number its events", DisplayName = "an extra event")]
+    [DataRow("DELETE FROM events", "do not number its events", DisplayName = "an emptied log")]
+    public async Task StrictReaderRejectsAnEventLogThatIsNotTheGenesisLogOfItsStates(string sql, string expected)
     {
         var (built, corpusRef) = await BuildStateIndexAsync();
 
-        AssertRecomputedStateTamperRejected(built, corpusRef, connection => Execute(connection, sql), "not the genesis log of its states");
+        AssertRecomputedStateTamperRejected(built, corpusRef, connection => Execute(connection, sql), expected);
     }
 
     [TestMethod]
@@ -662,6 +678,650 @@ public sealed class LuxembourgIndexBuilderTests
         StringAssert.Contains(exception.InnerException.Message, "does not match its admitted articles");
     }
 
+    // ---- Index schema /7's event log (STATUS item 4, predecessor chaining, the first slice). ----
+
+    /// <summary>
+    /// A genesis log as schema /7 holds it: one observation, of this build's corpus, with no predecessor, numbering
+    /// every event; the log's own stamp (its schema, and the digest of exactly its observations and events); and each
+    /// event naming the bodies its state's articles were read from, as the corpus holds them, so a later build that
+    /// carries the log forward can tell a replaced publisher file by the log alone.
+    /// </summary>
+    [TestMethod]
+    public async Task TheGenesisLogHasOneObservationItsOwnStampAndEachStatesSourceBodies()
+    {
+        var (built, corpus) = await BuildStateIndexWithCorpusAsync();
+        LuxembourgIndexBuilder.EventRow[] events = [];
+        LuxembourgIndexBuilder.ObservationRow[] observations = [];
+        (string Schema, string Digest) logStamp = default;
+        _ = MutateDatabase(built.IndexBytes.Span, connection =>
+        {
+            events = ReadEvents(connection);
+            observations = ReadObservations(connection);
+            logStamp = ReadLogStamp(connection);
+        });
+
+        Assert.IsNotEmpty(events, "the fixture's state has a first_sighting");
+        CollectionAssert.AreEqual(
+            new[] { new LuxembourgIndexBuilder.ObservationRow(1, corpus.ArtifactRef.Sha256, null, 1, events.Length, BuiltAtText, null) },
+            observations,
+            "one observation of this corpus, with no predecessor, numbering every event, at its build time and no observation time");
+        Assert.AreEqual((LuxembourgIndexBuilder.EventLogSchema, LuxembourgIndexBuilder.HashEventLog(observations, events)), logStamp);
+
+        var held = corpus.Set.Members
+            .Where(static member => member.Publisher == Lex.V3.Contracts.PublisherId.LuLegilux && member.BodySha256 is not null)
+            .Select(static member => member.BodySha256!)
+            .ToHashSet(StringComparer.Ordinal);
+        foreach (var value in events)
+        {
+            var bodies = System.Text.Json.JsonDocument.Parse(value.DetailJson).RootElement.GetProperty("source_body_sha256")
+                .EnumerateArray().Select(static body => body.GetString()!).ToArray();
+            Assert.IsNotEmpty(bodies, $"event {value.Seq} names its state's source bodies");
+            CollectionAssert.AreEqual(bodies.Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray(), bodies, "sorted, each once");
+            Assert.IsTrue(bodies.All(held.Contains), $"event {value.Seq} names a body the corpus holds");
+        }
+
+        using var reader = LuxembourgIndexReader.OpenAndVerify(built.IndexRef, built.IndexBytes.Span, corpus.ArtifactRef, built.CapabilityManifest);
+        reader.VerifyEventLogSources(corpus);
+    }
+
+    /// <summary>
+    /// The observations and the log stamp are the reader's own recomputation, with the logical-rows stamp recomputed
+    /// over the tampered tables so only these checks can refuse: an observation numbering an event the log lacks, of
+    /// another corpus, a second or no observation; a log stamp of other rows, of another log schema, or none.
+    /// </summary>
+    [TestMethod]
+    [DataRow("UPDATE observations SET last_seq=last_seq+1", "do not number its events", DisplayName = "an observation numbering an event the log lacks")]
+    [DataRow("UPDATE observations SET corpus_sha256='bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb'", "is not of this index's corpus", DisplayName = "an observation of another corpus")]
+    [DataRow("INSERT INTO observations VALUES(2,'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb','cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc',2,1,'2026-10-01T09:00:00Z',NULL)", "is not of this index's corpus", DisplayName = "a second observation of another corpus")]
+    [DataRow("INSERT INTO observations VALUES(2,'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb','cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc',2,1,'2026-10-01T07:59:59Z',NULL)", "each later than the one before", DisplayName = "a second build earlier than the first")]
+    [DataRow("INSERT INTO observations VALUES(2,'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb','cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc',2,1,'2026-10-01T08:00:00Z',NULL)", "each later than the one before", DisplayName = "a second build at the first one's time")]
+    [DataRow("UPDATE observations SET built_at='2026-13-01T08:00:00Z'", "are not UTC seconds", DisplayName = "a build time that is no date")]
+    [DataRow("DELETE FROM observations", "do not number its events", DisplayName = "no observation")]
+    [DataRow("UPDATE log_stamp SET log_rows_sha256='0000000000000000000000000000000000000000000000000000000000000000'", "does not match its log stamp", DisplayName = "a log stamp of other rows")]
+    [DataRow("UPDATE log_stamp SET log_schema='lex-v3-event-log/0'", "does not match its log stamp", DisplayName = "a log stamp of another log schema")]
+    [DataRow("DELETE FROM log_stamp", "does not match its log stamp", DisplayName = "no log stamp")]
+    public async Task StrictReaderRejectsATamperedObservationOrLogStamp(string sql, string expected)
+    {
+        var (built, corpusRef) = await BuildStateIndexAsync();
+
+        AssertRecomputedStateTamperRejected(built, corpusRef, connection => Execute(connection, sql), expected);
+    }
+
+    /// <summary>
+    /// Source bodies the index alone cannot confirm: an event naming a body its state was not read from passes the
+    /// reader (the index holds no body digest) and is refused by the corpus; one naming its body twice is not the
+    /// canonical genesis log, and the reader refuses it. Both stamps are recomputed, so only these checks can refuse.
+    /// </summary>
+    [TestMethod]
+    public async Task AnEventsSourceBodiesAreTheCorpusOwnAndCanonical()
+    {
+        var (built, corpus) = await BuildStateIndexWithCorpusAsync();
+        var (foreign, foreignManifest, foreignRef) = Resealed(built, detail => detail["source_body_sha256"] = new System.Text.Json.Nodes.JsonArray(new string('e', 64)));
+        using (var reader = LuxembourgIndexReader.OpenAndVerify(foreignRef, foreign, corpus.ArtifactRef, foreignManifest))
+        {
+            var exception = Assert.ThrowsExactly<InvalidDataException>(() => reader.VerifyEventLogSources(corpus));
+            StringAssert.Contains(exception.Message, "names source bodies the corpus does not hold");
+        }
+
+        var (twice, twiceManifest, twiceRef) = Resealed(built, detail =>
+        {
+            var body = detail["source_body_sha256"]![0]!.GetValue<string>();
+            detail["source_body_sha256"] = new System.Text.Json.Nodes.JsonArray(body, body);
+        });
+        var refused = Assert.ThrowsExactly<InvalidDataException>(() => LuxembourgIndexReader.OpenAndVerify(twiceRef, twice, corpus.ArtifactRef, twiceManifest));
+        StringAssert.Contains(refused.Message, "not the log of its states");
+    }
+
+    /// <summary>
+    /// The mount checks the event log's source bodies against the corpus it mounts, so an index whose log names a body
+    /// the corpus does not hold for the state is not mounted, though the index alone verifies.
+    /// </summary>
+    [TestMethod]
+    public async Task TheMountRefusesAnEventLogNamingABodyItsCorpusDoesNotHoldForTheState()
+    {
+        var fixture = await V3CorpusResolveMountTests.MountedFixture.CreateAsync();
+        await using var cleanup = fixture;
+        var indexPath = Path.Combine(fixture.Directory, Lex.V3.Api.V3CorpusMount.IndexFileName);
+        var bytes = ResealedBytes(await File.ReadAllBytesAsync(indexPath),
+            detail => detail["source_body_sha256"] = new System.Text.Json.Nodes.JsonArray(new string('e', 64)), out var articles, out var titles);
+        await File.WriteAllBytesAsync(indexPath, bytes);
+        var manifest = LuxembourgIndexBuilder.MeasureCapabilities(Convert.ToHexStringLower(SHA256.HashData(bytes)), articles, titles);
+        using (var stream = new MemoryStream())
+        {
+            _ = V3IndexCapabilityManifestArtifact.Write(stream, manifest);
+            await File.WriteAllBytesAsync(Path.Combine(fixture.Directory, Lex.V3.Api.V3CorpusMount.CapabilityManifestFileName), stream.ToArray());
+        }
+
+        var exception = await Assert.ThrowsExactlyAsync<InvalidDataException>(() => Lex.V3.Api.V3CorpusMount.OpenAsync(fixture.Directory, CancellationToken.None));
+        StringAssert.Contains(exception.Message, "names source bodies the corpus does not hold");
+    }
+
+    // ---- Predecessor chaining, the fifth slice: each observation's build time. ----
+
+    /// <summary>
+    /// An observation records its build's time, the upper bound <c>as_observed</c> gives: a UTC whole second (the build
+    /// rounds up), later than the predecessor's last build, and no earlier than the corpus's EU capture, the one
+    /// observation clock the corpus holds; any other time refuses <c>build_time_invalid</c> and writes no index.
+    /// </summary>
+    [TestMethod]
+    public async Task ABuildTimeIsAUtcSecondInTimeOrderAndNoEarlierThanTheEuCapture()
+    {
+        var (envelope, first, corpus) = await BuildStateEnvelopeAsync();
+        Assert.AreEqual(BuiltAtText, ReadLog(first.IndexBytes.ToArray()).Observations.Single().BuiltAt, "the genesis observation records its build's time");
+
+        var captured = DateTimeOffset.Parse(corpus.Set.EuropeRightsMatrix.CapturedAt, CultureInfo.InvariantCulture, DateTimeStyles.AdjustToUniversal);
+        var beforeCapture = new DateTimeOffset(captured.UtcTicks - (captured.UtcTicks % TimeSpan.TicksPerSecond), TimeSpan.Zero).AddSeconds(-1);
+        var predecessor = LuxembourgIndexPredecessor.TryRead(first.IndexRef, first.IndexBytes.Span, out _, out _);
+        foreach (var (what, chainedTo, builtAt, expected) in new (string, LuxembourgIndexPredecessor?, DateTimeOffset, string)[]
+                 {
+                     ("an offset that is not UTC", null, new DateTimeOffset(2026, 10, 1, 10, 0, 0, TimeSpan.FromHours(2)), "is not a UTC whole second"),
+                     ("a part of a second", null, BuiltAt.AddMilliseconds(1), "is not a UTC whole second"),
+                     ("before the corpus's EU capture", null, beforeCapture, "is earlier than the corpus's EU capture"),
+                     ("the predecessor's own build time", predecessor, BuiltAt, "is not later than the predecessor's build"),
+                 })
+        {
+            Assert.IsNull(LuxembourgIndexBuilder.TryBuild(envelope, chainedTo, builtAt, out var refusal, out var detail), what);
+            Assert.AreEqual(LuxembourgIndexBuildRefusal.BuildTimeInvalid, refusal, what);
+            StringAssert.Contains(detail, expected, what);
+        }
+
+        var chained = LuxembourgIndexBuilder.TryBuild(envelope, predecessor, Later, out var chainedRefusal, out var chainedDetail);
+        Assert.IsNotNull(chained, $"{chainedRefusal}: {chainedDetail}");
+        CollectionAssert.AreEqual(new[] { BuiltAtText, LaterText }, ReadLog(chained.IndexBytes.ToArray()).Observations.Select(static o => o.BuiltAt).ToArray(),
+            "each observation keeps its own build's time, the predecessor's carried forward unchanged");
+        using var reader = LuxembourgIndexReader.OpenAndVerify(chained.IndexRef, chained.IndexBytes.Span, corpus.ArtifactRef, chained.CapabilityManifest);
+        CollectionAssert.AreEqual(new[] { BuiltAtText, LaterText }, reader.ResolveObservations().Select(static o => o.BuiltAt).ToArray());
+    }
+
+    /// <summary>
+    /// The mount's own check of the build time: an index whose last build is stamped before its corpus's EU capture
+    /// passes the reader alone (the index holds no capture time) and is refused once it is held to its corpus.
+    /// </summary>
+    [TestMethod]
+    public async Task AMountedIndexBuiltBeforeItsCorpussEuCaptureIsRefusedWithItsCorpus()
+    {
+        var (built, corpus) = await BuildStateIndexWithCorpusAsync();
+        var (early, reference) = Tampered(built.IndexBytes.ToArray(), connection => Execute(connection, "UPDATE observations SET built_at='2000-01-01T00:00:00Z'"));
+        using var reader = LuxembourgIndexReader.OpenAndVerify(reference, early, corpus.ArtifactRef, RebindManifest(built.CapabilityManifest, reference.Sha256));
+        var exception = Assert.ThrowsExactly<InvalidDataException>(() => reader.VerifyEventLogSources(corpus));
+        StringAssert.Contains(exception.Message, "last build time 2000-01-01T00:00:00Z is earlier than the corpus's EU capture");
+    }
+
+    // ---- Predecessor chaining, the second slice: the predecessor as a build input. ----
+
+    /// <summary>
+    /// G3a: a build chained to a predecessor carries the predecessor's observations and events forward unchanged, an
+    /// exact prefix, and appends one observation of its own naming the predecessor's digest; the same states append no
+    /// event (silence). Two builds with the same predecessor are the same bytes, and a third chains onto the second.
+    /// </summary>
+    [TestMethod]
+    public async Task AChainedBuildCarriesThePredecessorsLogAsAnExactPrefix()
+    {
+        var (envelope, first, corpus) = await BuildStateEnvelopeAsync();
+        var predecessor = LuxembourgIndexPredecessor.TryRead(first.IndexRef, first.IndexBytes.Span, out var readRefusal, out var readDetail);
+        Assert.IsNotNull(predecessor, $"{readRefusal}: {readDetail}");
+        Assert.AreEqual(first.IndexRef.Sha256, predecessor.IndexSha256);
+
+        var second = LuxembourgIndexBuilder.TryBuild(envelope, predecessor, Later, out var refusal, out var detail);
+        Assert.IsNotNull(second, $"{refusal}: {detail}");
+        var again = LuxembourgIndexBuilder.TryBuild(envelope, predecessor, Later, out refusal, out detail);
+        Assert.IsNotNull(again, $"{refusal}: {detail}");
+        CollectionAssert.AreEqual(second.IndexBytes.ToArray(), again.IndexBytes.ToArray(), "two builds with one predecessor are one index");
+
+        var (firstObservations, firstEvents) = ReadLog(first.IndexBytes.ToArray());
+        var (secondObservations, secondEvents) = ReadLog(second.IndexBytes.ToArray());
+        CollectionAssert.AreEqual(firstEvents, secondEvents, "the predecessor's events, carried forward; the same states append none");
+        CollectionAssert.AreEqual(firstObservations, secondObservations.Take(firstObservations.Length).ToArray(), "the predecessor's observations, an exact prefix");
+        Assert.AreEqual(
+            new LuxembourgIndexBuilder.ObservationRow(2, corpus.ArtifactRef.Sha256, first.IndexRef.Sha256, firstEvents.Length + 1, firstEvents.Length, LaterText, null),
+            secondObservations[^1],
+            "one observation of this build, naming the predecessor, appending no event");
+        using (var reader = LuxembourgIndexReader.OpenAndVerify(second.IndexRef, second.IndexBytes.Span, corpus.ArtifactRef, second.CapabilityManifest))
+        {
+            reader.VerifyEventLogSources(corpus);
+        }
+
+        var third = LuxembourgIndexBuilder.TryBuild(
+            envelope, LuxembourgIndexPredecessor.TryRead(second.IndexRef, second.IndexBytes.Span, out _, out _), Latest, out refusal, out detail);
+        Assert.IsNotNull(third, $"{refusal}: {detail}");
+        var (thirdObservations, thirdEvents) = ReadLog(third.IndexBytes.ToArray());
+        CollectionAssert.AreEqual(secondObservations, thirdObservations.Take(secondObservations.Length).ToArray(), "the chain grows by one observation a build");
+        Assert.AreEqual(second.IndexRef.Sha256, thirdObservations[^1].PredecessorIndexSha256);
+        CollectionAssert.AreEqual(firstEvents, thirdEvents);
+    }
+
+    /// <summary>
+    /// A state the predecessor's log does not hold is appended: a first_sighting, or expression_added when the log holds
+    /// the same work and date in another language; one the log holds unchanged appends nothing; one it holds with
+    /// other source bodies is a replaced file, and one it holds with another digest from the same bodies refuses.
+    /// </summary>
+    [TestMethod]
+    public void NewStatesAppendFirstSightingsAndANewLanguageOfAHeldWorkAndDateIsExpressionAdded()
+    {
+        static LuxembourgIndexBuilder.StateRow State(string work, string date, string expression, string language, string digest) =>
+            new(work, date, digest, expression, "w", "r", language, "[]", "[]");
+        var held = State("loi-a", "2024-01-01", "https://example.invalid/a/fr", "fra", new string('1', 64));
+        var fold = new Dictionary<string, LuxembourgIndexBuilder.LoggedState>(StringComparer.Ordinal)
+        {
+            [LuxembourgIndexBuilder.StateKey(held)] = new("loi-a", "2024-01-01", "https://example.invalid/a/fr", "fra", held.StateSha256, [new string('b', 64)]),
+        };
+        var german = State("loi-a", "2024-01-01", "https://example.invalid/a/de", "deu", new string('2', 64));
+        var other = State("loi-b", "2024-01-01", "https://example.invalid/b/fr", "fra", new string('3', 64));
+        var bodies = new Dictionary<string, string[]>(StringComparer.Ordinal)
+        {
+            [held.StateSha256] = [new string('b', 64)],
+            [german.StateSha256] = [new string('c', 64)],
+            [other.StateSha256] = [new string('d', 64)],
+        };
+
+        var appended = LuxembourgIndexBuilder.ProjectChainedEvents(fold, [other, held, german], bodies, 7, out var changed);
+        Assert.IsNull(changed);
+        CollectionAssert.AreEqual(
+            new[]
+            {
+                new LuxembourgIndexBuilder.EventRow(7, "state", LuxembourgIndexBuilder.StateKey(german), "expression_added", null,
+                    $"{{\"state_sha256\":\"{german.StateSha256}\",\"source_body_sha256\":[\"{new string('c', 64)}\"]}}"),
+                new LuxembourgIndexBuilder.EventRow(8, "state", LuxembourgIndexBuilder.StateKey(other), "first_sighting", null,
+                    $"{{\"state_sha256\":\"{other.StateSha256}\",\"source_body_sha256\":[\"{new string('d', 64)}\"]}}"),
+            },
+            appended,
+            "in the states' key order, numbered on from the log, the held state silent");
+
+        var redigested = held with { StateSha256 = new string('9', 64) };
+        bodies[redigested.StateSha256] = [new string('b', 64)];
+        Assert.IsNull(LuxembourgIndexBuilder.ProjectChainedEvents(fold, [redigested], bodies, 7, out changed), "a held key with another digest");
+        StringAssert.Contains(changed, "/lu-legilux/loi-a/2024-01-01");
+        bodies[held.StateSha256] = [new string('e', 64)];
+        Assert.AreEqual("file_replaced", LuxembourgIndexBuilder.ProjectChainedEvents(fold, [held], bodies, 7, out changed)!.Single().Event,
+            "a held key with other source bodies is a replaced file");
+    }
+
+    /// <summary>
+    /// A predecessor is read by its own digest and log: other bytes than its build names, no log stamp (index schema 6
+    /// and before), another log schema, a log that does not match its stamp, or a log its observations do not number,
+    /// are each refused with their reason.
+    /// </summary>
+    [TestMethod]
+    public async Task APredecessorIsReadByItsOwnDigestAndItsOwnLog()
+    {
+        var (_, first, _) = await BuildStateEnvelopeAsync();
+        var bytes = first.IndexBytes.ToArray();
+        Assert.IsNull(LuxembourgIndexPredecessor.TryRead(
+            new SourceArtifactRef(LexCorpus6Builder.ResourceIdOf(new string('0', 64)), new string('0', 64)), bytes, out var refusal, out _));
+        Assert.AreEqual(LuxembourgIndexBuildRefusal.PredecessorMismatch, refusal, "other bytes than the build names");
+
+        foreach (var (tamper, restamp, expected, reason) in new (string Sql, bool Restamp, LuxembourgIndexBuildRefusal Refusal, string Reason)[]
+                 {
+                     ("DROP TABLE log_stamp", false, LuxembourgIndexBuildRefusal.PredecessorSchemaDiffers, "no event log stamp"),
+                     ("UPDATE log_stamp SET log_schema='lex-v3-event-log/0'", false, LuxembourgIndexBuildRefusal.PredecessorSchemaDiffers, "lex-v3-event-log/0"),
+                     ("UPDATE log_stamp SET log_rows_sha256='" + new string('0', 64) + "'", false, LuxembourgIndexBuildRefusal.PredecessorMismatch, "does not match its log stamp"),
+                     ("UPDATE observations SET last_seq=last_seq+1", true, LuxembourgIndexBuildRefusal.PredecessorMismatch, "do not number its events"),
+                     // The review of #866's reproduction: a genesis observation's event renamed, the log stamp recomputed.
+                     ("UPDATE events SET event='expression_added' WHERE seq=1", true, LuxembourgIndexBuildRefusal.PredecessorMismatch, "holds events that are not the ones it appends"),
+                 })
+        {
+            var (tampered, reference) = Tampered(bytes, tamper, restamp);
+            Assert.IsNull(LuxembourgIndexPredecessor.TryRead(reference, tampered, out refusal, out var detail), tamper);
+            Assert.AreEqual(expected, refusal, tamper);
+            StringAssert.Contains(detail, reason, tamper);
+        }
+    }
+
+    /// <summary>
+    /// The review of #866: every observation of a carried log is replayed, not only the last, so a chained index whose
+    /// predecessor part holds an event no build could have written (a genesis event renamed expression_added) is refused
+    /// by the reader, with both stamps recomputed over the change.
+    /// </summary>
+    [TestMethod]
+    public async Task AChainedIndexWhoseCarriedLogHoldsAFalseEventIsRefused()
+    {
+        var (envelope, first, corpus) = await BuildStateEnvelopeAsync();
+        var second = LuxembourgIndexBuilder.TryBuild(
+            envelope, LuxembourgIndexPredecessor.TryRead(first.IndexRef, first.IndexBytes.Span, out _, out _), Later, out var refusal, out var detail);
+        Assert.IsNotNull(second, $"{refusal}: {detail}");
+        var renamed = MutateDatabase(second.IndexBytes.Span, connection =>
+        {
+            Execute(connection, "UPDATE events SET event='expression_added' WHERE seq=1");
+            Execute(connection, "UPDATE stamp SET logical_rows_sha256=$digest WHERE stamp_id=1", ("$digest", LuxembourgIndexBuilder.HashLogicalRows(
+                ReadMembers(connection), ReadArticles(connection), ReadStates(connection), ReadWorkTitles(connection), ReadRelations(connection), ReadWorkFacts(connection), ReadEvents(connection))));
+            Execute(connection, "UPDATE log_stamp SET log_rows_sha256=$digest WHERE log_stamp_id=1",
+                ("$digest", LuxembourgIndexBuilder.HashEventLog(ReadObservations(connection), ReadEvents(connection))));
+        });
+        var digest = Convert.ToHexStringLower(SHA256.HashData(renamed));
+        var exception = Assert.ThrowsExactly<InvalidDataException>(() => LuxembourgIndexReader.OpenAndVerify(
+            new SourceArtifactRef(LexCorpus6Builder.ResourceIdOf(digest), digest), renamed, corpus.ArtifactRef, RebindManifest(second.CapabilityManifest, digest)));
+        StringAssert.Contains(exception.Message, "not the log of its states");
+        StringAssert.Contains(exception.InnerException!.Message, "observation 1 holds events that are not the ones it appends");
+    }
+
+    /// <summary>
+    /// A predecessor whose log holds this build's state with another digest is refused (comparison events are not
+    /// served yet); one whose log does not hold the state yet gets a first_sighting appended, which the reader then
+    /// holds to exactly what the observation must append.
+    /// </summary>
+    [TestMethod]
+    public async Task AChainedBuildAppendsANewStateAndRefusesAChangedOne()
+    {
+        var (envelope, first, corpus) = await BuildStateEnvelopeAsync();
+        var bytes = first.IndexBytes.ToArray();
+        var (changedLog, changedRef) = Tampered(bytes, connection =>
+        {
+            var held = ReadEvents(connection)[0];
+            var detail = System.Text.Json.Nodes.JsonNode.Parse(held.DetailJson)!;
+            detail["state_sha256"] = new string('9', 64);
+            Execute(connection, "UPDATE events SET detail_json=$detail WHERE seq=1", ("$detail", detail.ToJsonString()));
+        });
+        var changed = LuxembourgIndexPredecessor.TryRead(changedRef, changedLog, out var refusal, out var readDetail);
+        Assert.IsNotNull(changed, $"{refusal}: {readDetail}");
+        Assert.IsNull(LuxembourgIndexBuilder.TryBuild(envelope, changed, Later, out refusal, out var detail));
+        Assert.AreEqual(LuxembourgIndexBuildRefusal.PredecessorDerivationDiffers, refusal);
+        StringAssert.Contains(detail, "this build's derivation differs from the predecessor's");
+
+        var (emptyLog, emptyRef) = Tampered(bytes, connection =>
+        {
+            Execute(connection, "DELETE FROM events");
+            Execute(connection, "UPDATE observations SET last_seq=0");
+        });
+        var empty = LuxembourgIndexPredecessor.TryRead(emptyRef, emptyLog, out refusal, out readDetail);
+        Assert.IsNotNull(empty, $"{refusal}: {readDetail}");
+        var chained = LuxembourgIndexBuilder.TryBuild(envelope, empty, Later, out refusal, out detail);
+        Assert.IsNotNull(chained, $"{refusal}: {detail}");
+        var (observations, events) = ReadLog(chained.IndexBytes.ToArray());
+        Assert.AreEqual(2, observations.Length);
+        Assert.AreEqual(new LuxembourgIndexBuilder.ObservationRow(2, corpus.ArtifactRef.Sha256, emptyRef.Sha256, 1, events.Length, LaterText, null), observations[1]);
+        Assert.IsTrue(events.All(static value => value.Event == "first_sighting"), "each state, new to the log, first sighted");
+
+        // The appended events are the reader's own recomputation: one renamed, both stamps recomputed, is refused.
+        var renamed = MutateDatabase(chained.IndexBytes.Span, connection =>
+        {
+            Execute(connection, "UPDATE events SET event='expression_added' WHERE seq=1");
+            Execute(connection, "UPDATE stamp SET logical_rows_sha256=$digest WHERE stamp_id=1", ("$digest", LuxembourgIndexBuilder.HashLogicalRows(
+                ReadMembers(connection), ReadArticles(connection), ReadStates(connection), ReadWorkTitles(connection), ReadRelations(connection), ReadWorkFacts(connection), ReadEvents(connection))));
+            Execute(connection, "UPDATE log_stamp SET log_rows_sha256=$digest WHERE log_stamp_id=1",
+                ("$digest", LuxembourgIndexBuilder.HashEventLog(ReadObservations(connection), ReadEvents(connection))));
+        });
+        var digest = Convert.ToHexStringLower(SHA256.HashData(renamed));
+        var exception = Assert.ThrowsExactly<InvalidDataException>(() => LuxembourgIndexReader.OpenAndVerify(
+            new SourceArtifactRef(LexCorpus6Builder.ResourceIdOf(digest), digest), renamed, corpus.ArtifactRef, RebindManifest(chained.CapabilityManifest, digest)));
+        StringAssert.Contains(exception.Message, "not the log of its states");
+    }
+
+    // ---- Predecessor chaining, the third slice: comparison events. ----
+
+    private static LuxembourgIndexBuilder.StateRow ChainState(string work, string date, string language, string digest) =>
+        new(work, date, digest, $"https://example.invalid/{work}/{date}/{language}", "w", "r", language, "[]", "[]");
+
+    private static Dictionary<string, LuxembourgIndexBuilder.LoggedState> ChainFold(params (LuxembourgIndexBuilder.StateRow Row, string Body)[] held) =>
+        held.ToDictionary(
+            static pair => LuxembourgIndexBuilder.StateKey(pair.Row),
+            static pair => new LuxembourgIndexBuilder.LoggedState(pair.Row.WorkKey, pair.Row.ApplicabilityDate, pair.Row.ExpressionIri, pair.Row.Language, pair.Row.StateSha256, [pair.Body]),
+            StringComparer.Ordinal);
+
+    /// <summary>
+    /// G1 at the projection: a held state whose source bodies differ is file_replaced, naming the state and bodies it
+    /// replaces, whether its digest changed with its text or stayed with its text; the same bodies with another digest
+    /// are this derivation's change, not the publisher's, and refuse.
+    /// </summary>
+    [TestMethod]
+    public void AHeldStateWhoseSourceBodiesDifferIsFileReplacedAndAnotherDigestFromTheSameBodiesRefuses()
+    {
+        var held = ChainState("loi-a", "2020-01-01", "fra", new string('1', 64));
+        var fold = ChainFold((held, new string('b', 64)));
+        var reworded = held with { StateSha256 = new string('2', 64) };
+        var appended = LuxembourgIndexBuilder.ProjectChainedEvents(fold, [reworded],
+            new Dictionary<string, string[]>(StringComparer.Ordinal) { [reworded.StateSha256] = [new string('c', 64)] }, 5, out var changed);
+        Assert.IsNull(changed);
+        CollectionAssert.AreEqual(
+            new[]
+            {
+                new LuxembourgIndexBuilder.EventRow(5, "state", LuxembourgIndexBuilder.StateKey(held), "file_replaced", null,
+                    $"{{\"state_sha256\":\"{reworded.StateSha256}\",\"source_body_sha256\":[\"{new string('c', 64)}\"],"
+                    + $"\"replaced_state_sha256\":\"{held.StateSha256}\",\"replaced_source_body_sha256\":[\"{new string('b', 64)}\"]}}"),
+            },
+            appended,
+            "a new text: a new state digest, the state and bodies it replaces named");
+
+        var reissued = LuxembourgIndexBuilder.ProjectChainedEvents(fold, [held],
+            new Dictionary<string, string[]>(StringComparer.Ordinal) { [held.StateSha256] = [new string('c', 64)] }, 5, out changed)!;
+        Assert.AreEqual("file_replaced", reissued.Single().Event, "new bytes with the same text: file_replaced, the digest unchanged");
+        StringAssert.Contains(reissued.Single().DetailJson, $"\"replaced_state_sha256\":\"{held.StateSha256}\"");
+
+        Assert.IsNull(LuxembourgIndexBuilder.ProjectChainedEvents(fold, [reworded],
+            new Dictionary<string, string[]>(StringComparer.Ordinal) { [reworded.StateSha256] = [new string('b', 64)] }, 5, out changed));
+        StringAssert.Contains(changed, "/lu-legilux/loi-a/2020-01-01");
+    }
+
+    /// <summary>
+    /// The derived intervals: the latest state the log held, followed by a later one, is interval_closed; a state whose
+    /// end moved because a state was inserted before its next is validity_revised; a held state this build lacks stays
+    /// held, and its interval closes too; each says it is derived and names its old and new end exactly.
+    /// </summary>
+    [TestMethod]
+    public void AHeldStatesIntervalClosesOrIsRevisedByTheStatesThisBuildAdds()
+    {
+        string Body(char c) => new(c, 64);
+        var first = ChainState("loi-a", "2020-01-01", "fra", Body('1'));
+        var last = ChainState("loi-a", "2024-01-01", "fra", Body('2'));
+        var later = ChainState("loi-a", "2026-01-01", "fra", Body('3'));
+        var between = ChainState("loi-a", "2022-01-01", "fra", Body('4'));
+        var bodies = new Dictionary<string, string[]>(StringComparer.Ordinal)
+        {
+            [first.StateSha256] = [Body('a')], [last.StateSha256] = [Body('b')], [later.StateSha256] = [Body('c')], [between.StateSha256] = [Body('d')],
+        };
+        static string Interval(LuxembourgIndexBuilder.StateRow row, string body, string? previous, string next) =>
+            $"{{\"state_sha256\":\"{row.StateSha256}\",\"source_body_sha256\":[\"{body}\"],\"applicable_from\":\"{row.ApplicabilityDate}\","
+            + $"\"previous_to\":{(previous is null ? "null" : $"\"{previous}\"")},\"new_to\":\"{next}\",\"derived\":true}}";
+        var fold = ChainFold((first, Body('a')), (last, Body('b')));
+
+        var closed = LuxembourgIndexBuilder.ProjectChainedEvents(fold, [first, last, later], bodies, 3, out _);
+        CollectionAssert.AreEqual(
+            new[]
+            {
+                new LuxembourgIndexBuilder.EventRow(3, "state", LuxembourgIndexBuilder.StateKey(last), "interval_closed", null, Interval(last, Body('b'), null, "2026-01-01")),
+                new LuxembourgIndexBuilder.EventRow(4, "state", LuxembourgIndexBuilder.StateKey(later), "first_sighting", null,
+                    $"{{\"state_sha256\":\"{later.StateSha256}\",\"source_body_sha256\":[\"{Body('c')}\"]}}"),
+            },
+            closed,
+            "the latest held state closes at the later one's date; the first state's end is unchanged");
+
+        var revised = LuxembourgIndexBuilder.ProjectChainedEvents(fold, [first, between, last], bodies, 3, out _);
+        CollectionAssert.AreEqual(
+            new[]
+            {
+                new LuxembourgIndexBuilder.EventRow(3, "state", LuxembourgIndexBuilder.StateKey(first), "validity_revised", null, Interval(first, Body('a'), "2024-01-01", "2022-01-01")),
+                new LuxembourgIndexBuilder.EventRow(4, "state", LuxembourgIndexBuilder.StateKey(between), "first_sighting", null,
+                    $"{{\"state_sha256\":\"{between.StateSha256}\",\"source_body_sha256\":[\"{Body('d')}\"]}}"),
+            },
+            revised,
+            "a state inserted before the next moves the end back; the latest state stays open");
+
+        var absent = LuxembourgIndexBuilder.ProjectChainedEvents(fold, [later], bodies, 3, out _)!;
+        CollectionAssert.AreEqual(
+            new[] { "interval_closed", "first_sighting" },
+            absent.Select(static value => value.Event).ToArray(),
+            "the held states this build lacks stay held: the latest closes at the new one's date");
+        StringAssert.Contains(absent[0].DetailJson, $"\"state_sha256\":\"{last.StateSha256}\"", "named by the digest the log holds");
+    }
+
+    /// <summary>
+    /// G1 through the real pipeline: the same act built again from the publisher's file with one article reworded is
+    /// file_replaced, and the state's digest, and so its permalink, is new; built from the same file with one byte added
+    /// and its text unchanged, it is file_replaced with the digest, and so the version, unchanged.
+    /// </summary>
+    [TestMethod]
+    public async Task AReplacedPublisherFileIsFileReplacedAndItsNewTextIsANewVersion()
+    {
+        var (_, first, _) = await BuildStateEnvelopeAsync();
+        var predecessor = LuxembourgIndexPredecessor.TryRead(first.IndexRef, first.IndexBytes.Span, out var readRefusal, out var readDetail);
+        Assert.IsNotNull(predecessor, $"{readRefusal}: {readDetail}");
+        var (_, firstEvents) = ReadLog(first.IndexBytes.ToArray());
+        var firstState = System.Text.Json.JsonDocument.Parse(firstEvents[0].DetailJson).RootElement.GetProperty("state_sha256").GetString();
+
+        foreach (var (what, transform, newVersion) in new (string What, Func<string, string> Transform, bool NewVersion)[]
+                 {
+                     ("one article reworded", static xml => ReplaceFirst(xml, "assemblée générale", "assemblée plénière"), true),
+                     ("one byte added, the text unchanged", static xml => xml + "\n", false),
+                 })
+        {
+            var (envelope, _, _) = await BuildStateEnvelopeAsync(transform);
+            var chained = LuxembourgIndexBuilder.TryBuild(envelope, predecessor, Later, out var refusal, out var detail);
+            Assert.IsNotNull(chained, $"{what}: {refusal}: {detail}");
+            var (observations, events) = ReadLog(chained.IndexBytes.ToArray());
+            var replaced = events.Skip((int)observations[^1].FirstSeq - 1).Where(static value => value.Event == "file_replaced").ToArray();
+            Assert.HasCount(1, replaced, what);
+            var detailJson = System.Text.Json.JsonDocument.Parse(replaced[0].DetailJson).RootElement;
+            Assert.AreEqual(firstState, detailJson.GetProperty("replaced_state_sha256").GetString(), what);
+            Assert.AreEqual(newVersion, !string.Equals(firstState, detailJson.GetProperty("state_sha256").GetString(), StringComparison.Ordinal), what);
+            CollectionAssert.AreNotEqual(
+                detailJson.GetProperty("replaced_source_body_sha256").EnumerateArray().Select(static body => body.GetString()).ToArray(),
+                detailJson.GetProperty("source_body_sha256").EnumerateArray().Select(static body => body.GetString()).ToArray(),
+                $"{what}: the bodies differ");
+        }
+    }
+
+    private static string ReplaceFirst(string text, string old, string replacement)
+    {
+        var at = text.IndexOf(old, StringComparison.Ordinal);
+        Assert.IsGreaterThanOrEqualTo(0, at, old);
+        return text[..at] + replacement + text[(at + old.Length)..];
+    }
+
+    /// <summary>The state index's envelope and its first build, with the corpus, for the chained builds.</summary>
+    internal static async Task<(Stage3DerivationProfileEnvelope Envelope, LuxembourgIndexBuildResult Built, VerifiedLexCorpus6ManifestSet Corpus)> BuildStateEnvelopeAsync(
+        Func<string, string>? transform = null)
+    {
+        const string manifestation =
+            "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo/fr/xml";
+        const string item =
+            "http://data.legilux.public.lu/filestore/eli/etat/leg/loi/1991/08/10/n3/jo/fr/xml/eli-etat-leg-loi-1991-08-10-n3-jo-fr-xml.xml";
+        var xml = await File.ReadAllBytesAsync(Path.Combine(
+            AppContext.BaseDirectory, "Fixtures", "LuAknLegalContent", Retained1991));
+        if (transform is not null)
+        {
+            xml = Encoding.UTF8.GetBytes(transform(Encoding.UTF8.GetString(xml)));
+        }
+
+        ICustodyStore store = new RoutedHttpAcquisitionSessionTests.MultiObjectCustodyStore();
+        var luxembourg = await LuxembourgGazetteAcquisitionTests
+            .CompleteXmlForStage3BodyCompositionAsync(xml, store, manifestation, item);
+        var envelope = await LexCorpus6BuilderTests.CompleteProfileEnvelopeAsync(
+            luxembourgOverride: luxembourg, luxembourgStore: store);
+        var corpus = LexCorpus6Builder.TryBuild(envelope, out var corpusRefusal, out var corpusDetail);
+        Assert.IsNotNull(corpus, $"{corpusRefusal}: {corpusDetail}");
+        var built = LuxembourgIndexBuilder.TryBuild(envelope, BuiltAt, out var refusal, out var detail);
+        Assert.IsNotNull(built, $"{refusal}: {detail}");
+        return (envelope, built, corpus.VerifiedSet);
+    }
+
+    private static (LuxembourgIndexBuilder.ObservationRow[] Observations, LuxembourgIndexBuilder.EventRow[] Events) ReadLog(byte[] bytes)
+    {
+        LuxembourgIndexBuilder.ObservationRow[] observations = [];
+        LuxembourgIndexBuilder.EventRow[] events = [];
+        _ = MutateDatabase(bytes, connection =>
+        {
+            observations = ReadObservations(connection);
+            events = ReadEvents(connection);
+        });
+        return (observations, events);
+    }
+
+    /// <summary>An index changed by <paramref name="tamper"/>, its log stamp recomputed over the change when asked, with its new digest.</summary>
+    private static (byte[] Bytes, SourceArtifactRef Reference) Tampered(byte[] source, string tamper, bool restampLog) =>
+        Tampered(source, connection => Execute(connection, tamper), restampLog);
+
+    internal static (byte[] Bytes, SourceArtifactRef Reference) Tampered(byte[] source, Action<SqliteConnection> tamper, bool restampLog = true)
+    {
+        var bytes = MutateDatabase(source, connection =>
+        {
+            tamper(connection);
+            if (restampLog)
+            {
+                Execute(connection, "UPDATE log_stamp SET log_rows_sha256=$digest WHERE log_stamp_id=1",
+                    ("$digest", LuxembourgIndexBuilder.HashEventLog(ReadObservations(connection), ReadEvents(connection))));
+            }
+        });
+        var digest = Convert.ToHexStringLower(SHA256.HashData(bytes));
+        return (bytes, new SourceArtifactRef(LexCorpus6Builder.ResourceIdOf(digest), digest));
+    }
+
+    /// <summary>The state index built with its corpus, for the checks that need the corpus's own body digests.</summary>
+    internal static async Task<(LuxembourgIndexBuildResult Built, VerifiedLexCorpus6ManifestSet Corpus)> BuildStateIndexWithCorpusAsync()
+    {
+        const string manifestation =
+            "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo/fr/xml";
+        const string item =
+            "http://data.legilux.public.lu/filestore/eli/etat/leg/loi/1991/08/10/n3/jo/fr/xml/eli-etat-leg-loi-1991-08-10-n3-jo-fr-xml.xml";
+        var xml = await File.ReadAllBytesAsync(Path.Combine(
+            AppContext.BaseDirectory, "Fixtures", "LuAknLegalContent", Retained1991));
+        ICustodyStore store = new RoutedHttpAcquisitionSessionTests.MultiObjectCustodyStore();
+        var luxembourg = await LuxembourgGazetteAcquisitionTests
+            .CompleteXmlForStage3BodyCompositionAsync(xml, store, manifestation, item);
+        var envelope = await LexCorpus6BuilderTests.CompleteProfileEnvelopeAsync(
+            luxembourgOverride: luxembourg, luxembourgStore: store);
+        var corpus = LexCorpus6Builder.TryBuild(envelope, out var corpusRefusal, out var corpusDetail);
+        Assert.IsNotNull(corpus, $"{corpusRefusal}: {corpusDetail}");
+        var built = LuxembourgIndexBuilder.TryBuild(envelope, BuiltAt, out var refusal, out var detail);
+        Assert.IsNotNull(built, $"{refusal}: {detail}");
+        return (built, corpus.VerifiedSet);
+    }
+
+    /// <summary>The index with its first event's detail changed, and both stamps (logical rows, log) recomputed over it.</summary>
+    private static (byte[] Bytes, V3IndexCapabilityManifest Manifest, SourceArtifactRef Reference) Resealed(
+        LuxembourgIndexBuildResult built,
+        Action<System.Text.Json.Nodes.JsonNode> change)
+    {
+        var bytes = ResealedBytes(built.IndexBytes.ToArray(), change, out _, out _);
+        var digest = Convert.ToHexStringLower(SHA256.HashData(bytes));
+        return (bytes, RebindManifest(built.CapabilityManifest, digest), new SourceArtifactRef(LexCorpus6Builder.ResourceIdOf(digest), digest));
+    }
+
+    internal static byte[] ResealedBytes(
+        byte[] source,
+        Action<System.Text.Json.Nodes.JsonNode> change,
+        out LuxembourgIndexBuilder.ArticleRow[] articles,
+        out LuxembourgIndexBuilder.WorkTitleRow[] titles)
+    {
+        LuxembourgIndexBuilder.ArticleRow[] readArticles = [];
+        LuxembourgIndexBuilder.WorkTitleRow[] readTitles = [];
+        var bytes = MutateDatabase(source, connection =>
+        {
+            var first = ReadEvents(connection)[0];
+            var detail = System.Text.Json.Nodes.JsonNode.Parse(first.DetailJson)!;
+            change(detail);
+            Execute(connection, "UPDATE events SET detail_json=$detail WHERE seq=$seq", ("$detail", detail.ToJsonString()), ("$seq", first.Seq));
+            readArticles = ReadArticles(connection);
+            readTitles = ReadWorkTitles(connection);
+            Execute(connection, "UPDATE stamp SET logical_rows_sha256=$digest WHERE stamp_id=1", ("$digest", LuxembourgIndexBuilder.HashLogicalRows(
+                ReadMembers(connection), readArticles, ReadStates(connection), readTitles, ReadRelations(connection), ReadWorkFacts(connection), ReadEvents(connection))));
+            Execute(connection, "UPDATE log_stamp SET log_rows_sha256=$digest WHERE log_stamp_id=1",
+                ("$digest", LuxembourgIndexBuilder.HashEventLog(ReadObservations(connection), ReadEvents(connection))));
+        });
+        articles = readArticles;
+        titles = readTitles;
+        return bytes;
+    }
+
+    internal static LuxembourgIndexBuilder.ObservationRow[] ReadObservations(SqliteConnection connection)
+    {
+        using var command = connection.CreateCommand();
+        command.CommandText = "SELECT observation,corpus_sha256,predecessor_index_sha256,first_seq,last_seq,built_at,observed_from FROM observations ORDER BY observation";
+        using var reader = command.ExecuteReader();
+        var rows = new List<LuxembourgIndexBuilder.ObservationRow>();
+        while (reader.Read()) rows.Add(new(
+            reader.GetInt64(0), reader.GetString(1), reader.IsDBNull(2) ? null : reader.GetString(2),
+            reader.GetInt64(3), reader.GetInt64(4), reader.GetString(5), reader.IsDBNull(6) ? null : reader.GetString(6)));
+        return rows.ToArray();
+    }
+
+    private static (string Schema, string Digest) ReadLogStamp(SqliteConnection connection)
+    {
+        using var command = connection.CreateCommand();
+        command.CommandText = "SELECT log_schema,log_rows_sha256 FROM log_stamp WHERE log_stamp_id=1";
+        using var reader = command.ExecuteReader();
+        Assert.IsTrue(reader.Read(), "the log stamp row");
+        return (reader.GetString(0), reader.GetString(1));
+    }
+
     internal static async Task<(LuxembourgIndexBuildResult Built, SourceArtifactRef CorpusRef)>
         BuildStateIndexAsync()
     {
@@ -678,7 +1338,7 @@ public sealed class LuxembourgIndexBuilderTests
             luxembourgOverride: luxembourg, luxembourgStore: store);
         var corpus = LexCorpus6Builder.TryBuild(envelope, out var corpusRefusal, out var corpusDetail);
         Assert.IsNotNull(corpus, $"{corpusRefusal}: {corpusDetail}");
-        var built = LuxembourgIndexBuilder.TryBuild(envelope, out var refusal, out var detail);
+        var built = LuxembourgIndexBuilder.TryBuild(envelope, BuiltAt, out var refusal, out var detail);
         Assert.IsNotNull(built, $"{refusal}: {detail}");
         return (built, corpus.ArtifactRef);
     }
@@ -846,15 +1506,28 @@ public sealed class LuxembourgIndexBuilderTests
     /// </summary>
     internal static LuxembourgIndexBuilder.EventRow[] RefreshGenesisEvents(
         SqliteConnection connection,
-        IReadOnlyList<LuxembourgIndexBuilder.StateRow> states)
+        IReadOnlyList<LuxembourgIndexBuilder.ArticleRow> articles,
+        IReadOnlyList<LuxembourgIndexBuilder.StateRow> states,
+        IReadOnlyDictionary<string, string> bodyByObjectRef)
     {
-        using (var clear = connection.CreateCommand())
+        // The genesis log of the edited states, re-sealed whole: its events (each naming its state's source bodies),
+        // its one observation (at the build time it held) and its own stamp, as the builder writes them.
+        string builtAt;
+        using (var held = connection.CreateCommand())
         {
-            clear.CommandText = "DELETE FROM events";
+            held.CommandText = "SELECT built_at FROM observations WHERE observation=1";
+            builtAt = (string)held.ExecuteScalar()!;
+        }
+
+        foreach (var table in new[] { "events", "observations", "log_stamp" })
+        {
+            using var clear = connection.CreateCommand();
+            clear.CommandText = $"DELETE FROM {table}";
             clear.ExecuteNonQuery();
         }
 
-        var events = LuxembourgIndexBuilder.ProjectGenesisEvents(states);
+        var events = LuxembourgIndexBuilder.ProjectGenesisEvents(
+            states, LuxembourgIndexBuilder.SourceBodiesOfStates(articles, states, bodyByObjectRef));
         foreach (var value in events)
         {
             using var insert = connection.CreateCommand();
@@ -868,8 +1541,41 @@ public sealed class LuxembourgIndexBuilderTests
             Assert.AreEqual(1, insert.ExecuteNonQuery());
         }
 
+        string corpusSha256;
+        using (var stamp = connection.CreateCommand())
+        {
+            stamp.CommandText = "SELECT corpus_sha256 FROM stamp WHERE stamp_id=1";
+            corpusSha256 = (string)stamp.ExecuteScalar()!;
+        }
+
+        var observations = LuxembourgIndexBuilder.ProjectGenesisObservations(corpusSha256, events.Length, builtAt);
+        foreach (var observation in observations)
+        {
+            using var insert = connection.CreateCommand();
+            insert.CommandText = "INSERT INTO observations VALUES($observation,$corpus,NULL,$first,$last,$builtAt,NULL)";
+            insert.Parameters.AddWithValue("$builtAt", observation.BuiltAt);
+            insert.Parameters.AddWithValue("$observation", observation.Observation);
+            insert.Parameters.AddWithValue("$corpus", observation.CorpusSha256);
+            insert.Parameters.AddWithValue("$first", observation.FirstSeq);
+            insert.Parameters.AddWithValue("$last", observation.LastSeq);
+            Assert.AreEqual(1, insert.ExecuteNonQuery());
+        }
+
+        using (var logStamp = connection.CreateCommand())
+        {
+            logStamp.CommandText = "INSERT INTO log_stamp VALUES(1,$schema,$digest)";
+            logStamp.Parameters.AddWithValue("$schema", LuxembourgIndexBuilder.EventLogSchema);
+            logStamp.Parameters.AddWithValue("$digest", LuxembourgIndexBuilder.HashEventLog(observations, events));
+            Assert.AreEqual(1, logStamp.ExecuteNonQuery());
+        }
+
         return events;
     }
+
+    /// <summary>The body digest of every Luxembourg member of a mount's corpus file, by object reference.</summary>
+    internal static IReadOnlyDictionary<string, string> CorpusBodies(string directory) =>
+        LuxembourgIndexBuilder.BodiesByObjectRef(VerifiedLexCorpus6ManifestSet.ParseCanonicalAndVerify(
+            File.ReadAllBytes(Path.Combine(directory, Lex.V3.Api.V3CorpusMount.CorpusFileName))));
 
     internal static LuxembourgIndexBuilder.WorkFactRow[] ReadWorkFacts(SqliteConnection connection)
     {

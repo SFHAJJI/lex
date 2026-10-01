@@ -18,6 +18,10 @@ public enum LuxembourgIndexBuildRefusal
     [JsonStringEnumMemberName("population_mismatch")] PopulationMismatch = 2,
     [JsonStringEnumMemberName("derivation_mismatch")] DerivationMismatch = 3,
     [JsonStringEnumMemberName("index_invalid")] IndexInvalid = 4,
+    [JsonStringEnumMemberName("predecessor_mismatch")] PredecessorMismatch = 5,
+    [JsonStringEnumMemberName("predecessor_schema_differs")] PredecessorSchemaDiffers = 6,
+    [JsonStringEnumMemberName("predecessor_derivation_differs")] PredecessorDerivationDiffers = 7,
+    [JsonStringEnumMemberName("build_time_invalid")] BuildTimeInvalid = 8,
 }
 
 public sealed record LuxembourgIndexBuildResult(
@@ -26,6 +30,122 @@ public sealed record LuxembourgIndexBuildResult(
     SourceArtifactRef CapabilityManifestRef,
     ReadOnlyMemory<byte> CapabilityManifestBytes,
     V3IndexCapabilityManifest CapabilityManifest);
+
+/// <summary>
+/// The previous build's index as the next build's input (predecessor chaining): its digest and its event log, read
+/// and verified by the log's own stamp (<c>log_stamp</c>) and structure, independently of the index's other tables, so
+/// a predecessor of an older index schema still chains while its log schema is the one this build writes. Built only
+/// by <see cref="TryRead"/>, which verifies the bytes against the digest the caller names.
+/// </summary>
+public sealed class LuxembourgIndexPredecessor
+{
+    private LuxembourgIndexPredecessor(
+        string indexSha256,
+        IReadOnlyList<LuxembourgIndexBuilder.ObservationRow> observations,
+        IReadOnlyList<LuxembourgIndexBuilder.EventRow> events)
+    {
+        IndexSha256 = indexSha256;
+        Observations = observations;
+        Events = events;
+    }
+
+    /// <summary>The predecessor index's digest, which the successor's new observation names.</summary>
+    public string IndexSha256 { get; }
+
+    internal IReadOnlyList<LuxembourgIndexBuilder.ObservationRow> Observations { get; }
+
+    internal IReadOnlyList<LuxembourgIndexBuilder.EventRow> Events { get; }
+
+    internal long LastSeq => Observations[^1].LastSeq;
+
+    /// <summary>
+    /// Reads a predecessor index: its bytes must be the digest the caller names (the predecessor's build report), it
+    /// must hold a log of this log schema (an index without one, schema 6 and before, refuses
+    /// <see cref="LuxembourgIndexBuildRefusal.PredecessorSchemaDiffers"/>), and the log must match its own stamp and be
+    /// numbered as observations appending events, or it refuses <see cref="LuxembourgIndexBuildRefusal.PredecessorMismatch"/>.
+    /// </summary>
+    public static LuxembourgIndexPredecessor? TryRead(
+        SourceArtifactRef indexRef,
+        ReadOnlySpan<byte> indexBytes,
+        out LuxembourgIndexBuildRefusal refusal,
+        out string? detail)
+    {
+        ArgumentNullException.ThrowIfNull(indexRef);
+        refusal = LuxembourgIndexBuildRefusal.None;
+        detail = null;
+        var digest = Convert.ToHexStringLower(SHA256.HashData(indexBytes));
+        if (!string.Equals(digest, indexRef.Sha256, StringComparison.Ordinal))
+        {
+            refusal = LuxembourgIndexBuildRefusal.PredecessorMismatch;
+            detail = $"The predecessor index's bytes are {digest}, not the {indexRef.Sha256} its build names.";
+            return null;
+        }
+
+        var path = Path.Combine(Path.GetTempPath(), $"lex-v3-lu-predecessor-{Guid.NewGuid():N}.sqlite");
+        try
+        {
+            File.WriteAllBytes(path, indexBytes.ToArray());
+            using var connection = LuxembourgIndexBuilder.Open(path, SqliteOpenMode.ReadOnly);
+            using (var tables = connection.CreateCommand())
+            {
+                tables.CommandText = "SELECT count(*) FROM sqlite_master WHERE type='table' AND name='log_stamp'";
+                if (Convert.ToInt64(tables.ExecuteScalar(), CultureInfo.InvariantCulture) != 1)
+                {
+                    refusal = LuxembourgIndexBuildRefusal.PredecessorSchemaDiffers;
+                    detail = "The predecessor index holds no event log stamp (index schema 6 or before), so its log cannot be carried forward.";
+                    return null;
+                }
+            }
+
+            string logSchema;
+            string logDigest;
+            using (var stamp = connection.CreateCommand())
+            {
+                stamp.CommandText = "SELECT log_schema,log_rows_sha256 FROM log_stamp WHERE log_stamp_id=1";
+                using var reader = stamp.ExecuteReader();
+                if (!reader.Read())
+                {
+                    refusal = LuxembourgIndexBuildRefusal.PredecessorMismatch;
+                    detail = "The predecessor index's event log has no stamp row.";
+                    return null;
+                }
+
+                logSchema = reader.GetString(0);
+                logDigest = reader.GetString(1);
+            }
+
+            if (!string.Equals(logSchema, LuxembourgIndexBuilder.EventLogSchema, StringComparison.Ordinal))
+            {
+                refusal = LuxembourgIndexBuildRefusal.PredecessorSchemaDiffers;
+                detail = $"The predecessor's event log is {logSchema}; this build carries {LuxembourgIndexBuilder.EventLogSchema} forward.";
+                return null;
+            }
+
+            var observations = LuxembourgIndexBuilder.ReadLogObservations(connection);
+            var events = LuxembourgIndexBuilder.ReadLogEvents(connection);
+            if (!string.Equals(LuxembourgIndexBuilder.HashEventLog(observations, events), logDigest, StringComparison.Ordinal))
+            {
+                refusal = LuxembourgIndexBuildRefusal.PredecessorMismatch;
+                detail = "The predecessor's event log does not match its log stamp.";
+                return null;
+            }
+
+            LuxembourgIndexBuilder.ValidateLogNumbering(observations, events);
+            LuxembourgIndexBuilder.ValidateLogHistory(observations, events);
+            return new LuxembourgIndexPredecessor(digest, observations, events);
+        }
+        catch (Exception exception) when (exception is SqliteException or IOException or InvalidDataException)
+        {
+            refusal = LuxembourgIndexBuildRefusal.PredecessorMismatch;
+            detail = exception.Message;
+            return null;
+        }
+        finally
+        {
+            LuxembourgIndexBuilder.DeleteDatabase(path);
+        }
+    }
+}
 
 /// <summary>One article of one held state whose searchable text matched, as the index holds it.</summary>
 public sealed record LuxembourgIndexSearchHit(
@@ -257,10 +377,38 @@ public sealed record LuxembourgIndexEvent(
     string ApplicabilityDate,
     string ExpressionIri,
     string Language,
-    string StateSha256);
+    string StateSha256,
+    string DetailJson);
 
 /// <summary>What the index's event log holds: how many events and the last sequence number (0 when empty).</summary>
 public sealed record LuxembourgIndexEventLog(long Events, long LastSeq);
+
+/// <summary>
+/// One state of one work as the event log held it at an observation: the states table's key, the digest of its last
+/// event up to that observation and the publisher bodies it was read from. The log alone says it; whether the mounted
+/// index still holds the state is the caller's to ask.
+/// </summary>
+public sealed record LuxembourgIndexObservedState(
+    string WorkKey,
+    string ApplicabilityDate,
+    string ExpressionIri,
+    string Language,
+    string StateSha256,
+    IReadOnlyList<string> SourceBodySha256);
+
+/// <summary>
+/// One observation of the index's event log: the build that observed (its corpus), the index whose log it carried
+/// forward (null for the first), the events it appended by sequence number (an empty range: first is last + 1), and
+/// when that build ran (<c>yyyy-MM-ddTHH:mm:ssZ</c>), an upper bound on when its corpus was observed and never an
+/// observation time.
+/// </summary>
+public sealed record LuxembourgIndexObservation(
+    long Observation,
+    string CorpusSha256,
+    string? PredecessorIndexSha256,
+    long FirstSeq,
+    long LastSeq,
+    string BuiltAt);
 
 /// <summary>
 /// Builds the immutable Luxembourg index from the same proof-complete envelope that builds
@@ -268,9 +416,32 @@ public sealed record LuxembourgIndexEventLog(long Events, long LastSeq);
 /// </summary>
 public static class LuxembourgIndexBuilder
 {
-    public const string Schema = "lex-v3-luxembourg-index/6";
+    public const string Schema = "lex-v3-luxembourg-index/8";
+
+    /// <summary>
+    /// The event log's own schema, stamped apart from the index's (<c>log_stamp</c>), so a later build can verify a
+    /// predecessor's log, which it carries forward unchanged, across a change of the index's other tables.
+    /// </summary>
+    internal const string EventLogSchema = "lex-v3-event-log/2";
+
+    /// <summary>
+    /// The form of an observation's build time: UTC to the second. A build time is captured once per build, after
+    /// every fetch, and rounded up to the next second, so it is an upper bound on when the build's corpus was observed.
+    /// </summary>
+    internal const string BuiltAtFormat = "yyyy-MM-ddTHH:mm:ssZ";
     private const int ApplicationId = 0x4c563306;
-    private const string Ddl = """
+    private const string Ddl = TablesDdl + "\n" + EventLogDdl;
+
+    /// <summary>
+    /// Schema 6, the last before the event log recorded builds. Its tables are this schema's but for the event log: a
+    /// genesis log of <c>first_sighting</c> events only, unique per state, with no observations and no log stamp. The
+    /// reader still serves an index of it, with that evidence absent (the panel's answer to Q-20261001-0656-codex).
+    /// </summary>
+    internal const string LegacySchema6 = "lex-v3-luxembourg-index/6";
+
+    private const string LegacyDdl6 = TablesDdl + "\n" + LegacyEventLogDdl6;
+
+    private const string TablesDdl = """
         CREATE TABLE stamp (
           stamp_id INTEGER NOT NULL PRIMARY KEY CHECK (stamp_id = 1),
           schema_identity TEXT COLLATE BINARY NOT NULL,
@@ -353,6 +524,37 @@ public static class LuxembourgIndexBuilder
           evidence_sha256 TEXT COLLATE BINARY NOT NULL CHECK (length(evidence_sha256) = 64),
           PRIMARY KEY (subject_iri, predicate, object_kind, object_value, datatype_iri, language_tag, evidence_sha256)
         ) STRICT;
+        """;
+
+    private const string EventLogDdl = """
+        CREATE TABLE events (
+          seq INTEGER NOT NULL PRIMARY KEY CHECK (seq >= 1),
+          scope TEXT COLLATE BINARY NOT NULL CHECK (scope IN ('state')),
+          key TEXT COLLATE BINARY NOT NULL,
+          event TEXT COLLATE BINARY NOT NULL CHECK (event IN ('first_sighting', 'expression_added', 'file_replaced', 'interval_closed', 'validity_revised')),
+          observed_from TEXT COLLATE BINARY CHECK (observed_from IS NULL),
+          detail_json TEXT COLLATE BINARY NOT NULL
+        ) STRICT;
+        CREATE INDEX events_event_seq ON events(event, seq);
+        CREATE INDEX events_work_seq ON events(json_extract(key, '$[0]'), seq);
+        CREATE TABLE observations (
+          observation INTEGER NOT NULL PRIMARY KEY CHECK (observation >= 1),
+          corpus_sha256 TEXT COLLATE BINARY NOT NULL CHECK (length(corpus_sha256) = 64),
+          predecessor_index_sha256 TEXT COLLATE BINARY CHECK (predecessor_index_sha256 IS NULL OR length(predecessor_index_sha256) = 64),
+          first_seq INTEGER NOT NULL CHECK (first_seq >= 1),
+          last_seq INTEGER NOT NULL CHECK (last_seq >= first_seq - 1),
+          built_at TEXT COLLATE BINARY NOT NULL CHECK (built_at GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z'),
+          observed_from TEXT COLLATE BINARY CHECK (observed_from IS NULL),
+          CHECK ((observation = 1) = (predecessor_index_sha256 IS NULL))
+        ) STRICT;
+        CREATE TABLE log_stamp (
+          log_stamp_id INTEGER NOT NULL PRIMARY KEY CHECK (log_stamp_id = 1),
+          log_schema TEXT COLLATE BINARY NOT NULL,
+          log_rows_sha256 TEXT COLLATE BINARY NOT NULL CHECK (length(log_rows_sha256) = 64)
+        ) STRICT;
+        """;
+
+    internal const string LegacyEventLogDdl6 = """
         CREATE TABLE events (
           seq INTEGER NOT NULL PRIMARY KEY CHECK (seq >= 1),
           scope TEXT COLLATE BINARY NOT NULL CHECK (scope IN ('state')),
@@ -367,6 +569,26 @@ public static class LuxembourgIndexBuilder
 
     public static LuxembourgIndexBuildResult? TryBuild(
         Stage3DerivationProfileEnvelope envelope,
+        DateTimeOffset builtAt,
+        out LuxembourgIndexBuildRefusal refusal,
+        out string? detail) =>
+        TryBuild(envelope, predecessor: null, builtAt, out refusal, out detail);
+
+    /// <summary>
+    /// Builds the index, its event log chained to <paramref name="predecessor"/> when one is given: the predecessor's
+    /// observations and events carried forward unchanged (an exact prefix), then one observation of this build
+    /// appending the comparison events (<c>first_sighting</c>, <c>expression_added</c>, <c>file_replaced</c>, and the
+    /// derived <c>interval_closed</c> and <c>validity_revised</c>). A state the log holds and this build does not is
+    /// silent (absence is not a withdrawal). With no predecessor the log is a genesis log. The observation records
+    /// <paramref name="builtAt"/>, the build's time, which the caller captures once after every fetch and passes to
+    /// each build it compares: UTC to the whole second, later than the predecessor's last build and no earlier than the
+    /// corpus's EU capture, or the build refuses <see cref="LuxembourgIndexBuildRefusal.BuildTimeInvalid"/>. It is an
+    /// upper bound on when the corpus was observed, never an observation time.
+    /// </summary>
+    public static LuxembourgIndexBuildResult? TryBuild(
+        Stage3DerivationProfileEnvelope envelope,
+        LuxembourgIndexPredecessor? predecessor,
+        DateTimeOffset builtAt,
         out LuxembourgIndexBuildRefusal refusal,
         out string? detail)
     {
@@ -379,6 +601,13 @@ public static class LuxembourgIndexBuilder
         {
             refusal = LuxembourgIndexBuildRefusal.CorpusRefused;
             detail = $"{corpusRefusal}: {corpusDetail}";
+            return null;
+        }
+
+        var builtAtText = TryBuiltAt(builtAt, predecessor, corpus.VerifiedSet, out detail);
+        if (builtAtText is null)
+        {
+            refusal = LuxembourgIndexBuildRefusal.BuildTimeInvalid;
             return null;
         }
 
@@ -404,13 +633,51 @@ public static class LuxembourgIndexBuilder
         }
 
         var relations = ProjectRelations(articles);
-        var events = ProjectGenesisEvents(states);
+        IReadOnlyDictionary<string, string[]> sourceBodies;
+        try
+        {
+            sourceBodies = SourceBodiesOfStates(articles, states, BodiesByObjectRef(corpus.VerifiedSet));
+        }
+        catch (InvalidDataException exception)
+        {
+            refusal = LuxembourgIndexBuildRefusal.DerivationMismatch;
+            detail = exception.Message;
+            return null;
+        }
+
+        EventRow[] events;
+        ObservationRow[] observations;
+        if (predecessor is null)
+        {
+            events = ProjectGenesisEvents(states, sourceBodies);
+            observations = ProjectGenesisObservations(corpus.ArtifactRef.Sha256, events.Length, builtAtText);
+        }
+        else
+        {
+            var appended = ProjectChainedEvents(FoldLog(predecessor.Events), states, sourceBodies, predecessor.LastSeq + 1, out var changed);
+            if (appended is null)
+            {
+                refusal = LuxembourgIndexBuildRefusal.PredecessorDerivationDiffers;
+                detail = $"The state of {changed} has another digest from the same source bodies than the predecessor's log holds: this build's derivation differs from the predecessor's, so the change is not the publisher's.";
+                return null;
+            }
+
+            events = [.. predecessor.Events, .. appended];
+            observations =
+            [
+                .. predecessor.Observations,
+                new ObservationRow(
+                    predecessor.Observations.Count + 1L, corpus.ArtifactRef.Sha256, predecessor.IndexSha256,
+                    predecessor.LastSeq + 1, predecessor.LastSeq + appended.Length, builtAtText, null),
+            ];
+        }
+
         var logicalRowsSha256 = HashLogicalRows(members, articles, states, workTitles, relations, workFacts, events);
         var path = Path.Combine(Path.GetTempPath(), $"lex-v3-lu-index-{Guid.NewGuid():N}.sqlite");
         try
         {
             BuildDatabase(
-                path, corpus.ArtifactRef.Sha256, logicalRowsSha256, members, articles, states, workTitles, relations, workFacts, events);
+                path, corpus.ArtifactRef.Sha256, logicalRowsSha256, members, articles, states, workTitles, relations, workFacts, events, observations);
             var bytes = File.ReadAllBytes(path);
             var digest = Convert.ToHexStringLower(SHA256.HashData(bytes));
             var indexRef = new SourceArtifactRef(LexCorpus6Builder.ResourceIdOf(digest), digest);
@@ -424,6 +691,7 @@ public static class LuxembourgIndexBuilder
                 manifestRef, manifestBytes, PublisherId.LuLegilux, digest);
             using var verified = LuxembourgIndexReader.OpenAndVerify(
                 indexRef, bytes, corpus.ArtifactRef, manifest);
+            verified.VerifyEventLogSources(corpus.VerifiedSet);
             return new LuxembourgIndexBuildResult(
                 indexRef, bytes, manifestRef, manifestBytes, manifest);
         }
@@ -663,22 +931,443 @@ public static class LuxembourgIndexBuilder
     /// comparison can say file_replaced rather than a withdrawal and a new sighting; the detail carries
     /// the state's digest. No observation time is held, so none is written: first_sighting here means
     /// first present in this log, not when the publisher published the text or when it was fetched.
-    /// A pure function of the states, so the reader recomputes it and refuses any other rows.
+    /// The detail also names the digests of the publisher bodies the state's articles were read from
+    /// (<c>source_body_sha256</c>, sorted, each once), so a later build that carries this log forward can tell a
+    /// replaced publisher file from an unchanged one by the log alone. A pure function of the states and their
+    /// source bodies, so the reader recomputes it and refuses any other rows; the bodies themselves are checked
+    /// against the corpus by whoever holds it (<see cref="LuxembourgIndexReader.VerifyEventLogSources"/>).
     /// </summary>
-    internal static EventRow[] ProjectGenesisEvents(IReadOnlyList<StateRow> states) =>
-        states
-            .OrderBy(static row => row.WorkKey, StringComparer.Ordinal)
-            .ThenBy(static row => row.ApplicabilityDate, StringComparer.Ordinal)
-            .ThenBy(static row => row.ExpressionIri, StringComparer.Ordinal)
-            .ThenBy(static row => row.Language, StringComparer.Ordinal)
-            .Select(static (row, index) => new EventRow(
-                index + 1L,
-                "state",
-                JsonSerializer.Serialize(new[] { row.WorkKey, row.ApplicabilityDate, row.ExpressionIri, row.Language }),
-                V3EventRegistry.FirstSighting,
-                null,
-                JsonSerializer.Serialize(new { state_sha256 = row.StateSha256 })))
-            .ToArray();
+    internal static EventRow[] ProjectGenesisEvents(IReadOnlyList<StateRow> states, IReadOnlyDictionary<string, string[]> sourceBodies) =>
+        ProjectChainedEvents(new Dictionary<string, LoggedState>(StringComparer.Ordinal), states, sourceBodies, 1, out _)!;
+
+    /// <summary>
+    /// The events one observation appends to a log whose states are <paramref name="fold"/>, numbered from
+    /// <paramref name="firstSeq"/>, key by key in the states table's key order over the keys the log holds and the keys
+    /// this build holds (a state the log holds and this build does not stays held: absence is not a withdrawal):
+    /// <list type="bullet">
+    /// <item>a key this build holds and the log does not: <c>first_sighting</c>, or <c>expression_added</c> when the log
+    /// holds the same work and date in another language;</item>
+    /// <item>a key both hold whose source bodies differ: <c>file_replaced</c>, naming the state and bodies it replaces
+    /// (the state's digest changes with its text, not with the bytes alone);</item>
+    /// <item>then, for a key the log held, its applicability interval moved by this build's states: <c>interval_closed</c>
+    /// when the log held it as the latest state of its work and language and a later one is now held, or
+    /// <c>validity_revised</c> when its end moved because a state was inserted before it; both are derived from the
+    /// publisher's dates, not asserted by the publisher, and say so.</item>
+    /// </list>
+    /// A key both hold with the same bodies and another digest is not the publisher's change but this derivation's: null,
+    /// naming the state. A genesis log is the events appended to no log.
+    /// </summary>
+    internal static EventRow[]? ProjectChainedEvents(
+        IReadOnlyDictionary<string, LoggedState> fold,
+        IReadOnlyList<StateRow> states,
+        IReadOnlyDictionary<string, string[]> sourceBodies,
+        long firstSeq,
+        out string? changedState)
+    {
+        changedState = null;
+        var current = new Dictionary<string, (StateRow Row, string[] Bodies)>(StringComparer.Ordinal);
+        foreach (var row in states)
+        {
+            current[StateKey(row)] = (row, sourceBodies.TryGetValue(row.StateSha256, out var found)
+                ? found.Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray()
+                : throw new InvalidDataException($"The state {row.StateSha256} has no source bodies for its event."));
+        }
+
+        var endsBefore = IntervalEnds(fold.Values.Select(static held => (held.WorkKey, held.ApplicabilityDate, held.Language)));
+        var endsAfter = IntervalEnds(fold.Values.Select(static held => (held.WorkKey, held.ApplicabilityDate, held.Language))
+            .Concat(states.Select(static row => (row.WorkKey, row.ApplicabilityDate, row.Language))));
+        var keys = fold.Values.Select(static held => (held.WorkKey, held.ApplicabilityDate, held.ExpressionIri, held.Language))
+            .Concat(states.Select(static row => (row.WorkKey, row.ApplicabilityDate, row.ExpressionIri, row.Language)))
+            .Distinct()
+            .OrderBy(static key => key.WorkKey, StringComparer.Ordinal)
+            .ThenBy(static key => key.ApplicabilityDate, StringComparer.Ordinal)
+            .ThenBy(static key => key.ExpressionIri, StringComparer.Ordinal)
+            .ThenBy(static key => key.Language, StringComparer.Ordinal);
+
+        var appended = new List<EventRow>();
+        void Append(string key, string name, string detail) =>
+            appended.Add(new EventRow(firstSeq + appended.Count, "state", key, name, null, detail));
+
+        foreach (var (work, date, expression, language) in keys)
+        {
+            var key = JsonSerializer.Serialize(new[] { work, date, expression, language });
+            var heldBefore = fold.TryGetValue(key, out var held);
+            var heldNow = current.TryGetValue(key, out var now);
+            var stateSha256 = heldNow ? now.Row.StateSha256 : held!.StateSha256;
+            var bodies = heldNow ? now.Bodies : held!.SourceBodies.ToArray();
+            if (heldNow && !heldBefore)
+            {
+                var newLanguage = fold.Values.Any(other =>
+                    string.Equals(other.WorkKey, work, StringComparison.Ordinal) &&
+                    string.Equals(other.ApplicabilityDate, date, StringComparison.Ordinal) &&
+                    !string.Equals(other.Language, language, StringComparison.Ordinal));
+                Append(key, newLanguage ? V3EventRegistry.ExpressionAdded : V3EventRegistry.FirstSighting,
+                    JsonSerializer.Serialize(new { state_sha256 = stateSha256, source_body_sha256 = bodies }));
+                continue;
+            }
+
+            if (heldNow && heldBefore)
+            {
+                if (!held!.SourceBodies.SequenceEqual(bodies, StringComparer.Ordinal))
+                {
+                    Append(key, V3EventRegistry.FileReplaced, JsonSerializer.Serialize(new
+                    {
+                        state_sha256 = stateSha256,
+                        source_body_sha256 = bodies,
+                        replaced_state_sha256 = held.StateSha256,
+                        replaced_source_body_sha256 = held.SourceBodies,
+                    }));
+                }
+                else if (!string.Equals(held.StateSha256, stateSha256, StringComparison.Ordinal))
+                {
+                    changedState = $"/lu-legilux/{work}/{date} ({language})";
+                    return null;
+                }
+            }
+
+            var before = endsBefore[(work, date, language)];
+            var after = endsAfter[(work, date, language)];
+            if (string.Equals(before, after, StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            Append(key, before is null ? V3EventRegistry.IntervalClosed : V3EventRegistry.ValidityRevised, JsonSerializer.Serialize(new
+            {
+                state_sha256 = stateSha256,
+                source_body_sha256 = bodies,
+                applicable_from = date,
+                previous_to = before,
+                new_to = after,
+                derived = true,
+            }));
+        }
+
+        return appended.ToArray();
+    }
+
+    /// <summary>
+    /// Each held date's derived end in its work and language: the next later date held in them, or null for the latest.
+    /// The publisher dates states from; it gives no end date, so an end is this derivation's and never the publisher's.
+    /// </summary>
+    internal static IReadOnlyDictionary<(string WorkKey, string ApplicabilityDate, string Language), string?> IntervalEnds(
+        IEnumerable<(string WorkKey, string ApplicabilityDate, string Language)> held)
+    {
+        var ends = new Dictionary<(string, string, string), string?>();
+        foreach (var group in held.Distinct().GroupBy(static state => (state.WorkKey, state.Language)))
+        {
+            var dates = group.Select(static state => state.ApplicabilityDate).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray();
+            for (var index = 0; index < dates.Length; index++)
+            {
+                ends[(group.Key.WorkKey, dates[index], group.Key.Language)] = index + 1 < dates.Length ? dates[index + 1] : null;
+            }
+        }
+
+        return ends;
+    }
+
+    /// <summary>A state's key in the log: the states table's primary key as a JSON array, which a later build keeps for the same state.</summary>
+    internal static string StateKey(StateRow row) =>
+        JsonSerializer.Serialize(new[] { row.WorkKey, row.ApplicabilityDate, row.ExpressionIri, row.Language });
+
+    /// <summary>What a log says one state key holds after all its events: the key's parts, and the digest and source bodies of its last event.</summary>
+    internal sealed record LoggedState(
+        string WorkKey,
+        string ApplicabilityDate,
+        string ExpressionIri,
+        string Language,
+        string StateSha256,
+        IReadOnlyList<string> SourceBodies);
+
+    /// <summary>
+    /// What a log says each state key holds, its events read in order (a later event of a key replaces an earlier one).
+    /// An event whose key or detail is not the shape this log schema writes refuses.
+    /// </summary>
+    internal static IReadOnlyDictionary<string, LoggedState> FoldLog(IReadOnlyList<EventRow> events)
+    {
+        var fold = new Dictionary<string, LoggedState>(StringComparer.Ordinal);
+        foreach (var value in events)
+        {
+            try
+            {
+                var key = JsonSerializer.Deserialize<string[]>(value.Key);
+                if (key is not { Length: 4 } || key.Any(static part => string.IsNullOrEmpty(part)))
+                {
+                    throw new InvalidDataException("An event's key is not a state key.");
+                }
+
+                using var detail = JsonDocument.Parse(value.DetailJson);
+                var state = detail.RootElement.GetProperty("state_sha256").GetString();
+                if (state is not { Length: 64 })
+                {
+                    throw new InvalidDataException("An event names no state digest.");
+                }
+
+                var bodies = detail.RootElement.GetProperty("source_body_sha256").EnumerateArray()
+                    .Select(static body => body.GetString() is { Length: 64 } digest && digest.All(static c => c is (>= '0' and <= '9') or (>= 'a' and <= 'f'))
+                        ? digest
+                        : throw new InvalidDataException("An event names a source body that is not a SHA-256 digest."))
+                    .ToArray();
+                fold[value.Key] = new LoggedState(key[0], key[1], key[2], key[3], state, bodies);
+            }
+            catch (Exception exception) when (exception is JsonException or KeyNotFoundException or InvalidOperationException)
+            {
+                throw new InvalidDataException("An event of the log is not a state event this log schema writes.", exception);
+            }
+        }
+
+        return fold;
+    }
+
+    internal static ObservationRow[] ReadLogObservations(SqliteConnection connection)
+    {
+        using var command = connection.CreateCommand();
+        command.CommandText = "SELECT observation,corpus_sha256,predecessor_index_sha256,first_seq,last_seq,built_at,observed_from FROM observations ORDER BY observation";
+        using var reader = command.ExecuteReader();
+        var values = new List<ObservationRow>();
+        while (reader.Read()) values.Add(new(
+            reader.GetInt64(0), reader.GetString(1), reader.IsDBNull(2) ? null : reader.GetString(2),
+            reader.GetInt64(3), reader.GetInt64(4), reader.GetString(5), reader.IsDBNull(6) ? null : reader.GetString(6)));
+        return values.ToArray();
+    }
+
+    internal static EventRow[] ReadLogEvents(SqliteConnection connection)
+    {
+        using var command = connection.CreateCommand();
+        command.CommandText = "SELECT seq,scope,key,event,observed_from,detail_json FROM events ORDER BY seq";
+        using var reader = command.ExecuteReader();
+        var values = new List<EventRow>();
+        while (reader.Read()) values.Add(new(
+            reader.GetInt64(0), reader.GetString(1), reader.GetString(2), reader.GetString(3),
+            reader.IsDBNull(4) ? null : reader.GetString(4), reader.GetString(5)));
+        return values.ToArray();
+    }
+
+    /// <summary>
+    /// The reader's check of an index's event log: numbered as observations appending events; the last observation of
+    /// this index's corpus; every state of the index held by the log at its own digest; and the last observation's
+    /// events exactly those it must append to the log before it (for a genesis log, to no log). The source bodies are
+    /// taken from the log, which only the corpus can confirm (<see cref="LuxembourgIndexReader.VerifyEventLogSources"/>);
+    /// that the log before the last observation is the predecessor's is proven when the build carries it forward.
+    /// </summary>
+    internal static void ValidateLog(
+        string corpusSha256,
+        IReadOnlyList<StateRow> states,
+        IReadOnlyList<ObservationRow> observations,
+        IReadOnlyList<EventRow> events)
+    {
+        ValidateLogNumbering(observations, events);
+        var last = observations[^1];
+        if (!string.Equals(last.CorpusSha256, corpusSha256, StringComparison.Ordinal))
+        {
+            throw new InvalidDataException("The Luxembourg event log's last observation is not of this index's corpus.");
+        }
+
+        try
+        {
+            ValidateLogHistory(observations, events);
+            var held = FoldLog(events);
+            var sourceBodies = new Dictionary<string, string[]>(StringComparer.Ordinal);
+            foreach (var state in states)
+            {
+                if (!held.TryGetValue(StateKey(state), out var logged) ||
+                    !string.Equals(logged.StateSha256, state.StateSha256, StringComparison.Ordinal))
+                {
+                    throw new InvalidDataException("A state is not held by the log at its own digest.");
+                }
+
+                sourceBodies[state.StateSha256] = logged.SourceBodies.ToArray();
+            }
+
+            var before = events.Take(checked((int)(last.FirstSeq - 1))).ToArray();
+            var expected = ProjectChainedEvents(FoldLog(before), states, sourceBodies, last.FirstSeq, out _);
+            if (expected is null || !expected.SequenceEqual(events.Skip(before.Length)))
+            {
+                throw new InvalidDataException("The last observation's events are not the ones it appends.");
+            }
+        }
+        catch (InvalidDataException exception)
+        {
+            throw new InvalidDataException("The Luxembourg index event rows are not the log of its states.", exception);
+        }
+    }
+
+    /// <summary>
+    /// The log's history, replayed from the log alone (review of #866): every observation's events must be exactly the
+    /// ones it appends to the log before it, given the states it leaves the log holding (every state held before, with
+    /// those it replaced, and those it sighted), so an event a build could not have written refuses wherever it sits in
+    /// the log, not only in its last observation. A genesis observation can hold only <c>first_sighting</c>: before it the
+    /// log holds nothing.
+    /// </summary>
+    internal static void ValidateLogHistory(IReadOnlyList<ObservationRow> observations, IReadOnlyList<EventRow> events)
+    {
+        foreach (var observation in observations)
+        {
+            var before = events.Take(checked((int)(observation.FirstSeq - 1))).ToArray();
+            var appended = events.Skip(before.Length).Take(checked((int)(observation.LastSeq - observation.FirstSeq + 1))).ToArray();
+            var after = FoldLog([.. before, .. appended]);
+            var states = after.Values
+                .Select(static held => new StateRow(
+                    held.WorkKey, held.ApplicabilityDate, held.StateSha256, held.ExpressionIri, string.Empty, string.Empty, held.Language, "[]", "[]"))
+                .ToArray();
+            var bodies = new Dictionary<string, string[]>(StringComparer.Ordinal);
+            foreach (var held in after.Values)
+            {
+                bodies[held.StateSha256] = held.SourceBodies.ToArray();
+            }
+
+            var expected = ProjectChainedEvents(FoldLog(before), states, bodies, observation.FirstSeq, out _);
+            if (expected is null || !expected.SequenceEqual(appended))
+            {
+                throw new InvalidDataException(
+                    $"The Luxembourg event log's observation {observation.Observation} holds events that are not the ones it appends.");
+            }
+        }
+    }
+
+    /// <summary>
+    /// The log's numbering: observations 1, 2, ... in order, each appending the events after the previous one's (the
+    /// first from 1), the last ending at the log's last event, and the events numbered 1, 2, ... without a gap; each
+    /// observation's build time a real UTC second later than the one before.
+    /// </summary>
+    internal static void ValidateLogNumbering(IReadOnlyList<ObservationRow> observations, IReadOnlyList<EventRow> events)
+    {
+        if (observations.Count == 0)
+        {
+            throw new InvalidDataException("The Luxembourg event log's observations do not number its events.");
+        }
+
+        for (var index = 0; index < observations.Count; index++)
+        {
+            var observation = observations[index];
+            var first = index == 0 ? 1 : observations[index - 1].LastSeq + 1;
+            if (observation.Observation != index + 1 || observation.FirstSeq != first || observation.LastSeq < observation.FirstSeq - 1 ||
+                (observation.Observation == 1) != (observation.PredecessorIndexSha256 is null) || observation.ObservedFrom is not null)
+            {
+                throw new InvalidDataException("The Luxembourg event log's observations do not number its events.");
+            }
+
+            if (ParseBuiltAt(observation.BuiltAt) is not { } builtAt ||
+                (index > 0 && builtAt <= ParseBuiltAt(observations[index - 1].BuiltAt)))
+            {
+                throw new InvalidDataException("The Luxembourg event log's build times are not UTC seconds, each later than the one before.");
+            }
+        }
+
+        if (observations[^1].LastSeq != events.Count || events.Select(static (value, index) => value.Seq == index + 1).Any(static ok => !ok))
+        {
+            throw new InvalidDataException("The Luxembourg event log's observations do not number its events.");
+        }
+    }
+
+    /// <summary>
+    /// The observations of a genesis log: one, of this build's corpus, with no predecessor, numbering every event the
+    /// log holds (an empty log numbers none: first 1, last 0), at the build's time. No observation time is held, so
+    /// none is written.
+    /// </summary>
+    internal static ObservationRow[] ProjectGenesisObservations(string corpusSha256, int eventCount, string builtAt) =>
+        [new ObservationRow(1, corpusSha256, null, 1, eventCount, builtAt, null)];
+
+    /// <summary>A build time in <see cref="BuiltAtFormat"/>, or null when the text is not one.</summary>
+    internal static DateTimeOffset? ParseBuiltAt(string text) =>
+        DateTimeOffset.TryParseExact(
+            text, BuiltAtFormat, CultureInfo.InvariantCulture,
+            DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal, out var value)
+            ? value
+            : null;
+
+    /// <summary>
+    /// The build time this build records, or null with the reason it cannot be: it must be UTC to the whole second
+    /// (the caller rounds up, so the bound stays an upper one), later than the predecessor's last build (a log's
+    /// builds are in time order), and no earlier than the corpus's EU capture, the one observation clock the corpus
+    /// holds. Nothing can check it against the Luxembourg fetches, whose times the corpus does not hold.
+    /// </summary>
+    private static string? TryBuiltAt(
+        DateTimeOffset builtAt,
+        LuxembourgIndexPredecessor? predecessor,
+        VerifiedLexCorpus6ManifestSet corpus,
+        out string? detail)
+    {
+        if (builtAt.Offset != TimeSpan.Zero || builtAt.Ticks % TimeSpan.TicksPerSecond != 0)
+        {
+            detail = $"The build time {builtAt:O} is not a UTC whole second.";
+            return null;
+        }
+
+        var text = builtAt.ToString(BuiltAtFormat, CultureInfo.InvariantCulture);
+        if (predecessor is not null && ParseBuiltAt(predecessor.Observations[^1].BuiltAt) is { } previous && builtAt <= previous)
+        {
+            detail = $"The build time {text} is not later than the predecessor's build at {predecessor.Observations[^1].BuiltAt}.";
+            return null;
+        }
+
+        if (EarlierThanEuCapture(builtAt, corpus) is { } reason)
+        {
+            detail = $"The build time {text} {reason}.";
+            return null;
+        }
+
+        detail = null;
+        return text;
+    }
+
+    /// <summary>
+    /// Why a build time cannot be an upper bound on the corpus's observation, by the one observation clock the corpus
+    /// holds (its EU legal notice's capture), or null when it can be.
+    /// </summary>
+    internal static string? EarlierThanEuCapture(DateTimeOffset builtAt, VerifiedLexCorpus6ManifestSet corpus)
+    {
+        var capturedAt = corpus.Set.EuropeRightsMatrix.CapturedAt;
+        if (!DateTimeOffset.TryParse(
+                capturedAt, CultureInfo.InvariantCulture,
+                DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal, out var captured))
+        {
+            return $"cannot be held to the corpus's EU capture, whose time {capturedAt} is not a timestamp";
+        }
+
+        return builtAt < captured ? $"is earlier than the corpus's EU capture at {capturedAt}" : null;
+    }
+
+    /// <summary>The digest of the event log alone (its observations and events), as <c>log_stamp</c> records it.</summary>
+    internal static string HashEventLog(IReadOnlyList<ObservationRow> observations, IReadOnlyList<EventRow> events) =>
+        Convert.ToHexStringLower(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(new EventLogRows(observations, events))));
+
+    /// <summary>The body digest of every Luxembourg member that holds one, by the member's object reference.</summary>
+    internal static IReadOnlyDictionary<string, string> BodiesByObjectRef(VerifiedLexCorpus6ManifestSet corpus) =>
+        corpus.Set.Members
+            .Where(static member => member.Publisher == PublisherId.LuLegilux && member.BodySha256 is not null)
+            .ToDictionary(static member => member.ObjectRefSha256, static member => member.BodySha256!, StringComparer.Ordinal);
+
+    /// <summary>
+    /// The publisher bodies each state's articles were read from: each article identity's member, by its object
+    /// reference, and that member's body digest, sorted and each once. A member that holds no body (one not acquired)
+    /// names none: a build reads articles only from held bodies, so it never meets one, and a body-less member has no
+    /// digest a replaced file could change.
+    /// </summary>
+    internal static IReadOnlyDictionary<string, string[]> SourceBodiesOfStates(
+        IReadOnlyList<ArticleRow> articles,
+        IReadOnlyList<StateRow> states,
+        IReadOnlyDictionary<string, string> bodyByObjectRef)
+    {
+        var objectByArticle = articles.ToDictionary(static article => article.ArticleIdentitySha256, static article => article.ObjectRefSha256, StringComparer.Ordinal);
+        var sources = new Dictionary<string, string[]>(StringComparer.Ordinal);
+        foreach (var state in states)
+        {
+            var identities = JsonSerializer.Deserialize<string[]>(state.ArticleIdentitiesJson)
+                ?? throw new InvalidDataException($"The state {state.StateSha256} names no article identities.");
+            sources[state.StateSha256] = identities
+                .Select(identity => objectByArticle.TryGetValue(identity, out var objectRef)
+                    ? objectRef
+                    : throw new InvalidDataException($"The state {state.StateSha256} names an article the index does not hold."))
+                .Where(bodyByObjectRef.ContainsKey)
+                .Select(objectRef => bodyByObjectRef[objectRef])
+                .Distinct(StringComparer.Ordinal)
+                .Order(StringComparer.Ordinal)
+                .ToArray();
+        }
+
+        return sources;
+    }
 
     private static string LanguageToken(string iri)
     {
@@ -966,7 +1655,8 @@ public static class LuxembourgIndexBuilder
         IReadOnlyList<WorkTitleRow> workTitles,
         IReadOnlyList<RelationRow> relations,
         IReadOnlyList<WorkFactRow> workFacts,
-        IReadOnlyList<EventRow> events)
+        IReadOnlyList<EventRow> events,
+        IReadOnlyList<ObservationRow> observations)
     {
         using var connection = Open(path, SqliteOpenMode.ReadWriteCreate);
         Execute(connection, "PRAGMA page_size=4096");
@@ -976,7 +1666,7 @@ public static class LuxembourgIndexBuilder
         Execute(connection, "PRAGMA synchronous=FULL");
         Execute(connection, "PRAGMA foreign_keys=ON");
         Execute(connection, $"PRAGMA application_id={ApplicationId}");
-        Execute(connection, "PRAGMA user_version=6");
+        Execute(connection, "PRAGMA user_version=8");
         using var transaction = connection.BeginTransaction();
         Execute(connection, Ddl, transaction);
         foreach (var member in members)
@@ -1030,6 +1720,14 @@ public static class LuxembourgIndexBuilder
                 "INSERT INTO events VALUES($p0,$p1,$p2,$p3,$p4,$p5)",
                 value.Seq, value.Scope, value.Key, value.Event, value.ObservedFrom, value.DetailJson);
         }
+        foreach (var observation in observations)
+        {
+            Insert(connection, transaction,
+                "INSERT INTO observations VALUES($p0,$p1,$p2,$p3,$p4,$p5,$p6)",
+                observation.Observation, observation.CorpusSha256, observation.PredecessorIndexSha256,
+                observation.FirstSeq, observation.LastSeq, observation.BuiltAt, observation.ObservedFrom);
+        }
+        Insert(connection, transaction, "INSERT INTO log_stamp VALUES(1,$p0,$p1)", EventLogSchema, HashEventLog(observations, events));
         var provenance = SqliteProvenance.Read(connection);
         Insert(connection, transaction, "INSERT INTO stamp VALUES(1,$p0,$p1,$p2,$p3,$p4,$p5)",
             Schema, corpusSha256, logicalRowsSha256, provenance.Version,
@@ -1079,9 +1777,13 @@ public static class LuxembourgIndexBuilder
         try
         {
             var relations = ProjectRelations(articles);
-            var events = ProjectGenesisEvents(states);
+            var events = ProjectGenesisEvents(states, SourceBodiesOfStates(articles, states, new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                [member.ObjectRefSha256] = new string('7', 64),
+            }));
             BuildDatabase(path, new string('a', 64), HashLogicalRows(members, articles, states, titles, relations, facts, events),
-                members, articles, states, titles, relations, facts, events);
+                members, articles, states, titles, relations, facts, events,
+                ProjectGenesisObservations(new string('a', 64), events.Length, "2026-01-01T00:00:00Z"));
             return File.ReadAllBytes(path);
         }
         finally
@@ -1167,6 +1869,35 @@ public static class LuxembourgIndexBuilder
 
     internal static void EnsureExactSchema(SqliteConnection actual)
     {
+        if (!SchemaOf(Ddl).SequenceEqual(ReadSchema(actual), StringComparer.Ordinal))
+        {
+            throw new InvalidDataException("The Luxembourg index schema differs from the exact terminal schema.");
+        }
+    }
+
+    /// <summary>
+    /// The readable schema an index's tables are exactly, by its <c>user_version</c>: this schema (8), or schema 6, the
+    /// last before the event log recorded builds. Any other version, or tables that are not exactly that version's,
+    /// refuses: no schema in between is read, and none is read loosely.
+    /// </summary>
+    internal static int ExactReadableSchemaVersion(SqliteConnection actual, int userVersion)
+    {
+        var ddl = userVersion switch
+        {
+            8 => Ddl,
+            6 => LegacyDdl6,
+            _ => throw new InvalidDataException("The Luxembourg index schema differs from the exact terminal schema."),
+        };
+        if (!SchemaOf(ddl).SequenceEqual(ReadSchema(actual), StringComparer.Ordinal))
+        {
+            throw new InvalidDataException("The Luxembourg index schema differs from the exact terminal schema.");
+        }
+
+        return userVersion;
+    }
+
+    private static string[] SchemaOf(string ddl)
+    {
         using var expected = new SqliteConnection(new SqliteConnectionStringBuilder
         {
             DataSource = ":memory:",
@@ -1175,12 +1906,28 @@ public static class LuxembourgIndexBuilder
             Pooling = false,
         }.ToString());
         expected.Open();
-        Execute(expected, Ddl);
-        if (!ReadSchema(expected).SequenceEqual(ReadSchema(actual), StringComparer.Ordinal))
-        {
-            throw new InvalidDataException("The Luxembourg index schema differs from the exact terminal schema.");
-        }
+        Execute(expected, ddl);
+        return ReadSchema(expected);
     }
+
+    /// <summary>
+    /// The genesis log a schema-6 index holds, as schema 6 wrote it: one <c>first_sighting</c> per state, ordered by its
+    /// key, naming the state digest only (no source bodies, which schema 6 did not record).
+    /// </summary>
+    internal static EventRow[] LegacyGenesisEvents6(IReadOnlyList<StateRow> states) =>
+        states
+            .OrderBy(static row => row.WorkKey, StringComparer.Ordinal)
+            .ThenBy(static row => row.ApplicabilityDate, StringComparer.Ordinal)
+            .ThenBy(static row => row.ExpressionIri, StringComparer.Ordinal)
+            .ThenBy(static row => row.Language, StringComparer.Ordinal)
+            .Select(static (row, index) => new EventRow(
+                index + 1L,
+                "state",
+                JsonSerializer.Serialize(new[] { row.WorkKey, row.ApplicabilityDate, row.ExpressionIri, row.Language }),
+                V3EventRegistry.FirstSighting,
+                null,
+                JsonSerializer.Serialize(new { state_sha256 = row.StateSha256 })))
+            .ToArray();
 
     private static string[] ReadSchema(SqliteConnection connection)
     {
@@ -1329,6 +2076,22 @@ public static class LuxembourgIndexBuilder
         string? ObservedFrom,
         string DetailJson);
 
+    /// <summary>
+    /// One observation of the event log: the build that observed (its corpus), the index it carried forward (null for
+    /// the first, a genesis log's only observation), the events it appended by sequence number, the build's time (an
+    /// upper bound on when its corpus was observed), and its observation time (null: none is held).
+    /// </summary>
+    internal sealed record ObservationRow(
+        long Observation,
+        string CorpusSha256,
+        string? PredecessorIndexSha256,
+        long FirstSeq,
+        long LastSeq,
+        string BuiltAt,
+        string? ObservedFrom);
+
+    private sealed record EventLogRows(IReadOnlyList<ObservationRow> Observations, IReadOnlyList<EventRow> Events);
+
     private sealed record LogicalRows(
         IReadOnlyList<MemberRow> Members,
         IReadOnlyList<ArticleRow> Articles,
@@ -1403,6 +2166,7 @@ public sealed class LuxembourgIndexReader : IDisposable
         V3IndexCapabilityManifest capabilityManifest,
         SourceArtifactRef indexRef,
         SourceArtifactRef corpusRef,
+        string schemaIdentity,
         bool deleteOnDispose)
     {
         _path = path;
@@ -1410,10 +2174,22 @@ public sealed class LuxembourgIndexReader : IDisposable
         _capabilityManifest = capabilityManifest;
         IndexRef = indexRef;
         CorpusRef = corpusRef;
+        SchemaIdentity = schemaIdentity;
         _deleteOnDispose = deleteOnDispose;
     }
 
     public SourceArtifactRef IndexRef { get; }
+
+    /// <summary>The schema the index's stamp names: <see cref="LuxembourgIndexBuilder.Schema"/>, or <see cref="LuxembourgIndexBuilder.LegacySchema6"/>.</summary>
+    public string SchemaIdentity { get; }
+
+    /// <summary>
+    /// Whether the index's event log records its builds: observations with their build times and corpora, the source
+    /// bodies each event names, and the log's own stamp. A schema-6 index records none of them, so nothing it holds
+    /// names a snapshot, bounds an observation or can be checked against the corpus's bodies; they are absent, never
+    /// invented.
+    /// </summary>
+    public bool RecordsBuilds => string.Equals(SchemaIdentity, LuxembourgIndexBuilder.Schema, StringComparison.Ordinal);
 
     public SourceArtifactRef CorpusRef { get; }
 
@@ -1526,10 +2302,11 @@ public sealed class LuxembourgIndexReader : IDisposable
         try
         {
             connection = LuxembourgIndexBuilder.Open(path, SqliteOpenMode.ReadOnly);
-            LuxembourgIndexBuilder.EnsureExactSchema(connection);
+            var version = LuxembourgIndexBuilder.ExactReadableSchemaVersion(
+                connection, Convert.ToInt32(Scalar(connection, "PRAGMA user_version"), CultureInfo.InvariantCulture));
+            var schemaIdentity = version == 8 ? LuxembourgIndexBuilder.Schema : LuxembourgIndexBuilder.LegacySchema6;
             if (!string.Equals(Scalar(connection, "PRAGMA integrity_check"), "ok", StringComparison.Ordinal) ||
-                Convert.ToInt32(Scalar(connection, "PRAGMA application_id"), CultureInfo.InvariantCulture) != 0x4c563306 ||
-                Convert.ToInt32(Scalar(connection, "PRAGMA user_version"), CultureInfo.InvariantCulture) != 6)
+                Convert.ToInt32(Scalar(connection, "PRAGMA application_id"), CultureInfo.InvariantCulture) != 0x4c563306)
             {
                 throw new InvalidDataException("The Luxembourg index failed SQLite integrity or schema identity checks.");
             }
@@ -1538,7 +2315,7 @@ public sealed class LuxembourgIndexReader : IDisposable
             stamp.CommandText = "SELECT schema_identity,corpus_sha256,logical_rows_sha256,sqlite_version,sqlite_source_id,compile_options_sha256 FROM stamp WHERE stamp_id=1";
             using var stampReader = stamp.ExecuteReader();
             if (!stampReader.Read() ||
-                !string.Equals(stampReader.GetString(0), LuxembourgIndexBuilder.Schema, StringComparison.Ordinal))
+                !string.Equals(stampReader.GetString(0), schemaIdentity, StringComparison.Ordinal))
             {
                 throw new InvalidDataException("The Luxembourg index stamp does not bind the expected corpus.");
             }
@@ -1563,14 +2340,22 @@ public sealed class LuxembourgIndexReader : IDisposable
             var workTitles = ReadWorkTitles(connection);
             var relations = ReadRelations(connection);
             var workFacts = ReadWorkFacts(connection);
-            var events = ReadEvents(connection);
+            var events = LuxembourgIndexBuilder.ReadLogEvents(connection);
             ValidateStates(articles, states);
             if (!LuxembourgIndexBuilder.ProjectRelations(articles).SequenceEqual(relations))
                 throw new InvalidDataException(
                     "The Luxembourg index relation rows are not the references its articles carry.");
-            if (!LuxembourgIndexBuilder.ProjectGenesisEvents(states).SequenceEqual(events))
-                throw new InvalidDataException(
-                    "The Luxembourg index event rows are not the genesis log of its states.");
+            if (version == 8)
+            {
+                var observations = LuxembourgIndexBuilder.ReadLogObservations(connection);
+                LuxembourgIndexBuilder.ValidateLog(corpusSha256, states, observations, events);
+                VerifyLogStamp(connection, observations, events);
+            }
+            else if (!LuxembourgIndexBuilder.LegacyGenesisEvents6(states).SequenceEqual(events))
+            {
+                // Schema 6's own check: its log is exactly the genesis log of its states, as schema 6 wrote it.
+                throw new InvalidDataException("The Luxembourg index event rows are not the genesis log of its states.");
+            }
             if (!string.Equals(
                     LuxembourgIndexBuilder.HashLogicalRows(members, articles, states, workTitles, relations, workFacts, events),
                     expectedLogical,
@@ -1587,6 +2372,7 @@ public sealed class LuxembourgIndexReader : IDisposable
                 capabilityManifest,
                 indexRef,
                 corpusRef,
+                schemaIdentity,
                 deleteOnDispose);
         }
         catch
@@ -2605,10 +3391,110 @@ public sealed class LuxembourgIndexReader : IDisposable
                     reader.GetInt64(0), reader.GetString(1), reader.GetString(3),
                     reader.IsDBNull(4) ? null : reader.GetString(4),
                     key[0], key[1], key[2], key[3],
-                    detail.RootElement.GetProperty("state_sha256").GetString()!));
+                    detail.RootElement.GetProperty("state_sha256").GetString()!,
+                    reader.GetString(5)));
             }
 
             return Array.AsReadOnly(values.ToArray());
+        }
+    }
+
+    /// <summary>
+    /// The observations of the event log, in order (<see cref="LuxembourgIndexQueries.Observations"/>); none for an index
+    /// that records no builds (<see cref="RecordsBuilds"/>), which has no observation to name.
+    /// </summary>
+    public IReadOnlyList<LuxembourgIndexObservation> ResolveObservations()
+    {
+        if (!RecordsBuilds) return Array.Empty<LuxembourgIndexObservation>();
+        lock (_gate)
+        {
+            using var command = _connection.CreateCommand();
+            command.CommandText = LuxembourgIndexQueries.Observations;
+            using var reader = command.ExecuteReader();
+            var values = new List<LuxembourgIndexObservation>();
+            while (reader.Read())
+            {
+                values.Add(new LuxembourgIndexObservation(
+                    reader.GetInt64(0), reader.GetString(1), reader.IsDBNull(2) ? null : reader.GetString(2),
+                    reader.GetInt64(3), reader.GetInt64(4), reader.GetString(5)));
+            }
+
+            return Array.AsReadOnly(values.ToArray());
+        }
+    }
+
+    /// <summary>
+    /// The revising events (<c>validity_revised</c>, <c>interval_closed</c>) after a sequence number, in sequence order,
+    /// at most <paramref name="take"/>, optionally of one work (<see cref="LuxembourgIndexQueries.RevisingEventsAfter"/>).
+    /// </summary>
+    public IReadOnlyList<LuxembourgIndexEvent> ResolveRevisingEvents(long afterSeq, string? workKey, int take)
+    {
+        if (afterSeq < 0) throw new ArgumentOutOfRangeException(nameof(afterSeq));
+        if (take < 1) throw new ArgumentOutOfRangeException(nameof(take));
+        lock (_gate)
+        {
+            using var command = _connection.CreateCommand();
+            command.CommandText = LuxembourgIndexQueries.RevisingEventsAfter;
+            command.Parameters.AddWithValue("$events", JsonSerializer.Serialize(V3EventRegistry.Revising));
+            command.Parameters.AddWithValue("$after", afterSeq);
+            command.Parameters.AddWithValue("$work", (object?)workKey ?? DBNull.Value);
+            command.Parameters.AddWithValue("$take", take);
+            using var reader = command.ExecuteReader();
+            var values = new List<LuxembourgIndexEvent>();
+            while (reader.Read())
+            {
+                var key = JsonSerializer.Deserialize<string[]>(reader.GetString(2))!;
+                using var detail = JsonDocument.Parse(reader.GetString(5));
+                values.Add(new LuxembourgIndexEvent(
+                    reader.GetInt64(0), reader.GetString(1), reader.GetString(3),
+                    reader.IsDBNull(4) ? null : reader.GetString(4),
+                    key[0], key[1], key[2], key[3],
+                    detail.RootElement.GetProperty("state_sha256").GetString()!,
+                    reader.GetString(5)));
+            }
+
+            return Array.AsReadOnly(values.ToArray());
+        }
+    }
+
+    /// <summary>
+    /// The states of one work the event log held after its events up to <paramref name="lastSeq"/> (an observation's last
+    /// event), folded as the builder folds a predecessor's log: a later event of a key replaces an earlier one, and a key
+    /// once held stays held (absence is not a withdrawal). Ordered by language, date and expression
+    /// (<see cref="LuxembourgIndexQueries.WorkEventsUpTo"/>).
+    /// </summary>
+    public IReadOnlyList<LuxembourgIndexObservedState> ResolveObservedStates(string workKey, long lastSeq)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(workKey);
+        if (lastSeq < 0) throw new ArgumentOutOfRangeException(nameof(lastSeq));
+        if (!RecordsBuilds)
+        {
+            throw new InvalidOperationException("An index that records no builds names no observation to fold its log to.");
+        }
+
+        lock (_gate)
+        {
+            using var command = _connection.CreateCommand();
+            command.CommandText = LuxembourgIndexQueries.WorkEventsUpTo;
+            command.Parameters.AddWithValue("$work", workKey);
+            command.Parameters.AddWithValue("$last", lastSeq);
+            using var reader = command.ExecuteReader();
+            var events = new List<LuxembourgIndexBuilder.EventRow>();
+            while (reader.Read())
+            {
+                events.Add(new(
+                    reader.GetInt64(0), reader.GetString(1), reader.GetString(2), reader.GetString(3),
+                    reader.IsDBNull(4) ? null : reader.GetString(4), reader.GetString(5)));
+            }
+
+            return Array.AsReadOnly(LuxembourgIndexBuilder.FoldLog(events).Values
+                .Select(static held => new LuxembourgIndexObservedState(
+                    held.WorkKey, held.ApplicabilityDate, held.ExpressionIri, held.Language, held.StateSha256,
+                    Array.AsReadOnly(held.SourceBodies.ToArray())))
+                .OrderBy(static held => held.Language, StringComparer.Ordinal)
+                .ThenBy(static held => held.ApplicabilityDate, StringComparer.Ordinal)
+                .ThenBy(static held => held.ExpressionIri, StringComparer.Ordinal)
+                .ToArray());
         }
     }
 
@@ -2880,16 +3766,67 @@ public sealed class LuxembourgIndexReader : IDisposable
         return values.ToArray();
     }
 
-    private static LuxembourgIndexBuilder.EventRow[] ReadEvents(SqliteConnection connection)
+    /// <summary>The log's own stamp: its schema, and the digest of exactly its observations and events.</summary>
+    private static void VerifyLogStamp(
+        SqliteConnection connection,
+        IReadOnlyList<LuxembourgIndexBuilder.ObservationRow> observations,
+        IReadOnlyList<LuxembourgIndexBuilder.EventRow> events)
     {
         using var command = connection.CreateCommand();
-        command.CommandText = "SELECT seq,scope,key,event,observed_from,detail_json FROM events ORDER BY seq";
+        command.CommandText = "SELECT log_schema,log_rows_sha256 FROM log_stamp WHERE log_stamp_id=1";
         using var reader = command.ExecuteReader();
-        var values = new List<LuxembourgIndexBuilder.EventRow>();
-        while (reader.Read()) values.Add(new(
-            reader.GetInt64(0), reader.GetString(1), reader.GetString(2), reader.GetString(3),
-            reader.IsDBNull(4) ? null : reader.GetString(4), reader.GetString(5)));
-        return values.ToArray();
+        if (!reader.Read() ||
+            !string.Equals(reader.GetString(0), LuxembourgIndexBuilder.EventLogSchema, StringComparison.Ordinal) ||
+            !string.Equals(reader.GetString(1), LuxembourgIndexBuilder.HashEventLog(observations, events), StringComparison.Ordinal))
+        {
+            throw new InvalidDataException("The Luxembourg event log does not match its log stamp.");
+        }
+    }
+
+    /// <summary>
+    /// Checks the event log against the corpus this index binds: every state's events name exactly the body digests of
+    /// the members its articles were read from, and the last build's time is no earlier than the corpus's EU capture.
+    /// The index alone holds neither a body digest nor a capture time, so whoever mounts it with its corpus calls this
+    /// (the mount, the mount writer's verification, the build).
+    /// </summary>
+    public void VerifyEventLogSources(VerifiedLexCorpus6ManifestSet corpus)
+    {
+        ArgumentNullException.ThrowIfNull(corpus);
+        if (corpus.ArtifactRef != CorpusRef)
+        {
+            throw new InvalidDataException("The corpus is not the one this Luxembourg index binds.");
+        }
+
+        if (!RecordsBuilds)
+        {
+            // Schema 6 recorded no source bodies and no build time: there is nothing of the log to hold to the corpus
+            // beyond the binding above, and nothing is invented to hold.
+            return;
+        }
+
+        lock (_gate)
+        {
+            var states = ReadStates(_connection);
+            var expected = LuxembourgIndexBuilder.SourceBodiesOfStates(
+                ReadArticles(_connection), states, LuxembourgIndexBuilder.BodiesByObjectRef(corpus));
+            var held = LuxembourgIndexBuilder.FoldLog(LuxembourgIndexBuilder.ReadLogEvents(_connection));
+            foreach (var state in states)
+            {
+                if (!held.TryGetValue(LuxembourgIndexBuilder.StateKey(state), out var logged) ||
+                    !logged.SourceBodies.SequenceEqual(expected[state.StateSha256], StringComparer.Ordinal))
+                {
+                    throw new InvalidDataException("The Luxembourg event log names source bodies the corpus does not hold for its states.");
+                }
+            }
+
+            // This build's time is an upper bound on its corpus's observation only if it is no earlier than the corpus's
+            // EU capture; the index alone holds no capture time, so the check is made here, with the corpus.
+            var builtAt = LuxembourgIndexBuilder.ReadLogObservations(_connection)[^1].BuiltAt;
+            if (LuxembourgIndexBuilder.EarlierThanEuCapture(LuxembourgIndexBuilder.ParseBuiltAt(builtAt)!.Value, corpus) is { } reason)
+            {
+                throw new InvalidDataException($"The Luxembourg event log's last build time {builtAt} {reason}.");
+            }
+        }
     }
 
     private static LuxembourgIndexBuilder.WorkFactRow[] ReadWorkFacts(SqliteConnection connection)
