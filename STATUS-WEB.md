@@ -1048,7 +1048,7 @@ Nothing here logs in, deploys or signs with a production identity; those stay wi
   - a custom domain, DNS and monitoring;
   - an Azure-side check of the template, since `what-if` needs the owner's session.
 
-The deployment kit's browser probes and rollback (kit 2, PR #901), toward the launch contract's lines "zero-traffic
+The deployment kit's browser probes and rollback (kit 2, PR #902, first opened as #901), toward the launch contract's lines "zero-traffic
 deploy with health, API, browser, privacy and security probes" and "rollback and forward again".
 - **`deploy-probe.mjs --browser`** runs the journey's real-mount steps (`realMountRuns`, the same ten
   steps the image run and the real-mount journeys run) through Chrome or Edge against the candidate's
@@ -2169,7 +2169,7 @@ through the real handler, beside G2 and G5, so the launch contract's "replay G1 
 
 The web lane's order since the owner's proxy's journey corrections (2026-10-01 14:30 UTC,
 `C:\lex-v3\lanes\STANDING-ORDERS.md` section 7, overriding the queues below):
-1. Pay the merge debt: this STATUS split (the lane files and the tree allowlist), with the deployment
+1. Pay the merge debt: this STATUS split (PR #902: the lane files and the tree allowlist), with the deployment
    kit's browser probes (#901) folded in; #893 rebased and merged; #891 and #897 merged.
 2. Serve EU text now from what the EU index holds: EU `evidence_bundle` and the EU reading screen over
    the original wording, carrying "© European Union, https://eur-lex.europa.eu" and the statement that
