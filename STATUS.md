@@ -25,8 +25,10 @@ The draft adds both custody-obligation checks for both retention classes, empty/
 round trips, concurrent/idempotent creates, nine corruption cases through both read doors and
 create, cross-lane corruption, caller mutation/cancellation, occupied paths, CLI admission and an
 offline two-work Luxembourg acquisition/corpus rebuild with a separate compressed-store reader.
-Build, required fast and affected ingest tests remain queued after the active EU acquisition and
-already queued DATA slices. No product validation success is claimed yet.
+Clean Release build passed with zero warnings/errors at630485e4. Required fast tests passed
+(3,105 succeeded, one skipped), and affected ingest passed (42 succeeded, two skipped), including
+the separate-reader two-work acquisition/corpus rebuild. Cross-family review and exact-head
+green CI remain required. Full LU partition assembly and population sizing remain unfinished.
 
 A separate generic Brotli measurement reopened the retained 65-row LU response
 ff180f054a3f9bf6a8782b6cee3735ca95303f97565a07b1bab3e9f39e4b4dc9:
