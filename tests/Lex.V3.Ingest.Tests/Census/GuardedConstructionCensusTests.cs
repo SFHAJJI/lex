@@ -581,15 +581,12 @@ public sealed class GuardedConstructionCensusTests
                     + "Lex.V3.Ingest.Luxembourg.LuxembourgFamilyEnumerationOutcome::ProofRefused, "
                     + "method public static "
                     + "Lex.V3.Ingest.Luxembourg.LuxembourgFamilyEnumerationOutcome::Proven",
-                "Lex.V3.Ingest.Luxembourg.LuxembourgFirstMountAcquisitionResult: constructor "
-                    + "private instance "
-                    + "Lex.V3.Ingest.Luxembourg.LuxembourgFirstMountAcquisitionResult::.ctor, "
-                    + "method public instance "
-                    + "Lex.V3.Ingest.Luxembourg.LuxembourgFirstMountAcquisition::RunAsync, "
-                    + "method public static "
-                    + "Lex.V3.Ingest.Luxembourg.LuxembourgFirstMountAcquisitionResult::Refused, "
-                    + "method public static "
-                    + "Lex.V3.Ingest.Luxembourg.LuxembourgFirstMountAcquisitionResult::Success",
+                "Lex.V3.Ingest.Luxembourg.LuxembourgFirstMountAcquisitionResult: constructor private instance Lex.V"
+                    + "3.Ingest.Luxembourg.LuxembourgFirstMountAcquisitionResult::.ctor, method internal instance Lex.V3."
+                    + "Ingest.Luxembourg.LuxembourgFirstMountAcquisitionResult::WithVocabularyCheckpoint, method public i"
+                    + "nstance Lex.V3.Ingest.Luxembourg.LuxembourgFirstMountAcquisition::RunAsync, method public static L"
+                    + "ex.V3.Ingest.Luxembourg.LuxembourgFirstMountAcquisitionResult::Refused, method public static Lex.V"
+                    + "3.Ingest.Luxembourg.LuxembourgFirstMountAcquisitionResult::Success",
                 "Lex.V3.Ingest.Luxembourg.LuxembourgGazetteBodyProductionResult: constructor "
                     + "private instance "
                     + "Lex.V3.Ingest.Luxembourg.LuxembourgGazetteBodyProductionResult::.ctor, "
