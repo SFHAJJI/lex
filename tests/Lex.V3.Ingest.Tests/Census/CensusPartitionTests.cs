@@ -44,6 +44,8 @@ public sealed class CensusPartitionTests
     /// </summary>
     private static readonly string[] Declined =
     [
+        "Lex.V3.Ingest.Europe.EuEnumerationCheckpoint: one private schema identifier; "
+            + "not a selectable vocabulary. Canonical reopening and unknown-schema refusal are tested.",
         "Lex.V3.Ingest.Luxembourg.LuxembourgPartitionBoundary: one private Unicode scalar limit; "
             + "this is arithmetic, not a selectable vocabulary. Boundary and progress tests "
             + "cover scalar ordering, surrogate exclusion and the cursor byte limit.",
@@ -90,14 +92,14 @@ public sealed class CensusPartitionTests
     public void ThePartitionTotalsAreExactlyThese()
     {
         Assert.AreEqual(
-            256, ClosedSurfaceCensus.Candidates(CensusScope.SweptHere).Count, "candidates");
+            257, ClosedSurfaceCensus.Candidates(CensusScope.SweptHere).Count, "candidates");
         Assert.AreEqual(
             103, ClosedSurfaceCensus.ClosedVocabularies(CensusScope.SweptHere).Count, "vocabularies");
         Assert.AreEqual(
             138, ClosedSurfaceCensus.GuardedConstruction(CensusScope.SweptHere).Count, "guarded types");
         Assert.AreEqual(
             9, ClosedSurfaceCensus.VocabularyRegistries(CensusScope.SweptHere).Count, "registries");
-        Assert.AreEqual(6, Declined.Length, "declined");
+        Assert.AreEqual(7, Declined.Length, "declined");
     }
 
     private static string NameOf(string row) =>
