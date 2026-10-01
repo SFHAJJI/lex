@@ -905,6 +905,7 @@ public sealed partial class EuropeIndexReader : IDisposable
 
     private static bool IsSha256(string value) => value.Length == 64 && value.All(char.IsAsciiHexDigitLower);
 
+    /// <summary>Legacy original-wording resolution. Schema 5 consolidated works use ReadStateExpressions.</summary>
     public IReadOnlyList<EuropeIndexResolvedExpression> ResolveExact(string identifier)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(identifier);
@@ -917,15 +918,20 @@ public sealed partial class EuropeIndexReader : IDisposable
                 SELECT publisher_work_id,publisher_expression_id,language,
                        publisher_identifier,article_identity_sha256
                 FROM articles
-                WHERE publisher_work_id=$identifier OR publisher_work_celex=$identifier
+                WHERE (publisher_work_id=$identifier OR publisher_work_celex=$identifier
                    OR publisher_expression_id=$identifier
                    OR article_identity_sha256=$identifier
                    OR ($has_qualified_provision=1
                        AND publisher_expression_id=$provision_expression
-                       AND publisher_identifier=$provision_identifier)
+                       AND publisher_identifier=$provision_identifier))
+                  AND publisher_work_celex IS NOT NULL
+                  AND ($has_states=0 OR EXISTS (SELECT 1 FROM members m
+                       WHERE m.object_ref_sha256=articles.object_ref_sha256
+                         AND m.content_class='original_legal_text'))
                 ORDER BY publisher_work_id,publisher_expression_id,language,
                          publisher_identifier,article_identity_sha256
                 """;
+            command.Parameters.AddWithValue("$has_states", HasStates ? 1 : 0);
             command.Parameters.AddWithValue("$identifier", identifier);
             command.Parameters.AddWithValue(
                 "$has_qualified_provision", hasQualifiedProvision ? 1 : 0);
@@ -1017,8 +1023,9 @@ public sealed partial class EuropeIndexReader : IDisposable
     /// <summary>
     /// Every held expression of one EU work, in language and expression order, with the Formex act dates of
     /// its wording, its article count and the members its articles were read from (joined to the members
-    /// table for their outcome and content class). This legacy CELEX-addressed surface omits works whose
-    /// own CELEX is absent; ReadStateExpressions exposes those through their census/Cellar identities. An unknown work has no rows.
+    /// table for their outcome and content class). In schema 5 this legacy surface exposes original
+    /// legal text only. ReadStateExpressions exposes consolidated works through their census/Cellar
+    /// identities, with optional CELEX. An unknown or unsupported work has no rows.
     /// </summary>
     public IReadOnlyList<EuropeIndexWorkExpression> ResolveWorkExpressions(string publisherWorkId)
     {
@@ -1031,10 +1038,12 @@ public sealed partial class EuropeIndexReader : IDisposable
                        a.wording_date,a.object_ref_sha256,m.outcome,m.content_class,count(*)
                 FROM articles a JOIN members m ON m.object_ref_sha256=a.object_ref_sha256
                 WHERE a.publisher_work_id=$work AND a.publisher_work_celex IS NOT NULL
+                  AND ($has_states=0 OR m.content_class='original_legal_text')
                 GROUP BY a.publisher_work_id,a.publisher_work_celex,a.publisher_expression_id,a.language,
                          a.wording_date,a.object_ref_sha256,m.outcome,m.content_class
                 ORDER BY a.language,a.publisher_expression_id,a.wording_date,a.object_ref_sha256
                 """;
+            command.Parameters.AddWithValue("$has_states", HasStates ? 1 : 0);
             command.Parameters.AddWithValue("$work", publisherWorkId);
             using var reader = command.ExecuteReader();
             var rows = new List<(string Work, string Celex, string Expression, string Language, string Date,
@@ -1107,9 +1116,12 @@ public sealed partial class EuropeIndexReader : IDisposable
             "SELECT publisher_work_id,publisher_work_celex,publisher_expression_id,publisher_identifier,heading," +
             "wording_date,language,article_identity_sha256 FROM articles " +
             "WHERE language=$language AND publisher_expression_id=$expression AND publisher_work_celex IS NOT NULL" +
+            " AND ($has_states=0 OR EXISTS (SELECT 1 FROM members m" +
+            " WHERE m.object_ref_sha256=articles.object_ref_sha256 AND m.content_class='original_legal_text'))" +
             string.Concat(needles.Select(static (_, index) => $" AND instr(searchable_text,$needle{index})>0")) +
             " ORDER BY publisher_identifier,article_identity_sha256";
         command.Parameters.AddWithValue("$language", language);
+        command.Parameters.AddWithValue("$has_states", HasStates ? 1 : 0);
         command.Parameters.AddWithValue("$expression", publisherExpressionId);
         for (var index = 0; index < needles.Count; index++)
         {
