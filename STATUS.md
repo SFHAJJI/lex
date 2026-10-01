@@ -3,6 +3,23 @@
 Updated 2026-10-01 by the driver. This file replaces the issue-comment ledgers. It is rewritten in
 every pull request that changes what is served, what is next or what is blocked.
 
+## Offline Formex population reconciliation (Codex, 2026-10-01)
+
+Reversible driver decision: retain the complete ordered Formex population associations for a
+checked EU run. Replay restores each served-language enumeration and selected package from
+custody, uses the same eligibility, per-family outcome and whole-run reconciliation gates,
+and consumes every checkpoint exactly once. It preserves the original renderer identities,
+CELEX selection mode, annex identities and typed non-EN/FRA outcomes. A missing package or
+population checkpoint prevents delivery. Replay sends no requests and writes no custody objects.
+
+Thirty-two new draft cases cover copied and weaker custody, original expression references,
+annex identities, language exclusions, automatic CELEX selection, missing nested evidence,
+caller and rehashed association changes, cancellation and failed holds. Source is uncompiled;
+remote CI is requested. Local Release, fast and affected ingest tests plus Claude review
+remain required after the active EU run and earlier queue. Pending PR881's final merged head
+must be included before local validation. This restores Formex over an already checked run;
+the complete acquisition catalog and independent offline mount builds remain outstanding.
+
 ## Offline Formex package and annex derivation (Codex, 2026-10-01)
 
 Draft: retain each package acquisition's ordered ZIP/PDF attempts, original annex profile IDs,
@@ -1447,7 +1464,7 @@ The live reading screen and its journey step (PR #777). `dist-live/reading.html`
   - `no_version_for_date`, because the card's contract requires every absence to carry
     `what_would_answer` from its closed vocabulary (and `asserts_absence_of_law`), and the
     platform's payload names the nearest earlier and later dates instead. Its status line still
-    carries the date to ask again: "The history this index holds for this work begins on â€¦".
+    carries the date to ask again: "The history this index holds for this work begins on …".
     `text_not_available`'s payload does carry both, so its card is shown.
 - Found and fixed on the way: the React refusal card threw on the platform's own `ambiguous_version`
   payload. The platform sends its candidates as bare hash-pinned links, and the string card
@@ -1599,7 +1616,7 @@ least one article permalink, and nothing that is only prose. The journey's own p
 
 The interface languages on the live pages (PR #797, the launch contract's "DE and LB answer
 `localization_unavailable`"). Every live page carries a language list (`LocaleNav`): English,
-FranÃ§ais, Deutsch, LÃ«tzebuergesch, each named in itself and tagged with its own `lang`, the page's
+Français, Deutsch, Lëtzebuergesch, each named in itself and tagged with its own `lang`, the page's
 own language marked current, and each link's `hrefLang` the language of the page it leads to
 (English for an unreviewed language; review of #797). Only English chrome is reviewed (`REVIEWED_CHROME_LOCALES`), so the
 other three lead to `locale-fr.html`, `locale-de.html` and `locale-lb.html`, built into `dist-live`:
@@ -2203,8 +2220,8 @@ holds the two date kinds apart in three places:
   - the entries the EU views use carry no Luxembourg date word ("applies", "version", "state",
     "s'applique");
   - no other entry, page introductions apart, carries an EU one ("wording of", "Wording date",
-    "dated {date}", "libellÃ© du", "Date du libellÃ©").
-  "Wording" and "libellÃ©" alone stay Luxembourg words too: an article's wording changes from state
+    "dated {date}", "libellé du", "Date du libellé").
+  "Wording" and "libellé" alone stay Luxembourg words too: an article's wording changes from state
   to state.
 - **What each screen says and a screen reader hears**, for every census answer on all eight
   screens: the text and the human-read attributes, with the answer's own values taken out, use only
@@ -2371,7 +2388,7 @@ A held state this build lacks stays held: absence is not a withdrawal.
 - The reader's history replay (#866) covers the new events with no change: every observation's
   events are recomputed from the log alone.
 - `withdrawn_from_source` and `resighted` stay unminted. They need the three-run rule (31-v3-spec
-  Â§91(b)) and a proof of complete enumeration.
+  §91(b)) and a proof of complete enumeration.
 - The review of #867 found that a chained log broke the served event operations: `answer_drift`
   threw on any revising event, and `events` called every log genesis. So the fourth slice is part
   of #867:
@@ -2463,7 +2480,7 @@ Predecessor chaining, the fifth slice, second part (PR #874): `as_observed` by b
   A build's time bounds observation only from above.
 - The `answer_drift` and `events` MCP descriptions no longer call every log genesis (stale since
   #867).
-- The registry digest moves with the new request schema, to `c40e23fdâ€¦`.
+- The registry digest moves with the new request schema, to `c40e23fd…`.
 
 Schema 6 served with its build record absent (PR #878).
 - **The gap.** Since #864 the reader read only the newest schema. So the API refused every Luxembourg
@@ -2500,7 +2517,7 @@ Schema 6 served with its build record absent (PR #878).
   - `coverage`'s build-time row says the index records no build time either;
   - the corpus check holds only the binding: no source bodies or build time are held to check.
 - **Fixtures:** the real bounded first mount's Luxembourg index, manifest and corpus, byte for byte
-  the files its build report names (`c7f40548â€¦`, `ef03cacdâ€¦`, `312d4804â€¦`).
+  the files its build report names (`c7f40548…`, `ef03cacd…`, `312d4804…`).
   - The mount opens and is served with its build record absent.
   - A schema-6 index with states (the state fixture rewritten into schema 6's tables) serves its
     genesis log, `as_of` answers, and `as_observed` refuses.
@@ -2639,7 +2656,7 @@ request.
 
 **The search journey step passes (PR #773, run locally 2026-09-30).** `node scripts/journey.mjs`
 now runs two steps, each with and without the fixture mount, and all four runs pass.
-- The search step loads `/search.html` and waits for hydration. It types "assemblÃ©e gÃ©nÃ©rale"
+- The search step loads `/search.html` and waits for hydration. It types "assemblée générale"
   over the DevTools protocol (`Input.insertText`, so React's own change handler runs) and presses
   the submit button.
 - With the mount, the page ends in the answer, showing "4 with the exact phrase, 1 with every
@@ -3036,7 +3053,7 @@ proves the path, not a corpus.
   Custody and canonical evidence: `C:\lex-v3\lanes\rights-probe`; log: `rights-probe.log` beside it.
   This receipt is the Commission policy the notice cites; Decision 95 records the accepted limit
   for Parliament and Council documents. When EU evidence bundles serve text, they must carry
-  `Â© European Union, https://eur-lex.europa.eu` and the statement that only the electronic Official
+  `© European Union, https://eur-lex.europa.eu` and the statement that only the electronic Official
   Journal is authentic. EU text bundles are still the parity slice; this change acquires the receipt.
   Next: rerun the bounded first mount with Lex.V3.Tool, using PR #750's command and the Codex
   checkout. The historical failed attempts below remain evidence of the old route.
@@ -3412,7 +3429,7 @@ Decision 95 (lex-governance PR #9, merged 2026-09-30) records these rulings and 
   Office route (`https://publications.europa.eu/resource/celex/32011D0833`, `Accept:
   application/xhtml+xml`, `Accept-Language: eng`; observed 2026-09-30: 303 then 200, 48,730 bytes,
   sha256 `2d5bc877...`). Decision 88's one-GET exception for `eur-lex.europa.eu` is withdrawn: no
-  request goes to that host. Served EU text carries "Â© European Union, https://eur-lex.europa.eu"
+  request goes to that host. Served EU text carries "© European Union, https://eur-lex.europa.eu"
   and the statement that only the electronic Official Journal is authentic.
 - Two lanes (amends Decision 94). Codex drives the data lane (the EU rights receipt, the first real
   mount, the populations, French EU bodies, EU parity, release-pipeline pieces without production
@@ -3445,7 +3462,7 @@ Each is the driver's call under ruling 7 and can be reversed by a later pull req
 
 - The EU search screen (PR #853): an EU answer whose hits pin no wording is said as unreadable, not
   shown unpinned, since every citation the live screens show must pin its digest. An EU hit is a
-  "wording of" its date, and the French draft calls the one held wording a "libellÃ©".
+  "wording of" its date, and the French draft calls the one held wording a "libellé".
 - The EU permalink grammar (PR #850): language as a path segment, not only a parameter, so one
   grammar serves English and French expressions. The wording digest is computed in the API (the
   panel's boundary), not stored in the EU index. If the data lane later stores a wording digest, the
@@ -3560,7 +3577,7 @@ Repair fast lane: 3,065 pass / 1 Windows skip; repair build: zero warnings/error
 - EU search on the live search screen waits on an EU permalink grammar (item 5). The real mount's
   EU index answers `search` in one work (for example `32016R0679`, 60 hits for "personal data"), and
   the web search reader refuses the answer by design, reading Luxembourg's only. Each EU hit cites
-  its expression IRI and provision (`â€¦/3e485e15-â€¦-01aa75ed71a1.0006#lex-provision=001`), not a
+  its expression IRI and provision (`…/3e485e15-…-01aa75ed71a1.0006#lex-provision=001`), not a
   hash-pinned permalink. A screen showing those citations would break the launch contract's first
   promise, which the journey holds. Once the grammar exists: the search screen gains the optional
   work identifier, the reader reads the EU answer, and the journey searches the EU work on the real
