@@ -2201,7 +2201,7 @@ Nothing here logs in, deploys or signs with a production identity; those stay wi
   - a custom domain, DNS and monitoring;
   - an Azure-side check of the template, since `what-if` needs the owner's session.
 
-The deployment kit's browser probes and rollback (kit 2), toward the launch contract's lines "zero-traffic
+The deployment kit's browser probes and rollback (kit 2, PR #901), toward the launch contract's lines "zero-traffic
 deploy with health, API, browser, privacy and security probes" and "rollback and forward again".
 - **`deploy-probe.mjs --browser`** runs the journey's real-mount steps (`realMountRuns`, the same ten
   steps the image run and the real-mount journeys run) through Chrome or Edge against the candidate's
