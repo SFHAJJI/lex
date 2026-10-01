@@ -236,6 +236,16 @@ export function Coverage({ answer, copy = COVERAGE_COPY }) {
               : <Spaced values={view.operations.notServed} />}
           </Row>
         </dl>
+        {view.operations.notServedData.length === 0 ? null : (
+          <FacetTable caption={copy.captions.notServedData} head={heads('notServedData', copy)} copy={copy}>
+            {view.operations.notServedData.map((row) => (
+              <tr key={row.operation}>
+                <td><Evidence value={row.operation} /></td>
+                <td>{row.dataNeeded}</td>
+              </tr>
+            ))}
+          </FacetTable>
+        )}
         <p className="coverage-note">{view.operations.note}</p>
       </section>
       <section className="coverage-block">

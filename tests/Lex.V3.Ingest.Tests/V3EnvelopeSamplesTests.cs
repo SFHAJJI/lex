@@ -65,6 +65,7 @@ public sealed class V3EnvelopeSamplesTests
             await CaptureAsync(fixture, mount, "dossier", "a work the index does not hold: a refusal with a payload", new { identifier = "/lu-legilux/no-such-work" }),
             await CaptureAsync(fixture, mount, "dossier", "a language the work is not held in: a refusal with a payload", new { identifier = $"/lu-legilux/{fixture.WorkKey}", language = "deu" }),
             await CaptureAsync(fixture, mount, "dossier", "an EU identifier on a mount without the EU index: a refusal with a payload", new { identifier = "32016R0679" }),
+            await CaptureAsync(europe.CorpusSha256, europe.IndexSha256, europeMount, "dossier", "one EU work by its CELEX: an answer whose expression carries its pinned wording", new { identifier = "32016R0679" }),
             await CaptureAsync(fixture, null, "dossier", "no corpus mounted: a refusal", new { identifier = $"/lu-legilux/{fixture.WorkKey}" }),
             await CaptureAsync(fixture, mount, "evidence_bundle", "the work on its state's date, in the language it is held in: an answer", new { identifier = $"/lu-legilux/{fixture.WorkKey}", date = fixture.ApplicabilityDate, language = "fra" }),
             await CaptureAsync(fixture, mount, "evidence_bundle", "a date before the work's history: a refusal with a payload", new { identifier = $"/lu-legilux/{fixture.WorkKey}", date = "1990-01-01" }),

@@ -14,7 +14,6 @@ import { renderToStaticMarkup } from "react-dom/server";
 
 import { DossierAnswerView, LiveDossier, RefusalCard, renderLiveDossierPage } from "../.react-build/app.mjs";
 import {
-  EU_DOSSIER_NOT_SHOWN,
   LIVE_DOSSIER_IDLE,
   LIVE_DOSSIER_REFUSAL_SENTENCES,
   createDossierSession,
@@ -94,13 +93,38 @@ test("a served dossier is the work, its states and what it does not hold, read b
   assert.equal((markup.match(/<li><strong>/g) ?? []).length, value.not_held.length);
 });
 
-test("an EU work's dossier is said as not shown here, and an answer the reader refuses is said as unreadable", () => {
-  const eu = structuredClone(envelopeOf(ANSWER));
-  eu.result.value.publisher = "eu-eurlex";
-  const notShown = dossierOutcome({ state: "success", envelope: eu });
-  assert.equal(notShown.state, "not_shown");
-  assert.equal(notShown.sentence, EU_DOSSIER_NOT_SHOWN);
+test("an EU work's dossier is the work by its CELEX, its expressions with the one wording held of each, pinned, and what it does not hold", async () => {
+  const envelope = envelopeOf("one EU work by its CELEX");
+  const value = envelope.result.value;
+  const request = { identifier: "32016R0679" };
+  const { calls, fetchImpl } = answering(200, "application/json", envelope);
+  const outcome = await loadLiveDossier({ contract, fetchImpl, request });
+  assert.equal(outcome.state, "success", outcome.sentence);
+  assert.equal(outcome.view.publisher, "eu-eurlex");
+  assert.deepEqual(JSON.parse(calls[0].init.body), { operation_id: "dossier", parameters: request });
 
+  const markup = view(outcome);
+  const shown = text(markup);
+  assert.ok(markup.includes("<h2>32016R0679</h2>"), "the work is named by its CELEX");
+  assert.ok(markup.includes(`<code>${value.publisher_work_id}</code>`));
+  assert.ok(shown.includes("1 expression held, in its one original wording."));
+  const [expression] = value.expressions;
+  assert.ok(markup.includes(`data-pinned-wording="${expression.pinned_wording.wording_sha256}"`));
+  assert.ok(markup.includes(`<code>${expression.pinned_wording.permalink}</code>`), "the expression is pinned by its wording's permalink");
+  assert.ok(markup.includes("<th scope=\"col\">Wording date</th>"), "the date is a wording date, never an applicability date");
+  assert.doesNotMatch(shown, /Applies from|Next state from/, "an EU dossier lists no state");
+  assert.doesNotMatch(markup, /data-state=/);
+  assert.ok(shown.includes("The wording date (wording_date in search, wording_dates in dossier) is the date the publisher's Formex package gives the act"));
+  for (const row of value.not_held) assert.ok(shown.includes(row.item), `the dossier says it does not hold ${row.item}`);
+
+  const unpinned = structuredClone(envelope);
+  unpinned.result.value.expressions[0].pinned_wording = null;
+  const refused = dossierOutcome({ state: "success", envelope: unpinned });
+  assert.equal(refused.state, "invalid_envelope", "an expression that pins no wording is not shown unpinned");
+  assert.match(refused.sentence, /pins no wording/);
+});
+
+test("an answer the reader refuses is said as unreadable", () => {
   const broken = structuredClone(envelopeOf(ANSWER));
   broken.result.value.state_count = 2;
   const unreadable = dossierOutcome({ state: "success", envelope: broken });

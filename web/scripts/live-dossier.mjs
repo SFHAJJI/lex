@@ -3,15 +3,15 @@
 // The third screen that reads a served answer. It asks `dossier` with the work identifier the reader
 // typed and, when one is chosen, a language, through the one client module, and turns what comes
 // back into one view state. Every rule about what a dossier answer may say stays in
-// `dossier-answer.mjs` (`readDossier`), and every rule about a refusal in `refusal-card.mjs`; this
+// `dossier-answer.mjs` (`readDossierAnswer`), and every rule about a refusal in `refusal-card.mjs`; this
 // file builds the request, decides which of them a state goes to, and holds the few sentences a page
 // needs for the states that carry no answer.
 //
-// An EU work's dossier is answered by the platform in another shape. This screen lays out the
-// Luxembourg dossier only, so an EU answer is said as not shown here, never read as a Luxembourg one.
+// An EU work's dossier is answered by the platform in another shape, read by its own reader
+// (`readDossierAnswer` sends each answer to the reader its publisher names), never as a Luxembourg one.
 
 import { askV3 } from "./v3-client.mjs";
-import { readDossier } from "./dossier-answer.mjs";
+import { readDossierAnswer } from "./dossier-answer.mjs";
 import { validateRefusal } from "./refusal-card.mjs";
 import { noCorpusMountedSentence } from "./live-refusals.mjs";
 import { liveChrome } from "./live-chrome.mjs";
@@ -30,18 +30,17 @@ export const DOSSIER_LANGUAGES = Object.freeze([
 /**
  * The one sentence per refusal code a request from this page can meet besides `no_corpus_mounted`,
  * whose sentence names the missing index from its payload (`noCorpusMountedSentence`): a work the
- * index does not hold, or a language the work is not held in. Any other code gets a sentence that
- * names it.
+ * index does not hold, a language the work is not held in, or an identifier that names more than one
+ * held work. Any other code gets a sentence that names it.
  */
 export const LIVE_DOSSIER_REFUSAL_SENTENCES = Object.freeze({
   identifier_unknown: "This index holds no work under that identifier.",
   language_not_available: "This work is not held in the language asked for.",
+  ambiguous_identifier: "That identifier names more than one held work, so no dossier is chosen.",
 });
 
 export const LIVE_DOSSIER_IDLE = liveChrome().dossier.idle;
 export const LIVE_DOSSIER_LOADING = liveChrome().common.loading;
-export const EU_DOSSIER_NOT_SHOWN =
-  "This work is an EU work. The server answered its dossier, and this screen lays out Luxembourg dossiers only.";
 
 export function unexpectedRefusalSentence(code) {
   return `The dossier was refused with ${code}.`;
@@ -78,18 +77,14 @@ export function dossierParameters({ identifier, language = "" }) {
 }
 
 /**
- * Maps what `askV3` returned to the view: `success` with the dossier view (read by `readDossier`),
- * `not_shown` for an EU work's dossier, `refusal` with the refusal card's inputs, or a state that
- * carries a sentence.
+ * Maps what `askV3` returned to the view: `success` with the dossier view (read by
+ * `readDossierAnswer`, whose `publisher` says which publisher's view it is), `refusal` with the
+ * refusal card's inputs, or a state that carries a sentence.
  */
 export function dossierOutcome(asked) {
   if (asked.state === "success") {
-    const answer = asked.envelope.result.value;
-    if (answer?.publisher === "eu-eurlex") {
-      return { state: "not_shown", sentence: EU_DOSSIER_NOT_SHOWN, context: asked.envelope.context };
-    }
     try {
-      return { state: "success", view: readDossier(answer), context: asked.envelope.context };
+      return { state: "success", view: readDossierAnswer(asked.envelope.result.value), context: asked.envelope.context };
     } catch (error) {
       return { state: "invalid_envelope", sentence: invalidAnswerSentence(error.message) };
     }

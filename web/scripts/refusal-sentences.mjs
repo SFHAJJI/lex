@@ -50,6 +50,7 @@ export const FRENCH_DRAFTS = Object.freeze({
   'This index holds no work under that identifier.': 'Cet index ne contient aucun acte sous cet identifiant.',
   'That identifier names more than one held work or expression, so none is searched.': 'Cet identifiant désigne plusieurs actes ou expressions détenus ; la recherche ne porte donc sur aucun d’eux.',
   'This work is not held in the language asked for.': 'Cet acte n’est pas disponible dans la langue demandée.',
+  'That identifier names more than one held work, so no dossier is chosen.': 'Cet identifiant désigne plusieurs actes détenus ; aucun dossier n’est donc retenu.',
   'No state of this work that this index holds applies on that date.': 'Aucune version de cet acte contenue dans cet index ne s’applique à cette date.',
   'Several states of this work apply on that date, and none is chosen.': 'Plusieurs versions de cet acte s’appliquent à cette date, et aucune n’est retenue.',
   "This state's text is withheld: its rights did not admit it.": 'Le texte de cette version n’est pas communiqué : ses droits ne le permettaient pas.',

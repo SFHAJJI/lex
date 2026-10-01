@@ -10,6 +10,7 @@
     "mounted.index_sha256",
     "states[].sources[].object_ref_sha256",
     "retained[].object_ref_sha256",
+    "expressions[].members[].object_ref_sha256",
     "log.log_id",
     "events[].cursor",
     "events:next_after",
@@ -952,13 +953,31 @@
           }
         ],
         "operations": {
+          "not_served_data": [
+            {
+              "data_needed": "observation times: when this corpus first observed each held state (observed_from), recorded by builds chained to their predecessors in the event log; a single build holds no observation time, so no answer can be replayed as it was observed",
+              "operation": "as_observed"
+            },
+            {
+              "data_needed": "the concept data attached to EU works: EuroVoc descriptors, EU directory codes and subject matters as the Publications Office records them; the EU index holds none of them",
+              "operation": "concepts"
+            },
+            {
+              "data_needed": "each held state\u0027s publication date beside its observation time (observed_from), so a date is answered with what a reader could have known on it, never with the publisher\u0027s valid-from date; the observation times need builds chained to their predecessors",
+              "operation": "knowable_on"
+            },
+            {
+              "data_needed": "the transposition links: Legilux\u0027s transposes and draftTransposes assertions and the Publications Office\u0027s national implementing measures for Luxembourg, each kept as its publisher asserts it and never merged; neither is acquired",
+              "operation": "transposition"
+            }
+          ],
           "not_served_operations": [
             "as_observed",
             "concepts",
             "knowable_on",
             "transposition"
           ],
-          "note": "served_operations are the routes this mount answers and not_served_operations are registered with no route on it; a request for an unserved operation answers the transport failure operation_not_served (HTTP 404, below the envelope), which tells it apart from a path nothing names (unknown_route)",
+          "note": "served_operations are the routes this mount answers and not_served_operations are registered with no route on it; a request for an unserved operation answers the transport failure operation_not_served (HTTP 404, below the envelope), which tells it apart from a path nothing names (unknown_route); not_served_data names, for each unserved operation, the data that would serve it, none of which the ingest produces",
           "registered": 27,
           "served_operations": [
             "answer_drift",
@@ -3176,6 +3195,79 @@
         ],
         "titles": [],
         "work_key": "loi-1991-08-10-n3"
+      }
+    },
+    {
+      "operation": "dossier",
+      "object_type": "work_record",
+      "scenario": "one EU work by its CELEX, any held language: its expression, the one wording held of it, pinned, and what the dossier does not hold",
+      "answer": {
+        "available_languages": [
+          "eng"
+        ],
+        "celex": "32016R0679",
+        "consolidations_held": false,
+        "corpus_sha256": "\u003Cvaries-per-run\u003E",
+        "date_semantics": "the wording date (wording_date in search, wording_dates in dossier) is the date the publisher\u0027s Formex package gives the act, the date of the original wording this index holds; it is not a publication, entry-into-force, application or consolidation date, and an EU date is never merged with a Luxembourg applicability date",
+        "digest_rule": "the SHA-256, under the domain lex-v3-eu-wording/1, of the work\u0027s CELEX, the publisher\u0027s work and expression IRIs, the language, the wording date and every article identity of the expression in the publisher\u0027s article order, each field written as a 4-byte big-endian length and its UTF-8 bytes; each article identity is itself the SHA-256 of that article\u0027s text and tokens, so the digest pins the whole held wording, computed here from the EU index, which stores no wording digest",
+        "expression_count": 1,
+        "expressions": [
+          {
+            "article_count": 99,
+            "language": "eng",
+            "members": [
+              {
+                "content_class": "original_legal_text",
+                "object_ref_sha256": "\u003Cvaries-per-run\u003E",
+                "outcome": "acquired"
+              }
+            ],
+            "pinned_wording": {
+              "permalink": "/eu-eurlex/32016R0679/eng/2016-04-27--ff42858ce2bc578d29219e1551cc1dc1cf3e558e354fc0d7ed39a8f932c7720f",
+              "wording_date": "2016-04-27",
+              "wording_sha256": "ff42858ce2bc578d29219e1551cc1dc1cf3e558e354fc0d7ed39a8f932c7720f"
+            },
+            "publisher_expression_id": "http://publications.europa.eu/resource/cellar/5f2552c2-11bd-11e6-ba9a-01aa75ed71a1.0001",
+            "resolve": {
+              "identifier": "http://publications.europa.eu/resource/cellar/5f2552c2-11bd-11e6-ba9a-01aa75ed71a1.0001"
+            },
+            "wording_dates": [
+              "2016-04-27"
+            ]
+          }
+        ],
+        "index_sha256": "\u003Cvaries-per-run\u003E",
+        "not_held": [
+          {
+            "item": "titles",
+            "reason": "no title of the EU work is held by the EU index"
+          },
+          {
+            "item": "later_wordings",
+            "reason": "no consolidated version is held, so the wording listed is the original act\u0027s and no later wording or state is listed"
+          },
+          {
+            "item": "force_dates",
+            "reason": "no entry-into-force, application or end-of-validity date is held; the wording date is none of them"
+          },
+          {
+            "item": "document_type",
+            "reason": "the publisher\u0027s document type is not held for EU works"
+          },
+          {
+            "item": "corrigenda",
+            "reason": "corrigendum lines are recorded by the index per corrected work root and are not joined to the work here, because the join between a corrected work root and the work\u0027s publisher identifier is not established"
+          },
+          {
+            "item": "other_languages",
+            "reason": "an expression in a language the index holds no wording in is not listed; French expressions are not acquired (Decision 89)"
+          }
+        ],
+        "publisher": "eu-eurlex",
+        "publisher_work_id": "http://publications.europa.eu/resource/cellar/3e485e15-11bd-11e6-ba9a-01aa75ed71a1",
+        "requested_identifier": "32016R0679",
+        "requested_language": null,
+        "scope": "the EU work as the mounted EU index holds it: its expressions, the one wording held of each with the Formex act date, the article count and the corpus members the articles were read from; a record of this corpus and not of what the publisher holds, and a missing expression or wording here is neither absent from the publisher\u0027s record nor absent from law; with a language, only that language\u0027s expressions are listed and available_languages still lists every language the work has"
       }
     },
     {
