@@ -25,11 +25,11 @@ An additional literal-null regression now checks a typed integrity refusal befor
 bringing this slice to 38 cases. Fresh combined CI and read-only Claude review remain required;
 local builds/tests stay deferred under the acquisition memory guard.
 
-This branch starts from integration65922 and includes pending873,877,886 and887 (including869
-and879). Their final reviewed/merged source must be included before merge. This restores the EU
-query adapter; rights, Formex population, LU acquisition and top-level mount catalog wiring still
-remain. Two independent full mount processes and their byte comparison are not yet demonstrated.
-The active6eb EU runtime/custody are unchanged; no old-run import or full-LU fit is claimed.
+This branch includes merged PR873 and integration92c8df5a, reviewed witness parent1a228278,
+updated ladder parent61fd5042 and corpus parentea5078c8. Pending877/886/887 and their879 prerequisite
+must merge with final reviewed source included. This restores the query adapter; rights/Formex/LU
+and mount-catalog composition remain separate. Two independent full mount processes are not yet
+proved. The active6eb EU runtime/custody are unchanged; no full-LU fit is claimed.
 
 
 ## Retained expression production pairings (Codex, 2026-10-01)
