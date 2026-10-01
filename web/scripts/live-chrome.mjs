@@ -46,6 +46,9 @@ const EN = Object.freeze({
     noHit: "No article of the text this server holds contains “{query}”.",
     noText: "This index holds no searchable text in {language}; it holds text in {languages}.",
     nextPage: "Next page",
+    euWording: "Every hit is in the one wording of {celex} this server holds in {language}, dated {date} and pinned by its digest: {permalink}",
+    euHit: "{heading} of {celex}, wording of {date}",
+    notHeldHeading: "What this search does not cover",
   }),
   dossier: Object.freeze({
     title: "Dossier",

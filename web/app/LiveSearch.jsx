@@ -11,6 +11,12 @@
 // and version matched, in which lane, and the permalink that pins it. The permalink is printed, not
 // linked: this origin serves no reading page for it yet.
 //
+// An EU answer (one named EU work, `view.publisher` "eu-eurlex") is laid out with its own words: the
+// one wording the hits are in, its date and its permalink, said once above the hits; each hit's
+// heading, CELEX and wording date, never called a version or an applicability date, since the date
+// is the one the publisher's Formex package gives the act (the answer's `date_semantics`, shown as
+// sent); and what the search does not cover, as the answer lists it.
+//
 // The form's controls carry no `name`: a submit the browser performs itself (before the bundle has
 // hydrated the page, or without it) then sends nothing, so the phrase never reaches the address bar,
 // the history or a referrer. Only the hydrated screen sends it, in a request body.
@@ -99,6 +105,53 @@ function AmbiguousWorks({ works, date }) {
   );
 }
 
+function EuropeHit({ hit }) {
+  // The heading is the publisher's text, marked in the language of the wording it is in.
+  return (
+    <li data-lane={hit.lane}>
+      <Say
+        template={COPY.euHit}
+        values={{ heading: <strong lang={quotationLanguageTag(hit.language)}>{hit.heading}</strong>, celex: hit.celex, date: hit.wordingDate }}
+      />{' '}
+      <span className="badge">{COPY.lane[hit.lane]}</span>
+      <br />
+      <code>{hit.permalink}</code>
+    </li>
+  );
+}
+
+/** The one wording an EU answer's hits are in, said once above them, with what its date means. */
+function EuropeWording({ view }) {
+  const { wording } = view;
+  if (wording === null) return null;
+  return (
+    <>
+      <p data-pinned-wording={wording.wordingSha256}>
+        <Say
+          template={COPY.euWording}
+          values={{ celex: wording.celex, language: view.language, date: wording.wordingDate, permalink: <code>{wording.permalink}</code> }}
+        />
+      </p>
+      <p data-date-semantics="">{asSentence(view.dateSemantics)}</p>
+    </>
+  );
+}
+
+/** What an EU search does not cover, as the answer lists it: the platform's own items and reasons. */
+function NotCovered({ rows }) {
+  if (rows.length === 0) return null;
+  return (
+    <section data-not-held={rows.length}>
+      <h2>{COPY.notHeldHeading}</h2>
+      <ul>
+        {rows.map((row) => (
+          <li key={row.item}><Say template={liveChrome().common.notHeldRow} values={{ item: row.item, reason: row.reason }} /></li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
 function Hit({ hit }) {
   return (
     <li data-lane={hit.lane}>
@@ -113,6 +166,7 @@ function Hit({ hit }) {
 /** One search view, laid out: the hits and what they are, or the no-hit answer. */
 export function SearchResultsView({ view, onNextPage }) {
   const { population } = view;
+  const europe = view.publisher === 'eu-eurlex';
   return (
     <>
       <p data-population="">
@@ -128,7 +182,7 @@ export function SearchResultsView({ view, onNextPage }) {
         />
       </p>
       <SearchWorkResolution resolution={view.workResolution} />
-      <AmbiguousWorks works={view.ambiguousWorks} date={view.date} />
+      {europe ? <EuropeWording view={view} /> : <AmbiguousWorks works={view.ambiguousWorks} date={view.date} />}
       {view.hits.length === 0 ? (
         view.searchableTextHeld ? (
           <p data-no-hit=""><Say template={COPY.noHit} values={{ query: view.query }} /> {asSentence(view.matching)}</p>
@@ -141,12 +195,14 @@ export function SearchResultsView({ view, onNextPage }) {
         <>
           <p>{asSentence(view.pageIs)} {asSentence(view.hitUnit)}</p>
           <ol className="hits">
-            {view.hits.map((hit) => (
-              <Hit key={`${hit.stateSha256}.${hit.articleIdentitySha256}`} hit={hit} />
+            {view.hits.map((hit) => (europe
+              ? <EuropeHit key={hit.articleIdentitySha256} hit={hit} />
+              : <Hit key={`${hit.stateSha256}.${hit.articleIdentitySha256}`} hit={hit} />
             ))}
           </ol>
         </>
       )}
+      {europe ? <NotCovered rows={view.notHeld} /> : null}
       {view.truncated && onNextPage ? (
         <button type="button" onClick={() => onNextPage(view.continueAfter)}>
           {COPY.nextPage}
@@ -190,6 +246,7 @@ export function SearchAnswerView({ outcome, onNextPage }) {
 export function LiveSearch({ contract, fetchImpl }) {
   const [query, setQuery] = useState('');
   const [language, setLanguage] = useState(SEARCH_LANGUAGES[0].code);
+  const [identifier, setIdentifier] = useState('');
   const [outcome, setOutcome] = useState(IDLE);
   const session = useRef(null);
   if (session.current === null) {
@@ -204,7 +261,7 @@ export function LiveSearch({ contract, fetchImpl }) {
         role="search"
         onSubmit={(event) => {
           event.preventDefault();
-          session.current.ask({ query, language });
+          session.current.ask({ query, language, identifier });
         }}
       >
         <label>
@@ -215,6 +272,16 @@ export function LiveSearch({ contract, fetchImpl }) {
             maxLength={SEARCH_QUERY_MAX}
             autoComplete="off"
             onChange={(event) => setQuery(event.target.value)}
+          />
+        </label>{' '}
+        <label>
+          {FORM.workIdentifierOptional}{' '}
+          <input
+            type="text"
+            value={identifier}
+            autoComplete="off"
+            spellCheck={false}
+            onChange={(event) => setIdentifier(event.target.value)}
           />
         </label>{' '}
         <label>

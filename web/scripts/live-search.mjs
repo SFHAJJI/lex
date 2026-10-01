@@ -1,18 +1,21 @@
 // The search screen, asked of the live API.
 //
 // The second screen that reads a served answer. It asks `search` with the phrase the reader typed,
-// the language chosen and, for a later page, the cursor the previous page handed over, through the
-// one client module, and turns what comes back into one view state. Every rule about what a search
-// answer may say stays in `search-answer.mjs` (`readSearch`), and every rule about a refusal in
-// `refusal-card.mjs`; this file builds the request, decides which of them a state goes to, and
-// holds the few sentences a page needs for the states that carry no answer.
+// the language chosen, the work to search within if the reader named one and, for a later page, the
+// cursor the previous page handed over, through the one client module, and turns what comes back
+// into one view state. Every rule about what a search answer may say stays in `search-answer.mjs`
+// (`readSearchAnswer`: Luxembourg's answer, or the EU's in one named work), and every rule about a
+// refusal in `refusal-card.mjs`; this file builds the request, decides which of them a state goes
+// to, and holds the few sentences a page needs for the states that carry no answer.
 //
-// The request carries the query and the language and nothing else about the reader: the client
-// sends no cookie and no referrer, and this file stores nothing. The query is sent as typed, never
-// trimmed or folded, because the platform matches it byte for byte.
+// The request carries the query, the language and the work identifier, if any, and nothing else
+// about the reader: the client sends no cookie and no referrer, and this file stores nothing. The
+// query is sent as typed, never trimmed or folded, because the platform matches it byte for byte; so
+// is the identifier, as the dossier screen sends it. An EU work is searched only within it: the
+// platform serves no search across EU works, so an EU answer comes from naming the work.
 
 import { askV3 } from "./v3-client.mjs";
-import { readSearch } from "./search-answer.mjs";
+import { readSearchAnswer } from "./search-answer.mjs";
 import { validateRefusal } from "./refusal-card.mjs";
 import { noCorpusMountedSentence } from "./live-refusals.mjs";
 import { liveChrome } from "./live-chrome.mjs";
@@ -47,10 +50,14 @@ export const SEARCH_LANGUAGES = Object.freeze([
 /**
  * The one sentence per refusal code a request from this page can meet besides `no_corpus_mounted`,
  * whose sentence names the missing index from its payload (`noCorpusMountedSentence`): a language
- * the mount holds no searchable text in. Any other code gets a sentence that names it.
+ * the mount (or the named work) holds no searchable text in, a work identifier the indexes do not
+ * hold, and one that names more than one held work or expression. Any other code gets a sentence
+ * that names it.
  */
 export const LIVE_SEARCH_REFUSAL_SENTENCES = Object.freeze({
   language_not_available: "This index holds no searchable text in the language asked for.",
+  identifier_unknown: "This index holds no work under that identifier.",
+  ambiguous_identifier: "That identifier names more than one held work or expression, so none is searched.",
 });
 
 export const LIVE_SEARCH_IDLE = liveChrome().search.idle;
@@ -80,9 +87,10 @@ export function invalidAnswerSentence(reason) {
 /**
  * The request parameters for one search, checked before anything is sent: a query that is not
  * blank and within the platform's two ceilings (characters and distinct terms), a language the form
- * offers, and a cursor only when a later page is asked for. Nothing else is sent.
+ * offers, a work identifier only when the reader named one (a blank one is no identifier), and a
+ * cursor only when a later page is asked for. Nothing else is sent.
  */
-export function searchParameters({ query, language, after = null }) {
+export function searchParameters({ query, language, identifier = "", after = null }) {
   if (typeof query !== "string" || query.trim().length === 0) {
     throw new Error("a search needs a phrase to look for");
   }
@@ -96,20 +104,29 @@ export function searchParameters({ query, language, after = null }) {
   if (!SEARCH_LANGUAGES.some((offered) => offered.code === language)) {
     throw new Error(`${JSON.stringify(language)} is not a language this form offers`);
   }
+  if (typeof identifier !== "string") {
+    throw new Error("a work identifier is text");
+  }
   if (after !== null && (typeof after !== "string" || after.length === 0)) {
     throw new Error("a later page is asked for with the cursor the previous page handed over");
   }
-  return after === null ? { query, language } : { query, language, after };
+  return {
+    query,
+    language,
+    ...(identifier.trim().length === 0 ? {} : { identifier }),
+    ...(after === null ? {} : { after }),
+  };
 }
 
 /**
- * Maps what `askV3` returned to the view: `success` with the search view (read by `readSearch`),
- * `refusal` with the refusal card's inputs, or a state that carries a sentence.
+ * Maps what `askV3` returned to the view: `success` with the search view (read by `readSearchAnswer`,
+ * whose `publisher` says which publisher's view it is), `refusal` with the refusal card's inputs, or a
+ * state that carries a sentence.
  */
 export function searchOutcome(asked) {
   if (asked.state === "success") {
     try {
-      return { state: "success", view: readSearch(asked.envelope.result.value), context: asked.envelope.context };
+      return { state: "success", view: readSearchAnswer(asked.envelope.result.value), context: asked.envelope.context };
     } catch (error) {
       return { state: "invalid_envelope", sentence: invalidAnswerSentence(error.message) };
     }

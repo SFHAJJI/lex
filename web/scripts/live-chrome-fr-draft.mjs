@@ -9,7 +9,7 @@
 //   node web/scripts/live-chrome-fr-draft.mjs > chrome-fr.md
 //
 // Vocabulary, as in the refusal drafts: a work is an "acte", a state a "version", the publisher's article id an
-// "identifiant d'article".
+// "identifiant d'article"; the one wording of an EU act the index holds is its "libellé".
 
 import { pathToFileURL } from 'node:url';
 
@@ -45,6 +45,9 @@ export const LIVE_CHROME_FR_DRAFT = Object.freeze({
     noHit: 'Aucun article du texte que ce serveur détient ne contient « {query} ».',
     noText: 'Cet index ne contient aucun texte consultable en {language} ; il contient du texte en {languages}.',
     nextPage: 'Page suivante',
+    euWording: 'Chaque résultat se trouve dans le seul libellé de {celex} que ce serveur détient en {language}, daté du {date} et épinglé par son empreinte : {permalink}',
+    euHit: '{heading} de {celex}, libellé du {date}',
+    notHeldHeading: 'Ce que cette recherche ne couvre pas',
   }),
   dossier: Object.freeze({
     title: 'Dossier',
