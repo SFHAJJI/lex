@@ -3,6 +3,32 @@
 Updated 2026-10-01 by the driver. This file replaces the issue-comment ledgers. It is rewritten in
 every pull request that changes what is served, what is next or what is blocked.
 
+## Luxembourg dependency lookup for partition derivation (Codex, 2026-10-01)
+
+Reversible driver decision: separate one resource's WEMI/original-Act traversal from the current
+in-memory dictionary. A run-wide subject lookup supplies the same breadth-first graph and original
+assertion objects. Forward WEMI links may cross acquisition ranges; consolidation qualification
+reads its unique original Act's own assertions. Missing targets remain missing, unrelated relations
+are not traversed, and cycles do not duplicate evidence. A lookup that substitutes the requested
+subject or run observation is rejected.
+
+The acquisition adapter now uses this component. Eight new cases cover range boundaries, cycles,
+shared descendants, literal/non-WEMI links, missing targets, original-Act qualification and lookup
+substitution. Local build, fast and affected ingest validation are queued after the active EU run;
+no validation success is claimed yet. The existing whole-population acquisition/corpus tests remain
+part of that validation. This is a dependency boundary for disk-backed derivation: dictionaries and
+the complete scope graph are still retained. It does not establish full Luxembourg memory fit or
+permit separate range corpora to be concatenated without complete enumeration verification.
+
+Full EU retry 4 is running from frozen source 18b53941 in
+C:/lex-v3/eu-population-20261001-2, all 82 seeds and a 20,000-request ceiling. The fresh three-family
+maintenance census passed with 22 of 60 allowed wire requests; every attempt was zero, so it did
+not exercise a live retry. All proof rows and retained HTTP body hashes were independently reopened.
+PRs #840 and #843 are merged after cross-family review and exact-head green CI. The full run started
+with 6,653,554,688 free bytes against the recorded 6,474,369,248-byte physical storage estimate,
+including a 3 GiB floor and 512 MiB stop margin. Resource monitoring continues; no full-population
+success is claimed. Original refusal evidence and frozen input snapshots remain retained.
+
 ## EU article source coordinates (Codex, 2026-10-01)
 
 Reversible driver decision: schema 3 preserves the admitted Formex package SHA-256 and checked
