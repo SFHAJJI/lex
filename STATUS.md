@@ -15,8 +15,11 @@ DocumentCheckpointNotRetained refusal. Offline replay opens no publisher session
 
 Twenty-six new draft cases cover copied and weaker custody, successful and refused bodies,
 format fallback, missing evidence, rehashed row/order/representation changes, caller pins,
-cancellation and failed holds. Not locally compiled: the active EU run owns the local heavy
-slot. Remote CI is requested. Required local Release, fast and affected ingest tests and
+cancellation and failed holds. Initial76665557 CI36847408312 compiled:5301 passed/22 skipped/22 failures.
+Nineteen cases could not run because the shared two-format recording handler was disposed
+between sessions; seven new cases passed. The fixture lifetime is corrected. The compiled
+new wire token is transcribed; guard/enum failure messages now report exact row differences.
+Fresh CI is required. The active EU run owns the local heavy slot. Required local Release, fast and affected ingest tests and
 Claude review follow the existing queue; pending PR879's final merged head must be included.
 The complete run coordinator, acquisition catalog and independent offline mounts are still
 required. No full-population or byte-stability claim is made here.

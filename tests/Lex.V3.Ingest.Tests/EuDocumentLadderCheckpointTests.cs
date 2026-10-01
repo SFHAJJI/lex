@@ -144,6 +144,8 @@ public sealed partial class EuQueryExecutionAdapterTests
     private sealed class RecordingLadderHandler(HttpMessageHandler inner) : DelegatingHandler(inner)
     {
         internal int Sends { get; private set; }
+        // The fixture owns one scripted handler across the ladder's separate acquisition sessions.
+        protected override void Dispose(bool disposing) { }
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
         { Sends++; return base.SendAsync(request, cancellationToken); }
     }
