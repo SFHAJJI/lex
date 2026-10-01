@@ -170,16 +170,12 @@ public sealed class GuardedConstructionCensusTests
                 "Lex.V3.Ingest.Europe.EuDerivedPdfPageMapping: constructor internal instance "
                     + "Lex.V3.Ingest.Europe.EuDerivedPdfPageMapping::.ctor, "
                     + "method private static Lex.V3.Ingest.Europe.EuAnnexEvidenceBinder::Map",
-                "Lex.V3.Ingest.Europe.EuDocumentFetchAttemptResult: constructor private instance "
-                    + "Lex.V3.Ingest.Europe.EuDocumentFetchAttemptResult::.ctor, "
-                    + "method private instance "
-                    + "Lex.V3.Ingest.Europe.EuFormexPackageAcquisitionProducer::FetchAsync, "
-                    + "method public instance "
-                    + "Lex.V3.Ingest.Europe.EuRepeatedEnumerationExecutor::RunDocumentFetchAsync, "
-                    + "method public static "
-                    + "Lex.V3.Ingest.Europe.EuDocumentFetchAttemptResult::Executed, "
-                    + "method public static "
-                    + "Lex.V3.Ingest.Europe.EuDocumentFetchAttemptResult::Refused",
+                "Lex.V3.Ingest.Europe.EuDocumentFetchAttemptResult: constructor private instance Lex.V3.Ingest.Euro"
+                    + "pe.EuDocumentFetchAttemptResult::.ctor, method private instance Lex.V3.Ingest.Europe.EuFormexPacka"
+                    + "geAcquisitionProducer::FetchAsync, method public instance Lex.V3.Ingest.Europe.EuRepeatedEnumerati"
+                    + "onExecutor::RunDocumentFetchAsync, method public static Lex.V3.Ingest.Europe.EuDocumentFetchAttemp"
+                    + "tResult::Executed, method public static Lex.V3.Ingest.Europe.EuDocumentFetchAttemptResult::Refused"
+                    + ", method public static Lex.V3.Ingest.Europe.EuDocumentFetchRouteReader::ReopenAsync",
                 "Lex.V3.Ingest.Europe.EuEnumerationRefusalDetail: by-ref-method public instance "
                     + "Lex.V3.Ingest.Europe.EuRepeatedEnumerationExecutor+ObserveOutcome::Deconstru"
                     + "ct, "
