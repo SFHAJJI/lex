@@ -1049,7 +1049,7 @@ public sealed class V3CorpusResolveMountTests
                 luxembourgStore: store);
             var corpus = LexCorpus6Builder.TryBuild(envelope, out var corpusRefusal, out var corpusDetail);
             Assert.IsNotNull(corpus, $"{corpusRefusal}: {corpusDetail}");
-            var index = LuxembourgIndexBuilder.TryBuild(envelope, out var indexRefusal, out var indexDetail);
+            var index = LuxembourgIndexBuilder.TryBuild(envelope, LuxembourgIndexBuilderTests.BuiltAt, out var indexRefusal, out var indexDetail);
             Assert.IsNotNull(index, $"{indexRefusal}: {indexDetail}");
             var article = envelope.BodyComposition.Envelope.LuxembourgAknLegalContentPopulation
                 .Outcomes.First(static value => value.Article is not null).Article!;
@@ -1249,7 +1249,7 @@ public sealed class V3CorpusResolveMountTests
                 using var stamp = connection.CreateCommand();
                 stamp.CommandText = "UPDATE stamp SET logical_rows_sha256=$digest WHERE stamp_id=1";
                 stamp.Parameters.AddWithValue(
-                    "$digest", LogicalRowsWithRelationsRefreshed(connection, members, articles, states, titles));
+                    "$digest", LogicalRowsWithRelationsRefreshed(connection, members, articles, states, titles, LuxembourgIndexBuilderTests.CorpusBodies(Directory)));
                 Assert.AreEqual(1, stamp.ExecuteNonQuery());
             }
 
@@ -1287,7 +1287,7 @@ public sealed class V3CorpusResolveMountTests
                 stamp.CommandText =
                     "UPDATE stamp SET logical_rows_sha256=$digest WHERE stamp_id=1";
                 stamp.Parameters.AddWithValue(
-                    "$digest", LogicalRowsWithRelationsRefreshed(connection, members, articles, states, titles));
+                    "$digest", LogicalRowsWithRelationsRefreshed(connection, members, articles, states, titles, LuxembourgIndexBuilderTests.CorpusBodies(Directory)));
                 Assert.AreEqual(1, stamp.ExecuteNonQuery());
             }
 
@@ -1380,7 +1380,7 @@ public sealed class V3CorpusResolveMountTests
                 using var stamp = connection.CreateCommand();
                 stamp.CommandText = "UPDATE stamp SET logical_rows_sha256=$digest WHERE stamp_id=1";
                 stamp.Parameters.AddWithValue(
-                    "$digest", LogicalRowsWithRelationsRefreshed(connection, members, articles, states, titles));
+                    "$digest", LogicalRowsWithRelationsRefreshed(connection, members, articles, states, titles, LuxembourgIndexBuilderTests.CorpusBodies(Directory)));
                 Assert.AreEqual(1, stamp.ExecuteNonQuery());
             }
 
@@ -1454,7 +1454,7 @@ public sealed class V3CorpusResolveMountTests
                 using var stamp = connection.CreateCommand();
                 stamp.CommandText = "UPDATE stamp SET logical_rows_sha256=$digest WHERE stamp_id=1";
                 stamp.Parameters.AddWithValue(
-                    "$digest", LogicalRowsWithRelationsRefreshed(connection, members, articles, states, titles));
+                    "$digest", LogicalRowsWithRelationsRefreshed(connection, members, articles, states, titles, LuxembourgIndexBuilderTests.CorpusBodies(Directory)));
                 Assert.AreEqual(1, stamp.ExecuteNonQuery());
             }
 
@@ -1582,7 +1582,7 @@ public sealed class V3CorpusResolveMountTests
                 using var stamp = connection.CreateCommand();
                 stamp.CommandText = "UPDATE stamp SET logical_rows_sha256=$digest WHERE stamp_id=1";
                 stamp.Parameters.AddWithValue(
-                    "$digest", LogicalRowsWithRelationsRefreshed(connection, members, articles, states, titles));
+                    "$digest", LogicalRowsWithRelationsRefreshed(connection, members, articles, states, titles, LuxembourgIndexBuilderTests.CorpusBodies(Directory)));
                 Assert.AreEqual(1, stamp.ExecuteNonQuery());
             }
 
@@ -1681,7 +1681,7 @@ public sealed class V3CorpusResolveMountTests
                 using var stamp = connection.CreateCommand();
                 stamp.CommandText = "UPDATE stamp SET logical_rows_sha256=$digest WHERE stamp_id=1";
                 stamp.Parameters.AddWithValue(
-                    "$digest", LogicalRowsWithRelationsRefreshed(connection, members, articles, states, titles));
+                    "$digest", LogicalRowsWithRelationsRefreshed(connection, members, articles, states, titles, LuxembourgIndexBuilderTests.CorpusBodies(Directory)));
                 Assert.AreEqual(1, stamp.ExecuteNonQuery());
             }
 
@@ -1732,7 +1732,7 @@ public sealed class V3CorpusResolveMountTests
                 using var stamp = connection.CreateCommand();
                 stamp.CommandText = "UPDATE stamp SET logical_rows_sha256=$digest WHERE stamp_id=1";
                 stamp.Parameters.AddWithValue(
-                    "$digest", LogicalRowsWithRelationsRefreshed(connection, members, articles, states, titles));
+                    "$digest", LogicalRowsWithRelationsRefreshed(connection, members, articles, states, titles, LuxembourgIndexBuilderTests.CorpusBodies(Directory)));
                 Assert.AreEqual(1, stamp.ExecuteNonQuery());
             }
 
@@ -2019,7 +2019,7 @@ public sealed class V3CorpusResolveMountTests
                 using var stamp = connection.CreateCommand();
                 stamp.CommandText = "UPDATE stamp SET logical_rows_sha256=$digest WHERE stamp_id=1";
                 stamp.Parameters.AddWithValue(
-                    "$digest", LogicalRowsWithRelationsRefreshed(connection, members, articles, states, titles));
+                    "$digest", LogicalRowsWithRelationsRefreshed(connection, members, articles, states, titles, LuxembourgIndexBuilderTests.CorpusBodies(Directory)));
                 Assert.AreEqual(1, stamp.ExecuteNonQuery());
             }
 
@@ -2043,7 +2043,8 @@ public sealed class V3CorpusResolveMountTests
             LuxembourgIndexBuilder.MemberRow[] members,
             LuxembourgIndexBuilder.ArticleRow[] articles,
             LuxembourgIndexBuilder.StateRow[] states,
-            LuxembourgIndexBuilder.WorkTitleRow[] titles)
+            LuxembourgIndexBuilder.WorkTitleRow[] titles,
+            IReadOnlyDictionary<string, string> bodyByObjectRef)
         {
             using (var clear = connection.CreateCommand())
             {
@@ -2070,7 +2071,7 @@ public sealed class V3CorpusResolveMountTests
                 Assert.AreEqual(1, insert.ExecuteNonQuery());
             }
 
-            var events = LuxembourgIndexBuilderTests.RefreshGenesisEvents(connection, states);
+            var events = LuxembourgIndexBuilderTests.RefreshGenesisEvents(connection, articles, states, bodyByObjectRef);
             return LuxembourgIndexBuilder.HashLogicalRows(members, articles, states, titles, relations, facts, events);
         }
 
@@ -2266,7 +2267,7 @@ public sealed class V3CorpusResolveMountTests
         public async Task AddLuxembourgMountAsync()
         {
             var index = LuxembourgIndexBuilder.TryBuild(
-                _envelope, out var refusal, out var detail);
+                _envelope, LuxembourgIndexBuilderTests.BuiltAt, out var refusal, out var detail);
             Assert.IsNotNull(index, $"{refusal}: {detail}");
             await File.WriteAllBytesAsync(
                 Path.Combine(Directory, V3CorpusMount.IndexFileName),

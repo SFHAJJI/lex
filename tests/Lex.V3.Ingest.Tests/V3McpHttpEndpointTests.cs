@@ -80,6 +80,7 @@ public sealed class V3McpHttpEndpointTests
             ("ask", new { question = "Can I be fired while on sick leave?" }),
             ("events", new { limit = 5 }),
             ("answer_drift", new { identifier = work }),
+            ("as_observed", new { identifier = work, date = fixture.ApplicabilityDate, snapshot = fixture.IndexSha256 }),
         };
         CollectionAssert.AreEquivalent(
             V3RestRouteBinding.Served.Select(static binding => binding.OperationId).ToArray(),

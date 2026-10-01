@@ -301,7 +301,7 @@
       "optional_payload_keys": [],
       "payload": {
         "snapshot_id": "0000000000000000000000000000000000000000000000000000000000000000",
-        "what_would_answer": "a cursor from this log (its log_id is the mounted index digest), or no cursor to read this log from its first event"
+        "what_would_answer": "a cursor from this log (its log_id is the mounted index digest) or from an ancestor it carries forward (log.ancestors), or no cursor to read this log from its first event"
       },
       "produced_by": [
         "answer_drift",

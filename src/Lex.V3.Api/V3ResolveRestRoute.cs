@@ -13,6 +13,7 @@ internal sealed record V3RestRouteBinding(string RawTarget, string OperationId)
 {
     public static readonly V3RestRouteBinding Resolve = new("/api/v3/resolve", "resolve");
     public static readonly V3RestRouteBinding AsOf = new("/api/v3/as_of", "as_of");
+    public static readonly V3RestRouteBinding AsObserved = new("/api/v3/as_observed", "as_observed");
     public static readonly V3RestRouteBinding Timeline = new("/api/v3/timeline", "timeline");
     public static readonly V3RestRouteBinding ArticleHistory = new("/api/v3/article_history", "article_history");
     public static readonly V3RestRouteBinding Diff = new("/api/v3/diff", "diff");
@@ -34,7 +35,7 @@ internal sealed record V3RestRouteBinding(string RawTarget, string OperationId)
     public static readonly V3RestRouteBinding Ask = new("/api/v3/ask", "ask");
     public static readonly V3RestRouteBinding Events = new("/api/v3/events", "events");
     public static readonly V3RestRouteBinding AnswerDrift = new("/api/v3/answer_drift", "answer_drift");
-    public static readonly IReadOnlyList<V3RestRouteBinding> Served = [Resolve, AsOf, Timeline, ArticleHistory, Diff, ChangesInPeriod, InForceOn, Search, Coverage, Provenance, Dossier, Citation, CitedBy, Verify, Relations, EvidenceBundle, Classification, Manifestation, StatusOn, Browse, Ask, Events, AnswerDrift];
+    public static readonly IReadOnlyList<V3RestRouteBinding> Served = [Resolve, AsOf, Timeline, ArticleHistory, Diff, ChangesInPeriod, InForceOn, Search, Coverage, Provenance, Dossier, Citation, CitedBy, Verify, Relations, EvidenceBundle, Classification, Manifestation, StatusOn, Browse, Ask, Events, AnswerDrift, AsObserved];
 
     public bool Claims(string rawTarget) =>
         string.Equals(rawTarget, RawTarget, StringComparison.Ordinal) ||

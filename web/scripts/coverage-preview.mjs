@@ -83,24 +83,18 @@ const OPERATIONS_NOTE =
   + 'serve it, none of which the ingest produces';
 
 const SERVED = Object.freeze([
-  'answer_drift', 'article_history', 'as_of', 'ask', 'browse', 'changes_in_period', 'citation',
-  'cited_by', 'classification', 'coverage', 'diff', 'dossier', 'events', 'evidence_bundle',
-  'in_force_on', 'manifestation', 'provenance', 'relations', 'resolve', 'search', 'status_on',
-  'timeline', 'verify',
+  'answer_drift', 'article_history', 'as_observed', 'as_of', 'ask', 'browse', 'changes_in_period',
+  'citation', 'cited_by', 'classification', 'coverage', 'diff', 'dossier', 'events',
+  'evidence_bundle', 'in_force_on', 'manifestation', 'provenance', 'relations', 'resolve', 'search',
+  'status_on', 'timeline', 'verify',
 ]);
 
 const NOT_SERVED = Object.freeze([
-  'as_observed', 'concepts', 'knowable_on', 'transposition',
+  'concepts', 'knowable_on', 'transposition',
 ]);
 
 // The platform's own sentences, to the character (`V3CorpusMount.NotServedDataNeeded`).
 const NOT_SERVED_DATA = Object.freeze([
-  Object.freeze({
-    data_needed: 'observation times: when this corpus first observed each held state (observed_from), '
-      + 'recorded by builds chained to their predecessors in the event log; a single build holds no '
-      + 'observation time, so no answer can be replayed as it was observed',
-    operation: 'as_observed',
-  }),
   Object.freeze({
     data_needed: 'the concept data attached to EU works: EuroVoc descriptors, EU directory codes and '
       + 'subject matters as the Publications Office records them; the EU index holds none of them',
@@ -109,7 +103,8 @@ const NOT_SERVED_DATA = Object.freeze([
   Object.freeze({
     data_needed: 'each held state\'s publication date beside its observation time (observed_from), so a '
       + 'date is answered with what a reader could have known on it, never with the publisher\'s '
-      + 'valid-from date; the observation times need builds chained to their predecessors',
+      + "valid-from date; the observation times need each Luxembourg body's capture time in the "
+      + "corpus, which no build records yet: a build's time bounds observation only from above",
     operation: 'knowable_on',
   }),
   Object.freeze({
@@ -134,13 +129,16 @@ const NOT_HELD = Object.freeze([
   Object.freeze({
     item: 'first_sighting_and_observation_times',
     reason: 'no observation time is held, so nothing here says when anything was first seen; '
-      + 'events serves a genesis log whose first_sighting events say only that a state is first '
+      + 'events serves the event log, whose first_sighting events say only that a state is first '
       + 'present in that log',
   }),
   Object.freeze({
     item: 'build_time_and_currency',
-    reason: 'no build time of the corpus or index is held, so nothing here says how current these '
-      + 'counts are; the corpus and index digests name exactly which artifacts are mounted',
+    reason: 'this report states no build time and no build time of the corpus file is held, so '
+      + "nothing here says how current these counts are; the index's event log records when each "
+      + 'build ran (events: log.built_at), an upper bound on when its corpus was observed and no '
+      + 'measure of currency against the publisher; the corpus and index digests name exactly which '
+      + 'artifacts are mounted',
   }),
   Object.freeze({
     item: 'legal_status',
@@ -313,7 +311,7 @@ export function renderCoveragePreview({ locale = 'en' } = {}) {
       + 'a wrong answer but a comfortable one: a count presented as current, a breakdown that reads '
       + 'as complete because nothing said it was not, two numbers in one row that cannot both be '
       + 'true.</p>\n'
-      + '      <p>Nothing on it says when the counting happened. This mount holds no build time and '
+      + '      <p>Nothing on it says when the counting happened. Its report states no build time and '
       + 'records that it does not, so what names the artifacts these counts came from is a pair of '
       + 'digests rather than an instant. The calendar dates in the tables are the publisher’s facts '
       + 'about the law and are a different kind of thing.</p>\n'
