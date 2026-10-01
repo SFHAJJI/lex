@@ -2161,7 +2161,7 @@ judgments control now applies and catches the shuffle. Only the temporal arms ar
 there, since the mount holds no Luxembourg state. A mutant whose EU `verify` names the first
 provision for every request fails the fixture's resolver gate.
 
-The release rehearsal over the real bounded first mount (2026-10-01, recorded by PR #NNN),
+The release rehearsal over the real bounded first mount (2026-10-01, recorded by PR #862),
 `node web/scripts/image-rehearsal.mjs --mount C:/lex-v3/first-mount-decision95-restart-20260930/v3-corpus`
 at the head of PR #860. Every step passed:
 - the one-server image (72,561,664 bytes) holds the 26 live page files, the 6 mount files and the 5
@@ -2869,7 +2869,7 @@ wordings. The earlier 82 separate runs remain separate evidence. A complete comb
 has not yet run; the bounded first mount above is complete.
 
 The web lane's order, from the panel's answer to Q-20261001-0345-claude (2026-10-01 03:50 UTC),
-recorded by PR #NNN:
+recorded by PR #862:
 1. **Predecessor chaining, claimed by the web lane** (item 4). It unblocks G1, G3, G4, `as_observed`
    and `knowable_on`. The web lane changes only the event-log and chaining parts of the builders,
    rebases onto the data lane's merges before every pull request, and gets a Codex review of each.
@@ -2916,7 +2916,7 @@ recorded by PR #NNN:
    needing data the ingest does not produce; they keep `operation_not_served`, and since PR #857
    the coverage answer names, for each, the data that would serve it (driver decision, below), which
    Trust and Coverage shows. The event log's next step, predecessor chaining with observation
-   times, is the web lane's since 2026-10-01 and is claimed by PR #NNN (the web lane's order,
+   times, is the web lane's since 2026-10-01 and is claimed by PR #862 (the web lane's order,
    above).
 5. EU parity: every temporal and search operation from the EU index; French expressions. EU
    `search` in one work served by PR #761, EU `dossier` by PR #762; the temporal operations,
@@ -2977,7 +2977,7 @@ recorded by PR #NNN:
    the release assets (the image, its signature, the evaluation card, the mount's report, a signed
    manifest) published under a version, read back and verified, and the card served at
    `/evaluation-card.json`. The credential-free release steps
-   are rehearsed end to end, and since 2026-10-01 over the real bounded first mount too (PR #NNN).
+   are rehearsed end to end, and since 2026-10-01 over the real bounded first mount too (PR #862).
    Next in the web lane's order: a credential-free deployment kit. Production signing, credentials
    and deployment stay with the owner.
 8. Machine gates (launch contract, Evaluation): the temporal, refusal and retrieval case sets run
