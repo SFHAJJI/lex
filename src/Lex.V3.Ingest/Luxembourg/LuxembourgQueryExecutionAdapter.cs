@@ -619,6 +619,10 @@ public enum LuxembourgQueryExecutionRefusal
     /// <summary>The selected document phase could not retain its original replay associations.</summary>
     [JsonStringEnumMemberName("document_checkpoint_not_retained")]
     DocumentCheckpointNotRetained = 21,
+
+    /// <summary>The Gazette phase could not retain its original replay associations.</summary>
+    [JsonStringEnumMemberName("gazette_checkpoint_not_retained")]
+    GazetteCheckpointNotRetained = 22,
 }
 
 /// <summary>
@@ -813,7 +817,8 @@ public sealed class LuxembourgQueryExecutionResult
         IReadOnlyDictionary<int, IReadOnlyList<string>>? gazetteListingsWithContradictoryLegalValueByOrdinal,
         LuxembourgNeverConsolidatedBodyLedger? populationLedger,
         LuxembourgQueryExecutionRefusalDetail? refusal,
-        SourceArtifactRef? documentCheckpointRef = null)
+        SourceArtifactRef? documentCheckpointRef = null,
+        SourceArtifactRef? gazetteCheckpointRef = null)
     {
         Topology = topology;
         FamilyOutcomes = familyOutcomes;
@@ -840,10 +845,14 @@ public sealed class LuxembourgQueryExecutionResult
         PopulationLedger = populationLedger;
         Refusal = refusal;
         DocumentCheckpointRef = documentCheckpointRef;
+        GazetteCheckpointRef = gazetteCheckpointRef;
     }
 
     /// <summary>Original selected-document phase checkpoint, present on captured delivered runs.</summary>
     public SourceArtifactRef? DocumentCheckpointRef { get; }
+
+    /// <summary>Original Gazette phase checkpoint, present on captured delivered runs.</summary>
+    public SourceArtifactRef? GazetteCheckpointRef { get; }
 
     internal LuxembourgQueryExecutionResult WithDocumentCheckpoint(SourceArtifactRef checkpoint)
     {
@@ -872,7 +881,37 @@ public sealed class LuxembourgQueryExecutionResult
             GazetteListingFetchRefusalsByOrdinal,
             GazetteListingsWithContradictoryLegalValueByOrdinal,
             PopulationLedger,
-            Refusal, checkpoint);
+            Refusal, checkpoint, GazetteCheckpointRef);
+    }
+
+    internal LuxembourgQueryExecutionResult WithGazetteCheckpoint(SourceArtifactRef checkpoint)
+    {
+        ArgumentNullException.ThrowIfNull(checkpoint);
+        return new(
+            Topology,
+            FamilyOutcomes,
+            RelationFamilyAcquisitions,
+            ResolvedRelations,
+            LocalInboundRelations,
+            TypedAssertions,
+            ResourceObservationSubjects,
+            ResourceObservationExclusions,
+            ScopeManifestReceipt,
+            ScopeManifestCanonicalSha256,
+            Completion,
+            DocumentAcquisitionOutcomesByOrdinal,
+            CorpusRecordSetRef,
+            CorpusRecordSetReceipt,
+            CorpusRecordSet,
+            ObservedObjectIdentitySetRef,
+            ObservedObjectIdentitySetReceipt,
+            ObservedObjectIdentitySet,
+            HeldBodyDerivationPopulation,
+            GazetteBodySetsByOrdinal,
+            GazetteListingFetchRefusalsByOrdinal,
+            GazetteListingsWithContradictoryLegalValueByOrdinal,
+            PopulationLedger,
+            Refusal, DocumentCheckpointRef, checkpoint);
     }
 
     public static LuxembourgQueryExecutionResult Delivered(
@@ -1966,11 +2005,11 @@ public sealed partial class LuxembourgQueryExecutionAdapter
         // #419 slice 6c: after the final rights-bearing resolution, every Gazette listing of every
         // as-published act, through the accepted producer. Before the record set: the sets are
         // their own artifacts and the record set's shape does not move.
-        var (gazetteBodySetsByOrdinal, gazetteListingFetchRefusalsByOrdinal, gazetteContradictoryByOrdinal, gazetteRefusal) =
-            await RunGazetteAcquisitionAsync(
+        var gazettePhase = await RunGazetteAcquisitionWithCheckpointAsync(
                     resolved, reopenedManifest!, mintedAddressesByObjectRef, heldByOrdinal!,
                     documentFetchRendererSource, wireBudget, cancellationToken)
                 .ConfigureAwait(false);
+        var (gazetteBodySetsByOrdinal, gazetteListingFetchRefusalsByOrdinal, gazetteContradictoryByOrdinal, gazetteRefusal) = gazettePhase.Data;
         if (gazetteRefusal is not null)
         {
             return LuxembourgQueryExecutionResult.Refused(topology, outcomes, relationAcquisitions, gazetteRefusal);
@@ -2053,7 +2092,7 @@ public sealed partial class LuxembourgQueryExecutionAdapter
             identitySetResult.VerifiedSet!,
             derivationPopulation,
             gazetteBodySetsByOrdinal!, gazetteListingFetchRefusalsByOrdinal!, gazetteContradictoryByOrdinal!,
-            populationLedger!).WithDocumentCheckpoint(documentPhase.Checkpoint!);
+            populationLedger!).WithDocumentCheckpoint(documentPhase.Checkpoint!).WithGazetteCheckpoint(gazettePhase.Checkpoint!);
     }
 
     private static IReadOnlyList<LuxembourgTypedAssertion>? TryBuildTypedAssertions(
@@ -2989,18 +3028,18 @@ public sealed partial class LuxembourgQueryExecutionAdapter
             : (ledger, null);
     }
 
-    internal async Task<(
+    private async Task<(
         IReadOnlyDictionary<int, LuxembourgGazetteBodySet>? Sets,
         IReadOnlyDictionary<int, IReadOnlyDictionary<string, CorpusAcquisitionRefusalReason>>? FetchRefusals,
         IReadOnlyDictionary<int, IReadOnlyList<string>>? ContradictoryLegalValues,
-        LuxembourgQueryExecutionRefusalDetail? Refusal)> RunGazetteAcquisitionAsync(
+        LuxembourgQueryExecutionRefusalDetail? Refusal)> RunGazetteAcquisitionCoreAsync(
         LuxembourgProfileResolution.Resolved resolved,
         ScopeManifest reopenedManifest,
         IReadOnlyDictionary<SourceObjectRef, LuxembourgDocumentFetchAddress> mintedAddressesByObjectRef,
         IReadOnlyDictionary<int, RoutedHttpEvidence> heldEvidenceByOrdinal,
         MachineQueryRendererSource documentFetchRendererSource,
         WireRequestBudget wireBudget,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken, DocumentReplay replay)
     {
         ArgumentNullException.ThrowIfNull(resolved);
         ArgumentNullException.ThrowIfNull(reopenedManifest);
@@ -3087,12 +3126,8 @@ public sealed partial class LuxembourgQueryExecutionAdapter
                 }
                 else
                 {
-                    var bound = new LuxembourgDocumentFetchPlan(address).Bind(
-                        $"urn:uuid:{Guid.NewGuid():D}",
-                        $"urn:uuid:{Guid.NewGuid():D}",
-                        documentFetchRendererSource);
-                    var attempt = await _executor.RunDocumentGetAsync(bound.Request, wireBudget, cancellationToken)
-                        .ConfigureAwait(false);
+                    var attempt = await replay.FetchAsync(_custodyStore, _executor, ordinal, address,
+                        documentFetchRendererSource, wireBudget, cancellationToken).ConfigureAwait(false);
                     if (attempt.Evidence is null)
                     {
                         if (attempt.Refusal == LuxembourgDocumentGetAttemptRefusal.RobotsDisallowed)

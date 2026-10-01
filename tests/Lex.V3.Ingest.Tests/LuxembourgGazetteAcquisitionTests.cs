@@ -24,7 +24,7 @@ namespace Lex.V3.Ingest.Tests;
 /// which is how "fetched exactly once" and "not fetched at all" are proved rather than assumed.
 /// </remarks>
 [TestClass]
-public sealed class LuxembourgGazetteAcquisitionTests
+public sealed partial class LuxembourgGazetteAcquisitionTests
 {
     private const string Jolux = "http://data.legilux.public.lu/resource/ontology/jolux#";
     private const string RdfType = "http://www.w3.org/1999/02/22-rdf-syntax-ns#type";

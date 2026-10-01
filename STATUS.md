@@ -3,6 +3,12 @@
 Updated 2026-10-01 by the driver. This file replaces the issue-comment ledgers. It is rewritten in
 every pull request that changes what is served, what is next or what is blocked.
 
+## Luxembourg Gazette acquisition checkpoint — draft
+
+The Gazette phase retains its ordered additional document requests, binds the independently derived resolution and manifest, selected addresses and reused document routes, and replays from custody with zero wire-budget use. A delivered query carries both the selected-document and Gazette checkpoint references. Missing checkpoint retention is a typed refusal. Reused routes retain their original transport receipts; replay does not claim those historical receipts prove the current store's retention floor.
+
+24 new cases cover two independent copied stores, weaker custody, successful/refused/withheld/contradictory/robots-denied listings, missing custody, rehashed input or route substitutions, changed reuse maps, null roots, cancellation and checkpoint hold failure. Compilation and CI remain pending; no local builds/tests while EU acquisition is active. Full Luxembourg acquisition composition, a complete offline mount command and measured disk-backed population capacity remain outstanding. Pending parents #895 and #896 must merge before this slice.
+
 ## Retained Luxembourg selected-document phase (Codex, 2026-10-01)
 
 Reversible driver decision: retain the selected-document phase's original row/file bindings,
