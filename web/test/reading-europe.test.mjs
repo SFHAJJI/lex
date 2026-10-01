@@ -148,7 +148,18 @@ test("the reading screen shows the EU wording: the acknowledgement and authentic
   assert.match(markup, /<span lang="en">Subject-matter and objectives<\/span>/, "the heading is the publisher's, in its language");
   assert.ok(markup.includes(`${PERMALINK}#001`) && markup.includes(sha256(ARTICLES[0][2])), "each quote carries its permalink and text digest");
   assert.match(markup, /the original wording of 2016-04-27/);
-  assert.doesNotMatch(markup, /applying from/, "an EU wording date is never said as an applicability date");
+  // The launch contract: Luxembourg applicability dates and EU wording-state dates are never merged. Once the
+  // answer's own data is taken out, what the page says names no Luxembourg date (the rule date-speech.test.mjs holds
+  // for every census answer).
+  let said = markup.replace(/<[^>]+>/g, " ").replace(/&#x27;/g, "'").replace(/&amp;/g, "&").replace(/&quot;/g, '"');
+  const data = [];
+  const walk = (node) => {
+    if (typeof node === "string") data.push(node);
+    else if (node !== null && typeof node === "object") Object.values(node).forEach(walk);
+  };
+  walk(europeBundle());
+  for (const value of data.filter((item) => item.length > 0).sort((a, b) => b.length - a.length)) said = said.split(value).join(" ");
+  assert.doesNotMatch(said, /\b(?:appl(?:y|ies|ied|ying|icability)|versions?|states?)\b|s[’']appliqu|applicab/i, "an EU wording date is never said as an applicability date");
 });
 
 test("the export composer reads an EU wording and says it is not composed, offering no file", () => {

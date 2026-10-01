@@ -212,7 +212,7 @@ const EN = Object.freeze({
     formatRefused: "{format} is not offered for this export: {reason}.",
     composeFailed: "This export cannot be composed: {reason}.",
     jsonSummary: "The JSON as it will be saved",
-    europeNotComposed: "This is the original wording of an EU work. Its export is not composed yet: the composer pins the articles of Luxembourg states only, so no file is offered for EU text.",
+    europeNotComposed: "This is EU text. Its export is not composed yet: the composer pins the articles of Luxembourg works only, so no file is offered for EU text.",
   }),
   card: Object.freeze({
     heading: "Evaluation card",

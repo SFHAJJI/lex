@@ -211,7 +211,7 @@ export const LIVE_CHROME_FR_DRAFT = Object.freeze({
     formatRefused: 'Le format {format} n’est pas proposé pour cet export : {reason}.',
     composeFailed: 'Cet export ne peut pas être composé : {reason}.',
     jsonSummary: 'Le JSON tel qu’il sera enregistré',
-    europeNotComposed: 'Il s’agit de la rédaction originale d’un acte de l’UE. Son export n’est pas encore composé : le compositeur n’épingle que les articles des versions luxembourgeoises, et aucun fichier n’est proposé pour un texte de l’UE.',
+    europeNotComposed: 'Il s’agit d’un texte de l’UE. Son export n’est pas encore composé : le compositeur n’épingle que les articles des actes luxembourgeois, et aucun fichier n’est proposé pour un texte de l’UE.',
   }),
   card: Object.freeze({
     heading: 'Fiche d’évaluation',
