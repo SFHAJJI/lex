@@ -3814,20 +3814,20 @@ and refuses a literal-null root with an integrity exception. One new before-writ
 brings this slice to 18 cases. Fresh combined CI gates merge; local builds/tests remain deferred
 under the acquisition memory guard. The offline budget records zero sends with a synthetic ceiling
 of two, not the historical wire allowance. Full population/acquisition and mount replay are separate.
-
 ## Offline EU document routes (Codex, 2026-10-01)
 
 Reopen a retained document route using its original acquisition run, logical-request digest and
-independently selected address. Check each hop's GET, representation, policies, original write
-receipt and exact body. The existing constructor repeats receipt, redirect and completion gates;
+independently selected address. Check each hop's GET, representation, original write receipt and
+exact body; reopen policy bytes by digest and require agreement across hops. The existing constructor repeats receipt, redirect and completion gates;
 the complete canonical route must match the original bytes. No transport or observation is created.
 Non-200 and incomplete routes retain their original outcomes, without a current retention claim.
 
-All 19 new cases passed at 69c851c7: CI 36842850940 reported 5,292 passed and 22 skipped,
-with required watch exit zero. Integration 8c3f3801 is now included. Fresh combined CI and
-read-only Claude review remain required. Local builds/tests stay deferred under the acquisition
-memory guard. Package inventories, annex classification and complete offline acquisition/mount
-composition remain follow-on work. No population completion or production action is claimed.
+All 19 cases passed at 00e95ae6: CI36856918011 reported5,336 passed and22 skipped, with
+required watch exit zero. Claude returned MERGE with no material defect; the one repair includes
+merged873/integration92c8df5a, clarifies digest-only policy reopening and original retained-route
+scope. Fresh combined CI gates merge; local builds/tests remain deferred under the acquisition
+memory guard. A containing catalog must preserve route references; complete offline mounts remain
+outstanding. No current retention floor or population completion is claimed.
 
 ## Retained EU enumeration checkpoints (Codex, 2026-10-01)
 

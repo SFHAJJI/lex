@@ -11,6 +11,9 @@ namespace Lex.V3.Ingest.Europe;
 /// <summary>Reopens an original document route and its transport closure without sending a request.</summary>
 /// <remarks>
 /// The caller supplies the original logical-request pin and the independently selected address.
+/// Policy bytes are reopened by digest and must agree across hops; this does not reparse policies.
+/// The route digest anchors lookup; retainedRoute.ResourceId is not compared. This door restores
+/// routes actually retained by the producer; it does not recreate unretained wire-budget refusals.
 /// Original write receipts describe capture, not the current store's retention floor. This reader
 /// does not create a new observation or prove a package, body, robots verdict or enumeration.
 /// </remarks>
