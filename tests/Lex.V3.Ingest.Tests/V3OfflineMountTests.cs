@@ -1,0 +1,121 @@
+using System.Diagnostics;
+using System.Net;
+using System.Net.Sockets;
+using System.Security.Cryptography;
+using System.Text;
+using System.Text.Json.Nodes;
+using Lex.V3.Artifacts;
+using Lex.V3.Contracts;
+using Lex.V3.Contracts.Custody;
+using Lex.V3.Contracts.Source.Core;
+using Lex.V3.Ingest.Luxembourg;
+
+namespace Lex.V3.Ingest.Tests;
+
+public sealed partial class V3FirstMountBuildTests
+{
+    [TestMethod]
+    [DataRow(false, false)]
+    [DataRow(true, true)]
+    public async Task OfflineCommandRebuildsEveryMountFileInTwoSeparateProcesses(bool compressed, bool chained)
+    {
+        var root = Path.Combine(Path.GetTempPath(), "lex-v3-offline-test-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+        try
+        {
+            var custody = Path.Combine(root, "custody");
+            var store = compressed ? FileSystemCustodyStore.WithBrotliCompression(custody) : new FileSystemCustodyStore(custody);
+            var (europe, luxembourg) = await AcquireAsync(store, CheckoutRoot());
+            Assert.IsTrue(europe.Delivered, europe.Detail);
+            Assert.IsTrue(luxembourg.Delivered, luxembourg.Detail);
+            var time = DateTimeOffset.FromUnixTimeSeconds(DateTimeOffset.UtcNow.ToUnixTimeSeconds() + 1);
+            V3GenerationSource? generations = null;
+            LuxembourgIndexPredecessor? predecessor = null;
+            if (chained)
+            {
+                var previous = await new V3FirstMountBuild(store, new V3OfflineMount.BuildClock(time)).RunAsync(europe, luxembourg, CancellationToken.None);
+                Assert.IsTrue(previous.Delivered, previous.Detail);
+                var previousPath = Path.Combine(root, "previous");
+                await V3CorpusMountWriter.WriteAsync(previous, previousPath, null, CancellationToken.None, time);
+                predecessor = V3FirstMountBuild.ReadPredecessor(previousPath, out var refusal, out var detail);
+                Assert.IsNotNull(predecessor, $"{refusal}: {detail}");
+                generations = new(previousPath, new HashSet<string>(StringComparer.Ordinal) { predecessor.IndexSha256 });
+                time = time.AddDays(1);
+            }
+            var checkpoint = await V3OfflineMount.CaptureAsync(store, europe, luxembourg,
+                new[] { EuAxiomWiringHarness.Seed(null).Celex }, LuxembourgFirstMountAcquisitionTests.ActRange, time, generations, CancellationToken.None);
+            var referencePath = Path.Combine(root, "inputs.json");
+            await File.WriteAllTextAsync(referencePath, ContractJson.Serialize(checkpoint));
+            var baseline = await new V3FirstMountBuild(store, new V3OfflineMount.BuildClock(time)).RunAsync(europe, luxembourg, predecessor, CancellationToken.None);
+            Assert.IsTrue(baseline.Delivered, baseline.Detail);
+            var expected = Path.Combine(root, "baseline");
+            await V3CorpusMountWriter.WriteAsync(baseline, expected, generations, CancellationToken.None, time);
+            // Once captured, even the predecessor directory is no longer an input to the command.
+            if (generations is not null) Directory.Delete(generations.PredecessorDirectory, recursive: true);
+            var first = Path.Combine(root, "first");
+            var second = Path.Combine(root, "second");
+            var listener = new TcpListener(IPAddress.Loopback, 0);
+            listener.Start();
+            try
+            {
+                var attemptedNetwork = listener.AcceptTcpClientAsync();
+                var proxy = "http://127.0.0.1:" + ((IPEndPoint)listener.LocalEndpoint).Port;
+                await RunOfflineCommandAsync(custody, referencePath, first, compressed, proxy);
+                await RunOfflineCommandAsync(custody, referencePath, second, compressed, proxy);
+                Assert.IsFalse(attemptedNetwork.IsCompleted, "The offline processes must not attempt publisher traffic.");
+            }
+            finally { listener.Stop(); }
+            CollectionAssert.AreEqual(MountDigests(expected), MountDigests(first), "Live derivation and first independent replay");
+            CollectionAssert.AreEqual(MountDigests(first), MountDigests(second), "Every file, including report and generations");
+            Assert.IsTrue((await V3CorpusMountWriter.VerifyAsync(second, CancellationToken.None)).Verified);
+            Assert.IsTrue(MountDigests(second).Length >= 7);
+            await Assert.ThrowsExactlyAsync<ArgumentException>(() => V3OfflineMount.DeriveAsync(store, checkpoint, second, CancellationToken.None));
+
+            var originalBytes = await store.ReadByDigestAsync(checkpoint.Sha256, CancellationToken.None);
+            var document = JsonNode.Parse(Encoding.UTF8.GetString(originalBytes.Span))!;
+            document["predecessor"] = new JsonArray(new JsonObject { ["path"] = "../escape", ["sha256"] = checkpoint.Sha256 });
+            var held = await store.CreateAsync(Encoding.UTF8.GetBytes(document.ToJsonString()), CustodyClass.NightlyFloor90d, CancellationToken.None);
+            await Assert.ThrowsExactlyAsync<CustodyIntegrityException>(() => V3OfflineMount.DeriveAsync(store,
+                new SourceArtifactRef(checkpoint.ResourceId, held.Reference.ContentSha256), Path.Combine(root, "unsafe"), CancellationToken.None));
+            Assert.IsFalse(Directory.Exists(Path.Combine(root, "unsafe")));
+        }
+        finally { if (Directory.Exists(root)) Directory.Delete(root, recursive: true); }
+    }
+
+    [TestMethod]
+    public async Task OfflineCommandMissingCatalogAndCancellationDoNotWriteOutput()
+    {
+        var store = new EuAcquisitionTestFixture.EuInMemoryCustodyStore();
+        var output = Path.Combine(Path.GetTempPath(), "lex-v3-missing-" + Guid.NewGuid().ToString("N"));
+        var missing = new SourceArtifactRef("urn:uuid:00000000-0000-4000-8000-000000000089", new string('a', 64));
+        try { _ = await V3OfflineMount.DeriveAsync(store, missing, output, CancellationToken.None); Assert.Fail("Missing catalog must refuse."); }
+        catch (Exception exception) when (exception is CustodyRequiredException or CustodyIntegrityException) { }
+        using var cancellation = new CancellationTokenSource(); cancellation.Cancel();
+        await Assert.ThrowsExactlyAsync<OperationCanceledException>(() => V3OfflineMount.DeriveAsync(store, missing, output, cancellation.Token));
+        Assert.IsFalse(Directory.Exists(output));
+    }
+
+    private static string[] MountDigests(string directory) => Directory.EnumerateFiles(directory, "*", SearchOption.AllDirectories)
+        .Select(path => Path.GetRelativePath(directory, path).Replace('\\', '/') + " " + Convert.ToHexStringLower(SHA256.HashData(File.ReadAllBytes(path))))
+        .Order(StringComparer.Ordinal).ToArray();
+
+    private static async Task RunOfflineCommandAsync(string custody, string checkpoint, string output, bool compressed, string proxy)
+    {
+        var configuration = new DirectoryInfo(AppContext.BaseDirectory).Parent!.Name;
+        var tool = Path.Combine(CheckoutRoot(), "src", "Lex.V3.Tool", "bin", configuration, "net10.0", "Lex.V3.Tool.dll");
+        Assert.IsTrue(File.Exists(tool), tool);
+        var start = new ProcessStartInfo("dotnet") { RedirectStandardOutput = true, RedirectStandardError = true, UseShellExecute = false, CreateNoWindow = true };
+        foreach (var argument in new[] { tool, "derive", "--custody", custody, "--checkpoint", checkpoint, "--out", output,
+            "--custody-encoding", compressed ? "brotli" : "raw" }) start.ArgumentList.Add(argument);
+        foreach (var name in new[] { "HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "http_proxy", "https_proxy", "all_proxy" }) start.Environment[name] = proxy;
+        start.Environment["NO_PROXY"] = ""; start.Environment["no_proxy"] = "";
+        using var process = Process.Start(start)!;
+        var stdout = process.StandardOutput.ReadToEndAsync();
+        var stderr = process.StandardError.ReadToEndAsync();
+        using var timeout = new CancellationTokenSource(TimeSpan.FromMinutes(2));
+        try { await process.WaitForExitAsync(timeout.Token); }
+        catch { process.Kill(entireProcessTree: true); throw; }
+        Assert.AreEqual(0, process.ExitCode, await stderr + "\n" + await stdout);
+        StringAssert.Contains(await stdout, "publisher_requests=0");
+    }
+}
