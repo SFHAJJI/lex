@@ -241,6 +241,41 @@ public sealed class V3FirstMountBuildTests
                     retention.RootElement.GetProperty("dropped").EnumerateArray().Select(static g => g.GetProperty("index_sha256").GetString()).ToArray());
             }
 
+            // The API's mount holds the generations to its log when it opens, and reports the depth it keeps: three builds
+            // recorded, the text of all three held (the mounted build and the two generations, each with why it is kept).
+            using (var mount = await V3CorpusMount.OpenAsync(third, CancellationToken.None))
+            {
+                Assert.IsNotNull(mount);
+                var history = (await V3CorpusClassificationMountTests.EnvelopeAsync(mount, "/api/v3/coverage", "coverage", new { })).Result!.Value.GetProperty("history");
+                Assert.IsTrue(history.GetProperty("log_records_builds").GetBoolean());
+                Assert.AreEqual(3, history.GetProperty("snapshots_in_log").GetInt32());
+                Assert.AreEqual("2026-10-01T08:00:00Z", history.GetProperty("history_begins").GetString());
+                Assert.AreEqual(V3GenerationRetention.PolicyId, history.GetProperty("retention_policy").GetProperty("id").GetString());
+                Assert.AreEqual(0, history.GetProperty("snapshots_without_text").GetInt32());
+                var withText = history.GetProperty("snapshots_with_text").EnumerateArray().ToArray();
+                CollectionAssert.AreEqual(
+                    new[] { IndexOf(directories[0]), IndexOf(directories[1]), IndexOf(third) },
+                    withText.Select(static snapshot => snapshot.GetProperty("snapshot_id").GetString()).ToArray());
+                CollectionAssert.AreEqual(new[] { "mounted" }, withText[2].GetProperty("retained_as").EnumerateArray().Select(static r => r.GetString()).ToArray());
+
+                var ancestors = (await V3CorpusClassificationMountTests.EnvelopeAsync(mount, "/api/v3/events", "events", new { })).Result!.Value
+                    .GetProperty("log").GetProperty("ancestors").EnumerateArray().ToArray();
+                Assert.AreEqual(2, ancestors.Length);
+                Assert.IsTrue(ancestors.All(static ancestor => ancestor.GetProperty("text_held").GetBoolean()), "both earlier builds are kept beside the mount");
+                CollectionAssert.AreEqual(new[] { "nightly" }, ancestors[1].GetProperty("retained_as").EnumerateArray().Select(static r => r.GetString()).ToArray());
+            }
+
+            // The fourth build's mount: four builds recorded, the text of two held (the mounted build and October's keeper),
+            // and the two dropped nightlies named by the log alone.
+            using (var mount = await V3CorpusMount.OpenAsync(fourth, CancellationToken.None))
+            {
+                Assert.IsNotNull(mount);
+                var history = (await V3CorpusClassificationMountTests.EnvelopeAsync(mount, "/api/v3/coverage", "coverage", new { })).Result!.Value.GetProperty("history");
+                Assert.AreEqual(4, history.GetProperty("snapshots_in_log").GetInt32());
+                Assert.AreEqual(2, history.GetProperty("snapshots_with_text").GetArrayLength());
+                Assert.AreEqual(2, history.GetProperty("snapshots_without_text").GetInt32());
+            }
+
             // Each way a generation can be wrong, on a copy of the third build.
             foreach (var (what, damage, expected) in new (string, Action<string>, string)[]
                      {
@@ -268,6 +303,8 @@ public sealed class V3FirstMountBuildTests
                 var verified = await V3CorpusMountWriter.VerifyAsync(copy, CancellationToken.None);
                 Assert.IsFalse(verified.Verified, what);
                 StringAssert.Contains(verified.Detail, expected, what);
+                var refused = await Assert.ThrowsExactlyAsync<InvalidDataException>(() => V3CorpusMount.OpenAsync(copy, CancellationToken.None), what);
+                StringAssert.Contains(refused.Message, expected, $"the mount refuses it as the writer's verification does: {what}");
             }
         }
         finally
