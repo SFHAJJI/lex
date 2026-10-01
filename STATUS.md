@@ -23,6 +23,26 @@ review are pending. Local heavy work waits for active EU and prior validation/re
 The source starts from integration2668e16b with pending869 included. Full acquisition catalog,
 tripwire/Formex restoration and two independent offline mount builds remain outstanding.
 No full Luxembourg fit or completed EU population claim is made.
+## Retained EU watermark traversal (Codex, 2026-10-01)
+
+Reversible driver decision: retain successful witness traversals with ordered batch descriptors,
+original page evidence references, acquisition run, renderer, entry/evidence digests and historical
+elapsed time. Offline replay uses the same opening, crossing, tie-set and double-terminal loop.
+Each original query is independently rebound; request, response, receipt and retained body must
+agree. Every saved page must be consumed once. There is no publisher session on the replay path.
+
+Twenty-five new cases cover empty and nonempty batches, cursor crossing, copied weaker custody,
+repeat replay, missing dependencies, caller pins, rehashed/reordered/extra pages, cross-run
+substitution, cancellation and typed checkpoint-hold failure. All25 passed at63f39c75 in
+CI36838512448:5311 passed,22 skipped and3 surface/vocabulary pins failed. Compiled result
+doors, wire tokens and the compiled enum row are transcribed. Diagnostic CI36839545700 passed
+5313, skipped22 and failed only that enum pin; fresh CI must verify the repair. Required local
+Release, fast tests, affected ingests and Claude review wait for
+the active EU run and prior queue. Pending PR869 must merge and its final head be included first.
+
+This restores the watermark dependency of a future acquisition catalog. Complete run, document,
+Formex package/annex and independent offline mount restoration remain outstanding.
+
 ## Retained EU enumeration checkpoints (Codex, 2026-10-01)
 
 Reversible driver decision under Q-20261001-0656-codex: build acquisition persistence before
