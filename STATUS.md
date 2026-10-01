@@ -3,23 +3,6 @@
 Updated 2026-10-01 by the driver. This file replaces the issue-comment ledgers. It is rewritten in
 every pull request that changes what is served, what is next or what is blocked.
 
-## Corpus rebuild identity (Codex, 2026-10-01)
-
-The internal rebuild path takes the original corpus set reference and rederives records from
-checked acquisition inputs. Before writing, it compares the newly derived domain-separated
-canonical digest. A mismatch returns RebuildIdentityDisagrees. A match preserves the original
-resource ID through normal checked holds and reopening, for inline and chunked storage. Normal
-acquisition still creates a fresh identity; the retention floor comes from current writes.
-
-All16 cases passed atea5078c8: CI36857779108 reported5,360 passed and22 skipped, with
-required watch exit zero. Cases cover two separate stores, inline/chunked output, current weaker
-custody, changed identity inputs before writes, failed holds and cancellation. Claude returned
-MERGE with no material defect. The one repair includes merged876/integration1fe27581, removes
-a BOM from the touched vocabulary inventory and refreshes this evidence. Fresh full CI gates
-merge; local builds/tests remain deferred under the acquisition memory guard. Pending888 uses
-this internal gate; complete acquisition closure and independent full mount processes remain
-outstanding. The cancellation test establishes no writes, without isolating which early guard runs.
-
 ## Offline Formex package and annex derivation (Codex, 2026-10-01)
 
 Retain ordered ZIP/PDF attempts, original annex profile identities, checked expression/corpus/CELEX
@@ -54,7 +37,6 @@ and refuses a literal-null root with an integrity exception. One new before-writ
 brings this slice to 18 cases. Fresh combined CI gates merge; local builds/tests remain deferred
 under the acquisition memory guard. The offline budget records zero sends with a synthetic ceiling
 of two, not the historical wire allowance. Full population/acquisition and mount replay are separate.
-
 ## Offline EU document routes (Codex, 2026-10-01)
 
 Reopen a retained document route using its original acquisition run, logical-request digest and
@@ -69,7 +51,6 @@ merged873/integration92c8df5a, clarifies digest-only policy reopening and origin
 scope. Fresh combined CI gates merge; local builds/tests remain deferred under the acquisition
 memory guard. A containing catalog must preserve route references; complete offline mounts remain
 outstanding. No current retention floor or population completion is claimed.
-
 ## Retained EU enumeration checkpoints (Codex, 2026-10-01)
 
 Each delivered EU enumeration retains its comparison inputs in checked custody. Offline
@@ -127,6 +108,7 @@ JSON writer buffer and a 4 KiB comparison buffer. An individual JSON element may
 writer's 64 KiB flush threshold. Factories and resolvers can retain more. This method is not
 wired into the LU adapter and does not provide a bounded downstream manifest view.
 
+
 ## Async Luxembourg assertion snapshots (Codex, 2026-10-01)
 
 The snapshot writer now consumes asynchronous verified rows through the bounded small-chunk
@@ -143,6 +125,7 @@ caller's proof checks and records this evidence. PR858 is merged as a74fece1 and
 Final-head CI still gates merge.
 No local build/test was run under the 10:35 low-memory rule. Adapter integration, complete
 bounded derivation and full-LU memory measurement remain outstanding.
+
 
 ## LU assertion snapshot storage (Codex, 2026-10-01)
 
@@ -172,6 +155,7 @@ review during acquisition while memory is below 4 GB. No additional local build 
 
 The asynchronous snapshot now uses the bounded small-chunk channel introduced by PR #855.
 No publisher traffic, production action or completed population is claimed by this slice.
+
 
 ## Retained custody storage consolidation (Codex, 2026-10-01)
 
@@ -223,6 +207,7 @@ the two escaped cases. The one editorial repair records the exact ingest filter:
 The AU+TARD escaped case is constructed; MA/PART was observed. Literal matching retains priority,
 and lowercase percent escapes still refuse safely. The next full run requires this change merged
 and frozen in a fresh custody directory, with the measured storage allowance and disk guard.
+
 
 ## EU retry 5 and LU lookup storage (Codex, 2026-10-01)
 
@@ -734,7 +719,6 @@ Repair validation passed build/fast (3,083 plus one skip)/40 affected ingest; #8
 canonical set and retains reopened bytes; typed records/completion also remain. Chunked record-set
 persistence and measured downstream resources remain required before full Luxembourg. No full
 population-fit claim, publisher traffic or production operation follows this change.
-
 ## DATA review and fresh population evidence (Codex, 2026-09-30)
 
 The required Claude review of #824 at99a8e29d returned MERGE, with no blocking finding.
@@ -794,7 +778,6 @@ per row (four dispositions and the exact accepted-body-role bit). Accounting com
 ordinal sequences, avoiding whole expected-partition arrays. A 32-object mixed-disposition fixture
 cross-checks all 16 partitions against the unchanged builder, role-gated body membership and a
 corrupted partition refusal. No measured savings or full-process memory bound is claimed.
-
 ## EU population census refusal diagnostics (Codex, 2026-09-30)
 
 The fresh all-82-seed EU run at `C:\lex-v3\eu-population-20260930-1` ended with
@@ -3796,7 +3779,6 @@ and a current storage check before and after its runtime is frozen; it has not s
 
 PRs #827, #829 and #830 are merged. The all-82-seed EU retry remains prepared, with a
 4,999,959,422-byte launch allowance and checks before and after freezing its runtime.
-
 ## Retained Luxembourg enumeration checkpoints (Codex, 2026-10-01)
 
 This slice depends on pending PR869. The LU executor retains its closed invariant plan wire
@@ -3839,7 +3821,6 @@ the acquisition memory guard. No complete offline mount process is claimed.
 The current store's protection is checked again. Changed protection refuses the original
 byte claim because protection is part of derivation identity. Replay reports zero publisher
 requests. Complete offline acquisition composition and independent mount builds remain pending.
-
 ## Retained Luxembourg cover history (Codex, 2026-10-01)
 
 Reversible driver decision: retain the actual successful split history and every leaf's
