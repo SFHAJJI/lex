@@ -12,9 +12,9 @@ asynchronous assertion writing share the same record encoding and domain-separat
 source remains responsible for publisher proof, census membership, admission and subject grouping;
 the existing snapshot reader still checks the complete sequence before lookup.
 
-Seven unvalidated cases cover exact synchronous/asynchronous bytes, empty input, independent
+Eight unvalidated cases cover exact synchronous/asynchronous bytes, empty input, independent
 small-chunk reopening with duplicate rows and literal metadata, a failed custody write while the
-source waits, source exceptions, wrong observations, null rows and cancellation before writing.
+source waits, no root after a source failure, wrong observations, null rows and cancellation before writing.
 This follow-on is local preparation on a branch created from origin/v3/integration, with pending
 PR858 merged as an explicit prerequisite. It will not be submitted until that prerequisite is
 reviewed and merged. Required Release build, fast and affected ingest checks, review and final CI

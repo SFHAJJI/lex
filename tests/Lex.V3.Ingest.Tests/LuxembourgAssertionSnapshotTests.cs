@@ -271,6 +271,31 @@ public sealed class LuxembourgAssertionSnapshotTests
     }
 
     [TestMethod]
+    public async Task AsyncSourceFailureAfterAChunkDoesNotPublishARoot()
+    {
+        async IAsyncEnumerable<LuxembourgObservedAssertion> Source()
+        {
+            yield return new LuxembourgObservedAssertion("a", Jolux + "title",
+                LuxembourgAssertionObjectKind.Literal, new string('x', ChunkedDerivedArtifact.SmallChunkSize + 100),
+                "", "fr", Observation);
+            await Task.Yield();
+            throw new InvalidOperationException("source failed after a chunk");
+        }
+        var store = new EuInMemoryCustodyStore();
+        var error = await Assert.ThrowsExactlyAsync<InvalidOperationException>(async () =>
+            await ChunkedDerivedArtifact.WriteSmallChunksAsync(store, LuxembourgAssertionSnapshot.Kind,
+                (stream, token) => LuxembourgAssertionSnapshot.WriteAsync(stream, Run, Observation, Census, Assertions,
+                    Source(), token), CancellationToken.None).WaitAsync(TimeSpan.FromSeconds(10)));
+        Assert.AreEqual("source failed after a chunk", error.Message);
+        Assert.IsGreaterThan(0, store.CreateCallCount);
+        foreach (var digest in store.WrittenDigestsInOrder)
+        {
+            var held = await store.ReadByDigestAsync(digest, CancellationToken.None);
+            Assert.IsFalse(ChunkedDerivedArtifact.IsRoot(held.Span, out _));
+        }
+    }
+
+    [TestMethod]
     [DataRow("wrong-observation")]
     [DataRow("null-row")]
     [DataRow("source-failure")]
