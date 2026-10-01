@@ -17,7 +17,8 @@
     "answer_drift:next_after",
     "requested_snapshot",
     "snapshot.snapshot_id",
-    "snapshot.corpus_sha256"
+    "snapshot.corpus_sha256",
+    "history.snapshots_with_text[].snapshot_id"
   ],
   "sampled": [
     {
@@ -1228,6 +1229,24 @@
           }
         ],
         "counts_note": "counts are of rows the index holds; totals.articles and languages[].articles count the articles the index holds, and the corpus can have recorded more articles than the index holds: members.article_outcomes counts what it recorded; a missing publisher date is counted as missing and never dropped; articles_with_searchable_text is counted where the article carries a publisher date, which is what the capability cells measure, and so it and articles_without_publisher_date are not addends; when a language is requested, requested_language echoes it and only languages and capability_cells are narrowed to it, and every other member, totals included, is the whole mount\u0027s",
+        "history": {
+          "history_begins": "2026-10-01T08:00:00Z",
+          "log_records_builds": true,
+          "note": "the builds the mounted Luxembourg log records (its snapshots), and those whose text this mount holds: the mounted build, and each earlier generation the retention line keeps beside it (S7-A09: referenced generations indefinitely, the last build of each UTC day for 90 days, each UTC month\u0027s earliest indefinitely), held to the log when the mount opened; a snapshot without text is named by the log alone, and as_observed answers its states without text; every time here is a build\u0027s, an upper bound on observation, never an observation time",
+          "retention_policy": null,
+          "snapshots_in_log": 1,
+          "snapshots_with_text": [
+            {
+              "built_at": "2026-10-01T08:00:00Z",
+              "observation": 1,
+              "retained_as": [
+                "mounted"
+              ],
+              "snapshot_id": "\u003Cvaries-per-run\u003E"
+            }
+          ],
+          "snapshots_without_text": 0
+        },
         "languages": [
           {
             "articles": 49,
@@ -1296,7 +1315,7 @@
           },
           {
             "item": "build_time_and_currency",
-            "reason": "this report states no build time and no build time of the corpus file is held, so nothing here says how current these counts are; the index\u0027s event log records when each build ran (events: log.built_at), an upper bound on when its corpus was observed and no measure of currency against the publisher; the corpus and index digests name exactly which artifacts are mounted"
+            "reason": "history gives when each build ran, an upper bound on when its corpus was observed and never an observation time, and nothing here says how current these counts are against the publisher; no build time of the corpus file itself is held; the corpus and index digests name exactly which artifacts are mounted"
           },
           {
             "item": "legal_status",
@@ -3669,6 +3688,7 @@
         ],
         "genesis_note": "this log comes from one observation with no predecessor, so it holds only first_sighting; first_sighting means first present in this log and does not say when the publisher published the text or when it was fetched; observed_from is null because no observation time is held; log.built_at is when the build ran, an upper bound on when its corpus was observed and never an observation time; a revision (validity_revised, interval_closed, file_replaced, withdrawn_from_source, ...) needs a later build compared against this one",
         "has_more": false,
+        "legacy_note": null,
         "log": {
           "ancestors": [],
           "basis": "genesis",

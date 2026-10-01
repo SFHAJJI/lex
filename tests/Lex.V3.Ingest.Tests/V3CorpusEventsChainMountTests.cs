@@ -56,6 +56,8 @@ public sealed class V3CorpusEventsChainMountTests
         await File.WriteAllBytesAsync(Path.Combine(directory, V3CorpusMount.CorpusFileName), corpus.CanonicalBytes.ToArray());
         await File.WriteAllBytesAsync(Path.Combine(directory, V3CorpusMount.IndexFileName), chained.IndexBytes.ToArray());
         await File.WriteAllBytesAsync(Path.Combine(directory, V3CorpusMount.CapabilityManifestFileName), chained.CapabilityManifestBytes.ToArray());
+        // The crafted predecessor is no mount, so none of the earlier builds is held; the record says so (each absent).
+        await V3CorpusMountWriter.WriteRetentionRecordAsync(directory, chained.IndexRef, chained.IndexBytes, CancellationToken.None);
         return new ChainedMount(directory, reference.Sha256, key[0], key[3], heldState);
     }
 
