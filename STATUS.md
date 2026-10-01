@@ -3,7 +3,6 @@
 Updated 2026-10-01 by the driver. This file replaces the issue-comment ledgers. It is rewritten in
 every pull request that changes what is served, what is next or what is blocked.
 
-<<<<<<< HEAD
 ## Streaming scope verification from source inputs (Codex, 2026-10-01)
 
 The retained manifest can be verified by independently replaying its original source inputs
@@ -16,7 +15,7 @@ from the manifest under test would be circular.
 PR head b3cafcab passed CI 36850031289: 5,289 tests passed, 22 skipped, including all eleven
 new scope cases. Claude returned MERGE with no material findings. The one editorial repair
 clarifies exception precedence and working buffers in the API remarks and records the review.
-Integration c27012f4 is included; final-head CI gates merge under the 10:35 standing order.
+Integration a74fece1 is included; final-head CI gates merge under the 10:35 standing order.
 No local Release/fast/ingest run or synthetic source-replay measurement is claimed.
 
 The measurement remains required before claiming a full Luxembourg memory fit. Working
@@ -26,7 +25,6 @@ writer's 64 KiB flush threshold. Factories and resolvers can retain more. This m
 wired into the LU adapter and does not provide a bounded downstream manifest view.
 
 
-=======
 ## LU assertion snapshot storage (Codex, 2026-10-01)
 
 The immutable assertion snapshot uses the checked chunk reader. Opening validates the complete
@@ -73,7 +71,6 @@ bytes during the operation, with unrelated host writes possible. All original cu
 and bytes remain. This does not enforce retention or provide redundant physical copies.
 The next EU launch retains the full 6,374,424,214-byte allowance, checked again after freezing.
 
->>>>>>> origin/v3/integration
 ## EU escaped qualifier authority (Codex, 2026-10-01)
 
 EU retry 5 at C:/lex-v3/eu-population-20261001-3 ended at 03:08 UTC with exit 3 after
