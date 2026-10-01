@@ -384,6 +384,19 @@ public sealed record LuxembourgIndexEvent(
 public sealed record LuxembourgIndexEventLog(long Events, long LastSeq);
 
 /// <summary>
+/// One state of one work as the event log held it at an observation: the states table's key, the digest of its last
+/// event up to that observation and the publisher bodies it was read from. The log alone says it; whether the mounted
+/// index still holds the state is the caller's to ask.
+/// </summary>
+public sealed record LuxembourgIndexObservedState(
+    string WorkKey,
+    string ApplicabilityDate,
+    string ExpressionIri,
+    string Language,
+    string StateSha256,
+    IReadOnlyList<string> SourceBodySha256);
+
+/// <summary>
 /// One observation of the index's event log: the build that observed (its corpus), the index whose log it carried
 /// forward (null for the first), the events it appended by sequence number (an empty range: first is last + 1), and
 /// when that build ran (<c>yyyy-MM-ddTHH:mm:ssZ</c>), an upper bound on when its corpus was observed and never an
@@ -3342,6 +3355,42 @@ public sealed class LuxembourgIndexReader : IDisposable
             }
 
             return Array.AsReadOnly(values.ToArray());
+        }
+    }
+
+    /// <summary>
+    /// The states of one work the event log held after its events up to <paramref name="lastSeq"/> (an observation's last
+    /// event), folded as the builder folds a predecessor's log: a later event of a key replaces an earlier one, and a key
+    /// once held stays held (absence is not a withdrawal). Ordered by language, date and expression
+    /// (<see cref="LuxembourgIndexQueries.WorkEventsUpTo"/>).
+    /// </summary>
+    public IReadOnlyList<LuxembourgIndexObservedState> ResolveObservedStates(string workKey, long lastSeq)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(workKey);
+        if (lastSeq < 0) throw new ArgumentOutOfRangeException(nameof(lastSeq));
+        lock (_gate)
+        {
+            using var command = _connection.CreateCommand();
+            command.CommandText = LuxembourgIndexQueries.WorkEventsUpTo;
+            command.Parameters.AddWithValue("$work", workKey);
+            command.Parameters.AddWithValue("$last", lastSeq);
+            using var reader = command.ExecuteReader();
+            var events = new List<LuxembourgIndexBuilder.EventRow>();
+            while (reader.Read())
+            {
+                events.Add(new(
+                    reader.GetInt64(0), reader.GetString(1), reader.GetString(2), reader.GetString(3),
+                    reader.IsDBNull(4) ? null : reader.GetString(4), reader.GetString(5)));
+            }
+
+            return Array.AsReadOnly(LuxembourgIndexBuilder.FoldLog(events).Values
+                .Select(static held => new LuxembourgIndexObservedState(
+                    held.WorkKey, held.ApplicabilityDate, held.ExpressionIri, held.Language, held.StateSha256,
+                    Array.AsReadOnly(held.SourceBodies.ToArray())))
+                .OrderBy(static held => held.Language, StringComparer.Ordinal)
+                .ThenBy(static held => held.ApplicabilityDate, StringComparer.Ordinal)
+                .ThenBy(static held => held.ExpressionIri, StringComparer.Ordinal)
+                .ToArray());
         }
     }
 

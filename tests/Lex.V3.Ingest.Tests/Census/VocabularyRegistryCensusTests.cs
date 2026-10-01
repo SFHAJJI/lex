@@ -81,7 +81,7 @@ public sealed class VocabularyRegistryCensusTests
                     + "const MemberOutcomes, const Observations, const RevisingEventsAfter, "
                     + "const StateArticles, const StateCitations, "
                     + "const StateDocumentOutcomes, const StateSources, const StatesOfExpressions, "
-                    + "const SubjectFacts, const WorkRecords, const WorkTitles",
+                    + "const SubjectFacts, const WorkEventsUpTo, const WorkRecords, const WorkTitles",
                 "Lex.V3.Ingest.Luxembourg.LuxembourgPublisherPdfActScopeProducer: const "
                     + "AdministrativeMemorialPrefix, const ExpectedResourceHost, "
                     + "const LegislativeMemorialPrefix, const RuleProfile, "

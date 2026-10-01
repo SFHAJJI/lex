@@ -374,6 +374,238 @@ internal sealed class V3CorpusMount : IDisposable
             new V3PlatformOperationResult(request, "work_resolution", result.RootElement));
     }
 
+    internal const string AsObservedBasis =
+        "the event log as it stood at the named snapshot: every state of the work its events had sighted up to that build's last event, " +
+        "a later event of a state replacing an earlier one and a state once held staying held (absence is not a withdrawal); the state " +
+        "applying on the date is selected among them as as_of selects among the mounted states, and the next date is the next one held at " +
+        "that snapshot; the work is named as the mounted index names it";
+
+    internal const string AsObservedBoundNote =
+        "observed_no_later_than is when the snapshot's build ran, rounded up to the second, so every state it held was observed no later " +
+        "than that; no observation time is held, so nothing here says when a state was first observed, and no time between two snapshots " +
+        "is placed in either";
+
+    internal const string AsObservedTextNote =
+        "a state the mounted index still holds is served in full (text_held true); a state only an earlier build held is named by its " +
+        "permalink, digest and source bodies from the log, without text (text_held false), because no generation that held its text is mounted";
+
+    internal const string AsObservedSnapshotWhatWouldAnswer =
+        "a snapshot of the mounted log by its index digest: the mounted index (events: log.log_id) or an ancestor it carries forward " +
+        "(events: log.ancestors[].log_id)";
+
+    internal const string AsObservedAtWhatWouldAnswer =
+        "a snapshot by its index digest instead of a time: no observation time is held and a build's time bounds observation only from " +
+        "above, so no time can be placed in a snapshot without guessing; the mounted index (events: log.log_id) or an ancestor it carries " +
+        "forward (events: log.ancestors[].log_id)";
+
+    internal const string AsObservedNotHeldWorkWhatWouldAnswer =
+        "a work the log held at this snapshot; this one was first sighted by a later build (events: first_sighting)";
+
+    /// <summary>
+    /// <c>as_observed</c> for Luxembourg, by build snapshot (the panel's ruling on the owner's behalf): the state of one
+    /// work that applied on a date as the event log held it at one build of the mounted chain, named by that build's
+    /// index digest. The log is folded up to the snapshot's last event and the state is selected as <c>as_of</c>
+    /// selects; the answer names the snapshot and gives its build time as an upper bound (<c>observed_no_later_than</c>),
+    /// never an observation time. A state the mounted index still holds is served in full; one only an earlier build
+    /// held is named by its identity from the log, without text. A request by time (<c>at</c>) refuses
+    /// <c>snapshot_unknown</c>, as does a digest that is no snapshot of this log: upper bounds alone place no instant.
+    /// </summary>
+    public V3PlatformOperationOutcome AsObserved(
+        V3PlatformOperationRequest request,
+        DateTimeOffset observedAt)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        if (!string.Equals(request.OperationId, "as_observed", StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException("The mounted corpus observed-state operation only accepts as_observed/1.");
+        }
+
+        var identifier = RequiredString(request.Parameters, "identifier");
+        var requestedDate = RequiredString(request.Parameters, "date");
+        var requestedLanguage = OptionalLanguage(request.Parameters);
+        if (!DateOnly.TryParseExact(
+                requestedDate, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out _))
+        {
+            throw new V3TransportFailureException(
+                V3TransportFailureKind.RequestSchemaInvalid,
+                "The requested date is not a civil calendar date.");
+        }
+
+        if (request.Parameters.TryGetProperty("snapshot", out _) == request.Parameters.TryGetProperty("at", out _))
+        {
+            throw new V3TransportFailureException(
+                V3TransportFailureKind.RequestSchemaInvalid,
+                "as_observed takes exactly one of 'snapshot' (an index digest) and 'at' (a time).");
+        }
+
+        if (request.Parameters.TryGetProperty("at", out _))
+        {
+            return SnapshotUnknown(request, observedAt, RequiredString(request.Parameters, "at"), AsObservedAtWhatWouldAnswer);
+        }
+
+        var snapshot = RequiredString(request.Parameters, "snapshot");
+        if (snapshot.Length != 64 || !snapshot.All(static c => c is (>= '0' and <= '9') or (>= 'a' and <= 'f')))
+        {
+            throw new V3TransportFailureException(
+                V3TransportFailureKind.RequestSchemaInvalid,
+                "The operation request's 'snapshot' is not an index digest.");
+        }
+
+        if (RefuseUnlessWorkStates(request, identifier, observedAt, "r6_as_observed", requestedLanguage: null,
+                out var mountedStates, out _) is { } refused)
+        {
+            return refused;
+        }
+
+        // Snapshot k is the build of observation k: the index its successor names as predecessor, or the mounted one.
+        var observations = _reader!.ResolveObservations();
+        var generation = Enumerable.Range(0, observations.Count).FirstOrDefault(
+            k => string.Equals(
+                k + 1 < observations.Count ? observations[k + 1].PredecessorIndexSha256 : _reader.IndexRef.Sha256,
+                snapshot,
+                StringComparison.Ordinal),
+            -1);
+        if (generation < 0)
+        {
+            return SnapshotUnknown(request, observedAt, snapshot, AsObservedSnapshotWhatWouldAnswer);
+        }
+
+        var at = observations[generation];
+        var workKey = mountedStates[0].WorkKey;
+        var held = _reader.ResolveObservedStates(workKey, at.LastSeq);
+        if (held.Count == 0)
+        {
+            return Unknown(request, identifier, observedAt, PublisherId.LuLegilux, AsObservedNotHeldWorkWhatWouldAnswer);
+        }
+
+        var heldLanguages = held.Select(static state => state.Language)
+            .Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray();
+        if (requestedLanguage is not null && !heldLanguages.Contains(requestedLanguage, StringComparer.Ordinal))
+        {
+            using var unavailableLanguage = JsonSerializer.SerializeToDocument(new
+            {
+                requested_language = requestedLanguage,
+                available_languages = heldLanguages,
+            });
+            return V3PlatformOperationOutcome.Refused(
+                Context("refusal", observedAt),
+                new V3PlatformOperationRefusal(request, "language_not_available", unavailableLanguage.RootElement));
+        }
+
+        var scope = requestedLanguage is null
+            ? held
+            : held.Where(state => string.Equals(state.Language, requestedLanguage, StringComparison.Ordinal)).ToArray();
+        var mounted = mountedStates.ToLookup(static state => state.StateSha256, StringComparer.Ordinal);
+        var served = new List<JsonNode>();
+        var ambiguous = new List<string>();
+        foreach (var language in requestedLanguage is null ? heldLanguages : [requestedLanguage])
+        {
+            var ofLanguage = scope.Where(state => string.Equals(state.Language, language, StringComparison.Ordinal)).ToArray();
+            var atOrBefore = ofLanguage.Where(state => string.CompareOrdinal(state.ApplicabilityDate, requestedDate) <= 0).ToArray();
+            if (atOrBefore.Length == 0)
+            {
+                continue;
+            }
+
+            var selectedDate = atOrBefore.Max(static state => state.ApplicabilityDate)!;
+            var selected = atOrBefore.Where(state => string.Equals(state.ApplicabilityDate, selectedDate, StringComparison.Ordinal)).ToArray();
+            if (selected.Length > 1)
+            {
+                ambiguous.AddRange(selected.Select(ObservedStateUrl));
+                continue;
+            }
+
+            var nextDate = ofLanguage
+                .Select(static state => state.ApplicabilityDate)
+                .Where(date => string.CompareOrdinal(date, requestedDate) > 0)
+                .Order(StringComparer.Ordinal)
+                .FirstOrDefault();
+            var state = selected[0];
+            if (mounted[state.StateSha256].FirstOrDefault(candidate => string.Equals(candidate.Language, state.Language, StringComparison.Ordinal)) is { } full)
+            {
+                var row = JsonSerializer.SerializeToNode(StateRow(full, nextDate))!.AsObject();
+                row["text_held"] = true;
+                served.Add(row);
+            }
+            else
+            {
+                served.Add(new JsonObject
+                {
+                    ["language"] = state.Language,
+                    ["applicability_date"] = state.ApplicabilityDate,
+                    ["next_applicability_date"] = nextDate,
+                    ["state_sha256"] = state.StateSha256,
+                    ["expression_iri"] = state.ExpressionIri,
+                    ["source_body_sha256"] = new JsonArray(state.SourceBodySha256.Select(static body => (JsonNode?)JsonValue.Create(body)).ToArray()),
+                    ["stable_coordinate"] = $"/lu-legilux/{state.WorkKey}/{state.ApplicabilityDate}",
+                    ["permalink"] = ObservedStateUrl(state),
+                    ["text_held"] = false,
+                });
+            }
+        }
+
+        if (ambiguous.Count != 0)
+        {
+            return RefuseAmbiguousVersion(request, observedAt, requestedDate, ambiguous.Order(StringComparer.Ordinal).ToArray(), bound: null);
+        }
+
+        if (served.Count == 0)
+        {
+            return RefuseNoVersionForDate(request, observedAt, scope.Select(static state => state.ApplicabilityDate).ToArray(), requestedDate, bound: null);
+        }
+
+        using var result = JsonSerializer.SerializeToDocument(new
+        {
+            requested_identifier = identifier,
+            requested_date = requestedDate,
+            requested_language = requestedLanguage,
+            requested_snapshot = snapshot,
+            publisher = "lu-legilux",
+            work_key = workKey,
+            snapshot = new
+            {
+                snapshot_id = snapshot,
+                observation = at.Observation,
+                observations_in_log = observations.Count,
+                mounted = generation == observations.Count - 1,
+                corpus_sha256 = at.CorpusSha256,
+                observed_no_later_than = at.BuiltAt,
+                observation_time_held = false,
+                bound_note = AsObservedBoundNote,
+            },
+            basis = AsObservedBasis,
+            text_note = AsObservedTextNote,
+            states = served,
+            articles_not_admitted_note = ArticlesNotAdmittedNote,
+            available_languages = heldLanguages,
+            corpus_sha256 = _corpus.ArtifactRef.Sha256,
+            index_sha256 = _reader.IndexRef.Sha256,
+        });
+        return V3PlatformOperationOutcome.Success(
+            Context("success", observedAt),
+            new V3PlatformOperationResult(request, "version_state", result.RootElement));
+    }
+
+    private static string ObservedStateUrl(LuxembourgIndexObservedState state) =>
+        $"/lu-legilux/{state.WorkKey}/{state.ApplicabilityDate}--{state.StateSha256}";
+
+    /// <summary>The one <c>snapshot_unknown</c> refusal of <c>as_observed</c>: the snapshot or time asked for, and what would answer.</summary>
+    private V3PlatformOperationOutcome SnapshotUnknown(
+        V3PlatformOperationRequest request,
+        DateTimeOffset observedAt,
+        string snapshotId,
+        string whatWouldAnswer)
+    {
+        using var unknown = JsonSerializer.SerializeToDocument(new
+        {
+            snapshot_id = snapshotId,
+            what_would_answer = whatWouldAnswer,
+        });
+        return V3PlatformOperationOutcome.Refused(
+            Context("refusal", observedAt),
+            new V3PlatformOperationRefusal(request, "snapshot_unknown", unknown.RootElement));
+    }
+
     /// <summary>
     /// R6 <c>as_of</c> for Luxembourg: the publisher-dated state of one work that applies on the
     /// requested date, per language. Pure selection over the index's <c>states</c> rows: the greatest
@@ -2514,10 +2746,18 @@ internal sealed class V3CorpusMount : IDisposable
         DateTimeOffset observedAt,
         IReadOnlyList<LuxembourgIndexResolvedState> scope,
         string requestedDate,
+        string? bound) =>
+        RefuseNoVersionForDate(request, observedAt, scope.Select(static state => state.ApplicabilityDate).ToArray(), requestedDate, bound);
+
+    /// <summary>The same refusal over the publisher dates of the states it is given (<c>as_observed</c> gives a snapshot's).</summary>
+    private V3PlatformOperationOutcome RefuseNoVersionForDate(
+        V3PlatformOperationRequest request,
+        DateTimeOffset observedAt,
+        IReadOnlyList<string> scopeDates,
+        string requestedDate,
         string? bound)
     {
-        var dates = scope.Select(static state => state.ApplicabilityDate)
-            .Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray();
+        var dates = scopeDates.Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray();
         var payload = new JsonObject { ["requested_date"] = requestedDate };
         if (bound is not null)
         {
@@ -3771,12 +4011,10 @@ internal sealed class V3CorpusMount : IDisposable
     /// </summary>
     internal static readonly IReadOnlyDictionary<string, string> NotServedDataNeeded = new Dictionary<string, string>(StringComparer.Ordinal)
     {
-        ["as_observed"] =
-            "observation times: when this corpus first observed each held state (observed_from), recorded by builds chained to their " +
-            "predecessors in the event log; a single build holds no observation time, so no answer can be replayed as it was observed",
         ["knowable_on"] =
             "each held state's publication date beside its observation time (observed_from), so a date is answered with what a reader " +
-            "could have known on it, never with the publisher's valid-from date; the observation times need builds chained to their predecessors",
+            "could have known on it, never with the publisher's valid-from date; the observation times need each Luxembourg body's capture time " +
+            "in the corpus, which no build records yet: a build's time bounds observation only from above",
         ["concepts"] =
             "the concept data attached to EU works: EuroVoc descriptors, EU directory codes and subject matters as the Publications Office " +
             "records them; the EU index holds none of them",
