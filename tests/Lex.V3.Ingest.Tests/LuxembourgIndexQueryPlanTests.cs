@@ -64,6 +64,9 @@ public sealed class LuxembourgIndexQueryPlanTests
     private static readonly (string Sql, (string, object)[] Parameters) EventsOfNameAfterQuery =
         (LuxembourgIndexQueries.EventsOfNameAfter, [("$after", 1L), ("$event", "first_sighting"), ("$take", 10)]);
 
+    private static readonly (string Sql, (string, object)[] Parameters) WorkEventsUpToQuery =
+        (LuxembourgIndexQueries.WorkEventsUpTo, [("$work", "loi-1991-08-10-n3"), ("$last", 10L)]);
+
     private static readonly (string Sql, (string, object)[] Parameters) EventCountQuery =
         (LuxembourgIndexQueries.EventCount, [("$events", "[\"validity_revised\",\"interval_closed\"]")]);
 
@@ -226,6 +229,21 @@ public sealed class LuxembourgIndexQueryPlanTests
                 line.StartsWith("SEARCH e USING INTEGER PRIMARY KEY (rowid>?)", StringComparison.Ordinal)))
         {
             yield return "the page of one name is not a range after the cursor. " + shown;
+        }
+    }
+
+    /// <summary>One work's events up to an observation (as_observed): a range of the (work, seq) index, never a scan of the log.</summary>
+    private static IEnumerable<string> WorkEventsUpToProblems(string label, string[] plan)
+    {
+        var shown = $"{label}, WorkEventsUpTo: {string.Join(" | ", plan)}";
+        if (plan.Any(static line => Regex.IsMatch(line, @"^SCAN e\b")))
+        {
+            yield return "the event log is scanned for one work. " + shown;
+        }
+
+        if (!plan.Any(static line => Regex.IsMatch(line, @"^SEARCH e USING INDEX events_work_seq \(<expr>=\? AND seq<\?\)")))
+        {
+            yield return "one work's events are not a range of the (work, seq) index. " + shown;
         }
     }
 
@@ -485,6 +503,7 @@ public sealed class LuxembourgIndexQueryPlanTests
             problems.AddRange(WorkRecordsProblems(label, Plan(connection, WorkRecordsQuery.Sql, WorkRecordsQuery.Parameters)));
             problems.AddRange(EventsAfterProblems(label, Plan(connection, EventsAfterQuery.Sql, EventsAfterQuery.Parameters)));
             problems.AddRange(EventsOfNameAfterProblems(label, Plan(connection, EventsOfNameAfterQuery.Sql, EventsOfNameAfterQuery.Parameters)));
+            problems.AddRange(WorkEventsUpToProblems(label, Plan(connection, WorkEventsUpToQuery.Sql, WorkEventsUpToQuery.Parameters)));
             problems.AddRange(EventCountProblems(label, Plan(connection, EventCountQuery.Sql, EventCountQuery.Parameters)));
         }
 

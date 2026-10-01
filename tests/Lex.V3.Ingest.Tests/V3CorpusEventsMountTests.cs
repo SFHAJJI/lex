@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Text.Json;
 using Lex.V3.Api;
 using Lex.V3.Contracts.Platform;
+using Lex.V3.Ingest.Luxembourg;
 using Microsoft.AspNetCore.Http;
 using static Lex.V3.Ingest.Tests.V3CorpusClassificationMountTests;
 using static Lex.V3.Ingest.Tests.V3CorpusResolveMountTests;
@@ -56,6 +57,8 @@ public sealed class V3CorpusEventsMountTests
         Assert.AreEqual("genesis", log.GetProperty("basis").GetString());
         Assert.AreEqual(JsonValueKind.Null, log.GetProperty("predecessor_index_sha256").ValueKind);
         Assert.AreEqual(0, log.GetProperty("observations_compared").GetInt32());
+        Assert.IsNotNull(LuxembourgIndexBuilder.ParseBuiltAt(log.GetProperty("built_at").GetString()!), "the build's time, a UTC second");
+        StringAssert.Contains(body.GetProperty("genesis_note").GetString(), "an upper bound on when its corpus was observed and never an observation time");
         Assert.AreEqual(3, log.GetProperty("events_held").GetInt64());
         Assert.AreEqual(3, log.GetProperty("last_seq").GetInt64());
 
@@ -98,8 +101,8 @@ public sealed class V3CorpusEventsMountTests
             new[] { "first_sighting" },
             body.GetProperty("event_names").GetProperty("in_this_log").EnumerateArray().Select(static value => value.GetString()).ToArray());
         StringAssert.Contains(body.GetProperty("delivery").GetString(), "at least once");
-        StringAssert.Contains(body.GetProperty("delivery").GetString(), "a new build starts a new log");
-        StringAssert.Contains(body.GetProperty("event_names").GetProperty("note").GetString(), "this build mints first_sighting only");
+        StringAssert.Contains(body.GetProperty("delivery").GetString(), "a build not chained to this one starts a new log");
+        StringAssert.Contains(body.GetProperty("event_names").GetProperty("note").GetString(), "a genesis log holds first_sighting only");
         StringAssert.Contains(body.GetProperty("silence_note").GetString(), "says nothing about whether the publisher changed anything");
         CollectionAssert.AreEqual(
             new[] { "observation_times", "revision_events", "work_level_events", "upstream_health" },

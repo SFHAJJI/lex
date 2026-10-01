@@ -112,7 +112,7 @@ public sealed class VocabularyRegistryCensusTests
                     + "const NoStateForDate, const PublisherReference, const StateInterval, "
                     + "const TextOnDate",
                 "Lex.V3.Contracts.Platform.V3EventRegistry: Mintable=12, Revising=2, "
-                    + "const ExpressionAdded, const FileReplaced, const FirstSighting, "
+                    + "const ChainedBasis, const ExpressionAdded, const FileReplaced, const FirstSighting, "
                     + "const FutureStateActivated, const FutureStateScheduled, const GenesisBasis, "
                     + "const IntervalClosed, const MetadataRevised, const RelationAsserted, "
                     + "const RelationRetracted, const Resighted, const ValidityRevised, "

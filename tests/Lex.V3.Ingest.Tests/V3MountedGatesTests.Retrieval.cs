@@ -18,7 +18,9 @@ namespace Lex.V3.Ingest.Tests;
 /// judgments are the corpus's own truth about its text, so 1.0 is the path's exactness, not a quality claim.
 /// An EU index gives its own cases the same way (<c>EuropeSearchMatching</c> is the same byte-exact substring): a word
 /// held by a few provisions of one work in one language, searched with that work as its scope (EU search is served in
-/// one work), and strings that work holds nowhere. EU <c>verify</c> is not served, so the EU gives no exact case.
+/// one work), and strings that work holds nowhere. And, since EU <c>verify</c> is served over the EU permalink grammar (#850),
+/// exact cases: three provisions of the work's one wording, each pinned by the digest recomputed by the stated rule, judged
+/// to resolve to exactly that provision, and a provision the wording does not hold, judged to find nothing.
 /// </summary>
 public sealed partial class V3MountedGatesTests
 {
@@ -133,7 +135,9 @@ public sealed partial class V3MountedGatesTests
     /// <summary>
     /// The EU cases of a mount's EU index, for a seeded sample of its works in each language: words held by one to five
     /// provisions, each judged to find exactly those (the work's CELEX and the publisher's provision id, as a hit names
-    /// them), and strings the work holds nowhere.
+    /// them), and strings the work holds nowhere. When the work's expression in the language holds one wording date, its
+    /// first three provisions' permalinks (the digest recomputed by the stated rule) are exact cases, each judged to
+    /// resolve to that provision, and a provision the wording does not hold is a near miss, judged to find nothing.
     /// </summary>
     private static void EuropeCases(string mountDirectory, IDictionary<string, RetrievalRequest> requests)
     {
@@ -185,6 +189,25 @@ public sealed partial class V3MountedGatesTests
             {
                 requests[$"eu-no-hit-{celex}-{language}-{nothing}"] = new(EvaluationCaseKind.Retrieval, "search", new { query = nothing, language, identifier = celex }, []);
             }
+
+            var quotedCelex = celex.Replace("'", "''", StringComparison.Ordinal);
+            var wordings = Rows(connection, $"SELECT DISTINCT publisher_work_id, publisher_expression_id, wording_date FROM articles WHERE publisher_work_celex = '{quotedCelex}' AND language = '{language}'");
+            if (wordings.Count != 1)
+            {
+                continue;
+            }
+
+            var (workId, expressionId, wordingDate) = (wordings[0][0], wordings[0][1], wordings[0][2]);
+            var articles = Rows(connection, $"SELECT publisher_identifier, article_identity_sha256 FROM articles WHERE publisher_expression_id = '{expressionId.Replace("'", "''", StringComparison.Ordinal)}' ORDER BY publisher_identifier, article_identity_sha256");
+            var wording = $"/eu-eurlex/{celex}/{language}/{wordingDate}--" +
+                V3EuropePermalinkTests.WordingSha256ByTheStatedRule(celex, workId, expressionId, language, wordingDate, articles.Select(static row => row[1]));
+            foreach (var provision in articles.Select(static row => row[0]).Distinct(StringComparer.Ordinal).Take(3))
+            {
+                requests[$"eu-exact-{celex}-{language}-{provision}"] = new(EvaluationCaseKind.ExactIdentifier, "verify", new { identifier = $"{wording}#{Uri.EscapeDataString(provision)}", language },
+                    [new JudgedAnchor(celex, provision, JudgedAnchor.SupportingGrade)]);
+            }
+
+            requests[$"eu-near-miss-{celex}-{language}"] = new(EvaluationCaseKind.Retrieval, "verify", new { identifier = $"{wording}#lex-no-such-provision", language }, []);
         }
     }
 
@@ -290,7 +313,8 @@ public sealed partial class V3MountedGatesTests
 
             var value = envelope.Result!.Value;
             return request.Operation == "verify"
-                ? [new RankedAnchor(value.GetProperty("work_key").GetString()!, value.GetProperty("requested_anchor").GetString()!)]
+                // A Luxembourg verify names its work by work key; an EU verify by its CELEX, and the provision unescaped.
+                ? [new RankedAnchor((value.TryGetProperty("work_key", out var verifiedWork) ? verifiedWork : value.GetProperty("celex")).GetString()!, value.GetProperty("requested_anchor").GetString()!)]
                 : value.GetProperty("hits").EnumerateArray()
                     // A Luxembourg hit names its work by work key; an EU hit by its CELEX.
                     .Select(static hit => new RankedAnchor(
@@ -381,7 +405,8 @@ public sealed partial class V3MountedGatesTests
     public async Task AnEuIndexGivesItsOwnRetrievalCasesFromItsText()
     {
         // The GDPR mounted alone in its EU index: the EU words and strings held nowhere are measured, scoped to the work,
-        // and resolver exactness has no case (EU verify is not served), so it is not measured and says so.
+        // and resolver exactness is measured over the EU permalink grammar: three pinned provisions, each verified as
+        // exactly itself, and a provision the wording does not hold, which finds nothing.
         var fixture = await EuropeMountedFixture.CreateAsync();
         await using var cleanup = fixture;
         using var mount = await V3CorpusMount.OpenAsync(fixture.Directory, CancellationToken.None);
@@ -390,11 +415,14 @@ public sealed partial class V3MountedGatesTests
         var requests = RetrievalCases(fixture.Directory, Timelines(fixture.Directory));
         Assert.IsTrue(requests.Keys.Any(static key => key.StartsWith("eu-word-", StringComparison.Ordinal)), string.Join(", ", requests.Keys));
         Assert.IsTrue(requests.Keys.Any(static key => key.StartsWith("eu-no-hit-", StringComparison.Ordinal)));
+        Assert.AreEqual(3, requests.Keys.Count(static key => key.StartsWith("eu-exact-", StringComparison.Ordinal)), string.Join(", ", requests.Keys));
+        Assert.IsTrue(requests.Keys.Any(static key => key.StartsWith("eu-near-miss-", StringComparison.Ordinal)));
         var set = RunRetrievalGate(mount, fixture.Directory, Timelines(fixture.Directory));
         var gates = set.Gates.ToDictionary(static gate => gate.Gate);
         Assert.AreEqual(GateVerdict.Pass, gates[EvaluationGateNames.AnchorNdcgAt10].Verdict, $"{gates[EvaluationGateNames.AnchorNdcgAt10].Value} over {gates[EvaluationGateNames.AnchorNdcgAt10].N}");
         Assert.AreEqual(GateVerdict.Pass, gates[EvaluationGateNames.NoHitAccuracy].Verdict);
-        Assert.AreEqual(GateVerdict.NotMeasured, gates[EvaluationGateNames.ResolverExactness].Verdict, "EU verify is not served, so no exact case");
+        Assert.AreEqual(GateVerdict.Pass, gates[EvaluationGateNames.ResolverExactness].Verdict,
+            $"each pinned EU provision resolves to exactly itself: {gates[EvaluationGateNames.ResolverExactness].Value} over {gates[EvaluationGateNames.ResolverExactness].N}");
     }
 
     [TestMethod]

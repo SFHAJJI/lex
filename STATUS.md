@@ -1,4 +1,4 @@
-# Lex V3 status
+﻿# Lex V3 status
 
 Updated 2026-10-01 by the driver. This file replaces the issue-comment ledgers. It is rewritten in
 every pull request that changes what is served, what is next or what is blocked.
@@ -12,7 +12,7 @@ cross-range dependencies. The header binds run, observation and ordered census/a
 references. These references do not prove publisher delivery; production integration must compare
 against independently replayed source proofs and check census membership before admission.
 
-The draft requires contiguous subject groups and refuses repeated groups or digest collisions.
+The snapshot requires contiguous subject groups and refuses repeated groups or digest collisions.
 It bounds each serialized record to 4 MiB without truncation. It retains one row during opening,
 compact index entries, and one requested subject's assertions during lookup. No full-population
 memory or disk measurement is claimed. Scope resolution and corpus construction still materialize
@@ -27,9 +27,13 @@ assertion is loosened. At 168fbe90, repaired Release build passed with zero warn
 required fast tests passed (3,105 succeeded, one skipped), and affected ingest tests passed
 (82 succeeded, two skipped). Exact-head CI 36812117581 is green. Cross-family review is pending.
 
+The 10:35 UTC standing order permits a read-only cross-family review during the active EU
+run, with CI providing current full-suite evidence while free memory is below 4 GB. The branch
+now includes integration65922; its fresh exact-head CI and review are still required.
+
 This slice uses the existing legacy chunk writer; PR #855's small-chunk profile is now merged.
 EU decoder recovery has priority, with local heavy checks serialized. No publisher requests were
-made for this draft.
+made for this slice.
 
 
 ## Retained custody storage consolidation (Codex, 2026-10-01)
@@ -47,6 +51,42 @@ operation shared 2,754,376,458 logical bytes; free space rose from 4,960,497,664
 bytes during the operation, with unrelated host writes possible. All original custody paths
 and bytes remain. This does not enforce retention or provide redundant physical copies.
 The next EU launch retains the full 6,374,424,214-byte allowance, checked again after freezing.
+
+## EU escaped qualifier authority (Codex, 2026-10-01)
+
+EU retry 5 at C:/lex-v3/eu-population-20261001-3 ended at 03:08 UTC with exit 3 after
+1,358 of 20,000 wire requests. ReifiedAxiomDecodeRefused names seed 32007R0864 and
+QualifierAuthorityDisagreesWithItsCode for `{MA/PART|http://publications.europa.eu/resource/authority/fd_335/MA%2FPART}`.
+The frozen source is eed2b485. The guard did not stop the run: minimum sampled free space was
+5,770,530,816 bytes and peak working set was 532,279,296 bytes. No complete population was built.
+
+Offline reads through the frozen product custody reader found the exact type_of_date carrier in
+held bodies 628d74398542b6e078e06262f56dd138e6ae4d0ddaa17d646ebd05d3fca8d7ac and
+fcbf08f683ac984207f694f254e9b9216baba941a82f47867e30b077d1cb489f. The readback audit is
+C:/lex-v3/lanes/eu-retry5-qualifier-type-held-rows.json; it is not a complete family replay.
+
+Reversible driver decision: accept the exact existing authority form or the same fixed authority
+base followed by the code escaped as one URI path segment. Keep the literal code and original
+carrier unchanged. MA/PART receives no invented label or date role; the accepted table still
+controls interpretation. Wrong bases, other concepts, double escaping and extra URI parts refuse.
+Eleven contract cases cover the two forms and refusals. At c9d23643, Release build passed with
+no warnings or errors; required fast tests passed (3,116 succeeded, one skipped), and affected
+EU ingest checks passed (19 succeeded). The offline replay at C:/lex-v3/eu-qualifier-replay-20261001-2
+used the product's strict parser on 24 retained date-axiom families, compared 3,390 first-pass rows
+exactly with the second pass, and decoded all 1,166 parents without refusal. Five MA/PART bindings
+kept the unrecognised-code outcome. No publisher requests were made. This diagnostic checks
+retained row equality and decoding; it does not mint new enumeration proofs or a population result.
+The first diagnostic accidentally selected amendment families too; its 44 wrong-family refusals
+are retained in replay-1. The corrected selector matches the exact date-predicate VALUES block.
+
+PR #859 received cross-family MERGE with no material findings. The reviewer reproduced the
+build, fast tests and all 29 decoder cases, including a counterfactual where the old decoder fails
+the two escaped cases. The one editorial repair records the exact ingest filter:
+`FullyQualifiedName~EuObjectFacts|FullyQualifiedName~EuProduction|FullyQualifiedName~EuRepeatedEnumeration`.
+The AU+TARD escaped case is constructed; MA/PART was observed. Literal matching retains priority,
+and lowercase percent escapes still refuse safely. The next full run requires this change merged
+and frozen in a fresh custody directory, with the measured storage allowance and disk guard.
+
 
 ## EU retry 5 and LU lookup storage (Codex, 2026-10-01)
 
@@ -983,11 +1023,11 @@ CI evidence are recorded in the pull request before merge.
 
 ## Heads
 
-- `v3/integration`: `07cfd3c5` (2026-10-01, PR #856 merged). Build 45 s. Fast lane
+- `v3/integration`: `55d58cb2` (2026-10-01, PR #878 merged). Build 45 s. Fast lane
   (`eng/test-fast.ps1`): 3,077 tests, 3,076 pass, 1 skipped (the review of PR #828). Ingest suite: green on CI for PR #760
   (the CI `dotnet` job runs the whole solution on every pull request, about 7 min on the runner;
   green for PR #834);
-  locally about 15 min. 991 web tests pass. The web job's "browser debugger never answered" failures
+  locally about 15 min. 995 web tests pass. The web job's "browser debugger never answered" failures
   (keyboard-walk, and paint-check since #811) are fixed by PR #822: each browser binds its own
   debugging port (`launchBrowser`) instead of a random one another browser starting at the same
   moment could hold.
@@ -1055,7 +1095,7 @@ needs none of those.
 
 `events` and `answer_drift` (PR #760) read a new index table, `events`: the index's append-only
 event log (`seq`, `scope`, `key`, `event`, `observed_from`, `detail_json`; schema
-`lex-v3-luxembourg-index/6`, `user_version` 6, the fixed-input byte pin moved). A build is one
+`lex-v3-luxembourg-index/6`, `user_version` 6, the fixed-input byte pin moved; `/7` since PR #864, below). A build is one
 observation with no predecessor, so its log is a **genesis log**: one `first_sighting` per held
 state, in the states table's key order, numbered from 1, keyed by the state's primary key and
 carrying its digest, with `observed_from` null because no observation time reaches the index (the
@@ -1085,7 +1125,8 @@ reversible: events are scoped to states (no work-level events); the cursor names
 `answer_drift`'s future rows are date intervals per revising event (stated in the answer).
 Deferred to the next index schema: predecessor chaining (the builder takes the previous verified
 index, copies its log unchanged and appends comparison events), `observed_from` from the route
-evidence, and every revision event.
+evidence, and every revision event. The web lane claimed predecessor chaining on 2026-10-01
+(PR #862, the web lane's order under "Next, in order").
 
 `ask` (PR #759) answers the containment and nothing else (Decisions 51 and 91, S4-A05): every
 request, whatever the question, is a success envelope under the `point` verdict whose result is a
@@ -1191,7 +1232,8 @@ profession" runs together; the token stream the composer could render from is in
 the reading view's own provision-level one (two producers, two declared key sets) and the catalog's
 two text examples show the producer's fields.
 
-Registered and not served: `as_observed`, `concepts`, `knowable_on`, `transposition`. Since PR
+Registered and not served: `concepts`, `knowable_on`, `transposition` (`as_observed` is served by
+build snapshot since PR #874). Since PR
 #758 a request for one of them is the typed
 transport failure `operation_not_served` (HTTP 404, `application/problem+json`, below the envelope
 like every transport failure), which tells a registered operation with no route apart from a path
@@ -2113,6 +2155,380 @@ STATUS item 4.
   serve each operation with no route". The words have French drafts. The preview answers carry the
   platform's sentences to the character, and the census holds them.
 
+The timeline speech test per publisher (PR #860), the evidence the launch contract names for its
+promise "Luxembourg applicability dates and EU wording-state dates are never merged, in text or in
+speech". Before the EU screens there was nothing EU on a page to merge. `web/test/date-speech.test.mjs`
+holds the two date kinds apart in three places:
+- **What the platform sends:** no EU answer in either census carries a Luxembourg state's date
+  fields (`applicability_date`, `next_applicability_date`, `latest_applicability_date`,
+  `history_begins`, `state_sha256`), and no Luxembourg answer carries an EU wording's
+  (`wording_date`, `wording_dates`, `pinned_wording`).
+- **What the interface table says**, in English and in the French draft:
+  - the entries the EU views use carry no Luxembourg date word ("applies", "version", "state",
+    "s'applique");
+  - no other entry, page introductions apart, carries an EU one ("wording of", "Wording date",
+    "dated {date}", "libellé du", "Date du libellé").
+  "Wording" and "libellé" alone stay Luxembourg words too: an article's wording changes from state
+  to state.
+- **What each screen says and a screen reader hears**, for every census answer on all eight
+  screens: the text and the human-read attributes, with the answer's own values taken out, use only
+  the publisher's own date words. Each publisher's screens are seen saying their own words. The
+  platform's sentences are data here, so an EU answer saying its date is never merged with a
+  Luxembourg applicability date is the promise kept.
+- **Mutations:** each is caught.
+  - An EU hit "version of" fails the table check, the screen check and the borrowed-render check.
+  - A Luxembourg hit "wording of" fails the table and screen checks.
+  - An `applicability_date` added to the EU dossier census answer fails the field check.
+
+The launch contract's first promise over EU answers (PR #860): "verify resolves every citation the
+product emitted". `V3CitationVerificationTests` walked only Luxembourg answers. It now also walks the
+answers the EU screens read, on the GDPR fixture: search in one work, and the dossier.
+- The citations by role (each `permalink`, and any string that is exactly an EU permalink) must be
+  hash-pinned EU permalinks. Each must verify as `digest_matches` for the very wording it pins
+  (`wording_sha256`), and for its provision, unescaped.
+- An EU `resolve.identifier` is the coordinate EU `resolve` answers (a provision or an expression),
+  not a pinned citation, so it is asked of `resolve` and must answer.
+- A mutant that drops the dossier permalink's digest is caught ("not a hash-pinned EU permalink").
+
+The refusal set measures EU `verify` (PR #860). On a mount with an EU index, when the work's
+expression holds one wording date, the mounted refusal set derives three more requests. The wording
+digest is recomputed from the index rows by the stated rule, so `verify` answering also checks the
+API's digest:
+- a pinned provision: answered;
+- a digest the wording does not have: `pinned_digest_mismatch`;
+- a provision the wording does not hold: `anchor_not_in_version`.
+On the real bounded first mount the refusal set is 8 cases (5 before), passing, with the shuffled
+control caught; those two codes are no longer listed as not produced there. A mutant that lets EU
+`verify` answer a provision not held fails the gate.
+
+The retrieval set measures EU resolver exactness (PR #860). For each sampled EU work whose
+expression holds one wording date, the retrieval set adds:
+- its first three provisions' permalinks (the digest recomputed by the stated rule): exact cases,
+  each judged to resolve to exactly that provision (`verify` names the CELEX and the provision);
+- a provision the wording does not hold: a near miss, judged to find nothing.
+On the real bounded first mount the card's retrieval set is 13 cases, and every gate is measured
+and passes: anchor nDCG@10 1 over 9, no-hit accuracy 1 over 4, resolver exactness 1 over 3. The
+judgments control now applies and catches the shuffle. Only the temporal arms are not measured
+there, since the mount holds no Luxembourg state. A mutant whose EU `verify` names the first
+provision for every request fails the fixture's resolver gate.
+
+The release rehearsal over the real bounded first mount (2026-10-01, recorded by PR #862),
+`node web/scripts/image-rehearsal.mjs --mount C:/lex-v3/first-mount-decision95-restart-20260930/v3-corpus`
+at the head of PR #860. Every step passed:
+- the one-server image (72,561,664 bytes) holds the 26 live page files, the 6 mount files and the 5
+  files the mount's report lists, byte for byte, with no image failure;
+- two builds from scratch give one manifest, `sha256:b330577295f5a4017715420733ff7351e9134b8d36cc917a690db9e1288ff9d6`;
+- V2 is absent: 527 entries scanned, and none of V2's 63 routes fails when asked of the image. A
+  V2-only route answers 404, and a path V2 and V3 share (such as `/`) answers with V3's own bytes;
+- the rehearsal signature verifies;
+- the image runs in WSL and is probed on all ten journey steps:
+  - coverage and radar answer;
+  - the six Luxembourg screens show the refusals the API gives, since the mount holds no
+    Luxembourg state;
+  - the EU search answers with 61 citations verified, and the EU dossier with 1;
+  - no step fails;
+- the card served at `/evaluation-card.json` is the release card, the gates over this mount:
+  - refusal: 8 cases, pass, the shuffle caught;
+  - retrieval: 13 cases, every gate passing, the shuffle caught;
+  - temporal: not measured, since the mount holds no Luxembourg state;
+- the release (version `v3-rehearsal-20261001T033235Z-523f28f8e84b`, manifest
+  `7e6a2f08fefc8699d8e5c317073a206fff9145f0d4c123534e00d1ab3cc34681`, six assets) is published,
+  read back and verified with no failure;
+- the work directory, the artifacts and the container are removed.
+
+Predecessor chaining, the first slice (PR #864): Luxembourg index schema `lex-v3-luxembourg-index/7`,
+`user_version` 7. It still holds a genesis log, now in the shape a chained log needs. The changes are
+confined to the event-log parts of the builder and the reader.
+- `events` drops `UNIQUE(scope, key, event)`, since a replaced file can recur for one state's key;
+  `seq` stays the key.
+- A new `observations` table: one row per build that wrote events. Each row holds:
+  - its corpus;
+  - the index it carried forward (null for the first observation; a check makes this exact);
+  - the events it appended, by sequence number;
+  - its observation time, which a check holds null because none is held.
+  A genesis log has one observation numbering every event (an empty log numbers none: first 1,
+  last 0).
+- A new `log_stamp`: the log's own schema, `lex-v3-event-log/1`, and the digest of exactly its
+  observations and events. A later build can then verify a predecessor's log, which it will carry
+  forward unchanged, across a change to the index's other tables.
+- Each `first_sighting` names the digests of the publisher bodies its state's articles were read
+  from (`source_body_sha256`, sorted, each once). With them a later build can tell a replaced file
+  from an unchanged one by the log alone. The index's own tables hold no body digest, so:
+  - the reader recomputes the whole log from the states and the bodies the log names, and refuses
+    any other row, observation or stamp;
+  - whoever holds the corpus checks the bodies against it (`VerifyEventLogSources`): the build, the
+    mount at open, and the mount writer's verification.
+- Tests:
+  - the genesis log's shape;
+  - seven observation and log-stamp tampers, each refused with the logical-rows stamp recomputed,
+    so only the new checks can refuse;
+  - a body the state was not read from passes the index alone and is refused by the corpus, by the
+    mount and by the mount writer;
+  - a body named twice is not the genesis log.
+- The fixed-input byte pin moves, as a schema change moves it. The schema version and the pin are
+  shared with the data lane.
+
+Predecessor chaining, the second slice (PR #866): a Luxembourg index build can carry its
+predecessor's event log forward.
+- `LuxembourgIndexPredecessor.TryRead` reads the previous build's index:
+  - its bytes must be the digest its build report names;
+  - it must hold a log of this log schema (`lex-v3-event-log/1`), whatever its other tables'
+    schema. An index of schema 6 or before has no log stamp and refuses
+    `predecessor_schema_differs`;
+  - the log must match its own stamp and be numbered as observations appending events, or it
+    refuses `predecessor_mismatch`.
+- `TryBuild(envelope, predecessor)`:
+  - copies the predecessor's observations and events unchanged, an exact prefix (G3a);
+  - appends one observation naming the predecessor's digest, with an event for each state the log
+    does not hold: `first_sighting`, or `expression_added` when the log holds the same work and date
+    in another language;
+  - leaves a state the log holds unchanged silent, and a state the log holds that this build lacks
+    silent too (absence is not a withdrawal);
+  - refuses `predecessor_state_changed` for a held state with another digest or other source bodies,
+    until slice 3 adds `file_replaced`.
+  The genesis log is now the special case: the events appended to no log.
+- The reader checks any log:
+  - it is numbered as observations appending events;
+  - its last observation is of the index's corpus;
+  - every state is held by the log at its own digest;
+  - the last observation's events are exactly those it must append to the log before it;
+  - every observation's events are exactly those it appends to the log before it, replayed from the
+    log alone (the states it leaves held). The review of #866 found that a carried genesis event
+    renamed `expression_added` passed both the predecessor read and the reader.
+  That the log before it is the predecessor's is proven by the build, which copies it.
+- `VerifyEventLogSources` checks the corpus's bodies against the log's last word on each state.
+- Plumbing: `V3FirstMountBuild.ReadPredecessor(directory)` and a `RunAsync` overload, with both
+  builds of the index taking the same predecessor. `Lex.V3.Tool build --predecessor <v3-corpus
+  dir>` reads and verifies the predecessor before the first request.
+- The API described every log as a genesis log (`basis`, the predecessor and the notes) until
+  PR #867, which serves `events` and `answer_drift` across the chain.
+- On the fixture, a chained build is byte-stable across two builds, chains again (three
+  observations), appends `first_sighting` to a predecessor whose log lacks the state, and refuses
+  a changed state.
+- The real bounded first mount's Luxembourg index is schema 6 with no state, so it cannot be a
+  predecessor; the first chain starts with the next build.
+
+Predecessor chaining, the third slice (PR #867): comparison events. A chained build compares its
+states with its predecessor's log, key by key, over the keys the log holds and the keys it holds.
+A held state this build lacks stays held: absence is not a withdrawal.
+- **`file_replaced`** (G1): a held state whose source bodies differ. It names the state and bodies
+  it replaces (`replaced_state_sha256`, `replaced_source_body_sha256`).
+  - The state's digest is the permalink's version id, and it changes with the text, not with the
+    bytes alone.
+  - Through the real pipeline: the act rebuilt from its publisher file with one article reworded is
+    `file_replaced` with a new digest, so a new permalink.
+  - Rebuilt with one byte added and the text unchanged, it is `file_replaced` with the digest, and
+    so the version, unchanged. **Owner question, asked in PR #867:** should a replaced file whose
+    text is unchanged mint a new version? That would change the published permalink scheme.
+    **Answered** by the panel on the owner's behalf (recorded by PR #871): no. Version identity
+    follows the legal text, and the replacement is recorded as built.
+- **`interval_closed`** and **`validity_revised`**, for a state the log held whose applicability
+  interval this build's states move. The end is the next later date in the work and language,
+  which is this derivation's, never the publisher's, so each event is marked `derived: true` and
+  names `applicable_from`, `previous_to` and `new_to`.
+  - The latest state, followed by a later one, closes.
+  - A state whose next moved earlier, because one was inserted, is revised.
+  - A held state this build lacks closes too.
+- **The same bodies with another digest** are this derivation's change, not the publisher's: the
+  build refuses **`predecessor_derivation_differs`**, which replaces slice 2's interim
+  `predecessor_state_changed`.
+- The reader's history replay (#866) covers the new events with no change: every observation's
+  events are recomputed from the log alone.
+- `withdrawn_from_source` and `resighted` stay unminted. They need the three-run rule (31-v3-spec
+  §91(b)) and a proof of complete enumeration.
+- The review of #867 found that a chained log broke the served event operations: `answer_drift`
+  threw on any revising event, and `events` called every log genesis. So the fourth slice is part
+  of #867:
+  - `events`' log block names the basis (`genesis` or `chained`), the predecessor, the number of
+    builds compared, and the **ancestor logs** whose cursors it honours, each to the last event it
+    held;
+  - a cursor of an ancestor reads on in this log with the same numbers, and one from any other log
+    still refuses `snapshot_unknown` (a driver decision, below);
+  - each row carries the log's detail verbatim, and a `file_replaced` row also carries the replaced
+    permalink;
+  - a chained log says what it holds (`chained_note`) and what it does not (`withdrawal_events`);
+  - `answer_drift` enumerates its `interval_closed` and `validity_revised` events a page at a time.
+    Each row is the dates of one work and language, from the revision's new end to its old one
+    (open for the latest), whose as_of answer moved from the state before to the states applying
+    from the first of them, each by its permalink, marked derived.
+  On a mount whose chained log holds the act at an earlier date (crafted predecessor, real build),
+  `events` and `answer_drift` show the `interval_closed` and its moved dates.
+
+Predecessor chaining, the fifth slice, first part (PR #871): each build's time, the bound that
+`as_observed` will give.
+- The panel answered the chain's three owner questions on the owner's behalf (ANSWERS.md,
+  2026-10-01):
+  - G1: a replaced file whose text is unchanged mints no new version. Version identity follows the
+    wording and text digests, so published permalinks keep resolving. The replacement is still
+    recorded as `file_replaced` with both body digests, as #867 builds it.
+  - `as_observed` may ship identified by a build snapshot. The answer must name the snapshot, give
+    that generation's build time as an upper bound ("observed no later than"), and never state or
+    infer an observation time. A time the snapshots cannot place refuses with an existing typed
+    code.
+  - Generations are retained by the launch contract's retention line (S7-A09):
+    - every generation a published permalink or evidence bundle references, indefinitely;
+    - nightly generations for 90 days;
+    - one complete monthly keeper, indefinitely;
+    - the retained depth reported truthfully.
+  - The slice-4 decision (an ancestor's cursor reads on) stands.
+- Index schema `lex-v3-luxembourg-index/8`, event log `lex-v3-event-log/2`: each observation records
+  `built_at`, UTC to the second. It is hashed into the log stamp and carried forward unchanged by
+  every successor. `observed_from` stays null, because a build time is not an observation time.
+- The build time is a build input, not read inside the builder (a driver decision, below):
+  - `LuxembourgIndexBuilder.TryBuild` takes it;
+  - it must be a UTC whole second, later than the predecessor's last build and no earlier than the
+    corpus's EU capture (the one observation clock the corpus holds), or the build refuses
+    `build_time_invalid`;
+  - nothing can check it against the Luxembourg fetches, whose times the corpus does not hold;
+  - the reader requires each observation's time to be a real UTC second later than the one before.
+- `V3FirstMountBuild` reads its clock once, after every fetch and derivation:
+  - it rounds the time up to the next second, since rounding down could land before the last fetch;
+  - it passes that one time to both builds of the index, so the twice-built comparison holds;
+  - the Tool uses the system clock.
+- `events` now serves `log.built_at` and each ancestor's `built_at`. The sentences that said no
+  build time is held now say what is held:
+  - `coverage` states none, in its `not_held` row and in the Trust and Coverage page's counts note
+    (English and the French draft);
+  - a build's time is not upstream health.
+- An index on each event's work (`events_work_seq`) serves the per-work fold that `as_observed`
+  reads.
+- A `/7` predecessor refuses `predecessor_schema_differs`. No real mount was chainable: the real
+  bounded first mount's index is schema 6.
+- The second part is PR #874, below.
+
+Predecessor chaining, the fifth slice, second part (PR #874): `as_observed` by build snapshot (G4).
+- `POST /api/v3/as_observed` and its MCP tool. The request takes `identifier`, `date`, optionally
+  `language`, and exactly one of `snapshot` (an index digest) or `at` (a time).
+- The snapshot is one build of the mounted chain, named by its index digest: the mounted index
+  (`events`: `log.log_id`) or an ancestor its log carries forward (`log.ancestors[].log_id`).
+- The log is folded up to that build's last event, by a new per-work query over the
+  `events_work_seq` index (its plan checked, never a scan). The state applying on the date is
+  selected as `as_of` selects. A state once held stays held (absence is not a withdrawal), and the
+  next date is the next one held at that snapshot.
+- The answer names the snapshot: its digest, its observation number, its corpus and whether it is
+  mounted. It gives `observed_no_later_than`, the build's time, with
+  `observation_time_held: false`, and it states no observation time.
+- A state the mounted index still holds is served in full, as `as_of` serves it
+  (`text_held: true`). A state only an earlier build held is named by its permalink, digest and
+  source bodies from the log, without text (`text_held: false`), until the generation mount
+  (slice 6) can quote it.
+- Every request by time refuses `snapshot_unknown`, because upper bounds alone place no instant in
+  a snapshot. So does a digest that is no snapshot of this log. A date before the snapshot's history
+  is `no_version_for_date`, and a language the snapshot did not hold is `language_not_available`.
+- On the chained fixture (a predecessor whose log held the work at an earlier date, and the real
+  build chained to it):
+  - the predecessor's snapshot answers the earlier state, without text, bounded by the
+    predecessor's build time;
+  - the mounted snapshot quotes the act's state, the same permalink `as_of` gives;
+  - between the two dates, the mounted snapshot answers the earlier state the log still holds,
+    which `as_of` cannot answer.
+- 24 operations are served and three remain unserved (`knowable_on`, `concepts`, `transposition`).
+  The sentence for `knowable_on` now says what it still needs: each Luxembourg body's capture time.
+  A build's time bounds observation only from above.
+- The `answer_drift` and `events` MCP descriptions no longer call every log genesis (stale since
+  #867).
+- The registry digest moves with the new request schema, to `c40e23fd…`.
+
+Schema 6 served with its build record absent (PR #878).
+- **The gap.** Since #864 the reader read only the newest schema. So the API refused every Luxembourg
+  index of schema 6 ("the schema differs from the exact terminal schema"). Two such indexes exist:
+  - the data lane's running EU population, frozen at `6eb1d9d9`;
+  - the real bounded first mount, which the web lane's journeys and release rehearsal used.
+
+  The data lane raised it (Q-20261001-0656-codex). CI did not catch it, because the image rehearsal
+  job is skipped there.
+- **The panel's answer**, on the owner's behalf: the web lane adds exact schema-6 read validation for
+  serving.
+  - The new observation and log evidence is explicitly absent, and the operations that need it
+    refuse with their typed codes.
+  - `LuxembourgIndexPredecessor.TryRead` keeps refusing schema 6.
+  - No log stamp and no observation time is invented.
+  - The data lane does not edit these files. Its next step is "acquire once, derive many", so a
+    schema change no longer forces re-acquisition.
+- **What the reader accepts**, by `user_version`, exactly two schemas: 8, and 6.
+  - Schema 6's tables are schema 8's but for the event log: one `events` table of `first_sighting`
+    only, unique per state, with no `observations` and no `log_stamp`.
+  - Any other version refuses, and so do tables that are not exactly that version's.
+  - The DDL is now the shared tables plus each version's event log. It is byte for byte the same,
+    and the fixed-input pin holds.
+- **A schema-6 index is checked as schema 6 checked it**:
+  - its log is exactly its states' genesis log as schema 6 wrote it (state digests only);
+  - its stamp names schema 6;
+  - its logical rows match their stamp.
+- **What a schema-6 mount answers:**
+  - the reader reports `SchemaIdentity`, and `RecordsBuilds` is false;
+  - `events` serves its genesis log with `log.built_at` null, a `legacy_note` and a `build_record`
+    not-held row. Its genesis and silence notes and its upstream-health row are schema 6's own, and
+    claim no build time (review of #878);
+  - `as_observed` refuses `snapshot_unknown`, saying the index names no snapshot;
+  - `coverage`'s build-time row says the index records no build time either;
+  - the corpus check holds only the binding: no source bodies or build time are held to check.
+- **Fixtures:** the real bounded first mount's Luxembourg index, manifest and corpus, byte for byte
+  the files its build report names (`c7f40548…`, `ef03cacd…`, `312d4804…`).
+  - The mount opens and is served with its build record absent.
+  - A schema-6 index with states (the state fixture rewritten into schema 6's tables) serves its
+    genesis log, `as_of` answers, and `as_observed` refuses.
+  - Seven tampers are refused, among them schema 6's tables under `user_version` 7 or 8, an
+    observations table, a stamp naming schema 8, and schema 8's tables under `user_version` 6.
+- **The whole ingest suite also ran with `V3_EVALUATE_MOUNT` naming the real mount**, so its
+  real-mount gates ran on it.
+
+Predecessor chaining, the sixth slice, first part (PR #880): a chained build keeps its earlier
+generations, by the retention line (G3b).
+- **The line.** The panel applied the launch's retention line, Stage 7 S7-A09
+  (`lex-governance/stages/STAGE-7.md:37-38`), to the generation mount:
+  - every generation a published permalink or evidence bundle references, indefinitely;
+  - nightlies for 90 days;
+  - one complete monthly keeper, indefinitely;
+  - the retained depth reported truthfully.
+- **`V3GenerationRetention.Decide`** decides from the log alone. "Now" is the mounted build's own
+  time, never the clock, so two builds of one chain decide alike. It keeps each held generation
+  that is any of these:
+  - referenced;
+  - the last build of its UTC day (the mounted build's day included) within 90 days;
+  - its UTC month's earliest held generation.
+
+  It reports the rest as dropped, and those no longer held as absent: never claimed.
+  - Nothing records which permalinks or bundles were published. So `referenced` comes from the new
+    Tool option `--referenced <file>`, a JSON array of index digests. It means the generations
+    promoted to production, which is empty until the owner promotes one.
+  - Every verified generation counts as "complete".
+- **The writer** handles a chained build (`--predecessor`):
+  - it copies the kept generations whole out of the predecessor's directory (the predecessor itself,
+    or a generation it kept) into `generations/{luxembourg index digest}/`: the five mount files and
+    the build report;
+  - it records the decision in `generations/retention.json` and lists the generations in the build
+    report;
+  - nothing is deleted anywhere, and the predecessor's directory is only read.
+- **`VerifyAsync`** holds each generation to the mounted log:
+  - its name is an index the log names as a predecessor;
+  - it holds exactly a generation's six files and is itself a mount that verifies;
+  - its Luxembourg index is that digest, and its corpus the one its observation names;
+  - its log is the mounted log up to its observation;
+  - `retention.json` is the line's decision over the generations the writer could copy: those it
+    kept, held here, and those it recorded as dropped, which have no directory;
+  - a chained mount must hold `generations/retention.json`, even when it keeps no generation, so a
+    mount whose generations were all removed does not verify as one that never had any. A
+    generation is verified as a generation: its own earlier builds are its mount's to record.
+  - The review of #880 found both gaps. With only the held generations as input, a correctly dropped
+    nightly read as absent and the writer's record was refused; and a chained mount with
+    `generations/` deleted verified.
+- **Tests:**
+  - three real first-mount builds on three days, each chained to the last: the third keeps the
+    first (its day's last, and October's keeper) and the second (nightly), copied byte for byte,
+    and verifies;
+  - a fourth build 120 days after the first keeps only October's keeper and records the two
+    nightlies, now past 90 days, as dropped; it verifies;
+  - five ways a generation can be wrong are refused: a missing file, a directory that is no earlier
+    build, another build's files under a generation's name, no `generations/` at all, and a
+    retention record the line did not decide;
+  - the policy's own tests cover the 90-day edge, a referenced old build, an absent one, and an
+    earlier build of the mounted build's day.
+- **Not yet:** the API reads no generation. Next come the mount's own checks of them at open, the
+  depth `coverage` and `events` report, and then `as_observed` and `verify` quoting a state from a
+  retained generation. An image built from such a mount carries `generations/` too. No byte budget
+  is enforced yet.
+
 The live export composer and its journey step (PR #789), the eighth screen. `dist-live/export.html`
 has its own bundle `client-live-export.js`.
 - The page asks what the reading page asks: the same form (`ReadingForm`, now shared), the same one
@@ -2404,7 +2820,8 @@ so the one code the registry says answers it follows from the mount's own data:
   - the real bounded first mount: 1 (coverage, answered). Every Luxembourg code is listed as not
     produced there, since there is no Luxembourg state. `no_corpus_mounted` is not produced either,
     since the EU index exists.
-  EU refusal cases derived from the EU index are a later slice.
+  EU refusal cases derived from the EU index came later: EU search's in PR #846, and EU `verify`'s
+  in PR #860. The real bounded first mount now has 8 cases.
 - Two mutations:
   - the day-before-history request given the gold `answer` fails the refusal tests;
   - the first version's `non_admitting` guess fails the `conflict` case.
@@ -2431,10 +2848,11 @@ leave a language unsearched):
 - words held by one to five provisions are judged to find exactly those (the CELEX and the
   publisher's provision id, as an EU hit names them), searched with the work as scope;
 - strings the work holds nowhere find nothing.
-EU `verify` is not served, so the EU gives no exact-identifier case. On the GDPR fixture and on the
-real first mount, anchor nDCG@10 is 1 over 6 EU word cases and no-hit accuracy 1 over 3. Resolver
-exactness is not measured (no measurable query). So the judgments control does not apply: its rule
-needs every required gate to pass first, and the card says so. A French-held work gives French
+EU `verify` was not served then, so the EU gave no exact-identifier case. On the GDPR fixture and on
+the real first mount, anchor nDCG@10 was 1 over 6 EU word cases and no-hit accuracy 1 over 3.
+Resolver exactness was not measured (no measurable query), so the judgments control did not apply:
+its rule needs every required gate to pass first, and the card said so. Since PR #860 the EU gives
+exact cases over the EU permalink grammar, and every retrieval gate is measured there (below). A French-held work gives French
 cases, which pass. Two mutations:
 - EU judgments naming another provision drop nDCG@10 to 0 and fail;
 - the first version's sampling (three English works and a French one) leaves French out and fails
@@ -2560,7 +2978,8 @@ publisher, ...". The same wording is in the provenance answer, its test pin, the
 census and the web preview's copy. G1 (a replaced publisher file mints a new version and a
 `file_replaced` event), G3 (nothing hard-deleted across builds) and G4 (as-observed answering;
 `as_observed` and `knowable_on` are registered and not served) need predecessor chaining with
-observation times, which follows the first mount; see the event-log question (b) below. G2's
+observation times, which follows the first mount (claimed by the web lane in PR #862); see the
+event-log question (b) below. G2's
 detached signature comes from the release pipeline (item 7). The mount is the fixture, so this
 proves the path, not a corpus.
 
@@ -2795,6 +3214,37 @@ an Appendix A root receives `not_acquired / identity_not_admitted`; this does no
 wordings. The earlier 82 separate runs remain separate evidence. A complete combined live build
 has not yet run; the bounded first mount above is complete.
 
+The web lane's order, from the panel's answer to Q-20261001-0345-claude (2026-10-01 03:50 UTC),
+recorded by PR #862:
+1. **Predecessor chaining, claimed by the web lane** (item 4). It unblocks G1, G3, G4, `as_observed`
+   and `knowable_on`. The web lane changes only the event-log and chaining parts of the builders,
+   rebases onto the data lane's merges before every pull request, and gets a Codex review of each.
+   Any overlap with an open data-lane pull request goes to QUESTIONS.md rather than being edited
+   around. The planned slices, one pull request each:
+   - index schema `/7` with the genesis log, an `observations` table and a log stamp (PR #864);
+   - the predecessor as a build input (`--predecessor`), its log carried forward as an exact
+     prefix (G3a) (PR #866);
+   - comparison events: `first_sighting` and `expression_added` for new keys, `file_replaced` when a
+     source body changes (G1), and the derived `interval_closed` and `validity_revised` (PR #867);
+   - `events` and `answer_drift` across the chain (folded into PR #867 by its review);
+   - each build's time in the log (PR #871), then `as_observed` by build snapshot (G4) (PR #874);
+   - a generation mount (G3b), retained by S7-A09: generations written and verified (PR #880),
+     then read by the mount.
+   `observed_from` stays null until a Luxembourg body's capture time reaches the corpus (data lane);
+   `knowable_on` and withdrawal follow it. The owner questions (G1 when a file changes but its text
+   does not, "as observed" identified by snapshot with no time, retaining every generation) were
+   answered by the panel on the owner's behalf; PR #871 records the answers.
+2. The index capability manifest's per-operation rows for the unserved operations: one small
+   additive pull request.
+3. A credential-free deployment kit, so the owner's go-live is one command (item 7). It holds the
+   Azure definitions for the one-server container, and a deploy script that takes the subscription,
+   the managed identity and the signing identity as parameters and never reads or stores a secret.
+   It validates the templates offline, runs the zero-traffic probe against the deployed revision,
+   removes the revision, and has a runbook here. No Azure login, deployment or production signing:
+   those stay with the owner.
+4. Standing: the real-mount journeys and gates on every new mount the data lane builds, and a
+   review of the data lane's pull requests that touch the API when asked.
+
 1. Data lane (Codex, Decision 95): bounded first mount and real-data resolve completed above.
    Finish PR #786 and population PR #785, then continue the population work below.
 2. Data lane (Codex). Complete the EU and Luxembourg populations under the owner's 2026-09-30
@@ -2809,11 +3259,12 @@ has not yet run; the bounded first mount above is complete.
    `manifestation` by PR #756, `status_on` and `browse` by PR #757; a request to an unserved
    operation answers the transport failure `operation_not_served`, PR #758; `ask` answers the
    contained `assistant_v3_unavailable` card, PR #759; `events` and `answer_drift` over a genesis
-   log, PR #760). Four remain (`as_observed`, `knowable_on`, `concepts`, `transposition`), all
-   needing data the ingest does not produce; they keep `operation_not_served`, and since PR #857
+   log, PR #760; `as_observed` by build snapshot, PR #874). Three remain (`knowable_on`,
+   `concepts`, `transposition`), all needing data the ingest does not produce; they keep `operation_not_served`, and since PR #857
    the coverage answer names, for each, the data that would serve it (driver decision, below), which
-   Trust and Coverage shows. The event log's next step,
-   predecessor chaining with observation times, needs a second build, so it follows the first mount.
+   Trust and Coverage shows. The event log's next step, predecessor chaining with observation
+   times, is the web lane's since 2026-10-01 and is claimed by PR #862 (the web lane's order,
+   above).
 5. EU parity: every temporal and search operation from the EU index; French expressions. EU
    `search` in one work served by PR #761, EU `dossier` by PR #762; the temporal operations,
    `provenance` and `evidence_bundle` wait on consolidation acquisition; the parity details are driver
@@ -2869,12 +3320,14 @@ has not yet run; the bounded first mount above is complete.
    it runs the image (WSL, read-only root, private /tmp) and probes the eight screens against it; PR
    #826: the image is reproducible (two builds from scratch, one manifest digest); PR #828: the
    image probed on the journey's fixture mount, where every screen answers and 105 citations verify;
-   PR #831: V2 absent from the image (no V2 assembly or dependency, V2's 63 routes 404); PR #833:
+   PR #831: V2 absent from the image (no V2 assembly or dependency; of V2's 63 routes, a V2-only
+   one answers 404 and a path both share answers with V3's own bytes); PR #833:
    the release assets (the image, its signature, the evaluation card, the mount's report, a signed
    manifest) published under a version, read back and verified, and the card served at
    `/evaluation-card.json`. The credential-free release steps
-   are rehearsed end to end. Production signing,
-   credentials and deployment stay with the owner.
+   are rehearsed end to end, and since 2026-10-01 over the real bounded first mount too (PR #862).
+   Next in the web lane's order: a credential-free deployment kit. Production signing, credentials
+   and deployment stay with the owner.
 8. Machine gates (launch contract, Evaluation): the temporal, refusal and retrieval case sets run
    against the real handler, and all three shuffled controls are caught (PRs #767 and #768). The
    evaluation card is rendered from them with the statistical rows `not_yet_labelled` (PR #769).
@@ -2883,7 +3336,8 @@ has not yet run; the bounded first mount above is complete.
    mounted-corpus run once the first mount exists. Replay G1 to G5 (`33-product-spec.md`): G2 snapshot
    determinism and G5 independent verifiability run on the real handler (PR #770). G1 version
    immutability, G3 bitemporal completeness and G4 as-observed answering need predecessor
-   chaining with observation times, so they follow the first mount and the event-log ruling. What
+   chaining with observation times, so they follow the first mount and the event-log ruling
+   (predecessor chaining is the web lane's since PR #862). What
    is left of the launch contract's machine-gates line after that was "V2 absent from the image",
    which the image rehearsal now checks (PR #831, item 7). Ruling 2's gates over the real mounted
    corpus: PR #838 derives the temporal set from any mount, PR #839 the refusal set, PR #842 the
@@ -2998,9 +3452,19 @@ Each is the driver's call under ruling 7 and can be reversed by a later pull req
 - The event log (PR #760): (a) the mintable registry is twelve names (the coverage event is not
   minted); (b) launch may ship genesis-only logs (append-only within a log; a rebuild or rollback
   starts a new log with new cursors), with predecessor chaining after the first mount; (c) a cursor
-  from a retired log refuses `snapshot_unknown`.
+  from a retired log refuses `snapshot_unknown`. Amended by PR #867: a build chained to a log carries
+  it forward with the same numbers, so a cursor of an ancestor the mounted log names
+  (`log.ancestors`) reads on; a log not chained to the mounted one is still retired.
+- The build time of the event log (PR #871) is an explicit build input, which the first-mount
+  build reads once from its clock and passes to both index builds. The builder never reads it
+  itself.
+  - The launch contract's two-build line still holds: two independent executions given the same
+    inputs, the build time among them, give the same bytes. A build that must reproduce another
+    takes the other's time.
+  - Rejected: the predecessor's build-report time. It is not hashed, anyone can edit it, and it
+    would leave the mounted generation with no bound.
 - `ask`'s containment card keeps the `point` verdict.
-- The four operations with no data (`as_observed`, `knowable_on`, `concepts`, `transposition`) keep
+- The operations with no data (`knowable_on`, `concepts`, `transposition`; `as_observed` until PR #874) keep
   the typed transport failure `operation_not_served`, and the platform states, per operation, that
   it is not served and which data would serve it. PR #857 states it in the `coverage` answer
   (`operations.not_served_data`), which the API owns, rather than in the index capability manifest,
@@ -3052,7 +3516,8 @@ Repair fast lane: 3,065 pass / 1 Windows skip; repair build: zero warnings/error
 
 - The bounded real mount is available at
   `C:\lex-v3\first-mount-decision95-restart-20260930\v3-corpus`; the web lane's journeys run on it
-  (PR #815). The machine gates derive their cases from any mount (PRs #838, #839, #842, #845, #846)
+  (PR #815). Its Luxembourg index is schema 6. The reader refused it from #864 until PR #878, which
+  serves it with its build record absent. The machine gates derive their cases from any mount (PRs #838, #839, #842, #845, #846)
   and the release card is the gates run over the rehearsal's mount (PR #844). The real mount holds
   no Luxembourg state yet, so its temporal set is not measured, and it will be once the data lane's
   full populations land.

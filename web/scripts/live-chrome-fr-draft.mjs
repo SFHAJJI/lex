@@ -334,7 +334,7 @@ export const LIVE_CHROME_FR_DRAFT = Object.freeze({
     }),
     held: Object.freeze({ true: 'oui', false: 'non' }),
     none: 'aucune',
-    countsProvenance: 'Les décomptes du corpus et de l’index ci-dessous proviennent des artefacts désignés plus haut. Rien ici n’indique quand ils ont été établis : aucune date de construction de l’un ou de l’autre n’est détenue. Les empreintes désignent exactement les artefacts comptés, ce qu’une date ne ferait pas. Les dates calendaires plus bas sont celles de l’éditeur, relatives au droit, et non au moment du décompte.',
+    countsProvenance: 'Les décomptes du corpus et de l’index ci-dessous proviennent des artefacts désignés plus haut. Rien ici n’indique quand ils ont été établis : ce rapport n’indique aucune date de construction. Les empreintes désignent exactement les artefacts comptés, ce qu’une date ne ferait pas. Les dates calendaires plus bas sont celles de l’éditeur, relatives au droit, et non au moment du décompte.',
     noLanguageRows: 'Ce montage ne contient aucune version dans aucune langue ; les totaux ci-dessus n’ont donc pas de ventilation par langue.',
     stateRange: 'Ce sont les première et dernière dates d’applicabilité données par l’éditeur, et non un relevé de la date de collecte. L’éditeur date des versions à l’avance, de sorte que la dernière peut se situer dans le futur ; ce montage ne détient aucune date présente à laquelle les comparer et ne fait aucune comparaison de ce genre.',
     noArticleOutcomes: 'Aucun résultat de contenu juridique n’est compté ici ; cette page ne peut donc pas dire ce que le corpus a consigné pour les articles des documents acquis.',
