@@ -5,21 +5,23 @@ every pull request that changes what is served, what is next or what is blocked.
 
 ## Compact Luxembourg object identities (Codex, 2026-10-01)
 
-Reversible driver decision: retain each derived object digest as four unsigned 64-bit values,
-sorted in the same order as lowercase hexadecimal. The production LU evidence resolver uses
-binary search over this immutable set, and both identity creation and the checked reader retain the compact set. The writer uses its lazy hexadecimal
-view. This replaces their retained string/hash-tree payloads while preserving exact membership,
-duplicate-set semantics and the existing canonical identity artifact. It does not alter publisher
-proofs, custody admission or complete-enumeration checks. Binary search trades lookup work for
-less retained memory; full pipeline memory remains to be measured.
+Reversible driver decision: retain each derived object digest as four unsigned 64-bit values, sorted
+in the same order as lowercase hexadecimal. The production LU evidence resolver uses binary search
+over this immutable set, and both identity creation and the checked reader retain the compact set.
+The writer uses its lazy hexadecimal view. This replaces their retained string/hash-tree payloads
+while preserving exact membership, duplicate-set semantics and the existing canonical identity
+artifact. It does not alter publisher proofs, custody admission or complete-enumeration checks.
+Canonical readback must reproduce both the original digest pin and bytes. Binary search trades
+lookup work for less retained memory; full pipeline memory remains to be measured.
 
-Twenty-seven draft cases cover complete-digest membership and sorted-set parity over 1,024 distinct identities plus duplicates, indexed
-and enumerated access, absent and malformed digests, input-list mutation, empty/repeated sets,
-legacy canonical bytes/digests and independent reopening, nulls, cancellation and mismatched source counts.
-Reader cases also cover ordering under shared prefixes, duplicate and malformed digests and refusal precedence. Existing
-resolver and retained-identity checks will run too. Code is unvalidated; census diagnostics will
-print the actual new construction entry before pin updates. Local heavy checks remain serialized
-behind the active EU acquisition and previously queued reviews/validation.
+Twenty-seven draft cases cover complete-digest membership and sorted-set parity over 1,024 distinct
+identities plus duplicates, indexed and enumerated access, absent and malformed digests, input-list
+mutation, empty/repeated sets, legacy canonical bytes/digests and independent reopening, nulls,
+cancellation and mismatched source counts. Reader cases also cover ordering under shared prefixes,
+duplicate and malformed digests and refusal precedence. Existing resolver and retained-identity
+checks will run too. Code is unvalidated; census diagnostics will print the actual new construction
+entry before pin updates. Local heavy checks remain serialized behind the active EU acquisition and
+previously queued reviews/validation.
 
 EU retry 6 started at 04:01 UTC in C:/lex-v3/eu-population-20261001-4 from exact merged/tested
 6eb1d9d9, after preserving all cited custody paths through verified duplicate hardlinks and
@@ -27,7 +29,8 @@ reclaiming finished build outputs. It retains all 82 seeds, EN/FRA Formex enumer
 outcomes for other languages, 20,000-wire ceiling, bounded LU a439 and Brotli custody. The full
 6,374,424,214-byte allowance was checked again after runtime freezing and before the child launch.
 It is still active; no completed population is claimed. Full LU retains the independently counted
-S=1,986,924, A=9,672,378 and G=221,852 sizing inputs; a bounded complete partition is still required.
+S=1,986,924, A=9,672,378 and G=221,852 sizing inputs; a bounded complete partition is still
+required.
 
 ## EU escaped qualifier authority (Codex, 2026-10-01)
 
