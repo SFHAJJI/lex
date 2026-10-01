@@ -27,6 +27,7 @@ public sealed partial class EuFormexPackagePopulationProducerTests
     {
         var capture = shape == 2 ? await AnnexCapture.Value : await CapturePackageAsync(shape);
         var copy = await CopyPackageStoreAsync(capture.Store, weaker: weaker);
+        var writes = copy.CreateCallCount;
         var sends = capture.Handler.PackageRequests.Count + capture.Handler.PdfRequests.Count + capture.Handler.RobotsSends;
         var first = await RestorePackageAsync(copy, capture);
         var second = await RestorePackageAsync(copy, capture);
@@ -40,6 +41,7 @@ public sealed partial class EuFormexPackagePopulationProducerTests
         Assert.AreEqual(capture.Result.AnnexClassification?.ProfileRef, first.AnnexClassification?.ProfileRef);
         Assert.AreEqual(capture.Result.CheckpointRef, first.CheckpointRef);
         Assert.AreEqual(0, first.ProductRequestCount);
+        Assert.AreEqual(writes, copy.CreateCallCount, "offline derivation reuses captured identities and makes no custody writes");
         Assert.AreEqual(sends, capture.Handler.PackageRequests.Count + capture.Handler.PdfRequests.Count + capture.Handler.RobotsSends);
     }
 
@@ -84,7 +86,7 @@ public sealed partial class EuFormexPackagePopulationProducerTests
         await Assert.ThrowsExactlyAsync<CustodyIntegrityException>(() => EuFormexPackageAcquisitionProducer.ReopenAsync(
             capture.Store, capture.Result.CheckpointRef!, enumeration, changed == "corpus" ? null : capture.Corpus,
             changed == "celex" ? "32003L0088" : WorkCelex,
-            changed == "renderer" ? EuAcquisitionTestFixture.BuildRendererSource(8502) : RendererSource(), CancellationToken.None));
+            changed == "renderer" ? EuAcquisitionTestFixture.BuildRendererSource(8502) : capture.Renderer, CancellationToken.None));
     }
 
     [TestMethod]
@@ -120,7 +122,7 @@ public sealed partial class EuFormexPackagePopulationProducerTests
         var held = await copy.CreateAsync(bytes, CustodyClass.NightlyFloor90d, CancellationToken.None);
         await Assert.ThrowsExactlyAsync<CustodyIntegrityException>(() => EuFormexPackageAcquisitionProducer.ReopenAsync(
             copy, new SourceArtifactRef(capture.Result.CheckpointRef!.ResourceId, held.Reference.ContentSha256), capture.Enumeration,
-            capture.Corpus, WorkCelex, RendererSource(), CancellationToken.None));
+            capture.Corpus, WorkCelex, capture.Renderer, CancellationToken.None));
     }
 
     [TestMethod]
@@ -129,7 +131,7 @@ public sealed partial class EuFormexPackagePopulationProducerTests
         var capture = await AnnexCapture.Value;
         using var source = new CancellationTokenSource(); source.Cancel();
         await Assert.ThrowsExactlyAsync<OperationCanceledException>(() => EuFormexPackageAcquisitionProducer.ReopenAsync(
-            capture.Store, capture.Result.CheckpointRef!, capture.Enumeration, capture.Corpus, WorkCelex, RendererSource(), source.Token));
+            capture.Store, capture.Result.CheckpointRef!, capture.Enumeration, capture.Corpus, WorkCelex, capture.Renderer, source.Token));
     }
 
     [TestMethod]
@@ -141,12 +143,30 @@ public sealed partial class EuFormexPackagePopulationProducerTests
         Assert.AreEqual(0, capture.Handler.PackageRequests.Count);
     }
 
+    [TestMethod]
+    public async Task SuccessfulPopulationRetainsItsExactPackageCheckpointAssociations()
+    {
+        var (population, _, _, _) = await AcquireEnglishAsync(_ => null);
+        Assert.HasCount(1, population.Acquisitions);
+        var acquisition = population.Acquisitions[0];
+        Assert.IsNotNull(acquisition.CheckpointRef);
+        Assert.IsTrue(population.Reconciliation!.Outcomes.Any(outcome => ReferenceEquals(outcome, acquisition.Outcome)));
+        var copied = new[] { acquisition };
+        var attached = population.WithAcquisitions(copied);
+        copied[0] = null!;
+        Assert.AreSame(acquisition, attached.Acquisitions[0]);
+        Assert.ThrowsExactly<ArgumentException>(() => population.WithAcquisitions([acquisition, acquisition]));
+        var foreign = new EuFormexPackageAcquisitionResult(EuFormexPackageOutcome.NotAcquired(acquisition.Outcome.Expression,
+            EuFormexPackageNotAcquiredReason.BodyNotHeld, "other result"), 0);
+        Assert.ThrowsExactly<ArgumentException>(() => population.WithAcquisitions([foreign]));
+    }
+
     private sealed record PackageCapture(EuAcquisitionTestFixture.EuInMemoryCustodyStore Store,
         EuFormexManifestationEnumerationResult Enumeration, VerifiedCorpusRecordSet? Corpus,
-        EuFormexPackageAcquisitionResult Result, FormexEnumerationHandler Handler);
+        EuFormexPackageAcquisitionResult Result, FormexEnumerationHandler Handler, MachineQueryRendererSource Renderer);
     private static Task<EuFormexPackageAcquisitionResult> RestorePackageAsync(ICustodyStore store, PackageCapture capture) =>
         EuFormexPackageAcquisitionProducer.ReopenAsync(store, capture.Result.CheckpointRef!, capture.Enumeration,
-            capture.Corpus, WorkCelex, RendererSource(), CancellationToken.None);
+            capture.Corpus, WorkCelex, capture.Renderer, CancellationToken.None);
     private static async Task<JsonNode> PackageRootAsync(ICustodyStore store, SourceArtifactRef reference) =>
         JsonNode.Parse(Encoding.UTF8.GetString((await store.ReadByDigestAsync(reference.Sha256, CancellationToken.None)).Span))!;
     private static async Task<EuAcquisitionTestFixture.EuInMemoryCustodyStore> CopyPackageStoreAsync(
@@ -172,19 +192,20 @@ public sealed partial class EuFormexPackagePopulationProducerTests
             if (shape == 4) return EuAcquisitionTestFixture.BinaryResponse(request, HttpStatusCode.OK, "not a ZIP"u8.ToArray(), "application/zip");
             return package is null ? null : EuAcquisitionTestFixture.BinaryResponse(request, HttpStatusCode.OK, package, "application/zip");
         });
+        var renderer = RendererSource();
         var enumeration = await new EuFormexManifestationEnumerationProducer(store, new EuAcquisitionTestFixture.FixedTimeProvider(), handler)
             .RunAsync(new EuFormexManifestationRunRequest(EuFormexManifestationDiscoveryPlan.Create(), english,
-                "urn:uuid:00000000-0000-4000-8000-000000000085", RendererSource(), EuAcquisitionTestFixture.TestWireBudget()),
+                "urn:uuid:00000000-0000-4000-8000-000000000085", renderer, EuAcquisitionTestFixture.TestWireBudget()),
                 EuAcquisitionTestFixture.SourceWitness(), CancellationToken.None);
         Assert.IsTrue(enumeration.IsFormexEligible, enumeration.Detail);
         var corpus = shape == 0 ? null : run.CorpusRecordSet;
         var result = await new EuFormexPackageAcquisitionProducer(store, new EuAcquisitionTestFixture.FixedTimeProvider(), handler)
-            .RunAsync(enumeration, corpus, WorkCelex, RendererSource(), shape == 6 ? WireRequestBudget.OfWireRequests(2) : EuAcquisitionTestFixture.TestWireBudget(), CancellationToken.None);
+            .RunAsync(enumeration, corpus, WorkCelex, renderer, shape == 6 ? WireRequestBudget.OfWireRequests(2) : EuAcquisitionTestFixture.TestWireBudget(), CancellationToken.None);
         if (!failCheckpoint)
         {
             Assert.IsNotNull(result.CheckpointRef, result.Outcome.Detail);
             if (shape == 2) Assert.IsNotNull(result.AnnexClassification, result.Outcome.Detail);
         }
-        return new(store, enumeration, corpus, result, handler);
+        return new(store, enumeration, corpus, result, handler, renderer);
     }
 }

@@ -66,7 +66,7 @@ public sealed partial class EuFormexPackageAcquisitionProducer
             var result = await producer.RunCoreAsync(enumeration, corpusRecordSet, workCelex, documentFetchRendererSource,
                 budget, context, cancellationToken).ConfigureAwait(false);
             context.RequireEnd();
-            if (result.ProductRequestCount != document.ProductRequestCount || ResultDigest(result) != document.ResultSha256)
+            if (budget.Spent != 0 || result.ProductRequestCount != document.ProductRequestCount || ResultDigest(result) != document.ResultSha256)
                 throw new CustodyIntegrityException("Package replay differs from its original typed outcome or annex derivation.");
             return new EuFormexPackageAcquisitionResult(result.Outcome, 0, result.AnnexClassification).WithCheckpoint(checkpoint);
         }
