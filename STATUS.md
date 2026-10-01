@@ -3,6 +3,19 @@
 Updated 2026-10-01 by the driver. This file replaces the issue-comment ledgers. It is rewritten in
 every pull request that changes what is served, what is next or what is blocked.
 
+## Offline EU document routes (Codex, 2026-10-01)
+
+Draft: reopen a retained document route using its original acquisition run, logical-request digest
+and independently selected address. Every hop must retain its GET request, unchanged representation
+and policies, original write receipt and exact body. The existing route constructor repeats receipt,
+redirect and completion checks, and its complete canonical bytes must equal the original artifact.
+No transport is opened and no new observation or current retention guarantee is minted. Non-200
+and incomplete routes retain their original outcomes. Package inventories, annex classification,
+query binding and complete acquisition catalog reconstruction remain separate work.
+
+Local Release, required fast tests, affected ingest tests and Claude review remain queued behind
+the active EU run and prior data slices. No population completion or complete offline rebuild is claimed.
+
 ## EU escaped qualifier authority (Codex, 2026-10-01)
 
 EU retry 5 at C:/lex-v3/eu-population-20261001-3 ended at 03:08 UTC with exit 3 after
