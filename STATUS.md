@@ -3,51 +3,67 @@
 Updated 2026-10-01 by the driver. This file replaces the issue-comment ledgers. It is rewritten in
 every pull request that changes what is served, what is next or what is blocked.
 
-Combined CI36850119297 passed5,304 tests with22 skipped; the sole failure is the
-guarded-type total after integration merge (observed139, expected138). Member-level
-pins passed. The observed total is corrected; freshCI is required before review.
-
-## Validation during the EU acquisition (Codex, 2026-10-01)
-
-The 10:35 UTC standing order permits full-suite GitHub CI and a read-only Claude review
-while free memory is below 4 GB. This branch now includes integration65922 and requires
-fresh exact-head CI before merge. Local checks and the synthetic compact-digest measurement
-remain unrun. The measurement and bounded complete derivation remain required before any
-full Luxembourg memory-fit claim or population launch.
-
-
 ## Compact Luxembourg object identities (Codex, 2026-10-01)
 
-Reversible driver decision: retain each derived object digest as four unsigned 64-bit values, sorted
-in the same order as lowercase hexadecimal. The production LU evidence resolver uses binary search
-over this immutable set, and both identity creation and the checked reader retain the compact set.
-The writer uses its lazy hexadecimal view. This replaces their retained string/hash-tree payloads
-while preserving exact membership, duplicate-set semantics and the existing canonical identity
-artifact. It does not alter publisher proofs, custody admission or complete-enumeration checks.
-Canonical readback must reproduce both the original digest pin and bytes. Binary search trades
-lookup work for less retained memory; full pipeline memory remains to be measured.
+Object identity sets retain sorted 32-byte digests. Binary search preserves exact membership,
+duplicate-set semantics and canonical bytes. Checked reopening enforces the original digest,
+byte equality, ordering and refusal precedence. No publisher or custody admission changes.
 
-Twenty-seven draft cases cover complete-digest membership and sorted-set parity over 1,024 distinct
-identities plus duplicates, indexed and enumerated access, absent and malformed digests, input-list
-mutation, empty/repeated sets, legacy canonical bytes/digests and independent reopening, nulls,
-cancellation and mismatched source counts. Reader cases also cover ordering under shared prefixes,
-duplicate and malformed digests and refusal precedence. Existing resolver and retained-identity
-checks run too. Remote CI36816137999 on 9333c2d8 built successfully and passed all 27 new cases;
-the full suite reported 5,265 passed, 22 skipped and two construction-census failures. Its compiled
-surface adds the private constructor and the two internal factories FromObservations and
-FromCanonicalArray. The literal entry and independently observed counts (256 candidates, 138
-guarded types) are now pinned; fresh CI must verify the repair. Local Release build, required fast
-tests, affected ingest checks, measurement and cross-family review remain queued behind active EU
-acquisition and the earlier reviews/validation. No full-population memory result is claimed.
+All 27 new cases passed at b222687c: CI 36851145863 reported 5,305 passed and 22 skipped,
+with 259 candidates and 139 guarded types after merging integration 65922f24. The required
+CI watch exited 0. Claude reviewed that exact head and requested corrected documentation
+counts; this is the one repair round. The code review found no material defect.
 
-EU retry 6 started at 04:01 UTC in C:/lex-v3/eu-population-20261001-4 from exact merged/tested
-6eb1d9d9, after preserving all cited custody paths through verified duplicate hardlinks and
-reclaiming finished build outputs. It retains all 82 seeds, EN/FRA Formex enumeration, typed
-outcomes for other languages, 20,000-wire ceiling, bounded LU a439 and Brotli custody. The full
-6,374,424,214-byte allowance was checked again after runtime freezing and before the child launch.
-It is still active; no completed population is claimed. Full LU retains the independently counted
-S=1,986,924, A=9,672,378 and G=221,852 sizing inputs; a bounded complete partition is still
-required.
+Integration a74fece1 is now included. Final combined CI must verify its census union before
+merge. Local Release build, required fast tests, affected ingest checks and the synthetic
+measurement remain deferred under the acquisition memory guard. No full-LU fit is claimed.
+The remaining observation, scope and corpus graphs still require bounded derivation evidence.
+
+## LU assertion snapshot storage (Codex, 2026-10-01)
+
+The immutable assertion snapshot uses the checked chunk reader. Opening validates the complete
+retained sequence and builds a compact subject-digest/offset index. Lookups reopen and recheck
+chunks, preserving row order, duplicates, literal metadata and cross-range dependencies. The
+header binds the run, observation and ordered census/assertion proof references. Integration
+must independently replay those proofs and check census membership before admitting rows.
+
+Each serialized record, including the complete proof-reference header, is limited to 4 MiB.
+Opening refuses noncontiguous repeated subject groups and digest collisions. The writer does
+not detect repeated groups early. Integration must measure header size and proof count before
+launch; an oversized header refuses without truncation. This remains unwired storage support.
+Scope and corpus graphs still materialize, so no full-population memory or disk fit is claimed.
+
+At 168fbe90, the Release build passed with zero warnings/errors, required fast tests passed
+(3,105 passed, one skipped), and affected ingests passed (82 passed, two skipped). Twenty new
+cases cover row preservation, malformed and corrupted storage, binding changes and cancellation.
+CI 36850526856 passed exact 12be52d4 with 5,298 tests passed and 22 skipped. Its member-level
+census and the combined totals of 259 candidates and 139 guarded types all passed.
+
+Claude's read-only cross-family review returned MERGE with no material findings. The one
+editorial repair records that evidence, removes two added byte-order marks and records the
+header-size and writer-order limitations above. Integration c27012f4 is included; merge still
+requires successful CI on the final head. The 10:35 UTC standing order permits that CI-backed
+review during acquisition while memory is below 4 GB. No additional local build was run.
+
+The snapshot uses the legacy chunk writer; PR #855 supplies smaller chunks for its follow-on.
+No publisher traffic, production action or completed population is claimed by this slice.
+
+
+## Retained custody storage consolidation (Codex, 2026-10-01)
+
+Reversible driver decision: preserve every cited historical custody path while consolidating
+byte-identical files onto NTFS hardlinks to retained run 9. Eight bounded files passed first;
+the expanded operation completed 971 more files at 03:56 UTC with no publisher traffic.
+Every target/master was rehashed and independently read through the frozen product custody
+reader before and after replacement. A flushed per-file journal records each intent and result.
+An independent audit confirms all 971 file identities, path lengths and exact journal coverage.
+
+Evidence: C:/lex-v3/lanes/old-eu-hardlink-expanded-20261001-result.json, its .jsonl journal,
+old-eu-hardlink-expanded-fileids.json, and the bounded2 result and file-ID audit. The expanded
+operation shared 2,754,376,458 logical bytes; free space rose from 4,960,497,664 to 6,416,429,056
+bytes during the operation, with unrelated host writes possible. All original custody paths
+and bytes remain. This does not enforce retention or provide redundant physical copies.
+The next EU launch retains the full 6,374,424,214-byte allowance, checked again after freezing.
 
 ## EU escaped qualifier authority (Codex, 2026-10-01)
 
