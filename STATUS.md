@@ -2201,6 +2201,42 @@ Nothing here logs in, deploys or signs with a production identity; those stay wi
   - a custom domain, DNS and monitoring;
   - an Azure-side check of the template, since `what-if` needs the owner's session.
 
+The deployment kit's browser probes and rollback (kit 2), toward the launch contract's lines "zero-traffic
+deploy with health, API, browser, privacy and security probes" and "rollback and forward again".
+- **`deploy-probe.mjs --browser`** runs the journey's real-mount steps (`realMountRuns`, the same ten
+  steps the image run and the real-mount journeys run) through Chrome or Edge against the candidate's
+  own URL, after the HTTP probes pass:
+  - the release's mount report stands as the build report the steps read, from a temporary directory
+    removed when they end;
+  - each page is held to what the API answers its request, its hydration, console, paint and security
+    headers, with every citation verified;
+  - the revision is reached through a remote stand-in (`remoteRevision`) that exposes no process.
+- **Privacy is stated, not passed.** A deployed revision's process output and files are not the probe's
+  to watch, so its privacy checks would read nothing and prove nothing. The probe prints
+  `REMOTE_PRIVACY_NOTE` with every browser run instead: the image run's privacy probe (nothing written
+  after the first answer, no query text, address or user agent recorded) held the same image digest.
+- **`deploy.ps1`** passes `--browser` unless `-SkipBrowserProbe`, and says so when skipped. With
+  `-LiveRevision` it prints, after promotion, the rollback to the live revision (kept, since every
+  revision is kept) and forward again to the candidate: traffic moves, the owner's, printed and never
+  run.
+- **Evidence:**
+  - against the API started locally on the bounded EN/FR canary mount
+    (`C:/lex-v3/bounded-en-fr-canary-20260930-1/v3-corpus`) with the built live pages, the browser
+    probes passed all ten steps: coverage, search, dossier, reading, compare, radar, export, history,
+    EU search and EU dossier, with 0 failures;
+  - the tests hold that a failing step is reported with its label, no local API is started, the
+    release's mount report is what the steps read and is removed afterwards, the revision serves its
+    own pages (so the security headers are held), and the remote stand-in's empty privacy record comes
+    with the note;
+  - the static rules hold the `--browser` default, the stated skip, and rollback and forward printed
+    inside `Write-Host` only.
+- **Runbook, added:** step 4 now also runs the browser probes, which need Chrome or Edge on the owner's
+  machine (or `-SkipBrowserProbe`, which runs only the HTTP probes and says so). After promotion,
+  roll back or go forward again with the commands the script prints.
+- **Not covered:** a second revision, promotion, rollback and V2's retirement on Azure itself, which are
+  the owner's go-live; privacy on the deployed revision beyond the image digest it shares with the image
+  run.
+
 The licence-blocked journey (PR #834), the launch contract's "one licence-blocked journey" for its
 line "rights are enforced at compose time".
 - `V3JourneyMountTests` also writes a licence-blocked mount when `V3_WRITE_LICENCE_BLOCKED_MOUNT`
@@ -3541,7 +3577,9 @@ recorded by PR #862:
    the managed identity and the signing identity as parameters and never reads or stores a secret.
    It validates the templates offline, runs the zero-traffic probe against the deployed revision,
    removes the revision, and has a runbook here. No Azure login, deployment or production signing:
-   those stay with the owner.
+   those stay with the owner. Kit 2 adds the browser probes against the candidate (`--browser`, the
+   journey's ten real-mount steps), states that privacy is not observable on a remote revision, and
+   prints rollback and forward again.
 4. Standing: the real-mount journeys and gates on every new mount the data lane builds, and a
    review of the data lane's pull requests that touch the API when asked.
    - 2026-10-01 (PR #893): the two data-lane mounts newer than the real bounded first mount. Both
