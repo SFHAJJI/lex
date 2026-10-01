@@ -26,7 +26,7 @@ public sealed partial class EuFormexManifestationEnumerationProducer
         try
         {
             var document = ContractJson.Deserialize<Checkpoint>(new UTF8Encoding(false, true).GetString(bytes.Span));
-            if (document.Schema != CheckpointSchema || !bytes.Span.SequenceEqual(EncodeCheckpoint(document)) ||
+            if (document is null || document.Schema != CheckpointSchema || !bytes.Span.SequenceEqual(EncodeCheckpoint(document)) ||
                 document.Run != expectedRun || document.Profile != expectedProfile ||
                 document.ExpressionSha256 != expression.CanonicalContentSha256)
                 throw new CustodyIntegrityException("Formex enumeration checkpoint framing or caller binding disagrees.");
@@ -42,9 +42,10 @@ public sealed partial class EuFormexManifestationEnumerationProducer
                 if (count.QueryPlanRef.ResourceId != document.PlanResourceId)
                     throw new CustodyIntegrityException("Formex count plan identity disagrees.");
                 var evidence = await glue.ReopenPageEvidenceAsync(count, cancellationToken).ConfigureAwait(false);
-                var parameter = evidence.QueryInput.OrderedParameters.Single(value => value.Name == "pass_id");
-                if (parameter.Kind != MachineQueryParameterKind.BoundedInteger || parameter.IntegerValue is not { } pass)
-                    throw new CustodyIntegrityException("Formex count pass is absent.");
+                var parameters = evidence.QueryInput.OrderedParameters.Where(value => value.Name == "pass_id").ToArray();
+                if (parameters.Length != 1 || parameters[0].Kind != MachineQueryParameterKind.BoundedInteger ||
+                    parameters[0].IntegerValue is not { } pass || pass is not (1 or 2))
+                    throw new CustodyIntegrityException("Formex count needs one bounded pass value in 1..2.");
                 var rebound = plan.BindCount(expression.Identity, (EuFormexManifestationQueryPass)checked((int)pass),
                     count.QueryPlanRef.ResourceId, count.QueryInputRef.ResourceId, source);
                 MachineQueryPlanIdentity.Validate(count.QueryPlanRef, rebound.MachinePlan);

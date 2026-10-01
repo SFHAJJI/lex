@@ -591,28 +591,16 @@ public sealed class GuardedConstructionCensusTests
                     + "Deconstruct, "
                     + "constructor internal instance "
                     + "Lex.V3.Ingest.Luxembourg.LuxembourgEnumerationRefusalDetail::.ctor",
-                "Lex.V3.Ingest.Luxembourg.LuxembourgEnumerationRunResult: constructor private "
-                    + "instance Lex.V3.Ingest.Luxembourg.LuxembourgEnumerationRunResult::.ctor, "
-                    + "method private instance "
-                    + "Lex.V3.Ingest.Luxembourg.LuxembourgRepeatedEnumerationExecutor::RunCoverCore"
-                    + "Async, "
-                    + "method private instance "
-                    + "Lex.V3.Ingest.Luxembourg.LuxembourgRepeatedEnumerationExecutor::RunPartition"
-                    + "OnSessionAsync, "
-                    + "method public instance "
-                    + "Lex.V3.Ingest.Luxembourg.LuxembourgRepeatedEnumerationExecutor::RunAdaptiveC"
-                    + "overAsync, "
-                    + "method public instance "
-                    + "Lex.V3.Ingest.Luxembourg.LuxembourgRepeatedEnumerationExecutor::RunCoverAsyn"
-                    + "c, "
-                    + "method public instance "
-                    + "Lex.V3.Ingest.Luxembourg.LuxembourgRepeatedEnumerationExecutor::RunPartition"
-                    + "Async, "
-                    + "method public static "
-                    + "Lex.V3.Ingest.Luxembourg.LuxembourgEnumerationRunResult::Delivered, "
-                    + "method public static "
-                    + "Lex.V3.Ingest.Luxembourg.LuxembourgEnumerationRunResult::Refused, "
-                    + "2 compiler-generated",
+                "Lex.V3.Ingest.Luxembourg.LuxembourgEnumerationRunResult: constructor private instance Lex.V3.Ingest.Luxembourg"
+                    + ".LuxembourgEnumerationRunResult::.ctor, method internal static Lex.V3.Ingest.Luxembourg.LuxembourgEnumerationR"
+                    + "unResult::DeliveredWithCheckpoint, method private instance Lex.V3.Ingest.Luxembourg.LuxembourgRepeatedEnumerat"
+                    + "ionExecutor::RunCoverCoreAsync, method private instance Lex.V3.Ingest.Luxembourg.LuxembourgRepeatedEnumeration"
+                    + "Executor::RunPartitionOnSessionAsync, method public instance Lex.V3.Ingest.Luxembourg.LuxembourgRepeatedEnumer"
+                    + "ationExecutor::RunAdaptiveCoverAsync, method public instance Lex.V3.Ingest.Luxembourg.LuxembourgRepeatedEnumer"
+                    + "ationExecutor::RunCoverAsync, method public instance Lex.V3.Ingest.Luxembourg.LuxembourgRepeatedEnumerationExe"
+                    + "cutor::RunPartitionAsync, method public static Lex.V3.Ingest.Luxembourg.LuxembourgEnumerationRunResult::Delive"
+                    + "red, method public static Lex.V3.Ingest.Luxembourg.LuxembourgEnumerationRunResult::Refused, 2 compiler-generat"
+                    + "ed",
                 "Lex.V3.Ingest.Luxembourg.LuxembourgFamilyEnumerationOutcome: constructor private "
                     + "instance Lex.V3.Ingest.Luxembourg.LuxembourgFamilyEnumerationOutcome::.ctor, "
                     + "method private static "
@@ -682,6 +670,11 @@ public sealed class GuardedConstructionCensusTests
                     + "Lex.V3.Ingest.Luxembourg.LuxembourgInitialDraftInventoryResult::Success, "
                     + "method public instance "
                     + "Lex.V3.Ingest.Luxembourg.LuxembourgInitialDraftInventoryProducer::RunAsync",
+                "Lex.V3.Ingest.Luxembourg.LuxembourgObjectDigestSet: constructor private instance "
+                    + "Lex.V3.Ingest.Luxembourg.LuxembourgObjectDigestSet::.ctor, method internal static "
+                    + "Lex.V3.Ingest.Luxembourg.LuxembourgObjectDigestSet::FromCanonicalArray, "
+                    + "method internal static "
+                    + "Lex.V3.Ingest.Luxembourg.LuxembourgObjectDigestSet::FromObservations",
                 "Lex.V3.Ingest.Luxembourg.LuxembourgObjectPopulationCompletion: constructor "
                     + "private instance "
                     + "Lex.V3.Ingest.Luxembourg.LuxembourgObjectPopulationCompletion::.ctor, "
@@ -1171,6 +1164,7 @@ public sealed class GuardedConstructionCensusTests
                     + "method public static Lex.V3.Ingest.WireRequestBudget::OfWireRequests",
             };
         var actual = ClosedSurfaceCensus.GuardedConstruction(CensusScope.SweptHere).ToArray();
+        // Expected entries stay literal; remote failures print the independently observed changes.
         CollectionAssert.AreEqual(expected, actual,
             "Removed or changed pins:\n" + string.Join("\n", expected.Except(actual, StringComparer.Ordinal)) +
             "\nActual added or changed entries:\n" + string.Join("\n", actual.Except(expected, StringComparer.Ordinal)));
