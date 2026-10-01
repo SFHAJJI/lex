@@ -1,4 +1,4 @@
-using Lex.V3.TestSupport;
+﻿using Lex.V3.TestSupport;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
 namespace Lex.V3.Ingest.Tests.Census;
@@ -175,18 +175,15 @@ public sealed class ClosedVocabularyCensusTests
                     + "VerifiedRowsRefused",
                 "Lex.V3.Ingest.Europe.EuQueryExecutionCompletion: AllFamiliesProven, "
                     + "PartialFamilyRefused",
-                "Lex.V3.Ingest.Europe.EuQueryExecutionRefusal: None, CensusFamilyNotProven, "
-                    + "ObjectFactsFamilyNotProven, FamilyRowsNotVerified, RootBindingRefused, "
-                    + "RecordFormNotResolved, ObjectDecodeRefused, ScopeManifestNotRetained, "
-                    + "ManifestBindingRefused, WatermarkBootstrapRefused, WatermarkPlanRefused, "
-                    + "RootWatermarkBindingRefused, WitnessBindingRefused, "
-                    + "WitnessReconciliationRefused, ScopeReductionRefused, WitnessTraversalRefused, "
-                    + "DocumentFetchSessionNotStarted, DocumentBodyNotRetained, "
-                    + "AcquisitionOutcomeNotRepresentable, RecordSetNotRetained, "
-                    + "ReifiedAxiomDecodeRefused, LocatedAmendmentDecodeRefused, "
-                    + "LocatedAmendmentCorpusScopeUnproven, "
-                    + "CensusRequestCarriesADifferentWireBudget, DocumentFetchWireBudgetExhausted, "
-                    + "CorrigendumTripwireProductionRefused, CorrigendumTripwireBatchesNotPaired",
+                "Lex.V3.Ingest.Europe.EuQueryExecutionRefusal: None, CensusFamilyNotProven, ObjectFactsFamilyNotPro"
+                    + "ven, FamilyRowsNotVerified, RootBindingRefused, RecordFormNotResolved, ObjectDecodeRefused, ScopeM"
+                    + "anifestNotRetained, ManifestBindingRefused, WatermarkBootstrapRefused, WatermarkPlanRefused, RootW"
+                    + "atermarkBindingRefused, WitnessBindingRefused, WitnessReconciliationRefused, ScopeReductionRefused"
+                    + ", WitnessTraversalRefused, DocumentFetchSessionNotStarted, DocumentBodyNotRetained, AcquisitionOut"
+                    + "comeNotRepresentable, RecordSetNotRetained, ReifiedAxiomDecodeRefused, LocatedAmendmentDecodeRefus"
+                    + "ed, LocatedAmendmentCorpusScopeUnproven, CensusRequestCarriesADifferentWireBudget, DocumentFetchWi"
+                    + "reBudgetExhausted, CorrigendumTripwireProductionRefused, CorrigendumTripwireBatchesNotPaired, Docu"
+                    + "mentCheckpointNotRetained",
                 "Lex.V3.Ingest.Europe.EuTranspositionBridgePopulationRefusal: None, WorkScopeEmpty, "
                     + "WorkScopeNotUnique, WorkScopeNotAdmitted, SourceNotDelivered, "
                     + "SourceWorkOutsideScope, BridgeRefused, JoinEvidenceNotHeld, "

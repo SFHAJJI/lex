@@ -1,4 +1,4 @@
-using Lex.V3.TestSupport;
+﻿using Lex.V3.TestSupport;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
 namespace Lex.V3.Ingest.Tests.Census;
@@ -63,17 +63,16 @@ public sealed class GuardedConstructionCensusTests
                 "Lex.V3.Ingest.ChunkedDerivedArtifact: constructor private instance "
                     + "Lex.V3.Ingest.ChunkedDerivedArtifact::.ctor, "
                     + "method internal static Lex.V3.Ingest.ChunkedDerivedArtifact::OpenAsync",
-                "Lex.V3.Ingest.CorpusAcquisitionOutcome: constructor private instance "
-                    + "Lex.V3.Ingest.CorpusAcquisitionOutcome::.ctor, "
-                    + "constructor private instance Lex.V3.Ingest.CorpusAcquisitionOutcome::.ctor, "
-                    + "method internal instance "
-                    + "Lex.V3.Ingest.Europe.EuQueryExecutionAdapter::RunDocumentAcquisitionAsync, "
-                    + "method internal instance "
-                    + "Lex.V3.Ingest.Luxembourg.LuxembourgQueryExecutionAdapter::RunDocumentAcquisi"
-                    + "tionAsync, "
-                    + "method public instance Lex.V3.Ingest.CorpusAcquisitionOutcome::<Clone>$, "
-                    + "method public static Lex.V3.Ingest.CorpusAcquisitionOutcome::Held, "
-                    + "method public static Lex.V3.Ingest.CorpusAcquisitionOutcome::Refused",
+                "Lex.V3.Ingest.CorpusAcquisitionOutcome: constructor private instance Lex.V3.Ingest.CorpusAcquisiti"
+                    + "onOutcome::.ctor, constructor private instance Lex.V3.Ingest.CorpusAcquisitionOutcome::.ctor, meth"
+                    + "od internal instance Lex.V3.Ingest.Europe.EuQueryExecutionAdapter::RunDocumentAcquisitionAsync, me"
+                    + "thod internal instance Lex.V3.Ingest.Europe.EuQueryExecutionAdapter::RunDocumentAcquisitionWithChe"
+                    + "ckpointAsync, method internal instance Lex.V3.Ingest.Luxembourg.LuxembourgQueryExecutionAdapter::R"
+                    + "unDocumentAcquisitionAsync, method internal static Lex.V3.Ingest.Europe.EuQueryExecutionAdapter::R"
+                    + "eopenDocumentAcquisitionAsync, method private instance Lex.V3.Ingest.Europe.EuQueryExecutionAdapte"
+                    + "r::RunDocumentAcquisitionCoreAsync, method public instance Lex.V3.Ingest.CorpusAcquisitionOutcome:"
+                    + ":<Clone>$, method public static Lex.V3.Ingest.CorpusAcquisitionOutcome::Held, method public static"
+                    + " Lex.V3.Ingest.CorpusAcquisitionOutcome::Refused",
                 "Lex.V3.Ingest.CorpusRecordSetReadResult: constructor private instance "
                     + "Lex.V3.Ingest.CorpusRecordSetReadResult::.ctor, "
                     + "method public instance Lex.V3.Ingest.CorpusRecordSetReader::ReadAsync, "
@@ -180,11 +179,12 @@ public sealed class GuardedConstructionCensusTests
                     + "Lex.V3.Ingest.Europe.EuDerivedPdfPageMapping::.ctor, "
                     + "method private static Lex.V3.Ingest.Europe.EuAnnexEvidenceBinder::Map",
                 "Lex.V3.Ingest.Europe.EuDocumentFetchAttemptResult: constructor private instance Lex.V3.Ingest.Euro"
-                    + "pe.EuDocumentFetchAttemptResult::.ctor, method private instance Lex.V3.Ingest.Europe.EuFormexPacka"
-                    + "geAcquisitionProducer::FetchAsync, method public instance Lex.V3.Ingest.Europe.EuRepeatedEnumerati"
-                    + "onExecutor::RunDocumentFetchAsync, method public static Lex.V3.Ingest.Europe.EuDocumentFetchAttemp"
-                    + "tResult::Executed, method public static Lex.V3.Ingest.Europe.EuDocumentFetchAttemptResult::Refused"
-                    + ", method public static Lex.V3.Ingest.Europe.EuDocumentFetchRouteReader::ReopenAsync",
+                    + "pe.EuDocumentFetchAttemptResult::.ctor, method internal instance Lex.V3.Ingest.Europe.EuQueryExecu"
+                    + "tionAdapter+DocumentLadderReplay::FetchAsync, method private instance Lex.V3.Ingest.Europe.EuForme"
+                    + "xPackageAcquisitionProducer::FetchAsync, method public instance Lex.V3.Ingest.Europe.EuRepeatedEnu"
+                    + "merationExecutor::RunDocumentFetchAsync, method public static Lex.V3.Ingest.Europe.EuDocumentFetch"
+                    + "AttemptResult::Executed, method public static Lex.V3.Ingest.Europe.EuDocumentFetchAttemptResult::R"
+                    + "efused, method public static Lex.V3.Ingest.Europe.EuDocumentFetchRouteReader::ReopenAsync",
                 "Lex.V3.Ingest.Europe.EuEnumerationRefusalDetail: by-ref-method public instance "
                     + "Lex.V3.Ingest.Europe.EuRepeatedEnumerationExecutor+ObserveOutcome::Deconstru"
                     + "ct, "
@@ -457,23 +457,20 @@ public sealed class GuardedConstructionCensusTests
                     + "Lex.V3.Ingest.Europe.EuProductionScopeReductionEvidenceResolver::CreateAsync",
                 "Lex.V3.Ingest.Europe.EuPublisherMarkedAmendmentAttribution: constructor internal "
                     + "instance Lex.V3.Ingest.Europe.EuPublisherMarkedAmendmentAttribution::.ctor",
-                "Lex.V3.Ingest.Europe.EuQueryExecutionRefusalDetail: constructor internal instance "
-                    + "Lex.V3.Ingest.Europe.EuQueryExecutionRefusalDetail::.ctor, "
-                    + "method internal instance "
-                    + "Lex.V3.Ingest.Europe.EuQueryExecutionAdapter::RunDocumentAcquisitionAsync, "
-                    + "method internal static "
-                    + "Lex.V3.Ingest.Europe.EuQueryExecutionAdapter::TryPairExpressionAndObjectBatc"
-                    + "hes",
-                "Lex.V3.Ingest.Europe.EuQueryExecutionResult: constructor private instance "
-                    + "Lex.V3.Ingest.Europe.EuQueryExecutionResult::.ctor, "
-                    + "method internal static "
-                    + "Lex.V3.Ingest.Europe.EuQueryExecutionResult::DeliveredWithLocatedAmendments, "
-                    + "method internal static "
-                    + "Lex.V3.Ingest.Europe.EuQueryExecutionResult::DeliveredWithLocatedAmendments, "
-                    + "method public instance "
-                    + "Lex.V3.Ingest.Europe.EuQueryExecutionAdapter::RunAsync, "
-                    + "method public static Lex.V3.Ingest.Europe.EuQueryExecutionResult::Delivered, "
-                    + "method public static Lex.V3.Ingest.Europe.EuQueryExecutionResult::Refused",
+                "Lex.V3.Ingest.Europe.EuQueryExecutionRefusalDetail: constructor internal instance Lex.V3.Ingest.Eu"
+                    + "rope.EuQueryExecutionRefusalDetail::.ctor, method internal instance Lex.V3.Ingest.Europe.EuQueryEx"
+                    + "ecutionAdapter::RunDocumentAcquisitionAsync, method internal instance Lex.V3.Ingest.Europe.EuQuery"
+                    + "ExecutionAdapter::RunDocumentAcquisitionWithCheckpointAsync, method internal static Lex.V3.Ingest."
+                    + "Europe.EuQueryExecutionAdapter::ReopenDocumentAcquisitionAsync, method internal static Lex.V3.Inge"
+                    + "st.Europe.EuQueryExecutionAdapter::TryPairExpressionAndObjectBatches, method private instance Lex."
+                    + "V3.Ingest.Europe.EuQueryExecutionAdapter::RunDocumentAcquisitionCoreAsync",
+                "Lex.V3.Ingest.Europe.EuQueryExecutionResult: constructor private instance Lex.V3.Ingest.Europe.EuQ"
+                    + "ueryExecutionResult::.ctor, method internal instance Lex.V3.Ingest.Europe.EuQueryExecutionResult::"
+                    + "WithDocumentCheckpoint, method internal static Lex.V3.Ingest.Europe.EuQueryExecutionResult::Delive"
+                    + "redWithLocatedAmendments, method internal static Lex.V3.Ingest.Europe.EuQueryExecutionResult::Deli"
+                    + "veredWithLocatedAmendments, method public instance Lex.V3.Ingest.Europe.EuQueryExecutionAdapter::R"
+                    + "unAsync, method public static Lex.V3.Ingest.Europe.EuQueryExecutionResult::Delivered, method publi"
+                    + "c static Lex.V3.Ingest.Europe.EuQueryExecutionResult::Refused",
                 "Lex.V3.Ingest.Europe.EuTranspositionBridgePopulationResult: constructor private "
                     + "instance Lex.V3.Ingest.Europe.EuTranspositionBridgePopulationResult::.ctor, "
                     + "method internal static "
