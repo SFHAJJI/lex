@@ -19,20 +19,22 @@ public sealed partial class EuFormexPackagePopulationProducerTests
     [DataRow(3, false)]
     [DataRow(4, false)]
     [DataRow(2, true)]
-    public async Task PopulationReplayRepeatsAllTypedOutcomesWithoutWritesOrRequests(int shape, bool weaker)
+    public async Task PopulationReplayRepeatsAllTypedOutcomesWithoutNewArtifactsOrRequests(int shape, bool weaker)
     {
         var capture = shape == 2 ? await PopulationAnnexCapture.Value : await CapturePopulationAsync(shape);
         var copy = await CopyPackageStoreAsync(capture.Store, weaker: weaker);
-        var writes = copy.CreateCallCount;
+        var digests = copy.WrittenDigestsInOrder.Distinct().Order(StringComparer.Ordinal).ToArray();
         var sends = PopulationSends(capture.Handler);
         var first = await RestorePopulationAsync(copy, capture);
         var second = await RestorePopulationAsync(copy, capture);
         Assert.IsTrue(first.Delivered);
+        Assert.AreSame(capture.Run, first.Reconciliation!.Run);
         Assert.AreEqual(capture.Result.CreateOutcomeDiagnosticsJson(), first.CreateOutcomeDiagnosticsJson());
         Assert.AreEqual(first.CreateOutcomeDiagnosticsJson(), second.CreateOutcomeDiagnosticsJson());
         Assert.AreEqual(capture.Result.CheckpointRef, first.CheckpointRef);
         Assert.AreEqual(0, first.ProductRequestCount);
-        Assert.AreEqual(writes, copy.CreateCallCount);
+        CollectionAssert.AreEqual(digests, copy.WrittenDigestsInOrder.Distinct().Order(StringComparer.Ordinal).ToArray(),
+            "Receipt refresh may repeat holds, but replay must introduce no new artifact identities.");
         Assert.AreEqual(sends, PopulationSends(capture.Handler));
         CollectionAssert.AreEqual(capture.Result.AnnexClassifications.Select(value => value.IdentitySha256).ToArray(),
             first.AnnexClassifications.Select(value => value.IdentitySha256).ToArray());

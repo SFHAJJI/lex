@@ -10,12 +10,13 @@ checked EU run. Replay restores each served-language enumeration and selected pa
 custody, uses the same eligibility, per-family outcome and whole-run reconciliation gates,
 and consumes every checkpoint exactly once. It preserves the original renderer identities,
 CELEX selection mode, annex identities and typed non-EN/FRA outcomes. A missing package or
-population checkpoint prevents delivery. Replay sends no requests and writes no custody objects.
+population checkpoint prevents delivery. Replay sends no requests and introduces no new artifact digests. Enumeration receipt restoration
+repeats checked local holds so current custody guarantees are not inferred from archived receipts.
 
 Thirty-two new draft cases cover copied and weaker custody, original expression references,
 annex identities, language exclusions, automatic CELEX selection, missing nested evidence,
-caller and rehashed association changes, cancellation and failed holds. Source is uncompiled;
-remote CI is requested. Local Release, fast and affected ingest tests plus Claude review
+caller and rehashed association changes, cancellation and failed holds. Initial d5fd69e3 CI36845188277 failed compilation on a missing Derivation namespace import;
+no tests ran. The import and receipt-refresh assertion are corrected; fresh CI is required. Local Release, fast and affected ingest tests plus Claude review
 remain required after the active EU run and earlier queue. Pending PR881's final merged head
 must be included before local validation. This restores Formex over an already checked run;
 the complete acquisition catalog and independent offline mount builds remain outstanding.
