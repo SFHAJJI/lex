@@ -28,7 +28,7 @@ public sealed class V3CorpusGenerationQuoteTests
         }
     }
 
-    private static string WriteMount(Stage3DerivationProfileEnvelope envelope, LuxembourgIndexBuildResult luxembourg)
+    internal static string WriteMount(Stage3DerivationProfileEnvelope envelope, LuxembourgIndexBuildResult luxembourg)
     {
         var corpus = LexCorpus6Builder.TryBuild(envelope, out var corpusRefusal, out var corpusDetail);
         Assert.IsNotNull(corpus, $"{corpusRefusal}: {corpusDetail}");
