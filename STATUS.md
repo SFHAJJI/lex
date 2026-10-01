@@ -5,42 +5,43 @@ every pull request that changes what is served, what is next or what is blocked.
 
 ## EU object-facts continuation range (Codex, 2026-10-01)
 
-Full EU retry 4 (frozen source18b53941, C:/lex-v3/eu-population-20261001-2) refused
-ObjectFactsFamilyNotProven after 1,359 wire requests. In retained batch c4968f32 both COUNTs
-are 678; pass A has 678 rows and pass B has 613+72, with seven repeated keys below its cursor.
-Both unique key sets are equal. The retained continuation query88def2e2 explicitly excludes
+Full EU retry 4, frozen at source 18b53941 in C:/lex-v3/eu-population-20261001-2, refused with
+ObjectFactsFamilyNotProven after 1,359 wire requests. In retained batch c4968f32, both COUNTs
+are 678. Pass A has 678 rows; pass B has 613 + 72, including seven repeated keys below its cursor.
+Both unique key sets are equal. The retained continuation query 88def2e2 explicitly excludes
 those earlier rows. The proof correctly refused; no complete population or mount was produced.
-Minimum sampled free space was5,981,491,200 bytes; this was not a disk-guard stop.
+Minimum sampled free space was 5,981,491,200 bytes. The disk guard did not stop the run.
 
-Reversible driver decision: retain the original predicate and add an equivalent nested comparison
-that selects the first unequal cursor component. All six components are already total strings.
-This candidate changes publisher-side filtering only; rows are never discarded or deduplicated
-locally to turn an invalid delivery into a proof. The executor now checks the first continuation
-row against the prior cursor so an overlapping prefix refuses immediately. Three offline cases
-cover earlier, equal and valid later prefixes. At0ddc4795, clean Release build passed with no
-warnings/errors; required fast tests passed (3,085 succeeded, one skipped), and affected ingest
-passed (86 succeeded, two skipped).
+Reversible driver decision: retain the original query predicate and add an equivalent nested
+comparison that selects the first unequal cursor component. All six components are total strings.
+Publisher rows are never discarded or deduplicated locally to make an invalid delivery prove.
+The executor also checks the first continuation row against the prior cursor, so an overlapping
+prefix refuses immediately. Three offline cases cover earlier, equal and valid later prefixes.
+At 0ddc4795, the clean Release build passed with no warnings or errors. Required fast tests passed
+(3,085 succeeded, one skipped), as did affected ingest tests (86 succeeded, two skipped).
 
 The fresh production-executor probe C:/lex-v3/eu-object-facts-cursor-20261001-1 completed with
-11 of60 allowed wire requests. Both COUNTs are678; passA has678 rows and passB has613+65,
+11 of 60 allowed wire requests. Both COUNTs are 678. Pass A has 678 rows; pass B has 613 + 65,
 strictly ordered with no overlap. The family proof and independent retained-row reopen passed.
-The separate audit rehashed frozen inputs, logical requests, rendered queries and response bodies;
-both row sequences are equal and match every binding from the prior failed run's passA.
-Minimum sampled free space was5,411,053,568 bytes and peak sampled working set104,214,528 bytes.
-Audit: retained-cursor-audit.json; summary SHA31d5912623f5376da63b0ea162f5265cbbc6dbd72ef99f7bfd787e337b82f06e.
-This proves the correction on the exact failing batch; it does not complete the full population.
-Cross-family review and exact-head green CI remain required.
+A separate audit rehashed frozen inputs, logical requests, rendered queries and response bodies.
+Both complete row sequences are equal and match every binding from the failed run's pass A.
+Minimum sampled free space was 5,411,053,568 bytes; peak sampled working set was 104,214,528 bytes.
+The run contains retained-cursor-audit.json. Its summary SHA-256 is
+`31d5912623f5376da63b0ea162f5265cbbc6dbd72ef99f7bfd787e337b82f06e`.
+This proves the correction on the failing batch. Full population acquisition remains unfinished.
+Cross-family review and green CI on the exact final head remain required.
 
-The proposed raw-custody retry5 plan keeps all82 seeds, EN/FRA Formex enumeration with explicit
-out-of-language outcomes, the20,000-wire ceiling and bounded LU a439 companion. It raises index
-headroom from25 to60 percent for schema4 source/digest rows:1,274,491,700 bytes. Together with
-held bodies656,160,664, packages564,415,560 and metadata/runtime/other500,000,000, the working
-allowance is2,995,067,924 bytes. Add the3GiB reserve and512MiB stop margin:6,753,164,308 bytes
-must be free before and after freeze. This is a planning estimate, informed by retained physical
-samples and small fixed-index growth61440->77824; it is not a full-population size bound.
-The nonready plan and input hashes are in C:/lex-v3/lanes/eu-population-retry5-sizing-proposed-20261001.json.
-A compressed-custody alternative needs separate measured sizing and a recorded decision first.
-No full rerun has started; source must include the reviewed cursor and schema4 changes.
+The proposed raw-custody retry 5 keeps all 82 seeds, EN/FRA Formex enumeration, explicit outcomes
+for other languages, the 20,000-request ceiling and the bounded LU a439 companion. It raises index
+headroom from 25 to 60 percent for schema 4 source and digest rows: 1,274,491,700 bytes. Add held
+bodies (656,160,664), packages (564,415,560) and metadata/runtime/other data (500,000,000): the
+working allowance is 2,995,067,924 bytes. With the 3 GiB reserve and 512 MiB stop margin,
+6,753,164,308 bytes must be free before and after freeze. This estimate uses retained physical
+samples and fixed-index growth from 61,440 to 77,824 bytes; it is not a population size bound.
+The plan and input hashes are in
+C:/lex-v3/lanes/eu-population-retry5-sizing-proposed-20261001.json; it is not launch-ready.
+A compressed-custody alternative needs measured sizing and a recorded decision first.
+No full rerun has started. Its source must include the reviewed cursor and schema 4 changes.
 
 ## EU article source coordinates (Codex, 2026-10-01)
 
