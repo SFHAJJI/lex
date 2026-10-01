@@ -17,9 +17,9 @@ namespace Lex.V3.Ingest.Tests;
 [TestClass]
 public sealed class V3CorpusEventsChainMountTests
 {
-    private const string EarlierDate = "2001-01-01";
+    internal const string EarlierDate = "2001-01-01";
 
-    private sealed record ChainedMount(string Directory, string PredecessorSha256, string WorkKey, string Language, string HeldStateSha256)
+    internal sealed record ChainedMount(string Directory, string PredecessorSha256, string WorkKey, string Language, string HeldStateSha256)
         : IAsyncDisposable
     {
         public ValueTask DisposeAsync()
@@ -29,7 +29,7 @@ public sealed class V3CorpusEventsChainMountTests
         }
     }
 
-    private static async Task<ChainedMount> ChainedMountAsync()
+    internal static async Task<ChainedMount> ChainedMountAsync()
     {
         var (envelope, first, _) = await LuxembourgIndexBuilderTests.BuildStateEnvelopeAsync();
         string[] key = [];

@@ -83,24 +83,18 @@ const OPERATIONS_NOTE =
   + 'serve it, none of which the ingest produces';
 
 const SERVED = Object.freeze([
-  'answer_drift', 'article_history', 'as_of', 'ask', 'browse', 'changes_in_period', 'citation',
-  'cited_by', 'classification', 'coverage', 'diff', 'dossier', 'events', 'evidence_bundle',
-  'in_force_on', 'manifestation', 'provenance', 'relations', 'resolve', 'search', 'status_on',
-  'timeline', 'verify',
+  'answer_drift', 'article_history', 'as_observed', 'as_of', 'ask', 'browse', 'changes_in_period',
+  'citation', 'cited_by', 'classification', 'coverage', 'diff', 'dossier', 'events',
+  'evidence_bundle', 'in_force_on', 'manifestation', 'provenance', 'relations', 'resolve', 'search',
+  'status_on', 'timeline', 'verify',
 ]);
 
 const NOT_SERVED = Object.freeze([
-  'as_observed', 'concepts', 'knowable_on', 'transposition',
+  'concepts', 'knowable_on', 'transposition',
 ]);
 
 // The platform's own sentences, to the character (`V3CorpusMount.NotServedDataNeeded`).
 const NOT_SERVED_DATA = Object.freeze([
-  Object.freeze({
-    data_needed: 'observation times: when this corpus first observed each held state (observed_from), '
-      + 'recorded by builds chained to their predecessors in the event log; a single build holds no '
-      + 'observation time, so no answer can be replayed as it was observed',
-    operation: 'as_observed',
-  }),
   Object.freeze({
     data_needed: 'the concept data attached to EU works: EuroVoc descriptors, EU directory codes and '
       + 'subject matters as the Publications Office records them; the EU index holds none of them',
@@ -109,7 +103,8 @@ const NOT_SERVED_DATA = Object.freeze([
   Object.freeze({
     data_needed: 'each held state\'s publication date beside its observation time (observed_from), so a '
       + 'date is answered with what a reader could have known on it, never with the publisher\'s '
-      + 'valid-from date; the observation times need builds chained to their predecessors',
+      + "valid-from date; the observation times need each Luxembourg body's capture time in the "
+      + "corpus, which no build records yet: a build's time bounds observation only from above",
     operation: 'knowable_on',
   }),
   Object.freeze({
