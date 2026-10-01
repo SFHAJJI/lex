@@ -15,7 +15,9 @@ stops before population traffic. The checkpoint remains reachable on later run r
 
 Twenty-three new draft cases cover copied/weaker custody, seven missing dependencies, ten
 rehashed association changes, caller pins, cancellation and failed holds. Initial bfb7ffd4 CI36846085303 compiled production code but test compilation failed because
-the test store lacked failSchema. The fixture support is now included; fresh CI is required. Required local Release, fast and affected ingest tests plus Claude
+the test store lacked failSchema. Repaired302a84c4 CI36846408858 passed all23 new cases:
+5339 passed/22 skipped, one construction inventory failure. The exact compiled new association
+method is now transcribed; fresh CI must verify the update. Required local Release, fast and affected ingest tests plus Claude
 review wait for the active EU run and earlier queue. Include pending PR872's final merged head
 before local validation. Full LU acquisition restoration and independent offline mounts remain
 outstanding; this slice makes no full-population memory or completion claim.
