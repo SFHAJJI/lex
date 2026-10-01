@@ -11,10 +11,13 @@ count templates to original batches and artifact IDs, and repeats the existing p
 production and tripwire fold. Expression derivation, episode, tripwire and lineage must
 match the held originals byte for byte. Both production orders retain checkpoints.
 
-All 33 new cases passed at e36c062a: CI 36834162515 reported 5,319 passed and 22 skipped,
-and the required watch exited 0. Integration d874273b is included; fresh combined CI and
-read-only Claude review remain required. Local builds/tests stay deferred under the
-acquisition memory guard. PR869's final reviewed head must merge before this slice.
+The original 33 new cases passed at 392567c6: CI 36856266903 reported 5,370 passed and
+22 skipped; the required watch exited zero. Claude found no material production defect but
+requested the merged parent/base and combined census fix. The one repair includes merged869
+1a63b61a and the 261/140/7 candidate/guarded/declined union. It adds explicit null-root integrity
+refusals in all three readers, validates one pass value in 1..2 before conversion, and adds three
+null-root regression cases. Fresh full CI gates merge; local builds/tests remain deferred under
+the acquisition memory guard. No complete offline mount process is claimed.
 
 The current store's protection is checked again. Changed protection refuses the original
 byte claim because protection is part of derivation identity. Replay reports zero publisher

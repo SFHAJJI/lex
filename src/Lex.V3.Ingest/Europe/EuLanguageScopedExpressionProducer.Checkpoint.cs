@@ -34,7 +34,7 @@ public sealed partial class EuLanguageScopedExpressionProducer
         try
         {
             var document = ContractJson.Deserialize<ProductionCheckpoint>(new UTF8Encoding(false, true).GetString(bytes.Span));
-            if (document.Schema != CheckpointSchema || !bytes.Span.SequenceEqual(EncodeCheckpoint(document)))
+            if (document is null || document.Schema != CheckpointSchema || !bytes.Span.SequenceEqual(EncodeCheckpoint(document)))
                 throw new CustodyIntegrityException("Expression checkpoint framing disagrees.");
             var budget = WireRequestBudget.OfWireRequests(2); // Shared contract witness; never spent by this path.
             var expression = await ReopenFamilyAsync(store, document.Expression, budget, cancellationToken)
@@ -77,9 +77,10 @@ public sealed partial class EuLanguageScopedExpressionProducer
             if (family.PlanResourceId != count.QueryPlanRef.ResourceId)
                 throw new CustodyIntegrityException("Expression plan identity differs from the retained count.");
             var evidence = await glue.ReopenPageEvidenceAsync(count, cancellationToken).ConfigureAwait(false);
-            var parameter = evidence.QueryInput.OrderedParameters.Single(value => value.Name == "pass_id");
-            if (parameter.Kind != MachineQueryParameterKind.BoundedInteger || parameter.IntegerValue is not { } pass)
-                throw new CustodyIntegrityException("Expression count pass is absent.");
+            var parameters = evidence.QueryInput.OrderedParameters.Where(value => value.Name == "pass_id").ToArray();
+            if (parameters.Length != 1 || parameters[0].Kind != MachineQueryParameterKind.BoundedInteger ||
+                parameters[0].IntegerValue is not { } pass || pass is not (1 or 2))
+                throw new CustodyIntegrityException("Expression count must have exactly one bounded pass, 1 or 2.");
             var rebound = plan.BindCount(family.Set, family.Batch, (EuObjectFactsQueryPass)checked((int)pass),
                 count.QueryPlanRef.ResourceId, count.QueryInputRef.ResourceId, source);
             MachineQueryPlanIdentity.Validate(count.QueryPlanRef, rebound.MachinePlan);

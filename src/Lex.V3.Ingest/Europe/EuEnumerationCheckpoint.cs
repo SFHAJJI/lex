@@ -58,7 +58,7 @@ public static class EuEnumerationCheckpoint
         try
         {
             var document = ContractJson.Deserialize<Document>(new UTF8Encoding(false, true).GetString(bytes.Span));
-            if (document.Schema != Schema || !bytes.Span.SequenceEqual(Encode(document)) ||
+            if (document is null || document.Schema != Schema || !bytes.Span.SequenceEqual(Encode(document)) ||
                 document.Run != expectedRun || document.ProfileRef != expectedInterpretationProfile)
                 throw new CustodyIntegrityException("Enumeration checkpoint framing or expected identity disagrees.");
             if (document.PagesA.Pages.Any(p => p is null || p.Evidence is null) ||
