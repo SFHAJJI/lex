@@ -98,6 +98,8 @@ public sealed class LuxembourgObservedObjectIdentitySetWriter
     /// The containing acquisition replay remains responsible for proving the observation inputs.
     /// Current custody holds and independent readback still run; historical receipts are not reused.
     /// </summary>
+    /// <remarks>The caller must obtain originalSet from its verified retained catalog. Its ResourceId
+    /// is not encoded in these canonical bytes and cannot be independently checked by this writer.</remarks>
     internal Task<LuxembourgObservedObjectIdentitySetWriteResult> RebuildAsync(
         SourceArtifactRef runIdentity, IReadOnlyList<LuxembourgResourceObservation> observations,
         SourceArtifactRef originalSet, CancellationToken cancellationToken)

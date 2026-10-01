@@ -3,6 +3,10 @@
 Updated 2026-10-01 by the driver. This file replaces the issue-comment ledgers. It is rewritten in
 every pull request that changes what is served, what is next or what is blocked.
 
+## LU observed-identity rebuild review — PR #894
+
+Claude reviewed 2a81df6d with a MERGE verdict; CI 36863849041 passed 5,453 tests with 22 live-publisher tests skipped, including all 13 new cases. The editorial repair states that the containing verified catalog must supply the original ResourceId, which is not encoded in the set bytes; it also wraps the unchanged literal census row and corrects evidence spacing. The final current-base STATUS merge and exact-head CI are pending the shared merge turn. Whole-set buffering remains and this is not a full-LU memory-fit measurement.
+
 ## Luxembourg observed identity rebuild (Codex, 2026-10-01)
 
 The internal rebuild path derives the observed-object identity set from fresh observation inputs
@@ -13,7 +17,7 @@ needed by LU offline replay; the containing catalog must still prove its observa
 
 Thirteen cases cover empty/single/3,000-object sets in two separate stores, reordered and
 duplicate inputs, current weaker protection, changed digest/run/objects before writes, failed
-holds, cancellation, missing original identity and ordinary new identities. Initial CI36861974288 compiled and passed all13 new cases:5,398 passed/22 skipped, one
+holds, cancellation, missing original identity and ordinary new identities. Initial CI 36861974288 compiled and passed all 13 new cases: 5,398 passed/22 skipped, one
 construction inventory failure. Its exact compiled writer-method row is now transcribed. Fresh
 full CI and read-only Claude review remain required. Local Release/fast/ingest checks are
 deferred under the acquisition memory guard. The writer still buffers its whole canonical set;
@@ -3769,6 +3773,7 @@ and a current storage check before and after its runtime is frozen; it has not s
 
 PRs #827, #829 and #830 are merged. The all-82-seed EU retry remains prepared, with a
 4,999,959,422-byte launch allowance and checks before and after freezing its runtime.
+
 ## Retained Formex manifestation enumeration (Codex, 2026-10-01)
 
 The retained checkpoint binds each expression to its original enumeration, renderer, plan and
