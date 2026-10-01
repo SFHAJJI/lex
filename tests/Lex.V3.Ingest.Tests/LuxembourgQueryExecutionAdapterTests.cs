@@ -1504,12 +1504,14 @@ public sealed partial class LuxembourgQueryExecutionAdapterTests
     // ---------------------------------------------------------------------------------------
 
     [TestMethod]
-    public async Task ACensusFamilyThatSaturatesReconcilesThroughATwoLeafCoverAndUnionsBothLeavesRows()
+    [DataRow(false)]
+    [DataRow(true)]
+    public async Task ACensusFamilyThatSaturatesReconcilesThroughATwoLeafCoverAndUnionsBothLeavesRows(bool failCheckpoint)
     {
         const string leafASubject = "http://data.legilux.public.lu/eli/etat/leg/loi/2026/01/01/b0";
         const string leafBSubject = "http://data.legilux.public.lu/eli/etat/leg/loi/2026/01/01/n0";
         var (profile, _, enumerationRef) = BuildProfile();
-        var store = new InMemoryCustodyStore();
+        var store = new InMemoryCustodyStore { FailSchema = failCheckpoint ? "lex-lu-partition-cover-checkpoint/1" : null };
         var (assertionRequest, assertionWitness) = BuildPartitionRequest(AssertionSetId, AssertionFamilyKey);
         var (resourceRequest, resourceWitness) = BuildPartitionRequest(ResourceSetId, ResourceFamilyKey);
         var chain = LuxembourgPartitionChain.Root(resourceRequest.Partition)
@@ -1556,6 +1558,22 @@ public sealed partial class LuxembourgQueryExecutionAdapterTests
             null, ResourceFamilyKey, AssertionFamilyKey,
             new PermissiveEvidenceResolver(enumerationRef), DocumentFetchRendererSource(), LuxembourgAcquisitionTestFixture.TestWireBudget(), CancellationToken.None);
 
+        if (failCheckpoint)
+        {
+            Assert.IsNotNull(result.Refusal);
+            var failed = result.FamilyOutcomes.Single(outcome => outcome.FamilyKey == ResourceFamilyKey);
+            Assert.AreEqual(LuxembourgFamilyEnumerationOutcomeKind.CoverRefused, failed.Kind);
+            Assert.IsNull(failed.CheckpointRef);
+            Assert.IsNotNull(failed.CoverRefusal);
+            Assert.AreEqual(LuxembourgPartitionCoverReconciliationRefusal.CheckpointNotRetained, failed.CoverRefusal.Code);
+            Assert.IsNotNull(failed.CoverRefusal.CheckpointFailure);
+            Assert.IsNull(failed.CoverRefusal.LeafExecutorRefusal);
+            Assert.IsNull(failed.CoverRefusal.LeafProofRefusal);
+            Assert.IsNull(failed.CoverRefusal.CoverRefusal);
+            Assert.AreEqual(1, store.FailedCreateCount);
+            return;
+        }
+
         Assert.IsNull(result.Refusal, $"code={result.Refusal?.Code} detail={result.Refusal?.Detail}");
         Assert.IsNotNull(result.ScopeManifestReceipt);
         Assert.AreEqual(
@@ -1570,6 +1588,15 @@ public sealed partial class LuxembourgQueryExecutionAdapterTests
         Assert.AreEqual(2, censusOutcome.CoverLeafProofs!.Count);
         Assert.AreEqual("leaf-a", censusOutcome.CoverLeafProofs[0].FamilyKey);
         Assert.AreEqual("leaf-b", censusOutcome.CoverLeafProofs[1].FamilyKey);
+
+        Assert.IsTrue(result.FamilyOutcomes.All(outcome => outcome.CheckpointRef is not null));
+        var sends = handler.SendCount;
+        var reopened = await LuxembourgPartitionCoverCheckpoint.RestoreAsync(store, censusOutcome.CheckpointRef!,
+            chain.RootRange, censusOutcome.CoverLeafProofs[0].AcquisitionRunRef,
+            censusOutcome.CoverLeafProofs[0].InterpretationProfileRef, CancellationToken.None);
+        Assert.AreEqual(2L, reopened.LeafDeliveredRowCountSum);
+        Assert.AreEqual(LuxembourgPartitionCoverBasis.LeafTilingOnly, reopened.Basis);
+        Assert.AreEqual(sends, handler.SendCount);
 
         // The union of both leaves' own verified rows, in leaf order -- never a subset, and never
         // silently missing the second leaf.
@@ -2306,11 +2333,18 @@ public sealed partial class LuxembourgQueryExecutionAdapterTests
     /// </summary>
     private sealed class InMemoryCustodyStore : ICustodyStore
     {
+        public string? FailSchema { get; init; }
+        public int FailedCreateCount { get; private set; }
         private readonly Dictionary<string, byte[]> _byDigest = new(StringComparer.Ordinal);
 
         public Task<DurableBlobWriteReceipt> CreateAsync(
             ReadOnlyMemory<byte> bytes, CustodyClass custodyClass, CancellationToken cancellationToken)
         {
+            if (FailSchema is not null && bytes.Span.IndexOf(Encoding.UTF8.GetBytes("\"schema\":\"" + FailSchema + "\"")) >= 0)
+            {
+                FailedCreateCount++;
+                throw new CustodyRequiredException("Scripted checkpoint hold failure.");
+            }
             var frozen = bytes.ToArray();
             var digest = CustodyDigest.Of(frozen);
             _byDigest[digest] = frozen;

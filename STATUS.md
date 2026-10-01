@@ -3,24 +3,23 @@
 Updated 2026-10-01 by the driver. This file replaces the issue-comment ledgers. It is rewritten in
 every pull request that changes what is served, what is next or what is blocked.
 
-## Retained Luxembourg vocabulary proof (Codex, 2026-10-01)
+## Retained Luxembourg cover history (Codex, 2026-10-01)
 
-Reversible driver decision: retain all four original P/T/C/O enumeration checkpoint associations
-and the resulting vocabulary observation reference. Live and offline paths share the row-proof
-and classification code. Replay independently rebinds both count queries to the required ranges,
-restores every enumeration with current custody checks, reproduces the original observation
-bytes and reopens the verified source profile. Required vocabulary remains an expectation;
-missing observations cannot be supplied from that expectation. Failed checkpoint retention
-stops before population traffic. The checkpoint remains reachable on later run refusals.
+Reversible driver decision: retain the actual successful split history and every leaf's
+checkpoint before reporting a proven cover. Restoration replays those splits, checks the
+caller's root/run/profile, reopens both passes of every leaf, compares all six query bounds,
+and repeats the existing leaf and cover gates. It keeps the LeafTilingOnly basis and current
+custody protection. A failed checkpoint hold produces a typed cover refusal.
 
-All 23 cases passed at reviewed 99fd13f9: CI 36859809816 reported 5,406 passed and
-22 skipped. Claude found no production defect; its two blocking findings were invalid UTF-8
-in inherited STATUS lines and a stale merge base. One repair restores current integration's
-UTF-8 sections and includes merged PRs 873, 876 and 879 (749e88a3). Strict UTF-8 decoding
-now succeeds. Fresh full CI gates merge; local tests remain deferred under the acquisition
-memory guard. The checkpoint reference still needs a containing LU acquisition catalog or
-CLI output to make it discoverable from a real run. Full LU acquisition restoration and
-independent offline mounts remain outstanding; no full-population fit is claimed.
+The chain owns immutable copies of its leaves and history. All 22 original cases passed at
+96e5cb49: CI 36859308947 reported 5,405 passed and 22 skipped; required watch exited zero.
+Claude returned MERGE with no material defect. One repair includes197f0511, adds explicit null-root
+integrity refusals to cover and leaf readers with two before-writes regressions (24 new cases),
+and fixes the whole-checkpoint partition-ID comment. Fresh combined CI gates merge; local
+builds/tests remain deferred under the acquisition memory guard. PR869 and PR872 are merged.
+
+This supplies the cover part of the offline acquisition catalog. Complete catalog restoration,
+two independent offline mount derivations and bounded full LU fit remain outstanding.
 
 ## Retained Luxembourg enumeration checkpoints (Codex, 2026-10-01)
 
@@ -3772,21 +3771,6 @@ and a current storage check before and after its runtime is frozen; it has not s
 
 PRs #827, #829 and #830 are merged. The all-82-seed EU retry remains prepared, with a
 4,999,959,422-byte launch allowance and checks before and after freezing its runtime.
-## Offline EU document routes (Codex, 2026-10-01)
-
-Reopen a retained document route using its original acquisition run, logical-request digest and
-independently selected address. Check each hop's GET, representation, original write receipt and
-exact body; reopen policy bytes by digest and require agreement across hops. The existing constructor repeats receipt, redirect and completion gates;
-the complete canonical route must match the original bytes. No transport or observation is created.
-Non-200 and incomplete routes retain their original outcomes, without a current retention claim.
-
-All 19 cases passed at 00e95ae6: CI36856918011 reported5,336 passed and22 skipped, with
-required watch exit zero. Claude returned MERGE with no material defect; the one repair includes
-merged873/integration92c8df5a, clarifies digest-only policy reopening and original retained-route
-scope. Fresh combined CI gates merge; local builds/tests remain deferred under the acquisition
-memory guard. A containing catalog must preserve route references; complete offline mounts remain
-outstanding. No current retention floor or population completion is claimed.
-
 ## Retained expression production pairings (Codex, 2026-10-01)
 
 This slice depends on PR869. It retains the expression producer's own paired enumerations
@@ -3821,3 +3805,36 @@ and refuses a literal-null root with an integrity exception. One new before-writ
 brings this slice to 18 cases. Fresh combined CI gates merge; local builds/tests remain deferred
 under the acquisition memory guard. The offline budget records zero sends with a synthetic ceiling
 of two, not the historical wire allowance. Full population/acquisition and mount replay are separate.
+## Retained Luxembourg vocabulary proof (Codex, 2026-10-01)
+
+Reversible driver decision: retain all four original P/T/C/O enumeration checkpoint associations
+and the resulting vocabulary observation reference. Live and offline paths share the row-proof
+and classification code. Replay independently rebinds both count queries to the required ranges,
+restores every enumeration with current custody checks, reproduces the original observation
+bytes and reopens the verified source profile. Required vocabulary remains an expectation;
+missing observations cannot be supplied from that expectation. Failed checkpoint retention
+stops before population traffic. The checkpoint remains reachable on later run refusals.
+
+All 23 cases passed at reviewed 99fd13f9: CI 36859809816 reported 5,406 passed and
+22 skipped. Claude found no production defect; its two blocking findings were invalid UTF-8
+in inherited STATUS lines and a stale merge base. One repair restores current integration's
+UTF-8 sections and includes merged PRs 873, 876 and 879 (749e88a3). Strict UTF-8 decoding
+now succeeds. Fresh full CI gates merge; local tests remain deferred under the acquisition
+memory guard. The checkpoint reference still needs a containing LU acquisition catalog or
+CLI output to make it discoverable from a real run. Full LU acquisition restoration and
+independent offline mounts remain outstanding; no full-population fit is claimed.
+
+## Offline EU document routes (Codex, 2026-10-01)
+
+Reopen a retained document route using its original acquisition run, logical-request digest and
+independently selected address. Check each hop's GET, representation, original write receipt and
+exact body; reopen policy bytes by digest and require agreement across hops. The existing constructor repeats receipt, redirect and completion gates;
+the complete canonical route must match the original bytes. No transport or observation is created.
+Non-200 and incomplete routes retain their original outcomes, without a current retention claim.
+
+All 19 cases passed at 00e95ae6: CI36856918011 reported5,336 passed and22 skipped, with
+required watch exit zero. Claude returned MERGE with no material defect; the one repair includes
+merged873/integration92c8df5a, clarifies digest-only policy reopening and original retained-route
+scope. Fresh combined CI gates merge; local builds/tests remain deferred under the acquisition
+memory guard. A containing catalog must preserve route references; complete offline mounts remain
+outstanding. No current retention floor or population completion is claimed.
