@@ -14,8 +14,8 @@ missing observations cannot be supplied from that expectation. Failed checkpoint
 stops before population traffic. The checkpoint remains reachable on later run refusals.
 
 Twenty-three new draft cases cover copied/weaker custody, seven missing dependencies, ten
-rehashed association changes, caller pins, cancellation and failed holds. Source is uncompiled;
-remote CI is requested. Required local Release, fast and affected ingest tests plus Claude
+rehashed association changes, caller pins, cancellation and failed holds. Initial bfb7ffd4 CI36846085303 compiled production code but test compilation failed because
+the test store lacked failSchema. The fixture support is now included; fresh CI is required. Required local Release, fast and affected ingest tests plus Claude
 review wait for the active EU run and earlier queue. Include pending PR872's final merged head
 before local validation. Full LU acquisition restoration and independent offline mounts remain
 outstanding; this slice makes no full-population memory or completion claim.
