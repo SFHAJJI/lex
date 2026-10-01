@@ -3,6 +3,37 @@
 Updated 2026-10-01 by the driver. This file replaces the issue-comment ledgers. It is rewritten in
 every pull request that changes what is served, what is next or what is blocked.
 
+## Direct Luxembourg scope classification (Codex, 2026-10-01)
+
+The verified profile constructs final resource resolutions after fixing global evidence ordinals.
+This removes the intermediate classification array and releases each temporary assertion/relation
+array sooner. Those arrays are still allocated and copied by the final record constructor.
+Validation, ordering, global target lookup, constructor checks, relations and accounting remain.
+
+Three cases permute 130 mixed resources and compare every serialized resolution field plus global
+relationships. Exact ffa39231 passed CI 36853787741: 5,301 passed and 22 skipped; the required
+watch exited zero. Claude found no resolver defect and requested updated compatibility evidence
+and current-base conflict resolution. This is the one repair round. Integration d874273b is now
+included, with both census changes preserved; fresh combined CI gates merge.
+
+Local tests and allocation measurements remain deferred under the acquisition memory guard.
+Final observation/resource/input graphs still materialize. No full Luxembourg fit is claimed.
+
+## EU mount compatibility and offline derivation order (Codex, 2026-10-01)
+
+EU acquisition remains frozen at 6eb1d9d9 in C:/lex-v3/eu-population-20261001-4. It writes the
+schema-6 Luxembourg companion index. Merged PR878 now serves exact schema-6 indexes, with absent
+build/log evidence represented honestly, while preserving strict schema-8 validation. Its held
+fixture and tamper checks are recorded below. A mount test on the active EU output remains pending
+until acquisition finishes. Preserve the running process and custody; no re-acquisition is needed
+for this host compatibility change. The web lane continues to own the LU index builder/reader.
+
+Before full Luxembourg acquisition, persist the acquisition result in checked custody and derive
+corpus/indexes offline. Independently reopen the evidence and compare two separate derivations
+byte for byte with publisher traffic trapped. Keep original proof/source bindings and typed
+outcomes; a stored success flag cannot replace verification. Complete bounded derivation and
+observed-count sizing still gate the full Luxembourg run.
+
 ## EU acquire-once / replay-from-custody operation — consolidated PR #892
 
 Driver decision under the 13:40 UTC standing order: combine the remaining EU witness, renderer, rights, Formex population, document ladders and query replay slices into this catalog operation. This branch includes the exact repaired heads of #870, #877, #882, #883, #886 and #888, including their cross-family review fixes. Those PRs are superseded here; their review and CI evidence remain recorded. #887 supplies the shared corpus identity rebuild and retains its own merge turn.
