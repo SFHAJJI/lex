@@ -3366,3 +3366,5 @@ and a current storage check before and after its runtime is frozen; it has not s
 
 PRs #827, #829 and #830 are merged. The all-82-seed EU retry remains prepared, with a
 4,999,959,422-byte launch allowance and checks before and after freezing its runtime.
+
+PR870 diagnostic CI36831002321 passed5271 tests with22 skipped; its only failure is the construction census. The literal checked reader entry is transcribed from compiled output with evidence in pr-870-pin-transcription.json. Fresh CI is required; local checks and review remain pending.
