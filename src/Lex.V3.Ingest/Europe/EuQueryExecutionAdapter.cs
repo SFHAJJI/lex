@@ -581,8 +581,10 @@ public sealed class EuQueryExecutionResult
         EuCellarObjectDecodeRefusal? decodeRefusal,
         string? decodeOffendingIri,
         EuCellarObjectSnapshotRefusal? decodeSnapshotRefusal,
-        EuWitnessTraversalRefusalDetail? witnessTraversalRefusal = null)
+        EuWitnessTraversalRefusalDetail? witnessTraversalRefusal = null,
+        IReadOnlyList<EuObservedWorkFacts>? observedWorkFacts = null)
     {
+        ObservedWorkFacts = observedWorkFacts ?? [];
         WitnessTraversalRefusal = witnessTraversalRefusal;
         Topology = topology;
         FamilyOutcomes = familyOutcomes;
@@ -615,6 +617,8 @@ public sealed class EuQueryExecutionResult
         DecodeSnapshotRefusal = decodeSnapshotRefusal;
     }
 
+    public IReadOnlyList<EuObservedWorkFacts> ObservedWorkFacts { get; }
+
     public SourceArtifactRef? DocumentAcquisitionCheckpointRef { get; private init; }
 
     public SourceArtifactRef? AcquisitionCheckpointRef { get; private init; }
@@ -631,7 +635,7 @@ public sealed class EuQueryExecutionResult
             DateAxioms, LocatedAmendmentObservations, LocatedAmendmentProduction, CorrigendumTripwires,
             CorpusRecordSetRef, CorpusRecordSetReceipt, CorpusRecordSet, HeldBodyContentClasses,
             Completion, Refusal, DecodeRefusal, DecodeOffendingIri,
-            DecodeSnapshotRefusal, WitnessTraversalRefusal) { DocumentAcquisitionCheckpointRef = document, AcquisitionCheckpointRef = acquisition };
+            DecodeSnapshotRefusal, WitnessTraversalRefusal, ObservedWorkFacts) { DocumentAcquisitionCheckpointRef = document, AcquisitionCheckpointRef = acquisition };
 
     public static EuQueryExecutionResult Delivered(
         SourceProfileTopology topology,
@@ -757,7 +761,8 @@ public sealed class EuQueryExecutionResult
         IReadOnlyList<EuLocatedAmendmentAxiomObservation> locatedAmendmentObservations,
         IReadOnlyList<EuCellarObjectSnapshot> decodedSnapshots,
         CorpusRecordSetWriteResult recordSetResult,
-        EuCorrigendumTripwireCompletion corrigendumTripwires)
+        EuCorrigendumTripwireCompletion corrigendumTripwires,
+        IReadOnlyList<EuObservedWorkFacts>? observedWorkFacts = null)
     {
         ArgumentNullException.ThrowIfNull(topology);
         ArgumentNullException.ThrowIfNull(watermarkWitnessPlan);
@@ -795,7 +800,7 @@ public sealed class EuQueryExecutionResult
             observedManifestationTypesByCelex, observedExpressionsByCelex, mintedRowsByOrdinal,
             dateAxioms, locatedAmendmentObservations, locatedAmendmentProduction, corrigendumTripwires,
             recordSetResult.SetRef!, recordSetResult.RetainedSetReceipt!, corpusRecordSet,
-            heldBodyContentClasses, completion, null, null, null, null);
+            heldBodyContentClasses, completion, null, null, null, null, observedWorkFacts: observedWorkFacts);
     }
 
     private static IReadOnlyDictionary<SourceObjectRef, EuContentClassObservation> BindHeldBodyContentClasses(
@@ -2213,7 +2218,11 @@ public sealed partial class EuQueryExecutionAdapter
             locatedAmendmentObservations: locatedAmendmentObservations,
             decodedSnapshots: bodySnapshots,
             recordSetResult: recordSetResult,
-            corrigendumTripwires: corrigendumTripwires).WithDocumentCheckpoint(documentCapture.Checkpoint!);
+            corrigendumTripwires: corrigendumTripwires,
+            observedWorkFacts: ProjectWorkFacts(closuresByCelex, pFamilies.Select(batch =>
+                (batch.Rows, batch.Profile, batch.Proof.InterpretationProfileRef)).ToArray(),
+                censusByFamilyKey.Values.ToDictionary(value => value.RequestedCelex,
+                    value => value.Proof.InterpretationProfileRef, StringComparer.Ordinal))).WithDocumentCheckpoint(documentCapture.Checkpoint!);
     }
 
     /// <summary>

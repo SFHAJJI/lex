@@ -46,6 +46,33 @@ public sealed partial class EuFormexPackagePopulationProducerTests
     }
 
     [TestMethod]
+    [DataRow(false)]
+    [DataRow(true)]
+    public async Task HistoricalPackageCheckpointKeepsRequiredCelexAndOriginalAnnexIdentity(bool missingCelex)
+    {
+        var capture = await CapturePackageAsync(2, missingCelex: missingCelex);
+        var root = await PackageRootAsync(capture.Store, capture.Result.CheckpointRef!);
+        root["schema"] = "lex-eu-formex-package-checkpoint/1";
+        var bytes = Encoding.UTF8.GetBytes(root.ToJsonString(new System.Text.Json.JsonSerializerOptions { WriteIndented = false }));
+        var held = await capture.Store.CreateAsync(bytes, CustodyClass.NightlyFloor90d, CancellationToken.None);
+        var checkpoint = new SourceArtifactRef(capture.Result.CheckpointRef!.ResourceId, held.Reference.ContentSha256);
+        Task<EuFormexPackageAcquisitionResult> Reopen() => EuFormexPackageAcquisitionProducer.ReopenAsync(
+            capture.Store, checkpoint, capture.Enumeration, capture.Corpus, capture.Celex,
+            capture.Renderer, CancellationToken.None);
+        if (missingCelex)
+        {
+            await Assert.ThrowsExactlyAsync<CustodyIntegrityException>(() => Reopen());
+            return;
+        }
+        var reopened = await Reopen();
+        Assert.AreEqual(capture.Result.Outcome.AcquiredInventory!.IdentitySha256,
+            reopened.Outcome.AcquiredInventory!.IdentitySha256);
+        Assert.AreEqual(capture.Result.AnnexClassification!.IdentitySha256,
+            reopened.AnnexClassification!.IdentitySha256);
+        Assert.AreEqual(0, reopened.ProductRequestCount);
+    }
+
+    [TestMethod]
     [DataRow("root")]
     [DataRow("zip_route")]
     [DataRow("zip_body")]
@@ -161,12 +188,30 @@ public sealed partial class EuFormexPackagePopulationProducerTests
         Assert.ThrowsExactly<ArgumentException>(() => population.WithAcquisitions([foreign]));
     }
 
+    [TestMethod]
+    public async Task ProvenAnnexTransportAndReplayKeepMissingWorkCelexAbsent()
+    {
+        var capture = await CapturePackageAsync(2, missingCelex: true);
+        Assert.IsNotNull(capture.Result.AnnexClassification, capture.Result.Outcome.Detail);
+        Assert.IsNull(capture.Result.AnnexClassification.Binding.WorkCelex);
+        var copy = await CopyPackageStoreAsync(capture.Store);
+        var first = await RestorePackageAsync(copy, capture);
+        var second = await RestorePackageAsync(copy, capture);
+        Assert.IsNotNull(first.AnnexClassification, first.Outcome.Detail);
+        Assert.IsNull(first.AnnexClassification.Binding.WorkCelex);
+        Assert.AreEqual(capture.Result.AnnexClassification.IdentitySha256, first.AnnexClassification.IdentitySha256);
+        Assert.AreEqual(first.AnnexClassification.IdentitySha256, second.AnnexClassification?.IdentitySha256);
+        await Assert.ThrowsExactlyAsync<CustodyIntegrityException>(() => EuFormexPackageAcquisitionProducer.ReopenAsync(
+            copy, capture.Result.CheckpointRef!, capture.Enumeration, capture.Corpus, WorkCelex,
+            capture.Renderer, CancellationToken.None));
+    }
+
     private sealed record PackageCapture(EuAcquisitionTestFixture.EuInMemoryCustodyStore Store,
         EuFormexManifestationEnumerationResult Enumeration, VerifiedCorpusRecordSet? Corpus,
-        EuFormexPackageAcquisitionResult Result, FormexEnumerationHandler Handler, MachineQueryRendererSource Renderer);
+        EuFormexPackageAcquisitionResult Result, FormexEnumerationHandler Handler, MachineQueryRendererSource Renderer, string? Celex);
     private static Task<EuFormexPackageAcquisitionResult> RestorePackageAsync(ICustodyStore store, PackageCapture capture) =>
         EuFormexPackageAcquisitionProducer.ReopenAsync(store, capture.Result.CheckpointRef!, capture.Enumeration,
-            capture.Corpus, WorkCelex, capture.Renderer, CancellationToken.None);
+            capture.Corpus, capture.Celex, capture.Renderer, CancellationToken.None);
     private static async Task<JsonNode> PackageRootAsync(ICustodyStore store, SourceArtifactRef reference) =>
         JsonNode.Parse(Encoding.UTF8.GetString((await store.ReadByDigestAsync(reference.Sha256, CancellationToken.None)).Span))!;
     private static async Task<EuAcquisitionTestFixture.EuInMemoryCustodyStore> CopyPackageStoreAsync(
@@ -177,9 +222,9 @@ public sealed partial class EuFormexPackagePopulationProducerTests
             await copy.CreateAsync(await source.ReadByDigestAsync(digest, CancellationToken.None), CustodyClass.NightlyFloor90d, CancellationToken.None);
         return copy;
     }
-    private static async Task<PackageCapture> CapturePackageAsync(int shape, bool failCheckpoint = false)
+    private static async Task<PackageCapture> CapturePackageAsync(int shape, bool failCheckpoint = false, bool missingCelex = false)
     {
-        var store = new EuAcquisitionTestFixture.EuInMemoryCustodyStore(failSchema: failCheckpoint ? "lex-eu-formex-package-checkpoint/1" : null);
+        var store = new EuAcquisitionTestFixture.EuInMemoryCustodyStore(failSchema: failCheckpoint ? "lex-eu-formex-package-checkpoint/2" : null);
         var annex = shape is 2 or 5 or 7;
         var (run, english, french) = await RunWithTwoExpressionsAsync(
             annex && shape != 7 ? await FixtureAsync("new-xhtml-200-body.bin") : null, store);
@@ -200,12 +245,12 @@ public sealed partial class EuFormexPackagePopulationProducerTests
         Assert.IsTrue(enumeration.IsFormexEligible, enumeration.Detail);
         var corpus = shape == 0 ? null : run.CorpusRecordSet;
         var result = await new EuFormexPackageAcquisitionProducer(store, new EuAcquisitionTestFixture.FixedTimeProvider(), handler)
-            .RunAsync(enumeration, corpus, WorkCelex, renderer, shape == 6 ? WireRequestBudget.OfWireRequests(2) : EuAcquisitionTestFixture.TestWireBudget(), CancellationToken.None);
+            .RunAsync(enumeration, corpus, missingCelex ? null : WorkCelex, renderer, shape == 6 ? WireRequestBudget.OfWireRequests(2) : EuAcquisitionTestFixture.TestWireBudget(), CancellationToken.None);
         if (!failCheckpoint)
         {
             Assert.IsNotNull(result.CheckpointRef, result.Outcome.Detail);
             if (shape == 2) Assert.IsNotNull(result.AnnexClassification, result.Outcome.Detail);
         }
-        return new(store, enumeration, corpus, result, handler, renderer);
+        return new(store, enumeration, corpus, result, handler, renderer, missingCelex ? null : WorkCelex);
     }
 }

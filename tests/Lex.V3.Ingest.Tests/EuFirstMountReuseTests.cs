@@ -29,6 +29,32 @@ public sealed partial class EuFirstMountAcquisitionTests
     }
 
     [TestMethod]
+    public async Task ReuseKeepsConsolidatedEnglishAndFrenchBodiesWithoutCelex()
+    {
+        var store = new EuAcquisitionTestFixture.EuInMemoryCustodyStore();
+        var original = await AcquireConsolidatedAsync(store, missingStateCelex: true);
+        Assert.IsTrue(original.Delivered, original.Detail);
+        var copy = await CopyAcquisitionStoreAsync(store);
+        using var handler = RightsOnlyHandler();
+        var budget = WireRequestBudget.OfWireRequests(10);
+        var renewed = await Acquisition(copy, handler).ReuseAsync(original.CheckpointRef!,
+            [ConsolidatedSeed], budget, CancellationToken.None);
+        Assert.IsTrue(renewed.Delivered, renewed.Detail);
+        Assert.AreEqual(4, renewed.Formex!.AcquiredExpressionCount);
+        Assert.AreEqual(1, handler.RightsRequests.Count(uri => uri == NoticeUri));
+        Assert.AreEqual(0, handler.AdapterRequests + handler.FormexEnumerationRequests + handler.FormexPackageRequests);
+        Assert.AreEqual(handler.RightsRequests.Count, budget.Spent);
+        var replay = await EuFirstMountAcquisition.ReopenAsync(copy, renewed.CheckpointRef!,
+            [ConsolidatedSeed], CancellationToken.None);
+        Assert.IsTrue(replay.Delivered, replay.Detail);
+        Assert.AreEqual(4, replay.Formex!.AcquiredExpressionCount);
+        CollectionAssert.AreEqual(EuropeIndexBuilder.ProjectStates(original.Run!.ObservedWorkFacts),
+            EuropeIndexBuilder.ProjectStates(replay.Run!.ObservedWorkFacts));
+        Assert.IsNull(EuropeIndexBuilder.ProjectStates(replay.Run.ObservedWorkFacts)
+            .Single(state => state.PublisherWorkIri == ConsolidatedWork).PublisherWorkCelex);
+    }
+
+    [TestMethod]
     [DataRow(false)]
     [DataRow(true)]
     public async Task InvalidRetainedPopulationRefusesBeforeRightsTraffic(bool wrongScope)

@@ -15,10 +15,13 @@ namespace Lex.V3.Ingest.Tests;
 public sealed partial class V3FirstMountBuildTests
 {
     [TestMethod]
-    [DataRow(false, false, false)]
-    [DataRow(true, true, false)]
-    [DataRow(true, false, true)]
-    public async Task OfflineCommandRebuildsEveryMountFileInTwoSeparateProcesses(bool compressed, bool chained, bool reuseEurope)
+    [DataRow(false, false, false, false, false)]
+    [DataRow(true, true, false, false, false)]
+    [DataRow(true, false, true, false, false)]
+    [DataRow(true, false, true, true, false)]
+    [DataRow(true, false, false, false, true)]
+    [DataRow(true, false, true, true, true)]
+    public async Task OfflineCommandRebuildsEveryMountFileInTwoSeparateProcesses(bool compressed, bool chained, bool consolidated, bool missingStateCelex, bool reuseEurope)
     {
         var root = Path.Combine(Path.GetTempPath(), "lex-v3-offline-test-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(root);
@@ -27,12 +30,14 @@ public sealed partial class V3FirstMountBuildTests
             var custody = Path.Combine(root, "custody");
             var store = compressed ? FileSystemCustodyStore.WithBrotliCompression(custody) : new FileSystemCustodyStore(custody);
             var (europe, luxembourg) = await AcquireAsync(store, CheckoutRoot());
+            if (consolidated) europe = await EuFirstMountAcquisitionTests.AcquireConsolidatedAsync(store, missingStateCelex);
+            var seed = consolidated ? EuFirstMountAcquisitionTests.ConsolidatedSeed : EuAxiomWiringHarness.Seed(null).Celex;
             if (reuseEurope)
             {
                 using var rights = new EuFirstMountAcquisitionTests.CompositeHandler(
                     new Dictionary<string, EuAcquisitionTestFixture.FamilyScript>(), new Dictionary<string, string[]>());
                 europe = await new Lex.V3.Ingest.Europe.EuFirstMountAcquisition(store, TimeProvider.System, rights)
-                    .ReuseAsync(europe.CheckpointRef!, [EuAxiomWiringHarness.Seed(null).Celex], WireRequestBudget.OfWireRequests(10), CancellationToken.None);
+                    .ReuseAsync(europe.CheckpointRef!, [seed], WireRequestBudget.OfWireRequests(10), CancellationToken.None);
                 Assert.IsTrue(europe.Delivered, europe.Detail);
                 Assert.AreEqual(0, rights.AdapterRequests + rights.FormexEnumerationRequests + rights.FormexPackageRequests);
                 using var luHandler = new LuxembourgFirstMountAcquisitionTests.LuxembourgFamilyHandler(LuxembourgFirstMountAcquisitionTests.PdfBytes());
@@ -62,7 +67,7 @@ public sealed partial class V3FirstMountBuildTests
                 time = time.AddDays(1);
             }
             var checkpoint = await V3OfflineMount.CaptureAsync(store, europe, luxembourg,
-                new[] { EuAxiomWiringHarness.Seed(null).Celex }, LuxembourgFirstMountAcquisitionTests.ActRange, time, generations, CancellationToken.None);
+                new[] { seed }, LuxembourgFirstMountAcquisitionTests.ActRange, time, generations, CancellationToken.None);
             var referencePath = Path.Combine(root, "inputs.json");
             await File.WriteAllTextAsync(referencePath, ContractJson.Serialize(checkpoint));
             var baseline = await new V3FirstMountBuild(store, new V3OfflineMount.BuildClock(time)).RunAsync(europe, luxembourg, predecessor, CancellationToken.None);
@@ -87,6 +92,69 @@ public sealed partial class V3FirstMountBuildTests
             CollectionAssert.AreEqual(MountDigests(expected), MountDigests(first), "Live derivation and first independent replay\nExpected:\n" + string.Join("\n", MountDigests(expected)) + "\nActual:\n" + string.Join("\n", MountDigests(first)));
             CollectionAssert.AreEqual(MountDigests(first), MountDigests(second), "Every file, including report and generations\nFirst:\n" + string.Join("\n", MountDigests(first)) + "\nSecond:\n" + string.Join("\n", MountDigests(second)));
             Assert.IsTrue((await V3CorpusMountWriter.VerifyAsync(second, CancellationToken.None)).Verified);
+            if (consolidated)
+            {
+                using var stateReader = await Lex.V3.Ingest.Europe.EuropeIndexReader.OpenAndVerifyFileAsync(
+                    Path.Combine(second, "europe-index.sqlite3"),
+                    await File.ReadAllBytesAsync(Path.Combine(second, "europe-capability-manifest.json")),
+                    baseline.Corpus!.ArtifactRef, CancellationToken.None);
+                Assert.IsTrue(stateReader.HasStates);
+                var states = stateReader.ReadStates(seed);
+                Assert.HasCount(2, states);
+                var expressions = stateReader.ReadStateExpressions(seed);
+                Assert.HasCount(4, expressions);
+                var consolidatedExpressions = expressions.Where(expression =>
+                    expression.PublisherWorkIri == EuFirstMountAcquisitionTests.ConsolidatedWork).ToArray();
+                Assert.HasCount(2, consolidatedExpressions);
+                CollectionAssert.AreEquivalent(new[] { "eng", "fra" },
+                    consolidatedExpressions.Select(expression => expression.Language).ToArray());
+                Assert.IsTrue(consolidatedExpressions.All(expression =>
+                    expression.PublisherWorkCelex == (missingStateCelex ? null : "02016R0679-20240101") &&
+                    expression.ArticleIdentities.Count > 0 && states.Any(state =>
+                        state.StateIdentitySha256 == expression.StateIdentitySha256)));
+                Assert.HasCount(0, stateReader.ReadStateExpressions("unknown-seed"));
+                Assert.HasCount(0, stateReader.ResolveExact(EuFirstMountAcquisitionTests.ConsolidatedWork));
+                Assert.HasCount(0, stateReader.ResolveExact("02016R0679-20240101"));
+                Assert.HasCount(0, stateReader.ResolveWorkExpressions(EuFirstMountAcquisitionTests.ConsolidatedWork));
+                foreach (var expression in consolidatedExpressions)
+                {
+                    Assert.HasCount(0, stateReader.ResolveExact(expression.PublisherExpressionId));
+                    Assert.HasCount(0, stateReader.ResolveExact(expression.ArticleIdentities[0]));
+                    var source = stateReader.ReadArticleSourceEvidence(expression.ArticleIdentities[0]);
+                    Assert.IsNotNull(source, "State-aware access keeps the held source evidence.");
+                    Assert.HasCount(0, stateReader.ResolveExact(
+                        Lex.V3.Ingest.Europe.EuropeIndexReader.QualifiedProvisionIdentifierOf(
+                            expression.PublisherExpressionId, source.PublisherIdentifier)));
+                    Assert.HasCount(0, stateReader.SearchExpressionArticles(expression.Language,
+                        new[] { "data" }, expression.PublisherExpressionId)!);
+                }
+                Assert.HasCount(2, stateReader.ResolveExact(seed));
+                var originalWork = states.Single(state => state.DateStatus ==
+                    Lex.V3.Ingest.Europe.EuropeIndexStateDateStatus.OriginalWording).PublisherWorkIri;
+                Assert.HasCount(2, stateReader.ResolveWorkExpressions(originalWork));
+                var originalEnglish = expressions.Single(expression => expression.PublisherWorkIri == originalWork &&
+                    expression.Language == "eng");
+                Assert.IsTrue(stateReader.SearchExpressionArticles("eng", new[] { "data" },
+                    originalEnglish.PublisherExpressionId)!.Count > 0, "Original English text remains searchable.");
+                var heldHits = stateReader.Search("eng", new DateOnly(2016, 4, 27), new DateOnly(2016, 4, 27), "data");
+                Assert.IsTrue(heldHits.ArticleIdentities.Any(identity =>
+                    consolidatedExpressions.Any(expression => expression.ArticleIdentities.Contains(identity))),
+                    "The low-level capability search still covers all held articles for state-aware callers.");
+                using var connection = Lex.V3.Ingest.Europe.EuropeIndexBuilder.Open(
+                    Path.Combine(second, "europe-index.sqlite3"), Microsoft.Data.Sqlite.SqliteOpenMode.ReadOnly);
+                using var command = connection.CreateCommand();
+                command.CommandText = "SELECT count(*) FROM states";
+                Assert.AreEqual(2L, command.ExecuteScalar());
+                command.CommandText = "SELECT count(DISTINCT publisher_expression_id) FROM articles";
+                Assert.AreEqual(4L, command.ExecuteScalar(), "Both original and consolidated EN/FR texts must reach the complete offline mount.");
+                command.CommandText = "SELECT publisher_work_celex FROM states WHERE publisher_consolidation_date='2024-01-01'";
+                Assert.AreEqual(missingStateCelex ? DBNull.Value : (object)"02016R0679-20240101", command.ExecuteScalar(),
+                    "The publisher's own CELEX remains present or absent without substitution.");
+                command.CommandText = "SELECT count(DISTINCT publisher_expression_id) FROM articles WHERE publisher_work_celex IS NULL";
+                Assert.AreEqual(missingStateCelex ? 2L : 0L, command.ExecuteScalar(),
+                    "Both consolidated languages remain indexed without inventing CELEX.");
+            }
+
             string[] expectedFiles = ["build-report.json", "lex-corpus-6.json", "luxembourg-index.sqlite3",
                 "luxembourg-capability-manifest.json", "europe-index.sqlite3", "europe-capability-manifest.json"];
             if (chained)
