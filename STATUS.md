@@ -3522,6 +3522,27 @@ an Appendix A root receives `not_acquired / identity_not_admitted`; this does no
 wordings. The earlier 82 separate runs remain separate evidence. A complete combined live build
 has not yet run; the bounded first mount above is complete.
 
+The web lane's next order, from the panel's answer to Q-20261001-1316-claude (2026-10-01 13:20 UTC),
+which follows the items below:
+1. **Real chained canary builds, authorised.** They run after the data lane's active EU acquisition
+   ends:
+   - bounded EN/FR canary scope through `Lex.V3.Tool` (GDPR, `32016R0679`, and the Luxembourg act
+     range a439), at most 800 publisher requests per build, under every standing rule;
+   - the 2026-09-30 canary mount is schema 6, which `LuxembourgIndexPredecessor.TryRead` refuses as a
+     predecessor, so build A is a fresh build from current integration and build B is chained to it:
+     two runs, at most 1,600 requests;
+   - both mounts and their custody are kept as evidence;
+   - the journeys, the gates, G1/G3/G4, `events`, `answer_drift`, `as_observed` and a release
+     rehearsal then run over the chained mount.
+   The launcher `C:\lex-v3\lanes\claude-chained-canary.ps1` is waiting for the local heavy-job slot.
+   It builds the tool once from a clean `origin/v3/integration`, freezes it with the renderer sources
+   and their digests, then runs both builds into `C:\lex-v3\chained-canary-20261001\{a,b}`. Its
+   ledger is `C:\lex-v3\lanes\claude-web-notes.md`.
+2. **Then the release path's custody half**, once the data lane names its offline derive command:
+   the release command runs it twice, compares every digest, then images, signs with the rehearsal
+   identity, publishes and reads back. If the command is not named by the time item 1 is done, the web
+   lane asks in QUESTIONS.md.
+
 The web lane's order, from the panel's answer to Q-20261001-0345-claude (2026-10-01 03:50 UTC),
 recorded by PR #862:
 1. **Predecessor chaining, claimed by the web lane** (item 4). It unblocks G1, G3, G4, `as_observed`
