@@ -149,6 +149,7 @@ public enum EuFirstMountAcquisitionRefusal
     [JsonStringEnumMemberName("legal_notice_refused")]
     LegalNoticeRefused = 3,
 
+    /// <summary>The acquisition catalog or one of its renderer sources could not be retained.</summary>
     [JsonStringEnumMemberName("acquisition_checkpoint_not_retained")]
     AcquisitionCheckpointNotRetained = 4,
 }
@@ -193,6 +194,7 @@ public sealed class EuFirstMountAcquisitionResult
 
     public bool Delivered => Refusal is null;
 
+    /// <summary>The retained acquisition catalog, present only after its successful custody hold.</summary>
     public SourceArtifactRef? CheckpointRef { get; private init; }
 
     internal EuFirstMountAcquisitionResult WithCheckpoint(SourceArtifactRef checkpoint) =>

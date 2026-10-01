@@ -14,7 +14,6 @@ public sealed partial class EuFirstMountAcquisitionTests
     public async Task CompleteEuAcquisitionRestoresTheSameRunAssociationInTwoIndependentStores()
     {
         var capture = await RetainedAcquisition.Value;
-        var sends = AcquisitionSends(capture.Handler);
         for (var index = 0; index < 2; index++)
         {
             var copy = await CopyAcquisitionStoreAsync(capture.Store);
@@ -29,7 +28,6 @@ public sealed partial class EuFirstMountAcquisitionTests
             Assert.AreEqual(result.Run.CorpusRecordSet!.Set.Records[0].RunIdentity, result.LegalNotice!.Route!.RunIdentity);
             CollectionAssert.AreEqual(capture.Result.LegalNotice!.Route!.CopyCanonicalBytes(), result.LegalNotice.Route.CopyCanonicalBytes());
             CollectionAssert.AreEqual(digests, copy.WrittenDigestsInOrder.Distinct().Order(StringComparer.Ordinal).ToArray());
-            Assert.AreEqual(sends, AcquisitionSends(capture.Handler));
         }
     }
 
@@ -97,7 +95,7 @@ public sealed partial class EuFirstMountAcquisitionTests
     public async Task CompleteEuAcquisitionRejectsValidComponentsFromAnotherRun(string component)
     {
         var capture = await RetainedAcquisition.Value;
-        var foreign = await CaptureAcquisitionAsync();
+        var foreign = await CaptureAcquisitionAsync(suppliedRenderers: capture.Renderers);
         var copy = await CopyAcquisitionStoreAsync(capture.Store);
         foreach (var digest in foreign.Store.WrittenDigestsInOrder.Distinct())
             await copy.CreateAsync(await foreign.Store.ReadByDigestAsync(digest, CancellationToken.None), CustodyClass.NightlyFloor90d, CancellationToken.None);
@@ -165,7 +163,7 @@ public sealed partial class EuFirstMountAcquisitionTests
         Assert.IsTrue(capture.Result.Formex!.Delivered);
     }
 
-    private static async Task<AcquisitionCapture> CaptureAcquisitionAsync(bool failRoot = false, bool failLegacySource = false)
+    private static async Task<AcquisitionCapture> CaptureAcquisitionAsync(bool failRoot = false, bool failLegacySource = false, EuRendererSources? suppliedRenderers = null)
     {
         var root = EuAxiomWiringHarness.SeedRoot(null);
         var seed = EuAxiomWiringHarness.Seed(null).Celex;
@@ -177,7 +175,11 @@ public sealed partial class EuFirstMountAcquisitionTests
         var handler = new CompositeHandler(EuAxiomWiringHarness.Scripts(root,
             static seedRoot => EuAcquisitionTestFixture.AxiomAbsenceScriptFor(seedRoot), expressionIri: expression),
             new Dictionary<string, string[]>(StringComparer.Ordinal) { [expression] = ["fmx4", "xhtml"] });
-        var renderers = await EuRendererSources.FromCheckoutAsync(store, CheckoutRoot(), CancellationToken.None);
+        var renderers = suppliedRenderers ?? await EuRendererSources.FromCheckoutAsync(store, CheckoutRoot(), CancellationToken.None);
+        if (suppliedRenderers is not null)
+            foreach (var file in EuRendererSources.RendererFiles)
+                await store.CreateAsync(await File.ReadAllBytesAsync(Path.Combine(CheckoutRoot(), file)),
+                    CustodyClass.NightlyFloor90d, CancellationToken.None);
         var result = await Acquisition(store, handler).RunAsync(seed, renderers,
             EuAcquisitionTestFixture.TestWireBudget(), CancellationToken.None);
         if (!failRoot && !failLegacySource)
@@ -185,7 +187,7 @@ public sealed partial class EuFirstMountAcquisitionTests
             Assert.IsTrue(result.Delivered, $"{result.Refusal}: {result.Detail}");
             Assert.IsNotNull(result.CheckpointRef);
         }
-        return new(store, result, handler, seed);
+        return new(store, result, handler, seed, renderers);
     }
 
     private static async Task<EuAcquisitionTestFixture.EuInMemoryCustodyStore> CopyAcquisitionStoreAsync(
@@ -206,8 +208,6 @@ public sealed partial class EuFirstMountAcquisitionTests
         return new SourceArtifactRef($"urn:uuid:{Guid.NewGuid():D}", receipt.Reference.ContentSha256);
     }
 
-    private static int AcquisitionSends(CompositeHandler handler) => handler.AdapterRequests + handler.FormexEnumerationRequests +
-        handler.FormexPackageRequests + handler.RightsRequests.Count;
     private sealed record AcquisitionCapture(EuAcquisitionTestFixture.EuInMemoryCustodyStore Store,
-        EuFirstMountAcquisitionResult Result, CompositeHandler Handler, string Seed);
+        EuFirstMountAcquisitionResult Result, CompositeHandler Handler, string Seed, EuRendererSources Renderers);
 }

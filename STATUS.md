@@ -3,6 +3,10 @@
 Updated 2026-10-01 by the driver. This file replaces the issue-comment ledgers. It is rewritten in
 every pull request that changes what is served, what is next or what is blocked.
 
+## EU acquisition catalog review repair — PR #892
+
+Claude reviewed a8840b84 with no material code defect; exact CI 36865495924 passed 5,690 tests with 22 live-publisher tests skipped, including all 24 new catalog cases. The repair makes foreign captures share the original renderer identities so the substitution test reaches run association checks, removes an assertion against an unreachable handler, documents the catalog members and removes byte-order marks. The catalog is retained but the live CLI does not yet surface its reference. Final merged parents, current-base reconciliation and fresh exact-head CI remain required before merge.
+
 ## Complete EU acquisition catalog (Codex, 2026-10-01)
 
 Reversible driver decision: retain the successful EU acquisition's sorted seed scope, query and
