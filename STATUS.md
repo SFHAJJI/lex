@@ -52,7 +52,6 @@ the acquisition memory guard. No complete offline mount process is claimed.
 The current store's protection is checked again. Changed protection refuses the original
 byte claim because protection is part of derivation identity. Replay reports zero publisher
 requests. Complete offline acquisition composition and independent mount builds remain pending.
-
 ## Retained EU watermark traversal (Codex, 2026-10-01)
 
 Reversible driver decision: retain successful witness traversals with ordered batch descriptors,
@@ -61,17 +60,15 @@ elapsed time. Offline replay uses the same opening, crossing, tie-set and double
 Each original query is independently rebound; request, response, receipt and retained body must
 agree. Every saved page must be consumed once. There is no publisher session on the replay path.
 
-Twenty-five new cases cover empty and nonempty batches, cursor crossing, copied weaker custody,
-repeat replay, missing dependencies, caller pins, rehashed/reordered/extra pages, cross-run
-substitution, cancellation and typed checkpoint-hold failure. All25 passed at63f39c75 in
-CI36838512448:5311 passed,22 skipped and3 surface/vocabulary pins failed. Compiled result
-doors, wire tokens and the compiled enum row are transcribed. Diagnostic CI36839545700 passed
-5313, skipped22 and failed only that enum pin; fresh CI must verify the repair. Required local
-Release, fast tests, affected ingests and Claude review wait for
-the active EU run and prior queue. Pending PR869 must merge and its final head be included first.
+All 25 cases passed at 9eba7749: CI 36856725210 reported 5,362 passed and 22 skipped,
+with required watch exit zero. Claude found no material replay defect but required merged869,
+current integration and updated evidence. The one repair includes197f0511, documents historical
+elapsed time beside zero replay sends and explains failed checkpoint retention. Fresh combined
+CI gates merge; local builds/tests remain deferred under the acquisition memory guard.
 
-This restores the watermark dependency of a future acquisition catalog. Complete run, document,
-Formex package/annex and independent offline mount restoration remain outstanding.
+This reader checks historical receipts and writes nothing; it makes no current protection claim.
+A containing acquisition catalog must retain the checkpoint/run references that the existing
+adapter drops. Pending PR888 supplies that composition; full independent mounts remain outstanding.
 
 ## Retained EU enumeration checkpoints (Codex, 2026-10-01)
 
