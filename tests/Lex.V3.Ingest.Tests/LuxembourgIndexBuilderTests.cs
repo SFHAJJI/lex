@@ -1179,7 +1179,7 @@ public sealed class LuxembourgIndexBuilderTests
         }
     }
 
-    private static string ReplaceFirst(string text, string old, string replacement)
+    internal static string ReplaceFirst(string text, string old, string replacement)
     {
         var at = text.IndexOf(old, StringComparison.Ordinal);
         Assert.IsGreaterThanOrEqualTo(0, at, old);
