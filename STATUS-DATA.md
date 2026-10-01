@@ -16,7 +16,7 @@ Reversible sizing decision: do not multiply this sample into a claim that the wh
 
 The EU language decision remains: enumerate original and consolidated EN/FRA expressions; retain the contract's explicit language-out-of-scope outcome for other languages without Formex enumeration. All 24-language enumeration would spend traffic on bodies outside the served scope. The next full EU run uses fresh custody, checkpoint writers and the merged gateway recovery; the old refused run stays retained.
 
-Validation: repaired code `3d75dc0d` passed workflow 36902789017 (5,953 passed, 0 failed, 22 skipped). Local `pwsh -File eng/test-fast.ps1` and touched ingest suites remain deferred under the standing 4 GiB memory guard; CI ran the complete solution. Claude's original code review returned MERGE; scoped confirmation of the renderer-binding repair, hidden-file guard and this measured evidence remains pending. The measured immutable 614a9e15 runtime used direct acquisition, so it did not execute the later repaired reuse path.
+Validation: repaired code `3d75dc0d` passed workflow 36902789017 (5,953 passed, 0 failed, 22 skipped). Local `pwsh -File eng/test-fast.ps1` and touched ingest suites remain deferred under the standing 4 GiB memory guard; CI ran the complete solution. Claude's original code review returned MERGE; scoped confirmation of the renderer-binding repair, hidden-file guard and measured evidence returned MERGE. PR #904 merged as 6f42f296 after exact 576697df CI36905375699 (5,953 passed, 0 failed, 22 skipped). The independent Python comparison is now retained as independent-python-comparison.json. The measured immutable 614a9e15 runtime used direct acquisition, so it did not execute the later repaired reuse path.
 
 
 ## EU population refusal and recovery
@@ -1564,3 +1564,11 @@ now succeeds. Fresh full CI gates merge; local tests remain deferred under the a
 memory guard. The checkpoint reference still needs a containing LU acquisition catalog or
 CLI output to make it discoverable from a real run. Full LU acquisition restoration and
 independent offline mounts remain outstanding; no full-population fit is claimed.
+
+## Real consolidated Formex main-body support (2026-10-01)
+
+The real bounded GDPR capture retained six Formex packages. Two originals contain ACT roots and already yield 99 articles each. Four consolidated packages contain CONS.ACT roots with 99 articles each; the previous parser reported main_body_missing because it only recognized ACT. This is reproduced by reopening the held package checkpoints, routes and bodies with no HTTP requests. Evidence is C:\lex-v3\lu-legislative-measurement-20261001-1\formex-structure-audit.json. The selected XHTML corpus body is a separate representation and did not cause this Formex gap.
+
+The parser now admits a CONS.ACT only through one CONS.DOC, its own single BIB.INSTANCE and one ENACTING.TERMS. Amendment-history languages/dates and articles outside operative text do not enter the result. The document bibliographic date keeps its existing article meaning; CONSLEG.DATE is not substituted or treated as applicability. Profile version 4 records the new scope. Exact retained EN/FRA packages are regression fixtures with route/body provenance and SHA-256 pins; mutations cover duplicate or absent document coordinates, wrong language and excluded text. Original ACT behavior remains covered.
+
+Local fast/ingest suites are deferred under the standing 4 GiB memory guard. CI and cross-family review are pending. After merging, rederive the real bounded mount from retained custody and compare two independent runs. No new publisher capture is needed for this parser correction, and full EU/LU population completion is still outstanding.
