@@ -1144,7 +1144,7 @@ CI evidence are recorded in the pull request before merge.
 
 ## Heads
 
-- `v3/integration`: `48422a0f` (2026-10-01, PR #891 merged). Build 45 s. Fast lane
+- `v3/integration`: `2326417b` (2026-10-01, PR #893 merged). Build 45 s. Fast lane
   (`eng/test-fast.ps1`): 3,077 tests, 3,076 pass, 1 skipped (the review of PR #828). Ingest suite: green on CI for PR #760
   (the CI `dotnet` job runs the whole solution on every pull request, about 7 min on the runner;
   green for PR #834);
@@ -3250,7 +3250,7 @@ publisher, ...". The same wording is in the provenance answer, its test pin, the
 census and the web preview's copy. G2's detached signature comes from the release pipeline (item 7).
 The mount is the fixture, so this proves the path, not a corpus.
 
-Replay G1, G3 and G4 on the real handler (PR #REPLAY). Predecessor chaining (PRs #864 to #889) made the
+Replay G1, G3 and G4 on the real handler (PR #897). Predecessor chaining (PRs #864 to #889) made the
 other three guarantees provable, and each had been proven in parts: G1 at the builder
 (`LuxembourgIndexBuilderTests`), G3 by the generation mount (`V3CorpusGenerationQuoteTests`), and G4
 by `as_observed` (`V3CorpusAsObservedMountTests`). `V3ReplayGuaranteesTests` now runs all three
@@ -3561,7 +3561,7 @@ recorded by PR #862:
          show their refusal cards; the two EU steps ask for the GDPR, which this mount does not hold;
        - canary mount: 10 of 10 steps pass; coverage and radar answer, the Luxembourg screens show their refusal cards, EU search answers with 61 citations verified, and EU dossier with 2, one per held expression (English and French).
    Reversible driver decision, 2026-10-01: with items 2 and 3 in review, the web lane runs replay G1,
-   G3 and G4 on the real handler (PR #REPLAY), the launch contract's machine-gates line. The custody
+   G3 and G4 on the real handler (PR #897), the launch contract's machine-gates line. The custody
    half of the release path's first line waits for the data lane's offline derivation.
 
 1. Data lane (Codex, Decision 95): bounded first mount and real-data resolve completed above.
@@ -3655,7 +3655,7 @@ recorded by PR #862:
    mounted-corpus run once the first mount exists. Replay G1 to G5 (`33-product-spec.md`): G2 snapshot
    determinism and G5 independent verifiability run on the real handler (PR #770). G1 version
    immutability, G3 bitemporal completeness and G4 as-observed answering run on the real handler
-   over a three-build chain (PR #REPLAY), now that predecessor chaining is merged. What
+   over a three-build chain (PR #897), now that predecessor chaining is merged. What
    is left of the launch contract's machine-gates line after that was "V2 absent from the image",
    which the image rehearsal now checks (PR #831, item 7). Ruling 2's gates over the real mounted
    corpus: PR #838 derives the temporal set from any mount, PR #839 the refusal set, PR #842 the
