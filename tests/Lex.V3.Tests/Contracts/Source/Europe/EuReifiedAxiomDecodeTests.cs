@@ -553,7 +553,7 @@ public sealed class EuReifiedAxiomDecodeTests
         var admitted = WellFormed();
         admitted.Add(RowDrifted(
             CommentOnDate,
-            RepeatedEnumerationRdfTerm.Literal("texte en franÃƒÂ§ais", null, "fr"),
+            RepeatedEnumerationRdfTerm.Literal("texte en français", null, "fr"),
             datatype: RepeatedEnumerationRdfTerm.Unbound(),
             language: RepeatedEnumerationRdfTerm.Literal("fr", null, null)));
 
