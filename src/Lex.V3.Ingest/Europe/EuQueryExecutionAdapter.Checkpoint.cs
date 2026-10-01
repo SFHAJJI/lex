@@ -10,7 +10,7 @@ namespace Lex.V3.Ingest.Europe;
 
 public sealed partial class EuQueryExecutionAdapter
 {
-    private const string RunCheckpointSchema = "lex-eu-acquisition-checkpoint/1";
+    private const string RunCheckpointSchema = "lex-eu-acquisition-checkpoint/2";
 
     public async Task<EuQueryExecutionResult> RunAsync(
         IReadOnlyList<(EuCensusPartitionRunRequest Request, BoundMachineRequest SourceWitness)> censusFamilies,

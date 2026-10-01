@@ -2152,8 +2152,12 @@ public sealed partial class EuQueryExecutionAdapter
             foreach (var pair in historicalOutcomes.ToArray())
             {
                 if (pair.Value.Receipt is not { } currentReceipt) continue;
-                var record = originalSet.Set.Records.SingleOrDefault(record => record.ObjectOrdinal == pair.Key);
-                if (record is null) throw new CustodyIntegrityException("Original corpus has no acquired ordinal.");
+                // An acquisition corpus has one sorted record per manifest ordinal. Indexing
+                // it avoids scanning the entire original corpus again for every held body.
+                if (pair.Key < 0 || pair.Key >= originalSet.Set.Records.Count ||
+                    originalSet.Set.Records[pair.Key].ObjectOrdinal != pair.Key)
+                    throw new CustodyIntegrityException("Original corpus has no acquired ordinal.");
+                var record = originalSet.Set.Records[pair.Key];
                 if (record.Body.Kind != CorpusBodyRecordKind.Held) continue; // Final rights may exclude a fetched body.
                 if (record.Body.Receipt is not { } historicalReceipt ||
                     historicalReceipt.Reference.ContentSha256 != currentReceipt.Reference.ContentSha256 ||
@@ -2164,7 +2168,6 @@ public sealed partial class EuQueryExecutionAdapter
             }
             documentAcquisitionOutcomesByOrdinal = historicalOutcomes;
         }
-
 
         var recordSetWriter = new CorpusRecordSetWriter(_custodyStore);
         var recordSetResult = context.IsReplay

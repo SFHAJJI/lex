@@ -456,6 +456,13 @@ public sealed partial class LuxembourgFirstMountAcquisition
                 run, profile, vocabularyEvidenceRef).WithVocabularyCheckpoint(vocabularyCheckpoint);
         }
 
+        var unproven = run.FamilyOutcomes.FirstOrDefault(static family => family.Kind is not
+            (LuxembourgFamilyEnumerationOutcomeKind.Proven or LuxembourgFamilyEnumerationOutcomeKind.CoverProven));
+        if (unproven is not null)
+            return LuxembourgFirstMountAcquisitionResult.Refused(LuxembourgFirstMountAcquisitionRefusal.RunRefused,
+                $"Complete offline acquisition requires proven family {unproven.FamilyKey}; observed {unproven.Kind}.",
+                run, profile, vocabularyEvidenceRef).WithVocabularyCheckpoint(vocabularyCheckpoint);
+
         var inventory = await new LuxembourgAknArticleInventoryProducer(_custodyStore)
             .RunAsync(heldBodies, cancellationToken).ConfigureAwait(false);
         var legalContent = await new LuxembourgAknLegalContentProfileProducer(_custodyStore)

@@ -289,7 +289,7 @@ public sealed partial class EuQueryExecutionAdapterTests
         var unusedRendererSha = EuAcquisitionTestFixture.BuildRendererSource(1009).Reference.Sha256;
         var store = new EuAcquisitionTestFixture.EuInMemoryCustodyStore(
             failWriteDigest: (digest, _) => failUnusedRenderer && digest == unusedRendererSha,
-            failSchema: failRoot ? "lex-eu-acquisition-checkpoint/1" : null);
+            failSchema: failRoot ? "lex-eu-acquisition-checkpoint/2" : null);
         var executor = new EuRepeatedEnumerationExecutor(
             store, new EuAcquisitionTestFixture.FixedTimeProvider(), handler);
         var adapter = new EuQueryExecutionAdapter(store, executor);

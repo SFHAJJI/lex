@@ -29,8 +29,7 @@ public static class V3OfflineMount
         var previous = new List<RetainedFile>();
         if (generations is not null)
         {
-            var verified = await V3CorpusMountWriter.VerifyAsync(generations.PredecessorDirectory, cancellationToken).ConfigureAwait(false);
-            if (!verified.Verified) throw new CustodyIntegrityException("Predecessor mount does not verify: " + verified.Detail);
+            await ValidatePredecessorAsync(generations.PredecessorDirectory, cancellationToken).ConfigureAwait(false);
             foreach (var file in Directory.EnumerateFiles(generations.PredecessorDirectory, "*", SearchOption.AllDirectories).Order(StringComparer.Ordinal))
             {
                 var relative = Path.GetRelativePath(generations.PredecessorDirectory, file).Replace('\\', '/');
@@ -47,6 +46,18 @@ public static class V3OfflineMount
         var encoded = Encode(root);
         await HoldAsync(store, encoded, cancellationToken).ConfigureAwait(false);
         return new SourceArtifactRef($"urn:uuid:{Guid.NewGuid():D}", CustodyDigest.Of(encoded));
+    }
+
+    /// <summary>Validates the complete predecessor before live acquisition spends any publisher requests.</summary>
+    public static async Task ValidatePredecessorAsync(string directory, CancellationToken cancellationToken)
+    {
+        var verified = await V3CorpusMountWriter.VerifyAsync(directory, cancellationToken).ConfigureAwait(false);
+        if (!verified.Verified) throw new CustodyIntegrityException("Predecessor mount does not verify: " + verified.Detail);
+        if (V3FirstMountBuild.ReadPredecessor(directory, out var refusal, out var detail) is null)
+            throw new CustodyIntegrityException($"Predecessor cannot be chained: {refusal}: {detail}");
+        foreach (var file in Directory.EnumerateFiles(directory, "*", SearchOption.AllDirectories))
+            if (!AdmittedPath(Path.GetRelativePath(directory, file).Replace('\\', '/')))
+                throw new CustodyIntegrityException("Predecessor holds an unexpected mount file.");
     }
 
     /// <summary>The input clock describes the original build, never a fresh publisher observation.</summary>

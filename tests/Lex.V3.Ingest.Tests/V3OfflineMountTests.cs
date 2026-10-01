@@ -37,6 +37,10 @@ public sealed partial class V3FirstMountBuildTests
                 Assert.IsTrue(previous.Delivered, previous.Detail);
                 var previousPath = Path.Combine(root, "previous");
                 await V3CorpusMountWriter.WriteAsync(previous, previousPath, null, CancellationToken.None, time);
+                var extra = Path.Combine(previousPath, "unexpected-input.txt");
+                await File.WriteAllTextAsync(extra, "not a mount file");
+                await Assert.ThrowsExactlyAsync<CustodyIntegrityException>(() => V3OfflineMount.ValidatePredecessorAsync(previousPath, CancellationToken.None));
+                File.Delete(extra);
                 predecessor = V3FirstMountBuild.ReadPredecessor(previousPath, out var refusal, out var detail);
                 Assert.IsNotNull(predecessor, $"{refusal}: {detail}");
                 generations = new(previousPath, new HashSet<string>(StringComparer.Ordinal) { predecessor.IndexSha256 });
@@ -65,8 +69,8 @@ public sealed partial class V3FirstMountBuildTests
                 Assert.IsFalse(attemptedNetwork.IsCompleted, "The offline processes must not attempt publisher traffic.");
             }
             finally { listener.Stop(); }
-            CollectionAssert.AreEqual(MountDigests(expected), MountDigests(first), "Live derivation and first independent replay");
-            CollectionAssert.AreEqual(MountDigests(first), MountDigests(second), "Every file, including report and generations");
+            CollectionAssert.AreEqual(MountDigests(expected), MountDigests(first), "Live derivation and first independent replay\nExpected:\n" + string.Join("\n", MountDigests(expected)) + "\nActual:\n" + string.Join("\n", MountDigests(first)));
+            CollectionAssert.AreEqual(MountDigests(first), MountDigests(second), "Every file, including report and generations\nFirst:\n" + string.Join("\n", MountDigests(first)) + "\nSecond:\n" + string.Join("\n", MountDigests(second)));
             Assert.IsTrue((await V3CorpusMountWriter.VerifyAsync(second, CancellationToken.None)).Verified);
             Assert.IsTrue(MountDigests(second).Length >= 7);
             await Assert.ThrowsExactlyAsync<ArgumentException>(() => V3OfflineMount.DeriveAsync(store, checkpoint, second, CancellationToken.None));

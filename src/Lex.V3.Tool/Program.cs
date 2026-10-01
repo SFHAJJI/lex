@@ -112,6 +112,14 @@ if (options.TryGetValue("--predecessor", out var predecessorDirectory))
         return 2;
     }
 
+    try { await V3OfflineMount.ValidatePredecessorAsync(Path.GetFullPath(predecessorDirectory), CancellationToken.None); }
+    catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or ArgumentException
+        or Lex.V3.Contracts.Custody.CustodyRequiredException or Lex.V3.Contracts.Custody.CustodyIntegrityException)
+    {
+        Console.Error.WriteLine($"--predecessor refused before acquisition: {exception.Message}");
+        return 2;
+    }
+
     Console.WriteLine($"predecessor: luxembourg index {predecessor.IndexSha256[..12]}, its event log carried forward");
 }
 

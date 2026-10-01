@@ -112,6 +112,19 @@ public sealed partial class LuxembourgFirstMountAcquisitionTests
     }
 
     [TestMethod]
+    public async Task IncompleteRelationFamilyNamesTheActualAcquisitionFailure()
+    {
+        var store = new EuAcquisitionTestFixture.EuInMemoryCustodyStore();
+        var handler = new LuxembourgFamilyHandler(PdfBytes(), refuseRelations: true);
+        var renderers = await LuxembourgRendererSources.FromCheckoutAsync(store, CheckoutRoot(), CancellationToken.None);
+        var result = await Acquisition(store, handler).RunAsync(ActRange, renderers,
+            LuxembourgAcquisitionTestFixture.TestWireBudget(), CancellationToken.None);
+        Assert.AreEqual(LuxembourgFirstMountAcquisitionRefusal.RunRefused, result.Refusal);
+        StringAssert.Contains(result.Detail, "act-2026-g");
+        Assert.IsNull(result.CheckpointRef);
+    }
+
+    [TestMethod]
     public async Task CompleteLuCatalogHoldFailurePreservesPhaseEvidenceAndRefuses()
     {
         var store = new EuAcquisitionTestFixture.EuInMemoryCustodyStore(failSchema: "lex-lu-first-mount-acquisition/1");

@@ -9,7 +9,7 @@ namespace Lex.V3.Ingest.Europe;
 
 public sealed partial class EuLanguageScopedExpressionProducer
 {
-    private const string CheckpointSchema = "lex-eu-expression-production-checkpoint/1";
+    private const string CheckpointSchema = "lex-eu-expression-production-checkpoint/2";
 
     /// <summary>
     /// Reopens this producer's retained pairing and derives the original bytes again without
@@ -117,7 +117,7 @@ public sealed partial class EuLanguageScopedExpressionProducer
 
     private static byte[] EncodeCheckpoint(ProductionCheckpoint document) => Encoding.UTF8.GetBytes(ContractJson.Serialize(document));
     private sealed record ProductionCheckpoint(string Schema, FamilyCheckpoint Expression, FamilyCheckpoint? Objects,
-        string DerivationSha256, string EpisodeSha256);
+        string DerivationSha256, string EpisodeSha256, string DerivationReceiptSha256, string EpisodeReceiptSha256);
     private sealed record FamilyCheckpoint(SourceArtifactRef Checkpoint, SourceArtifactRef Run, SourceArtifactRef Profile,
         string PlanResourceId, EuObjectFactsQuerySet Set, string[] Batch, SourceArtifactRef Renderer);
     private sealed record RestoredFamily(EuObjectFactsPartitionRunRequest Request, EuEnumerationRunResult Run);
