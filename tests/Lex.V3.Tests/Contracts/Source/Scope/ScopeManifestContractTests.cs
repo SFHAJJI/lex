@@ -1849,7 +1849,7 @@ public sealed class ScopeManifestContractTests
         foreach (var untrusted in new IScopeReductionEvidenceResolver[]
         {
             ExactResolver.For(profile, evidence, [other]),
-            new CompleteEnumerationRefusingResolver(resolver.CompleteEnumerationRef)
+            new SourceReplayEnumerationRejectingResolver(resolver)
         })
         {
             using var retained = new ShortReadStream(bytes);
@@ -1869,12 +1869,16 @@ public sealed class ScopeManifestContractTests
         var resolver = ExactResolver.For(profile, evidence, inputs);
         var bytes = CanonicalBytes(ScopeReducer.Reduce(profile, evidence,
             inputs.Select(input => input.ObjectRef).ToArray(), inputs, resolver));
-        foreach (var source in new[] { inputs[..1], inputs.Concat(inputs[..1]).ToArray(), inputs.Reverse().ToArray() })
+        foreach (var source in new[] { inputs[..1], inputs.Concat(inputs[..1]).ToArray() })
         {
             using var retained = new ShortReadStream(bytes);
             Assert.ThrowsExactly<InvalidOperationException>(() => VerifiedScopeManifest.VerifyStreamFromSnapshot(
                 ArtifactRefFor(bytes), retained, profile, evidence, 2, _ => source, resolver));
         }
+        using var reordered = new ShortReadStream(bytes);
+        // Reversing the first observed object also disagrees with the retained canonical prefix.
+        Assert.ThrowsExactly<ArgumentException>(() => VerifiedScopeManifest.VerifyStreamFromSnapshot(
+            ArtifactRefFor(bytes), reordered, profile, evidence, 2, _ => inputs.Reverse(), resolver));
         using var changing = new ShortReadStream(bytes);
         var pass = 0;
         Assert.ThrowsExactly<InvalidOperationException>(() => VerifiedScopeManifest.VerifyStreamFromSnapshot(
@@ -1904,6 +1908,19 @@ public sealed class ScopeManifestContractTests
         Assert.ThrowsExactly<OperationCanceledException>(() => VerifiedScopeManifest.VerifyStreamFromSnapshot(
             ArtifactRefFor(bytes), retained, profile, evidence, 1,
             _ => { duringReplay.Cancel(); return [input]; }, resolver, duringReplay.Token));
+    }
+
+    private sealed class SourceReplayEnumerationRejectingResolver(
+        IScopeReductionEvidenceResolver admitted) : IScopeReductionEvidenceResolver
+    {
+        public SourceArtifactRef CompleteEnumerationRef => admitted.CompleteEnumerationRef;
+        public bool IsSelectorObservationAdmitted(ScopeSelectorObservationBinding binding) =>
+            admitted.IsSelectorObservationAdmitted(binding);
+        public bool IsSelectorNotApplicableAdmitted(ScopeSelectorNotApplicableBinding binding) =>
+            admitted.IsSelectorNotApplicableAdmitted(binding);
+        public bool IsRuleEvaluationAdmitted(ScopeRuleEvaluationBinding binding) =>
+            admitted.IsRuleEvaluationAdmitted(binding);
+        public bool IsCompleteEnumerationAdmitted(ScopeCompleteEnumerationBinding binding) => false;
     }
 
     private sealed class ShortReadStream(byte[] initial, byte[]? replacement = null) : Stream
