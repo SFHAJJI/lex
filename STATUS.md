@@ -2380,7 +2380,7 @@ Predecessor chaining, the fifth slice, second part (PR #874): `as_observed` by b
   #867).
 - The registry digest moves with the new request schema, to `c40e23fd…`.
 
-Schema 6 served with its build record absent (PR #877).
+Schema 6 served with its build record absent (PR #878).
 - **The gap.** Since #864 the reader read only the newest schema. So the API refused every Luxembourg
   index of schema 6 ("the schema differs from the exact terminal schema"). Two such indexes exist:
   - the data lane's running EU population, frozen at `6eb1d9d9`;
@@ -3409,7 +3409,7 @@ Repair fast lane: 3,065 pass / 1 Windows skip; repair build: zero warnings/error
 
 - The bounded real mount is available at
   `C:\lex-v3\first-mount-decision95-restart-20260930\v3-corpus`; the web lane's journeys run on it
-  (PR #815). Its Luxembourg index is schema 6. The reader refused it from #864 until PR #877, which
+  (PR #815). Its Luxembourg index is schema 6. The reader refused it from #864 until PR #878, which
   serves it with its build record absent. The machine gates derive their cases from any mount (PRs #838, #839, #842, #845, #846)
   and the release card is the gates run over the rehearsal's mount (PR #844). The real mount holds
   no Luxembourg state yet, so its temporal set is not measured, and it will be once the data lane's
