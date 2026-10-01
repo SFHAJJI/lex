@@ -578,6 +578,10 @@ public enum LuxembourgQueryExecutionRefusal
     /// </summary>
     [JsonStringEnumMemberName("selected_manifestation_identity_not_unique")]
     SelectedManifestationIdentityNotUnique = 20,
+
+    /// <summary>The selected document phase could not retain its original replay associations.</summary>
+    [JsonStringEnumMemberName("document_checkpoint_not_retained")]
+    DocumentCheckpointNotRetained = 21,
 }
 
 /// <summary>
@@ -771,7 +775,8 @@ public sealed class LuxembourgQueryExecutionResult
         IReadOnlyDictionary<int, IReadOnlyDictionary<string, CorpusAcquisitionRefusalReason>>? gazetteListingFetchRefusalsByOrdinal,
         IReadOnlyDictionary<int, IReadOnlyList<string>>? gazetteListingsWithContradictoryLegalValueByOrdinal,
         LuxembourgNeverConsolidatedBodyLedger? populationLedger,
-        LuxembourgQueryExecutionRefusalDetail? refusal)
+        LuxembourgQueryExecutionRefusalDetail? refusal,
+        SourceArtifactRef? documentCheckpointRef = null)
     {
         Topology = topology;
         FamilyOutcomes = familyOutcomes;
@@ -797,6 +802,40 @@ public sealed class LuxembourgQueryExecutionResult
         GazetteListingsWithContradictoryLegalValueByOrdinal = gazetteListingsWithContradictoryLegalValueByOrdinal;
         PopulationLedger = populationLedger;
         Refusal = refusal;
+        DocumentCheckpointRef = documentCheckpointRef;
+    }
+
+    /// <summary>Original selected-document phase checkpoint, present on captured delivered runs.</summary>
+    public SourceArtifactRef? DocumentCheckpointRef { get; }
+
+    internal LuxembourgQueryExecutionResult WithDocumentCheckpoint(SourceArtifactRef checkpoint)
+    {
+        ArgumentNullException.ThrowIfNull(checkpoint);
+        return new(
+            Topology,
+            FamilyOutcomes,
+            RelationFamilyAcquisitions,
+            ResolvedRelations,
+            LocalInboundRelations,
+            TypedAssertions,
+            ResourceObservationSubjects,
+            ResourceObservationExclusions,
+            ScopeManifestReceipt,
+            ScopeManifestCanonicalSha256,
+            Completion,
+            DocumentAcquisitionOutcomesByOrdinal,
+            CorpusRecordSetRef,
+            CorpusRecordSetReceipt,
+            CorpusRecordSet,
+            ObservedObjectIdentitySetRef,
+            ObservedObjectIdentitySetReceipt,
+            ObservedObjectIdentitySet,
+            HeldBodyDerivationPopulation,
+            GazetteBodySetsByOrdinal,
+            GazetteListingFetchRefusalsByOrdinal,
+            GazetteListingsWithContradictoryLegalValueByOrdinal,
+            PopulationLedger,
+            Refusal, checkpoint);
     }
 
     public static LuxembourgQueryExecutionResult Delivered(
@@ -1128,7 +1167,7 @@ public sealed class LuxembourgQueryExecutionResult
 /// its caller-supplied-cover behavior.
 /// </para>
 /// </remarks>
-public sealed class LuxembourgQueryExecutionAdapter
+public sealed partial class LuxembourgQueryExecutionAdapter
 {
     private readonly ICustodyStore _custodyStore;
     private readonly LuxembourgRepeatedEnumerationExecutor _executor;
@@ -1832,11 +1871,11 @@ public sealed class LuxembourgQueryExecutionAdapter
         var runIdentityRef = new SourceArtifactRef(
             $"urn:uuid:{Guid.NewGuid():D}", writeReceipt!.Reference.ContentSha256);
 
-        var (documentAcquisitionOutcomesByOrdinal, heldByOrdinal, acquisitionRefusal) =
-            await RunDocumentAcquisitionAsync(
+        var documentPhase = await RunDocumentAcquisitionWithCheckpointAsync(
                     reopenedManifest!, mintedAddressesByObjectRef, documentFetchRendererSource,
                     wireBudget, cancellationToken)
                 .ConfigureAwait(false);
+        var (documentAcquisitionOutcomesByOrdinal, heldByOrdinal, acquisitionRefusal) = documentPhase.Data;
         if (acquisitionRefusal is not null)
         {
             return LuxembourgQueryExecutionResult.Refused(
@@ -1976,7 +2015,7 @@ public sealed class LuxembourgQueryExecutionAdapter
             identitySetResult.VerifiedSet!,
             derivationPopulation,
             gazetteBodySetsByOrdinal!, gazetteListingFetchRefusalsByOrdinal!, gazetteContradictoryByOrdinal!,
-            populationLedger!);
+            populationLedger!).WithDocumentCheckpoint(documentPhase.Checkpoint!);
     }
 
     private static IReadOnlyList<LuxembourgTypedAssertion>? TryBuildTypedAssertions(
@@ -2535,15 +2574,15 @@ public sealed class LuxembourgQueryExecutionAdapter
     /// this door's own closed <see cref="CorpusAcquisitionRefusalReason"/> vocabulary cannot
     /// represent. Never both, never neither.
     /// </returns>
-    internal async Task<(
+    private async Task<(
         IReadOnlyDictionary<int, CorpusAcquisitionOutcome>? Outcomes,
         IReadOnlyDictionary<int, RoutedHttpEvidence>? HeldEvidenceByOrdinal,
-        LuxembourgQueryExecutionRefusalDetail? Refusal)> RunDocumentAcquisitionAsync(
+        LuxembourgQueryExecutionRefusalDetail? Refusal)> RunDocumentAcquisitionCoreAsync(
         ScopeManifest reopenedManifest,
         IReadOnlyDictionary<SourceObjectRef, LuxembourgDocumentFetchAddress> mintedAddressesByObjectRef,
         MachineQueryRendererSource documentFetchRendererSource,
         WireRequestBudget wireBudget,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken, DocumentReplay replay)
     {
         ArgumentNullException.ThrowIfNull(reopenedManifest);
         ArgumentNullException.ThrowIfNull(mintedAddressesByObjectRef);
@@ -2592,13 +2631,8 @@ public sealed class LuxembourgQueryExecutionAdapter
                     "fetch address this run never itself minted."));
             }
 
-            var bound = new LuxembourgDocumentFetchPlan(address).Bind(
-                $"urn:uuid:{Guid.NewGuid():D}",
-                $"urn:uuid:{Guid.NewGuid():D}",
-                documentFetchRendererSource);
-            var attempt = await _executor.RunDocumentGetAsync(
-                    bound.Request, wireBudget, cancellationToken)
-                .ConfigureAwait(false);
+            var attempt = await replay.FetchAsync(_custodyStore, _executor, rowOrdinal,
+                address, documentFetchRendererSource, wireBudget, cancellationToken).ConfigureAwait(false);
             if (attempt.Evidence is null)
             {
                 if (attempt.Refusal == LuxembourgDocumentGetAttemptRefusal.RobotsDisallowed)

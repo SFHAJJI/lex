@@ -3,6 +3,22 @@
 Updated 2026-10-01 by the driver. This file replaces the issue-comment ledgers. It is rewritten in
 every pull request that changes what is served, what is next or what is blocked.
 
+## Retained Luxembourg selected-document phase (Codex, 2026-10-01)
+
+Reversible driver decision: retain the selected-document phase's original row/file bindings,
+plan/input identities, transport routes and typed robots refusals. The live wrapper and offline
+reader execute the same private outcome logic. Replay checks manifest/address/renderer bindings,
+consumes every saved fetch, restores the original observations and repeats current body holds.
+It returns the same held-route map for Gazette reuse. A failed checkpoint hold has the explicit
+DocumentCheckpointNotRetained refusal. Delivered query results carry the phase checkpoint.
+
+Twenty-five new cases are drafted: copied stores with current weaker protection, successful and
+refused outcomes, excluded rows, missing evidence, rehashed bindings, changed selection, null
+root, cancellation and failed checkpoint retention. Local tests are deferred while acquisition
+holds the heavy slot; full CI and official review are pending. Parent PR 895 is still pending.
+Gazette-only fetches, full LU query restoration and independent offline mounts remain outstanding.
+Input/result digest calculation still materializes JSON; this slice makes no full-LU fit claim.
+
 ## Offline Luxembourg document attempts (Codex, 2026-10-01)
 
 Reversible driver decision: reopen the final retained LU document attempt from its original
