@@ -269,6 +269,8 @@ public sealed class GuardedConstructionCensusTests
                     + "5 compiler-generated",
                 "Lex.V3.Contracts.Index.V3IndexCapabilityManifest: by-ref-method public static "
                     + "Lex.V3.Contracts.Index.V3IndexCapabilityManifest::TryCreate, "
+                    + "by-ref-method public static "
+                    + "Lex.V3.Contracts.Index.V3IndexCapabilityManifest::TryCreate, "
                     + "constructor private instance "
                     + "Lex.V3.Contracts.Index.V3IndexCapabilityManifest::.ctor, "
                     + "method public static "
@@ -1743,7 +1745,8 @@ public sealed class GuardedConstructionCensusTests
                     + "method public static "
                     + "Lex.V3.Contracts.Source.Scope.ScopeManifestCanonicalWriter::WriteStreaming, "
                     + "method public static "
-                    + "Lex.V3.Contracts.Source.Scope.VerifiedScopeManifest::VerifyStreamFromSnapshot",
+                    + "Lex.V3.Contracts.Source.Scope.VerifiedScopeManifest::VerifyStreamFromSnapsho"
+                    + "t",
                 "Lex.V3.Contracts.Source.Scope.VerifiedScopeManifest: constructor internal "
                     + "instance Lex.V3.Contracts.Source.Scope.VerifiedScopeManifest::.ctor, "
                     + "method private static "

@@ -77,6 +77,12 @@ test("the script deploys only a release that verifies, and only by the image's d
   assert.match(script, /\$image = "\$Registry\/\$Repository@\$digest"/);
   assert.match(script, /\$digest -notmatch '\^sha256:\[0-9a-f\]\{64\}\$'/);
   assert.match(script, /"image=\$image"/);
+  // The browser probes run unless -SkipBrowserProbe says they do not, and a skip is stated.
+  assert.match(code, /\$browserProbe = if \(\$SkipBrowserProbe\) \{ @\(\) \} else \{ @\('--browser'\) \}/);
+  assert.match(code, /deploy-probe\.mjs'\) --origin \$origin --release \$releasePath --public-key \$keyPath @browserProbe/);
+  assert.match(code, /the browser probes are skipped \(-SkipBrowserProbe\)/);
+  // Rollback and forward again are printed for the owner with promotion, never run.
+  assert.match(code, /Write-Host "  > az containerapp ingress traffic set -g \$ResourceGroup -n \$AppName --revision-weight \$LiveRevision=100"/);
   // A failed probe deactivates the candidate (the removal step) and stops.
   assert.match(script, /if \(\$LASTEXITCODE -ne 0\) \{[\s\S]*?revision deactivate[\s\S]*?throw "The candidate failed its probe/);
 });
