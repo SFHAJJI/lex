@@ -861,6 +861,11 @@ public sealed class EuObjectFactsDiscoveryPlan
             GROUP BY ?object ?predicate ?value ?value_kind ?datatype_iri ?language_tag
             """;
         var objectFactsCount = Wrap(objectFactsRows);
+        // Retained retry4 continuation 88def2e2 returned seven keys BELOW its cursor,
+        // despite the disjunction and exact-cursor exclusion. The additional nested IF
+        // compares the first unequal component. It is equivalent for these total string
+        // keys and cannot remove any row permitted by the strict lexicographic boundary.
+        // Keep publisher responses intact: the executor and proof still refuse overlap.
         var objectFactsPage = $$"""
             SELECT ?object ?predicate ?value ?value_kind ?datatype_iri ?language_tag ?key_1 ?key_2 ?key_3 ?key_4 ?key_5 ?key_6 WHERE {
               {
@@ -885,6 +890,13 @@ public sealed class EuObjectFactsDiscoveryPlan
               )
               FILTER(?has_cursor = 0 || !(
                 ?key_1 = ?last_key_1 && ?key_2 = ?last_key_2 && ?key_3 = ?last_key_3 && ?key_4 = ?last_key_4 && ?key_5 = ?last_key_5 && ?key_6 = ?last_key_6))
+              FILTER(IF(?has_cursor = 0, true,
+                IF(?key_1 != ?last_key_1, ?key_1 > ?last_key_1,
+                IF(?key_2 != ?last_key_2, ?key_2 > ?last_key_2,
+                IF(?key_3 != ?last_key_3, ?key_3 > ?last_key_3,
+                IF(?key_4 != ?last_key_4, ?key_4 > ?last_key_4,
+                IF(?key_5 != ?last_key_5, ?key_5 > ?last_key_5,
+                   ?key_6 > ?last_key_6)))))))
             }
             ORDER BY ?key_1 ?key_2 ?key_3 ?key_4 ?key_5 ?key_6
             LIMIT {page_limit:uint}

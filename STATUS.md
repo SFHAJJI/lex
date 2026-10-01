@@ -3,6 +3,23 @@
 Updated 2026-10-01 by the driver. This file replaces the issue-comment ledgers. It is rewritten in
 every pull request that changes what is served, what is next or what is blocked.
 
+## EU object-facts continuation range (Codex, 2026-10-01)
+
+Full EU retry 4 (frozen source18b53941, C:/lex-v3/eu-population-20261001-2) refused
+ObjectFactsFamilyNotProven after 1,359 wire requests. In retained batch c4968f32 both COUNTs
+are 678; pass A has 678 rows and pass B has 613+72, with seven repeated keys below its cursor.
+Both unique key sets are equal. The retained continuation query88def2e2 explicitly excludes
+those earlier rows. The proof correctly refused; no complete population or mount was produced.
+Minimum sampled free space was5,981,491,200 bytes; this was not a disk-guard stop.
+
+Reversible driver decision: retain the original predicate and add an equivalent nested comparison
+that selects the first unequal cursor component. All six components are already total strings.
+This candidate changes publisher-side filtering only; rows are never discarded or deduplicated
+locally to turn an invalid delivery into a proof. The executor now checks the first continuation
+row against the prior cursor so an overlapping prefix refuses immediately. Three offline cases
+cover earlier, equal and valid later prefixes. Local validation and a fresh bounded live run
+over the exact retained 50-object batch are pending. A full rerun requires this evidence first.
+
 ## EU article source coordinates (Codex, 2026-10-01)
 
 Reversible driver decision: schema 3 preserves the admitted Formex package SHA-256 and checked

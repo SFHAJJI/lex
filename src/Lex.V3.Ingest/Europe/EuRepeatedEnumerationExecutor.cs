@@ -2806,7 +2806,9 @@ public sealed class EuRepeatedEnumerationExecutor
                 }
 
                 var candidate = rows[^1];
-                if (cursor is not null && CompareKeys(cursor, candidate) >= 0)
+                // Every continuation row must be beyond the previous page. Checking the last
+                // row alone misses an overlapping prefix followed by a later valid row.
+                if (cursor is not null && CompareKeys(cursor, rows[0]) >= 0)
                 {
                     return new PassOutcome(
                         null,
