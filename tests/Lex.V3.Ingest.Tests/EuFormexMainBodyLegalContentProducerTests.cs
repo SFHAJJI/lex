@@ -28,7 +28,7 @@ public sealed class EuFormexMainBodyLegalContentProducerTests
         Assert.IsTrue(outcome.Articles.All(a => a.Language == language && a.PublisherDate == "20160504"),
             "The document bibliographic date remains distinct from CONSLEG.DATE=20180523.");
         Assert.IsTrue(outcome.Articles.All(a => a.PackageEntry.StartsWith("CL2016R0679", StringComparison.Ordinal)));
-        Assert.AreEqual("Article 1", outcome.Articles[0].Heading);
+        Assert.AreEqual(language == "FR" ? "Article premier" : "Article 1", outcome.Articles[0].Heading);
     }
 
     [TestMethod]
@@ -38,6 +38,7 @@ public sealed class EuFormexMainBodyLegalContentProducerTests
     [DataRow("duplicate-language")]
     [DataRow("duplicate-date")]
     [DataRow("missing-date")]
+    [DataRow("invalid-date")]
     [DataRow("wrong-language")]
     [DataRow("missing-operative-text")]
     public async Task ConsolidatedDocumentAmbiguityOrMissingCoordinatesRefuses(string change)
@@ -54,6 +55,7 @@ public sealed class EuFormexMainBodyLegalContentProducerTests
                 case "duplicate-language": bib.Add(new XElement(bib.Element("LG.DOC")!)); break;
                 case "duplicate-date": bib.Add(new XElement(bib.Element("DATE")!)); break;
                 case "missing-date": bib.Element("DATE")!.Remove(); break;
+                case "invalid-date": bib.Element("DATE")!.SetAttributeValue("ISO", "20160230"); break;
                 case "wrong-language": bib.Element("LG.DOC")!.Value = "FR"; break;
                 case "missing-operative-text": doc.Element("ENACTING.TERMS")!.Remove(); break;
                 default: throw new ArgumentOutOfRangeException(nameof(change));

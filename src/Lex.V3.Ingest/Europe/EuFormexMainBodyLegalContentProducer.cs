@@ -1,4 +1,5 @@
 using System.Buffers.Binary;
+using System.Globalization;
 using System.IO.Compression;
 using System.Security.Cryptography;
 using System.Text;
@@ -321,6 +322,10 @@ public sealed class EuFormexMainBodyLegalContentProducer
                     // Keep the existing article bibliographic date meaning. CONSLEG.DATE
                     // is a separate publisher state coordinate, never an applicability date.
                     publisherDate = dates.Length == 1 ? dates[0].Attribute("ISO")?.Value : null;
+                    if (!DateOnly.TryParseExact(publisherDate, new[] { "yyyyMMdd", "yyyy-MM-dd" },
+                            CultureInfo.InvariantCulture, DateTimeStyles.None, out _))
+                        return Refused(EuFormexMainBodyLegalContentDisposition.UnsupportedContentShape,
+                            "a CONS.DOC bibliographic date must be one exact civil date");
                     articleRoot = operative[0];
                 }
                 else
