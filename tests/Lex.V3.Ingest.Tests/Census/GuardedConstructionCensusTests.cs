@@ -58,8 +58,7 @@ public sealed class GuardedConstructionCensusTests
     [TestMethod]
     public void EveryConstructionRestrictedTypeInTheSweptAssembliesHasExactlyTheseDoors()
     {
-        CollectionAssert.AreEqual(
-            new[]
+        var expected = new[]
             {
                 "Lex.V3.Ingest.ChunkedDerivedArtifact: constructor private instance "
                     + "Lex.V3.Ingest.ChunkedDerivedArtifact::.ctor, "
@@ -197,62 +196,40 @@ public sealed class GuardedConstructionCensusTests
                     + "Lex.V3.Ingest.Europe.EuRepeatedEnumerationExecutor+PassOutcome::Deconstruct, "
                     + "constructor internal instance "
                     + "Lex.V3.Ingest.Europe.EuEnumerationRefusalDetail::.ctor",
-                "Lex.V3.Ingest.Europe.EuEnumerationRunResult: constructor private instance "
-                    + "Lex.V3.Ingest.Europe.EuEnumerationRunResult::.ctor, "
-                    + "method internal instance "
-                    + "Lex.V3.Ingest.Europe.EuCorrigendumTripwireProducer+Pairing::RunExpressionFac"
-                    + "tsAndProduceAsync, "
-                    + "method internal instance "
-                    + "Lex.V3.Ingest.Europe.EuCorrigendumTripwireProducer+Pairing::RunObjectFactsAs"
-                    + "ync, "
-                    + "method internal instance "
-                    + "Lex.V3.Ingest.Europe.EuLanguageScopedExpressionProducer+Pairing::RunExpressi"
-                    + "onFactsAndDeriveAsync, "
-                    + "method internal instance "
-                    + "Lex.V3.Ingest.Europe.EuLanguageScopedExpressionProducer+Pairing::RunObjectFa"
-                    + "ctsAsync, "
-                    + "method private instance "
-                    + "Lex.V3.Ingest.Europe.EuRepeatedEnumerationExecutor::RunPassesAsync, "
-                    + "method public instance "
-                    + "Lex.V3.Ingest.Europe.EuRepeatedEnumerationExecutor::RunCaseLawLinksAsync, "
-                    + "method public instance "
-                    + "Lex.V3.Ingest.Europe.EuRepeatedEnumerationExecutor::RunCensusPartitionAsync, "
-                    + "method public instance "
-                    + "Lex.V3.Ingest.Europe.EuRepeatedEnumerationExecutor::RunEuFormexManifestation"
-                    + "sAsync, "
-                    + "method public instance "
-                    + "Lex.V3.Ingest.Europe.EuRepeatedEnumerationExecutor::RunEuProcedureEventsAsyn"
-                    + "c, "
-                    + "method public instance "
-                    + "Lex.V3.Ingest.Europe.EuRepeatedEnumerationExecutor::RunLuxembourgConsolidati"
-                    + "onByActAsync, "
-                    + "method public instance "
-                    + "Lex.V3.Ingest.Europe.EuRepeatedEnumerationExecutor::RunLuxembourgDraftGraphA"
-                    + "sync, "
-                    + "method public instance "
-                    + "Lex.V3.Ingest.Europe.EuRepeatedEnumerationExecutor::RunLuxembourgInitialDraf"
-                    + "tInventoryAsync, "
-                    + "method public instance "
-                    + "Lex.V3.Ingest.Europe.EuRepeatedEnumerationExecutor::RunLuxembourgOpinionRequ"
-                    + "estGraphAsync, "
-                    + "method public instance "
-                    + "Lex.V3.Ingest.Europe.EuRepeatedEnumerationExecutor::RunLuxembourgOpinionRequ"
-                    + "estInventoryAsync, "
-                    + "method public instance "
-                    + "Lex.V3.Ingest.Europe.EuRepeatedEnumerationExecutor::RunLuxembourgOpinionsAsy"
-                    + "nc, "
-                    + "method public instance "
-                    + "Lex.V3.Ingest.Europe.EuRepeatedEnumerationExecutor::RunLuxembourgTranspositi"
-                    + "onIdentitiesAsync, "
-                    + "method public instance "
-                    + "Lex.V3.Ingest.Europe.EuRepeatedEnumerationExecutor::RunNationalImplementingM"
-                    + "easuresAsync, "
-                    + "method public instance "
-                    + "Lex.V3.Ingest.Europe.EuRepeatedEnumerationExecutor::RunObjectFactsPartitionA"
-                    + "sync, "
-                    + "method public static Lex.V3.Ingest.Europe.EuEnumerationRunResult::Delivered, "
-                    + "method public static Lex.V3.Ingest.Europe.EuEnumerationRunResult::Refused, "
-                    + "2 compiler-generated",
+                "Lex.V3.Ingest.Europe.EuEnumerationRunResult: constructor private insta"
+                    + "nce Lex.V3.Ingest.Europe.EuEnumerationRunResult::.ctor, method interna"
+                    + "l instance Lex.V3.Ingest.Europe.EuCorrigendumTripwireProducer+Pairing:"
+                    + ":RunExpressionFactsAndProduceAsync, method internal instance Lex.V3.In"
+                    + "gest.Europe.EuCorrigendumTripwireProducer+Pairing::RunObjectFactsAsync"
+                    + ", method internal instance Lex.V3.Ingest.Europe.EuLanguageScopedExpres"
+                    + "sionProducer+Pairing::RunExpressionFactsAndDeriveAsync, method interna"
+                    + "l instance Lex.V3.Ingest.Europe.EuLanguageScopedExpressionProducer+Pai"
+                    + "ring::RunObjectFactsAsync, method internal static Lex.V3.Ingest.Europe"
+                    + ".EuEnumerationRunResult::DeliveredWithCheckpoint, method private insta"
+                    + "nce Lex.V3.Ingest.Europe.EuRepeatedEnumerationExecutor::RunPassesAsync"
+                    + ", method public instance Lex.V3.Ingest.Europe.EuRepeatedEnumerationExe"
+                    + "cutor::RunCaseLawLinksAsync, method public instance Lex.V3.Ingest.Euro"
+                    + "pe.EuRepeatedEnumerationExecutor::RunCensusPartitionAsync, method publ"
+                    + "ic instance Lex.V3.Ingest.Europe.EuRepeatedEnumerationExecutor::RunEuF"
+                    + "ormexManifestationsAsync, method public instance Lex.V3.Ingest.Europe."
+                    + "EuRepeatedEnumerationExecutor::RunEuProcedureEventsAsync, method publi"
+                    + "c instance Lex.V3.Ingest.Europe.EuRepeatedEnumerationExecutor::RunLuxe"
+                    + "mbourgConsolidationByActAsync, method public instance Lex.V3.Ingest.Eu"
+                    + "rope.EuRepeatedEnumerationExecutor::RunLuxembourgDraftGraphAsync, meth"
+                    + "od public instance Lex.V3.Ingest.Europe.EuRepeatedEnumerationExecutor:"
+                    + ":RunLuxembourgInitialDraftInventoryAsync, method public instance Lex.V"
+                    + "3.Ingest.Europe.EuRepeatedEnumerationExecutor::RunLuxembourgOpinionReq"
+                    + "uestGraphAsync, method public instance Lex.V3.Ingest.Europe.EuRepeated"
+                    + "EnumerationExecutor::RunLuxembourgOpinionRequestInventoryAsync, method"
+                    + " public instance Lex.V3.Ingest.Europe.EuRepeatedEnumerationExecutor::R"
+                    + "unLuxembourgOpinionsAsync, method public instance Lex.V3.Ingest.Europe"
+                    + ".EuRepeatedEnumerationExecutor::RunLuxembourgTranspositionIdentitiesAs"
+                    + "ync, method public instance Lex.V3.Ingest.Europe.EuRepeatedEnumeration"
+                    + "Executor::RunNationalImplementingMeasuresAsync, method public instance"
+                    + " Lex.V3.Ingest.Europe.EuRepeatedEnumerationExecutor::RunObjectFactsPar"
+                    + "titionAsync, method public static Lex.V3.Ingest.Europe.EuEnumerationRu"
+                    + "nResult::Delivered, method public static Lex.V3.Ingest.Europe.EuEnumer"
+                    + "ationRunResult::Refused, 2 compiler-generated",
                 "Lex.V3.Ingest.Europe.EuFamilyEnumerationOutcome: constructor private instance "
                     + "Lex.V3.Ingest.Europe.EuFamilyEnumerationOutcome::.ctor, "
                     + "method public static "
@@ -306,17 +283,7 @@ public sealed class GuardedConstructionCensusTests
                     + "instance Lex.V3.Ingest.Europe.EuFormexMainBodyLegalContentPopulation::.ctor, "
                     + "method public instance "
                     + "Lex.V3.Ingest.Europe.EuFormexMainBodyLegalContentProducer::RunAsync",
-                "Lex.V3.Ingest.Europe.EuFormexManifestationEnumerationResult: constructor private "
-                    + "instance Lex.V3.Ingest.Europe.EuFormexManifestationEnumerationResult::.ctor, "
-                    + "method internal static "
-                    + "Lex.V3.Ingest.Europe.EuFormexManifestationEnumerationProducer::DecodeRows, "
-                    + "method internal static "
-                    + "Lex.V3.Ingest.Europe.EuFormexManifestationEnumerationResult::Refused, "
-                    + "method internal static "
-                    + "Lex.V3.Ingest.Europe.EuFormexManifestationEnumerationResult::Success, "
-                    + "method public instance "
-                    + "Lex.V3.Ingest.Europe.EuFormexManifestationEnumerationProducer::RunAsync, "
-                    + "1 compiler-generated",
+                "Lex.V3.Ingest.Europe.EuFormexManifestationEnumerationResult: constructor private instance Lex.V3.Ingest.Europe.EuFormexManifestationEnumerationResult::.ctor, method internal instance Lex.V3.Ingest.Europe.EuFormexManifestationEnumerationResult::WithCheckpoint, method internal static Lex.V3.Ingest.Europe.EuFormexManifestationEnumerationProducer::DecodeRows, method internal static Lex.V3.Ingest.Europe.EuFormexManifestationEnumerationResult::Refused, method internal static Lex.V3.Ingest.Europe.EuFormexManifestationEnumerationResult::Success, method private static Lex.V3.Ingest.Europe.EuFormexManifestationEnumerationProducer::DeriveAsync, method public instance Lex.V3.Ingest.Europe.EuFormexManifestationEnumerationProducer::RunAsync, method public static Lex.V3.Ingest.Europe.EuFormexManifestationEnumerationProducer::ReopenAsync, 1 compiler-generated",
                 "Lex.V3.Ingest.Europe.EuFormexPackageOutcome: constructor private instance "
                     + "Lex.V3.Ingest.Europe.EuFormexPackageOutcome::.ctor, "
                     + "method public static Lex.V3.Ingest.Europe.EuFormexPackageOutcome::Acquired, "
@@ -1196,8 +1163,11 @@ public sealed class GuardedConstructionCensusTests
                     + "Lex.V3.Ingest.Europe.LuxembourgTranspositionIdentityRunRequest::Deconstruct, "
                     + "constructor private instance Lex.V3.Ingest.WireRequestBudget::.ctor, "
                     + "method public static Lex.V3.Ingest.WireRequestBudget::OfWireRequests",
-            },
-            ClosedSurfaceCensus.GuardedConstruction(CensusScope.SweptHere).ToArray());
+            };
+        var actual = ClosedSurfaceCensus.GuardedConstruction(CensusScope.SweptHere).ToArray();
+        CollectionAssert.AreEqual(expected, actual,
+            "Removed or changed pins:\n" + string.Join("\n", expected.Except(actual, StringComparer.Ordinal)) +
+            "\nActual added or changed entries:\n" + string.Join("\n", actual.Except(expected, StringComparer.Ordinal)));
     }
 
     /// <summary>
