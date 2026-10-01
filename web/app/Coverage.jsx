@@ -6,8 +6,9 @@
 // already decided, so a rule cannot be repaired in the string renderer while this one keeps the
 // defect.
 //
-// It does decide FIVE absences -- no language row, no gap token, no measured capability, no
-// unrouted operation, no unserved capability -- and an earlier header claimed it decided none. Each
+// It does decide SEVEN absences -- no language row, no gap token, no measured capability, no
+// unrouted operation, no unserved capability, no retention line, no build recorded in the mounted
+// log -- and an earlier header claimed it decided none. Each
 // is a branch on a list being empty, and each branch's SENTENCE is imported rather than written
 // here, because the page's own prose was the last thing left in two copies. One of those sentences
 // was false on an answer the producer really sends, and the parity test that was supposed to hold
@@ -24,8 +25,8 @@
 // evidence values carry a space between them. React puts none there, the string renderer joins with
 // one, and two identifiers run together are one identifier a reader cannot look up.
 //
-// There is no build instant anywhere on this page, and no retention sentence, and both are
-// deliberate rather than pending. The answer's own `not_held` carries a row saying it states no build
+// There is no build instant on the counts anywhere on this page, and no retention sentence, and both
+// are deliberate rather than pending. The answer's own `not_held` carries a row saying it states no build
 // time and another saying no observation time is held, and both are rendered with the rest. The page
 // this replaced stamped `Counts as of index build <instant>.` into its body and both its captions,
 // and printed `Observation history begins August 2026`. The calendar dates that remain -- each
@@ -33,6 +34,11 @@
 // the law, not a claim about when the counting happened, and the note above the counts says so.
 // The V2 page's qualification of the last state date is restored under the table, in words that do
 // not assume a present date this mount does not hold.
+//
+// The one place an instant appears is the history section, and it is not a date of the counts: the
+// answer's `history` lists the builds the mounted log records, each with its build time, and its own
+// note says every such time is "a build's, an upper bound on observation, never an observation time".
+// Each is printed verbatim beside the build it belongs to, and the note is printed under them.
 
 import { Fragment } from 'react';
 
@@ -124,6 +130,64 @@ function LanguageRow({ language, copy }) {
       <td>{language.first_state_date}</td>
       <td>{language.last_state_date}</td>
     </tr>
+  );
+}
+
+/** Tokens with a comma between them, as the string renderer joins them. */
+function Listed({ values }) {
+  return values.map((value, index) => (
+    <Fragment key={value}>
+      {index === 0 ? null : ', '}
+      <Evidence value={value} />
+    </Fragment>
+  ));
+}
+
+/**
+ * The mounted log's history, or nothing when no Luxembourg index is mounted. Each time in it is a
+ * build's, printed verbatim beside the build it belongs to, with the platform's note under it.
+ */
+function History({ history, copy }) {
+  if (history === null) return null;
+  if (!history.logRecordsBuilds) {
+    return (
+      <section className="coverage-block">
+        <h2>{copy.headings.history}</h2>
+        <p className="coverage-held">{copy.noBuildsRecorded}</p>
+        <p className="coverage-note">{history.note}</p>
+      </section>
+    );
+  }
+  const policy = history.retentionPolicy;
+  return (
+    <section className="coverage-block">
+      <h2>{copy.headings.history}</h2>
+      <dl className="coverage-facts">
+        <Row label={copy.facts.snapshotsInLog}>{String(history.snapshotsInLog)}</Row>
+        <Row label={copy.facts.historyBegins}>{history.historyBegins}</Row>
+        {policy === null ? (
+          <Row label={copy.facts.retentionPolicy}>{copy.noRetentionPolicy}</Row>
+        ) : (
+          <>
+            <Row label={copy.facts.retentionPolicy}><Evidence value={policy.id} /></Row>
+            <Row label={copy.facts.nightlyDays}>{String(policy.nightlyDays)}</Row>
+            <Row label={copy.facts.retentionEvaluatedAt}>{policy.evaluatedAt}</Row>
+          </>
+        )}
+        <Row label={copy.facts.snapshotsWithoutText}>{String(history.snapshotsWithoutText)}</Row>
+      </dl>
+      <FacetTable caption={copy.captions.snapshots} head={heads('snapshots', copy)} copy={copy}>
+        {history.snapshotsWithText.map((snapshot) => (
+          <tr key={snapshot.snapshotId}>
+            <td><Evidence value={snapshot.snapshotId} /></td>
+            <td>{snapshot.observation}</td>
+            <td>{snapshot.builtAt}</td>
+            <td><Listed values={snapshot.retainedAs} /></td>
+          </tr>
+        ))}
+      </FacetTable>
+      <p className="coverage-note">{history.note}</p>
+    </section>
   );
 }
 
@@ -248,6 +312,7 @@ export function Coverage({ answer, copy = COVERAGE_COPY }) {
         )}
         <p className="coverage-note">{view.operations.note}</p>
       </section>
+      <History history={view.history} copy={copy} />
       <section className="coverage-block">
         <h2>{copy.headings.measured}</h2>
         {view.capabilityCells.length === 0 ? (

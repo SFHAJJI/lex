@@ -5,20 +5,103 @@ every pull request that changes what is served, what is next or what is blocked.
 
 ## Offline EU document routes (Codex, 2026-10-01)
 
-Draft: reopen a retained document route using its original acquisition run, logical-request digest
-and independently selected address. Every hop must retain its GET request, unchanged representation
-and policies, original write receipt and exact body. The existing route constructor repeats receipt,
-redirect and completion checks, and its complete canonical bytes must equal the original artifact.
-No transport is opened and no new observation or current retention guarantee is minted. Non-200
-and incomplete routes retain their original outcomes. Package inventories, annex classification,
-query binding and complete acquisition catalog reconstruction remain separate work.
+Reopen a retained document route using its original acquisition run, logical-request digest and
+independently selected address. Check each hop's GET, representation, policies, original write
+receipt and exact body. The existing constructor repeats receipt, redirect and completion gates;
+the complete canonical route must match the original bytes. No transport or observation is created.
+Non-200 and incomplete routes retain their original outcomes, without a current retention claim.
 
-All19 new cases passed in initial CI36840785524:5291 passed,22 skipped and one construction
-census failed. Diagnostic CI36841885062 repeated that result; its138 compiled rows change only
-the document-fetch result factory list. The new ReopenAsync door is now pinned from that output;
-fresh CI must verify the transcription. No implementation failure was reported.
-Local Release, required fast tests, affected ingest tests and Claude review remain queued behind
-the active EU run and prior data slices. No population completion or complete offline rebuild is claimed.
+All 19 new cases passed at 69c851c7: CI 36842850940 reported 5,292 passed and 22 skipped,
+with required watch exit zero. Integration 8c3f3801 is now included. Fresh combined CI and
+read-only Claude review remain required. Local builds/tests stay deferred under the acquisition
+memory guard. Package inventories, annex classification and complete offline acquisition/mount
+composition remain follow-on work. No population completion or production action is claimed.
+
+## Streaming scope verification from source inputs (Codex, 2026-10-01)
+
+The retained manifest can be verified by independently replaying its original source inputs
+through the existing streaming reducer and canonical writer. Acceptance checks the pinned
+digest, UTF-8, complete byte comparison, both source passes and writer admission/accounting.
+It returns the existing digest/count receipt without materializing a second manifest graph.
+The source factory and evidence resolver must come from original evidence; deriving either
+from the manifest under test would be circular.
+
+PR head b3cafcab passed CI 36850031289: 5,289 tests passed, 22 skipped, including all eleven
+new scope cases. Claude returned MERGE with no material findings. The one editorial repair
+clarifies exception precedence and working buffers in the API remarks and records the review.
+Integration a74fece1 is included; final-head CI gates merge under the 10:35 standing order.
+No local Release/fast/ingest run or synthetic source-replay measurement is claimed.
+
+The measurement remains required before claiming a full Luxembourg memory fit. Working
+storage includes five projection bytes per object, the evidence table, current input, the
+JSON writer buffer and a 4 KiB comparison buffer. An individual JSON element may exceed the
+writer's 64 KiB flush threshold. Factories and resolvers can retain more. This method is not
+wired into the LU adapter and does not provide a bounded downstream manifest view.
+
+
+## Async Luxembourg assertion snapshots (Codex, 2026-10-01)
+
+The snapshot writer now consumes asynchronous verified rows through the bounded small-chunk
+channel. Failed custody cancels the producer's linked token, including a source awaiting its
+next row. Both writer paths share the record encoding and canonical digest. The source remains
+responsible for publisher proofs, census membership, admission and subject grouping.
+
+Eight cases cover equal synchronous/asynchronous bytes, empty input, independently reopened
+small chunks with duplicates and literal metadata, failure during an awaiting source, absence
+of a root after source failure, wrong observations, null rows and early cancellation. Exact
+1f16080f passed CI 36852404133: 5,306 passed, 22 skipped; the required watch exited zero.
+Claude returned MERGE with no material findings. The one editorial repair clarifies the
+caller's proof checks and records this evidence. PR858 is merged as a74fece1 and included.
+Final-head CI still gates merge.
+No local build/test was run under the 10:35 low-memory rule. Adapter integration, complete
+bounded derivation and full-LU memory measurement remain outstanding.
+
+
+## LU assertion snapshot storage (Codex, 2026-10-01)
+
+The immutable assertion snapshot uses the checked chunk reader. Opening validates the complete
+retained sequence and builds a compact subject-digest/offset index. Lookups reopen and recheck
+chunks, preserving row order, duplicates, literal metadata and cross-range dependencies. The
+header binds the run, observation and ordered census/assertion proof references. Integration
+must independently replay those proofs and check census membership before admitting rows.
+
+Each serialized record, including the complete proof-reference header, is limited to 4 MiB.
+Opening refuses noncontiguous repeated subject groups and digest collisions. The writer does
+not detect repeated groups early. Integration must measure header size and proof count before
+launch; an oversized header refuses without truncation. This remains unwired storage support.
+Scope and corpus graphs still materialize, so no full-population memory or disk fit is claimed.
+
+At 168fbe90, the Release build passed with zero warnings/errors, required fast tests passed
+(3,105 passed, one skipped), and affected ingests passed (82 passed, two skipped). Twenty new
+cases cover row preservation, malformed and corrupted storage, binding changes and cancellation.
+CI 36850526856 passed exact 12be52d4 with 5,298 tests passed and 22 skipped. Its member-level
+census and the combined totals of 259 candidates and 139 guarded types all passed.
+
+Claude's read-only cross-family review returned MERGE with no material findings. The one
+editorial repair records that evidence, removes two added byte-order marks and records the
+header-size and writer-order limitations above. Integration c27012f4 is included; merge still
+requires successful CI on the final head. The 10:35 UTC standing order permits that CI-backed
+review during acquisition while memory is below 4 GB. No additional local build was run.
+
+The asynchronous snapshot now uses the bounded small-chunk channel introduced by PR #855.
+No publisher traffic, production action or completed population is claimed by this slice.
+
+
+## Retained custody storage consolidation (Codex, 2026-10-01)
+
+Reversible driver decision: preserve every cited historical custody path while consolidating
+byte-identical files onto NTFS hardlinks to retained run 9. Eight bounded files passed first;
+the expanded operation completed 971 more files at 03:56 UTC with no publisher traffic.
+Every target/master was rehashed and independently read through the frozen product custody
+reader before and after replacement. A flushed per-file journal records each intent and result.
+An independent audit confirms all 971 file identities, path lengths and exact journal coverage.
+
+Evidence: C:/lex-v3/lanes/old-eu-hardlink-expanded-20261001-result.json, its .jsonl journal,
+old-eu-hardlink-expanded-fileids.json, and the bounded2 result and file-ID audit. The expanded
+operation shared 2,754,376,458 logical bytes; free space rose from 4,960,497,664 to 6,416,429,056
+bytes during the operation, with unrelated host writes possible. All original custody paths
+and bytes remain. This does not enforce retention or provide redundant physical copies.
+The next EU launch retains the full 6,374,424,214-byte allowance, checked again after freezing.
 
 ## EU escaped qualifier authority (Codex, 2026-10-01)
 
@@ -991,7 +1074,7 @@ CI evidence are recorded in the pull request before merge.
 
 ## Heads
 
-- `v3/integration`: `34a9573d` (2026-10-01, PR #874 merged). Build 45 s. Fast lane
+- `v3/integration`: `65922f24` (2026-10-01, PR #880 merged). Build 45 s. Fast lane
   (`eng/test-fast.ps1`): 3,077 tests, 3,076 pass, 1 skipped (the review of PR #828). Ingest suite: green on CI for PR #760
   (the CI `dotnet` job runs the whole solution on every pull request, about 7 min on the runner;
   green for PR #834);
@@ -2441,6 +2524,93 @@ Schema 6 served with its build record absent (PR #878).
 - **The whole ingest suite also ran with `V3_EVALUATE_MOUNT` naming the real mount**, so its
   real-mount gates ran on it.
 
+Predecessor chaining, the sixth slice, first part (PR #880): a chained build keeps its earlier
+generations, by the retention line (G3b).
+- **The line.** The panel applied the launch's retention line, Stage 7 S7-A09
+  (`lex-governance/stages/STAGE-7.md:37-38`), to the generation mount:
+  - every generation a published permalink or evidence bundle references, indefinitely;
+  - nightlies for 90 days;
+  - one complete monthly keeper, indefinitely;
+  - the retained depth reported truthfully.
+- **`V3GenerationRetention.Decide`** decides from the log alone. "Now" is the mounted build's own
+  time, never the clock, so two builds of one chain decide alike. It keeps each held generation
+  that is any of these:
+  - referenced;
+  - the last build of its UTC day (the mounted build's day included) within 90 days;
+  - its UTC month's earliest held generation.
+
+  It reports the rest as dropped, and those no longer held as absent: never claimed.
+  - Nothing records which permalinks or bundles were published. So `referenced` comes from the new
+    Tool option `--referenced <file>`, a JSON array of index digests. It means the generations
+    promoted to production, which is empty until the owner promotes one.
+  - Every verified generation counts as "complete".
+- **The writer** handles a chained build (`--predecessor`):
+  - it copies the kept generations whole out of the predecessor's directory (the predecessor itself,
+    or a generation it kept) into `generations/{luxembourg index digest}/`: the five mount files and
+    the build report;
+  - it records the decision in `generations/retention.json` and lists the generations in the build
+    report;
+  - nothing is deleted anywhere, and the predecessor's directory is only read.
+- **`VerifyAsync`** holds each generation to the mounted log:
+  - its name is an index the log names as a predecessor;
+  - it holds exactly a generation's six files and is itself a mount that verifies;
+  - its Luxembourg index is that digest, and its corpus the one its observation names;
+  - its log is the mounted log up to its observation;
+  - `retention.json` is the line's decision over the generations the writer could copy: those it
+    kept, held here, and those it recorded as dropped, which have no directory;
+  - a chained mount must hold `generations/retention.json`, even when it keeps no generation, so a
+    mount whose generations were all removed does not verify as one that never had any. A
+    generation is verified as a generation: its own earlier builds are its mount's to record.
+  - The review of #880 found both gaps. With only the held generations as input, a correctly dropped
+    nightly read as absent and the writer's record was refused; and a chained mount with
+    `generations/` deleted verified.
+- **Tests:**
+  - three real first-mount builds on three days, each chained to the last: the third keeps the
+    first (its day's last, and October's keeper) and the second (nightly), copied byte for byte,
+    and verifies;
+  - a fourth build 120 days after the first keeps only October's keeper and records the two
+    nightlies, now past 90 days, as dropped; it verifies;
+  - five ways a generation can be wrong are refused: a missing file, a directory that is no earlier
+    build, another build's files under a generation's name, no `generations/` at all, and a
+    retention record the line did not decide;
+  - the policy's own tests cover the 90-day edge, a referenced old build, an absent one, and an
+    earlier build of the mounted build's day.
+- **Not yet:** the API reads no generation. Next come the mount's own checks of them at open, the
+  depth `coverage` and `events` report, and then `as_observed` and `verify` quoting a state from a
+  retained generation. An image built from such a mount carries `generations/` too. No byte budget
+  is enforced yet.
+
+Predecessor chaining, the sixth slice, second part (PR #885): the mount holds its generations to
+its log when it opens, and reports the history depth it keeps (S7-A09: "reported history depth is
+truthful").
+- **At open,** `V3CorpusMount.OpenAsync` runs `V3CorpusMountWriter.VerifyGenerationsAsync`, the
+  checks the writer's verification runs, so a mount is held to the same checks where it is built
+  and where it is served.
+  - A generation that does not hold, a chained mount with no retention record, or generations
+    beside a mount with no Luxembourg index all fail the mount closed.
+  - A chained build written without its predecessor's directory records each earlier build as
+    absent (`WriteRetentionRecordAsync`), never claimed.
+- **`coverage` gains `history`:**
+  - whether the log records builds, how many it records and since when;
+  - the retention line that decided (its id, nightly days and evaluation time);
+  - each snapshot whose text the mount holds (the mounted build, and each kept generation with why
+    it is kept);
+  - how many it does not hold, and a note that every time is a build's, never an observation time.
+  - A schema-6 index records no build and says so.
+- **The Trust and Coverage page renders it,** in English with a French draft. The page's tests hold
+  every leaf of it to reach the page, both renderers to agree, and every string to be escaped.
+- **`events`' ancestors gain `text_held` and `retained_as`.**
+- **Tests:**
+  - the chain test's third build mounts and reports three builds, all three with text;
+  - its fourth build, 120 days later, reports four builds, two with text and two without;
+  - each damaged copy that the writer's verification refuses, the mount refuses with the same
+    reason;
+  - a genesis mount reports one build with the mount's own text and no retention line applied;
+  - a schema-6 mount reports no build recorded;
+  - the crafted chained mounts of the events and `as_observed` tests carry a retention record that
+    names their predecessor absent.
+- **Next:** `as_observed` and `verify` quote a state from a retained generation.
+
 The live export composer and its journey step (PR #789), the eighth screen. `dist-live/export.html`
 has its own bundle `client-live-export.js`.
 - The page asks what the reading page asks: the same form (`ReadingForm`, now shared), the same one
@@ -3140,7 +3310,8 @@ recorded by PR #862:
      source body changes (G1), and the derived `interval_closed` and `validity_revised` (PR #867);
    - `events` and `answer_drift` across the chain (folded into PR #867 by its review);
    - each build's time in the log (PR #871), then `as_observed` by build snapshot (G4) (PR #874);
-   - a generation mount (G3b), retained by S7-A09.
+   - a generation mount (G3b), retained by S7-A09: generations written and verified (PR #880),
+     held to the log by the mount with the depth reported (PR #885), then quoted.
    `observed_from` stays null until a Luxembourg body's capture time reaches the corpus (data lane);
    `knowable_on` and withdrawal follow it. The owner questions (G1 when a file changes but its text
    does not, "as observed" identified by snapshot with no time, retaining every generation) were
