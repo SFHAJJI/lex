@@ -1,3 +1,6 @@
+using System.IO.Compression;
+using System.Security.Cryptography;
+using System.Text;
 using Lex.V3.Contracts.Derivation;
 using Lex.V3.Contracts.Source.Europe;
 using Lex.V3.Ingest.Europe;
@@ -38,6 +41,7 @@ public sealed class EuFormexMainBodyLegalContentProducerTests
         var outcome = population.Outcomes.Single();
         Assert.AreEqual(EuFormexMainBodyLegalContentDisposition.Admitted, outcome.Disposition);
         Assert.HasCount(99, outcome.Articles);
+        AssertDigests(bytes, outcome.Articles);
         Assert.AreEqual("001", outcome.Articles[0].PublisherIdentifier);
         Assert.AreEqual("Article 1", outcome.Articles[0].Heading);
         Assert.IsTrue(outcome.Articles[0].Tokens.Any(static token =>
@@ -105,10 +109,131 @@ public sealed class EuFormexMainBodyLegalContentProducerTests
         var outcome = population.Outcomes.Single();
         Assert.AreEqual(EuFormexMainBodyLegalContentDisposition.Admitted, outcome.Disposition);
         Assert.HasCount(2, outcome.Articles);
+        AssertDigests(bytes, outcome.Articles);
         Assert.IsTrue(outcome.Articles.All(static article =>
             article.PackageEntry == "L_202601965EN.000101.fmx.xml"));
         Assert.IsFalse(outcome.Articles.Any(static article =>
             article.PackageEntry.Contains("000201", StringComparison.Ordinal)),
             "The ANNEX root must not enter the ACT article population.");
     }
+    [TestMethod]
+    [DataRow("comment")]
+    [DataRow("bom")]
+    [DataRow("line-endings")]
+    public async Task SourceBytesChangeWithoutChangingEmittedTextOrSemanticIdentity(string change)
+    {
+        var original = await ReadMixedPackage();
+        var changed = RewriteEntry(original, "L_202601965EN.000101.fmx.xml", bytes => change switch
+        {
+            "comment" => Encoding.UTF8.GetBytes(Encoding.UTF8.GetString(bytes)
+                .Replace("<ACT ", "<!-- retained source comment -->\n<ACT ", StringComparison.Ordinal)),
+            "bom" => new byte[] { 0xef, 0xbb, 0xbf }.Concat(bytes).ToArray(),
+            "line-endings" => Encoding.UTF8.GetBytes(Encoding.UTF8.GetString(bytes)
+                .Replace("\r\n", "\n", StringComparison.Ordinal).Replace("\n", "\r\n", StringComparison.Ordinal)),
+            _ => throw new ArgumentOutOfRangeException(nameof(change)),
+        });
+        var before = await Produce(original);
+        var after = await Produce(changed);
+        AssertDigests(changed, after.Articles);
+        CollectionAssert.AreEqual(before.Articles.Select(a => a.IdentitySha256).ToArray(),
+            after.Articles.Select(a => a.IdentitySha256).ToArray());
+        CollectionAssert.AreEqual(before.Articles.Select(a => a.TextSha256).ToArray(),
+            after.Articles.Select(a => a.TextSha256).ToArray());
+        Assert.AreNotEqual(before.Articles[0].SourceEntrySha256, after.Articles[0].SourceEntrySha256);
+    }
+
+    [TestMethod]
+    public async Task ChangingAnAnnexChangesThePackageButNotMainBodyDigests()
+    {
+        var original = await ReadMixedPackage();
+        var changed = RewriteEntry(original, "L_202601965EN.000201.fmx.xml", bytes =>
+            bytes.Concat(Encoding.UTF8.GetBytes("<!-- archive-only change -->")).ToArray());
+        var before = await Produce(original);
+        var after = await Produce(changed);
+        Assert.AreNotEqual(Sha(original), Sha(changed));
+        AssertDigests(changed, after.Articles);
+        CollectionAssert.AreEqual(before.Articles.Select(a => a.SourceEntrySha256).ToArray(),
+            after.Articles.Select(a => a.SourceEntrySha256).ToArray());
+        CollectionAssert.AreEqual(before.Articles.Select(a => a.TextSha256).ToArray(),
+            after.Articles.Select(a => a.TextSha256).ToArray());
+    }
+
+    [TestMethod]
+    public async Task ChangingOneArticlesTextChangesItsTextDigestAndTheSharedSourceEntryDigest()
+    {
+        var original = await ReadMixedPackage();
+        var changed = RewriteEntry(original, "L_202601965EN.000101.fmx.xml", bytes =>
+            Encoding.UTF8.GetBytes(Encoding.UTF8.GetString(bytes).Replace(
+                "This Regulation shall enter into force", "This Regulation shall enter into effect", StringComparison.Ordinal)));
+        var before = await Produce(original);
+        var after = await Produce(changed);
+        AssertDigests(changed, after.Articles);
+        Assert.AreEqual(before.Articles[0].TextSha256, after.Articles[0].TextSha256);
+        Assert.AreNotEqual(before.Articles[1].TextSha256, after.Articles[1].TextSha256);
+        Assert.AreNotEqual(before.Articles[0].SourceEntrySha256, after.Articles[0].SourceEntrySha256);
+        Assert.AreEqual(after.Articles[0].SourceEntrySha256, after.Articles[1].SourceEntrySha256);
+    }
+
+    private static Task<byte[]> ReadMixedPackage() => File.ReadAllBytesAsync(Path.Combine(
+        AppContext.BaseDirectory, "Fixtures", "EuDocumentFetch", "new-fmx4-200-body.bin"));
+
+    private static void AssertDigests(byte[] package, IReadOnlyList<EuFormexMainBodyArticle> articles)
+    {
+        using var input = new MemoryStream(package);
+        using var zip = new ZipArchive(input, ZipArchiveMode.Read);
+        foreach (var article in articles)
+        {
+            using var source = zip.GetEntry(article.PackageEntry)!.Open();
+            using var bytes = new MemoryStream();
+            source.CopyTo(bytes);
+            Assert.AreEqual(Sha(bytes.ToArray()), article.SourceEntrySha256);
+            Assert.AreEqual(Sha(Encoding.UTF8.GetBytes(article.SearchableText)), article.TextSha256);
+            Assert.AreNotEqual(Sha(package), article.SourceEntrySha256);
+        }
+    }
+
+    private static string Sha(byte[] bytes) => Convert.ToHexStringLower(SHA256.HashData(bytes));
+
+    private static byte[] RewriteEntry(byte[] package, string target, Func<byte[], byte[]> rewrite)
+    {
+        using var input = new MemoryStream(package);
+        using var original = new ZipArchive(input, ZipArchiveMode.Read);
+        using var output = new MemoryStream();
+        using (var changed = new ZipArchive(output, ZipArchiveMode.Create, leaveOpen: true))
+        {
+            foreach (var entry in original.Entries)
+            {
+                using var source = entry.Open();
+                using var bytes = new MemoryStream();
+                source.CopyTo(bytes);
+                var next = changed.CreateEntry(entry.FullName);
+                next.LastWriteTime = entry.LastWriteTime;
+                using var destination = next.Open();
+                destination.Write(entry.FullName == target ? rewrite(bytes.ToArray()) : bytes.ToArray());
+            }
+        }
+        return output.ToArray();
+    }
+
+    private static async Task<EuFormexMainBodyLegalContentOutcome> Produce(byte[] bytes)
+    {
+        var fixture = await EuFormexAnnexInventoryProducerTests.FixtureAsync(bytes);
+        var inventory = await new EuFormexAnnexInventoryProducer(fixture.Store).RunAsync(
+            fixture.Binding, fixture.Profile.Bytes, fixture.Profile.Reference, CancellationToken.None);
+        Assert.IsNotNull(inventory.Inventory, inventory.Detail);
+        var expression = LanguageScopedExpression.FromRetainedSource(
+            new LanguageScopedExpressionIdentity(fixture.Binding.Expression.ParentKeyRef!.PublisherUri,
+                fixture.Binding.Expression.PublisherUri), "EN", null, fixture.Binding.Expression,
+            LanguageScopedExpressionLineage.FromContributions(
+                [new(LanguageScopedExpressionContribution.IdentityAndLanguage, fixture.Receipt)]));
+        var run = await EuAxiomWiringHarness.RunAsync(
+            static root => EuAcquisitionTestFixture.AxiomAbsenceScriptFor(root));
+        var formex = EuFormexAnnexClassificationReconciliationTests.Reconciliation(run,
+            [EuFormexPackageOutcome.Acquired(expression, inventory.Inventory)]);
+        var result = await new EuFormexMainBodyLegalContentProducer(fixture.Store).RunAsync(formex, CancellationToken.None);
+        var outcome = result.Outcomes.Single();
+        Assert.AreEqual(EuFormexMainBodyLegalContentDisposition.Admitted, outcome.Disposition, outcome.Detail);
+        return outcome;
+    }
+
 }

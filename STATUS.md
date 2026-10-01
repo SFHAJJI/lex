@@ -21,23 +21,97 @@ original SHA-256. The decoder uses the consumed/written counts and completion st
 The public read contract still returns one whole admitted object in memory. Compression reduces
 retained storage; it does not make the global Luxembourg scope graph disk-backed.
 
-The draft adds both custody-obligation checks for both retention classes, empty/random/repetitive
+The change adds both custody-obligation checks for both retention classes, empty/random/repetitive
 round trips, concurrent/idempotent creates, nine corruption cases through both read doors and
 create, cross-lane corruption, caller mutation/cancellation, occupied paths, CLI admission and an
 offline two-work Luxembourg acquisition/corpus rebuild with a separate compressed-store reader.
 Clean Release build passed with zero warnings/errors at 630485e4. Required fast tests passed
 (3,105 succeeded, one skipped), and affected ingest passed (42 succeeded, two skipped), including
-the separate-reader two-work acquisition/corpus rebuild. Cross-family review and exact-head
-green CI remain required. Full LU partition assembly and population sizing remain unfinished.
+the separate-reader two-work acquisition/corpus rebuild. Cross-family review returned MERGE, reproduced these checks and added 248 independent size/pattern
+round trips, including a 256 MiB object. Final exact-head green CI remains required. Full LU partition assembly and population sizing remain unfinished.
 
 A separate generic Brotli measurement reopened the retained 65-row LU response
 ff180f054a3f9bf6a8782b6cee3735ca95303f97565a07b1bab3e9f39e4b4dc9:
 65,175 source bytes became 2,411 Brotli bytes (2,427 including the proposed header), and restoration
 reproduced its original hash. Evidence: C:/lex-v3/lanes/lu-retained-response-brotli-sample-20261001.json.
-This is one sample, not a population storage bound or an end-to-end partition measurement. The full
-EU run continues on its frozen raw-store implementation; the disk floor and traffic scope remain
-unchanged. Resource evidence branch codex/eu-population-resource-evidence retains launch/retry facts
-at c99b0a0c, with prelaunch snapshots frozen in the live root.
+This is one sample, not a population storage bound or an end-to-end partition measurement. The previous EU run ended with a cursor refusal; it produced no complete population.
+
+The offline production-store measurement at C:/lex-v3/eu-brotli-sizing-20261001-1 reopened all
+394 retained English bodies byte-for-byte through a separate reader. Their 536,661,019 original
+bytes became 110,968,228 framed bytes. No publisher requests were made. Peak sampled working set
+was 179,286,016 bytes; minimum sampled free space was 5,985,570,816 bytes.
+
+Reversible driver decision: use this explicit mode for fresh EU retry 5 after the cursor and
+schema 4 changes merge. Body allowance is 277,420,570 bytes (twice the measured English sample
+for EN/FRA, plus 25 percent headroom). Keep packages at 564,415,560 bytes, index allowance at
+1,274,491,700 and metadata/runtime/other at 500,000,000. Total working allowance is 2,616,327,830
+bytes. With the 3 GiB reserve and 512 MiB stop margin, 6,374,424,214 bytes must remain free before
+and after freeze. This historical sample is an estimate, not a population storage bound. No ZIP
+or index compression savings are claimed. The guard cannot bound other processes' write bursts.
+The plan and input hashes are in C:/lex-v3/lanes/eu-population-retry5-brotli-sizing-proposed-20261001.json.
+It remains unready until required merges, source comparisons and free-space checks pass.
+
+## EU XML-entry and article-text byte digests (Codex, 2026-10-01)
+
+Reversible driver decision: the Formex producer hashes the exact decompressed ACT entry bytes,
+including encoding, BOM and comments, and separately hashes its existing SearchableText as UTF-8
+without a BOM or added newline. The bounded source-entry read checks cancellation and the declared
+length. Semantic article identity remains unchanged. The ZIP digest remains a separate package
+coordinate; source-entry digest is not taken from the separately acquired XHTML body.
+
+Schema 4 stores one digest row for each indexed article and binds the rows in the logical hash.
+Reopen verifies exact coverage, lowercase SHA-256 values, each text digest against stored text, and
+consistent source-entry digests for articles from the same package and entry. Reader access exposes
+these named coordinates without adding public quote, citation or verify operations. Reopening an
+index does not independently reopen its source ZIP; that remains the original custody/replay chain.
+Schema 2 and 3 mounts keep their exact schema, logical hash, provenance and capability checks;
+the new digest capability is unavailable for those versions. Full EU retry 4 at frozen source 18b53941
+refused ObjectFactsFamilyNotProven after 1,359 wire requests and produced no complete population index.
+The next full run should include reviewed schema 4 directly; no coordinate is invented for old rows.
+
+Tests add exact source-byte mutations (comments, BOM and line endings), an annex-only ZIP change,
+an article text change, English/French producer-to-index binding, schema 3 LF/CRLF compatibility,
+missing/substituted/version-mixed digests, and hostile logical restamping. The actual schema 2
+bilingual fixture is retained. The synthetic mount ambiguity fixtures explicitly populate their
+own synthetic source/digest rows. Two fixed-input schema 4 builds produced identical 77,824-byte
+indexes with SHA-256 `44a6158077203b3729c2103f3efeb007e3b8d10cd59b6616ee1c50194b205f1c`.
+The clean Release build passed with no warnings or errors. Required fast tests passed
+(3,085 succeeded, one skipped), as did affected ingest tests (126 succeeded, three skipped)
+at 0a65ede4.
+Cross-family review and exact-head green CI remain required; no full EU completion is claimed.
+
+## Luxembourg dependency lookup for partition derivation (Codex, 2026-10-01)
+
+Reversible driver decision: separate one resource's WEMI/original-Act traversal from the current
+in-memory dictionary. A run-wide subject lookup supplies the same breadth-first graph and original
+assertion objects. Forward WEMI links may cross acquisition ranges; consolidation qualification
+reads its unique original Act's own assertions. Missing targets remain missing, unrelated relations
+are not traversed, and cycles do not duplicate evidence. A lookup that substitutes the requested
+subject or run observation is rejected.
+
+The acquisition adapter now uses this component. Eight new cases cover range boundaries, cycles,
+shared descendants, literal/non-WEMI links, missing targets, original-Act qualification and lookup
+substitution. Clean Release build passed with no warnings/errors; required fast tests passed
+(3,085 succeeded, one skipped), and affected ingest tests passed (133 succeeded, two skipped),
+including the existing population acquisition/corpus cases. This creates a dependency boundary
+for disk-backed derivation; dictionaries and the complete scope graph are still retained. It does not establish full Luxembourg memory fit or
+permit separate range corpora to be concatenated without complete enumeration verification.
+
+## EU retry 4 evidence and continuation repair (Codex, 2026-10-01)
+
+Full EU retry 4 ended with ObjectFactsFamilyNotProven after 1,359 wire requests from frozen
+source 18b53941 in C:/lex-v3/eu-population-20261001-2. It requested all 82 seeds with a
+20,000-request ceiling and produced no complete population. One retained object-facts batch
+has equal COUNT values of 678 and equal unique row sets, but its second pass repeats seven rows
+across the continuation boundary. PR #852 carries the correction and separate bounded proof.
+The disk guard did not stop retry 4; minimum sampled free space was 5,981,491,200 bytes.
+
+The preceding three-family maintenance census passed with 22 of 60 allowed wire requests.
+Every attempt was zero, so that probe did not exercise a live retry. All proof rows and retained
+HTTP body hashes were independently reopened. PRs #840 and #843 merged after cross-family
+review and green CI on their exact heads. Retry 4 started with 6,653,554,688 free bytes against
+the recorded 6,474,369,248-byte estimate, including a 3 GiB floor and 512 MiB stop margin.
+The resource logs, refusal evidence and frozen input snapshots are retained.
 
 ## EU article source coordinates (Codex, 2026-10-01)
 
@@ -786,7 +860,7 @@ CI evidence are recorded in the pull request before merge.
 
 ## Heads
 
-- `v3/integration`: `fed8c30d` (2026-10-01, PR #844 merged). Build 45 s. Fast lane
+- `v3/integration`: `8defa6c1` (2026-10-01, PR #846 merged). Build 45 s. Fast lane
   (`eng/test-fast.ps1`): 3,077 tests, 3,076 pass, 1 skipped (the review of PR #828). Ingest suite: green on CI for PR #760
   (the CI `dotnet` job runs the whole solution on every pull request, about 7 min on the runner;
   green for PR #834);
@@ -1782,6 +1856,36 @@ line "rights are enforced at compose time".
 - The check is not blind: run against the normal fixture mount, all 2,950 windows are found on the
   reading and export pages. The normal journey's 16 runs pass under the card-code rule.
 
+The EU permalink grammar and EU `verify` (PR #850), the first slice of the EU half of the launch
+screens. Until now EU hits cited `expressionIRI#lex-provision=NNN`, which pins nothing, so the live
+screens refused EU answers by design.
+- The grammar is in Luxembourg's family, with the language part of it from the start, so the French
+  expressions (Decision 89) need no second grammar:
+  `/eu-eurlex/{celex}/{language}/{wording date}--{wording sha256}#{provision}`. The stable
+  coordinate is the permalink without its digest; the provision is the publisher's id, escaped.
+- The wording digest is computed in the API from what the EU index holds, which stores none
+  (`EuropeWordingDigestRule`). It is the SHA-256, under `lex-v3-eu-wording/1`, of the CELEX, the
+  work and expression IRIs, the language, the wording date and every article identity in the
+  publisher's order, each field length-prefixed. Each EU article identity is itself the SHA-256 of
+  the article's text and tokens (`EuFormexMainBodyLegalContentProducer.IdentityOf`), so the digest
+  pins the whole held wording. An expression without exactly one wording date gets no permalink.
+- EU `search` answers carry `pinned_wording` (wording date, digest, permalink, the rule) and each
+  hit its provision permalink.
+- `verify` routes an EU permalink to the EU index:
+  - `digest_matches` with the CELEX, work and expression, language, wording date, digest, stable
+    coordinate and the provision coordinate EU `resolve` answers;
+  - otherwise `pinned_digest_mismatch` naming the current digest, `anchor_not_in_version`,
+    `language_not_available`, `identifier_unknown` (a work or wording date not held), or
+    `no_corpus_mounted`.
+  - The CELEX slot holds the work's CELEX and nothing else. The review of #850 found an article
+    identity there resolved the same work and verified. Only expressions of the work whose CELEX is
+    exactly the slot's are considered, and the wording's CELEX is checked again.
+- On the GDPR fixture a hit's permalink verifies (also under the product's https origin), and the
+  digest recomputed from the index by the stated rule equals the API's. Each refusal is held to
+  its code.
+- On the real bounded first mount, all 60 hits for "personal data" carry a permalink, and every one
+  verifies as `digest_matches`.
+
 The live export composer and its journey step (PR #789), the eighth screen. `dist-live/export.html`
 has its own bundle `client-live-export.js`.
 - The page asks what the reading page asks: the same form (`ReadingForm`, now shared), the same one
@@ -2016,6 +2120,26 @@ mount they are given.
 - Next slices: the refusal and retrieval sets derived from a mount, then the card over the release's
   mount in the rehearsal.
 
+The refusal set reads the EU index too (PR #846), so a mount that holds only the EU still measures
+its refusals. From the EU index's first work in its first language that holds a usable word in any
+article (scanned in order; the review of #846 found the first version read only the first article,
+so a short one left the EU unmeasured):
+- a word it holds, searched in it, must be answered;
+- the same in a CELEX the index does not hold: `identifier_unknown`;
+- in a language the work is not held in: `language_not_available`;
+- with a date, which EU search does not serve: `retrieval_mode_unavailable`.
+A code an EU request produces is no longer listed as not produced. Coverage's own rule is mirrored:
+it refuses `no_corpus_mounted` when the mount holds no Luxembourg index. The first run on the
+EU-only GDPR fixture expected an answer there.
+- On the real bounded first mount the refusal set grows from 1 request to 5 (coverage and the four
+  EU ones), all answered with their code. The verdict control now applies and catches the shuffle.
+- On the GDPR fixture alone: every EU request is answered with its code, and the control catches
+  the shuffle.
+- The release-mount run requires the EU requests whenever the EU index holds a usable word.
+- Two mutations:
+  - the unknown CELEX given the gold `answer` fails;
+  - reading only the first article fails the short-first-article test.
+
 The refusal set over any mount (PR #839), the second slice of ruling 2's gates over the real
 mounted corpus (`V3MountedGatesTests.Refusal.cs`). Each request is built from what the mount holds,
 so the one code the registry says answers it follows from the mount's own data:
@@ -2111,6 +2235,23 @@ all three gates pass at 1: anchor nDCG@10 (11 cases), no-hit accuracy (4) and re
 (3). The judgments control catches the shuffle. The real first mount has no case: all three gates
 are not measured and the control says why. A mutation, word judgments naming another anchor,
 drops nDCG@10 to 0.57 and fails. `TheGatesOverTheMountTheReleaseNames` now writes all three sets.
+
+The image rehearsal runs in CI (PR #847): the job `image-rehearsal` in `v3-ci.yml`, on every push
+to `v3/integration`. It also runs on a pull request whose branch name contains `rehearsal`, so a
+change to the rehearsal proves the job before it merges.
+- It writes the journey fixture mount (`V3JourneyMountTests`) and runs
+  `web/scripts/image-rehearsal.mjs --no-probe`. The WSL probes need the driver's machine and stay
+  local.
+- `jq` then holds the report to:
+  - the second build's digest;
+  - no image failure and V2 absent;
+  - the rehearsal signature verified;
+  - the card being the gates run over that mount;
+  - the release read back with no failure;
+  - the work and artifacts directories removed.
+- The report is uploaded.
+Push only, so a pull request's wait is unchanged, while the image pipeline is checked after every
+merge, the data lane's included.
 
 The release card is the machine gates run over the release's own mount (PR #844), the last slice of
 ruling 2's gates over the real mounted corpus. The image rehearsal first runs
@@ -2445,11 +2586,14 @@ has not yet run; the bounded first mount above is complete.
    needing data the ingest does not produce; they keep `operation_not_served`, and the capability
    manifest is to state per operation which data would serve it (driver decision). The event log's next step,
    predecessor chaining with observation times, needs a second build, so it follows the first mount.
-5. Data lane (Codex). EU parity: every temporal and search operation from the EU index; French
-   expressions. EU
+5. EU parity: every temporal and search operation from the EU index; French expressions. EU
    `search` in one work served by PR #761, EU `dossier` by PR #762; the temporal operations,
-   `provenance`, `evidence_bundle` and `verify` wait on consolidation acquisition and an EU permalink
-   grammar; the parity details are driver decisions (below).
+   `provenance` and `evidence_bundle` wait on consolidation acquisition; the parity details are driver
+   decisions (below). The EU permalink grammar is the web lane's since 2026-10-01 (the panel's answer
+   to Q-20261001-0108-claude). It works in the API and the web; the EU index schema and the Ingest
+   builders stay the data lane's. PR #850: EU hits carry a hash-pinned permalink, and EU `verify`
+   is served over it. Next: the web search reader and screen read EU answers, then the journey on the
+   real mount's GDPR.
 6. Wire the eight launch screens to `/api/v3`; journeys J1 to J8 in a real browser. PR #763: the
    envelope reader and the client module; PR #764: the live Trust and Coverage component; PR #765:
    its page, the live build and the one-origin server; PR #766: the first browser journey step,
@@ -2578,6 +2722,11 @@ Each is the driver's call under ruling 7 and can be reversed by a later pull req
     its sources were committed, not when it was built. The product reads no file modification time
     (`V3WebRoot` holds the pages in memory), so the choice changes no answer.
 
+- The EU permalink grammar (PR #850): language as a path segment, not only a parameter, so one
+  grammar serves English and French expressions. The wording digest is computed in the API (the
+  panel's boundary), not stored in the EU index. If the data lane later stores a wording digest, the
+  API can read it instead, as long as the value stays the same.
+
 - The refusal card's payload rows keep the payload's own member names (`requested_identifier`,
   `asserts_absence_of_law`) as their labels, in every interface language (PR #809). They are the
   contract's names, shown with the refusal code beside them, and a reader who quotes them can find
@@ -2666,8 +2815,10 @@ Repair fast lane: 3,065 pass / 1 Windows skip; repair build: zero warnings/error
 
 - The bounded real mount is available at
   `C:\lex-v3\first-mount-decision95-restart-20260930\v3-corpus`; the web lane's journeys run on it
-  (PR #815). The machine gates' mounted-corpus run needs case sets written for a real corpus, whose
-  Luxembourg side holds no state yet. The data lane continues the full EU and Luxembourg populations.
+  (PR #815). The machine gates derive their cases from any mount (PRs #838, #839, #842, #845, #846)
+  and the release card is the gates run over the rehearsal's mount (PR #844). The real mount holds
+  no Luxembourg state yet, so its temporal set is not measured, and it will be once the data lane's
+  full populations land.
 - EU search on the live search screen waits on an EU permalink grammar (item 5). The real mount's
   EU index answers `search` in one work (for example `32016R0679`, 60 hits for "personal data"), and
   the web search reader refuses the answer by design, reading Luxembourg's only. Each EU hit cites

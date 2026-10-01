@@ -443,3 +443,60 @@ jobs:
         working-directory: web
       - run: npm test
         working-directory: web
+
+  image-rehearsal:
+    name: image-rehearsal
+    # The release pipeline's credential-free rehearsal (web/scripts/image-rehearsal.mjs), without its WSL
+    # probes, which need the driver's machine: the image built twice from scratch and held to one
+    # digest, verified (V2 absent), rehearsal-signed, its evaluation card the machine gates run over
+    # the journey fixture mount, and the release published, read back and verified. It runs on every
+    # push to v3/integration, so it adds nothing to a pull request's wait, and on a pull request
+    # whose branch name contains "rehearsal", so a change to the rehearsal proves it before merging.
+    if: github.event_name == 'push' || contains(github.head_ref, 'rehearsal')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+          ref: ${{ env.CANDIDATE_SHA }}
+      - name: Verify exact candidate checkout
+        shell: bash
+        run: test "$(git rev-parse HEAD)" = "$CANDIDATE_SHA"
+      - uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1 # v5
+        with:
+          global-json-file: global.json
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: npm ci
+        working-directory: web
+      - name: Write the journey fixture mount
+        shell: bash
+        run: |
+          set -euo pipefail
+          V3_WRITE_JOURNEY_MOUNT="$RUNNER_TEMP/journey-mount" dotnet test tests/Lex.V3.Ingest.Tests/Lex.V3.Ingest.Tests.csproj --configuration Release --filter "FullyQualifiedName~TheJourneyMountIsTheFixtureMountWrittenWhereTheJourneyAsks" -v q
+          test -s "$RUNNER_TEMP/journey-mount/journey-mount.json"
+      - name: Rehearse the release without the WSL probes
+        shell: bash
+        run: |
+          set -euo pipefail
+          node web/scripts/image-rehearsal.mjs --mount "$RUNNER_TEMP/journey-mount" --no-probe > "$RUNNER_TEMP/image-rehearsal.json"
+          jq -e '
+            .reproduced.identical == true
+            and (.imageFailures | length) == 0
+            and (.v2Absent.failures | length) == 0
+            and .signatureVerified == true
+            and .card.over == "the machine gates over this mount"
+            and (.release.readBackFailures | length) == 0
+            and .removed.work == true and .removed.artifacts == true
+          ' "$RUNNER_TEMP/image-rehearsal.json"
+      - name: Upload the rehearsal report
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: image-rehearsal
+          path: ${{ runner.temp }}/image-rehearsal.json
+          if-no-files-found: ignore

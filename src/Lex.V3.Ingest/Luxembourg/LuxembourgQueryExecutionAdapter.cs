@@ -3845,51 +3845,9 @@ public sealed class LuxembourgQueryExecutionAdapter
         var observations = new List<LuxembourgResourceObservation>(censusOrder.Count);
         foreach (var subject in censusOrder)
         {
-            // WEMI consumes a connected graph. Keep each census resource as its own row, but
-            // supply its forward descendants from this run's proven assertion family as evidence.
-            // Unrelated resources and arbitrary relation targets never enter this graph.
-            var assertions = new List<LuxembourgObservedAssertion>();
-            var visited = new HashSet<string>(StringComparer.Ordinal);
-            var pending = new Queue<string>();
-            pending.Enqueue(subject);
-            while (pending.TryDequeue(out var resource))
-            {
-                if (!visited.Add(resource) || !assertionsBySubject.TryGetValue(resource, out var resourceAssertions))
-                {
-                    continue;
-                }
-                assertions.AddRange(resourceAssertions);
-                foreach (var assertion in resourceAssertions)
-                {
-                    if (assertion.ObjectKind == LuxembourgAssertionObjectKind.Iri &&
-                        assertion.PredicateIri is
-                            "http://data.legilux.public.lu/resource/ontology/jolux#isRealizedBy" or
-                            "http://data.legilux.public.lu/resource/ontology/jolux#isEmbodiedBy" or
-                            "http://data.legilux.public.lu/resource/ontology/jolux#isExemplifiedBy")
-                    {
-                        pending.Enqueue(assertion.ObjectIriOrLexical);
-                    }
-                }
-            }
-            // Consolidation qualification consumes the original Act's own assertions too.
-            // This is only a lookup in the already-proven census, never an inferred assertion
-            // or a fetch address. The resolver still checks the exact Act class, type and parent.
-            if (assertionsBySubject.TryGetValue(subject, out var rootAssertions) &&
-                rootAssertions.Any(assertion => assertion.PredicateIri ==
-                    "http://www.w3.org/1999/02/22-rdf-syntax-ns#type" &&
-                    assertion.ObjectKind == LuxembourgAssertionObjectKind.Iri &&
-                    assertion.ObjectIriOrLexical == "http://data.legilux.public.lu/resource/ontology/jolux#Consolidation"))
-            {
-                var parents = rootAssertions.Where(assertion => assertion.PredicateIri ==
-                        "http://data.legilux.public.lu/resource/ontology/jolux#isMemberOf" &&
-                        assertion.ObjectKind == LuxembourgAssertionObjectKind.Iri)
-                    .Select(assertion => assertion.ObjectIriOrLexical).Distinct(StringComparer.Ordinal).ToArray();
-                if (parents.Length == 1 && assertionsBySubject.TryGetValue(parents[0] + "/jo", out var originalAssertions) &&
-                    visited.Add(parents[0] + "/jo"))
-                {
-                    assertions.AddRange(originalAssertions);
-                }
-            }
+            // Resolve through the complete proven family, including dependencies in other ranges.
+            var assertions = LuxembourgObservationDependencies.Collect(subject, observationRef,
+                key => assertionsBySubject.TryGetValue(key, out var values) ? values : []);
             relationsBySubject.TryGetValue(subject, out var relations);
             observations.Add(BuildResourceObservation(
                 subject, assertions, relations ?? [], observationRef,
