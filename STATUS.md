@@ -17,16 +17,17 @@ consistent source-entry digests for articles from the same package and entry. Re
 these named coordinates without adding public quote, citation or verify operations. Reopening an
 index does not independently reopen its source ZIP; that remains the original custody/replay chain.
 Schema 2 and 3 mounts keep their exact schema, logical hash, provenance and capability checks;
-the new digest capability is unavailable for those versions. The running full EU build is frozen
-at schema 3 and remains readable. No source byte coordinate is invented for its existing rows.
+the new digest capability is unavailable for those versions. Full EU retry4 at frozen18b53941
+refused ObjectFactsFamilyNotProven after1,359wire and produced no complete population index.
+The next full run should include reviewed schema4 directly; no coordinate is invented for old rows.
 
 Tests add exact source-byte mutations (comments, BOM and line endings), an annex-only ZIP change,
 an article text change, English/French producer-to-index binding, schema 3 LF/CRLF compatibility,
 missing/substituted/version-mixed digests, and hostile logical restamping. The actual schema 2
 bilingual fixture is retained. The synthetic mount ambiguity fixtures explicitly populate their
-own synthetic source/digest rows. The fixed-input schema 4 bytes were derived twice identically (77824 bytes, SHA-256 44a6158077203b3729c2103f3efeb007e3b8d10cd59b6616ee1c50194b205f1c). Required fast and
-affected ingest validation remain queued behind full EU acquisition and the Luxembourg dependency
-slice. No validation success or full EU completion is claimed yet.
+own synthetic source/digest rows. The fixed-input schema 4 bytes were derived twice identically (77824 bytes, SHA-256 44a6158077203b3729c2103f3efeb007e3b8d10cd59b6616ee1c50194b205f1c). Clean Release build passed with no warnings/errors. Required fast tests passed (3,085 succeeded,
+one skipped), and affected ingest passed (126 succeeded, three skipped) at0a65ede4.
+Cross-family review and exact-head green CI remain required; no full EU completion is claimed.
 
 ## EU article source coordinates (Codex, 2026-10-01)
 
