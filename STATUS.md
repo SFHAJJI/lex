@@ -3,46 +3,54 @@
 Updated 2026-10-01 by the driver. This file replaces the issue-comment ledgers. It is rewritten in
 every pull request that changes what is served, what is next or what is blocked.
 
-## Retained Luxembourg cover history (Codex, 2026-10-01)
+## Offline Formex package and annex derivation (Codex, 2026-10-01)
 
-Reversible driver decision: retain the actual successful split history and every leaf's
-checkpoint before reporting a proven cover. Restoration replays those splits, checks the
-caller's root/run/profile, reopens both passes of every leaf, compares all six query bounds,
-and repeats the existing leaf and cover gates. It keeps the LeafTilingOnly basis and current
-custody protection. A failed checkpoint hold produces a typed cover refusal.
+Retain ordered ZIP/PDF attempts, original annex profile identities, checked expression/corpus/CELEX
+input digest, renderer and final outcome digest. Replay selects addresses from the same enumeration
+and repeats the existing inventory/annex core using checked retained routes. Consume every saved
+fetch/profile and reproduce typed outcomes and identities. Unexecuted attempts remain operational
+refusals; no new observation or publisher request is invented.
 
-The chain owns immutable copies of its leaves and history. All 22 original cases passed at
-96e5cb49: CI 36859308947 reported 5,405 passed and 22 skipped; required watch exited zero.
-Claude returned MERGE with no material defect. One repair includes197f0511, adds explicit null-root
-integrity refusals to cover and leaf readers with two before-writes regressions (24 new cases),
-and fixes the whole-checkpoint partition-ID comment. Fresh combined CI gates merge; local
-builds/tests remain deferred under the acquisition memory guard. PR869 and PR872 are merged.
+All 32 new cases passed at reviewed 853b1906: CI 36863759397 reported 5,491 passed
+and 22 skipped. Claude returned MERGE with no material findings. The one editorial repair
+restores spacing and records that parent PR 879 is merged as 749e88a3. Fresh current-base
+CI gates merge; local tests remain deferred while the long acquisition holds the heavy slot.
+The input digest currently serializes the corpus for each expression; avoiding that repeated
+work remains a measured performance follow-up. If checkpoint retention fails, acquisition is
+reported as checkpoint_not_retained and carries no annex classification, even after a successful
+fetch. This explicit refusal preserves the replay requirement.
 
-This supplies the cover part of the offline acquisition catalog. Complete catalog restoration,
-two independent offline mount derivations and bounded full LU fit remain outstanding.
+Successful populations expose immutable package results tied to their exact outcome objects.
+Complete acquisition composition and same-run object restoration still gate independent mounts.
 
-## Retained Luxembourg enumeration checkpoints (Codex, 2026-10-01)
+## Retained Formex manifestation enumeration (Codex, 2026-10-01)
 
-This slice depends on pending PR869. The LU executor retains its closed invariant plan wire
-representation and both enumeration passes. Restoration checks the original plan, renderer,
-run and profile, then regenerates each count/page request with the existing template binder
-and original artifact IDs. Retained request bytes must match the regenerated request. The
-complete comparison and current custody receipt checks run again without publisher traffic.
-EU and LU share the actual-receipt restoration helper; no saved proof or floor is trusted.
+The retained checkpoint binds each expression to its original enumeration, renderer, plan and
+result digest. Reopening checks both passes with current custody receipts and independently
+rebinds the count queries. It preserves the original observation identities and sends no requests.
+Page requests remain checked against retained evidence and the caller's run pin.
 
-Nineteen cases cover empty, nonempty and multi-page enumeration, Unicode cursors, independent
-custody, weaker protection, missing inputs, caller pins, substitutions and cancellation. Exact
-d834ae22 passed CI 36856207562: 5,356 passed and 22 skipped; the required watch exited zero.
-Claude found no material LU code defect and requested the current parent/base and combined census
-correction. The one repair includes reviewed PR869 source 60c2589c and integration d56d0539,
-sets the union to 262 candidates/140 guarded types, preserves all member pins and copies each
-regenerated request body once. PR869 is merged as 1a63b61a and included; final current-base CI gates this merge.
-Local builds/tests remain deferred under the acquisition memory guard.
+Exact f80bdee6 passed CI 36856566025 with 5,354 passed and 22 skipped, including all 17 original
+cases. Claude found the production code sound but required the merged parent and current base.
+One repair includes merged869/872 at c9e5a40a, checks a single pass value in 1..2 before conversion,
+and refuses a literal-null root with an integrity exception. One new before-writes regression
+brings this slice to 18 cases. Fresh combined CI gates merge; local builds/tests remain deferred
+under the acquisition memory guard. The offline budget records zero sends with a synthetic ceiling
+of two, not the historical wire allowance. Full population/acquisition and mount replay are separate.
+## Offline EU document routes (Codex, 2026-10-01)
 
-Full acquisition catalog restoration and two independent offline mount derivations remain
-outstanding. This does not establish full Luxembourg memory or disk fit. The active EU runtime,
-queued source heads, LU index builder/reader and web lane are unchanged.
+Reopen a retained document route using its original acquisition run, logical-request digest and
+independently selected address. Check each hop's GET, representation, original write receipt and
+exact body; reopen policy bytes by digest and require agreement across hops. The existing constructor repeats receipt, redirect and completion gates;
+the complete canonical route must match the original bytes. No transport or observation is created.
+Non-200 and incomplete routes retain their original outcomes, without a current retention claim.
 
+All 19 cases passed at 00e95ae6: CI36856918011 reported5,336 passed and22 skipped, with
+required watch exit zero. Claude returned MERGE with no material defect; the one repair includes
+merged873/integration92c8df5a, clarifies digest-only policy reopening and original retained-route
+scope. Fresh combined CI gates merge; local builds/tests remain deferred under the acquisition
+memory guard. A containing catalog must preserve route references; complete offline mounts remain
+outstanding. No current retention floor or population completion is claimed.
 ## Retained EU enumeration checkpoints (Codex, 2026-10-01)
 
 Each delivered EU enumeration retains its comparison inputs in checked custody. Offline
@@ -3771,6 +3779,28 @@ and a current storage check before and after its runtime is frozen; it has not s
 
 PRs #827, #829 and #830 are merged. The all-82-seed EU retry remains prepared, with a
 4,999,959,422-byte launch allowance and checks before and after freezing its runtime.
+## Retained Luxembourg enumeration checkpoints (Codex, 2026-10-01)
+
+This slice depends on pending PR869. The LU executor retains its closed invariant plan wire
+representation and both enumeration passes. Restoration checks the original plan, renderer,
+run and profile, then regenerates each count/page request with the existing template binder
+and original artifact IDs. Retained request bytes must match the regenerated request. The
+complete comparison and current custody receipt checks run again without publisher traffic.
+EU and LU share the actual-receipt restoration helper; no saved proof or floor is trusted.
+
+Nineteen cases cover empty, nonempty and multi-page enumeration, Unicode cursors, independent
+custody, weaker protection, missing inputs, caller pins, substitutions and cancellation. Exact
+d834ae22 passed CI 36856207562: 5,356 passed and 22 skipped; the required watch exited zero.
+Claude found no material LU code defect and requested the current parent/base and combined census
+correction. The one repair includes reviewed PR869 source 60c2589c and integration d56d0539,
+sets the union to 262 candidates/140 guarded types, preserves all member pins and copies each
+regenerated request body once. PR869 is merged as 1a63b61a and included; final current-base CI gates this merge.
+Local builds/tests remain deferred under the acquisition memory guard.
+
+Full acquisition catalog restoration and two independent offline mount derivations remain
+outstanding. This does not establish full Luxembourg memory or disk fit. The active EU runtime,
+queued source heads, LU index builder/reader and web lane are unchanged.
+
 ## Retained expression production pairings (Codex, 2026-10-01)
 
 This slice depends on PR869. It retains the expression producer's own paired enumerations
@@ -3791,20 +3821,24 @@ the acquisition memory guard. No complete offline mount process is claimed.
 The current store's protection is checked again. Changed protection refuses the original
 byte claim because protection is part of derivation identity. Replay reports zero publisher
 requests. Complete offline acquisition composition and independent mount builds remain pending.
-## Retained Formex manifestation enumeration (Codex, 2026-10-01)
+## Retained Luxembourg cover history (Codex, 2026-10-01)
 
-The retained checkpoint binds each expression to its original enumeration, renderer, plan and
-result digest. Reopening checks both passes with current custody receipts and independently
-rebinds the count queries. It preserves the original observation identities and sends no requests.
-Page requests remain checked against retained evidence and the caller's run pin.
+Reversible driver decision: retain the actual successful split history and every leaf's
+checkpoint before reporting a proven cover. Restoration replays those splits, checks the
+caller's root/run/profile, reopens both passes of every leaf, compares all six query bounds,
+and repeats the existing leaf and cover gates. It keeps the LeafTilingOnly basis and current
+custody protection. A failed checkpoint hold produces a typed cover refusal.
 
-Exact f80bdee6 passed CI 36856566025 with 5,354 passed and 22 skipped, including all 17 original
-cases. Claude found the production code sound but required the merged parent and current base.
-One repair includes merged869/872 at c9e5a40a, checks a single pass value in 1..2 before conversion,
-and refuses a literal-null root with an integrity exception. One new before-writes regression
-brings this slice to 18 cases. Fresh combined CI gates merge; local builds/tests remain deferred
-under the acquisition memory guard. The offline budget records zero sends with a synthetic ceiling
-of two, not the historical wire allowance. Full population/acquisition and mount replay are separate.
+The chain owns immutable copies of its leaves and history. All 22 original cases passed at
+96e5cb49: CI 36859308947 reported 5,405 passed and 22 skipped; required watch exited zero.
+Claude returned MERGE with no material defect. One repair includes197f0511, adds explicit null-root
+integrity refusals to cover and leaf readers with two before-writes regressions (24 new cases),
+and fixes the whole-checkpoint partition-ID comment. Fresh combined CI gates merge; local
+builds/tests remain deferred under the acquisition memory guard. PR869 and PR872 are merged.
+
+This supplies the cover part of the offline acquisition catalog. Complete catalog restoration,
+two independent offline mount derivations and bounded full LU fit remain outstanding.
+
 ## Retained Luxembourg vocabulary proof (Codex, 2026-10-01)
 
 Reversible driver decision: retain all four original P/T/C/O enumeration checkpoint associations
@@ -3823,18 +3857,3 @@ now succeeds. Fresh full CI gates merge; local tests remain deferred under the a
 memory guard. The checkpoint reference still needs a containing LU acquisition catalog or
 CLI output to make it discoverable from a real run. Full LU acquisition restoration and
 independent offline mounts remain outstanding; no full-population fit is claimed.
-
-## Offline EU document routes (Codex, 2026-10-01)
-
-Reopen a retained document route using its original acquisition run, logical-request digest and
-independently selected address. Check each hop's GET, representation, original write receipt and
-exact body; reopen policy bytes by digest and require agreement across hops. The existing constructor repeats receipt, redirect and completion gates;
-the complete canonical route must match the original bytes. No transport or observation is created.
-Non-200 and incomplete routes retain their original outcomes, without a current retention claim.
-
-All 19 cases passed at 00e95ae6: CI36856918011 reported5,336 passed and22 skipped, with
-required watch exit zero. Claude returned MERGE with no material defect; the one repair includes
-merged873/integration92c8df5a, clarifies digest-only policy reopening and original retained-route
-scope. Fresh combined CI gates merge; local builds/tests remain deferred under the acquisition
-memory guard. A containing catalog must preserve route references; complete offline mounts remain
-outstanding. No current retention floor or population completion is claimed.
