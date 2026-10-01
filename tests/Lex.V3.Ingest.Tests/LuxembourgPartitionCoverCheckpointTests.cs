@@ -13,6 +13,27 @@ namespace Lex.V3.Ingest.Tests;
 public sealed class LuxembourgPartitionCoverCheckpointTests
 {
     [TestMethod]
+    [DataRow(false)]
+    [DataRow(true)]
+    public async Task NullCoverAndLeafCheckpointsRefuseBeforeWrites(bool leaf)
+    {
+        var store = new EuAcquisitionTestFixture.EuInMemoryCustodyStore();
+        var receipt = await store.CreateAsync("null"u8.ToArray(), CustodyClass.NightlyFloor90d, CancellationToken.None);
+        var checkpoint = new SourceArtifactRef($"urn:uuid:{Guid.NewGuid():D}", receipt.Reference.ContentSha256);
+        var expected = new SourceArtifactRef($"urn:uuid:{Guid.NewGuid():D}", new string('a', 64));
+        var writes = store.WrittenDigestsInOrder.Count;
+        await Assert.ThrowsExactlyAsync<CustodyIntegrityException>(async () =>
+        {
+            if (leaf)
+                await LuxembourgEnumerationCheckpoint.RestoreReceiptAsync(store, checkpoint, expected, expected, CancellationToken.None);
+            else
+                await LuxembourgPartitionCoverCheckpoint.RestoreAsync(store, checkpoint,
+                    new LuxembourgQueryPartitionRange("root", Cursor("a"), Cursor("z")), expected, expected, CancellationToken.None);
+        });
+        Assert.AreEqual(writes, store.WrittenDigestsInOrder.Count);
+    }
+
+    [TestMethod]
     [DataRow(false, false)]
     [DataRow(true, false)]
     [DataRow(true, true)]

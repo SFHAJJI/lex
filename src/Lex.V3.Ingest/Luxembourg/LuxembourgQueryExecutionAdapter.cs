@@ -227,7 +227,8 @@ public sealed class LuxembourgPartitionCoverReconciliationDetail
     /// <summary>
     /// The chain leaf this refusal names. Empty for <see cref="LuxembourgPartitionCoverReconciliationRefusal.CoverReconciliationRefused"/>,
     /// which is <see cref="LuxembourgPartitionCover.TryCreate"/>'s own refusal: that door reports one
-    /// closed reason for the whole chain, never a specific leaf ordinal.
+    /// closed reason for the whole chain, never a specific leaf ordinal. Also empty for
+    /// <see cref="LuxembourgPartitionCoverReconciliationRefusal.CheckpointNotRetained"/>, which names the whole cover checkpoint.
     /// </summary>
     public string LeafPartitionId { get; }
 

@@ -55,7 +55,7 @@ public static class LuxembourgPartitionCoverCheckpoint
         try
         {
             var document = ContractJson.Deserialize<Document>(new UTF8Encoding(false, true).GetString(bytes.Span));
-            if (document.Schema != Schema || !bytes.Span.SequenceEqual(Encode(document)) || document.Root != expectedRoot ||
+            if (document is null || document.Schema != Schema || !bytes.Span.SequenceEqual(Encode(document)) || document.Root != expectedRoot ||
                 document.Run != expectedRun || document.Profile != expectedProfile)
                 throw new CustodyIntegrityException("Cover checkpoint framing or caller identity disagrees.");
             if (document.Splits is null || document.Leaves is null || document.Splits.Any(step => step is null) || document.Leaves.Any(leaf => leaf is null) ||

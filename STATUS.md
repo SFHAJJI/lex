@@ -11,13 +11,12 @@ caller's root/run/profile, reopens both passes of every leaf, compares all six q
 and repeats the existing leaf and cover gates. It keeps the LeafTilingOnly basis and current
 custody protection. A failed checkpoint hold produces a typed cover refusal.
 
-The chain now owns immutable copies of its leaves and history. Twenty-two new cases cover
-history/collection mutation, copied custody, current weaker protection, empty leaves,
-ancestor-ID reuse, missing artifacts, caller pins, rehashed boundary/history changes,
-cancellation and the adapter's custody-failure path. Exact 0d11ea0a passed CI 36856826820: 5,378 passed and 22 skipped,
-including all 22 new cases; the required watch exited 0. Merged PR869 integration 1a63b61a and reviewed parent PR872 source 8ba8376a are included.
-Fresh combined CI and read-only Claude review remain required. Local builds/tests remain
-deferred under the acquisition memory guard. PR872 is merged as c9e5a40a and included, along with its merged PR869 prerequisite.
+The chain owns immutable copies of its leaves and history. All 22 original cases passed at
+96e5cb49: CI 36859308947 reported 5,405 passed and 22 skipped; required watch exited zero.
+Claude returned MERGE with no material defect. One repair includes197f0511, adds explicit null-root
+integrity refusals to cover and leaf readers with two before-writes regressions (24 new cases),
+and fixes the whole-checkpoint partition-ID comment. Fresh combined CI gates merge; local
+builds/tests remain deferred under the acquisition memory guard. PR869 and PR872 are merged.
 
 This supplies the cover part of the offline acquisition catalog. Complete catalog restoration,
 two independent offline mount derivations and bounded full LU fit remain outstanding.
