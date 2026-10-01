@@ -49,7 +49,8 @@ public sealed class EuFormexMainBodyArticle
         string language,
         string publisherDate,
         string searchableText,
-        IReadOnlyList<EuFormexMainBodyToken> tokens)
+        IReadOnlyList<EuFormexMainBodyToken> tokens,
+        string sourceEntrySha256)
     {
         PublisherExpressionId = publisherExpressionId;
         PackageEntry = packageEntry;
@@ -58,6 +59,8 @@ public sealed class EuFormexMainBodyArticle
         Language = language;
         PublisherDate = publisherDate;
         SearchableText = searchableText;
+        SourceEntrySha256 = sourceEntrySha256;
+        TextSha256 = Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(searchableText)));
         Tokens = Array.AsReadOnly(tokens.ToArray());
         IdentitySha256 = IdentityOf(this);
     }
@@ -70,6 +73,13 @@ public sealed class EuFormexMainBodyArticle
     public string PublisherDate { get; }
     public string SearchableText { get; }
     public IReadOnlyList<EuFormexMainBodyToken> Tokens { get; }
+    /// <summary>SHA-256 of the exact decompressed publisher XML entry, including its encoding,
+    /// BOM and comments. This identifies an entry inside the separately pinned ZIP package.</summary>
+    public string SourceEntrySha256 { get; }
+    /// <summary>SHA-256 of SearchableText encoded as UTF-8 without a BOM or added newline.
+    /// This is the emitted article text representation; it is not a hash of token JSON or XML.</summary>
+    public string TextSha256 { get; }
+    /// <summary>Existing semantic article identity. Source byte digests are separate coordinates.</summary>
     public string IdentitySha256 { get; }
 
     private static string IdentityOf(EuFormexMainBodyArticle article)
@@ -281,6 +291,7 @@ public sealed class EuFormexMainBodyLegalContentProducer
 
                 if (!string.Equals(document.Root?.Name.LocalName, "ACT", StringComparison.Ordinal)) continue;
                 actCount++;
+                var sourceEntrySha256 = HashEntry(entry, cancellationToken);
                 var language = RequiredSingleValue(document.Root!, "LG.DOC");
                 var publisherDate = document.Root!.Descendants()
                     .FirstOrDefault(static value => value.Name.LocalName == "BIB.INSTANCE")?
@@ -315,7 +326,8 @@ public sealed class EuFormexMainBodyLegalContentProducer
                         language,
                         publisherDate,
                         SearchableTextOf(element),
-                        tokens);
+                        tokens,
+                        sourceEntrySha256);
                     if (!identities.Add(article.IdentitySha256))
                         return Refused(EuFormexMainBodyLegalContentDisposition.UnsupportedContentShape,
                             $"Formex package contains duplicate article identity {identifier}");
@@ -346,6 +358,27 @@ public sealed class EuFormexMainBodyLegalContentProducer
         var tokens = new List<EuFormexMainBodyToken>();
         AppendTokens(article, tokens);
         return Array.AsReadOnly(tokens.ToArray());
+    }
+
+    private static string HashEntry(ZipArchiveEntry entry, CancellationToken cancellationToken)
+    {
+        using var stream = entry.Open();
+        using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
+        Span<byte> buffer = stackalloc byte[8192];
+        long length = 0;
+        while (true)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var count = stream.Read(buffer);
+            if (count == 0) break;
+            length += count;
+            if (length > MaxXmlEntryBytes || length > entry.Length)
+                throw new InvalidDataException("The Formex XML entry exceeds its declared byte length.");
+            hash.AppendData(buffer[..count]);
+        }
+        if (length != entry.Length)
+            throw new InvalidDataException("The Formex XML entry is shorter than its declared byte length.");
+        return Convert.ToHexStringLower(hash.GetHashAndReset());
     }
 
     private static string SearchableTextOf(XElement article)
