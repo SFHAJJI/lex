@@ -2976,7 +2976,8 @@ recorded by PR #862:
    it runs the image (WSL, read-only root, private /tmp) and probes the eight screens against it; PR
    #826: the image is reproducible (two builds from scratch, one manifest digest); PR #828: the
    image probed on the journey's fixture mount, where every screen answers and 105 citations verify;
-   PR #831: V2 absent from the image (no V2 assembly or dependency, V2's 63 routes 404); PR #833:
+   PR #831: V2 absent from the image (no V2 assembly or dependency; of V2's 63 routes, a V2-only
+   one answers 404 and a path both share answers with V3's own bytes); PR #833:
    the release assets (the image, its signature, the evaluation card, the mount's report, a signed
    manifest) published under a version, read back and verified, and the card served at
    `/evaluation-card.json`. The credential-free release steps
