@@ -750,7 +750,7 @@ CI evidence are recorded in the pull request before merge.
 
 ## Heads
 
-- `v3/integration`: `18b53941` (2026-10-01, PR #843 merged). Build 45 s. Fast lane
+- `v3/integration`: `fed8c30d` (2026-10-01, PR #844 merged). Build 45 s. Fast lane
   (`eng/test-fast.ps1`): 3,077 tests, 3,076 pass, 1 skipped (the review of PR #828). Ingest suite: green on CI for PR #760
   (the CI `dotnet` job runs the whole solution on every pull request, about 7 min on the runner;
   green for PR #834);
@@ -2038,15 +2038,20 @@ retrieval set it has 4 sets and says 5, as the review of #841 counted. The journ
 licence-blocked mounts' cards and the platform card read too.
 The retrieval set reads the EU index too (PR #845), so the real bounded first mount's card measures
 retrieval. EU search is served in one work and states the same matching (`EuropeSearchMatching`: a
-byte-exact substring). For a seeded sample of the EU index's works in each language:
+byte-exact substring). For a seeded sample of up to two of the EU index's works in each language it
+holds (the review of #845 found the first version took two work-language pairs in all, which could
+leave a language unsearched):
 - words held by one to five provisions are judged to find exactly those (the CELEX and the
   publisher's provision id, as an EU hit names them), searched with the work as scope;
 - strings the work holds nowhere find nothing.
 EU `verify` is not served, so the EU gives no exact-identifier case. On the GDPR fixture and on the
 real first mount, anchor nDCG@10 is 1 over 6 EU word cases and no-hit accuracy 1 over 3. Resolver
 exactness is not measured (no measurable query). So the judgments control does not apply: its rule
-needs every required gate to pass first, and the card says so. A mutation, EU judgments naming
-another provision, drops nDCG@10 to 0 and fails.
+needs every required gate to pass first, and the card says so. A French-held work gives French
+cases, which pass. Two mutations:
+- EU judgments naming another provision drop nDCG@10 to 0 and fail;
+- the first version's sampling (three English works and a French one) leaves French out and fails
+  the sampling test.
 
 The retrieval set over any mount (PR #842), the third slice of ruling 2's gates over the real
 mounted corpus (`V3MountedGatesTests.Retrieval.cs`). The judgments are computed from the mount's
