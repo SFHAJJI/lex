@@ -58,6 +58,7 @@ failed (260 versus 259). Its complete member pins passed. The candidate total is
 260; the passing literal pin contains 140 guarded types. Fresh CI gates merge. Local Release build, required fast tests, affected ingest checks and the synthetic
 measurement remain deferred under the acquisition memory guard. No full-LU fit is claimed.
 The remaining observation, scope and corpus graphs still require bounded derivation evidence.
+
 ## Streaming scope verification from source inputs (Codex, 2026-10-01)
 
 The retained manifest can be verified by independently replaying its original source inputs
