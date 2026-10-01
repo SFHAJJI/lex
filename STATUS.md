@@ -118,33 +118,28 @@ all saved attempts exactly once and repeats checked body holds for the current c
 A successful adapter run exposes its document checkpoint; failed root retention has a distinct
 DocumentCheckpointNotRetained refusal. Offline replay opens no publisher session.
 
-Twenty-six new draft cases cover copied and weaker custody, successful and refused bodies,
-format fallback, missing evidence, rehashed row/order/representation changes, caller pins,
-cancellation and failed holds. Initial76665557 CI36847408312 compiled:5301 passed/22 skipped/22 failures.
-Nineteen cases could not run because the shared two-format recording handler was disposed
-between sessions; seven new cases passed. The fixture lifetime is corrected. The compiled
-new wire token is transcribed; guard/enum failure messages now report exact row differences.
-Fresh CI is required. The active EU run owns the local heavy slot. Required local Release, fast and affected ingest tests and
-Claude review follow the existing queue; pending PR879's final merged head must be included.
-The complete run coordinator, acquisition catalog and independent offline mounts are still
-required. No full-population or byte-stability claim is made here.
+All 26 new cases passed at 7377c0c4: CI 36849937717 reported 5,323 passed and 22 skipped,
+with required watch exit zero. Cases cover copied/weaker custody, successful/refused bodies,
+format fallback, missing evidence, changed row/order/representation, cancellation and failed holds.
+Updated document parent 00e95ae6 and integration 8c3f3801 are included. Fresh combined CI and
+read-only Claude review remain required; final merged PR879 source must remain included.
+Local builds/tests stay deferred under the acquisition memory guard. The complete run coordinator,
+acquisition catalog and independent offline mounts remain outstanding.
 
 ## Offline EU document routes (Codex, 2026-10-01)
 
-Draft: reopen a retained document route using its original acquisition run, logical-request digest
-and independently selected address. Every hop must retain its GET request, unchanged representation
-and policies, original write receipt and exact body. The existing route constructor repeats receipt,
-redirect and completion checks, and its complete canonical bytes must equal the original artifact.
-No transport is opened and no new observation or current retention guarantee is minted. Non-200
-and incomplete routes retain their original outcomes. Package inventories, annex classification,
-query binding and complete acquisition catalog reconstruction remain separate work.
+Reopen a retained document route using its original acquisition run, logical-request digest and
+independently selected address. Check each hop's GET, representation, policies, original write
+receipt and exact body. The existing constructor repeats receipt, redirect and completion gates;
+the complete canonical route must match the original bytes. No transport or observation is created.
+Non-200 and incomplete routes retain their original outcomes, without a current retention claim.
 
-All19 new cases passed in initial CI36840785524:5291 passed,22 skipped and one construction
-census failed. Diagnostic CI36841885062 repeated that result; its138 compiled rows change only
-the document-fetch result factory list. The new ReopenAsync door is now pinned from that output;
-fresh CI must verify the transcription. No implementation failure was reported.
-Local Release, required fast tests, affected ingest tests and Claude review remain queued behind
-the active EU run and prior data slices. No population completion or complete offline rebuild is claimed.
+All 19 new cases passed at 69c851c7: CI 36842850940 reported 5,292 passed and 22 skipped,
+with required watch exit zero. Integration 8c3f3801 is now included. Fresh combined CI and
+read-only Claude review remain required. Local builds/tests stay deferred under the acquisition
+memory guard. Package inventories, annex classification and complete offline acquisition/mount
+composition remain follow-on work. No population completion or production action is claimed.
+
 ## Corpus rebuild identity (Codex, 2026-10-01)
 
 Reversible driver decision: the internal corpus rebuild path takes the original set reference
@@ -3727,20 +3722,88 @@ and a current storage check before and after its runtime is frozen; it has not s
 
 PRs #827, #829 and #830 are merged. The all-82-seed EU retry remains prepared, with a
 4,999,959,422-byte launch allowance and checks before and after freezing its runtime.
+## Streaming scope verification from source inputs (Codex, 2026-10-01)
 
-The same slice now also retains the corrigendum tripwire root, pointing to its own expression
-pairing and original canonical/lineage artifacts. Reopening composes only over proof deliveries
-returned by the checked expression reader, then repeats the fold and requires both original
-outputs byte for byte. Eleven additional draft cases cover both production orders, missing
-artifacts, rehashed output and cross-acquisition pairing substitutions, and cancellation.
-Thirty new cases total await current-source CI; initial expression-only CI is still running.
+The retained manifest can be verified by independently replaying its original source inputs
+through the existing streaming reducer and canonical writer. Acceptance checks the pinned
+digest, UTF-8, complete byte comparison, both source passes and writer admission/accounting.
+It returns the existing digest/count receipt without materializing a second manifest graph.
+The source factory and evidence resolver must come from original evidence; deriving either
+from the manifest under test would be circular.
 
-Initial expression-only CI36832422429 at e7f78050 passed5290 tests, skipped22 and failed15. Fourteen failures came from the unused shared budget's invalid limit1 (the contract requires at least2); corrected to2 with an explicit zero-spend postcondition. One construction pin remains. The combined30-case expression/tripwire head needs fresh CI, local validation and review.
+PR head b3cafcab passed CI 36850031289: 5,289 tests passed, 22 skipped, including all eleven
+new scope cases. Claude returned MERGE with no material findings. The one editorial repair
+clarifies exception precedence and working buffers in the API remarks and records the review.
+Integration a74fece1 is included; final-head CI gates merge under the 10:35 standing order.
+No local Release/fast/ingest run or synthetic source-replay measurement is claimed.
 
-Combined CI36833259271 at e0e1aa75 passed all30 new cases:5314 passed,22 skipped,2 failures.
-The old lineage failure fixture assumed lineage was the last write; it now targets lineage's
-schema bytes and verifies exactly one failed write. Two added cases require checkpoint hold
-failures to refuse the enclosing production. A self-audit also added a direct check that both
-retained count plan IDs match the archived request plan ID, with a substitution case (33 new
-cases total). Three compiled construction rows were transcribed with old-literal verification
-and log digest in pr-873-pin-transcription.json. Fresh CI/local validation/review remain required.
+The measurement remains required before claiming a full Luxembourg memory fit. Working
+storage includes five projection bytes per object, the evidence table, current input, the
+JSON writer buffer and a 4 KiB comparison buffer. An individual JSON element may exceed the
+writer's 64 KiB flush threshold. Factories and resolvers can retain more. This method is not
+wired into the LU adapter and does not provide a bounded downstream manifest view.
+
+
+## Async Luxembourg assertion snapshots (Codex, 2026-10-01)
+
+The snapshot writer now consumes asynchronous verified rows through the bounded small-chunk
+channel. Failed custody cancels the producer's linked token, including a source awaiting its
+next row. Both writer paths share the record encoding and canonical digest. The source remains
+responsible for publisher proofs, census membership, admission and subject grouping.
+
+Eight cases cover equal synchronous/asynchronous bytes, empty input, independently reopened
+small chunks with duplicates and literal metadata, failure during an awaiting source, absence
+of a root after source failure, wrong observations, null rows and early cancellation. Exact
+1f16080f passed CI 36852404133: 5,306 passed, 22 skipped; the required watch exited zero.
+Claude returned MERGE with no material findings. The one editorial repair clarifies the
+caller's proof checks and records this evidence. PR858 is merged as a74fece1 and included.
+Final-head CI still gates merge.
+No local build/test was run under the 10:35 low-memory rule. Adapter integration, complete
+bounded derivation and full-LU memory measurement remain outstanding.
+
+
+## LU assertion snapshot storage (Codex, 2026-10-01)
+
+The immutable assertion snapshot uses the checked chunk reader. Opening validates the complete
+retained sequence and builds a compact subject-digest/offset index. Lookups reopen and recheck
+chunks, preserving row order, duplicates, literal metadata and cross-range dependencies. The
+header binds the run, observation and ordered census/assertion proof references. Integration
+must independently replay those proofs and check census membership before admitting rows.
+
+Each serialized record, including the complete proof-reference header, is limited to 4 MiB.
+Opening refuses noncontiguous repeated subject groups and digest collisions. The writer does
+not detect repeated groups early. Integration must measure header size and proof count before
+launch; an oversized header refuses without truncation. This remains unwired storage support.
+Scope and corpus graphs still materialize, so no full-population memory or disk fit is claimed.
+
+At 168fbe90, the Release build passed with zero warnings/errors, required fast tests passed
+(3,105 passed, one skipped), and affected ingests passed (82 passed, two skipped). Twenty new
+cases cover row preservation, malformed and corrupted storage, binding changes and cancellation.
+CI 36850526856 passed exact 12be52d4 with 5,298 tests passed and 22 skipped. Its member-level
+census and the combined totals of 259 candidates and 139 guarded types all passed.
+
+Claude's read-only cross-family review returned MERGE with no material findings. The one
+editorial repair records that evidence, removes two added byte-order marks and records the
+header-size and writer-order limitations above. Integration c27012f4 is included; merge still
+requires successful CI on the final head. The 10:35 UTC standing order permits that CI-backed
+review during acquisition while memory is below 4 GB. No additional local build was run.
+
+The asynchronous snapshot now uses the bounded small-chunk channel introduced by PR #855.
+No publisher traffic, production action or completed population is claimed by this slice.
+
+
+## Retained custody storage consolidation (Codex, 2026-10-01)
+
+Reversible driver decision: preserve every cited historical custody path while consolidating
+byte-identical files onto NTFS hardlinks to retained run 9. Eight bounded files passed first;
+the expanded operation completed 971 more files at 03:56 UTC with no publisher traffic.
+Every target/master was rehashed and independently read through the frozen product custody
+reader before and after replacement. A flushed per-file journal records each intent and result.
+An independent audit confirms all 971 file identities, path lengths and exact journal coverage.
+
+Evidence: C:/lex-v3/lanes/old-eu-hardlink-expanded-20261001-result.json, its .jsonl journal,
+old-eu-hardlink-expanded-fileids.json, and the bounded2 result and file-ID audit. The expanded
+operation shared 2,754,376,458 logical bytes; free space rose from 4,960,497,664 to 6,416,429,056
+bytes during the operation, with unrelated host writes possible. All original custody paths
+and bytes remain. This does not enforce retention or provide redundant physical copies.
+The next EU launch retains the full 6,374,424,214-byte allowance, checked again after freezing.
