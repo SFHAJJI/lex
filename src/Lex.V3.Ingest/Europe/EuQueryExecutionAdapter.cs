@@ -1,4 +1,4 @@
-﻿using DocumentAcquisitionData = (System.Collections.Generic.IReadOnlyDictionary<int, Lex.V3.Ingest.CorpusAcquisitionOutcome>? Outcomes, System.Collections.Generic.IReadOnlyDictionary<int, Lex.V3.Ingest.Europe.EuDocumentLadderResult>? LadderResults, System.Collections.Generic.IReadOnlyDictionary<int, Lex.V3.Ingest.Europe.EuMintedRowAccounting>? MintedRows, Lex.V3.Ingest.Europe.EuQueryExecutionRefusalDetail? Refusal);
+using DocumentAcquisitionData = (System.Collections.Generic.IReadOnlyDictionary<int, Lex.V3.Ingest.CorpusAcquisitionOutcome>? Outcomes, System.Collections.Generic.IReadOnlyDictionary<int, Lex.V3.Ingest.Europe.EuDocumentLadderResult>? LadderResults, System.Collections.Generic.IReadOnlyDictionary<int, Lex.V3.Ingest.Europe.EuMintedRowAccounting>? MintedRows, Lex.V3.Ingest.Europe.EuQueryExecutionRefusalDetail? Refusal);
 using System.Text.Json.Serialization;
 using Lex.V3.Contracts;
 using Lex.V3.Contracts.Custody;

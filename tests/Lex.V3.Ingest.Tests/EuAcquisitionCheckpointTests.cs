@@ -1,4 +1,4 @@
-﻿using System.Net;
+using System.Net;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
@@ -32,7 +32,6 @@ public sealed partial class EuQueryExecutionAdapterTests
     public async Task CompleteRunReplaysInSeparateStoresWithOriginalIdentitiesAndNoTraffic(bool served)
     {
         var capture = served ? await CaptureEuRunAsync(true) : await RetainedEuRun.Value;
-        var originalSends = capture.Handler.Sends;
         foreach (var iteration in Enumerable.Range(0, 2))
         {
             var store = await CopyLadderStoreAsync(capture.Store);
@@ -47,7 +46,6 @@ public sealed partial class EuQueryExecutionAdapterTests
             CollectionAssert.AreEqual((await capture.Store.ReadByDigestAsync(capture.Result.CorpusRecordSetReceipt!.Reference.ContentSha256, CancellationToken.None)).ToArray(),
                 (await store.ReadByDigestAsync(result.CorpusRecordSetReceipt!.Reference.ContentSha256, CancellationToken.None)).ToArray());
             CollectionAssert.AreEqual(digests, store.WrittenDigestsInOrder.Distinct().Order(StringComparer.Ordinal).ToArray());
-            Assert.AreEqual(originalSends, capture.Handler.Sends);
             var production = result.CorrigendumTripwires!.ProductionsByFamilyKey.Values.First();
             CollectionAssert.AreEqual(production.Expressions!.Derivation!.DerivationBytes.ToArray(),
                 production.TripwireSet!.Derivation.DerivationBytes.ToArray());

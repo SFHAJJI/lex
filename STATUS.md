@@ -3,6 +3,10 @@
 Updated 2026-10-01 by the driver. This file replaces the issue-comment ledgers. It is rewritten in
 every pull request that changes what is served, what is next or what is blocked.
 
+## EU acquisition replay review repair — PR #888
+
+Claude reviewed 977a5fda with no material defect; CI 36862500249 passed 5,546 tests with 22 live-publisher tests skipped, including all 38 checkpoint cases. The repair validates exactly one pass parameter in range 1–2 before casting, removes an assertion against a handler replay cannot access, and corrects the receipt-targeted write comment. Replay itself requires zero wire-budget use. Final merged parents #877, #886 and #887, current-base integration and fresh exact-head CI remain required. #879 is merged.
+
 ## EU acquisition catalog review repair — PR #892
 
 Claude reviewed a8840b84 with no material code defect; exact CI 36865495924 passed 5,690 tests with 22 live-publisher tests skipped, including all 24 new catalog cases. The repair makes foreign captures share the original renderer identities so the substitution test reaches run association checks, removes an assertion against an unreachable handler, documents the catalog members and removes byte-order marks. The catalog is retained but the live CLI does not yet surface its reference. Final merged parents, current-base reconciliation and fresh exact-head CI remain required before merge.
