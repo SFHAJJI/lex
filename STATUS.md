@@ -15,6 +15,12 @@ come from original source evidence; deriving them from the manifest would be cir
 The draft tests cover parity with both existing writers, short reads, pinned and self-hashed
 mutations, canonical accounting forgery, admitted replacement between passes, fresh admission,
 input count/order/pass drift and cancellation. Local checks and cross-family review are pending.
+At 94884365, remote CI36814003327 built successfully and passed all ingest tests and all eleven
+new scope cases; its sole failure was the new receipt producer missing from the closed census.
+The test printed the actual compiled entry, now transcribed literally. The earlier reversed-input
+exception expectation was corrected; exact retained-prefix comparison refuses it. No census
+assertion was weakened. Fresh CI and required local validation remain pending.
+
 The method retains the writer's five-byte-per-object projection and evidence table; caller inputs
 may retain more. It does not yet connect the production LU adapter or provide a downstream
 bounded manifest view. Full population fit is still unproven.
