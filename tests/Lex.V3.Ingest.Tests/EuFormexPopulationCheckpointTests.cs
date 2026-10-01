@@ -13,6 +13,20 @@ public sealed partial class EuFormexPackagePopulationProducerTests
     private static readonly Lazy<Task<PopulationCapture>> PopulationAnnexCapture = new(() => CapturePopulationAsync(2));
 
     [TestMethod]
+    public async Task PopulationReplayRejectsMissingExpressionProductionBeforeWrites()
+    {
+        var capture = await CapturePopulationAsync(0);
+        var productions = (IDictionary<string, EuCorrigendumTripwireProductionResult>)capture.Run.CorrigendumTripwires!.ProductionsByFamilyKey;
+        var key = productions.Keys.First();
+        productions[key] = EuCorrigendumTripwireProductionResult.Refused(
+            Enum.GetValues<EuCorrigendumTripwireProductionRefusal>().First(value => value != EuCorrigendumTripwireProductionRefusal.None),
+            "fixture: expression production absent", null, 0);
+        var writes = capture.Store.CreateCallCount;
+        await Assert.ThrowsExactlyAsync<CustodyIntegrityException>(() => RestorePopulationAsync(capture.Store, capture));
+        Assert.AreEqual(writes, capture.Store.CreateCallCount);
+    }
+
+    [TestMethod]
     [DataRow(0, false)]
     [DataRow(1, false)]
     [DataRow(2, false)]
