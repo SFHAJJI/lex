@@ -71,23 +71,31 @@ public sealed class VocabularyRegistryCensusTests
                     + "DigestDomain, const Schema",
                 "Lex.V3.Ingest.Europe.EuObjectFactsBatchFactory: SetsOverObservedObjects=5, "
                     + "SetsOverPackRootsOnly=1",
-                "Lex.V3.Ingest.Europe.EuropeIndexBuilder: const Ddl, const LegacyDdl, const LegacySchema, const Schema, const SourceDdl, const SourceSchema",
+                "Lex.V3.Ingest.Europe.EuropeIndexBuilder: const Ddl, const LegacyDdl, "
+                    + "const LegacySchema, const Schema, const SourceDdl, const SourceSchema",
                 "Lex.V3.Ingest.LexCorpus6Builder: Domain=13, const Schema",
-                "Lex.V3.Ingest.Luxembourg.LuxembourgIndexBuilder: const BuiltAtFormat, const Ddl, const EventLogDdl, const EventLogSchema, "
-                    + "const LegacyDdl6, const LegacyEventLogDdl6, const LegacySchema6, const LegiluxEliRoot, const Schema, const TablesDdl",
+                "Lex.V3.Ingest.Luxembourg.LuxembourgIndexBuilder: const BuiltAtFormat, const Ddl, "
+                    + "const EventLogDdl, const EventLogSchema, const LegacyDdl6, "
+                    + "const LegacyEventLogDdl6, const LegacySchema6, const LegiluxEliRoot, "
+                    + "const Schema, const TablesDdl",
                 "Lex.V3.Ingest.Luxembourg.LuxembourgIndexQueries: const AnchorArticles, "
                     + "const ArticleIds, const CitationsTo, const EventCount, const EventLog, "
                     + "const EventsAfter, const EventsOfNameAfter, const HeldWorks, "
                     + "const MemberOutcomes, const Observations, const RevisingEventsAfter, "
-                    + "const StateArticles, const StateCitations, "
-                    + "const StateDocumentOutcomes, const StateSources, const StatesOfExpressions, "
-                    + "const SubjectFacts, const WorkEventsUpTo, const WorkRecords, const WorkTitles",
+                    + "const StateArticles, const StateCitations, const StateDocumentOutcomes, "
+                    + "const StateSources, const StatesOfExpressions, const SubjectFacts, "
+                    + "const WorkEventsUpTo, const WorkRecords, const WorkTitles",
                 "Lex.V3.Ingest.Luxembourg.LuxembourgPublisherPdfActScopeProducer: const "
                     + "AdministrativeMemorialPrefix, const ExpectedResourceHost, "
                     + "const LegislativeMemorialPrefix, const RuleProfile, "
                     + "static property RuleProfileSha256",
                 "Lex.V3.Ingest.Luxembourg.LuxembourgReferralDateComposition: const HasOpinion, "
                     + "const IriKind, const ReferralDate",
+                "Lex.V3.Ingest.V3CorpusMountWriter: GenerationFiles=6, "
+                    + "const GenerationsDirectoryName, const ReportFileName, "
+                    + "const RetentionFileName",
+                "Lex.V3.Ingest.V3GenerationRetention: const MonthlyKeeper, const Nightly, "
+                    + "const PolicyId, const Referenced",
             },
             ClosedSurfaceCensus.VocabularyRegistries(CensusScope.SweptHere).ToArray());
     }
