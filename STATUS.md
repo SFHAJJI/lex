@@ -27,6 +27,9 @@ Current evidence: exact8e3226de CI36820458287 passed 5,268 tests with22 skipped.
 The branch now includes integration65922 and PR858 head2b45518e. Fresh exact-head CI
 and the final merged858 head are required. Under the10:35 standing order, Claude can
 review read-only while memory is below4GB; no local build/test or full-LU fit is claimed.
+Combined CI36849715330 passed5,297 tests with22 skipped and one census-total failure:
+the merged guarded-type union is139, not138. The exact member-level census already passed.
+The observed total is now pinned; fresh CI must verify it before review.
 
 ## LU assertion snapshot storage (Codex, 2026-10-01)
 
