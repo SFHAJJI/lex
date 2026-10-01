@@ -21,10 +21,10 @@ namespace Lex.V3.Ingest.Tests;
 /// identities digest and the state digest from the derivations the platform publishes).
 /// </summary>
 /// <remarks>
-/// G1 (a replaced publisher file mints a new version id and a <c>file_replaced</c> event), G3 (nothing hard-deleted
-/// across builds) and G4 (as-observed answering) need predecessor chaining with observation times: one build holds no
-/// observation time and its log is a genesis log, so they wait for a second build after the first mount, and their
-/// operations (<c>as_observed</c>, <c>knowable_on</c>) are registered and not served. G2's detached signature comes from
+/// G1 (a replaced publisher file is a <c>file_replaced</c> event, with a new version id when its text changed) and G4
+/// (as-observed answering, by build snapshot) are proven over a chained log, in <c>LuxembourgIndexBuilderTests</c> and
+/// <c>V3CorpusAsObservedMountTests</c>; G3 (nothing hard-deleted across builds) waits for the generation mount, and
+/// <c>knowable_on</c> for observation times, which no build holds, so it stays registered and not served. G2's detached signature comes from
 /// the release pipeline. G5 does not recompute <c>wording_sha256</c> (its input is the stored token stream, which the
 /// bundle does not serve), nor the article identities, the rule-profile digests or the body receipt, whose derivations
 /// are not published. The mount is the test fixture, so this proves the path, not a corpus.
@@ -82,6 +82,7 @@ public sealed class V3ReplayGuaranteesTests
                 ["ask"] = new { question = $"Quel est le texte de {work} au {date} ?" },
                 ["events"] = new { },
                 ["answer_drift"] = new { },
+                ["as_observed"] = new { identifier = work, date, language = "fra", snapshot = fixture.IndexSha256 },
             };
             CollectionAssert.AreEquivalent(
                 V3RestRouteBinding.Served.Select(static binding => binding.OperationId).ToArray(),

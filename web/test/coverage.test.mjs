@@ -4,8 +4,8 @@
 // .built_at` and stamped `Counts as of index build <instant>.` into its body and both its table
 // captions; it printed `Observation history begins August 2026; replay depth grows from here.`; it
 // had a whole section built on `document_types`; and it required `versions_with_text_served +
-// versions_without_text === versions`. The V3 answer holds none of those members, records that no
-// build time and no observation time are held, and states in its own `counts_note` that the two
+// versions_without_text === versions`. The V3 answer holds none of those members, records that it
+// states no build time and that no observation time is held, and states in its own `counts_note` that the two
 // article columns "are not addends". So the page had to be rebuilt, and the question was what to
 // build it against.
 //
@@ -68,6 +68,7 @@ const MUST_REACH = [
   "members.article_outcomes[].disposition",
   "operations.not_served_operations[]",
   "operations.not_served_data[].data_needed",
+  "history.snapshots_with_text[].retained_as[]",
   "not_held[].reason",
 ];
 
@@ -80,7 +81,34 @@ const MUST_REACH = [
  * MAX over it are values. A nullable list is a claim about the producer, and two thirds of this one
  * was wrong.
  */
-const NULLABLE = new Set(["requested_language"]);
+//
+// `history` brought two more, both read off the producer (`V3CorpusMount.HistoryBlock`):
+// `history_begins` is null when the mounted index is schema 6 and records no build, and
+// `retention_policy` is null when the mount keeps no generation, which the captured genesis log does.
+const NULLABLE = new Set(["requested_language", "history.history_begins", "history.retention_policy"]);
+
+const HISTORY_HEADING = "What this mount keeps of its history";
+const SNAPSHOTS_CAPTION = "Snapshots whose text this mount holds";
+
+/**
+ * The history section's markup, and the page without it, so an instant can be held to the one
+ * section that is allowed to print one. Both renderers open it the same way.
+ */
+function splitHistory(html) {
+  const found = html.match(new RegExp(`<section class="coverage-block"><h2>${HISTORY_HEADING}</h2>.*?</section>`, "s"));
+  return found === null ? ["", html] : [found[0], html.replace(found[0], "")];
+}
+
+/** The instants an answer's history carries: its first build, each listed build, and when the retention line decided. */
+function historyInstants(answer) {
+  const history = answer.history;
+  if (history === null) return new Set();
+  return new Set([
+    history.history_begins,
+    ...history.snapshots_with_text.map((snapshot) => snapshot.built_at),
+    history.retention_policy?.evaluated_at,
+  ].filter((value) => typeof value === "string"));
+}
 
 async function capturedAnswer() {
   let parsed;
@@ -268,6 +296,7 @@ test("the page renders the answer the platform really sends", async () => {
     "What this mount holds",
     "What the corpus recorded for its members",
     "What can be asked of this mount",
+    HISTORY_HEADING,
     "What this mount measured it can answer",
     "What this mount does not hold",
   ]);
@@ -398,7 +427,16 @@ test("the two claims the platform refuses to make are gone, and its reasons are 
 
     // The build instant, in the body and in every caption.
     assert.ok(!body.includes("Counts as of index build"), "the build stamp survived");
-    assert.ok(!/\d{4}-\d{2}-\d{2}T/.test(body), "an instant reached a page that holds none");
+    // An instant is printed in ONE section, the mounted log's history, and every instant there is a
+    // build's time the answer's history carries. The rest of the page, where the counts are, holds
+    // none, which is the claim this line made before the platform sent any build time at all.
+    const [history, rest] = splitHistory(render(answer));
+    assert.ok(!/\d{4}-\d{2}-\d{2}T/.test(text(rest)), "an instant reached the page outside its history section");
+    const printed = [...text(history).matchAll(/\d{4}-\d{2}-\d{2}T[^\s<]*/g)].map(([instant]) => instant);
+    assert.ok(printed.length > 0, "the history section prints no build time, so this checked none");
+    for (const instant of printed) {
+      assert.ok(historyInstants(answer).has(instant), `${instant} is in the history section and is not a build time the answer carries`);
+    }
     for (const caption of captions(render(answer))) {
       assert.ok(!/\bbuild\b/i.test(caption), `a caption still dates itself: ${caption}`);
     }
@@ -420,7 +458,7 @@ test("the two claims the platform refuses to make are gone, and its reasons are 
     assert.ok(/\d{4}-\d{2}-\d{2}/.test(body), "the page carries no calendar date at all");
 
     // And the platform's own two reasons, which are what stands in their place.
-    assert.ok(body.includes("no build time of the corpus or index is held"));
+    assert.ok(body.includes("history gives when each build ran"));
     assert.ok(body.includes("no observation time is held"));
     assert.ok(body.includes(answer.mounted.corpus_sha256));
     assert.ok(body.includes(answer.mounted.index_sha256));
@@ -846,7 +884,7 @@ test("an answer that holds everything, or says nothing about what it does not ho
   );
   // A member that is absent and a member that is empty are different facts.
   for (const member of ["scope", "counts_note", "requested_language", "languages_held", "mounted",
-    "totals", "languages", "members", "operations", "capability_cells", "not_held"]) {
+    "totals", "languages", "members", "operations", "history", "capability_cells", "not_held"]) {
     assert.throws(
       () => readCoverage(mutate(whole, (a) => { delete a[member]; })),
       new RegExp(`does not carry ${member}`),
@@ -900,6 +938,20 @@ test("the two renderers show the same rows, the same tables and the same sentenc
   }
 });
 
+/**
+ * The members the producer writes for a retention line, read from the anonymous object it builds in
+ * `V3CorpusMount.HistoryBlock` rather than copied beside it, so a preview showing a chained mount is
+ * held to what the producer emits even though the captured genesis log sends null there.
+ */
+async function producerRetentionMembers() {
+  const source = await readFile(new URL("../../src/Lex.V3.Api/V3CorpusMount.cs", import.meta.url), "utf8");
+  const found = source.match(/retention_policy = _generations is null\s*\?\s*null\s*:\s*new \{([^}]*)\}/);
+  assert.ok(found, "the producer's retention_policy object was not found in V3CorpusMount.cs");
+  const members = [...found[1].matchAll(/(\w+) =/g)].map(([, member]) => member);
+  assert.ok(members.includes("id") && members.includes("evaluated_at"), `the retention line's members did not parse: ${members}`);
+  return members;
+}
+
 test("the preview holds synthetic values in the shape the platform really sends", async () => {
   // The FILLED captured answer, because the census normalises the two mount digests to a
   // placeholder whose form is text. Compared against the unfilled one, this test would require the
@@ -907,6 +959,7 @@ test("the preview holds synthetic values in the shape the platform really sends"
   const captured = withDigests(await capturedAnswer());
   const expected = paths(captured);
   const expectedForms = forms(captured);
+  const retention = await producerRetentionMembers();
 
   for (const preview of PREVIEW_ANSWERS) {
     const answer = preview.answer;
@@ -917,13 +970,20 @@ test("the preview holds synthetic values in the shape the platform really sends"
     // the whole mount empties neither, a language that measures nothing empties only the cells, and
     // the first version of this keyed both lists off `languages` being empty.
     const actual = paths(answer);
+    // A member the platform sends as null OR as an object. The captured answer is a genesis log and
+    // keeps no generation, so its retention line is null; a preview of a chained mount carries one,
+    // with exactly the members the producer writes, read from the producer rather than copied here.
+    const expectedHere = new Set(expected);
+    if (captured.history.retention_policy === null && answer.history.retention_policy !== null) {
+      for (const member of retention) expectedHere.add(`history.retention_policy.${member}`);
+    }
     const narrowedAway = [
       ...(answer.languages.length === 0 ? ["languages[]"] : []),
       ...(answer.capability_cells.length === 0 ? ["capability_cells[]"] : []),
     ];
     const dropped = (path) => narrowedAway.some((prefix) => path.startsWith(prefix));
     assert.deepEqual(
-      [...expected].filter((path) => !dropped(path)).sort(),
+      [...expectedHere].filter((path) => !dropped(path)).sort(),
       [...actual].sort(),
       `${preview.heading} does not carry the paths the platform sends`,
     );
@@ -1159,6 +1219,10 @@ test("one key is one row, in every keyed list on the page", () => {
     ["the measured capabilities", (a) => { a.capability_cells.push({ ...a.capability_cells[0] }); }],
     ["the languages this mount holds", (a) => { a.languages_held.push("fra"); }],
     ["the list of what is not held", (a) => { a.not_held.push({ ...a.not_held[0] }); }],
+    ["the snapshots with text", (a) => {
+      a.history.snapshots_with_text.push({ ...a.history.snapshots_with_text[0] });
+      a.history.snapshots_without_text -= 1;
+    }],
   ];
   for (const [what, change] of duplicated) {
     assert.throws(
@@ -1167,7 +1231,7 @@ test("one key is one row, in every keyed list on the page", () => {
       `${what} accepted a repeated key`,
     );
   }
-  assert.equal(duplicated.length, 8, "a keyed list was added and this walk was not extended");
+  assert.equal(duplicated.length, 9, "a keyed list was added and this walk was not extended");
 });
 
 test("a date on this page is a currency claim, and the guard is a reach rather than a list", async () => {
@@ -1178,19 +1242,32 @@ test("a date on this page is a currency claim, and the guard is a reach rather t
   //
   // This asks the opposite question. Every calendar date the page prints must be one the ANSWER
   // carries, so a date from anywhere else fails without this test knowing what words carry it.
+  //
+  // The history section is the one place a time of day may appear, and the same reach holds there:
+  // every instant it prints is a build time the answer's history carries, and once those are taken
+  // out it prints no other date and no other time.
   const captured = withDigests(await capturedAnswer());
   for (const answer of [captured, ...PREVIEW_ANSWERS.map((preview) => preview.answer)]) {
     const held = new Set([
       ...answer.languages.flatMap((row) => [row.first_state_date, row.last_state_date]),
       ...answer.capability_cells.flatMap((cell) => [cell.period_from, cell.period_to]),
     ]);
+    const instants = historyInstants(answer);
     for (const render of [string, react]) {
-      const body = text(render(answer));
+      const [history, rest] = splitHistory(render(answer));
+      const body = text(rest);
       for (const [printed] of body.matchAll(/\d{4}-\d{2}-\d{2}/g)) {
         assert.ok(held.has(printed), `${printed} is on the page and not in the answer`);
       }
-      assert.ok(!/\d{2}:\d{2}:\d{2}/.test(body), "a time of day reached a page that holds none");
-      assert.ok(!/\d{4}-\d{2}-\d{2}T/.test(body), "an instant reached a page that holds none");
+      assert.ok(!/\d{2}:\d{2}:\d{2}/.test(body), "a time of day reached the page outside its history section");
+      assert.ok(!/\d{4}-\d{2}-\d{2}T/.test(body), "an instant reached the page outside its history section");
+      const INSTANT = /\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z/g;
+      for (const [printed] of text(history).matchAll(INSTANT)) {
+        assert.ok(instants.has(printed), `${printed} is in the history section and is not a build time the answer carries`);
+      }
+      const others = text(history).replace(INSTANT, " ");
+      assert.ok(!/\d{4}-\d{2}-\d{2}/.test(others), "a date that is no build's time reached the history section");
+      assert.ok(!/\d{2}:\d{2}/.test(others), "a time of day that is no build's reached the history section");
     }
   }
   // And the guard reaches something: the captured answer does print dates, so a page that printed
@@ -1239,6 +1316,7 @@ test("the preview reproduces the platform's sentences, to the character", async 
     assert.deepEqual(
       answer.operations.not_served_data, captured.operations.not_served_data,
       `${preview.heading} rewrote the data that would serve an unrouted operation`);
+    assert.equal(answer.history.note, captured.history.note, `${preview.heading} paraphrases history.note`);
   }
 });
 
@@ -1428,5 +1506,128 @@ test("a mount that serves every registered operation says none where the unroute
     assert.equal(
       rows(html).get("registered, with no route on this mount"), "none",
       `${renderer} left the empty list blank`);
+  }
+});
+
+test("the mounted log's history is its own section, row by row and snapshot by snapshot, in both renderers", async () => {
+  const captured = withDigests(await capturedAnswer());
+  const chained = PREVIEW_ANSWERS[0].answer;
+  assert.notEqual(chained.history.retention_policy, null, "the whole-mount preview stopped showing a chained mount");
+  assert.ok(chained.history.snapshots_without_text > 0, "the whole-mount preview names no snapshot without text");
+
+  for (const answer of [captured, chained]) {
+    const { history } = answer;
+    for (const [renderer, html] of [["string", string(answer)], ["react", react(answer)]]) {
+      // Its own section, after what can be asked of the mount and before what it measured.
+      const order = headings(html);
+      assert.equal(order.indexOf(HISTORY_HEADING), order.indexOf("What can be asked of this mount") + 1, `${renderer}: the history is out of place`);
+      assert.equal(order.indexOf("What this mount measured it can answer"), order.indexOf(HISTORY_HEADING) + 1, `${renderer}: the history is out of place`);
+
+      const shown = rows(html);
+      assert.equal(shown.get("builds the mounted log records"), String(history.snapshots_in_log), `${renderer}: snapshots_in_log`);
+      assert.equal(shown.get("first build recorded"), history.history_begins, `${renderer}: history_begins`);
+      assert.equal(
+        shown.get("builds the log names whose text this mount does not hold"), String(history.snapshots_without_text),
+        `${renderer}: snapshots_without_text`);
+      if (history.retention_policy === null) {
+        assert.equal(shown.get("retention line"), "none, so this mount keeps no earlier build beside its own", `${renderer}: no retention line`);
+        assert.equal(shown.has("days each day’s last build is kept"), false, `${renderer}: nightly days with no retention line`);
+      } else {
+        assert.equal(shown.get("retention line"), history.retention_policy.id, `${renderer}: retention_policy.id`);
+        assert.equal(shown.get("days each day’s last build is kept"), String(history.retention_policy.nightly_days), `${renderer}: nightly_days`);
+        assert.equal(shown.get("retention decided as of"), history.retention_policy.evaluated_at, `${renderer}: evaluated_at`);
+      }
+      // `strip` puts a space where each tag was, so the comma after a `<code>` token reads " ,".
+      assert.deepEqual(
+        tableRows(html, SNAPSHOTS_CAPTION),
+        history.snapshots_with_text.map((snapshot) => [
+          snapshot.snapshot_id, String(snapshot.observation), snapshot.built_at, snapshot.retained_as.join(" , "),
+        ]),
+        `${renderer}: each snapshot in its own row, in the order sent`);
+      assert.ok(text(html).includes(history.note), `${renderer}: the platform's note on the history was not printed verbatim`);
+    }
+  }
+});
+
+test("a history whose counts do not add up, or that lists what a log recording no build cannot hold, is refused by the one reader", async () => {
+  const captured = withDigests(await capturedAnswer());
+  const chained = PREVIEW_ANSWERS[0].answer;
+  const recordsNone = (a) => {
+    a.history.log_records_builds = false;
+    a.history.snapshots_in_log = 0;
+    a.history.history_begins = null;
+    a.history.retention_policy = null;
+    a.history.snapshots_with_text = [];
+    a.history.snapshots_without_text = 0;
+  };
+  const cases = [
+    ["more builds than are accounted for", captured, (a) => { a.history.snapshots_in_log = 2; },
+      /1 snapshots with text and 0 without are counted against 2 the log records/],
+    ["more without text than the log records", chained, (a) => { a.history.snapshots_without_text = 2; },
+      /3 snapshots with text and 2 without are counted against 4 the log records/],
+    ["snapshots listed for a log that records no build", captured, (a) => { a.history.log_records_builds = false; },
+      /says the mounted log records no build, and counts 1 snapshots, 1 with text/],
+    ["a first build for a log that records none", captured, (a) => { recordsNone(a); a.history.history_begins = "2026-10-01T08:00:00Z"; },
+      /says the mounted log records no build/],
+    ["a retention line for a log that records none", captured, (a) => { recordsNone(a); a.history.retention_policy = { ...chained.history.retention_policy }; },
+      /says the mounted log records no build/],
+    ["no first build for a log that records its builds", captured, (a) => { a.history.history_begins = null; },
+      /records its builds and names no first build/],
+    ["no mounted build", captured, (a) => { a.history.snapshots_with_text[0].retained_as = ["nightly"]; },
+      /lists 0 snapshots kept as mounted/],
+    ["the mounted build kept for another reason too", captured, (a) => { a.history.snapshots_with_text[0].retained_as = ["mounted", "nightly"]; },
+      /lists 1 snapshots kept as mounted and gives it another reason as well/],
+    ["a generation kept with no retention line", chained, (a) => { a.history.retention_policy = null; },
+      /lists 2 earlier builds kept beside the mounted one and no retention line/],
+    ["a snapshot kept for no reason", chained, (a) => { a.history.snapshots_with_text[1].retained_as = []; },
+      /snapshots_with_text\[1\] is listed with no reason it is kept/],
+    ["one reason twice", chained, (a) => { a.history.snapshots_with_text[1].retained_as = ["monthly_keeper", "monthly_keeper"]; },
+      /lists "monthly_keeper" twice/],
+    ["two snapshots of one build", chained, (a) => { a.history.snapshots_with_text[1].observation = 1; },
+      /the observations of the snapshots with text lists 1 twice/],
+    ["an observation of nought", captured, (a) => { a.history.snapshots_with_text[0].observation = 0; },
+      /observation is 0; a log numbers its builds from 1/],
+    ["a build time that is a date", captured, (a) => { a.history.snapshots_with_text[0].built_at = "2026-10-01"; },
+      /snapshots_with_text\[0\]\.built_at is not a UTC instant/],
+    ["a first build that is not an instant", captured, (a) => { a.history.history_begins = "2026-10-01T08:00:00+02:00"; },
+      /history_begins is not a UTC instant/],
+    ["a retention decision that is not an instant", chained, (a) => { a.history.retention_policy.evaluated_at = "yesterday"; },
+      /retention_policy\.evaluated_at is not a UTC instant/],
+    ["a snapshot that is not a digest", captured, (a) => { a.history.snapshots_with_text[0].snapshot_id = "abc"; },
+      /snapshot_id is not a SHA-256 digest/],
+    ["a negative count", captured, (a) => { a.history.snapshots_without_text = -1; }, /rather than a count/],
+    ["a fractional count", captured, (a) => { a.history.snapshots_in_log = 1.5; }, /rather than a count/],
+    ["nightly days as text", chained, (a) => { a.history.retention_policy.nightly_days = "90"; }, /rather than a count/],
+    ["a retention line with no id", chained, (a) => { delete a.history.retention_policy.id; }, /retention_policy does not carry id/],
+    ["the flag as text", captured, (a) => { a.history.log_records_builds = "true"; }, /is true or false and never absent/],
+    ["no note", captured, (a) => { delete a.history.note; }, /history does not carry note/],
+    ["a list for the history", captured, (a) => { a.history = []; }, /an object, or null when no Luxembourg index is mounted/],
+  ];
+  for (const [name, base, change, pattern] of cases) {
+    assert.throws(() => readCoverage(mutate(base, change)), pattern, `the reader accepted ${name}`);
+    assert.throws(() => string(mutate(base, change)), pattern, `the string renderer accepted ${name}`);
+    assert.throws(() => react(mutate(base, change)), pattern, `the React port accepted ${name}`);
+  }
+
+  // A schema-6 index records no build, and that history is rendered, not refused: the sentence that
+  // no build is recorded and the platform's own note, and no table. The note is the producer's
+  // (`V3CorpusMount.HistoryNotRecordedNote`).
+  const legacy = mutate(captured, (a) => {
+    recordsNone(a);
+    a.history.note = "the mounted Luxembourg index is lex-v3-luxembourg-index/6 and records no build, so it names no snapshot and keeps no generation";
+  });
+  for (const [renderer, html] of [["string", string(legacy)], ["react", react(legacy)]]) {
+    assert.ok(headings(html).includes(HISTORY_HEADING), `${renderer}: a log recording no build lost its section`);
+    assert.ok(text(html).includes("The mounted log records no build"), `${renderer}: no sentence that no build is recorded`);
+    assert.ok(text(html).includes(legacy.history.note), `${renderer}: the platform's note was dropped`);
+    assert.equal(captions(html).includes(SNAPSHOTS_CAPTION), false, `${renderer}: a snapshot table with no snapshot`);
+    assert.equal(rows(html).has("builds the mounted log records"), false, `${renderer}: counts for a log that records none`);
+  }
+
+  // And a mount with no Luxembourg index has no history to show, which is a section absent rather
+  // than a section empty.
+  const none = mutate(captured, (a) => { a.history = null; });
+  for (const [renderer, html] of [["string", string(none)], ["react", react(none)]]) {
+    assert.equal(headings(html).includes(HISTORY_HEADING), false, `${renderer}: a history section for no history`);
   }
 });
