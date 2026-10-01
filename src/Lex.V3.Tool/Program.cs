@@ -32,11 +32,12 @@ const string Usage =
     + "  --out          the v3-corpus directory to write\n"
     + "  --checkout     the repository root holding the renderer source files\n"
     + "  --wire-ceiling the one ceiling on publisher requests for the whole run, robots included\n"
+    + "  --predecessor  a previous build's v3-corpus directory: its Luxembourg event log is carried forward and this build appends to it\n"
     + "Exit codes: 0 built and verified, 1 unexpected failure, 2 usage, 3 typed refusal, 4 written directory did not verify, 130 cancelled";
 
 string[] required = ["--celex", "--custody", "--out", "--checkout", "--wire-ceiling"];
 string[] rangeOptions = ["--lu-name", "--lu-start", "--lu-end"];
-string[] admitted = [.. required, .. rangeOptions, "--lu-population", "--custody-encoding"];
+string[] admitted = [.. required, .. rangeOptions, "--lu-population", "--custody-encoding", "--predecessor"];
 
 if (args.Length == 0 || !string.Equals(args[0], "build", StringComparison.Ordinal) || (args.Length - 1) % 2 != 0)
 {
@@ -93,6 +94,20 @@ if (!int.TryParse(options["--wire-ceiling"], out var ceiling) || ceiling < 2)
 {
     Console.Error.WriteLine("--wire-ceiling must be an integer of at least 2 (robots plus one product request).");
     return 2;
+}
+
+// The predecessor is read and verified before the first request, like every other argument.
+LuxembourgIndexPredecessor? predecessor = null;
+if (options.TryGetValue("--predecessor", out var predecessorDirectory))
+{
+    predecessor = V3FirstMountBuild.ReadPredecessor(Path.GetFullPath(predecessorDirectory), out var predecessorRefusal, out var predecessorDetail);
+    if (predecessor is null)
+    {
+        Console.Error.WriteLine($"--predecessor refused: {predecessorRefusal}: {predecessorDetail}");
+        return 2;
+    }
+
+    Console.WriteLine($"predecessor: luxembourg index {predecessor.IndexSha256[..12]}, its event log carried forward");
 }
 
 var checkout = Path.GetFullPath(options["--checkout"]);
@@ -178,7 +193,7 @@ try
         $"luxembourg: run complete, {luxembourg.Run!.CorpusRecordSet?.Set.Records.Count ?? 0} corpus record(s), "
         + $"vocabulary evidence {luxembourg.VocabularyEvidenceRef!.Sha256[..12]}; spent {budget.Spent} of {budget.Limit}");
 
-    var build = await new V3FirstMountBuild(store).RunAsync(europe, luxembourg, token);
+    var build = await new V3FirstMountBuild(store).RunAsync(europe, luxembourg, predecessor, token);
     if (!build.Delivered)
     {
         Console.Error.WriteLine($"refused: build: {build.Refusal}: {build.Detail} (spent {budget.Spent} of {budget.Limit})");

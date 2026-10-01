@@ -151,9 +151,49 @@ public sealed class V3FirstMountBuild
     public V3FirstMountBuild(ICustodyStore custodyStore) =>
         _custodyStore = custodyStore ?? throw new ArgumentNullException(nameof(custodyStore));
 
+    public Task<V3FirstMountBuildResult> RunAsync(
+        EuFirstMountAcquisitionResult europe,
+        LuxembourgFirstMountAcquisitionResult luxembourg,
+        CancellationToken cancellationToken) =>
+        RunAsync(europe, luxembourg, predecessor: null, cancellationToken);
+
+    /// <summary>
+    /// The previous build's Luxembourg index, read from its v3-corpus directory for <see cref="RunAsync(EuFirstMountAcquisitionResult, LuxembourgFirstMountAcquisitionResult, LuxembourgIndexPredecessor?, CancellationToken)"/>:
+    /// the index file, held to the digest the directory's build report names (<see cref="LuxembourgIndexPredecessor.TryRead"/>).
+    /// </summary>
+    public static LuxembourgIndexPredecessor? ReadPredecessor(
+        string directory,
+        out LuxembourgIndexBuildRefusal refusal,
+        out string? detail)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(directory);
+        try
+        {
+            using var report = System.Text.Json.JsonDocument.Parse(File.ReadAllBytes(Path.Combine(directory, "build-report.json")));
+            var index = report.RootElement.GetProperty("luxembourgIndex");
+            var reference = new Lex.V3.Contracts.Source.Core.SourceArtifactRef(
+                index.GetProperty("resourceId").GetString()!, index.GetProperty("Sha256").GetString()!);
+            return LuxembourgIndexPredecessor.TryRead(
+                reference, File.ReadAllBytes(Path.Combine(directory, V3FirstMountBuildResult.LuxembourgIndexFileName)), out refusal, out detail);
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or System.Text.Json.JsonException
+                                              or KeyNotFoundException or InvalidOperationException or ArgumentException)
+        {
+            refusal = LuxembourgIndexBuildRefusal.PredecessorMismatch;
+            detail = $"the predecessor directory holds no readable build report and Luxembourg index: {exception.Message}";
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// The build, with the Luxembourg index's event log chained to <paramref name="predecessor"/> when one is given
+    /// (<see cref="LuxembourgIndexBuilder.TryBuild(Stage3DerivationProfileEnvelope, LuxembourgIndexPredecessor?, out LuxembourgIndexBuildRefusal, out string?)"/>):
+    /// both builds of the index take the same predecessor, so the twice-built comparison still holds.
+    /// </summary>
     public async Task<V3FirstMountBuildResult> RunAsync(
         EuFirstMountAcquisitionResult europe,
         LuxembourgFirstMountAcquisitionResult luxembourg,
+        LuxembourgIndexPredecessor? predecessor,
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(europe);
@@ -252,14 +292,14 @@ public sealed class V3FirstMountBuild
                     : $"two builds of the corpus differ: {corpus.ArtifactRef.Sha256} then {corpusAgain.ArtifactRef.Sha256}");
         }
 
-        var luxembourgIndex = LuxembourgIndexBuilder.TryBuild(profileEnvelope, out var luxembourgIndexRefusal, out var luxembourgIndexDetail);
+        var luxembourgIndex = LuxembourgIndexBuilder.TryBuild(profileEnvelope, predecessor, out var luxembourgIndexRefusal, out var luxembourgIndexDetail);
         if (luxembourgIndex is null)
         {
             return V3FirstMountBuildResult.Refused(
                 V3FirstMountBuildRefusal.LuxembourgIndexRefused, $"{luxembourgIndexRefusal}: {luxembourgIndexDetail}");
         }
 
-        var luxembourgIndexAgain = LuxembourgIndexBuilder.TryBuild(profileEnvelope, out luxembourgIndexRefusal, out luxembourgIndexDetail);
+        var luxembourgIndexAgain = LuxembourgIndexBuilder.TryBuild(profileEnvelope, predecessor, out luxembourgIndexRefusal, out luxembourgIndexDetail);
         if (luxembourgIndexAgain is null
             || !SameArtefact(luxembourgIndex.IndexRef, luxembourgIndex.IndexBytes, luxembourgIndexAgain.IndexRef, luxembourgIndexAgain.IndexBytes)
             || !SameArtefact(luxembourgIndex.CapabilityManifestRef, luxembourgIndex.CapabilityManifestBytes,
