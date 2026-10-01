@@ -182,6 +182,9 @@ public enum LuxembourgPartitionCoverReconciliationRefusal
     /// <see cref="LuxembourgPartitionCoverReconciliationDetail.CoverRefusal"/>).
     /// </summary>
     CoverReconciliationRefused = 3,
+
+    /// <summary>The proven cover's split history and leaf references could not be retained.</summary>
+    CheckpointNotRetained = 4,
 }
 
 /// <summary>
@@ -189,7 +192,7 @@ public enum LuxembourgPartitionCoverReconciliationRefusal
 /// single-partition pass refuses <see cref="LuxembourgEnumerationRefusal.PartitionRequired"/> and a
 /// caller-supplied <see cref="LuxembourgPartitionChain"/> exists for it -- could not reconcile into a
 /// proven whole enumeration. Exactly one of <see cref="LeafExecutorRefusal"/>,
-/// <see cref="LeafProofRefusal"/> or <see cref="CoverRefusal"/> is present, matching <see cref="Code"/>.
+/// <see cref="LeafProofRefusal"/>, <see cref="CoverRefusal"/> or <see cref="CheckpointFailure"/> is present, matching <see cref="Code"/>.
 /// A chain that cannot reconcile is a typed family refusal, never a raw exception.
 /// </summary>
 public sealed class LuxembourgPartitionCoverReconciliationDetail
@@ -199,8 +202,10 @@ public sealed class LuxembourgPartitionCoverReconciliationDetail
         string leafPartitionId,
         LuxembourgEnumerationRefusalDetail? leafExecutorRefusal,
         AbsenceFamilyEnumerationProofRefusal? leafProofRefusal,
-        LuxembourgPartitionCoverRefusal? coverRefusal)
+        LuxembourgPartitionCoverRefusal? coverRefusal,
+        string? checkpointFailure = null)
     {
+        CheckpointFailure = checkpointFailure;
         Code = code;
         LeafPartitionId = leafPartitionId;
         LeafExecutorRefusal = leafExecutorRefusal;
@@ -210,10 +215,20 @@ public sealed class LuxembourgPartitionCoverReconciliationDetail
 
     public LuxembourgPartitionCoverReconciliationRefusal Code { get; }
 
+    public string? CheckpointFailure { get; }
+
+    public static LuxembourgPartitionCoverReconciliationDetail CheckpointNotRetained(string detail)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(detail);
+        return new(LuxembourgPartitionCoverReconciliationRefusal.CheckpointNotRetained,
+            string.Empty, null, null, null, detail);
+    }
+
     /// <summary>
     /// The chain leaf this refusal names. Empty for <see cref="LuxembourgPartitionCoverReconciliationRefusal.CoverReconciliationRefused"/>,
     /// which is <see cref="LuxembourgPartitionCover.TryCreate"/>'s own refusal: that door reports one
-    /// closed reason for the whole chain, never a specific leaf ordinal.
+    /// closed reason for the whole chain, never a specific leaf ordinal. Also empty for
+    /// <see cref="LuxembourgPartitionCoverReconciliationRefusal.CheckpointNotRetained"/>, which names the whole cover checkpoint.
     /// </summary>
     public string LeafPartitionId { get; }
 
@@ -286,6 +301,28 @@ public sealed class LuxembourgFamilyEnumerationOutcome
     public string FamilyKey { get; }
 
     public LuxembourgFamilyEnumerationOutcomeKind Kind { get; }
+
+    /// <summary>The retained single enumeration or tiled cover, as selected by Kind.</summary>
+    public SourceArtifactRef? CheckpointRef { get; private init; }
+
+    internal static LuxembourgFamilyEnumerationOutcome ProvenWithCheckpoint(string familyKey,
+        AbsenceFamilyEnumerationProof proof, SourceArtifactRef checkpoint)
+    {
+        ArgumentNullException.ThrowIfNull(proof);
+        ArgumentNullException.ThrowIfNull(checkpoint);
+        return new(familyKey, LuxembourgFamilyEnumerationOutcomeKind.Proven, proof, null, null, null, null)
+            { CheckpointRef = checkpoint };
+    }
+
+    internal static LuxembourgFamilyEnumerationOutcome CoverProvenWithCheckpoint(string familyKey,
+        IReadOnlyList<AbsenceFamilyEnumerationProof> leafProofs, SourceArtifactRef checkpoint)
+    {
+        ArgumentNullException.ThrowIfNull(checkpoint);
+        var result = CoverProven(familyKey, leafProofs);
+        return new(familyKey, result.Kind, null, null, null, result.CoverLeafProofs, null)
+            { CheckpointRef = checkpoint };
+    }
+
 
     public AbsenceFamilyEnumerationProof? Proof { get; }
 
@@ -1408,10 +1445,11 @@ public sealed class LuxembourgQueryExecutionAdapter
             {
                 var execution = await _executor.RunAdaptiveCoverAsync(
                     partitionRequest, sourceWitness, wireBudget, cancellationToken, maximumLeafRows: 100_000).ConfigureAwait(false);
-                var reconciled = ReconcileCover(partitionRequest, execution.Chain, execution.Results);
+                var reconciled = await ReconcileCoverAsync(partitionRequest, execution.Chain, execution.Results,
+                    cancellationToken).ConfigureAwait(false);
                 if (reconciled.Legs is { } adaptiveLegs)
                 {
-                    outcomes.Add(LuxembourgFamilyEnumerationOutcome.CoverProven(familyKey, reconciled.LeafProofs!));
+                    outcomes.Add(LuxembourgFamilyEnumerationOutcome.CoverProvenWithCheckpoint(familyKey, reconciled.LeafProofs!, reconciled.CheckpointRef!));
                     if (isCensusFamily) censusLegs.AddRange(adaptiveLegs);
                     if (isAssertionFamily) assertionLegs.AddRange(adaptiveLegs);
                     if (isRelationFamily) relationLegs.AddRange(adaptiveLegs);
@@ -1432,7 +1470,7 @@ public sealed class LuxembourgQueryExecutionAdapter
                 var proof = receipt.TryProveFamilyEnumeration(familyKey, out var proofRefusal);
                 if (proof is not null)
                 {
-                    outcomes.Add(LuxembourgFamilyEnumerationOutcome.Proven(familyKey, proof));
+                    outcomes.Add(LuxembourgFamilyEnumerationOutcome.ProvenWithCheckpoint(familyKey, proof, runResult.CheckpointRef!));
                     if (isRelationFamily)
                     {
                         sawRelationFamily = true;
@@ -1471,7 +1509,7 @@ public sealed class LuxembourgQueryExecutionAdapter
                     .ConfigureAwait(false);
                 if (coverOutcome.Legs is { } legs)
                 {
-                    outcomes.Add(LuxembourgFamilyEnumerationOutcome.CoverProven(familyKey, coverOutcome.LeafProofs!));
+                    outcomes.Add(LuxembourgFamilyEnumerationOutcome.CoverProvenWithCheckpoint(familyKey, coverOutcome.LeafProofs!, coverOutcome.CheckpointRef!));
                     if (isCensusFamily)
                     {
                         censusLegs.AddRange(legs);
@@ -3242,7 +3280,7 @@ public sealed class LuxembourgQueryExecutionAdapter
     private sealed record CoverReconciliationOutcome(
         IReadOnlyList<AbsenceFamilyEnumerationProof>? LeafProofs,
         IReadOnlyList<FamilyRowsLeg>? Legs,
-        LuxembourgPartitionCoverReconciliationDetail? Refusal);
+        LuxembourgPartitionCoverReconciliationDetail? Refusal, SourceArtifactRef? CheckpointRef = null);
 
     /// <summary>
     /// D1-04c item 1: drives <see cref="LuxembourgRepeatedEnumerationExecutor.RunCoverAsync"/> over
@@ -3266,13 +3304,14 @@ public sealed class LuxembourgQueryExecutionAdapter
         var leafResults = await _executor.RunCoverAsync(
                 rootRequest, chain, sourceWitness, wireBudget, cancellationToken)
             .ConfigureAwait(false);
-        return ReconcileCover(rootRequest, chain, leafResults);
+        return await ReconcileCoverAsync(rootRequest, chain, leafResults, cancellationToken).ConfigureAwait(false);
     }
 
-    private static CoverReconciliationOutcome ReconcileCover(
+    private async Task<CoverReconciliationOutcome> ReconcileCoverAsync(
         LuxembourgPartitionRunRequest rootRequest,
         LuxembourgPartitionChain chain,
-        IReadOnlyList<LuxembourgEnumerationRunResult> leafResults)
+        IReadOnlyList<LuxembourgEnumerationRunResult> leafResults,
+        CancellationToken cancellationToken)
     {
 
         // RunCoverAsync's own contract: exactly one result per chain leaf, in leaf order, whether or
@@ -3318,7 +3357,17 @@ public sealed class LuxembourgQueryExecutionAdapter
             legs.Add(new FamilyRowsLeg(proof, receipt, rootRequest with { Partition = leaf }));
         }
 
-        return new CoverReconciliationOutcome(leafProofs, legs, null);
+        try
+        {
+            var checkpoint = await LuxembourgPartitionCoverCheckpoint.WriteAsync(_custodyStore, cover, leafResults,
+                cancellationToken).ConfigureAwait(false);
+            return new CoverReconciliationOutcome(leafProofs, legs, null, checkpoint);
+        }
+        catch (Exception exception) when (exception is CustodyRequiredException or CustodyIntegrityException)
+        {
+            return new CoverReconciliationOutcome(null, null,
+                LuxembourgPartitionCoverReconciliationDetail.CheckpointNotRetained(exception.Message));
+        }
     }
 
     /// <summary>
