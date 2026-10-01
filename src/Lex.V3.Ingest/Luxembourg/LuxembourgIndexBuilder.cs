@@ -20,7 +20,7 @@ public enum LuxembourgIndexBuildRefusal
     [JsonStringEnumMemberName("index_invalid")] IndexInvalid = 4,
     [JsonStringEnumMemberName("predecessor_mismatch")] PredecessorMismatch = 5,
     [JsonStringEnumMemberName("predecessor_schema_differs")] PredecessorSchemaDiffers = 6,
-    [JsonStringEnumMemberName("predecessor_state_changed")] PredecessorStateChanged = 7,
+    [JsonStringEnumMemberName("predecessor_derivation_differs")] PredecessorDerivationDiffers = 7,
 }
 
 public sealed record LuxembourgIndexBuildResult(
@@ -482,7 +482,7 @@ public static class LuxembourgIndexBuilder
           seq INTEGER NOT NULL PRIMARY KEY CHECK (seq >= 1),
           scope TEXT COLLATE BINARY NOT NULL CHECK (scope IN ('state')),
           key TEXT COLLATE BINARY NOT NULL,
-          event TEXT COLLATE BINARY NOT NULL CHECK (event IN ('first_sighting', 'expression_added')),
+          event TEXT COLLATE BINARY NOT NULL CHECK (event IN ('first_sighting', 'expression_added', 'file_replaced', 'interval_closed', 'validity_revised')),
           observed_from TEXT COLLATE BINARY CHECK (observed_from IS NULL),
           detail_json TEXT COLLATE BINARY NOT NULL
         ) STRICT;
@@ -582,8 +582,8 @@ public static class LuxembourgIndexBuilder
             var appended = ProjectChainedEvents(FoldLog(predecessor.Events), states, sourceBodies, predecessor.LastSeq + 1, out var changed);
             if (appended is null)
             {
-                refusal = LuxembourgIndexBuildRefusal.PredecessorStateChanged;
-                detail = $"The predecessor's log holds the state of {changed} with another digest or other source bodies; comparison events are not served yet.";
+                refusal = LuxembourgIndexBuildRefusal.PredecessorDerivationDiffers;
+                detail = $"The state of {changed} has another digest from the same source bodies than the predecessor's log holds: this build's derivation differs from the predecessor's, so the change is not the publisher's.";
                 return null;
             }
 
@@ -866,11 +866,21 @@ public static class LuxembourgIndexBuilder
         ProjectChainedEvents(new Dictionary<string, LoggedState>(StringComparer.Ordinal), states, sourceBodies, 1, out _)!;
 
     /// <summary>
-    /// The events one observation appends to a log whose states are <paramref name="fold"/>: in the states table's key
-    /// order, numbered from <paramref name="firstSeq"/>, a <c>first_sighting</c> for each state whose key the log does
-    /// not hold, or <c>expression_added</c> when the log holds the same work and date in another language; nothing for
-    /// a state the log holds unchanged. Null, naming the state, when the log holds a state's key with another digest or
-    /// other source bodies: comparison events are not served yet. A genesis log is the events appended to no log.
+    /// The events one observation appends to a log whose states are <paramref name="fold"/>, numbered from
+    /// <paramref name="firstSeq"/>, key by key in the states table's key order over the keys the log holds and the keys
+    /// this build holds (a state the log holds and this build does not stays held: absence is not a withdrawal):
+    /// <list type="bullet">
+    /// <item>a key this build holds and the log does not: <c>first_sighting</c>, or <c>expression_added</c> when the log
+    /// holds the same work and date in another language;</item>
+    /// <item>a key both hold whose source bodies differ: <c>file_replaced</c>, naming the state and bodies it replaces
+    /// (the state's digest changes with its text, not with the bytes alone);</item>
+    /// <item>then, for a key the log held, its applicability interval moved by this build's states: <c>interval_closed</c>
+    /// when the log held it as the latest state of its work and language and a later one is now held, or
+    /// <c>validity_revised</c> when its end moved because a state was inserted before it; both are derived from the
+    /// publisher's dates, not asserted by the publisher, and say so.</item>
+    /// </list>
+    /// A key both hold with the same bodies and another digest is not the publisher's change but this derivation's: null,
+    /// naming the state. A genesis log is the events appended to no log.
     /// </summary>
     internal static EventRow[]? ProjectChainedEvents(
         IReadOnlyDictionary<string, LoggedState> fold,
@@ -880,43 +890,105 @@ public static class LuxembourgIndexBuilder
         out string? changedState)
     {
         changedState = null;
-        var appended = new List<EventRow>();
-        foreach (var row in states
-                     .OrderBy(static row => row.WorkKey, StringComparer.Ordinal)
-                     .ThenBy(static row => row.ApplicabilityDate, StringComparer.Ordinal)
-                     .ThenBy(static row => row.ExpressionIri, StringComparer.Ordinal)
-                     .ThenBy(static row => row.Language, StringComparer.Ordinal))
+        var current = new Dictionary<string, (StateRow Row, string[] Bodies)>(StringComparer.Ordinal);
+        foreach (var row in states)
         {
-            var key = StateKey(row);
-            var bodies = sourceBodies.TryGetValue(row.StateSha256, out var found)
+            current[StateKey(row)] = (row, sourceBodies.TryGetValue(row.StateSha256, out var found)
                 ? found.Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray()
-                : throw new InvalidDataException($"The state {row.StateSha256} has no source bodies for its event.");
-            if (fold.TryGetValue(key, out var held))
-            {
-                if (!string.Equals(held.StateSha256, row.StateSha256, StringComparison.Ordinal) ||
-                    !held.SourceBodies.SequenceEqual(bodies, StringComparer.Ordinal))
-                {
-                    changedState = $"/lu-legilux/{row.WorkKey}/{row.ApplicabilityDate} ({row.Language})";
-                    return null;
-                }
+                : throw new InvalidDataException($"The state {row.StateSha256} has no source bodies for its event."));
+        }
 
+        var endsBefore = IntervalEnds(fold.Values.Select(static held => (held.WorkKey, held.ApplicabilityDate, held.Language)));
+        var endsAfter = IntervalEnds(fold.Values.Select(static held => (held.WorkKey, held.ApplicabilityDate, held.Language))
+            .Concat(states.Select(static row => (row.WorkKey, row.ApplicabilityDate, row.Language))));
+        var keys = fold.Values.Select(static held => (held.WorkKey, held.ApplicabilityDate, held.ExpressionIri, held.Language))
+            .Concat(states.Select(static row => (row.WorkKey, row.ApplicabilityDate, row.ExpressionIri, row.Language)))
+            .Distinct()
+            .OrderBy(static key => key.WorkKey, StringComparer.Ordinal)
+            .ThenBy(static key => key.ApplicabilityDate, StringComparer.Ordinal)
+            .ThenBy(static key => key.ExpressionIri, StringComparer.Ordinal)
+            .ThenBy(static key => key.Language, StringComparer.Ordinal);
+
+        var appended = new List<EventRow>();
+        void Append(string key, string name, string detail) =>
+            appended.Add(new EventRow(firstSeq + appended.Count, "state", key, name, null, detail));
+
+        foreach (var (work, date, expression, language) in keys)
+        {
+            var key = JsonSerializer.Serialize(new[] { work, date, expression, language });
+            var heldBefore = fold.TryGetValue(key, out var held);
+            var heldNow = current.TryGetValue(key, out var now);
+            var stateSha256 = heldNow ? now.Row.StateSha256 : held!.StateSha256;
+            var bodies = heldNow ? now.Bodies : held!.SourceBodies.ToArray();
+            if (heldNow && !heldBefore)
+            {
+                var newLanguage = fold.Values.Any(other =>
+                    string.Equals(other.WorkKey, work, StringComparison.Ordinal) &&
+                    string.Equals(other.ApplicabilityDate, date, StringComparison.Ordinal) &&
+                    !string.Equals(other.Language, language, StringComparison.Ordinal));
+                Append(key, newLanguage ? V3EventRegistry.ExpressionAdded : V3EventRegistry.FirstSighting,
+                    JsonSerializer.Serialize(new { state_sha256 = stateSha256, source_body_sha256 = bodies }));
                 continue;
             }
 
-            var newLanguage = fold.Values.Any(other =>
-                string.Equals(other.WorkKey, row.WorkKey, StringComparison.Ordinal) &&
-                string.Equals(other.ApplicabilityDate, row.ApplicabilityDate, StringComparison.Ordinal) &&
-                !string.Equals(other.Language, row.Language, StringComparison.Ordinal));
-            appended.Add(new EventRow(
-                firstSeq + appended.Count,
-                "state",
-                key,
-                newLanguage ? V3EventRegistry.ExpressionAdded : V3EventRegistry.FirstSighting,
-                null,
-                JsonSerializer.Serialize(new { state_sha256 = row.StateSha256, source_body_sha256 = bodies })));
+            if (heldNow && heldBefore)
+            {
+                if (!held!.SourceBodies.SequenceEqual(bodies, StringComparer.Ordinal))
+                {
+                    Append(key, V3EventRegistry.FileReplaced, JsonSerializer.Serialize(new
+                    {
+                        state_sha256 = stateSha256,
+                        source_body_sha256 = bodies,
+                        replaced_state_sha256 = held.StateSha256,
+                        replaced_source_body_sha256 = held.SourceBodies,
+                    }));
+                }
+                else if (!string.Equals(held.StateSha256, stateSha256, StringComparison.Ordinal))
+                {
+                    changedState = $"/lu-legilux/{work}/{date} ({language})";
+                    return null;
+                }
+            }
+
+            var before = endsBefore[(work, date, language)];
+            var after = endsAfter[(work, date, language)];
+            if (string.Equals(before, after, StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            Append(key, before is null ? V3EventRegistry.IntervalClosed : V3EventRegistry.ValidityRevised, JsonSerializer.Serialize(new
+            {
+                state_sha256 = stateSha256,
+                source_body_sha256 = bodies,
+                applicable_from = date,
+                previous_to = before,
+                new_to = after,
+                derived = true,
+            }));
         }
 
         return appended.ToArray();
+    }
+
+    /// <summary>
+    /// Each held date's derived end in its work and language: the next later date held in them, or null for the latest.
+    /// The publisher dates states from; it gives no end date, so an end is this derivation's and never the publisher's.
+    /// </summary>
+    internal static IReadOnlyDictionary<(string WorkKey, string ApplicabilityDate, string Language), string?> IntervalEnds(
+        IEnumerable<(string WorkKey, string ApplicabilityDate, string Language)> held)
+    {
+        var ends = new Dictionary<(string, string, string), string?>();
+        foreach (var group in held.Distinct().GroupBy(static state => (state.WorkKey, state.Language)))
+        {
+            var dates = group.Select(static state => state.ApplicabilityDate).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray();
+            for (var index = 0; index < dates.Length; index++)
+            {
+                ends[(group.Key.WorkKey, dates[index], group.Key.Language)] = index + 1 < dates.Length ? dates[index + 1] : null;
+            }
+        }
+
+        return ends;
     }
 
     /// <summary>A state's key in the log: the states table's primary key as a JSON array, which a later build keeps for the same state.</summary>
