@@ -17,12 +17,15 @@ internal sealed class ChunkedDerivedArtifact
 {
     internal const string Schema = "lex-v3-derived-byte-sequence/1";
     internal const int ChunkSize = 4 * 1024 * 1024;
+    internal const string SmallChunkSchema = "lex-v3-derived-byte-sequence/2";
+    internal const int SmallChunkSize = 64 * 1024;
+    private readonly int _chunkSize;
     private readonly ICustodyStore _store;
     private readonly Chunk[] _chunks;
     private readonly CancellationToken _cancellationToken;
 
     private ChunkedDerivedArtifact(ICustodyStore store, string kind, string canonicalSha256,
-        string contentSha256, long byteLength, Chunk[] chunks,
+        string contentSha256, long byteLength, int chunkSize, Chunk[] chunks,
         IReadOnlyList<DurableBlobWriteReceipt> chunkReceipts, CancellationToken cancellationToken)
     {
         _store = store;
@@ -30,6 +33,7 @@ internal sealed class ChunkedDerivedArtifact
         CanonicalSha256 = canonicalSha256;
         ContentSha256 = contentSha256;
         ByteLength = byteLength;
+        _chunkSize = chunkSize;
         _chunks = chunks;
         ChunkReceipts = Array.AsReadOnly(chunkReceipts.ToArray());
         _cancellationToken = cancellationToken;
@@ -50,10 +54,27 @@ internal sealed class ChunkedDerivedArtifact
         return counter.Length;
     }
 
-    internal static async Task<(DurableBlobWriteReceipt RootReceipt,
+    internal static Task<(DurableBlobWriteReceipt RootReceipt,
         IReadOnlyList<DurableBlobWriteReceipt> ChunkReceipts)> WriteAsync(
         ICustodyStore store, string kind, Func<Stream, string> writeCanonical,
-        CancellationToken cancellationToken, Action<DurableBlobWriteReceipt>? observeReceipt = null)
+        CancellationToken cancellationToken, Action<DurableBlobWriteReceipt>? observeReceipt = null) =>
+        WriteCoreAsync(store, kind, writeCanonical, Schema, ChunkSize, cancellationToken, observeReceipt);
+
+    /// <summary>Small chunks bound the custody bytes loaded by a short random lookup. The v2
+    /// root uses exactly 64 KiB chunks; v1 keeps its existing 4 MiB representation unchanged.
+    /// Opening still verifies the whole sequence before any seekable reader is returned.</summary>
+    internal static Task<(DurableBlobWriteReceipt RootReceipt,
+        IReadOnlyList<DurableBlobWriteReceipt> ChunkReceipts)> WriteSmallChunksAsync(
+        ICustodyStore store, string kind, Func<Stream, string> writeCanonical,
+        CancellationToken cancellationToken, Action<DurableBlobWriteReceipt>? observeReceipt = null) =>
+        WriteCoreAsync(store, kind, writeCanonical, SmallChunkSchema, SmallChunkSize,
+            cancellationToken, observeReceipt);
+
+    private static async Task<(DurableBlobWriteReceipt RootReceipt,
+        IReadOnlyList<DurableBlobWriteReceipt> ChunkReceipts)> WriteCoreAsync(
+        ICustodyStore store, string kind, Func<Stream, string> writeCanonical,
+        string schema, int chunkSize, CancellationToken cancellationToken,
+        Action<DurableBlobWriteReceipt>? observeReceipt)
     {
         ArgumentNullException.ThrowIfNull(store);
         ArgumentException.ThrowIfNullOrWhiteSpace(kind);
@@ -70,7 +91,7 @@ internal sealed class ChunkedDerivedArtifact
         {
             try
             {
-                using var output = new ChunkWriteStream(channel.Writer, stop.Token);
+                using var output = new ChunkWriteStream(channel.Writer, chunkSize, stop.Token);
                 var digest = writeCanonical(output);
                 output.Complete();
                 channel.Writer.TryComplete();
@@ -116,7 +137,7 @@ internal sealed class ChunkedDerivedArtifact
             if (!CustodyDigest.IsLowercaseSha256(canonicalSha256) || byteLength == 0)
                 throw new InvalidOperationException("A derived artifact needs canonical bytes and their digest.");
             var contentSha256 = Convert.ToHexStringLower(contentHash.GetHashAndReset());
-            var root = SerializeRoot(kind, canonicalSha256, contentSha256, byteLength, chunks);
+            var root = SerializeRoot(schema, chunkSize, kind, canonicalSha256, contentSha256, byteLength, chunks);
             var (rootReceipt, rootFailure) = await CustodyHold.TryHoldAsync(store, root, cancellationToken)
                 .ConfigureAwait(false);
             if (rootReceipt is null) throw new CustodyRequiredException("Derived root was not held: " + rootFailure);
@@ -144,7 +165,8 @@ internal sealed class ChunkedDerivedArtifact
             var reader = new Utf8JsonReader(bytes);
             if (!(reader.Read() && reader.TokenType == JsonTokenType.StartObject &&
                 reader.Read() && reader.TokenType == JsonTokenType.PropertyName && reader.ValueTextEquals("schema") &&
-                reader.Read() && reader.TokenType == JsonTokenType.String && reader.ValueTextEquals(Schema)))
+                reader.Read() && reader.TokenType == JsonTokenType.String &&
+                (reader.ValueTextEquals(Schema) || reader.ValueTextEquals(SmallChunkSchema))))
                 return false;
             if (reader.Read() && reader.TokenType == JsonTokenType.PropertyName && reader.ValueTextEquals("kind") &&
                 reader.Read() && reader.TokenType == JsonTokenType.String)
@@ -162,7 +184,8 @@ internal sealed class ChunkedDerivedArtifact
         ArgumentException.ThrowIfNullOrWhiteSpace(expectedKind);
         var rootBytes = await CustodyRestore.ReadByDigestCheckedAsync(store, rootContentSha256, cancellationToken)
             .ConfigureAwait(false);
-        string canonicalSha256, contentSha256;
+        string schema, canonicalSha256, contentSha256;
+        int chunkSize;
         long byteLength;
         Chunk[] chunks;
         try
@@ -170,8 +193,11 @@ internal sealed class ChunkedDerivedArtifact
             using var document = JsonDocument.Parse(rootBytes);
             var root = document.RootElement;
             RequireMembers(root, "schema", "kind", "canonicalSha256", "contentSha256", "byteLength", "chunkSize", "chunks");
-            if (root.GetProperty("schema").GetString() != Schema || root.GetProperty("kind").GetString() != expectedKind ||
-                root.GetProperty("chunkSize").GetInt32() != ChunkSize)
+            schema = root.GetProperty("schema").GetString()!;
+            chunkSize = root.GetProperty("chunkSize").GetInt32();
+            if (!((schema == Schema && chunkSize == ChunkSize) ||
+                  (schema == SmallChunkSchema && chunkSize == SmallChunkSize)) ||
+                root.GetProperty("kind").GetString() != expectedKind)
                 throw new CustodyIntegrityException("Derived root has a different schema, kind or chunk size.");
             canonicalSha256 = root.GetProperty("canonicalSha256").GetString()!;
             contentSha256 = root.GetProperty("contentSha256").GetString()!;
@@ -179,7 +205,7 @@ internal sealed class ChunkedDerivedArtifact
             if (!CustodyDigest.IsLowercaseSha256(canonicalSha256) || !CustodyDigest.IsLowercaseSha256(contentSha256) || byteLength <= 0)
                 throw new CustodyIntegrityException("Derived root has an invalid digest or length.");
             var array = root.GetProperty("chunks");
-            var expectedCount = byteLength / ChunkSize + (byteLength % ChunkSize == 0 ? 0 : 1);
+            var expectedCount = byteLength / chunkSize + (byteLength % chunkSize == 0 ? 0 : 1);
             if (array.GetArrayLength() != expectedCount)
                 throw new CustodyIntegrityException("Derived root does not cover its declared byte length.");
             chunks = new Chunk[array.GetArrayLength()];
@@ -190,12 +216,12 @@ internal sealed class ChunkedDerivedArtifact
                 var digest = value.GetProperty("sha256").GetString()!;
                 var length = value.GetProperty("byteLength").GetInt32();
                 var receiptDigest = value.GetProperty("receiptSha256").GetString()!;
-                var expectedLength = ordinal == chunks.Length - 1 ? byteLength - (long)ordinal * ChunkSize : ChunkSize;
+                var expectedLength = ordinal == chunks.Length - 1 ? byteLength - (long)ordinal * chunkSize : chunkSize;
                 if (!CustodyDigest.IsLowercaseSha256(digest) || !CustodyDigest.IsLowercaseSha256(receiptDigest) || length != expectedLength)
                     throw new CustodyIntegrityException("Derived chunk identity or ordered length is invalid.");
                 chunks[ordinal++] = new Chunk(digest, length, receiptDigest);
             }
-            if (!rootBytes.Span.SequenceEqual(SerializeRoot(expectedKind, canonicalSha256, contentSha256, byteLength, chunks)))
+            if (!rootBytes.Span.SequenceEqual(SerializeRoot(schema, chunkSize, expectedKind, canonicalSha256, contentSha256, byteLength, chunks)))
                 throw new CustodyIntegrityException("Derived root is not its exact canonical representation.");
         }
         catch (Exception exception) when (exception is JsonException or InvalidOperationException or FormatException or OverflowException)
@@ -227,13 +253,13 @@ internal sealed class ChunkedDerivedArtifact
         if (Convert.ToHexStringLower(hash.GetHashAndReset()) != contentSha256)
             throw new CustodyIntegrityException("Derived chunks do not reproduce the complete ordered content digest.");
         return new ChunkedDerivedArtifact(store, expectedKind, canonicalSha256, contentSha256,
-            byteLength, chunks, receipts, cancellationToken);
+            byteLength, chunkSize, chunks, receipts, cancellationToken);
     }
 
-    private static byte[] SerializeRoot(string kind, string canonicalSha256, string contentSha256,
+    private static byte[] SerializeRoot(string schema, int chunkSize, string kind, string canonicalSha256, string contentSha256,
         long byteLength, IReadOnlyList<Chunk> chunks) => JsonSerializer.SerializeToUtf8Bytes(new
         {
-            schema = Schema, kind, canonicalSha256, contentSha256, byteLength, chunkSize = ChunkSize,
+            schema, kind, canonicalSha256, contentSha256, byteLength, chunkSize,
             chunks = chunks.Select(static chunk => new { sha256 = chunk.Sha256, byteLength = chunk.ByteLength, receiptSha256 = chunk.ReceiptSha256 }),
         });
 
@@ -296,7 +322,7 @@ internal sealed class ChunkedDerivedArtifact
             ObjectDisposedException.ThrowIf(_disposed, this);
             artifact._cancellationToken.ThrowIfCancellationRequested();
             if (buffer.IsEmpty || _position == Length) return 0;
-            var ordinal = checked((int)(_position / ChunkSize));
+            var ordinal = checked((int)(_position / artifact._chunkSize));
             if (_cachedOrdinal != ordinal)
             {
                 // Canonical readers are synchronous. The custody continuation runs on a worker,
@@ -305,7 +331,7 @@ internal sealed class ChunkedDerivedArtifact
                     artifact._cancellationToken)).GetAwaiter().GetResult();
                 _cachedOrdinal = ordinal;
             }
-            var offset = (int)(_position % ChunkSize);
+            var offset = (int)(_position % artifact._chunkSize);
             var count = Math.Min(buffer.Length, _cached.Length - offset);
             _cached.Span.Slice(offset, count).CopyTo(buffer);
             _position += count;
@@ -337,9 +363,9 @@ internal sealed class ChunkedDerivedArtifact
         }
     }
 
-    private sealed class ChunkWriteStream(ChannelWriter<ReadOnlyMemory<byte>> writer, CancellationToken cancellationToken) : Stream
+    private sealed class ChunkWriteStream(ChannelWriter<ReadOnlyMemory<byte>> writer, int chunkSize, CancellationToken cancellationToken) : Stream
     {
-        private byte[] _buffer = new byte[ChunkSize];
+        private byte[] _buffer = new byte[chunkSize];
         private int _used;
         private bool _completed;
         public override bool CanRead => false;
@@ -358,17 +384,17 @@ internal sealed class ChunkedDerivedArtifact
             while (!buffer.IsEmpty)
             {
                 cancellationToken.ThrowIfCancellationRequested();
-                var count = Math.Min(buffer.Length, ChunkSize - _used);
+                var count = Math.Min(buffer.Length, chunkSize - _used);
                 buffer[..count].CopyTo(_buffer.AsSpan(_used));
                 _used += count;
                 buffer = buffer[count..];
-                if (_used == ChunkSize) Emit();
+                if (_used == chunkSize) Emit();
             }
         }
         private void Emit()
         {
             writer.WriteAsync(_buffer.AsMemory(0, _used), cancellationToken).AsTask().GetAwaiter().GetResult();
-            _buffer = new byte[ChunkSize];
+            _buffer = new byte[chunkSize];
             _used = 0;
         }
         internal void Complete()

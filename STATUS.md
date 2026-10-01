@@ -3,6 +3,28 @@
 Updated 2026-10-01 by the driver. This file replaces the issue-comment ledgers. It is rewritten in
 every pull request that changes what is served, what is next or what is blocked.
 
+## EU retry 5 and LU lookup storage (Codex, 2026-10-01)
+
+PRs #848, #849, #851 and #852 are merged after cross-family reviews, one repair round and green
+CI on their exact final heads. EU retry 5 is running at C:/lex-v3/eu-population-20261001-3,
+with runtime and renderers frozen at eed2b485. It keeps all 82 seeds, EN/FRA Formex enumeration,
+explicit outcomes for other languages, the 20,000-wire ceiling and bounded LU a439 companion.
+The run uses the measured Brotli mode and the 6,374,424,214-byte starting allowance. Its owned
+process guard retains the 3 GiB floor and 512 MiB stop margin. No completed population is claimed.
+
+Reversible driver decision for the next LU storage step: use existing digest-checked chunk
+storage for random observation lookups. The draft adds a separate v2 root with exactly 64 KiB
+chunks; the v1 writer keeps its 4 MiB format. Both readers verify the complete ordered sequence
+before returning a stream and recheck custody on each chunk load. A seek drops the previous cache.
+The canonical payload digest and per-chunk retention evidence remain separate from the root receipt.
+
+The draft expands the seven existing chunk obligations to both profiles and adds nine cases for
+profile admission, unread-tail corruption, an independent compressed-store reader, legacy root
+bytes and the custody bytes loaded by 100 short random reads. These 23 cases are not yet run.
+Build, required fast tests and affected ingest tests wait for the live acquisition's heavy slot.
+No PR or full-LU fit claim is made yet. Subject indexes, a checked streaming scope-resolution door,
+independent bounded manifest reopening and corpus assembly still need implementation.
+
 ## EU object-facts continuation range (Codex, 2026-10-01)
 
 Full EU retry 4, frozen at source 18b53941 in C:/lex-v3/eu-population-20261001-2, refused with

@@ -7,28 +7,31 @@ using static Lex.V3.Ingest.Tests.EuAcquisitionTestFixture;
 namespace Lex.V3.Ingest.Tests;
 
 [TestClass]
-public sealed class ChunkedDerivedArtifactTests
+public sealed partial class ChunkedDerivedArtifactTests
 {
     private const string Kind = "test-derived-canonical/1";
 
     [TestMethod]
-    public async Task OrderedChunksReopenExactlyAcrossBoundariesAndRepeatedSeeks()
+    [DataRow(false)]
+    [DataRow(true)]
+    public async Task OrderedChunksReopenExactlyAcrossBoundariesAndRepeatedSeeks(bool smallChunks)
     {
+        var chunkSize = smallChunks ? ChunkedDerivedArtifact.SmallChunkSize : ChunkedDerivedArtifact.ChunkSize;
         var store = new EuInMemoryCustodyStore();
-        var bytes = Payload(ChunkedDerivedArtifact.ChunkSize * 2 + 19);
-        var (receipt, chunks) = await Write(store, bytes);
+        var bytes = Payload(chunkSize * 2 + 19);
+        var (receipt, chunks) = await Write(store, bytes, smallChunks);
         Assert.HasCount(3, chunks);
-        Assert.IsTrue(chunks.All(value => value.Reference.ByteLength <= ChunkedDerivedArtifact.ChunkSize));
+        Assert.IsTrue(chunks.All(value => value.Reference.ByteLength <= chunkSize));
         var opened = await ChunkedDerivedArtifact.OpenAsync(store, receipt.Reference.ContentSha256, Kind, CancellationToken.None);
         Assert.AreEqual((long)bytes.Length, opened.ByteLength);
         Assert.AreEqual(CustodyDigest.Of(bytes), opened.ContentSha256);
         using var stream = opened.OpenRead();
         Assert.AreEqual(ContentDerivedIdentity.DeriveUuidUrn(Kind, bytes),
             ContentDerivedIdentity.DeriveUuidUrnFromStream(Kind, stream));
-        stream.Position = ChunkedDerivedArtifact.ChunkSize - 7;
+        stream.Position = chunkSize - 7;
         var across = new byte[31];
         stream.ReadExactly(across);
-        CollectionAssert.AreEqual(bytes.AsSpan(ChunkedDerivedArtifact.ChunkSize - 7, 31).ToArray(), across);
+        CollectionAssert.AreEqual(bytes.AsSpan(chunkSize - 7, 31).ToArray(), across);
         stream.Seek(-19, SeekOrigin.End);
         var tail = new byte[19];
         stream.ReadExactly(tail);
@@ -38,11 +41,14 @@ public sealed class ChunkedDerivedArtifactTests
     }
 
     [TestMethod]
-    public async Task EqualRepeatedChunksRemainInTheOrderedSequence()
+    [DataRow(false)]
+    [DataRow(true)]
+    public async Task EqualRepeatedChunksRemainInTheOrderedSequence(bool smallChunks)
     {
+        var chunkSize = smallChunks ? ChunkedDerivedArtifact.SmallChunkSize : ChunkedDerivedArtifact.ChunkSize;
         var store = new EuInMemoryCustodyStore();
-        var bytes = new byte[ChunkedDerivedArtifact.ChunkSize * 2];
-        var (receipt, chunks) = await Write(store, bytes);
+        var bytes = new byte[chunkSize * 2];
+        var (receipt, chunks) = await Write(store, bytes, smallChunks);
         Assert.HasCount(2, chunks);
         Assert.AreEqual(chunks[0].Reference.ContentSha256, chunks[1].Reference.ContentSha256);
         var opened = await ChunkedDerivedArtifact.OpenAsync(store, receipt.Reference.ContentSha256, Kind, CancellationToken.None);
@@ -52,11 +58,14 @@ public sealed class ChunkedDerivedArtifactTests
     }
 
     [TestMethod]
-    public async Task MissingAndReorderedChunksCannotBeOpenedAsTheOriginalContent()
+    [DataRow(false)]
+    [DataRow(true)]
+    public async Task MissingAndReorderedChunksCannotBeOpenedAsTheOriginalContent(bool smallChunks)
     {
+        var chunkSize = smallChunks ? ChunkedDerivedArtifact.SmallChunkSize : ChunkedDerivedArtifact.ChunkSize;
         var store = new EuInMemoryCustodyStore();
-        var bytes = Payload(ChunkedDerivedArtifact.ChunkSize * 2 + 19);
-        var (receipt, _) = await Write(store, bytes);
+        var bytes = Payload(chunkSize * 2 + 19);
+        var (receipt, _) = await Write(store, bytes, smallChunks);
         var raw = await store.ReadByDigestAsync(receipt.Reference.ContentSha256, CancellationToken.None);
         var missing = JsonNode.Parse(raw.Span)!.AsObject();
         missing["chunks"]!.AsArray().RemoveAt(0);
@@ -77,10 +86,13 @@ public sealed class ChunkedDerivedArtifactTests
     }
 
     [TestMethod]
-    public async Task AReceiptForAnotherChunkCannotCertifyThisPayload()
+    [DataRow(false)]
+    [DataRow(true)]
+    public async Task AReceiptForAnotherChunkCannotCertifyThisPayload(bool smallChunks)
     {
+        var chunkSize = smallChunks ? ChunkedDerivedArtifact.SmallChunkSize : ChunkedDerivedArtifact.ChunkSize;
         var store = new EuInMemoryCustodyStore();
-        var (receipt, _) = await Write(store, Payload(ChunkedDerivedArtifact.ChunkSize + 19));
+        var (receipt, _) = await Write(store, Payload(chunkSize + 19), smallChunks);
         var raw = await store.ReadByDigestAsync(receipt.Reference.ContentSha256, CancellationToken.None);
         var changed = JsonNode.Parse(raw.Span)!.AsObject();
         var chunks = changed["chunks"]!.AsArray();
@@ -93,23 +105,28 @@ public sealed class ChunkedDerivedArtifactTests
     }
 
     [TestMethod]
-    public async Task FailedChunkHoldReleasesTheBlockedProducerWithoutPublishingARoot()
+    [DataRow(false)]
+    [DataRow(true)]
+    public async Task FailedChunkHoldReleasesTheBlockedProducerWithoutPublishingARoot(bool smallChunks)
     {
+        var chunkSize = smallChunks ? ChunkedDerivedArtifact.SmallChunkSize : ChunkedDerivedArtifact.ChunkSize;
         var attempts = 0;
         var store = new EuInMemoryCustodyStore(failWriteDigest: (_, _) => ++attempts == 3);
-        var bytes = Payload(ChunkedDerivedArtifact.ChunkSize * 5 + 7);
+        var bytes = Payload(chunkSize * 5 + 7);
         await Assert.ThrowsExactlyAsync<CustodyRequiredException>(async () =>
-            await Write(store, bytes).WaitAsync(TimeSpan.FromSeconds(10)));
+            await Write(store, bytes, smallChunks).WaitAsync(TimeSpan.FromSeconds(10)));
         Assert.AreEqual(3, store.CreateCallCount);
     }
 
     [TestMethod]
-    public async Task ANewReadPassRechecksCustodyInsteadOfReusingThePreviousChunk()
+    [DataRow(false)]
+    [DataRow(true)]
+    public async Task ANewReadPassRechecksCustodyInsteadOfReusingThePreviousChunk(bool smallChunks)
     {
         var revoke = false;
         var store = new EuInMemoryCustodyStore(loseBytesAfterWriteDigest: (_, _) => revoke);
         var bytes = Payload(111);
-        var (receipt, _) = await Write(store, bytes);
+        var (receipt, _) = await Write(store, bytes, smallChunks);
         var opened = await ChunkedDerivedArtifact.OpenAsync(store, receipt.Reference.ContentSha256, Kind, CancellationToken.None);
         using var stream = opened.OpenRead();
         Assert.AreEqual(bytes[0], (byte)stream.ReadByte());
@@ -120,12 +137,15 @@ public sealed class ChunkedDerivedArtifactTests
     }
 
     [TestMethod]
-    public async Task AnUnenforcedChunkDoesNotBecomeFlooredBecauseItsRootIsFloored()
+    [DataRow(false)]
+    [DataRow(true)]
+    public async Task AnUnenforcedChunkDoesNotBecomeFlooredBecauseItsRootIsFloored(bool smallChunks)
     {
-        var bytes = Payload(ChunkedDerivedArtifact.ChunkSize + 9);
-        var firstDigest = CustodyDigest.Of(bytes.AsSpan(0, ChunkedDerivedArtifact.ChunkSize));
+        var chunkSize = smallChunks ? ChunkedDerivedArtifact.SmallChunkSize : ChunkedDerivedArtifact.ChunkSize;
+        var bytes = Payload(chunkSize + 9);
+        var firstDigest = CustodyDigest.Of(bytes.AsSpan(0, chunkSize));
         var store = new EuInMemoryCustodyStore(unenforceDigest: digest => digest == firstDigest);
-        var (root, chunks) = await Write(store, bytes);
+        var (root, chunks) = await Write(store, bytes, smallChunks);
         Assert.AreEqual(CustodyMembership.Floored, CustodyMembershipClassifier.Classify(root));
         Assert.AreEqual(CustodyMembership.RetainedUnenforced, CustodyMembershipClassifier.Classify(chunks[0]));
         Assert.AreEqual(CustodyMembership.Floored, CustodyMembershipClassifier.Classify(chunks[1]));
@@ -136,13 +156,19 @@ public sealed class ChunkedDerivedArtifactTests
     }
 
     private static Task<(DurableBlobWriteReceipt RootReceipt, IReadOnlyList<DurableBlobWriteReceipt> ChunkReceipts)>
-        Write(ICustodyStore store, byte[] bytes) => ChunkedDerivedArtifact.WriteAsync(store, Kind, stream =>
+        Write(ICustodyStore store, byte[] bytes, bool smallChunks = false)
+    {
+        string Emit(Stream stream)
         {
             // Vary the producer's writes independently of storage chunk boundaries.
             for (var offset = 0; offset < bytes.Length; offset += 7919)
                 stream.Write(bytes.AsSpan(offset, Math.Min(7919, bytes.Length - offset)));
             return CustodyDigest.Of(bytes);
-        }, CancellationToken.None);
+        }
+        return smallChunks
+            ? ChunkedDerivedArtifact.WriteSmallChunksAsync(store, Kind, Emit, CancellationToken.None)
+            : ChunkedDerivedArtifact.WriteAsync(store, Kind, Emit, CancellationToken.None);
+    }
 
     private static byte[] Payload(int count) => Enumerable.Range(0, count)
         .Select(index => (byte)((index / ChunkedDerivedArtifact.ChunkSize + index % 251) % 256)).ToArray();
