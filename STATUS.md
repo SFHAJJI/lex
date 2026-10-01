@@ -15,7 +15,8 @@ Twenty-five new cases cover empty and nonempty batches, cursor crossing, copied 
 repeat replay, missing dependencies, caller pins, rehashed/reordered/extra pages, cross-run
 substitution, cancellation and typed checkpoint-hold failure. All25 passed at63f39c75 in
 CI36838512448:5311 passed,22 skipped and3 surface/vocabulary pins failed. Compiled result
-doors and wire tokens are transcribed; enum diagnostics and fresh CI remain. Required local
+doors, wire tokens and the compiled enum row are transcribed. Diagnostic CI36839545700 passed
+5313, skipped22 and failed only that enum pin; fresh CI must verify the repair. Required local
 Release, fast tests, affected ingests and Claude review wait for
 the active EU run and prior queue. Pending PR869 must merge and its final head be included first.
 

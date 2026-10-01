@@ -51,7 +51,6 @@ public sealed class ClosedVocabularyCensusTests
     [TestMethod]
     public void EveryClosedVocabularyInTheSweptAssembliesIsPinnedMemberByMember()
     {
-        foreach (var row in ClosedSurfaceCensus.ClosedVocabularies(CensusScope.SweptHere).Where(row => row.Contains("EuWitnessTraversalRefusal", StringComparison.Ordinal))) System.Console.WriteLine("PIN877_ENUM " + row);
         CollectionAssert.AreEqual(
             new[]
             {
@@ -200,10 +199,10 @@ public sealed class ClosedVocabularyCensusTests
                     + "SourceNotDelivered, NimWorkIdentityNotConsistent, LegiluxIdentityNotSingular, "
                     + "LegiluxIdentityNotInNimPopulation, LegiluxIdentityContradictsNim, "
                     + "IdentityObservationUnused, PopulationRefused",
-                "Lex.V3.Ingest.Europe.EuWitnessTraversalRefusal: None, RobotsBootstrapRefused, "
-                    + "BindRefused, ObservationNotExecuted, StatusNotAdmitted, MediaTypeNotAdmitted, "
-                    + "PageBodyMalformed, CrossingRefused, StepRefused, EntrySetRefused, "
-                    + "PageBudgetExhausted, PageDecodeFailedOnOurSide, WireBudgetExhausted",
+                "Lex.V3.Ingest.Europe.EuWitnessTraversalRefusal: None, RobotsBootstrapRefused, BindRefused, Observa"
+                    + "tionNotExecuted, StatusNotAdmitted, MediaTypeNotAdmitted, PageBodyMalformed, CrossingRefused, Step"
+                    + "Refused, EntrySetRefused, PageBudgetExhausted, PageDecodeFailedOnOurSide, WireBudgetExhausted, Che"
+                    + "ckpointNotRetained",
                 "Lex.V3.Ingest.Europe.EuXhtmlAnnexInventoryRefusal: None, ProfileDigestMismatch, "
                     + "ProfileInvalid, ProfileDoesNotNameTransport, RetainedBytesUnavailable, "
                     + "XhtmlInvalid, PublisherAnnexConventionAbsent, "
