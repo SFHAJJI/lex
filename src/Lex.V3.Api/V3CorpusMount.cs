@@ -398,6 +398,10 @@ internal sealed class V3CorpusMount : IDisposable
         "above, so no time can be placed in a snapshot without guessing; the mounted index (events: log.log_id) or an ancestor it carries " +
         "forward (events: log.ancestors[].log_id)";
 
+    internal const string AsObservedLegacyWhatWouldAnswer =
+        "a mount whose Luxembourg index records its builds (lex-v3-luxembourg-index/8); this one is lex-v3-luxembourg-index/6, built " +
+        "before builds were recorded, so it names no snapshot and no build time";
+
     internal const string AsObservedNotHeldWorkWhatWouldAnswer =
         "a work the log held at this snapshot; this one was first sighted by a later build (events: first_sighting)";
 
@@ -457,8 +461,13 @@ internal sealed class V3CorpusMount : IDisposable
             return refused;
         }
 
+        if (!_reader!.RecordsBuilds)
+        {
+            return SnapshotUnknown(request, observedAt, snapshot, AsObservedLegacyWhatWouldAnswer);
+        }
+
         // Snapshot k is the build of observation k: the index its successor names as predecessor, or the mounted one.
-        var observations = _reader!.ResolveObservations();
+        var observations = _reader.ResolveObservations();
         var generation = Enumerable.Range(0, observations.Count).FirstOrDefault(
             k => string.Equals(
                 k + 1 < observations.Count ? observations[k + 1].PredecessorIndexSha256 : _reader.IndexRef.Sha256,
@@ -4023,6 +4032,10 @@ internal sealed class V3CorpusMount : IDisposable
             "measures for Luxembourg, each kept as its publisher asserts it and never merged; neither is acquired",
     };
 
+    /// <summary>The build-time row on a mount whose Luxembourg index is schema 6, which records no build time at all.</summary>
+    internal static readonly string[] CoverageLegacyBuildTimeRow =
+        ["build_time_and_currency", "this report states no build time and no build time of the corpus file is held, so nothing here says how current these counts are; this Luxembourg index is lex-v3-luxembourg-index/6 and its event log records no build time either; the corpus and index digests name exactly which artifacts are mounted"];
+
     internal static readonly string[][] CoverageNotHeld =
     [
         ["publisher_universe", "how many acts the publisher holds, or how many of them this mount lacks: the mount records only what was admitted"],
@@ -4169,7 +4182,10 @@ internal sealed class V3CorpusMount : IDisposable
                     .ToArray(),
                 note = CoverageOperationsNote,
             },
-            not_held = CoverageNotHeld.Select(static row => new { item = row[0], reason = row[1] }).ToArray(),
+            not_held = CoverageNotHeld
+                .Select(row => _reader.RecordsBuilds || row[0] != "build_time_and_currency" ? row : CoverageLegacyBuildTimeRow)
+                .Select(static row => new { item = row[0], reason = row[1] })
+                .ToArray(),
         });
         return V3PlatformOperationOutcome.Success(
             Context("success", observedAt),
@@ -4326,6 +4342,15 @@ internal sealed class V3CorpusMount : IDisposable
         "enumeration, and metadata_revised and the relation and future-state events need data this index does not hold, so none of them is minted; " +
         "in_this_log names those this log holds";
 
+    internal const string EventsLegacyNote =
+        "this Luxembourg index is lex-v3-luxembourg-index/6, built before the event log recorded builds: its log is a genesis log of " +
+        "first_sighting events naming state digests only, and it records no build time, no corpus per build, no source bodies and no log " +
+        "stamp, so log.built_at is null, no build bounds when anything was observed, as_observed names no snapshot of it, and it cannot be " +
+        "a predecessor";
+
+    internal static readonly string[] EventsLegacyNotHeld =
+        ["build_record", "this index is schema 6: its log records no build, no build time, no source bodies and no log stamp, and nothing stands in for them"];
+
     internal const string EventsChainedNote =
         "this log carries its predecessors' observations unchanged and appends one observation per later build; each appended event compares that " +
         "build's states with the log before it: first_sighting or expression_added for a state new to the log, file_replaced when a state's source " +
@@ -4458,6 +4483,7 @@ internal sealed class V3CorpusMount : IDisposable
             delivery = EventsDeliveryNote,
             genesis_note = EventsGenesisNote,
             chained_note = chained ? EventsChainedNote : null,
+            legacy_note = _reader.RecordsBuilds ? null : EventsLegacyNote,
             silence_note = EventsSilenceNote,
             event_names = new
             {
@@ -4465,7 +4491,10 @@ internal sealed class V3CorpusMount : IDisposable
                 in_this_log = V3EventRegistry.Mintable.Where(name => _reader.CountEvents([name]) > 0).ToArray(),
                 note = EventNamesNote,
             },
-            not_held = (chained ? EventsChainedNotHeld : EventsNotHeld).Select(static row => new { item = row[0], reason = row[1] }).ToArray(),
+            not_held = (chained ? EventsChainedNotHeld : EventsNotHeld)
+                .Concat(_reader.RecordsBuilds ? [] : [EventsLegacyNotHeld])
+                .Select(static row => new { item = row[0], reason = row[1] })
+                .ToArray(),
         });
         return V3PlatformOperationOutcome.Success(
             Context("success", observedAt),
