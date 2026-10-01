@@ -3,6 +3,40 @@
 Updated 2026-10-01 by the driver. This file replaces the issue-comment ledgers. It is rewritten in
 every pull request that changes what is served, what is next or what is blocked.
 
+## Retained Luxembourg selected-document phase (Codex, 2026-10-01)
+
+Reversible driver decision: retain the selected-document phase's original row/file bindings,
+plan/input identities, transport routes and typed robots refusals. The live wrapper and offline
+reader execute the same private outcome logic. Replay checks manifest/address/renderer bindings,
+consumes every saved fetch, restores the original observations and repeats current body holds.
+It returns the same held-route map for Gazette reuse. A failed checkpoint hold has the explicit
+DocumentCheckpointNotRetained refusal. Delivered query results carry the phase checkpoint.
+
+Twenty-five new cases are drafted: copied stores with current weaker protection, successful and
+refused outcomes, excluded rows, missing evidence, rehashed bindings, changed selection, null
+root, cancellation and failed checkpoint retention. Local tests are deferred while acquisition
+holds the heavy slot; full CI and official review are pending. Parent PR 895 is still pending.
+Gazette-only fetches, full LU query restoration and independent offline mounts remain outstanding.
+Input/result digest calculation still materializes JSON; this slice makes no full-LU fit claim.
+
+## Offline Luxembourg document attempts (Codex, 2026-10-01)
+
+Reversible driver decision: reopen the final retained LU document attempt from its original
+run, logical-request digest, original bound plan/input/renderer and selected file identity. Check the single-hop GET, absence of
+negotiation, format/provenance binding, supported profile and retry limit, write receipt and
+body. RetryAllowanceSpent is reproduced from the original attempt ordinal and final status.
+Previous attempts are not re-proved. Policy bytes are digest checked; only profile, address
+and retry fields are interpreted. Historical receipts do not claim current retention protection.
+Unretained bootstrap/budget refusals are outside this reader's scope.
+
+Twenty-nine drafted cases cover copied/weaker stores, terminal outcomes, status and pre-header
+retries, missing dependencies, different run/request/file/format/provenance, receipt and policy
+substitutions, negotiation and cancellation. Initial CI 36865407923 caught an inaccessible profile resolver before tests ran. The reader now
+uses the public binder-authenticated profile resolver and checks the original plan/input/renderer.
+Fresh CI and official Claude review are pending. No local
+build or fast/ingest tests run under the active-acquisition memory guard. This is a component;
+full LU restoration, independent offline mounts and full-population memory fit remain pending.
+
 ## Retained Luxembourg cover history (Codex, 2026-10-01)
 
 Reversible driver decision: retain the actual successful split history and every leaf's
@@ -100,7 +134,6 @@ JSON writer buffer and a 4 KiB comparison buffer. An individual JSON element may
 writer's 64 KiB flush threshold. Factories and resolvers can retain more. This method is not
 wired into the LU adapter and does not provide a bounded downstream manifest view.
 
-
 ## Async Luxembourg assertion snapshots (Codex, 2026-10-01)
 
 The snapshot writer now consumes asynchronous verified rows through the bounded small-chunk
@@ -117,7 +150,6 @@ caller's proof checks and records this evidence. PR858 is merged as a74fece1 and
 Final-head CI still gates merge.
 No local build/test was run under the 10:35 low-memory rule. Adapter integration, complete
 bounded derivation and full-LU memory measurement remain outstanding.
-
 
 ## LU assertion snapshot storage (Codex, 2026-10-01)
 
@@ -147,7 +179,6 @@ review during acquisition while memory is below 4 GB. No additional local build 
 
 The asynchronous snapshot now uses the bounded small-chunk channel introduced by PR #855.
 No publisher traffic, production action or completed population is claimed by this slice.
-
 
 ## Retained custody storage consolidation (Codex, 2026-10-01)
 
@@ -199,7 +230,6 @@ the two escaped cases. The one editorial repair records the exact ingest filter:
 The AU+TARD escaped case is constructed; MA/PART was observed. Literal matching retains priority,
 and lowercase percent escapes still refuse safely. The next full run requires this change merged
 and frozen in a fresh custody directory, with the measured storage allowance and disk guard.
-
 
 ## EU retry 5 and LU lookup storage (Codex, 2026-10-01)
 
@@ -711,6 +741,7 @@ Repair validation passed build/fast (3,083 plus one skip)/40 affected ingest; #8
 canonical set and retains reopened bytes; typed records/completion also remain. Chunked record-set
 persistence and measured downstream resources remain required before full Luxembourg. No full
 population-fit claim, publisher traffic or production operation follows this change.
+
 ## DATA review and fresh population evidence (Codex, 2026-09-30)
 
 The required Claude review of #824 at99a8e29d returned MERGE, with no blocking finding.
@@ -770,6 +801,7 @@ per row (four dispositions and the exact accepted-body-role bit). Accounting com
 ordinal sequences, avoiding whole expected-partition arrays. A 32-object mixed-disposition fixture
 cross-checks all 16 partitions against the unchanged builder, role-gated body membership and a
 corrupted partition refusal. No measured savings or full-process memory bound is claimed.
+
 ## EU population census refusal diagnostics (Codex, 2026-09-30)
 
 The fresh all-82-seed EU run at `C:\lex-v3\eu-population-20260930-1` ended with
@@ -3771,6 +3803,7 @@ and a current storage check before and after its runtime is frozen; it has not s
 
 PRs #827, #829 and #830 are merged. The all-82-seed EU retry remains prepared, with a
 4,999,959,422-byte launch allowance and checks before and after freezing its runtime.
+
 ## Retained expression production pairings (Codex, 2026-10-01)
 
 This slice depends on PR869. It retains the expression producer's own paired enumerations
@@ -3791,6 +3824,7 @@ the acquisition memory guard. No complete offline mount process is claimed.
 The current store's protection is checked again. Changed protection refuses the original
 byte claim because protection is part of derivation identity. Replay reports zero publisher
 requests. Complete offline acquisition composition and independent mount builds remain pending.
+
 ## Retained Formex manifestation enumeration (Codex, 2026-10-01)
 
 The retained checkpoint binds each expression to its original enumeration, renderer, plan and
@@ -3805,6 +3839,7 @@ and refuses a literal-null root with an integrity exception. One new before-writ
 brings this slice to 18 cases. Fresh combined CI gates merge; local builds/tests remain deferred
 under the acquisition memory guard. The offline budget records zero sends with a synthetic ceiling
 of two, not the historical wire allowance. Full population/acquisition and mount replay are separate.
+
 ## Retained Luxembourg vocabulary proof (Codex, 2026-10-01)
 
 Reversible driver decision: retain all four original P/T/C/O enumeration checkpoint associations
