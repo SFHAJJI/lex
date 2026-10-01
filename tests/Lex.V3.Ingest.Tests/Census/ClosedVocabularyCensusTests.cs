@@ -296,8 +296,8 @@ public sealed class ClosedVocabularyCensusTests
                 "Lex.V3.Ingest.Luxembourg.LuxembourgOpinionRequestInventoryRefusal: None, "
                     + "EnumerationRefused, EnumerationProofRefused, VerifiedRowsRefused, "
                     + "RowNotAdmitted, SubjectDeliveredTwice, NonAddressableSubjectObserved",
-                "Lex.V3.Ingest.Luxembourg.LuxembourgPartitionCoverReconciliationRefusal: "
-                    + "LeafExecutorRefused, LeafProofRefused, CoverReconciliationRefused",
+                "Lex.V3.Ingest.Luxembourg.LuxembourgPartitionCoverReconciliationRefusal: LeafExecutorRefused, LeafP"
+                    + "roofRefused, CoverReconciliationRefused, CheckpointNotRetained",
                 "Lex.V3.Ingest.Luxembourg.LuxembourgPdfLayoutEvidenceDisposition: NotApplicable, "
                     + "Admitted, TypedGap",
                 "Lex.V3.Ingest.Luxembourg.LuxembourgPdfLayoutEvidenceGapReason: "
