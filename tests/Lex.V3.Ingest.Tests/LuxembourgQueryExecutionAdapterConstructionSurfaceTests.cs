@@ -176,35 +176,45 @@ public sealed class LuxembourgQueryExecutionAdapterConstructionSurfaceTests
     }
 
     /// <summary>
-    /// Five factories (one per <see cref="LuxembourgFamilyEnumerationOutcomeKind"/> member) over one
+    /// Five public factories and two internal checkpoint factories over one
     /// private constructor. D1-04c added CoverProven (a cover chain's own leaf proofs) and
     /// CoverRefused (a cover chain's own reconciliation detail).
     /// </summary>
     [TestMethod]
-    public void FamilyEnumerationOutcomeHasExactlyFiveFactoriesOverOnePrivateConstructor()
+    public void FamilyEnumerationOutcomePinsPublicFactoriesAndInternalCheckpointFactories()
     {
-        foreach (var row in ConstructionSurface.Of(typeof(LuxembourgFamilyEnumerationOutcome))) System.Console.WriteLine("PIN875_OUTCOME " + row);
         CollectionAssert.AreEqual(
             new[]
             {
-                "constructor private instance " + N + "LuxembourgFamilyEnumerationOutcome::.ctor(System.String, "
-                + N + "LuxembourgFamilyEnumerationOutcomeKind, " + Absence + "AbsenceFamilyEnumerationProof?, "
-                + N + "LuxembourgEnumerationRefusalDetail?, "
-                + "System.Nullable<" + Absence + "AbsenceFamilyEnumerationProofRefusal>, "
-                + "System.Collections.Generic.IReadOnlyList<" + Absence + "AbsenceFamilyEnumerationProof>?, "
-                + N + "LuxembourgPartitionCoverReconciliationDetail?) -> "
-                + N + "LuxembourgFamilyEnumerationOutcome",
-                "method public static " + N + "LuxembourgFamilyEnumerationOutcome::CoverProven(System.String, "
-                + "System.Collections.Generic.IReadOnlyList<" + Absence + "AbsenceFamilyEnumerationProof>) -> "
-                + N + "LuxembourgFamilyEnumerationOutcome",
-                "method public static " + N + "LuxembourgFamilyEnumerationOutcome::CoverRefused(System.String, "
-                + N + "LuxembourgPartitionCoverReconciliationDetail) -> " + N + "LuxembourgFamilyEnumerationOutcome",
-                "method public static " + N + "LuxembourgFamilyEnumerationOutcome::ExecutorRefused(System.String, "
-                + N + "LuxembourgEnumerationRefusalDetail) -> " + N + "LuxembourgFamilyEnumerationOutcome",
-                "method public static " + N + "LuxembourgFamilyEnumerationOutcome::ProofRefused(System.String, "
-                + Absence + "AbsenceFamilyEnumerationProofRefusal) -> " + N + "LuxembourgFamilyEnumerationOutcome",
-                "method public static " + N + "LuxembourgFamilyEnumerationOutcome::Proven(System.String, "
-                + Absence + "AbsenceFamilyEnumerationProof) -> " + N + "LuxembourgFamilyEnumerationOutcome",
+                "constructor private instance Lex.V3.Ingest.Luxembourg.LuxembourgFamilyEnumerationOutcome::.ctor(Sy"
+                    + "stem.String, Lex.V3.Ingest.Luxembourg.LuxembourgFamilyEnumerationOutcomeKind, Lex.V3.Contracts.Sou"
+                    + "rce.Absence.AbsenceFamilyEnumerationProof?, Lex.V3.Ingest.Luxembourg.LuxembourgEnumerationRefusalD"
+                    + "etail?, System.Nullable<Lex.V3.Contracts.Source.Absence.AbsenceFamilyEnumerationProofRefusal>, Sys"
+                    + "tem.Collections.Generic.IReadOnlyList<Lex.V3.Contracts.Source.Absence.AbsenceFamilyEnumerationProo"
+                    + "f>?, Lex.V3.Ingest.Luxembourg.LuxembourgPartitionCoverReconciliationDetail?) -> Lex.V3.Ingest.Luxe"
+                    + "mbourg.LuxembourgFamilyEnumerationOutcome",
+                "method internal static Lex.V3.Ingest.Luxembourg.LuxembourgFamilyEnumerationOutcome::CoverProvenWit"
+                    + "hCheckpoint(System.String, System.Collections.Generic.IReadOnlyList<Lex.V3.Contracts.Source.Absenc"
+                    + "e.AbsenceFamilyEnumerationProof>, Lex.V3.Contracts.Source.Core.SourceArtifactRef) -> Lex.V3.Ingest"
+                    + ".Luxembourg.LuxembourgFamilyEnumerationOutcome",
+                "method internal static Lex.V3.Ingest.Luxembourg.LuxembourgFamilyEnumerationOutcome::ProvenWithChec"
+                    + "kpoint(System.String, Lex.V3.Contracts.Source.Absence.AbsenceFamilyEnumerationProof, Lex.V3.Contra"
+                    + "cts.Source.Core.SourceArtifactRef) -> Lex.V3.Ingest.Luxembourg.LuxembourgFamilyEnumerationOutcome",
+                "method public static Lex.V3.Ingest.Luxembourg.LuxembourgFamilyEnumerationOutcome::CoverProven(Syst"
+                    + "em.String, System.Collections.Generic.IReadOnlyList<Lex.V3.Contracts.Source.Absence.AbsenceFamilyE"
+                    + "numerationProof>) -> Lex.V3.Ingest.Luxembourg.LuxembourgFamilyEnumerationOutcome",
+                "method public static Lex.V3.Ingest.Luxembourg.LuxembourgFamilyEnumerationOutcome::CoverRefused(Sys"
+                    + "tem.String, Lex.V3.Ingest.Luxembourg.LuxembourgPartitionCoverReconciliationDetail) -> Lex.V3.Inges"
+                    + "t.Luxembourg.LuxembourgFamilyEnumerationOutcome",
+                "method public static Lex.V3.Ingest.Luxembourg.LuxembourgFamilyEnumerationOutcome::ExecutorRefused("
+                    + "System.String, Lex.V3.Ingest.Luxembourg.LuxembourgEnumerationRefusalDetail) -> Lex.V3.Ingest.Luxem"
+                    + "bourg.LuxembourgFamilyEnumerationOutcome",
+                "method public static Lex.V3.Ingest.Luxembourg.LuxembourgFamilyEnumerationOutcome::ProofRefused(Sys"
+                    + "tem.String, Lex.V3.Contracts.Source.Absence.AbsenceFamilyEnumerationProofRefusal) -> Lex.V3.Ingest"
+                    + ".Luxembourg.LuxembourgFamilyEnumerationOutcome",
+                "method public static Lex.V3.Ingest.Luxembourg.LuxembourgFamilyEnumerationOutcome::Proven(System.St"
+                    + "ring, Lex.V3.Contracts.Source.Absence.AbsenceFamilyEnumerationProof) -> Lex.V3.Ingest.Luxembourg.L"
+                    + "uxembourgFamilyEnumerationOutcome",
             },
             ConstructionSurface.Of(typeof(LuxembourgFamilyEnumerationOutcome)).ToArray());
     }

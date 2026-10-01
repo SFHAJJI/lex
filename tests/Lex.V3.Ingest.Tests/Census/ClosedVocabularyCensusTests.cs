@@ -51,7 +51,6 @@ public sealed class ClosedVocabularyCensusTests
     [TestMethod]
     public void EveryClosedVocabularyInTheSweptAssembliesIsPinnedMemberByMember()
     {
-        foreach (var row in ClosedSurfaceCensus.ClosedVocabularies(CensusScope.SweptHere).Where(row => row.Contains("LuxembourgPartitionCoverReconciliationRefusal", StringComparison.Ordinal))) System.Console.WriteLine("PIN875_ENUM " + row);
         CollectionAssert.AreEqual(
             new[]
             {
@@ -300,8 +299,8 @@ public sealed class ClosedVocabularyCensusTests
                 "Lex.V3.Ingest.Luxembourg.LuxembourgOpinionRequestInventoryRefusal: None, "
                     + "EnumerationRefused, EnumerationProofRefused, VerifiedRowsRefused, "
                     + "RowNotAdmitted, SubjectDeliveredTwice, NonAddressableSubjectObserved",
-                "Lex.V3.Ingest.Luxembourg.LuxembourgPartitionCoverReconciliationRefusal: "
-                    + "LeafExecutorRefused, LeafProofRefused, CoverReconciliationRefused",
+                "Lex.V3.Ingest.Luxembourg.LuxembourgPartitionCoverReconciliationRefusal: LeafExecutorRefused, LeafP"
+                    + "roofRefused, CoverReconciliationRefused, CheckpointNotRetained",
                 "Lex.V3.Ingest.Luxembourg.LuxembourgPdfLayoutEvidenceDisposition: NotApplicable, "
                     + "Admitted, TypedGap",
                 "Lex.V3.Ingest.Luxembourg.LuxembourgPdfLayoutEvidenceGapReason: "
