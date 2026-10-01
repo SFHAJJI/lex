@@ -2,6 +2,54 @@
 
 Updated 2026-10-01.
 
+## Luxembourg legislative population command (Codex, 2026-10-01)
+
+Reversible driver decision under standing order section 7: `build --lu-population legislative`
+selects the disjoint publisher URI ranges `code/..code0`, `loi/..loi0`, and `rgd/..rgd0` beneath
+`http://data.legilux.public.lu/eli/etat/leg/`. It shares one observed vocabulary, proves each
+S/A/G family with the adaptive cover, and keeps gaps outside the requested scope. Consolidated
+and expression/manifestation descendants inside those ranges keep the existing individual
+scope, source, transport and rights gates. Prefix membership alone does not establish a legal
+family or authorize a body. The legacy bounded range and whole-IRI commands remain compatible.
+
+A retained family manifest lists every observed typeDocument IRI once, explicitly stating that
+its type family was not independently enumerated. Objects found in selected URI ranges retain
+their individual outcomes; outside-range and unobserved-family complements are explicitly
+unenumerated. This is URI-range coverage, not a claim that the prefixes exhaust every legal
+family. The CLI writes a manifest pointer. The population catalog binds that declaration to
+every family plan and regenerates the manifest from verified vocabulary during offline restore.
+`derive` restores either the old bounded catalog or the new population catalog without HTTP.
+
+Validation added: nine-family replay from two copied stores; range/policy/manifest tampering;
+missing scope custody; excluded-gap behavior; raw and Brotli complete mounts in two independent
+CLI processes (including predecessor and consolidated EU); accepted/mixed CLI arguments. Local
+`pwsh -File eng/test-fast.ps1` and touched ingest tests are deferred under the standing 4 GiB
+free-memory rule. Initial CI reported 5,971 passed, one stale method-signature pin failed, and
+22 skipped. Claude reproduced that sole blocker. The repair updates the pin and uses the
+existing advancing fixture clock for mocked LU captures; fresh full CI gates merge. No full live population or memory
+fit is claimed. Measured March2017 partition and representative counts below remain the sizing
+evidence; the proposed full run must preserve the resource stop and shared wire ceiling.
+
+### Completed count and real-replay evidence (19:09 UTC)
+
+The declared URI ranges now have nine independently rehashed single-count observations, using
+18 wire requests: code S21,231 / A112,276 / G0; loi S93,161 / A580,389 / G32,121; rgd
+S145,703 / A914,752 / G63,225. Totals: S260,095 / A1,607,417 / G95,346. Evidence:
+`C:\lex-v3\lanes\lu-legislative-nine-counts-readback.json` and each named root's
+`count-readback.json`. Each two-wire budget intentionally stops after its first COUNT. This
+is sizing evidence, not repeated-enumeration proof or body counts. At the existing 100,000-row
+leaf ceiling those observed counts need at least 25 leaves; actual split shape, overhead and
+future counts can differ. Regulation and dated civil-code body-cost measurements are prepared
+for the next free acquisition slot, using checked EU reuse and 800 requests each.
+
+PR907's merged runtime independently rederived the real bounded custody twice at
+`C:\lex-v3\lu-consolidated-offline-20261001-3`, completed 19:01:31 UTC. Every one of the six
+mount file digests matched, with zero proxy-trap connections. The EU index has 594 articles:
+297 ENG and 297 FRA across six expressions, 99 each, including all four real CONS.ACT packages.
+Both executions exited zero, peaking at 288,542,720 and 292,675,584 bytes. Independent Python
+hash and SQLite readback is retained there. LU article/state/member content is unchanged;
+only its complete-corpus references and observation-log digest change with the new EU content.
+
 ## Measured Luxembourg partition and full-run sizing decision
 
 The bounded March 2017 law acquisition completed at 18:03:53 UTC, exit 0, from exact CI runtime `614a9e1509f28f53d77dfdf8a69da35339407da5` (green workflow 36897978670). Evidence: `C:\lex-v3\lu-legislative-measurement-20261001-1\summary.json`, `measurement.json`, `sizing-scenarios.json` and `verified-digests.txt`. The acquisition used 276 requests (EU 135, LU 141) within 800, with proven LU S=219, A=1,414, G=114. Combined elapsed time was 20m01.8s; it is not isolated LU timing.
@@ -1571,4 +1619,4 @@ The real bounded GDPR capture retained six Formex packages. Two originals contai
 
 The parser now admits a CONS.ACT only through one CONS.DOC, its own single BIB.INSTANCE and one ENACTING.TERMS. Amendment-history languages/dates and articles outside operative text do not enter the result. The document bibliographic date keeps its existing article meaning; CONSLEG.DATE is not substituted or treated as applicability. Profile version 4 records the new scope. Exact retained EN/FRA packages are regression fixtures with route/body provenance and SHA-256 pins; mutations cover duplicate or absent document coordinates, wrong language and excluded text. Original ACT behavior remains covered.
 
-Local fast/ingest suites are deferred under the standing 4 GiB memory guard. CI and cross-family review are pending. After merging, rederive the real bounded mount from retained custody and compare two independent runs. No new publisher capture is needed for this parser correction, and full EU/LU population completion is still outstanding.
+Local fast/ingest suites are deferred under the standing 4 GiB memory guard. Exact-head CI 36907840460 passed (5,965 passed / 0 failed / 22 skipped); Claude returned MERGE and PR907 merged as 58502d13. After merging, rederive the real bounded mount from retained custody and compare two independent runs. No new publisher capture is needed for this parser correction, and full EU/LU population completion is still outstanding.

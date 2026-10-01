@@ -645,7 +645,7 @@ public sealed class LuxembourgQueryExecutionAdapterConstructionSurfaceTests
                     + "System.Boolean) -> "
                     + "System.Threading.Tasks.Task<Lex.V3.Ingest.Luxembourg.LuxembourgQueryExecutio"
                     + "nResult>",
-                "method internal static Lex.V3.Ingest.Luxembourg.LuxembourgQueryExecutionAdapter::ReopenAcquisitionAsync(Lex.V3.Contracts.Custody.ICustodyStore, Lex.V3.Contracts.Source.Core.SourceArtifactRef, Lex.V3.Contracts.Source.Luxembourg.VerifiedLuxembourgSourceProfile, System.Collections.Generic.IReadOnlyList<Lex.V3.Contracts.Source.Luxembourg.LuxembourgQueryPartitionRange>, System.Threading.CancellationToken, Lex.V3.Ingest.Luxembourg.LuxembourgRendererSources?) -> System.Threading.Tasks.Task<Lex.V3.Ingest.Luxembourg.LuxembourgQueryExecutionResult>",
+                "method internal static Lex.V3.Ingest.Luxembourg.LuxembourgQueryExecutionAdapter::ReopenAcquisitionAsync(Lex.V3.Contracts.Custody.ICustodyStore, Lex.V3.Contracts.Source.Core.SourceArtifactRef, Lex.V3.Contracts.Source.Luxembourg.VerifiedLuxembourgSourceProfile, System.Collections.Generic.IReadOnlyList<Lex.V3.Contracts.Source.Luxembourg.LuxembourgQueryPartitionRange>, System.Threading.CancellationToken, Lex.V3.Ingest.Luxembourg.LuxembourgRendererSources?, Lex.V3.Contracts.Source.Core.SourceArtifactRef?) -> System.Threading.Tasks.Task<Lex.V3.Ingest.Luxembourg.LuxembourgQueryExecutionResult>",
                 "method private instance "
                     + "Lex.V3.Ingest.Luxembourg.LuxembourgQueryExecutionAdapter::RunCoreAsync(Syste"
                     + "m.Collections.Generic.IReadOnlyList<System.ValueTuple<Lex.V3.Ingest.Luxembou"

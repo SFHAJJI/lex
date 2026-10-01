@@ -18,7 +18,7 @@ public sealed partial class LuxembourgQueryExecutionAdapter
     internal static async Task<LuxembourgQueryExecutionResult> ReopenAcquisitionAsync(ICustodyStore store,
         SourceArtifactRef checkpoint, VerifiedLuxembourgSourceProfile profile,
         IReadOnlyList<LuxembourgQueryPartitionRange> expectedRanges, CancellationToken cancellationToken,
-        LuxembourgRendererSources? expectedRenderers = null)
+        LuxembourgRendererSources? expectedRenderers = null, SourceArtifactRef? expectedScopeDefinition = null)
     {
         ArgumentNullException.ThrowIfNull(store);
         ArgumentNullException.ThrowIfNull(checkpoint);
@@ -50,6 +50,8 @@ public sealed partial class LuxembourgQueryExecutionAdapter
             {
                 var planBytes = await CustodyRestore.ReadByDigestCheckedAsync(store, family.PlanWireSha256, cancellationToken).ConfigureAwait(false);
                 var plan = LuxembourgQueryPlan.ParseAndVerify(family.Plan, planBytes.Span);
+                if (expectedScopeDefinition is not null && plan.DatasetGraphIdentity.ScopeDefinitionRef != expectedScopeDefinition)
+                    throw new CustodyIntegrityException("LU family plan belongs to a different declared population scope.");
                 var sourceBytes = await CustodyRestore.ReadByDigestCheckedAsync(store, family.Renderer.Sha256, cancellationToken).ConfigureAwait(false);
                 var source = MachineQueryRendererSource.Open(family.Renderer, sourceBytes.Span);
                 var request = new LuxembourgPartitionRunRequest(plan, family.Plan.ResourceId, family.Set, family.Range, source);

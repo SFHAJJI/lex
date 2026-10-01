@@ -18,12 +18,27 @@ public static class V3OfflineMount
         public override DateTimeOffset GetUtcNow() => instant;
     }
 
-    public static async Task<SourceArtifactRef> CaptureAsync(ICustodyStore store,
+    public static Task<SourceArtifactRef> CaptureAsync(ICustodyStore store,
         EuFirstMountAcquisitionResult europe, LuxembourgFirstMountAcquisitionResult luxembourg,
         IReadOnlyList<string> seeds, LuxembourgActRange act, DateTimeOffset buildTime,
-        V3GenerationSource? generations, CancellationToken cancellationToken)
+        V3GenerationSource? generations, CancellationToken cancellationToken) =>
+        CaptureCoreAsync(store, europe, luxembourg, seeds, act, null, buildTime, generations, cancellationToken);
+
+    public static Task<SourceArtifactRef> CapturePopulationAsync(ICustodyStore store,
+        EuFirstMountAcquisitionResult europe, LuxembourgFirstMountAcquisitionResult luxembourg,
+        IReadOnlyList<string> seeds, LuxembourgPopulationScope scope, DateTimeOffset buildTime,
+        V3GenerationSource? generations, CancellationToken cancellationToken) =>
+        CaptureCoreAsync(store, europe, luxembourg, seeds, null,
+            scope ?? throw new ArgumentNullException(nameof(scope)), buildTime, generations, cancellationToken);
+
+    private static async Task<SourceArtifactRef> CaptureCoreAsync(ICustodyStore store,
+        EuFirstMountAcquisitionResult europe, LuxembourgFirstMountAcquisitionResult luxembourg,
+        IReadOnlyList<string> seeds, LuxembourgActRange? act, LuxembourgPopulationScope? populationScope,
+        DateTimeOffset buildTime, V3GenerationSource? generations, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(store);
+        if (act is null && populationScope is null)
+            throw new ArgumentException("A complete mount must name its Luxembourg acquisition scope.");
         if (!europe.Delivered || !luxembourg.Delivered || europe.CheckpointRef is null || luxembourg.CheckpointRef is null)
             throw new CustodyRequiredException("Both acquisitions must retain complete checkpoints before offline derivation.");
         var previous = new List<RetainedFile>();
@@ -43,7 +58,9 @@ public static class V3OfflineMount
             seeds.Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray(), act,
             V3FirstMountBuild.BuildTimeOf(buildTime), previous.OrderBy(static file => file.Path, StringComparer.Ordinal).ToArray(),
             generations?.Referenced.Order(StringComparer.Ordinal).ToArray() ?? []);
-        var encoded = Encode(root);
+        var encoded = populationScope is null ? Encode(root) : Encoding.UTF8.GetBytes(ContractJson.Serialize(
+            new PopulationInputs("lex-v3-offline-mount-inputs/2", root.Europe, root.Luxembourg, root.Seeds,
+                populationScope.Policy, populationScope.Ranges.ToArray(), root.BuildTime, root.Predecessor, root.Referenced)));
         await HoldAsync(store, encoded, cancellationToken).ConfigureAwait(false);
         return new SourceArtifactRef($"urn:uuid:{Guid.NewGuid():D}", CustodyDigest.Of(encoded));
     }
@@ -73,11 +90,32 @@ public static class V3OfflineMount
             throw new ArgumentException("Offline derivation requires an empty output directory.", nameof(outputDirectory));
         var bytes = await CustodyRestore.ReadByDigestCheckedAsync(store, checkpoint.Sha256, cancellationToken).ConfigureAwait(false);
         Inputs root;
+        LuxembourgPopulationScope? populationScope = null;
         try
         {
-            root = ContractJson.Deserialize<Inputs>(new UTF8Encoding(false, true).GetString(bytes.Span));
-            if (root.Schema != Schema || !bytes.Span.SequenceEqual(Encode(root)) || root.Europe is null || root.Luxembourg is null ||
-                root.Seeds is null || root.Seeds.Length == 0 || root.Seeds.Any(string.IsNullOrWhiteSpace) || root.Act is null ||
+            using var framing = JsonDocument.Parse(bytes);
+            var schema = framing.RootElement.ValueKind == JsonValueKind.Object &&
+                framing.RootElement.TryGetProperty("schema", out var schemaProperty) && schemaProperty.ValueKind == JsonValueKind.String
+                ? schemaProperty.GetString() : null;
+            if (schema == Schema)
+            {
+                root = ContractJson.Deserialize<Inputs>(new UTF8Encoding(false, true).GetString(bytes.Span));
+                if (root is null || !bytes.Span.SequenceEqual(Encode(root)))
+                    throw new CustodyIntegrityException("Offline mount catalog framing is invalid.");
+            }
+            else if (schema == "lex-v3-offline-mount-inputs/2")
+            {
+                var population = ContractJson.Deserialize<PopulationInputs>(new UTF8Encoding(false, true).GetString(bytes.Span));
+                if (population is null || population.Ranges is null ||
+                    !bytes.Span.SequenceEqual(Encoding.UTF8.GetBytes(ContractJson.Serialize(population))))
+                    throw new CustodyIntegrityException("Offline population catalog framing is invalid.");
+                populationScope = new LuxembourgPopulationScope(population.Policy, population.Ranges);
+                root = new Inputs(population.Schema, population.Europe, population.Luxembourg, population.Seeds,
+                    null, population.BuildTime, population.Predecessor, population.Referenced);
+            }
+            else throw new CustodyIntegrityException("Unknown offline mount catalog schema.");
+            if (root.Europe is null || root.Luxembourg is null ||
+                root.Seeds is null || root.Seeds.Length == 0 || root.Seeds.Any(string.IsNullOrWhiteSpace) || root.Act is null && populationScope is null ||
                 !root.Seeds.SequenceEqual(root.Seeds.Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal), StringComparer.Ordinal) ||
                 root.BuildTime.Offset != TimeSpan.Zero || root.BuildTime != V3FirstMountBuild.BuildTimeOf(root.BuildTime) ||
                 root.Predecessor is null || root.Referenced is null || root.Predecessor.Any(static file => file is null || !AdmittedPath(file.Path)) ||
@@ -111,7 +149,9 @@ public static class V3OfflineMount
                 generations = new(staging, root.Referenced.ToHashSet(StringComparer.Ordinal));
             }
             var europe = await EuFirstMountAcquisition.ReopenAsync(store, root.Europe, root.Seeds, cancellationToken).ConfigureAwait(false);
-            var luxembourg = await LuxembourgFirstMountAcquisition.ReopenAsync(store, root.Luxembourg, root.Act, cancellationToken).ConfigureAwait(false);
+            var luxembourg = populationScope is null
+                ? await LuxembourgFirstMountAcquisition.ReopenAsync(store, root.Luxembourg, root.Act!, cancellationToken).ConfigureAwait(false)
+                : await LuxembourgFirstMountAcquisition.ReopenPopulationAsync(store, root.Luxembourg, populationScope, cancellationToken).ConfigureAwait(false);
             var build = await new V3FirstMountBuild(store, new BuildClock(root.BuildTime))
                 .RunAsync(europe, luxembourg, predecessor, cancellationToken).ConfigureAwait(false);
             if (!build.Delivered) throw new CustodyIntegrityException($"Offline mount derivation refused: {build.Refusal}: {build.Detail}");
@@ -149,5 +189,9 @@ public static class V3OfflineMount
     private static byte[] Encode(Inputs root) => Encoding.UTF8.GetBytes(ContractJson.Serialize(root));
     private sealed record RetainedFile(string Path, string Sha256);
     private sealed record Inputs(string Schema, SourceArtifactRef Europe, SourceArtifactRef Luxembourg, string[] Seeds,
-        LuxembourgActRange Act, DateTimeOffset BuildTime, RetainedFile[] Predecessor, string[] Referenced);
+        LuxembourgActRange? Act, DateTimeOffset BuildTime, RetainedFile[] Predecessor, string[] Referenced);
+    private sealed record PopulationInputs(string Schema, SourceArtifactRef Europe, SourceArtifactRef Luxembourg,
+        string[] Seeds, string Policy, LuxembourgActRange[] Ranges, DateTimeOffset BuildTime,
+        RetainedFile[] Predecessor, string[] Referenced);
+
 }
