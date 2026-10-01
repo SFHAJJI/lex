@@ -62,6 +62,19 @@ public sealed class V3CorpusEuropeDossierMountTests
                 new { identifier = expression.GetProperty("resolve").GetProperty("identifier").GetString() });
             Assert.IsNull(resolved.Refusal, resolved.Refusal?.Code);
 
+            // The expression's one held wording, pinned as EU search pins it (the EU permalink grammar), and the
+            // permalink verifies: a dossier the live screen shows cites nothing unpinned.
+            var pinned = expression.GetProperty("pinned_wording");
+            Assert.AreEqual("2016-04-27", pinned.GetProperty("wording_date").GetString());
+            var permalink = pinned.GetProperty("permalink").GetString()!;
+            Assert.AreEqual($"/eu-eurlex/{Celex}/eng/2016-04-27--{pinned.GetProperty("wording_sha256").GetString()}", permalink);
+            StringAssert.StartsWith(body.GetProperty("digest_rule").GetString(), "the SHA-256, under the domain lex-v3-eu-wording/1");
+            var verified = await EnvelopeAsync(mount, "/api/v3/verify", "verify", new { identifier = permalink });
+            Assert.AreEqual("digest_matches", verified.Result?.Value.GetProperty("verdict").GetString(), verified.Refusal?.Code);
+            var searched = await EnvelopeAsync(mount, "/api/v3/search", "search", new { query = "personal data", language = "eng", identifier = Celex, limit = 1 });
+            Assert.AreEqual(searched.Result!.Value.GetProperty("pinned_wording").GetProperty("permalink").GetString(), permalink,
+                "the dossier pins the very wording EU search pins");
+
             // Every identifier of the one work answers the same record, apart from what it echoes.
             var node = System.Text.Json.Nodes.JsonNode.Parse(body.GetRawText())!.AsObject();
             Assert.AreEqual(identifier, node["requested_identifier"]!.GetValue<string>());
