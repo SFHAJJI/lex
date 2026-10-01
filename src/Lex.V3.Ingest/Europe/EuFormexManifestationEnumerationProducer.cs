@@ -24,6 +24,8 @@ public enum EuFormexManifestationEnumerationRefusal
     RowNamesAnotherExpression = 5,
     [JsonStringEnumMemberName("manifestation_binding_delivered_twice")]
     ManifestationBindingDeliveredTwice = 6,
+    [JsonStringEnumMemberName("checkpoint_not_retained")]
+    CheckpointNotRetained = 7,
 }
 
 /// <summary>One exact publisher manifestation and asserted type proven by a completed enumeration.</summary>
@@ -58,6 +60,12 @@ public sealed class EuFormexManifestationEnumerationResult
         ProductRequestCount = productRequestCount;
         WireBudget = wireBudget;
     }
+
+    public SourceArtifactRef? CheckpointRef { get; private init; }
+
+    internal EuFormexManifestationEnumerationResult WithCheckpoint(SourceArtifactRef checkpoint) =>
+        new(Expression, ManifestationTypes, Proof, Refusal, Detail, ProductRequestCount, WireBudget)
+            { CheckpointRef = checkpoint ?? throw new ArgumentNullException(nameof(checkpoint)) };
 
     public LanguageScopedExpression Expression { get; }
     public LanguageScopedExpressionIdentity ExpressionIdentity => Expression.Identity;
@@ -222,10 +230,11 @@ public sealed class EuFormexEligibilityPopulation
 }
 
 /// <summary>Runs and decodes the proof-bearing manifestation family for one expression.</summary>
-public sealed class EuFormexManifestationEnumerationProducer
+public sealed partial class EuFormexManifestationEnumerationProducer
 {
     private const string XsdString = "http://www.w3.org/2001/XMLSchema#string";
     private const string XsdInteger = "http://www.w3.org/2001/XMLSchema#integer";
+    private readonly ICustodyStore _custodyStore;
     private readonly EuRepeatedEnumerationExecutor _executor;
     private readonly RepeatedEnumerationDeliveryReopenGlue _reopenGlue;
 
@@ -241,6 +250,7 @@ public sealed class EuFormexManifestationEnumerationProducer
     {
         ArgumentNullException.ThrowIfNull(custodyStore);
         ArgumentNullException.ThrowIfNull(timeProvider);
+        _custodyStore = custodyStore;
         _executor = new EuRepeatedEnumerationExecutor(custodyStore, timeProvider, testHandlerOverride);
         _reopenGlue = new RepeatedEnumerationDeliveryReopenGlue(custodyStore);
     }
@@ -269,31 +279,52 @@ public sealed class EuFormexManifestationEnumerationProducer
                 budget);
         }
 
-        var key = EuFormexManifestationDiscoveryPlan.PartitionKeyFor(request.ExpressionIdentity);
+        var result = await DeriveAsync(_reopenGlue, receipt, request.Plan, request.Expression,
+            budget, run.ProductRequestCount, cancellationToken).ConfigureAwait(false);
+        if (!result.Delivered) return result;
+        try
+        {
+            var checkpoint = await RetainCheckpointAsync(request, run, result, cancellationToken).ConfigureAwait(false);
+            return result.WithCheckpoint(checkpoint);
+        }
+        catch (Exception exception) when (exception is CustodyRequiredException or CustodyIntegrityException)
+        {
+            return EuFormexManifestationEnumerationResult.Refused(request.Expression,
+                EuFormexManifestationEnumerationRefusal.CheckpointNotRetained, exception.Message,
+                run.ProductRequestCount, budget);
+        }
+    }
+
+    private static async Task<EuFormexManifestationEnumerationResult> DeriveAsync(
+        RepeatedEnumerationDeliveryReopenGlue glue, RepeatedEnumerationDeliveryReceipt receipt,
+        EuFormexManifestationDiscoveryPlan plan, LanguageScopedExpression expression,
+        WireBudgetSnapshot budget, int productRequestCount, CancellationToken cancellationToken)
+    {
+        var key = EuFormexManifestationDiscoveryPlan.PartitionKeyFor(expression.Identity);
         var proof = receipt.TryProveFamilyEnumeration(key, out var proofRefusal);
         if (proof is null)
         {
             return EuFormexManifestationEnumerationResult.Refused(
-                request.Expression,
+                expression,
                 EuFormexManifestationEnumerationRefusal.EnumerationProofRefused,
-                proofRefusal.ToString(), run.ProductRequestCount, budget);
+                proofRefusal.ToString(), productRequestCount, budget);
         }
 
         var pages = new List<RepeatedEnumerationResolvedEvidence>(receipt.Delivery.PagesA.Pages.Count);
         foreach (var page in receipt.Delivery.PagesA.Pages.OrderBy(static value => value.Ordinal))
         {
-            pages.Add(await _reopenGlue.ReopenPageEvidenceAsync(page.Evidence, cancellationToken)
+            pages.Add(await glue.ReopenPageEvidenceAsync(page.Evidence, cancellationToken)
                 .ConfigureAwait(false));
         }
-        var profile = request.Plan.CreateDeliveryProfile();
+        var profile = plan.CreateDeliveryProfile();
         var rows = VerifiedRepeatedEnumerationRows.TryOpen(
             proof, receipt.Delivery, profile, receipt.Delivery.InterpretationProfileRef,
             receipt.Delivery.CountA.HttpEvidenceRef, pages, out var rowRefusal);
         return rows is null
             ? EuFormexManifestationEnumerationResult.Refused(
-                request.Expression, EuFormexManifestationEnumerationRefusal.VerifiedRowsRefused,
-                rowRefusal.ToString(), run.ProductRequestCount, budget)
-            : DecodeRows(rows, profile, proof, request.Expression, budget, run.ProductRequestCount);
+                expression, EuFormexManifestationEnumerationRefusal.VerifiedRowsRefused,
+                rowRefusal.ToString(), productRequestCount, budget)
+            : DecodeRows(rows, profile, proof, expression, budget, productRequestCount);
     }
 
     internal static EuFormexManifestationEnumerationResult DecodeRows(

@@ -112,10 +112,9 @@ public sealed class ClosedVocabularyCensusTests
                     + "PackageUnreadable, XmlRejected, MainBodyMissing, UnsupportedContentShape, "
                     + "PackageNotAcquired, RouteRefused, PackageRejected",
                 "Lex.V3.Ingest.Europe.EuFormexMainBodyTokenKind: Text, Reference, Footnote",
-                "Lex.V3.Ingest.Europe.EuFormexManifestationEnumerationRefusal: None, "
-                    + "EnumerationRefused, EnumerationProofRefused, VerifiedRowsRefused, "
-                    + "RowNotAdmitted, RowNamesAnotherExpression, "
-                    + "ManifestationBindingDeliveredTwice",
+                "Lex.V3.Ingest.Europe.EuFormexManifestationEnumerationRefusal: None, EnumerationRefused, Enumeratio"
+                    + "nProofRefused, VerifiedRowsRefused, RowNotAdmitted, RowNamesAnotherExpression, ManifestationBindin"
+                    + "gDeliveredTwice, CheckpointNotRetained",
                 "Lex.V3.Ingest.Europe.EuFormexPackageNotAcquiredReason: None, BodyNotHeld, "
                     + "LanguageNotAddressable, ManifestationNotSingular, IdentityNotAdmitted, "
                     + "AnnexXhtmlNotInventoried, AnnexPdfNotServed, AnnexEvidenceNotBound, "
