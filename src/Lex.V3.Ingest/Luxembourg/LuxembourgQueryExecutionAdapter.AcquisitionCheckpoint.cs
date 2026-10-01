@@ -17,7 +17,8 @@ public sealed partial class LuxembourgQueryExecutionAdapter
     /// <remarks>The caller supplies an independently reopened vocabulary profile and the intended ranges.</remarks>
     internal static async Task<LuxembourgQueryExecutionResult> ReopenAcquisitionAsync(ICustodyStore store,
         SourceArtifactRef checkpoint, VerifiedLuxembourgSourceProfile profile,
-        IReadOnlyList<LuxembourgQueryPartitionRange> expectedRanges, CancellationToken cancellationToken)
+        IReadOnlyList<LuxembourgQueryPartitionRange> expectedRanges, CancellationToken cancellationToken,
+        LuxembourgRendererSources? expectedRenderers = null)
     {
         ArgumentNullException.ThrowIfNull(store);
         ArgumentNullException.ThrowIfNull(checkpoint);
@@ -34,6 +35,8 @@ public sealed partial class LuxembourgQueryExecutionAdapter
                 document.Families.Any(static family => family is null || family.Range is null || family.Plan is null ||
                     family.Renderer is null || family.Checkpoint is null || family.Run is null || family.Profile is null) ||
                 document.DocumentRenderer is null ||
+                expectedRenderers is not null && (document.DocumentRenderer != expectedRenderers.DocumentFetch.Reference ||
+                    document.Families.Any(family => family.Renderer != expectedRenderers.Query.Reference)) ||
                 !document.Families.Select(static family => family.Range).SequenceEqual(ranges) ||
                 ranges.Select(static range => range.PartitionId).Distinct(StringComparer.Ordinal).Count() != ranges.Length ||
                 document.Documents is null || document.Gazette is null || document.Corpus is null || document.Observed is null ||
@@ -162,7 +165,7 @@ public sealed partial class LuxembourgQueryExecutionAdapter
         var document = new QueryCheckpoint(QueryCheckpointSchema, HashDocument(_sourceProfile.Snapshot), retained.ToArray(),
             renderer.Reference, scoped, adaptive, selectionManifest, selectionContentSha256, finalManifest, finalContentSha256,
             run, result.DocumentCheckpointRef!, result.GazetteCheckpointRef!, result.CorpusRecordSetRef!,
-            result.ObservedObjectIdentitySetRef!, QueryResultDigest(result));
+            result.ObservedObjectIdentitySetRef!, result.CorpusRecordSetReceipt!.Reference.ContentSha256, QueryResultDigest(result));
         var bytes = EncodeQuery(document);
         await HoldQueryInputAsync(bytes, cancellationToken).ConfigureAwait(false);
         return new SourceArtifactRef($"urn:uuid:{Guid.NewGuid():D}", CustodyDigest.Of(bytes));
@@ -231,7 +234,7 @@ public sealed partial class LuxembourgQueryExecutionAdapter
         SourceArtifactRef DocumentRenderer, bool Scoped, bool Adaptive, SourceArtifactRef SelectionManifest,
         string SelectionContentSha256, SourceArtifactRef FinalManifest, string FinalContentSha256,
         SourceArtifactRef Run, SourceArtifactRef Documents, SourceArtifactRef Gazette,
-        SourceArtifactRef Corpus, SourceArtifactRef Observed, string ResultSha256);
+        SourceArtifactRef Corpus, SourceArtifactRef Observed, string CorpusContentSha256, string ResultSha256);
     private sealed class QueryReplay(QueryCheckpoint document)
     {
         internal QueryCheckpoint Document { get; } = document;

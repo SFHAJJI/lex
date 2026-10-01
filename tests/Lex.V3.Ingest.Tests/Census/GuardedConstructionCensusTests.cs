@@ -567,12 +567,7 @@ public sealed class GuardedConstructionCensusTests
                     + "Lex.V3.Ingest.Luxembourg.LuxembourgFamilyEnumerationOutcome::ExecutorRefused, method public static"
                     + " Lex.V3.Ingest.Luxembourg.LuxembourgFamilyEnumerationOutcome::ProofRefused, method public static L"
                     + "ex.V3.Ingest.Luxembourg.LuxembourgFamilyEnumerationOutcome::Proven",
-                "Lex.V3.Ingest.Luxembourg.LuxembourgFirstMountAcquisitionResult: constructor private instance Lex.V"
-                    + "3.Ingest.Luxembourg.LuxembourgFirstMountAcquisitionResult::.ctor, method internal instance Lex.V3."
-                    + "Ingest.Luxembourg.LuxembourgFirstMountAcquisitionResult::WithVocabularyCheckpoint, method public i"
-                    + "nstance Lex.V3.Ingest.Luxembourg.LuxembourgFirstMountAcquisition::RunAsync, method public static L"
-                    + "ex.V3.Ingest.Luxembourg.LuxembourgFirstMountAcquisitionResult::Refused, method public static Lex.V"
-                    + "3.Ingest.Luxembourg.LuxembourgFirstMountAcquisitionResult::Success",
+                "Lex.V3.Ingest.Luxembourg.LuxembourgFirstMountAcquisitionResult: constructor private instance Lex.V3.Ingest.Luxembourg.LuxembourgFirstMountAcquisitionResult::.ctor, method internal instance Lex.V3.Ingest.Luxembourg.LuxembourgFirstMountAcquisitionResult::WithCheckpoint, method internal instance Lex.V3.Ingest.Luxembourg.LuxembourgFirstMountAcquisitionResult::WithVocabularyCheckpoint, method public instance Lex.V3.Ingest.Luxembourg.LuxembourgFirstMountAcquisition::RunAsync, method public static Lex.V3.Ingest.Luxembourg.LuxembourgFirstMountAcquisition::ReopenAsync, method public static Lex.V3.Ingest.Luxembourg.LuxembourgFirstMountAcquisitionResult::Refused, method public static Lex.V3.Ingest.Luxembourg.LuxembourgFirstMountAcquisitionResult::Success",
                 "Lex.V3.Ingest.Luxembourg.LuxembourgGazetteBodyProductionResult: constructor "
                     + "private instance "
                     + "Lex.V3.Ingest.Luxembourg.LuxembourgGazetteBodyProductionResult::.ctor, "
@@ -825,34 +820,8 @@ public sealed class GuardedConstructionCensusTests
                     + "method public static "
                     + "Lex.V3.Ingest.Luxembourg.LuxembourgQueryExecutionAdapter+ResourceObservation"
                     + "BuildResult::TermUnbound",
-                "Lex.V3.Ingest.Luxembourg.LuxembourgQueryExecutionRefusalDetail: constructor internal instance Lex.V3"
-                    + ".Ingest.Luxembourg.LuxembourgQueryExecutionRefusalDetail::.ctor, method internal instance Lex.V3.Ing"
-                    + "est.Luxembourg.LuxembourgQueryExecutionAdapter::RunDocumentAcquisitionAsync, method internal instanc"
-                    + "e Lex.V3.Ingest.Luxembourg.LuxembourgQueryExecutionAdapter::RunDocumentAcquisitionWithCheckpointAsyn"
-                    + "c, method internal instance Lex.V3.Ingest.Luxembourg.LuxembourgQueryExecutionAdapter::RunGazetteAcqu"
-                    + "isitionAsync, method internal instance Lex.V3.Ingest.Luxembourg.LuxembourgQueryExecutionAdapter::Run"
-                    + "GazetteAcquisitionWithCheckpointAsync, method internal static Lex.V3.Ingest.Luxembourg.LuxembourgQue"
-                    + "ryExecutionAdapter::CompletePopulationLedger, method internal static Lex.V3.Ingest.Luxembourg.Luxemb"
-                    + "ourgQueryExecutionAdapter::ReopenDocumentAcquisitionAsync, method internal static Lex.V3.Ingest.Luxe"
-                    + "mbourg.LuxembourgQueryExecutionAdapter::ReopenGazetteAcquisitionAsync, method private instance Lex.V"
-                    + "3.Ingest.Luxembourg.LuxembourgQueryExecutionAdapter::HoldManifestAsync, method private instance Lex."
-                    + "V3.Ingest.Luxembourg.LuxembourgQueryExecutionAdapter::ReadInFileRightsAsync, method private instance"
-                    + " Lex.V3.Ingest.Luxembourg.LuxembourgQueryExecutionAdapter::RunDocumentAcquisitionCoreAsync, method p"
-                    + "rivate instance Lex.V3.Ingest.Luxembourg.LuxembourgQueryExecutionAdapter::RunGazetteAcquisitionCoreA"
-                    + "sync, method private static Lex.V3.Ingest.Luxembourg.LuxembourgQueryExecutionAdapter::MintDocumentFe"
-                    + "tchSelections",
-                "Lex.V3.Ingest.Luxembourg.LuxembourgQueryExecutionResult: constructor private instance Lex.V3.Ingest."
-                    + "Luxembourg.LuxembourgQueryExecutionResult::.ctor, method internal instance Lex.V3.Ingest.Luxembourg."
-                    + "LuxembourgQueryExecutionAdapter::RunAsync, method internal instance Lex.V3.Ingest.Luxembourg.Luxembo"
-                    + "urgQueryExecutionAdapter::RunScopedAsync, method internal instance Lex.V3.Ingest.Luxembourg.Luxembou"
-                    + "rgQueryExecutionResult::WithDocumentCheckpoint, method internal instance Lex.V3.Ingest.Luxembourg.Lu"
-                    + "xembourgQueryExecutionResult::WithGazetteCheckpoint, method private instance Lex.V3.Ingest.Luxembour"
-                    + "g.LuxembourgQueryExecutionAdapter::RunCoreAsync, method public instance Lex.V3.Ingest.Luxembourg.Lux"
-                    + "embourgQueryExecutionAdapter::RunAdaptiveScopedAsync, method public instance Lex.V3.Ingest.Luxembour"
-                    + "g.LuxembourgQueryExecutionAdapter::RunAsync, method public instance Lex.V3.Ingest.Luxembourg.Luxembo"
-                    + "urgQueryExecutionAdapter::RunScopedAsync, method public static Lex.V3.Ingest.Luxembourg.LuxembourgQu"
-                    + "eryExecutionResult::Delivered, method public static Lex.V3.Ingest.Luxembourg.LuxembourgQueryExecutio"
-                    + "nResult::Refused",
+                "Lex.V3.Ingest.Luxembourg.LuxembourgQueryExecutionRefusalDetail: constructor internal instance Lex.V3.Ingest.Luxembourg.LuxembourgQueryExecutionRefusalDetail::.ctor, method internal instance Lex.V3.Ingest.Luxembourg.LuxembourgQueryExecutionAdapter::RunDocumentAcquisitionAsync, method internal instance Lex.V3.Ingest.Luxembourg.LuxembourgQueryExecutionAdapter::RunDocumentAcquisitionWithCheckpointAsync, method internal instance Lex.V3.Ingest.Luxembourg.LuxembourgQueryExecutionAdapter::RunGazetteAcquisitionAsync, method internal instance Lex.V3.Ingest.Luxembourg.LuxembourgQueryExecutionAdapter::RunGazetteAcquisitionWithCheckpointAsync, method internal static Lex.V3.Ingest.Luxembourg.LuxembourgQueryExecutionAdapter::CompletePopulationLedger, method internal static Lex.V3.Ingest.Luxembourg.LuxembourgQueryExecutionAdapter::ReopenDocumentAcquisitionAsync, method internal static Lex.V3.Ingest.Luxembourg.LuxembourgQueryExecutionAdapter::ReopenGazetteAcquisitionAsync, method private instance Lex.V3.Ingest.Luxembourg.LuxembourgQueryExecutionAdapter::HoldAcquisitionManifestAsync, method private instance Lex.V3.Ingest.Luxembourg.LuxembourgQueryExecutionAdapter::HoldManifestAsync, method private instance Lex.V3.Ingest.Luxembourg.LuxembourgQueryExecutionAdapter::ReadInFileRightsAsync, method private instance Lex.V3.Ingest.Luxembourg.LuxembourgQueryExecutionAdapter::RunDocumentAcquisitionCoreAsync, method private instance Lex.V3.Ingest.Luxembourg.LuxembourgQueryExecutionAdapter::RunGazetteAcquisitionCoreAsync, method private static Lex.V3.Ingest.Luxembourg.LuxembourgQueryExecutionAdapter::MintDocumentFetchSelections",
+                "Lex.V3.Ingest.Luxembourg.LuxembourgQueryExecutionResult: constructor private instance Lex.V3.Ingest.Luxembourg.LuxembourgQueryExecutionResult::.ctor, method internal instance Lex.V3.Ingest.Luxembourg.LuxembourgQueryExecutionAdapter::RunAsync, method internal instance Lex.V3.Ingest.Luxembourg.LuxembourgQueryExecutionAdapter::RunScopedAsync, method internal instance Lex.V3.Ingest.Luxembourg.LuxembourgQueryExecutionResult::WithAcquisitionCheckpoint, method internal instance Lex.V3.Ingest.Luxembourg.LuxembourgQueryExecutionResult::WithDocumentCheckpoint, method internal instance Lex.V3.Ingest.Luxembourg.LuxembourgQueryExecutionResult::WithGazetteCheckpoint, method internal static Lex.V3.Ingest.Luxembourg.LuxembourgQueryExecutionAdapter::ReopenAcquisitionAsync, method private instance Lex.V3.Ingest.Luxembourg.LuxembourgQueryExecutionAdapter::RunCoreAsync, method public instance Lex.V3.Ingest.Luxembourg.LuxembourgQueryExecutionAdapter::RunAdaptiveScopedAsync, method public instance Lex.V3.Ingest.Luxembourg.LuxembourgQueryExecutionAdapter::RunAsync, method public instance Lex.V3.Ingest.Luxembourg.LuxembourgQueryExecutionAdapter::RunScopedAsync, method public static Lex.V3.Ingest.Luxembourg.LuxembourgQueryExecutionResult::Delivered, method public static Lex.V3.Ingest.Luxembourg.LuxembourgQueryExecutionResult::Refused",
                 "Lex.V3.Ingest.Luxembourg.LuxembourgRelationFamilyAcquisition: constructor private "
                     + "instance Lex.V3.Ingest.Luxembourg.LuxembourgRelationFamilyAcquisition::.ctor, "
                     + "method private instance "

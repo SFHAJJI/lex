@@ -243,6 +243,7 @@ public sealed class DurableBlobReceiptFamilyIngestSurfaceTests
                     + "System.Threading.CancellationToken) -> "
                     + "System.Threading.Tasks.Task<Lex.V3.Contracts.Custody.DurableBlobWriteReceipt"
                     + ">",
+                "method private instance Lex.V3.Ingest.Luxembourg.LuxembourgQueryExecutionAdapter::HoldAcquisitionManifestAsync(Lex.V3.Contracts.Source.Scope.VerifiedScopeManifest, Lex.V3.Contracts.Source.Scope.IScopeReductionEvidenceResolver, Lex.V3.Contracts.Source.Core.SourceArtifactRef?, System.String?, System.Threading.CancellationToken) -> System.Threading.Tasks.Task<System.ValueTuple<Lex.V3.Contracts.Source.Scope.ScopeManifest, Lex.V3.Contracts.Custody.DurableBlobWriteReceipt, Lex.V3.Contracts.Source.Core.SourceArtifactRef, System.String, Lex.V3.Ingest.Luxembourg.LuxembourgQueryExecutionRefusalDetail>>",
                 "method private instance "
                     + "Lex.V3.Ingest.Luxembourg.LuxembourgQueryExecutionAdapter::HoldManifestAsync("
                     + "Lex.V3.Contracts.Source.Scope.VerifiedScopeManifest, "

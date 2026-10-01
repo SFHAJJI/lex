@@ -259,7 +259,7 @@ public sealed class ClosedVocabularyCensusTests
                 "Lex.V3.Ingest.Luxembourg.LuxembourgFamilyEnumerationOutcomeKind: Proven, "
                     + "ExecutorRefused, ProofRefused, CoverProven, CoverRefused",
                 "Lex.V3.Ingest.Luxembourg.LuxembourgFirstMountAcquisitionRefusal: None, "
-                    + "VocabularyRefused, ProfileRefused, RunRefused",
+                    + "VocabularyRefused, ProfileRefused, RunRefused, AcquisitionCheckpointNotRetained",
                 "Lex.V3.Ingest.Luxembourg.LuxembourgGazetteBodyProductionRefusal: None, "
                     + "AcquisitionForUnlistedBody, AcquisitionDeliveredTwice, "
                     + "RetainedBytesUnavailable, RetentionNotEstablished",
