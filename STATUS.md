@@ -14,11 +14,10 @@ IDs survive. Failed checkpoint holds return a typed refusal.
 
 Seventeen new cases cover empty/nonempty copied custody, repeat restoration, weaker current
 protection, missing inputs, caller pins, rehashed expression/query/result substitutions,
-cancellation and failed holds. All17 passed in initial CI36836931023 atafb75fa6;
-5304 tests passed,22 skipped and2 census pins failed. Compiled surface/enum pins are now
-transcribed from the retained CI logs; fresh CI is required. Required
-local Release, fast tests, affected ingests and Claude review wait for the active EU run and
-prior validation queue. Pending PR869 must merge and its final head be included first.
+cancellation and failed holds. All 17 passed at 3e563d96: CI 36838928383 reported 5,306 passed and
+22 skipped; the required watch exited zero. Reviewed PR869 source 6ae0389d and integration
+8c3f3801 are now included. Fresh combined CI and read-only Claude review remain required.
+Local builds/tests remain deferred under the acquisition memory guard. PR869 must merge first.
 
 This covers manifestation eligibility evidence only. EN/FRA scope and explicit unenumerated
 other-language outcomes remain the population policy. Package, annex, complete catalog and
