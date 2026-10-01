@@ -53,6 +53,35 @@ public sealed partial class EuQueryExecutionAdapterTests
     }
 
     [TestMethod]
+    public async Task HistoricalQueryCheckpointRecomputesWorkFactsFromOriginalEvidence()
+    {
+        var capture = await RetainedEuRun.Value;
+        var original = capture.Result;
+        var root = await RunRootAsync(capture.Store, original.AcquisitionCheckpointRef!);
+        root["schema"] = "lex-eu-acquisition-checkpoint/2";
+        // The exact schema-2 payload predates ObservedWorkFacts. The replay must obtain
+        // those facts from the original retained P rows, not from a caller-supplied upgrade.
+        var oldPayload = new
+        {
+            original.ScopeManifestCanonicalSha256, original.CorpusRecordSetRef, original.ObservedObjectCount,
+            original.ObservedExpressionCount, original.FamilyOutcomes, original.ReductionExclusions,
+            original.ObservedManifestationTypesByCelex, original.ObservedExpressionsByCelex,
+            original.MintedRowsByOrdinal, original.DateAxioms, original.LocatedAmendmentObservations,
+            original.WitnessTerminations,
+        };
+        root["result_sha256"] = Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(
+            Encoding.UTF8.GetBytes(ContractJson.Serialize(oldPayload))));
+        var bytes = Encoding.UTF8.GetBytes(root.ToJsonString(new JsonSerializerOptions { WriteIndented = false }));
+        var held = await capture.Store.CreateAsync(bytes, CustodyClass.NightlyFloor90d, CancellationToken.None);
+        var checkpoint = new SourceArtifactRef(original.AcquisitionCheckpointRef!.ResourceId, held.Reference.ContentSha256);
+        var replay = await EuQueryExecutionAdapter.ReopenAsync(capture.Store, checkpoint, capture.Seeds, CancellationToken.None);
+        Assert.IsNull(replay.Refusal, replay.Refusal?.Detail);
+        Assert.AreEqual(original.CorpusRecordSetRef, replay.CorpusRecordSetRef);
+        Assert.IsTrue(replay.ObservedWorkFacts.Count > 0);
+        Assert.AreEqual(ContractJson.Serialize(original.ObservedWorkFacts), ContractJson.Serialize(replay.ObservedWorkFacts));
+    }
+
+    [TestMethod]
     public async Task CompleteEuReplayPreservesOriginalBodyReceiptsAfterFreshHoldObservations()
     {
         var capture = await CaptureEuRunAsync(true);
@@ -289,7 +318,7 @@ public sealed partial class EuQueryExecutionAdapterTests
         var unusedRendererSha = EuAcquisitionTestFixture.BuildRendererSource(1009).Reference.Sha256;
         var store = new EuAcquisitionTestFixture.EuInMemoryCustodyStore(
             failWriteDigest: (digest, _) => failUnusedRenderer && digest == unusedRendererSha,
-            failSchema: failRoot ? "lex-eu-acquisition-checkpoint/2" : null);
+            failSchema: failRoot ? "lex-eu-acquisition-checkpoint/3" : null);
         var executor = new EuRepeatedEnumerationExecutor(
             store, new EuAcquisitionTestFixture.FixedTimeProvider(), handler);
         var adapter = new EuQueryExecutionAdapter(store, executor);

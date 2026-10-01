@@ -206,6 +206,8 @@ public sealed class ClosedVocabularyCensusTests
                     + "PublisherAnnexConventionInvalid, WorkEliMissing",
                 "Lex.V3.Ingest.Europe.EuropeIndexBuildRefusal: None, CorpusRefused, "
                     + "PopulationMismatch, DerivationMismatch, RightsIneligible, IndexInvalid",
+                "Lex.V3.Ingest.Europe.EuropeIndexStateDateStatus: OriginalWording, ObservationMissing, "
+                    + "PublisherDateAbsent, PublisherDateUnusable, ObservedConsolidationDate, AmbiguousVersion",
                 "Lex.V3.Ingest.LexCorpus6BuildRefusal: None, EvidenceIncomplete, "
                     + "EuropeRightsBindingMissing, LuxembourgRightsBindingMissing, "
                     + "LuxembourgRightsEvidenceIncomplete, PopulationMismatch, "
