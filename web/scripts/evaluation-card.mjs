@@ -39,6 +39,11 @@ export const SET_GATES = Object.freeze({
 });
 export const SET_CONTROLS = Object.freeze({ temporal: 'date_shuffle', refusal: 'verdict_shuffle', retrieval: 'qrels_shuffle' });
 const DIGEST = /^[0-9a-f]{64}$/;
+/**
+ * The case digest of no case: the SHA-256 of the canonical empty case list, `[]`, as the platform renders it. A set
+ * or control of no case carries it and nothing else (review of #841: another digest would contradict "no case").
+ */
+export const EMPTY_CASES_SHA256 = '4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945';
 const Z95 = 1.959963984540054;
 
 function round4(value) {
@@ -96,12 +101,15 @@ function readGate(gate, where, caseCount) {
   const name = requireText(requireOwn(gate, 'gate', where), `${where} gate`);
   const at = `${where} (${name})`;
   const verdict = requireOneOf(requireOwn(gate, 'verdict', at), GATE_VERDICTS, `${at}'s verdict`);
-  const n = requireCount(requireOwn(gate, 'n', at), `${at} n`, 1);
+  const reason = Object.hasOwn(gate, 'not_measured_reason') ? gate.not_measured_reason : null;
+  // A stratum with no measurable query counts no case: a mount the gates found nothing to ask of (the gates over
+  // a mounted corpus, ruling 2) reports that, and it is never scored. Every other gate counts at least one.
+  const emptyStratum = verdict === 'not_measured' && reason === 'no_measurable_query';
+  const n = requireCount(requireOwn(gate, 'n', at), `${at} n`, emptyStratum ? 0 : 1);
   if (n > caseCount) throw new Error(`${at} counts ${n} cases in its stratum, and its set holds ${caseCount}`);
   const threshold = requireOwn(gate, 'threshold', at);
   if (typeof threshold !== 'number' || threshold < 0 || threshold > 1) throw new Error(`${at}'s threshold is not a number from 0 to 1`);
   const value = requireOwn(gate, 'value', at);
-  const reason = Object.hasOwn(gate, 'not_measured_reason') ? gate.not_measured_reason : null;
 
   if (verdict === 'not_measured') {
     if (value !== null) throw new Error(`${at} is not measured, so it carries no value`);
@@ -145,7 +153,7 @@ function readGate(gate, where, caseCount) {
 
 function readSet(set, index) {
   const where = `machine_gates[${index}]`;
-  const caseCount = requireCount(requireOwn(set, 'cases', where), `${where} cases`, 1);
+  const caseCount = requireCount(requireOwn(set, 'cases', where), `${where} cases`);
   const casesSha256 = requireOwn(set, 'cases_sha256', where);
   if (!DIGEST.test(casesSha256)) throw new Error(`${where} cases_sha256 is not a SHA-256 digest`);
   const name = requireOneOf(requireOwn(set, 'set', where), Object.keys(SET_GATES), `${where}'s set`);
@@ -153,6 +161,12 @@ function readSet(set, index) {
   const names = gates.map((gate) => gate.gate);
   if (names.join() !== SET_GATES[name].join()) {
     throw new Error(`${where} is a ${name} set, so its gates are ${SET_GATES[name].join(', ')}, and it carries ${names.join(', ')}`);
+  }
+  if (caseCount === 0 && !gates.every((gate) => gate.verdict === 'not_measured' && gate.reason === 'no_measurable_query')) {
+    throw new Error(`${where} holds no case, so every gate of it is not measured for no measurable query`);
+  }
+  if (caseCount === 0 && casesSha256 !== EMPTY_CASES_SHA256) {
+    throw new Error(`${where} holds no case, so its cases_sha256 is ${EMPTY_CASES_SHA256}, the digest of no case`);
   }
   return Object.freeze({
     set: name,
@@ -172,8 +186,13 @@ function readControl(control, index, set) {
   }
   const casesSha256 = requireOwn(control, 'cases_sha256', where);
   if (!DIGEST.test(casesSha256)) throw new Error(`${where} cases_sha256 is not a SHA-256 digest`);
-  const cases = requireCount(requireOwn(control, 'cases', where), `${where} cases`, 1);
+  // A control over no case can only say it did not apply, and why.
+  const controlVerdict = requireOneOf(requireOwn(control, 'verdict', where), CONTROL_VERDICTS, `${where}'s verdict`);
+  const cases = requireCount(requireOwn(control, 'cases', where), `${where} cases`, controlVerdict === 'not_applicable' ? 0 : 1);
   if (cases > set.cases) throw new Error(`${where} ran over ${cases} cases, and its set holds ${set.cases}`);
+  if (cases === 0 && casesSha256 !== EMPTY_CASES_SHA256) {
+    throw new Error(`${where} ran over no case, so its cases_sha256 is ${EMPTY_CASES_SHA256}, the digest of no case`);
+  }
   if (cases < set.cases && !Object.hasOwn(control, 'note')) {
     throw new Error(`${where} ran over fewer cases than its set, and does not say why`);
   }
@@ -181,7 +200,7 @@ function readControl(control, index, set) {
     control: requireOneOf(requireOwn(control, 'control', where), [SET_CONTROLS[set.set]], `${where}'s control for a ${set.set} set`),
     set: forSet,
     arm,
-    verdict: requireOneOf(requireOwn(control, 'verdict', where), CONTROL_VERDICTS, `${where}'s verdict`),
+    verdict: controlVerdict,
     reason: requireText(requireOwn(control, 'reason', where), `${where} reason`),
     seed: requireCount(requireOwn(control, 'seed', where), `${where} seed`),
     cases,
