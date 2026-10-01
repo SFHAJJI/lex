@@ -175,14 +175,7 @@ public sealed class LuxembourgEnumerationRunResult
         LuxembourgEnumerationRefusalDetail? refusal,
         int productRequestCount)
     {
-        // There is deliberately no "delivered or refused, never both and never neither" check
-        // here. It cannot fail: this constructor is private and its only two callers are
-        // Delivered and Refused below, each of which null-checks its one argument and passes null
-        // for the other. A check that no caller can trip is not defense, it is a claim that reads
-        // as defense; what actually holds the invariant is that no third door exists, which
-        // LuxembourgConstructionSurfaceTests pins by making a third door a line in a diff.
-        //
-        // The count check below is different: both public factories take it from a caller.
+        // Completion factories validate their populated side; refused results carry no receipt.
         if (productRequestCount < 0)
         {
             throw new ArgumentOutOfRangeException(nameof(productRequestCount));
@@ -209,6 +202,16 @@ public sealed class LuxembourgEnumerationRunResult
 
     public RepeatedEnumerationDeliveryReceipt? Receipt { get; }
 
+    /// <summary>The retained comparison inputs produced by the executor, when available.</summary>
+    public SourceArtifactRef? CheckpointRef { get; private init; }
+
+    internal static LuxembourgEnumerationRunResult DeliveredWithCheckpoint(
+        RepeatedEnumerationDeliveryReceipt receipt, int productRequestCount, SourceArtifactRef checkpoint)
+    {
+        ArgumentNullException.ThrowIfNull(receipt);
+        ArgumentNullException.ThrowIfNull(checkpoint);
+        return new(receipt, null, productRequestCount) { CheckpointRef = checkpoint };
+    }
     public LuxembourgEnumerationRefusalDetail? Refusal { get; }
 
     /// <summary>Publisher requests this run spent, robots excluded. Always populated.</summary>
@@ -670,7 +673,9 @@ public sealed class LuxembourgRepeatedEnumerationExecutor
                     productRequestCount);
             }
 
-            return LuxembourgEnumerationRunResult.Delivered(receipt, productRequestCount);
+            var checkpoint = await LuxembourgEnumerationCheckpoint.WriteAsync(
+                _custodyStore, receipt, request, cancellationToken).ConfigureAwait(false);
+            return LuxembourgEnumerationRunResult.DeliveredWithCheckpoint(receipt, productRequestCount, checkpoint);
         }
         catch (Exception exception) when (exception is CustodyIntegrityException or CustodyRequiredException)
         {

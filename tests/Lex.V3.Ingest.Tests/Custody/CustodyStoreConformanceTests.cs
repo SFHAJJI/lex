@@ -55,6 +55,10 @@ public sealed class CustodyStoreConformanceTests
     /// </summary>
     private static readonly string[] Exempt =
     [
+        "Lex.V3.Ingest.Tests.EuEnumerationCheckpointTests+FaultedWriteStore: "
+            + "decorates an inner store to refuse writes or substitute an unrelated write receipt",
+        "Lex.V3.Ingest.Tests.EuEnumerationCheckpointTests+ReadOnlyStore: "
+            + "decorates an inner store to forbid writes and inject missing or corrupt read dependencies",
         "Lex.V3.Ingest.Tests.ChunkedDerivedArtifactTests+ReadCountingStore: decorates an "
             + "inner store to count digest-read bytes and optionally corrupt one selected digest "
             + "after holding it",
@@ -150,14 +154,14 @@ public sealed class CustodyStoreConformanceTests
     public void TheImplementationCountsAreExactlyThese()
     {
         var types = CustodyStoreConformance.ImplementationTypes(Scope);
-        Assert.AreEqual(30, types.Count, "implementations swept");
+        Assert.AreEqual(32, types.Count, "implementations swept");
         Assert.AreEqual(
             9,
             types.Count(static type =>
                 CustodyStoreConformance.IsDrivenByDefault(type)
                 || CustodyStoreConformance.HasRecipe(type)),
             "implementations driven");
-        Assert.AreEqual(21, Exempt.Length, "implementations exempt");
+        Assert.AreEqual(23, Exempt.Length, "implementations exempt");
     }
 
     [TestMethod]
