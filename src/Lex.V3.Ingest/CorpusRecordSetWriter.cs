@@ -265,7 +265,7 @@ public static class CorpusRecordBuilder
     }
 }
 
-/// <summary>Why <see cref="CorpusRecordSetWriter.WriteAsync"/> refused to complete a run. Closed at one.</summary>
+/// <summary>Why the corpus writer refused to complete an acquisition or rebuild.</summary>
 public enum CorpusRecordSetWriteRefusalKind
 {
     /// <summary>
@@ -278,8 +278,8 @@ public enum CorpusRecordSetWriteRefusalKind
     /// removed that condition, because a record set held without an enforced floor is recorded with
     /// the class it observed and the run continues. This member is RE-CONDITIONED rather than
     /// removed: a genuine custody failure really can happen at this point, and it used to escape
-    /// <c>WriteAsync</c> as an exception instead of being stated. Still closed at one, and the one
-    /// now means something that can actually go wrong.
+    /// <c>WriteAsync</c> as an exception instead of being stated. This member remains the custody failure and
+    /// rebuild identity disagreement is a separate refusal.
     /// </remarks>
     RecordSetNotRetained = 1,
 
