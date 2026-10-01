@@ -903,11 +903,11 @@ CI evidence are recorded in the pull request before merge.
 
 ## Heads
 
-- `v3/integration`: `047152d4` (2026-10-01, PR #854 merged). Build 45 s. Fast lane
+- `v3/integration`: `07cfd3c5` (2026-10-01, PR #856 merged). Build 45 s. Fast lane
   (`eng/test-fast.ps1`): 3,077 tests, 3,076 pass, 1 skipped (the review of PR #828). Ingest suite: green on CI for PR #760
   (the CI `dotnet` job runs the whole solution on every pull request, about 7 min on the runner;
   green for PR #834);
-  locally about 15 min. 990 web tests pass. The web job's "browser debugger never answered" failures
+  locally about 15 min. 991 web tests pass. The web job's "browser debugger never answered" failures
   (keyboard-walk, and paint-check since #811) are fixed by PR #822: each browser binds its own
   debugging port (`launchBrowser`) instead of a random one another browser starting at the same
   moment could hold.
@@ -2011,6 +2011,28 @@ screens. Until now the dossier screen said an EU dossier was not shown.
   - on the fixture mount it shows `no_corpus_mounted` naming the EU index; the fixture journey
     passes 18 of 18 steps, by pointer and by keyboard.
 
+The data that would serve each unserved operation (PR #857), the driver decision recorded for
+STATUS item 4.
+- `coverage` answers `operations.not_served_data`: one row per registered operation with no
+  route, in the order of `not_served_operations`, each naming the data that would serve it
+  (`V3CorpusMount.NotServedDataNeeded`). The data are the specification's own (`33-product-spec.md`):
+  - `as_observed`: observation times (`observed_from`), recorded by builds chained to their
+    predecessors in the event log;
+  - `knowable_on`: each state's publication date beside its observation time, never the
+    publisher's valid-from date;
+  - `concepts`: EuroVoc descriptors, EU directory codes and subject matters;
+  - `transposition`: Legilux's transposes and draftTransposes assertions and the Publications
+    Office's national implementing measures for Luxembourg, each kept as its publisher asserts it.
+  None of these is produced by the ingest.
+- A coverage test holds the table to exactly the registered operations the mount does not serve.
+  A newly served operation leaves it, and a newly unserved one cannot be listed without saying what
+  it needs.
+- The coverage reader requires one row per unrouted operation, in the same order, each with a
+  sentence.
+- Trust and Coverage shows the rows in a table, in both renderers, captioned "The data that would
+  serve each operation with no route". The words have French drafts. The preview answers carry the
+  platform's sentences to the character, and the census holds them.
+
 The live export composer and its journey step (PR #789), the eighth screen. `dist-live/export.html`
 has its own bundle `client-live-export.js`.
 - The page asks what the reading page asks: the same form (`ReadingForm`, now shared), the same one
@@ -2708,8 +2730,9 @@ has not yet run; the bounded first mount above is complete.
    operation answers the transport failure `operation_not_served`, PR #758; `ask` answers the
    contained `assistant_v3_unavailable` card, PR #759; `events` and `answer_drift` over a genesis
    log, PR #760). Four remain (`as_observed`, `knowable_on`, `concepts`, `transposition`), all
-   needing data the ingest does not produce; they keep `operation_not_served`, and the capability
-   manifest is to state per operation which data would serve it (driver decision). The event log's next step,
+   needing data the ingest does not produce; they keep `operation_not_served`, and since PR #857
+   the coverage answer names, for each, the data that would serve it (driver decision, below), which
+   Trust and Coverage shows. The event log's next step,
    predecessor chaining with observation times, needs a second build, so it follows the first mount.
 5. EU parity: every temporal and search operation from the EU index; French expressions. EU
    `search` in one work served by PR #761, EU `dossier` by PR #762; the temporal operations,
@@ -2898,8 +2921,11 @@ Each is the driver's call under ruling 7 and can be reversed by a later pull req
   from a retired log refuses `snapshot_unknown`.
 - `ask`'s containment card keeps the `point` verdict.
 - The four operations with no data (`as_observed`, `knowable_on`, `concepts`, `transposition`) keep
-  the typed transport failure `operation_not_served`, and the capability manifest will state, per
-  operation, that it is not served and which data would serve it.
+  the typed transport failure `operation_not_served`, and the platform states, per operation, that
+  it is not served and which data would serve it. PR #857 states it in the `coverage` answer
+  (`operations.not_served_data`), which the API owns, rather than in the index capability manifest,
+  which the data lane's builders write. The data named are the specification's own
+  (`33-product-spec.md`). The index manifest can carry the same rows later without changing them.
 - The web hosting shape of ruling 3 is `Lex.V3.Api` serving the built live pages beside `/api/v3` and
   `/mcp`, with the security headers, rather than an ingress split.
 - Exports (PRs #789 and #790): JSON, CSV and PDF are written from one model, so they cannot
