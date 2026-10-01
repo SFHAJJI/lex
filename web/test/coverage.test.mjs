@@ -4,8 +4,8 @@
 // .built_at` and stamped `Counts as of index build <instant>.` into its body and both its table
 // captions; it printed `Observation history begins August 2026; replay depth grows from here.`; it
 // had a whole section built on `document_types`; and it required `versions_with_text_served +
-// versions_without_text === versions`. The V3 answer holds none of those members, records that no
-// build time and no observation time are held, and states in its own `counts_note` that the two
+// versions_without_text === versions`. The V3 answer holds none of those members, records that it
+// states no build time and that no observation time is held, and states in its own `counts_note` that the two
 // article columns "are not addends". So the page had to be rebuilt, and the question was what to
 // build it against.
 //
@@ -420,7 +420,7 @@ test("the two claims the platform refuses to make are gone, and its reasons are 
     assert.ok(/\d{4}-\d{2}-\d{2}/.test(body), "the page carries no calendar date at all");
 
     // And the platform's own two reasons, which are what stands in their place.
-    assert.ok(body.includes("no build time of the corpus or index is held"));
+    assert.ok(body.includes("this report states no build time"));
     assert.ok(body.includes("no observation time is held"));
     assert.ok(body.includes(answer.mounted.corpus_sha256));
     assert.ok(body.includes(answer.mounted.index_sha256));

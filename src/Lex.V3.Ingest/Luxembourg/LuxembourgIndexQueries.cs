@@ -185,7 +185,7 @@ internal static class LuxembourgIndexQueries
 
     /// <summary>The event log's observations, in order.</summary>
     internal const string Observations =
-        "SELECT o.observation,o.corpus_sha256,o.predecessor_index_sha256,o.first_seq,o.last_seq " +
+        "SELECT o.observation,o.corpus_sha256,o.predecessor_index_sha256,o.first_seq,o.last_seq,o.built_at " +
         "FROM observations o ORDER BY o.observation";
 
     /// <summary>

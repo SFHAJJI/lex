@@ -13,12 +13,13 @@
 // `Observation history begins August 2026; replay depth grows from here.` The V3 answer holds
 // neither fact and says so in its own words, in two of the five rows of its fixed `not_held` list:
 //
-//   build_time_and_currency -- "no build time of the corpus or index is held, so nothing here says
-//   how current these counts are; the corpus and index digests name exactly which artifacts are
-//   mounted"
+//   build_time_and_currency -- "this report states no build time and no build time of the corpus
+//   file is held, so nothing here says how current these counts are; ..." (the index's event log
+//   records when each build ran, which `events` serves, an upper bound on observation and no
+//   measure of currency)
 //
 //   first_sighting_and_observation_times -- "no observation time is held, so nothing here says
-//   when anything was first seen; events serves a genesis log whose first_sighting events say only
+//   when anything was first seen; events serves the event log, whose first_sighting events say only
 //   that a state is first present in that log"
 //
 // So there is no build instant on this page and no retention sentence. Not "no date": the page
@@ -87,7 +88,7 @@ const DIGEST = /^[0-9a-f]{64}$/;
  * refuses.
  *
  * Without this, feeding the V2 shape to this page produces a page missing its date rather than an
- * error, and a reader cannot tell a platform that holds no build time from a page that forgot to
+ * error, and a reader cannot tell a report that states no build time from a page that forgot to
  * print one.
  */
 function refuseRetiredShapes(answer) {
@@ -108,7 +109,7 @@ function refuseRetiredShapes(answer) {
       throw new Error(
         `this coverage answer carries ${member}, which belongs to the payload this page was `
           + 'written against before V3. That payload carried a build instant and this one records '
-          + 'that no build time is held, so rendering the old shape here would put a date on counts '
+          + 'that it states no build time, so rendering the old shape here would put a date on counts '
           + 'the platform refuses to date',
       );
     }
@@ -704,7 +705,7 @@ export function readCoverage(answer) {
  */
 export const COUNTS_PROVENANCE_NOTE =
   'The counts of the corpus and the index below were taken from the artifacts named above. Nothing '
-  + 'here says when they were taken: no build time of either is held. The digests say exactly which '
+  + 'here says when they were taken: this report states no build time. The digests say exactly which '
   + 'artifacts were counted, which a date does not. The calendar dates further down are the '
   + 'publisher’s, about the law, and not about when this was counted.';
 

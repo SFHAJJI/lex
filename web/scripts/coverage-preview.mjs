@@ -134,13 +134,16 @@ const NOT_HELD = Object.freeze([
   Object.freeze({
     item: 'first_sighting_and_observation_times',
     reason: 'no observation time is held, so nothing here says when anything was first seen; '
-      + 'events serves a genesis log whose first_sighting events say only that a state is first '
+      + 'events serves the event log, whose first_sighting events say only that a state is first '
       + 'present in that log',
   }),
   Object.freeze({
     item: 'build_time_and_currency',
-    reason: 'no build time of the corpus or index is held, so nothing here says how current these '
-      + 'counts are; the corpus and index digests name exactly which artifacts are mounted',
+    reason: 'this report states no build time and no build time of the corpus file is held, so '
+      + "nothing here says how current these counts are; the index's event log records when each "
+      + 'build ran (events: log.built_at), an upper bound on when its corpus was observed and no '
+      + 'measure of currency against the publisher; the corpus and index digests name exactly which '
+      + 'artifacts are mounted',
   }),
   Object.freeze({
     item: 'legal_status',
@@ -313,7 +316,7 @@ export function renderCoveragePreview({ locale = 'en' } = {}) {
       + 'a wrong answer but a comfortable one: a count presented as current, a breakdown that reads '
       + 'as complete because nothing said it was not, two numbers in one row that cannot both be '
       + 'true.</p>\n'
-      + '      <p>Nothing on it says when the counting happened. This mount holds no build time and '
+      + '      <p>Nothing on it says when the counting happened. Its report states no build time and '
       + 'records that it does not, so what names the artifacts these counts came from is a pair of '
       + 'digests rather than an instant. The calendar dates in the tables are the publisher’s facts '
       + 'about the law and are a different kind of thing.</p>\n'

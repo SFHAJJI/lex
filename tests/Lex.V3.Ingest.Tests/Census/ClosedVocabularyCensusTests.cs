@@ -277,7 +277,7 @@ public sealed class ClosedVocabularyCensusTests
                     + "InvalidLicenceIri",
                 "Lex.V3.Ingest.Luxembourg.LuxembourgIndexBuildRefusal: None, CorpusRefused, "
                     + "PopulationMismatch, DerivationMismatch, IndexInvalid, PredecessorMismatch, "
-                    + "PredecessorSchemaDiffers, PredecessorDerivationDiffers",
+                    + "PredecessorSchemaDiffers, PredecessorDerivationDiffers, BuildTimeInvalid",
                 "Lex.V3.Ingest.Luxembourg.LuxembourgInitialDraftInventoryRefusal: None, "
                     + "EnumerationRefused, EnumerationProofRefused, VerifiedRowsRefused, "
                     + "RowNotAdmitted, SubjectDeliveredTwice, NonAddressableSubjectObserved",

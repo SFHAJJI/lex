@@ -30,6 +30,7 @@
         "log": {
           "ancestors": [],
           "basis": "genesis",
+          "built_at": "2026-10-01T08:00:00Z",
           "events_held": 1,
           "last_seq": 1,
           "log_id": "\u003Cvaries-per-run\u003E",
@@ -942,11 +943,11 @@
           },
           {
             "item": "first_sighting_and_observation_times",
-            "reason": "no observation time is held, so nothing here says when anything was first seen; events serves a genesis log whose first_sighting events say only that a state is first present in that log"
+            "reason": "no observation time is held, so nothing here says when anything was first seen; events serves the event log, whose first_sighting events say only that a state is first present in that log"
           },
           {
             "item": "build_time_and_currency",
-            "reason": "no build time of the corpus or index is held, so nothing here says how current these counts are; the corpus and index digests name exactly which artifacts are mounted"
+            "reason": "this report states no build time and no build time of the corpus file is held, so nothing here says how current these counts are; the index\u0027s event log records when each build ran (events: log.built_at), an upper bound on when its corpus was observed and no measure of currency against the publisher; the corpus and index digests name exactly which artifacts are mounted"
           },
           {
             "item": "legal_status",
@@ -3321,11 +3322,12 @@
             "work_key": "loi-1991-08-10-n3"
           }
         ],
-        "genesis_note": "this log comes from one observation with no predecessor, so it holds only first_sighting; first_sighting means first present in this log and does not say when the publisher published the text or when it was fetched; observed_from is null because no observation time is held; a revision (validity_revised, interval_closed, file_replaced, withdrawn_from_source, ...) needs a later build compared against this one",
+        "genesis_note": "this log comes from one observation with no predecessor, so it holds only first_sighting; first_sighting means first present in this log and does not say when the publisher published the text or when it was fetched; observed_from is null because no observation time is held; log.built_at is when the build ran, an upper bound on when its corpus was observed and never an observation time; a revision (validity_revised, interval_closed, file_replaced, withdrawn_from_source, ...) needs a later build compared against this one",
         "has_more": false,
         "log": {
           "ancestors": [],
           "basis": "genesis",
+          "built_at": "2026-10-01T08:00:00Z",
           "events_held": 1,
           "last_seq": 1,
           "log_id": "\u003Cvaries-per-run\u003E",
@@ -3348,12 +3350,12 @@
           },
           {
             "item": "upstream_health",
-            "reason": "no upstream health or build time is held, so silence here is not a statement that the publisher was quiet"
+            "reason": "no upstream health is held, and a build\u0027s time says when it ran and not what the publisher did after, so silence here is not a statement that the publisher was quiet"
           }
         ],
         "requested_event": null,
         "scope": "the event log of the mounted Luxembourg index: a list numbered from 1, polled by cursor, append-only; a genesis log (one observation, no predecessor) holds one first_sighting per held state and nothing else; a chained log carries its predecessors\u0027 observations unchanged and appends one observation per later build (log.basis says which)",
-        "silence_note": "an empty page says this log holds no further event; it says nothing about whether the publisher changed anything or whether acquisition ran: this mount holds no upstream health and no build time, and every envelope\u0027s freshness names upstream health stale"
+        "silence_note": "an empty page says this log holds no further event; it says nothing about whether the publisher changed anything or whether acquisition ran: this mount holds no upstream health, a build\u0027s time (log.built_at) says when it ran and not what the publisher did after, and every envelope\u0027s freshness names upstream health stale"
       }
     },
     {

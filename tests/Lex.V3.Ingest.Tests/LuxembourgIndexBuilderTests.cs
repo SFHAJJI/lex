@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
 using Lex.V3.Contracts;
@@ -18,10 +19,24 @@ public sealed class LuxembourgIndexBuilderTests
     {
         var digest = Convert.ToHexStringLower(SHA256.HashData(
             LuxembourgIndexBuilder.BuildFixedInputDeterminismEvidence()));
-        Assert.AreEqual("5b328364b06f43339ba418add44a941a7787a595121a09f4ff8ed60ce80c8bf9", digest);
+        Assert.AreEqual("97c536e9646dc834758427071ed3df26bed6b44ea40ade7d3b366a4b9e231b02", digest);
     }
 
     internal const string Retained1991 = "loi-1991-08-10-n3--2024-02-01--fr.bin";
+
+    /// <summary>
+    /// The build time every genesis build here records, later than any fixture's EU capture; a chained build records
+    /// <see cref="Later"/> and a build chained to that one <see cref="Latest"/>, as builds of one log run in time order.
+    /// </summary>
+    internal static readonly DateTimeOffset BuiltAt = new(2026, 10, 1, 8, 0, 0, TimeSpan.Zero);
+
+    internal const string BuiltAtText = "2026-10-01T08:00:00Z";
+
+    internal static readonly DateTimeOffset Later = BuiltAt.AddHours(1);
+
+    internal const string LaterText = "2026-10-01T09:00:00Z";
+
+    internal static readonly DateTimeOffset Latest = BuiltAt.AddHours(2);
 
     [TestMethod]
     public void BuilderAndStrictReaderShipAsOneTerminalSlice()
@@ -29,7 +44,7 @@ public sealed class LuxembourgIndexBuilderTests
         var schema = (string)typeof(LuxembourgIndexBuilder)
             .GetField(nameof(LuxembourgIndexBuilder.Schema))!
             .GetRawConstantValue()!;
-        Assert.AreEqual("lex-v3-luxembourg-index/7", schema);
+        Assert.AreEqual("lex-v3-luxembourg-index/8", schema);
         Assert.IsTrue(typeof(LuxembourgIndexBuilder).GetMethods().Any(static method => method.Name == nameof(LuxembourgIndexBuilder.TryBuild)));
         Assert.IsNotNull(typeof(LuxembourgIndexReader).GetMethod(nameof(LuxembourgIndexReader.OpenAndVerify)));
     }
@@ -49,8 +64,8 @@ public sealed class LuxembourgIndexBuilderTests
         var envelope = await LexCorpus6BuilderTests.CompleteProfileEnvelopeAsync();
         var corpus = LexCorpus6Builder.TryBuild(envelope, out var corpusRefusal, out var corpusDetail);
         Assert.IsNotNull(corpus, $"{corpusRefusal}: {corpusDetail}");
-        var first = LuxembourgIndexBuilder.TryBuild(envelope, out var firstRefusal, out var firstDetail);
-        var second = LuxembourgIndexBuilder.TryBuild(envelope, out var secondRefusal, out var secondDetail);
+        var first = LuxembourgIndexBuilder.TryBuild(envelope, BuiltAt, out var firstRefusal, out var firstDetail);
+        var second = LuxembourgIndexBuilder.TryBuild(envelope, BuiltAt, out var secondRefusal, out var secondDetail);
 
         Assert.IsNotNull(first, $"{firstRefusal}: {firstDetail}");
         Assert.IsNotNull(second, $"{secondRefusal}: {secondDetail}");
@@ -126,7 +141,7 @@ public sealed class LuxembourgIndexBuilderTests
         Assert.HasCount(54, inventory.Articles);
         Assert.IsTrue(inventory.Articles.All(static article => article.PublisherApplicability is not null));
 
-        var built = LuxembourgIndexBuilder.TryBuild(envelope, out var refusal, out var detail);
+        var built = LuxembourgIndexBuilder.TryBuild(envelope, BuiltAt, out var refusal, out var detail);
 
         Assert.IsNotNull(built, $"{refusal}: {detail}");
         var luxembourgMembers = corpus.VerifiedSet.Set.Members.Where(static value =>
@@ -210,7 +225,7 @@ public sealed class LuxembourgIndexBuilderTests
         Assert.AreEqual(1, outcomes.Count(static value => value.Disposition == LuxembourgAknLegalContentDisposition.MarkerOnlyEvidence));
         Assert.AreEqual(5, outcomes.Count(static value => value.Disposition == LuxembourgAknLegalContentDisposition.UnsupportedContentShape));
 
-        var built = LuxembourgIndexBuilder.TryBuild(envelope, out var refusal, out var detail);
+        var built = LuxembourgIndexBuilder.TryBuild(envelope, BuiltAt, out var refusal, out var detail);
 
         Assert.IsNotNull(built, $"{refusal}: {detail}");
         using var reader = LuxembourgIndexReader.OpenAndVerify(
@@ -262,7 +277,7 @@ public sealed class LuxembourgIndexBuilderTests
             value.Coordinate?.PublisherId == "art_3" &&
             value.Disposition == LuxembourgAknLegalContentDisposition.UnsupportedContentShape));
 
-        var built = LuxembourgIndexBuilder.TryBuild(envelope, out var refusal, out var detail);
+        var built = LuxembourgIndexBuilder.TryBuild(envelope, BuiltAt, out var refusal, out var detail);
 
         Assert.IsNotNull(built, $"{refusal}: {detail}");
         using var reader = LuxembourgIndexReader.OpenAndVerify(
@@ -313,7 +328,7 @@ public sealed class LuxembourgIndexBuilderTests
             value.Publisher == PublisherId.LuLegilux &&
             value.Outcome == LexCorpus6OutcomeKind.RightsWithheld));
 
-        var built = LuxembourgIndexBuilder.TryBuild(envelope, out var refusal, out var detail);
+        var built = LuxembourgIndexBuilder.TryBuild(envelope, BuiltAt, out var refusal, out var detail);
 
         Assert.IsNotNull(built, $"{refusal}: {detail}");
         using var reader = LuxembourgIndexReader.OpenAndVerify(
@@ -389,7 +404,7 @@ public sealed class LuxembourgIndexBuilderTests
             envelope.BodyComposition.Envelope.LuxembourgAknLegalContentPopulation.Outcomes
                 .Select(static value => value.Disposition).ToArray());
 
-        var built = LuxembourgIndexBuilder.TryBuild(envelope, out var refusal, out var detail);
+        var built = LuxembourgIndexBuilder.TryBuild(envelope, BuiltAt, out var refusal, out var detail);
 
         Assert.IsNotNull(built, $"{refusal}: {detail}");
         using var reader = LuxembourgIndexReader.OpenAndVerify(
@@ -409,7 +424,7 @@ public sealed class LuxembourgIndexBuilderTests
     {
         var envelope = await LexCorpus6BuilderTests.CompleteProfileEnvelopeAsync(includeLegalNotice: false);
 
-        var result = LuxembourgIndexBuilder.TryBuild(envelope, out var refusal, out var detail);
+        var result = LuxembourgIndexBuilder.TryBuild(envelope, BuiltAt, out var refusal, out var detail);
 
         Assert.IsNull(result);
         Assert.AreEqual(LuxembourgIndexBuildRefusal.CorpusRefused, refusal, detail);
@@ -421,7 +436,7 @@ public sealed class LuxembourgIndexBuilderTests
         var envelope = await LexCorpus6BuilderTests.CompleteProfileEnvelopeAsync();
         var corpus = LexCorpus6Builder.TryBuild(envelope, out var corpusRefusal, out var corpusDetail);
         Assert.IsNotNull(corpus, $"{corpusRefusal}: {corpusDetail}");
-        var built = LuxembourgIndexBuilder.TryBuild(envelope, out var refusal, out var detail);
+        var built = LuxembourgIndexBuilder.TryBuild(envelope, BuiltAt, out var refusal, out var detail);
         Assert.IsNotNull(built, $"{refusal}: {detail}");
 
         var changedBytes = built.IndexBytes.ToArray();
@@ -686,9 +701,9 @@ public sealed class LuxembourgIndexBuilderTests
 
         Assert.IsNotEmpty(events, "the fixture's state has a first_sighting");
         CollectionAssert.AreEqual(
-            new[] { new LuxembourgIndexBuilder.ObservationRow(1, corpus.ArtifactRef.Sha256, null, 1, events.Length, null) },
+            new[] { new LuxembourgIndexBuilder.ObservationRow(1, corpus.ArtifactRef.Sha256, null, 1, events.Length, BuiltAtText, null) },
             observations,
-            "one observation of this corpus, with no predecessor, numbering every event, at no observation time");
+            "one observation of this corpus, with no predecessor, numbering every event, at its build time and no observation time");
         Assert.AreEqual((LuxembourgIndexBuilder.EventLogSchema, LuxembourgIndexBuilder.HashEventLog(observations, events)), logStamp);
 
         var held = corpus.Set.Members
@@ -716,7 +731,9 @@ public sealed class LuxembourgIndexBuilderTests
     [TestMethod]
     [DataRow("UPDATE observations SET last_seq=last_seq+1", "do not number its events", DisplayName = "an observation numbering an event the log lacks")]
     [DataRow("UPDATE observations SET corpus_sha256='bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb'", "is not of this index's corpus", DisplayName = "an observation of another corpus")]
-    [DataRow("INSERT INTO observations VALUES(2,'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb','cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc',2,1,NULL)", "is not of this index's corpus", DisplayName = "a second observation of another corpus")]
+    [DataRow("INSERT INTO observations VALUES(2,'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb','cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc',2,1,'2026-10-01T09:00:00Z',NULL)", "is not of this index's corpus", DisplayName = "a second observation of another corpus")]
+    [DataRow("INSERT INTO observations VALUES(2,'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb','cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc',2,1,'2026-10-01T07:59:59Z',NULL)", "each later than the one before", DisplayName = "a second build earlier than the first")]
+    [DataRow("UPDATE observations SET built_at='2026-13-01T08:00:00Z'", "are not UTC seconds", DisplayName = "a build time that is no date")]
     [DataRow("DELETE FROM observations", "do not number its events", DisplayName = "no observation")]
     [DataRow("UPDATE log_stamp SET log_rows_sha256='0000000000000000000000000000000000000000000000000000000000000000'", "does not match its log stamp", DisplayName = "a log stamp of other rows")]
     [DataRow("UPDATE log_stamp SET log_schema='lex-v3-event-log/0'", "does not match its log stamp", DisplayName = "a log stamp of another log schema")]
@@ -777,6 +794,43 @@ public sealed class LuxembourgIndexBuilderTests
         StringAssert.Contains(exception.Message, "names source bodies the corpus does not hold");
     }
 
+    // ---- Predecessor chaining, the fifth slice: each observation's build time. ----
+
+    /// <summary>
+    /// An observation records its build's time, the upper bound <c>as_observed</c> gives: a UTC whole second (the build
+    /// rounds up), later than the predecessor's last build, and no earlier than the corpus's EU capture, the one
+    /// observation clock the corpus holds; any other time refuses <c>build_time_invalid</c> and writes no index.
+    /// </summary>
+    [TestMethod]
+    public async Task ABuildTimeIsAUtcSecondInTimeOrderAndNoEarlierThanTheEuCapture()
+    {
+        var (envelope, first, corpus) = await BuildStateEnvelopeAsync();
+        Assert.AreEqual(BuiltAtText, ReadLog(first.IndexBytes.ToArray()).Observations.Single().BuiltAt, "the genesis observation records its build's time");
+
+        var captured = DateTimeOffset.Parse(corpus.Set.EuropeRightsMatrix.CapturedAt, CultureInfo.InvariantCulture, DateTimeStyles.AdjustToUniversal);
+        var beforeCapture = new DateTimeOffset(captured.UtcTicks - (captured.UtcTicks % TimeSpan.TicksPerSecond), TimeSpan.Zero).AddSeconds(-1);
+        var predecessor = LuxembourgIndexPredecessor.TryRead(first.IndexRef, first.IndexBytes.Span, out _, out _);
+        foreach (var (what, chainedTo, builtAt, expected) in new (string, LuxembourgIndexPredecessor?, DateTimeOffset, string)[]
+                 {
+                     ("an offset that is not UTC", null, new DateTimeOffset(2026, 10, 1, 10, 0, 0, TimeSpan.FromHours(2)), "is not a UTC whole second"),
+                     ("a part of a second", null, BuiltAt.AddMilliseconds(1), "is not a UTC whole second"),
+                     ("before the corpus's EU capture", null, beforeCapture, "is earlier than the corpus's EU capture"),
+                     ("the predecessor's own build time", predecessor, BuiltAt, "is not later than the predecessor's build"),
+                 })
+        {
+            Assert.IsNull(LuxembourgIndexBuilder.TryBuild(envelope, chainedTo, builtAt, out var refusal, out var detail), what);
+            Assert.AreEqual(LuxembourgIndexBuildRefusal.BuildTimeInvalid, refusal, what);
+            StringAssert.Contains(detail, expected, what);
+        }
+
+        var chained = LuxembourgIndexBuilder.TryBuild(envelope, predecessor, Later, out var chainedRefusal, out var chainedDetail);
+        Assert.IsNotNull(chained, $"{chainedRefusal}: {chainedDetail}");
+        CollectionAssert.AreEqual(new[] { BuiltAtText, LaterText }, ReadLog(chained.IndexBytes.ToArray()).Observations.Select(static o => o.BuiltAt).ToArray(),
+            "each observation keeps its own build's time, the predecessor's carried forward unchanged");
+        using var reader = LuxembourgIndexReader.OpenAndVerify(chained.IndexRef, chained.IndexBytes.Span, corpus.ArtifactRef, chained.CapabilityManifest);
+        CollectionAssert.AreEqual(new[] { BuiltAtText, LaterText }, reader.ResolveObservations().Select(static o => o.BuiltAt).ToArray());
+    }
+
     // ---- Predecessor chaining, the second slice: the predecessor as a build input. ----
 
     /// <summary>
@@ -792,9 +846,9 @@ public sealed class LuxembourgIndexBuilderTests
         Assert.IsNotNull(predecessor, $"{readRefusal}: {readDetail}");
         Assert.AreEqual(first.IndexRef.Sha256, predecessor.IndexSha256);
 
-        var second = LuxembourgIndexBuilder.TryBuild(envelope, predecessor, out var refusal, out var detail);
+        var second = LuxembourgIndexBuilder.TryBuild(envelope, predecessor, Later, out var refusal, out var detail);
         Assert.IsNotNull(second, $"{refusal}: {detail}");
-        var again = LuxembourgIndexBuilder.TryBuild(envelope, predecessor, out refusal, out detail);
+        var again = LuxembourgIndexBuilder.TryBuild(envelope, predecessor, Later, out refusal, out detail);
         Assert.IsNotNull(again, $"{refusal}: {detail}");
         CollectionAssert.AreEqual(second.IndexBytes.ToArray(), again.IndexBytes.ToArray(), "two builds with one predecessor are one index");
 
@@ -803,7 +857,7 @@ public sealed class LuxembourgIndexBuilderTests
         CollectionAssert.AreEqual(firstEvents, secondEvents, "the predecessor's events, carried forward; the same states append none");
         CollectionAssert.AreEqual(firstObservations, secondObservations.Take(firstObservations.Length).ToArray(), "the predecessor's observations, an exact prefix");
         Assert.AreEqual(
-            new LuxembourgIndexBuilder.ObservationRow(2, corpus.ArtifactRef.Sha256, first.IndexRef.Sha256, firstEvents.Length + 1, firstEvents.Length, null),
+            new LuxembourgIndexBuilder.ObservationRow(2, corpus.ArtifactRef.Sha256, first.IndexRef.Sha256, firstEvents.Length + 1, firstEvents.Length, LaterText, null),
             secondObservations[^1],
             "one observation of this build, naming the predecessor, appending no event");
         using (var reader = LuxembourgIndexReader.OpenAndVerify(second.IndexRef, second.IndexBytes.Span, corpus.ArtifactRef, second.CapabilityManifest))
@@ -812,7 +866,7 @@ public sealed class LuxembourgIndexBuilderTests
         }
 
         var third = LuxembourgIndexBuilder.TryBuild(
-            envelope, LuxembourgIndexPredecessor.TryRead(second.IndexRef, second.IndexBytes.Span, out _, out _), out refusal, out detail);
+            envelope, LuxembourgIndexPredecessor.TryRead(second.IndexRef, second.IndexBytes.Span, out _, out _), Latest, out refusal, out detail);
         Assert.IsNotNull(third, $"{refusal}: {detail}");
         var (thirdObservations, thirdEvents) = ReadLog(third.IndexBytes.ToArray());
         CollectionAssert.AreEqual(secondObservations, thirdObservations.Take(secondObservations.Length).ToArray(), "the chain grows by one observation a build");
@@ -907,7 +961,7 @@ public sealed class LuxembourgIndexBuilderTests
     {
         var (envelope, first, corpus) = await BuildStateEnvelopeAsync();
         var second = LuxembourgIndexBuilder.TryBuild(
-            envelope, LuxembourgIndexPredecessor.TryRead(first.IndexRef, first.IndexBytes.Span, out _, out _), out var refusal, out var detail);
+            envelope, LuxembourgIndexPredecessor.TryRead(first.IndexRef, first.IndexBytes.Span, out _, out _), Later, out var refusal, out var detail);
         Assert.IsNotNull(second, $"{refusal}: {detail}");
         var renamed = MutateDatabase(second.IndexBytes.Span, connection =>
         {
@@ -943,7 +997,7 @@ public sealed class LuxembourgIndexBuilderTests
         });
         var changed = LuxembourgIndexPredecessor.TryRead(changedRef, changedLog, out var refusal, out var readDetail);
         Assert.IsNotNull(changed, $"{refusal}: {readDetail}");
-        Assert.IsNull(LuxembourgIndexBuilder.TryBuild(envelope, changed, out refusal, out var detail));
+        Assert.IsNull(LuxembourgIndexBuilder.TryBuild(envelope, changed, Later, out refusal, out var detail));
         Assert.AreEqual(LuxembourgIndexBuildRefusal.PredecessorDerivationDiffers, refusal);
         StringAssert.Contains(detail, "this build's derivation differs from the predecessor's");
 
@@ -954,11 +1008,11 @@ public sealed class LuxembourgIndexBuilderTests
         });
         var empty = LuxembourgIndexPredecessor.TryRead(emptyRef, emptyLog, out refusal, out readDetail);
         Assert.IsNotNull(empty, $"{refusal}: {readDetail}");
-        var chained = LuxembourgIndexBuilder.TryBuild(envelope, empty, out refusal, out detail);
+        var chained = LuxembourgIndexBuilder.TryBuild(envelope, empty, Later, out refusal, out detail);
         Assert.IsNotNull(chained, $"{refusal}: {detail}");
         var (observations, events) = ReadLog(chained.IndexBytes.ToArray());
         Assert.AreEqual(2, observations.Length);
-        Assert.AreEqual(new LuxembourgIndexBuilder.ObservationRow(2, corpus.ArtifactRef.Sha256, emptyRef.Sha256, 1, events.Length, null), observations[1]);
+        Assert.AreEqual(new LuxembourgIndexBuilder.ObservationRow(2, corpus.ArtifactRef.Sha256, emptyRef.Sha256, 1, events.Length, LaterText, null), observations[1]);
         Assert.IsTrue(events.All(static value => value.Event == "first_sighting"), "each state, new to the log, first sighted");
 
         // The appended events are the reader's own recomputation: one renamed, both stamps recomputed, is refused.
@@ -1094,7 +1148,7 @@ public sealed class LuxembourgIndexBuilderTests
                  })
         {
             var (envelope, _, _) = await BuildStateEnvelopeAsync(transform);
-            var chained = LuxembourgIndexBuilder.TryBuild(envelope, predecessor, out var refusal, out var detail);
+            var chained = LuxembourgIndexBuilder.TryBuild(envelope, predecessor, Later, out var refusal, out var detail);
             Assert.IsNotNull(chained, $"{what}: {refusal}: {detail}");
             var (observations, events) = ReadLog(chained.IndexBytes.ToArray());
             var replaced = events.Skip((int)observations[^1].FirstSeq - 1).Where(static value => value.Event == "file_replaced").ToArray();
@@ -1138,7 +1192,7 @@ public sealed class LuxembourgIndexBuilderTests
             luxembourgOverride: luxembourg, luxembourgStore: store);
         var corpus = LexCorpus6Builder.TryBuild(envelope, out var corpusRefusal, out var corpusDetail);
         Assert.IsNotNull(corpus, $"{corpusRefusal}: {corpusDetail}");
-        var built = LuxembourgIndexBuilder.TryBuild(envelope, out var refusal, out var detail);
+        var built = LuxembourgIndexBuilder.TryBuild(envelope, BuiltAt, out var refusal, out var detail);
         Assert.IsNotNull(built, $"{refusal}: {detail}");
         return (envelope, built, corpus.VerifiedSet);
     }
@@ -1190,7 +1244,7 @@ public sealed class LuxembourgIndexBuilderTests
             luxembourgOverride: luxembourg, luxembourgStore: store);
         var corpus = LexCorpus6Builder.TryBuild(envelope, out var corpusRefusal, out var corpusDetail);
         Assert.IsNotNull(corpus, $"{corpusRefusal}: {corpusDetail}");
-        var built = LuxembourgIndexBuilder.TryBuild(envelope, out var refusal, out var detail);
+        var built = LuxembourgIndexBuilder.TryBuild(envelope, BuiltAt, out var refusal, out var detail);
         Assert.IsNotNull(built, $"{refusal}: {detail}");
         return (built, corpus.VerifiedSet);
     }
@@ -1234,12 +1288,12 @@ public sealed class LuxembourgIndexBuilderTests
     internal static LuxembourgIndexBuilder.ObservationRow[] ReadObservations(SqliteConnection connection)
     {
         using var command = connection.CreateCommand();
-        command.CommandText = "SELECT observation,corpus_sha256,predecessor_index_sha256,first_seq,last_seq,observed_from FROM observations ORDER BY observation";
+        command.CommandText = "SELECT observation,corpus_sha256,predecessor_index_sha256,first_seq,last_seq,built_at,observed_from FROM observations ORDER BY observation";
         using var reader = command.ExecuteReader();
         var rows = new List<LuxembourgIndexBuilder.ObservationRow>();
         while (reader.Read()) rows.Add(new(
             reader.GetInt64(0), reader.GetString(1), reader.IsDBNull(2) ? null : reader.GetString(2),
-            reader.GetInt64(3), reader.GetInt64(4), reader.IsDBNull(5) ? null : reader.GetString(5)));
+            reader.GetInt64(3), reader.GetInt64(4), reader.GetString(5), reader.IsDBNull(6) ? null : reader.GetString(6)));
         return rows.ToArray();
     }
 
@@ -1268,7 +1322,7 @@ public sealed class LuxembourgIndexBuilderTests
             luxembourgOverride: luxembourg, luxembourgStore: store);
         var corpus = LexCorpus6Builder.TryBuild(envelope, out var corpusRefusal, out var corpusDetail);
         Assert.IsNotNull(corpus, $"{corpusRefusal}: {corpusDetail}");
-        var built = LuxembourgIndexBuilder.TryBuild(envelope, out var refusal, out var detail);
+        var built = LuxembourgIndexBuilder.TryBuild(envelope, BuiltAt, out var refusal, out var detail);
         Assert.IsNotNull(built, $"{refusal}: {detail}");
         return (built, corpus.ArtifactRef);
     }
@@ -1441,7 +1495,14 @@ public sealed class LuxembourgIndexBuilderTests
         IReadOnlyDictionary<string, string> bodyByObjectRef)
     {
         // The genesis log of the edited states, re-sealed whole: its events (each naming its state's source bodies),
-        // its one observation and its own stamp, as the builder writes them.
+        // its one observation (at the build time it held) and its own stamp, as the builder writes them.
+        string builtAt;
+        using (var held = connection.CreateCommand())
+        {
+            held.CommandText = "SELECT built_at FROM observations WHERE observation=1";
+            builtAt = (string)held.ExecuteScalar()!;
+        }
+
         foreach (var table in new[] { "events", "observations", "log_stamp" })
         {
             using var clear = connection.CreateCommand();
@@ -1471,11 +1532,12 @@ public sealed class LuxembourgIndexBuilderTests
             corpusSha256 = (string)stamp.ExecuteScalar()!;
         }
 
-        var observations = LuxembourgIndexBuilder.ProjectGenesisObservations(corpusSha256, events.Length);
+        var observations = LuxembourgIndexBuilder.ProjectGenesisObservations(corpusSha256, events.Length, builtAt);
         foreach (var observation in observations)
         {
             using var insert = connection.CreateCommand();
-            insert.CommandText = "INSERT INTO observations VALUES($observation,$corpus,NULL,$first,$last,NULL)";
+            insert.CommandText = "INSERT INTO observations VALUES($observation,$corpus,NULL,$first,$last,$builtAt,NULL)";
+            insert.Parameters.AddWithValue("$builtAt", observation.BuiltAt);
             insert.Parameters.AddWithValue("$observation", observation.Observation);
             insert.Parameters.AddWithValue("$corpus", observation.CorpusSha256);
             insert.Parameters.AddWithValue("$first", observation.FirstSeq);
