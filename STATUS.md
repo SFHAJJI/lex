@@ -3,6 +3,31 @@
 Updated 2026-10-01 by the driver. This file replaces the issue-comment ledgers. It is rewritten in
 every pull request that changes what is served, what is next or what is blocked.
 
+## Compact Luxembourg object identities (Codex, 2026-10-01)
+
+Reversible driver decision: retain each derived object digest as four unsigned 64-bit values,
+sorted in the same order as lowercase hexadecimal. The production LU evidence resolver uses
+binary search over this immutable set, and the observed-identity writer uses its lazy hexadecimal
+view. This replaces their retained string/hash-tree payloads while preserving exact membership,
+duplicate-set semantics and the existing canonical identity artifact. It does not alter publisher
+proofs, custody admission or complete-enumeration checks. Binary search trades lookup work for
+less retained memory; full pipeline memory remains to be measured.
+
+Ten draft cases cover sorted-set parity over 1,024 distinct identities plus duplicates, indexed
+and enumerated access, absent and malformed digests, input-list mutation, empty/repeated sets,
+legacy canonical bytes/digests and independent reopening, nulls and cancellation. Existing
+resolver and retained-identity checks will run too. Code is unvalidated; census diagnostics will
+print the actual new construction entry before pin updates. Local heavy checks remain serialized
+behind the active EU acquisition and previously queued reviews/validation.
+
+EU retry 6 started at 04:01 UTC in C:/lex-v3/eu-population-20261001-4 from exact merged/tested
+6eb1d9d9, after preserving all cited custody paths through verified duplicate hardlinks and
+reclaiming finished build outputs. It retains all 82 seeds, EN/FRA Formex enumeration, typed
+outcomes for other languages, 20,000-wire ceiling, bounded LU a439 and Brotli custody. The full
+6,374,424,214-byte allowance was checked again after runtime freezing and before the child launch.
+It is still active; no completed population is claimed. Full LU retains the independently counted
+S=1,986,924, A=9,672,378 and G=221,852 sizing inputs; a bounded complete partition is still required.
+
 ## EU escaped qualifier authority (Codex, 2026-10-01)
 
 EU retry 5 at C:/lex-v3/eu-population-20261001-3 ended at 03:08 UTC with exit 3 after

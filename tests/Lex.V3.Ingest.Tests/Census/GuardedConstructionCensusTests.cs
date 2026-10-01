@@ -58,8 +58,7 @@ public sealed class GuardedConstructionCensusTests
     [TestMethod]
     public void EveryConstructionRestrictedTypeInTheSweptAssembliesHasExactlyTheseDoors()
     {
-        CollectionAssert.AreEqual(
-            new[]
+        var expected = new[]
             {
                 "Lex.V3.Ingest.ChunkedDerivedArtifact: constructor private instance "
                     + "Lex.V3.Ingest.ChunkedDerivedArtifact::.ctor, "
@@ -1190,8 +1189,12 @@ public sealed class GuardedConstructionCensusTests
                     + "Lex.V3.Ingest.Europe.LuxembourgTranspositionIdentityRunRequest::Deconstruct, "
                     + "constructor private instance Lex.V3.Ingest.WireRequestBudget::.ctor, "
                     + "method public static Lex.V3.Ingest.WireRequestBudget::OfWireRequests",
-            },
-            ClosedSurfaceCensus.GuardedConstruction(CensusScope.SweptHere).ToArray());
+            };
+        var actual = ClosedSurfaceCensus.GuardedConstruction(CensusScope.SweptHere).ToArray();
+        // Expected entries stay literal; remote failures print the independently observed changes.
+        CollectionAssert.AreEqual(expected, actual,
+            "Removed or changed pins:\n" + string.Join("\n", expected.Except(actual, StringComparer.Ordinal)) +
+            "\nActual added or changed entries:\n" + string.Join("\n", actual.Except(expected, StringComparer.Ordinal)));
     }
 
     /// <summary>

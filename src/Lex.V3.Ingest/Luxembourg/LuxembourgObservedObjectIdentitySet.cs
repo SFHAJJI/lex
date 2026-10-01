@@ -78,14 +78,8 @@ public sealed class LuxembourgObservedObjectIdentitySet
         ArgumentNullException.ThrowIfNull(runIdentity);
         ArgumentNullException.ThrowIfNull(observations);
 
-        var values = new SortedSet<string>(StringComparer.Ordinal);
-        foreach (var observation in observations)
-        {
-            ArgumentNullException.ThrowIfNull(observation);
-            values.Add(ScopeManifestCanonicalWriter.ComputeObjectRefSha256(observation.ObjectRef));
-        }
-
-        return new LuxembourgObservedObjectIdentitySet(runIdentity, [.. values]);
+        return new LuxembourgObservedObjectIdentitySet(runIdentity,
+            LuxembourgObjectDigestSet.FromObservations(observations));
     }
 }
 
