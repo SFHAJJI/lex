@@ -56,8 +56,12 @@ test("the script never logs in, never handles a secret on a command line or on d
   for (const banned of [/\baz login\b/, /Connect-AzAccount/, /ConvertTo-SecureString/, /--password(?!-stdin)\b/, /-p\s+\S*password/i, /Set-Content[^\n]*token/i, /Out-File[^\n]*token/i]) {
     assert.ok(!banned.test(code), `deploy.ps1 matches ${banned}`);
   }
-  assert.match(script, /--expose-token --query accessToken -o tsv \|\s*\n?\s*oras cp/, "the registry token goes to oras on standard input only");
-  assert.match(script, /--to-password-stdin/);
+  // The registry token goes on standard input to `oras login`, into a registry config in a fresh private directory that
+  // `oras cp` reads and a finally block removes (oras cp takes no password on stdin; review of #890).
+  assert.match(code, /--expose-token --query accessToken -o tsv \|\s*\n?\s*oras login \$Registry --username 0{8}-0{4}-0{4}-0{4}-0{12} --password-stdin --registry-config \$registryConfig/);
+  assert.match(code, /oras cp --from-oci-layout "\$\{archive\}@\$digest" "\$Registry\/\$\{Repository\}:\$tag" --to-registry-config \$registryConfig/);
+  assert.match(code, /finally \{\s*if \(Test-Path \$session\) \{ Remove-Item -Recurse -Force \$session/);
+  assert.ok(!/--to-password|--password(?!-stdin)/.test(code), "no password on a command line");
   // Promotion is printed for the owner, never run: the traffic and access-restriction commands appear only inside Write-Host.
   const promotion = script.split("\n").filter((line) => line.includes("ingress traffic set") || line.includes("access-restriction remove"));
   assert.ok(promotion.length >= 2 && promotion.every((line) => line.trim().startsWith("Write-Host")), `promotion runs: ${promotion.join(" | ")}`);

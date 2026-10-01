@@ -7,7 +7,8 @@ one-server container, probed, and removed again if the probe fails.
 Going live is the owner's decision (production credentials, deployment and promotion; STATUS, owner decisions). This
 script is the kit for it. It never logs in, never reads, prints or stores a secret, and never promotes:
 - it runs in the owner's own Azure CLI session (`az login` is the owner's, before this script);
-- the registry access token travels from `az acr login --expose-token` to `oras cp` on standard input only;
+- the registry access token (short-lived) travels from `az acr login --expose-token` to `oras login` on standard input,
+  into a registry config in a fresh private directory that is removed when the copy ends; never on a command line;
 - the app pulls its image with the managed identity the owner names, and the template holds no secret.
 
 Without -Apply it only plans: it verifies the release and prints every command it would run, and changes nothing.
@@ -97,15 +98,31 @@ $archive = Join-Path $releasePath 'lex-v3-image.oci.tar'
 Write-Host "  release $($manifest.version): image $digest, corpus $($manifest.corpus.sha256)"
 
 # 2. The image into the registry: read out of the release by its manifest digest, tagged with the release version as a
-# handle, and deployed below by the digest alone. The access token is piped to oras and never written or printed.
+# handle, and deployed below by the digest alone. The registry access token (short-lived, from the owner's session)
+# goes on standard input to `oras login`, which keeps it in a registry config in a fresh private directory that only
+# `oras cp` and the digest check read; the directory is removed when the copy ends, whatever happens. The token is never
+# on a command line, never printed, and never left on disk (the custody probe's runbook did the same).
 Step "copy the image into $Registry"
 Run "az account set --subscription $Subscription" { az account set --subscription $Subscription }
 $registryName = $Registry.Split('.')[0]
 $tag = ($manifest.version -replace '[^A-Za-z0-9_.-]', '-')
-Run "az acr login --name $registryName --expose-token --query accessToken -o tsv | oras cp --from-oci-layout <release image>@$digest $Registry/${Repository}:$tag --to-username 00000000-0000-0000-0000-000000000000 --to-password-stdin" {
-    az acr login --name $registryName --expose-token --query accessToken -o tsv |
-        oras cp --from-oci-layout "${archive}@$digest" "$Registry/${Repository}:$tag" `
-            --to-username 00000000-0000-0000-0000-000000000000 --to-password-stdin
+$session = Join-Path ([System.IO.Path]::GetTempPath()) "lex-v3-oras-$([guid]::NewGuid().ToString('N'))"
+$registryConfig = Join-Path $session 'registry-config.json'
+try {
+    if ($Apply) { New-Item -ItemType Directory -Path $session | Out-Null }
+    Run "az acr login --name $registryName --expose-token --query accessToken -o tsv | oras login $Registry --username 00000000-0000-0000-0000-000000000000 --password-stdin --registry-config <private session config>" {
+        az acr login --name $registryName --expose-token --query accessToken -o tsv |
+            oras login $Registry --username 00000000-0000-0000-0000-000000000000 --password-stdin --registry-config $registryConfig
+    }
+    Run "oras cp --from-oci-layout <release image>@$digest $Registry/${Repository}:$tag --to-registry-config <private session config>" {
+        oras cp --from-oci-layout "${archive}@$digest" "$Registry/${Repository}:$tag" --to-registry-config $registryConfig
+    }
+    Run "oras manifest fetch $image --descriptor --registry-config <private session config>" {
+        oras manifest fetch $image --descriptor --registry-config $registryConfig
+    }
+}
+finally {
+    if (Test-Path $session) { Remove-Item -Recurse -Force $session -Confirm:$false }
 }
 
 # 3. The candidate revision, with no traffic while a live revision serves.

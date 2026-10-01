@@ -1144,7 +1144,7 @@ CI evidence are recorded in the pull request before merge.
 
 ## Heads
 
-- `v3/integration`: `c9e5a40a` (2026-10-01, PR #872 merged). Build 45 s. Fast lane
+- `v3/integration`: `197f0511` (2026-10-01, PR #889 merged). Build 45 s. Fast lane
   (`eng/test-fast.ps1`): 3,077 tests, 3,076 pass, 1 skipped (the review of PR #828). Ingest suite: green on CI for PR #760
   (the CI `dotnet` job runs the whole solution on every pull request, about 7 min on the runner;
   green for PR #834);
@@ -2139,8 +2139,12 @@ Nothing here logs in, deploys or signs with a production identity; those stay wi
   - With `-Apply`, in order:
     1. it verifies the release under the signing identity's public key, and stops if it does not
        verify;
-    2. it copies the image out of the release by its manifest digest with `oras`, the registry token
-       piped from `az acr login --expose-token` on standard input only;
+    2. it copies the image out of the release by its manifest digest with `oras`, and checks the
+       pushed digest. The short-lived registry token goes from `az acr login --expose-token` on
+       standard input to `oras login`, into a registry config in a fresh private directory, which
+       `oras cp` reads and which is removed when the copy ends, whatever happens. It is never on a
+       command line or printed. `oras cp` takes no password on stdin (review of #890); the custody
+       probe's runbook did the same;
     3. it runs `az deployment group what-if`, then `create`, by digest;
     4. it probes the candidate's own URL;
     5. if the probe fails, it deactivates the candidate (the removal step) and exits non-zero.
@@ -2160,7 +2164,8 @@ Nothing here logs in, deploys or signs with a production identity; those stay wi
   `web/test/deploy-kit.test.mjs`:
   - no secure parameter, secret, key listing or registry password;
   - the identity pull, one server, `/tmp`, and the zero-traffic candidate;
-  - the script never logs in, never puts a token on a command line or on disk, and never promotes;
+  - the script never logs in, never puts a token or password on a command line, keeps the registry
+    token only in the private session config it removes, and never promotes;
   - the release is verified before any Azure command, and the image is deployed by digest.
 - **Evidence:**
   - the probe passes a stand-in revision that answers as its release holds, and fails nine ways a
