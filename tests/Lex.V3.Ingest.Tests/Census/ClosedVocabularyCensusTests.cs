@@ -51,7 +51,6 @@ public sealed class ClosedVocabularyCensusTests
     [TestMethod]
     public void EveryClosedVocabularyInTheSweptAssembliesIsPinnedMemberByMember()
     {
-        foreach (var row in ClosedSurfaceCensus.ClosedVocabularies(CensusScope.SweptHere).Where(row => row.Contains("EuFormexPackageNotAcquiredReason", StringComparison.Ordinal))) System.Console.WriteLine("PIN881_ENUM " + row);
         CollectionAssert.AreEqual(
             new[]
             {
@@ -116,10 +115,9 @@ public sealed class ClosedVocabularyCensusTests
                 "Lex.V3.Ingest.Europe.EuFormexManifestationEnumerationRefusal: None, EnumerationRefused, Enumeratio"
                     + "nProofRefused, VerifiedRowsRefused, RowNotAdmitted, RowNamesAnotherExpression, ManifestationBindin"
                     + "gDeliveredTwice, CheckpointNotRetained",
-                "Lex.V3.Ingest.Europe.EuFormexPackageNotAcquiredReason: None, BodyNotHeld, "
-                    + "LanguageNotAddressable, ManifestationNotSingular, IdentityNotAdmitted, "
-                    + "AnnexXhtmlNotInventoried, AnnexPdfNotServed, AnnexEvidenceNotBound, "
-                    + "AnnexBodyNotClassified",
+                "Lex.V3.Ingest.Europe.EuFormexPackageNotAcquiredReason: None, BodyNotHeld, LanguageNotAddressable, "
+                    + "ManifestationNotSingular, IdentityNotAdmitted, AnnexXhtmlNotInventoried, AnnexPdfNotServed, AnnexE"
+                    + "videnceNotBound, AnnexBodyNotClassified, CheckpointNotRetained",
                 "Lex.V3.Ingest.Europe.EuFormexPackageOutcomeKind: NotEligible, Acquired, "
                     + "Unavailable, Refused, NotAcquired, RouteRefused, PackageRejected, "
                     + "NotEnumeratedLanguageOutOfScope",

@@ -17,7 +17,9 @@ sources, caller mismatches, rehashed associations, cancellation and typed failed
 Initial e91a02f5 CI36841427108 compiled:5349 passed,22 skipped,11 failures. Nine replay cases
 used fresh renderer UUIDs in the fixture and correctly failed the original-identity gate; two
 census pins also failed. The fixture now reuses its captured renderer. The compiled document
-result doors are transcribed; enum diagnostics and fresh CI remain. Required local Release,
+result doors are transcribed. Diagnostic a62e7ff9 CI36842483757 passed all32 new cases:5359
+passed,22 skipped and two remaining census pins. Both compiled rows are now transcribed and
+temporary diagnostics removed; fresh CI must verify them. Required local Release,
 fast and affected ingest tests plus Claude review
 wait for the active EU run and prior queue. Pending PR876 and PR879 final merged heads are required.
 Successful populations expose immutable package results bound to their exact outcome objects, so
