@@ -14,7 +14,9 @@ and incomplete routes retain their original outcomes. Package inventories, annex
 query binding and complete acquisition catalog reconstruction remain separate work.
 
 All19 new cases passed in initial CI36840785524:5291 passed,22 skipped and one construction
-census failed. A compiled-surface diagnostic is pending; no implementation failure was reported.
+census failed. Diagnostic CI36841885062 repeated that result; its138 compiled rows change only
+the document-fetch result factory list. The new ReopenAsync door is now pinned from that output;
+fresh CI must verify the transcription. No implementation failure was reported.
 Local Release, required fast tests, affected ingest tests and Claude review remain queued behind
 the active EU run and prior data slices. No population completion or complete offline rebuild is claimed.
 
