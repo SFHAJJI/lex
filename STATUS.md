@@ -3,19 +3,22 @@
 Updated 2026-10-01 by the driver. This file replaces the issue-comment ledgers. It is rewritten in
 every pull request that changes what is served, what is next or what is blocked.
 
-## Renderer source identities from custody (Codex, 2026-10-01)
+## Offline rights-route reopening (Codex, 2026-10-01)
 
-Reopen the six EU and two Luxembourg renderer-source artifacts from an exact role-to-reference
-mapping. Snapshot caller input, require the declared role names, verify each body by digest and
-preserve its resource ID. This avoids checkout reads and new UUIDs during reconstruction. It does
-not execute archived source or independently prove that a containing acquisition used the mapping.
+Retained EU rights evidence reopens under its original corpus run identity. The reader has no
+transport and performs no writes. It verifies the route digest, every hop's original GET and
+policy bytes, body receipt and actual body bytes, then repeats the existing route and legal-notice
+gates. The route digest is the lookup anchor; the supplied resource identifier is not compared.
+Capture times and receipts remain historical evidence, without a current retention claim.
 
-All 26 cases passed at 019f6eda: CI 36843293672 reported 5,304 passed and 22 skipped,
-with required watch exit zero. Coverage includes independent and weaker custody, byte/ID equality,
-mapping order/mutation, all eight missing bodies, exact roles/counts, wrong digests and cancellation.
-Integration d56d0539 is now included; fresh CI and read-only Claude review remain required.
-Local builds/tests are deferred under the acquisition memory guard. Complete catalogs and two
-independent offline mount processes remain pending. No publisher traffic or production actions.
+All 12 cases passed at 47eb3e39: CI 36854051881 reported 5,310 passed and 22 skipped, with
+required watch exit zero. Claude returned MERGE with no material code findings. The one repair
+clarifies reopen refusals and digest lookup, makes the literal census entry readable without
+changing its value, and includes integration 8c3f3801 with both STATUS sections preserved.
+Fresh final-head CI gates merge. Local builds/tests remain deferred under the memory guard.
+
+This restores one rights component. Complete acquisition catalogs and independent offline mounts
+remain pending. The active EU runtime is unchanged; no publisher traffic is sent by this slice.
 
 ## Compact Luxembourg object identities (Codex, 2026-10-01)
 
@@ -3686,6 +3689,20 @@ and a current storage check before and after its runtime is frozen; it has not s
 
 PRs #827, #829 and #830 are merged. The all-82-seed EU retry remains prepared, with a
 4,999,959,422-byte launch allowance and checks before and after freezing its runtime.
+## Renderer source identities from custody (Codex, 2026-10-01)
+
+Reopen the six EU and two Luxembourg renderer-source artifacts from an exact role-to-reference
+mapping. Snapshot caller input, require the declared role names, verify each body by digest and
+preserve its resource ID. This avoids checkout reads and new UUIDs during reconstruction. It does
+not execute archived source or independently prove that a containing acquisition used the mapping.
+
+All 26 cases passed at 019f6eda: CI 36843293672 reported 5,304 passed and 22 skipped,
+with required watch exit zero. Coverage includes independent and weaker custody, byte/ID equality,
+mapping order/mutation, all eight missing bodies, exact roles/counts, wrong digests and cancellation.
+Integration d56d0539 is now included; fresh CI and read-only Claude review remain required.
+Local builds/tests are deferred under the acquisition memory guard. Complete catalogs and two
+independent offline mount processes remain pending. No publisher traffic or production actions.
+
 ## Offline Formex population reconciliation (Codex, 2026-10-01)
 
 Reversible driver decision: retain the complete ordered Formex population associations for a

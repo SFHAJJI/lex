@@ -435,6 +435,147 @@ public sealed class EuLegalNoticeRouteProducerTests
         public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
     }
 
+    [TestMethod]
+    [DataRow(false)]
+    [DataRow(true)]
+    public async Task RetainedRightsReopenIndependentlyWithOriginalBytesTimesAndNoTraffic(bool redirect)
+    {
+        var (store, result, handler) = await CaptureForReopenAsync(redirect);
+        var copy = await CopyForReopenAsync(store);
+        var sends = handler.Sends.Count;
+        var writes = copy.CreateCallCount;
+        var reference = new SourceArtifactRef(NewUrn(), Sha256(result.Route!.CopyCanonicalBytes()));
+        var first = await EuLegalNoticeRouteProducer.ReopenAsync(copy, reference, result.Route.RunIdentity, CancellationToken.None);
+        var second = await EuLegalNoticeRouteProducer.ReopenAsync(copy, reference, result.Route.RunIdentity, CancellationToken.None);
+        Assert.IsNull(first.Refusal, first.Detail);
+        Assert.IsNull(second.Refusal, second.Detail);
+        CollectionAssert.AreEqual(result.Route.CopyCanonicalBytes(), first.Route!.CopyCanonicalBytes());
+        CollectionAssert.AreEqual(first.Route.CopyCanonicalBytes(), second.Route!.CopyCanonicalBytes());
+        CollectionAssert.AreEqual(result.TerminalRequest!.CopyCanonicalBytes(), first.TerminalRequest!.CopyCanonicalBytes());
+        Assert.AreEqual(EuLegalNoticeEvidence.FromRoute(result.Route, result.TerminalRequest).CanonicalSha256,
+            EuLegalNoticeEvidence.FromRoute(first.Route, first.TerminalRequest).CanonicalSha256);
+        Assert.AreEqual(sends, handler.Sends.Count);
+        Assert.AreEqual(writes, copy.CreateCallCount);
+    }
+
+    [TestMethod]
+    [DataRow("route")]
+    [DataRow("request")]
+    [DataRow("receipt")]
+    [DataRow("body")]
+    [DataRow("request_policy")]
+    [DataRow("redirect_policy")]
+    public async Task MissingRightsDependencyRefusesWithoutFallback(string missing)
+    {
+        var (store, result, handler) = await CaptureForReopenAsync(true);
+        var route = result.Route!;
+        var request = result.TerminalRequest!;
+        var digest = missing switch
+        {
+            "route" => Sha256(route.CopyCanonicalBytes()),
+            "request" => route.Hops[0].LogicalRequestSha256,
+            "receipt" => route.Hops[0].DurableWriteReceiptSha256,
+            "body" => route.Hops[^1].Sha256,
+            "request_policy" => request.RequestPolicySha256,
+            "redirect_policy" => request.RedirectPolicySha256,
+            _ => throw new InvalidOperationException(),
+        };
+        var copy = await CopyForReopenAsync(store, digest);
+        var sends = handler.Sends.Count;
+        var writes = copy.CreateCallCount;
+        var reopened = await EuLegalNoticeRouteProducer.ReopenAsync(copy,
+            new SourceArtifactRef(NewUrn(), Sha256(route.CopyCanonicalBytes())), route.RunIdentity, CancellationToken.None);
+        Assert.AreEqual(EuLegalNoticeRouteRefusal.RouteNotRetained, reopened.Refusal, reopened.Detail);
+        Assert.IsNull(reopened.Route);
+        Assert.AreEqual(sends, handler.Sends.Count);
+        Assert.AreEqual(writes, copy.CreateCallCount);
+    }
+
+    [TestMethod]
+    public async Task ChangedRetainedRightsBodyRefusesItsDigest()
+    {
+        var (store, result, _) = await CaptureForReopenAsync(false);
+        var copy = await CopyForReopenAsync(store);
+        var route = result.Route!;
+        var bytes = await copy.ReadByDigestAsync(route.Hops[0].Sha256, CancellationToken.None);
+        Assert.IsTrue(System.Runtime.InteropServices.MemoryMarshal.TryGetArray(bytes, out var segment));
+        segment.Array![segment.Offset] ^= 1; // Deliberately violate this test store's retained bytes.
+        var reopened = await EuLegalNoticeRouteProducer.ReopenAsync(copy,
+            new SourceArtifactRef(NewUrn(), Sha256(route.CopyCanonicalBytes())), route.RunIdentity, CancellationToken.None);
+        Assert.AreEqual(EuLegalNoticeRouteRefusal.RouteNotRetained, reopened.Refusal);
+    }
+
+    [TestMethod]
+    public async Task AnotherCorpusRunCannotAdoptTheRetainedRightsRoute()
+    {
+        var (store, result, _) = await CaptureForReopenAsync(false);
+        var reopened = await EuLegalNoticeRouteProducer.ReopenAsync(store,
+            new SourceArtifactRef(NewUrn(), Sha256(result.Route!.CopyCanonicalBytes())), CorpusRunIdentity(), CancellationToken.None);
+        Assert.AreEqual(EuLegalNoticeRouteRefusal.NoticeRouteInvalid, reopened.Refusal);
+        StringAssert.Contains(reopened.Detail, "different corpus run");
+    }
+
+    [TestMethod]
+    public async Task CancelledRightsReopenDoesNotBecomeAPublisherRefusal()
+    {
+        var (store, result, handler) = await CaptureForReopenAsync(false);
+        using var cancellation = new CancellationTokenSource();
+        cancellation.Cancel();
+        var writes = store.CreateCallCount;
+        var sends = handler.Sends.Count;
+        await Assert.ThrowsExactlyAsync<OperationCanceledException>(() => EuLegalNoticeRouteProducer.ReopenAsync(store,
+            new SourceArtifactRef(NewUrn(), Sha256(result.Route!.CopyCanonicalBytes())), result.Route.RunIdentity, cancellation.Token));
+        Assert.AreEqual(writes, store.CreateCallCount);
+        Assert.AreEqual(sends, handler.Sends.Count);
+    }
+
+    [TestMethod]
+    public async Task ARehashedRouteCannotSubstituteAnotherBodyReceipt()
+    {
+        var (store, result, _) = await CaptureForReopenAsync(false);
+        var unrelated = await store.CreateAsync("another body"u8.ToArray(), CustodyClass.NightlyFloor90d, CancellationToken.None);
+        var receiptBytes = Encoding.UTF8.GetBytes(Lex.V3.Contracts.ContractJson.Serialize(unrelated));
+        var heldReceipt = await store.CreateAsync(receiptBytes, CustodyClass.NightlyFloor90d, CancellationToken.None);
+        var original = Encoding.UTF8.GetString(result.Route!.CopyCanonicalBytes());
+        var replacement = original.Replace(result.Route.Hops[0].DurableWriteReceiptSha256,
+            heldReceipt.Reference.ContentSha256, StringComparison.Ordinal);
+        Assert.AreNotEqual(original, replacement);
+        var replacementBytes = Encoding.UTF8.GetBytes(replacement);
+        // The route grammar still accepts these canonical bytes; the independent receipt gate must refuse.
+        _ = RoutedHttpEvidence.ParseAndVerify(replacementBytes);
+        var held = await store.CreateAsync(replacementBytes, CustodyClass.NightlyFloor90d, CancellationToken.None);
+        var reopened = await EuLegalNoticeRouteProducer.ReopenAsync(store,
+            new SourceArtifactRef(NewUrn(), held.Reference.ContentSha256), result.Route.RunIdentity, CancellationToken.None);
+        Assert.AreEqual(EuLegalNoticeRouteRefusal.NoticeRouteInvalid, reopened.Refusal);
+        StringAssert.Contains(reopened.Detail, "receipt names other bytes");
+    }
+    private static async Task<(EuAcquisitionTestFixture.EuInMemoryCustodyStore Store,
+        EuLegalNoticeRouteResult Result, ScriptedHandler Handler)> CaptureForReopenAsync(bool redirect)
+    {
+        const string terminal = "https://publications.europa.eu/resource/celex/32011D0833?view=legal";
+        var store = new EuAcquisitionTestFixture.EuInMemoryCustodyStore();
+        var handler = new ScriptedHandler((ordinal, request) => ordinal switch
+        {
+            0 => Robots(request),
+            1 when redirect => EuAcquisitionTestFixture.BinaryResponse(request, HttpStatusCode.Found, [], location: terminal),
+            1 or 2 => EuAcquisitionTestFixture.BinaryResponse(request, HttpStatusCode.OK, NoticeBody, NoticeMediaType),
+            _ => throw new InvalidOperationException("Unexpected rights acquisition request."),
+        });
+        var result = await Producer(store, handler).RunAsync(CorpusRunIdentity(), RendererSource(),
+            EuAcquisitionTestFixture.TestWireBudget(), CancellationToken.None);
+        Assert.IsNull(result.Refusal, result.Detail);
+        return (store, result, handler);
+    }
+
+    private static async Task<EuAcquisitionTestFixture.EuInMemoryCustodyStore> CopyForReopenAsync(
+        EuAcquisitionTestFixture.EuInMemoryCustodyStore source, string? omit = null)
+    {
+        var copy = new EuAcquisitionTestFixture.EuInMemoryCustodyStore();
+        foreach (var digest in source.WrittenDigestsInOrder.Distinct().Where(digest => digest != omit))
+            await copy.CreateAsync(await source.ReadByDigestAsync(digest, CancellationToken.None),
+                CustodyClass.NightlyFloor90d, CancellationToken.None);
+        return copy;
+    }
     private static byte[] RobotsFixtureBytes()
     {
         var path = Path.Combine(AppContext.BaseDirectory, "Fixtures", "EuDocumentFetch", "eu-robots.txt");
