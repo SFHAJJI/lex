@@ -3,204 +3,6 @@
 Updated 2026-10-01 by the driver. This file replaces the issue-comment ledgers. It is rewritten in
 every pull request that changes what is served, what is next or what is blocked.
 
-## Direct Luxembourg scope classification (Codex, 2026-10-01)
-
-The verified profile constructs final resource resolutions after fixing global evidence ordinals.
-This removes the intermediate classification array and releases each temporary assertion/relation
-array sooner. Those arrays are still allocated and copied by the final record constructor.
-Validation, ordering, global target lookup, constructor checks, relations and accounting remain.
-
-Three cases permute 130 mixed resources and compare every serialized resolution field plus global
-relationships. Exact ffa39231 passed CI 36853787741: 5,301 passed and 22 skipped; the required
-watch exited zero. Claude found no resolver defect and requested updated compatibility evidence
-and current-base conflict resolution. This is the one repair round. Integration d874273b is now
-included, with both census changes preserved; fresh combined CI gates merge.
-
-Local tests and allocation measurements remain deferred under the acquisition memory guard.
-Final observation/resource/input graphs still materialize. No full Luxembourg fit is claimed.
-
-## EU mount compatibility and offline derivation order (Codex, 2026-10-01)
-
-EU acquisition remains frozen at 6eb1d9d9 in C:/lex-v3/eu-population-20261001-4. It writes the
-schema-6 Luxembourg companion index. Merged PR878 now serves exact schema-6 indexes, with absent
-build/log evidence represented honestly, while preserving strict schema-8 validation. Its held
-fixture and tamper checks are recorded below. A mount test on the active EU output remains pending
-until acquisition finishes. Preserve the running process and custody; no re-acquisition is needed
-for this host compatibility change. The web lane continues to own the LU index builder/reader.
-
-Before full Luxembourg acquisition, persist the acquisition result in checked custody and derive
-corpus/indexes offline. Independently reopen the evidence and compare two separate derivations
-byte for byte with publisher traffic trapped. Keep original proof/source bindings and typed
-outcomes; a stored success flag cannot replace verification. Complete bounded derivation and
-observed-count sizing still gate the full Luxembourg run.
-
-## EU acquire-once / replay-from-custody operation — consolidated PR #892
-
-Driver decision under the 13:40 UTC standing order: combine the remaining EU witness, renderer, rights, Formex population, document ladders and query replay slices into this catalog operation. This branch includes the exact repaired heads of #870, #877, #882, #883, #886 and #888, including their cross-family review fixes. Those PRs are superseded here; their review and CI evidence remain recorded. #887 supplies the shared corpus identity rebuild and retains its own merge turn.
-
-The operation reopens one EU query run, binds its original corpus identity, restores Formex against that same run, and verifies the rights route and all six retained renderer roles. It creates no publisher requests. The combined branch includes the missing-expression guard, bounded pass validation and shared-renderer foreign-component regression. Fresh combined CI and a fresh review of this consolidated scope precede the final merge lock and exact-head validation.
-
-This is the EU acquisition operation. The complete offline mount CLI, LU query catalog and two independent process mount comparison remain pending. The active population run predates these catalog writers; no automatic import of that older custody is claimed.
-
-## EU acquisition replay review repair — PR #888
-
-Claude reviewed 977a5fda with no material defect; CI 36862500249 passed 5,546 tests with 22 live-publisher tests skipped, including all 38 checkpoint cases. The repair validates exactly one pass parameter in range 1–2 before casting, removes an assertion against a handler replay cannot access, and corrects the receipt-targeted write comment. Replay itself requires zero wire-budget use. Final merged parents #877, #886 and #887, current-base integration and fresh exact-head CI remain required. #879 is merged.
-
-## EU acquisition catalog review repair — PR #892
-
-Claude reviewed a8840b84 with no material code defect; exact CI 36865495924 passed 5,690 tests with 22 live-publisher tests skipped, including all 24 new catalog cases. The repair makes foreign captures share the original renderer identities so the substitution test reaches run association checks, removes an assertion against an unreachable handler, documents the catalog members and removes byte-order marks. The catalog is retained but the live CLI does not yet surface its reference. Final merged parents, current-base reconciliation and fresh exact-head CI remain required before merge.
-
-## Complete EU acquisition catalog (Codex, 2026-10-01)
-
-Reversible driver decision: retain the successful EU acquisition's sorted seed scope, query and
-Formex checkpoints, corpus-bound rights route and all six original renderer role references.
-Reopening checks the nested query renderer roles, restores one checked query run, passes that
-same instance to Formex reconciliation and binds rights to its corpus identity. Every source,
-including the unused legacy legal-notice renderer, is retained. Failed catalog/source retention
-prevents successful delivery. Offline receipt/body holds use the current store; no HTTP session
-is constructed and archived renderer code is not executed.
-
-Twenty-four draft cases cover two independent replay stores, preserved identities and same-run
-association, missing components, rehashed bindings, three valid foreign-acquisition substitutions,
-null roots, exact caller scope, weaker current protection, cancellation and failed root/source holds.
-Initial CI36861251593 compiled and passed all24 new cases:5,684 passed/22 skipped, two inventory failures.
-The exact compiled refusal/member rows are now transcribed, preserving literal pins. Fresh CI and
-read-only Claude review remain required. Local
-Release/fast/ingest checks remain deferred under the acquisition memory guard. This branch starts
-from origin c9e5a40a and includes pending870/882/883/888 with their dependencies; final reviewed
-merged sources must be included before merge. Tests use two stores in one process, not the two
-independent mount processes required by S7-A03. LU acquisition and build-time/predecessor catalog
-composition remain outstanding. No production action or full-LU fit claim.
-
-## Offline rights-route reopening (Codex, 2026-10-01)
-
-Retained EU rights evidence reopens under its original corpus run identity. The reader has no
-transport and performs no writes. It verifies the route digest, every hop's original GET and
-policy bytes, body receipt and actual body bytes, then repeats the existing route and legal-notice
-gates. The route digest is the lookup anchor; the supplied resource identifier is not compared.
-Capture times and receipts remain historical evidence, without a current retention claim.
-
-All 12 cases passed at 47eb3e39: CI 36854051881 reported 5,310 passed and 22 skipped, with
-required watch exit zero. Claude returned MERGE with no material code findings. The one repair
-clarifies reopen refusals and digest lookup, makes the literal census entry readable without
-changing its value, and includes integration 8c3f3801 with both STATUS sections preserved.
-Fresh final-head CI gates merge. Local builds/tests remain deferred under the memory guard.
-
-This restores one rights component. Complete acquisition catalogs and independent offline mounts
-remain pending. The active EU runtime is unchanged; no publisher traffic is sent by this slice.
-
-## Renderer source identities from custody (Codex, 2026-10-01)
-
-Reopen the six EU and two Luxembourg renderer-source artifacts from an exact role-to-reference
-mapping. Snapshot caller input, require the declared role names, verify each body by digest and
-preserve its resource ID. This avoids checkout reads and new UUIDs during reconstruction. It does
-not execute archived source or independently prove that a containing acquisition used the mapping.
-
-All 26 cases passed at 019f6eda: CI 36843293672 reported 5,304 passed and 22 skipped,
-with required watch exit zero. Coverage includes independent and weaker custody, byte/ID equality,
-mapping order/mutation, all eight missing bodies, exact roles/counts, wrong digests and cancellation.
-Integration d56d0539 is now included; fresh CI and read-only Claude review remain required.
-Local builds/tests are deferred under the acquisition memory guard. Complete catalogs and two
-independent offline mount processes remain pending. No publisher traffic or production actions.
-
-## Offline Formex population reconciliation (Codex, 2026-10-01)
-
-Reversible driver decision: retain the complete ordered Formex population associations for a
-checked EU run. Replay restores each served-language enumeration and selected package from
-custody, uses the same eligibility, per-family outcome and whole-run reconciliation gates,
-and consumes every checkpoint exactly once. It preserves the original renderer identities,
-CELEX selection mode, annex identities and typed non-EN/FRA outcomes. A missing package or
-population checkpoint prevents delivery. Replay sends no requests and introduces no new artifact digests. Enumeration receipt restoration
-repeats checked local holds so current custody guarantees are not inferred from archived receipts.
-
-All 32 new cases passed at 2f55bc45: CI 36846666698 reported 5,398 passed and 22 skipped,
-with required watch exit zero. Cases cover copied/weaker custody, annex and expression identities,
-language exclusions, automatic CELEX selection, missing evidence, changed associations and holds.
-This branch now includes updated package parent af34feed and integration d56d0539. Fresh combined
-CI and a read-only Claude review remain required; pending PR881 must merge with its final source
-included. Local builds/tests remain deferred under the acquisition memory guard. This restores
-Formex over an already checked run; complete acquisition composition and independent offline
-mount builds remain outstanding.
-
-## EU query acquisition replay (Codex, 2026-10-01)
-
-Reversible driver decision: retain the complete successful query adapter's dependency catalog
-before returning success. It binds ordered seeds, original plans/renderers, every census and
-object-family checkpoint, paired expression/tripwire productions, document ladders, watermark
-traversal and original manifest/run/corpus identities. A failed catalog hold has its own refusal.
-Offline reopening independently checks both count templates, derives object batches from the
-proven census closure, checks the paired producer's original P/X proofs, then uses the same
-decode/reduction, document/witness reconciliation and corpus writer. Every catalog association
-must be consumed exactly once. The paired producer reopens its families again through its own
-checked door; this avoids accepting caller-assembled proof inputs. Its repeated read cost is not
-measured. Changed current custody protection refuses the original-byte equality claim.
-
-All 37 original cases passed at 3bd16571: CI 36853048719 reported 5,454 passed and 22 skipped,
-with required watch exit zero. They cover separate replay stores, served/unserved bodies, original
-identities, paired derivation equality, missing/changed dependencies, exact seed scope, weaker custody,
-foreign valid acquisitions, cancellation and failed root/source holds. The catalog retains every
-named renderer, including unused roles. Existing hold tests locate their target by its actual receipt.
-An additional literal-null regression now checks a typed integrity refusal before any replay write,
-bringing this slice to 38 cases. Fresh combined CI and read-only Claude review remain required;
-local builds/tests stay deferred under the acquisition memory guard.
-
-This branch includes merged PR873 and integration92c8df5a, reviewed witness parent1a228278,
-updated ladder parent61fd5042 and corpus parentea5078c8. Pending877/886/887 and their879 prerequisite
-must merge with final reviewed source included. This restores the query adapter; rights/Formex/LU
-and mount-catalog composition remain separate. Two independent full mount processes are not yet
-proved. The active6eb EU runtime/custody are unchanged; no full-LU fit is claimed.
-
-## Retained EU watermark traversal (Codex, 2026-10-01)
-
-Reversible driver decision: retain successful witness traversals with ordered batch descriptors,
-original page evidence references, acquisition run, renderer, entry/evidence digests and historical
-elapsed time. Offline replay uses the same opening, crossing, tie-set and double-terminal loop.
-Each original query is independently rebound; request, response, receipt and retained body must
-agree. Every saved page must be consumed once. There is no publisher session on the replay path.
-
-All 25 cases passed at 9eba7749: CI 36856725210 reported 5,362 passed and 22 skipped,
-with required watch exit zero. Claude found no material replay defect but required merged869,
-current integration and updated evidence. The one repair includes197f0511, documents historical
-elapsed time beside zero replay sends and explains failed checkpoint retention. Fresh combined
-CI gates merge; local builds/tests remain deferred under the acquisition memory guard.
-
-This reader checks historical receipts and writes nothing; it makes no current protection claim.
-A containing acquisition catalog must retain the checkpoint/run references that the existing
-adapter drops. Pending PR888 supplies that composition; full independent mounts remain outstanding.
-
-## Retained EU document ladders (Codex, 2026-10-01)
-
-Reversible driver decision: retain the ordered document attempts behind the scope manifest's
-selected body rows. The shared live/offline loop keeps the original format fallback rules,
-typed robots and unavailable outcomes, served format, and accounting for every minted row.
-Replay checks the manifest and address ladders, restores original transport evidence, consumes
-all saved attempts exactly once and repeats checked body holds for the current custody floor.
-A successful adapter run exposes its document checkpoint; failed root retention has a distinct
-DocumentCheckpointNotRetained refusal. Offline replay opens no publisher session.
-
-All 26 new cases passed at 7377c0c4: CI 36849937717 reported 5,323 passed and 22 skipped,
-with required watch exit zero. Cases cover copied/weaker custody, successful/refused bodies,
-format fallback, missing evidence, changed row/order/representation, cancellation and failed holds.
-Updated document parent 00e95ae6 and integration 8c3f3801 are included. Fresh combined CI and
-read-only Claude review remain required; final merged PR879 source must remain included.
-Local builds/tests stay deferred under the acquisition memory guard. The complete run coordinator,
-acquisition catalog and independent offline mounts remain outstanding.
-
-## Corpus rebuild identity (Codex, 2026-10-01)
-
-The internal rebuild path takes the original corpus set reference and rederives records from
-checked acquisition inputs. Before writing, it compares the newly derived domain-separated
-canonical digest. A mismatch returns RebuildIdentityDisagrees. A match preserves the original
-resource ID through normal checked holds and reopening, for inline and chunked storage. Normal
-acquisition still creates a fresh identity; the retention floor comes from current writes.
-
-All 16 cases passed at c712d2a6: CI 36849932332 reported 5,294 passed and 22 skipped,
-with required watch exit zero. They cover separate stores, inline/chunked bytes, weaker custody,
-changed digest/manifest/run/outcomes before writes, failed holds and cancellation. Integration
-d56d0539 is now included. Fresh CI and read-only Claude review remain required; local builds/tests
-stay deferred under the memory guard. Acquisition closure and independent full mount processes
-remain outstanding. No publisher traffic or production action.
-
 ## Offline Formex package and annex derivation (Codex, 2026-10-01)
 
 Retain ordered ZIP/PDF attempts, original annex profile identities, checked expression/corpus/CELEX
@@ -235,7 +37,6 @@ and refuses a literal-null root with an integrity exception. One new before-writ
 brings this slice to 18 cases. Fresh combined CI gates merge; local builds/tests remain deferred
 under the acquisition memory guard. The offline budget records zero sends with a synthetic ceiling
 of two, not the historical wire allowance. Full population/acquisition and mount replay are separate.
-
 ## Offline EU document routes (Codex, 2026-10-01)
 
 Reopen a retained document route using its original acquisition run, logical-request digest and
@@ -250,7 +51,6 @@ merged873/integration92c8df5a, clarifies digest-only policy reopening and origin
 scope. Fresh combined CI gates merge; local builds/tests remain deferred under the acquisition
 memory guard. A containing catalog must preserve route references; complete offline mounts remain
 outstanding. No current retention floor or population completion is claimed.
-
 ## Retained EU enumeration checkpoints (Codex, 2026-10-01)
 
 Each delivered EU enumeration retains its comparison inputs in checked custody. Offline
@@ -308,6 +108,7 @@ JSON writer buffer and a 4 KiB comparison buffer. An individual JSON element may
 writer's 64 KiB flush threshold. Factories and resolvers can retain more. This method is not
 wired into the LU adapter and does not provide a bounded downstream manifest view.
 
+
 ## Async Luxembourg assertion snapshots (Codex, 2026-10-01)
 
 The snapshot writer now consumes asynchronous verified rows through the bounded small-chunk
@@ -324,6 +125,7 @@ caller's proof checks and records this evidence. PR858 is merged as a74fece1 and
 Final-head CI still gates merge.
 No local build/test was run under the 10:35 low-memory rule. Adapter integration, complete
 bounded derivation and full-LU memory measurement remain outstanding.
+
 
 ## LU assertion snapshot storage (Codex, 2026-10-01)
 
@@ -353,6 +155,7 @@ review during acquisition while memory is below 4 GB. No additional local build 
 
 The asynchronous snapshot now uses the bounded small-chunk channel introduced by PR #855.
 No publisher traffic, production action or completed population is claimed by this slice.
+
 
 ## Retained custody storage consolidation (Codex, 2026-10-01)
 
@@ -404,6 +207,7 @@ the two escaped cases. The one editorial repair records the exact ingest filter:
 The AU+TARD escaped case is constructed; MA/PART was observed. Literal matching retains priority,
 and lowercase percent escapes still refuse safely. The next full run requires this change merged
 and frozen in a fresh custody directory, with the measured storage allowance and disk guard.
+
 
 ## EU retry 5 and LU lookup storage (Codex, 2026-10-01)
 
@@ -915,7 +719,6 @@ Repair validation passed build/fast (3,083 plus one skip)/40 affected ingest; #8
 canonical set and retains reopened bytes; typed records/completion also remain. Chunked record-set
 persistence and measured downstream resources remain required before full Luxembourg. No full
 population-fit claim, publisher traffic or production operation follows this change.
-
 ## DATA review and fresh population evidence (Codex, 2026-09-30)
 
 The required Claude review of #824 at99a8e29d returned MERGE, with no blocking finding.
@@ -975,7 +778,6 @@ per row (four dispositions and the exact accepted-body-role bit). Accounting com
 ordinal sequences, avoiding whole expected-partition arrays. A 32-object mixed-disposition fixture
 cross-checks all 16 partitions against the unchanged builder, role-gated body membership and a
 corrupted partition refusal. No measured savings or full-process memory bound is claimed.
-
 ## EU population census refusal diagnostics (Codex, 2026-09-30)
 
 The fresh all-82-seed EU run at `C:\lex-v3\eu-population-20260930-1` ended with
@@ -3977,7 +3779,6 @@ and a current storage check before and after its runtime is frozen; it has not s
 
 PRs #827, #829 and #830 are merged. The all-82-seed EU retry remains prepared, with a
 4,999,959,422-byte launch allowance and checks before and after freezing its runtime.
-
 ## Retained Luxembourg enumeration checkpoints (Codex, 2026-10-01)
 
 This slice depends on pending PR869. The LU executor retains its closed invariant plan wire
@@ -4020,7 +3821,6 @@ the acquisition memory guard. No complete offline mount process is claimed.
 The current store's protection is checked again. Changed protection refuses the original
 byte claim because protection is part of derivation identity. Replay reports zero publisher
 requests. Complete offline acquisition composition and independent mount builds remain pending.
-
 ## Retained Luxembourg cover history (Codex, 2026-10-01)
 
 Reversible driver decision: retain the actual successful split history and every leaf's
