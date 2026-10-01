@@ -2,6 +2,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using Lex.V3.Api;
+using Lex.V3.Contracts;
 using Lex.V3.Contracts.Platform;
 using Lex.V3.Ingest.Europe;
 using Microsoft.Data.Sqlite;
