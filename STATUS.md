@@ -3,6 +3,12 @@
 Updated 2026-10-01 by the driver. This file replaces the issue-comment ledgers. It is rewritten in
 every pull request that changes what is served, what is next or what is blocked.
 
+Validation update: CI 36848599198 compiled and passed all 26 new cases
+(5,321 succeeded, 22 skipped, two census failures). Compiled guard and vocabulary
+rows were checked against previous literals and transcribed; fresh CI must verify them.
+The 10:35 UTC standing order permits full-suite CI and a read-only Claude review while
+free memory is below 4 GB. No local test result is claimed.
+
 ## Retained EU document ladders (Codex, 2026-10-01)
 
 Reversible driver decision: retain the ordered document attempts behind the scope manifest's
