@@ -1595,8 +1595,7 @@ public sealed class LuxembourgScopeResolverTests
         // closure that carries it into the anonymous type ResolveTypedRole's caller builds, and
         // LuxembourgResourceResolution's own TypedRole property (and its backing field) are the
         // only places elsewhere in Contracts that hand out a typed-role resolution.
-        CollectionAssert.AreEqual(
-            new[]
+        var expectedProducers = new[]
             {
                 "field private instance " + N
                     + "LuxembourgResourceResolution::<TypedRole>k__BackingField -> "
@@ -1627,12 +1626,13 @@ public sealed class LuxembourgScopeResolverTests
                     + N + "LuxembourgTypedRoleResolution",
                 "property public instance " + N + "LuxembourgResourceResolution::TypedRole() -> "
                     + N + "LuxembourgTypedRoleResolution",
-            },
-            ConstructionSurface.ProducersIn(
-                typeof(LuxembourgTypedRoleResolution).Assembly,
-                typeof(LuxembourgTypedRoleResolution),
-                true).ToArray(),
-            "something other than the resolver now hands out a typed-role resolution");
+            };
+        var actualProducers = ConstructionSurface.ProducersIn(
+            typeof(LuxembourgTypedRoleResolution).Assembly,
+            typeof(LuxembourgTypedRoleResolution), true).ToArray();
+        CollectionAssert.AreEqual(expectedProducers, actualProducers,
+            "Removed or changed typed-role pins:\n" + string.Join("\n", expectedProducers.Except(actualProducers, StringComparer.Ordinal)) +
+            "\nActual added or changed typed-role entries:\n" + string.Join("\n", actualProducers.Except(expectedProducers, StringComparer.Ordinal)));
 
         // The compiler-generated display-class ordinal above (24_0, was 23_0 before item 18 added
         // a new member to LuxembourgScopeResolver ahead of it) shifts whenever unrelated members

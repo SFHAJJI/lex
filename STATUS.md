@@ -12,13 +12,15 @@ The existing complete structural validation, object ordering, global target look
 constructor checks, inbound relations and accounting remain in place. This reduces duplicated working
 state; it does not provide bounded observation, scope or corpus construction.
 
-Three draft mixed-population cases permute 130 resources with shared evidence, a body with a replaced
+Three mixed-population cases permute 130 resources with shared evidence, a body with a replaced
 item, a coordinated-text relation to that body, an inbound citation and empty metadata resources.
 They compare all serialized resolution fields and explicitly check resource/input alignment and the
-global relation result. Existing resolver and ingest checks remain required. No local build, tests,
-measurement or cross-family review has run: EU acquisition owns the heavy slot. Remote CI is the
-first compiler/test feedback; local required fast tests and affected ingest checks follow the queued
-work. No measured memory saving or full Luxembourg capacity is claimed.
+global relation result. Initial CI36824262596 built with zero warnings/errors and passed these three
+cases and the ingest suite: 5,256 passed, 22 skipped, two construction-surface pin failures. Those
+pins still include the removed anonymous carrier; failure diagnostics now expose the exact compiled
+differences for transcription. No pin is loosened. Local build, required fast tests, affected ingest
+checks, measurement and cross-family review remain pending while EU owns the heavy slot. No measured
+memory saving or full Luxembourg capacity is claimed.
 
 ## EU escaped qualifier authority (Codex, 2026-10-01)
 
