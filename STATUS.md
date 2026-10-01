@@ -3,6 +3,41 @@
 Updated 2026-10-01 by the driver. This file replaces the issue-comment ledgers. It is rewritten in
 every pull request that changes what is served, what is next or what is blocked.
 
+## EU retry 5 and LU lookup storage (Codex, 2026-10-01)
+
+PRs #848, #849, #851 and #852 are merged after cross-family reviews, one repair round and green
+CI on their exact final heads. EU retry 5 ended at C:/lex-v3/eu-population-20261001-3,
+with runtime and renderers frozen at eed2b485. It keeps all 82 seeds, EN/FRA Formex enumeration,
+explicit outcomes for other languages, the 20,000-wire ceiling and bounded LU a439 companion.
+The run uses the measured Brotli mode and the 6,374,424,214-byte starting allowance. Its owned
+process guard retained the 3 GiB floor and 512 MiB stop margin. It ended at 03:08 UTC with exit 3
+after 1,358 wire requests: ReifiedAxiomDecodeRefused for seed 32007R0864,
+QualifierAuthorityDisagreesWithItsCode at MA/PART versus the fd_335 authority ending MA%2FPART.
+Minimum sampled free space was 5,770,530,816 bytes; peak working set was 532,279,296 bytes.
+The guard did not stop it. No completed population is claimed; retained bytes need a decoder audit.
+
+Reversible driver decision for the next LU storage step: use existing digest-checked chunk
+storage for random observation lookups. The draft adds a separate v2 root with exactly 64 KiB
+chunks; the v1 writer keeps its 4 MiB format. Both readers verify the complete ordered sequence
+before returning a stream and recheck custody on each chunk load. A seek drops the previous cache.
+The canonical payload digest and per-chunk retention evidence remain separate from the root receipt.
+
+The seven existing chunk obligations now run under both profiles, with nine additional cases for
+profile admission, unread-tail corruption, an independent compressed-store reader, legacy root
+bytes and the custody bytes loaded by 100 short random reads. At 873600fa, the local Release
+build passed, required fast tests passed (3,105 succeeded, one skipped), and affected ingest
+checks passed (170 succeeded, two skipped). CI 36808709344 also passed on that exact head.
+The first CI run found three census omissions; explicit entries now account for the test wrapper
+and the two new receipt-returning methods. No receipt constructor changed. No census assertion was loosened; two expected counts rose by
+one for the new test store.
+PR #855 received cross-family CHANGES REQUESTED for six existing STATUS lines damaged by
+incorrect text decoding. The one repair restores those exact lines from the base and corrects
+the census-count wording. The reviewer independently reproduced the build, fast tests and all
+23 chunk cases. Existing readers now admit v2 roots, with the same content and retention checks;
+only tests write that profile in this slice. No full-LU fit claim is made. Subject indexes, a checked
+streaming scope-resolution door, independent bounded manifest reopening and corpus assembly
+still need implementation.
+
 ## EU object-facts continuation range (Codex, 2026-10-01)
 
 Full EU retry 4, frozen at source 18b53941 in C:/lex-v3/eu-population-20261001-2, refused with
