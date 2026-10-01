@@ -52,6 +52,18 @@ No acquisition-completion or custody-floor claim is read from the checkpoint. Th
 restore the complete EU/LU acquisition, Formex/rights/body outcomes, or rebuild a mount offline;
 those remain required follow-on work. Existing in-process two-build checks remain unchanged.
 Active EU retry6 uses its frozen old runtime and is untouched.
+## Offline EU document routes (Codex, 2026-10-01)
+
+Draft: reopen a retained document route using its original acquisition run, logical-request digest
+and independently selected address. Every hop must retain its GET request, unchanged representation
+and policies, original write receipt and exact body. The existing route constructor repeats receipt,
+redirect and completion checks, and its complete canonical bytes must equal the original artifact.
+No transport is opened and no new observation or current retention guarantee is minted. Non-200
+and incomplete routes retain their original outcomes. Package inventories, annex classification,
+query binding and complete acquisition catalog reconstruction remain separate work.
+
+Local Release, required fast tests, affected ingest tests and Claude review remain queued behind
+the active EU run and prior data slices. No population completion or complete offline rebuild is claimed.
 
 ## EU escaped qualifier authority (Codex, 2026-10-01)
 
