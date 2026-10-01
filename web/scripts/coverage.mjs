@@ -494,7 +494,9 @@ function readArticleOutcomes(value, where) {
 }
 
 /**
- * What this mount answers, and what is registered with no route on it.
+ * What this mount answers, and what is registered with no route on it, with the data that would
+ * serve each operation that has none (`not_served_data`: one row per unrouted operation, in the same
+ * order, each saying what data it needs).
  *
  * The producer builds `not_served_operations` as `registered.Except(served)`, so the two lists add
  * up to `registered` exactly when the served operations are a subset of the registered ones. When
@@ -538,10 +540,24 @@ function readOperations(value) {
     );
   }
 
+  const notServedData = requireList(requireOwn(value, 'not_served_data', where), `${where}.not_served_data`)
+    .map((row, index) => Object.freeze({
+      operation: requireText(requireOwn(row, 'operation', `${where}.not_served_data[${index}]`), `${where}.not_served_data[${index}].operation`),
+      dataNeeded: requireText(requireOwn(row, 'data_needed', `${where}.not_served_data[${index}]`), `${where}.not_served_data[${index}].data_needed`),
+    }));
+  const named = notServedData.map((row) => row.operation);
+  if (named.length !== notServed.length || named.some((operation, index) => operation !== notServed[index])) {
+    throw new Error(
+      `the data that would serve the unrouted operations is given for ${named.join(', ') || 'none'}, and the unrouted `
+        + `operations are ${notServed.join(', ') || 'none'}; each has exactly one row, in the same order`,
+    );
+  }
+
   return {
     registered,
     served,
     notServed,
+    notServedData: Object.freeze(notServedData),
     note: requireText(requireOwn(value, 'note', where), `${where}.note`),
   };
 }
@@ -848,6 +864,7 @@ export const COVERAGE_COPY = Object.freeze({
     gaps: 'Gap tokens the corpus recorded, counted by member',
     articleOutcomes: 'Legal-content outcomes the corpus recorded, by disposition',
     capabilities: 'Measured capabilities, by operation, column, field, language and period',
+    notServedData: 'The data that would serve each operation with no route',
   }),
   scrollable: '{caption}, scrollable',
   columns: Object.freeze({
@@ -871,6 +888,7 @@ export const COVERAGE_COPY = Object.freeze({
     from: 'from',
     to: 'to',
     population: 'population',
+    dataNeeded: 'data that would serve it',
   }),
   held: HELD,
   none: 'none',
@@ -896,6 +914,7 @@ export const COVERAGE_COLUMNS = Object.freeze({
   gaps: Object.freeze(['gap', 'members']),
   articleOutcomes: Object.freeze(['disposition', 'outcomes']),
   capabilities: Object.freeze(['operation', 'column', 'field', 'language', 'from', 'to', 'population']),
+  notServedData: Object.freeze(['operation', 'dataNeeded']),
 });
 
 function languageRows(languages) {
@@ -988,6 +1007,12 @@ export function renderCoverage(answer) {
       ? escapeHtml(COVERAGE_COPY.none)
       : view.operations.notServed.map(code).join(' '))
     + '</tbody></table>'
+    + (view.operations.notServedData.length === 0 ? '' : table({
+      caption: COVERAGE_COPY.captions.notServedData,
+      head: COVERAGE_COLUMNS.notServedData.map((key) => COVERAGE_COPY.columns[key]),
+      rows: view.operations.notServedData.map((row) => (
+        `<tr><td>${code(row.operation)}</td><td>${escapeHtml(row.dataNeeded)}</td></tr>`)).join(''),
+    }))
     + `<p class="coverage-note">${escapeHtml(view.operations.note)}</p></section>`
     + `<section class="coverage-block"><h2>${escapeHtml(COVERAGE_COPY.headings.measured)}</h2>`
     + (view.capabilityCells.length === 0

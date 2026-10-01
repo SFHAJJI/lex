@@ -67,6 +67,7 @@ const MUST_REACH = [
   "members.by_outcome[].outcome",
   "members.article_outcomes[].disposition",
   "operations.not_served_operations[]",
+  "operations.not_served_data[].data_needed",
   "not_held[].reason",
 ];
 
@@ -1235,6 +1236,32 @@ test("the preview reproduces the platform's sentences, to the character", async 
     assert.deepEqual(answer.operations.served_operations, captured.operations.served_operations);
     assert.deepEqual(
       answer.operations.not_served_operations, captured.operations.not_served_operations);
+    assert.deepEqual(
+      answer.operations.not_served_data, captured.operations.not_served_data,
+      `${preview.heading} rewrote the data that would serve an unrouted operation`);
+  }
+});
+
+test("each unrouted operation says the data that would serve it, in its own row, and the page shows it", async () => {
+  const captured = withDigests(await capturedAnswer());
+  const view = readCoverage(captured);
+  assert.deepEqual(view.operations.notServedData.map((row) => row.operation), view.operations.notServed,
+    "one row per unrouted operation, in the same order");
+  assert.ok(view.operations.notServedData.every((row) => row.dataNeeded.length > 0));
+  const html = renderCoverage(captured);
+  assert.deepEqual(
+    tableRows(html, "The data that would serve each operation with no route"),
+    captured.operations.not_served_data.map((row) => [row.operation, row.data_needed]),
+    "each operation beside its data, in the table captioned for them");
+
+  for (const [what, change, reason] of [
+    ["a row dropped", (a) => { a.operations.not_served_data.pop(); }, /each has exactly one row, in the same order/],
+    ["rows out of order", (a) => { a.operations.not_served_data.reverse(); }, /each has exactly one row, in the same order/],
+    ["a row for a served operation", (a) => { a.operations.not_served_data[0].operation = "search"; }, /each has exactly one row/],
+    ["a blank need", (a) => { a.operations.not_served_data[1].data_needed = " "; }, /not_served_data\[1\].data_needed is not a value this page can print/],
+    ["the list dropped", (a) => { delete a.operations.not_served_data; }, /does not carry not_served_data/],
+  ]) {
+    assert.throws(() => readCoverage(mutate(captured, change)), reason, what);
   }
 });
 
@@ -1392,6 +1419,7 @@ test("a mount that serves every registered operation says none where the unroute
       ...a.operations.served_operations, ...a.operations.not_served_operations,
     ].toSorted();
     a.operations.not_served_operations = [];
+    a.operations.not_served_data = [];
   });
   assert.equal(
     every.operations.served_operations.length, every.operations.registered,
