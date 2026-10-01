@@ -225,6 +225,7 @@ public sealed class GuardedConstructionCensusTests
                 "Lex.V3.Ingest.Europe.EuFirstMountAcquisitionResult: "
                     + "constructor private instance Lex.V3.Ingest.Europe.EuFirstMountAcquisitionResult::.ctor, "
                     + "method internal instance Lex.V3.Ingest.Europe.EuFirstMountAcquisitionResult::WithCheckpoint, "
+                    + "method public instance Lex.V3.Ingest.Europe.EuFirstMountAcquisition::ReuseAsync, "
                     + "method public instance Lex.V3.Ingest.Europe.EuFirstMountAcquisition::RunAsync, "
                     + "method public instance Lex.V3.Ingest.Europe.EuFirstMountAcquisition::RunAsync, "
                     + "method public static Lex.V3.Ingest.Europe.EuFirstMountAcquisition::ReopenAsync, "
