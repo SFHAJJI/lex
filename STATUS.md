@@ -5,40 +5,56 @@ every pull request that changes what is served, what is next or what is blocked.
 
 ## Direct Luxembourg scope classification (Codex, 2026-10-01)
 
-The verified profile constructs final resource resolutions after fixing the global evidence
-table. This removes the intermediate classification array and its temporary assertion/relation
-arrays. Complete structural validation, ordering, global target lookup, evidence ordinals,
-constructor checks, inbound relations and accounting remain in the existing path.
+The verified profile constructs final resource resolutions after fixing global evidence ordinals.
+This removes the intermediate classification array and releases each temporary assertion/relation
+array sooner. Those arrays are still allocated and copied by the final record constructor.
+Validation, ordering, global target lookup, constructor checks, relations and accounting remain.
 
-Three cases permute 130 mixed resources with shared evidence, replaced body items, coordinated
-text, inbound citations and empty metadata. They compare every serialized resolution field,
-resource/input alignment and global relations. Exact f98a2546 passed CI36827783161 with
-5,263 tests passed and 22 skipped. The branch now includes integration c27012f4; fresh final-head
-CI and read-only Claude review are required under the 10:35 standing order. No local tests were
-run during active acquisition. The final observation/resource/input graphs still materialize;
-no measured memory saving, bounded full pipeline or full Luxembourg fit is claimed.
+Three cases permute 130 mixed resources and compare every serialized resolution field plus global
+relationships. Exact ffa39231 passed CI 36853787741: 5,301 passed and 22 skipped; the required
+watch exited zero. Claude found no resolver defect and requested updated compatibility evidence
+and current-base conflict resolution. This is the one repair round. Integration d874273b is now
+included, with both census changes preserved; fresh combined CI gates merge.
 
+Local tests and allocation measurements remain deferred under the acquisition memory guard.
+Final observation/resource/input graphs still materialize. No full Luxembourg fit is claimed.
 
 ## EU mount compatibility and offline derivation order (Codex, 2026-10-01)
 
-EU acquisition continues unchanged in C:/lex-v3/eu-population-20261001-4, frozen at6eb1d9d9.
-That source writes Luxembourg companion index schema6; integration e3984f6b requires schema7 in
-its serving reader. This is a source-level handoff gate, not a completed mount test or a reason to
-repeat acquisition. The EU index remains schema4. Preserve the running process and all its evidence.
+EU acquisition remains frozen at 6eb1d9d9 in C:/lex-v3/eu-population-20261001-4. It writes the
+schema-6 Luxembourg companion index. Merged PR878 now serves exact schema-6 indexes, with absent
+build/log evidence represented honestly, while preserving strict schema-8 validation. Its held
+fixture and tamper checks are recorded below. A mount test on the active EU output remains pending
+until acquisition finishes. Preserve the running process and custody; no re-acquisition is needed
+for this host compatibility change. The web lane continues to own the LU index builder/reader.
 
-Panel answer Q-20261001-0656-codex assigns strict legacy6 serving compatibility to the web lane,
-which owns LuxembourgIndexBuilder.cs and its reader during chaining. Operations needing the new
-observation/log evidence must refuse explicitly for schema6; predecessor chaining continues to
-refuse schema6. No log stamp or observation time may be invented. The data lane makes no overlapping
-reader/builder edit. Serving the new mount on the current host waits for that compatibility check,
-including a real held schema6 mount, tamper cases and unchanged strict schema7 validation.
+Before full Luxembourg acquisition, persist the acquisition result in checked custody and derive
+corpus/indexes offline. Independently reopen the evidence and compare two separate derivations
+byte for byte with publisher traffic trapped. Keep original proof/source bindings and typed
+outcomes; a stored success flag cannot replace verification. Complete bounded derivation and
+observed-count sizing still gate the full Luxembourg run.
 
-Next for the data lane, ahead of the full Luxembourg run: persist the acquisition result in checked
-custody and derive corpus/indexes offline from that retained evidence. Verify independent reopening
-and two byte-equal derivations with publisher traffic trapped. This is planned work, not an existing
-replay claim. Preserve the original source/proof bindings and typed outcomes; a stored success flag
-cannot replace evidence verification. The full Luxembourg run still needs the complete bounded
-partition measurement and observed-count sizing after this path is implemented.
+## Streaming scope verification from source inputs (Codex, 2026-10-01)
+
+The retained manifest can be verified by independently replaying its original source inputs
+through the existing streaming reducer and canonical writer. Acceptance checks the pinned
+digest, UTF-8, complete byte comparison, both source passes and writer admission/accounting.
+It returns the existing digest/count receipt without materializing a second manifest graph.
+The source factory and evidence resolver must come from original evidence; deriving either
+from the manifest under test would be circular.
+
+PR head b3cafcab passed CI 36850031289: 5,289 tests passed, 22 skipped, including all eleven
+new scope cases. Claude returned MERGE with no material findings. The one editorial repair
+clarifies exception precedence and working buffers in the API remarks and records the review.
+Integration a74fece1 is included; final-head CI gates merge under the 10:35 standing order.
+No local Release/fast/ingest run or synthetic source-replay measurement is claimed.
+
+The measurement remains required before claiming a full Luxembourg memory fit. Working
+storage includes five projection bytes per object, the evidence table, current input, the
+JSON writer buffer and a 4 KiB comparison buffer. An individual JSON element may exceed the
+writer's 64 KiB flush threshold. Factories and resolvers can retain more. This method is not
+wired into the LU adapter and does not provide a bounded downstream manifest view.
+
 
 ## LU assertion snapshot storage (Codex, 2026-10-01)
 

@@ -1739,7 +1739,9 @@ public sealed class GuardedConstructionCensusTests
                 "Lex.V3.Contracts.Source.Scope.ScopeManifestWriteReceipt: constructor internal "
                     + "instance Lex.V3.Contracts.Source.Scope.ScopeManifestWriteReceipt::.ctor, "
                     + "method public static "
-                    + "Lex.V3.Contracts.Source.Scope.ScopeManifestCanonicalWriter::WriteStreaming",
+                    + "Lex.V3.Contracts.Source.Scope.ScopeManifestCanonicalWriter::WriteStreaming, "
+                    + "method public static "
+                    + "Lex.V3.Contracts.Source.Scope.VerifiedScopeManifest::VerifyStreamFromSnapshot",
                 "Lex.V3.Contracts.Source.Scope.VerifiedScopeManifest: constructor internal "
                     + "instance Lex.V3.Contracts.Source.Scope.VerifiedScopeManifest::.ctor, "
                     + "method private static "
@@ -1770,6 +1772,8 @@ public sealed class GuardedConstructionCensusTests
                     + "Lex.V3.Contracts.SyntheticResolveSuccessEnvelope::Create",
             };
         var actual = ClosedSurfaceCensus.GuardedConstruction(CensusScope.SweptHere).ToArray();
+        // Keep the expected side literal. Print only differences so a failed remote run supplies
+        // the independently observed surface for review and transcription.
         CollectionAssert.AreEqual(expected, actual,
             "Removed or changed pins:\n" + string.Join("\n", expected.Except(actual, StringComparer.Ordinal)) +
             "\nActual added or changed entries:\n" + string.Join("\n", actual.Except(expected, StringComparer.Ordinal)));

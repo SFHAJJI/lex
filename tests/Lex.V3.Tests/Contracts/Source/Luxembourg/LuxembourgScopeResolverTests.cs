@@ -1609,8 +1609,6 @@ public sealed class LuxembourgScopeResolverTests
         CollectionAssert.AreEqual(expectedProducers, actualProducers,
             "Removed or changed typed-role pins:\n" + string.Join("\n", expectedProducers.Except(actualProducers, StringComparer.Ordinal)) +
             "\nActual added or changed typed-role entries:\n" + string.Join("\n", actualProducers.Except(expectedProducers, StringComparer.Ordinal)));
-
-
     }
 
     /// <summary>
