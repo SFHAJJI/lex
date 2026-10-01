@@ -1,43 +1,36 @@
-﻿# Lex V3 status
+# Lex V3 status
 
 Updated 2026-10-01 by the driver. This file replaces the issue-comment ledgers. It is rewritten in
 every pull request that changes what is served, what is next or what is blocked.
 
-Combined CI36849715330 passed5,297 tests with22 skipped and one census-total failure:
-the merged guarded-type union is139, not138. The exact member-level census already passed.
-The observed total is now pinned; fresh CI must verify it before review.
-
 ## LU assertion snapshot storage (Codex, 2026-10-01)
 
-Reversible driver decision: prepare immutable assertion storage using the existing checked chunk
-reader. A complete open parses the retained sequence and rebuilds a compact subject-digest/offset
-index. Lookups reopen and recheck chunks, preserving row order, duplicates, literal metadata and
-cross-range dependencies. The header binds run, observation and ordered census/assertion proof
-references. These references do not prove publisher delivery; production integration must compare
-against independently replayed source proofs and check census membership before admission.
+The immutable assertion snapshot uses the checked chunk reader. Opening validates the complete
+retained sequence and builds a compact subject-digest/offset index. Lookups reopen and recheck
+chunks, preserving row order, duplicates, literal metadata and cross-range dependencies. The
+header binds the run, observation and ordered census/assertion proof references. Integration
+must independently replay those proofs and check census membership before admitting rows.
 
-The snapshot requires contiguous subject groups and refuses repeated groups or digest collisions.
-It bounds each serialized record to 4 MiB without truncation. It retains one row during opening,
-compact index entries, and one requested subject's assertions during lookup. No full-population
-memory or disk measurement is claimed. Scope resolution and corpus construction still materialize
-graphs and require the separate bounded paths in the lane design note.
+Each serialized record, including the complete proof-reference header, is limited to 4 MiB.
+Opening refuses noncontiguous repeated subject groups and digest collisions. The writer does
+not detect repeated groups early. Integration must measure header size and proof count before
+launch; an oversized header refuses without truncation. This remains unwired storage support.
+Scope and corpus graphs still materialize, so no full-population memory or disk fit is claimed.
 
-At de9f84ca, the Release build and required fast tests passed. Remote CI and local affected
-ingest tests found the same two census omissions. The new snapshot functional cases passed.
-The actual built assembly's guarded surface was independently rendered: it adds the snapshot's
-private instance constructor, static initializer and internal Open method. Those literal entries
-are now pinned, with exact candidate/guarded counts changed from 255/137 to 256/138. No census
-assertion is loosened. At 168fbe90, repaired Release build passed with zero warnings/errors,
-required fast tests passed (3,105 succeeded, one skipped), and affected ingest tests passed
-(82 succeeded, two skipped). Exact-head CI 36812117581 is green. Cross-family review is pending.
+At 168fbe90, the Release build passed with zero warnings/errors, required fast tests passed
+(3,105 passed, one skipped), and affected ingests passed (82 passed, two skipped). Twenty new
+cases cover row preservation, malformed and corrupted storage, binding changes and cancellation.
+CI 36850526856 passed exact 12be52d4 with 5,298 tests passed and 22 skipped. Its member-level
+census and the combined totals of 259 candidates and 139 guarded types all passed.
 
-The 10:35 UTC standing order permits a read-only cross-family review during the active EU
-run, with CI providing current full-suite evidence while free memory is below 4 GB. The branch
-now includes integration65922; its fresh exact-head CI and review are still required.
+Claude's read-only cross-family review returned MERGE with no material findings. The one
+editorial repair records that evidence, removes two added byte-order marks and records the
+header-size and writer-order limitations above. Integration c27012f4 is included; merge still
+requires successful CI on the final head. The 10:35 UTC standing order permits that CI-backed
+review during acquisition while memory is below 4 GB. No additional local build was run.
 
-This slice uses the existing legacy chunk writer; PR #855's small-chunk profile is now merged.
-EU decoder recovery has priority, with local heavy checks serialized. No publisher requests were
-made for this slice.
+The snapshot uses the legacy chunk writer; PR #855 supplies smaller chunks for its follow-on.
+No publisher traffic, production action or completed population is claimed by this slice.
 
 
 ## Retained custody storage consolidation (Codex, 2026-10-01)
