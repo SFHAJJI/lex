@@ -3,6 +3,26 @@
 Updated 2026-10-01 by the driver. This file replaces the issue-comment ledgers. It is rewritten in
 every pull request that changes what is served, what is next or what is blocked.
 
+## Retained expression production pairings (Codex, 2026-10-01)
+
+Pending869 is the explicit prerequisite for this slice. The expression producer retains its own
+expression/object-facts pairing and original derivation/episode digests. Offline reopening checks
+both enumeration checkpoints and independently rebinds their count templates with the original
+IDs and selected batches, then uses the existing private derive path. It compares both generated
+artifacts byte for byte with the held originals and reports zero newly sent product requests.
+Both expression-first and adapter object-first production paths retain the checkpoint.
+
+Custody protection is part of the derivation identity. A copied store with different protection
+therefore refuses the original-byte equality claim; no historical protection flag is trusted.
+The public reader accepts only a checked checkpoint reference, with no delivery-input API.
+Nineteen draft cases cover the two production orders, empty expressions, copied custody, repeated
+derivation/episode equality, changed protection, missing artifacts, substitutions and cancellation.
+These changes are uncompiled. Remote CI, local Release/fast/affected ingests and cross-family
+review are pending. Local heavy work waits for active EU and prior validation/review steps.
+
+The source starts from integration2668e16b with pending869 included. Full acquisition catalog,
+tripwire/Formex restoration and two independent offline mount builds remain outstanding.
+No full Luxembourg fit or completed EU population claim is made.
 ## Retained EU enumeration checkpoints (Codex, 2026-10-01)
 
 Reversible driver decision under Q-20261001-0656-codex: build acquisition persistence before
