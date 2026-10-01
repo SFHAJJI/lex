@@ -318,7 +318,7 @@ public enum EuQueryExecutionRefusal
     /// <summary>
     /// D1-06c-EU fix two (SCOPE_RULING lex-event-20260904T141600712Z-0b823f7143154a608f01ec8f757f9e93
     /// item 2): this run's own corpus/6 record set (<see cref="Lex.V3.Ingest.CorpusRecordSetWriter.WriteAsync"/>,
-    /// called as this run's own last step) could not be retained at all. Carries
+    /// called before the acquisition checkpoint) could not be retained at all. Carries
     /// <see cref="Lex.V3.Ingest.CorpusRecordSetWriteRefusalKind.RecordSetNotRetained"/>'s own detail:
     /// the write failed, or the reopen handed back bytes the digest does not name. Renamed with that
     /// writer under RULING lex-event-20260904T213727510Z-671a8c2563684ab49048677997ceef1c, and no longer
@@ -372,6 +372,7 @@ public enum EuQueryExecutionRefusal
     [JsonStringEnumMemberName("corrigendum_tripwire_batches_not_paired")]
     CorrigendumTripwireBatchesNotPaired = 26,
 
+    /// <summary>The document-ladder checkpoint could not be retained and verified.</summary>
     [JsonStringEnumMemberName("document_checkpoint_not_retained")]
     DocumentCheckpointNotRetained = 27,
 
@@ -946,7 +947,7 @@ public sealed class EuQueryExecutionResult
     /// <see cref="EuQueryExecutionRefusal.AcquisitionOutcomeNotRepresentable"/>'s own remarks for
     /// exactly which outcomes cannot be represented and so refuse the run instead of appearing here).
     /// D1-06c-EU fix two: this is exactly the <c>acquisitionOutcomesByOrdinal</c> this run itself
-    /// hands to <c>CorpusRecordSetWriter.WriteAsync</c> as its own last step (see this file's own
+    /// hands to <c>CorpusRecordSetWriter.WriteAsync</c> before the acquisition checkpoint (see this file's own
     /// remarks on <see cref="RunAsync"/>); it remains exposed here too because it is useful context on
     /// its own, not because a caller still needs to relay it anywhere.
     /// </summary>
@@ -1106,7 +1107,7 @@ public sealed class EuQueryExecutionResult
 /// its own record.
 /// <para>
 /// D1-06c-EU fix two (same SCOPE_RULING, item 2): this run now itself calls
-/// <see cref="Lex.V3.Ingest.CorpusRecordSetWriter.WriteAsync"/> as its own last step, after the
+/// <see cref="Lex.V3.Ingest.CorpusRecordSetWriter.WriteAsync"/> before retaining the acquisition checkpoint, after the
 /// manifest is written and every document fetch above has been attempted and classified. D1-06b's own
 /// writer builds one <c>CorpusRecordSet</c> from the reopened manifest plus this run's own document
 /// acquisition outcomes; before this fix nothing in either the EU or the Luxembourg adapter ever
@@ -1890,8 +1891,8 @@ public sealed partial class EuQueryExecutionAdapter
         var manifestArtifactRef = context.Original?.Manifest ?? new SourceArtifactRef($"urn:uuid:{Guid.NewGuid():D}", manifestCanonicalSha256);
         if (manifestArtifactRef.Sha256 != manifestCanonicalSha256)
             throw new CustodyIntegrityException("Restored scope manifest differs from its original canonical identity.");
-        // D1-06c-EU fix two: this run's own identity for the corpus/6 record set it writes as its
-        // last step (see this method's own remarks below and this class's own remarks on RunAsync).
+        // D1-06c-EU fix two: this run's own identity for the corpus/6 record set, written
+        // before the acquisition checkpoint (see this class's remarks on RunAsync).
         // Paired with real evidence -- this exact run's own manifest custody-write digest, distinct
         // from manifestArtifactRef's own canonical digest above -- rather than an inert placeholder,
         // mirroring how every other minted SourceArtifactRef in this method pairs a fresh urn:uuid
@@ -2116,7 +2117,7 @@ public sealed partial class EuQueryExecutionAdapter
                     EuQueryExecutionRefusal.WitnessReconciliationRefused, reconciliationRefusal.ToString()));
         }
 
-        // ---- D1-06c-EU fix two: write this run's whole corpus/6 record set as the last step, after
+        // ---- D1-06c-EU fix two: write this run's whole corpus/6 record set before the checkpoint, after
         // the manifest (above) and every document fetch this run attempted
         // (RunDocumentAcquisitionAsync above). Item 2 of SCOPE_RULING
         // lex-event-20260904T141600712Z-0b823f7143154a608f01ec8f757f9e93: before this fix nothing in

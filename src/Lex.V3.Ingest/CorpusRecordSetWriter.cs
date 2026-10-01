@@ -448,7 +448,7 @@ public sealed class CorpusRecordSetWriter
         // RULING lex-event-20260904T213727510Z-671a8c2563684ab49048677997ceef1c: the set's observed
         // membership is recorded on the result this writer produces, and the run completes. It used
         // to refuse whenever the store published no enforcement, which discarded a record set that
-        // had been written correctly and, because this is the run's last step, cost the whole run
+        // had been written correctly and prevented the run from delivering
         // its corpus records. The class is derived by the one classifier and carried out on
         // CorpusRecordSetWriteResult.RetainedFloor; it is never asserted by a caller.
         //

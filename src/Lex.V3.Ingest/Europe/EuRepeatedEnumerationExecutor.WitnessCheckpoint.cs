@@ -27,7 +27,7 @@ public sealed partial class EuRepeatedEnumerationExecutor
         try
         {
             var document = ContractJson.Deserialize<WitnessCheckpoint>(new UTF8Encoding(false, true).GetString(bytes.Span));
-            if (document.Schema != WitnessCheckpointSchema || !bytes.Span.SequenceEqual(EncodeWitnessCheckpoint(document)) ||
+            if (document is null || document.Schema != WitnessCheckpointSchema || !bytes.Span.SequenceEqual(EncodeWitnessCheckpoint(document)) ||
                 document.Run != expectedRun || document.Renderer != expectedRenderer || document.Plans is null ||
                 !document.Plans.SequenceEqual(plans.Select(DescribeWitnessPlan)) || document.Pages is null ||
                 document.Pages.Count == 0 || document.ElapsedTicks < 0 || document.ProductRequestCount < document.Pages.Count)

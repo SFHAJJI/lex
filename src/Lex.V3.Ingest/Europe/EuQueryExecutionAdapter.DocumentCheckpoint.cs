@@ -60,7 +60,7 @@ public sealed partial class EuQueryExecutionAdapter
         try
         {
             var document = ContractJson.Deserialize<DocumentLadderCheckpoint>(new UTF8Encoding(false, true).GetString(bytes.Span));
-            if (document.Schema != DocumentCheckpointSchema || !bytes.Span.SequenceEqual(EncodeDocumentCheckpoint(document)) ||
+            if (document is null || document.Schema != DocumentCheckpointSchema || !bytes.Span.SequenceEqual(EncodeDocumentCheckpoint(document)) ||
                 document.Renderer != renderer.Reference || document.InputSha256 != DocumentInputDigest(manifest, snapshot) ||
                 document.Fetches is null || document.Fetches.Any(static value => value is null || value.Ordinal < 0))
                 throw new CustodyIntegrityException("Document ladder checkpoint framing or caller binding disagrees.");
