@@ -29,6 +29,42 @@ This slice uses the existing legacy chunk writer; PR #855's small-chunk profile 
 EU decoder recovery has priority, with local heavy checks serialized. No publisher requests were
 made for this draft.
 
+
+## EU retry 5 and LU lookup storage (Codex, 2026-10-01)
+
+PRs #848, #849, #851 and #852 are merged after cross-family reviews, one repair round and green
+CI on their exact final heads. EU retry 5 ended at C:/lex-v3/eu-population-20261001-3,
+with runtime and renderers frozen at eed2b485. It keeps all 82 seeds, EN/FRA Formex enumeration,
+explicit outcomes for other languages, the 20,000-wire ceiling and bounded LU a439 companion.
+The run uses the measured Brotli mode and the 6,374,424,214-byte starting allowance. Its owned
+process guard retained the 3 GiB floor and 512 MiB stop margin. It ended at 03:08 UTC with exit 3
+after 1,358 wire requests: ReifiedAxiomDecodeRefused for seed 32007R0864,
+QualifierAuthorityDisagreesWithItsCode at MA/PART versus the fd_335 authority ending MA%2FPART.
+Minimum sampled free space was 5,770,530,816 bytes; peak working set was 532,279,296 bytes.
+The guard did not stop it. No completed population is claimed; retained bytes need a decoder audit.
+
+Reversible driver decision for the next LU storage step: use existing digest-checked chunk
+storage for random observation lookups. The draft adds a separate v2 root with exactly 64 KiB
+chunks; the v1 writer keeps its 4 MiB format. Both readers verify the complete ordered sequence
+before returning a stream and recheck custody on each chunk load. A seek drops the previous cache.
+The canonical payload digest and per-chunk retention evidence remain separate from the root receipt.
+
+The seven existing chunk obligations now run under both profiles, with nine additional cases for
+profile admission, unread-tail corruption, an independent compressed-store reader, legacy root
+bytes and the custody bytes loaded by 100 short random reads. At 873600fa, the local Release
+build passed, required fast tests passed (3,105 succeeded, one skipped), and affected ingest
+checks passed (170 succeeded, two skipped). CI 36808709344 also passed on that exact head.
+The first CI run found three census omissions; explicit entries now account for the test wrapper
+and the two new receipt-returning methods. No receipt constructor changed. No census assertion was loosened; two expected counts rose by
+one for the new test store.
+PR #855 received cross-family CHANGES REQUESTED for six existing STATUS lines damaged by
+incorrect text decoding. The one repair restores those exact lines from the base and corrects
+the census-count wording. The reviewer independently reproduced the build, fast tests and all
+23 chunk cases. Existing readers now admit v2 roots, with the same content and retention checks;
+only tests write that profile in this slice. No full-LU fit claim is made. Subject indexes, a checked
+streaming scope-resolution door, independent bounded manifest reopening and corpus assembly
+still need implementation.
+
 ## EU object-facts continuation range (Codex, 2026-10-01)
 
 Full EU retry 4, frozen at source 18b53941 in C:/lex-v3/eu-population-20261001-2, refused with
@@ -929,11 +965,11 @@ CI evidence are recorded in the pull request before merge.
 
 ## Heads
 
-- `v3/integration`: `978ecd7a` (2026-10-01, PR #853 merged). Build 45 s. Fast lane
+- `v3/integration`: `07cfd3c5` (2026-10-01, PR #856 merged). Build 45 s. Fast lane
   (`eng/test-fast.ps1`): 3,077 tests, 3,076 pass, 1 skipped (the review of PR #828). Ingest suite: green on CI for PR #760
   (the CI `dotnet` job runs the whole solution on every pull request, about 7 min on the runner;
   green for PR #834);
-  locally about 15 min. 987 web tests pass. The web job's "browser debugger never answered" failures
+  locally about 15 min. 991 web tests pass. The web job's "browser debugger never answered" failures
   (keyboard-walk, and paint-check since #811) are fixed by PR #822: each browser binds its own
   debugging port (`launchBrowser`) instead of a random one another browser starting at the same
   moment could hold.
@@ -1182,7 +1218,8 @@ breaks a rule the answer states about itself:
 - `ambiguous_works` (a dated search's works with several applicable states, which contribute no
   hits) and `work_resolution` are read into the view.
 
-An EU search answer (`publisher: "eu-eurlex"`) has another shape and is refused by this reader.
+An EU search answer (`publisher: "eu-eurlex"`) has another shape and is refused by this reader;
+since PR #853 `readEuropeSearch` reads it, beside this one.
 It reads no text snippet, because the answer carries none. The pre-V3 renderer
 `search-results.mjs` (`lex_id`, `provision_num`, a row set) stays for the preview until the live
 search screen replaces it.
@@ -1225,7 +1262,8 @@ breaks a rule the answer states about itself:
 - `not_held` names each item once with its reason. It is carried whole: it is the V3 form of the
   pre-V3 screen's unfilled slots.
 
-An EU dossier (`publisher: "eu-eurlex"`) has another shape and is refused. The fixture holds one
+An EU dossier (`publisher: "eu-eurlex"`) has another shape and is refused by this reader; since PR
+#856 `readEuropeDossier` reads it, beside this one. The fixture holds one
 state and no titles, so the tests also read a work with three states in two languages and a
 titled work, built from the captured answer the way `V3CorpusMount.Dossier` builds them. The
 pre-V3 `dossier.mjs` renderer stays for the preview until the live dossier screen replaces it.
@@ -1240,7 +1278,8 @@ bundle `client-live-dossier.js`, which embeds the contract and nothing else of t
   index holds no title for this work" when none), the state count and range, a table of states
   (language, applicability date, next state, articles held and not admitted, printed permalink),
   and every item the dossier does not hold with its reason.
-- An EU work's dossier is answered in another shape and is said as not shown on this screen.
+- An EU work's dossier is answered in another shape. Until PR #856 it was said as not shown on this
+  screen; it is now laid out in its own words (the EU dossier paragraph below).
 - The envelope census now holds the dossier answer and its four refusals from the real handler. A
   language not held, an EU identifier on a mount without the EU index (`no_corpus_mounted`,
   `required_corpus: "eu"`), and no mount are refusal cards. A `no_corpus_mounted` sentence names
@@ -2009,6 +2048,53 @@ the panel's "journey on the real mount's GDPR".
   as before on that mount.
 - The fixture journey passes 17 of 17 steps, by pointer and by keyboard.
 
+The EU dossier on the live screen (PR #856), the fourth slice of the EU half of the launch
+screens. Until now the dossier screen said an EU dossier was not shown.
+- The API: each expression of an EU `dossier` answer carries `pinned_wording` (wording date, digest,
+  permalink), the same wording EU search pins. It is null when the expression holds no single
+  wording date. The answer carries the `digest_rule`. The EU index is untouched.
+- `readEuropeDossier` (in `dossier-answer.mjs`, beside the Luxembourg reader; `readDossierAnswer`
+  dispatches on the publisher):
+  - every expression is in a language the work is held in, and in the language asked when one was;
+  - each is listed once, counted, and resolvable by its own IRI;
+  - each is pinned by `/eu-eurlex/{celex}/{language}/{wording date}--{digest}`, whose date is its
+    one wording date. An expression that pins no wording is refused rather than shown unpinned, as
+    in EU search.
+- The screen shows the CELEX, the work IRI, and a table of expressions: language, wording date
+  (never "applies from"), articles held, permalink. It then gives the answer's sentence on what the
+  wording date is, and what the dossier does not hold. The `not_shown` state is gone. The new
+  refusal sentence for `ambiguous_identifier` (one CELEX naming two works) has a French draft.
+- The censuses hold the EU dossier: one answer in the answer census and one envelope. The EU
+  members' object references move per run, as the Luxembourg ones do, so they are normalised; the
+  double-run test found them.
+- The journey gains `EU_DOSSIER_STEP` (the dossier page, the GDPR by its CELEX):
+  - on the real bounded first mount it answers, and its one citation (the expression's wording
+    permalink) verifies, by pointer and by keyboard; all 10 real-mount steps pass in both modes;
+  - on the fixture mount it shows `no_corpus_mounted` naming the EU index; the fixture journey
+    passes 18 of 18 steps, by pointer and by keyboard.
+
+The data that would serve each unserved operation (PR #857), the driver decision recorded for
+STATUS item 4.
+- `coverage` answers `operations.not_served_data`: one row per registered operation with no
+  route, in the order of `not_served_operations`, each naming the data that would serve it
+  (`V3CorpusMount.NotServedDataNeeded`). The data are the specification's own (`33-product-spec.md`):
+  - `as_observed`: observation times (`observed_from`), recorded by builds chained to their
+    predecessors in the event log;
+  - `knowable_on`: each state's publication date beside its observation time, never the
+    publisher's valid-from date;
+  - `concepts`: EuroVoc descriptors, EU directory codes and subject matters;
+  - `transposition`: Legilux's transposes and draftTransposes assertions and the Publications
+    Office's national implementing measures for Luxembourg, each kept as its publisher asserts it.
+  None of these is produced by the ingest.
+- A coverage test holds the table to exactly the registered operations the mount does not serve.
+  A newly served operation leaves it, and a newly unserved one cannot be listed without saying what
+  it needs.
+- The coverage reader requires one row per unrouted operation, in the same order, each with a
+  sentence.
+- Trust and Coverage shows the rows in a table, in both renderers, captioned "The data that would
+  serve each operation with no route". The words have French drafts. The preview answers carry the
+  platform's sentences to the character, and the census holds them.
+
 The live export composer and its journey step (PR #789), the eighth screen. `dist-live/export.html`
 has its own bundle `client-live-export.js`.
 - The page asks what the reading page asks: the same form (`ReadingForm`, now shared), the same one
@@ -2706,8 +2792,9 @@ has not yet run; the bounded first mount above is complete.
    operation answers the transport failure `operation_not_served`, PR #758; `ask` answers the
    contained `assistant_v3_unavailable` card, PR #759; `events` and `answer_drift` over a genesis
    log, PR #760). Four remain (`as_observed`, `knowable_on`, `concepts`, `transposition`), all
-   needing data the ingest does not produce; they keep `operation_not_served`, and the capability
-   manifest is to state per operation which data would serve it (driver decision). The event log's next step,
+   needing data the ingest does not produce; they keep `operation_not_served`, and since PR #857
+   the coverage answer names, for each, the data that would serve it (driver decision, below), which
+   Trust and Coverage shows. The event log's next step,
    predecessor chaining with observation times, needs a second build, so it follows the first mount.
 5. EU parity: every temporal and search operation from the EU index; French expressions. EU
    `search` in one work served by PR #761, EU `dossier` by PR #762; the temporal operations,
@@ -2717,8 +2804,9 @@ has not yet run; the bounded first mount above is complete.
    builders stay the data lane's. PR #850: EU hits carry a hash-pinned permalink, and EU `verify`
    is served over it. PR #853: the search screen reads and shows EU answers in one named work. PR
    #854: the journey searches the real mount's GDPR, and `verify` confirms all 61 EU citations the
-   page prints. Next: the dossier screen reads the EU dossier (served by PR #762), which it now says
-   it does not show.
+   page prints. PR #856: the EU dossier pins each expression's wording, and the dossier screen and
+   journey show it. The EU screens that need dated states (reading, history, compare, radar) wait on
+   consolidation acquisition, as above.
 6. Wire the eight launch screens to `/api/v3`; journeys J1 to J8 in a real browser. PR #763: the
    envelope reader and the client module; PR #764: the live Trust and Coverage component; PR #765:
    its page, the live build and the one-origin server; PR #766: the first browser journey step,
@@ -2895,8 +2983,11 @@ Each is the driver's call under ruling 7 and can be reversed by a later pull req
   from a retired log refuses `snapshot_unknown`.
 - `ask`'s containment card keeps the `point` verdict.
 - The four operations with no data (`as_observed`, `knowable_on`, `concepts`, `transposition`) keep
-  the typed transport failure `operation_not_served`, and the capability manifest will state, per
-  operation, that it is not served and which data would serve it.
+  the typed transport failure `operation_not_served`, and the platform states, per operation, that
+  it is not served and which data would serve it. PR #857 states it in the `coverage` answer
+  (`operations.not_served_data`), which the API owns, rather than in the index capability manifest,
+  which the data lane's builders write. The data named are the specification's own
+  (`33-product-spec.md`). The index manifest can carry the same rows later without changing them.
 - The web hosting shape of ruling 3 is `Lex.V3.Api` serving the built live pages beside `/api/v3` and
   `/mcp`, with the security headers, rather than an ingress split.
 - Exports (PRs #789 and #790): JSON, CSV and PDF are written from one model, so they cannot

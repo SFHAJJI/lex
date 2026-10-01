@@ -79,7 +79,8 @@ const OPERATIONS_NOTE =
   'served_operations are the routes this mount answers and not_served_operations are registered '
   + 'with no route on it; a request for an unserved operation answers the transport failure '
   + 'operation_not_served (HTTP 404, below the envelope), which tells it apart from a path nothing '
-  + 'names (unknown_route)';
+  + 'names (unknown_route); not_served_data names, for each unserved operation, the data that would '
+  + 'serve it, none of which the ingest produces';
 
 const SERVED = Object.freeze([
   'answer_drift', 'article_history', 'as_of', 'ask', 'browse', 'changes_in_period', 'citation',
@@ -90,6 +91,33 @@ const SERVED = Object.freeze([
 
 const NOT_SERVED = Object.freeze([
   'as_observed', 'concepts', 'knowable_on', 'transposition',
+]);
+
+// The platform's own sentences, to the character (`V3CorpusMount.NotServedDataNeeded`).
+const NOT_SERVED_DATA = Object.freeze([
+  Object.freeze({
+    data_needed: 'observation times: when this corpus first observed each held state (observed_from), '
+      + 'recorded by builds chained to their predecessors in the event log; a single build holds no '
+      + 'observation time, so no answer can be replayed as it was observed',
+    operation: 'as_observed',
+  }),
+  Object.freeze({
+    data_needed: 'the concept data attached to EU works: EuroVoc descriptors, EU directory codes and '
+      + 'subject matters as the Publications Office records them; the EU index holds none of them',
+    operation: 'concepts',
+  }),
+  Object.freeze({
+    data_needed: 'each held state\'s publication date beside its observation time (observed_from), so a '
+      + 'date is answered with what a reader could have known on it, never with the publisher\'s '
+      + 'valid-from date; the observation times need builds chained to their predecessors',
+    operation: 'knowable_on',
+  }),
+  Object.freeze({
+    data_needed: 'the transposition links: Legilux\'s transposes and draftTransposes assertions and the '
+      + 'Publications Office\'s national implementing measures for Luxembourg, each kept as its '
+      + 'publisher asserts it and never merged; neither is acquired',
+    operation: 'transposition',
+  }),
 ]);
 
 const NOT_HELD = Object.freeze([
@@ -210,6 +238,7 @@ function answer({ requestedLanguage, languages, capabilityCells }) {
     },
     not_held: NOT_HELD.map((row) => ({ ...row })),
     operations: {
+      not_served_data: NOT_SERVED_DATA.map((row) => ({ ...row })),
       not_served_operations: [...NOT_SERVED],
       note: OPERATIONS_NOTE,
       registered: SERVED.length + NOT_SERVED.length,

@@ -8,6 +8,8 @@ import test from "node:test";
 
 import {
   DOSSIER_IDENTIFIER,
+  EU_DOSSIER_ON_FIXTURE,
+  EU_DOSSIER_STEP,
   EU_SEARCH_IDENTIFIER,
   EU_SEARCH_ON_FIXTURE,
   EU_SEARCH_PHRASE,
@@ -461,8 +463,12 @@ test("the EU search step names the GDPR by its CELEX, chooses English and is hel
   const report = { corpus: { Sha256: "a".repeat(64) }, luxembourgIndex: { Sha256: "b".repeat(64) } };
   assert.deepEqual(realMountSteps(report).map(([name]) => name), Object.keys(JOURNEY_STEPS), "a real mount without an EU index runs the eight");
   const withEurope = realMountSteps({ ...report, europeIndex: { Sha256: "c".repeat(64) } });
-  assert.deepEqual(withEurope.map(([name]) => name), [...Object.keys(JOURNEY_STEPS), "eu search"], "and one with an EU index runs the EU search too");
-  assert.equal(withEurope.at(-1)[1], EU_SEARCH_STEP);
+  assert.deepEqual(withEurope.map(([name]) => name), [...Object.keys(JOURNEY_STEPS), "eu search", "eu dossier"], "and one with an EU index runs the EU search and dossier too");
+  assert.equal(withEurope.at(-2)[1], EU_SEARCH_STEP);
+  assert.equal(withEurope.at(-1)[1], EU_DOSSIER_STEP);
+  assert.deepEqual(EU_DOSSIER_STEP.body, { operation_id: "dossier", parameters: { identifier: "32016R0679" } }, "the same work, any held language");
+  assert.equal(EU_DOSSIER_STEP.path, JOURNEY_STEPS.dossier.path, "the same dossier page");
+  assert.deepEqual(EU_DOSSIER_ON_FIXTURE, { ...EU_SEARCH_ON_FIXTURE, step: EU_DOSSIER_STEP });
 
   assert.deepEqual(EU_SEARCH_ON_FIXTURE, { step: EU_SEARCH_STEP, state: "refusal", refusalCode: "no_corpus_mounted", texts: ["This build has no EU index mounted."] },
     "the fixture mount holds no EU index, and the page must say that one is what is missing");
