@@ -494,7 +494,8 @@ public sealed class LuxembourgIndexBuilderTests
     }
 
     [TestMethod]
-    [DataRow("PRAGMA user_version=2", "schema identity")]
+    [DataRow("PRAGMA user_version=2", "schema differs from the exact terminal schema")]
+    [DataRow("PRAGMA user_version=6", "schema differs from the exact terminal schema")]
     [DataRow("UPDATE states SET state_sha256='aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'", "digest is not derived")]
     [DataRow("UPDATE articles SET expression_iri=expression_iri || '/other'", "does not bind its exact article population")]
     [DataRow("UPDATE states SET work_key='wrong-work-key'", "not canonical")]
