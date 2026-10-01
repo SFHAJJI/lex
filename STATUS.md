@@ -750,7 +750,7 @@ CI evidence are recorded in the pull request before merge.
 
 ## Heads
 
-- `v3/integration`: `fed8c30d` (2026-10-01, PR #844 merged). Build 45 s. Fast lane
+- `v3/integration`: `9041cbc2` (2026-10-01, PR #845 merged). Build 45 s. Fast lane
   (`eng/test-fast.ps1`): 3,077 tests, 3,076 pass, 1 skipped (the review of PR #828). Ingest suite: green on CI for PR #760
   (the CI `dotnet` job runs the whole solution on every pull request, about 7 min on the runner;
   green for PR #834);
@@ -2075,6 +2075,23 @@ all three gates pass at 1: anchor nDCG@10 (11 cases), no-hit accuracy (4) and re
 (3). The judgments control catches the shuffle. The real first mount has no case: all three gates
 are not measured and the control says why. A mutation, word judgments naming another anchor,
 drops nDCG@10 to 0.57 and fails. `TheGatesOverTheMountTheReleaseNames` now writes all three sets.
+
+The image rehearsal runs in CI (PR #847): the job `image-rehearsal` in `v3-ci.yml`, on every push
+to `v3/integration`. It also runs on a pull request whose branch name contains `rehearsal`, so a
+change to the rehearsal proves the job before it merges.
+- It writes the journey fixture mount (`V3JourneyMountTests`) and runs
+  `web/scripts/image-rehearsal.mjs --no-probe`. The WSL probes need the driver's machine and stay
+  local.
+- `jq` then holds the report to:
+  - the second build's digest;
+  - no image failure and V2 absent;
+  - the rehearsal signature verified;
+  - the card being the gates run over that mount;
+  - the release read back with no failure;
+  - the work and artifacts directories removed.
+- The report is uploaded.
+Push only, so a pull request's wait is unchanged, while the image pipeline is checked after every
+merge, the data lane's included.
 
 The release card is the machine gates run over the release's own mount (PR #844), the last slice of
 ruling 2's gates over the real mounted corpus. The image rehearsal first runs
