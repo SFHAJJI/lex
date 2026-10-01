@@ -1,3 +1,4 @@
+using Lex.V3.Contracts;
 using System.Globalization;
 using System.Security.Cryptography;
 using System.Text.Json;

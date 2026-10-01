@@ -1,3 +1,4 @@
+using Lex.V3.Contracts;
 using System.Globalization;
 using System.Text.RegularExpressions;
 using Lex.V3.Contracts.Source.Core;
