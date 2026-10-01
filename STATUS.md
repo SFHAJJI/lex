@@ -17,8 +17,11 @@ item, a coordinated-text relation to that body, an inbound citation and empty me
 They compare all serialized resolution fields and explicitly check resource/input alignment and the
 global relation result. Initial CI36824262596 built with zero warnings/errors and passed these three
 cases and the ingest suite: 5,256 passed, 22 skipped, two construction-surface pin failures. Those
-pins still include the removed anonymous carrier; failure diagnostics now expose the exact compiled
-differences for transcription. No pin is loosened. Local build, required fast tests, affected ingest
+pins still included the removed anonymous carrier. Diagnostic CI36825213776 independently printed
+six changed census entries: five carrier counts decrease, and the final resource producer count
+increases. Those exact literal rows are transcribed, and the obsolete typed-role carrier entry is
+removed; constructor/factory assertions remain strict. Both CI runs passed all three new cases and
+all ingests. Fresh CI must verify the pin repair. Local build, required fast tests, affected ingest
 checks, measurement and cross-family review remain pending while EU owns the heavy slot. No measured
 memory saving or full Luxembourg capacity is claimed.
 

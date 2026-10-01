@@ -1590,37 +1590,13 @@ public sealed class LuxembourgScopeResolverTests
             },
             ConstructionSurface.Of(typeof(LuxembourgTypedRoleResolution)).ToArray());
 
-        // Fold-in: paired the way the sibling Luxembourg pin file pairs every Of pin with a
-        // ProducersIn assertion. The resolver's own ResolveTypedRole, the per-resource projection
-        // closure that carries it into the anonymous type ResolveTypedRole's caller builds, and
-        // LuxembourgResourceResolution's own TypedRole property (and its backing field) are the
-        // only places elsewhere in Contracts that hand out a typed-role resolution.
+        // The final resource carries the role through its property/backing field. The resolver's
+        // direct role method is the remaining external producer; there is no anonymous carrier.
         var expectedProducers = new[]
             {
                 "field private instance " + N
                     + "LuxembourgResourceResolution::<TypedRole>k__BackingField -> "
                     + N + "LuxembourgTypedRoleResolution",
-                // The display-class ordinal moved from 24 to 27 when D1-06c-LU-2's repair made the
-                // three userFormat sets internal and added KnownUserFormatIris beside them (RULING
-                // lex-event-20260904T194556163Z-dd9191017eaf4c3b83ea04862933006f item three). The
-                // compiler numbers generated types by declaration position; this is not a new way
-                // to hand out a typed-role resolution. Re-printed after the change, not guessed.
-                "method internal instance " + N + "LuxembourgScopeResolver+<>c__DisplayClass27_0"
-                    + "::<Resolve>b__3(" + N + "LuxembourgResourceObservation) -> "
-                    + "<>f__AnonymousType0<" + N + "LuxembourgResourceObservation, "
-                    + "Lex.V3.Contracts.LuScopeDimensions, "
-                    + "System.Collections.Generic.IReadOnlyList<"
-                    + N + "LuxembourgResolvedAssertion>, "
-                    + "System.Collections.Generic.IReadOnlyList<" + N
-                    + "LuxembourgResolvedRelation>, " + N + "LuxembourgWemiTopologyResolution, "
-                    // #419 slice 6c: the classified tuple also carries the publication form, so the
-                    // anonymous type gained one type argument. Re-printed, not guessed.
-                    // #419 slice 7: two more, the resolver's own act test and the publisher's legal
-                    // types, which the population ledger folds. The type arguments are what the
-                    // initializer actually yields - IriValues returns an array, so String[] here
-                    // rather than the read-only list the record exposes. Re-printed, not guessed.
-                    + N + "LuxembourgBodyJoinResolution, " + N + "LuxembourgTypedRoleResolution, "
-                    + N + "LuxembourgPublicationForm, System.Boolean, System.String[]>",
                 "method private static " + N + "LuxembourgScopeResolver::ResolveTypedRole("
                     + N + "LuxembourgResourceObservation) -> "
                     + N + "LuxembourgTypedRoleResolution",
@@ -1634,12 +1610,7 @@ public sealed class LuxembourgScopeResolverTests
             "Removed or changed typed-role pins:\n" + string.Join("\n", expectedProducers.Except(actualProducers, StringComparer.Ordinal)) +
             "\nActual added or changed typed-role entries:\n" + string.Join("\n", actualProducers.Except(expectedProducers, StringComparer.Ordinal)));
 
-        // The compiler-generated display-class ordinal above (24_0, was 23_0 before item 18 added
-        // a new member to LuxembourgScopeResolver ahead of it) shifts whenever unrelated members
-        // are added to the class, even without touching ResolveTypedRole itself or adding any new
-        // closure -- exactly the brittleness item 15's reviewer flagged in this same pin. Re-print
-        // and re-transcribe this assertion's expected array whenever LuxembourgScopeResolver next
-        // gains or loses a member ahead of ResolveTypedRole's own closure.
+
     }
 
     /// <summary>
