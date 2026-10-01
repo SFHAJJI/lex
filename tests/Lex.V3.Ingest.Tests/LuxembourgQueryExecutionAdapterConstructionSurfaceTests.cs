@@ -220,7 +220,7 @@ public sealed class LuxembourgQueryExecutionAdapterConstructionSurfaceTests
     }
 
     [TestMethod]
-    public void QueryExecutionRefusalIsATwentyThreeMemberEnumIncludingNone()
+    public void QueryExecutionRefusalIsATwentyFourMemberEnumIncludingNone()
     {
         // D1-06c-LU-2 added four: DocumentFetchSessionNotStarted, DocumentBodyNotRetained,
         // AcquisitionOutcomeNotRepresentable and RecordSetNotHeld, one per whole-run failure the
@@ -245,6 +245,9 @@ public sealed class LuxembourgQueryExecutionAdapterConstructionSurfaceTests
             {
                 "base-constructor protected instance System.Enum::.ctor() -> System.Enum",
                 "base-constructor protected instance System.ValueType::.ctor() -> System.ValueType",
+                "field public static " + N
+                + "LuxembourgQueryExecutionRefusal::AcquisitionCheckpointNotRetained -> " + N
+                + "LuxembourgQueryExecutionRefusal",
                 "field public static " + N
                 + "LuxembourgQueryExecutionRefusal::AcquisitionOutcomeNotRepresentable -> "
                 + N + "LuxembourgQueryExecutionRefusal",
@@ -533,6 +536,7 @@ public sealed class LuxembourgQueryExecutionAdapterConstructionSurfaceTests
                     + "Lex.V3.Ingest.Luxembourg.LuxembourgQueryExecutionRefusalDetail?, "
                     + "Lex.V3.Contracts.Source.Core.SourceArtifactRef?, Lex.V3.Contracts.Source.Core.SourceArtifactRef?) -> "
                     + "Lex.V3.Ingest.Luxembourg.LuxembourgQueryExecutionResult",
+                "method internal instance Lex.V3.Ingest.Luxembourg.LuxembourgQueryExecutionResult::WithAcquisitionCheckpoint(Lex.V3.Contracts.Source.Core.SourceArtifactRef) -> Lex.V3.Ingest.Luxembourg.LuxembourgQueryExecutionResult",
                 "method internal instance Lex.V3.Ingest.Luxembourg.LuxembourgQueryExecutionResult::WithDocumentCheckpoint(Lex.V3.Contracts.Source.Core.SourceArtifactRef) -> Lex.V3.Ingest.Luxembourg.LuxembourgQueryExecutionResult",
                 "method internal instance Lex.V3.Ingest.Luxembourg.LuxembourgQueryExecutionResult::WithGazetteCheckpoint(Lex.V3.Contracts.Source.Core.SourceArtifactRef) -> Lex.V3.Ingest.Luxembourg.LuxembourgQueryExecutionResult",
                 "method public static "

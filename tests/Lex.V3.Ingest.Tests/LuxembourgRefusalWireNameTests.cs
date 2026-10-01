@@ -108,6 +108,7 @@ public sealed class LuxembourgRefusalWireNameTests
                 "selected_manifestation_identity_not_unique\n" +
                 "document_checkpoint_not_retained",
                 "gazette_checkpoint_not_retained",
+                "acquisition_checkpoint_not_retained",
             }),
             string.Join("\n", WireNames<LuxembourgQueryExecutionRefusal>()),
             "a wire name changing is a contract change; a number changing is not.");

@@ -623,6 +623,10 @@ public enum LuxembourgQueryExecutionRefusal
     /// <summary>The Gazette phase could not retain its original replay associations.</summary>
     [JsonStringEnumMemberName("gazette_checkpoint_not_retained")]
     GazetteCheckpointNotRetained = 22,
+
+    /// <summary>The complete proven query acquisition catalog could not be retained.</summary>
+    [JsonStringEnumMemberName("acquisition_checkpoint_not_retained")]
+    AcquisitionCheckpointNotRetained = 23,
 }
 
 /// <summary>
@@ -854,6 +858,9 @@ public sealed class LuxembourgQueryExecutionResult
     /// <summary>Original Gazette phase checkpoint, present on captured delivered runs.</summary>
     public SourceArtifactRef? GazetteCheckpointRef { get; }
 
+    /// <summary>Complete retained query acquisition, for supported fully proven S/A/G runs.</summary>
+    public SourceArtifactRef? AcquisitionCheckpointRef { get; private init; }
+
     internal LuxembourgQueryExecutionResult WithDocumentCheckpoint(SourceArtifactRef checkpoint)
     {
         ArgumentNullException.ThrowIfNull(checkpoint);
@@ -881,7 +888,7 @@ public sealed class LuxembourgQueryExecutionResult
             GazetteListingFetchRefusalsByOrdinal,
             GazetteListingsWithContradictoryLegalValueByOrdinal,
             PopulationLedger,
-            Refusal, checkpoint, GazetteCheckpointRef);
+            Refusal, checkpoint, GazetteCheckpointRef) { AcquisitionCheckpointRef = AcquisitionCheckpointRef };
     }
 
     internal LuxembourgQueryExecutionResult WithGazetteCheckpoint(SourceArtifactRef checkpoint)
@@ -911,7 +918,37 @@ public sealed class LuxembourgQueryExecutionResult
             GazetteListingFetchRefusalsByOrdinal,
             GazetteListingsWithContradictoryLegalValueByOrdinal,
             PopulationLedger,
-            Refusal, DocumentCheckpointRef, checkpoint);
+            Refusal, DocumentCheckpointRef, checkpoint) { AcquisitionCheckpointRef = AcquisitionCheckpointRef };
+    }
+
+    internal LuxembourgQueryExecutionResult WithAcquisitionCheckpoint(SourceArtifactRef checkpoint)
+    {
+        ArgumentNullException.ThrowIfNull(checkpoint);
+        return new(
+            Topology,
+            FamilyOutcomes,
+            RelationFamilyAcquisitions,
+            ResolvedRelations,
+            LocalInboundRelations,
+            TypedAssertions,
+            ResourceObservationSubjects,
+            ResourceObservationExclusions,
+            ScopeManifestReceipt,
+            ScopeManifestCanonicalSha256,
+            Completion,
+            DocumentAcquisitionOutcomesByOrdinal,
+            CorpusRecordSetRef,
+            CorpusRecordSetReceipt,
+            CorpusRecordSet,
+            ObservedObjectIdentitySetRef,
+            ObservedObjectIdentitySetReceipt,
+            ObservedObjectIdentitySet,
+            HeldBodyDerivationPopulation,
+            GazetteBodySetsByOrdinal,
+            GazetteListingFetchRefusalsByOrdinal,
+            GazetteListingsWithContradictoryLegalValueByOrdinal,
+            PopulationLedger,
+            Refusal, DocumentCheckpointRef, GazetteCheckpointRef) { AcquisitionCheckpointRef = checkpoint };
     }
 
     public static LuxembourgQueryExecutionResult Delivered(
@@ -1470,7 +1507,7 @@ public sealed partial class LuxembourgQueryExecutionAdapter
         WireRequestBudget wireBudget,
         CancellationToken cancellationToken,
         IReadOnlyList<LuxembourgConsolidationByActResult>? consolidationsByAct,
-        bool adaptive = false)
+        bool adaptive = false, QueryReplay? replay = null)
     {
         ArgumentNullException.ThrowIfNull(families);
         // ONE CEILING FOR THE RUN, AND EVERY DOOR BELOW CHARGES IT. This run enumerates N families,
@@ -1518,6 +1555,25 @@ public sealed partial class LuxembourgQueryExecutionAdapter
             var isRelationFamily = relationFamilyKeys.Contains(familyKey, StringComparer.Ordinal);
             var isCensusFamily = censusFamilyKeys.Contains(familyKey, StringComparer.Ordinal);
             var isAssertionFamily = assertionFamilyKeys.Contains(familyKey, StringComparer.Ordinal);
+
+            if (replay is not null)
+            {
+                var retained = replay.Document.Families.Single(value => value.Range.PartitionId == familyKey);
+                var restoredLegs = replay.Legs[familyKey];
+                outcomes.Add(retained.Kind == LuxembourgFamilyEnumerationOutcomeKind.Proven
+                    ? LuxembourgFamilyEnumerationOutcome.ProvenWithCheckpoint(familyKey, restoredLegs[0].Proof, retained.Checkpoint)
+                    : LuxembourgFamilyEnumerationOutcome.CoverProvenWithCheckpoint(familyKey,
+                        restoredLegs.Select(static leg => leg.Proof).ToArray(), retained.Checkpoint));
+                if (isCensusFamily) censusLegs.AddRange(restoredLegs);
+                if (isAssertionFamily) assertionLegs.AddRange(restoredLegs);
+                if (isRelationFamily)
+                {
+                    relationLegs.AddRange(restoredLegs);
+                    sawRelationFamily = true;
+                    relationProof = restoredLegs[0].Proof;
+                }
+                continue;
+            }
 
             if (adaptive)
             {
@@ -1935,7 +1991,8 @@ public sealed partial class LuxembourgQueryExecutionAdapter
                 static entry => entry.Value.ToScopeManifestFetchAddress()));
 
         var (reopenedManifest, writeReceipt, manifestArtifactRef, manifestCanonicalSha256, manifestFailure) =
-            await HoldManifestAsync(manifest, resolver, cancellationToken).ConfigureAwait(false);
+            await HoldAcquisitionManifestAsync(manifest, resolver, replay?.Document.SelectionManifest,
+                replay?.Document.SelectionContentSha256, cancellationToken).ConfigureAwait(false);
         if (manifestFailure is not null)
         {
             return LuxembourgQueryExecutionResult.Refused(topology, outcomes, relationAcquisitions, manifestFailure);
@@ -1945,13 +2002,21 @@ public sealed partial class LuxembourgQueryExecutionAdapter
         // with real evidence -- this exact run's own manifest custody-write digest, distinct from
         // manifestArtifactRef's own canonical digest above -- rather than an inert placeholder,
         // mirroring EuQueryExecutionAdapter's own runIdentityRef exactly.
-        var runIdentityRef = new SourceArtifactRef(
-            $"urn:uuid:{Guid.NewGuid():D}", writeReceipt!.Reference.ContentSha256);
+        var selectionManifestRef = manifestArtifactRef!;
+        var selectionContentSha256 = writeReceipt!.Reference.ContentSha256;
+        if (replay is not null && (selectionManifestRef != replay.Document.SelectionManifest ||
+            selectionContentSha256 != replay.Document.SelectionContentSha256 ||
+            replay.Document.Run.Sha256 != selectionContentSha256))
+            throw new CustodyIntegrityException("LU selection manifest or original run identity differs after derivation.");
+        var runIdentityRef = replay?.Document.Run ?? new SourceArtifactRef(
+            $"urn:uuid:{Guid.NewGuid():D}", selectionContentSha256);
 
-        var documentPhase = await RunDocumentAcquisitionWithCheckpointAsync(
-                    reopenedManifest!, mintedAddressesByObjectRef, documentFetchRendererSource,
-                    wireBudget, cancellationToken)
-                .ConfigureAwait(false);
+        var documentPhase = replay is null
+            ? await RunDocumentAcquisitionWithCheckpointAsync(reopenedManifest!, mintedAddressesByObjectRef,
+                documentFetchRendererSource, wireBudget, cancellationToken).ConfigureAwait(false)
+            : (Data: await ReopenDocumentAcquisitionAsync(_custodyStore, replay.Document.Documents, _sourceProfile,
+                reopenedManifest!, mintedAddressesByObjectRef, documentFetchRendererSource, cancellationToken).ConfigureAwait(false),
+                Checkpoint: (SourceArtifactRef?)replay.Document.Documents);
         var (documentAcquisitionOutcomesByOrdinal, heldByOrdinal, acquisitionRefusal) = documentPhase.Data;
         if (acquisitionRefusal is not null)
         {
@@ -1987,7 +2052,8 @@ public sealed partial class LuxembourgQueryExecutionAdapter
                 mintedAddressesByObjectRef.ToDictionary(static pair => pair.Key,
                     static pair => pair.Value.ToScopeManifestFetchAddress()));
             (reopenedManifest, writeReceipt, manifestArtifactRef, manifestCanonicalSha256, manifestFailure) =
-                await HoldManifestAsync(manifest, resolver, cancellationToken).ConfigureAwait(false);
+                await HoldAcquisitionManifestAsync(manifest, resolver, replay?.Document.FinalManifest,
+                    replay?.Document.FinalContentSha256, cancellationToken).ConfigureAwait(false);
             if (manifestFailure is not null)
             {
                 return LuxembourgQueryExecutionResult.Refused(topology, outcomes, relationAcquisitions, manifestFailure);
@@ -2005,10 +2071,15 @@ public sealed partial class LuxembourgQueryExecutionAdapter
         // #419 slice 6c: after the final rights-bearing resolution, every Gazette listing of every
         // as-published act, through the accepted producer. Before the record set: the sets are
         // their own artifacts and the record set's shape does not move.
-        var gazettePhase = await RunGazetteAcquisitionWithCheckpointAsync(
-                    resolved, reopenedManifest!, mintedAddressesByObjectRef, heldByOrdinal!,
-                    documentFetchRendererSource, wireBudget, cancellationToken)
-                .ConfigureAwait(false);
+        if (replay is not null && (manifestArtifactRef != replay.Document.FinalManifest ||
+            writeReceipt!.Reference.ContentSha256 != replay.Document.FinalContentSha256))
+            throw new CustodyIntegrityException("LU final rights manifest differs after derivation.");
+        var gazettePhase = replay is null
+            ? await RunGazetteAcquisitionWithCheckpointAsync(resolved, reopenedManifest!, mintedAddressesByObjectRef,
+                heldByOrdinal!, documentFetchRendererSource, wireBudget, cancellationToken).ConfigureAwait(false)
+            : (Data: await ReopenGazetteAcquisitionAsync(_custodyStore, replay.Document.Gazette, _sourceProfile,
+                resolved, reopenedManifest!, mintedAddressesByObjectRef, heldByOrdinal!, documentFetchRendererSource,
+                cancellationToken).ConfigureAwait(false), Checkpoint: (SourceArtifactRef?)replay.Document.Gazette);
         var (gazetteBodySetsByOrdinal, gazetteListingFetchRefusalsByOrdinal, gazetteContradictoryByOrdinal, gazetteRefusal) = gazettePhase.Data;
         if (gazetteRefusal is not null)
         {
@@ -2032,9 +2103,11 @@ public sealed partial class LuxembourgQueryExecutionAdapter
         // CreateAsync: the manifest outlived the run and the premise behind it did not. Derived here
         // from the run's own observations, never recomputed from the manifest -- a set rebuilt from
         // the manifest would agree with the manifest by construction and prove nothing.
-        var identitySetResult = await new LuxembourgObservedObjectIdentitySetWriter(_custodyStore)
-            .WriteAsync(runIdentityRef, observations, cancellationToken)
-            .ConfigureAwait(false);
+        var identityWriter = new LuxembourgObservedObjectIdentitySetWriter(_custodyStore);
+        var identitySetResult = replay is null
+            ? await identityWriter.WriteAsync(runIdentityRef, observations, cancellationToken).ConfigureAwait(false)
+            : await identityWriter.RebuildAsync(runIdentityRef, observations, replay.Document.Observed,
+                cancellationToken).ConfigureAwait(false);
         if (identitySetResult.Refusal is not null)
         {
             return LuxembourgQueryExecutionResult.Refused(
@@ -2047,10 +2120,11 @@ public sealed partial class LuxembourgQueryExecutionAdapter
 
         // The record set is still the last artifact, after the final rights-bearing manifest.
         var recordSetWriter = new CorpusRecordSetWriter(_custodyStore);
-        var recordSetResult = await recordSetWriter.WriteAsync(
-                reopenedManifest!, manifestArtifactRef!, runIdentityRef,
-                documentAcquisitionOutcomesByOrdinal, cancellationToken)
-            .ConfigureAwait(false);
+        var recordSetResult = replay is null
+            ? await recordSetWriter.WriteAsync(reopenedManifest!, manifestArtifactRef!, runIdentityRef,
+                documentAcquisitionOutcomesByOrdinal, cancellationToken).ConfigureAwait(false)
+            : await recordSetWriter.RebuildAsync(reopenedManifest!, manifestArtifactRef!, runIdentityRef,
+                documentAcquisitionOutcomesByOrdinal, replay.Document.Corpus, cancellationToken).ConfigureAwait(false);
         if (recordSetResult.Refusal is not null)
         {
             return LuxembourgQueryExecutionResult.Refused(
@@ -2077,7 +2151,7 @@ public sealed partial class LuxembourgQueryExecutionAdapter
                     null, $"{derivationRefusal}: {derivationDetail}"));
         }
 
-        return LuxembourgQueryExecutionResult.Delivered(
+        var delivered = LuxembourgQueryExecutionResult.Delivered(
             topology, outcomes, relationAcquisitions,
             resolved.Resources.SelectMany(static resource => resource.Relations).ToArray(),
             resolved.LocalInboundRelations,
@@ -2093,6 +2167,20 @@ public sealed partial class LuxembourgQueryExecutionAdapter
             derivationPopulation,
             gazetteBodySetsByOrdinal!, gazetteListingFetchRefusalsByOrdinal!, gazetteContradictoryByOrdinal!,
             populationLedger!).WithDocumentCheckpoint(documentPhase.Checkpoint!).WithGazetteCheckpoint(gazettePhase.Checkpoint!);
+        if (replay is not null || evidenceResolver is not null || consolidationsByAct is { Count: > 0 }) return delivered;
+        try
+        {
+            var checkpoint = await RetainQueryCheckpointAsync(families, relationFamilyKeys, censusFamilyKeys, assertionFamilyKeys,
+                documentFetchRendererSource, scoped, adaptive, delivered, selectionManifestRef, selectionContentSha256,
+                manifestArtifactRef!, writeReceipt!.Reference.ContentSha256, runIdentityRef, cancellationToken).ConfigureAwait(false);
+            return checkpoint is null ? delivered : delivered.WithAcquisitionCheckpoint(checkpoint);
+        }
+        catch (Exception exception) when (exception is CustodyRequiredException or CustodyIntegrityException)
+        {
+            return LuxembourgQueryExecutionResult.Refused(topology, outcomes, relationAcquisitions,
+                new LuxembourgQueryExecutionRefusalDetail(LuxembourgQueryExecutionRefusal.AcquisitionCheckpointNotRetained,
+                    null, exception.Message));
+        }
     }
 
     private static IReadOnlyList<LuxembourgTypedAssertion>? TryBuildTypedAssertions(

@@ -479,7 +479,8 @@ public sealed partial class LuxembourgGazetteAcquisitionTests
         return (consolidation, expression, manifestation, item, assertions);
     }
 
-    private sealed record GazetteRun(LuxembourgQueryExecutionResult Result, int DocumentRequests);
+    private sealed record GazetteRun(LuxembourgQueryExecutionResult Result, int DocumentRequests,
+        VerifiedLuxembourgSourceProfile Profile, IReadOnlyList<LuxembourgQueryPartitionRange> Ranges);
 
     private static (string, string, string)[] GazetteAssertions(string? pdfLicence = null, string[]? pdfLegalValues = null)
     {
@@ -578,7 +579,7 @@ public sealed partial class LuxembourgGazetteAcquisitionTests
             null, "census", "assertions", LuxembourgAcquisitionTestFixture.DocumentFetchRendererSource(420),
             wireBudget ?? LuxembourgAcquisitionTestFixture.TestWireBudget(),
             CancellationToken.None);
-        return new GazetteRun(result, documentRequests);
+        return new GazetteRun(result, documentRequests, profile, [censusRequest.Partition, assertionRequest.Partition]);
 
         HttpResponseMessage Document(HttpRequestMessage request, string item, HttpStatusCode status, byte[] body, string mediaType = "application/pdf")
         {
