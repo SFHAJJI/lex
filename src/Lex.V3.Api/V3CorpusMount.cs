@@ -4059,13 +4059,16 @@ internal sealed class V3CorpusMount : IDisposable
     public const int EventsMaxRows = 200;
 
     internal const string EventsScope =
-        "the event log of the mounted Luxembourg index: a list numbered from 1, polled by cursor, append-only while this index is mounted; " +
-        "this build's log is a genesis log (one observation, no predecessor), so it holds one first_sighting per held state and nothing else";
+        "the event log of the mounted Luxembourg index: a list numbered from 1, polled by cursor, append-only; a genesis log (one observation, " +
+        "no predecessor) holds one first_sighting per held state and nothing else; a chained log carries its predecessors' observations unchanged " +
+        "and appends one observation per later build (log.basis says which)";
 
     internal const string EventsDeliveryNote =
         "cursor polling, at least once: while this index is mounted a request with the same cursor answers the same events again, so a reader " +
-        "deduplicates by seq within log_id; next_after is always the cursor to poll next; a new build starts a new log, whose log_id differs and " +
-        "under which a cursor of this log refuses snapshot_unknown; there is no push delivery and no subscription (Decision 93)";
+        "deduplicates by seq within log_id; next_after is always the cursor to poll next; a build chained to this one carries this log forward " +
+        "with the same numbers, so a cursor of this log reads on in its successor (log.ancestors lists the logs a log honours); a build not chained " +
+        "to this one starts a new log, under which a cursor of this log refuses snapshot_unknown; there is no push delivery and no subscription " +
+        "(Decision 93)";
 
     internal const string EventsGenesisNote =
         "this log comes from one observation with no predecessor, so it holds only first_sighting; first_sighting means first present in this log " +
@@ -4078,11 +4081,35 @@ internal sealed class V3CorpusMount : IDisposable
 
     internal const string EventNamesNote =
         "the Stage 4 registry names thirteen events; mintable lists the twelve this pipeline may mint, never the coverage event (B42 finding 5.2: a " +
-        "gate must not be excused by an event the same pipeline mints); this build mints first_sighting only, because the others need a predecessor " +
-        "build to compare against; in_this_log names those this log holds";
+        "gate must not be excused by an event the same pipeline mints); a genesis log holds first_sighting only; a chained log adds expression_added, " +
+        "file_replaced, interval_closed and validity_revised; withdrawn_from_source and resighted need three completed runs and a complete " +
+        "enumeration, and metadata_revised and the relation and future-state events need data this index does not hold, so none of them is minted; " +
+        "in_this_log names those this log holds";
+
+    internal const string EventsChainedNote =
+        "this log carries its predecessors' observations unchanged and appends one observation per later build; each appended event compares that " +
+        "build's states with the log before it: first_sighting or expression_added for a state new to the log, file_replaced when a state's source " +
+        "bodies differ (its digest changes with its text, not with the bytes alone), and interval_closed or validity_revised when a state's interval " +
+        "moved, an end derived from the publisher's start dates and never asserted by the publisher; a state the log holds and a later build lacks " +
+        "stays held, because absence is not a withdrawal; observed_from is null because no observation time is held";
+
+    internal static readonly string[][] EventsChainedNotHeld =
+    [
+        ["observation_times", "no observation time is held; observed_from is null on every event"],
+        ["withdrawal_events", "a state the log holds and a later build lacks stays held: a withdrawal needs three completed runs and a complete enumeration, which no build here proves"],
+        ["work_level_events", "events are scoped to states; no work-level event is minted"],
+        ["upstream_health", "no upstream health or build time is held, so silence here is not a statement that the publisher was quiet"],
+    ];
+
+    internal const string AnswerDriftChainedBasis =
+        "enumerated from the log's validity_revised and interval_closed events: each row is the interval of dates, in one work and language, whose " +
+        "as_of answer the revision moved from the state named before to the state applying from the row's first date; the dates are derived from the " +
+        "publisher's start dates, not asserted by the publisher; a file_replaced event changes a state's text without moving an interval and is not " +
+        "enumerated here; this is a statement about the log, not about the law or the publisher";
 
     internal const string EventsForeignCursorWhatWouldAnswer =
-        "a cursor from this log (its log_id is the mounted index digest), or no cursor to read this log from its first event";
+        "a cursor from this log (its log_id is the mounted index digest) or from an ancestor it carries forward (log.ancestors), or no cursor to " +
+        "read this log from its first event";
 
     internal static readonly string[][] EventsNotHeld =
     [
@@ -4107,14 +4134,15 @@ internal sealed class V3CorpusMount : IDisposable
         "whose as_of answer changed, with the permalinks before and after";
 
     /// <summary>
-    /// <c>events</c> for Luxembourg: the mounted index's event log, one ordered, cursor-paged list. The log
-    /// is a genesis log (one observation, no predecessor): one <c>first_sighting</c> per held state in the
-    /// states table's order, numbered from 1, with no observation time (null, never invented). A cursor is
-    /// <c>{log_id}:{seq}</c>, where the log id is the index digest; a cursor from another log refuses
-    /// <c>snapshot_unknown</c> rather than being read against this one, and a sequence number beyond the
-    /// log's last is a request-schema failure. <c>event</c> narrows to one registry name. The answer says
-    /// what at-least-once polling means, what the genesis basis cannot say, and that silence is not
-    /// upstream health.
+    /// <c>events</c> for Luxembourg: the mounted index's event log, one ordered, cursor-paged list, with no
+    /// observation time (null, never invented). A genesis log (one observation, no predecessor) holds one
+    /// <c>first_sighting</c> per held state; a chained log carries its predecessors' observations and appends one
+    /// per later build, and the log block names its basis, its predecessor, how many builds were compared and the
+    /// ancestor logs whose cursors it honours. A cursor is <c>{log_id}:{seq}</c>, where the log id is an index
+    /// digest; one of this log or of an ancestor reads on, one from any other log refuses <c>snapshot_unknown</c>,
+    /// and a sequence number beyond its log's last is a request-schema failure. Each row carries the log's detail
+    /// verbatim. <c>event</c> narrows to one registry name. The answer says what at-least-once polling means, what
+    /// its basis cannot say, and that silence is not upstream health.
     /// </summary>
     public V3PlatformOperationOutcome Events(
         V3PlatformOperationRequest request,
@@ -4147,12 +4175,14 @@ internal sealed class V3CorpusMount : IDisposable
         }
 
         var log = _reader.ResolveEventLog();
+        var observations = _reader.ResolveObservations();
         var logId = _reader.IndexRef.Sha256;
-        if (RefuseUnlessCursorOfThisLog(request, cursor, logId, log, observedAt) is { } foreign)
+        if (RefuseUnlessCursorOfThisLog(request, cursor, logId, log, observations, observedAt) is { } foreign)
         {
             return foreign;
         }
 
+        var chained = observations.Count > 1;
         var rows = _reader.ResolveEvents(cursor?.Seq ?? 0, eventName, limit + 1);
         var hasMore = rows.Count > limit;
         var served = rows.Take(limit).ToArray();
@@ -4160,7 +4190,7 @@ internal sealed class V3CorpusMount : IDisposable
         using var result = JsonSerializer.SerializeToDocument(new
         {
             scope = EventsScope,
-            log = EventLogBlock(logId, log),
+            log = EventLogBlock(logId, log, observations),
             requested_event = eventName,
             events = served.Select(value => new
             {
@@ -4176,11 +4206,17 @@ internal sealed class V3CorpusMount : IDisposable
                 state_sha256 = value.StateSha256,
                 stable_coordinate = $"/lu-legilux/{value.WorkKey}/{value.ApplicabilityDate}",
                 permalink = $"/lu-legilux/{value.WorkKey}/{value.ApplicabilityDate}--{value.StateSha256}",
+                // The log's own detail, verbatim: the source bodies, and what a revision replaced or moved.
+                detail = JsonDocument.Parse(value.DetailJson).RootElement.Clone(),
+                replaced_permalink = value.Event == V3EventRegistry.FileReplaced
+                    ? $"/lu-legilux/{value.WorkKey}/{value.ApplicabilityDate}--{JsonDocument.Parse(value.DetailJson).RootElement.GetProperty("replaced_state_sha256").GetString()}"
+                    : null,
             }).ToArray(),
             has_more = hasMore,
             next_after = $"{logId}:{nextSeq}",
             delivery = EventsDeliveryNote,
             genesis_note = EventsGenesisNote,
+            chained_note = chained ? EventsChainedNote : null,
             silence_note = EventsSilenceNote,
             event_names = new
             {
@@ -4188,7 +4224,7 @@ internal sealed class V3CorpusMount : IDisposable
                 in_this_log = V3EventRegistry.Mintable.Where(name => _reader.CountEvents([name]) > 0).ToArray(),
                 note = EventNamesNote,
             },
-            not_held = EventsNotHeld.Select(static row => new { item = row[0], reason = row[1] }).ToArray(),
+            not_held = (chained ? EventsChainedNotHeld : EventsNotHeld).Select(static row => new { item = row[0], reason = row[1] }).ToArray(),
         });
         return V3PlatformOperationOutcome.Success(
             Context("success", observedAt),
@@ -4197,11 +4233,13 @@ internal sealed class V3CorpusMount : IDisposable
 
     /// <summary>
     /// <c>answer_drift</c> for Luxembourg: the past dated answers a publisher revision invalidated,
-    /// enumerated from the log's <c>validity_revised</c> and <c>interval_closed</c> events. The genesis log
-    /// holds none, so the answer is an empty list with its basis and absence flags
+    /// enumerated from the log's <c>validity_revised</c> and <c>interval_closed</c> events, a page at a time:
+    /// each row the dates of one work and language whose as_of answer moved from the state before to the state
+    /// applying from the first of them, derived from the publisher's start dates. A genesis log holds no
+    /// revising event, so its answer is an empty list with its basis and absence flags
     /// (<c>asserts_no_drift_in_law</c> and <c>asserts_publisher_unrevised</c> are false) and what would
     /// answer, never "nothing drifted". An identifier narrows to one work and refuses as <c>dossier</c>
-    /// refuses; the cursor is the event log's and refuses a foreign log as <c>events</c> does.
+    /// refuses; the cursor is the event log's and is read as <c>events</c> reads it.
     /// </summary>
     public V3PlatformOperationOutcome AnswerDrift(
         V3PlatformOperationRequest request,
@@ -4216,7 +4254,7 @@ internal sealed class V3CorpusMount : IDisposable
         var identifier = request.Parameters.TryGetProperty("identifier", out var identifierValue) && identifierValue.ValueKind == JsonValueKind.String
             ? RequiredString(request.Parameters, "identifier")
             : null;
-        _ = EventPageLimit(request.Parameters);
+        var limit = EventPageLimit(request.Parameters);
         var cursor = EventCursorOf(request.Parameters);
         string? workKey = null;
         if (identifier is not null)
@@ -4238,32 +4276,29 @@ internal sealed class V3CorpusMount : IDisposable
         }
 
         var log = _reader!.ResolveEventLog();
+        var observations = _reader.ResolveObservations();
         var logId = _reader.IndexRef.Sha256;
-        if (RefuseUnlessCursorOfThisLog(request, cursor, logId, log, observedAt) is { } foreign)
+        if (RefuseUnlessCursorOfThisLog(request, cursor, logId, log, observations, observedAt) is { } foreign)
         {
             return foreign;
         }
 
         var revising = _reader.CountEvents(V3EventRegistry.Revising);
-        if (revising != 0)
-        {
-            // The index's own schema admits first_sighting only, so this is unreachable on a verified index;
-            // a log that held a revising event must be enumerated, never answered as empty.
-            throw new InvalidOperationException("The event log holds revising events that this operation does not enumerate.");
-        }
-
+        var rows = _reader.ResolveRevisingEvents(cursor?.Seq ?? 0, workKey, limit + 1);
+        var hasMore = rows.Count > limit;
+        var served = rows.Take(limit).ToArray();
         using var result = JsonSerializer.SerializeToDocument(new
         {
             scope = AnswerDriftScope,
-            log = EventLogBlock(logId, log),
+            log = EventLogBlock(logId, log, observations),
             requested_identifier = identifier,
             work_key = workKey,
             revising_event_types = V3EventRegistry.Revising,
             revising_events_considered = revising,
-            invalidated_answers = Array.Empty<object>(),
-            has_more = false,
-            next_after = $"{logId}:{log.LastSeq}",
-            basis = AnswerDriftBasis,
+            invalidated_answers = served.Select(InvalidatedAnswer).ToArray(),
+            has_more = hasMore,
+            next_after = $"{logId}:{(hasMore ? served[^1].Seq : log.LastSeq)}",
+            basis = revising == 0 && observations.Count <= 1 ? AnswerDriftBasis : AnswerDriftChainedBasis,
             asserts_no_drift_in_law = false,
             asserts_publisher_unrevised = false,
             what_would_answer = AnswerDriftWhatWouldAnswer,
@@ -4276,15 +4311,58 @@ internal sealed class V3CorpusMount : IDisposable
 
     private sealed record EventCursor(string LogId, long Seq);
 
-    private static object EventLogBlock(string logId, LuxembourgIndexEventLog log) => new
+    /// <summary>
+    /// One answer a revising event invalidated: the dates of one work and language, from the revision's new end to its
+    /// old one (open when the interval was the latest), whose as_of answer moved from the state the event names to the
+    /// state applying from the first of those dates (one, or several twins on that date, each by its permalink).
+    /// </summary>
+    private object InvalidatedAnswer(LuxembourgIndexEvent value)
+    {
+        using var detail = JsonDocument.Parse(value.DetailJson);
+        var previousTo = detail.RootElement.GetProperty("previous_to").GetString();
+        var newTo = detail.RootElement.GetProperty("new_to").GetString()!;
+        var now = _reader!.ResolveWorkStates(value.WorkKey)
+            .Where(state => string.Equals(state.ApplicabilityDate, newTo, StringComparison.Ordinal) &&
+                            string.Equals(state.Language, value.Language, StringComparison.Ordinal))
+            .Select(state => $"/lu-legilux/{state.WorkKey}/{state.ApplicabilityDate}--{state.StateSha256}")
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+        return new
+        {
+            seq = value.Seq,
+            @event = value.Event,
+            work_key = value.WorkKey,
+            language = value.Language,
+            dates_from = newTo,
+            dates_to_exclusive = previousTo,
+            answered_before = $"/lu-legilux/{value.WorkKey}/{value.ApplicabilityDate}--{value.StateSha256}",
+            answered_now = now,
+            derived = true,
+        };
+    }
+
+    /// <summary>
+    /// The log block: its id (the index digest); its basis (a genesis log, or one chained to predecessors); the
+    /// predecessor its last observation carried forward and how many builds were compared; each ancestor log whose
+    /// cursors this log still honours, to its last sequence number; and the events it holds.
+    /// </summary>
+    private static object EventLogBlock(string logId, LuxembourgIndexEventLog log, IReadOnlyList<LuxembourgIndexObservation> observations) => new
     {
         log_id = logId,
-        basis = V3EventRegistry.GenesisBasis,
-        predecessor_index_sha256 = (string?)null,
-        observations_compared = 0,
+        basis = observations.Count <= 1 ? V3EventRegistry.GenesisBasis : V3EventRegistry.ChainedBasis,
+        predecessor_index_sha256 = observations.Count == 0 ? null : observations[^1].PredecessorIndexSha256,
+        observations_compared = Math.Max(0, observations.Count - 1),
+        ancestors = AncestorLogs(observations).Select(static ancestor => new { log_id = ancestor.LogId, last_seq = ancestor.LastSeq }).ToArray(),
         events_held = log.Events,
         last_seq = log.LastSeq,
     };
+
+    /// <summary>The logs this log carries forward, each to the last event it held: an observation's predecessor held the events before it.</summary>
+    private static (string LogId, long LastSeq)[] AncestorLogs(IReadOnlyList<LuxembourgIndexObservation> observations) =>
+        observations
+            .Where(static observation => observation.PredecessorIndexSha256 is not null)
+            .Select(static observation => (observation.PredecessorIndexSha256!, observation.FirstSeq - 1))
+            .ToArray();
 
     private static int EventPageLimit(JsonElement parameters)
     {
@@ -4325,19 +4403,35 @@ internal sealed class V3CorpusMount : IDisposable
     }
 
     /// <summary>
-    /// A cursor names its log. One from another log (another index digest) is <c>snapshot_unknown</c>: read
-    /// against this log it would silently skip or repeat events. A sequence number beyond this log's last
-    /// was never handed out by it and is a request-schema failure.
+    /// A cursor names its log. One of this log, or of an ancestor this log carries forward unchanged (to the last event
+    /// that ancestor held, the same numbers here), reads on in this log. One from any other log (another index digest,
+    /// such as a rebuild not chained to this one) is <c>snapshot_unknown</c>: read against this log it would silently
+    /// skip or repeat events. A sequence number beyond the log's last was never handed out by it and is a request-schema
+    /// failure.
     /// </summary>
     private V3PlatformOperationOutcome? RefuseUnlessCursorOfThisLog(
         V3PlatformOperationRequest request,
         EventCursor? cursor,
         string logId,
         LuxembourgIndexEventLog log,
+        IReadOnlyList<LuxembourgIndexObservation> observations,
         DateTimeOffset observedAt)
     {
         if (cursor is null)
         {
+            return null;
+        }
+
+        var ancestor = AncestorLogs(observations).FirstOrDefault(candidate => string.Equals(candidate.LogId, cursor.LogId, StringComparison.Ordinal));
+        if (ancestor.LogId is not null)
+        {
+            if (cursor.Seq > ancestor.LastSeq)
+            {
+                throw new V3TransportFailureException(
+                    V3TransportFailureKind.RequestSchemaInvalid,
+                    "The operation request's 'after' names a sequence number its log never handed out.");
+            }
+
             return null;
         }
 
