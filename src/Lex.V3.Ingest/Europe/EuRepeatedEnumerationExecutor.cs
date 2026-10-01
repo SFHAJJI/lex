@@ -909,6 +909,11 @@ public enum EuWitnessTraversalRefusal
     /// </remarks>
     [JsonStringEnumMemberName("wire_budget_exhausted")]
     WireBudgetExhausted = 12,
+
+    /// <summary>The traversal completed, but its acquisition checkpoint could not be retained.</summary>
+    /// <remarks>Delivery refuses so no successful witness loses the evidence needed for offline replay.</remarks>
+    [JsonStringEnumMemberName("checkpoint_not_retained")]
+    CheckpointNotRetained = 13,
 }
 
 public sealed class EuWitnessTraversalRefusalDetail
@@ -975,6 +980,13 @@ public sealed class EuWitnessTraversalResult
         Refusal = refusal;
     }
 
+    public SourceArtifactRef? CheckpointRef { get; private init; }
+    public SourceArtifactRef? AcquisitionRunRef { get; private init; }
+
+    internal EuWitnessTraversalResult WithCheckpoint(SourceArtifactRef checkpoint, SourceArtifactRef run) =>
+        new(Entries, DeliveryEvidenceSha256, ProductRequestCount, Refusal)
+            { Elapsed = Elapsed, CheckpointRef = checkpoint, AcquisitionRunRef = run };
+
     public static EuWitnessTraversalResult Delivered(
         EuFeedWatermarkEntrySet entries,
         string deliveryEvidenceSha256,
@@ -989,7 +1001,8 @@ public sealed class EuWitnessTraversalResult
     /// <summary>
     /// Wall time the whole witness spent, across every batch. Reported under the spec's explicit
     /// bounds beside <see cref="ProductRequestCount"/>, so a run that stayed inside its budget by
-    /// taking a very long time cannot look identical to one that was quick.
+    /// taking a very long time cannot look identical to one that was quick. On offline restoration,
+    /// this is the original traversal time; ProductRequestCount is zero for the current replay.
     /// </summary>
     public TimeSpan Elapsed { get; private init; }
 
@@ -1116,7 +1129,7 @@ public sealed class EuDocumentFetchAttemptResult
 /// D1-05c-2: the EU repeated-enumeration executor. See the type's own summary above for exactly what
 /// it owns and what it deliberately reuses from item 19 and Core rather than reimplementing.
 /// </summary>
-public sealed class EuRepeatedEnumerationExecutor
+public sealed partial class EuRepeatedEnumerationExecutor
 {
     private readonly ICustodyStore _custodyStore;
     private readonly TimeProvider _timeProvider;
@@ -2015,17 +2028,26 @@ public sealed class EuRepeatedEnumerationExecutor
     /// EACH BATCH rather than the run, so a pack of eighty two batches could walk eighty two times
     /// that many pages with nothing counting the total.
     /// </param>
-    public async Task<EuWitnessTraversalResult> RunWitnessTraversalAsync(
+    public Task<EuWitnessTraversalResult> RunWitnessTraversalAsync(
         IReadOnlyList<EuWatermarkWitnessPlan> batchPlans,
         MachineQueryRendererSource rendererSource,
         BoundMachineRequest sourceWitness,
         WireRequestBudget wireBudget,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken) =>
+        RunWitnessTraversalCoreAsync(batchPlans, rendererSource, sourceWitness, wireBudget, cancellationToken, null);
+
+    private async Task<EuWitnessTraversalResult> RunWitnessTraversalCoreAsync(
+        IReadOnlyList<EuWatermarkWitnessPlan> batchPlans,
+        MachineQueryRendererSource rendererSource,
+        BoundMachineRequest? sourceWitness,
+        WireRequestBudget wireBudget,
+        CancellationToken cancellationToken, WitnessReplay? replay)
     {
         ArgumentNullException.ThrowIfNull(batchPlans);
         ArgumentNullException.ThrowIfNull(rendererSource);
-        ArgumentNullException.ThrowIfNull(sourceWitness);
+        if (replay is null) ArgumentNullException.ThrowIfNull(sourceWitness);
         ArgumentNullException.ThrowIfNull(wireBudget);
+        batchPlans = batchPlans.ToArray();
         if (batchPlans.Count == 0)
         {
             return EuWitnessTraversalResult.Refused(
@@ -2033,24 +2055,29 @@ public sealed class EuRepeatedEnumerationExecutor
                 productRequestCount: 0);
         }
 
-        // THE SESSION'S ROBOTS FETCH, RESERVED BEFORE THE SESSION EXISTS. StartSessionAsync sends
-        // robots as its first act, so this is the last point at which that request can be stopped
-        // rather than merely counted after the fact.
-        if (!wireBudget.TryReserveAttempt())
+        RoutedHttpAcquisitionSession? session = null;
+        if (replay is null)
         {
-            return EuWitnessTraversalResult.Refused(
-                new EuWitnessTraversalRefusalDetail(
-                    EuWitnessTraversalRefusal.WireBudgetExhausted,
-                    "the ceiling was reached before this traversal's robots request."),
-                productRequestCount: 0);
-        }
+            // THE SESSION'S ROBOTS FETCH, RESERVED BEFORE THE SESSION EXISTS. StartSessionAsync sends
+            // robots as its first act, so this is the last point at which that request can be stopped
+            // rather than merely counted after the fact.
+            if (!wireBudget.TryReserveAttempt())
+            {
+                return EuWitnessTraversalResult.Refused(
+                    new EuWitnessTraversalRefusalDetail(
+                        EuWitnessTraversalRefusal.WireBudgetExhausted,
+                        "the ceiling was reached before this traversal's robots request."),
+                    productRequestCount: 0);
+            }
 
-        var session = await StartSessionAsync(sourceWitness, wireBudget, cancellationToken).ConfigureAwait(false);
-        if (session is null)
-        {
-            return EuWitnessTraversalResult.Refused(
-                new EuWitnessTraversalRefusalDetail(EuWitnessTraversalRefusal.RobotsBootstrapRefused, null),
-                productRequestCount: 0);
+            session = await StartSessionAsync(sourceWitness!, wireBudget, cancellationToken).ConfigureAwait(false);
+            if (session is null)
+            {
+                return EuWitnessTraversalResult.Refused(
+                    new EuWitnessTraversalRefusalDetail(EuWitnessTraversalRefusal.RobotsBootstrapRefused, null),
+                    productRequestCount: 0);
+            }
+
         }
 
         var productRequestCount = 0;
@@ -2060,9 +2087,13 @@ public sealed class EuRepeatedEnumerationExecutor
             var executorWrittenMembership = new Dictionary<string, CustodyMembership>(StringComparer.Ordinal);
             var evidenceBytesInOrder = new List<byte[]>();
             var steps = new List<EuWatermarkTraversalStep>();
+            var checkpointPages = new List<WitnessCheckpointPage>();
+            SourceArtifactRef? acquisitionRun = null;
+            var batchOrdinal = -1;
 
             foreach (var plan in batchPlans)
             {
+            batchOrdinal++;
             var batchRequestCount = 0;
             var position = plan.StartPosition;
             // A BATCH'S FIRST PAGE OPENS THE BATCH; IT DOES NOT CROSS ANYTHING.
@@ -2092,7 +2123,9 @@ public sealed class EuRepeatedEnumerationExecutor
                         productRequestCount);
                 }
 
-                var bound = plan.TryBindPage(position, NewUrn(), NewUrn(), rendererSource, out var bindRefusal);
+                var saved = replay?.Peek(batchOrdinal);
+                var bound = plan.TryBindPage(position, saved?.Evidence.QueryPlanRef.ResourceId ?? NewUrn(),
+                    saved?.Evidence.QueryInputRef.ResourceId ?? NewUrn(), rendererSource, out var bindRefusal);
                 if (bound is null)
                 {
                     return EuWitnessTraversalResult.Refused(
@@ -2100,8 +2133,10 @@ public sealed class EuRepeatedEnumerationExecutor
                         productRequestCount);
                 }
 
-                var outcome = await _reopenGlue.ObserveAsync(
-                        session, bound.Request, EuWatermarkWitnessPlan.ResponseMediaType, executorWrittenMembership,
+                var outcome = replay is not null
+                    ? await replay.ReadAsync(bound, batchOrdinal, cancellationToken).ConfigureAwait(false)
+                    : await _reopenGlue.ObserveAsync(
+                        session!, bound.Request, EuWatermarkWitnessPlan.ResponseMediaType, executorWrittenMembership,
                         () => productRequestCount,
                         count =>
                         {
@@ -2142,6 +2177,18 @@ public sealed class EuRepeatedEnumerationExecutor
                 }
 
                 var transport = outcome.Transport!;
+                if (replay is not null) batchRequestCount++;
+                acquisitionRun ??= transport.HttpEvidence.RunIdentity;
+                if (acquisitionRun != transport.HttpEvidence.RunIdentity)
+                    throw new CustodyIntegrityException("Witness pages belong to different acquisition runs.");
+                if (replay is null)
+                {
+                    var opened = MachineQueryBinder.OpenForSend(bound.Request);
+                    checkpointPages.Add(new WitnessCheckpointPage(batchOrdinal, new RepeatedEnumerationEvidenceRefs(
+                        bound.MachinePlanRef, bound.InputArtifact.ArtifactRef, opened.RenderReceiptRef,
+                        new SourceArtifactRef(NewUrn(), CustodyDigest.Of(transport.LogicalRequest.CopyCanonicalBytes())),
+                        new SourceArtifactRef(NewUrn(), CustodyDigest.Of(transport.HttpEvidence.CopyCanonicalBytes())))));
+                }
                 evidenceBytesInOrder.Add(transport.HttpEvidence.CopyCanonicalBytes());
 
                 IReadOnlyList<EuWatermarkCursor> deliveredPage;
@@ -2257,11 +2304,21 @@ public sealed class EuRepeatedEnumerationExecutor
                     productRequestCount);
             }
 
-            return EuWitnessTraversalResult.Delivered(
-                entrySet,
-                CombinedSha256(evidenceBytesInOrder),
-                productRequestCount,
-                _timeProvider.GetElapsedTime(witnessStarted));
+            replay?.RequireEnd();
+            var result = EuWitnessTraversalResult.Delivered(entrySet, CombinedSha256(evidenceBytesInOrder),
+                productRequestCount, replay?.HistoricalElapsed ?? _timeProvider.GetElapsedTime(witnessStarted));
+            if (replay is not null) return result.WithCheckpoint(replay.Reference, acquisitionRun!);
+            try
+            {
+                var checkpoint = await RetainWitnessCheckpointAsync(batchPlans, rendererSource.Reference,
+                    acquisitionRun!, checkpointPages, result, cancellationToken).ConfigureAwait(false);
+                return result.WithCheckpoint(checkpoint, acquisitionRun!);
+            }
+            catch (Exception exception) when (exception is CustodyRequiredException or CustodyIntegrityException)
+            {
+                return EuWitnessTraversalResult.Refused(new EuWitnessTraversalRefusalDetail(
+                    EuWitnessTraversalRefusal.CheckpointNotRetained, exception.Message), productRequestCount);
+            }
         }
         catch (Exception exception) when (exception is CustodyIntegrityException or CustodyRequiredException)
         {
@@ -2271,7 +2328,7 @@ public sealed class EuRepeatedEnumerationExecutor
         }
         finally
         {
-            session.Dispose();
+            session?.Dispose();
         }
     }
 

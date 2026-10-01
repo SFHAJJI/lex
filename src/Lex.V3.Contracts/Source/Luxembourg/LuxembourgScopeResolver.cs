@@ -120,7 +120,9 @@ internal static class LuxembourgScopeResolver
             static observation => observation.ObjectRef.PublisherUri,
             StringComparer.Ordinal);
 
-        var classified = ordered
+        // Construct the final immutable resource directly, without retaining a second
+        // population-wide graph of intermediate classification objects and arrays.
+        var resources = ordered
             .Select(observation =>
             {
                 var relations = ResolveRelations(
@@ -137,41 +139,31 @@ internal static class LuxembourgScopeResolver
                     wemiTopology,
                     observation.SparqlRightsObservations,
                     observation.InFileRightsObservations);
-                return new
-                {
-                    Observation = observation,
-                    Dimensions = ResolveDimensions(
-                        profile,
-                        observation,
-                        relations,
-                        bodyJoin),
-                    Assertions = ResolveAssertions(profile, observation, wemiTopology),
-                    Relations = relations,
-                    WemiTopology = wemiTopology,
-                    BodyJoin = bodyJoin,
-                    TypedRole = ResolveTypedRole(observation),
-                    PublicationForm = ResolvePublicationForm(profile, observation),
-
-                    // This build's own act test, and the publisher's own legal types, read from the
-                    // same assertions the typed role reads. ResolveTypedRole discards both the
-                    // moment the types are not exactly one; a population count needs them anyway,
-                    // so that an act with no legal type, or several, refuses by name later instead
-                    // of disappearing into a role that was never applicable.
-                    IsPublisherActClass = IsActClass(IriValues(
+                return new LuxembourgResourceResolution(
+                    observation.ObjectRef,
+                    ResolveDimensions(profile, observation, relations, bodyJoin),
+                    ResolveAssertions(profile, observation, wemiTopology),
+                    relations,
+                    wemiTopology,
+                    bodyJoin,
+                    ResolveTypedRole(observation),
+                    ResolvePublicationForm(profile, observation),
+                    // Preserve the publisher's act class and complete legal-type set even when
+                    // no unique typed role applies. Population accounting reads these values.
+                    IsActClass(IriValues(
                         observation.Assertions,
                         VerifiedLuxembourgSourceProfile.RdfType,
                         observation.ObjectRef.PublisherUri)),
-                    LegalTypes = IriValues(
+                    IriValues(
                         observation.Assertions,
                         TypeDocument,
-                        observation.ObjectRef.PublisherUri),
-                };
+                        observation.ObjectRef.PublisherUri));
             })
             .ToArray();
-        var evidenceArtifacts = classified
-            .SelectMany(static value => UsedEvidenceArtifacts(
-                value.Observation,
-                value.Dimensions))
+        var evidenceArtifacts = resources
+            .SelectMany((resource, ordinal) => UsedEvidenceArtifacts(
+                ordered[ordinal],
+                resource.Dimensions))
             .Distinct()
             .OrderBy(
                 static artifact => artifact.ResourceId,
@@ -184,32 +176,18 @@ internal static class LuxembourgScopeResolver
             .Select((artifact, ordinal) => (artifact, ordinal))
             .ToDictionary(static value => value.artifact, static value => value.ordinal);
 
-        var resources = new LuxembourgResourceResolution[classified.Length];
-        var scopeInputs = new ScopeObjectReductionInput[classified.Length];
+        var scopeInputs = new ScopeObjectReductionInput[resources.Length];
         var inputReuse = new ScopeInputReuse(profile);
-        for (var ordinal = 0; ordinal < classified.Length; ordinal++)
+        for (var ordinal = 0; ordinal < resources.Length; ordinal++)
         {
-            var observation = classified[ordinal].Observation;
-            var dimensions = classified[ordinal].Dimensions;
-            var relations = classified[ordinal].Relations;
-            resources[ordinal] = new LuxembourgResourceResolution(
-                observation.ObjectRef,
-                dimensions,
-                classified[ordinal].Assertions,
-                relations,
-                classified[ordinal].WemiTopology,
-                classified[ordinal].BodyJoin,
-                classified[ordinal].TypedRole,
-                classified[ordinal].PublicationForm,
-                classified[ordinal].IsPublisherActClass,
-                classified[ordinal].LegalTypes);
+            var resource = resources[ordinal];
             scopeInputs[ordinal] = BuildScopeInput(
                 profile,
-                observation,
-                dimensions,
-                relations,
-                classified[ordinal].WemiTopology,
-                classified[ordinal].BodyJoin,
+                ordered[ordinal],
+                resource.Dimensions,
+                resource.Relations,
+                resource.WemiTopology,
+                resource.BodyJoin,
                 evidenceOrdinals,
                 inputReuse);
         }

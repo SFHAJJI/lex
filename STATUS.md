@@ -1144,7 +1144,7 @@ CI evidence are recorded in the pull request before merge.
 
 ## Heads
 
-- `v3/integration`: `c9e5a40a` (2026-10-01, PR #872 merged). Build 45 s. Fast lane
+- `v3/integration`: `046e650f` (2026-10-01, PR #881 merged). Build 45 s. Fast lane
   (`eng/test-fast.ps1`): 3,077 tests, 3,076 pass, 1 skipped (the review of PR #828). Ingest suite: green on CI for PR #760
   (the CI `dotnet` job runs the whole solution on every pull request, about 7 min on the runner;
   green for PR #834);
@@ -2119,6 +2119,87 @@ beside the release assets, and 36 s6's card for machines at a stable route.
 - Not in this step: building the corpus from custody in the same command, which is the data lane's
   build (`Lex.V3.Tool build`), and publishing anywhere but a local directory, which needs the owner's
   release identity and storage.
+
+The credential-free deployment kit (PR #890): the owner's go-live as one command, the panel's item 3.
+Nothing here logs in, deploys or signs with a production identity; those stay with the owner.
+- **`deploy/main.bicep`** (built to `deploy/main.json`) is the one-server container as an Azure
+  Container App in an existing managed environment:
+  - the release image by digest, pulled with the user-assigned managed identity the owner names, with
+    no secret and no registry password;
+  - one replica, with a private writable `/tmp` (an EmptyDir volume: the image run's finding that
+    mounting a corpus writes its index copy there);
+  - liveness on `/`, readiness on `/evaluation-card.json`, port 8080, HTTPS only;
+  - every revision kept (multiple revision mode):
+    - a new revision arrives as the `candidate` label with no traffic, while `liveRevision` keeps 100
+      per cent;
+    - on a first deployment there is no live revision, so the candidate takes the traffic and ingress
+      admits only the owner's probe address (`probeSourceCidr`) until promotion.
+- **`deploy/deploy.ps1`** is the one command.
+  - Without `-Apply` it only plans: it verifies the release and prints every command, changing nothing.
+  - With `-Apply`, in order:
+    1. it verifies the release under the signing identity's public key, and stops if it does not
+       verify;
+    2. it copies the image out of the release by its manifest digest with `oras`, and checks the
+       pushed digest. The short-lived registry token goes from `az acr login --expose-token` on
+       standard input to `oras login`, into a registry config in a fresh private directory, which
+       `oras cp` reads and which is removed when the copy ends, whatever happens. It is never on a
+       command line or printed. `oras cp` takes no password on stdin (review of #890); the custody
+       probe's runbook did the same;
+    3. it runs `az deployment group what-if`, then `create`, by digest;
+    4. it probes the candidate's own URL;
+    5. if the probe fails, it deactivates the candidate (the removal step) and exits non-zero.
+  - Promotion is printed for the owner and never run: a traffic move, or on a first deployment lifting
+    the probe-only restriction.
+  - `-Remove -Revision <name>` is the removal step on its own.
+- **`web/scripts/deploy-probe.mjs`** is the zero-traffic probe. First it reads the release back
+  under the signing identity's key (`releaseFailures`). Then, against the revision's URL:
+  - `/` must be the release image's own page byte for byte, with CSP `frame-ancestors 'none'`, HSTS,
+    `Referrer-Policy: no-referrer` and `nosniff`;
+  - the card at `/evaluation-card.json` must be the release's, byte for byte, as JSON;
+  - `coverage` must answer from the release's corpus;
+  - every V2 route must answer 404.
+  - Without `--origin` it only reads the release back, which `deploy.ps1` does before touching Azure.
+- **`deploy/validate.ps1`** checks offline that `main.json` is `main.bicep`'s build, that `bicep
+  lint` is clean, and that `deploy.ps1` parses. The static rules run in CI in
+  `web/test/deploy-kit.test.mjs`:
+  - no secure parameter, secret, key listing or registry password;
+  - the identity pull, one server, `/tmp`, and the zero-traffic candidate;
+  - the script never logs in, never puts a token or password on a command line, keeps the registry
+    token only in the private session config it removes, and never promotes;
+  - the release is verified before any Azure command, and the image is deployed by digest.
+- **Evidence:**
+  - the probe passes a stand-in revision that answers as its release holds, and fails nine ways a
+    revision can differ, each with its own reason;
+  - it is never run against a release under another key;
+  - the probe command's exit codes (0, 1, 2) are tested as a process. The kit's first plan run found
+    the command guard running nothing and exiting 0, which would have let an unverified release
+    deploy;
+  - a plan run of `deploy.ps1` against a published release printed the verified release, the digest
+    copy, what-if and create by digest, and the probe. Under another key it now stops at
+    verification;
+  - mutations fail their checks: a promotion that runs fails the static rules, and an edited
+    `main.json` fails validation.
+- **Runbook, for the owner:**
+  1. Provide what the kit does not create:
+     - the managed environment;
+     - the registry;
+     - a user-assigned identity with AcrPull on it;
+     - the production signing identity, and a release signed by it in the rehearsal's release format.
+  2. `az login` in your own session, then `pwsh -File deploy/validate.ps1` (it needs the Bicep CLI;
+     no Azure is touched).
+  3. Plan: `pwsh -File deploy/deploy.ps1 -Subscription <id> -ResourceGroup <rg> -EnvironmentId <id>
+     -Registry <name>.azurecr.io -IdentityResourceId <id> -SigningPublicKey <identity's public key,
+     PEM> -Release <release directory>`, then either `-LiveRevision <the revision serving now>`, or on
+     a first deployment `-ProbeSourceCidr <your address>/32`.
+  4. The same command with `-Apply` deploys the candidate and probes it. On "answers as the release
+     holds", promote with the command it prints. On a failed probe the candidate is already
+     deactivated.
+  5. Remove a revision at any time with `pwsh -File deploy/deploy.ps1 -Subscription <id>
+     -ResourceGroup <rg> -Remove -Revision <name>`.
+- **Not covered:**
+  - the production signing identity and its release format (the owner's);
+  - a custom domain, DNS and monitoring;
+  - an Azure-side check of the template, since `what-if` needs the owner's session.
 
 The licence-blocked journey (PR #834), the launch contract's "one licence-blocked journey" for its
 line "rights are enforced at compose time".
@@ -3428,7 +3509,7 @@ recorded by PR #862:
    answered by the panel on the owner's behalf; PR #871 records the answers.
 2. The index capability manifest's per-operation rows for the unserved operations: one small
    additive pull request.
-3. A credential-free deployment kit, so the owner's go-live is one command (item 7). It holds the
+3. A credential-free deployment kit, so the owner's go-live is one command (item 7; PR #890). It holds the
    Azure definitions for the one-server container, and a deploy script that takes the subscription,
    the managed identity and the signing identity as parameters and never reads or stores a secret.
    It validates the templates offline, runs the zero-traffic probe against the deployed revision,

@@ -1,3 +1,6 @@
+using System.Text;
+using System.Text.Json;
+using Lex.V3.Contracts;
 using System.Text.Json.Serialization;
 using Lex.V3.Contracts.Custody;
 using Lex.V3.Contracts.Source.Core;
@@ -34,6 +37,8 @@ public enum EuLegalNoticeRouteRefusal
     /// terminal with the wrong source media type, a terminal off the pinned origin, or a route the
     /// session sealed as incomplete (a body it could not read to the end). The detail is
     /// <see cref="EuLegalNoticeEvidence.FromRoute"/>'s own reason.
+    /// Offline reopening also uses this refusal for a different corpus identity, an empty route,
+    /// or a route/receipt mismatch; the detail identifies the failed check.
     /// </summary>
     [JsonStringEnumMemberName("notice_route_invalid")]
     NoticeRouteInvalid = 4,
@@ -271,5 +276,75 @@ public sealed class EuLegalNoticeRouteProducer
         }
     }
 
+    /// <summary>
+    /// Reopens a retained rights route under its original corpus identity, without a transport or
+    /// new observation. All hop requests, policy bytes, body receipts and bodies must still exist.
+    /// Retained receipts describe the original capture; this reader makes no current retention claim.
+    /// The route digest anchors lookup; retainedRoute.ResourceId is not compared.
+    /// </summary>
+    public static async Task<EuLegalNoticeRouteResult> ReopenAsync(
+        ICustodyStore custodyStore,
+        SourceArtifactRef retainedRoute,
+        SourceArtifactRef expectedCorpusRun,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(custodyStore);
+        ArgumentNullException.ThrowIfNull(retainedRoute);
+        ArgumentNullException.ThrowIfNull(expectedCorpusRun);
+        try
+        {
+            var bytes = await CustodyRestore.ReadByDigestCheckedAsync(
+                custodyStore, retainedRoute.Sha256, cancellationToken).ConfigureAwait(false);
+            var route = RoutedHttpEvidence.ParseAndVerify(bytes.Span);
+            if (route.RunIdentity != expectedCorpusRun)
+                return EuLegalNoticeRouteResult.Refused(EuLegalNoticeRouteRefusal.NoticeRouteInvalid,
+                    "The retained rights route belongs to a different corpus run.");
+            if (route.Hops.Count == 0)
+                return EuLegalNoticeRouteResult.Refused(EuLegalNoticeRouteRefusal.NoticeRouteInvalid,
+                    "The retained rights route has no observed hop.");
+            var terminalBytes = await CustodyRestore.ReadByDigestCheckedAsync(custodyStore,
+                route.Hops[^1].LogicalRequestSha256, cancellationToken).ConfigureAwait(false);
+            var terminalRequest = HttpLogicalRequest.ParseAndVerify(terminalBytes.Span);
+            _ = EuLegalNoticeEvidence.FromRoute(route, terminalRequest);
+            var receipts = new Dictionary<string, DurableBlobWriteReceipt>(StringComparer.Ordinal);
+            foreach (var hop in route.Hops)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                var requestBytes = await CustodyRestore.ReadByDigestCheckedAsync(custodyStore,
+                    hop.LogicalRequestSha256, cancellationToken).ConfigureAwait(false);
+                var request = HttpLogicalRequest.ParseAndVerify(requestBytes.Span);
+                if (request.Uri != hop.RequestUri || request.Method != HttpRequestMethod.Get)
+                    throw new ArgumentException("A retained rights hop disagrees with its original GET request.");
+                _ = await CustodyRestore.ReadByDigestCheckedAsync(custodyStore, request.RequestPolicySha256,
+                    cancellationToken).ConfigureAwait(false);
+                _ = await CustodyRestore.ReadByDigestCheckedAsync(custodyStore, request.RedirectPolicySha256,
+                    cancellationToken).ConfigureAwait(false);
+                var receiptBytes = await CustodyRestore.ReadByDigestCheckedAsync(custodyStore,
+                    hop.DurableWriteReceiptSha256, cancellationToken).ConfigureAwait(false);
+                var receipt = ContractJson.Deserialize<DurableBlobWriteReceipt>(
+                    new UTF8Encoding(false, true).GetString(receiptBytes.Span));
+                var body = await CustodyRestore.ReadByDigestCheckedAsync(custodyStore,
+                    hop.Sha256, cancellationToken).ConfigureAwait(false);
+                if ((ulong)body.Length != hop.Length)
+                    throw new CustodyIntegrityException("A retained rights body has the wrong length.");
+                receipts.Add(hop.ObservationId, receipt);
+            }
+            // Re-enter the original receipt gate, then compare the whole route with the pinned bytes.
+            var checkedRoute = RoutedHttpEvidence.Create(route.RunIdentity, route.RequestOrdinal,
+                route.AttemptOrdinal, route.Hops, route.Outcome, receipts);
+            if (!bytes.Span.SequenceEqual(checkedRoute.CopyCanonicalBytes()))
+                throw new CustodyIntegrityException("Reopened rights receipts do not reproduce the retained route.");
+            cancellationToken.ThrowIfCancellationRequested();
+            return EuLegalNoticeRouteResult.Delivered(checkedRoute, terminalRequest).WithReceipts(receipts);
+        }
+        catch (Exception exception) when (exception is CustodyIntegrityException or CustodyRequiredException)
+        {
+            return EuLegalNoticeRouteResult.Refused(EuLegalNoticeRouteRefusal.RouteNotRetained, exception.Message);
+        }
+        catch (Exception exception) when (exception is ArgumentException or JsonException or DecoderFallbackException)
+        {
+            return EuLegalNoticeRouteResult.Refused(EuLegalNoticeRouteRefusal.NoticeRouteInvalid, exception.Message);
+        }
+    }
     private static string NewUrn() => $"urn:uuid:{Guid.NewGuid():D}";
 }

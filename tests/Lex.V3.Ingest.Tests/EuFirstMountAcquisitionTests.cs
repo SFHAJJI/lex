@@ -20,7 +20,7 @@ namespace Lex.V3.Ingest.Tests;
 /// </summary>
 [TestClass]
 [DoNotParallelize]
-public sealed class EuFirstMountAcquisitionTests
+public sealed partial class EuFirstMountAcquisitionTests
 {
     private const string NoticeUri = EuLegalNoticeEvidence.ReuseDecisionUri;
     private const string NoticeMediaType = "application/xhtml+xml; charset=UTF-8";

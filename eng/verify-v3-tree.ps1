@@ -38,6 +38,8 @@ function Test-V3TrackedPath {
         $normalized -ceq 'eng/test-fast.ps1' -or
         $normalized -ceq 'eng/verify-mounted-corpus.ps1' -or
         $normalized -ceq 'eng/verify-s0-05-preview.ps1' -or
+        # The credential-free deployment kit (the owner's go-live): its template, the template's build, and two scripts.
+        $normalized -cmatch '^deploy/(?:main\.bicep|main\.json|deploy\.ps1|validate\.ps1)$' -or
         $normalized -cmatch '^schemas/v3-[a-z0-9-]+/[a-z0-9-]+\.schema\.json$' -or
         # The four censuses: real payloads, real answers and whole envelopes the platform sends, and the evaluation card the
         # machine gates print; not schemas, so each is admitted by its exact path and nothing else in that directory is.
