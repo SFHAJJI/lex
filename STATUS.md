@@ -11,16 +11,15 @@ elapsed time. Offline replay uses the same opening, crossing, tie-set and double
 Each original query is independently rebound; request, response, receipt and retained body must
 agree. Every saved page must be consumed once. There is no publisher session on the replay path.
 
-Twenty-five new cases cover empty and nonempty batches, cursor crossing, copied weaker custody,
-repeat replay, missing dependencies, caller pins, rehashed/reordered/extra pages, cross-run
-substitution, cancellation and typed checkpoint-hold failure. All 25 passed at 5dd2e694: CI 36840571593 reported
-5,314 passed and 22 skipped; the required watch exited zero. Reviewed PR869 source 6ae0389d
-and integration 8c3f3801 are now included. Fresh combined CI and read-only Claude review
-remain required. Local builds/tests stay deferred under the acquisition memory guard.
-PR869 must merge before this slice.
+All 25 cases passed at 9eba7749: CI 36856725210 reported 5,362 passed and 22 skipped,
+with required watch exit zero. Claude found no material replay defect but required merged869,
+current integration and updated evidence. The one repair includes197f0511, documents historical
+elapsed time beside zero replay sends and explains failed checkpoint retention. Fresh combined
+CI gates merge; local builds/tests remain deferred under the acquisition memory guard.
 
-This restores the watermark dependency of a future acquisition catalog. Complete run, document,
-Formex package/annex and independent offline mount restoration remain outstanding.
+This reader checks historical receipts and writes nothing; it makes no current protection claim.
+A containing acquisition catalog must retain the checkpoint/run references that the existing
+adapter drops. Pending PR888 supplies that composition; full independent mounts remain outstanding.
 
 ## Retained EU enumeration checkpoints (Codex, 2026-10-01)
 
@@ -1098,7 +1097,7 @@ CI evidence are recorded in the pull request before merge.
 
 ## Heads
 
-- `v3/integration`: `65922f24` (2026-10-01, PR #880 merged). Build 45 s. Fast lane
+- `v3/integration`: `c9e5a40a` (2026-10-01, PR #872 merged). Build 45 s. Fast lane
   (`eng/test-fast.ps1`): 3,077 tests, 3,076 pass, 1 skipped (the review of PR #828). Ingest suite: green on CI for PR #760
   (the CI `dotnet` job runs the whole solution on every pull request, about 7 min on the runner;
   green for PR #834);
@@ -2635,6 +2634,45 @@ truthful").
     names their predecessor absent.
 - **Next:** `as_observed` and `verify` quote a state from a retained generation.
 
+Predecessor chaining, the sixth slice, third part (PR #889): a state only a retained generation
+holds is answered from it, and the permalink the product emitted for it still verifies (G3, and the
+launch contract's "`verify` resolves every citation the product emitted").
+- **Readers at startup.** The mount opens one verified reader per retained generation, newest first,
+  so no request opens one (the image's private `/tmp` holds every index copy from startup on). The
+  readers are disposed with the mount.
+- **`as_observed`:**
+  - a state the mounted index lacks is served in full from the newest retained generation that holds
+    it, with `text_held: true` and `text_from` naming that generation;
+  - `text_from` is null for a state the mounted index holds;
+  - a state no held build holds stays identity only, without text;
+  - a work the mounted build no longer holds at all is found through the log by its stable work
+    coordinate, and answered from its generation (review of #889). An identifier the log never held
+    keeps `identifier_unknown`.
+- **`verify`:** a pinned permalink whose digest a later build replaced at its coordinate is verified
+  in the retained generation that holds it:
+  - `digest_matches`, with `held_in` naming the generation and `superseded_by` the mounted state that
+    replaced it;
+  - `verified_by` is the generation's own corpus and index, and the sources are its own;
+  - with the generation pruned, it is `pinned_digest_mismatch` naming the current state, as before.
+  - The generation is asked before any refusal over the current states. So the permalink resolves
+    when the coordinate holds another state, several (one per language), or none any more, and
+    `superseded_by` is null in the last case (review of #889).
+  - A driver decision: the verdict stays `digest_matches`, because the digest does match the retained
+    text. The superseded state is named beside it, so a citation checker keeps working and a reader
+    sees that the citation is no longer the current text.
+- **On two real builds of the state fixture,** the second with one article reworded:
+  - `as_observed` at the first build's snapshot serves the original state from the generation;
+  - the permalink emitted before the rewording verifies there, naming the reworded state;
+  - with the generation pruned, the same requests answer without text and as a mismatch;
+  - removing the generation lookup from `verify` fails the test;
+  - a later build that holds the work no longer at all (chained, from the complete envelope, which
+    holds no Luxembourg state) answers `as_observed` from the generation by the work's coordinate,
+    and verifies the old permalink with `superseded_by` null. Reverting either repair fails that
+    test.
+- **What is left of predecessor chaining** is the data lane's part: observation times
+  (`observed_from`) once a Luxembourg body's capture time reaches the corpus, then `knowable_on` and
+  withdrawal.
+
 The live export composer and its journey step (PR #789), the eighth screen. `dist-live/export.html`
 has its own bundle `client-live-export.js`.
 - The page asks what the reading page asks: the same form (`ReadingForm`, now shared), the same one
@@ -3335,7 +3373,8 @@ recorded by PR #862:
    - `events` and `answer_drift` across the chain (folded into PR #867 by its review);
    - each build's time in the log (PR #871), then `as_observed` by build snapshot (G4) (PR #874);
    - a generation mount (G3b), retained by S7-A09: generations written and verified (PR #880),
-     held to the log by the mount with the depth reported (PR #885), then quoted.
+     held to the log by the mount with the depth reported (PR #885), and quoted by `as_observed`
+     and `verify` (PR #889).
    `observed_from` stays null until a Luxembourg body's capture time reaches the corpus (data lane);
    `knowable_on` and withdrawal follow it. The owner questions (G1 when a file changes but its text
    does not, "as observed" identified by snapshot with no time, retaining every generation) were
@@ -3693,3 +3732,41 @@ and a current storage check before and after its runtime is frozen; it has not s
 
 PRs #827, #829 and #830 are merged. The all-82-seed EU retry remains prepared, with a
 4,999,959,422-byte launch allowance and checks before and after freezing its runtime.
+## Retained Luxembourg enumeration checkpoints (Codex, 2026-10-01)
+
+This slice depends on pending PR869. The LU executor retains its closed invariant plan wire
+representation and both enumeration passes. Restoration checks the original plan, renderer,
+run and profile, then regenerates each count/page request with the existing template binder
+and original artifact IDs. Retained request bytes must match the regenerated request. The
+complete comparison and current custody receipt checks run again without publisher traffic.
+EU and LU share the actual-receipt restoration helper; no saved proof or floor is trusted.
+
+Nineteen cases cover empty, nonempty and multi-page enumeration, Unicode cursors, independent
+custody, weaker protection, missing inputs, caller pins, substitutions and cancellation. Exact
+d834ae22 passed CI 36856207562: 5,356 passed and 22 skipped; the required watch exited zero.
+Claude found no material LU code defect and requested the current parent/base and combined census
+correction. The one repair includes reviewed PR869 source 60c2589c and integration d56d0539,
+sets the union to 262 candidates/140 guarded types, preserves all member pins and copies each
+regenerated request body once. PR869 is merged as 1a63b61a and included; final current-base CI gates this merge.
+Local builds/tests remain deferred under the acquisition memory guard.
+
+Full acquisition catalog restoration and two independent offline mount derivations remain
+outstanding. This does not establish full Luxembourg memory or disk fit. The active EU runtime,
+queued source heads, LU index builder/reader and web lane are unchanged.
+
+## Compact Luxembourg object identities (Codex, 2026-10-01)
+
+Object identity sets retain sorted 32-byte digests. Binary search preserves exact membership,
+duplicate-set semantics and canonical bytes. Checked reopening enforces the original digest,
+byte equality, ordering and refusal precedence. No publisher or custody admission changes.
+
+All 27 new cases passed at b222687c: CI 36851145863 reported 5,305 passed and 22 skipped,
+with 259 candidates and 139 guarded types after merging integration 65922f24. The required
+CI watch exited 0. Claude reviewed that exact head and requested corrected documentation
+counts; this is the one repair round. The code review found no material defect.
+
+Integration d874273b is now included. Combined CI 36853595395 passed 5,324 tests with 22 skipped; only the candidate total
+failed (260 versus 259). Its complete member pins passed. The candidate total is now
+260; the passing literal pin contains 140 guarded types. Fresh CI gates merge. Local Release build, required fast tests, affected ingest checks and the synthetic
+measurement remain deferred under the acquisition memory guard. No full-LU fit is claimed.
+The remaining observation, scope and corpus graphs still require bounded derivation evidence.

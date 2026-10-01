@@ -910,6 +910,8 @@ public enum EuWitnessTraversalRefusal
     [JsonStringEnumMemberName("wire_budget_exhausted")]
     WireBudgetExhausted = 12,
 
+    /// <summary>The traversal completed, but its acquisition checkpoint could not be retained.</summary>
+    /// <remarks>Delivery refuses so no successful witness loses the evidence needed for offline replay.</remarks>
     [JsonStringEnumMemberName("checkpoint_not_retained")]
     CheckpointNotRetained = 13,
 }
@@ -999,7 +1001,8 @@ public sealed class EuWitnessTraversalResult
     /// <summary>
     /// Wall time the whole witness spent, across every batch. Reported under the spec's explicit
     /// bounds beside <see cref="ProductRequestCount"/>, so a run that stayed inside its budget by
-    /// taking a very long time cannot look identical to one that was quick.
+    /// taking a very long time cannot look identical to one that was quick. On offline restoration,
+    /// this is the original traversal time; ProductRequestCount is zero for the current replay.
     /// </summary>
     public TimeSpan Elapsed { get; private init; }
 
