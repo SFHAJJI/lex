@@ -1261,17 +1261,31 @@ public static class LuxembourgIndexBuilder
             return null;
         }
 
-        if (DateTimeOffset.TryParse(
-                corpus.Set.EuropeRightsMatrix.CapturedAt, CultureInfo.InvariantCulture,
-                DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal, out var captured) &&
-            builtAt < captured)
+        if (EarlierThanEuCapture(builtAt, corpus) is { } reason)
         {
-            detail = $"The build time {text} is earlier than the corpus's EU capture at {corpus.Set.EuropeRightsMatrix.CapturedAt}.";
+            detail = $"The build time {text} {reason}.";
             return null;
         }
 
         detail = null;
         return text;
+    }
+
+    /// <summary>
+    /// Why a build time cannot be an upper bound on the corpus's observation, by the one observation clock the corpus
+    /// holds (its EU legal notice's capture), or null when it can be.
+    /// </summary>
+    internal static string? EarlierThanEuCapture(DateTimeOffset builtAt, VerifiedLexCorpus6ManifestSet corpus)
+    {
+        var capturedAt = corpus.Set.EuropeRightsMatrix.CapturedAt;
+        if (!DateTimeOffset.TryParse(
+                capturedAt, CultureInfo.InvariantCulture,
+                DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal, out var captured))
+        {
+            return $"cannot be held to the corpus's EU capture, whose time {capturedAt} is not a timestamp";
+        }
+
+        return builtAt < captured ? $"is earlier than the corpus's EU capture at {capturedAt}" : null;
     }
 
     /// <summary>The digest of the event log alone (its observations and events), as <c>log_stamp</c> records it.</summary>
@@ -3617,9 +3631,10 @@ public sealed class LuxembourgIndexReader : IDisposable
     }
 
     /// <summary>
-    /// Checks the source bodies the event log names against the corpus this index binds: every state's events name
-    /// exactly the body digests of the members its articles were read from. The index alone holds no body digest, so
-    /// whoever mounts it with its corpus calls this (the mount, the mount writer's verification, the build).
+    /// Checks the event log against the corpus this index binds: every state's events name exactly the body digests of
+    /// the members its articles were read from, and the last build's time is no earlier than the corpus's EU capture.
+    /// The index alone holds neither a body digest nor a capture time, so whoever mounts it with its corpus calls this
+    /// (the mount, the mount writer's verification, the build).
     /// </summary>
     public void VerifyEventLogSources(VerifiedLexCorpus6ManifestSet corpus)
     {
@@ -3642,6 +3657,14 @@ public sealed class LuxembourgIndexReader : IDisposable
                 {
                     throw new InvalidDataException("The Luxembourg event log names source bodies the corpus does not hold for its states.");
                 }
+            }
+
+            // This build's time is an upper bound on its corpus's observation only if it is no earlier than the corpus's
+            // EU capture; the index alone holds no capture time, so the check is made here, with the corpus.
+            var builtAt = LuxembourgIndexBuilder.ReadLogObservations(_connection)[^1].BuiltAt;
+            if (LuxembourgIndexBuilder.EarlierThanEuCapture(LuxembourgIndexBuilder.ParseBuiltAt(builtAt)!.Value, corpus) is { } reason)
+            {
+                throw new InvalidDataException($"The Luxembourg event log's last build time {builtAt} {reason}.");
             }
         }
     }

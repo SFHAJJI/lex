@@ -733,6 +733,7 @@ public sealed class LuxembourgIndexBuilderTests
     [DataRow("UPDATE observations SET corpus_sha256='bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb'", "is not of this index's corpus", DisplayName = "an observation of another corpus")]
     [DataRow("INSERT INTO observations VALUES(2,'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb','cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc',2,1,'2026-10-01T09:00:00Z',NULL)", "is not of this index's corpus", DisplayName = "a second observation of another corpus")]
     [DataRow("INSERT INTO observations VALUES(2,'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb','cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc',2,1,'2026-10-01T07:59:59Z',NULL)", "each later than the one before", DisplayName = "a second build earlier than the first")]
+    [DataRow("INSERT INTO observations VALUES(2,'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb','cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc',2,1,'2026-10-01T08:00:00Z',NULL)", "each later than the one before", DisplayName = "a second build at the first one's time")]
     [DataRow("UPDATE observations SET built_at='2026-13-01T08:00:00Z'", "are not UTC seconds", DisplayName = "a build time that is no date")]
     [DataRow("DELETE FROM observations", "do not number its events", DisplayName = "no observation")]
     [DataRow("UPDATE log_stamp SET log_rows_sha256='0000000000000000000000000000000000000000000000000000000000000000'", "does not match its log stamp", DisplayName = "a log stamp of other rows")]
@@ -829,6 +830,20 @@ public sealed class LuxembourgIndexBuilderTests
             "each observation keeps its own build's time, the predecessor's carried forward unchanged");
         using var reader = LuxembourgIndexReader.OpenAndVerify(chained.IndexRef, chained.IndexBytes.Span, corpus.ArtifactRef, chained.CapabilityManifest);
         CollectionAssert.AreEqual(new[] { BuiltAtText, LaterText }, reader.ResolveObservations().Select(static o => o.BuiltAt).ToArray());
+    }
+
+    /// <summary>
+    /// The mount's own check of the build time: an index whose last build is stamped before its corpus's EU capture
+    /// passes the reader alone (the index holds no capture time) and is refused once it is held to its corpus.
+    /// </summary>
+    [TestMethod]
+    public async Task AMountedIndexBuiltBeforeItsCorpussEuCaptureIsRefusedWithItsCorpus()
+    {
+        var (built, corpus) = await BuildStateIndexWithCorpusAsync();
+        var (early, reference) = Tampered(built.IndexBytes.ToArray(), connection => Execute(connection, "UPDATE observations SET built_at='2000-01-01T00:00:00Z'"));
+        using var reader = LuxembourgIndexReader.OpenAndVerify(reference, early, corpus.ArtifactRef, RebindManifest(built.CapabilityManifest, reference.Sha256));
+        var exception = Assert.ThrowsExactly<InvalidDataException>(() => reader.VerifyEventLogSources(corpus));
+        StringAssert.Contains(exception.Message, "last build time 2000-01-01T00:00:00Z is earlier than the corpus's EU capture");
     }
 
     // ---- Predecessor chaining, the second slice: the predecessor as a build input. ----
