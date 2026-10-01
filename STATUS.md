@@ -16,13 +16,20 @@ must be consumed exactly once. The paired producer reopens its families again th
 checked door; this avoids accepting caller-assembled proof inputs. Its repeated read cost is not
 measured. Changed current custody protection refuses the original-byte equality claim.
 
-Thirty-four draft cases cover separate replay stores, served and unserved body policy, original
-identities and same-object expression/tripwire reconciliation, zero traffic and no new artifact
+Thirty-seven draft cases cover separate replay stores, served and unserved body policy, original
+identities and paired expression/tripwire canonical equality, zero traffic and no new artifact
 digests, eight missing dependencies, eighteen rehashed catalog changes, exact caller seed scope,
-weaker custody, cancellation and failed root hold. Existing custody-failure tests now locate the
+weaker custody, two valid foreign-acquisition substitutions, cancellation and failed root/source holds. Existing custody-failure tests now locate the
 corpus write by its actual receipt rather than assuming it is the final write. No assertion is
 relaxed. Source is uncompiled; remote full-suite CI and read-only cross-family review are required
 under the 10:35 standing order. Local builds/tests remain deferred while memory is below4GB.
+
+Initial CI36851553582 compiled and reported5,433 passed,22 skipped and18 failures.
+Fourteen failures shared a missing document-renderer artifact when policy made no fetch.
+The catalog now retains every named renderer explicitly, including unused roles. One test
+incorrectly required the same CLR derivation instance; it now checks the existing byte-equality
+contract. Three failures were vocabulary/member pins, transcribed from the compiled log.
+No complete replay case was green on that initial head; fresh CI must verify this repair.
 
 This branch starts from integration65922 and includes pending873,877,886 and887 (including869
 and879). Their final reviewed/merged source must be included before merge. This restores the EU

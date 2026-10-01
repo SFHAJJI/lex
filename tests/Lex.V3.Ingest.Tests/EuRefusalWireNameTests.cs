@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Linq;
 using System.Text.Json.Serialization;
 using Lex.V3.Ingest.Europe;
@@ -170,6 +170,7 @@ public sealed class EuRefusalWireNameTests
                 // would deliver an Expression batch no production covers.
                 "corrigendum_tripwire_batches_not_paired",
                 "document_checkpoint_not_retained",
+                "acquisition_checkpoint_not_retained",
             }),
             string.Join("\n", WireNames<EuQueryExecutionRefusal>()),
             "a wire name changing is a contract change; a number changing is not.");

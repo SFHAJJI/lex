@@ -36,8 +36,9 @@ public sealed partial class EuQueryExecutionAdapterTests
                 (await store.ReadByDigestAsync(result.CorpusRecordSetReceipt!.Reference.ContentSha256, CancellationToken.None)).ToArray());
             CollectionAssert.AreEqual(digests, store.WrittenDigestsInOrder.Distinct().Order(StringComparer.Ordinal).ToArray());
             Assert.AreEqual(originalSends, capture.Handler.Sends);
-            Assert.AreSame(result.CorrigendumTripwires!.ProductionsByFamilyKey.Values.First().Expressions!.Derivation,
-                result.CorrigendumTripwires.ProductionsByFamilyKey.Values.First().TripwireSet!.Derivation);
+            var production = result.CorrigendumTripwires!.ProductionsByFamilyKey.Values.First();
+            CollectionAssert.AreEqual(production.Expressions!.Derivation!.DerivationBytes.ToArray(),
+                production.TripwireSet!.Derivation.DerivationBytes.ToArray());
         }
     }
 
@@ -116,6 +117,26 @@ public sealed partial class EuQueryExecutionAdapterTests
     }
 
     [TestMethod]
+    [DataRow("census")]
+    [DataRow("tripwires")]
+    public async Task CompleteRunRejectsValidDependenciesSubstitutedFromAnotherAcquisition(string changed)
+    {
+        var capture = await RetainedEuRun.Value;
+        var other = await CaptureEuRunAsync(false);
+        var copy = await CopyLadderStoreAsync(capture.Store);
+        foreach (var digest in other.Store.WrittenDigestsInOrder.Distinct())
+            await copy.CreateAsync(await other.Store.ReadByDigestAsync(digest, CancellationToken.None),
+                CustodyClass.NightlyFloor90d, CancellationToken.None);
+        var root = await RunRootAsync(copy, capture.Result.AcquisitionCheckpointRef!);
+        var foreign = await RunRootAsync(copy, other.Result.AcquisitionCheckpointRef!);
+        root[changed]![0] = foreign[changed]![0]!.DeepClone();
+        var bytes = Encoding.UTF8.GetBytes(root.ToJsonString(new JsonSerializerOptions { Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping }));
+        var receipt = await copy.CreateAsync(bytes, CustodyClass.NightlyFloor90d, CancellationToken.None);
+        await Assert.ThrowsExactlyAsync<CustodyIntegrityException>(() => EuQueryExecutionAdapter.ReopenAsync(copy,
+            new SourceArtifactRef("urn:uuid:00000000-0000-4000-8000-000000000997", receipt.Reference.ContentSha256), capture.Seeds, CancellationToken.None));
+    }
+
+    [TestMethod]
     [DataRow(0)]
     [DataRow(1)]
     [DataRow(2)]
@@ -153,11 +174,20 @@ public sealed partial class EuQueryExecutionAdapterTests
         Assert.IsNull(capture.Result.AcquisitionCheckpointRef);
     }
 
+    [TestMethod]
+    public async Task CompleteRunMustRetainAnUnusedRendererBeforePublishingItsCheckpoint()
+    {
+        var capture = await CaptureEuRunAsync(false, failUnusedRenderer: true);
+        Assert.AreEqual(EuQueryExecutionRefusal.AcquisitionCheckpointNotRetained, capture.Result.Refusal?.Code);
+        StringAssert.Contains(capture.Result.Refusal!.Detail, "renderer hold refused");
+        Assert.IsNull(capture.Result.AcquisitionCheckpointRef);
+    }
+
     private static async Task<JsonNode> RunRootAsync(EuAcquisitionTestFixture.EuInMemoryCustodyStore store, SourceArtifactRef reference) =>
         JsonNode.Parse((await store.ReadByDigestAsync(reference.Sha256, CancellationToken.None)).Span)!;
     private sealed record RunCapture(EuAcquisitionTestFixture.EuInMemoryCustodyStore Store, EuQueryExecutionResult Result,
         string[] Seeds, RecordingLadderHandler Handler);
-    private static async Task<RunCapture> CaptureEuRunAsync(bool served, bool failRoot = false)
+    private static async Task<RunCapture> CaptureEuRunAsync(bool served, bool failRoot = false, bool failUnusedRenderer = false)
     {
         // ONE BUDGET FOR THE WHOLE RUN. The adapter refuses a census request
         // carrying a different instance, because two counters reading the same
@@ -228,7 +258,10 @@ public sealed partial class EuQueryExecutionAdapterTests
             request => EuAcquisitionTestFixture.BinaryResponse(request, HttpStatusCode.OK,
                 File.ReadAllBytes(Path.Combine(AppContext.BaseDirectory, "Fixtures", "EuDocumentFetch", "gdpr-xhtml-200-body.bin")),
                 "application/xhtml+xml")));
-        var store = new EuAcquisitionTestFixture.EuInMemoryCustodyStore(failSchema: failRoot ? "lex-eu-acquisition-checkpoint/1" : null);
+        var unusedRendererSha = EuAcquisitionTestFixture.BuildRendererSource(1009).Reference.Sha256;
+        var store = new EuAcquisitionTestFixture.EuInMemoryCustodyStore(
+            failWriteDigest: (digest, _) => failUnusedRenderer && digest == unusedRendererSha,
+            failSchema: failRoot ? "lex-eu-acquisition-checkpoint/1" : null);
         var executor = new EuRepeatedEnumerationExecutor(
             store, new EuAcquisitionTestFixture.FixedTimeProvider(), handler);
         var adapter = new EuQueryExecutionAdapter(store, executor);
@@ -272,7 +305,7 @@ public sealed partial class EuQueryExecutionAdapterTests
             EuAcquisitionTestFixture.DocumentFetchSourceWitness(),
             runWireBudget,
             CancellationToken.None);
-        if (!failRoot) { Assert.IsNull(result.Refusal, result.Refusal?.Detail); Assert.IsNotNull(result.AcquisitionCheckpointRef); }
+        if (!failRoot && !failUnusedRenderer) { Assert.IsNull(result.Refusal, result.Refusal?.Detail); Assert.IsNotNull(result.AcquisitionCheckpointRef); }
         return new(store, result, [seed.Celex], handler);
     }
 }

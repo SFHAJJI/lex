@@ -26,6 +26,21 @@ public sealed partial class EuQueryExecutionAdapter
         if (result.Refusal is not null) return result;
         try
         {
+            // A renderer can be referenced even when policy selected no requests for its role.
+            // Retain every named source explicitly so the catalog has a complete offline closure.
+            var renderers = new List<MachineQueryRendererSource>
+                { objectFactsPolicy.RendererSource, witnessRendererSource, documentFetchRendererSource };
+            foreach (var seed in seeds) renderers.Add(seed.Request.RendererSource);
+            var retainedSources = new HashSet<string>(StringComparer.Ordinal);
+            foreach (var renderer in renderers)
+            {
+                if (!retainedSources.Add(renderer.Reference.Sha256)) continue;
+                var sourceBytes = renderer.CopyBytes();
+                var (sourceReceipt, sourceFailure) = await CustodyHold.TryHoldAsync(_custodyStore, sourceBytes, cancellationToken).ConfigureAwait(false);
+                if (sourceReceipt is null) throw new CustodyRequiredException("Acquisition renderer hold refused: " + sourceFailure);
+                if (sourceReceipt.Reference.ContentSha256 != renderer.Reference.Sha256 || sourceReceipt.Reference.ByteLength != sourceBytes.Length)
+                    throw new CustodyIntegrityException("Acquisition renderer receipt names different bytes.");
+            }
             var document = new RunCheckpoint(RunCheckpointSchema, context.Census.ToArray(), objectFactsPolicy.PlanResourceId,
                 objectFactsPolicy.RendererSource.Reference, witnessRendererSource.Reference, documentFetchRendererSource.Reference,
                 context.Objects.ToArray(), context.Tripwires.ToArray(), context.Witness!.CheckpointRef!,
