@@ -15,11 +15,13 @@ namespace Lex.V3.Ingest.Tests;
 public sealed partial class V3FirstMountBuildTests
 {
     [TestMethod]
-    [DataRow(false, false, false, false)]
-    [DataRow(true, true, false, false)]
-    [DataRow(true, false, true, false)]
-    [DataRow(true, false, true, true)]
-    public async Task OfflineCommandRebuildsEveryMountFileInTwoSeparateProcesses(bool compressed, bool chained, bool consolidated, bool missingStateCelex)
+    [DataRow(false, false, false, false, false)]
+    [DataRow(true, true, false, false, false)]
+    [DataRow(true, false, true, false, false)]
+    [DataRow(true, false, true, true, false)]
+    [DataRow(true, false, false, false, true)]
+    [DataRow(true, false, true, true, true)]
+    public async Task OfflineCommandRebuildsEveryMountFileInTwoSeparateProcesses(bool compressed, bool chained, bool consolidated, bool missingStateCelex, bool reuseEurope)
     {
         var root = Path.Combine(Path.GetTempPath(), "lex-v3-offline-test-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(root);
@@ -30,6 +32,21 @@ public sealed partial class V3FirstMountBuildTests
             var (europe, luxembourg) = await AcquireAsync(store, CheckoutRoot());
             if (consolidated) europe = await EuFirstMountAcquisitionTests.AcquireConsolidatedAsync(store, missingStateCelex);
             var seed = consolidated ? EuFirstMountAcquisitionTests.ConsolidatedSeed : EuAxiomWiringHarness.Seed(null).Celex;
+            if (reuseEurope)
+            {
+                using var rights = new EuFirstMountAcquisitionTests.CompositeHandler(
+                    new Dictionary<string, EuAcquisitionTestFixture.FamilyScript>(), new Dictionary<string, string[]>());
+                europe = await new Lex.V3.Ingest.Europe.EuFirstMountAcquisition(store, TimeProvider.System, rights)
+                    .ReuseAsync(europe.CheckpointRef!, [seed],
+                        await File.ReadAllBytesAsync(Path.Combine(CheckoutRoot(), Lex.V3.Ingest.Europe.EuRendererSources.RendererFiles[3])), WireRequestBudget.OfWireRequests(10), CancellationToken.None);
+                Assert.IsTrue(europe.Delivered, europe.Detail);
+                Assert.AreEqual(0, rights.AdapterRequests + rights.FormexEnumerationRequests + rights.FormexPackageRequests);
+                using var luHandler = new LuxembourgFirstMountAcquisitionTests.LuxembourgFamilyHandler(LuxembourgFirstMountAcquisitionTests.PdfBytes());
+                luxembourg = await new LuxembourgFirstMountAcquisition(store, TimeProvider.System, luHandler)
+                    .RunAsync(LuxembourgFirstMountAcquisitionTests.ActRange,
+                        await LuxembourgRendererSources.FromCheckoutAsync(store, CheckoutRoot(), CancellationToken.None),
+                        LuxembourgAcquisitionTestFixture.TestWireBudget(), CancellationToken.None);
+            }
             Assert.IsTrue(europe.Delivered, europe.Detail);
             Assert.IsTrue(luxembourg.Delivered, luxembourg.Detail);
             var time = DateTimeOffset.FromUnixTimeSeconds(DateTimeOffset.UtcNow.ToUnixTimeSeconds() + 1);

@@ -26,6 +26,7 @@ const string Usage =
     + "   or: Lex.V3.Tool build --celex <CELEX[,CELEX...]|all> --lu-population all\n"
     + "                         --custody <directory> --out <directory> --checkout <directory> --wire-ceiling <n>\n"
     + "  --celex        an Appendix A seed, comma-separated seeds, or all for the 82-seed population\n"
+    + "  --eu-checkpoint  retained EU acquisition reference JSON in this custody; reuse its population and renew only the rights notice\n"
     + "  --lu-population all  all publisher IRI keys through S/A/G, with existing scope and rights rules\n"
     + "  --lu-name      lowercase ASCII key prefixing the act's three family keys\n"
     + "  --lu-start/--lu-end  an ELI key range on the publisher's key order (start inclusive, end exclusive)\n"
@@ -42,7 +43,7 @@ const string Usage =
 
 string[] required = ["--celex", "--custody", "--out", "--checkout", "--wire-ceiling"];
 string[] rangeOptions = ["--lu-name", "--lu-start", "--lu-end"];
-string[] admitted = [.. required, .. rangeOptions, "--lu-population", "--custody-encoding", "--predecessor", "--referenced"];
+string[] admitted = [.. required, .. rangeOptions, "--lu-population", "--custody-encoding", "--predecessor", "--referenced", "--eu-checkpoint"];
 
 if (args.Length == 0 || !string.Equals(args[0], "build", StringComparison.Ordinal) || (args.Length - 1) % 2 != 0)
 {
@@ -152,6 +153,21 @@ if (options.TryGetValue("--referenced", out var referencedPath))
     }
 }
 
+Lex.V3.Contracts.Source.Core.SourceArtifactRef? retainedEuCheckpoint = null;
+if (options.TryGetValue("--eu-checkpoint", out var euCheckpointPath))
+{
+    try
+    {
+        retainedEuCheckpoint = Lex.V3.Contracts.ContractJson.Deserialize<Lex.V3.Contracts.Source.Core.SourceArtifactRef>(
+            File.ReadAllText(Path.GetFullPath(euCheckpointPath)));
+    }
+    catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or ArgumentException or System.Text.Json.JsonException)
+    {
+        Console.Error.WriteLine($"--eu-checkpoint is not a valid retained acquisition reference: {exception.Message}");
+        return 2;
+    }
+}
+
 var checkout = Path.GetFullPath(options["--checkout"]);
 if (!Directory.Exists(checkout))
 {
@@ -196,16 +212,37 @@ try
     var startedAt = DateTimeOffset.UtcNow;
     Console.WriteLine($"lex-v3 build: custody={custodyRoot} custody_encoding={custodyEncoding} ceiling={ceiling} started={startedAt:O}");
 
-    var europeRenderers = await EuRendererSources.FromCheckoutAsync(store, checkout, token);
+    var europeRenderers = retainedEuCheckpoint is null ? await EuRendererSources.FromCheckoutAsync(store, checkout, token) : null;
     var luxembourgRenderers = await LuxembourgRendererSources.FromCheckoutAsync(store, checkout, token);
-    Console.WriteLine("renderer sources held: 6 Europe, 2 Luxembourg");
+    Console.WriteLine(retainedEuCheckpoint is null ? "renderer sources held: 6 Europe, 2 Luxembourg"
+        : "renderer sources held: 2 Luxembourg; Europe sources reopen from retained custody");
 
     var celexes = options["--celex"] == "all"
         ? EuAppendixASeedMap.SeedsInCelexOrder.Select(seed => seed.Celex).ToArray()
         : options["--celex"].Split(',', StringSplitOptions.None);
     Console.WriteLine($"europe selection: {celexes.Length} seed(s)");
-    var europe = await new EuFirstMountAcquisition(store, TimeProvider.System)
-        .RunAsync(celexes, europeRenderers, budget, token);
+    var euAcquisition = new EuFirstMountAcquisition(store, TimeProvider.System);
+    EuFirstMountAcquisitionResult europe;
+    if (retainedEuCheckpoint is not null)
+    {
+        try
+        {
+            var currentDocumentFetchSource = await File.ReadAllBytesAsync(Path.Combine(checkout,
+                "src/Lex.V3.Contracts/Source/Europe/EuDocumentFetchPlan.cs"), token);
+            europe = await euAcquisition.ReuseAsync(retainedEuCheckpoint, celexes,
+                currentDocumentFetchSource, budget, token);
+        }
+        catch (Exception exception) when (exception is Lex.V3.Contracts.Custody.CustodyRequiredException or Lex.V3.Contracts.Custody.CustodyIntegrityException)
+        {
+            Console.Error.WriteLine($"refused: retained europe acquisition: {exception.Message} (spent {budget.Spent} of {budget.Limit})");
+            return 3;
+        }
+        Console.WriteLine("europe input: retained population; new rights notice required for this build");
+    }
+    else
+    {
+        europe = await euAcquisition.RunAsync(celexes, europeRenderers!, budget, token);
+    }
     if (!europe.Delivered)
     {
         Console.Error.WriteLine($"refused: europe: {europe.Refusal}: {europe.Detail} (spent {budget.Spent} of {budget.Limit})");
@@ -222,9 +259,17 @@ try
         + $"spent {budget.Spent} of {budget.Limit}");
 
     Console.WriteLine("europe formex outcomes: " + europe.Formex.CreateOutcomeDiagnosticsJson());
+    if (europe.CheckpointRef is { } euCheckpoint)
+    {
+        var pointer = Path.Combine(custodyRoot, $"eu-acquisition-{euCheckpoint.Sha256}.json");
+        await File.WriteAllTextAsync(pointer, Lex.V3.Contracts.ContractJson.Serialize(euCheckpoint), token);
+        Console.WriteLine($"europe checkpoint: {pointer}");
+    }
 
     var luxembourg = await new LuxembourgFirstMountAcquisition(store, TimeProvider.System)
         .RunAsync(act, luxembourgRenderers, budget, token);
+    if (luxembourg.Run is { } observedLuxembourg)
+        Console.WriteLine("luxembourg family outcomes: " + Lex.V3.Contracts.ContractJson.Serialize(observedLuxembourg.FamilyOutcomes));
     if (!luxembourg.Delivered)
     {
         Console.Error.WriteLine($"refused: luxembourg: {luxembourg.Refusal}: {luxembourg.Detail} (spent {budget.Spent} of {budget.Limit})");
@@ -234,6 +279,19 @@ try
     Console.WriteLine(
         $"luxembourg: run complete, {luxembourg.Run!.CorpusRecordSet?.Set.Records.Count ?? 0} corpus record(s), "
         + $"vocabulary evidence {luxembourg.VocabularyEvidenceRef!.Sha256[..12]}; spent {budget.Spent} of {budget.Limit}");
+
+    var luRecords = luxembourg.Run!.CorpusRecordSet!.Set.Records;
+    var luBodies = luRecords.Where(record => record.Body.Receipt is not null)
+        .Select(record => record.Body.Receipt!.Reference).DistinctBy(reference => reference.ContentSha256).ToArray();
+    Console.WriteLine("luxembourg record measurements: " + Lex.V3.Contracts.ContractJson.Serialize(new
+    {
+        records = luRecords.Count,
+        uniqueHeldBodyCount = luBodies.Length,
+        uniqueHeldBodyBytes = luBodies.Sum(reference => reference.ByteLength),
+        outcomes = luRecords.GroupBy(record => new { record.Body.Kind, record.Body.NotHeldReason,
+            pendingReason = record.Body.PendingAcquisitionReason?.Kind })
+            .Select(group => new { outcome = group.Key, records = group.Count() }).ToArray(),
+    }));
 
     var derivationTime = DateTimeOffset.FromUnixTimeSeconds(DateTimeOffset.UtcNow.ToUnixTimeSeconds() + 1);
     var generationSource = predecessor is null ? null : new V3GenerationSource(Path.GetFullPath(predecessorDirectory!), referenced);

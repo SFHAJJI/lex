@@ -271,6 +271,10 @@ public sealed partial class EuFormexManifestationEnumerationProducer
                 request.Expression,
                 EuFormexManifestationEnumerationRefusal.EnumerationRefused,
                 run.Refusal is { } refusal ? refusal.Code + ": " + refusal.CoreRefusalDetail
+                    + (refusal.TerminalStatus is { } status
+                        ? "; status=" + status.ToString(CultureInfo.InvariantCulture) : string.Empty)
+                    + (refusal.ResponseBodySha256 is { } bodySha256
+                        ? "; body=" + bodySha256 : string.Empty)
                     + (refusal.ObservedCount is { } observedCount
                         ? "; observedCount=" + observedCount.ToString(CultureInfo.InvariantCulture)
                         : string.Empty)
