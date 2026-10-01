@@ -1,4 +1,4 @@
-﻿using System.Text;
+using System.Text;
 using System.Text.Json;
 using Lex.V3.Contracts;
 using Lex.V3.Contracts.Custody;
@@ -213,8 +213,9 @@ public sealed partial class EuQueryExecutionAdapter
             foreach (var count in new[] { receipt.Delivery.CountA, receipt.Delivery.CountB })
             {
                 var evidence = await glue.ReopenPageEvidenceAsync(count, cancellationToken).ConfigureAwait(false);
-                var parameter = evidence.QueryInput.OrderedParameters.Single(value => value.Name == "pass_id");
-                if (parameter.Kind != MachineQueryParameterKind.BoundedInteger || parameter.IntegerValue is not { } pass ||
+                var parameters = evidence.QueryInput.OrderedParameters.Where(value => value.Name == "pass_id").ToArray();
+                if (parameters.Length != 1 || parameters[0].Kind != MachineQueryParameterKind.BoundedInteger ||
+                    parameters[0].IntegerValue is not { } pass || pass is not (1 or 2) ||
                     count.QueryPlanRef.ResourceId != family.PlanResourceId)
                     throw new CustodyIntegrityException("Retained count has no matching plan/pass identity.");
                 BoundMachineRequest request;

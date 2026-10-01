@@ -1,4 +1,4 @@
-﻿using System.Net;
+using System.Net;
 using System.Text;
 using System.Text.Json;
 using Lex.V3.Contracts;
@@ -3072,8 +3072,8 @@ public sealed partial class EuQueryExecutionAdapterTests
     /// The second missing inverse mutation.
     /// <see cref="EuQueryExecutionRefusal.RecordSetNotRetained"/> also had zero test references, and
     /// the doc on <see cref="ARecordSetWriteWhoseFloorIsUnenforcedStillDeliversAndRecordsTheWeakerClass"/>
-    /// claimed a named test drove it, which was false. The record set is this run's LITERAL LAST
-    /// custody write, which is what makes the ordinal discoverable without guessing.
+    /// claimed a named test drove it, which was false. The record-set receipt identifies the
+    /// custody write to refuse; the acquisition checkpoint is written afterward.
     /// </remarks>
     [TestMethod]
     public async Task ARecordSetTheStoreCannotReproduceRefusesAsNotRetained()
