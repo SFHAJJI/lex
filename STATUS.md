@@ -974,7 +974,7 @@ CI evidence are recorded in the pull request before merge.
 
 ## Heads
 
-- `v3/integration`: `c585ee60` (2026-10-01, PR #862 merged). Build 45 s. Fast lane
+- `v3/integration`: `a51535ba` (2026-10-01, PR #864 merged). Build 45 s. Fast lane
   (`eng/test-fast.ps1`): 3,077 tests, 3,076 pass, 1 skipped (the review of PR #828). Ingest suite: green on CI for PR #760
   (the CI `dotnet` job runs the whole solution on every pull request, about 7 min on the runner;
   green for PR #834);
@@ -2218,6 +2218,44 @@ confined to the event-log parts of the builder and the reader.
 - The fixed-input byte pin moves, as a schema change moves it. The schema version and the pin are
   shared with the data lane.
 
+Predecessor chaining, the second slice (PR #866): a Luxembourg index build can carry its
+predecessor's event log forward.
+- `LuxembourgIndexPredecessor.TryRead` reads the previous build's index:
+  - its bytes must be the digest its build report names;
+  - it must hold a log of this log schema (`lex-v3-event-log/1`), whatever its other tables'
+    schema. An index of schema 6 or before has no log stamp and refuses
+    `predecessor_schema_differs`;
+  - the log must match its own stamp and be numbered as observations appending events, or it
+    refuses `predecessor_mismatch`.
+- `TryBuild(envelope, predecessor)`:
+  - copies the predecessor's observations and events unchanged, an exact prefix (G3a);
+  - appends one observation naming the predecessor's digest, with an event for each state the log
+    does not hold: `first_sighting`, or `expression_added` when the log holds the same work and date
+    in another language;
+  - leaves a state the log holds unchanged silent, and a state the log holds that this build lacks
+    silent too (absence is not a withdrawal);
+  - refuses `predecessor_state_changed` for a held state with another digest or other source bodies,
+    until slice 3 adds `file_replaced`.
+  The genesis log is now the special case: the events appended to no log.
+- The reader checks any log:
+  - it is numbered as observations appending events;
+  - its last observation is of the index's corpus;
+  - every state is held by the log at its own digest;
+  - the last observation's events are exactly those it must append to the log before it.
+  That the log before it is the predecessor's is proven by the build, which copies it.
+- `VerifyEventLogSources` checks the corpus's bodies against the log's last word on each state.
+- Plumbing: `V3FirstMountBuild.ReadPredecessor(directory)` and a `RunAsync` overload, with both
+  builds of the index taking the same predecessor. `Lex.V3.Tool build --predecessor <v3-corpus
+  dir>` reads and verifies the predecessor before the first request.
+- The API still describes every log as a genesis log (`basis`, the predecessor and the notes)
+  until slice 4 serves `events` and `answer_drift` across the chain. No chained index is mounted
+  before then.
+- On the fixture, a chained build is byte-stable across two builds, chains again (three
+  observations), appends `first_sighting` to a predecessor whose log lacks the state, and refuses
+  a changed state.
+- The real bounded first mount's Luxembourg index is schema 6 with no state, so it cannot be a
+  predecessor; the first chain starts with the next build.
+
 The live export composer and its journey step (PR #789), the eighth screen. `dist-live/export.html`
 has its own bundle `client-live-export.js`.
 - The page asks what the reading page asks: the same form (`ReadingForm`, now shared), the same one
@@ -2912,7 +2950,7 @@ recorded by PR #862:
    around. The planned slices, one pull request each:
    - index schema `/7` with the genesis log, an `observations` table and a log stamp (PR #864);
    - the predecessor as a build input (`--predecessor`), its log carried forward as an exact
-     prefix (G3a);
+     prefix (G3a) (PR #866);
    - comparison events: `first_sighting` and `expression_added` for new keys, `file_replaced` when a
      source body changes (G1), and the derived `interval_closed` and `validity_revised`;
    - `events` and `answer_drift` across the chain;
