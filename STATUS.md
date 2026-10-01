@@ -3,6 +3,26 @@
 Updated 2026-10-01 by the driver. This file replaces the issue-comment ledgers. It is rewritten in
 every pull request that changes what is served, what is next or what is blocked.
 
+## Offline Formex package and annex derivation (Codex, 2026-10-01)
+
+Retain ordered ZIP/PDF attempts, original annex profile identities, checked expression/corpus/CELEX
+input digest, renderer and final outcome digest. Replay selects addresses from the same enumeration
+and repeats the existing inventory/annex core using checked retained routes. Consume every saved
+fetch/profile and reproduce typed outcomes and identities. Unexecuted attempts remain operational
+refusals; no new observation or publisher request is invented.
+
+All 32 new cases passed at reviewed 853b1906: CI 36863759397 reported 5,491 passed
+and 22 skipped. Claude returned MERGE with no material findings. The one editorial repair
+restores spacing and records that parent PR 879 is merged as 749e88a3. Fresh current-base
+CI gates merge; local tests remain deferred while the long acquisition holds the heavy slot.
+The input digest currently serializes the corpus for each expression; avoiding that repeated
+work remains a measured performance follow-up. If checkpoint retention fails, acquisition is
+reported as checkpoint_not_retained and carries no annex classification, even after a successful
+fetch. This explicit refusal preserves the replay requirement.
+
+Successful populations expose immutable package results tied to their exact outcome objects.
+Complete acquisition composition and same-run object restoration still gate independent mounts.
+
 ## Luxembourg Gazette acquisition checkpoint — draft
 
 The Gazette phase retains its ordered additional document requests, binds the independently derived resolution and manifest, selected addresses and reused document routes, and replays from custody with zero wire-budget use. A delivered query carries both the selected-document and Gazette checkpoint references. Missing checkpoint retention is a typed refusal. Reused routes retain their original transport receipts; replay does not claim those historical receipts prove the current store's retention floor.

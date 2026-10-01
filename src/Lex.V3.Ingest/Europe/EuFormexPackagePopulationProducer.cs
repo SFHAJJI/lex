@@ -67,6 +67,21 @@ public sealed class EuFormexPackagePopulationResult
     /// </summary>
     public EuFormexRunOutcomeReconciliation? Reconciliation { get; }
 
+    /// <summary>Successful population's original package results, retaining their checkpoint associations.</summary>
+    public IReadOnlyList<EuFormexPackageAcquisitionResult> Acquisitions { get; private init; } = [];
+
+    internal EuFormexPackagePopulationResult WithAcquisitions(IReadOnlyList<EuFormexPackageAcquisitionResult> acquisitions)
+    {
+        ArgumentNullException.ThrowIfNull(acquisitions);
+        if (Reconciliation is null || acquisitions.Any(acquisition => acquisition is null ||
+            !Reconciliation.Outcomes.Any(outcome => ReferenceEquals(outcome, acquisition.Outcome))) ||
+            acquisitions.Select(static acquisition => acquisition.Outcome.ExpressionIdentity).Distinct().Count() != acquisitions.Count)
+            throw new ArgumentException("Package results must belong to this exact successful population.", nameof(acquisitions));
+        return new(Reconciliation, Enumerations, AnnexClassifications, EligibleExpressionCount, ProductRequestCount, Refusal, Detail)
+            { Acquisitions = Array.AsReadOnly(acquisitions.ToArray()) };
+    }
+
+
     /// <summary>
     /// Every manifestation enumeration this run attempted, in production order: the publisher
     /// facts behind each outcome and the wire accounting, kept whether or not the run closed.
@@ -334,6 +349,7 @@ public sealed class EuFormexPackagePopulationProducer
 
         var populations = new List<EuFormexPackageOutcomePopulation>(families.Count);
         var classifications = new List<EuBoundAnnexBodyClassification>();
+        var acquisitions = new List<EuFormexPackageAcquisitionResult>();
         var eligible = 0;
         foreach (var (familyKey, expressions, requests) in families)
         {
@@ -389,6 +405,7 @@ public sealed class EuFormexPackagePopulationProducer
                 var acquisition = await _acquisitions.RunAsync(
                         enumeration, run.CorpusRecordSet, expressionCelex, documentFetchRendererSource, wireBudget, cancellationToken)
                     .ConfigureAwait(false);
+                acquisitions.Add(acquisition);
                 productRequests += acquisition.ProductRequestCount;
                 outcomes.Add(acquisition.Outcome);
                 if (acquisition.AnnexClassification is { } classification)
@@ -422,7 +439,8 @@ public sealed class EuFormexPackagePopulationProducer
                 productRequests);
         }
 
-        return EuFormexPackagePopulationResult.Success(reconciliation, enumerations, classifications, eligible, productRequests);
+        return EuFormexPackagePopulationResult.Success(reconciliation, enumerations, classifications, eligible, productRequests)
+            .WithAcquisitions(acquisitions);
     }
 
     private static string NewUrn() => $"urn:uuid:{Guid.NewGuid():D}";

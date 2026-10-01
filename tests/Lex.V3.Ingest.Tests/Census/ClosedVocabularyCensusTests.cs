@@ -115,10 +115,9 @@ public sealed class ClosedVocabularyCensusTests
                 "Lex.V3.Ingest.Europe.EuFormexManifestationEnumerationRefusal: None, EnumerationRefused, Enumeratio"
                     + "nProofRefused, VerifiedRowsRefused, RowNotAdmitted, RowNamesAnotherExpression, ManifestationBindin"
                     + "gDeliveredTwice, CheckpointNotRetained",
-                "Lex.V3.Ingest.Europe.EuFormexPackageNotAcquiredReason: None, BodyNotHeld, "
-                    + "LanguageNotAddressable, ManifestationNotSingular, IdentityNotAdmitted, "
-                    + "AnnexXhtmlNotInventoried, AnnexPdfNotServed, AnnexEvidenceNotBound, "
-                    + "AnnexBodyNotClassified",
+                "Lex.V3.Ingest.Europe.EuFormexPackageNotAcquiredReason: None, BodyNotHeld, LanguageNotAddressable, "
+                    + "ManifestationNotSingular, IdentityNotAdmitted, AnnexXhtmlNotInventoried, AnnexPdfNotServed, AnnexE"
+                    + "videnceNotBound, AnnexBodyNotClassified, CheckpointNotRetained",
                 "Lex.V3.Ingest.Europe.EuFormexPackageOutcomeKind: NotEligible, Acquired, "
                     + "Unavailable, Refused, NotAcquired, RouteRefused, PackageRejected, "
                     + "NotEnumeratedLanguageOutOfScope",
@@ -338,7 +337,7 @@ public sealed class ClosedVocabularyCensusTests
                     + "GazetteBodyNotProduced, PopulationLedgerNotCompleted, "
                     + "ObservedObjectIdentitySetNotRetained, "
                     + "HeldBodyDerivationPopulationNotCompleted, "
-                    + "SelectedManifestationIdentityNotUnique",
+                    + "SelectedManifestationIdentityNotUnique, DocumentCheckpointNotRetained",
                 "Lex.V3.Ingest.Luxembourg.LuxembourgRelationFamilyAcquisitionState: "
                     + "AcquiredComplete, Unacquired, Incomplete, Uncertain",
                 "Lex.V3.Ingest.Luxembourg.LuxembourgResourceObservationExclusionCause: "
