@@ -5,7 +5,7 @@
     "envelope_schema": "lex-v3-envelope/1",
     "version": "v3",
     "registry_schema": "lex-v3-operation-registry/1",
-    "registry_sha256": "abe40749a2364dcbcf69a4427b0977e0510500345056eed4042b2e4758a53ef0",
+    "registry_sha256": "c40e23fd0da12172415bc594fe3fb2dd945e40557fecc986bcad6c2fa31c9284",
     "refusal_schema": "lex-v3-refusal/1",
     "verdicts": [
       "answer",
@@ -388,7 +388,7 @@
         "operation_id": "coverage",
         "refusal": null,
         "registry_schema": "lex-v3-operation-registry/1",
-        "registry_sha256": "abe40749a2364dcbcf69a4427b0977e0510500345056eed4042b2e4758a53ef0",
+        "registry_sha256": "c40e23fd0da12172415bc594fe3fb2dd945e40557fecc986bcad6c2fa31c9284",
         "request_ref": "http_fb09fb7191e84f40f48d21b4532a48ef36c84efacd236a30abd075a5a2b2c639",
         "result": {
           "object_type": "coverage_report",
@@ -433,6 +433,24 @@
               }
             ],
             "counts_note": "counts are of rows the index holds; totals.articles and languages[].articles count the articles the index holds, and the corpus can have recorded more articles than the index holds: members.article_outcomes counts what it recorded; a missing publisher date is counted as missing and never dropped; articles_with_searchable_text is counted where the article carries a publisher date, which is what the capability cells measure, and so it and articles_without_publisher_date are not addends; when a language is requested, requested_language echoes it and only languages and capability_cells are narrowed to it, and every other member, totals included, is the whole mount\u0027s",
+            "history": {
+              "history_begins": "2026-10-01T08:00:00Z",
+              "log_records_builds": true,
+              "note": "the builds the mounted Luxembourg log records (its snapshots), and those whose text this mount holds: the mounted build, and each earlier generation the retention line keeps beside it (S7-A09: referenced generations indefinitely, the last build of each UTC day for 90 days, each UTC month\u0027s earliest indefinitely), held to the log when the mount opened; a snapshot without text is named by the log alone, and as_observed answers its states without text; every time here is a build\u0027s, an upper bound on observation, never an observation time",
+              "retention_policy": null,
+              "snapshots_in_log": 1,
+              "snapshots_with_text": [
+                {
+                  "built_at": "2026-10-01T08:00:00Z",
+                  "observation": 1,
+                  "retained_as": [
+                    "mounted"
+                  ],
+                  "snapshot_id": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+                }
+              ],
+              "snapshots_without_text": 0
+            },
             "languages": [
               {
                 "articles": 49,
@@ -484,7 +502,7 @@
               "corpus_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
               "index_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
               "publisher": "lu-legilux",
-              "registry_sha256": "abe40749a2364dcbcf69a4427b0977e0510500345056eed4042b2e4758a53ef0"
+              "registry_sha256": "c40e23fd0da12172415bc594fe3fb2dd945e40557fecc986bcad6c2fa31c9284"
             },
             "not_held": [
               {
@@ -501,7 +519,7 @@
               },
               {
                 "item": "build_time_and_currency",
-                "reason": "this report states no build time and no build time of the corpus file is held, so nothing here says how current these counts are; the index\u0027s event log records when each build ran (events: log.built_at), an upper bound on when its corpus was observed and no measure of currency against the publisher; the corpus and index digests name exactly which artifacts are mounted"
+                "reason": "history gives when each build ran, an upper bound on when its corpus was observed and never an observation time, and nothing here says how current these counts are against the publisher; no build time of the corpus file itself is held; the corpus and index digests name exactly which artifacts are mounted"
               },
               {
                 "item": "legal_status",
@@ -511,15 +529,11 @@
             "operations": {
               "not_served_data": [
                 {
-                  "data_needed": "observation times: when this corpus first observed each held state (observed_from), recorded by builds chained to their predecessors in the event log; a single build holds no observation time, so no answer can be replayed as it was observed",
-                  "operation": "as_observed"
-                },
-                {
                   "data_needed": "the concept data attached to EU works: EuroVoc descriptors, EU directory codes and subject matters as the Publications Office records them; the EU index holds none of them",
                   "operation": "concepts"
                 },
                 {
-                  "data_needed": "each held state\u0027s publication date beside its observation time (observed_from), so a date is answered with what a reader could have known on it, never with the publisher\u0027s valid-from date; the observation times need builds chained to their predecessors",
+                  "data_needed": "each held state\u0027s publication date beside its observation time (observed_from), so a date is answered with what a reader could have known on it, never with the publisher\u0027s valid-from date; the observation times need each Luxembourg body\u0027s capture time in the corpus, which no build records yet: a build\u0027s time bounds observation only from above",
                   "operation": "knowable_on"
                 },
                 {
@@ -528,7 +542,6 @@
                 }
               ],
               "not_served_operations": [
-                "as_observed",
                 "concepts",
                 "knowable_on",
                 "transposition"
@@ -538,6 +551,7 @@
               "served_operations": [
                 "answer_drift",
                 "article_history",
+                "as_observed",
                 "as_of",
                 "ask",
                 "browse",
@@ -601,7 +615,7 @@
         "operation_id": "ask",
         "refusal": null,
         "registry_schema": "lex-v3-operation-registry/1",
-        "registry_sha256": "abe40749a2364dcbcf69a4427b0977e0510500345056eed4042b2e4758a53ef0",
+        "registry_sha256": "c40e23fd0da12172415bc594fe3fb2dd945e40557fecc986bcad6c2fa31c9284",
         "request_ref": "http_fb09fb7191e84f40f48d21b4532a48ef36c84efacd236a30abd075a5a2b2c639",
         "result": {
           "object_type": "handoff_card",
@@ -700,7 +714,7 @@
           "schema": "lex-v3-refusal/1"
         },
         "registry_schema": "lex-v3-operation-registry/1",
-        "registry_sha256": "abe40749a2364dcbcf69a4427b0977e0510500345056eed4042b2e4758a53ef0",
+        "registry_sha256": "c40e23fd0da12172415bc594fe3fb2dd945e40557fecc986bcad6c2fa31c9284",
         "request_ref": "http_fb09fb7191e84f40f48d21b4532a48ef36c84efacd236a30abd075a5a2b2c639",
         "result": null,
         "schema": "lex-v3-envelope/1",
@@ -742,7 +756,7 @@
           "schema": "lex-v3-refusal/1"
         },
         "registry_schema": "lex-v3-operation-registry/1",
-        "registry_sha256": "abe40749a2364dcbcf69a4427b0977e0510500345056eed4042b2e4758a53ef0",
+        "registry_sha256": "c40e23fd0da12172415bc594fe3fb2dd945e40557fecc986bcad6c2fa31c9284",
         "request_ref": "http_fb09fb7191e84f40f48d21b4532a48ef36c84efacd236a30abd075a5a2b2c639",
         "result": null,
         "schema": "lex-v3-envelope/1",
@@ -775,7 +789,7 @@
         "operation_id": "search",
         "refusal": null,
         "registry_schema": "lex-v3-operation-registry/1",
-        "registry_sha256": "abe40749a2364dcbcf69a4427b0977e0510500345056eed4042b2e4758a53ef0",
+        "registry_sha256": "c40e23fd0da12172415bc594fe3fb2dd945e40557fecc986bcad6c2fa31c9284",
         "request_ref": "http_fb09fb7191e84f40f48d21b4532a48ef36c84efacd236a30abd075a5a2b2c639",
         "result": {
           "object_type": "quote",
@@ -958,7 +972,7 @@
           "schema": "lex-v3-refusal/1"
         },
         "registry_schema": "lex-v3-operation-registry/1",
-        "registry_sha256": "abe40749a2364dcbcf69a4427b0977e0510500345056eed4042b2e4758a53ef0",
+        "registry_sha256": "c40e23fd0da12172415bc594fe3fb2dd945e40557fecc986bcad6c2fa31c9284",
         "request_ref": "http_fb09fb7191e84f40f48d21b4532a48ef36c84efacd236a30abd075a5a2b2c639",
         "result": null,
         "schema": "lex-v3-envelope/1",
@@ -991,7 +1005,7 @@
         "operation_id": "search",
         "refusal": null,
         "registry_schema": "lex-v3-operation-registry/1",
-        "registry_sha256": "abe40749a2364dcbcf69a4427b0977e0510500345056eed4042b2e4758a53ef0",
+        "registry_sha256": "c40e23fd0da12172415bc594fe3fb2dd945e40557fecc986bcad6c2fa31c9284",
         "request_ref": "http_fb09fb7191e84f40f48d21b4532a48ef36c84efacd236a30abd075a5a2b2c639",
         "result": {
           "object_type": "quote",
@@ -1174,7 +1188,7 @@
           "schema": "lex-v3-refusal/1"
         },
         "registry_schema": "lex-v3-operation-registry/1",
-        "registry_sha256": "abe40749a2364dcbcf69a4427b0977e0510500345056eed4042b2e4758a53ef0",
+        "registry_sha256": "c40e23fd0da12172415bc594fe3fb2dd945e40557fecc986bcad6c2fa31c9284",
         "request_ref": "http_fb09fb7191e84f40f48d21b4532a48ef36c84efacd236a30abd075a5a2b2c639",
         "result": null,
         "schema": "lex-v3-envelope/1",
@@ -1223,7 +1237,7 @@
           "schema": "lex-v3-refusal/1"
         },
         "registry_schema": "lex-v3-operation-registry/1",
-        "registry_sha256": "abe40749a2364dcbcf69a4427b0977e0510500345056eed4042b2e4758a53ef0",
+        "registry_sha256": "c40e23fd0da12172415bc594fe3fb2dd945e40557fecc986bcad6c2fa31c9284",
         "request_ref": "http_fb09fb7191e84f40f48d21b4532a48ef36c84efacd236a30abd075a5a2b2c639",
         "result": null,
         "schema": "lex-v3-envelope/1",
@@ -1256,7 +1270,7 @@
         "operation_id": "dossier",
         "refusal": null,
         "registry_schema": "lex-v3-operation-registry/1",
-        "registry_sha256": "abe40749a2364dcbcf69a4427b0977e0510500345056eed4042b2e4758a53ef0",
+        "registry_sha256": "c40e23fd0da12172415bc594fe3fb2dd945e40557fecc986bcad6c2fa31c9284",
         "request_ref": "http_fb09fb7191e84f40f48d21b4532a48ef36c84efacd236a30abd075a5a2b2c639",
         "result": {
           "object_type": "work_record",
@@ -1379,7 +1393,7 @@
           "schema": "lex-v3-refusal/1"
         },
         "registry_schema": "lex-v3-operation-registry/1",
-        "registry_sha256": "abe40749a2364dcbcf69a4427b0977e0510500345056eed4042b2e4758a53ef0",
+        "registry_sha256": "c40e23fd0da12172415bc594fe3fb2dd945e40557fecc986bcad6c2fa31c9284",
         "request_ref": "http_fb09fb7191e84f40f48d21b4532a48ef36c84efacd236a30abd075a5a2b2c639",
         "result": null,
         "schema": "lex-v3-envelope/1",
@@ -1421,7 +1435,7 @@
           "schema": "lex-v3-refusal/1"
         },
         "registry_schema": "lex-v3-operation-registry/1",
-        "registry_sha256": "abe40749a2364dcbcf69a4427b0977e0510500345056eed4042b2e4758a53ef0",
+        "registry_sha256": "c40e23fd0da12172415bc594fe3fb2dd945e40557fecc986bcad6c2fa31c9284",
         "request_ref": "http_fb09fb7191e84f40f48d21b4532a48ef36c84efacd236a30abd075a5a2b2c639",
         "result": null,
         "schema": "lex-v3-envelope/1",
@@ -1460,7 +1474,7 @@
           "schema": "lex-v3-refusal/1"
         },
         "registry_schema": "lex-v3-operation-registry/1",
-        "registry_sha256": "abe40749a2364dcbcf69a4427b0977e0510500345056eed4042b2e4758a53ef0",
+        "registry_sha256": "c40e23fd0da12172415bc594fe3fb2dd945e40557fecc986bcad6c2fa31c9284",
         "request_ref": "http_fb09fb7191e84f40f48d21b4532a48ef36c84efacd236a30abd075a5a2b2c639",
         "result": null,
         "schema": "lex-v3-envelope/1",
@@ -1493,7 +1507,7 @@
         "operation_id": "dossier",
         "refusal": null,
         "registry_schema": "lex-v3-operation-registry/1",
-        "registry_sha256": "abe40749a2364dcbcf69a4427b0977e0510500345056eed4042b2e4758a53ef0",
+        "registry_sha256": "c40e23fd0da12172415bc594fe3fb2dd945e40557fecc986bcad6c2fa31c9284",
         "request_ref": "http_fb09fb7191e84f40f48d21b4532a48ef36c84efacd236a30abd075a5a2b2c639",
         "result": {
           "object_type": "work_record",
@@ -1603,7 +1617,7 @@
           "schema": "lex-v3-refusal/1"
         },
         "registry_schema": "lex-v3-operation-registry/1",
-        "registry_sha256": "abe40749a2364dcbcf69a4427b0977e0510500345056eed4042b2e4758a53ef0",
+        "registry_sha256": "c40e23fd0da12172415bc594fe3fb2dd945e40557fecc986bcad6c2fa31c9284",
         "request_ref": "http_fb09fb7191e84f40f48d21b4532a48ef36c84efacd236a30abd075a5a2b2c639",
         "result": null,
         "schema": "lex-v3-envelope/1",
@@ -1636,7 +1650,7 @@
         "operation_id": "evidence_bundle",
         "refusal": null,
         "registry_schema": "lex-v3-operation-registry/1",
-        "registry_sha256": "abe40749a2364dcbcf69a4427b0977e0510500345056eed4042b2e4758a53ef0",
+        "registry_sha256": "c40e23fd0da12172415bc594fe3fb2dd945e40557fecc986bcad6c2fa31c9284",
         "request_ref": "http_fb09fb7191e84f40f48d21b4532a48ef36c84efacd236a30abd075a5a2b2c639",
         "result": {
           "object_type": "evidence_bundle",
@@ -2583,7 +2597,7 @@
             "verified_by": {
               "corpus_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
               "index_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-              "registry_sha256": "abe40749a2364dcbcf69a4427b0977e0510500345056eed4042b2e4758a53ef0"
+              "registry_sha256": "c40e23fd0da12172415bc594fe3fb2dd945e40557fecc986bcad6c2fa31c9284"
             },
             "work_key": "loi-1991-08-10-n3"
           }
@@ -2631,7 +2645,7 @@
           "schema": "lex-v3-refusal/1"
         },
         "registry_schema": "lex-v3-operation-registry/1",
-        "registry_sha256": "abe40749a2364dcbcf69a4427b0977e0510500345056eed4042b2e4758a53ef0",
+        "registry_sha256": "c40e23fd0da12172415bc594fe3fb2dd945e40557fecc986bcad6c2fa31c9284",
         "request_ref": "http_fb09fb7191e84f40f48d21b4532a48ef36c84efacd236a30abd075a5a2b2c639",
         "result": null,
         "schema": "lex-v3-envelope/1",
@@ -2680,7 +2694,7 @@
           "schema": "lex-v3-refusal/1"
         },
         "registry_schema": "lex-v3-operation-registry/1",
-        "registry_sha256": "abe40749a2364dcbcf69a4427b0977e0510500345056eed4042b2e4758a53ef0",
+        "registry_sha256": "c40e23fd0da12172415bc594fe3fb2dd945e40557fecc986bcad6c2fa31c9284",
         "request_ref": "http_fb09fb7191e84f40f48d21b4532a48ef36c84efacd236a30abd075a5a2b2c639",
         "result": null,
         "schema": "lex-v3-envelope/1",
@@ -2722,7 +2736,7 @@
           "schema": "lex-v3-refusal/1"
         },
         "registry_schema": "lex-v3-operation-registry/1",
-        "registry_sha256": "abe40749a2364dcbcf69a4427b0977e0510500345056eed4042b2e4758a53ef0",
+        "registry_sha256": "c40e23fd0da12172415bc594fe3fb2dd945e40557fecc986bcad6c2fa31c9284",
         "request_ref": "http_fb09fb7191e84f40f48d21b4532a48ef36c84efacd236a30abd075a5a2b2c639",
         "result": null,
         "schema": "lex-v3-envelope/1",
@@ -2761,7 +2775,7 @@
           "schema": "lex-v3-refusal/1"
         },
         "registry_schema": "lex-v3-operation-registry/1",
-        "registry_sha256": "abe40749a2364dcbcf69a4427b0977e0510500345056eed4042b2e4758a53ef0",
+        "registry_sha256": "c40e23fd0da12172415bc594fe3fb2dd945e40557fecc986bcad6c2fa31c9284",
         "request_ref": "http_fb09fb7191e84f40f48d21b4532a48ef36c84efacd236a30abd075a5a2b2c639",
         "result": null,
         "schema": "lex-v3-envelope/1",
@@ -2794,7 +2808,7 @@
         "operation_id": "article_history",
         "refusal": null,
         "registry_schema": "lex-v3-operation-registry/1",
-        "registry_sha256": "abe40749a2364dcbcf69a4427b0977e0510500345056eed4042b2e4758a53ef0",
+        "registry_sha256": "c40e23fd0da12172415bc594fe3fb2dd945e40557fecc986bcad6c2fa31c9284",
         "request_ref": "http_fb09fb7191e84f40f48d21b4532a48ef36c84efacd236a30abd075a5a2b2c639",
         "result": {
           "object_type": "provision_history",
@@ -2897,7 +2911,7 @@
           "schema": "lex-v3-refusal/1"
         },
         "registry_schema": "lex-v3-operation-registry/1",
-        "registry_sha256": "abe40749a2364dcbcf69a4427b0977e0510500345056eed4042b2e4758a53ef0",
+        "registry_sha256": "c40e23fd0da12172415bc594fe3fb2dd945e40557fecc986bcad6c2fa31c9284",
         "request_ref": "http_fb09fb7191e84f40f48d21b4532a48ef36c84efacd236a30abd075a5a2b2c639",
         "result": null,
         "schema": "lex-v3-envelope/1",
@@ -2946,7 +2960,7 @@
           "schema": "lex-v3-refusal/1"
         },
         "registry_schema": "lex-v3-operation-registry/1",
-        "registry_sha256": "abe40749a2364dcbcf69a4427b0977e0510500345056eed4042b2e4758a53ef0",
+        "registry_sha256": "c40e23fd0da12172415bc594fe3fb2dd945e40557fecc986bcad6c2fa31c9284",
         "request_ref": "http_fb09fb7191e84f40f48d21b4532a48ef36c84efacd236a30abd075a5a2b2c639",
         "result": null,
         "schema": "lex-v3-envelope/1",
@@ -2985,7 +2999,7 @@
           "schema": "lex-v3-refusal/1"
         },
         "registry_schema": "lex-v3-operation-registry/1",
-        "registry_sha256": "abe40749a2364dcbcf69a4427b0977e0510500345056eed4042b2e4758a53ef0",
+        "registry_sha256": "c40e23fd0da12172415bc594fe3fb2dd945e40557fecc986bcad6c2fa31c9284",
         "request_ref": "http_fb09fb7191e84f40f48d21b4532a48ef36c84efacd236a30abd075a5a2b2c639",
         "result": null,
         "schema": "lex-v3-envelope/1",
@@ -3018,7 +3032,7 @@
         "operation_id": "diff",
         "refusal": null,
         "registry_schema": "lex-v3-operation-registry/1",
-        "registry_sha256": "abe40749a2364dcbcf69a4427b0977e0510500345056eed4042b2e4758a53ef0",
+        "registry_sha256": "c40e23fd0da12172415bc594fe3fb2dd945e40557fecc986bcad6c2fa31c9284",
         "request_ref": "http_fb09fb7191e84f40f48d21b4532a48ef36c84efacd236a30abd075a5a2b2c639",
         "result": {
           "object_type": "diff",
@@ -3718,7 +3732,7 @@
           "schema": "lex-v3-refusal/1"
         },
         "registry_schema": "lex-v3-operation-registry/1",
-        "registry_sha256": "abe40749a2364dcbcf69a4427b0977e0510500345056eed4042b2e4758a53ef0",
+        "registry_sha256": "c40e23fd0da12172415bc594fe3fb2dd945e40557fecc986bcad6c2fa31c9284",
         "request_ref": "http_fb09fb7191e84f40f48d21b4532a48ef36c84efacd236a30abd075a5a2b2c639",
         "result": null,
         "schema": "lex-v3-envelope/1",
@@ -3767,7 +3781,7 @@
           "schema": "lex-v3-refusal/1"
         },
         "registry_schema": "lex-v3-operation-registry/1",
-        "registry_sha256": "abe40749a2364dcbcf69a4427b0977e0510500345056eed4042b2e4758a53ef0",
+        "registry_sha256": "c40e23fd0da12172415bc594fe3fb2dd945e40557fecc986bcad6c2fa31c9284",
         "request_ref": "http_fb09fb7191e84f40f48d21b4532a48ef36c84efacd236a30abd075a5a2b2c639",
         "result": null,
         "schema": "lex-v3-envelope/1",
@@ -3806,7 +3820,7 @@
           "schema": "lex-v3-refusal/1"
         },
         "registry_schema": "lex-v3-operation-registry/1",
-        "registry_sha256": "abe40749a2364dcbcf69a4427b0977e0510500345056eed4042b2e4758a53ef0",
+        "registry_sha256": "c40e23fd0da12172415bc594fe3fb2dd945e40557fecc986bcad6c2fa31c9284",
         "request_ref": "http_fb09fb7191e84f40f48d21b4532a48ef36c84efacd236a30abd075a5a2b2c639",
         "result": null,
         "schema": "lex-v3-envelope/1",
@@ -3839,7 +3853,7 @@
         "operation_id": "changes_in_period",
         "refusal": null,
         "registry_schema": "lex-v3-operation-registry/1",
-        "registry_sha256": "abe40749a2364dcbcf69a4427b0977e0510500345056eed4042b2e4758a53ef0",
+        "registry_sha256": "c40e23fd0da12172415bc594fe3fb2dd945e40557fecc986bcad6c2fa31c9284",
         "request_ref": "http_fb09fb7191e84f40f48d21b4532a48ef36c84efacd236a30abd075a5a2b2c639",
         "result": {
           "object_type": "change_list",
@@ -3936,7 +3950,7 @@
         "operation_id": "changes_in_period",
         "refusal": null,
         "registry_schema": "lex-v3-operation-registry/1",
-        "registry_sha256": "abe40749a2364dcbcf69a4427b0977e0510500345056eed4042b2e4758a53ef0",
+        "registry_sha256": "c40e23fd0da12172415bc594fe3fb2dd945e40557fecc986bcad6c2fa31c9284",
         "request_ref": "http_fb09fb7191e84f40f48d21b4532a48ef36c84efacd236a30abd075a5a2b2c639",
         "result": {
           "object_type": "change_list",
@@ -4011,7 +4025,7 @@
           "schema": "lex-v3-refusal/1"
         },
         "registry_schema": "lex-v3-operation-registry/1",
-        "registry_sha256": "abe40749a2364dcbcf69a4427b0977e0510500345056eed4042b2e4758a53ef0",
+        "registry_sha256": "c40e23fd0da12172415bc594fe3fb2dd945e40557fecc986bcad6c2fa31c9284",
         "request_ref": "http_fb09fb7191e84f40f48d21b4532a48ef36c84efacd236a30abd075a5a2b2c639",
         "result": null,
         "schema": "lex-v3-envelope/1",

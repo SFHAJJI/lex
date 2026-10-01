@@ -96,6 +96,14 @@ public sealed class V3AnswerSamplesTests
         "events[].cursor",
         "events:next_after",
         "answer_drift:next_after",
+        // `as_observed` names its snapshot by the index digest, which moves with `index_sha256`, and that build's corpus
+        // by the corpus digest; the observation number and build time beside them are deterministic and stay pinned.
+        "requested_snapshot",
+        "snapshot.snapshot_id",
+        "snapshot.corpus_sha256",
+        // `coverage` names each snapshot whose text the mount holds by its index digest, the mounted one included, so it
+        // moves with `index_sha256`; the observation number and build time beside it stay pinned.
+        "history.snapshots_with_text[].snapshot_id",
     ];
 
     /// <summary>Whether a path (operation prefix dropped) of an operation's answer is one the fixture re-mints.</summary>
@@ -345,6 +353,7 @@ public sealed class V3AnswerSamplesTests
             await DriveAsync(mount, "ask", "any question: the contained assistant's one card, the same for every question", new { question = "Can I be fired while on sick leave?" }),
             await DriveAsync(mount, "events", "the whole log from its start: a genesis log, one first_sighting per held state", new { }),
             await DriveAsync(mount, "answer_drift", "the whole mount: no revising event in a genesis log, so none enumerated", new { }),
+            await DriveAsync(mount, "as_observed", "the same request as as_of at the mounted build's snapshot: the state that build held, quoted, with its build time as the bound", new { parameters.identifier, parameters.date, parameters.language, snapshot = fixture.IndexSha256 }),
             // `coverage` asks about the mount rather than about a work, so it takes no identifier and no
             // date. It is sampled because its reader is the next one built against a captured answer, and
             // because that reader today requires seventeen paths of which the platform's sample carries

@@ -58,8 +58,7 @@ public sealed class GuardedConstructionCensusTests
     [TestMethod]
     public void EveryConstructionRestrictedTypeInTheSweptAssembliesHasExactlyTheseDoors()
     {
-        CollectionAssert.AreEqual(
-            new[]
+        var expected = new[]
             {
                 "Lex.V3.Api.SyntheticApiState: constructor private instance "
                     + "Lex.V3.Api.SyntheticApiState::.ctor, "
@@ -81,15 +80,18 @@ public sealed class GuardedConstructionCensusTests
                     + "method private instance Lex.V3.Api.V3CorpusMount::ModeUnavailable, "
                     + "method private instance Lex.V3.Api.V3CorpusMount::RefuseAmbiguousVersion, "
                     + "method private instance Lex.V3.Api.V3CorpusMount::RefuseNoVersionForDate, "
+                    + "method private instance Lex.V3.Api.V3CorpusMount::RefuseNoVersionForDate, "
                     + "method private instance "
                     + "Lex.V3.Api.V3CorpusMount::RefuseUnlessCursorOfThisLog, "
                     + "method private instance Lex.V3.Api.V3CorpusMount::RefuseUnlessWorkStates, "
                     + "method private instance Lex.V3.Api.V3CorpusMount::RouteEuropeSearch, "
                     + "method private instance Lex.V3.Api.V3CorpusMount::SearchEurope, "
+                    + "method private instance Lex.V3.Api.V3CorpusMount::SnapshotUnknown, "
                     + "method private instance Lex.V3.Api.V3CorpusMount::Unknown, "
                     + "method private instance Lex.V3.Api.V3CorpusMount::VerifyEurope, "
                     + "method public instance Lex.V3.Api.V3CorpusMount::AnswerDrift, "
                     + "method public instance Lex.V3.Api.V3CorpusMount::ArticleHistory, "
+                    + "method public instance Lex.V3.Api.V3CorpusMount::AsObserved, "
                     + "method public instance Lex.V3.Api.V3CorpusMount::AsOf, "
                     + "method public instance Lex.V3.Api.V3CorpusMount::Ask, "
                     + "method public instance Lex.V3.Api.V3CorpusMount::Browse, "
@@ -113,7 +115,7 @@ public sealed class GuardedConstructionCensusTests
                     + "method public instance Lex.V3.Api.V3CorpusMount::Verify, "
                     + "method public static Lex.V3.Api.V3PlatformOperationOutcome::Refused, "
                     + "method public static Lex.V3.Api.V3PlatformOperationOutcome::Success, "
-                    + "23 compiler-generated",
+                    + "24 compiler-generated",
                 "Lex.V3.Api.V3PlatformSchemaDocuments: constructor private instance "
                     + "Lex.V3.Api.V3PlatformSchemaDocuments::.ctor, "
                     + "constructor private static Lex.V3.Api.V3PlatformSchemaDocuments::.cctor, "
@@ -1740,7 +1742,9 @@ public sealed class GuardedConstructionCensusTests
                 "Lex.V3.Contracts.Source.Scope.ScopeManifestWriteReceipt: constructor internal "
                     + "instance Lex.V3.Contracts.Source.Scope.ScopeManifestWriteReceipt::.ctor, "
                     + "method public static "
-                    + "Lex.V3.Contracts.Source.Scope.ScopeManifestCanonicalWriter::WriteStreaming",
+                    + "Lex.V3.Contracts.Source.Scope.ScopeManifestCanonicalWriter::WriteStreaming, "
+                    + "method public static "
+                    + "Lex.V3.Contracts.Source.Scope.VerifiedScopeManifest::VerifyStreamFromSnapshot",
                 "Lex.V3.Contracts.Source.Scope.VerifiedScopeManifest: constructor internal "
                     + "instance Lex.V3.Contracts.Source.Scope.VerifiedScopeManifest::.ctor, "
                     + "method private static "
@@ -1769,8 +1773,13 @@ public sealed class GuardedConstructionCensusTests
                     + "Lex.V3.Contracts.SyntheticResolveRefusalEnvelope::Create, "
                     + "method public static "
                     + "Lex.V3.Contracts.SyntheticResolveSuccessEnvelope::Create",
-},
-            ClosedSurfaceCensus.GuardedConstruction(CensusScope.SweptHere).ToArray());
+            };
+        var actual = ClosedSurfaceCensus.GuardedConstruction(CensusScope.SweptHere).ToArray();
+        // Keep the expected side literal. Print only differences so a failed remote run supplies
+        // the independently observed surface for review and transcription.
+        CollectionAssert.AreEqual(expected, actual,
+            "Removed or changed pins:\n" + string.Join("\n", expected.Except(actual, StringComparer.Ordinal)) +
+            "\nActual added or changed entries:\n" + string.Join("\n", actual.Except(expected, StringComparer.Ordinal)));
     }
 
     /// <summary>

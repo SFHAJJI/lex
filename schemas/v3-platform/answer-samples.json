@@ -14,7 +14,11 @@
     "log.log_id",
     "events[].cursor",
     "events:next_after",
-    "answer_drift:next_after"
+    "answer_drift:next_after",
+    "requested_snapshot",
+    "snapshot.snapshot_id",
+    "snapshot.corpus_sha256",
+    "history.snapshots_with_text[].snapshot_id"
   ],
   "sampled": [
     {
@@ -101,6 +105,352 @@
             "language": "fra"
           }
         ],
+        "work_key": "loi-1991-08-10-n3"
+      }
+    },
+    {
+      "operation": "as_observed",
+      "object_type": "version_state",
+      "scenario": "the same request as as_of at the mounted build\u0027s snapshot: the state that build held, quoted, with its build time as the bound",
+      "answer": {
+        "articles_not_admitted_note": "articles_not_admitted counts the articles the corpus recorded for the publisher\u0027s document for this state that this state does not hold; the number of articles in this state plus articles_not_admitted is the number of articles the corpus recorded for that document, which provenance counts by disposition token; which articles they are is not held. An article is not admitted whole when the reviewed profile cannot represent every element in it: that can be an article the publisher struck out, and it can equally be an article whose text is complete but which carries a mark the profile does not accept, such as an empty placeholder where a list item was removed",
+        "available_languages": [
+          "fra"
+        ],
+        "basis": "the event log as it stood at the named snapshot: every state of the work its events had sighted up to that build\u0027s last event, a later event of a state replacing an earlier one and a state once held staying held (absence is not a withdrawal); the state applying on the date is selected among them as as_of selects among the mounted states, and the next date is the next one held at that snapshot; the work is named as the mounted index names it",
+        "corpus_sha256": "\u003Cvaries-per-run\u003E",
+        "index_sha256": "\u003Cvaries-per-run\u003E",
+        "publisher": "lu-legilux",
+        "requested_date": "2024-02-01",
+        "requested_identifier": "/lu-legilux/loi-1991-08-10-n3",
+        "requested_language": "fra",
+        "requested_snapshot": "\u003Cvaries-per-run\u003E",
+        "snapshot": {
+          "bound_note": "observed_no_later_than is when the snapshot\u0027s build ran, rounded up to the second, so every state it held was observed no later than that; no observation time is held, so nothing here says when a state was first observed, and no time between two snapshots is placed in either",
+          "corpus_sha256": "\u003Cvaries-per-run\u003E",
+          "mounted": true,
+          "observation": 1,
+          "observation_time_held": false,
+          "observations_in_log": 1,
+          "observed_no_later_than": "2026-10-01T08:00:00Z",
+          "snapshot_id": "\u003Cvaries-per-run\u003E"
+        },
+        "states": [
+          {
+            "applicability_date": "2024-02-01",
+            "article_identities": [
+              "05308b0478c8f6bf9ab81db3514594a5bd4098555db06f5a656ab27130f0d7fb",
+              "09858b46b63bc2137b430ec31647da23bfa65008575b165ff17daa1262cd34a7",
+              "09bab19edb5e9084cbe3cbc2bf02f4e5e1b58e7bea014bb753b67925d9c27fd3",
+              "1085ebb16ee5762fe66b20c89a9b995469be436158a9fdafbe295082f0eff4c4",
+              "1acfd78fefb365ce9ff8e4b6f11f94fbe26a66ddc67ab1f46e9b04b847bb857e",
+              "2a09ae37d170d5008f977ac2119e121e6bcbad4dabb2807b67de8f5e180a2baf",
+              "2ba783abdbe3cfd7736f7e645a19b423fe6940b5e4aa458e01b51d1a555fadc3",
+              "2bcf7567d4fec6a1a48c08e2007848bf9dbcf548c4e759da1cb252870d2dcfb5",
+              "32367ea725c326db7e75a487e2894ca139f791521439fd7800cd99bb76e6ab72",
+              "3ae9e0b3a4df533b44bbc1fe8e47e64b07d208b4c0b549429591c0fb56b22ab3",
+              "3e8328f030e6d0aee15cf057465eeb40fe29e1a7abbb4cb3afcf7d41fe58823c",
+              "3fe7cefa008102ed1dc3d0101c710b082b9d81a36de2d0a950efc800d317426a",
+              "40519d9855a5144d49478ffcd54b19cda6b3e7351771c5594a164ff8a62525e3",
+              "42ce9b04b4413e84bd5a796e49fdc8ad279cafce5fb7449b3feb9aca89421ee2",
+              "445f174a513ecde7a6b0be465d89d85792cbaa38e2edb7623583d1de895489e0",
+              "46e1dd5e589b19fa58047b5cc423d7ba982e7086ffbb868a75b598f14db4dc42",
+              "46e4579a11a5336953829a453a351220e0cbfec1d360ebd8a3413ea7216ab2f7",
+              "479068996300dafdbaeab50031c2c1346bae35bd47bb6c893c81653ca12f6e96",
+              "48e3af1e3ef924eab2a94922f8afb48e72efd50a3f673c9c0c2cc322ef432e40",
+              "506deb4c564247a671500688192f12d70afcef93c2ba466029972d9d272e918c",
+              "52f46a3f576269e76df131dddaf3aea72f93a8f8a75c4efa56299f88fb767bcb",
+              "5550a5c029011ec8a035da9a6245304c2606f178ccc8e7978d13c760a12c5004",
+              "86598b7a320f856c273cac745edbcaf57a903d36a6056e18167e9481f0109f48",
+              "8b046b5215fc50f80bbe9572692efa383f597d1f7784248d6de99edff5112078",
+              "8e52933c1a9ab53149a302147acf2dff609fab85e4958d8412dc4e6d8e611241",
+              "9261b305d0cf29c4b2dc464e7b7895268f959615e42248c7541f9d3e40199439",
+              "9376c79040e6a3873450deaad15f147484d5c5188acf3411d4692d9aa666ae1c",
+              "99eb9108980fda9a992eac4c011e9208868afbb8248b7eb70c0d7da73e4620e2",
+              "9c3876a608dd51d7a9137343e2e05b7a4c3d9a5b13a2b6e1034cadfec607a316",
+              "a5ad2da4adeb2a79bd53bd6bd6ecdae872800e18edcda4ecddf955448a74a3e5",
+              "ac7e7172b739d5a9a8dcb787f32ee229b9fe043c57edb68cffd18ce0d1322fa1",
+              "adf6a2791abb7e0bf2f203c6ad7c0b3dca9b28c06e490c3e9e9364b5ebcff165",
+              "bd7099c8b122e0b8d88023376c46e7c83a75d6a55f9d3685d06945bb3847fa02",
+              "bec3f203c4944135c7ee9ae06563dba6bcda2c03047ecee9d22099dfd9979855",
+              "c22f5f46565e5445d5b993a8d8d7c98142d9c04125d081632fb80ab048424ea1",
+              "c25d9d4e10be346349d4ce09a504c4fb59bef728bfe8f004395a128d7371edba",
+              "c36ab9a17715d87a5aaf5cf6e1da14266df09bda143ed77eb3b4c5d09f952820",
+              "c86fe9cf34f27d8bc5f65ecb91e33b2a8a0ec9127ea03bfe6aa9ca498e499cd3",
+              "d2e7dc693512cfcd5cd4a74cbc84d7982c8047823be319bf1508c7acfc59803b",
+              "d64e53555ed2a62f033950f68d21fbc3fd18083beb7600a0810ca0e15b02d7b0",
+              "e1d9b67433cd3044d665280d885246a0cff401ccfa7d9f964cb03816914f3a83",
+              "e22be08992af33e595a8634239673557fda60035e4521a545ba182b2b81a96ae",
+              "e594010cc633d1d993d0b202e0f2490af8fa2a9de4e74f9be4ea4ae8734dbf26",
+              "e80e7d5b3ebae94402872fca7340d97c4c69662b471aac7fddec0cd76844474d",
+              "f1785e7f507de3baa5d281d37c351095b5ca22d2bc13c14c4cc8cd2a7d5df8d2",
+              "f3c96389f8e28c9a15a4f114bd4506f338444a770fc7a6d17c7910f84ec90b8d",
+              "f4270fe90d947f1c47fb1babfe5b736fc52546e98dd90e74eabf3cdf50998126",
+              "fc1c1fda1d6d768931cf296275582a63259fd60b5078b71f7828f8bfee7a7391",
+              "fcd91b049213cb0d29bb2be694980805aac372fa1d957a0f964d0fcd5baf3630"
+            ],
+            "articles": [
+              {
+                "article_identity_sha256": "05308b0478c8f6bf9ab81db3514594a5bd4098555db06f5a656ab27130f0d7fb",
+                "article_valid_from": "2021-08-22",
+                "validity_conflict": true
+              },
+              {
+                "article_identity_sha256": "09858b46b63bc2137b430ec31647da23bfa65008575b165ff17daa1262cd34a7",
+                "article_valid_from": "2021-08-22",
+                "validity_conflict": true
+              },
+              {
+                "article_identity_sha256": "09bab19edb5e9084cbe3cbc2bf02f4e5e1b58e7bea014bb753b67925d9c27fd3",
+                "article_valid_from": "2021-08-22",
+                "validity_conflict": true
+              },
+              {
+                "article_identity_sha256": "1085ebb16ee5762fe66b20c89a9b995469be436158a9fdafbe295082f0eff4c4",
+                "article_valid_from": "2021-08-22",
+                "validity_conflict": true
+              },
+              {
+                "article_identity_sha256": "1acfd78fefb365ce9ff8e4b6f11f94fbe26a66ddc67ab1f46e9b04b847bb857e",
+                "article_valid_from": "2021-08-22",
+                "validity_conflict": true
+              },
+              {
+                "article_identity_sha256": "2a09ae37d170d5008f977ac2119e121e6bcbad4dabb2807b67de8f5e180a2baf",
+                "article_valid_from": "2021-08-22",
+                "validity_conflict": true
+              },
+              {
+                "article_identity_sha256": "2ba783abdbe3cfd7736f7e645a19b423fe6940b5e4aa458e01b51d1a555fadc3",
+                "article_valid_from": "2021-08-22",
+                "validity_conflict": true
+              },
+              {
+                "article_identity_sha256": "2bcf7567d4fec6a1a48c08e2007848bf9dbcf548c4e759da1cb252870d2dcfb5",
+                "article_valid_from": "2021-08-22",
+                "validity_conflict": true
+              },
+              {
+                "article_identity_sha256": "32367ea725c326db7e75a487e2894ca139f791521439fd7800cd99bb76e6ab72",
+                "article_valid_from": "2023-07-03",
+                "validity_conflict": true
+              },
+              {
+                "article_identity_sha256": "3ae9e0b3a4df533b44bbc1fe8e47e64b07d208b4c0b549429591c0fb56b22ab3",
+                "article_valid_from": "2023-07-03",
+                "validity_conflict": true
+              },
+              {
+                "article_identity_sha256": "3e8328f030e6d0aee15cf057465eeb40fe29e1a7abbb4cb3afcf7d41fe58823c",
+                "article_valid_from": "2021-08-22",
+                "validity_conflict": true
+              },
+              {
+                "article_identity_sha256": "3fe7cefa008102ed1dc3d0101c710b082b9d81a36de2d0a950efc800d317426a",
+                "article_valid_from": "2023-07-03",
+                "validity_conflict": true
+              },
+              {
+                "article_identity_sha256": "40519d9855a5144d49478ffcd54b19cda6b3e7351771c5594a164ff8a62525e3",
+                "article_valid_from": "2021-08-22",
+                "validity_conflict": true
+              },
+              {
+                "article_identity_sha256": "42ce9b04b4413e84bd5a796e49fdc8ad279cafce5fb7449b3feb9aca89421ee2",
+                "article_valid_from": "2023-07-03",
+                "validity_conflict": true
+              },
+              {
+                "article_identity_sha256": "445f174a513ecde7a6b0be465d89d85792cbaa38e2edb7623583d1de895489e0",
+                "article_valid_from": "2021-08-22",
+                "validity_conflict": true
+              },
+              {
+                "article_identity_sha256": "46e1dd5e589b19fa58047b5cc423d7ba982e7086ffbb868a75b598f14db4dc42",
+                "article_valid_from": "2021-08-22",
+                "validity_conflict": true
+              },
+              {
+                "article_identity_sha256": "46e4579a11a5336953829a453a351220e0cbfec1d360ebd8a3413ea7216ab2f7",
+                "article_valid_from": "2021-08-22",
+                "validity_conflict": true
+              },
+              {
+                "article_identity_sha256": "479068996300dafdbaeab50031c2c1346bae35bd47bb6c893c81653ca12f6e96",
+                "article_valid_from": "2023-07-03",
+                "validity_conflict": true
+              },
+              {
+                "article_identity_sha256": "48e3af1e3ef924eab2a94922f8afb48e72efd50a3f673c9c0c2cc322ef432e40",
+                "article_valid_from": "2021-08-22",
+                "validity_conflict": true
+              },
+              {
+                "article_identity_sha256": "506deb4c564247a671500688192f12d70afcef93c2ba466029972d9d272e918c",
+                "article_valid_from": "2021-08-22",
+                "validity_conflict": true
+              },
+              {
+                "article_identity_sha256": "52f46a3f576269e76df131dddaf3aea72f93a8f8a75c4efa56299f88fb767bcb",
+                "article_valid_from": "2021-08-22",
+                "validity_conflict": true
+              },
+              {
+                "article_identity_sha256": "5550a5c029011ec8a035da9a6245304c2606f178ccc8e7978d13c760a12c5004",
+                "article_valid_from": "2021-08-22",
+                "validity_conflict": true
+              },
+              {
+                "article_identity_sha256": "86598b7a320f856c273cac745edbcaf57a903d36a6056e18167e9481f0109f48",
+                "article_valid_from": "2021-08-22",
+                "validity_conflict": true
+              },
+              {
+                "article_identity_sha256": "8b046b5215fc50f80bbe9572692efa383f597d1f7784248d6de99edff5112078",
+                "article_valid_from": "2021-08-22",
+                "validity_conflict": true
+              },
+              {
+                "article_identity_sha256": "8e52933c1a9ab53149a302147acf2dff609fab85e4958d8412dc4e6d8e611241",
+                "article_valid_from": "2021-08-22",
+                "validity_conflict": true
+              },
+              {
+                "article_identity_sha256": "9261b305d0cf29c4b2dc464e7b7895268f959615e42248c7541f9d3e40199439",
+                "article_valid_from": "2021-08-22",
+                "validity_conflict": true
+              },
+              {
+                "article_identity_sha256": "9376c79040e6a3873450deaad15f147484d5c5188acf3411d4692d9aa666ae1c",
+                "article_valid_from": "2021-08-22",
+                "validity_conflict": true
+              },
+              {
+                "article_identity_sha256": "99eb9108980fda9a992eac4c011e9208868afbb8248b7eb70c0d7da73e4620e2",
+                "article_valid_from": "2021-08-22",
+                "validity_conflict": true
+              },
+              {
+                "article_identity_sha256": "9c3876a608dd51d7a9137343e2e05b7a4c3d9a5b13a2b6e1034cadfec607a316",
+                "article_valid_from": "2023-07-03",
+                "validity_conflict": true
+              },
+              {
+                "article_identity_sha256": "a5ad2da4adeb2a79bd53bd6bd6ecdae872800e18edcda4ecddf955448a74a3e5",
+                "article_valid_from": "2023-01-01",
+                "validity_conflict": true
+              },
+              {
+                "article_identity_sha256": "ac7e7172b739d5a9a8dcb787f32ee229b9fe043c57edb68cffd18ce0d1322fa1",
+                "article_valid_from": "2023-07-03",
+                "validity_conflict": true
+              },
+              {
+                "article_identity_sha256": "adf6a2791abb7e0bf2f203c6ad7c0b3dca9b28c06e490c3e9e9364b5ebcff165",
+                "article_valid_from": "2021-08-22",
+                "validity_conflict": true
+              },
+              {
+                "article_identity_sha256": "bd7099c8b122e0b8d88023376c46e7c83a75d6a55f9d3685d06945bb3847fa02",
+                "article_valid_from": "2021-08-22",
+                "validity_conflict": true
+              },
+              {
+                "article_identity_sha256": "bec3f203c4944135c7ee9ae06563dba6bcda2c03047ecee9d22099dfd9979855",
+                "article_valid_from": "2021-08-22",
+                "validity_conflict": true
+              },
+              {
+                "article_identity_sha256": "c22f5f46565e5445d5b993a8d8d7c98142d9c04125d081632fb80ab048424ea1",
+                "article_valid_from": "2021-08-22",
+                "validity_conflict": true
+              },
+              {
+                "article_identity_sha256": "c25d9d4e10be346349d4ce09a504c4fb59bef728bfe8f004395a128d7371edba",
+                "article_valid_from": "2023-01-01",
+                "validity_conflict": true
+              },
+              {
+                "article_identity_sha256": "c36ab9a17715d87a5aaf5cf6e1da14266df09bda143ed77eb3b4c5d09f952820",
+                "article_valid_from": "2021-08-22",
+                "validity_conflict": true
+              },
+              {
+                "article_identity_sha256": "c86fe9cf34f27d8bc5f65ecb91e33b2a8a0ec9127ea03bfe6aa9ca498e499cd3",
+                "article_valid_from": "2023-07-03",
+                "validity_conflict": true
+              },
+              {
+                "article_identity_sha256": "d2e7dc693512cfcd5cd4a74cbc84d7982c8047823be319bf1508c7acfc59803b",
+                "article_valid_from": "2023-07-03",
+                "validity_conflict": true
+              },
+              {
+                "article_identity_sha256": "d64e53555ed2a62f033950f68d21fbc3fd18083beb7600a0810ca0e15b02d7b0",
+                "article_valid_from": "2021-08-22",
+                "validity_conflict": true
+              },
+              {
+                "article_identity_sha256": "e1d9b67433cd3044d665280d885246a0cff401ccfa7d9f964cb03816914f3a83",
+                "article_valid_from": "2023-09-16",
+                "validity_conflict": true
+              },
+              {
+                "article_identity_sha256": "e22be08992af33e595a8634239673557fda60035e4521a545ba182b2b81a96ae",
+                "article_valid_from": "2021-08-22",
+                "validity_conflict": true
+              },
+              {
+                "article_identity_sha256": "e594010cc633d1d993d0b202e0f2490af8fa2a9de4e74f9be4ea4ae8734dbf26",
+                "article_valid_from": "2021-08-22",
+                "validity_conflict": true
+              },
+              {
+                "article_identity_sha256": "e80e7d5b3ebae94402872fca7340d97c4c69662b471aac7fddec0cd76844474d",
+                "article_valid_from": "2021-08-22",
+                "validity_conflict": true
+              },
+              {
+                "article_identity_sha256": "f1785e7f507de3baa5d281d37c351095b5ca22d2bc13c14c4cc8cd2a7d5df8d2",
+                "article_valid_from": "2021-08-22",
+                "validity_conflict": true
+              },
+              {
+                "article_identity_sha256": "f3c96389f8e28c9a15a4f114bd4506f338444a770fc7a6d17c7910f84ec90b8d",
+                "article_valid_from": "2021-08-22",
+                "validity_conflict": true
+              },
+              {
+                "article_identity_sha256": "f4270fe90d947f1c47fb1babfe5b736fc52546e98dd90e74eabf3cdf50998126",
+                "article_valid_from": "2023-07-03",
+                "validity_conflict": true
+              },
+              {
+                "article_identity_sha256": "fc1c1fda1d6d768931cf296275582a63259fd60b5078b71f7828f8bfee7a7391",
+                "article_valid_from": "2021-08-22",
+                "validity_conflict": true
+              },
+              {
+                "article_identity_sha256": "fcd91b049213cb0d29bb2be694980805aac372fa1d957a0f964d0fcd5baf3630",
+                "article_valid_from": "2021-08-22",
+                "validity_conflict": true
+              }
+            ],
+            "articles_not_admitted": 5,
+            "expression_iri": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo/fr",
+            "language": "fra",
+            "next_applicability_date": null,
+            "permalink": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--5bca01f82ef3058cfebe7f8a8a6eb1f1fbeeb32b8a1ea7b2c02ac20963235e3a",
+            "publisher_legal_resource_iri": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo",
+            "publisher_work_iri": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3",
+            "stable_coordinate": "/lu-legilux/loi-1991-08-10-n3/2024-02-01",
+            "state_sha256": "5bca01f82ef3058cfebe7f8a8a6eb1f1fbeeb32b8a1ea7b2c02ac20963235e3a",
+            "text_held": true,
+            "validity_conflict_count": 49,
+            "validity_conflict_rule": "article_valid_from is the publisher\u0027s article-level applicability date; validity_conflict is true when it is stated and differs from the state\u0027s applicability_date"
+          }
+        ],
+        "text_note": "a state the mounted index still holds is served in full (text_held true); a state only an earlier build held is named by its permalink, digest and source bodies from the log, without text (text_held false), because no generation that held its text is mounted",
         "work_key": "loi-1991-08-10-n3"
       }
     },
@@ -530,7 +880,7 @@
         "verified_by": {
           "corpus_sha256": "\u003Cvaries-per-run\u003E",
           "index_sha256": "\u003Cvaries-per-run\u003E",
-          "registry_sha256": "abe40749a2364dcbcf69a4427b0977e0510500345056eed4042b2e4758a53ef0"
+          "registry_sha256": "c40e23fd0da12172415bc594fe3fb2dd945e40557fecc986bcad6c2fa31c9284"
         },
         "works": [
           {
@@ -830,7 +1180,7 @@
         "verified_by": {
           "corpus_sha256": "\u003Cvaries-per-run\u003E",
           "index_sha256": "\u003Cvaries-per-run\u003E",
-          "registry_sha256": "abe40749a2364dcbcf69a4427b0977e0510500345056eed4042b2e4758a53ef0"
+          "registry_sha256": "c40e23fd0da12172415bc594fe3fb2dd945e40557fecc986bcad6c2fa31c9284"
         },
         "work_key": "loi-1991-08-10-n3"
       }
@@ -879,6 +1229,24 @@
           }
         ],
         "counts_note": "counts are of rows the index holds; totals.articles and languages[].articles count the articles the index holds, and the corpus can have recorded more articles than the index holds: members.article_outcomes counts what it recorded; a missing publisher date is counted as missing and never dropped; articles_with_searchable_text is counted where the article carries a publisher date, which is what the capability cells measure, and so it and articles_without_publisher_date are not addends; when a language is requested, requested_language echoes it and only languages and capability_cells are narrowed to it, and every other member, totals included, is the whole mount\u0027s",
+        "history": {
+          "history_begins": "2026-10-01T08:00:00Z",
+          "log_records_builds": true,
+          "note": "the builds the mounted Luxembourg log records (its snapshots), and those whose text this mount holds: the mounted build, and each earlier generation the retention line keeps beside it (S7-A09: referenced generations indefinitely, the last build of each UTC day for 90 days, each UTC month\u0027s earliest indefinitely), held to the log when the mount opened; a snapshot without text is named by the log alone, and as_observed answers its states without text; every time here is a build\u0027s, an upper bound on observation, never an observation time",
+          "retention_policy": null,
+          "snapshots_in_log": 1,
+          "snapshots_with_text": [
+            {
+              "built_at": "2026-10-01T08:00:00Z",
+              "observation": 1,
+              "retained_as": [
+                "mounted"
+              ],
+              "snapshot_id": "\u003Cvaries-per-run\u003E"
+            }
+          ],
+          "snapshots_without_text": 0
+        },
         "languages": [
           {
             "articles": 49,
@@ -930,7 +1298,7 @@
           "corpus_sha256": "\u003Cvaries-per-run\u003E",
           "index_sha256": "\u003Cvaries-per-run\u003E",
           "publisher": "lu-legilux",
-          "registry_sha256": "abe40749a2364dcbcf69a4427b0977e0510500345056eed4042b2e4758a53ef0"
+          "registry_sha256": "c40e23fd0da12172415bc594fe3fb2dd945e40557fecc986bcad6c2fa31c9284"
         },
         "not_held": [
           {
@@ -947,7 +1315,7 @@
           },
           {
             "item": "build_time_and_currency",
-            "reason": "this report states no build time and no build time of the corpus file is held, so nothing here says how current these counts are; the index\u0027s event log records when each build ran (events: log.built_at), an upper bound on when its corpus was observed and no measure of currency against the publisher; the corpus and index digests name exactly which artifacts are mounted"
+            "reason": "history gives when each build ran, an upper bound on when its corpus was observed and never an observation time, and nothing here says how current these counts are against the publisher; no build time of the corpus file itself is held; the corpus and index digests name exactly which artifacts are mounted"
           },
           {
             "item": "legal_status",
@@ -957,15 +1325,11 @@
         "operations": {
           "not_served_data": [
             {
-              "data_needed": "observation times: when this corpus first observed each held state (observed_from), recorded by builds chained to their predecessors in the event log; a single build holds no observation time, so no answer can be replayed as it was observed",
-              "operation": "as_observed"
-            },
-            {
               "data_needed": "the concept data attached to EU works: EuroVoc descriptors, EU directory codes and subject matters as the Publications Office records them; the EU index holds none of them",
               "operation": "concepts"
             },
             {
-              "data_needed": "each held state\u0027s publication date beside its observation time (observed_from), so a date is answered with what a reader could have known on it, never with the publisher\u0027s valid-from date; the observation times need builds chained to their predecessors",
+              "data_needed": "each held state\u0027s publication date beside its observation time (observed_from), so a date is answered with what a reader could have known on it, never with the publisher\u0027s valid-from date; the observation times need each Luxembourg body\u0027s capture time in the corpus, which no build records yet: a build\u0027s time bounds observation only from above",
               "operation": "knowable_on"
             },
             {
@@ -974,7 +1338,6 @@
             }
           ],
           "not_served_operations": [
-            "as_observed",
             "concepts",
             "knowable_on",
             "transposition"
@@ -984,6 +1347,7 @@
           "served_operations": [
             "answer_drift",
             "article_history",
+            "as_observed",
             "as_of",
             "ask",
             "browse",
@@ -3324,6 +3688,7 @@
         ],
         "genesis_note": "this log comes from one observation with no predecessor, so it holds only first_sighting; first_sighting means first present in this log and does not say when the publisher published the text or when it was fetched; observed_from is null because no observation time is held; log.built_at is when the build ran, an upper bound on when its corpus was observed and never an observation time; a revision (validity_revised, interval_closed, file_replaced, withdrawn_from_source, ...) needs a later build compared against this one",
         "has_more": false,
+        "legacy_note": null,
         "log": {
           "ancestors": [],
           "basis": "genesis",
@@ -4304,7 +4669,7 @@
         "verified_by": {
           "corpus_sha256": "\u003Cvaries-per-run\u003E",
           "index_sha256": "\u003Cvaries-per-run\u003E",
-          "registry_sha256": "abe40749a2364dcbcf69a4427b0977e0510500345056eed4042b2e4758a53ef0"
+          "registry_sha256": "c40e23fd0da12172415bc594fe3fb2dd945e40557fecc986bcad6c2fa31c9284"
         },
         "work_key": "loi-1991-08-10-n3"
       }
@@ -4387,7 +4752,7 @@
         "verified_by": {
           "corpus_sha256": "\u003Cvaries-per-run\u003E",
           "index_sha256": "\u003Cvaries-per-run\u003E",
-          "registry_sha256": "abe40749a2364dcbcf69a4427b0977e0510500345056eed4042b2e4758a53ef0"
+          "registry_sha256": "c40e23fd0da12172415bc594fe3fb2dd945e40557fecc986bcad6c2fa31c9284"
         },
         "work_key": "loi-1991-08-10-n3"
       }
@@ -4463,7 +4828,7 @@
         "verified_by": {
           "corpus_sha256": "\u003Cvaries-per-run\u003E",
           "index_sha256": "\u003Cvaries-per-run\u003E",
-          "registry_sha256": "abe40749a2364dcbcf69a4427b0977e0510500345056eed4042b2e4758a53ef0"
+          "registry_sha256": "c40e23fd0da12172415bc594fe3fb2dd945e40557fecc986bcad6c2fa31c9284"
         },
         "work_key": "loi-1991-08-10-n3"
       }
@@ -5548,7 +5913,7 @@
         "verified_by": {
           "corpus_sha256": "\u003Cvaries-per-run\u003E",
           "index_sha256": "\u003Cvaries-per-run\u003E",
-          "registry_sha256": "abe40749a2364dcbcf69a4427b0977e0510500345056eed4042b2e4758a53ef0"
+          "registry_sha256": "c40e23fd0da12172415bc594fe3fb2dd945e40557fecc986bcad6c2fa31c9284"
         },
         "what_would_answer": [
           "new_official_observation"
