@@ -3,6 +3,27 @@
 Updated 2026-10-01 by the driver. This file replaces the issue-comment ledgers. It is rewritten in
 every pull request that changes what is served, what is next or what is blocked.
 
+## Retained expression production pairings (Codex, 2026-10-01)
+
+This slice depends on PR869. It retains the expression producer's own paired enumerations
+and the corrigendum tripwire built from them. Reopening verifies those enumerations, rebinds
+count templates to original batches and artifact IDs, and repeats the existing private
+production and tripwire fold. Expression derivation, episode, tripwire and lineage must
+match the held originals byte for byte. Both production orders retain checkpoints.
+
+The original 33 new cases passed at 392567c6: CI 36856266903 reported 5,370 passed and
+22 skipped; the required watch exited zero. Claude found no material production defect but
+requested the merged parent/base and combined census fix. The one repair includes merged869
+1a63b61a and the 261/140/7 candidate/guarded/declined union. It adds explicit null-root integrity
+refusals in all three readers, validates one pass value in 1..2 before conversion, and adds three
+null-root regression cases. The repaired head 39b0f98f passed CI 36858496167. Merged LU parent c9e5a40a is now included,
+with the explicit EU null-root guard preserved. Fresh combined CI gates merge; local builds/tests remain deferred under
+the acquisition memory guard. No complete offline mount process is claimed.
+
+The current store's protection is checked again. Changed protection refuses the original
+byte claim because protection is part of derivation identity. Replay reports zero publisher
+requests. Complete offline acquisition composition and independent mount builds remain pending.
+
 ## Retained Luxembourg enumeration checkpoints (Codex, 2026-10-01)
 
 This slice depends on pending PR869. The LU executor retains its closed invariant plan wire
