@@ -1,4 +1,4 @@
-# Lex V3 status
+﻿# Lex V3 status
 
 Updated 2026-10-01 by the driver. This file replaces the issue-comment ledgers. It is rewritten in
 every pull request that changes what is served, what is next or what is blocked.
@@ -23,6 +23,11 @@ PR858 merged as an explicit prerequisite. Draft CI may validate this follow-on w
 local heavy slot; final review and merge wait for PR858. Required local Release build, fast and
 affected ingest checks, review and final CI remain outstanding. No adapter integration, publisher traffic or full-LU fit is claimed.
 
+Current evidence: exact8e3226de CI36820458287 passed 5,268 tests with22 skipped.
+The branch now includes integration65922 and PR858 head2b45518e. Fresh exact-head CI
+and the final merged858 head are required. Under the10:35 standing order, Claude can
+review read-only while memory is below4GB; no local build/test or full-LU fit is claimed.
+
 ## LU assertion snapshot storage (Codex, 2026-10-01)
 
 Reversible driver decision: prepare immutable assertion storage using the existing checked chunk
@@ -32,7 +37,7 @@ cross-range dependencies. The header binds run, observation and ordered census/a
 references. These references do not prove publisher delivery; production integration must compare
 against independently replayed source proofs and check census membership before admission.
 
-The draft requires contiguous subject groups and refuses repeated groups or digest collisions.
+The snapshot requires contiguous subject groups and refuses repeated groups or digest collisions.
 It bounds each serialized record to 4 MiB without truncation. It retains one row during opening,
 compact index entries, and one requested subject's assertions during lookup. No full-population
 memory or disk measurement is claimed. Scope resolution and corpus construction still materialize
@@ -47,9 +52,13 @@ assertion is loosened. At 168fbe90, repaired Release build passed with zero warn
 required fast tests passed (3,105 succeeded, one skipped), and affected ingest tests passed
 (82 succeeded, two skipped). Exact-head CI 36812117581 is green. Cross-family review is pending.
 
+The 10:35 UTC standing order permits a read-only cross-family review during the active EU
+run, with CI providing current full-suite evidence while free memory is below 4 GB. The branch
+now includes integration65922; its fresh exact-head CI and review are still required.
+
 This slice uses the existing legacy chunk writer; PR #855's small-chunk profile is now merged.
 EU decoder recovery has priority, with local heavy checks serialized. No publisher requests were
-made for this draft.
+made for this slice.
 
 
 ## Retained custody storage consolidation (Codex, 2026-10-01)

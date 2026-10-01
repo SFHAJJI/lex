@@ -1,4 +1,4 @@
-using Lex.V3.TestSupport;
+﻿using Lex.V3.TestSupport;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
 namespace Lex.V3.Ingest.Tests.Census;
