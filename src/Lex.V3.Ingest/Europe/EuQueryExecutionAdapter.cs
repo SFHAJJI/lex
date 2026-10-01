@@ -1,3 +1,4 @@
+using DocumentAcquisitionData = (System.Collections.Generic.IReadOnlyDictionary<int, Lex.V3.Ingest.CorpusAcquisitionOutcome>? Outcomes, System.Collections.Generic.IReadOnlyDictionary<int, Lex.V3.Ingest.Europe.EuDocumentLadderResult>? LadderResults, System.Collections.Generic.IReadOnlyDictionary<int, Lex.V3.Ingest.Europe.EuMintedRowAccounting>? MintedRows, Lex.V3.Ingest.Europe.EuQueryExecutionRefusalDetail? Refusal);
 using System.Text.Json.Serialization;
 using Lex.V3.Contracts;
 using Lex.V3.Contracts.Custody;
@@ -370,6 +371,9 @@ public enum EuQueryExecutionRefusal
     /// </remarks>
     [JsonStringEnumMemberName("corrigendum_tripwire_batches_not_paired")]
     CorrigendumTripwireBatchesNotPaired = 26,
+
+    [JsonStringEnumMemberName("document_checkpoint_not_retained")]
+    DocumentCheckpointNotRetained = 27,
 }
 
 public sealed class EuQueryExecutionRefusalDetail
@@ -605,6 +609,18 @@ public sealed class EuQueryExecutionResult
         DecodeOffendingIri = decodeOffendingIri;
         DecodeSnapshotRefusal = decodeSnapshotRefusal;
     }
+
+    public SourceArtifactRef? DocumentAcquisitionCheckpointRef { get; private init; }
+
+    internal EuQueryExecutionResult WithDocumentCheckpoint(SourceArtifactRef reference) =>
+        new(Topology, FamilyOutcomes, ObservedObjectCount, ObservedExpressionCount,
+            ReductionExclusions, WatermarkWitnessPlan, RootBinding, WitnessReconciliation,
+            WitnessTerminations, ScopeManifestReceipt, ScopeManifestCanonicalSha256, DocumentAcquisitionOutcomesByOrdinal,
+            DocumentLadderResultsByOrdinal, ObservedManifestationTypesByCelex, ObservedExpressionsByCelex, MintedRowsByOrdinal,
+            DateAxioms, LocatedAmendmentObservations, LocatedAmendmentProduction, CorrigendumTripwires,
+            CorpusRecordSetRef, CorpusRecordSetReceipt, CorpusRecordSet, HeldBodyContentClasses,
+            Completion, Refusal, DecodeRefusal, DecodeOffendingIri,
+            DecodeSnapshotRefusal, WitnessTraversalRefusal) { DocumentAcquisitionCheckpointRef = reference };
 
     public static EuQueryExecutionResult Delivered(
         SourceProfileTopology topology,
@@ -1094,7 +1110,7 @@ public sealed class EuQueryExecutionResult
 /// lex-event-20260904T213727510Z-671a8c2563684ab49048677997ceef1c.
 /// </para>
 /// </remarks>
-public sealed class EuQueryExecutionAdapter
+public sealed partial class EuQueryExecutionAdapter
 {
     private readonly ICustodyStore _custodyStore;
     private readonly EuRepeatedEnumerationExecutor _executor;
@@ -1877,12 +1893,11 @@ public sealed class EuQueryExecutionAdapter
         // ordinal. Extracted into RunDocumentAcquisitionAsync -- see that method's own remarks for
         // exactly what lands here versus what refuses the whole run instead, and for why the gate
         // moved there. ----
-        var (documentAcquisitionOutcomesByOrdinal, documentLadderResultsByOrdinal,
-                mintedRowAccounting, acquisitionRefusal) =
-            await RunDocumentAcquisitionAsync(
+        var documentCapture = await RunDocumentAcquisitionWithCheckpointAsync(
                 reopenedManifest, mintedAddressesByObjectRef, documentFetchRendererSource,
                 documentFetchSourceWitness, wireBudget, cancellationToken)
             .ConfigureAwait(false);
+        var (documentAcquisitionOutcomesByOrdinal, documentLadderResultsByOrdinal, mintedRowAccounting, acquisitionRefusal) = documentCapture.Data;
         if (acquisitionRefusal is not null)
         {
             return EuQueryExecutionResult.Refused(topology, outcomes, acquisitionRefusal);
@@ -2130,7 +2145,7 @@ public sealed class EuQueryExecutionAdapter
             locatedAmendmentObservations: locatedAmendmentObservations,
             decodedSnapshots: bodySnapshots,
             recordSetResult: recordSetResult,
-            corrigendumTripwires: corrigendumTripwires);
+            corrigendumTripwires: corrigendumTripwires).WithDocumentCheckpoint(documentCapture.Checkpoint!);
     }
 
     /// <summary>
@@ -2254,22 +2269,18 @@ public sealed class EuQueryExecutionAdapter
     /// shape this door's own closed <see cref="CorpusAcquisitionRefusalReason"/> vocabulary cannot
     /// represent. Never both, never neither.
     /// </returns>
-    internal async Task<(
-        IReadOnlyDictionary<int, CorpusAcquisitionOutcome>? Outcomes,
-        IReadOnlyDictionary<int, EuDocumentLadderResult>? LadderResults,
-        IReadOnlyDictionary<int, EuMintedRowAccounting>? MintedRows,
-        EuQueryExecutionRefusalDetail? Refusal)> RunDocumentAcquisitionAsync(
+    private async Task<DocumentAcquisitionData> RunDocumentAcquisitionCoreAsync(
         ScopeManifest reopenedManifest,
         IReadOnlyDictionary<SourceObjectRef, IReadOnlyList<EuDocumentFetchAddress>> mintedAddressesByObjectRef,
         MachineQueryRendererSource documentFetchRendererSource,
-        BoundMachineRequest documentFetchSourceWitness,
+        BoundMachineRequest? documentFetchSourceWitness,
         WireRequestBudget wireBudget,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken, DocumentLadderReplay context)
     {
         ArgumentNullException.ThrowIfNull(reopenedManifest);
         ArgumentNullException.ThrowIfNull(mintedAddressesByObjectRef);
         ArgumentNullException.ThrowIfNull(documentFetchRendererSource);
-        ArgumentNullException.ThrowIfNull(documentFetchSourceWitness);
+        if (!context.IsReplay) ArgumentNullException.ThrowIfNull(documentFetchSourceWitness);
         ArgumentNullException.ThrowIfNull(wireBudget);
 
         // Defect nine's own fix: the accepted-ordinal set is computed once, here, before the loop,
@@ -2336,14 +2347,16 @@ public sealed class EuQueryExecutionAdapter
             foreach (var candidateAddress in ladder)
             {
                 attemptedMediaTypes.Add(candidateAddress.MediaType);
-                var plan = new EuDocumentFetchPlan(candidateAddress);
-                var bound = plan.Bind(
-                    $"urn:uuid:{Guid.NewGuid():D}",
-                    $"urn:uuid:{Guid.NewGuid():D}",
-                    documentFetchRendererSource);
-                var attempt = await _executor.RunDocumentFetchAsync(
-                        bound.Request, documentFetchSourceWitness, wireBudget, cancellationToken)
-                    .ConfigureAwait(false);
+                EuDocumentFetchAttemptResult attempt;
+                if (context.IsReplay)
+                    attempt = await context.FetchAsync(_custodyStore, rowOrdinal, candidateAddress, cancellationToken).ConfigureAwait(false);
+                else
+                {
+                    var plan = new EuDocumentFetchPlan(candidateAddress);
+                    var bound = plan.Bind($"urn:uuid:{Guid.NewGuid():D}", $"urn:uuid:{Guid.NewGuid():D}", documentFetchRendererSource);
+                    attempt = await _executor.RunDocumentFetchAsync(bound.Request, documentFetchSourceWitness!, wireBudget, cancellationToken).ConfigureAwait(false);
+                    context.Capture(rowOrdinal, candidateAddress, attempt);
+                }
                 if (attempt.Evidence is null)
                 {
                     if (attempt.Refusal == EuDocumentFetchAttemptRefusal.RobotsBootstrapRefused)
