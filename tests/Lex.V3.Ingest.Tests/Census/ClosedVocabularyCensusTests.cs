@@ -1,4 +1,4 @@
-using Lex.V3.TestSupport;
+﻿using Lex.V3.TestSupport;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
 namespace Lex.V3.Ingest.Tests.Census;
@@ -57,7 +57,7 @@ public sealed class ClosedVocabularyCensusTests
                 "Lex.V3.Ingest.CorpusRecordSetCompletionState: Complete, Partial",
                 "Lex.V3.Ingest.CorpusRecordSetReadRefusalKind: CustodyBytesNotRetained, "
                     + "CustodyUnavailable, RetainedBytesAreNotThisSet",
-                "Lex.V3.Ingest.CorpusRecordSetWriteRefusalKind: RecordSetNotRetained",
+                "Lex.V3.Ingest.CorpusRecordSetWriteRefusalKind: RecordSetNotRetained, RebuildIdentityDisagrees",
                 "Lex.V3.Ingest.Europe.EuAnnexEvidenceBinder+PageLabelState: Missing, Invalid, Valid",
                 "Lex.V3.Ingest.Europe.EuAnnexEvidenceBindingRefusal: None, ProfileDigestMismatch, "
                     + "ProfileInvalid, ProfileEvidenceMismatch, SourceEvidenceMissingOrAmbiguous, "
