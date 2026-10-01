@@ -29,6 +29,12 @@ public sealed record V3CorpusMountVerification(bool Verified, string? Detail, So
 public sealed record V3GenerationSource(string PredecessorDirectory, IReadOnlySet<string> Referenced);
 
 /// <summary>
+/// Whether a mount's generations hold to its log (<see cref="V3CorpusMountWriter.VerifyGenerationsAsync"/>): what failed,
+/// or null; and when they hold, the retention line's decision they carry (null when the mount keeps none).
+/// </summary>
+public sealed record V3GenerationsVerification(string? Failure, V3RetentionDecision? Decision);
+
+/// <summary>
 /// Writes a delivered <see cref="V3FirstMountBuildResult"/> as the <c>v3-corpus</c> directory
 /// <c>Lex.V3.Api</c> mounts, and reads such a directory back through the public verifiers.
 /// </summary>
@@ -109,9 +115,18 @@ public static class V3CorpusMountWriter
                 written.Add(new V3CorpusMountWrittenFile(file.Name, file.Bytes.Length, Sha256(file.Bytes.Span)));
             }
 
-            var kept = generations is null
-                ? Array.Empty<V3RetainedGeneration>()
-                : await WriteGenerationsAsync(build, target, generations, cancellationToken).ConfigureAwait(false);
+            IReadOnlyList<V3RetainedGeneration> kept;
+            if (generations is not null)
+            {
+                kept = await WriteGenerationsAsync(build, target, generations, cancellationToken).ConfigureAwait(false);
+            }
+            else
+            {
+                // Written without its predecessor's directory, a chained build holds none of its earlier builds, and says so.
+                await WriteRetentionRecordAsync(target, build.LuxembourgIndex!.IndexRef, build.LuxembourgIndex.IndexBytes, cancellationToken)
+                    .ConfigureAwait(false);
+                kept = [];
+            }
             var report = RenderReport(build, written, kept);
             await File.WriteAllBytesAsync(reportTemporary, report, cancellationToken).ConfigureAwait(false);
             File.Move(reportTemporary, reportPath, overwrite: true);
@@ -185,6 +200,29 @@ public static class V3CorpusMountWriter
         await File.WriteAllBytesAsync(Path.Combine(root, RetentionFileName), RenderRetention(decision, generations.Referenced), cancellationToken)
             .ConfigureAwait(false);
         return decision.Retained;
+    }
+
+    /// <summary>
+    /// Records, for a chained mount that holds none of its earlier builds, the retention line's decision over none held: each
+    /// earlier build absent, none claimed. A genesis log has no earlier build and gets no record.
+    /// </summary>
+    internal static async Task WriteRetentionRecordAsync(
+        string directory,
+        SourceArtifactRef indexRef,
+        ReadOnlyMemory<byte> indexBytes,
+        CancellationToken cancellationToken)
+    {
+        var log = LogOf(indexRef, indexBytes.Span);
+        if (log.Count < 2)
+        {
+            return;
+        }
+
+        var none = new HashSet<string>(StringComparer.Ordinal);
+        var root = Path.Combine(directory, GenerationsDirectoryName);
+        Directory.CreateDirectory(root);
+        await File.WriteAllBytesAsync(Path.Combine(root, RetentionFileName), RenderRetention(V3GenerationRetention.Decide(log, none, none), none), cancellationToken)
+            .ConfigureAwait(false);
     }
 
     /// <summary>A Luxembourg index's log as the reader hands it out, read from its verified bytes.</summary>
@@ -273,7 +311,7 @@ public static class V3CorpusMountWriter
                     Path.Combine(directory, V3FirstMountBuildResult.EuropeIndexFileName), europeManifest, corpus.ArtifactRef,
                     cancellationToken)
                 .ConfigureAwait(false);
-            if (!asGeneration && await VerifyGenerationsAsync(directory, luxembourg, cancellationToken).ConfigureAwait(false) is { } generationFailure)
+            if (!asGeneration && (await VerifyGenerationsAsync(directory, luxembourg, cancellationToken).ConfigureAwait(false)).Failure is { } generationFailure)
             {
                 return new V3CorpusMountVerification(false, generationFailure, corpus.ArtifactRef);
             }
@@ -291,10 +329,11 @@ public static class V3CorpusMountWriter
     /// The generations a mount keeps, each held to the mounted log: its name an index this log names as a predecessor, its
     /// files exactly a generation's, itself a mount that verifies, its Luxembourg index that digest and its corpus the one
     /// its observation names, its log exactly the mounted log up to its own observation; and the retention record the
-    /// decision the retention line makes from the generations held and the references recorded. Null when every check
-    /// holds or there are none; otherwise what failed.
+    /// decision the retention line makes from the generations held and the references recorded. The mount writer's
+    /// verification and the API's mount both run it, so a mount is held to the same checks where it is built and where it
+    /// is served.
     /// </summary>
-    private static async Task<string?> VerifyGenerationsAsync(
+    public static async Task<V3GenerationsVerification> VerifyGenerationsAsync(
         string directory,
         LuxembourgIndexReader mounted,
         CancellationToken cancellationToken)
@@ -306,8 +345,8 @@ public static class V3CorpusMountWriter
             // A genesis log has no earlier build; a chained one must say what became of each (review of #880): without the
             // record, a mount whose generations were all removed would verify as one that never had any.
             return log.Count > 1
-                ? $"the mounted log records {log.Count - 1} earlier build(s) and the mount holds no {GenerationsDirectoryName}/{RetentionFileName} saying what became of them"
-                : null;
+                ? new V3GenerationsVerification($"the mounted log records {log.Count - 1} earlier build(s) and the mount holds no {GenerationsDirectoryName}/{RetentionFileName} saying what became of them", null)
+                : new V3GenerationsVerification(null, null);
         }
 
         var mountedLog = LuxembourgIndexPredecessor.TryRead(
@@ -318,7 +357,7 @@ public static class V3CorpusMountWriter
         var generations = V3GenerationRetention.GenerationsOf(log).ToDictionary(static generation => generation.IndexSha256, StringComparer.Ordinal);
         if (Directory.GetFiles(root).Select(Path.GetFileName).Order(StringComparer.Ordinal).ToArray() is not [RetentionFileName])
         {
-            return $"{GenerationsDirectoryName} holds files other than {RetentionFileName}, or not it";
+            return new V3GenerationsVerification($"{GenerationsDirectoryName} holds files other than {RetentionFileName}, or not it", null);
         }
 
         var held = Directory.GetDirectories(root).Select(static path => Path.GetFileName(path)!).ToHashSet(StringComparer.Ordinal);
@@ -327,19 +366,19 @@ public static class V3CorpusMountWriter
             var path = Path.Combine(root, name);
             if (!generations.TryGetValue(name, out var generation))
             {
-                return $"generation {name} is no earlier build of the mounted log";
+                return new V3GenerationsVerification($"generation {name} is no earlier build of the mounted log", null);
             }
 
             if (Directory.GetDirectories(path).Length != 0 ||
                 !Directory.GetFiles(path).Select(Path.GetFileName).Order(StringComparer.Ordinal).SequenceEqual(GenerationFiles.Order(StringComparer.Ordinal)))
             {
-                return $"generation {name} does not hold exactly a generation's files";
+                return new V3GenerationsVerification($"generation {name} does not hold exactly a generation's files", null);
             }
 
             var verified = await VerifyAsync(path, asGeneration: true, cancellationToken).ConfigureAwait(false);
             if (!verified.Verified)
             {
-                return $"generation {name} does not verify: {verified.Detail}";
+                return new V3GenerationsVerification($"generation {name} does not verify: {verified.Detail}", null);
             }
 
             var indexBytes = await File.ReadAllBytesAsync(Path.Combine(path, V3FirstMountBuildResult.LuxembourgIndexFileName), cancellationToken).ConfigureAwait(false);
@@ -348,7 +387,7 @@ public static class V3CorpusMountWriter
             if (!string.Equals(indexSha256, name, StringComparison.Ordinal) ||
                 !string.Equals(verified.CorpusRef!.Sha256, observation.CorpusSha256, StringComparison.Ordinal))
             {
-                return $"generation {name} is not the build its observation names";
+                return new V3GenerationsVerification($"generation {name} is not the build its observation names", null);
             }
 
             var own = LuxembourgIndexPredecessor.TryRead(
@@ -357,7 +396,7 @@ public static class V3CorpusMountWriter
             if (!own.Observations.SequenceEqual(mountedLog.Observations.Take((int)generation.Observation)) ||
                 !own.Events.SequenceEqual(mountedLog.Events.Take((int)observation.LastSeq)))
             {
-                return $"generation {name}'s log is not the mounted log up to its observation";
+                return new V3GenerationsVerification($"generation {name}'s log is not the mounted log up to its observation", null);
             }
         }
 
@@ -372,17 +411,17 @@ public static class V3CorpusMountWriter
             .ToHashSet(StringComparer.Ordinal);
         if (dropped.Overlaps(held))
         {
-            return $"{RetentionFileName} calls a generation dropped that the mount holds";
+            return new V3GenerationsVerification($"{RetentionFileName} calls a generation dropped that the mount holds", null);
         }
 
         var decision = V3GenerationRetention.Decide(log, held.Union(dropped).ToHashSet(StringComparer.Ordinal), referenced);
         if (!held.SetEquals(decision.Retained.Select(static kept => kept.IndexSha256)) ||
             !RenderRetention(decision, referenced).SequenceEqual(recorded))
         {
-            return $"{RetentionFileName} is not the decision the retention line makes from the generations held";
+            return new V3GenerationsVerification($"{RetentionFileName} is not the decision the retention line makes from the generations held", null);
         }
 
-        return null;
+        return new V3GenerationsVerification(null, decision);
     }
 
     private static object Reference(SourceArtifactRef reference) => new { resourceId = reference.ResourceId, reference.Sha256 };
