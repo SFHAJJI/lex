@@ -18,6 +18,27 @@ namespace Lex.V3.Ingest.Tests;
 [TestClass]
 public sealed class V3CorpusResolveMountTests
 {
+    // These helpers deliberately insert synthetic ambiguity/collision articles. Complete their
+    // schema3 source rows too; these fixture coordinates do not represent retained publisher bytes.
+    private static EuropeIndexBuilder.ArticleSourceRow[] CompleteSyntheticEuropeSourceRows(SqliteConnection connection)
+    {
+        using var insert = connection.CreateCommand();
+        insert.CommandText = """
+            INSERT INTO article_sources
+            SELECT article_identity_sha256,$digest,$uri FROM articles a
+            WHERE NOT EXISTS (SELECT 1 FROM article_sources s WHERE s.article_identity_sha256=a.article_identity_sha256)
+            """;
+        insert.Parameters.AddWithValue("$digest", new string('e', 64));
+        insert.Parameters.AddWithValue("$uri", "https://publications.europa.eu/resource/cellar/synthetic-test-package");
+        insert.ExecuteNonQuery();
+        using var command = connection.CreateCommand();
+        command.CommandText = "SELECT article_identity_sha256,package_sha256,official_source_uri FROM article_sources ORDER BY article_identity_sha256";
+        using var reader = command.ExecuteReader();
+        var rows = new List<EuropeIndexBuilder.ArticleSourceRow>();
+        while (reader.Read()) rows.Add(new(reader.GetString(0), reader.GetString(1), reader.GetString(2)));
+        return rows.ToArray();
+    }
+
     internal static readonly DateTimeOffset ObservedAt =
         new(2026, 9, 18, 7, 0, 0, TimeSpan.Zero);
 
@@ -1085,7 +1106,7 @@ public sealed class V3CorpusResolveMountTests
                 using var stamp = connection.CreateCommand();
                 stamp.CommandText = "UPDATE stamp SET logical_rows_sha256=$logical WHERE stamp_id=1";
                 stamp.Parameters.AddWithValue(
-                    "$logical", EuropeIndexBuilder.HashLogicalRows(members, lines, gaps, articles));
+                    "$logical", EuropeIndexBuilder.HashLogicalRows(members, lines, gaps, articles, CompleteSyntheticEuropeSourceRows(connection)));
                 Assert.AreEqual(1, stamp.ExecuteNonQuery());
             }
 
@@ -1144,7 +1165,7 @@ public sealed class V3CorpusResolveMountTests
                 using var stamp = connection.CreateCommand();
                 stamp.CommandText = "UPDATE stamp SET logical_rows_sha256=$logical WHERE stamp_id=1";
                 stamp.Parameters.AddWithValue(
-                    "$logical", EuropeIndexBuilder.HashLogicalRows(members, lines, gaps, articles));
+                    "$logical", EuropeIndexBuilder.HashLogicalRows(members, lines, gaps, articles, CompleteSyntheticEuropeSourceRows(connection)));
                 Assert.AreEqual(1, stamp.ExecuteNonQuery());
             }
 
@@ -2281,7 +2302,7 @@ public sealed class V3CorpusResolveMountTests
                 using var stamp = connection.CreateCommand();
                 stamp.CommandText = "UPDATE stamp SET logical_rows_sha256=$logical WHERE stamp_id=1";
                 stamp.Parameters.AddWithValue(
-                    "$logical", EuropeIndexBuilder.HashLogicalRows(members, lines, gaps, articles));
+                    "$logical", EuropeIndexBuilder.HashLogicalRows(members, lines, gaps, articles, CompleteSyntheticEuropeSourceRows(connection)));
                 Assert.AreEqual(1, stamp.ExecuteNonQuery());
             }
 

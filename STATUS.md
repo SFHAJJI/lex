@@ -3,6 +3,61 @@
 Updated 2026-10-01 by the driver. This file replaces the issue-comment ledgers. It is rewritten in
 every pull request that changes what is served, what is next or what is blocked.
 
+## EU article source coordinates (Codex, 2026-10-01)
+
+Reversible driver decision: schema 3 preserves the admitted Formex package SHA-256 and checked
+original request URI for every indexed article. The logical index hash binds these source rows;
+reopen requires exact article coverage. The reader returns work, expression, article, wording
+date, language and package entry with those fields. Package SHA identifies the complete ZIP.
+Article text/body digests, new public API operations and custody replay remain future work.
+
+Schema 2 mounts retain their original file/logical-hash and capability checks, with source-coordinate
+support unavailable. Schema comparison normalizes only CRLF/LF SQL spelling; new schema SQL uses
+LF on every checkout. Tests include the exact 198-article bilingual schema 2 canary and a CRLF variant,
+producer-bound source fields, hostile digest/URI/coverage/version changes, and complete synthetic
+source rows in the existing ambiguity fixtures. The fixed-input index was derived twice identically:
+61,440 bytes, SHA-256 153b5852a3c55ab85bf5064757638051a9f67c2109cdd16bedef6fce9aab7123.
+
+After correcting the reproduced initial fixture/schema/census failures, validation at 53ceaffe passed
+a clean build (39.43 s), required fast (3,085 passed, one platform skip, 73.580 s), and 105 affected
+ingest tests (three skips: two live EU tests and the owner-named mounted temporal gate, 134.765 s).
+Exact commands, initial failures and successful results remain under C:/lex-v3/lanes/eu-source-*.
+Required Claude review at 7893b2e7 returned MERGE with no material findings. It reproduced fast,
+the deterministic bytes and 108 ingest passes with three skips after the #839 integration refresh.
+The single repair restores prose spacing. The reader accepts hash-bound absolute HTTP/HTTPS URIs;
+the current producer only emits its checked Publications Office HTTPS route. Initial CI passed;
+fresh exact-head CI remains required after this documentation repair and any base refresh.
+
+Population checkpoint: EU retry 3 ended after 490 of 20,000 allowed requests, with 79 of 82 census
+families proven and three retained HTTP 503 maintenance responses. PR #840 narrowly retries that
+exact body within the existing four-attempt limit. It merged at a1752729 after final green CI.
+A fresh 60-request three-family proof/reopen
+must precede the next full run. The previous storage plan reserved only 1 GB; the panel's new
+3 GB floor requires updated sizing and runtime guards before launch. No new full run has started. The new governor checks free space every 100 ms and stops only
+its owned process tree below 3.5 GiB; scheduling delays and foreign writes remain limits. Both normal
+child exit and an induced safe resource stop were tested. The current conservative retry-4 proposal
+requires 8,026,491,262 free bytes before and after freeze; this host does not yet meet it.
+Reclaimed 894,621,742 bytes of inactive ignored legacy Ingest/test build output; preserved source,
+web, Git data, custody and frozen evidence. Further measured sizing and recovery remain required.
+Offline Luxembourg run 2 measured 70,855,000 additional retained bytes for 9,000 synthetic subjects
+and 61,000 admitted assertions through semantic/typed/scope stages. It excludes later stages and
+relations and does not establish whole-population fit.
+
+Panel answer Q-20261001-0049-codex: no spending or new worker; finish EU on this host first.
+The completed scope audit checked Stage 1 S1-A01/S1-A02, accepted Luxembourg Candidate 6 and
+issue #420's bounded acceptance (not a PR). Candidate 6 sections 1 and 6 require a resource row for
+every finite-universe resource, including metadata/relations when bodies are excluded; its subject
+universe cannot be defined by admitted records. Reversible decision: retain the whole metadata
+census, and apply the existing never-ingest, pointer, quarantine and admission gates to bodies.
+The measured S=1,986,924, A=9,672,378 and G=221,852 remain metadata planning counts, not acquired
+body counts. Audit and authority hashes: C:/lex-v3/lanes/lu-launch-scope-audit-20261001.md.
+
+Next Luxembourg work is bounded partition acquisition, derivation and independent verification,
+followed by disk-backed assembly with global relation/original-Act dependencies preserved. Measure
+one partition end to end first. Partitioning is not implemented yet. Use 3 GiB as the conservative
+free-space floor and stop our own run with a margin before it. No production signing, credentials,
+deployment or promotion.
+
 ## Retained EU maintenance response retry (Codex, 2026-10-01)
 
 The fresh full EU retry ended after 490 of 20,000 requests with 79 of 82 census families proven.

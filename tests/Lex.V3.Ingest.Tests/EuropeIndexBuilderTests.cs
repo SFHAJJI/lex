@@ -17,7 +17,7 @@ public sealed class EuropeIndexBuilderTests
     {
         var digest = Convert.ToHexStringLower(SHA256.HashData(
             EuropeIndexBuilder.BuildFixedInputDeterminismEvidence()));
-        Assert.AreEqual("e95fee7c89ab32bbfada9bbf79fb87a8e2237b622c2e71115d1da82c234032f9", digest);
+        Assert.AreEqual("153b5852a3c55ab85bf5064757638051a9f67c2109cdd16bedef6fce9aab7123", digest);
     }
 
     [TestMethod]
@@ -105,6 +105,95 @@ public sealed class EuropeIndexBuilderTests
         var gap = reader.Search("eng", new DateOnly(2016, 4, 28), new DateOnly(2016, 4, 28), "Regulation");
         Assert.AreEqual(V3IndexCapabilityLookupOutcome.FilterNotSupportedByIndex, gap.Outcome);
         Assert.IsEmpty(gap.ArticleIdentities);
+    }
+
+    [TestMethod]
+    [DataRow(false)]
+    [DataRow(true)]
+    public async Task SourceCoordinatesPreserveAdmittedPackageAndExactArticleBinding(bool french)
+    {
+        var envelope = await RetainedGdprEnvelopeAsync(acquireFrenchExpression: french);
+        var built = EuropeIndexBuilder.TryBuild(envelope, out var refusal, out var detail);
+        Assert.IsNotNull(built, $"{refusal}: {detail}");
+        var corpus = LexCorpus6Builder.TryBuild(envelope, out _, out _)!;
+        using var reader = EuropeIndexReader.OpenAndVerify(
+            built.IndexRef, built.IndexBytes.Span, corpus.ArtifactRef, built.CapabilityManifest);
+        Assert.IsTrue(reader.HasArticleSourceEvidence);
+        var admitted = envelope.BodyComposition.Envelope.FormexMainBodyLegalContent!.Outcomes
+            .Single(static value => value.Disposition == EuFormexMainBodyLegalContentDisposition.Admitted);
+        var inventory = admitted.Source.AcquiredInventory!;
+        foreach (var article in admitted.Articles)
+        {
+            var evidence = reader.ReadArticleSourceEvidence(article.IdentitySha256);
+            Assert.IsNotNull(evidence);
+            Assert.AreEqual(inventory.SourceReceipt.Reference.ContentSha256, evidence.PackageSha256);
+            Assert.AreEqual(inventory.TransportBinding.RequestEvidence.Uri, evidence.OfficialSourceUri);
+            Assert.AreEqual(admitted.Source.ExpressionIdentity.PublisherWorkId, evidence.PublisherWorkId);
+            Assert.AreEqual(article.PublisherExpressionId, evidence.PublisherExpressionId);
+            Assert.AreEqual(article.PublisherIdentifier, evidence.PublisherIdentifier);
+            Assert.AreEqual(article.PackageEntry, evidence.PackageEntry);
+            Assert.AreEqual(french ? "fra" : "eng", evidence.Language);
+            Assert.AreEqual("2016-04-27", evidence.WordingDate);
+            Assert.AreEqual(article.IdentitySha256, evidence.ArticleIdentitySha256);
+        }
+        Assert.IsNull(reader.ReadArticleSourceEvidence(new string('0', 64)));
+    }
+
+    [TestMethod]
+    [DataRow(false)]
+    [DataRow(true)]
+    public async Task ActualFrozenSchema2MountRemainsReadableWithoutInventingSourceCoordinates(bool carriageReturnSchema)
+    {
+        var fixture = Path.Combine(AppContext.BaseDirectory, "Fixtures", "EuDocumentFetch");
+        using var compressed = File.OpenRead(Path.Combine(fixture, "legacy-europe-index-schema2-gzip.bin"));
+        using var gzip = new System.IO.Compression.GZipStream(compressed, System.IO.Compression.CompressionMode.Decompress);
+        using var output = new MemoryStream();
+        await gzip.CopyToAsync(output);
+        var bytes = output.ToArray();
+        const string indexSha = "77f38ce099bf4adb1c1d42d4af2a6682b6d0bfd24a5b70111cf949afcd98ecc0";
+        Assert.AreEqual(indexSha, Convert.ToHexStringLower(SHA256.HashData(bytes)));
+        var capabilityBytes = await File.ReadAllBytesAsync(Path.Combine(fixture, "legacy-europe-index-schema2-capability.bin"));
+        Assert.AreEqual("97fa74ef5d47ce7c07320cbfede2463d654e713e0d3a873dae1441bf8b259c22",
+            Convert.ToHexStringLower(SHA256.HashData(capabilityBytes)));
+        var capabilitySha = V3IndexCapabilityManifestArtifact.ComputeSha256(capabilityBytes);
+        var capability = V3IndexCapabilityManifestArtifact.ParseAndVerify(
+            new SourceArtifactRef(LexCorpus6Builder.ResourceIdOf(capabilitySha), capabilitySha),
+            capabilityBytes, PublisherId.EuEurLex, indexSha);
+        var mountedDigest = indexSha;
+        if (carriageReturnSchema)
+        {
+            bytes = MutateDatabase(bytes, "PRAGMA writable_schema=ON; UPDATE sqlite_schema SET sql=replace(sql,char(10),char(13)||char(10)) WHERE sql IS NOT NULL; PRAGMA writable_schema=OFF;");
+            mountedDigest = Convert.ToHexStringLower(SHA256.HashData(bytes));
+            Assert.IsTrue(V3IndexCapabilityManifest.TryCreate(PublisherId.EuEurLex, mountedDigest,
+                capability.Cells.Select(cell => new V3IndexCapabilityCell(cell.Publisher, mountedDigest,
+                    cell.Operation, cell.Column, cell.Field, cell.Language, cell.PeriodFrom, cell.PeriodTo,
+                    cell.Population)).ToArray(), out var rebound, out var refusal), refusal.ToString());
+            capability = rebound!;
+        }
+        const string corpusSha = "cd36530f70421ab2efe543a31871266ac64823d75b419155c95806c7ec04dae5";
+        using var reader = EuropeIndexReader.OpenAndVerify(
+            new SourceArtifactRef(LexCorpus6Builder.ResourceIdOf(mountedDigest), mountedDigest), bytes,
+            new SourceArtifactRef(LexCorpus6Builder.ResourceIdOf(corpusSha), corpusSha), capability);
+        Assert.AreEqual(198, reader.ArticleCount);
+        Assert.IsFalse(reader.HasArticleSourceEvidence);
+        CollectionAssert.AreEqual(new[] { "eng", "fra" }, reader.SearchableLanguages().ToArray());
+        var article = reader.ResolveExact("32016R0679").First().ArticleIdentities.First();
+        Assert.IsNull(reader.ReadArticleSourceEvidence(article));
+    }
+
+    [TestMethod]
+    [DataRow("UPDATE article_sources SET package_sha256=printf('%064d',0)")]
+    [DataRow("UPDATE article_sources SET official_source_uri='https://example.invalid/substitution'")]
+    [DataRow("DELETE FROM article_sources WHERE rowid=(SELECT min(rowid) FROM article_sources)")]
+    [DataRow("PRAGMA user_version=2")]
+    [DataRow("UPDATE stamp SET schema_identity='lex-v3-europe-index/2'")]
+    public async Task ReaderRejectsSourceSubstitutionMissingCoordinatesAndVersionMixing(string sql)
+    {
+        var envelope = await RetainedGdprEnvelopeAsync();
+        var built = EuropeIndexBuilder.TryBuild(envelope, out var refusal, out var detail);
+        Assert.IsNotNull(built, $"{refusal}: {detail}");
+        var corpus = LexCorpus6Builder.TryBuild(envelope, out _, out _)!;
+        AssertHostileDatabaseRefused(built, corpus.ArtifactRef, sql);
     }
 
     [TestMethod]
