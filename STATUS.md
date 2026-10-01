@@ -1076,7 +1076,8 @@ reversible: events are scoped to states (no work-level events); the cursor names
 `answer_drift`'s future rows are date intervals per revising event (stated in the answer).
 Deferred to the next index schema: predecessor chaining (the builder takes the previous verified
 index, copies its log unchanged and appends comparison events), `observed_from` from the route
-evidence, and every revision event.
+evidence, and every revision event. The web lane claimed predecessor chaining on 2026-10-01
+(PR #862, the web lane's order under "Next, in order").
 
 `ask` (PR #759) answers the containment and nothing else (Decisions 51 and 91, S4-A05): every
 request, whatever the question, is a success envelope under the `point` verdict whose result is a
@@ -2633,7 +2634,8 @@ publisher, ...". The same wording is in the provenance answer, its test pin, the
 census and the web preview's copy. G1 (a replaced publisher file mints a new version and a
 `file_replaced` event), G3 (nothing hard-deleted across builds) and G4 (as-observed answering;
 `as_observed` and `knowable_on` are registered and not served) need predecessor chaining with
-observation times, which follows the first mount; see the event-log question (b) below. G2's
+observation times, which follows the first mount (claimed by the web lane in PR #862); see the
+event-log question (b) below. G2's
 detached signature comes from the release pipeline (item 7). The mount is the fixture, so this
 proves the path, not a corpus.
 
@@ -2988,7 +2990,8 @@ recorded by PR #862:
    mounted-corpus run once the first mount exists. Replay G1 to G5 (`33-product-spec.md`): G2 snapshot
    determinism and G5 independent verifiability run on the real handler (PR #770). G1 version
    immutability, G3 bitemporal completeness and G4 as-observed answering need predecessor
-   chaining with observation times, so they follow the first mount and the event-log ruling. What
+   chaining with observation times, so they follow the first mount and the event-log ruling
+   (predecessor chaining is the web lane's since PR #862). What
    is left of the launch contract's machine-gates line after that was "V2 absent from the image",
    which the image rehearsal now checks (PR #831, item 7). Ruling 2's gates over the real mounted
    corpus: PR #838 derives the temporal set from any mount, PR #839 the refusal set, PR #842 the
