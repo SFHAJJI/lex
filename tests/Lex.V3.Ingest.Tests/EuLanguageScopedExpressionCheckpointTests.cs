@@ -74,6 +74,7 @@ public sealed partial class EuLanguageScopedExpressionProducerTests
     [TestMethod]
     [DataRow("schema")]
     [DataRow("batch")]
+    [DataRow("plan_identity")]
     [DataRow("run")]
     [DataRow("profile")]
     [DataRow("derivation")]
@@ -87,6 +88,7 @@ public sealed partial class EuLanguageScopedExpressionProducerTests
         {
             case "schema": root["schema"] = "lex-eu-expression-production-checkpoint/99"; break;
             case "batch": root["expression"]!["batch"]![0] = OtherWork; break;
+            case "plan_identity": root["expression"]!["plan_resource_id"] = $"urn:uuid:{Guid.NewGuid():D}"; break;
             case "run": root["expression"]!["run"]!["resource_id"] = $"urn:uuid:{Guid.NewGuid():D}"; break;
             case "profile": root["expression"]!["profile"]!["resource_id"] = $"urn:uuid:{Guid.NewGuid():D}"; break;
             case "derivation": root["derivation_sha256"] = root["episode_sha256"]!.DeepClone(); break;
@@ -97,6 +99,7 @@ public sealed partial class EuLanguageScopedExpressionProducerTests
         var exception = await Assert.ThrowsExactlyAsync<CustodyIntegrityException>(() => EuLanguageScopedExpressionProducer.ReopenAsync(
             store, new SourceArtifactRef($"urn:uuid:{Guid.NewGuid():D}", held.Reference.ContentSha256), CancellationToken.None));
         if (change == "batch") StringAssert.Contains(exception.Message, "batch does not match");
+        if (change == "plan_identity") StringAssert.Contains(exception.Message, "plan identity differs");
         if (change is "derivation" or "episode" or "omit_objects") StringAssert.Contains(exception.Message, "differs from the original");
     }
 

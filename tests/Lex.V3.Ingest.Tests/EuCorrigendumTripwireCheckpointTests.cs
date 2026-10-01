@@ -89,6 +89,25 @@ public sealed partial class EuCorrigendumTripwireProducerTests
         Assert.AreEqual(writes, store.CreateCallCount);
     }
 
+    [TestMethod]
+    [DataRow(false)]
+    [DataRow(true)]
+    public async Task CheckpointHoldFailureRefusesTheProduction(bool expressionCheckpoint)
+    {
+        var schema = expressionCheckpoint ? "lex-eu-expression-production-checkpoint/1" : "lex-eu-tripwire-production-checkpoint/1";
+        var store = new CountingCustodyStore(new EuAcquisitionTestFixture.EuInMemoryCustodyStore(), failSchema: schema);
+        var (result, _, _) = await RunAsync(FourLanguageRows(), CorrigendumRows(), store);
+        Assert.IsFalse(result.Delivered);
+        Assert.AreEqual(expressionCheckpoint ? EuCorrigendumTripwireProductionRefusal.ExpressionProductionRefused
+            : EuCorrigendumTripwireProductionRefusal.TripwireNotRetained, result.Refusal);
+        Assert.AreEqual(1, store.FailedCreateCount);
+        Assert.IsNull(result.CheckpointRef);
+        Assert.AreEqual(!expressionCheckpoint, result.Expressions!.Delivered);
+        StringAssert.Contains(result.Detail, "checkpoint hold refused");
+        if (expressionCheckpoint)
+            Assert.AreEqual(EuLanguageScopedExpressionProductionRefusal.DerivationNotRetained, result.Expressions.Refusal);
+    }
+
     private static async Task<JsonNode> TripwireRootAsync(EuAcquisitionTestFixture.EuInMemoryCustodyStore store,
         EuCorrigendumTripwireProductionResult original) => JsonNode.Parse(Encoding.UTF8.GetString(
             (await store.ReadByDigestAsync(original.CheckpointRef!.Sha256, CancellationToken.None)).Span))!;

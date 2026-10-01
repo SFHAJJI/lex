@@ -74,6 +74,8 @@ public sealed partial class EuLanguageScopedExpressionProducer
         var glue = new RepeatedEnumerationDeliveryReopenGlue(store);
         foreach (var count in new[] { receipt.Delivery.CountA, receipt.Delivery.CountB })
         {
+            if (family.PlanResourceId != count.QueryPlanRef.ResourceId)
+                throw new CustodyIntegrityException("Expression plan identity differs from the retained count.");
             var evidence = await glue.ReopenPageEvidenceAsync(count, cancellationToken).ConfigureAwait(false);
             var parameter = evidence.QueryInput.OrderedParameters.Single(value => value.Name == "pass_id");
             if (parameter.Kind != MachineQueryParameterKind.BoundedInteger || parameter.IntegerValue is not { } pass)

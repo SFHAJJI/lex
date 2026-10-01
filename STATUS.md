@@ -3466,3 +3466,11 @@ artifacts, rehashed output and cross-acquisition pairing substitutions, and canc
 Thirty new cases total await current-source CI; initial expression-only CI is still running.
 
 Initial expression-only CI36832422429 at e7f78050 passed5290 tests, skipped22 and failed15. Fourteen failures came from the unused shared budget's invalid limit1 (the contract requires at least2); corrected to2 with an explicit zero-spend postcondition. One construction pin remains. The combined30-case expression/tripwire head needs fresh CI, local validation and review.
+
+Combined CI36833259271 at e0e1aa75 passed all30 new cases:5314 passed,22 skipped,2 failures.
+The old lineage failure fixture assumed lineage was the last write; it now targets lineage's
+schema bytes and verifies exactly one failed write. Two added cases require checkpoint hold
+failures to refuse the enclosing production. A self-audit also added a direct check that both
+retained count plan IDs match the archived request plan ID, with a substitution case (33 new
+cases total). Three compiled construction rows were transcribed with old-literal verification
+and log digest in pr-873-pin-transcription.json. Fresh CI/local validation/review remain required.
