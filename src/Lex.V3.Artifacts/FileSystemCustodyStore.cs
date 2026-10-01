@@ -330,7 +330,8 @@ public sealed class FileSystemCustodyStore : ICustodyStore
                 }
                 var full = written == bytes.Length;
                 var status = decoder.Decompress(buffer.AsSpan(offset, available - offset),
-                    full ? extra : bytes.AsSpan(written), out var consumed, out var produced);
+                    full ? extra : bytes.AsSpan(written, Math.Min(64 * 1024, bytes.Length - written)),
+                    out var consumed, out var produced);
                 offset += consumed;
                 if (full && produced != 0)
                     throw new CustodyIntegrityException("The decompressed custody object exceeds its promised length.");
