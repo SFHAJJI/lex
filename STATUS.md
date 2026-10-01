@@ -1118,7 +1118,7 @@ CI evidence are recorded in the pull request before merge.
 
 ## Heads
 
-- `v3/integration`: `c27012f4` (2026-10-01, PR #885 merged). Build 45 s. Fast lane
+- `v3/integration`: `c9e5a40a` (2026-10-01, PR #872 merged). Build 45 s. Fast lane
   (`eng/test-fast.ps1`): 3,077 tests, 3,076 pass, 1 skipped (the review of PR #828). Ingest suite: green on CI for PR #760
   (the CI `dotnet` job runs the whole solution on every pull request, about 7 min on the runner;
   green for PR #834);
@@ -2665,13 +2665,19 @@ launch contract's "`verify` resolves every citation the product emitted").
   - a state the mounted index lacks is served in full from the newest retained generation that holds
     it, with `text_held: true` and `text_from` naming that generation;
   - `text_from` is null for a state the mounted index holds;
-  - a state no held build holds stays identity only, without text.
+  - a state no held build holds stays identity only, without text;
+  - a work the mounted build no longer holds at all is found through the log by its stable work
+    coordinate, and answered from its generation (review of #889). An identifier the log never held
+    keeps `identifier_unknown`.
 - **`verify`:** a pinned permalink whose digest a later build replaced at its coordinate is verified
   in the retained generation that holds it:
   - `digest_matches`, with `held_in` naming the generation and `superseded_by` the mounted state that
     replaced it;
   - `verified_by` is the generation's own corpus and index, and the sources are its own;
   - with the generation pruned, it is `pinned_digest_mismatch` naming the current state, as before.
+  - The generation is asked before any refusal over the current states. So the permalink resolves
+    when the coordinate holds another state, several (one per language), or none any more, and
+    `superseded_by` is null in the last case (review of #889).
   - A driver decision: the verdict stays `digest_matches`, because the digest does match the retained
     text. The superseded state is named beside it, so a citation checker keeps working and a reader
     sees that the citation is no longer the current text.
@@ -2679,7 +2685,11 @@ launch contract's "`verify` resolves every citation the product emitted").
   - `as_observed` at the first build's snapshot serves the original state from the generation;
   - the permalink emitted before the rewording verifies there, naming the reworded state;
   - with the generation pruned, the same requests answer without text and as a mismatch;
-  - removing the generation lookup from `verify` fails the test.
+  - removing the generation lookup from `verify` fails the test;
+  - a later build that holds the work no longer at all (chained, from the complete envelope, which
+    holds no Luxembourg state) answers `as_observed` from the generation by the work's coordinate,
+    and verifies the old permalink with `superseded_by` null. Reverting either repair fails that
+    test.
 - **What is left of predecessor chaining** is the data lane's part: observation times
   (`observed_from`) once a Luxembourg body's capture time reaches the corpus, then `knowable_on` and
   withdrawal.

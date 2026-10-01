@@ -117,7 +117,7 @@
         "available_languages": [
           "fra"
         ],
-        "basis": "the event log as it stood at the named snapshot: every state of the work its events had sighted up to that build\u0027s last event, a later event of a state replacing an earlier one and a state once held staying held (absence is not a withdrawal); the state applying on the date is selected among them as as_of selects among the mounted states, and the next date is the next one held at that snapshot; the work is named as the mounted index names it",
+        "basis": "the event log as it stood at the named snapshot: every state of the work its events had sighted up to that build\u0027s last event, a later event of a state replacing an earlier one and a state once held staying held (absence is not a withdrawal); the state applying on the date is selected among them as as_of selects among the mounted states, and the next date is the next one held at that snapshot; the work is named as the mounted index names it, or by its stable work coordinate when only the log still holds it",
         "corpus_sha256": "\u003Cvaries-per-run\u003E",
         "index_sha256": "\u003Cvaries-per-run\u003E",
         "publisher": "lu-legilux",

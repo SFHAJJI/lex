@@ -119,6 +119,60 @@ public sealed class V3CorpusGenerationQuoteTests
         Assert.AreEqual(JsonValueKind.Null, today.GetProperty("superseded_by").ValueKind);
     }
 
+    /// <summary>
+    /// The review of #889: a later build that holds the work no longer at all (the complete envelope's Luxembourg part
+    /// holds no state), chained to the first. The coordinate holds no current state, so <c>verify</c> must ask the
+    /// generation before refusing, and <c>as_observed</c> must find the work through the log by its stable coordinate.
+    /// </summary>
+    [TestMethod]
+    public async Task AWorkTheMountedBuildNoLongerHoldsIsStillAnsweredFromItsGeneration()
+    {
+        var (first, firstBuilt, _) = await LuxembourgIndexBuilderTests.BuildStateEnvelopeAsync();
+        var second = await LexCorpus6BuilderTests.CompleteProfileEnvelopeAsync();
+        var predecessor = LuxembourgIndexPredecessor.TryRead(firstBuilt.IndexRef, firstBuilt.IndexBytes.Span, out _, out _);
+        var secondBuilt = LuxembourgIndexBuilder.TryBuild(second, predecessor, LuxembourgIndexBuilderTests.Later, out var refusal, out var detail);
+        Assert.IsNotNull(secondBuilt, $"{refusal}: {detail}");
+        var generation = WriteMount(first, firstBuilt);
+        var root = WriteMount(second, secondBuilt);
+        try
+        {
+            var kept = Path.Combine(root, V3CorpusMountWriter.GenerationsDirectoryName, firstBuilt.IndexRef.Sha256);
+            Directory.CreateDirectory(kept);
+            foreach (var file in Directory.GetFiles(generation)) File.Copy(file, Path.Combine(kept, Path.GetFileName(file)));
+            await V3CorpusMountWriter.WriteRetentionRecordAsync(root, secondBuilt.IndexRef, secondBuilt.IndexBytes, CancellationToken.None,
+                new HashSet<string>(StringComparer.Ordinal) { firstBuilt.IndexRef.Sha256 });
+            using var mount = await V3CorpusMount.OpenAsync(root, CancellationToken.None);
+            Assert.IsNotNull(mount);
+
+            var sighted = (await EnvelopeAsync(mount, "/api/v3/events", "events", new { })).Result!.Value.GetProperty("events")[0];
+            var workKey = sighted.GetProperty("work_key").GetString()!;
+            var date = sighted.GetProperty("applicability_date").GetString()!;
+            var identifier = $"/lu-legilux/{workKey}";
+            var current = await EnvelopeAsync(mount, "/api/v3/as_of", "as_of", new { identifier, date });
+            Assert.AreEqual("identifier_unknown", current.Refusal?.Code, "the mounted build holds the work no longer");
+
+            var observed = (await EnvelopeAsync(mount, "/api/v3/as_observed", "as_observed", new { identifier, date, snapshot = firstBuilt.IndexRef.Sha256 })).Result!.Value;
+            var state = observed.GetProperty("states").EnumerateArray().Single();
+            Assert.IsTrue(state.GetProperty("text_held").GetBoolean());
+            Assert.AreEqual(firstBuilt.IndexRef.Sha256, state.GetProperty("text_from").GetProperty("snapshot_id").GetString());
+
+            var verified = (await EnvelopeAsync(mount, "/api/v3/verify", "verify", new { identifier = state.GetProperty("permalink").GetString() })).Result!.Value;
+            Assert.AreEqual("digest_matches", verified.GetProperty("verdict").GetString());
+            Assert.AreEqual(firstBuilt.IndexRef.Sha256, verified.GetProperty("held_in").GetProperty("snapshot_id").GetString());
+            Assert.AreEqual(JsonValueKind.Null, verified.GetProperty("superseded_by").ValueKind, "no current state replaced it at that coordinate");
+
+            var never = await EnvelopeAsync(mount, "/api/v3/as_observed", "as_observed", new { identifier = "/lu-legilux/not-a-held-work", date, snapshot = firstBuilt.IndexRef.Sha256 });
+            Assert.AreEqual("identifier_unknown", never.Refusal?.Code, "a work the log never held keeps the refusal");
+        }
+        finally
+        {
+            foreach (var directory in new[] { generation, root })
+            {
+                if (Directory.Exists(directory)) Directory.Delete(directory, recursive: true);
+            }
+        }
+    }
+
     [TestMethod]
     public async Task WithoutTheGenerationTheSameRequestsAnswerWithoutTextAndAsAMismatch()
     {

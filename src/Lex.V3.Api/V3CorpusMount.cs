@@ -420,7 +420,7 @@ internal sealed class V3CorpusMount : IDisposable
         "the event log as it stood at the named snapshot: every state of the work its events had sighted up to that build's last event, " +
         "a later event of a state replacing an earlier one and a state once held staying held (absence is not a withdrawal); the state " +
         "applying on the date is selected among them as as_of selects among the mounted states, and the next date is the next one held at " +
-        "that snapshot; the work is named as the mounted index names it";
+        "that snapshot; the work is named as the mounted index names it, or by its stable work coordinate when only the log still holds it";
 
     internal const string AsObservedBoundNote =
         "observed_no_later_than is when the snapshot's build ran, rounded up to the second, so every state it held was observed no later " +
@@ -498,10 +498,26 @@ internal sealed class V3CorpusMount : IDisposable
                 "The operation request's 'snapshot' is not an index digest.");
         }
 
+        var workKey = "";
         if (RefuseUnlessWorkStates(request, identifier, observedAt, "r6_as_observed", requestedLanguage: null,
                 out var mountedStates, out _) is { } refused)
         {
-            return refused;
+            // A work the mounted build no longer holds at all is still named by the log, since absence is not a withdrawal:
+            // by its stable work coordinate it is answered from the log at the snapshot (review of #889). Any other
+            // identifier, or a work the log never held, keeps the refusal.
+            var logs = _reader?.RecordsBuilds == true ? _reader.ResolveObservations() : [];
+            if (refused.Refusal?.Code != "identifier_unknown" || logs.Count == 0 ||
+                !TryParseStableWorkCoordinate(identifier, out var loggedWork) ||
+                _reader!.ResolveObservedStates(loggedWork, logs[^1].LastSeq).Count == 0)
+            {
+                return refused;
+            }
+
+            workKey = loggedWork;
+        }
+        else
+        {
+            workKey = mountedStates[0].WorkKey;
         }
 
         if (!_reader!.RecordsBuilds)
@@ -523,7 +539,6 @@ internal sealed class V3CorpusMount : IDisposable
         }
 
         var at = observations[generation];
-        var workKey = mountedStates[0].WorkKey;
         var held = _reader.ResolveObservedStates(workKey, at.LastSeq);
         if (held.Count == 0)
         {
@@ -2050,7 +2065,8 @@ internal sealed class V3CorpusMount : IDisposable
         "whether a hash-pinned permalink of this publisher still names the state this index holds at its stable coordinate, by the state digest the index " +
         "computed from the retained publisher bytes under its rule profiles (a matching digest is verified as digest_matches; a digest the coordinate no longer " +
         "carries is the pinned_digest_mismatch refusal naming the current one, unless a retained generation holds that state, when it is verified there as " +
-        "digest_matches with held_in naming the generation and superseded_by the current state); for a work identifier or work coordinate, the current digests of every state " +
+        "digest_matches with held_in naming the generation and superseded_by the current state of its language, null when the coordinate holds none any " +
+        "more); for a work identifier or work coordinate, the current digests of every state " +
         "held, and for a dated stable coordinate those held exactly there, so a caller can pin them; a pinned permalink may carry an article id after # " +
         "(the article permalink evidence_bundle writes), and then the article must be one the pinned state holds or the answer is anchor_not_in_version; " +
         "nothing about the text or its legal effect is assessed";
@@ -2115,6 +2131,24 @@ internal sealed class V3CorpusMount : IDisposable
             }
 
             var pinnedStates = _reader.ResolveState(workKey, applicabilityDate);
+
+            // A digest the mounted index does not hold at its coordinate, held by a retained generation, is verified there
+            // before any refusal over the current states: the coordinate may hold another state, several (one per
+            // language), or none any more (review of #889). superseded_by names the current state of that language, if any.
+            if (!pinnedStates.Any(state => string.Equals(state.StateSha256, requestedDigest, StringComparison.Ordinal) &&
+                                           (requestedLanguage is null || string.Equals(state.Language, requestedLanguage, StringComparison.Ordinal))) &&
+                FromGeneration(workKey, applicabilityDate, requestedLanguage, requestedDigest) is var (holder, superseded))
+            {
+                var current = pinnedStates.FirstOrDefault(state => string.Equals(state.Language, superseded.Language, StringComparison.Ordinal));
+                return VerifiedPinned(
+                    request, observedAt, identifier, requestedDigest, requestedLanguage, anchor, superseded,
+                    holder.Reader.ResolveState(workKey, applicabilityDate).Select(static state => state.Language)
+                        .Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray(),
+                    holder.Reader, holder.Reader.CorpusRef.Sha256,
+                    new { snapshot_id = holder.IndexSha256, observation = holder.Observation, built_at = holder.BuiltAt },
+                    current is null ? null : new { state_sha256 = current.StateSha256, permalink = StateUrl(current) });
+            }
+
             if (pinnedStates.Count == 0)
             {
                 return Unknown(request, identifier, observedAt, PublisherId.LuLegilux,
@@ -2140,18 +2174,6 @@ internal sealed class V3CorpusMount : IDisposable
                 : pinnedStates.Where(state => string.Equals(state.Language, requestedLanguage, StringComparison.Ordinal)).ToArray();
             var matching = pinnedScope.Where(state => string.Equals(
                 requestedDigest, state.StateSha256, StringComparison.Ordinal)).ToArray();
-            if (matching.Length == 0 && pinnedScope.Count == 1 &&
-                FromGeneration(workKey, applicabilityDate, pinnedScope[0].Language, requestedDigest) is var (holder, superseded))
-            {
-                // A permalink the product emitted before a later build replaced the state's text: the retained generation
-                // that holds the state verifies it, and the answer names that generation and the state that replaced it.
-                return VerifiedPinned(
-                    request, observedAt, identifier, requestedDigest, requestedLanguage, anchor, superseded, pinnedLanguages,
-                    holder.Reader, holder.Reader.CorpusRef.Sha256,
-                    new { snapshot_id = holder.IndexSha256, observation = holder.Observation, built_at = holder.BuiltAt },
-                    new { state_sha256 = pinnedScope[0].StateSha256, permalink = StateUrl(pinnedScope[0]) });
-            }
-
             if (matching.Length == 0)
             {
                 if (pinnedScope.Count > 1)
@@ -5845,12 +5867,12 @@ internal sealed class V3CorpusMount : IDisposable
     /// holds it; null when none does.
     /// </summary>
     private (GenerationReader Generation, LuxembourgIndexResolvedState State)? FromGeneration(
-        string workKey, string applicabilityDate, string language, string stateSha256)
+        string workKey, string applicabilityDate, string? language, string stateSha256)
     {
         foreach (var generation in _generationReaders)
         {
             var state = generation.Reader.ResolveState(workKey, applicabilityDate).FirstOrDefault(candidate =>
-                string.Equals(candidate.Language, language, StringComparison.Ordinal) &&
+                (language is null || string.Equals(candidate.Language, language, StringComparison.Ordinal)) &&
                 string.Equals(candidate.StateSha256, stateSha256, StringComparison.Ordinal));
             if (state is not null)
             {
