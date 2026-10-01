@@ -58,12 +58,12 @@ namespace Lex.V3.Ingest.Luxembourg;
 /// </remarks>
 public sealed class LuxembourgProductionScopeReductionEvidenceResolver : IScopeReductionEvidenceResolver
 {
-    private readonly IReadOnlySet<string> _derivedObjectRefSha256Values;
+    private readonly LuxembourgObjectDigestSet _derivedObjectRefSha256Values;
     private readonly IReadOnlySet<SourceArtifactRef> _custodyConfirmedEvidenceArtifacts;
 
     private LuxembourgProductionScopeReductionEvidenceResolver(
         SourceArtifactRef completeEnumerationRef,
-        IReadOnlySet<string> derivedObjectRefSha256Values,
+        LuxembourgObjectDigestSet derivedObjectRefSha256Values,
         IReadOnlySet<SourceArtifactRef> custodyConfirmedEvidenceArtifacts)
     {
         CompleteEnumerationRef = completeEnumerationRef;
@@ -96,13 +96,8 @@ public sealed class LuxembourgProductionScopeReductionEvidenceResolver : IScopeR
         ArgumentNullException.ThrowIfNull(observations);
         ArgumentNullException.ThrowIfNull(evidenceArtifacts);
 
-        var derivedObjectRefSha256Values = new HashSet<string>(StringComparer.Ordinal);
-        foreach (var observation in observations)
-        {
-            ArgumentNullException.ThrowIfNull(observation);
-            derivedObjectRefSha256Values.Add(
-                ScopeManifestCanonicalWriter.ComputeObjectRefSha256(observation.ObjectRef));
-        }
+        var derivedObjectRefSha256Values = LuxembourgObjectDigestSet.FromObservations(
+            observations, cancellationToken);
 
         var custodyConfirmedEvidenceArtifacts = new HashSet<SourceArtifactRef>();
         foreach (var artifact in evidenceArtifacts.Distinct())

@@ -22,6 +22,23 @@ No saved success or protection flag is trusted as a proof. Complete acquisition 
 Formex/rights/body outcomes and two independent offline mount processes remain follow-on work.
 The active EU acquisition uses its frozen runtime and remains untouched.
 
+## Compact Luxembourg object identities (Codex, 2026-10-01)
+
+Object identity sets retain sorted 32-byte digests. Binary search preserves exact membership,
+duplicate-set semantics and canonical bytes. Checked reopening enforces the original digest,
+byte equality, ordering and refusal precedence. No publisher or custody admission changes.
+
+All 27 new cases passed at b222687c: CI 36851145863 reported 5,305 passed and 22 skipped,
+with 259 candidates and 139 guarded types after merging integration 65922f24. The required
+CI watch exited 0. Claude reviewed that exact head and requested corrected documentation
+counts; this is the one repair round. The code review found no material defect.
+
+Integration d874273b is now included. Combined CI 36853595395 passed 5,324 tests with 22 skipped; only the candidate total
+failed (260 versus 259). Its complete member pins passed. The candidate total is now
+260; the passing literal pin contains 140 guarded types. Fresh CI gates merge. Local Release build, required fast tests, affected ingest checks and the synthetic
+measurement remain deferred under the acquisition memory guard. No full-LU fit is claimed.
+The remaining observation, scope and corpus graphs still require bounded derivation evidence.
+
 ## Streaming scope verification from source inputs (Codex, 2026-10-01)
 
 The retained manifest can be verified by independently replaying its original source inputs
