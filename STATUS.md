@@ -14,11 +14,33 @@ with 259 candidates and 139 guarded types after merging integration 65922f24. Th
 CI watch exited 0. Claude reviewed that exact head and requested corrected documentation
 counts; this is the one repair round. The code review found no material defect.
 
-Integration a74fece1 is now included. Combined CI 36853595395 passed 5,324 tests with 22 skipped; only the candidate total
+Integration d874273b is now included. Combined CI 36853595395 passed 5,324 tests with 22 skipped; only the candidate total
 failed (260 versus 259). Its complete member pins passed. The candidate total is now
 260; the passing literal pin still has 139 guarded types. Fresh CI gates merge. Local Release build, required fast tests, affected ingest checks and the synthetic
 measurement remain deferred under the acquisition memory guard. No full-LU fit is claimed.
 The remaining observation, scope and corpus graphs still require bounded derivation evidence.
+
+## Streaming scope verification from source inputs (Codex, 2026-10-01)
+
+The retained manifest can be verified by independently replaying its original source inputs
+through the existing streaming reducer and canonical writer. Acceptance checks the pinned
+digest, UTF-8, complete byte comparison, both source passes and writer admission/accounting.
+It returns the existing digest/count receipt without materializing a second manifest graph.
+The source factory and evidence resolver must come from original evidence; deriving either
+from the manifest under test would be circular.
+
+PR head b3cafcab passed CI 36850031289: 5,289 tests passed, 22 skipped, including all eleven
+new scope cases. Claude returned MERGE with no material findings. The one editorial repair
+clarifies exception precedence and working buffers in the API remarks and records the review.
+Integration a74fece1 is included; final-head CI gates merge under the 10:35 standing order.
+No local Release/fast/ingest run or synthetic source-replay measurement is claimed.
+
+The measurement remains required before claiming a full Luxembourg memory fit. Working
+storage includes five projection bytes per object, the evidence table, current input, the
+JSON writer buffer and a 4 KiB comparison buffer. An individual JSON element may exceed the
+writer's 64 KiB flush threshold. Factories and resolvers can retain more. This method is not
+wired into the LU adapter and does not provide a bounded downstream manifest view.
+
 
 ## LU assertion snapshot storage (Codex, 2026-10-01)
 
