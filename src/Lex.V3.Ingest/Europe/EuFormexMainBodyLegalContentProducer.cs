@@ -340,7 +340,9 @@ public sealed class EuFormexMainBodyLegalContentProducer
                         $"Formex main-body entry {entry.FullName} language does not match its proven expression language");
 
                 foreach (var element in articleRoot.Descendants()
-                    .Where(static value => value.Name.LocalName == "ARTICLE"))
+                    .Where(value => value.Name.LocalName == "ARTICLE" &&
+                        (rootName != "CONS.ACT" || !value.Ancestors().TakeWhile(parent => parent != articleRoot)
+                            .Any(static parent => parent.Name.LocalName is "ANNEX" or "NOTE" or "FT"))))
                 {
                     var identifier = element.Attribute("IDENTIFIER")?.Value;
                     var heading = element.Elements().SingleOrDefault(static value =>

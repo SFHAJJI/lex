@@ -71,7 +71,10 @@ public sealed class EuFormexMainBodyLegalContentProducerTests
         {
             var doc = root.Element("CONS.DOC")!;
             doc.Element("FAM.COMP")!.Add(new XElement("LG.DOC", "FR"));
-            foreach (var parent in new[] { root, doc.Element("PREAMBLE")!, doc.Element("FINAL")! })
+            var annex = new XElement("ANNEX");
+            var note = new XElement("NOTE");
+            doc.Element("ENACTING.TERMS")!.Add(annex, note);
+            foreach (var parent in new[] { root, doc.Element("PREAMBLE")!, doc.Element("FINAL")!, annex, note })
                 parent.Add(new XElement("ARTICLE", new XAttribute("IDENTIFIER", "999"),
                     new XElement("TI.ART", "History only"), new XElement("P", "EXCLUDED_SENTINEL")));
         });
