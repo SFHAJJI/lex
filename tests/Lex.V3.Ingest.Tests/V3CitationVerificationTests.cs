@@ -32,6 +32,14 @@ public sealed class V3CitationVerificationTests
         @"^/lu-legilux/[a-z0-9_-]+/\d{4}-\d{2}-\d{2}--(?<digest>[0-9a-f]{64})(#(?<anchor>[^#\s]+))?$",
         RegexOptions.CultureInvariant);
 
+    /// <summary>
+    /// A hash-pinned EU permalink (#850): the CELEX, the language, the wording date, <c>--</c> and the wording digest, and
+    /// the provision after <c>#</c>, escaped as the platform escapes it.
+    /// </summary>
+    private static readonly Regex EuropePermalink = new(
+        @"^/eu-eurlex/[^/#\s]+/[a-z]{3}/\d{4}-\d{2}-\d{2}--(?<digest>[0-9a-f]{64})(#(?<anchor>[^#\s]+))?$",
+        RegexOptions.CultureInvariant);
+
     [TestMethod]
     public async Task EveryPermalinkTheServedAnswersEmitVerifiesOnTheMountThatEmittedIt()
     {
@@ -99,6 +107,65 @@ public sealed class V3CitationVerificationTests
     }
 
     [TestMethod]
+    public async Task EveryPermalinkTheEuAnswersEmitVerifiesAndEveryCoordinateTheyPrintResolves()
+    {
+        // The EU half of the promise, over the answers the EU screens read (search in one work, and the dossier), on the
+        // GDPR fixture. An EU answer's citations by role are its permalinks, each pinning the one wording held; its
+        // resolve.identifier is the coordinate EU resolve answers (a provision or an expression), not a pinned citation, so
+        // it is asked of resolve and must answer. Any other string that is exactly an EU permalink is a citation too.
+        var europe = await EuropeMountedFixture.CreateAsync();
+        await using var cleanup = europe;
+        using var mount = await V3CorpusMount.OpenAsync(europe.Directory, CancellationToken.None);
+        Assert.IsNotNull(mount);
+
+        var permalinks = new List<(string Operation, string Permalink)>();
+        var coordinates = new List<(string Operation, string Coordinate)>();
+        async Task CollectAsync(string operation, object request)
+        {
+            var answer = await AnswerAsync(mount, operation, request);
+            foreach (var (path, value, _) in CitationsIn(answer, "$", EuropePermalink))
+            {
+                if (path.EndsWith(".resolve.identifier", StringComparison.Ordinal))
+                {
+                    coordinates.Add((operation, value));
+                    continue;
+                }
+
+                Assert.IsTrue(EuropePermalink.IsMatch(value), $"{operation} emitted {value} at {path} as a citation, and it is not a hash-pinned EU permalink");
+                permalinks.Add((operation, value));
+            }
+        }
+
+        await CollectAsync("search", new { query = "joint controllers", language = "eng", identifier = "32016R0679" });
+        await CollectAsync("dossier", new { identifier = "32016R0679" });
+
+        // Both EU screens' answers contributed, with a provision permalink among them, or the walk proves less than it says.
+        CollectionAssert.AreEquivalent(new[] { "search", "dossier" }, permalinks.Select(static entry => entry.Operation).Distinct(StringComparer.Ordinal).ToArray());
+        Assert.IsTrue(permalinks.Any(static entry => entry.Permalink.Contains('#', StringComparison.Ordinal)), "no EU provision permalink was emitted");
+        CollectionAssert.AreEquivalent(new[] { "search", "dossier" }, coordinates.Select(static entry => entry.Operation).Distinct(StringComparer.Ordinal).ToArray());
+
+        foreach (var (operation, permalink) in permalinks.Distinct())
+        {
+            var match = EuropePermalink.Match(permalink);
+            var verified = await EnvelopeAsync(mount, "verify", new { identifier = permalink });
+            Assert.AreEqual(V3Verdicts.Answer, verified.Verdict, $"{operation} emitted {permalink}, and verify refused it with {verified.Refusal?.Code}");
+            var body = verified.Result!.Value;
+            Assert.AreEqual("digest_matches", body.GetProperty("verdict").GetString(), $"{operation}: {permalink}");
+            Assert.AreEqual(match.Groups["digest"].Value, body.GetProperty("wording_sha256").GetString(), $"{operation}: {permalink} verified another wording");
+            if (match.Groups["anchor"].Success)
+            {
+                Assert.AreEqual(Uri.UnescapeDataString(match.Groups["anchor"].Value), body.GetProperty("requested_anchor").GetString(), $"{operation}: {permalink}");
+            }
+        }
+
+        foreach (var (operation, coordinate) in coordinates.Distinct())
+        {
+            var resolved = await EnvelopeAsync(mount, "resolve", new { identifier = coordinate });
+            Assert.AreEqual(V3Verdicts.Answer, resolved.Verdict, $"{operation} printed {coordinate} to resolve, and resolve refused it with {resolved.Refusal?.Code}");
+        }
+    }
+
+    [TestMethod]
     public void TheWalkTakesEveryCitationByItsRoleAndAnyOtherPermalinkWhereverItSits()
     {
         var digest = new string('a', 64);
@@ -135,8 +202,9 @@ public sealed class V3CitationVerificationTests
     /// reader to), whatever it holds, so a malformed citation is caught rather than skipped (review of #796). And any
     /// other string that is exactly a hash-pinned permalink, such as a candidate list.
     /// </summary>
-    private static IEnumerable<(string Path, string Value, bool ByRole)> CitationsIn(JsonNode? node, string path = "$")
+    private static IEnumerable<(string Path, string Value, bool ByRole)> CitationsIn(JsonNode? node, string path = "$", Regex? pinned = null)
     {
+        pinned ??= Permalink;
         switch (node)
         {
             case JsonObject value:
@@ -155,7 +223,7 @@ public sealed class V3CitationVerificationTests
                         continue;
                     }
 
-                    foreach (var found in CitationsIn(child, at))
+                    foreach (var found in CitationsIn(child, at, pinned))
                     {
                         yield return found;
                     }
@@ -165,14 +233,14 @@ public sealed class V3CitationVerificationTests
             case JsonArray value:
                 for (var index = 0; index < value.Count; index++)
                 {
-                    foreach (var found in CitationsIn(value[index], $"{path}[{index}]"))
+                    foreach (var found in CitationsIn(value[index], $"{path}[{index}]", pinned))
                     {
                         yield return found;
                     }
                 }
 
                 break;
-            case JsonValue value when value.TryGetValue<string>(out var text) && Permalink.IsMatch(text):
+            case JsonValue value when value.TryGetValue<string>(out var text) && pinned.IsMatch(text):
                 yield return (path, text, false);
                 break;
         }
