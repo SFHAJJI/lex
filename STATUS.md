@@ -750,7 +750,7 @@ CI evidence are recorded in the pull request before merge.
 
 ## Heads
 
-- `v3/integration`: `c949c9e1` (2026-10-01, PR #847 merged). Build 45 s. Fast lane
+- `v3/integration`: `8defa6c1` (2026-10-01, PR #846 merged). Build 45 s. Fast lane
   (`eng/test-fast.ps1`): 3,077 tests, 3,076 pass, 1 skipped (the review of PR #828). Ingest suite: green on CI for PR #760
   (the CI `dotnet` job runs the whole solution on every pull request, about 7 min on the runner;
   green for PR #834);
@@ -1746,6 +1746,33 @@ line "rights are enforced at compose time".
 - The check is not blind: run against the normal fixture mount, all 2,950 windows are found on the
   reading and export pages. The normal journey's 16 runs pass under the card-code rule.
 
+The EU permalink grammar and EU `verify` (PR #850), the first slice of the EU half of the launch
+screens. Until now EU hits cited `expressionIRI#lex-provision=NNN`, which pins nothing, so the live
+screens refused EU answers by design.
+- The grammar is in Luxembourg's family, with the language part of it from the start, so the French
+  expressions (Decision 89) need no second grammar:
+  `/eu-eurlex/{celex}/{language}/{wording date}--{wording sha256}#{provision}`. The stable
+  coordinate is the permalink without its digest; the provision is the publisher's id, escaped.
+- The wording digest is computed in the API from what the EU index holds, which stores none
+  (`EuropeWordingDigestRule`). It is the SHA-256, under `lex-v3-eu-wording/1`, of the CELEX, the
+  work and expression IRIs, the language, the wording date and every article identity in the
+  publisher's order, each field length-prefixed. Each EU article identity is itself the SHA-256 of
+  the article's text and tokens (`EuFormexMainBodyLegalContentProducer.IdentityOf`), so the digest
+  pins the whole held wording. An expression without exactly one wording date gets no permalink.
+- EU `search` answers carry `pinned_wording` (wording date, digest, permalink, the rule) and each
+  hit its provision permalink.
+- `verify` routes an EU permalink to the EU index:
+  - `digest_matches` with the CELEX, work and expression, language, wording date, digest, stable
+    coordinate and the provision coordinate EU `resolve` answers;
+  - otherwise `pinned_digest_mismatch` naming the current digest, `anchor_not_in_version`,
+    `language_not_available`, `identifier_unknown` (a work or wording date not held), or
+    `no_corpus_mounted`.
+- On the GDPR fixture a hit's permalink verifies (also under the product's https origin), and the
+  digest recomputed from the index by the stated rule equals the API's. Each refusal is held to
+  its code.
+- On the real bounded first mount, all 60 hits for "personal data" carry a permalink, and every one
+  verifies as `digest_matches`.
+
 The live export composer and its journey step (PR #789), the eighth screen. `dist-live/export.html`
 has its own bundle `client-live-export.js`.
 - The page asks what the reading page asks: the same form (`ReadingForm`, now shared), the same one
@@ -2446,11 +2473,14 @@ has not yet run; the bounded first mount above is complete.
    needing data the ingest does not produce; they keep `operation_not_served`, and the capability
    manifest is to state per operation which data would serve it (driver decision). The event log's next step,
    predecessor chaining with observation times, needs a second build, so it follows the first mount.
-5. Data lane (Codex). EU parity: every temporal and search operation from the EU index; French
-   expressions. EU
+5. EU parity: every temporal and search operation from the EU index; French expressions. EU
    `search` in one work served by PR #761, EU `dossier` by PR #762; the temporal operations,
-   `provenance`, `evidence_bundle` and `verify` wait on consolidation acquisition and an EU permalink
-   grammar; the parity details are driver decisions (below).
+   `provenance` and `evidence_bundle` wait on consolidation acquisition; the parity details are driver
+   decisions (below). The EU permalink grammar is the web lane's since 2026-10-01 (the panel's answer
+   to Q-20261001-0108-claude). It works in the API and the web; the EU index schema and the Ingest
+   builders stay the data lane's. PR #850: EU hits carry a hash-pinned permalink, and EU `verify`
+   is served over it. Next: the web search reader and screen read EU answers, then the journey on the
+   real mount's GDPR.
 6. Wire the eight launch screens to `/api/v3`; journeys J1 to J8 in a real browser. PR #763: the
    envelope reader and the client module; PR #764: the live Trust and Coverage component; PR #765:
    its page, the live build and the one-origin server; PR #766: the first browser journey step,
@@ -2578,6 +2608,11 @@ Each is the driver's call under ruling 7 and can be reversed by a later pull req
   - The source date is the commit's time (the `SOURCE_DATE_EPOCH` convention): the image says when
     its sources were committed, not when it was built. The product reads no file modification time
     (`V3WebRoot` holds the pages in memory), so the choice changes no answer.
+
+- The EU permalink grammar (PR #850): language as a path segment, not only a parameter, so one
+  grammar serves English and French expressions. The wording digest is computed in the API (the
+  panel's boundary), not stored in the EU index. If the data lane later stores a wording digest, the
+  API can read it instead, as long as the value stays the same.
 
 - The refusal card's payload rows keep the payload's own member names (`requested_identifier`,
   `asserts_absence_of_law`) as their labels, in every interface language (PR #809). They are the

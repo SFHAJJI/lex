@@ -1796,6 +1796,11 @@ internal sealed class V3CorpusMount : IDisposable
 
         var identifier = RequiredString(request.Parameters, "identifier");
         var requestedLanguage = OptionalLanguage(request.Parameters);
+        if (TryParseEuropePermalink(identifier, out var celex, out var europeLanguage, out var wordingDate, out var europeDigest, out var provision))
+        {
+            return VerifyEurope(request, identifier, celex, europeLanguage, wordingDate, europeDigest, provision, requestedLanguage, observedAt);
+        }
+
         if (TryParsePinnedPermalink(identifier, out var workKey, out var applicabilityDate, out var requestedDigest, out var anchor))
         {
             if (_reader is null)
@@ -3617,6 +3622,7 @@ internal sealed class V3CorpusMount : IDisposable
         }
 
         var expression = expressions[0];
+        var wording = EuropeWordingOf(expression);
         var wantStrict = mode is null || string.Equals(mode, "strict", StringComparison.Ordinal);
         var wantRelaxed = mode is null || string.Equals(mode, "relaxed", StringComparison.Ordinal);
         var relaxedIsStrict = terms.Length == 1 && string.Equals(terms[0], query, StringComparison.Ordinal);
@@ -3694,7 +3700,16 @@ internal sealed class V3CorpusMount : IDisposable
             truncated,
             continue_after = truncated ? Cursor(page[^1]) : null,
             page_is = SearchPageIs,
-            hits = page.Select(static entry => new
+            // The one held wording the hits are in, pinned (the EU permalink grammar), or null when it holds no single
+            // wording date to pin; each hit's permalink is it with the provision after #.
+            pinned_wording = wording is not { } held ? null : new
+            {
+                wording_date = held.WordingDate,
+                wording_sha256 = held.Sha256,
+                permalink = held.Permalink,
+                digest_rule = EuropeWordingDigestRule,
+            },
+            hits = page.Select(entry => new
             {
                 lane = entry.Lane,
                 match_reasons = new[] { entry.Lane == "strict" ? "exact_phrase" : "all_terms" },
@@ -3708,6 +3723,8 @@ internal sealed class V3CorpusMount : IDisposable
                 heading = entry.Hit.Heading,
                 // The provision coordinate EU resolve answers; the text is not served here.
                 resolve = new { identifier = entry.Hit.ProvisionCoordinate },
+                // The hash-pinned provision permalink verify checks (null when the wording has no single date).
+                permalink = wording is { } pinned ? EuropeProvisionPermalink(pinned.Permalink, entry.Hit.PublisherIdentifier) : null,
             }).ToArray(),
             not_held = EuropeSearchNotHeld.Select(static row => new { item = row[0], reason = row[1] }).ToArray(),
             corpus_sha256 = _corpus.ArtifactRef.Sha256,
@@ -5412,6 +5429,281 @@ internal sealed class V3CorpusMount : IDisposable
     /// verbatim; an empty fragment is not a permalink. Only <c>verify</c> reads this form: the
     /// other operations take the state permalink and no fragment.
     /// </summary>
+    /// <summary>The publisher segment of the EU permalink grammar.</summary>
+    private const string EuropePermalinkPublisher = "eu-eurlex";
+
+    /// <summary>The domain the EU wording digest is computed under.</summary>
+    private const string EuropeWordingDigestDomain = "lex-v3-eu-wording/1";
+
+    internal const string EuropeWordingDigestRule =
+        "the SHA-256, under the domain lex-v3-eu-wording/1, of the work's CELEX, the publisher's work and expression IRIs, the language, the wording date " +
+        "and every article identity of the expression in the publisher's article order, each field written as a 4-byte big-endian length and its UTF-8 " +
+        "bytes; each article identity is itself the SHA-256 of that article's text and tokens, so the digest pins the whole held wording, computed here " +
+        "from the EU index, which stores no wording digest";
+
+    internal const string EuropeVerifyScope =
+        "whether a hash-pinned EU provision permalink (/eu-eurlex/{celex}/{language}/{wording date}--{wording sha256}, with the publisher's provision " +
+        "id after #) still names the one wording this EU index holds of that expression, by the wording digest computed from the index (a matching digest " +
+        "is digest_matches; a digest the wording no longer has is the pinned_digest_mismatch refusal naming the current one); the provision, when named, " +
+        "must be one the wording holds or the answer is anchor_not_in_version; nothing about the text or its legal effect is assessed";
+
+    internal static readonly string[][] EuropeVerifyNotHeld =
+    [
+        ["publisher_signature", "no signature or attestation of the publisher is held; the digest is this index's own reading of the retained wording"],
+        ["later_wordings", "no consolidated version is held, so only the one original wording of the expression can be pinned"],
+        ["text_verification", "the text itself is not compared here; each article identity is a digest of its text and tokens"],
+    ];
+
+    /// <summary>
+    /// The one held wording of an EU expression and its pin: the work, CELEX, language and wording date, the
+    /// provisions, the wording digest (<see cref="EuropeWordingDigestRule"/>) and the permalink without a provision.
+    /// Null when the index holds no single wording date for the expression, which no permalink can pin.
+    /// </summary>
+    private (string Celex, string WorkId, string ExpressionId, string Language, string WordingDate, IReadOnlyList<string> Provisions, string Sha256, string Permalink)?
+        EuropeWordingOf(string publisherExpressionId)
+    {
+        ArgumentNullException.ThrowIfNull(_europeReader);
+        var resolved = _europeReader.ResolveExact(publisherExpressionId)
+            .SingleOrDefault(candidate => string.Equals(candidate.PublisherExpressionId, publisherExpressionId, StringComparison.Ordinal));
+        if (resolved is null)
+        {
+            return null;
+        }
+
+        var expression = _europeReader.ResolveWorkExpressions(resolved.PublisherWorkId)
+            .SingleOrDefault(candidate => string.Equals(candidate.PublisherExpressionId, publisherExpressionId, StringComparison.Ordinal));
+        if (expression is null || expression.WordingDates.Count != 1)
+        {
+            return null;
+        }
+
+        var wordingDate = expression.WordingDates[0];
+        var sha256 = EuropeWordingSha256(
+            expression.PublisherWorkCelex, resolved.PublisherWorkId, publisherExpressionId, resolved.Language, wordingDate, resolved.ArticleIdentities);
+        return (expression.PublisherWorkCelex, resolved.PublisherWorkId, publisherExpressionId, resolved.Language, wordingDate,
+            resolved.PublisherProvisionIdentifiers, sha256,
+            $"/{EuropePermalinkPublisher}/{expression.PublisherWorkCelex}/{resolved.Language}/{wordingDate}--{sha256}");
+    }
+
+    /// <summary>The wording digest, as <see cref="EuropeWordingDigestRule"/> states it.</summary>
+    private static string EuropeWordingSha256(
+        string celex, string publisherWorkId, string publisherExpressionId, string language, string wordingDate, IReadOnlyList<string> articleIdentities)
+    {
+        using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
+        void Append(string value)
+        {
+            var bytes = Encoding.UTF8.GetBytes(value);
+            Span<byte> length = stackalloc byte[4];
+            System.Buffers.Binary.BinaryPrimitives.WriteInt32BigEndian(length, bytes.Length);
+            hash.AppendData(length);
+            hash.AppendData(bytes);
+        }
+
+        foreach (var field in new[] { EuropeWordingDigestDomain, celex, publisherWorkId, publisherExpressionId, language, wordingDate })
+        {
+            Append(field);
+        }
+
+        foreach (var article in articleIdentities)
+        {
+            Append(article);
+        }
+
+        return Convert.ToHexStringLower(hash.GetHashAndReset());
+    }
+
+    /// <summary>The EU stable coordinate, <c>/eu-eurlex/{celex}/{language}/{wording date}</c>: the wording's permalink without its digest.</summary>
+    private static string EuropeStableCoordinate(string wordingPermalink) => wordingPermalink[..^(2 + 64)];
+
+    /// <summary>A provision's permalink: the wording's, with the publisher's provision id (escaped) after #.</summary>
+    private static string EuropeProvisionPermalink(string wordingPermalink, string provision) =>
+        wordingPermalink + "#" + Uri.EscapeDataString(provision);
+
+    /// <summary>
+    /// Parses an EU permalink, <c>/eu-eurlex/{celex}/{language}/{wording date}--{wording sha256}</c> with an optional
+    /// provision after #, as a path or under the product's own https origin.
+    /// </summary>
+    private static bool TryParseEuropePermalink(
+        string value,
+        out string celex,
+        out string language,
+        out string wordingDate,
+        out string requestedDigest,
+        out string? provision)
+    {
+        celex = language = wordingDate = requestedDigest = string.Empty;
+        provision = null;
+        var hash = value.IndexOf('#', StringComparison.Ordinal);
+        var path = hash < 0 ? value : value[..hash];
+        if (hash >= 0)
+        {
+            var fragment = value[(hash + 1)..];
+            if (fragment.Length == 0 || fragment.Any(static character => char.IsWhiteSpace(character) || character == '#'))
+            {
+                return false;
+            }
+
+            provision = Uri.UnescapeDataString(fragment);
+        }
+
+        if (!path.StartsWith("/", StringComparison.Ordinal))
+        {
+            if (!Uri.TryCreate(path, UriKind.Absolute, out var uri) ||
+                !string.Equals(uri.Scheme, Uri.UriSchemeHttps, StringComparison.Ordinal) ||
+                !string.Equals(uri.Host, "law.soufien.lu", StringComparison.Ordinal) ||
+                !uri.IsDefaultPort || uri.UserInfo.Length != 0 || uri.Query.Length != 0)
+            {
+                return false;
+            }
+
+            path = uri.AbsolutePath;
+        }
+
+        var segments = path.Split('/', StringSplitOptions.RemoveEmptyEntries);
+        if (segments.Length != 4 ||
+            !string.Equals(segments[0], EuropePermalinkPublisher, StringComparison.Ordinal) ||
+            segments[1].Length == 0 || !segments[1].All(static character => char.IsAsciiLetterOrDigit(character) || character is '(' or ')' or '_' or '-' or '.') ||
+            segments[2].Length != 3 || !segments[2].All(char.IsAsciiLetterLower) ||
+            segments[3].Length != 10 + 2 + 64 ||
+            !string.Equals(segments[3].Substring(10, 2), "--", StringComparison.Ordinal) ||
+            !DateOnly.TryParseExact(segments[3][..10], "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out _) ||
+            !segments[3][12..].All(static character => character is >= '0' and <= '9' or >= 'a' and <= 'f'))
+        {
+            provision = null;
+            return false;
+        }
+
+        (celex, language, wordingDate, requestedDigest) = (segments[1], segments[2], segments[3][..10], segments[3][12..]);
+        return true;
+    }
+
+    /// <summary>
+    /// <c>verify</c> for an EU permalink: the one wording the EU index holds of the work's expression in that language,
+    /// its digest recomputed, and the provision checked when named.
+    /// </summary>
+    private V3PlatformOperationOutcome VerifyEurope(
+        V3PlatformOperationRequest request,
+        string identifier,
+        string celex,
+        string language,
+        string wordingDate,
+        string requestedDigest,
+        string? provision,
+        string? requestedLanguage,
+        DateTimeOffset observedAt)
+    {
+        if (_europeReader is null)
+        {
+            using var unmounted = JsonSerializer.SerializeToDocument(new { required_corpus = "eu" });
+            return V3PlatformOperationOutcome.Refused(
+                Context("refusal", observedAt, PublisherId.EuEurLex),
+                new V3PlatformOperationRefusal(request, "no_corpus_mounted", unmounted.RootElement));
+        }
+
+        var ofWork = _europeReader.ResolveExact(celex);
+        if (ofWork.Count == 0)
+        {
+            return Unknown(request, identifier, observedAt, PublisherId.EuEurLex,
+                "a hash-pinned EU permalink of a work this EU index holds");
+        }
+
+        var languagesHeld = ofWork.Select(static expression => expression.Language).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray();
+        if (!languagesHeld.Contains(language, StringComparer.Ordinal) ||
+            (requestedLanguage is not null && !string.Equals(requestedLanguage, language, StringComparison.Ordinal)))
+        {
+            using var unavailableLanguage = JsonSerializer.SerializeToDocument(new
+            {
+                requested_language = requestedLanguage ?? language,
+                available_languages = languagesHeld.Contains(language, StringComparer.Ordinal) ? new[] { language } : languagesHeld,
+            });
+            return V3PlatformOperationOutcome.Refused(
+                Context("refusal", observedAt, PublisherId.EuEurLex),
+                new V3PlatformOperationRefusal(request, "language_not_available", unavailableLanguage.RootElement));
+        }
+
+        var expressions = ofWork.Where(expression => string.Equals(expression.Language, language, StringComparison.Ordinal))
+            .Select(static expression => expression.PublisherExpressionId).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray();
+        if (expressions.Length > 1)
+        {
+            using var ambiguous = JsonSerializer.SerializeToDocument(new { requested_identifier = identifier, candidates = expressions });
+            return V3PlatformOperationOutcome.Refused(
+                Context("refusal", observedAt, PublisherId.EuEurLex),
+                new V3PlatformOperationRefusal(request, "ambiguous_identifier", ambiguous.RootElement));
+        }
+
+        if (EuropeWordingOf(expressions[0]) is not { } wording || !string.Equals(wording.WordingDate, wordingDate, StringComparison.Ordinal))
+        {
+            return Unknown(request, identifier, observedAt, PublisherId.EuEurLex,
+                "a hash-pinned EU permalink of the one wording this EU index holds of the expression, at its wording date");
+        }
+
+        if (!string.Equals(requestedDigest, wording.Sha256, StringComparison.Ordinal))
+        {
+            using var mismatch = JsonSerializer.SerializeToDocument(new
+            {
+                requested_digest = requestedDigest,
+                current_digest = wording.Sha256,
+                stable_coordinate = EuropeStableCoordinate(wording.Permalink),
+                current_hash_pinned_url = wording.Permalink,
+                digest_rule = EuropeWordingDigestRule,
+            });
+            return V3PlatformOperationOutcome.Refused(
+                Context("refusal", observedAt, PublisherId.EuEurLex),
+                new V3PlatformOperationRefusal(request, "pinned_digest_mismatch", mismatch.RootElement));
+        }
+
+        if (provision is not null && !wording.Provisions.Contains(provision, StringComparer.Ordinal))
+        {
+            using var notInVersion = JsonSerializer.SerializeToDocument(new
+            {
+                requested_anchor = provision,
+                nearest_anchors = NearestAnchors(wording.Provisions, provision),
+                do_not_fall_back_to_full_text_search = true,
+                what_would_answer = AnchorNotInVersionRoutes,
+                asserts_absence_of_law = false,
+            });
+            return V3PlatformOperationOutcome.Refused(
+                Context("refusal", observedAt, PublisherId.EuEurLex),
+                new V3PlatformOperationRefusal(request, "anchor_not_in_version", notInVersion.RootElement));
+        }
+
+        using var verification = JsonSerializer.SerializeToDocument(new
+        {
+            scope = EuropeVerifyScope,
+            requested_identifier = identifier,
+            requested_digest = requestedDigest,
+            requested_language = requestedLanguage,
+            requested_anchor = provision,
+            article_permalink = provision is null ? null : EuropeProvisionPermalink(wording.Permalink, provision),
+            verdict = "digest_matches",
+            publisher = EuropePermalinkPublisher,
+            celex = wording.Celex,
+            publisher_work_id = wording.WorkId,
+            publisher_expression_id = wording.ExpressionId,
+            language = wording.Language,
+            wording_date = wording.WordingDate,
+            wording_date_semantics = EuropeWordingDateSemantics,
+            wording_sha256 = wording.Sha256,
+            digest_rule = EuropeWordingDigestRule,
+            stable_coordinate = EuropeStableCoordinate(wording.Permalink),
+            permalink = wording.Permalink,
+            provisions = wording.Provisions.Count,
+            // The provision coordinate EU resolve answers, in the form the EU index writes it.
+            provision_coordinate = provision is null ? null : wording.ExpressionId + "#lex-provision=" + Uri.EscapeDataString(provision),
+            available_languages = languagesHeld,
+            verified_by = new
+            {
+                corpus_sha256 = _corpus.ArtifactRef.Sha256,
+                index_sha256 = _europeReader.IndexRef.Sha256,
+                registry_sha256 = V3OperationRegistry.Reviewed.Sha256,
+            },
+            not_held = EuropeVerifyNotHeld.Select(static row => new { item = row[0], reason = row[1] }).ToArray(),
+        });
+        return V3PlatformOperationOutcome.Success(
+            Context("success", observedAt, PublisherId.EuEurLex),
+            new V3PlatformOperationResult(request, "verification", verification.RootElement));
+    }
+
     private static bool TryParsePinnedPermalink(
         string value,
         out string workKey,
