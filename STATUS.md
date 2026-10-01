@@ -3,6 +3,42 @@
 Updated 2026-10-01 by the driver. This file replaces the issue-comment ledgers. It is rewritten in
 every pull request that changes what is served, what is next or what is blocked.
 
+## EU escaped qualifier authority (Codex, 2026-10-01)
+
+EU retry 5 at C:/lex-v3/eu-population-20261001-3 ended at 03:08 UTC with exit 3 after
+1,358 of 20,000 wire requests. ReifiedAxiomDecodeRefused names seed 32007R0864 and
+QualifierAuthorityDisagreesWithItsCode for `{MA/PART|http://publications.europa.eu/resource/authority/fd_335/MA%2FPART}`.
+The frozen source is eed2b485. The guard did not stop the run: minimum sampled free space was
+5,770,530,816 bytes and peak working set was 532,279,296 bytes. No complete population was built.
+
+Offline reads through the frozen product custody reader found the exact type_of_date carrier in
+held bodies 628d74398542b6e078e06262f56dd138e6ae4d0ddaa17d646ebd05d3fca8d7ac and
+fcbf08f683ac984207f694f254e9b9216baba941a82f47867e30b077d1cb489f. The readback audit is
+C:/lex-v3/lanes/eu-retry5-qualifier-type-held-rows.json; it is not a complete family replay.
+
+Reversible driver decision: accept the exact existing authority form or the same fixed authority
+base followed by the code escaped as one URI path segment. Keep the literal code and original
+carrier unchanged. MA/PART receives no invented label or date role; the accepted table still
+controls interpretation. Wrong bases, other concepts, double escaping and extra URI parts refuse.
+Eleven contract cases cover the two forms and refusals. At c9d23643, Release build passed with
+no warnings or errors; required fast tests passed (3,116 succeeded, one skipped), and affected
+EU ingest checks passed (19 succeeded). The offline replay at C:/lex-v3/eu-qualifier-replay-20261001-2
+used the product's strict parser on 24 retained date-axiom families, compared 3,390 first-pass rows
+exactly with the second pass, and decoded all 1,166 parents without refusal. Five MA/PART bindings
+kept the unrecognised-code outcome. No publisher requests were made. This diagnostic checks
+retained row equality and decoding; it does not mint new enumeration proofs or a population result.
+The first diagnostic accidentally selected amendment families too; its 44 wrong-family refusals
+are retained in replay-1. The corrected selector matches the exact date-predicate VALUES block.
+
+PR #859 received cross-family MERGE with no material findings. The reviewer reproduced the
+build, fast tests and all 29 decoder cases, including a counterfactual where the old decoder fails
+the two escaped cases. The one editorial repair records the exact ingest filter:
+`FullyQualifiedName~EuObjectFacts|FullyQualifiedName~EuProduction|FullyQualifiedName~EuRepeatedEnumeration`.
+The AU+TARD escaped case is constructed; MA/PART was observed. Literal matching retains priority,
+and lowercase percent escapes still refuse safely. The next full run requires this change merged
+and frozen in a fresh custody directory, with the measured storage allowance and disk guard.
+
+
 ## EU retry 5 and LU lookup storage (Codex, 2026-10-01)
 
 PRs #848, #849, #851 and #852 are merged after cross-family reviews, one repair round and green

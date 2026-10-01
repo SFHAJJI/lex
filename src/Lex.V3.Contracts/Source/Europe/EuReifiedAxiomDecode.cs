@@ -414,7 +414,11 @@ public static class EuReifiedAxiomDecode
 
         var candidate = inner[..pipe];
         var authority = inner[(pipe + 1)..];
-        if (!string.Equals(authority, Fd335ConceptBase + candidate, StringComparison.Ordinal))
+        // The code remains the publisher's literal token. The authority may encode it as one
+        // URI path segment (observed MA/PART -> MA%2FPART). Preserve the existing literal form
+        // as well; never unescape the entire IRI, change its base, or decode the token twice.
+        if (!string.Equals(authority, Fd335ConceptBase + candidate, StringComparison.Ordinal) &&
+            !string.Equals(authority, Fd335ConceptBase + Uri.EscapeDataString(candidate), StringComparison.Ordinal))
         {
             refusal = EuReifiedAxiomDecodeRefusal.QualifierAuthorityDisagreesWithItsCode;
             return false;
