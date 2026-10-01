@@ -16,7 +16,11 @@ repeats checked local holds so current custody guarantees are not inferred from 
 Thirty-two new draft cases cover copied and weaker custody, original expression references,
 annex identities, language exclusions, automatic CELEX selection, missing nested evidence,
 caller and rehashed association changes, cancellation and failed holds. Initial d5fd69e3 CI36845188277 failed compilation on a missing Derivation namespace import;
-no tests ran. The import and receipt-refresh assertion are corrected; fresh CI is required. Local Release, fast and affected ingest tests plus Claude review
+no tests ran. Repaired1009183a CI36845576216 passed all32 new cases:5395 passed/22 skipped,
+three failures (guarded construction, closed vocabulary and anonymous custody-reference exposure).
+Compiled method/enum rows are transcribed; the fingerprint now carries scalar reference fields,
+keeping the ban on new custody-reference producers. The weaker-store case explicitly checks
+RetainedUnenforced proof floors. Fresh CI is required. Local Release, fast and affected ingest tests plus Claude review
 remain required after the active EU run and earlier queue. Pending PR881's final merged head
 must be included before local validation. This restores Formex over an already checked run;
 the complete acquisition catalog and independent offline mount builds remain outstanding.

@@ -41,6 +41,8 @@ public sealed partial class EuFormexPackagePopulationProducerTests
         for (var i = 0; i < first.Reconciliation!.Outcomes.Count; i++)
             Assert.AreSame(capture.Result.Reconciliation!.Outcomes[i].Expression, first.Reconciliation.Outcomes[i].Expression);
         Assert.AreEqual(capture.Result.Acquisitions.Count, first.Acquisitions.Count);
+        if (weaker) Assert.IsTrue(first.Enumerations.All(value => value.Proof!.RetainedFloor == CustodyMembership.RetainedUnenforced),
+            "Restored enumeration floors must describe the copied store, not the original receipts.");
         if (shape == 3) Assert.AreEqual(1, first.NotEnumeratedExpressionCount);
         if (shape == 2) Assert.HasCount(1, first.AnnexClassifications);
     }

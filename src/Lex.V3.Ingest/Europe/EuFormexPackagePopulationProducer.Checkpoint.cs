@@ -82,7 +82,11 @@ public sealed partial class EuFormexPackagePopulationProducer
         {
             Expression = outcome.Expression.CanonicalContentSha256, outcome.Kind, outcome.NotAcquiredReason,
             outcome.PackageRefusal, outcome.UnavailableReason, outcome.AcquisitionRefusal, outcome.ObservedStatus, outcome.Detail,
-            Inventory = outcome.AcquiredInventory?.IdentitySha256, Package = outcome.AcquiredInventory?.SourceReceipt.Reference,
+            Inventory = outcome.AcquiredInventory?.IdentitySha256,
+            PackageSchema = outcome.AcquiredInventory?.SourceReceipt.Reference.Schema,
+            PackageSha256 = outcome.AcquiredInventory?.SourceReceipt.Reference.ContentSha256,
+            PackageLength = outcome.AcquiredInventory?.SourceReceipt.Reference.ByteLength,
+            PackageClass = outcome.AcquiredInventory?.SourceReceipt.Reference.CustodyClass,
         }).ToArray(),
         Annexes = result.AnnexClassifications.Select(static value => value.IdentitySha256).ToArray(),
     });

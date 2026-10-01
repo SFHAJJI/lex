@@ -51,8 +51,6 @@ public sealed class ClosedVocabularyCensusTests
     [TestMethod]
     public void EveryClosedVocabularyInTheSweptAssembliesIsPinnedMemberByMember()
     {
-        foreach (var row in ClosedSurfaceCensus.ClosedVocabularies(CensusScope.SweptHere))
-            Console.WriteLine("PIN883_ENUM " + row);
         CollectionAssert.AreEqual(
             new[]
             {
@@ -127,9 +125,8 @@ public sealed class ClosedVocabularyCensusTests
                     + "OutcomeOutsideExpressionPopulation, ExpressionContentDisagrees, "
                     + "ExpressionDisposedTwice, OutcomeMissing, EligibleExpressionMarkedIneligible, "
                     + "IneligibleExpressionHasPackageOutcome, EnumerationDispositionDisagrees",
-                "Lex.V3.Ingest.Europe.EuFormexPackagePopulationRefusal: None, RunNotComplete, "
-                    + "ExpressionSelectionInvalid, EligibilityRefused, OutcomePopulationRefused, "
-                    + "ReconciliationRefused",
+                "Lex.V3.Ingest.Europe.EuFormexPackagePopulationRefusal: None, RunNotComplete, ExpressionSelectionIn"
+                    + "valid, EligibilityRefused, OutcomePopulationRefused, ReconciliationRefused, CheckpointNotRetained",
                 "Lex.V3.Ingest.Europe.EuFormexRunOutcomeReconciliationRefusal: None, RunNotComplete, "
                     + "RunExpressionProductionInvalid, PopulationOutsideRun, "
                     + "PopulationProductionDisagrees, PopulationSuppliedTwice, PopulationMissing, "
