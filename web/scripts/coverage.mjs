@@ -13,16 +13,16 @@
 // `Observation history begins August 2026; replay depth grows from here.` The V3 answer holds
 // neither fact and says so in its own words, in two of the five rows of its fixed `not_held` list:
 //
-//   build_time_and_currency -- "this report states no build time and no build time of the corpus
-//   file is held, so nothing here says how current these counts are; ..." (the index's event log
-//   records when each build ran, which `events` serves, an upper bound on observation and no
-//   measure of currency)
+//   build_time_and_currency -- "history gives when each build ran, an upper bound on when its
+//   corpus was observed and never an observation time, and nothing here says how current these
+//   counts are against the publisher; ..." (the build times are the history section's, and none
+//   of them dates a count)
 //
 //   first_sighting_and_observation_times -- "no observation time is held, so nothing here says
 //   when anything was first seen; events serves the event log, whose first_sighting events say only
 //   that a state is first present in that log"
 //
-// So there is no build instant on this page and no retention sentence. Not "no date": the page
+// So there is no build instant on the counts and no retention sentence. Not "no date": the page
 // does carry calendar dates, the ends of each language's state range and each measured
 // capability's period, and they are the publisher's facts about the law rather than anyone's claim
 // about when the counting happened. What is gone is a date OF THE COUNTS, and what stands in its
@@ -34,6 +34,13 @@
 // cannot be made by accident. Recorded in advance on issue #348, comment 5752806528, reviewing
 // PR #711: "the rebuilt page renders your row, renders the two digests beside it, and does not
 // present `observed_at` as the counts' currency".
+//
+// ONE SECTION NOW PRINTS INSTANTS, and they are not a date of the counts. The answer's `history`
+// member lists the builds the mounted Luxembourg log records and those whose text this mount holds,
+// each with its build time, and its own note says "every time here is a build's, an upper bound on
+// observation, never an observation time". So those instants are printed verbatim, in that section
+// only, each beside the build it is the time of or under a label naming it a build's time; nothing
+// on the page puts one beside a count, and the counts above stay undated.
 //
 // The second rule is the one the old page attached to the wrong noun. It reconciled each facet
 // TABLE as a partition or as an overlap. The V3 language table is both, per COLUMN, and the SQL
@@ -70,7 +77,7 @@
 // than in a footnote, and renders `counts_note` verbatim as well.
 
 import { NOT_STATED, escapeHtml, requireCountedByAtLeastOne } from './render.mjs';
-import { isCalendarDate } from './temporal.mjs';
+import { isCalendarDate, isUtcInstant } from './temporal.mjs';
 
 export { NOT_STATED };
 
@@ -88,8 +95,8 @@ const DIGEST = /^[0-9a-f]{64}$/;
  * refuses.
  *
  * Without this, feeding the V2 shape to this page produces a page missing its date rather than an
- * error, and a reader cannot tell a report that states no build time from a page that forgot to
- * print one.
+ * error, and a reader cannot tell a report that dates no count from a page that forgot to print
+ * one.
  */
 function refuseRetiredShapes(answer) {
   const retired = [
@@ -108,9 +115,9 @@ function refuseRetiredShapes(answer) {
     if (Object.hasOwn(answer ?? {}, member)) {
       throw new Error(
         `this coverage answer carries ${member}, which belongs to the payload this page was `
-          + 'written against before V3. That payload carried a build instant and this one records '
-          + 'that it states no build time, so rendering the old shape here would put a date on counts '
-          + 'the platform refuses to date',
+          + 'written against before V3. That payload dated its counts with a build instant and this '
+          + 'one dates no count, so rendering the old shape here would put a date on counts the '
+          + 'platform refuses to date',
       );
     }
   }
@@ -177,6 +184,14 @@ function requireList(value, where) {
 function requireDate(value, where) {
   if (!isCalendarDate(value)) {
     throw new Error(`${where} is not a calendar date: ${JSON.stringify(value)}`);
+  }
+  return value;
+}
+
+/** A build's time, in the platform's one instant shape (`yyyy-MM-ddTHH:mm:ssZ`), printed verbatim. */
+function requireInstant(value, where) {
+  if (!isUtcInstant(value)) {
+    throw new Error(`${where} is not a UTC instant in the shape the platform sends: ${JSON.stringify(value)}`);
   }
   return value;
 }
@@ -564,6 +579,138 @@ function readOperations(value) {
 }
 
 /**
+ * How far back the mounted Luxembourg log goes, and which of its builds this mount holds the text of
+ * (`V3CorpusMount.HistoryBlock`): the builds the log records (its snapshots) and when the first ran,
+ * the mounted build and each earlier generation the retention line keeps beside it with every reason
+ * it is kept, how many builds the log names and this mount holds no text for, and the retention line
+ * that decided. Null when no Luxembourg index is mounted.
+ *
+ * The producer builds `snapshots_without_text` as the log's builds minus the ones listed, so the two
+ * add up to `snapshots_in_log` exactly. A schema-6 index records no build at all, and then there is
+ * nothing to count: no snapshot, no first build, no retention line and no listed text. The mounted
+ * build is listed once, as `mounted` and for no other reason, and a kept generation needs the line
+ * that kept it, so with no retention line the mounted build is the only one listed.
+ */
+function readHistory(value) {
+  if (value === null) return null;
+  const where = 'history';
+  if (typeof value !== 'object' || Array.isArray(value)) {
+    throw new Error(
+      `${where} is the mounted log's history, an object, or null when no Luxembourg index is `
+        + `mounted: ${JSON.stringify(value)}`,
+    );
+  }
+
+  const logRecordsBuilds = requireOwn(value, 'log_records_builds', where);
+  if (typeof logRecordsBuilds !== 'boolean') {
+    throw new Error(
+      `${where}.log_records_builds is whether the mounted log records its builds, which is true or `
+        + 'false and never absent',
+    );
+  }
+  const snapshotsInLog = requireCount(
+    requireOwn(value, 'snapshots_in_log', where), `${where}.snapshots_in_log`);
+  const historyBeginsValue = requireOwn(value, 'history_begins', where);
+  const historyBegins = historyBeginsValue === null
+    ? null
+    : requireInstant(historyBeginsValue, `${where}.history_begins`);
+
+  const policy = requireOwn(value, 'retention_policy', where);
+  const retentionPolicy = policy === null ? null : Object.freeze({
+    id: requireText(
+      requireOwn(policy, 'id', `${where}.retention_policy`), `${where}.retention_policy.id`),
+    nightlyDays: requireCount(
+      requireOwn(policy, 'nightly_days', `${where}.retention_policy`),
+      `${where}.retention_policy.nightly_days`),
+    evaluatedAt: requireInstant(
+      requireOwn(policy, 'evaluated_at', `${where}.retention_policy`),
+      `${where}.retention_policy.evaluated_at`),
+  });
+
+  const snapshotsWithText = requireList(
+    requireOwn(value, 'snapshots_with_text', where), `${where}.snapshots_with_text`)
+    .map((row, index) => {
+      const at = `${where}.snapshots_with_text[${index}]`;
+      const observation = requireCount(requireOwn(row, 'observation', at), `${at}.observation`);
+      if (observation < 1) {
+        throw new Error(`${at}.observation is 0; a log numbers its builds from 1`);
+      }
+      const retainedAs = requireList(requireOwn(row, 'retained_as', at), `${at}.retained_as`)
+        .map((reason, position) => requireText(reason, `${at}.retained_as[${position}]`));
+      if (retainedAs.length === 0) {
+        throw new Error(
+          `${at} is listed with no reason it is kept; a build whose text this mount holds is the `
+            + 'mounted one or a generation the retention line kept, and either way it says which',
+        );
+      }
+      requireDistinct(retainedAs, `the reasons ${at} is kept`);
+      return Object.freeze({
+        snapshotId: requireDigest(requireOwn(row, 'snapshot_id', at), `${at}.snapshot_id`),
+        observation,
+        builtAt: requireInstant(requireOwn(row, 'built_at', at), `${at}.built_at`),
+        retainedAs: Object.freeze(retainedAs),
+      });
+    });
+  const snapshotsWithoutText = requireCount(
+    requireOwn(value, 'snapshots_without_text', where), `${where}.snapshots_without_text`);
+  const note = requireText(requireOwn(value, 'note', where), `${where}.note`);
+
+  requireDistinct(snapshotsWithText.map((snapshot) => snapshot.snapshotId), 'the snapshots with text');
+  requireDistinct(
+    snapshotsWithText.map((snapshot) => snapshot.observation), 'the observations of the snapshots with text');
+  if (snapshotsWithText.length + snapshotsWithoutText !== snapshotsInLog) {
+    throw new Error(
+      `${snapshotsWithText.length} snapshots with text and ${snapshotsWithoutText} without are counted `
+        + `against ${snapshotsInLog} the log records; every build the log records either has its text `
+        + 'held here or does not, so these add up, and a history that does not is counting two logs',
+    );
+  }
+
+  if (!logRecordsBuilds) {
+    if (snapshotsInLog !== 0 || historyBegins !== null || retentionPolicy !== null
+      || snapshotsWithText.length !== 0) {
+      throw new Error(
+        `${where} says the mounted log records no build, and counts ${snapshotsInLog} snapshots, `
+          + `${snapshotsWithText.length} with text, a first build of ${JSON.stringify(historyBegins)} `
+          + `and ${retentionPolicy === null ? 'no' : 'a'} retention line; a log that records no build `
+          + 'has none of them to report',
+      );
+    }
+  } else {
+    if (historyBegins === null) {
+      throw new Error(
+        `${where} says the mounted log records its builds and names no first build; the first build `
+          + 'of a log that records builds is a time the log holds',
+      );
+    }
+    const mounted = snapshotsWithText.filter((snapshot) => snapshot.retainedAs.includes('mounted'));
+    if (mounted.length !== 1 || mounted[0].retainedAs.length !== 1) {
+      throw new Error(
+        `${where} lists ${mounted.length} snapshots kept as mounted`
+          + `${mounted.length === 1 ? ' and gives it another reason as well' : ''}; the mounted build is `
+          + 'listed exactly once, as the mounted build and for nothing else',
+      );
+    }
+    if (retentionPolicy === null && snapshotsWithText.length !== 1) {
+      throw new Error(
+        `${where} lists ${snapshotsWithText.length - 1} earlier builds kept beside the mounted one and `
+          + 'no retention line; a generation is kept only by the line that decided to keep it',
+      );
+    }
+  }
+
+  return Object.freeze({
+    logRecordsBuilds,
+    snapshotsInLog,
+    historyBegins,
+    retentionPolicy,
+    snapshotsWithText: Object.freeze(snapshotsWithText),
+    snapshotsWithoutText,
+    note,
+  });
+}
+
+/**
  * What the index measured it can be asked.
  *
  * A cell's period is inclusive and its population is above zero, both refused at construction by
@@ -681,6 +828,7 @@ export function readCoverage(answer) {
     languages,
     members: readMembers(requireOwn(answer, 'members', where), totals),
     operations: readOperations(requireOwn(answer, 'operations', where)),
+    history: readHistory(requireOwn(answer, 'history', where)),
     capabilityCells: readCells(requireOwn(answer, 'capability_cells', where)),
     notHeld: notHeldRows,
   };
@@ -705,9 +853,10 @@ export function readCoverage(answer) {
  */
 export const COUNTS_PROVENANCE_NOTE =
   'The counts of the corpus and the index below were taken from the artifacts named above. Nothing '
-  + 'here says when they were taken: this report states no build time. The digests say exactly which '
-  + 'artifacts were counted, which a date does not. The calendar dates further down are the '
-  + 'publisher’s, about the law, and not about when this was counted.';
+  + 'here says how current they are: the build times in the history section say when each build ran, '
+  + 'which bounds when its corpus was observed and dates no count. The digests say exactly which '
+  + 'artifacts were counted, which a date does not. The calendar dates in the language and capability '
+  + 'tables are the publisher’s, about the law, and not about when this was counted.';
 
 /** No language row at all, which a mount holding no state reaches and nothing else does. */
 export const NO_LANGUAGE_ROWS =
@@ -843,6 +992,7 @@ export const COVERAGE_COPY = Object.freeze({
     holds: 'What this mount holds',
     recorded: 'What the corpus recorded for its members',
     asked: 'What can be asked of this mount',
+    history: 'What this mount keeps of its history',
     measured: 'What this mount measured it can answer',
     notHeld: 'What this mount does not hold',
   }),
@@ -857,6 +1007,12 @@ export const COVERAGE_COPY = Object.freeze({
     members: 'members',
     answered: 'answered',
     notRouted: 'registered, with no route on this mount',
+    snapshotsInLog: 'builds the mounted log records',
+    historyBegins: 'first build recorded',
+    retentionPolicy: 'retention line',
+    nightlyDays: 'days each day’s last build is kept',
+    retentionEvaluatedAt: 'retention decided as of',
+    snapshotsWithoutText: 'builds the log names whose text this mount does not hold',
   }),
   languagesHeld: 'Languages held: {languages}',
   captions: Object.freeze({
@@ -866,6 +1022,7 @@ export const COVERAGE_COPY = Object.freeze({
     articleOutcomes: 'Legal-content outcomes the corpus recorded, by disposition',
     capabilities: 'Measured capabilities, by operation, column, field, language and period',
     notServedData: 'The data that would serve each operation with no route',
+    snapshots: 'Snapshots whose text this mount holds',
   }),
   scrollable: '{caption}, scrollable',
   columns: Object.freeze({
@@ -890,6 +1047,10 @@ export const COVERAGE_COPY = Object.freeze({
     to: 'to',
     population: 'population',
     dataNeeded: 'data that would serve it',
+    snapshot: 'snapshot',
+    observation: 'observation',
+    builtAt: 'built at',
+    keptAs: 'kept as',
   }),
   held: HELD,
   none: 'none',
@@ -898,6 +1059,8 @@ export const COVERAGE_COPY = Object.freeze({
   stateRange: STATE_RANGE_NOTE,
   noArticleOutcomes: NO_ARTICLE_OUTCOMES,
   noGapTokens: NO_GAP_TOKENS,
+  noRetentionPolicy: 'none, so this mount keeps no earlier build beside its own',
+  noBuildsRecorded: 'The mounted log records no build, so this page can name no snapshot and no earlier build this mount keeps.',
   capabilityAbsentAll: 'This mount measured no capability, so nothing here says what it can be asked of any period.',
   capabilityAbsentLanguage: 'No capability is measured for {language}. This says nothing about the other languages this mount holds: a narrowed answer carries only the capabilities of the language asked for.',
   gaps: '{withGaps} of {members} members recorded a gap.',
@@ -916,6 +1079,7 @@ export const COVERAGE_COLUMNS = Object.freeze({
   articleOutcomes: Object.freeze(['disposition', 'outcomes']),
   capabilities: Object.freeze(['operation', 'column', 'field', 'language', 'from', 'to', 'population']),
   notServedData: Object.freeze(['operation', 'dataNeeded']),
+  snapshots: Object.freeze(['snapshot', 'observation', 'builtAt', 'keptAs']),
 });
 
 function languageRows(languages) {
@@ -932,6 +1096,46 @@ function languageRows(languages) {
     + `<td>${cell(language.last_state_date, escapeHtml)}</td>`
     + '</tr>'
   )).join('');
+}
+
+/**
+ * The mounted log's history, or nothing when no Luxembourg index is mounted. Every time in it is a
+ * build's and is printed verbatim beside the build it belongs to; the platform's note says what that
+ * time is and is not, and is printed whole under it.
+ */
+function historySection(history) {
+  if (history === null) return '';
+  const open = `<section class="coverage-block"><h2>${escapeHtml(COVERAGE_COPY.headings.history)}</h2>`;
+  const note = `<p class="coverage-note">${escapeHtml(history.note)}</p></section>`;
+  if (!history.logRecordsBuilds) {
+    return open + `<p class="coverage-held">${escapeHtml(COVERAGE_COPY.noBuildsRecorded)}</p>` + note;
+  }
+  const policy = history.retentionPolicy;
+  return (
+    open
+    + '<table class="coverage-facts"><tbody>'
+    + row(COVERAGE_COPY.facts.snapshotsInLog, escapeHtml(String(history.snapshotsInLog)))
+    + row(COVERAGE_COPY.facts.historyBegins, escapeHtml(history.historyBegins))
+    + (policy === null
+      ? row(COVERAGE_COPY.facts.retentionPolicy, escapeHtml(COVERAGE_COPY.noRetentionPolicy))
+      : row(COVERAGE_COPY.facts.retentionPolicy, code(policy.id))
+        + row(COVERAGE_COPY.facts.nightlyDays, escapeHtml(String(policy.nightlyDays)))
+        + row(COVERAGE_COPY.facts.retentionEvaluatedAt, escapeHtml(policy.evaluatedAt)))
+    + row(COVERAGE_COPY.facts.snapshotsWithoutText, escapeHtml(String(history.snapshotsWithoutText)))
+    + '</tbody></table>'
+    + table({
+      caption: COVERAGE_COPY.captions.snapshots,
+      head: COVERAGE_COLUMNS.snapshots.map((key) => COVERAGE_COPY.columns[key]),
+      rows: history.snapshotsWithText.map((snapshot) => (
+        '<tr>'
+        + `<td>${code(snapshot.snapshotId)}</td>`
+        + `<td>${snapshot.observation}</td>`
+        + `<td>${escapeHtml(snapshot.builtAt)}</td>`
+        + `<td>${snapshot.retainedAs.map(code).join(', ')}</td>`
+        + '</tr>')).join(''),
+    })
+    + note
+  );
 }
 
 /** The page. Every rule is in readCoverage; this decides only how the result looks. */
@@ -1015,6 +1219,7 @@ export function renderCoverage(answer) {
         `<tr><td>${code(row.operation)}</td><td>${escapeHtml(row.dataNeeded)}</td></tr>`)).join(''),
     }))
     + `<p class="coverage-note">${escapeHtml(view.operations.note)}</p></section>`
+    + historySection(view.history)
     + `<section class="coverage-block"><h2>${escapeHtml(COVERAGE_COPY.headings.measured)}</h2>`
     + (view.capabilityCells.length === 0
       ? `<p class="coverage-note">${escapeHtml(capabilityAbsence(view.requestedLanguage))}</p>`
