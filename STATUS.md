@@ -29,7 +29,9 @@ Minimum sampled free space was 5,411,053,568 bytes; peak sampled working set was
 The run contains retained-cursor-audit.json. Its summary SHA-256 is
 `31d5912623f5376da63b0ea162f5265cbbc6dbd72ef99f7bfd787e337b82f06e`.
 This proves the correction on the failing batch. Full population acquisition remains unfinished.
-Cross-family review and green CI on the exact final head remain required.
+Cross-family review returned MERGE with no material findings and reproduced the local checks.
+The other five query families retain their existing filter; a similar publisher fault there
+would still refuse through the shared cursor and proof checks. Final head CI remains required.
 
 The proposed raw-custody retry 5 keeps all 82 seeds, EN/FRA Formex enumeration, explicit outcomes
 for other languages, the 20,000-request ceiling and the bounded LU a439 companion. It raises index
