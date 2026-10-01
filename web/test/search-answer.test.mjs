@@ -1,27 +1,47 @@
-// The V3 search reader, held to the answers the real handler sent.
+// The V3 search readers, held to the answers the real handler sent.
 //
 // The answers come from `schemas/v3-platform/answer-samples.json` (operation `search`), captured
-// by driving the real handler on the fixture mount, so the reader is written against what the
-// platform sends and a change to that shape fails here before any page renders it. Each rule the
-// answer states about itself is then broken once, and the reader must refuse the broken answer
-// with that rule's reason.
+// by driving the real handler on the fixture mounts (Luxembourg's, and the GDPR's for an EU search
+// in one work), so each reader is written against what the platform sends and a change to that
+// shape fails here before any page renders it. Each rule an answer states about itself is then
+// broken once, and the reader must refuse the broken answer with that rule's reason.
 
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 
-import { LANE_MATCH_REASON, SEARCH_LANES, WORK_RESOLUTION_OUTCOMES, readSearch } from "../scripts/search-answer.mjs";
+import {
+  LANE_MATCH_REASON,
+  SEARCH_LANES,
+  WORK_RESOLUTION_OUTCOMES,
+  escapeProvision,
+  readEuropeSearch,
+  readSearch,
+  readSearchAnswer,
+} from "../scripts/search-answer.mjs";
 
 const SAMPLES = new URL("../../schemas/v3-platform/answer-samples.json", import.meta.url);
 const PLACEHOLDER = "<varies-per-run>";
 
-async function capturedAnswers() {
+async function capturedRows(publisher) {
   const parsed = JSON.parse(await readFile(SAMPLES, "utf8"));
-  const rows = parsed.sampled.filter((sample) => sample.operation === "search");
-  assert.equal(rows.length, 5, "the census holds the five search answers this reader is written against");
+  const rows = parsed.sampled.filter((sample) => sample.operation === "search" && sample.answer.publisher === publisher);
   for (const row of rows) assert.equal(row.object_type, "quote");
-  const [both, paged, next, relaxed, none] = rows.map((row) => withDigests(row.answer));
+  return rows.map((row) => withDigests(row.answer));
+}
+
+async function capturedAnswers() {
+  const rows = await capturedRows("lu-legilux");
+  assert.equal(rows.length, 5, "the census holds the five Luxembourg search answers this reader is written against");
+  const [both, paged, next, relaxed, none] = rows;
   return { both, paged, next, relaxed, none };
+}
+
+async function capturedEuropeAnswers() {
+  const rows = await capturedRows("eu-eurlex");
+  assert.equal(rows.length, 4, "the census holds the four EU search answers this reader is written against");
+  const [both, paged, next, none] = rows;
+  return { both, paged, next, none };
 }
 
 /** Fills the fields the census normalises, and only those, each with its own digest. */
@@ -170,4 +190,97 @@ test("the lanes, their reasons and the work-resolution outcomes are the platform
   assert.deepEqual(SEARCH_LANES, ["strict", "relaxed"]);
   assert.deepEqual(LANE_MATCH_REASON, { strict: "exact_phrase", relaxed: "all_terms" });
   assert.deepEqual(WORK_RESOLUTION_OUTCOMES, ["not_run_identifier_given", "no_titles_held", "no_title_match", "one_work", "several_candidates"]);
+});
+
+test("the four captured EU answers read: one work's pinned wording, both lanes, a page and the page its cursor leads to, and no hit", async () => {
+  const { both, paged, next, none } = await capturedEuropeAnswers();
+
+  const view = readEuropeSearch(both);
+  assert.equal(view.publisher, "eu-eurlex");
+  assert.equal(view.identifier, "32016R0679");
+  assert.equal(view.language, "eng");
+  assert.equal(view.wording.celex, "32016R0679");
+  assert.match(view.wording.permalink, /^\/eu-eurlex\/32016R0679\/eng\/\d{4}-\d{2}-\d{2}--[0-9a-f]{64}$/);
+  assert.equal(view.wording.permalink, `/eu-eurlex/32016R0679/eng/${view.wording.wordingDate}--${view.wording.wordingSha256}`);
+  assert.deepEqual(view.hits.map((hit) => hit.lane), ["strict", "strict", "relaxed"]);
+  assert.deepEqual(view.hits.map((hit) => hit.heading), ["Article 26", "Article 36", "Article 47"]);
+  for (const hit of view.hits) {
+    assert.equal(hit.permalink, `${view.wording.permalink}#${hit.publisherId}`, "each hit's permalink is the wording's with its provision");
+    assert.equal(hit.wordingDate, view.wording.wordingDate);
+    assert.equal(hit.coordinate, `${hit.publisherExpressionIri}#lex-provision=${hit.publisherId}`);
+  }
+  assert.equal(view.workResolution.outcome, "not_run_identifier_given", "an EU search names its work");
+  assert.equal(view.population.worksWithHits, 1);
+  assert.equal(view.consolidationsHeld, false);
+  assert.ok(view.notHeld.some((row) => row.item === "corrigenda_applied"), "the answer says corrigenda are not applied, and the view keeps it");
+  assert.match(view.dateSemantics, /not a publication, entry-into-force, application or consolidation date/);
+
+  const page = readEuropeSearch(paged);
+  assert.equal(page.truncated, true);
+  assert.equal(page.continueAfter, `strict.${page.hits[0].articleIdentitySha256}`, "an EU cursor names the lane and the article");
+  const rest = readEuropeSearch(next);
+  assert.equal(rest.after, paged.continue_after, "the census followed the first page's own cursor");
+  assert.deepEqual([page.hits[0], ...rest.hits], [...view.hits], "two pages are the whole result, in order");
+
+  const empty = readEuropeSearch(none);
+  assert.equal(empty.hits.length, 0);
+  assert.equal(empty.searchableTextHeld, true, "no hit is an answer over held text");
+  assert.equal(empty.wording.permalink, view.wording.permalink, "a no-hit answer still names the wording it searched");
+
+  assert.deepEqual(readSearchAnswer(both), view, "readSearchAnswer sends an EU answer to the EU reader");
+  const luxembourg = (await capturedAnswers()).both;
+  assert.deepEqual(readSearchAnswer(luxembourg), readSearch(luxembourg), "and a Luxembourg answer to the Luxembourg reader");
+});
+
+test("an EU provision is escaped as the platform escapes it, in the coordinate and in the permalink", async () => {
+  assert.equal(escapeProvision("001"), "001");
+  assert.equal(escapeProvision("art. 1(a)*!'~"), "art.%201%28a%29%2A%21%27~", "RFC 3986: only the unreserved characters stay");
+  const { both } = await capturedEuropeAnswers();
+  const escaped = mutate(both, (a) => {
+    const hit = a.hits[0];
+    hit.publisher_id = "26(a)";
+    hit.resolve.identifier = `${hit.publisher_expression_id}#lex-provision=26%28a%29`;
+    hit.permalink = `${a.pinned_wording.permalink}#26%28a%29`;
+  });
+  assert.equal(readEuropeSearch(escaped).hits[0].permalink.split("#")[1], "26%28a%29");
+  assert.throws(() => readEuropeSearch(mutate(escaped, (a) => { a.hits[0].permalink = `${a.pinned_wording.permalink}#26(a)`; })), /not the pinned wording's with its provision/);
+  assert.throws(() => readEuropeSearch(mutate(escaped, (a) => { a.hits[0].resolve.identifier = `${a.hits[0].publisher_expression_id}#lex-provision=26(a)`; })), /not to the provision it names/);
+});
+
+test("each rule an EU answer states about itself is refused when broken, with that rule's reason", async () => {
+  const { both, paged, next, none } = await capturedEuropeAnswers();
+  assert.equal(readEuropeSearch(mutate(none, (a) => { a.pinned_wording = null; })).wording, null, "a no-hit answer that pins no wording still reads: it shows no hit");
+  const flipLast = (text) => text.replace(/[0-9a-f]$/, (digit) => (digit === "0" ? "1" : "0"));
+  const cases = [
+    ["a date", both, (a) => { a.requested_date = "2020-01-01"; }, /names no date/],
+    ["no work named", both, (a) => { a.requested_identifier = null; }, /requested_identifier is not a value/],
+    ["hits and no pinned wording", both, (a) => { a.pinned_wording = null; }, /hit 1 pins no wording/],
+    ["a pinned permalink to another digest", both, (a) => { a.pinned_wording.permalink = flipLast(a.pinned_wording.permalink); }, /not the wording it names/],
+    ["a pinned permalink to another date", both, (a) => { a.pinned_wording.wording_date = "2016-05-04"; }, /not the wording it names/],
+    ["a pinned permalink in another language", both, (a) => { a.pinned_wording.permalink = a.pinned_wording.permalink.replace("/eng/", "/fra/"); }, /in fra, and the search was asked in eng/],
+    ["a pinned permalink of another grammar", both, (a) => { a.pinned_wording.permalink = `/lu-legilux/32016R0679/2016-04-27--${a.pinned_wording.wording_sha256}`; }, /not an EU wording permalink/],
+    ["a hit permalink to another provision", both, (a) => { a.hits[0].permalink = a.hits[0].permalink.replace(/#.*$/, "#999"); }, /not the pinned wording's with its provision/],
+    ["a hit of another act", both, (a) => { a.hits[1].celex = "32016L0680"; }, /not in the wording the answer pins/],
+    ["a hit of another wording date", both, (a) => { a.hits[1].wording_date = "2016-05-04"; }, /not in the wording the answer pins/],
+    ["a hit in another language", both, (a) => { a.hits[2].language = "fra"; }, /one language asked \(eng\)/],
+    ["a hit resolving to another provision", both, (a) => { a.hits[0].resolve.identifier = a.hits[0].resolve.identifier.replace(/=.*$/, "=999"); }, /not to the provision it names/],
+    ["hits in two expressions", both, (a) => { a.hits[1].publisher_expression_id += "-other"; a.hits[1].resolve.identifier = `${a.hits[1].publisher_expression_id}#lex-provision=${a.hits[1].publisher_id}`; }, /in 2 expressions/],
+    ["one article twice", both, (a) => { a.hits[1] = structuredClone(a.hits[0]); }, /of the wording twice/],
+    ["relaxed before strict", both, (a) => { a.hits.reverse(); }, /relaxed never outranks strict/],
+    ["a population that does not add up", both, (a) => { a.population.strict_hits = 1; }, /counts 2 hits and the untruncated first page holds 3/],
+    ["a cursor that is not the last hit", paged, (a) => { a.continue_after = a.continue_after.replace("strict.", "relaxed."); }, /not the last hit/],
+    ["a Luxembourg-shaped cursor", next, (a) => { a.requested_after = `strict.${"a".repeat(64)}.${"b".repeat(64)}`; }, /is not a cursor \(lane\.article\)/],
+    ["hits in two works", both, (a) => { a.population.works_with_hits = 2; }, /2 works with hits, and an EU search is in one work/],
+    ["a no-hit answer with a work", none, (a) => { a.population.works_with_hits = 1; }, /1 works with hits/],
+    ["a scope of another work", both, (a) => { a.population.scope.identifier = "32016L0680"; }, /population.scope.identifier/],
+    ["a scope with a date", both, (a) => { a.population.scope.date = "2020-01-01"; }, /population.scope.date/],
+    ["an ambiguous work", both, (a) => { a.ambiguous_works = [{ work_key: "x", reason: "ambiguous_version", candidates: [] }]; }, /an EU search names none/],
+    ["a work resolved from the query", both, (a) => { a.work_resolution.outcome = "no_title_match"; }, /exactly when no identifier is given/],
+    ["the date's meaning dropped", both, (a) => { delete a.date_semantics; }, /does not carry date_semantics/],
+    ["a reason something is not held, dropped", both, (a) => { delete a.not_held[0].reason; }, /not_held\[0\] does not carry reason/],
+    ["another publisher's answer", both, (a) => { a.publisher = "lu-legilux"; }, /EU \(eu-eurlex\) search answer only/],
+  ];
+  for (const [what, base, change, reason] of cases) {
+    assert.throws(() => readEuropeSearch(mutate(base, change)), reason, what);
+  }
 });

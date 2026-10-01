@@ -3,8 +3,10 @@
 // The screen asks `search` through the client module when the reader submits, and shows one state.
 // These tests drive it with an injected fetch that answers the census envelopes
 // (`schemas/v3-platform/envelope-samples.json`: a search answer with hits in both lanes, a
-// `language_not_available` refusal and a `no_corpus_mounted` refusal), so every state is the one a
-// real server response produces, and the server render is the idle form a browser hydrates.
+// `language_not_available` refusal and a `no_corpus_mounted` refusal; and, for an EU work named by
+// its CELEX, an answer whose hits carry the pinned wording's permalink, a language the work is not
+// held in and an identifier the EU index does not hold), so every state is the one a real server
+// response produces, and the server render is the idle form a browser hydrates.
 
 import assert from "node:assert/strict";
 import test from "node:test";
@@ -36,6 +38,8 @@ const envelopeOf = (scenarioStart) => {
 };
 const ANSWER = "a phrase the held text carries";
 const REQUEST = { query: "assemblée générale", language: "fra" };
+const EU_ANSWER = "one EU work by its CELEX";
+const EU_REQUEST = { query: "joint controllers", language: "eng", identifier: "32016R0679" };
 
 function answering(status, contentType, body) {
   const calls = [];
@@ -67,10 +71,16 @@ test("the server renders the form in its idle state, and asks nothing", () => {
   const form = page.slice(page.indexOf('<form role="search"'), page.indexOf("</form>"));
   assert.ok(form.length > 0);
   assert.doesNotMatch(form, /\sname=/, "no control is named, so a submit the browser performs before hydration sends nothing (review of #772)");
+  assert.ok(form.includes("Work identifier (optional)"), "the form offers to search within one work, which is how an EU work is searched");
 });
 
-test("the request carries the phrase as typed and the language, and nothing else", () => {
+test("the request carries the phrase as typed, the language and the work if one is named, and nothing else", () => {
   assert.deepEqual(searchParameters(REQUEST), REQUEST);
+  assert.deepEqual(searchParameters(EU_REQUEST), EU_REQUEST, "a named work is sent");
+  assert.deepEqual(searchParameters({ ...REQUEST, identifier: "" }), REQUEST, "an empty work field sends no identifier");
+  assert.deepEqual(searchParameters({ ...REQUEST, identifier: "  " }), REQUEST, "nor does a blank one");
+  assert.deepEqual(searchParameters({ ...EU_REQUEST, identifier: " 32016R0679" }), { ...EU_REQUEST, identifier: " 32016R0679" }, "an identifier is sent as typed, as the dossier screen sends it");
+  assert.deepEqual(searchParameters({ ...EU_REQUEST, after: "strict.a" }), { ...EU_REQUEST, after: "strict.a" });
   assert.deepEqual(searchParameters({ ...REQUEST, query: "  Loyer " }), { query: "  Loyer ", language: "fra" }, "never trimmed or folded: the platform matches bytes");
   assert.deepEqual(searchParameters({ ...REQUEST, after: "strict.a.b" }), { ...REQUEST, after: "strict.a.b" });
   const words = (count) => Array.from({ length: count }, (_, index) => `w${index}`).join(" ");
@@ -85,6 +95,7 @@ test("the request carries the phrase as typed and the language, and nothing else
     ["a phrase over the ceiling", { ...REQUEST, query: "x".repeat(SEARCH_QUERY_MAX + 1) }, /at most 512/],
     ["a language the form does not offer", { ...REQUEST, language: "ltz" }, /not a language this form offers/],
     ["an empty cursor", { ...REQUEST, after: "" }, /cursor the previous page handed over/],
+    ["an identifier that is not text", { ...REQUEST, identifier: 32016 }, /a work identifier is text/],
   ]) {
     assert.throws(() => searchParameters(request), reason, what);
   }
@@ -113,6 +124,42 @@ test("a served search answer is the results, read by the search reader", async (
   assert.ok(shown.includes("4 with the exact phrase, 1 with every word, in 1 work."));
   assert.ok(shown.includes("This index holds no work titles"), "the work resolution the answer gives is shown");
   assert.doesNotMatch(markup, /Next page/, "a whole page offers no next page");
+});
+
+test("an EU work's search is the EU results: the pinned wording once, each hit's heading, CELEX and wording date, its permalink, and what is not covered", async () => {
+  const envelope = envelopeOf(EU_ANSWER);
+  const value = envelope.result.value;
+  const { calls, fetchImpl } = answering(200, "application/json; charset=utf-8", envelope);
+  const outcome = await loadLiveSearch({ contract, fetchImpl, request: EU_REQUEST });
+  assert.equal(outcome.state, "success", outcome.sentence);
+  assert.equal(outcome.view.publisher, "eu-eurlex");
+  assert.deepEqual(JSON.parse(calls[0].init.body), { operation_id: "search", parameters: EU_REQUEST }, "the work is named in the request");
+
+  const markup = view(outcome);
+  const shown = text(markup);
+  assert.ok(markup.includes(`data-pinned-wording="${value.pinned_wording.wording_sha256}"`));
+  assert.ok(markup.includes(`<code>${value.pinned_wording.permalink}</code>`), "the wording's permalink is printed once, above the hits");
+  assert.ok(shown.includes(`Every hit is in the one wording of 32016R0679 this server holds in eng, dated ${value.pinned_wording.wording_date} and pinned by its digest`));
+  assert.ok(shown.includes(`The wording date (wording_date in search, wording_dates in dossier) is the date the publisher's Formex package gives the act`),
+    "the answer's own sentence says what the date is, as a sentence");
+  for (const hit of value.hits) {
+    assert.ok(markup.includes(`<code>${hit.permalink}</code>`), `the page pins ${hit.publisher_id} by its permalink`);
+    assert.ok(shown.includes(`${hit.heading} of ${hit.celex}, wording of ${hit.wording_date}`));
+    assert.ok(markup.includes(`<strong lang="en">${hit.heading}</strong>`), "the publisher's heading is marked in its language");
+  }
+  assert.doesNotMatch(shown, /version of/, "an EU wording is never called a version");
+  assert.equal((markup.match(/data-lane="strict"/g) ?? []).length, 2);
+  assert.equal((markup.match(/data-lane="relaxed"/g) ?? []).length, 1);
+  assert.ok(shown.includes("2 with the exact phrase, 1 with every word, in 1 work."));
+  assert.ok(shown.includes("What this search does not cover"));
+  for (const row of value.not_held) assert.ok(shown.includes(`${row.item}: ${row.reason}`), row.item);
+  assert.doesNotMatch(markup, /Next page/, "a whole page offers no next page");
+
+  const unpinned = structuredClone(envelope);
+  unpinned.result.value.pinned_wording = null;
+  const refused = searchOutcome({ state: "success", envelope: unpinned });
+  assert.equal(refused.state, "invalid_envelope", "hits that pin no wording are not shown unpinned");
+  assert.match(refused.sentence, /pins no wording/);
 });
 
 test("a truncated page offers the next page with its own cursor, and a whole-result page does not", async () => {
@@ -153,11 +200,16 @@ test("an answer the search reader refuses is an invalid answer, said, never rend
   assert.match(view(outcome), /^<section data-answer-state="invalid_envelope"><p role="status">/);
 });
 
-test("the two refusals a search from this page can meet are refusal cards", async () => {
-  for (const [scenario, code] of [["no corpus mounted", "no_corpus_mounted"], ["a language the mount holds no text in", "language_not_available"]]) {
+test("the refusals a search from this page can meet are refusal cards, an EU work's too", async () => {
+  for (const [scenario, code, request] of [
+    ["no corpus mounted", "no_corpus_mounted", REQUEST],
+    ["a language the mount holds no text in", "language_not_available", { ...REQUEST, language: "deu" }],
+    ["one EU work in a language it is not held in", "language_not_available", { ...EU_REQUEST, language: "fra" }],
+    ["an EU identifier the EU index does not hold", "identifier_unknown", { ...EU_REQUEST, identifier: "32099R9999" }],
+  ]) {
     const envelope = envelopeOf(scenario);
     const { fetchImpl } = answering(200, "application/json", envelope);
-    const outcome = await loadLiveSearch({ contract, fetchImpl, request: { ...REQUEST, language: code === "language_not_available" ? "deu" : "fra" } });
+    const outcome = await loadLiveSearch({ contract, fetchImpl, request });
     assert.equal(outcome.state, "refusal", code);
     assert.equal(outcome.code, code);
     assert.equal(outcome.card, true, `${code}: the card's rules accept the payload the platform sent`);
@@ -226,6 +278,14 @@ test("a session asks when told, says a request it will not send, cancels the sea
   assert.equal(session.next("strict.cursor.last"), true);
   await arrived;
   assert.deepEqual(JSON.parse(settled.calls[1].init.body).parameters, { ...REQUEST, after: "strict.cursor.last" }, "the next page repeats the search with the cursor");
+
+  arrived = new Promise((resolve) => { done = resolve; });
+  assert.equal(session.ask(EU_REQUEST), true);
+  await arrived;
+  arrived = new Promise((resolve) => { done = resolve; });
+  assert.equal(session.next("strict.article"), true);
+  await arrived;
+  assert.deepEqual(JSON.parse(settled.calls[3].init.body).parameters, { ...EU_REQUEST, after: "strict.article" }, "the next page stays within the work named");
 
   const aborted = [];
   const hanging = async (url, init) => new Promise((resolve, reject) => {
