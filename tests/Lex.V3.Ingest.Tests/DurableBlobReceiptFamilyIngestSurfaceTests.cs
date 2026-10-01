@@ -63,8 +63,7 @@ public sealed class DurableBlobReceiptFamilyIngestSurfaceTests
     [TestMethod]
     public void EveryHolderOfReceiptInIngestIsPinnedAndNoneIsAConstructor()
     {
-        CollectionAssert.AreEqual(
-            new[]
+        var expected = new[]
             {
                 "by-ref-method public instance "
                     + "Lex.V3.Ingest.RoutedHttpAcquisitionSession+HeldBodyReceipt::Deconstruct(out "
@@ -390,8 +389,12 @@ public sealed class DurableBlobReceiptFamilyIngestSurfaceTests
                 "property public instance "
                     + "Lex.V3.Ingest.Stage3EvidenceLineage::LuxembourgScopeManifestReceipt() -> "
                     + "Lex.V3.Contracts.Custody.DurableBlobWriteReceipt",
-            },
-            ConstructionSurface.ProducersIn(typeof(RoutedHttpAcquisitionSession).Assembly, typeof(DurableBlobWriteReceipt), true).ToArray());
+            };
+        var actual = ConstructionSurface.ProducersIn(typeof(RoutedHttpAcquisitionSession).Assembly,
+            typeof(DurableBlobWriteReceipt), true).ToArray();
+        CollectionAssert.AreEqual(expected, actual,
+            "Removed or changed pins:\n" + string.Join("\n", expected.Except(actual)) +
+            "\nActual added or changed entries:\n" + string.Join("\n", actual.Except(expected)));
     }
 
     [TestMethod]
