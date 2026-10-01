@@ -28,6 +28,7 @@
         "has_more": false,
         "invalidated_answers": [],
         "log": {
+          "ancestors": [],
           "basis": "genesis",
           "events_held": 1,
           "last_seq": 1,
@@ -3275,7 +3276,8 @@
       "object_type": "event",
       "scenario": "the whole log from its start: a genesis log, one first_sighting per held state",
       "answer": {
-        "delivery": "cursor polling, at least once: while this index is mounted a request with the same cursor answers the same events again, so a reader deduplicates by seq within log_id; next_after is always the cursor to poll next; a new build starts a new log, whose log_id differs and under which a cursor of this log refuses snapshot_unknown; there is no push delivery and no subscription (Decision 93)",
+        "chained_note": null,
+        "delivery": "cursor polling, at least once: while this index is mounted a request with the same cursor answers the same events again, so a reader deduplicates by seq within log_id; next_after is always the cursor to poll next; a build chained to this one carries this log forward with the same numbers, so a cursor of this log reads on in its successor (log.ancestors lists the logs a log honours); a build not chained to this one starts a new log, under which a cursor of this log refuses snapshot_unknown; there is no push delivery and no subscription (Decision 93)",
         "event_names": {
           "in_this_log": [
             "first_sighting"
@@ -3294,17 +3296,24 @@
             "future_state_scheduled",
             "future_state_activated"
           ],
-          "note": "the Stage 4 registry names thirteen events; mintable lists the twelve this pipeline may mint, never the coverage event (B42 finding 5.2: a gate must not be excused by an event the same pipeline mints); this build mints first_sighting only, because the others need a predecessor build to compare against; in_this_log names those this log holds"
+          "note": "the Stage 4 registry names thirteen events; mintable lists the twelve this pipeline may mint, never the coverage event (B42 finding 5.2: a gate must not be excused by an event the same pipeline mints); a genesis log holds first_sighting only; a chained log adds expression_added, file_replaced, interval_closed and validity_revised; withdrawn_from_source and resighted need three completed runs and a complete enumeration, and metadata_revised and the relation and future-state events need data this index does not hold, so none of them is minted; in_this_log names those this log holds"
         },
         "events": [
           {
             "applicability_date": "2024-02-01",
             "cursor": "\u003Cvaries-per-run\u003E:1",
+            "detail": {
+              "source_body_sha256": [
+                "3a6bb598a9310f8a31240c1f33ae357d6e1f7a46392ca33d223c2718cdded95c"
+              ],
+              "state_sha256": "5bca01f82ef3058cfebe7f8a8a6eb1f1fbeeb32b8a1ea7b2c02ac20963235e3a"
+            },
             "event": "first_sighting",
             "expression_iri": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo/fr",
             "language": "fra",
             "observed_from": null,
             "permalink": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--5bca01f82ef3058cfebe7f8a8a6eb1f1fbeeb32b8a1ea7b2c02ac20963235e3a",
+            "replaced_permalink": null,
             "scope": "state",
             "seq": 1,
             "stable_coordinate": "/lu-legilux/loi-1991-08-10-n3/2024-02-01",
@@ -3315,6 +3324,7 @@
         "genesis_note": "this log comes from one observation with no predecessor, so it holds only first_sighting; first_sighting means first present in this log and does not say when the publisher published the text or when it was fetched; observed_from is null because no observation time is held; a revision (validity_revised, interval_closed, file_replaced, withdrawn_from_source, ...) needs a later build compared against this one",
         "has_more": false,
         "log": {
+          "ancestors": [],
           "basis": "genesis",
           "events_held": 1,
           "last_seq": 1,
@@ -3342,7 +3352,7 @@
           }
         ],
         "requested_event": null,
-        "scope": "the event log of the mounted Luxembourg index: a list numbered from 1, polled by cursor, append-only while this index is mounted; this build\u0027s log is a genesis log (one observation, no predecessor), so it holds one first_sighting per held state and nothing else",
+        "scope": "the event log of the mounted Luxembourg index: a list numbered from 1, polled by cursor, append-only; a genesis log (one observation, no predecessor) holds one first_sighting per held state and nothing else; a chained log carries its predecessors\u0027 observations unchanged and appends one observation per later build (log.basis says which)",
         "silence_note": "an empty page says this log holds no further event; it says nothing about whether the publisher changed anything or whether acquisition ran: this mount holds no upstream health and no build time, and every envelope\u0027s freshness names upstream health stale"
       }
     },

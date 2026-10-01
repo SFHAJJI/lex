@@ -18,7 +18,7 @@ public sealed class LuxembourgIndexBuilderTests
     {
         var digest = Convert.ToHexStringLower(SHA256.HashData(
             LuxembourgIndexBuilder.BuildFixedInputDeterminismEvidence()));
-        Assert.AreEqual("41032c02cf05cd744e72109dc18e543cf87c4b82420ebcaa9cb415971c42aad7", digest);
+        Assert.AreEqual("5b328364b06f43339ba418add44a941a7787a595121a09f4ff8ed60ce80c8bf9", digest);
     }
 
     internal const string Retained1991 = "loi-1991-08-10-n3--2024-02-01--fr.bin";
@@ -823,7 +823,7 @@ public sealed class LuxembourgIndexBuilderTests
     /// <summary>
     /// A state the predecessor's log does not hold is appended: a first_sighting, or expression_added when the log holds
     /// the same work and date in another language; one the log holds unchanged appends nothing; one it holds with
-    /// another digest or other bodies is refused until comparison events are served.
+    /// other source bodies is a replaced file, and one it holds with another digest from the same bodies refuses.
     /// </summary>
     [TestMethod]
     public void NewStatesAppendFirstSightingsAndANewLanguageOfAHeldWorkAndDateIsExpressionAdded()
@@ -862,7 +862,8 @@ public sealed class LuxembourgIndexBuilderTests
         Assert.IsNull(LuxembourgIndexBuilder.ProjectChainedEvents(fold, [redigested], bodies, 7, out changed), "a held key with another digest");
         StringAssert.Contains(changed, "/lu-legilux/loi-a/2024-01-01");
         bodies[held.StateSha256] = [new string('e', 64)];
-        Assert.IsNull(LuxembourgIndexBuilder.ProjectChainedEvents(fold, [held], bodies, 7, out changed), "a held key with other source bodies");
+        Assert.AreEqual("file_replaced", LuxembourgIndexBuilder.ProjectChainedEvents(fold, [held], bodies, 7, out changed)!.Single().Event,
+            "a held key with other source bodies is a replaced file");
     }
 
     /// <summary>
@@ -943,8 +944,8 @@ public sealed class LuxembourgIndexBuilderTests
         var changed = LuxembourgIndexPredecessor.TryRead(changedRef, changedLog, out var refusal, out var readDetail);
         Assert.IsNotNull(changed, $"{refusal}: {readDetail}");
         Assert.IsNull(LuxembourgIndexBuilder.TryBuild(envelope, changed, out refusal, out var detail));
-        Assert.AreEqual(LuxembourgIndexBuildRefusal.PredecessorStateChanged, refusal);
-        StringAssert.Contains(detail, "comparison events are not served yet");
+        Assert.AreEqual(LuxembourgIndexBuildRefusal.PredecessorDerivationDiffers, refusal);
+        StringAssert.Contains(detail, "this build's derivation differs from the predecessor's");
 
         var (emptyLog, emptyRef) = Tampered(bytes, connection =>
         {
@@ -975,8 +976,149 @@ public sealed class LuxembourgIndexBuilderTests
         StringAssert.Contains(exception.Message, "not the log of its states");
     }
 
+    // ---- Predecessor chaining, the third slice: comparison events. ----
+
+    private static LuxembourgIndexBuilder.StateRow ChainState(string work, string date, string language, string digest) =>
+        new(work, date, digest, $"https://example.invalid/{work}/{date}/{language}", "w", "r", language, "[]", "[]");
+
+    private static Dictionary<string, LuxembourgIndexBuilder.LoggedState> ChainFold(params (LuxembourgIndexBuilder.StateRow Row, string Body)[] held) =>
+        held.ToDictionary(
+            static pair => LuxembourgIndexBuilder.StateKey(pair.Row),
+            static pair => new LuxembourgIndexBuilder.LoggedState(pair.Row.WorkKey, pair.Row.ApplicabilityDate, pair.Row.ExpressionIri, pair.Row.Language, pair.Row.StateSha256, [pair.Body]),
+            StringComparer.Ordinal);
+
+    /// <summary>
+    /// G1 at the projection: a held state whose source bodies differ is file_replaced, naming the state and bodies it
+    /// replaces, whether its digest changed with its text or stayed with its text; the same bodies with another digest
+    /// are this derivation's change, not the publisher's, and refuse.
+    /// </summary>
+    [TestMethod]
+    public void AHeldStateWhoseSourceBodiesDifferIsFileReplacedAndAnotherDigestFromTheSameBodiesRefuses()
+    {
+        var held = ChainState("loi-a", "2020-01-01", "fra", new string('1', 64));
+        var fold = ChainFold((held, new string('b', 64)));
+        var reworded = held with { StateSha256 = new string('2', 64) };
+        var appended = LuxembourgIndexBuilder.ProjectChainedEvents(fold, [reworded],
+            new Dictionary<string, string[]>(StringComparer.Ordinal) { [reworded.StateSha256] = [new string('c', 64)] }, 5, out var changed);
+        Assert.IsNull(changed);
+        CollectionAssert.AreEqual(
+            new[]
+            {
+                new LuxembourgIndexBuilder.EventRow(5, "state", LuxembourgIndexBuilder.StateKey(held), "file_replaced", null,
+                    $"{{\"state_sha256\":\"{reworded.StateSha256}\",\"source_body_sha256\":[\"{new string('c', 64)}\"],"
+                    + $"\"replaced_state_sha256\":\"{held.StateSha256}\",\"replaced_source_body_sha256\":[\"{new string('b', 64)}\"]}}"),
+            },
+            appended,
+            "a new text: a new state digest, the state and bodies it replaces named");
+
+        var reissued = LuxembourgIndexBuilder.ProjectChainedEvents(fold, [held],
+            new Dictionary<string, string[]>(StringComparer.Ordinal) { [held.StateSha256] = [new string('c', 64)] }, 5, out changed)!;
+        Assert.AreEqual("file_replaced", reissued.Single().Event, "new bytes with the same text: file_replaced, the digest unchanged");
+        StringAssert.Contains(reissued.Single().DetailJson, $"\"replaced_state_sha256\":\"{held.StateSha256}\"");
+
+        Assert.IsNull(LuxembourgIndexBuilder.ProjectChainedEvents(fold, [reworded],
+            new Dictionary<string, string[]>(StringComparer.Ordinal) { [reworded.StateSha256] = [new string('b', 64)] }, 5, out changed));
+        StringAssert.Contains(changed, "/lu-legilux/loi-a/2020-01-01");
+    }
+
+    /// <summary>
+    /// The derived intervals: the latest state the log held, followed by a later one, is interval_closed; a state whose
+    /// end moved because a state was inserted before its next is validity_revised; a held state this build lacks stays
+    /// held, and its interval closes too; each says it is derived and names its old and new end exactly.
+    /// </summary>
+    [TestMethod]
+    public void AHeldStatesIntervalClosesOrIsRevisedByTheStatesThisBuildAdds()
+    {
+        string Body(char c) => new(c, 64);
+        var first = ChainState("loi-a", "2020-01-01", "fra", Body('1'));
+        var last = ChainState("loi-a", "2024-01-01", "fra", Body('2'));
+        var later = ChainState("loi-a", "2026-01-01", "fra", Body('3'));
+        var between = ChainState("loi-a", "2022-01-01", "fra", Body('4'));
+        var bodies = new Dictionary<string, string[]>(StringComparer.Ordinal)
+        {
+            [first.StateSha256] = [Body('a')], [last.StateSha256] = [Body('b')], [later.StateSha256] = [Body('c')], [between.StateSha256] = [Body('d')],
+        };
+        static string Interval(LuxembourgIndexBuilder.StateRow row, string body, string? previous, string next) =>
+            $"{{\"state_sha256\":\"{row.StateSha256}\",\"source_body_sha256\":[\"{body}\"],\"applicable_from\":\"{row.ApplicabilityDate}\","
+            + $"\"previous_to\":{(previous is null ? "null" : $"\"{previous}\"")},\"new_to\":\"{next}\",\"derived\":true}}";
+        var fold = ChainFold((first, Body('a')), (last, Body('b')));
+
+        var closed = LuxembourgIndexBuilder.ProjectChainedEvents(fold, [first, last, later], bodies, 3, out _);
+        CollectionAssert.AreEqual(
+            new[]
+            {
+                new LuxembourgIndexBuilder.EventRow(3, "state", LuxembourgIndexBuilder.StateKey(last), "interval_closed", null, Interval(last, Body('b'), null, "2026-01-01")),
+                new LuxembourgIndexBuilder.EventRow(4, "state", LuxembourgIndexBuilder.StateKey(later), "first_sighting", null,
+                    $"{{\"state_sha256\":\"{later.StateSha256}\",\"source_body_sha256\":[\"{Body('c')}\"]}}"),
+            },
+            closed,
+            "the latest held state closes at the later one's date; the first state's end is unchanged");
+
+        var revised = LuxembourgIndexBuilder.ProjectChainedEvents(fold, [first, between, last], bodies, 3, out _);
+        CollectionAssert.AreEqual(
+            new[]
+            {
+                new LuxembourgIndexBuilder.EventRow(3, "state", LuxembourgIndexBuilder.StateKey(first), "validity_revised", null, Interval(first, Body('a'), "2024-01-01", "2022-01-01")),
+                new LuxembourgIndexBuilder.EventRow(4, "state", LuxembourgIndexBuilder.StateKey(between), "first_sighting", null,
+                    $"{{\"state_sha256\":\"{between.StateSha256}\",\"source_body_sha256\":[\"{Body('d')}\"]}}"),
+            },
+            revised,
+            "a state inserted before the next moves the end back; the latest state stays open");
+
+        var absent = LuxembourgIndexBuilder.ProjectChainedEvents(fold, [later], bodies, 3, out _)!;
+        CollectionAssert.AreEqual(
+            new[] { "interval_closed", "first_sighting" },
+            absent.Select(static value => value.Event).ToArray(),
+            "the held states this build lacks stay held: the latest closes at the new one's date");
+        StringAssert.Contains(absent[0].DetailJson, $"\"state_sha256\":\"{last.StateSha256}\"", "named by the digest the log holds");
+    }
+
+    /// <summary>
+    /// G1 through the real pipeline: the same act built again from the publisher's file with one article reworded is
+    /// file_replaced, and the state's digest, and so its permalink, is new; built from the same file with one byte added
+    /// and its text unchanged, it is file_replaced with the digest, and so the version, unchanged.
+    /// </summary>
+    [TestMethod]
+    public async Task AReplacedPublisherFileIsFileReplacedAndItsNewTextIsANewVersion()
+    {
+        var (_, first, _) = await BuildStateEnvelopeAsync();
+        var predecessor = LuxembourgIndexPredecessor.TryRead(first.IndexRef, first.IndexBytes.Span, out var readRefusal, out var readDetail);
+        Assert.IsNotNull(predecessor, $"{readRefusal}: {readDetail}");
+        var (_, firstEvents) = ReadLog(first.IndexBytes.ToArray());
+        var firstState = System.Text.Json.JsonDocument.Parse(firstEvents[0].DetailJson).RootElement.GetProperty("state_sha256").GetString();
+
+        foreach (var (what, transform, newVersion) in new (string What, Func<string, string> Transform, bool NewVersion)[]
+                 {
+                     ("one article reworded", static xml => ReplaceFirst(xml, "assemblée générale", "assemblée plénière"), true),
+                     ("one byte added, the text unchanged", static xml => xml + "\n", false),
+                 })
+        {
+            var (envelope, _, _) = await BuildStateEnvelopeAsync(transform);
+            var chained = LuxembourgIndexBuilder.TryBuild(envelope, predecessor, out var refusal, out var detail);
+            Assert.IsNotNull(chained, $"{what}: {refusal}: {detail}");
+            var (observations, events) = ReadLog(chained.IndexBytes.ToArray());
+            var replaced = events.Skip((int)observations[^1].FirstSeq - 1).Where(static value => value.Event == "file_replaced").ToArray();
+            Assert.HasCount(1, replaced, what);
+            var detailJson = System.Text.Json.JsonDocument.Parse(replaced[0].DetailJson).RootElement;
+            Assert.AreEqual(firstState, detailJson.GetProperty("replaced_state_sha256").GetString(), what);
+            Assert.AreEqual(newVersion, !string.Equals(firstState, detailJson.GetProperty("state_sha256").GetString(), StringComparison.Ordinal), what);
+            CollectionAssert.AreNotEqual(
+                detailJson.GetProperty("replaced_source_body_sha256").EnumerateArray().Select(static body => body.GetString()).ToArray(),
+                detailJson.GetProperty("source_body_sha256").EnumerateArray().Select(static body => body.GetString()).ToArray(),
+                $"{what}: the bodies differ");
+        }
+    }
+
+    private static string ReplaceFirst(string text, string old, string replacement)
+    {
+        var at = text.IndexOf(old, StringComparison.Ordinal);
+        Assert.IsGreaterThanOrEqualTo(0, at, old);
+        return text[..at] + replacement + text[(at + old.Length)..];
+    }
+
     /// <summary>The state index's envelope and its first build, with the corpus, for the chained builds.</summary>
-    private static async Task<(Stage3DerivationProfileEnvelope Envelope, LuxembourgIndexBuildResult Built, VerifiedLexCorpus6ManifestSet Corpus)> BuildStateEnvelopeAsync()
+    internal static async Task<(Stage3DerivationProfileEnvelope Envelope, LuxembourgIndexBuildResult Built, VerifiedLexCorpus6ManifestSet Corpus)> BuildStateEnvelopeAsync(
+        Func<string, string>? transform = null)
     {
         const string manifestation =
             "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo/fr/xml";
@@ -984,6 +1126,11 @@ public sealed class LuxembourgIndexBuilderTests
             "http://data.legilux.public.lu/filestore/eli/etat/leg/loi/1991/08/10/n3/jo/fr/xml/eli-etat-leg-loi-1991-08-10-n3-jo-fr-xml.xml";
         var xml = await File.ReadAllBytesAsync(Path.Combine(
             AppContext.BaseDirectory, "Fixtures", "LuAknLegalContent", Retained1991));
+        if (transform is not null)
+        {
+            xml = Encoding.UTF8.GetBytes(transform(Encoding.UTF8.GetString(xml)));
+        }
+
         ICustodyStore store = new RoutedHttpAcquisitionSessionTests.MultiObjectCustodyStore();
         var luxembourg = await LuxembourgGazetteAcquisitionTests
             .CompleteXmlForStage3BodyCompositionAsync(xml, store, manifestation, item);
@@ -1012,7 +1159,7 @@ public sealed class LuxembourgIndexBuilderTests
     private static (byte[] Bytes, SourceArtifactRef Reference) Tampered(byte[] source, string tamper, bool restampLog) =>
         Tampered(source, connection => Execute(connection, tamper), restampLog);
 
-    private static (byte[] Bytes, SourceArtifactRef Reference) Tampered(byte[] source, Action<SqliteConnection> tamper, bool restampLog = true)
+    internal static (byte[] Bytes, SourceArtifactRef Reference) Tampered(byte[] source, Action<SqliteConnection> tamper, bool restampLog = true)
     {
         var bytes = MutateDatabase(source, connection =>
         {

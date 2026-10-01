@@ -78,7 +78,8 @@ public sealed class VocabularyRegistryCensusTests
                 "Lex.V3.Ingest.Luxembourg.LuxembourgIndexQueries: const AnchorArticles, "
                     + "const ArticleIds, const CitationsTo, const EventCount, const EventLog, "
                     + "const EventsAfter, const EventsOfNameAfter, const HeldWorks, "
-                    + "const MemberOutcomes, const StateArticles, const StateCitations, "
+                    + "const MemberOutcomes, const Observations, const RevisingEventsAfter, "
+                    + "const StateArticles, const StateCitations, "
                     + "const StateDocumentOutcomes, const StateSources, const StatesOfExpressions, "
                     + "const SubjectFacts, const WorkRecords, const WorkTitles",
                 "Lex.V3.Ingest.Luxembourg.LuxembourgPublisherPdfActScopeProducer: const "
