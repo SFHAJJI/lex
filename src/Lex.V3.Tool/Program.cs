@@ -212,9 +212,10 @@ try
     var startedAt = DateTimeOffset.UtcNow;
     Console.WriteLine($"lex-v3 build: custody={custodyRoot} custody_encoding={custodyEncoding} ceiling={ceiling} started={startedAt:O}");
 
-    var europeRenderers = await EuRendererSources.FromCheckoutAsync(store, checkout, token);
+    var europeRenderers = retainedEuCheckpoint is null ? await EuRendererSources.FromCheckoutAsync(store, checkout, token) : null;
     var luxembourgRenderers = await LuxembourgRendererSources.FromCheckoutAsync(store, checkout, token);
-    Console.WriteLine("renderer sources held: 6 Europe, 2 Luxembourg");
+    Console.WriteLine(retainedEuCheckpoint is null ? "renderer sources held: 6 Europe, 2 Luxembourg"
+        : "renderer sources held: 2 Luxembourg; Europe sources reopen from retained custody");
 
     var celexes = options["--celex"] == "all"
         ? EuAppendixASeedMap.SeedsInCelexOrder.Select(seed => seed.Celex).ToArray()
@@ -234,7 +235,7 @@ try
     }
     else
     {
-        europe = await euAcquisition.RunAsync(celexes, europeRenderers, budget, token);
+        europe = await euAcquisition.RunAsync(celexes, europeRenderers!, budget, token);
     }
     if (!europe.Delivered)
     {

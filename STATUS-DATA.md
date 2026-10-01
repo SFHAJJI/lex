@@ -16,6 +16,14 @@ Luxembourg launch scope follows the owner's legislative-body family decision. Co
 
 Local fast/ingest tests remain deferred while the EU acquisition occupies the machine and free memory is below 4 GB. GitHub CI runs the full solution. Production signing, deployment and promotion remain outside this lane's authorization.
 
+## Bounded Luxembourg measurement in preparation
+
+The next slice accepts `build --eu-checkpoint <reference.json>` with the original `--celex` scope and custody. It verifies the retained EU closure before any request, renews the rights notice once for the new build, and acquires the selected Luxembourg partition. A missing, changed or mismatched checkpoint refuses; it never falls back to fetching EU again. Successful EU phases write a reusable reference file under custody. Family proofs, record outcomes and unique held-body bytes are reported for measurement.
+
+The selected candidate is `loi/2017/03/` through the exclusive upper bound `loi/2017/030`, observed at S=219, A=1,414 and G=114. The six-request count probe is retained at `C:\lex-v3\lu-legislative-partition-count-20261001-1`; requests, bounds and response digests were reopened independently. This count probe does not establish a complete acquisition or full-population sizing.
+
+Ten new fixture/process cases are drafted for retained population reuse, fresh rights gating, bad-input refusal before network traffic, and complete mixed acquisition followed by two independent derives. They still need CI. The live partition measurement waits for the active EU run to finish and a complete checkpoint-bearing canary to supply the EU input. The prepared runner preserves the disk floor, records sampled peak memory and stored custody bytes, and compares every output file. No live success or population capacity is claimed yet.
+
 ## Earlier component evidence
 
 The entries below record earlier component checkpoints. Their statements about pending complete offline derivation are superseded by the current command above.

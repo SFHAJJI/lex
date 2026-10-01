@@ -15,9 +15,10 @@ namespace Lex.V3.Ingest.Tests;
 public sealed partial class V3FirstMountBuildTests
 {
     [TestMethod]
-    [DataRow(false, false)]
-    [DataRow(true, true)]
-    public async Task OfflineCommandRebuildsEveryMountFileInTwoSeparateProcesses(bool compressed, bool chained)
+    [DataRow(false, false, false)]
+    [DataRow(true, true, false)]
+    [DataRow(true, false, true)]
+    public async Task OfflineCommandRebuildsEveryMountFileInTwoSeparateProcesses(bool compressed, bool chained, bool reuseEurope)
     {
         var root = Path.Combine(Path.GetTempPath(), "lex-v3-offline-test-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(root);
@@ -26,6 +27,20 @@ public sealed partial class V3FirstMountBuildTests
             var custody = Path.Combine(root, "custody");
             var store = compressed ? FileSystemCustodyStore.WithBrotliCompression(custody) : new FileSystemCustodyStore(custody);
             var (europe, luxembourg) = await AcquireAsync(store, CheckoutRoot());
+            if (reuseEurope)
+            {
+                using var rights = new EuFirstMountAcquisitionTests.CompositeHandler(
+                    new Dictionary<string, EuAcquisitionTestFixture.FamilyScript>(), new Dictionary<string, string[]>());
+                europe = await new Lex.V3.Ingest.Europe.EuFirstMountAcquisition(store, TimeProvider.System, rights)
+                    .ReuseAsync(europe.CheckpointRef!, [EuAxiomWiringHarness.Seed(null).Celex], WireRequestBudget.OfWireRequests(10), CancellationToken.None);
+                Assert.IsTrue(europe.Delivered, europe.Detail);
+                Assert.AreEqual(0, rights.AdapterRequests + rights.FormexEnumerationRequests + rights.FormexPackageRequests);
+                using var luHandler = new LuxembourgFirstMountAcquisitionTests.LuxembourgFamilyHandler(LuxembourgFirstMountAcquisitionTests.PdfBytes());
+                luxembourg = await new LuxembourgFirstMountAcquisition(store, TimeProvider.System, luHandler)
+                    .RunAsync(LuxembourgFirstMountAcquisitionTests.ActRange,
+                        await LuxembourgRendererSources.FromCheckoutAsync(store, CheckoutRoot(), CancellationToken.None),
+                        LuxembourgAcquisitionTestFixture.TestWireBudget(), CancellationToken.None);
+            }
             Assert.IsTrue(europe.Delivered, europe.Detail);
             Assert.IsTrue(luxembourg.Delivered, luxembourg.Detail);
             var time = DateTimeOffset.FromUnixTimeSeconds(DateTimeOffset.UtcNow.ToUnixTimeSeconds() + 1);
