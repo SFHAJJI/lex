@@ -780,7 +780,7 @@ CI evidence are recorded in the pull request before merge.
 
 ## Heads
 
-- `v3/integration`: `18b53941` (2026-10-01, PR #843 merged). Build 45 s. Fast lane
+- `v3/integration`: `c949c9e1` (2026-10-01, PR #847 merged). Build 45 s. Fast lane
   (`eng/test-fast.ps1`): 3,077 tests, 3,076 pass, 1 skipped (the review of PR #828). Ingest suite: green on CI for PR #760
   (the CI `dotnet` job runs the whole solution on every pull request, about 7 min on the runner;
   green for PR #834);
@@ -2010,6 +2010,26 @@ mount they are given.
 - Next slices: the refusal and retrieval sets derived from a mount, then the card over the release's
   mount in the rehearsal.
 
+The refusal set reads the EU index too (PR #846), so a mount that holds only the EU still measures
+its refusals. From the EU index's first work in its first language that holds a usable word in any
+article (scanned in order; the review of #846 found the first version read only the first article,
+so a short one left the EU unmeasured):
+- a word it holds, searched in it, must be answered;
+- the same in a CELEX the index does not hold: `identifier_unknown`;
+- in a language the work is not held in: `language_not_available`;
+- with a date, which EU search does not serve: `retrieval_mode_unavailable`.
+A code an EU request produces is no longer listed as not produced. Coverage's own rule is mirrored:
+it refuses `no_corpus_mounted` when the mount holds no Luxembourg index. The first run on the
+EU-only GDPR fixture expected an answer there.
+- On the real bounded first mount the refusal set grows from 1 request to 5 (coverage and the four
+  EU ones), all answered with their code. The verdict control now applies and catches the shuffle.
+- On the GDPR fixture alone: every EU request is answered with its code, and the control catches
+  the shuffle.
+- The release-mount run requires the EU requests whenever the EU index holds a usable word.
+- Two mutations:
+  - the unknown CELEX given the gold `answer` fails;
+  - reading only the first article fails the short-first-article test.
+
 The refusal set over any mount (PR #839), the second slice of ruling 2's gates over the real
 mounted corpus (`V3MountedGatesTests.Refusal.cs`). Each request is built from what the mount holds,
 so the one code the registry says answers it follows from the mount's own data:
@@ -2066,6 +2086,23 @@ The first mount's card reads and renders. At this head it has 3 sets (the two te
 arms and the refusal set) and says "2 gates do not pass", each named not measured. With #842's
 retrieval set it has 4 sets and says 5, as the review of #841 counted. The journey and
 licence-blocked mounts' cards and the platform card read too.
+The retrieval set reads the EU index too (PR #845), so the real bounded first mount's card measures
+retrieval. EU search is served in one work and states the same matching (`EuropeSearchMatching`: a
+byte-exact substring). For a seeded sample of up to two of the EU index's works in each language it
+holds (the review of #845 found the first version took two work-language pairs in all, which could
+leave a language unsearched):
+- words held by one to five provisions are judged to find exactly those (the CELEX and the
+  publisher's provision id, as an EU hit names them), searched with the work as scope;
+- strings the work holds nowhere find nothing.
+EU `verify` is not served, so the EU gives no exact-identifier case. On the GDPR fixture and on the
+real first mount, anchor nDCG@10 is 1 over 6 EU word cases and no-hit accuracy 1 over 3. Resolver
+exactness is not measured (no measurable query). So the judgments control does not apply: its rule
+needs every required gate to pass first, and the card says so. A French-held work gives French
+cases, which pass. Two mutations:
+- EU judgments naming another provision drop nDCG@10 to 0 and fail;
+- the first version's sampling (three English works and a French one) leaves French out and fails
+  the sampling test.
+
 The retrieval set over any mount (PR #842), the third slice of ruling 2's gates over the real
 mounted corpus (`V3MountedGatesTests.Retrieval.cs`). The judgments are computed from the mount's
 index by the search's own stated matching (`SearchMatching`: a byte-exact substring of an article's
@@ -2088,6 +2125,23 @@ all three gates pass at 1: anchor nDCG@10 (11 cases), no-hit accuracy (4) and re
 (3). The judgments control catches the shuffle. The real first mount has no case: all three gates
 are not measured and the control says why. A mutation, word judgments naming another anchor,
 drops nDCG@10 to 0.57 and fails. `TheGatesOverTheMountTheReleaseNames` now writes all three sets.
+
+The image rehearsal runs in CI (PR #847): the job `image-rehearsal` in `v3-ci.yml`, on every push
+to `v3/integration`. It also runs on a pull request whose branch name contains `rehearsal`, so a
+change to the rehearsal proves the job before it merges.
+- It writes the journey fixture mount (`V3JourneyMountTests`) and runs
+  `web/scripts/image-rehearsal.mjs --no-probe`. The WSL probes need the driver's machine and stay
+  local.
+- `jq` then holds the report to:
+  - the second build's digest;
+  - no image failure and V2 absent;
+  - the rehearsal signature verified;
+  - the card being the gates run over that mount;
+  - the release read back with no failure;
+  - the work and artifacts directories removed.
+- The report is uploaded.
+Push only, so a pull request's wait is unchanged, while the image pipeline is checked after every
+merge, the data lane's included.
 
 The release card is the machine gates run over the release's own mount (PR #844), the last slice of
 ruling 2's gates over the real mounted corpus. The image rehearsal first runs
@@ -2643,8 +2697,10 @@ Repair fast lane: 3,065 pass / 1 Windows skip; repair build: zero warnings/error
 
 - The bounded real mount is available at
   `C:\lex-v3\first-mount-decision95-restart-20260930\v3-corpus`; the web lane's journeys run on it
-  (PR #815). The machine gates' mounted-corpus run needs case sets written for a real corpus, whose
-  Luxembourg side holds no state yet. The data lane continues the full EU and Luxembourg populations.
+  (PR #815). The machine gates derive their cases from any mount (PRs #838, #839, #842, #845, #846)
+  and the release card is the gates run over the rehearsal's mount (PR #844). The real mount holds
+  no Luxembourg state yet, so its temporal set is not measured, and it will be once the data lane's
+  full populations land.
 - EU search on the live search screen waits on an EU permalink grammar (item 5). The real mount's
   EU index answers `search` in one work (for example `32016R0679`, 60 hits for "personal data"), and
   the web search reader refuses the answer by design, reading Luxembourg's only. Each EU hit cites

@@ -353,7 +353,17 @@ public sealed partial class V3MountedGatesTests
         Assert.IsNotNull(mount, $"{directory} does not mount.");
         var timelines = Sample(Timelines(directory), WorkSample, Seed);
         var temporal = RunTemporalGate(mount, timelines);
-        var (refusal, _) = RunRefusalGate(mount, directory, timelines);
+        var (refusal, derived) = RunRefusalGate(mount, directory, timelines);
+        // An EU index that holds a usable word must give the EU requests (review of #846).
+        var europe = Path.Combine(directory, V3CorpusMount.EuropeIndexFileName);
+        if (File.Exists(europe))
+        {
+            using var connection = Lex.V3.Ingest.Europe.EuropeIndexBuilder.Open(europe, Microsoft.Data.Sqlite.SqliteOpenMode.ReadOnly);
+            if (Rows(connection, "SELECT searchable_text FROM articles").Any(static row => UsableWord(row[0]) is not null))
+            {
+                Assert.IsTrue(derived.Requests.ContainsKey("eu-search-held"), "the EU index holds a usable word, so the refusal set holds the EU requests");
+            }
+        }
         var retrieval = RunRetrievalGate(mount, directory, timelines);
         EvaluationCardSet[] sets = [.. temporal, refusal, retrieval];
         var output = Environment.GetEnvironmentVariable(CardOutVariable);
