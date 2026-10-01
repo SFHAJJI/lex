@@ -213,13 +213,19 @@ public sealed class LuxembourgFirstMountAcquisitionResult
     /// <summary>Original vocabulary/query acquisition and renderer bindings for offline derivation.</summary>
     public SourceArtifactRef? CheckpointRef { get; private init; }
 
+    public SourceArtifactRef? PopulationScopeManifestRef { get; private init; }
+
     internal LuxembourgFirstMountAcquisitionResult WithVocabularyCheckpoint(SourceArtifactRef reference) =>
         new(Run, Profile, VocabularyEvidenceRef, AknInventory, AknLegalContent, Refusal, Detail)
-            { VocabularyCheckpointRef = reference, CheckpointRef = CheckpointRef };
+            { VocabularyCheckpointRef = reference, CheckpointRef = CheckpointRef, PopulationScopeManifestRef = PopulationScopeManifestRef };
 
     internal LuxembourgFirstMountAcquisitionResult WithCheckpoint(SourceArtifactRef reference) =>
         new(Run, Profile, VocabularyEvidenceRef, AknInventory, AknLegalContent, Refusal, Detail)
-            { VocabularyCheckpointRef = VocabularyCheckpointRef, CheckpointRef = reference };
+            { VocabularyCheckpointRef = VocabularyCheckpointRef, CheckpointRef = reference, PopulationScopeManifestRef = PopulationScopeManifestRef };
+
+    internal LuxembourgFirstMountAcquisitionResult WithPopulationScopeManifest(SourceArtifactRef reference) =>
+        new(Run, Profile, VocabularyEvidenceRef, AknInventory, AknLegalContent, Refusal, Detail)
+            { VocabularyCheckpointRef = VocabularyCheckpointRef, CheckpointRef = CheckpointRef, PopulationScopeManifestRef = reference };
 
     public LuxembourgAknArticleInventoryPopulation? AknInventory { get; }
 
@@ -320,23 +326,39 @@ public sealed partial class LuxembourgFirstMountAcquisition
         _testHandlerOverride = testHandlerOverride;
     }
 
-    public async Task<LuxembourgFirstMountAcquisitionResult> RunAsync(
+    public Task<LuxembourgFirstMountAcquisitionResult> RunAsync(
         LuxembourgActRange act,
         LuxembourgRendererSources rendererSources,
         WireRequestBudget wireBudget,
+        CancellationToken cancellationToken) =>
+        RunScopeAsync(LuxembourgPopulationScope.FromRange(act), act, rendererSources, wireBudget, cancellationToken);
+
+    public Task<LuxembourgFirstMountAcquisitionResult> RunPopulationAsync(
+        LuxembourgPopulationScope scope,
+        LuxembourgRendererSources rendererSources,
+        WireRequestBudget wireBudget,
+        CancellationToken cancellationToken) =>
+        RunScopeAsync(scope, null, rendererSources, wireBudget, cancellationToken);
+
+    private async Task<LuxembourgFirstMountAcquisitionResult> RunScopeAsync(
+        LuxembourgPopulationScope scope, LuxembourgActRange? legacyAct,
+        LuxembourgRendererSources rendererSources, WireRequestBudget wireBudget,
         CancellationToken cancellationToken)
     {
-        ArgumentNullException.ThrowIfNull(act);
+        ArgumentNullException.ThrowIfNull(scope);
         ArgumentNullException.ThrowIfNull(rendererSources);
         ArgumentNullException.ThrowIfNull(wireBudget);
 
-        var scopeRef = await HoldAsync(JsonSerializer.SerializeToUtf8Bytes(new
-        {
-            schema = "lex-lu-first-mount-scope/1",
-            act = new { act.Name, start = act.StartInclusive, end = act.EndExclusive },
-            vocabulary = "P/T/C whole key space; O Creative Commons BY 4.0 range",
-            documents = "the manifest's selected body of each admitted object, and every accepted Gazette listing of each as-published act",
-        }, EvidenceJson), cancellationToken).ConfigureAwait(false);
+        var scopeBytes = legacyAct is { } act
+            ? JsonSerializer.SerializeToUtf8Bytes(new
+            {
+                schema = "lex-lu-first-mount-scope/1",
+                act = new { act.Name, start = act.StartInclusive, end = act.EndExclusive },
+                vocabulary = "P/T/C whole key space; O Creative Commons BY 4.0 range",
+                documents = "the manifest's selected body of each admitted object, and every accepted Gazette listing of each as-published act",
+            }, EvidenceJson)
+            : scope.DeclarationBytes();
+        var scopeRef = await HoldAsync(scopeBytes, cancellationToken).ConfigureAwait(false);
         var plan = LuxembourgQueryPlan.CreateDefaultGraph(scopeRef);
         var planId = NewUrn();
         var executor = new LuxembourgRepeatedEnumerationExecutor(_custodyStore, _timeProvider, _testHandlerOverride);
@@ -421,25 +443,29 @@ public sealed partial class LuxembourgFirstMountAcquisition
                 "vocabulary checkpoint not retained: " + exception.Message, vocabularyEvidenceRef: vocabularyEvidenceRef);
         }
 
-        // ---- The act: S, A and G over its range, through the adapter and its Gazette loop. ----
-        var families = new List<(LuxembourgPartitionRunRequest, BoundMachineRequest, LuxembourgPartitionChain?)>(LuxembourgActRange.Families.Count);
-        foreach (var family in LuxembourgActRange.Families)
+        // Each explicit range gets its own S/A/G group. Adaptive splitting proves the
+        // selected ranges independently; the gaps between ranges are never filled in.
+        var families = new List<(LuxembourgPartitionRunRequest, BoundMachineRequest, LuxembourgPartitionChain?)>();
+        var scopeMembers = new List<LuxembourgScopePartitionFamilies>();
+        foreach (var selected in scope.Ranges)
         {
-            var range = act.FamilyRange(family);
-            var request = new LuxembourgPartitionRunRequest(plan, planId, family, range, rendererSources.Query);
-            var witness = plan.BindCount(planId, NewUrn(), NewUrn(), family, LuxembourgQueryPass.Pass1, range, rendererSources.Query);
-            families.Add((request, witness.Request, null));
+            foreach (var family in LuxembourgActRange.Families)
+            {
+                var range = selected.FamilyRange(family);
+                var request = new LuxembourgPartitionRunRequest(plan, planId, family, range, rendererSources.Query);
+                var witness = plan.BindCount(planId, NewUrn(), NewUrn(), family, LuxembourgQueryPass.Pass1, range, rendererSources.Query);
+                families.Add((request, witness.Request, null));
+            }
+            scopeMembers.Add(new(selected.Name + "-s", selected.Name + "-a", selected.Name + "-g"));
         }
 
         var adapter = new LuxembourgQueryExecutionAdapter(_custodyStore, executor, profile);
-        var run = act == LuxembourgActRange.WholePopulation
-            ? await adapter.RunAdaptiveScopedAsync(families,
-                [new LuxembourgScopePartitionFamilies(act.Name + "-s", act.Name + "-a", act.Name + "-g")],
+        var run = legacyAct is null || legacyAct == LuxembourgActRange.WholePopulation
+            ? await adapter.RunAdaptiveScopedAsync(families, scopeMembers,
                 rendererSources.DocumentFetch, wireBudget, cancellationToken).ConfigureAwait(false)
             : await adapter.RunAsync(
-                families, act.Name + "-g", act.Name + "-s", act.Name + "-a",
-                rendererSources.DocumentFetch, wireBudget, cancellationToken)
-            .ConfigureAwait(false);
+                families, legacyAct.Name + "-g", legacyAct.Name + "-s", legacyAct.Name + "-a",
+                rendererSources.DocumentFetch, wireBudget, cancellationToken).ConfigureAwait(false);
         if (run.Refusal is { } runRefusal)
         {
             return LuxembourgFirstMountAcquisitionResult.Refused(
@@ -471,7 +497,13 @@ public sealed partial class LuxembourgFirstMountAcquisition
             .WithVocabularyCheckpoint(vocabularyCheckpoint);
         try
         {
-            var checkpoint = await RetainAcquisitionCheckpointAsync(act, rendererSources, delivered, cancellationToken).ConfigureAwait(false);
+            if (legacyAct is null)
+            {
+                var manifestBytes = scope.ManifestBytes(profile, scopeRef, vocabularyEvidenceRef);
+                await HoldAcquisitionBytesAsync(manifestBytes, cancellationToken).ConfigureAwait(false);
+                delivered = delivered.WithPopulationScopeManifest(new SourceArtifactRef(NewUrn(), CustodyDigest.Of(manifestBytes)));
+            }
+            var checkpoint = await RetainAcquisitionCheckpointAsync(scope, legacyAct is not null, scopeRef, rendererSources, delivered, cancellationToken).ConfigureAwait(false);
             return delivered.WithCheckpoint(checkpoint);
         }
         catch (Exception exception) when (exception is CustodyRequiredException or CustodyIntegrityException)

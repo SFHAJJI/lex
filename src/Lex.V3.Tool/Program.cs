@@ -23,11 +23,12 @@ if (args.Length > 0 && args[0] == "derive") return await OfflineDeriveCommand.Ru
 
 const string Usage =
     "Usage: Lex.V3.Tool build --celex <CELEX[,CELEX...]|all> --lu-name <key> --lu-start <IRI> --lu-end <IRI>\n"
-    + "   or: Lex.V3.Tool build --celex <CELEX[,CELEX...]|all> --lu-population all\n"
+    + "   or: Lex.V3.Tool build --celex <CELEX[,CELEX...]|all> --lu-population <all|legislative>\n"
     + "                         --custody <directory> --out <directory> --checkout <directory> --wire-ceiling <n>\n"
     + "  --celex        an Appendix A seed, comma-separated seeds, or all for the 82-seed population\n"
     + "  --eu-checkpoint  retained EU acquisition reference JSON in this custody; reuse its population and renew only the rights notice\n"
     + "  --lu-population all  all publisher IRI keys through S/A/G, with existing scope and rights rules\n"
+    + "  --lu-population legislative  explicit code/loi/rgd ranges, including descendants; other URI families typed unenumerated\n"
     + "  --lu-name      lowercase ASCII key prefixing the act's three family keys\n"
     + "  --lu-start/--lu-end  an ELI key range on the publisher's key order (start inclusive, end exclusive)\n"
     + "  --custody      the run's custody root (FileSystemCustodyStore); everything the run holds goes here\n"
@@ -77,20 +78,20 @@ if (custodyEncoding is not ("raw" or "brotli"))
     return 2;
 }
 
-var wholePopulation = options.TryGetValue("--lu-population", out var population);
-if (wholePopulation && (population != "all" || rangeOptions.Any(options.ContainsKey)))
+var populationRequested = options.TryGetValue("--lu-population", out var population);
+if (populationRequested && (population is not ("all" or "legislative") || rangeOptions.Any(options.ContainsKey)))
 {
-    Console.Error.WriteLine("--lu-population must be all and cannot be combined with --lu-name, --lu-start or --lu-end.");
+    Console.Error.WriteLine("--lu-population must be all or legislative and cannot be combined with --lu-name, --lu-start or --lu-end.");
     return 2;
 }
-var expected = wholePopulation ? required : rangeOptions.Concat(required).ToArray();
+var expected = populationRequested ? required : rangeOptions.Concat(required).ToArray();
 var missing = expected.Where(name => !options.ContainsKey(name)).ToArray();
 if (missing.Length != 0)
 {
     Console.Error.WriteLine("Missing: " + string.Join(", ", missing));
-    if (!wholePopulation && rangeOptions.All(name => !options.ContainsKey(name)))
+    if (!populationRequested && rangeOptions.All(name => !options.ContainsKey(name)))
     {
-        Console.Error.WriteLine("Use --lu-population all instead of the three range options to select all publisher IRIs.");
+        Console.Error.WriteLine("Use --lu-population legislative for the launch URI families, or all for all publisher IRIs.");
     }
     Console.Error.WriteLine(Usage);
     return 2;
@@ -175,10 +176,16 @@ if (!Directory.Exists(checkout))
     return 2;
 }
 
-LuxembourgActRange act;
+LuxembourgActRange? act;
+LuxembourgPopulationScope? populationScope = null;
 try
 {
-    act = wholePopulation
+    if (population == "legislative")
+    {
+        populationScope = LuxembourgPopulationScope.Legislative;
+        act = null;
+    }
+    else act = populationRequested
         ? LuxembourgActRange.WholePopulation
         : new LuxembourgActRange(options["--lu-name"], options["--lu-start"], options["--lu-end"]);
 }
@@ -266,8 +273,16 @@ try
         Console.WriteLine($"europe checkpoint: {pointer}");
     }
 
-    var luxembourg = await new LuxembourgFirstMountAcquisition(store, TimeProvider.System)
-        .RunAsync(act, luxembourgRenderers, budget, token);
+    var luAcquisition = new LuxembourgFirstMountAcquisition(store, TimeProvider.System);
+    if (populationScope is not null)
+        Console.WriteLine("luxembourg declared scope: " + Lex.V3.Contracts.ContractJson.Serialize(new
+        {
+            populationScope.Policy, populationScope.Ranges,
+            unselectedIriFamilies = "not_enumerated_outside_declared_ranges",
+        }));
+    var luxembourg = populationScope is null
+        ? await luAcquisition.RunAsync(act!, luxembourgRenderers, budget, token)
+        : await luAcquisition.RunPopulationAsync(populationScope, luxembourgRenderers, budget, token);
     if (luxembourg.Run is { } observedLuxembourg)
         Console.WriteLine("luxembourg family outcomes: " + Lex.V3.Contracts.ContractJson.Serialize(observedLuxembourg.FamilyOutcomes));
     if (!luxembourg.Delivered)
@@ -295,8 +310,16 @@ try
 
     var derivationTime = DateTimeOffset.FromUnixTimeSeconds(DateTimeOffset.UtcNow.ToUnixTimeSeconds() + 1);
     var generationSource = predecessor is null ? null : new V3GenerationSource(Path.GetFullPath(predecessorDirectory!), referenced);
-    var checkpoint = await V3OfflineMount.CaptureAsync(store, europe, luxembourg, celexes, act,
-        derivationTime, generationSource, token);
+    var checkpoint = populationScope is null
+        ? await V3OfflineMount.CaptureAsync(store, europe, luxembourg, celexes, act!, derivationTime, generationSource, token)
+        : await V3OfflineMount.CapturePopulationAsync(store, europe, luxembourg, celexes, populationScope,
+            derivationTime, generationSource, token);
+    if (luxembourg.PopulationScopeManifestRef is { } scopeManifest)
+    {
+        var scopePath = Path.Combine(custodyRoot, "lu-population-scope-" + scopeManifest.Sha256 + ".json");
+        await File.WriteAllTextAsync(scopePath, Lex.V3.Contracts.ContractJson.Serialize(scopeManifest), cancellation.Token);
+        Console.WriteLine("LU population family disposition pointer: " + scopePath);
+    }
     var checkpointPath = Path.Combine(custodyRoot, "mount-inputs-" + checkpoint.Sha256 + ".json");
     await File.WriteAllTextAsync(checkpointPath, Lex.V3.Contracts.ContractJson.Serialize(checkpoint), token);
     Console.WriteLine($"offline inputs: {checkpointPath}; derive --custody {custodyRoot} --checkpoint {checkpointPath} --out <fresh-directory> --custody-encoding {custodyEncoding}");

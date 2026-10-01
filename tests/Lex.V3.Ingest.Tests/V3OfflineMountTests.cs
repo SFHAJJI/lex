@@ -15,13 +15,15 @@ namespace Lex.V3.Ingest.Tests;
 public sealed partial class V3FirstMountBuildTests
 {
     [TestMethod]
-    [DataRow(false, false, false, false, false)]
-    [DataRow(true, true, false, false, false)]
-    [DataRow(true, false, true, false, false)]
-    [DataRow(true, false, true, true, false)]
-    [DataRow(true, false, false, false, true)]
-    [DataRow(true, false, true, true, true)]
-    public async Task OfflineCommandRebuildsEveryMountFileInTwoSeparateProcesses(bool compressed, bool chained, bool consolidated, bool missingStateCelex, bool reuseEurope)
+    [DataRow(false, false, false, false, false, false)]
+    [DataRow(true, true, false, false, false, false)]
+    [DataRow(true, false, true, false, false, false)]
+    [DataRow(true, false, true, true, false, false)]
+    [DataRow(true, false, false, false, true, false)]
+    [DataRow(true, false, true, true, true, false)]
+    [DataRow(false, false, false, false, false, true)]
+    [DataRow(true, true, true, true, true, true)]
+    public async Task OfflineCommandRebuildsEveryMountFileInTwoSeparateProcesses(bool compressed, bool chained, bool consolidated, bool missingStateCelex, bool reuseEurope, bool populationScope)
     {
         var root = Path.Combine(Path.GetTempPath(), "lex-v3-offline-test-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(root);
@@ -47,6 +49,14 @@ public sealed partial class V3FirstMountBuildTests
                         await LuxembourgRendererSources.FromCheckoutAsync(store, CheckoutRoot(), CancellationToken.None),
                         LuxembourgAcquisitionTestFixture.TestWireBudget(), CancellationToken.None);
             }
+            if (populationScope)
+            {
+                using var luHandler = new LuxembourgFirstMountAcquisitionTests.LuxembourgFamilyHandler(LuxembourgFirstMountAcquisitionTests.PdfBytes());
+                luxembourg = await new LuxembourgFirstMountAcquisition(store, TimeProvider.System, luHandler)
+                    .RunPopulationAsync(LuxembourgPopulationScope.Legislative,
+                        await LuxembourgRendererSources.FromCheckoutAsync(store, CheckoutRoot(), CancellationToken.None),
+                        LuxembourgAcquisitionTestFixture.TestWireBudget(), CancellationToken.None);
+            }
             Assert.IsTrue(europe.Delivered, europe.Detail);
             Assert.IsTrue(luxembourg.Delivered, luxembourg.Detail);
             var time = DateTimeOffset.FromUnixTimeSeconds(DateTimeOffset.UtcNow.ToUnixTimeSeconds() + 1);
@@ -67,8 +77,11 @@ public sealed partial class V3FirstMountBuildTests
                 generations = new(previousPath, new HashSet<string>(StringComparer.Ordinal) { predecessor.IndexSha256 });
                 time = time.AddDays(1);
             }
-            var checkpoint = await V3OfflineMount.CaptureAsync(store, europe, luxembourg,
-                new[] { seed }, LuxembourgFirstMountAcquisitionTests.ActRange, time, generations, CancellationToken.None);
+            var checkpoint = populationScope
+                ? await V3OfflineMount.CapturePopulationAsync(store, europe, luxembourg,
+                    [seed], LuxembourgPopulationScope.Legislative, time, generations, CancellationToken.None)
+                : await V3OfflineMount.CaptureAsync(store, europe, luxembourg,
+                    [seed], LuxembourgFirstMountAcquisitionTests.ActRange, time, generations, CancellationToken.None);
             var referencePath = Path.Combine(root, "inputs.json");
             await File.WriteAllTextAsync(referencePath, ContractJson.Serialize(checkpoint));
             var baseline = await new V3FirstMountBuild(store, new V3OfflineMount.BuildClock(time)).RunAsync(europe, luxembourg, predecessor, CancellationToken.None);
