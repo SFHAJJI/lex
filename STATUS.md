@@ -16,7 +16,9 @@ is constructed and archived renderer code is not executed.
 Twenty-four draft cases cover two independent replay stores, preserved identities and same-run
 association, missing components, rehashed bindings, three valid foreign-acquisition substitutions,
 null roots, exact caller scope, weaker current protection, cancellation and failed root/source holds.
-These changes are uncompiled; full remote CI and read-only Claude review are requested. Local
+Initial CI36861251593 compiled and passed all24 new cases:5,684 passed/22 skipped, two inventory failures.
+The exact compiled refusal/member rows are now transcribed, preserving literal pins. Fresh CI and
+read-only Claude review remain required. Local
 Release/fast/ingest checks remain deferred under the acquisition memory guard. This branch starts
 from origin c9e5a40a and includes pending870/882/883/888 with their dependencies; final reviewed
 merged sources must be included before merge. Tests use two stores in one process, not the two

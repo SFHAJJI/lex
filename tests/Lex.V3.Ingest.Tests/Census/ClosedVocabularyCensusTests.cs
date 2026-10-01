@@ -1,4 +1,4 @@
-﻿using Lex.V3.TestSupport;
+ï»¿using Lex.V3.TestSupport;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
 namespace Lex.V3.Ingest.Tests.Census;
@@ -90,8 +90,12 @@ public sealed class ClosedVocabularyCensusTests
                     + "WireBudgetExhausted",
                 "Lex.V3.Ingest.Europe.EuFamilyEnumerationOutcomeKind: Proven, ExecutorRefused, "
                     + "ProofRefused",
-                "Lex.V3.Ingest.Europe.EuFirstMountAcquisitionRefusal: None, RunRefused, "
-                    + "FormexRefused, LegalNoticeRefused",
+                "Lex.V3.Ingest.Europe.EuFirstMountAcquisitionRefusal: "
+                    + "None, "
+                    + "RunRefused, "
+                    + "FormexRefused, "
+                    + "LegalNoticeRefused, "
+                    + "AcquisitionCheckpointNotRetained",
                 "Lex.V3.Ingest.Europe.EuFormexAnnexClassificationReconciliationRefusal: None, "
                     + "AcquiredInventoryClaimedTwice, ClassificationOutsideAcquiredPopulation, "
                     + "ClassificationInventoryDisagrees, ClassificationSuppliedTwice, "
