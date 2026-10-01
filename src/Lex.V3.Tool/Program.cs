@@ -225,7 +225,13 @@ try
     EuFirstMountAcquisitionResult europe;
     if (retainedEuCheckpoint is not null)
     {
-        try { europe = await euAcquisition.ReuseAsync(retainedEuCheckpoint, celexes, budget, token); }
+        try
+        {
+            var currentDocumentFetchSource = await File.ReadAllBytesAsync(Path.Combine(checkout,
+                "src/Lex.V3.Contracts/Source/Europe/EuDocumentFetchPlan.cs"), token);
+            europe = await euAcquisition.ReuseAsync(retainedEuCheckpoint, celexes,
+                currentDocumentFetchSource, budget, token);
+        }
         catch (Exception exception) when (exception is Lex.V3.Contracts.Custody.CustodyRequiredException or Lex.V3.Contracts.Custody.CustodyIntegrityException)
         {
             Console.Error.WriteLine($"refused: retained europe acquisition: {exception.Message} (spent {budget.Spent} of {budget.Limit})");

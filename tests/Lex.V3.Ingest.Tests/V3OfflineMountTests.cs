@@ -37,7 +37,8 @@ public sealed partial class V3FirstMountBuildTests
                 using var rights = new EuFirstMountAcquisitionTests.CompositeHandler(
                     new Dictionary<string, EuAcquisitionTestFixture.FamilyScript>(), new Dictionary<string, string[]>());
                 europe = await new Lex.V3.Ingest.Europe.EuFirstMountAcquisition(store, TimeProvider.System, rights)
-                    .ReuseAsync(europe.CheckpointRef!, [seed], WireRequestBudget.OfWireRequests(10), CancellationToken.None);
+                    .ReuseAsync(europe.CheckpointRef!, [seed],
+                        await File.ReadAllBytesAsync(Path.Combine(CheckoutRoot(), Lex.V3.Ingest.Europe.EuRendererSources.RendererFiles[3])), WireRequestBudget.OfWireRequests(10), CancellationToken.None);
                 Assert.IsTrue(europe.Delivered, europe.Detail);
                 Assert.AreEqual(0, rights.AdapterRequests + rights.FormexEnumerationRequests + rights.FormexPackageRequests);
                 using var luHandler = new LuxembourgFirstMountAcquisitionTests.LuxembourgFamilyHandler(LuxembourgFirstMountAcquisitionTests.PdfBytes());

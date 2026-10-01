@@ -108,6 +108,10 @@ jobs:
           artifact_root='artifacts/v3-acquisition-runtime'
           mkdir -p "$artifact_root/runtime"
           cp -a src/Lex.V3.Tool/bin/Release/net10.0/. "$artifact_root/runtime/"
+          if [ -n "$(find "$artifact_root/runtime" -name '.*' -print -quit)" ]; then
+            echo 'Runtime contains hidden paths that upload-artifact would omit.' >&2
+            exit 1
+          fi
           printf '%s\n' "$CANDIDATE_SHA" > "$artifact_root/source-head.txt"
           dotnet --info > "$artifact_root/dotnet-info.txt"
           (cd "$artifact_root" && find runtime -type f -print0 | LC_ALL=C sort -z | xargs -0 sha256sum) > "$artifact_root/runtime-sha256.txt"
