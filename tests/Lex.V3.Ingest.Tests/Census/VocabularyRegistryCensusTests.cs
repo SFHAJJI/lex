@@ -71,8 +71,9 @@ public sealed class VocabularyRegistryCensusTests
                     + "DigestDomain, const Schema",
                 "Lex.V3.Ingest.Europe.EuObjectFactsBatchFactory: SetsOverObservedObjects=5, "
                     + "SetsOverPackRootsOnly=1",
-                "Lex.V3.Ingest.Europe.EuropeIndexBuilder: const Ddl, const LegacyDdl, "
-                    + "const LegacySchema, const Schema, const SourceDdl, const SourceSchema",
+                "Lex.V3.Ingest.Europe.EuropeIndexBuilder: static readonly Ddl, const DigestDdl, "
+                    + "const DigestSchema, const LegacyDdl, const LegacySchema, const Schema, "
+                    + "const SourceDdl, const SourceSchema, const StatesDdl",
                 "Lex.V3.Ingest.LexCorpus6Builder: Domain=13, const Schema",
                 "Lex.V3.Ingest.Luxembourg.LuxembourgIndexBuilder: const BuiltAtFormat, const Ddl, "
                     + "const EventLogDdl, const EventLogSchema, const LegacyDdl6, "

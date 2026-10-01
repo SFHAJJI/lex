@@ -77,6 +77,24 @@ public sealed partial class V3FirstMountBuildTests
             Assert.IsTrue((await V3CorpusMountWriter.VerifyAsync(second, CancellationToken.None)).Verified);
             if (consolidated)
             {
+                using var stateReader = await Lex.V3.Ingest.Europe.EuropeIndexReader.OpenAndVerifyFileAsync(
+                    Path.Combine(second, "europe-index.sqlite3"),
+                    await File.ReadAllBytesAsync(Path.Combine(second, "europe-capability-manifest.json")),
+                    baseline.Corpus!.ArtifactRef, CancellationToken.None);
+                Assert.IsTrue(stateReader.HasStates);
+                var states = stateReader.ReadStates(seed);
+                Assert.HasCount(2, states);
+                var expressions = stateReader.ReadStateExpressions(seed);
+                Assert.HasCount(4, expressions);
+                var consolidatedExpressions = expressions.Where(expression =>
+                    expression.PublisherWorkIri == EuFirstMountAcquisitionTests.ConsolidatedWork).ToArray();
+                Assert.HasCount(2, consolidatedExpressions);
+                CollectionAssert.AreEquivalent(new[] { "eng", "fra" },
+                    consolidatedExpressions.Select(expression => expression.Language).ToArray());
+                Assert.IsTrue(consolidatedExpressions.All(expression => expression.PublisherWorkCelex is null &&
+                    expression.ArticleIdentities.Count > 0 && states.Any(state =>
+                        state.StateIdentitySha256 == expression.StateIdentitySha256)));
+                Assert.HasCount(0, stateReader.ReadStateExpressions("unknown-seed"));
                 using var connection = Lex.V3.Ingest.Europe.EuropeIndexBuilder.Open(
                     Path.Combine(second, "europe-index.sqlite3"), Microsoft.Data.Sqlite.SqliteOpenMode.ReadOnly);
                 using var command = connection.CreateCommand();

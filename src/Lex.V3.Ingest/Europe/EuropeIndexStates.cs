@@ -63,14 +63,27 @@ public static partial class EuropeIndexBuilder
         }).ToArray();
         if (rows.Select(row => (row.SeedCelex, row.PublisherWorkIri)).Distinct().Count() != rows.Length)
             throw new InvalidDataException("The EU census state population contains a duplicate seed/work coordinate.");
-        var ambiguous = rows.Where(row => row.PublisherConsolidationDate is not null)
-            .GroupBy(row => (row.SeedCelex, row.RootWorkIri, row.PublisherConsolidationDate))
-            .Where(group => group.Count() > 1).SelectMany(group => group)
-            .Select(row => row.StateIdentitySha256).ToHashSet(StringComparer.Ordinal);
+        // A work with several publisher dates is already ambiguous, but every one of those
+        // observed dates must also make a sibling on the same date ambiguous.
+        var ambiguous = works.Where(work => work.PublisherWorkIri != work.RootWorkIri)
+            .SelectMany(work => ObservedConsolidationDates(work).Select(date =>
+                (work.SeedCelex, work.RootWorkIri, Date: date,
+                    Identity: StateIdentity(work.SeedCelex, work.RootWorkIri, work.PublisherWorkIri))))
+            .GroupBy(value => (value.SeedCelex, value.RootWorkIri, value.Date))
+            .Where(group => group.Select(value => value.Identity).Distinct(StringComparer.Ordinal).Count() > 1)
+            .SelectMany(group => group).Select(value => value.Identity).ToHashSet(StringComparer.Ordinal);
         return rows.Select(row => ambiguous.Contains(row.StateIdentitySha256)
                 ? row with { DateStatus = EuropeIndexStateDateStatus.AmbiguousVersion } : row)
             .OrderBy(row => row.StateIdentitySha256, StringComparer.Ordinal).ToArray();
     }
+
+    private static IEnumerable<string> ObservedConsolidationDates(EuObservedWorkFacts work) =>
+        work.Observations.Where(observation => observation.PredicateIri == EuObjectFactsDiscoveryPlan.CdmIri(EuCdmPredicate.ActConsolidatedDate))
+            .Select(observation => observation.Value)
+            .Where(term => term.Kind == RepeatedEnumerationRdfTermKind.Literal && term.Language is null &&
+                term.Datatype == "http://www.w3.org/2001/XMLSchema#date" &&
+                DateOnly.TryParseExact(term.Value, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out _))
+            .Select(term => term.Value!).Distinct(StringComparer.Ordinal);
 
     private static (EuropeIndexStateDateStatus Status, string? Date) StateDate(EuObservedWorkFacts work)
     {

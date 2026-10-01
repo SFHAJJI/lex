@@ -46,6 +46,33 @@ public sealed partial class EuFormexPackagePopulationProducerTests
     }
 
     [TestMethod]
+    [DataRow(false)]
+    [DataRow(true)]
+    public async Task HistoricalPackageCheckpointKeepsRequiredCelexAndOriginalAnnexIdentity(bool missingCelex)
+    {
+        var capture = await CapturePackageAsync(2, missingCelex: missingCelex);
+        var root = await PackageRootAsync(capture.Store, capture.Result.CheckpointRef!);
+        root["schema"] = "lex-eu-formex-package-checkpoint/1";
+        var bytes = Encoding.UTF8.GetBytes(root.ToJsonString(new System.Text.Json.JsonSerializerOptions { WriteIndented = false }));
+        var held = await capture.Store.CreateAsync(bytes, CustodyClass.NightlyFloor90d, CancellationToken.None);
+        var checkpoint = new SourceArtifactRef(capture.Result.CheckpointRef!.ResourceId, held.Reference.ContentSha256);
+        Task<EuFormexPackageAcquisitionResult> Reopen() => EuFormexPackageAcquisitionProducer.ReopenAsync(
+            capture.Store, checkpoint, capture.Enumeration, capture.Corpus, capture.Celex,
+            capture.Renderer, CancellationToken.None);
+        if (missingCelex)
+        {
+            await Assert.ThrowsExactlyAsync<CustodyIntegrityException>(() => Reopen());
+            return;
+        }
+        var reopened = await Reopen();
+        Assert.AreEqual(capture.Result.Outcome.AcquiredInventory!.IdentitySha256,
+            reopened.Outcome.AcquiredInventory!.IdentitySha256);
+        Assert.AreEqual(capture.Result.AnnexClassification!.IdentitySha256,
+            reopened.AnnexClassification!.IdentitySha256);
+        Assert.AreEqual(0, reopened.ProductRequestCount);
+    }
+
+    [TestMethod]
     [DataRow("root")]
     [DataRow("zip_route")]
     [DataRow("zip_body")]

@@ -42,6 +42,18 @@ public sealed class EuropeIndexStateTests
     }
 
     [TestMethod]
+    public void AWorkWithTwoDatesMakesASiblingOnEitherDateAmbiguous()
+    {
+        var rows = EuropeIndexBuilder.ProjectStates([
+            Work(State, Date("2024-01-01"), Date("2024-02-01")),
+            Work(Other, Date("2024-01-01")),
+        ]);
+        Assert.HasCount(2, rows);
+        Assert.IsTrue(rows.All(row => row.DateStatus == EuropeIndexStateDateStatus.AmbiguousVersion));
+        Assert.AreEqual("2024-01-01", rows.Single(row => row.PublisherWorkIri == Other).PublisherConsolidationDate);
+    }
+
+    [TestMethod]
     public void MissingAbsentAndInvalidDatesHaveDifferentTypedOutcomes()
     {
         Assert.AreEqual(EuropeIndexStateDateStatus.ObservationMissing,

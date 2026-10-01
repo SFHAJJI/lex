@@ -19,7 +19,7 @@ public sealed class EuropeIndexBuilderTests
     {
         var digest = Convert.ToHexStringLower(SHA256.HashData(
             EuropeIndexBuilder.BuildFixedInputDeterminismEvidence()));
-        Assert.AreEqual("44a6158077203b3729c2103f3efeb007e3b8d10cd59b6616ee1c50194b205f1c", digest);
+        Assert.AreEqual("cb2b04fc0c50aaaaaacedd1261d38829bea8ce54667676a96552090baa7a9f7e", digest);
     }
 
     [TestMethod]
