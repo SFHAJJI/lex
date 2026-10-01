@@ -3,6 +3,21 @@
 Updated 2026-10-01 by the driver. This file replaces the issue-comment ledgers. It is rewritten in
 every pull request that changes what is served, what is next or what is blocked.
 
+## Luxembourg observed identity rebuild (Codex, 2026-10-01)
+
+The internal rebuild path derives the observed-object identity set from fresh observation inputs
+and compares its canonical domain digest with the original reference before any custody write.
+On equality it preserves that reference and repeats normal current-store holds and independent
+readback. Ordinary acquisition still mints a new set identity. This closes one identity boundary
+needed by LU offline replay; the containing catalog must still prove its observation inputs.
+
+Thirteen draft cases cover empty/single/3,000-object sets in two separate stores, reordered and
+duplicate inputs, current weaker protection, changed digest/run/objects before writes, failed
+holds, cancellation, missing original identity and ordinary new identities. Source is uncompiled;
+full remote CI and read-only Claude review remain required. Local Release/fast/ingest checks are
+deferred under the acquisition memory guard. The writer still buffers its whole canonical set;
+this is neither a complete LU acquisition replay nor a full-population memory-fit measurement.
+
 ## Retained Luxembourg enumeration checkpoints (Codex, 2026-10-01)
 
 This slice depends on pending PR869. The LU executor retains its closed invariant plan wire
