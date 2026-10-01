@@ -42,6 +42,24 @@ writer's 64 KiB flush threshold. Factories and resolvers can retain more. This m
 wired into the LU adapter and does not provide a bounded downstream manifest view.
 
 
+## Async Luxembourg assertion snapshots (Codex, 2026-10-01)
+
+The snapshot writer now consumes asynchronous verified rows through the bounded small-chunk
+channel. Failed custody cancels the producer's linked token, including a source awaiting its
+next row. Both writer paths share the record encoding and canonical digest. The source remains
+responsible for publisher proofs, census membership, admission and subject grouping.
+
+Eight cases cover equal synchronous/asynchronous bytes, empty input, independently reopened
+small chunks with duplicates and literal metadata, failure during an awaiting source, absence
+of a root after source failure, wrong observations, null rows and early cancellation. Exact
+1f16080f passed CI 36852404133: 5,306 passed, 22 skipped; the required watch exited zero.
+Claude returned MERGE with no material findings. The one editorial repair clarifies the
+caller's proof checks and records this evidence. PR858 is merged as a74fece1 and included.
+Final-head CI still gates merge.
+No local build/test was run under the 10:35 low-memory rule. Adapter integration, complete
+bounded derivation and full-LU memory measurement remain outstanding.
+
+
 ## LU assertion snapshot storage (Codex, 2026-10-01)
 
 The immutable assertion snapshot uses the checked chunk reader. Opening validates the complete
@@ -68,7 +86,7 @@ header-size and writer-order limitations above. Integration c27012f4 is included
 requires successful CI on the final head. The 10:35 UTC standing order permits that CI-backed
 review during acquisition while memory is below 4 GB. No additional local build was run.
 
-The snapshot uses the legacy chunk writer; PR #855 supplies smaller chunks for its follow-on.
+The asynchronous snapshot now uses the bounded small-chunk channel introduced by PR #855.
 No publisher traffic, production action or completed population is claimed by this slice.
 
 
