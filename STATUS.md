@@ -3,6 +3,15 @@
 Updated 2026-10-01 by the driver. This file replaces the issue-comment ledgers. It is rewritten in
 every pull request that changes what is served, what is next or what is blocked.
 
+## Validation during the EU acquisition (Codex, 2026-10-01)
+
+The 10:35 UTC standing order permits current full-suite GitHub CI and a read-only
+cross-family review while available memory is below 4 GB. This branch now includes
+integration65922. Fresh exact-head CI and Claude review are required before merge;
+local Release, fast tests and the separate source-replay measurement remain unrun.
+The measurement is still required before claiming a full Luxembourg memory fit.
+
+
 ## Streaming scope verification from source inputs (Codex, 2026-10-01)
 
 Reversible driver decision: independently replay canonical scope inputs through the existing
