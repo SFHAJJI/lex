@@ -17,8 +17,30 @@ that selects the first unequal cursor component. All six components are already 
 This candidate changes publisher-side filtering only; rows are never discarded or deduplicated
 locally to turn an invalid delivery into a proof. The executor now checks the first continuation
 row against the prior cursor so an overlapping prefix refuses immediately. Three offline cases
-cover earlier, equal and valid later prefixes. Local validation and a fresh bounded live run
-over the exact retained 50-object batch are pending. A full rerun requires this evidence first.
+cover earlier, equal and valid later prefixes. At0ddc4795, clean Release build passed with no
+warnings/errors; required fast tests passed (3,085 succeeded, one skipped), and affected ingest
+passed (86 succeeded, two skipped).
+
+The fresh production-executor probe C:/lex-v3/eu-object-facts-cursor-20261001-1 completed with
+11 of60 allowed wire requests. Both COUNTs are678; passA has678 rows and passB has613+65,
+strictly ordered with no overlap. The family proof and independent retained-row reopen passed.
+The separate audit rehashed frozen inputs, logical requests, rendered queries and response bodies;
+both row sequences are equal and match every binding from the prior failed run's passA.
+Minimum sampled free space was5,411,053,568 bytes and peak sampled working set104,214,528 bytes.
+Audit: retained-cursor-audit.json; summary SHA31d5912623f5376da63b0ea162f5265cbbc6dbd72ef99f7bfd787e337b82f06e.
+This proves the correction on the exact failing batch; it does not complete the full population.
+Cross-family review and exact-head green CI remain required.
+
+The proposed raw-custody retry5 plan keeps all82 seeds, EN/FRA Formex enumeration with explicit
+out-of-language outcomes, the20,000-wire ceiling and bounded LU a439 companion. It raises index
+headroom from25 to60 percent for schema4 source/digest rows:1,274,491,700 bytes. Together with
+held bodies656,160,664, packages564,415,560 and metadata/runtime/other500,000,000, the working
+allowance is2,995,067,924 bytes. Add the3GiB reserve and512MiB stop margin:6,753,164,308 bytes
+must be free before and after freeze. This is a planning estimate, informed by retained physical
+samples and small fixed-index growth61440->77824; it is not a full-population size bound.
+The nonready plan and input hashes are in C:/lex-v3/lanes/eu-population-retry5-sizing-proposed-20261001.json.
+A compressed-custody alternative needs separate measured sizing and a recorded decision first.
+No full rerun has started; source must include the reviewed cursor and schema4 changes.
 
 ## EU article source coordinates (Codex, 2026-10-01)
 
