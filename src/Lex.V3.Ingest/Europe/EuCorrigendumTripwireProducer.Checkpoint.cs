@@ -23,7 +23,7 @@ public sealed partial class EuCorrigendumTripwireProducer
         try
         {
             var document = ContractJson.Deserialize<TripwireCheckpoint>(new UTF8Encoding(false, true).GetString(bytes.Span));
-            if (document.Schema != CheckpointSchema || !bytes.Span.SequenceEqual(EncodeCheckpoint(document)))
+            if (document is null || document.Schema != CheckpointSchema || !bytes.Span.SequenceEqual(EncodeCheckpoint(document)))
                 throw new CustodyIntegrityException("Tripwire checkpoint framing disagrees.");
             var (expressions, expressionFacts, objectFacts) = await EuLanguageScopedExpressionProducer
                 .ReopenWithDeliveriesAsync(store, document.Expressions, cancellationToken).ConfigureAwait(false);
