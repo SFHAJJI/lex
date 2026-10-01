@@ -19,9 +19,13 @@ identities plus duplicates, indexed and enumerated access, absent and malformed 
 mutation, empty/repeated sets, legacy canonical bytes/digests and independent reopening, nulls,
 cancellation and mismatched source counts. Reader cases also cover ordering under shared prefixes,
 duplicate and malformed digests and refusal precedence. Existing resolver and retained-identity
-checks will run too. Code is unvalidated; census diagnostics will print the actual new construction
-entry before pin updates. Local heavy checks remain serialized behind the active EU acquisition and
-previously queued reviews/validation.
+checks run too. Remote CI36816137999 on 9333c2d8 built successfully and passed all 27 new cases;
+the full suite reported 5,265 passed, 22 skipped and two construction-census failures. Its compiled
+surface adds the private constructor and the two internal factories FromObservations and
+FromCanonicalArray. The literal entry and independently observed counts (256 candidates, 138
+guarded types) are now pinned; fresh CI must verify the repair. Local Release build, required fast
+tests, affected ingest checks, measurement and cross-family review remain queued behind active EU
+acquisition and the earlier reviews/validation. No full-population memory result is claimed.
 
 EU retry 6 started at 04:01 UTC in C:/lex-v3/eu-population-20261001-4 from exact merged/tested
 6eb1d9d9, after preserving all cited custody paths through verified duplicate hardlinks and
