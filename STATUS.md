@@ -1133,7 +1133,7 @@ CI evidence are recorded in the pull request before merge.
 
 ## Heads
 
-- `v3/integration`: `65922f24` (2026-10-01, PR #880 merged). Build 45 s. Fast lane
+- `v3/integration`: `c9e5a40a` (2026-10-01, PR #872 merged). Build 45 s. Fast lane
   (`eng/test-fast.ps1`): 3,077 tests, 3,076 pass, 1 skipped (the review of PR #828). Ingest suite: green on CI for PR #760
   (the CI `dotnet` job runs the whole solution on every pull request, about 7 min on the runner;
   green for PR #834);
@@ -2670,6 +2670,45 @@ truthful").
     names their predecessor absent.
 - **Next:** `as_observed` and `verify` quote a state from a retained generation.
 
+Predecessor chaining, the sixth slice, third part (PR #889): a state only a retained generation
+holds is answered from it, and the permalink the product emitted for it still verifies (G3, and the
+launch contract's "`verify` resolves every citation the product emitted").
+- **Readers at startup.** The mount opens one verified reader per retained generation, newest first,
+  so no request opens one (the image's private `/tmp` holds every index copy from startup on). The
+  readers are disposed with the mount.
+- **`as_observed`:**
+  - a state the mounted index lacks is served in full from the newest retained generation that holds
+    it, with `text_held: true` and `text_from` naming that generation;
+  - `text_from` is null for a state the mounted index holds;
+  - a state no held build holds stays identity only, without text;
+  - a work the mounted build no longer holds at all is found through the log by its stable work
+    coordinate, and answered from its generation (review of #889). An identifier the log never held
+    keeps `identifier_unknown`.
+- **`verify`:** a pinned permalink whose digest a later build replaced at its coordinate is verified
+  in the retained generation that holds it:
+  - `digest_matches`, with `held_in` naming the generation and `superseded_by` the mounted state that
+    replaced it;
+  - `verified_by` is the generation's own corpus and index, and the sources are its own;
+  - with the generation pruned, it is `pinned_digest_mismatch` naming the current state, as before.
+  - The generation is asked before any refusal over the current states. So the permalink resolves
+    when the coordinate holds another state, several (one per language), or none any more, and
+    `superseded_by` is null in the last case (review of #889).
+  - A driver decision: the verdict stays `digest_matches`, because the digest does match the retained
+    text. The superseded state is named beside it, so a citation checker keeps working and a reader
+    sees that the citation is no longer the current text.
+- **On two real builds of the state fixture,** the second with one article reworded:
+  - `as_observed` at the first build's snapshot serves the original state from the generation;
+  - the permalink emitted before the rewording verifies there, naming the reworded state;
+  - with the generation pruned, the same requests answer without text and as a mismatch;
+  - removing the generation lookup from `verify` fails the test;
+  - a later build that holds the work no longer at all (chained, from the complete envelope, which
+    holds no Luxembourg state) answers `as_observed` from the generation by the work's coordinate,
+    and verifies the old permalink with `superseded_by` null. Reverting either repair fails that
+    test.
+- **What is left of predecessor chaining** is the data lane's part: observation times
+  (`observed_from`) once a Luxembourg body's capture time reaches the corpus, then `knowable_on` and
+  withdrawal.
+
 The live export composer and its journey step (PR #789), the eighth screen. `dist-live/export.html`
 has its own bundle `client-live-export.js`.
 - The page asks what the reading page asks: the same form (`ReadingForm`, now shared), the same one
@@ -3370,7 +3409,8 @@ recorded by PR #862:
    - `events` and `answer_drift` across the chain (folded into PR #867 by its review);
    - each build's time in the log (PR #871), then `as_observed` by build snapshot (G4) (PR #874);
    - a generation mount (G3b), retained by S7-A09: generations written and verified (PR #880),
-     held to the log by the mount with the depth reported (PR #885), then quoted.
+     held to the log by the mount with the depth reported (PR #885), and quoted by `as_observed`
+     and `verify` (PR #889).
    `observed_from` stays null until a Luxembourg body's capture time reaches the corpus (data lane);
    `knowable_on` and withdrawal follow it. The owner questions (G1 when a file changes but its text
    does not, "as observed" identified by snapshot with no time, retaining every generation) were
@@ -3728,3 +3768,23 @@ and a current storage check before and after its runtime is frozen; it has not s
 
 PRs #827, #829 and #830 are merged. The all-82-seed EU retry remains prepared, with a
 4,999,959,422-byte launch allowance and checks before and after freezing its runtime.
+## Retained expression production pairings (Codex, 2026-10-01)
+
+This slice depends on PR869. It retains the expression producer's own paired enumerations
+and the corrigendum tripwire built from them. Reopening verifies those enumerations, rebinds
+count templates to original batches and artifact IDs, and repeats the existing private
+production and tripwire fold. Expression derivation, episode, tripwire and lineage must
+match the held originals byte for byte. Both production orders retain checkpoints.
+
+The original 33 new cases passed at 392567c6: CI 36856266903 reported 5,370 passed and
+22 skipped; the required watch exited zero. Claude found no material production defect but
+requested the merged parent/base and combined census fix. The one repair includes merged869
+1a63b61a and the 261/140/7 candidate/guarded/declined union. It adds explicit null-root integrity
+refusals in all three readers, validates one pass value in 1..2 before conversion, and adds three
+null-root regression cases. The repaired head 39b0f98f passed CI 36858496167. Merged LU parent c9e5a40a is now included,
+with the explicit EU null-root guard preserved. Fresh combined CI gates merge; local builds/tests remain deferred under
+the acquisition memory guard. No complete offline mount process is claimed.
+
+The current store's protection is checked again. Changed protection refuses the original
+byte claim because protection is part of derivation identity. Replay reports zero publisher
+requests. Complete offline acquisition composition and independent mount builds remain pending.
