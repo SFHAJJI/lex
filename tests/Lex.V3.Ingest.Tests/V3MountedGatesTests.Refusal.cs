@@ -183,8 +183,9 @@ public sealed partial class V3MountedGatesTests
     }
 
     /// <summary>
-    /// EU requests from the mount's EU index, for its first work in its first language: a word the work holds, searched in
-    /// it (answered); the same in a CELEX the index does not hold (<c>identifier_unknown</c>); in a language the work is not
+    /// EU requests from the mount's EU index, for its first work in its first language that holds a usable word (six
+    /// letters or more) in any of its articles, scanned in order (review of #846: the first version read only the first
+    /// article, and a short one left the EU unmeasured): a word the work holds, searched in it (answered); the same in a CELEX the index does not hold (<c>identifier_unknown</c>); in a language the work is not
     /// held in (<c>language_not_available</c>); and with a date, which EU search does not serve (<c>retrieval_mode_unavailable</c>).
     /// </summary>
     private static void EuropeRefusals(string mountDirectory, IDictionary<string, RefusalRequest> requests)
@@ -196,18 +197,15 @@ public sealed partial class V3MountedGatesTests
         }
 
         using var connection = EuropeIndexBuilder.Open(path, SqliteOpenMode.ReadOnly);
-        var work = Rows(connection, "SELECT publisher_work_celex, language, searchable_text FROM articles ORDER BY publisher_work_celex, language, article_identity_sha256 LIMIT 1").FirstOrDefault();
-        if (work is null)
+        var usable = Rows(connection, "SELECT publisher_work_celex, language, searchable_text FROM articles ORDER BY publisher_work_celex, language, article_identity_sha256")
+            .Select(static row => (Celex: row[0], Language: row[1], Word: UsableWord(row[2])))
+            .FirstOrDefault(static row => row.Word is not null);
+        if (usable.Word is null)
         {
             return;
         }
 
-        var (celex, language) = (work[0], work[1]);
-        var word = work[2].Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries).FirstOrDefault(static token => token.Length >= 6 && token.All(char.IsLetter));
-        if (word is null)
-        {
-            return;
-        }
+        var (celex, language, word) = usable;
 
         requests["eu-search-held"] = new("search", new { query = word, language, identifier = celex }, "answer");
         const string NotHeld = "32099R9999";
@@ -258,6 +256,10 @@ public sealed partial class V3MountedGatesTests
 
         return a[..length].TrimEnd();
     }
+
+    /// <summary>A word of six letters or more in an article's searchable text, or null.</summary>
+    private static string? UsableWord(string text) =>
+        text.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries).FirstOrDefault(static token => token.Length >= 6 && token.All(char.IsLetter));
 
     /// <summary>A state alone on its date, with articles, that meets a condition on its articles (as <c>s</c>).</summary>
     private static (string Work, string Date, string Language)? StateWhere(SqliteConnection connection, string condition)
@@ -365,5 +367,25 @@ public sealed partial class V3MountedGatesTests
 
         Assert.AreEqual(GateVerdict.Pass, set.Gates.Single().Verdict, "every EU request is answered with its own code");
         Assert.AreEqual(ControlVerdict.CaughtTheShuffle, set.Control.Verdict, set.Control.Reason);
+    }
+
+    [TestMethod]
+    public async Task AShortFirstEuArticleStillGivesTheEuRequests()
+    {
+        // The review of #846's reproduction: the EU index's first article holds no usable word, the others do; the EU
+        // requests are still derived, from the first article that holds one.
+        var fixture = await EuropeMountedFixture.CreateAsync();
+        await using var cleanup = fixture;
+        var index = Path.Combine(fixture.Directory, V3CorpusMount.EuropeIndexFileName);
+        using (var connection = EuropeIndexBuilder.Open(index, SqliteOpenMode.ReadWrite))
+        {
+            using var shorten = connection.CreateCommand();
+            shorten.CommandText = "UPDATE articles SET searchable_text = 'a' WHERE article_identity_sha256 = (SELECT article_identity_sha256 FROM articles ORDER BY publisher_work_celex, language, article_identity_sha256 LIMIT 1)";
+            Assert.AreEqual(1, shorten.ExecuteNonQuery());
+        }
+
+        var derived = RefusalCases(fixture.Directory, Timelines(fixture.Directory));
+        CollectionAssert.IsSubsetOf(new[] { "eu-search-held", "eu-unknown-celex", "eu-language-not-held", "eu-dated-search" }, derived.Requests.Keys.ToArray(),
+            string.Join(", ", derived.Requests.Keys));
     }
 }
