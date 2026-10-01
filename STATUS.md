@@ -3802,23 +3802,18 @@ Complete acquisition composition and same-run object restoration still gate inde
 
 ## Retained Formex manifestation enumeration (Codex, 2026-10-01)
 
-Reversible driver decision: retain each successful manifestation enumeration's original
-checkpoint association, expression content digest, closed-template renderer/plan identity
-and decoded result digest. Offline restoration checks the caller's expression/run/profile,
-restores both passes with current custody receipts, independently rebinds the original count
-queries and repeats the existing row/proof decoder. No request is sent and original observation
-IDs survive. Failed checkpoint holds return a typed refusal.
+The retained checkpoint binds each expression to its original enumeration, renderer, plan and
+result digest. Reopening checks both passes with current custody receipts and independently
+rebinds the count queries. It preserves the original observation identities and sends no requests.
+Page requests remain checked against retained evidence and the caller's run pin.
 
-Seventeen new cases cover empty/nonempty copied custody, repeat restoration, weaker current
-protection, missing inputs, caller pins, rehashed expression/query/result substitutions,
-cancellation and failed holds. All 17 passed at 3e563d96: CI 36838928383 reported 5,306 passed and
-22 skipped; the required watch exited zero. Reviewed PR869 source 6ae0389d and integration
-8c3f3801 are now included. Fresh combined CI and read-only Claude review remain required.
-Local builds/tests remain deferred under the acquisition memory guard. PR869 must merge first.
-
-This covers manifestation eligibility evidence only. EN/FRA scope and explicit unenumerated
-other-language outcomes remain the population policy. Package, annex, complete catalog and
-independent offline mount restoration remain outstanding.
+Exact f80bdee6 passed CI 36856566025 with 5,354 passed and 22 skipped, including all 17 original
+cases. Claude found the production code sound but required the merged parent and current base.
+One repair includes merged869/872 at c9e5a40a, checks a single pass value in 1..2 before conversion,
+and refuses a literal-null root with an integrity exception. One new before-writes regression
+brings this slice to 18 cases. Fresh combined CI gates merge; local builds/tests remain deferred
+under the acquisition memory guard. The offline budget records zero sends with a synthetic ceiling
+of two, not the historical wire allowance. Full population/acquisition and mount replay are separate.
 
 ## Offline EU document routes (Codex, 2026-10-01)
 
