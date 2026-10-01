@@ -6,11 +6,15 @@ every pull request that changes what is served, what is next or what is blocked.
 ## EU retry 5 and LU lookup storage (Codex, 2026-10-01)
 
 PRs #848, #849, #851 and #852 are merged after cross-family reviews, one repair round and green
-CI on their exact final heads. EU retry 5 is running at C:/lex-v3/eu-population-20261001-3,
+CI on their exact final heads. EU retry 5 ended at C:/lex-v3/eu-population-20261001-3,
 with runtime and renderers frozen at eed2b485. It keeps all 82 seeds, EN/FRA Formex enumeration,
 explicit outcomes for other languages, the 20,000-wire ceiling and bounded LU a439 companion.
 The run uses the measured Brotli mode and the 6,374,424,214-byte starting allowance. Its owned
-process guard retains the 3 GiB floor and 512 MiB stop margin. No completed population is claimed.
+process guard retained the 3 GiB floor and 512 MiB stop margin. It ended at 03:08 UTC with exit 3
+after 1,358 wire requests: ReifiedAxiomDecodeRefused for seed 32007R0864,
+QualifierAuthorityDisagreesWithItsCode at MA/PART versus the fd_335 authority ending MA%2FPART.
+Minimum sampled free space was 5,770,530,816 bytes; peak working set was 532,279,296 bytes.
+The guard did not stop it. No completed population is claimed; retained bytes need a decoder audit.
 
 Reversible driver decision for the next LU storage step: use existing digest-checked chunk
 storage for random observation lookups. The draft adds a separate v2 root with exactly 64 KiB
@@ -18,16 +22,16 @@ chunks; the v1 writer keeps its 4 MiB format. Both readers verify the complete o
 before returning a stream and recheck custody on each chunk load. A seek drops the previous cache.
 The canonical payload digest and per-chunk retention evidence remain separate from the root receipt.
 
-The draft expands the seven existing chunk obligations to both profiles and adds nine cases for
+The seven existing chunk obligations now run under both profiles, with nine additional cases for
 profile admission, unread-tail corruption, an independent compressed-store reader, legacy root
-bytes and the custody bytes loaded by 100 short random reads. The first remote CI run built successfully and reported no failures in these 23 cases.
-It found three census failures: the new test wrapper needed an explicit exemption, and the two
-new receipt-returning methods needed literal surface pins. Those entries are now added; no
-receipt constructor or census assertion changed. A fresh CI run must verify the repair.
-Build, required fast tests and affected ingest tests wait for the live acquisition's heavy slot.
-Draft PR #855 runs existing remote CI while local checks wait; it remains unready for review or
-merge until those checks pass. No full-LU fit claim is made. Subject indexes, a checked streaming scope-resolution door,
-independent bounded manifest reopening and corpus assembly still need implementation.
+bytes and the custody bytes loaded by 100 short random reads. At 873600fa, the local Release
+build passed, required fast tests passed (3,105 succeeded, one skipped), and affected ingest
+checks passed (170 succeeded, two skipped). CI 36808709344 also passed on that exact head.
+The first CI run found three census omissions; explicit entries now account for the test wrapper
+and the two new receipt-returning methods. No receipt constructor or census assertion changed.
+PR #855 is ready for cross-family review. No full-LU fit claim is made. Subject indexes, a checked
+streaming scope-resolution door, independent bounded manifest reopening and corpus assembly
+still need implementation.
 
 ## EU object-facts continuation range (Codex, 2026-10-01)
 
@@ -1312,7 +1316,7 @@ The live reading screen and its journey step (PR #777). `dist-live/reading.html`
   - `no_version_for_date`, because the card's contract requires every absence to carry
     `what_would_answer` from its closed vocabulary (and `asserts_absence_of_law`), and the
     platform's payload names the nearest earlier and later dates instead. Its status line still
-    carries the date to ask again: "The history this index holds for this work begins on …".
+    carries the date to ask again: "The history this index holds for this work begins on â€¦".
     `text_not_available`'s payload does carry both, so its card is shown.
 - Found and fixed on the way: the React refusal card threw on the platform's own `ambiguous_version`
   payload. The platform sends its candidates as bare hash-pinned links, and the string card
@@ -1464,7 +1468,7 @@ least one article permalink, and nothing that is only prose. The journey's own p
 
 The interface languages on the live pages (PR #797, the launch contract's "DE and LB answer
 `localization_unavailable`"). Every live page carries a language list (`LocaleNav`): English,
-Français, Deutsch, Lëtzebuergesch, each named in itself and tagged with its own `lang`, the page's
+FranÃ§ais, Deutsch, LÃ«tzebuergesch, each named in itself and tagged with its own `lang`, the page's
 own language marked current, and each link's `hrefLang` the language of the page it leads to
 (English for an unreviewed language; review of #797). Only English chrome is reviewed (`REVIEWED_CHROME_LOCALES`), so the
 other three lead to `locale-fr.html`, `locale-de.html` and `locale-lb.html`, built into `dist-live`:
@@ -2029,7 +2033,7 @@ request.
 
 **The search journey step passes (PR #773, run locally 2026-09-30).** `node scripts/journey.mjs`
 now runs two steps, each with and without the fixture mount, and all four runs pass.
-- The search step loads `/search.html` and waits for hydration. It types "assemblée générale"
+- The search step loads `/search.html` and waits for hydration. It types "assemblÃ©e gÃ©nÃ©rale"
   over the DevTools protocol (`Input.insertText`, so React's own change handler runs) and presses
   the submit button.
 - With the mount, the page ends in the answer, showing "4 with the exact phrase, 1 with every
@@ -2423,7 +2427,7 @@ proves the path, not a corpus.
   Custody and canonical evidence: `C:\lex-v3\lanes\rights-probe`; log: `rights-probe.log` beside it.
   This receipt is the Commission policy the notice cites; Decision 95 records the accepted limit
   for Parliament and Council documents. When EU evidence bundles serve text, they must carry
-  `© European Union, https://eur-lex.europa.eu` and the statement that only the electronic Official
+  `Â© European Union, https://eur-lex.europa.eu` and the statement that only the electronic Official
   Journal is authentic. EU text bundles are still the parity slice; this change acquires the receipt.
   Next: rerun the bounded first mount with Lex.V3.Tool, using PR #750's command and the Codex
   checkout. The historical failed attempts below remain evidence of the old route.
@@ -2760,7 +2764,7 @@ Decision 95 (lex-governance PR #9, merged 2026-09-30) records these rulings and 
   Office route (`https://publications.europa.eu/resource/celex/32011D0833`, `Accept:
   application/xhtml+xml`, `Accept-Language: eng`; observed 2026-09-30: 303 then 200, 48,730 bytes,
   sha256 `2d5bc877...`). Decision 88's one-GET exception for `eur-lex.europa.eu` is withdrawn: no
-  request goes to that host. Served EU text carries "© European Union, https://eur-lex.europa.eu"
+  request goes to that host. Served EU text carries "Â© European Union, https://eur-lex.europa.eu"
   and the statement that only the electronic Official Journal is authentic.
 - Two lanes (amends Decision 94). Codex drives the data lane (the EU rights receipt, the first real
   mount, the populations, French EU bodies, EU parity, release-pipeline pieces without production
@@ -2891,7 +2895,7 @@ Repair fast lane: 3,065 pass / 1 Windows skip; repair build: zero warnings/error
 - EU search on the live search screen waits on an EU permalink grammar (item 5). The real mount's
   EU index answers `search` in one work (for example `32016R0679`, 60 hits for "personal data"), and
   the web search reader refuses the answer by design, reading Luxembourg's only. Each EU hit cites
-  its expression IRI and provision (`…/3e485e15-…-01aa75ed71a1.0006#lex-provision=001`), not a
+  its expression IRI and provision (`â€¦/3e485e15-â€¦-01aa75ed71a1.0006#lex-provision=001`), not a
   hash-pinned permalink. A screen showing those citations would break the launch contract's first
   promise, which the journey holds. Once the grammar exists: the search screen gains the optional
   work identifier, the reader reads the EU answer, and the journey searches the EU work on the real
