@@ -3457,3 +3457,12 @@ and a current storage check before and after its runtime is frozen; it has not s
 
 PRs #827, #829 and #830 are merged. The all-82-seed EU retry remains prepared, with a
 4,999,959,422-byte launch allowance and checks before and after freezing its runtime.
+
+The same slice now also retains the corrigendum tripwire root, pointing to its own expression
+pairing and original canonical/lineage artifacts. Reopening composes only over proof deliveries
+returned by the checked expression reader, then repeats the fold and requires both original
+outputs byte for byte. Eleven additional draft cases cover both production orders, missing
+artifacts, rehashed output and cross-acquisition pairing substitutions, and cancellation.
+Thirty new cases total await current-source CI; initial expression-only CI is still running.
+
+Initial expression-only CI36832422429 at e7f78050 passed5290 tests, skipped22 and failed15. Fourteen failures came from the unused shared budget's invalid limit1 (the contract requires at least2); corrected to2 with an explicit zero-spend postcondition. One construction pin remains. The combined30-case expression/tripwire head needs fresh CI, local validation and review.

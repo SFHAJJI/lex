@@ -18,6 +18,15 @@ public sealed partial class EuLanguageScopedExpressionProducer
     public static async Task<EuLanguageScopedExpressionProductionResult> ReopenAsync(
         ICustodyStore store, SourceArtifactRef checkpoint, CancellationToken cancellationToken)
     {
+        var (result, _, _) = await ReopenWithDeliveriesAsync(store, checkpoint, cancellationToken).ConfigureAwait(false);
+        return result;
+    }
+
+    // Outputs from this checked restoration only, matching the live producer's composition door.
+    internal static async Task<(EuLanguageScopedExpressionProductionResult Result, EuProofBoundDelivery? ExpressionFacts,
+        EuProofBoundDelivery? ObjectFacts)> ReopenWithDeliveriesAsync(
+        ICustodyStore store, SourceArtifactRef checkpoint, CancellationToken cancellationToken)
+    {
         ArgumentNullException.ThrowIfNull(store);
         ArgumentNullException.ThrowIfNull(checkpoint);
         var bytes = await CustodyRestore.ReadByDigestCheckedAsync(store, checkpoint.Sha256, cancellationToken)
@@ -27,21 +36,22 @@ public sealed partial class EuLanguageScopedExpressionProducer
             var document = ContractJson.Deserialize<ProductionCheckpoint>(new UTF8Encoding(false, true).GetString(bytes.Span));
             if (document.Schema != CheckpointSchema || !bytes.Span.SequenceEqual(EncodeCheckpoint(document)))
                 throw new CustodyIntegrityException("Expression checkpoint framing disagrees.");
-            var budget = WireRequestBudget.OfWireRequests(1); // Shared contract witness; never spent by this path.
+            var budget = WireRequestBudget.OfWireRequests(2); // Shared contract witness; never spent by this path.
             var expression = await ReopenFamilyAsync(store, document.Expression, budget, cancellationToken)
                 .ConfigureAwait(false);
             var objects = document.Objects is null ? null : await ReopenFamilyAsync(store, document.Objects, budget,
                 cancellationToken).ConfigureAwait(false);
             if (RefuseBeforeTraffic(expression.Request, objects?.Request) is { } refused)
-                return refused;
+                return (refused, null, null);
             // The private derivation path accepts only these checked restored runs. Its object
             // callback cannot acquire data, and there is no delivery input on this public surface.
             var producer = new EuLanguageScopedExpressionProducer(store, TimeProvider.System);
-            var (result, _, _) = await producer.DeriveAndRetainAsync(expression.Request, expression.Run, 0,
+            var restored = await producer.DeriveAndRetainAsync(expression.Request, expression.Run, 0,
                 _ => Task.FromResult<(EuObjectFactsPartitionRunRequest Request, EuEnumerationRunResult Run, int AdditionalSpend)?>(
                     objects is null ? null : (objects.Request, objects.Run, 0)),
                 cancellationToken, document, checkpoint).ConfigureAwait(false);
-            return result;
+            if (budget.Spent != 0) throw new CustodyIntegrityException("Offline expression restoration spent publisher requests.");
+            return restored;
         }
         catch (Exception exception) when (exception is ArgumentException or JsonException or DecoderFallbackException)
         {

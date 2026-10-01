@@ -17,7 +17,7 @@ namespace Lex.V3.Ingest.Tests;
 /// correcting a work whose reader in English has no served body in which to read it.
 /// </remarks>
 [TestClass]
-public sealed class EuCorrigendumTripwireProducerTests
+public sealed partial class EuCorrigendumTripwireProducerTests
 {
     private const string Work = "http://publications.europa.eu/resource/cellar/work-0001";
     private const string Corrigendum = "http://publications.europa.eu/resource/cellar/work-0001-r01";
