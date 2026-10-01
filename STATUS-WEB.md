@@ -2165,6 +2165,54 @@ through the real handler, beside G2 and G5, so the launch contract's "replay G1 
 - The mounts are fixtures, so this proves the path, not a corpus. A real chained mount needs a second
   build from custody, which the data lane's offline derivation will provide.
 
+EU text served: EU `evidence_bundle` and the reading screen over the original wording (PR #903; the
+web lane's order 2, from the owner's proxy's journey corrections of 2026-10-01 14:30 UTC).
+- **The answer.** EU `evidence_bundle` answers a work the mounted EU index holds from that index. It
+  quotes, for each held expression in the served languages, every article of the one held wording:
+  - the article's text, which is the text the index searches;
+  - the digest of that text, held to the index's own stored text digest (a difference is a damaged
+    index and throws, never a quote);
+  - the corpus body digest, the official source, and an article permalink that EU `verify` accepts
+    (the wording permalink plus the provision after `#`).
+- **The date.** It answers on the wording's own Formex act date only. No consolidation is held, so a
+  date before or after it refuses `no_version_for_date`, naming the held wording dates (the EU parity
+  driver decision (b), PR #761). The original wording is never served as a later date's.
+- **Decision 95.** Every EU answer carries the acknowledgement "© European Union,
+  https://eur-lex.europa.eu" and the statement that only the Official Journal published in
+  electronic form is authentic (Regulation (EU) No 216/2013, Article 1(2)).
+- **Rights at compose time.** Every corpus member the articles come from must be acquired, which an
+  EU build reaches only after retaining the Decision 95 receipt. Otherwise the answer refuses
+  `text_withheld`.
+- **Refusals.**
+  - An ambiguous work or a language not held refuses as EU `dossier` does.
+  - With no EU index mounted, an EU identifier keeps the refusal it had, `retrieval_mode_unavailable`,
+    which the refusal census pins; EU `dossier` answers `no_corpus_mounted` there. Aligning the two is
+    a follow-up, once the samples can be re-rendered.
+- **The screens.** The reading screen reads the EU bundle (`readEuropeEvidenceBundle`, holding it to
+  its own rules) and shows:
+  - the acknowledgement and authenticity statement above the text;
+  - each wording headed by its Formex act date, never an applicability date;
+  - each quote with its evidence line.
+  The export composer shows the EU text and says it is not composed: it pins Luxembourg states'
+  articles only, so it offers no file. The chrome table gains the EU heading and counts and the export
+  sentence, each with a French draft, and the chrome scan renders both EU views.
+- **Evidence:**
+  - `V3CorpusEuropeEvidenceBundleMountTests` on the retained GDPR fixture, through the real handler:
+    - every article with text is quoted, in the index's order, with the index's own text;
+    - each `text_sha256` is recomputed;
+    - every article permalink verifies as `digest_matches`;
+    - the day before and five years after are each refused, and German refuses;
+    - with no language, the English and French wordings are each quoted under their own permalink.
+  - The EU citation walk (`V3CitationVerificationTests`) now verifies the bundle's permalinks too.
+  - Web: `reading-europe.test.mjs` covers the reader, fourteen broken rules, the escaped provision, the
+    reading screen and the export composer. The chrome scan passes with both EU views.
+- **Not yet:**
+  - the journey's EU reading step on the real canary mount (GDPR in English and French) in a browser;
+  - an EU bundle captured in the answer census, which replaces the web tests' hand-built answer;
+  - the EU export.
+  Local builds, test runs and browser runs wait for free memory above 4 GB (standing order of 10:35
+  UTC); CI runs the whole solution.
+
 ## Next, in order (web lane; the data lane's items 1 to 3 are in STATUS-DATA.md)
 
 The web lane's order since the owner's proxy's journey corrections (2026-10-01 14:30 UTC,
