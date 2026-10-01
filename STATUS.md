@@ -1156,7 +1156,8 @@ breaks a rule the answer states about itself:
 - `ambiguous_works` (a dated search's works with several applicable states, which contribute no
   hits) and `work_resolution` are read into the view.
 
-An EU search answer (`publisher: "eu-eurlex"`) has another shape and is refused by this reader.
+An EU search answer (`publisher: "eu-eurlex"`) has another shape and is refused by this reader;
+since PR #853 `readEuropeSearch` reads it, beside this one.
 It reads no text snippet, because the answer carries none. The pre-V3 renderer
 `search-results.mjs` (`lex_id`, `provision_num`, a row set) stays for the preview until the live
 search screen replaces it.
@@ -1199,7 +1200,8 @@ breaks a rule the answer states about itself:
 - `not_held` names each item once with its reason. It is carried whole: it is the V3 form of the
   pre-V3 screen's unfilled slots.
 
-An EU dossier (`publisher: "eu-eurlex"`) has another shape and is refused. The fixture holds one
+An EU dossier (`publisher: "eu-eurlex"`) has another shape and is refused by this reader; since PR
+#856 `readEuropeDossier` reads it, beside this one. The fixture holds one
 state and no titles, so the tests also read a work with three states in two languages and a
 titled work, built from the captured answer the way `V3CorpusMount.Dossier` builds them. The
 pre-V3 `dossier.mjs` renderer stays for the preview until the live dossier screen replaces it.
@@ -1214,7 +1216,8 @@ bundle `client-live-dossier.js`, which embeds the contract and nothing else of t
   index holds no title for this work" when none), the state count and range, a table of states
   (language, applicability date, next state, articles held and not admitted, printed permalink),
   and every item the dossier does not hold with its reason.
-- An EU work's dossier is answered in another shape and is said as not shown on this screen.
+- An EU work's dossier is answered in another shape. Until PR #856 it was said as not shown on this
+  screen; it is now laid out in its own words (the EU dossier paragraph below).
 - The envelope census now holds the dossier answer and its four refusals from the real handler. A
   language not held, an EU identifier on a mount without the EU index (`no_corpus_mounted`,
   `required_corpus: "eu"`), and no mount are refusal cards. A `no_corpus_mounted` sentence names
