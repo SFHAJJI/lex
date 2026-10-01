@@ -1,5 +1,6 @@
 using System.Buffers.Binary;
 using System.Collections;
+using System.Text.Json;
 using Lex.V3.Contracts.Source.Luxembourg;
 using Lex.V3.Contracts.Source.Scope;
 
@@ -32,14 +33,16 @@ internal sealed class LuxembourgObjectDigestSet : IReadOnlyList<string>
                 throw new InvalidOperationException("Observation enumeration exceeds its declared count.");
             ArgumentNullException.ThrowIfNull(observation);
             var hex = ScopeManifestCanonicalWriter.ComputeObjectRefSha256(observation.ObjectRef);
-            if (!Digest.TryParse(hex, out values[index++]))
+            if (!Digest.TryParse(hex, out values[index]))
                 throw new InvalidOperationException("Object identity writer returned a non-canonical digest.");
+            index++;
         }
         if (index != values.Length)
             throw new InvalidOperationException("Observation enumeration ended before its declared count.");
         Array.Sort(values);
         cancellationToken.ThrowIfCancellationRequested();
         var distinct = 0;
+        // Writes only touch the current or an earlier element, so no unread value is replaced.
         foreach (var value in values)
             if (distinct == 0 || values[distinct - 1].CompareTo(value) != 0)
                 values[distinct++] = value;
@@ -50,6 +53,33 @@ internal sealed class LuxembourgObjectDigestSet : IReadOnlyList<string>
 
     internal bool Contains(string? hex) => Digest.TryParse(hex, out var digest) &&
         Array.BinarySearch(_values, digest) >= 0;
+
+    /// <summary>Reads the identity array for the existing canonical reader. Input order and
+    /// duplicates are checked, never normalized; the enclosing reader still verifies schema,
+    /// run identity, the pinned digest and exact canonical bytes.</summary>
+    internal static LuxembourgObjectDigestSet FromCanonicalArray(JsonElement values, string parameterName)
+    {
+        if (values.ValueKind != JsonValueKind.Array)
+            throw new ArgumentException("Expected an object identity array.", parameterName);
+        var parsed = new Digest[values.GetArrayLength()];
+        var index = 0;
+        foreach (var value in values.EnumerateArray())
+        {
+            if (value.ValueKind != JsonValueKind.String)
+                throw new ArgumentException(
+                    "The observed object identity set carries a non-string object reference digest.", parameterName);
+            if (!Digest.TryParse(value.GetString(), out parsed[index]))
+                throw new ArgumentException(
+                    "The observed object identity set carries a value that is not a lowercase hex SHA-256.", parameterName);
+            index++;
+        }
+        // Preserve the existing reader's precedence: validate all scalar values before ordering.
+        for (index = 1; index < parsed.Length; index++)
+            if (parsed[index - 1].CompareTo(parsed[index]) >= 0)
+                throw new ArgumentException(
+                    "The observed object identity set is not ordinal-ascending and distinct.", parameterName);
+        return new LuxembourgObjectDigestSet(parsed);
+    }
 
     public IEnumerator<string> GetEnumerator()
     {

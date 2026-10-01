@@ -7,15 +7,16 @@ every pull request that changes what is served, what is next or what is blocked.
 
 Reversible driver decision: retain each derived object digest as four unsigned 64-bit values,
 sorted in the same order as lowercase hexadecimal. The production LU evidence resolver uses
-binary search over this immutable set, and the observed-identity writer uses its lazy hexadecimal
+binary search over this immutable set, and both identity creation and the checked reader retain the compact set. The writer uses its lazy hexadecimal
 view. This replaces their retained string/hash-tree payloads while preserving exact membership,
 duplicate-set semantics and the existing canonical identity artifact. It does not alter publisher
 proofs, custody admission or complete-enumeration checks. Binary search trades lookup work for
 less retained memory; full pipeline memory remains to be measured.
 
-Seventeen draft cases cover complete-digest membership and sorted-set parity over 1,024 distinct identities plus duplicates, indexed
+Twenty-seven draft cases cover complete-digest membership and sorted-set parity over 1,024 distinct identities plus duplicates, indexed
 and enumerated access, absent and malformed digests, input-list mutation, empty/repeated sets,
-legacy canonical bytes/digests and independent reopening, nulls, cancellation and mismatched source counts. Existing
+legacy canonical bytes/digests and independent reopening, nulls, cancellation and mismatched source counts.
+Reader cases also cover ordering under shared prefixes, duplicate and malformed digests and refusal precedence. Existing
 resolver and retained-identity checks will run too. Code is unvalidated; census diagnostics will
 print the actual new construction entry before pin updates. Local heavy checks remain serialized
 behind the active EU acquisition and previously queued reviews/validation.

@@ -1,3 +1,5 @@
+using System.Text;
+using System.Text.Json;
 using Lex.V3.Contracts.Source.Core;
 using Lex.V3.Contracts.Source.Luxembourg;
 using Lex.V3.Contracts.Source.Scope;
@@ -135,6 +137,71 @@ public sealed class LuxembourgObjectDigestSetTests
     {
         var source = new WrongCountList(Observations(1), declaredCount);
         Assert.ThrowsExactly<InvalidOperationException>(() => LuxembourgObjectDigestSet.FromObservations(source));
+    }
+
+    [TestMethod]
+    [DataRow(0)]
+    [DataRow(16)]
+    [DataRow(32)]
+    [DataRow(48)]
+    public void CanonicalReaderChecksFullDigestOrderAndDuplicates(int differingPosition)
+    {
+        var low = new string('0', 64);
+        var highCharacters = low.ToCharArray();
+        highCharacters[differingPosition] = '1';
+        var high = new string(highCharacters);
+        var valid = ReadRawValues(JsonSerializer.Serialize(new[] { low, high }));
+        CollectionAssert.AreEqual(new[] { low, high }, valid.Set.ObjectRefSha256Values.ToArray());
+        foreach (var invalid in new[] { new[] { high, low }, new[] { low, low } })
+        {
+            var failure = Assert.ThrowsExactly<ArgumentException>(() => ReadRawValues(JsonSerializer.Serialize(invalid)));
+            Assert.AreEqual("canonicalBytes", failure.ParamName);
+            StringAssert.Contains(failure.Message, "ordinal-ascending and distinct");
+        }
+    }
+
+    [TestMethod]
+    [DataRow("null")]
+    [DataRow("number")]
+    [DataRow("uppercase")]
+    [DataRow("short")]
+    [DataRow("nonhex")]
+    public void CanonicalReaderRejectsMalformedIdentityValues(string kind)
+    {
+        var values = kind switch
+        {
+            "null" => "[null]",
+            "number" => "[1]",
+            "uppercase" => JsonSerializer.Serialize(new[] { new string('A', 64) }),
+            "short" => JsonSerializer.Serialize(new[] { new string('a', 63) }),
+            "nonhex" => JsonSerializer.Serialize(new[] { new string('g', 64) }),
+            _ => throw new InvalidOperationException()
+        };
+        var failure = Assert.ThrowsExactly<ArgumentException>(() => ReadRawValues(values));
+        Assert.AreEqual("canonicalBytes", failure.ParamName);
+        StringAssert.Contains(failure.Message, kind is "null" or "number" ? "non-string" : "lowercase hex SHA-256");
+    }
+
+    [TestMethod]
+    public void CanonicalReaderValidatesAllValuesBeforeCheckingOrder()
+    {
+        var values = JsonSerializer.Serialize(new[] { new string('f', 64), new string('0', 64), "bad" });
+        var failure = Assert.ThrowsExactly<ArgumentException>(() => ReadRawValues(values));
+        StringAssert.Contains(failure.Message, "lowercase hex SHA-256");
+    }
+
+    private static VerifiedLuxembourgObservedObjectIdentitySet ReadRawValues(string arrayJson)
+    {
+        using var values = JsonDocument.Parse(arrayJson);
+        var bytes = Encoding.UTF8.GetBytes(JsonSerializer.Serialize(new
+        {
+            schema = LuxembourgObservedObjectIdentitySet.SchemaId,
+            run_identity = new { resource_id = RunIdentity.ResourceId, sha256 = RunIdentity.Sha256 },
+            object_ref_sha256 = values.RootElement
+        }) + "\n");
+        var reference = new SourceArtifactRef("urn:uuid:040f0784-1360-4818-bc50-04d2ab7351f0",
+            LuxembourgObservedObjectIdentitySetCanonicalWriter.ComputeSetSha256(bytes));
+        return VerifiedLuxembourgObservedObjectIdentitySet.ParseAndVerify(reference, bytes);
     }
 
     private sealed class WrongCountList(LuxembourgResourceObservation[] values, int count)

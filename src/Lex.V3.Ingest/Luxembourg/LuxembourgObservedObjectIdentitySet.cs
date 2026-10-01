@@ -282,24 +282,6 @@ public sealed class VerifiedLuxembourgObservedObjectIdentitySet
         return new VerifiedLuxembourgObservedObjectIdentitySet(setRef, set);
     }
 
-    private static bool IsSha256Hex(string value)
-    {
-        if (value.Length != 64)
-        {
-            return false;
-        }
-
-        foreach (var character in value)
-        {
-            if (character is not (>= '0' and <= '9' or >= 'a' and <= 'f'))
-            {
-                return false;
-            }
-        }
-
-        return true;
-    }
-
     private static LuxembourgObservedObjectIdentitySet Parse(ReadOnlySpan<byte> canonicalBytes)
     {
         JsonDocument document;
@@ -375,39 +357,8 @@ public sealed class VerifiedLuxembourgObservedObjectIdentitySet
                     nameof(canonicalBytes));
             }
 
-            var parsed = new List<string>(values.GetArrayLength());
-            foreach (var value in values.EnumerateArray())
-            {
-                if (value.ValueKind != JsonValueKind.String)
-                {
-                    throw new ArgumentException(
-                        "The observed object identity set carries a non-string object reference digest.",
-                        nameof(canonicalBytes));
-                }
-
-                var digest = value.GetString()!;
-                if (!IsSha256Hex(digest))
-                {
-                    throw new ArgumentException(
-                        "The observed object identity set carries a value that is not a lowercase "
-                        + "hex SHA-256.",
-                        nameof(canonicalBytes));
-                }
-
-                parsed.Add(digest);
-            }
-
-            for (var index = 1; index < parsed.Count; index++)
-            {
-                if (string.CompareOrdinal(parsed[index - 1], parsed[index]) >= 0)
-                {
-                    throw new ArgumentException(
-                        "The observed object identity set is not ordinal-ascending and distinct.",
-                        nameof(canonicalBytes));
-                }
-            }
-
-            return new LuxembourgObservedObjectIdentitySet(parsedRunIdentity, parsed);
+            return new LuxembourgObservedObjectIdentitySet(parsedRunIdentity,
+                LuxembourgObjectDigestSet.FromCanonicalArray(values, nameof(canonicalBytes)));
         }
     }
 }
