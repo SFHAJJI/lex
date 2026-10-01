@@ -52,6 +52,15 @@ public sealed class EuObservedWorkIdentityTests
         Assert.IsNull(EuObservedWorkIdentity.Resolve([facts[0] with { SeedCelex = "32019R0947" }], State));
     }
 
+    [TestMethod]
+    public void ObservedTreatyConsolidationPreservesTheCompletePublisherIdentifier()
+    {
+        var seed = EuAppendixASeedMap.SeedsInCelexOrder.Single(seed => seed.Celex == "12016M/TXT");
+        var facts = Facts(RepeatedEnumerationRdfTerm.Literal("02016M/TXT-20151225", StringType, null));
+        Assert.AreEqual("02016M/TXT-20151225", EuObservedWorkIdentity.Resolve(
+            [facts[0] with { SeedCelex = seed.Celex, RootWorkIri = seed.WorkRoot }], State));
+    }
+
     private static EuObservedWorkFacts[] Facts(params RepeatedEnumerationRdfTerm[] terms)
     {
         var seed = EuAppendixASeedMap.SeedsInCelexOrder.Single(seed => seed.Celex == "32016R0679");

@@ -94,10 +94,10 @@ public sealed class EuropeIndexBuilderTests
         foreach (var exactSpan in new[]
                  {
                      "It shall apply from 25 May 2018.",
-                     "identifiable natural person (Ã¢â‚¬Ëœdata subjectÃ¢â‚¬â„¢)",
+                     "identifiable natural person (‘data subject’)",
                      "its publication in the Official Journal of the European Union.",
                      "Article 99 Entry into force and application",
-                     "(1) Ã¢â‚¬Ëœpersonal dataÃ¢â‚¬â„¢ means any information",
+                     "(1) ‘personal data’ means any information",
                  })
         {
             var exactHit = reader.Search("eng", cell.PeriodFrom, cell.PeriodTo, exactSpan);
@@ -216,6 +216,7 @@ public sealed class EuropeIndexBuilderTests
                     ReadRows<EuropeIndexBuilder.CorrigendumGapRow>(connection, "ReadGaps"), articles,
                     ReadRows<EuropeIndexBuilder.ArticleSourceRow>(connection, "ReadArticleSources"));
                 EuropeIndexBuilder.Execute(connection, "DROP TABLE states; DROP TABLE article_digests; PRAGMA user_version=3;");
+                EuropeIndexBuilder.Execute(connection, "PRAGMA writable_schema=ON; UPDATE sqlite_schema SET sql=replace(sql,'publisher_work_celex TEXT COLLATE BINARY,','publisher_work_celex TEXT COLLATE BINARY NOT NULL,') WHERE name='articles'; PRAGMA writable_schema=OFF;");
                 using var command = connection.CreateCommand();
                 command.CommandText = "UPDATE stamp SET schema_identity='lex-v3-europe-index/3',logical_rows_sha256=$logical";
                 command.Parameters.AddWithValue("$logical", logical);
@@ -256,6 +257,7 @@ public sealed class EuropeIndexBuilderTests
                     ReadRows<EuropeIndexBuilder.ArticleSourceRow>(connection, "ReadArticleSources"),
                     ReadRows<EuropeIndexBuilder.ArticleDigestRow>(connection, "ReadArticleDigests"));
                 EuropeIndexBuilder.Execute(connection, "DROP TABLE states; PRAGMA user_version=4;");
+                EuropeIndexBuilder.Execute(connection, "PRAGMA writable_schema=ON; UPDATE sqlite_schema SET sql=replace(sql,'publisher_work_celex TEXT COLLATE BINARY,','publisher_work_celex TEXT COLLATE BINARY NOT NULL,') WHERE name='articles'; PRAGMA writable_schema=OFF;");
                 using var command = connection.CreateCommand();
                 command.CommandText = "UPDATE stamp SET schema_identity='lex-v3-europe-index/4',logical_rows_sha256=$logical";
                 command.Parameters.AddWithValue("$logical", logical);
@@ -455,7 +457,7 @@ public sealed class EuropeIndexBuilderTests
         Assert.AreEqual(1, reader.ArticleCount);
         var cell = built.CapabilityManifest.Cells.Single();
         Assert.AreEqual("fra", cell.Language);
-        var hit = reader.Search("fra", cell.PeriodFrom, cell.PeriodTo, "Texte franÃƒÂ§ais de test");
+        var hit = reader.Search("fra", cell.PeriodFrom, cell.PeriodTo, "Texte français de test");
         Assert.AreEqual(V3IndexCapabilityLookupOutcome.Supported, hit.Outcome);
         Assert.HasCount(1, hit.ArticleIdentities);
         Assert.AreEqual(V3IndexCapabilityLookupOutcome.FilterNotSupportedByIndex,

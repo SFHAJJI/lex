@@ -29,6 +29,11 @@ public sealed record EuropeIndexState(
     string? PublisherWorkCelex, EuropeIndexStateDateStatus DateStatus,
     string? PublisherConsolidationDate, string FactsJson);
 
+/// <summary>A held expression addressed by its proven seed/work/expression relation, even without a work CELEX.</summary>
+public sealed record EuropeIndexStateExpression(string StateIdentitySha256, string SeedCelex,
+    string PublisherWorkIri, string? PublisherWorkCelex, string PublisherExpressionId, string Language,
+    IReadOnlyList<string> ArticleIdentities);
+
 public static partial class EuropeIndexBuilder
 {
     private const string StatesDdl = """
@@ -84,6 +89,58 @@ public static partial class EuropeIndexBuilder
         return (EuropeIndexStateDateStatus.ObservedConsolidationDate, date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
     }
 
+    internal static void ValidateStateEvidence(IReadOnlyList<EuropeIndexState> rows)
+    {
+        try
+        {
+            var works = rows.Select(row =>
+            {
+                using var document = JsonDocument.Parse(row.FactsJson);
+                var root = document.RootElement;
+                var observations = root.GetProperty("Observations").EnumerateArray().Select(item =>
+                    new EuWorkFactObservation(item.GetProperty("PublisherWorkIri").GetString()!,
+                        item.GetProperty("PredicateIri").GetString()!, ReadTerm(item.GetProperty("Value")),
+                        ReadReference(item.GetProperty("InterpretationProfileRef")))).ToArray();
+                var work = new EuObservedWorkFacts(root.GetProperty("SeedCelex").GetString()!,
+                    root.GetProperty("RootWorkIri").GetString()!, root.GetProperty("PublisherWorkIri").GetString()!,
+                    observations, ReadReference(root.GetProperty("CensusInterpretationProfileRef")));
+                if (JsonSerializer.Serialize(work) != row.FactsJson ||
+                    observations.Any(observation => observation.PublisherWorkIri != work.PublisherWorkIri) ||
+                    !EuAppendixASeedMap.SeedsInCelexOrder.Any(seed => seed.Celex == work.SeedCelex && seed.WorkRoot == work.RootWorkIri) ||
+                    EuPackRootCanonicalForm.TryCanonicalize(work.PublisherWorkIri, out _) != work.PublisherWorkIri)
+                    throw new InvalidDataException("EU state evidence is not canonical or disagrees with its census coordinates.");
+                return work;
+            }).ToArray();
+            if (!ProjectStates(works).SequenceEqual(rows))
+                throw new InvalidDataException("EU state fields disagree with their retained identity/date observations.");
+        }
+        catch (Exception exception) when (exception is JsonException or ArgumentException or InvalidOperationException or KeyNotFoundException)
+        {
+            throw new InvalidDataException("EU state evidence could not be reopened.", exception);
+        }
+    }
+
+    private static SourceArtifactRef ReadReference(JsonElement value) =>
+        new(value.GetProperty("ResourceId").GetString()!, value.GetProperty("Sha256").GetString()!);
+
+    private static RepeatedEnumerationRdfTerm ReadTerm(JsonElement term)
+    {
+        var value = term.GetProperty("Value").GetString();
+        var datatype = term.GetProperty("Datatype").GetString();
+        var language = term.GetProperty("Language").GetString();
+        var result = (RepeatedEnumerationRdfTermKind)term.GetProperty("Kind").GetInt32() switch
+        {
+            RepeatedEnumerationRdfTermKind.Iri => RepeatedEnumerationRdfTerm.Iri(value!),
+            RepeatedEnumerationRdfTermKind.BlankNode => RepeatedEnumerationRdfTerm.BlankNode(value!),
+            RepeatedEnumerationRdfTermKind.Literal => RepeatedEnumerationRdfTerm.Literal(value!, datatype, language),
+            RepeatedEnumerationRdfTermKind.Unbound => RepeatedEnumerationRdfTerm.Unbound(),
+            _ => throw new InvalidDataException("EU state evidence contains an unknown RDF term kind."),
+        };
+        if (result.Value != value || result.Datatype != datatype || result.Language != language)
+            throw new InvalidDataException("EU state evidence contains an invalid RDF term shape.");
+        return result;
+    }
+
     internal static string StateIdentity(string seed, string root, string work) =>
         Convert.ToHexStringLower(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(new[] { seed, root, work })));
 
@@ -106,6 +163,32 @@ public sealed partial class EuropeIndexReader
             return Array.AsReadOnly(ReadStates(_connection).Where(row => row.SeedCelex == seedCelex)
                 .OrderBy(row => row.PublisherConsolidationDate, StringComparer.Ordinal)
                 .ThenBy(row => row.PublisherWorkIri, StringComparer.Ordinal).ToArray());
+    }
+
+    public IReadOnlyList<EuropeIndexStateExpression> ReadStateExpressions(string seedCelex)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(seedCelex);
+        if (!HasStates) throw new InvalidOperationException("This historical EU index has no states table.");
+        lock (_gate)
+        {
+            using var command = _connection.CreateCommand();
+            command.CommandText = """
+                SELECT s.state_identity_sha256,s.seed_celex,s.publisher_work_iri,s.publisher_work_celex,
+                       a.publisher_expression_id,a.language,a.article_identity_sha256
+                FROM states s JOIN articles a ON a.publisher_work_id=s.publisher_work_iri
+                WHERE s.seed_celex=$seed
+                ORDER BY s.state_identity_sha256,a.publisher_expression_id,a.language,a.article_identity_sha256
+                """;
+            command.Parameters.AddWithValue("$seed", seedCelex);
+            using var reader = command.ExecuteReader();
+            var rows = new List<(string State, string Seed, string Work, string? Celex, string Expression, string Language, string Article)>();
+            while (reader.Read()) rows.Add((reader.GetString(0), reader.GetString(1), reader.GetString(2),
+                reader.IsDBNull(3) ? null : reader.GetString(3), reader.GetString(4), reader.GetString(5), reader.GetString(6)));
+            return Array.AsReadOnly(rows.GroupBy(row => (row.State, row.Seed, row.Work, row.Celex, row.Expression, row.Language))
+                .Select(group => new EuropeIndexStateExpression(group.Key.State, group.Key.Seed, group.Key.Work,
+                    group.Key.Celex, group.Key.Expression, group.Key.Language,
+                    Array.AsReadOnly(group.Select(row => row.Article).ToArray()))).ToArray());
+        }
     }
 
     private static EuropeIndexState[] ReadStates(SqliteConnection connection)

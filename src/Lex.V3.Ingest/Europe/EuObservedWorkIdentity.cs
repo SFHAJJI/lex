@@ -1,6 +1,5 @@
 using Lex.V3.Contracts;
 using System.Globalization;
-using System.Text.RegularExpressions;
 using Lex.V3.Contracts.Source.Core;
 using Lex.V3.Contracts.Source.Europe;
 
@@ -8,9 +7,11 @@ namespace Lex.V3.Ingest.Europe;
 
 internal static class EuObservedWorkIdentity
 {
-    private static readonly Regex ConsolidatedCelex = new(
-        @"^0(?<year>[0-9]{4})(?<kind>[A-Z])(?<number>[0-9]{4})(?<suffix>\([0-9]{2}\))?-(?<date>[0-9]{8})$",
-        RegexOptions.CultureInvariant | RegexOptions.ExplicitCapture);
+    internal static bool IsProven(EuQueryExecutionResult run, string work) =>
+        EuAppendixASeedMap.SeedsInCelexOrder.Any(seed => seed.WorkRoot == work) ||
+        run.ObservedWorkFacts.Any(facts => facts.PublisherWorkIri == work &&
+            facts.CensusInterpretationProfileRef is not null &&
+            EuAppendixASeedMap.SeedsInCelexOrder.Any(seed => seed.Celex == facts.SeedCelex && seed.WorkRoot == facts.RootWorkIri));
 
     internal static string? Resolve(EuQueryExecutionResult run, string publisherWorkIri, bool originalOnly = false) =>
         Resolve(run.ObservedWorkFacts, publisherWorkIri, originalOnly);
@@ -30,13 +31,11 @@ internal static class EuObservedWorkIdentity
         if (terms.Length != 1 || terms[0].Kind != RepeatedEnumerationRdfTermKind.Literal ||
             terms[0].Language is not null || terms[0].Datatype != "http://www.w3.org/2001/XMLSchema#string") return null;
         var celex = terms[0].Value!;
-        var parsed = ConsolidatedCelex.Match(celex);
-        if (!parsed.Success || !DateOnly.TryParseExact(parsed.Groups["date"].Value, "yyyyMMdd",
-                CultureInfo.InvariantCulture, DateTimeStyles.None, out _)) return null;
-        // Require the retained census relation to the reviewed root. Never derive a sector-3
-        // identity from the stream name; international agreements retain their own seed sector.
-        var core = parsed.Groups["year"].Value + parsed.Groups["kind"].Value +
-            parsed.Groups["number"].Value + parsed.Groups["suffix"].Value;
+        if (celex.Length < 11 || celex[0] != '0' || celex[^9] != '-' ||
+            !DateOnly.TryParseExact(celex[^8..], "yyyyMMdd", CultureInfo.InvariantCulture, DateTimeStyles.None, out _)) return null;
+        // The reviewed seed admits the complete core, including treaty /TXT and agreement
+        // parentheticals. The observed identifier is preserved; none is synthesized.
+        var core = celex[1..^9];
         if (matches.Any(work => !EuAppendixASeedMap.SeedsInCelexOrder.Any(seed =>
                 seed.Celex == work.SeedCelex && seed.WorkRoot == work.RootWorkIri && seed.Celex[1..] == core))) return null;
         return celex;

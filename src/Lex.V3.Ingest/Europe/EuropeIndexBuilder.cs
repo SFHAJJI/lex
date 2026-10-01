@@ -158,7 +158,9 @@ public static partial class EuropeIndexBuilder
         ) STRICT;
         """;
 
-    private const string Ddl = DigestDdl + StatesDdl;
+    private static readonly string Ddl = DigestDdl.Replace(
+        "publisher_work_celex TEXT COLLATE BINARY NOT NULL,",
+        "publisher_work_celex TEXT COLLATE BINARY,", StringComparison.Ordinal) + StatesDdl;
 
     public static EuropeIndexBuildResult? TryBuild(
         Stage3DerivationProfileEnvelope envelope,
@@ -321,7 +323,7 @@ public static partial class EuropeIndexBuilder
             }
             if (outcome.Disposition != EuFormexMainBodyLegalContentDisposition.Admitted) continue;
             if (member.Outcome != LexCorpus6OutcomeKind.Acquired ||
-                member.EuropeContentClass?.ContentClass != EuContentClass.OriginalLegalText)
+                member.EuropeContentClass?.ContentClass is not (EuContentClass.OriginalLegalText or EuContentClass.Consolidation))
             {
                 articles = [];
                 refusal = EuropeIndexBuildRefusal.RightsIneligible;
@@ -330,11 +332,12 @@ public static partial class EuropeIndexBuilder
             }
             var workCelex = EuObservedWorkIdentity.Resolve(envelope.BodyComposition.Envelope.Europe,
                 outcome.Source.ExpressionIdentity.PublisherWorkId);
-            if (workCelex is null)
+            if (workCelex is null && !EuObservedWorkIdentity.IsProven(envelope.BodyComposition.Envelope.Europe,
+                    outcome.Source.ExpressionIdentity.PublisherWorkId))
             {
                 articles = [];
                 refusal = EuropeIndexBuildRefusal.DerivationMismatch;
-                detail = "An admitted Formex work has no unique admitted publisher CELEX and census relation.";
+                detail = "An admitted Formex work has no original-root or proven census identity.";
                 return false;
             }
 
@@ -644,7 +647,7 @@ public static partial class EuropeIndexBuilder
 
     internal sealed record ArticleRow(
         string ArticleIdentitySha256, string ObjectRefSha256, string PublisherWorkId,
-        string PublisherWorkCelex, string PublisherExpressionId, string PackageEntry,
+        string? PublisherWorkCelex, string PublisherExpressionId, string PackageEntry,
         string PublisherIdentifier,
         string Heading, string WordingDate, string Language, string SearchableText, string TokensJson);
 
@@ -816,6 +819,7 @@ public sealed partial class EuropeIndexReader : IDisposable
                     throw new InvalidDataException("EU articles disagree about the same source entry bytes.");
             }
             var states = version >= 5 ? ReadStates(connection) : null;
+            if (states is not null) EuropeIndexBuilder.ValidateStateEvidence(states);
             if (!string.Equals(EuropeIndexBuilder.HashLogicalRows(members, lines, gaps, articles, sources, digests, states),
                     expectedLogical, StringComparison.Ordinal))
                 throw new InvalidDataException("The EU index logical rows do not match their stamp.");
@@ -1013,7 +1017,8 @@ public sealed partial class EuropeIndexReader : IDisposable
     /// <summary>
     /// Every held expression of one EU work, in language and expression order, with the Formex act dates of
     /// its wording, its article count and the members its articles were read from (joined to the members
-    /// table for their outcome and content class). An unknown work has no rows.
+    /// table for their outcome and content class). This legacy CELEX-addressed surface omits works whose
+    /// own CELEX is absent; ReadStateExpressions exposes those through their census/Cellar identities. An unknown work has no rows.
     /// </summary>
     public IReadOnlyList<EuropeIndexWorkExpression> ResolveWorkExpressions(string publisherWorkId)
     {
@@ -1025,7 +1030,7 @@ public sealed partial class EuropeIndexReader : IDisposable
                 SELECT a.publisher_work_id,a.publisher_work_celex,a.publisher_expression_id,a.language,
                        a.wording_date,a.object_ref_sha256,m.outcome,m.content_class,count(*)
                 FROM articles a JOIN members m ON m.object_ref_sha256=a.object_ref_sha256
-                WHERE a.publisher_work_id=$work
+                WHERE a.publisher_work_id=$work AND a.publisher_work_celex IS NOT NULL
                 GROUP BY a.publisher_work_id,a.publisher_work_celex,a.publisher_expression_id,a.language,
                          a.wording_date,a.object_ref_sha256,m.outcome,m.content_class
                 ORDER BY a.language,a.publisher_expression_id,a.wording_date,a.object_ref_sha256
@@ -1101,7 +1106,7 @@ public sealed partial class EuropeIndexReader : IDisposable
         command.CommandText =
             "SELECT publisher_work_id,publisher_work_celex,publisher_expression_id,publisher_identifier,heading," +
             "wording_date,language,article_identity_sha256 FROM articles " +
-            "WHERE language=$language AND publisher_expression_id=$expression" +
+            "WHERE language=$language AND publisher_expression_id=$expression AND publisher_work_celex IS NOT NULL" +
             string.Concat(needles.Select(static (_, index) => $" AND instr(searchable_text,$needle{index})>0")) +
             " ORDER BY publisher_identifier,article_identity_sha256";
         command.Parameters.AddWithValue("$language", language);
@@ -1215,7 +1220,7 @@ public sealed partial class EuropeIndexReader : IDisposable
         using var reader = command.ExecuteReader();
         var values = new List<EuropeIndexBuilder.ArticleRow>();
         while (reader.Read()) values.Add(new(reader.GetString(0), reader.GetString(1), reader.GetString(2),
-            reader.GetString(3), reader.GetString(4), reader.GetString(5), reader.GetString(6),
+            reader.IsDBNull(3) ? null : reader.GetString(3), reader.GetString(4), reader.GetString(5), reader.GetString(6),
             reader.GetString(7), reader.GetString(8), reader.GetString(9), reader.GetString(10),
             reader.GetString(11)));
         return values.ToArray();

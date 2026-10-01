@@ -157,8 +157,8 @@ public sealed partial class EuFormexPackagePopulationProducerTests
     }
 
     [TestMethod]
-    [DataRow("lex-eu-formex-population-checkpoint/1")]
-    [DataRow("lex-eu-formex-package-checkpoint/1")]
+    [DataRow("lex-eu-formex-population-checkpoint/2")]
+    [DataRow("lex-eu-formex-package-checkpoint/2")]
     public async Task PopulationCannotDeliverWithoutItsCompleteCheckpointClosure(string failSchema)
     {
         var capture = await CapturePopulationAsync(1, failSchema);

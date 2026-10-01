@@ -85,7 +85,9 @@ public sealed partial class V3FirstMountBuildTests
                 command.CommandText = "SELECT count(DISTINCT publisher_expression_id) FROM articles";
                 Assert.AreEqual(4L, command.ExecuteScalar(), "Both original and consolidated EN/FR texts must reach the complete offline mount.");
                 command.CommandText = "SELECT publisher_work_celex FROM states WHERE publisher_consolidation_date='2024-01-01'";
-                Assert.AreEqual("02016R0679-20240101", command.ExecuteScalar());
+                Assert.AreEqual(DBNull.Value, command.ExecuteScalar(), "A missing publisher CELEX must remain absent in the complete mount.");
+                command.CommandText = "SELECT count(DISTINCT publisher_expression_id) FROM articles WHERE publisher_work_celex IS NULL";
+                Assert.AreEqual(2L, command.ExecuteScalar(), "Both consolidated languages remain indexed without inventing CELEX.");
             }
 
             string[] expectedFiles = ["build-report.json", "lex-corpus-6.json", "luxembourg-index.sqlite3",

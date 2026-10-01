@@ -10,11 +10,12 @@ namespace Lex.V3.Ingest.Europe;
 
 public sealed partial class EuFormexPackageAcquisitionProducer
 {
-    private const string PackageCheckpointSchema = "lex-eu-formex-package-checkpoint/1";
+    private const string PackageCheckpointSchema = "lex-eu-formex-package-checkpoint/2";
+    private const string PriorPackageCheckpointSchema = "lex-eu-formex-package-checkpoint/1";
 
     /// <summary>Acquire and classify one eligible package, retaining the original replay associations.</summary>
     public async Task<EuFormexPackageAcquisitionResult> RunAsync(EuFormexManifestationEnumerationResult enumeration,
-        VerifiedCorpusRecordSet? corpusRecordSet, string workCelex, MachineQueryRendererSource documentFetchRendererSource,
+        VerifiedCorpusRecordSet? corpusRecordSet, string? workCelex, MachineQueryRendererSource documentFetchRendererSource,
         WireRequestBudget wireBudget, CancellationToken cancellationToken)
     {
         var context = new PackageReplayContext(null);
@@ -41,20 +42,21 @@ public sealed partial class EuFormexPackageAcquisitionProducer
 
     /// <summary>Repeat package and annex derivation from the original capture, with zero publisher traffic.</summary>
     public static async Task<EuFormexPackageAcquisitionResult> ReopenAsync(ICustodyStore store, SourceArtifactRef checkpoint,
-        EuFormexManifestationEnumerationResult enumeration, VerifiedCorpusRecordSet? corpusRecordSet, string workCelex,
+        EuFormexManifestationEnumerationResult enumeration, VerifiedCorpusRecordSet? corpusRecordSet, string? workCelex,
         MachineQueryRendererSource documentFetchRendererSource, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(store);
         ArgumentNullException.ThrowIfNull(checkpoint);
         ArgumentNullException.ThrowIfNull(enumeration);
         ArgumentNullException.ThrowIfNull(documentFetchRendererSource);
-        ArgumentException.ThrowIfNullOrWhiteSpace(workCelex);
+        if (workCelex is not null) ArgumentException.ThrowIfNullOrWhiteSpace(workCelex);
         cancellationToken.ThrowIfCancellationRequested();
         var bytes = await CustodyRestore.ReadByDigestCheckedAsync(store, checkpoint.Sha256, cancellationToken).ConfigureAwait(false);
         try
         {
             var document = ContractJson.Deserialize<PackageCheckpoint>(new UTF8Encoding(false, true).GetString(bytes.Span));
-            if (document.Schema != PackageCheckpointSchema || !bytes.Span.SequenceEqual(Encode(document)) ||
+            if ((document.Schema != PackageCheckpointSchema && document.Schema != PriorPackageCheckpointSchema) ||
+                (document.Schema == PriorPackageCheckpointSchema && workCelex is null) || !bytes.Span.SequenceEqual(Encode(document)) ||
                 document.InputSha256 != InputDigest(enumeration, corpusRecordSet, workCelex) ||
                 document.Renderer != documentFetchRendererSource.Reference || document.Fetches is null || document.Profiles is null ||
                 document.Fetches.Length > 2 || document.Profiles.Length > 3 || document.ProductRequestCount < 0 ||
@@ -76,7 +78,7 @@ public sealed partial class EuFormexPackageAcquisitionProducer
         }
     }
 
-    private static string InputDigest(EuFormexManifestationEnumerationResult enumeration, VerifiedCorpusRecordSet? corpus, string celex) =>
+    private static string InputDigest(EuFormexManifestationEnumerationResult enumeration, VerifiedCorpusRecordSet? corpus, string? celex) =>
         Digest(new { Expression = enumeration.Expression.CanonicalContentSha256, enumeration.CheckpointRef,
             enumeration.ManifestationTypes, Corpus = corpus?.Set, Celex = celex });
     private static string ResultDigest(EuFormexPackageAcquisitionResult result) => Digest(new

@@ -70,6 +70,23 @@ public sealed class EuropeIndexStateTests
     public void DuplicateWorkCoordinatesRefuseInsteadOfSilentlyReducingPopulation() =>
         Assert.ThrowsExactly<InvalidDataException>(() => EuropeIndexBuilder.ProjectStates([Work(State), Work(State)]));
 
+    [TestMethod]
+    public void ReopeningEvidenceRejectsDateAndIdentitySubstitutionEvenAfterLogicalRestamping()
+    {
+        var seed = EuAppendixASeedMap.SeedsInCelexOrder.Single(seed => seed.Celex == "32016R0679");
+        var work = Work(State, Date("2024-01-01")) with { RootWorkIri = seed.WorkRoot };
+        var row = EuropeIndexBuilder.ProjectStates([work]).Single();
+        EuropeIndexBuilder.ValidateStateEvidence([row]);
+        Assert.ThrowsExactly<InvalidDataException>(() => EuropeIndexBuilder.ValidateStateEvidence(
+            [row with { PublisherConsolidationDate = "2024-02-01" }]));
+        Assert.ThrowsExactly<InvalidDataException>(() => EuropeIndexBuilder.ValidateStateEvidence(
+            [row with { PublisherWorkCelex = "02016R0679-20240101" }]));
+        Assert.ThrowsExactly<InvalidDataException>(() => EuropeIndexBuilder.ValidateStateEvidence(
+            [row with { FactsJson = "{}" }]));
+        Assert.ThrowsExactly<InvalidDataException>(() => EuropeIndexBuilder.ValidateStateEvidence(
+            [row with { DateStatus = EuropeIndexStateDateStatus.PublisherDateAbsent, PublisherConsolidationDate = null }]));
+    }
+
     private static RepeatedEnumerationRdfTerm Date(string value) => RepeatedEnumerationRdfTerm.Literal(value, XsdDate, null);
     private static EuObservedWorkFacts Work(string work, params RepeatedEnumerationRdfTerm[] dates)
     {

@@ -131,7 +131,7 @@ public sealed partial class EuFormexPackagePopulationProducer
                 item.Run, item.Profile, cancellationToken).ConfigureAwait(false);
         }
         internal async Task<EuFormexPackageAcquisitionResult> AcquireAsync(ICustodyStore store,
-            EuFormexManifestationEnumerationResult enumeration, EuQueryExecutionResult run, string celex,
+            EuFormexManifestationEnumerationResult enumeration, EuQueryExecutionResult run, string? celex,
             MachineQueryRendererSource renderer, CancellationToken cancellationToken)
         {
             if (document is null || _packageIndex >= document.Packages.Length)

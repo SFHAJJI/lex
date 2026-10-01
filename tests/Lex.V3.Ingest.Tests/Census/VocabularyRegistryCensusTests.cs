@@ -97,6 +97,7 @@ public sealed class VocabularyRegistryCensusTests
                 "Lex.V3.Ingest.V3GenerationRetention: const MonthlyKeeper, const Nightly, "
                     + "const PolicyId, const Referenced",
             },
-            ClosedSurfaceCensus.VocabularyRegistries(CensusScope.SweptHere).ToArray());
+            ClosedSurfaceCensus.VocabularyRegistries(CensusScope.SweptHere).ToArray(),
+            "Observed registries for reviewed transcription:\n" + string.Join("\n", ClosedSurfaceCensus.VocabularyRegistries(CensusScope.SweptHere)));
     }
 }

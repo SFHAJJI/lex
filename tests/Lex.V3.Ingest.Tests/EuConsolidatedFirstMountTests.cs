@@ -12,17 +12,19 @@ public sealed partial class EuFirstMountAcquisitionTests
     internal const string ConsolidatedWork = "http://publications.europa.eu/resource/cellar/aaaaaaaa-0000-0000-0000-00000000000a";
 
     [TestMethod]
-    public async Task OriginalAndConsolidatedEnglishAndFrenchPackagesAreAcquiredAndReplay()
+    [DataRow(false)]
+    [DataRow(true)]
+    public async Task OriginalAndConsolidatedEnglishAndFrenchPackagesAreAcquiredAndReplay(bool missingStateCelex)
     {
         var store = new EuAcquisitionTestFixture.EuInMemoryCustodyStore();
-        var result = await AcquireConsolidatedAsync(store);
+        var result = await AcquireConsolidatedAsync(store, missingStateCelex);
         Assert.IsTrue(result.Delivered, result.Detail);
         Assert.AreEqual(4, result.Formex!.AcquiredExpressionCount);
         Assert.HasCount(2, result.Run!.ObservedWorkFacts);
         Assert.IsTrue(result.Run.ObservedWorkFacts.All(work => work.CensusInterpretationProfileRef is not null));
         var states = EuropeIndexBuilder.ProjectStates(result.Run.ObservedWorkFacts);
         var consolidated = states.Single(state => state.PublisherWorkIri == ConsolidatedWork);
-        Assert.AreEqual("02016R0679-20240101", consolidated.PublisherWorkCelex);
+        Assert.AreEqual(missingStateCelex ? null : "02016R0679-20240101", consolidated.PublisherWorkCelex);
         Assert.AreEqual("2024-01-01", consolidated.PublisherConsolidationDate);
         var replay = await EuFirstMountAcquisition.ReopenAsync(store, result.CheckpointRef!, [ConsolidatedSeed], CancellationToken.None);
         Assert.IsTrue(replay.Delivered, replay.Detail);
@@ -30,7 +32,7 @@ public sealed partial class EuFirstMountAcquisitionTests
         CollectionAssert.AreEqual(states, EuropeIndexBuilder.ProjectStates(replay.Run!.ObservedWorkFacts));
     }
 
-    internal static async Task<EuFirstMountAcquisitionResult> AcquireConsolidatedAsync(ICustodyStore store)
+    internal static async Task<EuFirstMountAcquisitionResult> AcquireConsolidatedAsync(ICustodyStore store, bool missingStateCelex = true)
     {
         var root = EuAxiomWiringHarness.SeedRoot(ConsolidatedSeed);
         var works = new[] { root, ConsolidatedWork }.Order(StringComparer.Ordinal).ToArray();
@@ -40,6 +42,8 @@ public sealed partial class EuFirstMountAcquisitionTests
         var p = works.SelectMany(work => EuAcquisitionTestFixture.ObjectAuthorityPredicates
             .Concat(EuAcquisitionTestFixture.RelationPredicates).Order(StringComparer.Ordinal).Select(predicate =>
             {
+                if (predicate == EuAcquisitionTestFixture.ResourceLegalIdCelex && work != root && missingStateCelex)
+                    return EuAcquisitionTestFixture.ObjectFactRow(work, predicate, null);
                 if (predicate == EuAcquisitionTestFixture.ResourceLegalIdCelex)
                     return EuAcquisitionTestFixture.ObjectFactLiteralRow(work, predicate,
                         work == root ? ConsolidatedSeed : "02016R0679-20240101", "http://www.w3.org/2001/XMLSchema#string");

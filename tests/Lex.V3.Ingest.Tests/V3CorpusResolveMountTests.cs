@@ -951,6 +951,10 @@ public sealed class V3CorpusResolveMountTests
         }
     }
 
+    private static EuropeIndexState[] ReadEuropeStates(SqliteConnection connection) =>
+        (EuropeIndexState[])typeof(EuropeIndexReader).GetMethod("ReadStates",
+            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)!.Invoke(null, [connection])!;
+
     private static DefaultHttpContext Request(string identifier)
     {
         return RequestBody(
@@ -1128,7 +1132,7 @@ public sealed class V3CorpusResolveMountTests
                 using var stamp = connection.CreateCommand();
                 stamp.CommandText = "UPDATE stamp SET logical_rows_sha256=$logical WHERE stamp_id=1";
                 stamp.Parameters.AddWithValue(
-                    "$logical", EuropeIndexBuilder.HashLogicalRows(members, lines, gaps, articles, CompleteSyntheticEuropeSourceRows(connection), CompleteSyntheticEuropeDigestRows(connection)));
+                    "$logical", EuropeIndexBuilder.HashLogicalRows(members, lines, gaps, articles, CompleteSyntheticEuropeSourceRows(connection), CompleteSyntheticEuropeDigestRows(connection), ReadEuropeStates(connection)));
                 Assert.AreEqual(1, stamp.ExecuteNonQuery());
             }
 
@@ -1187,7 +1191,7 @@ public sealed class V3CorpusResolveMountTests
                 using var stamp = connection.CreateCommand();
                 stamp.CommandText = "UPDATE stamp SET logical_rows_sha256=$logical WHERE stamp_id=1";
                 stamp.Parameters.AddWithValue(
-                    "$logical", EuropeIndexBuilder.HashLogicalRows(members, lines, gaps, articles, CompleteSyntheticEuropeSourceRows(connection), CompleteSyntheticEuropeDigestRows(connection)));
+                    "$logical", EuropeIndexBuilder.HashLogicalRows(members, lines, gaps, articles, CompleteSyntheticEuropeSourceRows(connection), CompleteSyntheticEuropeDigestRows(connection), ReadEuropeStates(connection)));
                 Assert.AreEqual(1, stamp.ExecuteNonQuery());
             }
 
@@ -2325,7 +2329,7 @@ public sealed class V3CorpusResolveMountTests
                 using var stamp = connection.CreateCommand();
                 stamp.CommandText = "UPDATE stamp SET logical_rows_sha256=$logical WHERE stamp_id=1";
                 stamp.Parameters.AddWithValue(
-                    "$logical", EuropeIndexBuilder.HashLogicalRows(members, lines, gaps, articles, CompleteSyntheticEuropeSourceRows(connection), CompleteSyntheticEuropeDigestRows(connection)));
+                    "$logical", EuropeIndexBuilder.HashLogicalRows(members, lines, gaps, articles, CompleteSyntheticEuropeSourceRows(connection), CompleteSyntheticEuropeDigestRows(connection), ReadEuropeStates(connection)));
                 Assert.AreEqual(1, stamp.ExecuteNonQuery());
             }
 
