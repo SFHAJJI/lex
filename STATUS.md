@@ -14,7 +14,7 @@ This is a read of historical evidence and does not assert current retention enfo
 
 Twelve draft cases cover independent store reopening with and without a redirect, two identical
 reads, missing route/request/policies/receipt/body, corrupted body bytes, wrong corpus identity,
-cancellation and a rehashed route naming an unrelated body receipt. No tests have run yet. Local
+cancellation and a rehashed route naming an unrelated body receipt. CI36830012418 at749fbf3e compiled with zero warnings/errors and passed all12 new cases:5271 passed,22 skipped,one construction-census failure. Literal expected/actual diagnostics now capture the added reader method for transcription. Local
 Release, required fast tests, affected ingest tests and Claude review remain pending behind the
 active EU acquisition and earlier local work; remote CI will provide initial compiler feedback.
 This is one component of acquisition restoration. Complete EU/LU outcome catalogs and independent
