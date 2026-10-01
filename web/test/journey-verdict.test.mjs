@@ -6,7 +6,23 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { DOSSIER_IDENTIFIER, HISTORY_ANCHOR, JOURNEY_STEPS, READING_DATE, SEARCH_PHRASE, expectedFromEnvelope, fixtureMountExpectations, journeyVerdict, watchFiles } from "../scripts/journey.mjs";
+import {
+  DOSSIER_IDENTIFIER,
+  EU_SEARCH_IDENTIFIER,
+  EU_SEARCH_ON_FIXTURE,
+  EU_SEARCH_PHRASE,
+  EU_SEARCH_STEP,
+  HISTORY_ANCHOR,
+  JOURNEY_STEPS,
+  READING_DATE,
+  SEARCH_PHRASE,
+  expectedFromEnvelope,
+  fixtureMountExpectations,
+  journeyVerdict,
+  pinnedCitation,
+  realMountSteps,
+  watchFiles,
+} from "../scripts/journey.mjs";
 import { cspValue } from "../scripts/csp.mjs";
 
 const ORIGIN = "http://127.0.0.1:5000";
@@ -284,7 +300,7 @@ test("a keyboard run reaches every field by Tab alone, and every stop shows wher
   };
   const expected = { origin: ORIGIN, step: JOURNEY_STEPS.search, state: "success", keyboard: true };
   assert.deepEqual(journeyVerdict(observed, expected), []);
-  assert.ok(journeyVerdict({ ...observed, keyboard: { ...observed.keyboard, placed: 0 } }, expected).some((failure) => failure === "Tab reached 0 of the form's 1 text fields"));
+  assert.ok(journeyVerdict({ ...observed, keyboard: { ...observed.keyboard, placed: 0 } }, expected).some((failure) => failure === "Tab reached 0 of the form's 1 fields"));
   assert.ok(journeyVerdict({ ...observed, keyboard: { ...observed.keyboard, stops: [stop("button", "submit", false, "Search")] } }, expected)
     .some((failure) => failure === 'a focus stop shows no focus indicator: button[type=submit] "Search"'), "a suppressed focus ring fails");
   assert.ok(journeyVerdict({ ...observed, keyboard: { ...observed.keyboard, keyPresses: 0 } }, expected)
@@ -432,4 +448,72 @@ annuelle se tient le premier lundi` };
   const leaked = { ...refusal, text: `text_withheld; ${later}sed here` };
   assert.ok(journeyVerdict(leaked, { ...held, absentTexts: ["Opening forty characters of the article", later] }).includes(`the page shows withheld text "${later}"`),
     "a window past the opening is looked for too");
+});
+
+test("the EU search step names the GDPR by its CELEX, chooses English and is held to the exact body", () => {
+  assert.deepEqual(EU_SEARCH_STEP.typed, [EU_SEARCH_PHRASE, EU_SEARCH_IDENTIFIER]);
+  assert.deepEqual(EU_SEARCH_STEP.chosen, { value: "eng", label: "English" });
+  assert.deepEqual(EU_SEARCH_STEP.body, { operation_id: "search", parameters: { query: "personal data", language: "eng", identifier: "32016R0679" } },
+    "in the order the page sends them: the phrase, the language, the work");
+  assert.equal(EU_SEARCH_STEP.path, JOURNEY_STEPS.search.path, "the same search page");
+  assert.ok(!Object.values(JOURNEY_STEPS).includes(EU_SEARCH_STEP), "not one of the eight steps every mount runs: it needs an EU index");
+
+  const report = { corpus: { Sha256: "a".repeat(64) }, luxembourgIndex: { Sha256: "b".repeat(64) } };
+  assert.deepEqual(realMountSteps(report).map(([name]) => name), Object.keys(JOURNEY_STEPS), "a real mount without an EU index runs the eight");
+  const withEurope = realMountSteps({ ...report, europeIndex: { Sha256: "c".repeat(64) } });
+  assert.deepEqual(withEurope.map(([name]) => name), [...Object.keys(JOURNEY_STEPS), "eu search"], "and one with an EU index runs the EU search too");
+  assert.equal(withEurope.at(-1)[1], EU_SEARCH_STEP);
+
+  assert.deepEqual(EU_SEARCH_ON_FIXTURE, { step: EU_SEARCH_STEP, state: "refusal", refusalCode: "no_corpus_mounted", texts: ["This build has no EU index mounted."] },
+    "the fixture mount holds no EU index, and the page must say that one is what is missing");
+});
+
+test("an EU citation is pinned by its wording, verifies as that wording, and names its provision unescaped", () => {
+  const digest = "c".repeat(64);
+  const wording = `/eu-eurlex/32016R0679/eng/2016-04-27--${digest}`;
+  const article = `${wording}#026`;
+  const escaped = `${wording}#26%28a%29`;
+  assert.deepEqual(pinnedCitation(article), { publisher: "eu-eurlex", digest, anchor: "026" });
+  assert.deepEqual(pinnedCitation(escaped), { publisher: "eu-eurlex", digest, anchor: "26(a)" }, "verify names the provision unescaped");
+  assert.deepEqual(pinnedCitation(wording), { publisher: "eu-eurlex", digest, anchor: null });
+  assert.equal(pinnedCitation(`${wording}#%E0%A4%A`), null, "a provision that is not a valid escape pins nothing");
+  assert.equal(pinnedCitation("/eu-eurlex/32016R0679/eng/2016-04-27"), null, "a permalink without its digest pins nothing");
+  assert.equal(pinnedCitation(`http://publications.europa.eu/resource/cellar/x.0006#lex-provision=026`), null, "nor does the provision coordinate");
+
+  const matches = (identifier, anchor = null) => ({ identifier, refusal: null, verdict: "digest_matches", publisher: "eu-eurlex", stateSha256: null, wordingSha256: digest, requestedAnchor: anchor });
+  const step = EU_SEARCH_STEP;
+  const observed = {
+    ...goodSearch(),
+    requests: goodSearch().requests.map((request) => (request.postData ? { ...request, postData: JSON.stringify(step.body) } : request)),
+    citations: [wording, article, escaped],
+    verifications: [matches(wording), matches(article, "026"), matches(escaped, "26(a)")],
+  };
+  const expected = { origin: ORIGIN, step, state: "success" };
+  const failing = (change) => journeyVerdict({ ...observed, ...change }, expected);
+  assert.deepEqual(journeyVerdict(observed, expected), [], "EU citations that verify as their wording pass");
+  assert.ok(failing({ verifications: [matches(wording), { ...matches(article, "026"), wordingSha256: "d".repeat(64) }, matches(escaped, "26(a)")] })
+    .includes(`verify of ${article} named the wording ${"d".repeat(64)}`), "verify must find the wording the citation pins");
+  assert.ok(failing({ verifications: [matches(wording), { ...matches(article, "026"), wordingSha256: null, stateSha256: digest }, matches(escaped, "26(a)")] })
+    .includes(`verify of ${article} named the wording null`), "a state digest is not a wording digest");
+  assert.ok(failing({ verifications: [matches(wording), matches(article, "026"), matches(escaped, "26%28a%29")] })
+    .includes(`verify of ${escaped} named the article 26%28a%29`), "the provision is compared unescaped");
+  assert.ok(failing({ verifications: [matches(wording), { ...matches(article, "026"), publisher: "lu-legilux" }, matches(escaped, "26(a)")] })
+    .includes(`verify of ${article} answered for lu-legilux`), "an EU citation is verified by the EU index");
+  assert.ok(failing({ verifications: [matches(wording), { ...matches(article, "026"), refusal: "pinned_digest_mismatch", verdict: null }, matches(escaped, "26(a)")] })
+    .includes(`verify refused ${article} with pinned_digest_mismatch`));
+  assert.ok(failing({ citations: [...observed.citations, "/eu-eurlex/32016R0679/eng/2016-04-27"] })
+    .includes("the page printed /eu-eurlex/32016R0679/eng/2016-04-27, which is not a hash-pinned permalink"));
+});
+
+test("a keyboard run that chooses an option counts the select among the fields Tab must reach", () => {
+  const step = EU_SEARCH_STEP;
+  const observed = {
+    ...goodSearch(),
+    requests: goodSearch().requests.map((request) => (request.postData ? { ...request, postData: JSON.stringify(step.body) } : request)),
+    keyboard: { stops: [], placed: 3, wanted: 3, characters: 24, keyPresses: 24 },
+  };
+  const expected = { origin: ORIGIN, step, state: "success", keyboard: true };
+  assert.deepEqual(journeyVerdict(observed, expected), []);
+  assert.ok(journeyVerdict({ ...observed, keyboard: { ...observed.keyboard, placed: 2 } }, expected).includes("Tab reached 2 of the form's 3 fields"),
+    "a select never reached fails as a field never reached");
 });

@@ -903,11 +903,11 @@ CI evidence are recorded in the pull request before merge.
 
 ## Heads
 
-- `v3/integration`: `50519df6` (2026-10-01, PR #852 merged). Build 45 s. Fast lane
+- `v3/integration`: `978ecd7a` (2026-10-01, PR #853 merged). Build 45 s. Fast lane
   (`eng/test-fast.ps1`): 3,077 tests, 3,076 pass, 1 skipped (the review of PR #828). Ingest suite: green on CI for PR #760
   (the CI `dotnet` job runs the whole solution on every pull request, about 7 min on the runner;
   green for PR #834);
-  locally about 15 min. 984 web tests pass. The web job's "browser debugger never answered" failures
+  locally about 15 min. 987 web tests pass. The web job's "browser debugger never answered" failures
   (keyboard-walk, and paint-check since #811) are fixed by PR #822: each browser binds its own
   debugging port (`launchBrowser`) instead of a random one another browser starting at the same
   moment could hold.
@@ -1962,6 +1962,27 @@ screens. Until now the screen refused every EU answer as not Luxembourg's.
 - The captured answer from the real bounded first mount (60 hits for "personal data", three on the
   page) reads too.
 
+The EU search journey step (PR #854), the third slice of the EU half of the launch screens, and
+the panel's "journey on the real mount's GDPR".
+- A ninth step, `EU_SEARCH_STEP`, is the search page asked for the GDPR by its CELEX. It types
+  "personal data" and `32016R0679` and chooses English in the form's language select, since the held
+  wording is English. The request body must be exactly the phrase, the language and the work.
+- The verdict reads EU citations. `pinnedCitation` accepts the EU permalink grammar beside
+  Luxembourg's. `verify` must answer for the EU index, name the very wording the citation pins
+  (`wording_sha256`) and the provision it names, unescaped.
+- The keyboard path picks from the closed select as a keyboard user does: Tab to it, then type the
+  option's first letter. Then Tab on to the submit button and press Enter. The select counts among
+  the fields Tab must reach.
+- Where it runs:
+  - the fixture runs add "eu search, with the fixture mount", which must show the refusal card
+    `no_corpus_mounted` saying the EU index is the one missing;
+  - `--real-mount` adds the step when the build report names an EU index (`realMountSteps`).
+- On the real bounded first mount, the EU step ends in the answer with 61 citations: the wording's
+  permalink and the 60 hits' permalinks, every one `digest_matches` by `verify`. That holds in both
+  runs, by pointer and by keyboard (24 of 24 characters typed by key). The other eight steps behave
+  as before on that mount.
+- The fixture journey passes 17 of 17 steps, by pointer and by keyboard.
+
 The live export composer and its journey step (PR #789), the eighth screen. `dist-live/export.html`
 has its own bundle `client-live-export.js`.
 - The page asks what the reading page asks: the same form (`ReadingForm`, now shared), the same one
@@ -2668,8 +2689,10 @@ has not yet run; the bounded first mount above is complete.
    decisions (below). The EU permalink grammar is the web lane's since 2026-10-01 (the panel's answer
    to Q-20261001-0108-claude). It works in the API and the web; the EU index schema and the Ingest
    builders stay the data lane's. PR #850: EU hits carry a hash-pinned permalink, and EU `verify`
-   is served over it. PR #853: the search screen reads and shows EU answers in one named work. Next:
-   the journey searches the real mount's GDPR and verifies each EU citation.
+   is served over it. PR #853: the search screen reads and shows EU answers in one named work. PR
+   #854: the journey searches the real mount's GDPR, and `verify` confirms all 61 EU citations the
+   page prints. Next: the dossier screen reads the EU dossier (served by PR #762), which it now says
+   it does not show.
 6. Wire the eight launch screens to `/api/v3`; journeys J1 to J8 in a real browser. PR #763: the
    envelope reader and the client module; PR #764: the live Trust and Coverage component; PR #765:
    its page, the live build and the one-origin server; PR #766: the first browser journey step,
