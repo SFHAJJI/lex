@@ -152,16 +152,13 @@ public sealed partial class LuxembourgGazetteAcquisitionTests
         var evidence = new SourceArtifactRef(NewUrn(), new string('1', 64));
         var profile = LuxembourgProfiles.Opened(new LuxembourgVocabularySnapshot(evidence, evidence,
             VerifiedLuxembourgSourceProfile.RequiredIriVocabulary, []));
-        var objectRef = new SourceObjectRef(SourceCoreSchemaIds.SourceObjectRef, SourceAuthority.Jolux,
-            new SourceRegistryMemberRef(evidence, "legal_resource"), Act, Act, Sha256(Encoding.UTF8.GetBytes(Act)), evidence, null);
         var assertions = GazetteAssertions(shape == 2 ? LicenceScl : null,
             shape == 3 ? [LegalValues + "officiel", LegalValues + "definitif"] : null)
             .Select(value => new LuxembourgObservedAssertion(value.Item1, value.Item2, LuxembourgAssertionObjectKind.Iri,
                 value.Item3, string.Empty, string.Empty, evidence)).ToArray();
-        var rights = new LuxembourgRightsChannelObservation(ManifestationPdfA, evidence, evidence, [CcBy]);
-        var observation = new LuxembourgResourceObservation(objectRef, evidence, assertions, [],
-            new LuxembourgSparqlRightsChannelObservations(evidence, evidence, [rights]),
-            new LuxembourgInFileRightsChannelObservations(evidence, evidence, [rights]));
+        var observation = LuxembourgQueryExecutionAdapter.BuildResourceObservation(Act, assertions,
+            evidence, profile.ScopeBinding.SourceProfileRef);
+        var objectRef = observation.ObjectRef;
         var resolved = Assert.IsInstanceOfType<LuxembourgProfileResolution.Resolved>(profile.Resolve(
             LuxembourgProvenResourceObservations.RequireProven(AbsenceFixtures.Proof(), [observation])));
         var address = LuxembourgDocumentFetchAddress.Create(LuxembourgFileUri.RequireValid(ItemPdfA),
