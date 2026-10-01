@@ -11,7 +11,7 @@ namespace Lex.V3.Ingest.Tests;
 /// language-scoped expression decoder, and the exclusion the completion boundary requires.
 /// </summary>
 [TestClass]
-public sealed class EuLanguageScopedExpressionProducerTests
+public sealed partial class EuLanguageScopedExpressionProducerTests
 {
     private const string Work = "http://publications.europa.eu/resource/cellar/work-0001";
     private const string OtherWork = "http://publications.europa.eu/resource/cellar/work-other";

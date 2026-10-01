@@ -91,6 +91,8 @@ public sealed class EuCorrigendumTripwireProductionResult
     /// <summary>Every product request the inner run sent, reported whether this run delivered or refused.</summary>
     public int ProductRequestCount { get; }
 
+    public SourceArtifactRef? CheckpointRef { get; private init; }
+
     public bool Delivered => Refusal == EuCorrigendumTripwireProductionRefusal.None;
 
     internal static EuCorrigendumTripwireProductionResult Success(
@@ -98,7 +100,7 @@ public sealed class EuCorrigendumTripwireProductionResult
         EuCorrigendumTripwireSet tripwireSet,
         DurableBlobWriteReceipt retainedTripwire,
         DurableBlobWriteReceipt retainedTripwireLineage,
-        int productRequestCount)
+        int productRequestCount, SourceArtifactRef? checkpoint = null)
     {
         ArgumentNullException.ThrowIfNull(expressions);
         ArgumentNullException.ThrowIfNull(tripwireSet);
@@ -106,7 +108,7 @@ public sealed class EuCorrigendumTripwireProductionResult
         ArgumentNullException.ThrowIfNull(retainedTripwireLineage);
         return new(
             expressions, tripwireSet, retainedTripwire, retainedTripwireLineage,
-            EuCorrigendumTripwireProductionRefusal.None, null, productRequestCount);
+            EuCorrigendumTripwireProductionRefusal.None, null, productRequestCount) { CheckpointRef = checkpoint };
     }
 
     internal static EuCorrigendumTripwireProductionResult Refused(
@@ -165,7 +167,7 @@ public sealed class EuCorrigendumTripwireProductionResult
 /// not bind into the shared envelope or corpus/6, and it does not render anything.
 /// </para>
 /// </remarks>
-public sealed class EuCorrigendumTripwireProducer
+public sealed partial class EuCorrigendumTripwireProducer
 {
     private readonly ICustodyStore _custodyStore;
     private readonly EuLanguageScopedExpressionProducer _expressions;
@@ -278,8 +280,17 @@ public sealed class EuCorrigendumTripwireProducer
     private async Task<EuCorrigendumTripwireProductionResult> RetainAsync(
         EuLanguageScopedExpressionProductionResult expressions,
         EuCorrigendumTripwireSet set,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken, TripwireCheckpoint? replay = null, SourceArtifactRef? replayRef = null)
     {
+        if (replay is not null)
+        {
+            var canonical = await CustodyRestore.ReadByDigestCheckedAsync(_custodyStore, replay.CanonicalSha256,
+                cancellationToken).ConfigureAwait(false);
+            var lineage = await CustodyRestore.ReadByDigestCheckedAsync(_custodyStore, replay.LineageSha256,
+                cancellationToken).ConfigureAwait(false);
+            if (!canonical.Span.SequenceEqual(set.CanonicalBytes.Span) || !lineage.Span.SequenceEqual(set.LineageBytes.Span))
+                throw new CustodyIntegrityException("Reopened tripwire or lineage differs from the original.");
+        }
         var (tripwireReceipt, tripwireHoldFailure) = await CustodyHold
             .TryHoldAsync(_custodyStore, set.CanonicalBytes, cancellationToken)
             .ConfigureAwait(false);
@@ -304,8 +315,21 @@ public sealed class EuCorrigendumTripwireProducer
                 expressions.ProductRequestCount);
         }
 
+        SourceArtifactRef checkpoint;
+        try
+        {
+            checkpoint = replayRef ?? await RetainCheckpointAsync(new TripwireCheckpoint(CheckpointSchema,
+                expressions.CheckpointRef ?? throw new CustodyIntegrityException("Expression checkpoint is absent."),
+                CustodyDigest.Of(set.CanonicalBytes.Span), CustodyDigest.Of(set.LineageBytes.Span)), cancellationToken)
+                .ConfigureAwait(false);
+        }
+        catch (Exception exception) when (exception is CustodyRequiredException or CustodyIntegrityException)
+        {
+            return EuCorrigendumTripwireProductionResult.Refused(EuCorrigendumTripwireProductionRefusal.TripwireNotRetained,
+                exception.Message, expressions, expressions.ProductRequestCount);
+        }
         return EuCorrigendumTripwireProductionResult.Success(
-            expressions, set, tripwireReceipt, lineageReceipt, expressions.ProductRequestCount);
+            expressions, set, tripwireReceipt, lineageReceipt, expressions.ProductRequestCount, checkpoint);
     }
 
     /// <summary>
