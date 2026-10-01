@@ -196,6 +196,52 @@ public sealed class EuReifiedAxiomDecodeTests
         Assert.AreEqual(EuReifiedAxiomDecode.ParsedByAuthority, bindings[0].ParsedByAuthority);
     }
 
+    [TestMethod]
+    [DataRow("MA/PART", "MA%2FPART")]
+    [DataRow("MA/PART", "MA/PART")]
+    [DataRow("AU+TARD", "AU%2BTARD")]
+    [DataRow("AU+TARD", "AU+TARD")]
+    public void QualifierAuthorityAcceptsTheExactCodeOrItsEscapedPathSegment(string code, string segment)
+    {
+        var carrier = "{" + code + "|" + Fd335 + segment + "}";
+        var rows = WellFormed(code == "AU+TARD"
+            ? EuDateQualifierVocabulary.DeadlinePredicateUri
+            : EuDateQualifierVocabulary.EntryIntoForceAndApplicationPredicateUri);
+        rows.Add(Row(TypeOfDate, RepeatedEnumerationRdfTerm.Literal(carrier, XsdString, null)));
+        var bindings = Decode(rows, out var refusal);
+        Assert.AreEqual(EuReifiedAxiomDecodeRefusal.None, refusal);
+        Assert.IsNotNull(bindings);
+        Assert.HasCount(1, bindings);
+        Assert.AreEqual(code, bindings[0].RawQualifierCode);
+        Assert.IsTrue(bindings[0].Axiom.Qualifiers.Any(qualifier => qualifier.RawValue == carrier),
+            "The original carrier must remain exact evidence.");
+        if (code == "MA/PART")
+        {
+            Assert.IsNull(bindings[0].QualifierLabel);
+            Assert.AreEqual(DateSemanticRole.RoleNotStatedByPublisher, bindings[0].Fact.SemanticRole);
+        }
+        else
+        {
+            Assert.AreEqual(EuDateQualifierVocabulary.PinnedQualifiers[code].Label, bindings[0].QualifierLabel);
+        }
+    }
+
+    [TestMethod]
+    [DataRow("http://publications.europa.eu/resource/authority/fd_335/MA%252FPART")]
+    [DataRow("http://publications.europa.eu/resource/authority/fd_335/OTHER")]
+    [DataRow("http://publications.europa.eu/resource/authority/fd_335/MA%2FPART/extra")]
+    [DataRow("http://publications.europa.eu/resource/authority/fd_335/MA%2FPART?x=1")]
+    [DataRow("http://publications.europa.eu/resource/authority/fd_335/MA%2FPART#x")]
+    [DataRow("http://other.example/resource/authority/fd_335/MA%2FPART")]
+    [DataRow("http://publications.europa.eu/resource/authority/fd_335%2FMA%2FPART")]
+    public void EscapedAuthorityStillRefusesAnotherConceptBaseOrAdditionalUriParts(string authority)
+    {
+        var rows = WellFormed();
+        rows.Add(Row(TypeOfDate, RepeatedEnumerationRdfTerm.Literal("{MA/PART|" + authority + "}", XsdString, null)));
+        Assert.IsNull(Decode(rows, out var refusal));
+        Assert.AreEqual(EuReifiedAxiomDecodeRefusal.QualifierAuthorityDisagreesWithItsCode, refusal);
+    }
+
     /// <summary>
     /// The label is ours, from the accepted table, keyed by the code the publisher sent. The wire
     /// carries the code and its authority IRI and no label at all, so a label appearing here for a
@@ -507,7 +553,7 @@ public sealed class EuReifiedAxiomDecodeTests
         var admitted = WellFormed();
         admitted.Add(RowDrifted(
             CommentOnDate,
-            RepeatedEnumerationRdfTerm.Literal("texte en français", null, "fr"),
+            RepeatedEnumerationRdfTerm.Literal("texte en franÃƒÂ§ais", null, "fr"),
             datatype: RepeatedEnumerationRdfTerm.Unbound(),
             language: RepeatedEnumerationRdfTerm.Literal("fr", null, null)));
 
