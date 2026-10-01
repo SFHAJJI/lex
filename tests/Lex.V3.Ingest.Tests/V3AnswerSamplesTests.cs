@@ -83,6 +83,10 @@ public sealed class V3AnswerSamplesTests
         // The same object reference, where `manifestation` names the retained member; the body digest and
         // the WEMI IRIs beside it are deterministic and stay pinned.
         "retained[].object_ref_sha256",
+        // The same object reference in the EU dossier, where each expression names the corpus members its articles
+        // were read from: the EU fixture mints its source URNs per run too, as the double-run test found the first
+        // time the EU dossier was sampled. The wording digest and permalink beside it are deterministic and pinned.
+        "expressions[].members[].object_ref_sha256",
         // The event log is named by the index digest (`log_id`), and every cursor into it carries that
         // name before its sequence number, so all three move with `index_sha256`; the sequence numbers,
         // state digests and permalinks beside them are deterministic and stay pinned.
@@ -313,6 +317,15 @@ public sealed class V3AnswerSamplesTests
         using var comparedMount = await V3CorpusMount.OpenAsync(compared.Directory, CancellationToken.None);
         Assert.IsNotNull(comparedMount);
 
+        // An EU mount for EU `search` in one work, so the search screen's EU reader sees what an EU answer carries: the
+        // one held English wording of the GDPR, pinned, and each hit's hash-pinned provision permalink. The phrase has
+        // two strict hits and one relaxed hit in that wording, so one small answer holds both lanes.
+        var europe = await EuropeMountedFixture.CreateAsync();
+        await using var cleanupEurope = europe;
+        using var europeMount = await V3CorpusMount.OpenAsync(europe.Directory, CancellationToken.None);
+        Assert.IsNotNull(europeMount);
+        var europeFirstPage = await DriveAsync(europeMount, "search", "the same EU phrase, one hit per page: the first hit and the cursor to the next page", new { query = "joint controllers", language = "eng", identifier = "32016R0679", limit = 1 });
+
         var parameters = new
         {
             identifier = $"/lu-legilux/{fixture.WorkKey}",
@@ -348,8 +361,17 @@ public sealed class V3AnswerSamplesTests
             await DriveAsync(mount, "search", "the page after the first one-hit page, no limit: the rest of the result, whose population is still the whole result's", new { query = "assemblée générale", language = "fra", after = firstPage.Body["continue_after"]!.GetValue<string>() }),
             await DriveAsync(mount, "search", "the same phrase in the relaxed lane only: every hit relaxed, and the strict lane not counted (null, not zero)", new { query = "assemblée générale", language = "fra", mode = "relaxed" }),
             await DriveAsync(mount, "search", "a word the held text does not carry: no hit is an answer, not a refusal", new { query = "zéphyr", language = "fra" }),
+            // EU `search` in one work, for the same screen's EU reader: a phrase with hits in both lanes, the first page of
+            // one hit with its cursor, the page that cursor leads to, and a word the held wording does not carry.
+            await DriveAsync(europeMount, "search", "one EU work by its CELEX, a phrase its held English wording carries: strict hits, then a relaxed hit, each with the pinned wording's provision permalink", new { query = "joint controllers", language = "eng", identifier = "32016R0679" }),
+            europeFirstPage,
+            await DriveAsync(europeMount, "search", "the EU page after the first one-hit page, no limit: the rest of the result, whose population is still the whole result's", new { query = "joint controllers", language = "eng", identifier = "32016R0679", after = europeFirstPage.Body["continue_after"]!.GetValue<string>() }),
+            await DriveAsync(europeMount, "search", "a word the EU work's held wording does not carry: no hit is an answer, not a refusal", new { query = "zephyr", language = "eng", identifier = "32016R0679" }),
             // `dossier` is sampled for the live dossier screen's reader: the work, in the language it is held in.
             await DriveAsync(mount, "dossier", "the work, in the language it is held in: its identity, its held states and what the dossier does not hold", new { parameters.identifier, parameters.language }),
+            // The EU dossier, for the same screen's EU reader: the GDPR by its CELEX, its one held expression with the
+            // wording pinned as EU search pins it.
+            await DriveAsync(europeMount, "dossier", "one EU work by its CELEX, any held language: its expression, the one wording held of it, pinned, and what the dossier does not hold", new { identifier = "32016R0679" }),
             // `article_history` is sampled for the live provision history screen's reader: one article of the work, in its language.
             await DriveAsync(mount, "article_history", "one article of the work, in the language it is held in: its lineage through the held states", new { parameters.identifier, anchor = "art_15", parameters.language }),
             // `diff` is sampled for the live compare screen's reader: the work's one state against itself, and two
@@ -563,6 +585,10 @@ public sealed class V3AnswerSamplesTests
                 + "the five are articles the corpus recorded under the token akn_unsupported_content_shape, which the "
                 + "answers count, coverage in members.article_outcomes, provenance in each source's article_outcomes and as_of "
                 + "in the state's articles_not_admitted (which is the five). "
+                + "The EU search answers (publisher eu-eurlex) are driven on a second fixture mount holding one EU act, "
+                + "the GDPR (32016R0679), from the Formex package of its English expression committed as a test fixture: "
+                + "its CELEX, IRIs, wording date and article text are THE PUBLISHER'S, and the wording digest is the "
+                + "platform's own computation over them. "
                 + "There is no sample from a real corpus, so a "
                 + "reader holding a surface against this file is held against the shape a producer sends and not "
                 + "against the scale or the completeness a real corpus has.",

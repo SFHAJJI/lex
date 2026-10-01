@@ -44,6 +44,12 @@ public sealed class V3EnvelopeSamplesTests
         using var mount = await V3CorpusMount.OpenAsync(fixture.Directory, CancellationToken.None);
         Assert.IsNotNull(mount);
 
+        // An EU mount (the GDPR's one held English wording), for the search screen's EU answers and refusals.
+        var europe = await EuropeMountedFixture.CreateAsync();
+        await using var cleanupEurope = europe;
+        using var europeMount = await V3CorpusMount.OpenAsync(europe.Directory, CancellationToken.None);
+        Assert.IsNotNull(europeMount);
+
         var envelopes = new JsonArray
         {
             await CaptureAsync(fixture, mount, "coverage", "the whole mount: an answer", new { }),
@@ -52,10 +58,14 @@ public sealed class V3EnvelopeSamplesTests
             await CaptureAsync(fixture, mount, "search", "a language the mount holds no text in: a refusal with a payload", new { query = "loyer", language = "deu" }),
             await CaptureAsync(fixture, mount, "search", "a phrase the held text carries: an answer with hits in both lanes", new { query = "assemblée générale", language = "fra" }),
             await CaptureAsync(fixture, null, "search", "no corpus mounted: a refusal", new { query = "assemblée générale", language = "fra" }),
+            await CaptureAsync(europe.CorpusSha256, europe.IndexSha256, europeMount, "search", "one EU work by its CELEX, a phrase its held wording carries: an answer whose hits carry the pinned wording's provision permalink", new { query = "joint controllers", language = "eng", identifier = "32016R0679" }),
+            await CaptureAsync(europe.CorpusSha256, europe.IndexSha256, europeMount, "search", "one EU work in a language it is not held in: a refusal with a payload", new { query = "joint controllers", language = "fra", identifier = "32016R0679" }),
+            await CaptureAsync(europe.CorpusSha256, europe.IndexSha256, europeMount, "search", "an EU identifier the EU index does not hold: a refusal with a payload", new { query = "joint controllers", language = "eng", identifier = "32099R9999" }),
             await CaptureAsync(fixture, mount, "dossier", "the work, in the language it is held in: an answer", new { identifier = $"/lu-legilux/{fixture.WorkKey}", language = "fra" }),
             await CaptureAsync(fixture, mount, "dossier", "a work the index does not hold: a refusal with a payload", new { identifier = "/lu-legilux/no-such-work" }),
             await CaptureAsync(fixture, mount, "dossier", "a language the work is not held in: a refusal with a payload", new { identifier = $"/lu-legilux/{fixture.WorkKey}", language = "deu" }),
             await CaptureAsync(fixture, mount, "dossier", "an EU identifier on a mount without the EU index: a refusal with a payload", new { identifier = "32016R0679" }),
+            await CaptureAsync(europe.CorpusSha256, europe.IndexSha256, europeMount, "dossier", "one EU work by its CELEX: an answer whose expression carries its pinned wording", new { identifier = "32016R0679" }),
             await CaptureAsync(fixture, null, "dossier", "no corpus mounted: a refusal", new { identifier = $"/lu-legilux/{fixture.WorkKey}" }),
             await CaptureAsync(fixture, mount, "evidence_bundle", "the work on its state's date, in the language it is held in: an answer", new { identifier = $"/lu-legilux/{fixture.WorkKey}", date = fixture.ApplicabilityDate, language = "fra" }),
             await CaptureAsync(fixture, mount, "evidence_bundle", "a date before the work's history: a refusal with a payload", new { identifier = $"/lu-legilux/{fixture.WorkKey}", date = "1990-01-01" }),
@@ -125,8 +135,12 @@ public sealed class V3EnvelopeSamplesTests
         };
     }
 
+    private static Task<JsonObject> CaptureAsync(
+        MountedFixture fixture, V3CorpusMount? mount, string operation, string scenario, object parameters) =>
+        CaptureAsync(fixture.CorpusSha256, fixture.IndexSha256, mount, operation, scenario, parameters);
+
     private static async Task<JsonObject> CaptureAsync(
-        MountedFixture fixture, V3CorpusMount? mount, string operation, string scenario, object parameters)
+        string corpusSha256, string indexSha256, V3CorpusMount? mount, string operation, string scenario, object parameters)
     {
         var body = JsonSerializer.Serialize(new { operation_id = operation, parameters });
         var bytes = Encoding.UTF8.GetBytes(body);
@@ -144,9 +158,9 @@ public sealed class V3EnvelopeSamplesTests
         _ = V3EnvelopeJson.ParseAndVerify(sent, V3OperationRegistry.Reviewed);
 
         var text = Encoding.UTF8.GetString(sent)
-            .Replace(fixture.CorpusSha256, FixedCorpusDigest, StringComparison.Ordinal)
-            .Replace(fixture.IndexSha256, FixedIndexDigest, StringComparison.Ordinal)
-            .Replace("corpus-" + fixture.CorpusSha256[..16], "corpus-" + FixedCorpusDigest[..16], StringComparison.Ordinal);
+            .Replace(corpusSha256, FixedCorpusDigest, StringComparison.Ordinal)
+            .Replace(indexSha256, FixedIndexDigest, StringComparison.Ordinal)
+            .Replace("corpus-" + corpusSha256[..16], "corpus-" + FixedCorpusDigest[..16], StringComparison.Ordinal);
         return new JsonObject
         {
             ["operation"] = operation,

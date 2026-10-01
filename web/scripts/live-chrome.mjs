@@ -46,12 +46,15 @@ const EN = Object.freeze({
     noHit: "No article of the text this server holds contains “{query}”.",
     noText: "This index holds no searchable text in {language}; it holds text in {languages}.",
     nextPage: "Next page",
+    euWording: "Every hit is in the one wording of {celex} this server holds in {language}, dated {date} and pinned by its digest: {permalink}",
+    euHit: "{heading} of {celex}, wording of {date}",
+    notHeldHeading: "What this search does not cover",
   }),
   dossier: Object.freeze({
     title: "Dossier",
     eyebrow: "Dossier",
     heading: "A work's dossier",
-    intro: "What this server holds for one Luxembourg work: its titles, its publisher-dated states and what the dossier does not hold. The identifier goes to this server in the request and nowhere else, and this page keeps nothing.",
+    intro: "What this server holds for one work: a Luxembourg work's titles and publisher-dated states, or an EU work's expressions and the one wording held of each, and what the dossier does not hold. The identifier goes to this server in the request and nowhere else, and this page keeps nothing.",
     idle: "Type a work identifier to read what this server holds for it.",
     noTitle: "This index holds no title for this work.",
     shortTitle: "{title} (short title)",
@@ -67,6 +70,11 @@ const EN = Object.freeze({
     articlesHeld: "Articles held",
     articlesNotAdmitted: "Articles not admitted",
     notHeldHeading: "What this dossier does not hold",
+    euExpressions: Object.freeze({
+      one: "{count} expression held, in its one original wording.",
+      other: "{count} expressions held, each in its one original wording.",
+    }),
+    wordingDate: "Wording date",
   }),
   reading: Object.freeze({
     title: "Reading",

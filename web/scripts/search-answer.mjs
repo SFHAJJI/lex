@@ -1,11 +1,13 @@
-// The V3 Luxembourg search answer, read.
+// The V3 search answers, read: Luxembourg's, and the EU's in one work.
 //
 // The search screen's renderer (`search-results.mjs`) was written before V3 against a shape the
 // platform no longer sends: `lex_id`, `provision_num`, a row set and four match reasons. This file
-// reads the answer the platform does send for a Luxembourg search (`publisher: "lu-legilux"`; an EU
-// search, answered for one EU work, has another shape and is refused here), held to the answers
-// captured by driving the real handler (`schemas/v3-platform/answer-samples.json`, operation
-// `search`), and turns it into one view a live screen can render. It renders nothing itself.
+// reads the answers the platform does send, held to the answers captured by driving the real handler
+// (`schemas/v3-platform/answer-samples.json`, operation `search`), and turns each into one view a
+// live screen can render. It renders nothing itself. A Luxembourg search (`publisher: "lu-legilux"`)
+// is read by `readSearch`; an EU search, answered for one named EU work in the one wording the EU
+// index holds of it (`publisher: "eu-eurlex"`), has another shape and is read by `readEuropeSearch`;
+// `readSearchAnswer` sends an answer to the one its publisher names.
 //
 // Every rule here is one the answer states about itself, so an answer that breaks one is drift and
 // is thrown, never rendered: the lanes (strict before relaxed, a hit's reason is its lane's, and
@@ -16,6 +18,14 @@
 // digest the hit names); the works a dated search could not place (named with their candidate
 // states, contributing no hit); and how the query was resolved to a work, if it was. A search answer
 // carries no text snippet, so none is read.
+//
+// An EU answer states the same lane, page and population rules, and its own: it is in one work, one
+// expression and one language, it names no date (`requested_date` is null and no work is ambiguous),
+// and every hit is in the one wording the answer pins (`pinned_wording`): the wording's permalink,
+// `/eu-eurlex/{celex}/{language}/{wording date}--{wording sha256}`, and each hit's permalink is it
+// with the provision after `#`. A hit this page shows must pin its wording, so an answer with hits
+// and no pinned wording is refused here rather than shown unpinned. The wording date is the date the
+// publisher's Formex package gives the act (`date_semantics`), never an applicability date.
 
 import { isCalendarDate } from './temporal.mjs';
 
@@ -38,6 +48,12 @@ export const WORK_RESOLUTION_OUTCOMES = Object.freeze([
 
 const CURSOR = /^(strict|relaxed)\.[0-9a-f]{64}\.[0-9a-f]{64}$/;
 const STATE_PERMALINK = /^\/lu-legilux\/([^/]+)\/(\d{4}-\d{2}-\d{2})--[0-9a-f]{64}$/;
+
+/** An EU page's cursor names the lane and the article identity: an EU search is in one wording, so no state is named. */
+const EUROPE_CURSOR = /^(strict|relaxed)\.[0-9a-f]{64}$/;
+
+/** The EU wording permalink: the CELEX, the language, the wording date and the wording digest. */
+const EUROPE_WORDING_PERMALINK = /^\/eu-eurlex\/([^/#]+)\/([^/#]+)\/(\d{4}-\d{2}-\d{2})--([0-9a-f]{64})$/;
 
 function requireOwn(object, key, where) {
   if (object === null || typeof object !== 'object' || !Object.hasOwn(object, key)) {
@@ -229,52 +245,49 @@ function readHit(hit, index) {
   });
 }
 
-/**
- * Reads one V3 `search` answer into the view a live screen renders.
- *
- * @param {object} answer the `result.value` of a search envelope
- * @returns {object} a frozen view; throws on any answer the rules above do not allow
- */
-export function readSearch(answer) {
-  const where = 'this search answer';
-  const publisher = requireOwn(answer, 'publisher', where);
-  if (publisher !== 'lu-legilux') {
-    throw new Error(`this search answer is ${JSON.stringify(publisher)}'s; this reader reads the Luxembourg (lu-legilux) search answer only`);
-  }
+/** The request an answer echoes, as both publishers' answers echo it: the mode, the cursor, the query and its terms. */
+function readRequest(answer, where, cursor, cursorShape) {
   const mode = requireTextOrNull(requireOwn(answer, 'requested_mode', where), 'requested_mode');
   if (mode !== null && !SEARCH_LANES.includes(mode)) {
     throw new Error(`requested_mode ${JSON.stringify(mode)} is not a lane the index holds`);
   }
   const after = requireTextOrNull(requireOwn(answer, 'requested_after', where), 'requested_after');
-  if (after !== null && !CURSOR.test(after)) {
-    throw new Error(`requested_after ${JSON.stringify(after)} is not a cursor (lane.state.article)`);
+  if (after !== null && !cursor.test(after)) {
+    throw new Error(`requested_after ${JSON.stringify(after)} is not a cursor (${cursorShape})`);
   }
-  const requestedDate = requireOwn(answer, 'requested_date', where);
-  if (requestedDate !== null) requireDate(requestedDate, 'requested_date');
-  const identifier = requireTextOrNull(requireOwn(answer, 'requested_identifier', where), 'requested_identifier');
   const query = requireText(requireOwn(answer, 'requested_query', where), 'requested_query');
   const terms = requireList(requireOwn(answer, 'terms', where), 'terms')
     .map((term, index) => requireText(term, `terms[${index}]`));
   if (terms.length === 0) {
     throw new Error('terms names at least one term of the query');
   }
+  return { mode, after, query, terms: Object.freeze(terms) };
+}
 
-  const hits = requireList(requireOwn(answer, 'hits', where), 'hits').map(readHit);
+/** Each article once on a page, by the key that names it there. */
+function requireEachArticleOnce(hits, keyOf, twice) {
+  const seen = new Set();
+  for (const hit of hits) {
+    const key = keyOf(hit);
+    if (seen.has(key)) {
+      throw new Error(twice(hit));
+    }
+    seen.add(key);
+  }
+}
+
+/**
+ * The rules both publishers' answers state about their lanes, their page and their population: strict
+ * before relaxed, a mode's hits all in its lane, the limit, a cursor exactly when the page is truncated
+ * and naming its last hit (`cursorOf`), and a population that counts the whole result, not the page.
+ */
+function readPage(answer, where, hits, { mode, after, cursorOf }) {
   const firstRelaxed = hits.findIndex((hit) => hit.lane === 'relaxed');
   if (firstRelaxed >= 0 && hits.slice(firstRelaxed).some((hit) => hit.lane === 'strict')) {
     throw new Error('a strict hit follows a relaxed one; the answer says relaxed never outranks strict');
   }
   if (mode !== null && hits.some((hit) => hit.lane !== mode)) {
     throw new Error(`a search in the ${mode} lane alone serves only ${mode} hits`);
-  }
-
-  const seen = new Set();
-  for (const hit of hits) {
-    const key = `${hit.stateSha256}.${hit.articleIdentitySha256}`;
-    if (seen.has(key)) {
-      throw new Error(`the page lists the article ${hit.publisherId} of one state twice; each article is served once`);
-    }
-    seen.add(key);
   }
 
   const limit = requireCount(requireOwn(answer, 'limit', where), 'limit');
@@ -292,11 +305,8 @@ export function readSearch(answer) {
     throw new Error('a truncated page holds at least the hits it stopped after');
   }
 
-  if (continueAfter !== null) {
-    const last = hits[hits.length - 1];
-    if (continueAfter !== `${last.lane}.${last.stateSha256}.${last.articleIdentitySha256}`) {
-      throw new Error('the cursor is not the last hit on the page');
-    }
+  if (continueAfter !== null && continueAfter !== cursorOf(hits[hits.length - 1])) {
+    throw new Error('the cursor is not the last hit on the page');
   }
 
   const populationValue = requireOwn(answer, 'population', where);
@@ -323,21 +333,12 @@ export function readSearch(answer) {
     );
   }
 
-  return Object.freeze({
-    query,
-    terms: Object.freeze(terms),
-    language: requireText(requireOwn(answer, 'requested_language', where), 'requested_language'),
-    mode,
-    after,
-    date: requestedDate,
-    identifier,
-    hits: Object.freeze(hits),
-    ambiguousWorks: readAmbiguousWorks(requireOwn(answer, 'ambiguous_works', where), requestedDate, hits),
-    workResolution: readWorkResolution(requireOwn(answer, 'work_resolution', where), identifier),
-    limit,
-    truncated,
-    continueAfter,
-    population,
+  return { limit, truncated, continueAfter, population, total, populationValue };
+}
+
+/** What both publishers' answers say about how they searched, which index they searched and what it holds. */
+function readMethod(answer, where) {
+  return {
     matching: requireText(requireOwn(answer, 'matching', where), 'matching'),
     ranking: requireText(requireOwn(answer, 'ranking', where), 'ranking'),
     pageIs: requireText(requireOwn(answer, 'page_is', where), 'page_is'),
@@ -350,5 +351,240 @@ export function readSearch(answer) {
     searchableLanguages: requireTexts(requireOwn(answer, 'searchable_languages', where), 'searchable_languages'),
     corpusSha256: requireDigest(requireOwn(answer, 'corpus_sha256', where), 'corpus_sha256'),
     indexSha256: requireDigest(requireOwn(answer, 'index_sha256', where), 'index_sha256'),
+  };
+}
+
+/**
+ * Reads one V3 Luxembourg `search` answer into the view a live screen renders.
+ *
+ * @param {object} answer the `result.value` of a search envelope
+ * @returns {object} a frozen view; throws on any answer the rules above do not allow
+ */
+export function readSearch(answer) {
+  const where = 'this search answer';
+  const publisher = requireOwn(answer, 'publisher', where);
+  if (publisher !== 'lu-legilux') {
+    throw new Error(`this search answer is ${JSON.stringify(publisher)}'s; this reader reads the Luxembourg (lu-legilux) search answer only`);
+  }
+  const { mode, after, query, terms } = readRequest(answer, where, CURSOR, 'lane.state.article');
+  const requestedDate = requireOwn(answer, 'requested_date', where);
+  if (requestedDate !== null) requireDate(requestedDate, 'requested_date');
+  const identifier = requireTextOrNull(requireOwn(answer, 'requested_identifier', where), 'requested_identifier');
+
+  const hits = requireList(requireOwn(answer, 'hits', where), 'hits').map(readHit);
+  requireEachArticleOnce(
+    hits,
+    (hit) => `${hit.stateSha256}.${hit.articleIdentitySha256}`,
+    (hit) => `the page lists the article ${hit.publisherId} of one state twice; each article is served once`,
+  );
+  const { limit, truncated, continueAfter, population } = readPage(answer, where, hits, {
+    mode,
+    after,
+    cursorOf: (last) => `${last.lane}.${last.stateSha256}.${last.articleIdentitySha256}`,
   });
+
+  return Object.freeze({
+    publisher,
+    query,
+    terms,
+    language: requireText(requireOwn(answer, 'requested_language', where), 'requested_language'),
+    mode,
+    after,
+    date: requestedDate,
+    identifier,
+    hits: Object.freeze(hits),
+    ambiguousWorks: readAmbiguousWorks(requireOwn(answer, 'ambiguous_works', where), requestedDate, hits),
+    workResolution: readWorkResolution(requireOwn(answer, 'work_resolution', where), identifier),
+    limit,
+    truncated,
+    continueAfter,
+    population,
+    ...readMethod(answer, where),
+  });
+}
+
+/**
+ * A provision escaped as the platform escapes it (.NET's `Uri.EscapeDataString`, RFC 3986's unreserved
+ * characters only): `encodeURIComponent` leaves `!'()*` as they are, and the platform does not.
+ */
+export function escapeProvision(provision) {
+  return encodeURIComponent(provision).replace(/[!'()*]/g, (character) => `%${character.charCodeAt(0).toString(16).toUpperCase()}`);
+}
+
+/** The one wording an EU answer's hits are in, pinned; null when the answer pins none. */
+function readPinnedWording(value, language) {
+  if (value === null) return null;
+  const where = 'pinned_wording';
+  const wordingDate = requireDate(requireOwn(value, 'wording_date', where), `${where}.wording_date`);
+  const wordingSha256 = requireDigest(requireOwn(value, 'wording_sha256', where), `${where}.wording_sha256`);
+  const permalink = requireText(requireOwn(value, 'permalink', where), `${where}.permalink`);
+  const match = EUROPE_WORDING_PERMALINK.exec(permalink);
+  if (match === null) {
+    throw new Error(`${where}.permalink ${JSON.stringify(permalink)} is not an EU wording permalink (/eu-eurlex/{celex}/{language}/{wording date}--{wording sha256})`);
+  }
+  const [, celex, permalinkLanguage, permalinkDate, permalinkSha256] = match;
+  if (permalinkLanguage !== language) {
+    throw new Error(`${where}.permalink is in ${permalinkLanguage}, and the search was asked in ${language}`);
+  }
+  if (permalinkDate !== wordingDate || permalinkSha256 !== wordingSha256) {
+    throw new Error(`${where}.permalink pins ${permalinkDate}--${permalinkSha256}, not the wording it names (${wordingDate}--${wordingSha256})`);
+  }
+  return Object.freeze({
+    celex,
+    wordingDate,
+    wordingSha256,
+    permalink,
+    digestRule: requireText(requireOwn(value, 'digest_rule', where), `${where}.digest_rule`),
+  });
+}
+
+function readEuropeHit(hit, index, { language, wording }) {
+  const where = `hit ${index + 1}`;
+  const lane = requireOwn(hit, 'lane', where);
+  if (!SEARCH_LANES.includes(lane)) {
+    throw new Error(`${where} is in lane ${JSON.stringify(lane)}; the index holds ${SEARCH_LANES.join(' and ')}`);
+  }
+
+  const reasons = requireList(requireOwn(hit, 'match_reasons', where), `${where} match_reasons`);
+  if (reasons.length !== 1 || reasons[0] !== LANE_MATCH_REASON[lane]) {
+    throw new Error(
+      `${where} is a ${lane} hit whose match reasons are ${JSON.stringify(reasons)}; a ${lane} hit matched by `
+        + `${LANE_MATCH_REASON[lane]} and nothing else`,
+    );
+  }
+
+  const hitLanguage = requireText(requireOwn(hit, 'language', where), `${where} language`);
+  if (hitLanguage !== language) {
+    throw new Error(`${where} is in ${hitLanguage}, and an EU search is in the one language asked (${language})`);
+  }
+  const expressionIri = requireText(requireOwn(hit, 'publisher_expression_id', where), `${where} publisher_expression_id`);
+  const publisherId = requireText(requireOwn(hit, 'publisher_id', where), `${where} publisher_id`);
+  const coordinate = requireText(requireOwn(requireOwn(hit, 'resolve', where), 'identifier', `${where} resolve`), `${where} resolve.identifier`);
+  const expectedCoordinate = `${expressionIri}#lex-provision=${escapeProvision(publisherId)}`;
+  if (coordinate !== expectedCoordinate) {
+    throw new Error(`${where} resolves to ${coordinate}, not to the provision it names (${expectedCoordinate})`);
+  }
+
+  const celex = requireText(requireOwn(hit, 'celex', where), `${where} celex`);
+  const wordingDate = requireDate(requireOwn(hit, 'wording_date', where), `${where} wording_date`);
+  const permalink = requireOwn(hit, 'permalink', where);
+  if (wording === null) {
+    // A hit this page shows must pin its wording; an answer that pins none is not shown unpinned.
+    throw new Error(`${where} pins no wording (the answer's pinned_wording is null), and a hit this page shows must pin its wording`);
+  }
+  if (celex !== wording.celex || wordingDate !== wording.wordingDate) {
+    throw new Error(`${where} is in ${celex} of ${wordingDate}, not in the wording the answer pins (${wording.celex} of ${wording.wordingDate})`);
+  }
+  const expectedPermalink = `${wording.permalink}#${escapeProvision(publisherId)}`;
+  if (permalink !== expectedPermalink) {
+    throw new Error(`${where} carries the permalink ${JSON.stringify(permalink)}, not the pinned wording's with its provision (${expectedPermalink})`);
+  }
+
+  return Object.freeze({
+    lane,
+    matchReason: reasons[0],
+    celex,
+    publisherWorkIri: requireText(requireOwn(hit, 'publisher_work_id', where), `${where} publisher_work_id`),
+    publisherExpressionIri: expressionIri,
+    language: hitLanguage,
+    wordingDate,
+    articleIdentitySha256: requireDigest(requireOwn(hit, 'article_identity_sha256', where), `${where} article_identity_sha256`),
+    publisherId,
+    heading: requireText(requireOwn(hit, 'heading', where), `${where} heading`),
+    coordinate,
+    permalink,
+  });
+}
+
+function readNotHeld(value, where) {
+  return Object.freeze(requireList(value, where).map((row, index) => Object.freeze({
+    item: requireText(requireOwn(row, 'item', `${where}[${index}]`), `${where}[${index}].item`),
+    reason: requireText(requireOwn(row, 'reason', `${where}[${index}]`), `${where}[${index}].reason`),
+  })));
+}
+
+/**
+ * Reads one V3 EU `search` answer (one named EU work, the one wording the EU index holds of it) into the
+ * view a live screen renders.
+ *
+ * @param {object} answer the `result.value` of a search envelope
+ * @returns {object} a frozen view; throws on any answer the rules above do not allow
+ */
+export function readEuropeSearch(answer) {
+  const where = 'this search answer';
+  const publisher = requireOwn(answer, 'publisher', where);
+  if (publisher !== 'eu-eurlex') {
+    throw new Error(`this search answer is ${JSON.stringify(publisher)}'s; this reader reads the EU (eu-eurlex) search answer only`);
+  }
+  const { mode, after, query, terms } = readRequest(answer, where, EUROPE_CURSOR, 'lane.article');
+  if (requireOwn(answer, 'requested_date', where) !== null) {
+    throw new Error('an EU search names no date: the index holds one wording of the act and no consolidation');
+  }
+  const identifier = requireText(requireOwn(answer, 'requested_identifier', where), 'requested_identifier');
+  const language = requireText(requireOwn(answer, 'requested_language', where), 'requested_language');
+  const wording = readPinnedWording(requireOwn(answer, 'pinned_wording', where), language);
+
+  const hits = requireList(requireOwn(answer, 'hits', where), 'hits')
+    .map((hit, index) => readEuropeHit(hit, index, { language, wording }));
+  // One work and one expression of it, by the hits' own IRIs, not only by the population's count of works
+  // (review of #853: a hit of a second work read as a one-work result).
+  const works = new Set(hits.map((hit) => hit.publisherWorkIri));
+  if (works.size > 1) {
+    throw new Error(`the hits are in ${works.size} works, and an EU search is in the one work named`);
+  }
+  const expressions = new Set(hits.map((hit) => hit.publisherExpressionIri));
+  if (expressions.size > 1) {
+    throw new Error(`the hits are in ${expressions.size} expressions, and an EU search is in the one wording of one expression`);
+  }
+  requireEachArticleOnce(
+    hits,
+    (hit) => hit.articleIdentitySha256,
+    (hit) => `the page lists the article ${hit.publisherId} of the wording twice; each article is served once`,
+  );
+  const { limit, truncated, continueAfter, population, total, populationValue } = readPage(answer, where, hits, {
+    mode,
+    after,
+    cursorOf: (last) => `${last.lane}.${last.articleIdentitySha256}`,
+  });
+  if (population.worksWithHits !== (total > 0 ? 1 : 0)) {
+    throw new Error(`the population counts ${population.worksWithHits} works with hits, and an EU search is in one work`);
+  }
+  const scope = requireOwn(populationValue, 'scope', 'population');
+  for (const [key, expected] of [['identifier', identifier], ['language', language], ['date', null], ['mode', mode]]) {
+    if (requireOwn(scope, key, 'population.scope') !== expected) {
+      throw new Error(`population.scope.${key} is ${JSON.stringify(scope[key])}, not what the search asked (${JSON.stringify(expected)})`);
+    }
+  }
+  if (requireList(requireOwn(answer, 'ambiguous_works', where), 'ambiguous_works').length > 0) {
+    throw new Error('a work is ambiguous only on a date, and an EU search names none');
+  }
+
+  return Object.freeze({
+    publisher,
+    query,
+    terms,
+    language,
+    mode,
+    after,
+    identifier,
+    wording,
+    hits: Object.freeze(hits),
+    workResolution: readWorkResolution(requireOwn(answer, 'work_resolution', where), identifier),
+    limit,
+    truncated,
+    continueAfter,
+    population,
+    scope: requireText(requireOwn(answer, 'scope', where), 'scope'),
+    dateSemantics: requireText(requireOwn(answer, 'date_semantics', where), 'date_semantics'),
+    consolidationsHeld: requireBoolean(requireOwn(answer, 'consolidations_held', where), 'consolidations_held'),
+    notHeld: readNotHeld(requireOwn(answer, 'not_held', where), 'not_held'),
+    ...readMethod(answer, where),
+  });
+}
+
+/** Reads a search answer with the reader its publisher names: Luxembourg's, or the EU's in one work. */
+export function readSearchAnswer(answer) {
+  return answer !== null && typeof answer === 'object' && answer.publisher === 'eu-eurlex'
+    ? readEuropeSearch(answer)
+    : readSearch(answer);
 }

@@ -949,6 +949,271 @@
       }
     },
     {
+      "operation": "search",
+      "scenario": "one EU work by its CELEX, a phrase its held wording carries: an answer whose hits carry the pinned wording\u0027s provision permalink",
+      "http_status": 200,
+      "content_type": "application/json;charset=utf-8",
+      "envelope": {
+        "context": {
+          "freshness": {
+            "observed_at": "2026-09-18T07:00:00.0000000Z",
+            "upstream_health": "stale"
+          },
+          "jurisdiction": "eu",
+          "provisional": false,
+          "publisher": "eu-eurlex",
+          "snapshot": {
+            "snapshot_id": "corpus-aaaaaaaaaaaaaaaa",
+            "snapshot_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          "status": "success",
+          "timeline_semantics": "official_consolidation_state"
+        },
+        "object_type": "envelope",
+        "operation_id": "search",
+        "refusal": null,
+        "registry_schema": "lex-v3-operation-registry/1",
+        "registry_sha256": "abe40749a2364dcbcf69a4427b0977e0510500345056eed4042b2e4758a53ef0",
+        "request_ref": "http_fb09fb7191e84f40f48d21b4532a48ef36c84efacd236a30abd075a5a2b2c639",
+        "result": {
+          "object_type": "quote",
+          "schema": "lex-v3-search-result/1",
+          "value": {
+            "ambiguous_works": [],
+            "consolidations_held": false,
+            "continue_after": null,
+            "corpus_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "date_semantics": "the wording date (wording_date in search, wording_dates in dossier) is the date the publisher\u0027s Formex package gives the act, the date of the original wording this index holds; it is not a publication, entry-into-force, application or consolidation date, and an EU date is never merged with a Luxembourg applicability date",
+            "hit_unit": "a hit is one article of the one wording this index holds of the expression; no other wording of the act is held",
+            "hits": [
+              {
+                "article_identity_sha256": "7ab119a143803f39c2c7bccb41c19504294baa152fdfda20607356624da54a2c",
+                "celex": "32016R0679",
+                "heading": "Article 26",
+                "lane": "strict",
+                "language": "eng",
+                "match_reasons": [
+                  "exact_phrase"
+                ],
+                "permalink": "/eu-eurlex/32016R0679/eng/2016-04-27--ff42858ce2bc578d29219e1551cc1dc1cf3e558e354fc0d7ed39a8f932c7720f#026",
+                "publisher_expression_id": "http://publications.europa.eu/resource/cellar/5f2552c2-11bd-11e6-ba9a-01aa75ed71a1.0001",
+                "publisher_id": "026",
+                "publisher_work_id": "http://publications.europa.eu/resource/cellar/3e485e15-11bd-11e6-ba9a-01aa75ed71a1",
+                "resolve": {
+                  "identifier": "http://publications.europa.eu/resource/cellar/5f2552c2-11bd-11e6-ba9a-01aa75ed71a1.0001#lex-provision=026"
+                },
+                "wording_date": "2016-04-27"
+              },
+              {
+                "article_identity_sha256": "2750f70907f6d3e12f587dddf8e05ad775e5a7649f72ab8410afe5e4bb02ee08",
+                "celex": "32016R0679",
+                "heading": "Article 36",
+                "lane": "strict",
+                "language": "eng",
+                "match_reasons": [
+                  "exact_phrase"
+                ],
+                "permalink": "/eu-eurlex/32016R0679/eng/2016-04-27--ff42858ce2bc578d29219e1551cc1dc1cf3e558e354fc0d7ed39a8f932c7720f#036",
+                "publisher_expression_id": "http://publications.europa.eu/resource/cellar/5f2552c2-11bd-11e6-ba9a-01aa75ed71a1.0001",
+                "publisher_id": "036",
+                "publisher_work_id": "http://publications.europa.eu/resource/cellar/3e485e15-11bd-11e6-ba9a-01aa75ed71a1",
+                "resolve": {
+                  "identifier": "http://publications.europa.eu/resource/cellar/5f2552c2-11bd-11e6-ba9a-01aa75ed71a1.0001#lex-provision=036"
+                },
+                "wording_date": "2016-04-27"
+              },
+              {
+                "article_identity_sha256": "276c0867194f7e772fdc1eeb837b539f789c0ad66ffc2e9ae963d7d19a107c26",
+                "celex": "32016R0679",
+                "heading": "Article 47",
+                "lane": "relaxed",
+                "language": "eng",
+                "match_reasons": [
+                  "all_terms"
+                ],
+                "permalink": "/eu-eurlex/32016R0679/eng/2016-04-27--ff42858ce2bc578d29219e1551cc1dc1cf3e558e354fc0d7ed39a8f932c7720f#047",
+                "publisher_expression_id": "http://publications.europa.eu/resource/cellar/5f2552c2-11bd-11e6-ba9a-01aa75ed71a1.0001",
+                "publisher_id": "047",
+                "publisher_work_id": "http://publications.europa.eu/resource/cellar/3e485e15-11bd-11e6-ba9a-01aa75ed71a1",
+                "resolve": {
+                  "identifier": "http://publications.europa.eu/resource/cellar/5f2552c2-11bd-11e6-ba9a-01aa75ed71a1.0001#lex-provision=047"
+                },
+                "wording_date": "2016-04-27"
+              }
+            ],
+            "index_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            "lanes": "strict: the query as typed is a substring; relaxed: every distinct whitespace-separated term is a substring, in any order, so the relaxed set contains the strict set. With no mode the answer is the strict hits and then only the relaxed hits strict did not serve, each article once; with a mode it is that lane\u0027s whole set. A lane not asked for is null in the population, not zero",
+            "limit": 200,
+            "matching": "byte-exact substring of the article\u0027s searchable text as the EU index holds it; case and diacritics are significant; nothing is folded, stemmed or expanded",
+            "modes_held": [
+              "strict",
+              "relaxed"
+            ],
+            "modes_not_held": [
+              "bm25",
+              "semantic"
+            ],
+            "not_held": [
+              {
+                "item": "later_wordings",
+                "reason": "no consolidated version is held, so a later wording of the act is not searched and a date is not answered here"
+              },
+              {
+                "item": "corrigenda_applied",
+                "reason": "corrigenda are recorded by the index and not applied to the wording searched"
+              },
+              {
+                "item": "other_languages",
+                "reason": "an expression in a language this index holds no wording in is not searched; French expressions are not acquired (Decision 89)"
+              },
+              {
+                "item": "article_text",
+                "reason": "no snippet or article text is served; each hit names its provision, which resolve answers"
+              }
+            ],
+            "page_is": "the first hits in the stated order, not the best hits",
+            "pinned_wording": {
+              "digest_rule": "the SHA-256, under the domain lex-v3-eu-wording/1, of the work\u0027s CELEX, the publisher\u0027s work and expression IRIs, the language, the wording date and every article identity of the expression in the publisher\u0027s article order, each field written as a 4-byte big-endian length and its UTF-8 bytes; each article identity is itself the SHA-256 of that article\u0027s text and tokens, so the digest pins the whole held wording, computed here from the EU index, which stores no wording digest",
+              "permalink": "/eu-eurlex/32016R0679/eng/2016-04-27--ff42858ce2bc578d29219e1551cc1dc1cf3e558e354fc0d7ed39a8f932c7720f",
+              "wording_date": "2016-04-27",
+              "wording_sha256": "ff42858ce2bc578d29219e1551cc1dc1cf3e558e354fc0d7ed39a8f932c7720f"
+            },
+            "population": {
+              "distinct_publisher_articles": 3,
+              "relaxed_hits": 1,
+              "scope": {
+                "date": null,
+                "identifier": "32016R0679",
+                "language": "eng",
+                "mode": null
+              },
+              "strict_hits": 2,
+              "works_with_hits": 1
+            },
+            "publisher": "eu-eurlex",
+            "ranking": "none; strict lane before relaxed lane, then the publisher\u0027s article id and article identity. This index holds no BM25 ranker, so a page is the first hits in this order and not the best hits",
+            "requested_after": null,
+            "requested_date": null,
+            "requested_identifier": "32016R0679",
+            "requested_language": "eng",
+            "requested_mode": null,
+            "requested_query": "joint controllers",
+            "scope": "one EU work named by the identifier (its CELEX, work or expression IRI, or one of its provisions), in the one held wording of its expression in the language asked; a search across EU works is not served",
+            "searchable_languages": [
+              "eng"
+            ],
+            "searchable_text_held_for_language": true,
+            "terms": [
+              "joint",
+              "controllers"
+            ],
+            "text_served": false,
+            "truncated": false,
+            "work_resolution": {
+              "candidates": null,
+              "outcome": "not_run_identifier_given",
+              "retrieval_lane": "r1_work_discovery",
+              "work": null
+            }
+          }
+        },
+        "schema": "lex-v3-envelope/1",
+        "verdict": "answer",
+        "version": "v3"
+      }
+    },
+    {
+      "operation": "search",
+      "scenario": "one EU work in a language it is not held in: a refusal with a payload",
+      "http_status": 200,
+      "content_type": "application/json;charset=utf-8",
+      "envelope": {
+        "context": {
+          "freshness": {
+            "observed_at": "2026-09-18T07:00:00.0000000Z",
+            "upstream_health": "stale"
+          },
+          "jurisdiction": "eu",
+          "provisional": false,
+          "publisher": "eu-eurlex",
+          "snapshot": {
+            "snapshot_id": "corpus-aaaaaaaaaaaaaaaa",
+            "snapshot_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          "status": "refusal",
+          "timeline_semantics": "official_consolidation_state"
+        },
+        "object_type": "envelope",
+        "operation_id": "search",
+        "refusal": {
+          "code": "language_not_available",
+          "helpful_payload": {
+            "available_languages": [
+              "eng"
+            ],
+            "requested_language": "fra"
+          },
+          "schema": "lex-v3-refusal/1"
+        },
+        "registry_schema": "lex-v3-operation-registry/1",
+        "registry_sha256": "abe40749a2364dcbcf69a4427b0977e0510500345056eed4042b2e4758a53ef0",
+        "request_ref": "http_fb09fb7191e84f40f48d21b4532a48ef36c84efacd236a30abd075a5a2b2c639",
+        "result": null,
+        "schema": "lex-v3-envelope/1",
+        "verdict": "refuse",
+        "version": "v3"
+      }
+    },
+    {
+      "operation": "search",
+      "scenario": "an EU identifier the EU index does not hold: a refusal with a payload",
+      "http_status": 200,
+      "content_type": "application/json;charset=utf-8",
+      "envelope": {
+        "context": {
+          "freshness": {
+            "observed_at": "2026-09-18T07:00:00.0000000Z",
+            "upstream_health": "stale"
+          },
+          "jurisdiction": "eu",
+          "provisional": false,
+          "publisher": "eu-eurlex",
+          "snapshot": {
+            "snapshot_id": "corpus-aaaaaaaaaaaaaaaa",
+            "snapshot_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          "status": "refusal",
+          "timeline_semantics": "official_consolidation_state"
+        },
+        "object_type": "envelope",
+        "operation_id": "search",
+        "refusal": {
+          "code": "identifier_unknown",
+          "helpful_payload": {
+            "asserts_absence_of_law": false,
+            "official_search_actions": [
+              "search"
+            ],
+            "population_disclosure": "This build\u0027s EU index holds 1 members of the EU population it acquired; an identifier outside them was not searched further.",
+            "requested_identifier": "32099R9999",
+            "what_would_answer": [
+              "corrected_identifier",
+              "expanded_official_scope"
+            ],
+            "what_would_answer_detail": "an EU work identifier (CELEX, work or expression IRI) or provision present in the mounted EU index"
+          },
+          "schema": "lex-v3-refusal/1"
+        },
+        "registry_schema": "lex-v3-operation-registry/1",
+        "registry_sha256": "abe40749a2364dcbcf69a4427b0977e0510500345056eed4042b2e4758a53ef0",
+        "request_ref": "http_fb09fb7191e84f40f48d21b4532a48ef36c84efacd236a30abd075a5a2b2c639",
+        "result": null,
+        "schema": "lex-v3-envelope/1",
+        "verdict": "refuse",
+        "version": "v3"
+      }
+    },
+    {
       "operation": "dossier",
       "scenario": "the work, in the language it is held in: an answer",
       "http_status": 200,
@@ -1182,6 +1447,110 @@
         "result": null,
         "schema": "lex-v3-envelope/1",
         "verdict": "refuse",
+        "version": "v3"
+      }
+    },
+    {
+      "operation": "dossier",
+      "scenario": "one EU work by its CELEX: an answer whose expression carries its pinned wording",
+      "http_status": 200,
+      "content_type": "application/json;charset=utf-8",
+      "envelope": {
+        "context": {
+          "freshness": {
+            "observed_at": "2026-09-18T07:00:00.0000000Z",
+            "upstream_health": "stale"
+          },
+          "jurisdiction": "eu",
+          "provisional": false,
+          "publisher": "eu-eurlex",
+          "snapshot": {
+            "snapshot_id": "corpus-aaaaaaaaaaaaaaaa",
+            "snapshot_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          "status": "success",
+          "timeline_semantics": "official_consolidation_state"
+        },
+        "object_type": "envelope",
+        "operation_id": "dossier",
+        "refusal": null,
+        "registry_schema": "lex-v3-operation-registry/1",
+        "registry_sha256": "abe40749a2364dcbcf69a4427b0977e0510500345056eed4042b2e4758a53ef0",
+        "request_ref": "http_fb09fb7191e84f40f48d21b4532a48ef36c84efacd236a30abd075a5a2b2c639",
+        "result": {
+          "object_type": "work_record",
+          "schema": "lex-v3-dossier-result/1",
+          "value": {
+            "available_languages": [
+              "eng"
+            ],
+            "celex": "32016R0679",
+            "consolidations_held": false,
+            "corpus_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "date_semantics": "the wording date (wording_date in search, wording_dates in dossier) is the date the publisher\u0027s Formex package gives the act, the date of the original wording this index holds; it is not a publication, entry-into-force, application or consolidation date, and an EU date is never merged with a Luxembourg applicability date",
+            "digest_rule": "the SHA-256, under the domain lex-v3-eu-wording/1, of the work\u0027s CELEX, the publisher\u0027s work and expression IRIs, the language, the wording date and every article identity of the expression in the publisher\u0027s article order, each field written as a 4-byte big-endian length and its UTF-8 bytes; each article identity is itself the SHA-256 of that article\u0027s text and tokens, so the digest pins the whole held wording, computed here from the EU index, which stores no wording digest",
+            "expression_count": 1,
+            "expressions": [
+              {
+                "article_count": 99,
+                "language": "eng",
+                "members": [
+                  {
+                    "content_class": "original_legal_text",
+                    "object_ref_sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+                    "outcome": "acquired"
+                  }
+                ],
+                "pinned_wording": {
+                  "permalink": "/eu-eurlex/32016R0679/eng/2016-04-27--ff42858ce2bc578d29219e1551cc1dc1cf3e558e354fc0d7ed39a8f932c7720f",
+                  "wording_date": "2016-04-27",
+                  "wording_sha256": "ff42858ce2bc578d29219e1551cc1dc1cf3e558e354fc0d7ed39a8f932c7720f"
+                },
+                "publisher_expression_id": "http://publications.europa.eu/resource/cellar/5f2552c2-11bd-11e6-ba9a-01aa75ed71a1.0001",
+                "resolve": {
+                  "identifier": "http://publications.europa.eu/resource/cellar/5f2552c2-11bd-11e6-ba9a-01aa75ed71a1.0001"
+                },
+                "wording_dates": [
+                  "2016-04-27"
+                ]
+              }
+            ],
+            "index_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            "not_held": [
+              {
+                "item": "titles",
+                "reason": "no title of the EU work is held by the EU index"
+              },
+              {
+                "item": "later_wordings",
+                "reason": "no consolidated version is held, so the wording listed is the original act\u0027s and no later wording or state is listed"
+              },
+              {
+                "item": "force_dates",
+                "reason": "no entry-into-force, application or end-of-validity date is held; the wording date is none of them"
+              },
+              {
+                "item": "document_type",
+                "reason": "the publisher\u0027s document type is not held for EU works"
+              },
+              {
+                "item": "corrigenda",
+                "reason": "corrigendum lines are recorded by the index per corrected work root and are not joined to the work here, because the join between a corrected work root and the work\u0027s publisher identifier is not established"
+              },
+              {
+                "item": "other_languages",
+                "reason": "an expression in a language the index holds no wording in is not listed; French expressions are not acquired (Decision 89)"
+              }
+            ],
+            "publisher": "eu-eurlex",
+            "publisher_work_id": "http://publications.europa.eu/resource/cellar/3e485e15-11bd-11e6-ba9a-01aa75ed71a1",
+            "requested_identifier": "32016R0679",
+            "requested_language": null,
+            "scope": "the EU work as the mounted EU index holds it: its expressions, the one wording held of each with the Formex act date, the article count and the corpus members the articles were read from; a record of this corpus and not of what the publisher holds, and a missing expression or wording here is neither absent from the publisher\u0027s record nor absent from law; with a language, only that language\u0027s expressions are listed and available_languages still lists every language the work has"
+          }
+        },
+        "schema": "lex-v3-envelope/1",
+        "verdict": "answer",
         "version": "v3"
       }
     },

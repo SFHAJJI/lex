@@ -9,7 +9,11 @@
 // with no second request;
 // with a mount, the page must end in the answer, and the one request must carry exactly what was
 // typed and nothing else. Without a mount, each must end in the refusal card for
-// `no_corpus_mounted`. In every run, what the
+// `no_corpus_mounted`. Two EU steps ask for the GDPR by its CELEX: the search page with English chosen
+// in the form's language select (`EU_SEARCH_STEP`), and the dossier page (`EU_DOSSIER_STEP`). They
+// need an EU index, so on the fixture mount (Luxembourg only) each must end in the refusal card
+// `no_corpus_mounted` naming the EU index, and on a real mount whose build report names an EU index
+// each must end in the API's answer, every EU citation pinned and verified. In every run, what the
 // browser did is measured, not assumed: exactly one request to the API (`POST /api/v3/{operation}`,
 // no query string, no referrer, no cookie), every other request a same-origin asset, the page still
 // at its own address with no history entry added and no history state written, no cookie set,
@@ -27,13 +31,16 @@
 //                            [--real-mount]
 //
 // With `--real-mount` the mount is a real build's (`v3-corpus` with its `build-report.json`), whose
-// contents are not known in advance: each of the eight steps asks the API its page's request first
-// and holds the page to that answer, a success or that refusal by its code, and to every invariant
-// below. The coverage page must name the corpus and Luxembourg index the build report records.
+// contents are not known in advance: each of the eight steps, and the two EU steps when the build
+// report names an EU index, asks the API its page's request first and holds the page to that answer, a
+// success or that refusal by its code, and to every invariant below. The coverage page must name the
+// corpus and Luxembourg index the build report records.
 //
 // With `--keyboard` every form step is driven by the keyboard alone (the launch contract's keyboard
-// path): from the top of the page, Tab until each text field has focus, type, Enter to submit; the
-// export composer's pin is reached by Tab and checked with Space. Every focus stop must show a focus
+// path): from the top of the page, Tab until each text field has focus, type, Enter to submit; a step
+// that chooses an option reaches the select by Tab and types the first letter of the option's label,
+// then Tabs on to the submit button and presses Enter; the export composer's pin is reached by Tab and
+// checked with Space. Every focus stop must show a focus
 // indicator. In every run, keyboard or not, the answer must be written into a polite live region the
 // server already rendered (the screen-reader path).
 //
@@ -55,7 +62,8 @@
 // every citation the product emitted in the journey suite": each permalink the answer prints must be
 // hash-pinned, a step that cites must print one on an answer, and once the run is recorded each is
 // asked of the API's `verify`, which must find the digest it pins (`digest_matches`), that very
-// state, and the article it names.
+// state (for an EU citation, that very wording, answered by the EU index), and the article it names
+// (an EU provision as `verify` names it, unescaped).
 //
 // The mount is written by `V3JourneyMountTests` with `V3_WRITE_JOURNEY_MOUNT=<directory>`; it is the
 // test fixture's mount, so the journey proves the wiring, not a real corpus.
@@ -87,12 +95,43 @@ export const READING_DATE = "2024-02-01";
 /** The article id the provision history step types beside that identifier. */
 export const HISTORY_ANCHOR = "art_15";
 
+/** The EU work the EU search step names: the GDPR, by its CELEX. */
+export const EU_SEARCH_IDENTIFIER = "32016R0679";
+
+/** The phrase the EU search step types: the GDPR's held English wording carries it in many articles. */
+export const EU_SEARCH_PHRASE = "personal data";
+
+/** The language the EU search step chooses in the form's select: the one its held wording is in. */
+export const EU_SEARCH_LANGUAGE = Object.freeze({ value: "eng", label: "English" });
+
 /**
  * A hash-pinned Luxembourg permalink, as `verify` takes it: the stable coordinate, `--` and the state
  * digest, and an article id after `#` (the grammar `V3CitationVerificationTests` holds the served
  * answers to).
  */
 export const PINNED_PERMALINK = /^\/lu-legilux\/[a-z0-9_-]+\/\d{4}-\d{2}-\d{2}--([0-9a-f]{64})(?:#([^#\s]+))?$/;
+
+/**
+ * A hash-pinned EU permalink, as `verify` takes it: the CELEX, the language, the wording date, `--` and
+ * the wording digest, and a provision after `#`, escaped as the platform escapes it (#850).
+ */
+export const PINNED_EU_PERMALINK = /^\/eu-eurlex\/[^/#\s]+\/[a-z]{3}\/\d{4}-\d{2}-\d{2}--([0-9a-f]{64})(?:#([^#\s]+))?$/;
+
+/**
+ * What a citation pins, or null when it pins nothing: its publisher, the digest (a Luxembourg state's
+ * or an EU wording's) and the article, as `verify` names it (an EU provision unescaped).
+ */
+export function pinnedCitation(citation) {
+  const luxembourg = PINNED_PERMALINK.exec(citation);
+  if (luxembourg !== null) return { publisher: "lu-legilux", digest: luxembourg[1], anchor: luxembourg[2] ?? null };
+  const europe = PINNED_EU_PERMALINK.exec(citation);
+  if (europe === null) return null;
+  try {
+    return { publisher: "eu-eurlex", digest: europe[1], anchor: europe[2] === undefined ? null : decodeURIComponent(europe[2]) };
+  } catch {
+    return null;
+  }
+}
 
 /**
  * The steps: the page each loads, the operation it must ask, and what it does before waiting. A step
@@ -169,6 +208,38 @@ export const JOURNEY_STEPS = Object.freeze({
 });
 
 /**
+ * The EU search step: the search page asked for the GDPR by its CELEX, with English chosen in the
+ * form's language select and a phrase its one held wording carries. It needs an EU index, so it is
+ * answered on a mount that holds one (`--real-mount`, when the build report names an EU index), and
+ * on the fixture mount (Luxembourg only) and with no mount it must show the refusal
+ * `no_corpus_mounted`.
+ */
+export const EU_SEARCH_STEP = Object.freeze({
+  path: "/search.html",
+  cites: true,
+  operation: "search",
+  typed: Object.freeze([EU_SEARCH_PHRASE, EU_SEARCH_IDENTIFIER]),
+  chosen: EU_SEARCH_LANGUAGE,
+  body: Object.freeze({
+    operation_id: "search",
+    parameters: Object.freeze({ query: EU_SEARCH_PHRASE, language: EU_SEARCH_LANGUAGE.value, identifier: EU_SEARCH_IDENTIFIER }),
+  }),
+});
+
+/**
+ * The EU dossier step: the dossier page asked for the same EU work by its CELEX, in any held language.
+ * Like the EU search it needs an EU index, and where one is held each expression's wording permalink
+ * is printed and verified.
+ */
+export const EU_DOSSIER_STEP = Object.freeze({
+  path: "/dossier.html",
+  cites: true,
+  operation: "dossier",
+  typed: EU_SEARCH_IDENTIFIER,
+  body: Object.freeze({ operation_id: "dossier", parameters: Object.freeze({ identifier: EU_SEARCH_IDENTIFIER }) }),
+});
+
+/**
  * What one run must show, as failures (empty means the run passed).
  *
  * @param {object} observed what the browser run read: `answerState`, `text`, `requests`
@@ -220,7 +291,7 @@ export function journeyVerdict(observed, expected) {
     const keys = observed.keyboard;
     if (keys === undefined) failures.push("the run took no keyboard path");
     else {
-      if (keys.placed !== keys.wanted) failures.push(`Tab reached ${keys.placed} of the form's ${keys.wanted} text fields`);
+      if (keys.placed !== keys.wanted) failures.push(`Tab reached ${keys.placed} of the form's ${keys.wanted} fields`);
       // Not `<`: a count the page never kept (undefined) must fail, not pass.
       if (!(keys.keyPresses >= keys.characters)) failures.push(`text arrived without key presses: ${keys.characters} characters typed, ${keys.keyPresses} character keys pressed`);
       for (const stop of keys.stops.filter((candidate) => !candidate.ring)) {
@@ -231,8 +302,8 @@ export function journeyVerdict(observed, expected) {
   if (observed.citations !== undefined) {
     // The launch contract's first promise, on what the journey suite emitted: every citation a page
     // prints is hash-pinned, and `verify` finds the very state and article it pins.
-    const pinned = observed.citations.filter((citation) => PINNED_PERMALINK.test(citation));
-    for (const citation of observed.citations.filter((candidate) => !PINNED_PERMALINK.test(candidate))) {
+    const pinned = observed.citations.filter((citation) => pinnedCitation(citation) !== null);
+    for (const citation of observed.citations.filter((candidate) => pinnedCitation(candidate) === null)) {
       failures.push(`the page printed ${citation}, which is not a hash-pinned permalink`);
     }
     // An answer that holds nothing to cite (the radar's empty window, a search with no hit) prints none,
@@ -249,10 +320,13 @@ export function journeyVerdict(observed, expected) {
       const verified = new Set(observed.verifications.map((check) => check.identifier));
       for (const citation of pinned.filter((candidate) => !verified.has(candidate))) failures.push(`${citation} was not verified`);
       for (const check of observed.verifications) {
-        const [, digest, anchor = null] = check.identifier.match(PINNED_PERMALINK) ?? [];
+        const { publisher = null, digest = null, anchor = null } = pinnedCitation(check.identifier) ?? {};
+        // A Luxembourg citation pins a state, an EU citation the one wording held (#850).
+        const [pinnedKind, named] = publisher === "eu-eurlex" ? ["wording", check.wordingSha256] : ["state", check.stateSha256];
         if (check.refusal !== null) failures.push(`verify refused ${check.identifier} with ${check.refusal}`);
         else if (check.verdict !== "digest_matches") failures.push(`verify found ${check.identifier} ${check.verdict}, not digest_matches`);
-        else if (check.stateSha256 !== digest) failures.push(`verify of ${check.identifier} named the state ${check.stateSha256}`);
+        else if (check.publisher !== undefined && check.publisher !== publisher) failures.push(`verify of ${check.identifier} answered for ${check.publisher}`);
+        else if (named !== digest) failures.push(`verify of ${check.identifier} named the ${pinnedKind} ${named}`);
         else if (anchor !== null && check.requestedAnchor !== anchor) failures.push(`verify of ${check.identifier} named the article ${check.requestedAnchor}`);
       }
     }
@@ -464,11 +538,19 @@ async function startApi(apiOutput, mount, webRoot = null) {
     : `the API did not answer within 60 s: ${stderr}`);
 }
 
+/** Sets the form's select to a value as a pointer would: the value, then the change event the page listens for. */
+const chooseInSelect = (value) => `(() => {
+  const select = document.querySelector('form[role=search] select');
+  Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value').set.call(select, ${JSON.stringify(value)});
+  select.dispatchEvent(new Event('change', { bubbles: true }));
+  return select.value;
+})()`;
+
 /**
  * A form step's action: once hydrated, type into the form's text fields in order (one text, or one per
- * field) and submit it.
+ * field), choose the option a step names in the form's select, and submit it.
  */
-async function typeAndSubmit(session, sessionId, evaluate, deadline, typed) {
+async function typeAndSubmit(session, sessionId, evaluate, deadline, typed, chosen) {
   while (Date.now() < deadline && (await evaluate("document.documentElement.dataset.hydrated ?? null")) === null) {
     await new Promise((resolve) => setTimeout(resolve, 100));
   }
@@ -477,6 +559,7 @@ async function typeAndSubmit(session, sessionId, evaluate, deadline, typed) {
     await evaluate(`document.querySelectorAll('form[role=search] input')[${index}].focus()`);
     await session.send("Input.insertText", { text }, sessionId);
   }
+  if (chosen !== undefined) await evaluate(chooseInSelect(chosen.value));
   await evaluate("document.querySelector('form[role=search] button[type=submit]').click()");
 }
 
@@ -520,34 +603,53 @@ const FOCUSED = `(() => {
 
 /**
  * The keyboard path through a form step: from the top of the page, Tab until each of the form's text
- * fields (text or search) has focus in turn, type into it key by key, then press Enter, which submits
- * the form as a keyboard user submits it. Every focus stop on the way is recorded with whether it
- * shows a focus indicator, and the page counts the character keys it received.
+ * fields (text or search) has focus in turn, type into it key by key, and, when the step chooses an
+ * option, Tab to the form's select and type the first letter of the option's label, as a keyboard user
+ * picks from a closed select. Then press Enter in a text field, which submits the form as a keyboard
+ * user submits it, or, with focus past the text fields, Tab on to the submit button and press Enter on
+ * it. Every focus stop on the way is recorded with whether it shows a focus indicator, and the page
+ * counts the character keys it received.
  */
-async function keyboardTypeAndSubmit(session, sessionId, evaluate, deadline, typed) {
+async function keyboardTypeAndSubmit(session, sessionId, evaluate, deadline, typed, chosen) {
   while (Date.now() < deadline && (await evaluate("document.documentElement.dataset.hydrated ?? null")) === null) {
     await new Promise((resolve) => setTimeout(resolve, 100));
   }
   await evaluate("document.activeElement && document.activeElement.blur(); window.scrollTo(0, 0)");
   await evaluate(COUNT_CHARACTER_KEYS);
   const texts = Array.isArray(typed) ? typed : [typed];
+  const wanted = texts.length + (chosen === undefined ? 0 : 1);
+  const isText = (focused) => focused?.inForm && focused.tag === "input" && (focused.type === "text" || focused.type === "search");
   const stops = [];
-  let placed = 0;
+  let typedFields = 0;
+  let picked = chosen === undefined;
   let characters = 0;
-  for (let tab = 0; tab < 40 && placed < texts.length; tab += 1) {
+  let focused = null;
+  for (let tab = 0; tab < 40 && typedFields + (picked && chosen !== undefined ? 1 : 0) < wanted; tab += 1) {
     await pressKey(session, sessionId, "Tab");
-    const focused = await evaluate(FOCUSED);
+    focused = await evaluate(FOCUSED);
     if (focused === null) continue;
     stops.push(focused);
-    if (focused.inForm && focused.tag === "input" && (focused.type === "text" || focused.type === "search")) {
-      await typeByKeys(session, sessionId, texts[placed]);
-      characters += [...texts[placed]].length;
-      placed += 1;
+    if (isText(focused) && typedFields < texts.length) {
+      await typeByKeys(session, sessionId, texts[typedFields]);
+      characters += [...texts[typedFields]].length;
+      typedFields += 1;
+    } else if (!picked && focused.inForm && focused.tag === "select") {
+      await typeByKeys(session, sessionId, chosen.label.charAt(0));
+      characters += 1;
+      picked = (await evaluate("document.activeElement.value")) === chosen.value;
+    }
+  }
+  const placed = typedFields + (picked && chosen !== undefined ? 1 : 0);
+  if (placed === wanted) {
+    for (let tab = 0; tab < 10 && !isText(focused) && !(focused?.inForm && focused.tag === "button" && focused.type === "submit"); tab += 1) {
+      await pressKey(session, sessionId, "Tab");
+      focused = await evaluate(FOCUSED);
+      if (focused !== null) stops.push(focused);
     }
   }
   const keyPresses = await evaluate("window.__journeyCharacterKeys");
-  if (placed === texts.length) await pressKey(session, sessionId, "Enter");
-  return { stops, placed, wanted: texts.length, characters, keyPresses };
+  if (placed === wanted) await pressKey(session, sessionId, "Enter");
+  return { stops, placed, wanted, characters, keyPresses };
 }
 
 /** The keyboard path to a pin: Tab until a pin has focus, then Space, which checks it. */
@@ -657,8 +759,8 @@ async function observe(browser, pageOrigin, step, { keyboard = false } = {}) {
     const historyAtLoad = await evaluate("history.length");
     const liveRegionAtLoad = await evaluate(ANSWER_LIVE_REGION);
     let keys;
-    if (step.typed !== undefined && keyboard) keys = await keyboardTypeAndSubmit(session, sessionId, evaluate, deadline, step.typed);
-    else if (step.typed !== undefined) await typeAndSubmit(session, sessionId, evaluate, deadline, step.typed);
+    if (step.typed !== undefined && keyboard) keys = await keyboardTypeAndSubmit(session, sessionId, evaluate, deadline, step.typed, step.chosen);
+    else if (step.typed !== undefined) await typeAndSubmit(session, sessionId, evaluate, deadline, step.typed, step.chosen);
     let answerState = null;
     while (Date.now() < deadline) {
       answerState = await evaluate("document.querySelector('[data-answer-state]')?.dataset.answerState ?? null");
@@ -754,7 +856,9 @@ async function verifyCitations(origin, citations) {
       identifier,
       refusal: envelope.refusal?.code ?? (value === null ? `HTTP ${answer.status}` : null),
       verdict: value?.verdict ?? null,
+      publisher: value?.publisher ?? null,
       stateSha256: value?.state_sha256 ?? null,
+      wordingSha256: value?.wording_sha256 ?? null,
       requestedAnchor: value?.requested_anchor ?? null,
     });
   }
@@ -782,7 +886,7 @@ export async function run(apiOutput, mount, expected, browser, liveRoot) {
     const changedFiles = await api.changedFiles();
     observed.api = { startup: api.output().slice(0, api.outputAtStart), output: api.output().slice(api.outputAtStart), changedFiles, fileEvents };
     // Asked once the run's recording is closed, so checking the citations is not the run's traffic.
-    observed.verifications = await verifyCitations(api.origin, observed.citations.filter((citation) => PINNED_PERMALINK.test(citation)));
+    observed.verifications = await verifyCitations(api.origin, observed.citations.filter((citation) => pinnedCitation(citation) !== null));
     return { observed, failures: journeyVerdict(observed, { ...expected, origin: pageOrigin }) };
   } finally {
     if (live !== null) await new Promise((resolve) => live.close(resolve));
@@ -791,14 +895,21 @@ export async function run(apiOutput, mount, expected, browser, liveRoot) {
 }
 
 /**
- * The eight steps against a real mount (`--real-mount`): each page is held to what the API answers its
+ * The steps against a real mount (`--real-mount`): each page is held to what the API answers its
  * request, and to every invariant a run checks. The coverage page must name the mounted corpus and
- * Luxembourg index by the digests the mount's build report records.
+ * Luxembourg index by the digests the mount's build report records. When the build report names an
+ * EU index, the EU search step runs too: the GDPR searched by its CELEX, every EU citation pinned and
+ * verified (`realMountSteps`).
  */
+export function realMountSteps(report) {
+  const steps = Object.entries(JOURNEY_STEPS).map(([name, step]) => [name, step]);
+  return report.europeIndex ? [...steps, ["eu search", EU_SEARCH_STEP], ["eu dossier", EU_DOSSIER_STEP]] : steps;
+}
+
 export async function realMountRuns(apiOutput, mount, options, browser, liveRoot) {
   const report = JSON.parse(await readFile(join(mount, "build-report.json"), "utf8"));
   const runs = [];
-  for (const [name, step] of Object.entries(JOURNEY_STEPS)) {
+  for (const [name, step] of realMountSteps(report)) {
     const digests = name === "coverage" ? { corpusSha256: report.corpus.Sha256, indexSha256: report.luxembourgIndex.Sha256 } : {};
     runs.push([`${name}, with the real mount`, await run(apiOutput, mount, { ...options, step, fromApi: true, ...digests }, browser, liveRoot)]);
   }
@@ -843,6 +954,20 @@ export function fixtureMountExpectations(journeyMount) {
   ];
 }
 
+/**
+ * The EU search step on the fixture mount, which holds no EU index: the page must show the refusal card
+ * `no_corpus_mounted`, naming the EU index as the one missing.
+ */
+export const EU_SEARCH_ON_FIXTURE = Object.freeze({
+  step: EU_SEARCH_STEP,
+  state: "refusal",
+  refusalCode: "no_corpus_mounted",
+  texts: Object.freeze(["This build has no EU index mounted."]),
+});
+
+/** The EU dossier step on the fixture mount, which holds no EU index: the same refusal card. */
+export const EU_DOSSIER_ON_FIXTURE = Object.freeze({ ...EU_SEARCH_ON_FIXTURE, step: EU_DOSSIER_STEP });
+
 /** The eight steps against the fixture mount, each held to `fixtureMountExpectations`. */
 export async function fixtureMountRuns(apiOutput, mount, options, browser, liveRoot) {
   const journeyMount = JSON.parse(await readFile(join(mount, "journey-mount.json"), "utf8"));
@@ -881,6 +1006,9 @@ async function main(argv) {
       results.push([`${name}, with the fixture mount`, await run(apiOutput, mount, { servedByApi, keyboard, ...expected }, browser, liveRoot)]);
       results.push([`${name}, with no mount`, await run(apiOutput, null, { servedByApi, keyboard, step: expected.step, state: "refusal", refusalCode: "no_corpus_mounted" }, browser, liveRoot)]);
     }
+    // The EU steps: the fixture mount holds no EU index, so the EU work is refused for the EU corpus.
+    results.push(["eu search, with the fixture mount", await run(apiOutput, mount, { servedByApi, keyboard, ...EU_SEARCH_ON_FIXTURE }, browser, liveRoot)]);
+    results.push(["eu dossier, with the fixture mount", await run(apiOutput, mount, { servedByApi, keyboard, ...EU_DOSSIER_ON_FIXTURE }, browser, liveRoot)]);
   }
   let failed = false;
   for (const [label, { observed, failures }] of results) {

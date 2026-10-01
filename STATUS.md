@@ -938,11 +938,11 @@ CI evidence are recorded in the pull request before merge.
 
 ## Heads
 
-- `v3/integration`: `8defa6c1` (2026-10-01, PR #846 merged). Build 45 s. Fast lane
+- `v3/integration`: `047152d4` (2026-10-01, PR #854 merged). Build 45 s. Fast lane
   (`eng/test-fast.ps1`): 3,077 tests, 3,076 pass, 1 skipped (the review of PR #828). Ingest suite: green on CI for PR #760
   (the CI `dotnet` job runs the whole solution on every pull request, about 7 min on the runner;
   green for PR #834);
-  locally about 15 min. 980 web tests pass. The web job's "browser debugger never answered" failures
+  locally about 15 min. 990 web tests pass. The web job's "browser debugger never answered" failures
   (keyboard-walk, and paint-check since #811) are fixed by PR #822: each browser binds its own
   debugging port (`launchBrowser`) instead of a random one another browser starting at the same
   moment could hold.
@@ -1191,7 +1191,8 @@ breaks a rule the answer states about itself:
 - `ambiguous_works` (a dated search's works with several applicable states, which contribute no
   hits) and `work_resolution` are read into the view.
 
-An EU search answer (`publisher: "eu-eurlex"`) has another shape and is refused by this reader.
+An EU search answer (`publisher: "eu-eurlex"`) has another shape and is refused by this reader;
+since PR #853 `readEuropeSearch` reads it, beside this one.
 It reads no text snippet, because the answer carries none. The pre-V3 renderer
 `search-results.mjs` (`lex_id`, `provision_num`, a row set) stays for the preview until the live
 search screen replaces it.
@@ -1234,7 +1235,8 @@ breaks a rule the answer states about itself:
 - `not_held` names each item once with its reason. It is carried whole: it is the V3 form of the
   pre-V3 screen's unfilled slots.
 
-An EU dossier (`publisher: "eu-eurlex"`) has another shape and is refused. The fixture holds one
+An EU dossier (`publisher: "eu-eurlex"`) has another shape and is refused by this reader; since PR
+#856 `readEuropeDossier` reads it, beside this one. The fixture holds one
 state and no titles, so the tests also read a work with three states in two languages and a
 titled work, built from the captured answer the way `V3CorpusMount.Dossier` builds them. The
 pre-V3 `dossier.mjs` renderer stays for the preview until the live dossier screen replaces it.
@@ -1249,7 +1251,8 @@ bundle `client-live-dossier.js`, which embeds the contract and nothing else of t
   index holds no title for this work" when none), the state count and range, a table of states
   (language, applicability date, next state, articles held and not admitted, printed permalink),
   and every item the dossier does not hold with its reason.
-- An EU work's dossier is answered in another shape and is said as not shown on this screen.
+- An EU work's dossier is answered in another shape. Until PR #856 it was said as not shown on this
+  screen; it is now laid out in its own words (the EU dossier paragraph below).
 - The envelope census now holds the dossier answer and its four refusals from the real handler. A
   language not held, an EU identifier on a mount without the EU index (`no_corpus_mounted`,
   `required_corpus: "eu"`), and no mount are refusal cards. A `no_corpus_mounted` sentence names
@@ -1964,6 +1967,85 @@ screens refused EU answers by design.
 - On the real bounded first mount, all 60 hits for "personal data" carry a permalink, and every one
   verifies as `digest_matches`.
 
+The search screen reads EU answers (PR #853), the second slice of the EU half of the launch
+screens. Until now the screen refused every EU answer as not Luxembourg's.
+- The form gains an optional work identifier, sent as typed (as the dossier screen sends it), and
+  only when the field is not blank. An EU work is searched by naming it: the platform serves no
+  search across EU works. The next page stays within the work named.
+- `readEuropeSearch` (in `search-answer.mjs`, beside the Luxembourg reader, with the lane, page and
+  population rules both share) holds an EU answer to the rules it states about itself:
+  - one work, one expression and one language, and no date (`requested_date` null, no ambiguous
+    work);
+  - every hit in the one wording the answer pins: the wording permalink
+    `/eu-eurlex/{celex}/{language}/{wording date}--{wording sha256}` agrees with the wording date,
+    the digest and the language asked, and each hit's permalink is it with the provision, escaped as
+    the platform escapes it (RFC 3986);
+  - the EU cursor `lane.article`, the population scope echoing the request, and one work with hits;
+  - the hits' own work and expression IRIs are one work and one expression. The review of #853 found
+    a hit of a second work read as a one-work result, because only the population's count was
+    checked.
+- An answer with hits and no pinned wording is refused rather than shown unpinned: a hit this page
+  shows must pin its wording (driver decision, below).
+- The screen says the pinned wording once above the hits, with the answer's own sentence on what the
+  wording date is. Each hit gives its heading (marked in its language), the CELEX and the wording
+  date, never "version" or an applicability date, and the printed permalink. What the search does
+  not cover (later wordings, corrigenda not applied, other languages, no article text) is listed as
+  the answer lists it.
+- The censuses now hold EU search answers driven on the GDPR fixture mount:
+  - the answer census has four (both lanes for "joint controllers", the first one-hit page, the page
+    its cursor leads to, and no hit);
+  - the envelope census has three (the answer, a language the work is not held in, and an EU
+    identifier the index does not hold).
+  The refusal sentences for `identifier_unknown` and `ambiguous_identifier` have French drafts.
+- The captured answer from the real bounded first mount (60 hits for "personal data", three on the
+  page) reads too.
+
+The EU search journey step (PR #854), the third slice of the EU half of the launch screens, and
+the panel's "journey on the real mount's GDPR".
+- A ninth step, `EU_SEARCH_STEP`, is the search page asked for the GDPR by its CELEX. It types
+  "personal data" and `32016R0679` and chooses English in the form's language select, since the held
+  wording is English. The request body must be exactly the phrase, the language and the work.
+- The verdict reads EU citations. `pinnedCitation` accepts the EU permalink grammar beside
+  Luxembourg's. `verify` must answer for the EU index, name the very wording the citation pins
+  (`wording_sha256`) and the provision it names, unescaped.
+- The keyboard path picks from the closed select as a keyboard user does: Tab to it, then type the
+  option's first letter. Then Tab on to the submit button and press Enter. The select counts among
+  the fields Tab must reach.
+- Where it runs:
+  - the fixture runs add "eu search, with the fixture mount", which must show the refusal card
+    `no_corpus_mounted` saying the EU index is the one missing;
+  - `--real-mount` adds the step when the build report names an EU index (`realMountSteps`).
+- On the real bounded first mount, the EU step ends in the answer with 61 citations: the wording's
+  permalink and the 60 hits' permalinks, every one `digest_matches` by `verify`. That holds in both
+  runs, by pointer and by keyboard (24 of 24 characters typed by key). The other eight steps behave
+  as before on that mount.
+- The fixture journey passes 17 of 17 steps, by pointer and by keyboard.
+
+The EU dossier on the live screen (PR #856), the fourth slice of the EU half of the launch
+screens. Until now the dossier screen said an EU dossier was not shown.
+- The API: each expression of an EU `dossier` answer carries `pinned_wording` (wording date, digest,
+  permalink), the same wording EU search pins. It is null when the expression holds no single
+  wording date. The answer carries the `digest_rule`. The EU index is untouched.
+- `readEuropeDossier` (in `dossier-answer.mjs`, beside the Luxembourg reader; `readDossierAnswer`
+  dispatches on the publisher):
+  - every expression is in a language the work is held in, and in the language asked when one was;
+  - each is listed once, counted, and resolvable by its own IRI;
+  - each is pinned by `/eu-eurlex/{celex}/{language}/{wording date}--{digest}`, whose date is its
+    one wording date. An expression that pins no wording is refused rather than shown unpinned, as
+    in EU search.
+- The screen shows the CELEX, the work IRI, and a table of expressions: language, wording date
+  (never "applies from"), articles held, permalink. It then gives the answer's sentence on what the
+  wording date is, and what the dossier does not hold. The `not_shown` state is gone. The new
+  refusal sentence for `ambiguous_identifier` (one CELEX naming two works) has a French draft.
+- The censuses hold the EU dossier: one answer in the answer census and one envelope. The EU
+  members' object references move per run, as the Luxembourg ones do, so they are normalised; the
+  double-run test found them.
+- The journey gains `EU_DOSSIER_STEP` (the dossier page, the GDPR by its CELEX):
+  - on the real bounded first mount it answers, and its one citation (the expression's wording
+    permalink) verifies, by pointer and by keyboard; all 10 real-mount steps pass in both modes;
+  - on the fixture mount it shows `no_corpus_mounted` naming the EU index; the fixture journey
+    passes 18 of 18 steps, by pointer and by keyboard.
+
 The live export composer and its journey step (PR #789), the eighth screen. `dist-live/export.html`
 has its own bundle `client-live-export.js`.
 - The page asks what the reading page asks: the same form (`ReadingForm`, now shared), the same one
@@ -2670,8 +2752,11 @@ has not yet run; the bounded first mount above is complete.
    decisions (below). The EU permalink grammar is the web lane's since 2026-10-01 (the panel's answer
    to Q-20261001-0108-claude). It works in the API and the web; the EU index schema and the Ingest
    builders stay the data lane's. PR #850: EU hits carry a hash-pinned permalink, and EU `verify`
-   is served over it. Next: the web search reader and screen read EU answers, then the journey on the
-   real mount's GDPR.
+   is served over it. PR #853: the search screen reads and shows EU answers in one named work. PR
+   #854: the journey searches the real mount's GDPR, and `verify` confirms all 61 EU citations the
+   page prints. PR #856: the EU dossier pins each expression's wording, and the dossier screen and
+   journey show it. The EU screens that need dated states (reading, history, compare, radar) wait on
+   consolidation acquisition, as above.
 6. Wire the eight launch screens to `/api/v3`; journeys J1 to J8 in a real browser. PR #763: the
    envelope reader and the client module; PR #764: the live Trust and Coverage component; PR #765:
    its page, the live build and the one-origin server; PR #766: the first browser journey step,
@@ -2800,6 +2885,9 @@ Each is the driver's call under ruling 7 and can be reversed by a later pull req
     its sources were committed, not when it was built. The product reads no file modification time
     (`V3WebRoot` holds the pages in memory), so the choice changes no answer.
 
+- The EU search screen (PR #853): an EU answer whose hits pin no wording is said as unreadable, not
+  shown unpinned, since every citation the live screens show must pin its digest. An EU hit is a
+  "wording of" its date, and the French draft calls the one held wording a "libellé".
 - The EU permalink grammar (PR #850): language as a path segment, not only a parameter, so one
   grammar serves English and French expressions. The wording digest is computed in the API (the
   panel's boundary), not stored in the EU index. If the data lane later stores a wording digest, the

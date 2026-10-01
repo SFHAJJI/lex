@@ -9,7 +9,7 @@
 //   node web/scripts/live-chrome-fr-draft.mjs > chrome-fr.md
 //
 // Vocabulary, as in the refusal drafts: a work is an "acte", a state a "version", the publisher's article id an
-// "identifiant d'article".
+// "identifiant d'article"; the one wording of an EU act the index holds is its "libellé".
 
 import { pathToFileURL } from 'node:url';
 
@@ -45,12 +45,15 @@ export const LIVE_CHROME_FR_DRAFT = Object.freeze({
     noHit: 'Aucun article du texte que ce serveur détient ne contient « {query} ».',
     noText: 'Cet index ne contient aucun texte consultable en {language} ; il contient du texte en {languages}.',
     nextPage: 'Page suivante',
+    euWording: 'Chaque résultat se trouve dans le seul libellé de {celex} que ce serveur détient en {language}, daté du {date} et épinglé par son empreinte : {permalink}',
+    euHit: '{heading} de {celex}, libellé du {date}',
+    notHeldHeading: 'Ce que cette recherche ne couvre pas',
   }),
   dossier: Object.freeze({
     title: 'Dossier',
     eyebrow: 'Dossier',
     heading: 'Le dossier d’un acte',
-    intro: 'Ce que ce serveur détient pour un acte luxembourgeois : ses intitulés, ses versions datées par l’éditeur et ce que le dossier ne contient pas. L’identifiant est envoyé à ce serveur dans la requête et nulle part ailleurs, et cette page ne conserve rien.',
+    intro: 'Ce que ce serveur détient pour un acte : les intitulés et les versions datées par l’éditeur d’un acte luxembourgeois, ou les expressions d’un acte de l’Union européenne et le seul libellé détenu de chacune, et ce que le dossier ne contient pas. L’identifiant est envoyé à ce serveur dans la requête et nulle part ailleurs, et cette page ne conserve rien.',
     idle: 'Saisissez un identifiant d’acte pour consulter ce que ce serveur détient à son sujet.',
     noTitle: 'Cet index ne contient aucun intitulé pour cet acte.',
     shortTitle: '{title} (intitulé abrégé)',
@@ -66,6 +69,11 @@ export const LIVE_CHROME_FR_DRAFT = Object.freeze({
     articlesHeld: 'Articles détenus',
     articlesNotAdmitted: 'Articles non admis',
     notHeldHeading: 'Ce que ce dossier ne contient pas',
+    euExpressions: Object.freeze({
+      one: '{count} expression détenue, dans son seul libellé original.',
+      other: '{count} expressions détenues, chacune dans son seul libellé original.',
+    }),
+    wordingDate: 'Date du libellé',
   }),
   reading: Object.freeze({
     title: 'Lecture',
