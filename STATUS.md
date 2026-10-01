@@ -20,8 +20,19 @@ Reversible driver decision: accept the exact existing authority form or the same
 base followed by the code escaped as one URI path segment. Keep the literal code and original
 carrier unchanged. MA/PART receives no invented label or date role; the accepted table still
 controls interpretation. Wrong bases, other concepts, double escaping and extra URI parts refuse.
-Eleven contract cases cover the two forms and refusals. They are pending local validation behind
-PR #855's cross-family review. Retained full-family decoding will be checked before a fresh full run.
+Eleven contract cases cover the two forms and refusals. At c9d23643, Release build passed with
+no warnings or errors; required fast tests passed (3,116 succeeded, one skipped), and affected
+EU ingest checks passed (19 succeeded). The offline replay at C:/lex-v3/eu-qualifier-replay-20261001-2
+used the product's strict parser on 24 retained date-axiom families, compared 3,390 first-pass rows
+exactly with the second pass, and decoded all 1,166 parents without refusal. Five MA/PART bindings
+kept the unrecognised-code outcome. No publisher requests were made. This diagnostic checks
+retained row equality and decoding; it does not mint new enumeration proofs or a population result.
+The first diagnostic accidentally selected amendment families too; its 44 wrong-family refusals
+are retained in replay-1. The corrected selector matches the exact date-predicate VALUES block.
+
+PR #855 received one documentation repair after cross-family review and awaits final CI/merge.
+The next full EU run still requires this decoder change reviewed, merged and frozen in a fresh
+custody directory, plus the same measured storage allowance and disk guard.
 
 ## EU object-facts continuation range (Codex, 2026-10-01)
 
