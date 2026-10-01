@@ -1011,8 +1011,11 @@ public sealed class VerifiedScopeManifest
     /// then run the existing writer's enumeration, admission, ordering, reduction and accounting
     /// checks, with exact byte comparison and a final digest check. A different document observed
     /// during comparison refuses even if its source evidence is admitted. The receipt does not
-    /// lock the caller's stream against later writes. Working storage is the writer's five-byte projection
-    /// per object, evidence table and current input; caller factories/resolvers may retain more.
+    /// lock the caller's stream against later writes. Working storage includes five projection bytes
+    /// per object, the evidence table, current input, JSON writer buffer and 4 KiB comparison buffer.
+    /// The writer flushes at 64 KiB, but one JSON element can exceed that threshold. Caller factories
+    /// and resolvers may retain more. A source failure can trigger a final writer flush whose byte
+    /// mismatch replaces the original exception; exception type alone does not identify the cause.
     /// Cancellation is checked before and after the initial digest scan and during source replay.
     /// </remarks>
     public static ScopeManifestWriteReceipt VerifyStreamFromSnapshot(

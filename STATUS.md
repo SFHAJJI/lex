@@ -3,36 +3,27 @@
 Updated 2026-10-01 by the driver. This file replaces the issue-comment ledgers. It is rewritten in
 every pull request that changes what is served, what is next or what is blocked.
 
-## Validation during the EU acquisition (Codex, 2026-10-01)
-
-The 10:35 UTC standing order permits current full-suite GitHub CI and a read-only
-cross-family review while available memory is below 4 GB. This branch now includes
-integration65922. Fresh exact-head CI and Claude review are required before merge;
-local Release, fast tests and the separate source-replay measurement remain unrun.
-The measurement is still required before claiming a full Luxembourg memory fit.
-
-
 ## Streaming scope verification from source inputs (Codex, 2026-10-01)
 
-Reversible driver decision: independently replay canonical scope inputs through the existing
-streaming reducer/writer and compare them with retained custody bytes. This checks the complete
-pinned byte sequence without materializing a second scope graph. The new verification method
-returns the existing receipt after digest, UTF-8, exact byte comparison, both source passes and
-all writer admission/accounting checks succeed. Its source factory and evidence resolver must
-come from original source evidence; deriving them from the manifest would be circular.
+The retained manifest can be verified by independently replaying its original source inputs
+through the existing streaming reducer and canonical writer. Acceptance checks the pinned
+digest, UTF-8, complete byte comparison, both source passes and writer admission/accounting.
+It returns the existing digest/count receipt without materializing a second manifest graph.
+The source factory and evidence resolver must come from original evidence; deriving either
+from the manifest under test would be circular.
 
-The draft tests cover parity with both existing writers, short reads, pinned and self-hashed
-mutations, canonical accounting forgery, admitted replacement between passes, fresh admission,
-input count/order/pass drift and cancellation. Local checks and cross-family review are pending.
-At 94884365, remote CI36814003327 built successfully and passed all ingest tests and all eleven
-new scope cases; its sole failure was the new receipt producer missing from the closed census.
-The test printed the actual compiled entry, now transcribed literally. The earlier reversed-input
-exception expectation was corrected; exact retained-prefix comparison refuses it. No census
-assertion was weakened. Fresh CI and required local validation remain pending.
+PR head b3cafcab passed CI 36850031289: 5,289 tests passed, 22 skipped, including all eleven
+new scope cases. Claude returned MERGE with no material findings. The one editorial repair
+clarifies exception precedence and working buffers in the API remarks and records the review.
+Integration c27012f4 is included; final-head CI gates merge under the 10:35 standing order.
+No local Release/fast/ingest run or synthetic source-replay measurement is claimed.
 
-The method retains the writer's five-byte-per-object projection and evidence table; caller inputs
-may retain more. It does not yet connect the production LU adapter or provide a downstream
-bounded manifest view. Full population fit is still unproven.
+The measurement remains required before claiming a full Luxembourg memory fit. Working
+storage includes five projection bytes per object, the evidence table, current input, the
+JSON writer buffer and a 4 KiB comparison buffer. An individual JSON element may exceed the
+writer's 64 KiB flush threshold. Factories and resolvers can retain more. This method is not
+wired into the LU adapter and does not provide a bounded downstream manifest view.
+
 
 ## EU escaped qualifier authority (Codex, 2026-10-01)
 
