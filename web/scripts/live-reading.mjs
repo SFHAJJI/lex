@@ -3,12 +3,12 @@
 // The fourth screen that reads a served answer. It asks `evidence_bundle` with the work identifier
 // and the date the reader typed and, when one is chosen, a language, through the one client module,
 // and turns what comes back into one view state. Every rule about what a bundle may say stays in
-// `reading-answer.mjs` (`readEvidenceBundle`), and every rule about a refusal in `refusal-card.mjs`;
+// `reading-answer.mjs` (`readEvidenceBundleAnswer`: Luxembourg's bundle or the EU's), and every rule about a refusal in `refusal-card.mjs`;
 // this file builds the request, decides which of them a state goes to, and holds the sentences a page
 // needs for the states that carry no answer.
 
 import { askV3 } from "./v3-client.mjs";
-import { readEvidenceBundle } from "./reading-answer.mjs";
+import { readEvidenceBundleAnswer } from "./reading-answer.mjs";
 import { validateRefusal } from "./refusal-card.mjs";
 import { noCorpusMountedSentence, historyBeginsHint } from "./live-refusals.mjs";
 import { isCalendarDate } from "./temporal.mjs";
@@ -92,12 +92,12 @@ export function readingParameters({ identifier, date, language = "" }) {
 
 /**
  * Maps what `askV3` returned to the view: `success` with the reading view (read by
- * `readEvidenceBundle`), `refusal` with the refusal card's inputs, or a state that carries a sentence.
+ * `readEvidenceBundleAnswer`, Luxembourg's or the EU's), `refusal` with the refusal card's inputs, or a state that carries a sentence.
  */
 export function readingOutcome(asked) {
   if (asked.state === "success") {
     try {
-      return { state: "success", view: readEvidenceBundle(asked.envelope.result.value), context: asked.envelope.context };
+      return { state: "success", view: readEvidenceBundleAnswer(asked.envelope.result.value), context: asked.envelope.context };
     } catch (error) {
       return { state: "invalid_envelope", sentence: invalidAnswerSentence(error.message) };
     }

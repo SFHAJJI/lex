@@ -16,6 +16,7 @@
 // watermark, its JSON) is the file's content, shown as the file will hold it, not interface text.
 
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 import test from "node:test";
@@ -65,6 +66,46 @@ async function pseudoBuild() {
     }],
   });
   return import(`${pathToFileURL(OUT).href}?${Date.now()}`);
+}
+
+/**
+ * An EU reading's answer, built by hand in the shape `V3CorpusMount.EvidenceBundleEurope` sends, until the census captures
+ * an EU bundle: the reading and export screens show it, and every word they add to its data must be the table's.
+ */
+function europeReadingEnvelope() {
+  const sha = (text) => createHash("sha256").update(text, "utf8").digest("hex");
+  const permalink = `/eu-eurlex/32016R0679/eng/2016-04-27--${"5".repeat(64)}`;
+  const text = "This Regulation lays down rules relating to the protection of natural persons with regard to the processing of personal data.";
+  return {
+    result: {
+      operation_id: "evidence_bundle",
+      object_type: "evidence_bundle",
+      value: {
+        scope: "the evidence a reader needs to quote the original wording of an EU work",
+        requested_identifier: "32016R0679", requested_date: "2016-04-27", requested_language: "eng", publisher: "eu-eurlex",
+        publisher_work_id: "http://publications.europa.eu/resource/cellar/3e485e15", celex: "32016R0679",
+        available_languages: ["eng"], served_languages: ["eng"],
+        wordings: [{
+          publisher_expression_id: "http://publications.europa.eu/resource/cellar/3e485e15.0006", language: "eng", wording_date: "2016-04-27",
+          wording_sha256: "5".repeat(64), stable_coordinate: "/eu-eurlex/32016R0679/eng/2016-04-27", permalink,
+          sources: [{ object_ref_sha256: "c".repeat(64), outcome: "acquired", body_sha256: "b".repeat(64) }],
+          articles: [{
+            article_identity_sha256: "a".repeat(64), publisher_id: "001", heading: "Subject-matter and objectives", language: "eng", text,
+            text_sha256: sha(text), text_byte_length: Buffer.byteLength(text, "utf8"), body_sha256: "b".repeat(64),
+            official_source: "http://publications.europa.eu/resource/cellar/3e485e15.0006.02/DOC_1", article_permalink: `${permalink}#001`,
+          }],
+          articles_without_text: [{ article_identity_sha256: "e".repeat(64), publisher_id: "099" }],
+        }],
+        acknowledgement: "\u00a9 European Union, https://eur-lex.europa.eu",
+        authenticity: "Only the Official Journal of the European Union published in electronic form is authentic and produces legal effects (Regulation (EU) No 216/2013, Article 1(2)).",
+        rights_rule: "rights are enforced when the bundle is composed", date_rule: "the original wording answers only its own date",
+        date_semantics: "the wording date is the Formex act date", digest_rule: "the wording digest rule", consolidations_held: false,
+        not_held: [{ item: "later_wordings", reason: "no consolidated version is held" }],
+        corpus_sha256: "1".repeat(64), index_sha256: "2".repeat(64),
+      },
+    },
+    context: { publisher: "eu-eurlex" },
+  };
 }
 
 const ENTITIES = { "&amp;": "&", "&lt;": "<", "&gt;": ">", "&quot;": '"', "&#x27;": "'", "&#39;": "'", "&nbsp;": " " };
@@ -205,6 +246,15 @@ test("no interface text on a live page or a census answer bypasses the chrome ta
         scan(`export panel: ${entry.scenario}`, panel.replace(/<pre>[\s\S]*?<\/pre>/, ""), dataOf(entry.envelope, composed.model));
       }
     }
+  }
+  // The EU reading, on the reading screen and in the export composer (which says it is not composed).
+  {
+    const { readingOutcome } = await import(new URL("scripts/live-reading.mjs", web).href);
+    const envelope = europeReadingEnvelope();
+    const outcome = readingOutcome({ state: "success", envelope });
+    assert.equal(outcome.state, "success", "the EU reading reads");
+    scan("reading: an EU original wording", renderToStaticMarkup(h(app.ReadingAnswerView, { outcome })), dataOf(envelope));
+    scan("export: an EU original wording", renderToStaticMarkup(h(app.ExportAnswerView, { outcome, pins: new Set(), onPin: () => {} })), dataOf(envelope));
   }
   assert.deepEqual([...answered].sort(), [...screens.map(([name]) => name), "coverage"].sort(), "every screen had a census answer to scan");
   assert.deepEqual([...refused].sort(), [...screens.map(([name]) => name), "coverage"].sort(), "every screen had a census refusal to scan");
