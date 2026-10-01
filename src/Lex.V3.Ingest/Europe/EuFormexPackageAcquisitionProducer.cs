@@ -64,6 +64,10 @@ public enum EuFormexPackageNotAcquiredReason
     /// <summary>The bound annex evidence was not classified against the PDF route (<c>EuBoundAnnexBodyClassificationRefusal</c> in the detail).</summary>
     [JsonStringEnumMemberName("annex_body_not_classified")]
     AnnexBodyNotClassified = 8,
+
+    /// <summary>The acquisition result could not be retained for independent replay.</summary>
+    [JsonStringEnumMemberName("checkpoint_not_retained")]
+    CheckpointNotRetained = 9,
 }
 
 /// <summary>
@@ -101,6 +105,11 @@ public sealed class EuFormexPackageAcquisitionResult
         ProductRequestCount = productRequestCount;
         AnnexClassification = annexClassification;
     }
+
+    public SourceArtifactRef? CheckpointRef { get; private init; }
+
+    internal EuFormexPackageAcquisitionResult WithCheckpoint(SourceArtifactRef checkpoint) =>
+        new(Outcome, ProductRequestCount, AnnexClassification) { CheckpointRef = checkpoint };
 
     public EuFormexPackageOutcome Outcome { get; }
 
@@ -150,7 +159,7 @@ public sealed class EuFormexPackageAcquisitionResult
 /// Formex package is <c>package_rejected</c> with the inventory producer's refusal.
 /// </para>
 /// </remarks>
-public sealed class EuFormexPackageAcquisitionProducer
+public sealed partial class EuFormexPackageAcquisitionProducer
 {
     /// <summary>
     /// The annex interpretation profile the inventory producer reads, one fixed text: the same rule
@@ -219,12 +228,13 @@ public sealed class EuFormexPackageAcquisitionProducer
     /// <param name="workCelex">The CELEX of the work the run acquired, carried on the annex binding.</param>
     /// <param name="documentFetchRendererSource">The renderer-source artifact of the document-fetch plan.</param>
     /// <param name="wireBudget">The run's one ceiling, robots included.</param>
-    public async Task<EuFormexPackageAcquisitionResult> RunAsync(
+    private async Task<EuFormexPackageAcquisitionResult> RunCoreAsync(
         EuFormexManifestationEnumerationResult enumeration,
         VerifiedCorpusRecordSet? corpusRecordSet,
         string workCelex,
         MachineQueryRendererSource documentFetchRendererSource,
         WireRequestBudget wireBudget,
+        PackageReplayContext context,
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(enumeration);
@@ -297,7 +307,7 @@ public sealed class EuFormexPackageAcquisitionProducer
         }
 
         // ---- The one GET, through the session; robots is evaluated against the manifestation path itself. ----
-        var attempt = await FetchAsync(address, documentFetchRendererSource, wireBudget, cancellationToken).ConfigureAwait(false);
+        var attempt = await FetchAsync(address, documentFetchRendererSource, wireBudget, context, cancellationToken).ConfigureAwait(false);
         if (attempt.Evidence is null)
         {
             return new EuFormexPackageAcquisitionResult(
@@ -365,7 +375,7 @@ public sealed class EuFormexPackageAcquisitionProducer
         // ---- The package names annexes: the annex chain, or a typed reason with the ZIP retained. ----
         var retained = $"the ZIP is retained under {zipReceipt.Reference.ContentSha256}";
         var xhtmlReceipt = heldRecord.Body.Receipt!;
-        var xhtmlProfile = Profile(
+        var xhtmlProfile = context.Profile(
             XhtmlInventoryProfileHeader, "transport_sha256=" + xhtmlReceipt.Reference.ContentSha256, "xhtml_namespace=" + XhtmlNamespace);
         var xhtml = await _xhtmlInventories.RunAsync(xhtmlReceipt, xhtmlProfile.Bytes, xhtmlProfile.Reference, cancellationToken)
             .ConfigureAwait(false);
@@ -391,7 +401,7 @@ public sealed class EuFormexPackageAcquisitionProducer
                 $"the work {workRef.PublisherUri} is not a document-fetch address: {pdfAddressRefusal}; {retained}"), requests);
         }
 
-        var pdfAttempt = await FetchAsync(pdfAddress, documentFetchRendererSource, wireBudget, cancellationToken).ConfigureAwait(false);
+        var pdfAttempt = await FetchAsync(pdfAddress, documentFetchRendererSource, wireBudget, context, cancellationToken).ConfigureAwait(false);
         if (pdfAttempt.Evidence is null)
         {
             return new(EuFormexPackageOutcome.NotAcquired(expression, EuFormexPackageNotAcquiredReason.AnnexPdfNotServed,
@@ -418,7 +428,7 @@ public sealed class EuFormexPackageAcquisitionProducer
                 $"the PDF the office served is not a manifestation of this expression: {pdfManifestationDetail}; {retained}"), requests);
         }
 
-        var reconciliationProfile = Profile(
+        var reconciliationProfile = context.Profile(
             ReconciliationProfileHeader,
             "formex_inventory_sha256=" + inventory.Inventory.IdentitySha256,
             "xhtml_inventory_sha256=" + xhtml.Inventory!.IdentitySha256,
@@ -442,7 +452,7 @@ public sealed class EuFormexPackageAcquisitionProducer
                 $"the PDF requests the session sent are not retained: {officialRequest.Detail ?? terminalRequest.Detail}; {retained}"), requests);
         }
 
-        var classificationProfile = Profile(
+        var classificationProfile = context.Profile(
             ClassificationProfileHeader,
             "binding_identity_sha256=" + bound.Binding.IdentitySha256,
             "pdf_transport_sha256=" + pdfReceipt.Reference.ContentSha256,
@@ -464,11 +474,16 @@ public sealed class EuFormexPackageAcquisitionProducer
         EuDocumentFetchAddress address,
         MachineQueryRendererSource documentFetchRendererSource,
         WireRequestBudget wireBudget,
+        PackageReplayContext context,
         CancellationToken cancellationToken)
     {
+        if (context.IsReplay)
+            return await context.FetchAsync(_custodyStore, address, cancellationToken).ConfigureAwait(false);
         var bound = new EuDocumentFetchPlan(address).Bind(NewUrn(), NewUrn(), documentFetchRendererSource);
-        return await _executor.RunDocumentFetchAsync(bound.Request, bound.Request, wireBudget, cancellationToken)
+        var result = await _executor.RunDocumentFetchAsync(bound.Request, bound.Request, wireBudget, cancellationToken)
             .ConfigureAwait(false);
+        context.Capture(address, result);
+        return result;
     }
 
     private async Task<(HttpLogicalRequest? Request, string? Detail)> TryRestoreRequestAsync(
@@ -533,12 +548,6 @@ public sealed class EuFormexPackageAcquisitionProducer
             detail = exception.Message;
             return null;
         }
-    }
-
-    private static (byte[] Bytes, SourceArtifactRef Reference) Profile(params string[] lines)
-    {
-        var bytes = Encoding.UTF8.GetBytes(string.Join('\n', lines) + "\n");
-        return (bytes, new SourceArtifactRef(NewUrn(), Convert.ToHexStringLower(SHA256.HashData(bytes))));
     }
 
     private static EuFormexPackageAcquisitionResult NotAcquired(

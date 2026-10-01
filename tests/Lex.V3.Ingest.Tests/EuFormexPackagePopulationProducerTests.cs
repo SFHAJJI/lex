@@ -20,7 +20,7 @@ namespace Lex.V3.Ingest.Tests;
 /// </summary>
 [TestClass]
 [DoNotParallelize]
-public sealed class EuFormexPackagePopulationProducerTests
+public sealed partial class EuFormexPackagePopulationProducerTests
 {
     private const string FrenchAuthority = "http://publications.europa.eu/resource/authority/language/FRA";
 
