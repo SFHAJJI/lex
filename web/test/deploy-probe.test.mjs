@@ -14,7 +14,7 @@ import test from "node:test";
 
 import { cspValue } from "../scripts/csp.mjs";
 import { CARD_ROUTE } from "../scripts/evaluation-card.mjs";
-import { deployedReleaseFailures, liveFilesOf, revisionFailures } from "../scripts/deploy-probe.mjs";
+import { REMOTE_PRIVACY_NOTE, browserFailures, deployedReleaseFailures, liveFilesOf, remoteRevision, revisionFailures } from "../scripts/deploy-probe.mjs";
 import { rehearsalKey, signRehearsal } from "../scripts/image-rehearsal.mjs";
 import { writeLayout, writeTar } from "../scripts/image-reproducible.mjs";
 import { ASSETS, imageSignatureAsset, publishRelease, releaseVersion } from "../scripts/release-assets.mjs";
@@ -149,4 +149,35 @@ test("a revision is probed only against a release that reads back under the sign
     await served.close();
     await rm(root, { recursive: true, force: true });
   }
+});
+
+test("the browser probes run the journey's real-mount steps against the revision, through a remote stand-in for its process", async () => {
+  const release = await mkdtemp(join(tmpdir(), "lex-deploy-browser-release-"));
+  try {
+    const report = Buffer.from(JSON.stringify({ corpus: { Sha256: CORPUS }, luxembourgIndex: { Sha256: "d".repeat(64) } }));
+    await writeFile(join(release, ASSETS.mountReport), report);
+    let seen = null;
+    const runs = async (apiOutput, mount, options, browser) => {
+      const { readFile: read, access } = await import("node:fs/promises");
+      seen = { apiOutput, report: await read(join(mount, "build-report.json")), server: await options.startServer(), options, browser, mount };
+      await access(mount);
+      return [["coverage, with the real mount", { failures: [] }], ["search, with the real mount", { failures: ["the page does not name the refusal"] }]];
+    };
+    const failures = await browserFailures("https://candidate.example", release, { browser: "the browser", runs });
+    assert.deepEqual(failures, ["search, with the real mount: the page does not name the refusal"]);
+    assert.equal(seen.apiOutput, null, "no local API is started");
+    assert.ok(seen.report.equals(report), "the release's mount report stands as the build report the steps read");
+    assert.equal(seen.server.origin, "https://candidate.example");
+    assert.equal(seen.options.servedByApi, true, "the revision serves its own pages, so the security headers are held");
+    assert.equal(seen.browser, "the browser");
+    const { existsSync } = await import("node:fs");
+    assert.ok(!existsSync(seen.mount), "the temporary mount report is removed");
+  } finally {
+    await rm(release, { recursive: true, force: true });
+  }
+
+  // The stand-in exposes no process: its privacy record is empty, which proves nothing, and the note says so.
+  const server = remoteRevision("https://candidate.example");
+  assert.deepEqual([server.output(), await server.fileWatch.stop(), await server.changedFiles()], ["", [], []]);
+  assert.match(REMOTE_PRIVACY_NOTE, /privacy is not observed here/);
 });
