@@ -87,6 +87,7 @@ public sealed class GuardedConstructionCensusTests
                     + "method private instance Lex.V3.Api.V3CorpusMount::RouteEuropeSearch, "
                     + "method private instance Lex.V3.Api.V3CorpusMount::SearchEurope, "
                     + "method private instance Lex.V3.Api.V3CorpusMount::Unknown, "
+                    + "method private instance Lex.V3.Api.V3CorpusMount::VerifyEurope, "
                     + "method public instance Lex.V3.Api.V3CorpusMount::AnswerDrift, "
                     + "method public instance Lex.V3.Api.V3CorpusMount::ArticleHistory, "
                     + "method public instance Lex.V3.Api.V3CorpusMount::AsOf, "
