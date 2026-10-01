@@ -2,6 +2,8 @@ using System.Reflection;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Nodes;
+using Lex.V3.Contracts;
 using Lex.V3.Contracts.Custody;
 using Lex.V3.Contracts.Derivation;
 using Lex.V3.Contracts.Source.Absence;
@@ -23,6 +25,19 @@ public sealed class EuFormexManifestationEnumerationProducerTests
     private const string ManifestationA2 = ExpressionA + ".02";
     private const string XsdString = "http://www.w3.org/2001/XMLSchema#string";
     private const string XsdInteger = "http://www.w3.org/2001/XMLSchema#integer";
+
+    [TestMethod]
+    public async Task NullManifestationCheckpointRefusesBeforeAnyReplayWrites()
+    {
+        var store = new EuAcquisitionTestFixture.EuInMemoryCustodyStore();
+        var receipt = await store.CreateAsync("null"u8.ToArray(), CustodyClass.NightlyFloor90d, CancellationToken.None);
+        var checkpoint = new SourceArtifactRef($"urn:uuid:{Guid.NewGuid():D}", receipt.Reference.ContentSha256);
+        var expected = new SourceArtifactRef($"urn:uuid:{Guid.NewGuid():D}", new string('a', 64));
+        var writes = store.WrittenDigestsInOrder.Count;
+        await Assert.ThrowsExactlyAsync<CustodyIntegrityException>(() => EuFormexManifestationEnumerationProducer.ReopenAsync(
+            store, checkpoint, Expression(ExpressionA), expected, expected, CancellationToken.None));
+        Assert.AreEqual(writes, store.WrittenDigestsInOrder.Count);
+    }
 
     [TestMethod]
     public void ACompleteExpressionAnswerCarriesEveryTypeAndFindsFormexExactly()
@@ -498,6 +513,150 @@ public sealed class EuFormexManifestationEnumerationProducerTests
         };
         return "{" + string.Join(',', values.Select(value =>
             JsonSerializer.Serialize(value.Key) + ":" + value.Value)) + "}";
+    }
+
+    [TestMethod]
+    [DataRow(0, false)]
+    [DataRow(1, false)]
+    [DataRow(1, true)]
+    public async Task RetainedManifestationsReopenTwiceWithoutTraffic(int count, bool unenforced)
+    {
+        var (store, result, handler) = await AcquireCheckpointAsync(count);
+        var copy = await CopyCheckpointStoreAsync(store, unenforced: unenforced);
+        var sends = handler.FamilySequence.Count;
+        var first = await ReopenCheckpointAsync(copy, result);
+        var second = await ReopenCheckpointAsync(copy, result);
+        Assert.IsTrue(first.Delivered, first.Detail);
+        Assert.AreSame(result.Expression, first.Expression);
+        Assert.AreEqual(ContractJson.Serialize(result.ManifestationTypes), ContractJson.Serialize(first.ManifestationTypes));
+        Assert.AreEqual(ContractJson.Serialize(first.ManifestationTypes), ContractJson.Serialize(second.ManifestationTypes));
+        Assert.AreEqual(result.Proof!.AcquisitionRunRef, first.Proof!.AcquisitionRunRef);
+        Assert.AreEqual(unenforced ? CustodyMembership.RetainedUnenforced : CustodyMembership.Floored, first.Proof.RetainedFloor);
+        Assert.AreEqual(0, first.ProductRequestCount);
+        Assert.AreEqual(0, first.WireBudget.Spent);
+        Assert.AreEqual(sends, handler.FamilySequence.Count);
+        Assert.AreEqual(result.CheckpointRef, first.CheckpointRef);
+    }
+
+    [TestMethod]
+    [DataRow("root")]
+    [DataRow("enumeration")]
+    [DataRow("renderer")]
+    public async Task MissingManifestationCheckpointInputsRefuse(string missing)
+    {
+        var (store, result, _) = await AcquireCheckpointAsync(1);
+        var root = await CheckpointRootAsync(store, result);
+        var digest = missing == "root" ? result.CheckpointRef!.Sha256 : root[missing]!["sha256"]!.GetValue<string>();
+        var copy = await CopyCheckpointStoreAsync(store, omit: digest);
+        await Assert.ThrowsExactlyAsync<CustodyRequiredException>(() => ReopenCheckpointAsync(copy, result));
+    }
+
+    [TestMethod]
+    [DataRow("run")]
+    [DataRow("profile")]
+    [DataRow("expression")]
+    public async Task ReopenBindsTheCallersRunProfileAndExpressionContent(string changed)
+    {
+        var (store, result, _) = await AcquireCheckpointAsync(1);
+        var other = new SourceArtifactRef($"urn:uuid:{Guid.NewGuid():D}", new string('a', 64));
+        await Assert.ThrowsExactlyAsync<CustodyIntegrityException>(() => EuFormexManifestationEnumerationProducer.ReopenAsync(
+            store, result.CheckpointRef!, changed == "expression" ? Expression(ExpressionA, "http://publications.europa.eu/resource/authority/language/FRA") : result.Expression,
+            changed == "run" ? other : result.Proof!.AcquisitionRunRef,
+            changed == "profile" ? other : result.Proof!.InterpretationProfileRef, CancellationToken.None));
+    }
+
+    [TestMethod]
+    [DataRow("schema")]
+    [DataRow("types")]
+    [DataRow("expression")]
+    [DataRow("plan")]
+    [DataRow("renderer")]
+    [DataRow("another_expression")]
+    public async Task RehashedManifestationCheckpointCannotOverrideOriginalBindings(string changed)
+    {
+        var (store, result, _) = await AcquireCheckpointAsync(1);
+        var root = await CheckpointRootAsync(store, result);
+        var expression = result.Expression;
+        switch (changed)
+        {
+            case "schema": root["schema"] = "lex-eu-formex-enumeration-checkpoint/99"; break;
+            case "types": root["types_sha256"] = new string('a', 64); break;
+            case "expression": root["expression_sha256"] = new string('a', 64); break;
+            case "plan": root["plan_resource_id"] = $"urn:uuid:{Guid.NewGuid():D}"; break;
+            case "renderer": root["renderer"]!["resource_id"] = $"urn:uuid:{Guid.NewGuid():D}"; break;
+            case "another_expression": expression = Expression(ExpressionB); root["expression_sha256"] = expression.CanonicalContentSha256; break;
+        }
+        var held = await store.CreateAsync(Encoding.UTF8.GetBytes(root.ToJsonString()), CustodyClass.NightlyFloor90d, CancellationToken.None);
+        await Assert.ThrowsExactlyAsync<CustodyIntegrityException>(() => EuFormexManifestationEnumerationProducer.ReopenAsync(
+            store, new SourceArtifactRef($"urn:uuid:{Guid.NewGuid():D}", held.Reference.ContentSha256), expression,
+            result.Proof!.AcquisitionRunRef, result.Proof.InterpretationProfileRef, CancellationToken.None));
+    }
+
+    [TestMethod]
+    public async Task CancelledManifestationRestoreDoesNotWriteOrSend()
+    {
+        var (store, result, handler) = await AcquireCheckpointAsync(1);
+        using var cancellation = new CancellationTokenSource();
+        cancellation.Cancel();
+        var writes = store.CreateCallCount;
+        var sends = handler.FamilySequence.Count;
+        await Assert.ThrowsExactlyAsync<OperationCanceledException>(() => EuFormexManifestationEnumerationProducer.ReopenAsync(
+            store, result.CheckpointRef!, result.Expression, result.Proof!.AcquisitionRunRef,
+            result.Proof.InterpretationProfileRef, cancellation.Token));
+        Assert.AreEqual(writes, store.CreateCallCount);
+        Assert.AreEqual(sends, handler.FamilySequence.Count);
+    }
+
+    [TestMethod]
+    public async Task AFailedManifestationCheckpointHoldIsTyped()
+    {
+        var (_, result, _) = await AcquireCheckpointAsync(1, failCheckpoint: true);
+        Assert.IsFalse(result.Delivered);
+        Assert.AreEqual(EuFormexManifestationEnumerationRefusal.CheckpointNotRetained, result.Refusal);
+        Assert.IsNull(result.CheckpointRef);
+        StringAssert.Contains(result.Detail!, "hold refused");
+    }
+
+    private static Task<EuFormexManifestationEnumerationResult> ReopenCheckpointAsync(ICustodyStore store,
+        EuFormexManifestationEnumerationResult result) => EuFormexManifestationEnumerationProducer.ReopenAsync(
+            store, result.CheckpointRef!, result.Expression, result.Proof!.AcquisitionRunRef,
+            result.Proof.InterpretationProfileRef, CancellationToken.None);
+
+    private static async Task<JsonNode> CheckpointRootAsync(ICustodyStore store, EuFormexManifestationEnumerationResult result) =>
+        JsonNode.Parse(Encoding.UTF8.GetString((await store.ReadByDigestAsync(result.CheckpointRef!.Sha256, CancellationToken.None)).Span))!;
+
+    private static async Task<EuAcquisitionTestFixture.EuInMemoryCustodyStore> CopyCheckpointStoreAsync(
+        EuAcquisitionTestFixture.EuInMemoryCustodyStore source, string? omit = null, bool unenforced = false)
+    {
+        var copy = new EuAcquisitionTestFixture.EuInMemoryCustodyStore(unenforceDigest: _ => unenforced);
+        foreach (var digest in source.WrittenDigestsInOrder.Distinct().Where(digest => digest != omit))
+            await copy.CreateAsync(await source.ReadByDigestAsync(digest, CancellationToken.None), CustodyClass.NightlyFloor90d, CancellationToken.None);
+        return copy;
+    }
+
+    private static async Task<(EuAcquisitionTestFixture.EuInMemoryCustodyStore Store,
+        EuFormexManifestationEnumerationResult Result, EuAcquisitionTestFixture.ClassifyingHandler Handler)> AcquireCheckpointAsync(
+            int count, bool failCheckpoint = false)
+    {
+        var expression = Expression(ExpressionA);
+        var plan = EuFormexManifestationDiscoveryPlan.Create();
+        var page = EuAcquisitionTestFixture.RowsJson(plan.CreateDeliveryProfile().ProjectionVariables,
+            count == 0 ? [] : [JsonRow(expression, "fmx4")]);
+        var handler = new EuAcquisitionTestFixture.ClassifyingHandler(new Dictionary<string, EuAcquisitionTestFixture.FamilyScript>(StringComparer.Ordinal)
+        {
+            ["M"] = new("M", [EuAcquisitionTestFixture.EuCountJson(count), page, EuAcquisitionTestFixture.EuCountJson(count), page]),
+        });
+        var store = new EuAcquisitionTestFixture.EuInMemoryCustodyStore(failSchema: failCheckpoint ? "lex-eu-formex-enumeration-checkpoint/1" : null);
+        var producer = new EuFormexManifestationEnumerationProducer(store, new EuAcquisitionTestFixture.FixedTimeProvider(), handler);
+        var result = await producer.RunAsync(new EuFormexManifestationRunRequest(plan, expression,
+            "urn:uuid:5c30aa43-66fb-4a16-9e25-c5c02558d337", EuAcquisitionTestFixture.BuildRendererSource(9811), WireRequestBudget.OfWireRequests(20)),
+            EuAcquisitionTestFixture.SourceWitness(), CancellationToken.None);
+        if (!failCheckpoint)
+        {
+            Assert.IsTrue(result.Delivered, result.Detail);
+            Assert.IsNotNull(result.CheckpointRef);
+        }
+        return (store, result, handler);
     }
 
     private static LanguageScopedExpression Expression(

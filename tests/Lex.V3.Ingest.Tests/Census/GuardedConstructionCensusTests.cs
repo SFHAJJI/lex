@@ -263,17 +263,7 @@ public sealed class GuardedConstructionCensusTests
                     + "instance Lex.V3.Ingest.Europe.EuFormexMainBodyLegalContentPopulation::.ctor, "
                     + "method public instance "
                     + "Lex.V3.Ingest.Europe.EuFormexMainBodyLegalContentProducer::RunAsync",
-                "Lex.V3.Ingest.Europe.EuFormexManifestationEnumerationResult: constructor private "
-                    + "instance Lex.V3.Ingest.Europe.EuFormexManifestationEnumerationResult::.ctor, "
-                    + "method internal static "
-                    + "Lex.V3.Ingest.Europe.EuFormexManifestationEnumerationProducer::DecodeRows, "
-                    + "method internal static "
-                    + "Lex.V3.Ingest.Europe.EuFormexManifestationEnumerationResult::Refused, "
-                    + "method internal static "
-                    + "Lex.V3.Ingest.Europe.EuFormexManifestationEnumerationResult::Success, "
-                    + "method public instance "
-                    + "Lex.V3.Ingest.Europe.EuFormexManifestationEnumerationProducer::RunAsync, "
-                    + "1 compiler-generated",
+                "Lex.V3.Ingest.Europe.EuFormexManifestationEnumerationResult: constructor private instance Lex.V3.Ingest.Europe.EuFormexManifestationEnumerationResult::.ctor, method internal instance Lex.V3.Ingest.Europe.EuFormexManifestationEnumerationResult::WithCheckpoint, method internal static Lex.V3.Ingest.Europe.EuFormexManifestationEnumerationProducer::DecodeRows, method internal static Lex.V3.Ingest.Europe.EuFormexManifestationEnumerationResult::Refused, method internal static Lex.V3.Ingest.Europe.EuFormexManifestationEnumerationResult::Success, method private static Lex.V3.Ingest.Europe.EuFormexManifestationEnumerationProducer::DeriveAsync, method public instance Lex.V3.Ingest.Europe.EuFormexManifestationEnumerationProducer::RunAsync, method public static Lex.V3.Ingest.Europe.EuFormexManifestationEnumerationProducer::ReopenAsync, 1 compiler-generated",
                 "Lex.V3.Ingest.Europe.EuFormexPackageOutcome: constructor private instance "
                     + "Lex.V3.Ingest.Europe.EuFormexPackageOutcome::.ctor, "
                     + "method public static Lex.V3.Ingest.Europe.EuFormexPackageOutcome::Acquired, "
