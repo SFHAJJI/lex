@@ -1,3 +1,5 @@
+using System.Text;
+using Microsoft.Data.Sqlite;
 using System.Net;
 using System.Security.Cryptography;
 using Lex.V3.Contracts;
@@ -55,6 +57,7 @@ public sealed class EuropeIndexBuilderTests
             corpus.VerifiedSet.Set.Members.Count(static member => member.Publisher == PublisherId.EuEurLex),
             reader.MemberCount);
         Assert.AreEqual(0, reader.ArticleCount);
+        Assert.IsTrue(reader.HasArticleByteDigests);
         Assert.AreEqual(0, first.CapabilityManifest.Cells.Count);
     }
 
@@ -119,11 +122,17 @@ public sealed class EuropeIndexBuilderTests
         using var reader = EuropeIndexReader.OpenAndVerify(
             built.IndexRef, built.IndexBytes.Span, corpus.ArtifactRef, built.CapabilityManifest);
         Assert.IsTrue(reader.HasArticleSourceEvidence);
+        Assert.IsTrue(reader.HasArticleByteDigests);
         var admitted = envelope.BodyComposition.Envelope.FormexMainBodyLegalContent!.Outcomes
             .Single(static value => value.Disposition == EuFormexMainBodyLegalContentDisposition.Admitted);
         var inventory = admitted.Source.AcquiredInventory!;
         foreach (var article in admitted.Articles)
         {
+            var digests = reader.ReadArticleByteDigests(article.IdentitySha256);
+            Assert.IsNotNull(digests);
+            Assert.AreEqual(article.IdentitySha256, digests.ArticleIdentitySha256);
+            Assert.AreEqual(article.SourceEntrySha256, digests.SourceEntrySha256);
+            Assert.AreEqual(Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(article.SearchableText))), digests.TextSha256);
             var evidence = reader.ReadArticleSourceEvidence(article.IdentitySha256);
             Assert.IsNotNull(evidence);
             Assert.AreEqual(inventory.SourceReceipt.Reference.ContentSha256, evidence.PackageSha256);
@@ -137,6 +146,7 @@ public sealed class EuropeIndexBuilderTests
             Assert.AreEqual(article.IdentitySha256, evidence.ArticleIdentitySha256);
         }
         Assert.IsNull(reader.ReadArticleSourceEvidence(new string('0', 64)));
+        Assert.IsNull(reader.ReadArticleByteDigests(new string('0', 64)));
     }
 
     [TestMethod]
@@ -176,10 +186,114 @@ public sealed class EuropeIndexBuilderTests
             new SourceArtifactRef(LexCorpus6Builder.ResourceIdOf(corpusSha), corpusSha), capability);
         Assert.AreEqual(198, reader.ArticleCount);
         Assert.IsFalse(reader.HasArticleSourceEvidence);
+        Assert.IsFalse(reader.HasArticleByteDigests);
         CollectionAssert.AreEqual(new[] { "eng", "fra" }, reader.SearchableLanguages().ToArray());
         var article = reader.ResolveExact("32016R0679").First().ArticleIdentities.First();
         Assert.IsNull(reader.ReadArticleSourceEvidence(article));
+        Assert.IsNull(reader.ReadArticleByteDigests(article));
     }
+
+    [TestMethod]
+    [DataRow(false)]
+    [DataRow(true)]
+    public void Schema3SourceCoordinatesRemainReadableWithoutInventingByteDigests(bool carriageReturnSchema)
+    {
+        var bytes = EuropeIndexBuilder.BuildFixedInputDeterminismEvidence();
+        var path = Path.Combine(Path.GetTempPath(), $"lex-v3-schema3-test-{Guid.NewGuid():N}.sqlite");
+        try
+        {
+            File.WriteAllBytes(path, bytes);
+            EuropeIndexBuilder.ArticleRow[] articles;
+            using (var connection = EuropeIndexBuilder.Open(path, SqliteOpenMode.ReadWrite))
+            {
+                articles = ReadRows<EuropeIndexBuilder.ArticleRow>(connection, "ReadArticles");
+                var logical = EuropeIndexBuilder.HashLogicalRows(
+                    ReadRows<EuropeIndexBuilder.MemberRow>(connection, "ReadMembers"),
+                    ReadRows<EuropeIndexBuilder.CorrigendumLineRow>(connection, "ReadLines"),
+                    ReadRows<EuropeIndexBuilder.CorrigendumGapRow>(connection, "ReadGaps"), articles,
+                    ReadRows<EuropeIndexBuilder.ArticleSourceRow>(connection, "ReadArticleSources"));
+                EuropeIndexBuilder.Execute(connection, "DROP TABLE article_digests; PRAGMA user_version=3;");
+                using var command = connection.CreateCommand();
+                command.CommandText = "UPDATE stamp SET schema_identity='lex-v3-europe-index/3',logical_rows_sha256=$logical";
+                command.Parameters.AddWithValue("$logical", logical);
+                command.ExecuteNonQuery();
+                if (carriageReturnSchema)
+                    EuropeIndexBuilder.Execute(connection, "PRAGMA writable_schema=ON; UPDATE sqlite_schema SET sql=replace(sql,char(10),char(13)||char(10)) WHERE sql IS NOT NULL; PRAGMA writable_schema=OFF;");
+            }
+            bytes = File.ReadAllBytes(path);
+            var sha = Convert.ToHexStringLower(SHA256.HashData(bytes));
+            var corpusSha = new string('a', 64);
+            using var reader = EuropeIndexReader.OpenAndVerify(new(LexCorpus6Builder.ResourceIdOf(sha), sha), bytes,
+                new(LexCorpus6Builder.ResourceIdOf(corpusSha), corpusSha), EuropeIndexBuilder.MeasureCapabilities(sha, articles));
+            Assert.IsTrue(reader.HasArticleSourceEvidence);
+            Assert.IsFalse(reader.HasArticleByteDigests);
+            Assert.AreEqual(1, reader.ArticleCount);
+            Assert.IsNotNull(reader.ReadArticleSourceEvidence(new string('5', 64)));
+            Assert.IsNull(reader.ReadArticleByteDigests(new string('5', 64)));
+        }
+        finally { EuropeIndexBuilder.DeleteDatabase(path); }
+    }
+
+    [TestMethod]
+    [DataRow("UPDATE article_digests SET source_entry_sha256=printf('%064d',0)")]
+    [DataRow("UPDATE article_digests SET text_sha256=printf('%064d',0)")]
+    [DataRow("UPDATE article_digests SET source_entry_sha256=upper(source_entry_sha256)")]
+    [DataRow("DELETE FROM article_digests WHERE rowid=(SELECT min(rowid) FROM article_digests)")]
+    [DataRow("PRAGMA user_version=3")]
+    [DataRow("UPDATE stamp SET schema_identity='lex-v3-europe-index/3'")]
+    public async Task ReaderRejectsChangedMissingOrMixedByteDigests(string sql)
+    {
+        var envelope = await RetainedGdprEnvelopeAsync();
+        var built = EuropeIndexBuilder.TryBuild(envelope, out var refusal, out var detail);
+        Assert.IsNotNull(built, $"{refusal}: {detail}");
+        var corpus = LexCorpus6Builder.TryBuild(envelope, out _, out _)!;
+        AssertHostileDatabaseRefused(built, corpus.ArtifactRef, sql);
+    }
+
+    [TestMethod]
+    [DataRow("UPDATE article_digests SET text_sha256=printf('%064d',0)", "text does not match")]
+    [DataRow("UPDATE article_digests SET source_entry_sha256=printf('%064d',0) WHERE rowid=(SELECT min(rowid) FROM article_digests)", "same source entry")]
+    public async Task LogicalRestampingCannotHideTextMismatchOrConflictingEntryDigests(string sql, string expectedMessage)
+    {
+        var envelope = await RetainedGdprEnvelopeAsync();
+        var built = EuropeIndexBuilder.TryBuild(envelope, out var refusal, out var detail);
+        Assert.IsNotNull(built, $"{refusal}: {detail}");
+        var corpus = LexCorpus6Builder.TryBuild(envelope, out _, out _)!;
+        var path = Path.Combine(Path.GetTempPath(), $"lex-v3-digest-restamp-{Guid.NewGuid():N}.sqlite");
+        try
+        {
+            File.WriteAllBytes(path, built.IndexBytes.ToArray());
+            using (var connection = EuropeIndexBuilder.Open(path, SqliteOpenMode.ReadWrite))
+            {
+                EuropeIndexBuilder.Execute(connection, sql);
+                var logical = EuropeIndexBuilder.HashLogicalRows(
+                    ReadRows<EuropeIndexBuilder.MemberRow>(connection, "ReadMembers"),
+                    ReadRows<EuropeIndexBuilder.CorrigendumLineRow>(connection, "ReadLines"),
+                    ReadRows<EuropeIndexBuilder.CorrigendumGapRow>(connection, "ReadGaps"),
+                    ReadRows<EuropeIndexBuilder.ArticleRow>(connection, "ReadArticles"),
+                    ReadRows<EuropeIndexBuilder.ArticleSourceRow>(connection, "ReadArticleSources"),
+                    ReadRows<EuropeIndexBuilder.ArticleDigestRow>(connection, "ReadArticleDigests"));
+                using var command = connection.CreateCommand();
+                command.CommandText = "UPDATE stamp SET logical_rows_sha256=$logical";
+                command.Parameters.AddWithValue("$logical", logical);
+                command.ExecuteNonQuery();
+            }
+            var bytes = File.ReadAllBytes(path);
+            var sha = Convert.ToHexStringLower(SHA256.HashData(bytes));
+            Assert.IsTrue(V3IndexCapabilityManifest.TryCreate(PublisherId.EuEurLex, sha,
+                built.CapabilityManifest.Cells.Select(cell => new V3IndexCapabilityCell(cell.Publisher, sha,
+                    cell.Operation, cell.Column, cell.Field, cell.Language, cell.PeriodFrom, cell.PeriodTo,
+                    cell.Population)).ToArray(), out var manifest, out _));
+            var exception = Assert.ThrowsExactly<InvalidDataException>(() => EuropeIndexReader.OpenAndVerify(
+                new(LexCorpus6Builder.ResourceIdOf(sha), sha), bytes, corpus.ArtifactRef, manifest!));
+            StringAssert.Contains(exception.Message, expectedMessage);
+        }
+        finally { EuropeIndexBuilder.DeleteDatabase(path); }
+    }
+
+    private static T[] ReadRows<T>(SqliteConnection connection, string method) =>
+        (T[])typeof(EuropeIndexReader).GetMethod(method,
+            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)!.Invoke(null, [connection])!;
 
     [TestMethod]
     [DataRow("UPDATE article_sources SET package_sha256=printf('%064d',0)")]

@@ -3,6 +3,31 @@
 Updated 2026-10-01 by the driver. This file replaces the issue-comment ledgers. It is rewritten in
 every pull request that changes what is served, what is next or what is blocked.
 
+## EU XML-entry and article-text byte digests (Codex, 2026-10-01)
+
+Reversible driver decision: the Formex producer hashes the exact decompressed ACT entry bytes,
+including encoding, BOM and comments, and separately hashes its existing SearchableText as UTF-8
+without a BOM or added newline. The bounded source-entry read checks cancellation and the declared
+length. Semantic article identity remains unchanged. The ZIP digest remains a separate package
+coordinate; source-entry digest is not taken from the separately acquired XHTML body.
+
+Schema 4 stores one digest row for each indexed article and binds the rows in the logical hash.
+Reopen verifies exact coverage, lowercase SHA-256 values, each text digest against stored text, and
+consistent source-entry digests for articles from the same package and entry. Reader access exposes
+these named coordinates without adding public quote, citation or verify operations. Reopening an
+index does not independently reopen its source ZIP; that remains the original custody/replay chain.
+Schema 2 and 3 mounts keep their exact schema, logical hash, provenance and capability checks;
+the new digest capability is unavailable for those versions. The running full EU build is frozen
+at schema 3 and remains readable. No source byte coordinate is invented for its existing rows.
+
+Tests add exact source-byte mutations (comments, BOM and line endings), an annex-only ZIP change,
+an article text change, English/French producer-to-index binding, schema 3 LF/CRLF compatibility,
+missing/substituted/version-mixed digests, and hostile logical restamping. The actual schema 2
+bilingual fixture is retained. The synthetic mount ambiguity fixtures explicitly populate their
+own synthetic source/digest rows. Compilation, a fresh deterministic byte pin, required fast and
+affected ingest validation remain queued behind full EU acquisition and the Luxembourg dependency
+slice. No validation success or full EU completion is claimed yet.
+
 ## EU article source coordinates (Codex, 2026-10-01)
 
 Reversible driver decision: schema 3 preserves the admitted Formex package SHA-256 and checked
