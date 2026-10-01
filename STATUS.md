@@ -11,10 +11,11 @@ On equality it preserves that reference and repeats normal current-store holds a
 readback. Ordinary acquisition still mints a new set identity. This closes one identity boundary
 needed by LU offline replay; the containing catalog must still prove its observation inputs.
 
-Thirteen draft cases cover empty/single/3,000-object sets in two separate stores, reordered and
+Thirteen cases cover empty/single/3,000-object sets in two separate stores, reordered and
 duplicate inputs, current weaker protection, changed digest/run/objects before writes, failed
-holds, cancellation, missing original identity and ordinary new identities. Source is uncompiled;
-full remote CI and read-only Claude review remain required. Local Release/fast/ingest checks are
+holds, cancellation, missing original identity and ordinary new identities. Initial CI36861974288 compiled and passed all13 new cases:5,398 passed/22 skipped, one
+construction inventory failure. Its exact compiled writer-method row is now transcribed. Fresh
+full CI and read-only Claude review remain required. Local Release/fast/ingest checks are
 deferred under the acquisition memory guard. The writer still buffers its whole canonical set;
 this is neither a complete LU acquisition replay nor a full-population memory-fit measurement.
 
