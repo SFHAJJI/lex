@@ -16,22 +16,25 @@ The acquisition adapter now uses this component. Eight new cases cover range bou
 shared descendants, literal/non-WEMI links, missing targets, original-Act qualification and lookup
 substitution. Clean Release build passed with no warnings/errors; required fast tests passed
 (3,085 succeeded, one skipped), and affected ingest tests passed (133 succeeded, two skipped),
-including the existing population acquisition/corpus cases. This is a dependency boundary for disk-backed derivation: dictionaries and
-the complete scope graph are still retained. It does not establish full Luxembourg memory fit or
+including the existing population acquisition/corpus cases. This creates a dependency boundary
+for disk-backed derivation; dictionaries and the complete scope graph are still retained. It does not establish full Luxembourg memory fit or
 permit separate range corpora to be concatenated without complete enumeration verification.
 
+## EU retry 4 evidence and continuation repair (Codex, 2026-10-01)
+
 Full EU retry 4 ended with ObjectFactsFamilyNotProven after 1,359 wire requests from frozen
-source 18b53941 in
-C:/lex-v3/eu-population-20261001-2, all 82 requested seeds and a 20,000-request ceiling. No complete population was produced.
-One retained object-facts batch has equal COUNT values of 678 and equal unique row sets, but
-its second pass repeats seven rows across the continuation boundary; the cause is under investigation.
-The disk guard did not stop the run (minimum sampled free space 5,981,491,200 bytes). The fresh three-family
-maintenance census passed with 22 of 60 allowed wire requests; every attempt was zero, so it did
-not exercise a live retry. All proof rows and retained HTTP body hashes were independently reopened.
-PRs #840 and #843 are merged after cross-family review and exact-head green CI. The full run started
-with 6,653,554,688 free bytes against the recorded 6,474,369,248-byte physical storage estimate,
-including a 3 GiB floor and 512 MiB stop margin. Resource monitoring continues; no full-population
-success is claimed. Original refusal evidence and frozen input snapshots remain retained.
+source 18b53941 in C:/lex-v3/eu-population-20261001-2. It requested all 82 seeds with a
+20,000-request ceiling and produced no complete population. One retained object-facts batch
+has equal COUNT values of 678 and equal unique row sets, but its second pass repeats seven rows
+across the continuation boundary. PR #852 carries the correction and separate bounded proof.
+The disk guard did not stop retry 4; minimum sampled free space was 5,981,491,200 bytes.
+
+The preceding three-family maintenance census passed with 22 of 60 allowed wire requests.
+Every attempt was zero, so that probe did not exercise a live retry. All proof rows and retained
+HTTP body hashes were independently reopened. PRs #840 and #843 merged after cross-family
+review and green CI on their exact heads. Retry 4 started with 6,653,554,688 free bytes against
+the recorded 6,474,369,248-byte estimate, including a 3 GiB floor and 512 MiB stop margin.
+The resource logs, refusal evidence and frozen input snapshots are retained.
 
 ## EU article source coordinates (Codex, 2026-10-01)
 
