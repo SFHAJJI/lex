@@ -695,7 +695,7 @@ CI evidence are recorded in the pull request before merge.
 
 ## Heads
 
-- `v3/integration`: `398f936e` (2026-10-01, PR #839 merged). Build 45 s. Fast lane
+- `v3/integration`: `a1752729` (2026-10-01, PR #840 merged). Build 45 s. Fast lane
   (`eng/test-fast.ps1`): 3,077 tests, 3,076 pass, 1 skipped (the review of PR #828). Ingest suite: green on CI for PR #760
   (the CI `dotnet` job runs the whole solution on every pull request, about 7 min on the runner;
   green for PR #834);
@@ -1987,11 +1987,14 @@ searchable text, nothing folded):
 - words of the sampled states held by one to five articles (work and publisher article id) of the
   language, with every hit on the answer's one page: each is judged to find exactly those, which
   must all rank within the first ten;
-- the same word scoped to its work finds that work's articles; scoped to a work that lacks it,
-  nothing;
+- the same word scoped to its work finds that work's articles; scoped to a work held in the language
+  that lacks it, nothing. A work not held in the language is refused `language_not_available`, so it
+  is never asked;
 - strings held nowhere find nothing;
 - three article permalinks of each held state must be accepted under their own work and anchor,
-  and one naming an anchor the state lacks is refused `anchor_not_in_version` (no hit);
+  and one naming an anchor the state lacks is refused `anchor_not_in_version` (no hit). The cases are
+  keyed by state, so two states of one work keep their own cases. The review of #842 found both of
+  the last two;
 - a refused search ranks a marker that matches no judgment, so it fails rather than passing as
   "found nothing".
 Over the fixture (two works) and the journey and licence-blocked mounts (one state, 15 cases each),

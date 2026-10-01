@@ -78,8 +78,10 @@ public sealed partial class V3MountedGatesTests
             workOfWord[word] = found[0].Work;
         }
 
-        // A word scoped to its own work finds that work's articles; scoped to another work that lacks it, nothing.
-        var otherWork = held.Select(static value => value.Timeline.WorkKey).Distinct(StringComparer.Ordinal).ToArray();
+        // A word scoped to its own work finds that work's articles; scoped to another work held in the language that lacks
+        // it, nothing. A work not held in the language is refused language_not_available, rightly, so it is never the
+        // other work (review of #842).
+        var otherWork = held.Where(value => value.Timeline.Language == language).Select(static value => value.Timeline.WorkKey).Distinct(StringComparer.Ordinal).ToArray();
         foreach (var (word, work) in workOfWord.Take(2))
         {
             var ofWork = Holding(connection, language, word, work, out _);
@@ -101,19 +103,21 @@ public sealed partial class V3MountedGatesTests
         // anchor the state lacks, refused.
         foreach (var (timeline, date, state) in held.Take(3))
         {
-            var permalink = $"/lu-legilux/{timeline.WorkKey}/{date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)}--{state}";
+            var day = date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+            var permalink = $"/lu-legilux/{timeline.WorkKey}/{day}--{state}";
             var anchors = Rows(connection, "SELECT a.publisher_id FROM articles a JOIN states s ON s.expression_iri = a.expression_iri " +
                     $"WHERE s.state_sha256 = '{state}' AND s.language = '{timeline.Language}' ORDER BY a.publisher_id LIMIT 3")
                 .Select(static row => row[0]).ToArray();
             foreach (var anchor in anchors)
             {
-                requests[$"exact-{timeline.WorkKey}-{anchor}"] = new(EvaluationCaseKind.ExactIdentifier, "verify", new { identifier = $"{permalink}#{anchor}", language = timeline.Language },
+                // Keyed by the state too: two states of one work keep their own cases (review of #842).
+                requests[$"exact-{timeline.WorkKey}-{timeline.Language}-{day}-{anchor}"] = new(EvaluationCaseKind.ExactIdentifier, "verify", new { identifier = $"{permalink}#{anchor}", language = timeline.Language },
                     [new JudgedAnchor(timeline.WorkKey, anchor, JudgedAnchor.SupportingGrade)]);
             }
 
             if (anchors.Length > 0)
             {
-                requests[$"near-miss-{timeline.WorkKey}"] = new(EvaluationCaseKind.Retrieval, "verify", new { identifier = $"{permalink}#art_no_such_anchor", language = timeline.Language }, []);
+                requests[$"near-miss-{timeline.WorkKey}-{timeline.Language}-{day}"] = new(EvaluationCaseKind.Retrieval, "verify", new { identifier = $"{permalink}#art_no_such_anchor", language = timeline.Language }, []);
             }
         }
 
@@ -209,5 +213,52 @@ public sealed partial class V3MountedGatesTests
         }
 
         Assert.AreEqual(ControlVerdict.CaughtTheShuffle, set.Control.Verdict, set.Control.Reason);
+    }
+
+    [TestMethod]
+    public async Task TwoStatesOfOneWorkKeepTheirOwnPermalinkCases()
+    {
+        // Review of #842: the case ids lacked the state, so a later state replaced an earlier one's cases.
+        var fixture = await MountedFixture.CreateAsync();
+        await using var cleanup = fixture;
+        await fixture.AddStateAsync(Day(fixture.ApplicabilityDate).AddDays(400).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture), "later");
+        using var mount = await V3CorpusMount.OpenAsync(fixture.Directory, CancellationToken.None);
+        Assert.IsNotNull(mount);
+
+        var timelines = Timelines(fixture.Directory);
+        var requests = RetrievalCases(fixture.Directory, timelines);
+        Assert.AreEqual(6, requests.Keys.Count(static key => key.StartsWith("exact-", StringComparison.Ordinal)), "three anchors of each of the two states");
+        Assert.AreEqual(2, requests.Keys.Count(static key => key.StartsWith("near-miss-", StringComparison.Ordinal)));
+        Assert.IsTrue(RunRetrievalGate(mount, fixture.Directory, timelines).Gates.All(static gate => gate.Verdict == GateVerdict.Pass));
+    }
+
+    [TestMethod]
+    public async Task AWorkIsAskedForNothingOnlyInALanguageItIsHeldIn()
+    {
+        // Review of #842: a work not held in the query's language is refused language_not_available, rightly, so it must
+        // never be the work a scoped word is asked of to find nothing. Here the first work is held in German and French,
+        // and a second work in French only.
+        var fixture = await MountedFixture.CreateAsync();
+        await using var cleanup = fixture;
+        await fixture.AddSecondLanguageStateAsync(null);
+        await fixture.AddStateAsync(fixture.ApplicabilityDate, "w2", workLeaf: "n4");
+        using var mount = await V3CorpusMount.OpenAsync(fixture.Directory, CancellationToken.None);
+        Assert.IsNotNull(mount);
+
+        var timelines = Timelines(fixture.Directory);
+        var requests = RetrievalCases(fixture.Directory, timelines);
+        var heldIn = timelines.Select(static value => (value.WorkKey, value.Language)).ToHashSet();
+        foreach (var (key, request) in requests.Where(static pair => pair.Key.StartsWith("scoped-elsewhere-", StringComparison.Ordinal)))
+        {
+            var parameters = System.Text.Json.JsonSerializer.SerializeToElement(request.Parameters);
+            var work = parameters.GetProperty("identifier").GetString()!["/lu-legilux/".Length..];
+            Assert.IsTrue(heldIn.Contains((work, parameters.GetProperty("language").GetString()!)), $"{key} asks {work} in a language it is not held in");
+        }
+
+        var set = RunRetrievalGate(mount, fixture.Directory, timelines);
+        foreach (var gate in set.Gates)
+        {
+            Assert.AreNotEqual(GateVerdict.Fail, gate.Verdict, $"{gate.Gate}: {gate.Value} over {gate.N}");
+        }
     }
 }
