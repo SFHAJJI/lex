@@ -1166,7 +1166,8 @@ internal static class EuAcquisitionTestFixture
         Func<string, int, bool>? raiseIntegrityOnWriteDigest = null,
         Func<string, int, bool>? loseBytesAfterWriteDigest = null,
         int? loseBytesAfterWriteCallOrdinal = null,
-        Func<string, int, bool>? substituteReceiptDigest = null)
+        Func<string, int, bool>? substituteReceiptDigest = null,
+        string? failSchema = null)
         : Lex.V3.Contracts.Custody.ICustodyStore
     {
         private readonly Dictionary<string, byte[]> _byDigest = new(StringComparer.Ordinal);
@@ -1208,7 +1209,8 @@ internal static class EuAcquisitionTestFixture
             var occurrence = priorWrites + 1;
             _writesPerDigest[digest] = occurrence;
 
-            if (failWriteDigest?.Invoke(digest, occurrence) == true)
+            if (failWriteDigest?.Invoke(digest, occurrence) == true ||
+                (failSchema is not null && bytes.Span.IndexOf(System.Text.Encoding.UTF8.GetBytes("\"schema\":\"" + failSchema + "\"")) >= 0))
             {
                 throw new Lex.V3.Contracts.Custody.CustodyRequiredException(
                     "the scripted store refused to write this object.");
