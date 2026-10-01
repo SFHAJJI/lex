@@ -17,7 +17,7 @@ import { readV3Envelope } from "./v3-envelope.mjs";
 
 /** The operations the API serves; a request for any other is refused here, before it is sent. */
 export const SERVED_OPERATIONS = Object.freeze([
-  "answer_drift", "article_history", "as_of", "ask", "browse", "changes_in_period", "citation",
+  "answer_drift", "article_history", "as_observed", "as_of", "ask", "browse", "changes_in_period", "citation",
   "cited_by", "classification", "coverage", "diff", "dossier", "events", "evidence_bundle",
   "in_force_on", "manifestation", "provenance", "relations", "resolve", "search", "status_on",
   "timeline", "verify",

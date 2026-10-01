@@ -17,9 +17,9 @@ namespace Lex.V3.Ingest.Tests;
 [TestClass]
 public sealed class V3CorpusEventsChainMountTests
 {
-    private const string EarlierDate = "2001-01-01";
+    internal const string EarlierDate = "2001-01-01";
 
-    private sealed record ChainedMount(string Directory, string PredecessorSha256, string WorkKey, string Language, string HeldStateSha256)
+    internal sealed record ChainedMount(string Directory, string PredecessorSha256, string WorkKey, string Language, string HeldStateSha256)
         : IAsyncDisposable
     {
         public ValueTask DisposeAsync()
@@ -29,7 +29,7 @@ public sealed class V3CorpusEventsChainMountTests
         }
     }
 
-    private static async Task<ChainedMount> ChainedMountAsync()
+    internal static async Task<ChainedMount> ChainedMountAsync()
     {
         var (envelope, first, _) = await LuxembourgIndexBuilderTests.BuildStateEnvelopeAsync();
         string[] key = [];
@@ -46,7 +46,7 @@ public sealed class V3CorpusEventsChainMountTests
         });
         var predecessor = LuxembourgIndexPredecessor.TryRead(reference, log, out var readRefusal, out var readDetail);
         Assert.IsNotNull(predecessor, $"{readRefusal}: {readDetail}");
-        var chained = LuxembourgIndexBuilder.TryBuild(envelope, predecessor, out var refusal, out var detail);
+        var chained = LuxembourgIndexBuilder.TryBuild(envelope, predecessor, LuxembourgIndexBuilderTests.Later, out var refusal, out var detail);
         Assert.IsNotNull(chained, $"{refusal}: {detail}");
         var corpus = LexCorpus6Builder.TryBuild(envelope, out var corpusRefusal, out var corpusDetail);
         Assert.IsNotNull(corpus, $"{corpusRefusal}: {corpusDetail}");
@@ -56,6 +56,8 @@ public sealed class V3CorpusEventsChainMountTests
         await File.WriteAllBytesAsync(Path.Combine(directory, V3CorpusMount.CorpusFileName), corpus.CanonicalBytes.ToArray());
         await File.WriteAllBytesAsync(Path.Combine(directory, V3CorpusMount.IndexFileName), chained.IndexBytes.ToArray());
         await File.WriteAllBytesAsync(Path.Combine(directory, V3CorpusMount.CapabilityManifestFileName), chained.CapabilityManifestBytes.ToArray());
+        // The crafted predecessor is no mount, so none of the earlier builds is held; the record says so (each absent).
+        await V3CorpusMountWriter.WriteRetentionRecordAsync(directory, chained.IndexRef, chained.IndexBytes, CancellationToken.None);
         return new ChainedMount(directory, reference.Sha256, key[0], key[3], heldState);
     }
 
@@ -74,6 +76,8 @@ public sealed class V3CorpusEventsChainMountTests
         var ancestor = log.GetProperty("ancestors").EnumerateArray().Single();
         Assert.AreEqual(fixture.PredecessorSha256, ancestor.GetProperty("log_id").GetString());
         Assert.AreEqual(1, ancestor.GetProperty("last_seq").GetInt64(), "the predecessor held one event");
+        Assert.AreEqual(LuxembourgIndexBuilderTests.LaterText, log.GetProperty("built_at").GetString(), "when this build ran");
+        Assert.AreEqual(LuxembourgIndexBuilderTests.BuiltAtText, ancestor.GetProperty("built_at").GetString(), "when the predecessor's build ran");
 
         var events = answer.GetProperty("events").EnumerateArray().ToArray();
         CollectionAssert.AreEqual(new[] { "first_sighting", "interval_closed", "first_sighting" }, events.Select(static e => e.GetProperty("event").GetString()).ToArray());

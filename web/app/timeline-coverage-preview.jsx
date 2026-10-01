@@ -185,10 +185,10 @@ export function renderCoverageReactPage() {
         that cannot both be true.
       </p>
       <p>
-        Nothing on it says when the counting happened. This mount holds no build time and records
-        that it does not, so what names the artifacts these counts came from is a pair of digests
-        rather than an instant. The calendar dates in the tables are the publisher&rsquo;s facts
-        about the law and are a different kind of thing.
+        Nothing on it says how current the counts are. Its build times, in the history section, say
+        when each build ran, an upper bound on observation, and none of them dates the counts; what
+        names the artifacts these counts came from is a pair of digests. The calendar dates in the
+        tables are the publisher&rsquo;s facts about the law and are a different kind of thing.
       </p>
       <p>Every value on this page is synthetic and none of it is law.</p>
       {COVERAGE_PREVIEWS.map((preview) => (

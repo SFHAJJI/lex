@@ -147,9 +147,27 @@ public sealed class V3FirstMountBuildResult
 public sealed class V3FirstMountBuild
 {
     private readonly ICustodyStore _custodyStore;
+    private readonly TimeProvider _clock;
 
-    public V3FirstMountBuild(ICustodyStore custodyStore) =>
+    /// <summary>
+    /// A build over <paramref name="custodyStore"/>. <paramref name="clock"/> (the system clock unless given) gives the
+    /// build time the Luxembourg index's event log records: read once per run, after the acquisitions and every
+    /// derivation, rounded up to the next second, and passed to both builds of the index. A second build that must
+    /// reproduce a first one byte for byte takes a clock that gives the first one's time.
+    /// </summary>
+    public V3FirstMountBuild(ICustodyStore custodyStore, TimeProvider? clock = null)
+    {
         _custodyStore = custodyStore ?? throw new ArgumentNullException(nameof(custodyStore));
+        _clock = clock ?? TimeProvider.System;
+    }
+
+    /// <summary>A time rounded up to the next whole UTC second (unchanged when it is one), so it stays an upper bound.</summary>
+    internal static DateTimeOffset BuildTimeOf(DateTimeOffset now)
+    {
+        var utc = now.ToUniversalTime();
+        var whole = new DateTimeOffset(utc.Ticks - (utc.Ticks % TimeSpan.TicksPerSecond), TimeSpan.Zero);
+        return whole == utc ? whole : whole.AddSeconds(1);
+    }
 
     public Task<V3FirstMountBuildResult> RunAsync(
         EuFirstMountAcquisitionResult europe,
@@ -187,8 +205,8 @@ public sealed class V3FirstMountBuild
 
     /// <summary>
     /// The build, with the Luxembourg index's event log chained to <paramref name="predecessor"/> when one is given
-    /// (<see cref="LuxembourgIndexBuilder.TryBuild(Stage3DerivationProfileEnvelope, LuxembourgIndexPredecessor?, out LuxembourgIndexBuildRefusal, out string?)"/>):
-    /// both builds of the index take the same predecessor, so the twice-built comparison still holds.
+    /// (<see cref="LuxembourgIndexBuilder.TryBuild(Stage3DerivationProfileEnvelope, LuxembourgIndexPredecessor?, DateTimeOffset, out LuxembourgIndexBuildRefusal, out string?)"/>):
+    /// both builds of the index take the same predecessor and the same build time, so the twice-built comparison still holds.
     /// </summary>
     public async Task<V3FirstMountBuildResult> RunAsync(
         EuFirstMountAcquisitionResult europe,
@@ -274,6 +292,8 @@ public sealed class V3FirstMountBuild
         }
 
         // ---- Three builders, each twice. A pair that differs refuses the build. ----
+        // The build time is read here, after every fetch and derivation, once: both index builds record the same.
+        var builtAt = BuildTimeOf(_clock.GetUtcNow());
         var corpus = LexCorpus6Builder.TryBuild(profileEnvelope, out var corpusRefusal, out var corpusDetail);
         if (corpus is null)
         {
@@ -292,14 +312,14 @@ public sealed class V3FirstMountBuild
                     : $"two builds of the corpus differ: {corpus.ArtifactRef.Sha256} then {corpusAgain.ArtifactRef.Sha256}");
         }
 
-        var luxembourgIndex = LuxembourgIndexBuilder.TryBuild(profileEnvelope, predecessor, out var luxembourgIndexRefusal, out var luxembourgIndexDetail);
+        var luxembourgIndex = LuxembourgIndexBuilder.TryBuild(profileEnvelope, predecessor, builtAt, out var luxembourgIndexRefusal, out var luxembourgIndexDetail);
         if (luxembourgIndex is null)
         {
             return V3FirstMountBuildResult.Refused(
                 V3FirstMountBuildRefusal.LuxembourgIndexRefused, $"{luxembourgIndexRefusal}: {luxembourgIndexDetail}");
         }
 
-        var luxembourgIndexAgain = LuxembourgIndexBuilder.TryBuild(profileEnvelope, predecessor, out luxembourgIndexRefusal, out luxembourgIndexDetail);
+        var luxembourgIndexAgain = LuxembourgIndexBuilder.TryBuild(profileEnvelope, predecessor, builtAt, out luxembourgIndexRefusal, out luxembourgIndexDetail);
         if (luxembourgIndexAgain is null
             || !SameArtefact(luxembourgIndex.IndexRef, luxembourgIndex.IndexBytes, luxembourgIndexAgain.IndexRef, luxembourgIndexAgain.IndexBytes)
             || !SameArtefact(luxembourgIndex.CapabilityManifestRef, luxembourgIndex.CapabilityManifestBytes,
