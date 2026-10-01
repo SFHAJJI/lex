@@ -17,7 +17,7 @@ namespace Lex.V3.Ingest.Tests;
 /// correcting a work whose reader in English has no served body in which to read it.
 /// </remarks>
 [TestClass]
-public sealed class EuCorrigendumTripwireProducerTests
+public sealed partial class EuCorrigendumTripwireProducerTests
 {
     private const string Work = "http://publications.europa.eu/resource/cellar/work-0001";
     private const string Corrigendum = "http://publications.europa.eu/resource/cellar/work-0001-r01";
@@ -193,18 +193,15 @@ public sealed class EuCorrigendumTripwireProducerTests
         Assert.IsGreaterThan(0, canonicalFailed.ProductRequestCount);
         Assert.IsNull(canonicalFailed.RetainedTripwire);
 
-        // The lineage differs per run, so it cannot be named ahead; it is the LAST write of a run,
-        // and a counting store fails exactly that one - the premise being the honest run's count.
-        var counting = new CountingCustodyStore(new EuAcquisitionTestFixture.EuInMemoryCustodyStore());
-        var (recounted, _, _) = await RunAsync(FourLanguageRows(), CorrigendumRows(), counting);
-        Assert.IsTrue(recounted.Delivered, recounted.Detail);
-        var failing = new CountingCustodyStore(
-            new EuAcquisitionTestFixture.EuInMemoryCustodyStore(), failCreateOrdinal: counting.CreateCount);
+        // Target the lineage schema in this run's bytes, independent of later checkpoint writes.
+        var failing = new CountingCustodyStore(new EuAcquisitionTestFixture.EuInMemoryCustodyStore(),
+            failSchema: EuCorrigendumTripwireSet.LineageRecordSchema);
         var (lineageFailed, _, _) = await RunAsync(FourLanguageRows(), CorrigendumRows(), failing);
         Assert.AreEqual(EuCorrigendumTripwireProductionRefusal.TripwireNotRetained, lineageFailed.Refusal);
         StringAssert.StartsWith(lineageFailed.Detail, "lineage: ");
         StringAssert.Contains(lineageFailed.Detail, "the counting store refused this write.", "the store's own reason travels.");
         Assert.IsNull(lineageFailed.RetainedTripwireLineage);
+        Assert.AreEqual(1, failing.FailedCreateCount);
         Assert.IsTrue(lineageFailed.Expressions!.Delivered);
         Assert.AreEqual(lineageFailed.Expressions.ProductRequestCount, lineageFailed.ProductRequestCount);
         Assert.IsGreaterThan(0, lineageFailed.ProductRequestCount);
@@ -324,20 +321,24 @@ public sealed class EuCorrigendumTripwireProducerTests
 
     // ---- Fixtures. ----
 
-    /// <summary>Counts creates and, when asked, refuses exactly the Nth one as a genuine custody failure.</summary>
-    private sealed class CountingCustodyStore(ICustodyStore inner, int? failCreateOrdinal = null) : ICustodyStore
+    /// <summary>Counts creates and refuses the named artifact schema as a genuine custody failure.</summary>
+    private sealed class CountingCustodyStore(ICustodyStore inner, string? failSchema = null) : ICustodyStore
     {
         private int _createCount;
 
         public int CreateCount => Volatile.Read(ref _createCount);
+        public int FailedCreateCount { get; private set; }
 
         public Task<DurableBlobWriteReceipt> CreateAsync(
             ReadOnlyMemory<byte> bytes, CustodyClass custodyClass, CancellationToken cancellationToken)
         {
-            var ordinal = Interlocked.Increment(ref _createCount);
-            return ordinal == failCreateOrdinal
-                ? throw new CustodyRequiredException("the counting store refused this write.")
-                : inner.CreateAsync(bytes, custodyClass, cancellationToken);
+            Interlocked.Increment(ref _createCount);
+            if (failSchema is not null && bytes.Span.IndexOf(Encoding.UTF8.GetBytes("\"schema\":\"" + failSchema + "\"")) >= 0)
+            {
+                FailedCreateCount++;
+                throw new CustodyRequiredException("the counting store refused this write.");
+            }
+            return inner.CreateAsync(bytes, custodyClass, cancellationToken);
         }
 
         public Task<ReadOnlyMemory<byte>> ReadAsync(DurableBlobRef reference, CancellationToken cancellationToken) =>

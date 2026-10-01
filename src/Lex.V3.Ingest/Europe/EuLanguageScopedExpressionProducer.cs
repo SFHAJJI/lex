@@ -1,3 +1,4 @@
+using Lex.V3.Contracts;
 using System.Text.Json.Serialization;
 using Lex.V3.Contracts.Custody;
 using Lex.V3.Contracts.Source.Core;
@@ -129,6 +130,9 @@ public sealed class EuLanguageScopedExpressionProductionResult
     /// </summary>
     public int ProductRequestCount { get; }
 
+    /// <summary>Checked same-production inputs for an offline derivation.</summary>
+    public SourceArtifactRef? CheckpointRef { get; private init; }
+
     /// <summary>The derivation, when this production delivered one.</summary>
     public EuLanguageScopedExpressionDerivation? Derivation { get; }
 
@@ -195,9 +199,9 @@ public sealed class EuLanguageScopedExpressionProductionResult
         DurableBlobWriteReceipt retainedDerivation,
         DurableBlobWriteReceipt retainedEpisode,
         IReadOnlySet<string> objectsAskedAbout,
-        int productRequestCount) =>
+        int productRequestCount, SourceArtifactRef? checkpoint = null) =>
         new(derivation, retainedDerivation, retainedEpisode, objectsAskedAbout,
-            EuLanguageScopedExpressionProductionRefusal.None, null, productRequestCount);
+            EuLanguageScopedExpressionProductionRefusal.None, null, productRequestCount) { CheckpointRef = checkpoint };
 
     internal static EuLanguageScopedExpressionProductionResult Refused(
         EuLanguageScopedExpressionProductionRefusal refusal,
@@ -250,7 +254,7 @@ public sealed class EuLanguageScopedExpressionProductionResult
 /// building that surface.
 /// </para>
 /// </remarks>
-public sealed class EuLanguageScopedExpressionProducer
+public sealed partial class EuLanguageScopedExpressionProducer
 {
     private readonly ICustodyStore _custodyStore;
     private readonly EuRepeatedEnumerationExecutor _executor;
@@ -497,7 +501,8 @@ public sealed class EuLanguageScopedExpressionProducer
         EuEnumerationRunResult expressionRun,
         int spentBeforeExpressionRun,
         Func<CancellationToken, Task<(EuObjectFactsPartitionRunRequest Request, EuEnumerationRunResult Run, int AdditionalSpend)?>> objectFacts,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        ProductionCheckpoint? replay = null, SourceArtifactRef? replayRef = null)
     {
         var spent = spentBeforeExpressionRun + expressionRun.ProductRequestCount;
         var (expressionRefusal, expressionDelivery) = await TryOpenDeliveryAsync(
@@ -509,6 +514,7 @@ public sealed class EuLanguageScopedExpressionProducer
         }
 
         EuProofBoundDelivery? objectDelivery = null;
+        FamilyCheckpoint? objectCheckpoint = null;
         if (await objectFacts(cancellationToken).ConfigureAwait(false) is { } objectFamily)
         {
             spent += objectFamily.AdditionalSpend;
@@ -521,6 +527,7 @@ public sealed class EuLanguageScopedExpressionProducer
             }
 
             objectDelivery = opened;
+            objectCheckpoint = DescribeFamily(objectFamily.Request, objectFamily.Run);
         }
 
         var derivation = EuLanguageScopedExpressionDerivation.TryDerive(
@@ -537,6 +544,17 @@ public sealed class EuLanguageScopedExpressionProducer
                 $"derivation={derivationRefusal} decode={decodeRefusal} detail={decodeDetail} " +
                 $"offendingIri={offendingIri}",
                 spent), null, null);
+        }
+
+        if (replay is not null)
+        {
+            var originalDerivation = await CustodyRestore.ReadByDigestCheckedAsync(_custodyStore,
+                replay.DerivationSha256, cancellationToken).ConfigureAwait(false);
+            var originalEpisode = await CustodyRestore.ReadByDigestCheckedAsync(_custodyStore,
+                replay.EpisodeSha256, cancellationToken).ConfigureAwait(false);
+            if (!originalDerivation.Span.SequenceEqual(derivation.DerivationBytes.Span) ||
+                !originalEpisode.Span.SequenceEqual(derivation.EpisodeBytes.Span))
+                throw new CustodyIntegrityException("Reopened expression derivation or episode differs from the original.");
         }
 
         // Decision 78 retention, through the one door that proves the hold by reopening the digest
@@ -570,13 +588,26 @@ public sealed class EuLanguageScopedExpressionProducer
                 spent), null, null);
         }
 
+        SourceArtifactRef checkpoint;
+        try
+        {
+            checkpoint = replayRef ?? await RetainCheckpointAsync(new ProductionCheckpoint(CheckpointSchema,
+                DescribeFamily(expressionFactsRequest, expressionRun), objectCheckpoint,
+                derivation.DerivationSha256, derivation.EpisodeSha256), cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception exception) when (exception is CustodyRequiredException or CustodyIntegrityException)
+        {
+            return (EuLanguageScopedExpressionProductionResult.Refused(
+                EuLanguageScopedExpressionProductionRefusal.DerivationNotRetained, exception.Message, spent), null, null);
+        }
+
         return (
             EuLanguageScopedExpressionProductionResult.Success(
                 derivation,
                 derivationReceipt,
                 episodeReceipt,
                 ObjectsAskedAbout(expressionFactsRequest),
-                spent),
+                spent, checkpoint),
             expressionDelivery,
             objectDelivery);
     }
