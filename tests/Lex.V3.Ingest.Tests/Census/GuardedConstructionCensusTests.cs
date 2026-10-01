@@ -685,6 +685,11 @@ public sealed class GuardedConstructionCensusTests
                     + "method private static "
                     + "Lex.V3.Ingest.Luxembourg.LuxembourgHeldBodyDerivationPopulation::TryCreateCo"
                     + "re",
+                "Lex.V3.Ingest.Luxembourg.LuxembourgIndexPredecessor: constructor private instance "
+                    + "Lex.V3.Ingest.Luxembourg.LuxembourgIndexPredecessor::.ctor, "
+                    + "method public static "
+                    + "Lex.V3.Ingest.Luxembourg.LuxembourgIndexPredecessor::TryRead, "
+                    + "method public static Lex.V3.Ingest.V3FirstMountBuild::ReadPredecessor",
                 "Lex.V3.Ingest.Luxembourg.LuxembourgIndexReader: constructor private instance "
                     + "Lex.V3.Ingest.Luxembourg.LuxembourgIndexReader::.ctor, "
                     + "method private static "
@@ -1149,6 +1154,7 @@ public sealed class GuardedConstructionCensusTests
                     + "Lex.V3.Ingest.Stage3LuxembourgBodyComposition::.ctor",
                 "Lex.V3.Ingest.V3FirstMountBuildResult: constructor private instance "
                     + "Lex.V3.Ingest.V3FirstMountBuildResult::.ctor, "
+                    + "method public instance Lex.V3.Ingest.V3FirstMountBuild::RunAsync, "
                     + "method public instance Lex.V3.Ingest.V3FirstMountBuild::RunAsync, "
                     + "method public static Lex.V3.Ingest.V3FirstMountBuildResult::Refused, "
                     + "method public static Lex.V3.Ingest.V3FirstMountBuildResult::Success",
