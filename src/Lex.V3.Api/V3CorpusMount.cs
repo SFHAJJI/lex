@@ -4855,21 +4855,30 @@ internal sealed class V3CorpusMount : IDisposable
             celex = expressions[0].PublisherWorkCelex,
             available_languages = languages,
             expression_count = listed.Length,
-            expressions = listed.Select(static expression => new
+            expressions = listed.Select(expression => (Expression: expression, Wording: EuropeWordingOf(expression.PublisherExpressionId))).Select(static entry => new
             {
-                publisher_expression_id = expression.PublisherExpressionId,
-                language = expression.Language,
-                wording_dates = expression.WordingDates,
-                article_count = expression.ArticleCount,
-                members = expression.Members.Select(static member => new
+                publisher_expression_id = entry.Expression.PublisherExpressionId,
+                language = entry.Expression.Language,
+                wording_dates = entry.Expression.WordingDates,
+                article_count = entry.Expression.ArticleCount,
+                members = entry.Expression.Members.Select(static member => new
                 {
                     object_ref_sha256 = member.ObjectRefSha256,
                     outcome = member.Outcome,
                     content_class = member.ContentClass,
                 }).ToArray(),
                 // The expression is an identifier EU resolve answers.
-                resolve = new { identifier = expression.PublisherExpressionId },
+                resolve = new { identifier = entry.Expression.PublisherExpressionId },
+                // The one held wording of the expression, pinned (the EU permalink grammar, as EU search pins it), or null
+                // when the expression holds no single wording date to pin.
+                pinned_wording = entry.Wording is not { } held ? null : new
+                {
+                    wording_date = held.WordingDate,
+                    wording_sha256 = held.Sha256,
+                    permalink = held.Permalink,
+                },
             }).ToArray(),
+            digest_rule = EuropeWordingDigestRule,
             date_semantics = EuropeWordingDateSemantics,
             consolidations_held = false,
             not_held = EuropeDossierNotHeld.Select(static row => new { item = row[0], reason = row[1] }).ToArray(),

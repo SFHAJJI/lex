@@ -9,11 +9,11 @@
 // with no second request;
 // with a mount, the page must end in the answer, and the one request must carry exactly what was
 // typed and nothing else. Without a mount, each must end in the refusal card for
-// `no_corpus_mounted`. A ninth step, the EU search, asks the search page for the GDPR by its CELEX
-// with English chosen in the form's language select (`EU_SEARCH_STEP`): it needs an EU index, so on
-// the fixture mount (Luxembourg only) it must end in the refusal card `no_corpus_mounted` naming the
-// EU index, and on a real mount whose build report names an EU index it must end in the API's
-// answer, every EU citation pinned and verified. In every run, what the
+// `no_corpus_mounted`. Two EU steps ask for the GDPR by its CELEX: the search page with English chosen
+// in the form's language select (`EU_SEARCH_STEP`), and the dossier page (`EU_DOSSIER_STEP`). They
+// need an EU index, so on the fixture mount (Luxembourg only) each must end in the refusal card
+// `no_corpus_mounted` naming the EU index, and on a real mount whose build report names an EU index
+// each must end in the API's answer, every EU citation pinned and verified. In every run, what the
 // browser did is measured, not assumed: exactly one request to the API (`POST /api/v3/{operation}`,
 // no query string, no referrer, no cookie), every other request a same-origin asset, the page still
 // at its own address with no history entry added and no history state written, no cookie set,
@@ -31,8 +31,8 @@
 //                            [--real-mount]
 //
 // With `--real-mount` the mount is a real build's (`v3-corpus` with its `build-report.json`), whose
-// contents are not known in advance: each of the eight steps, and the EU search when the build report
-// names an EU index, asks the API its page's request first and holds the page to that answer, a
+// contents are not known in advance: each of the eight steps, and the two EU steps when the build
+// report names an EU index, asks the API its page's request first and holds the page to that answer, a
 // success or that refusal by its code, and to every invariant below. The coverage page must name the
 // corpus and Luxembourg index the build report records.
 //
@@ -224,6 +224,19 @@ export const EU_SEARCH_STEP = Object.freeze({
     operation_id: "search",
     parameters: Object.freeze({ query: EU_SEARCH_PHRASE, language: EU_SEARCH_LANGUAGE.value, identifier: EU_SEARCH_IDENTIFIER }),
   }),
+});
+
+/**
+ * The EU dossier step: the dossier page asked for the same EU work by its CELEX, in any held language.
+ * Like the EU search it needs an EU index, and where one is held each expression's wording permalink
+ * is printed and verified.
+ */
+export const EU_DOSSIER_STEP = Object.freeze({
+  path: "/dossier.html",
+  cites: true,
+  operation: "dossier",
+  typed: EU_SEARCH_IDENTIFIER,
+  body: Object.freeze({ operation_id: "dossier", parameters: Object.freeze({ identifier: EU_SEARCH_IDENTIFIER }) }),
 });
 
 /**
@@ -890,7 +903,7 @@ export async function run(apiOutput, mount, expected, browser, liveRoot) {
  */
 export function realMountSteps(report) {
   const steps = Object.entries(JOURNEY_STEPS).map(([name, step]) => [name, step]);
-  return report.europeIndex ? [...steps, ["eu search", EU_SEARCH_STEP]] : steps;
+  return report.europeIndex ? [...steps, ["eu search", EU_SEARCH_STEP], ["eu dossier", EU_DOSSIER_STEP]] : steps;
 }
 
 export async function realMountRuns(apiOutput, mount, options, browser, liveRoot) {
@@ -952,6 +965,9 @@ export const EU_SEARCH_ON_FIXTURE = Object.freeze({
   texts: Object.freeze(["This build has no EU index mounted."]),
 });
 
+/** The EU dossier step on the fixture mount, which holds no EU index: the same refusal card. */
+export const EU_DOSSIER_ON_FIXTURE = Object.freeze({ ...EU_SEARCH_ON_FIXTURE, step: EU_DOSSIER_STEP });
+
 /** The eight steps against the fixture mount, each held to `fixtureMountExpectations`. */
 export async function fixtureMountRuns(apiOutput, mount, options, browser, liveRoot) {
   const journeyMount = JSON.parse(await readFile(join(mount, "journey-mount.json"), "utf8"));
@@ -990,8 +1006,9 @@ async function main(argv) {
       results.push([`${name}, with the fixture mount`, await run(apiOutput, mount, { servedByApi, keyboard, ...expected }, browser, liveRoot)]);
       results.push([`${name}, with no mount`, await run(apiOutput, null, { servedByApi, keyboard, step: expected.step, state: "refusal", refusalCode: "no_corpus_mounted" }, browser, liveRoot)]);
     }
-    // The EU search step: the fixture mount holds no EU index, so the EU work is refused for the EU corpus.
+    // The EU steps: the fixture mount holds no EU index, so the EU work is refused for the EU corpus.
     results.push(["eu search, with the fixture mount", await run(apiOutput, mount, { servedByApi, keyboard, ...EU_SEARCH_ON_FIXTURE }, browser, liveRoot)]);
+    results.push(["eu dossier, with the fixture mount", await run(apiOutput, mount, { servedByApi, keyboard, ...EU_DOSSIER_ON_FIXTURE }, browser, liveRoot)]);
   }
   let failed = false;
   for (const [label, { observed, failures }] of results) {

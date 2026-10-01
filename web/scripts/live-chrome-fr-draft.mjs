@@ -53,7 +53,7 @@ export const LIVE_CHROME_FR_DRAFT = Object.freeze({
     title: 'Dossier',
     eyebrow: 'Dossier',
     heading: 'Le dossier d’un acte',
-    intro: 'Ce que ce serveur détient pour un acte luxembourgeois : ses intitulés, ses versions datées par l’éditeur et ce que le dossier ne contient pas. L’identifiant est envoyé à ce serveur dans la requête et nulle part ailleurs, et cette page ne conserve rien.',
+    intro: 'Ce que ce serveur détient pour un acte : les intitulés et les versions datées par l’éditeur d’un acte luxembourgeois, ou les expressions d’un acte de l’Union européenne et le seul libellé détenu de chacune, et ce que le dossier ne contient pas. L’identifiant est envoyé à ce serveur dans la requête et nulle part ailleurs, et cette page ne conserve rien.',
     idle: 'Saisissez un identifiant d’acte pour consulter ce que ce serveur détient à son sujet.',
     noTitle: 'Cet index ne contient aucun intitulé pour cet acte.',
     shortTitle: '{title} (intitulé abrégé)',
@@ -69,6 +69,11 @@ export const LIVE_CHROME_FR_DRAFT = Object.freeze({
     articlesHeld: 'Articles détenus',
     articlesNotAdmitted: 'Articles non admis',
     notHeldHeading: 'Ce que ce dossier ne contient pas',
+    euExpressions: Object.freeze({
+      one: '{count} expression détenue, dans son seul libellé original.',
+      other: '{count} expressions détenues, chacune dans son seul libellé original.',
+    }),
+    wordingDate: 'Date du libellé',
   }),
   reading: Object.freeze({
     title: 'Lecture',

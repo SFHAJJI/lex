@@ -83,6 +83,10 @@ public sealed class V3AnswerSamplesTests
         // The same object reference, where `manifestation` names the retained member; the body digest and
         // the WEMI IRIs beside it are deterministic and stay pinned.
         "retained[].object_ref_sha256",
+        // The same object reference in the EU dossier, where each expression names the corpus members its articles
+        // were read from: the EU fixture mints its source URNs per run too, as the double-run test found the first
+        // time the EU dossier was sampled. The wording digest and permalink beside it are deterministic and pinned.
+        "expressions[].members[].object_ref_sha256",
         // The event log is named by the index digest (`log_id`), and every cursor into it carries that
         // name before its sequence number, so all three move with `index_sha256`; the sequence numbers,
         // state digests and permalinks beside them are deterministic and stay pinned.
@@ -365,6 +369,9 @@ public sealed class V3AnswerSamplesTests
             await DriveAsync(europeMount, "search", "a word the EU work's held wording does not carry: no hit is an answer, not a refusal", new { query = "zephyr", language = "eng", identifier = "32016R0679" }),
             // `dossier` is sampled for the live dossier screen's reader: the work, in the language it is held in.
             await DriveAsync(mount, "dossier", "the work, in the language it is held in: its identity, its held states and what the dossier does not hold", new { parameters.identifier, parameters.language }),
+            // The EU dossier, for the same screen's EU reader: the GDPR by its CELEX, its one held expression with the
+            // wording pinned as EU search pins it.
+            await DriveAsync(europeMount, "dossier", "one EU work by its CELEX, any held language: its expression, the one wording held of it, pinned, and what the dossier does not hold", new { identifier = "32016R0679" }),
             // `article_history` is sampled for the live provision history screen's reader: one article of the work, in its language.
             await DriveAsync(mount, "article_history", "one article of the work, in the language it is held in: its lineage through the held states", new { parameters.identifier, anchor = "art_15", parameters.language }),
             // `diff` is sampled for the live compare screen's reader: the work's one state against itself, and two

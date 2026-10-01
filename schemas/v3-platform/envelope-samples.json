@@ -1452,6 +1452,110 @@
     },
     {
       "operation": "dossier",
+      "scenario": "one EU work by its CELEX: an answer whose expression carries its pinned wording",
+      "http_status": 200,
+      "content_type": "application/json;charset=utf-8",
+      "envelope": {
+        "context": {
+          "freshness": {
+            "observed_at": "2026-09-18T07:00:00.0000000Z",
+            "upstream_health": "stale"
+          },
+          "jurisdiction": "eu",
+          "provisional": false,
+          "publisher": "eu-eurlex",
+          "snapshot": {
+            "snapshot_id": "corpus-aaaaaaaaaaaaaaaa",
+            "snapshot_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          "status": "success",
+          "timeline_semantics": "official_consolidation_state"
+        },
+        "object_type": "envelope",
+        "operation_id": "dossier",
+        "refusal": null,
+        "registry_schema": "lex-v3-operation-registry/1",
+        "registry_sha256": "abe40749a2364dcbcf69a4427b0977e0510500345056eed4042b2e4758a53ef0",
+        "request_ref": "http_fb09fb7191e84f40f48d21b4532a48ef36c84efacd236a30abd075a5a2b2c639",
+        "result": {
+          "object_type": "work_record",
+          "schema": "lex-v3-dossier-result/1",
+          "value": {
+            "available_languages": [
+              "eng"
+            ],
+            "celex": "32016R0679",
+            "consolidations_held": false,
+            "corpus_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "date_semantics": "the wording date (wording_date in search, wording_dates in dossier) is the date the publisher\u0027s Formex package gives the act, the date of the original wording this index holds; it is not a publication, entry-into-force, application or consolidation date, and an EU date is never merged with a Luxembourg applicability date",
+            "digest_rule": "the SHA-256, under the domain lex-v3-eu-wording/1, of the work\u0027s CELEX, the publisher\u0027s work and expression IRIs, the language, the wording date and every article identity of the expression in the publisher\u0027s article order, each field written as a 4-byte big-endian length and its UTF-8 bytes; each article identity is itself the SHA-256 of that article\u0027s text and tokens, so the digest pins the whole held wording, computed here from the EU index, which stores no wording digest",
+            "expression_count": 1,
+            "expressions": [
+              {
+                "article_count": 99,
+                "language": "eng",
+                "members": [
+                  {
+                    "content_class": "original_legal_text",
+                    "object_ref_sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+                    "outcome": "acquired"
+                  }
+                ],
+                "pinned_wording": {
+                  "permalink": "/eu-eurlex/32016R0679/eng/2016-04-27--ff42858ce2bc578d29219e1551cc1dc1cf3e558e354fc0d7ed39a8f932c7720f",
+                  "wording_date": "2016-04-27",
+                  "wording_sha256": "ff42858ce2bc578d29219e1551cc1dc1cf3e558e354fc0d7ed39a8f932c7720f"
+                },
+                "publisher_expression_id": "http://publications.europa.eu/resource/cellar/5f2552c2-11bd-11e6-ba9a-01aa75ed71a1.0001",
+                "resolve": {
+                  "identifier": "http://publications.europa.eu/resource/cellar/5f2552c2-11bd-11e6-ba9a-01aa75ed71a1.0001"
+                },
+                "wording_dates": [
+                  "2016-04-27"
+                ]
+              }
+            ],
+            "index_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            "not_held": [
+              {
+                "item": "titles",
+                "reason": "no title of the EU work is held by the EU index"
+              },
+              {
+                "item": "later_wordings",
+                "reason": "no consolidated version is held, so the wording listed is the original act\u0027s and no later wording or state is listed"
+              },
+              {
+                "item": "force_dates",
+                "reason": "no entry-into-force, application or end-of-validity date is held; the wording date is none of them"
+              },
+              {
+                "item": "document_type",
+                "reason": "the publisher\u0027s document type is not held for EU works"
+              },
+              {
+                "item": "corrigenda",
+                "reason": "corrigendum lines are recorded by the index per corrected work root and are not joined to the work here, because the join between a corrected work root and the work\u0027s publisher identifier is not established"
+              },
+              {
+                "item": "other_languages",
+                "reason": "an expression in a language the index holds no wording in is not listed; French expressions are not acquired (Decision 89)"
+              }
+            ],
+            "publisher": "eu-eurlex",
+            "publisher_work_id": "http://publications.europa.eu/resource/cellar/3e485e15-11bd-11e6-ba9a-01aa75ed71a1",
+            "requested_identifier": "32016R0679",
+            "requested_language": null,
+            "scope": "the EU work as the mounted EU index holds it: its expressions, the one wording held of each with the Formex act date, the article count and the corpus members the articles were read from; a record of this corpus and not of what the publisher holds, and a missing expression or wording here is neither absent from the publisher\u0027s record nor absent from law; with a language, only that language\u0027s expressions are listed and available_languages still lists every language the work has"
+          }
+        },
+        "schema": "lex-v3-envelope/1",
+        "verdict": "answer",
+        "version": "v3"
+      }
+    },
+    {
+      "operation": "dossier",
       "scenario": "no corpus mounted: a refusal",
       "http_status": 200,
       "content_type": "application/json;charset=utf-8",

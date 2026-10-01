@@ -30,7 +30,7 @@ export { LocaleNav, localeHome, localeHref } from './LocaleNav.jsx';
 export { renderLiveLocaleUnavailablePage } from './live-locale-page.jsx';
 export { LiveSearch, SearchAnswerView, SearchResultsView, SearchWorkResolution } from './LiveSearch.jsx';
 export { LIVE_SEARCH_ROOT, liveSearchTree, renderLiveSearchPage } from './live-search-page.jsx';
-export { DossierAnswerView, DossierTitles, DossierView, LiveDossier } from './LiveDossier.jsx';
+export { DossierAnswerView, DossierTitles, DossierView, EuropeDossierView, LiveDossier } from './LiveDossier.jsx';
 export { LIVE_DOSSIER_ROOT, liveDossierTree, renderLiveDossierPage } from './live-dossier-page.jsx';
 export { LiveReading, ReadingAnswerView, ReadingView } from './LiveReading.jsx';
 export { LIVE_READING_ROOT, liveReadingTree, renderLiveReadingPage } from './live-reading-page.jsx';
