@@ -173,27 +173,77 @@ public sealed class V3EuropePermalinkTests
         Assert.AreEqual("no_corpus_mounted", envelope.Refusal?.Code);
     }
 
+    /// <summary>
+    /// An EU work the mount at <paramref name="directory"/> holds, by its CELEX, with the language of one of its articles
+    /// and a word of six or more letters from that article's searchable text; read from a copy of the mount's EU index.
+    /// Null when the mount holds no EU index or no article with searchable text.
+    /// </summary>
+    private static (string Celex, string Language, string Word)? HeldEuWord(string directory)
+    {
+        var index = Path.Combine(directory, V3CorpusMount.EuropeIndexFileName);
+        if (!File.Exists(index))
+        {
+            return null;
+        }
+
+        var copy = Path.Combine(Path.GetTempPath(), $"lex-v3-eu-word-{Guid.NewGuid():N}.sqlite");
+        File.Copy(index, copy);
+        try
+        {
+            using (var connection = new SqliteConnection(new SqliteConnectionStringBuilder { DataSource = copy, Mode = SqliteOpenMode.ReadOnly, Pooling = false }.ToString()))
+            {
+                connection.Open();
+                using var command = connection.CreateCommand();
+                command.CommandText = "SELECT publisher_work_celex, language, searchable_text FROM articles " +
+                                      "WHERE searchable_text IS NOT NULL AND length(searchable_text) > 0 ORDER BY article_identity_sha256";
+                using var reader = command.ExecuteReader();
+                while (reader.Read())
+                {
+                    var word = System.Text.RegularExpressions.Regex.Match(reader.GetString(2), @"\b[A-Za-z]{6,}\b");
+                    if (word.Success)
+                    {
+                        return (reader.GetString(0), reader.GetString(1), word.Value);
+                    }
+                }
+            }
+
+            return null;
+        }
+        finally
+        {
+            File.Delete(copy);
+        }
+    }
+
     [TestMethod]
     public async Task EveryEuPermalinkASearchOfTheNamedMountEmitsVerifies()
     {
-        // On the mount V3_EVALUATE_MOUNT names (the real bounded first mount holds the GDPR in English): every hit of a
-        // search for "personal data" carries a pinned permalink, and each verifies as digest_matches.
+        // On the mount V3_EVALUATE_MOUNT names: a word of an EU work the mount holds, searched in that work, and every hit
+        // carries a pinned permalink that verifies as digest_matches. The work and the word come from the mount's own EU
+        // index, so any mount can be checked, not only one that holds the GDPR (the real bounded first mount does; the EU
+        // three-seed retry holds the SFDR only).
         var directory = Environment.GetEnvironmentVariable("V3_EVALUATE_MOUNT");
         if (string.IsNullOrWhiteSpace(directory))
         {
             Assert.Inconclusive("V3_EVALUATE_MOUNT names no mount.");
         }
 
+        if (HeldEuWord(directory) is not var (celex, language, word))
+        {
+            Assert.Inconclusive("The named mount holds no EU article with searchable text.");
+            return;
+        }
+
         using var mount = await V3CorpusMount.OpenAsync(directory, CancellationToken.None);
         Assert.IsNotNull(mount);
-        var envelope = await EnvelopeAsync(mount, "/api/v3/search", "search", new { query = "personal data", language = "eng", identifier = "32016R0679" });
+        var envelope = await EnvelopeAsync(mount, "/api/v3/search", "search", new { query = word, language, identifier = celex });
         Assert.IsNull(envelope.Refusal, envelope.Refusal?.Code);
         var hits = envelope.Result!.Value.GetProperty("hits").EnumerateArray().ToArray();
         Assert.IsNotEmpty(hits);
         foreach (var hit in hits)
         {
             var permalink = hit.GetProperty("permalink").GetString()!;
-            var verified = await VerifyAsync(mount, permalink, "eng");
+            var verified = await VerifyAsync(mount, permalink, language);
             Assert.AreEqual("digest_matches", verified.Result?.Value.GetProperty("verdict").GetString(), $"{permalink}: {verified.Refusal?.Code}");
         }
 
