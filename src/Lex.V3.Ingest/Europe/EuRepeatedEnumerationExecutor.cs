@@ -248,6 +248,17 @@ public sealed class EuEnumerationRunResult
 
     public RepeatedEnumerationDeliveryReceipt? Receipt { get; }
 
+    /// <summary>Retained comparison inputs when this result was produced by the live executor.</summary>
+    public SourceArtifactRef? CheckpointRef { get; private init; }
+
+    internal static EuEnumerationRunResult DeliveredWithCheckpoint(
+        RepeatedEnumerationDeliveryReceipt receipt, int productRequestCount, SourceArtifactRef checkpoint)
+    {
+        ArgumentNullException.ThrowIfNull(checkpoint);
+        ArgumentNullException.ThrowIfNull(receipt);
+
+        return new(receipt, null, productRequestCount) { CheckpointRef = checkpoint };
+    }
     public EuEnumerationRefusalDetail? Refusal { get; }
 
     /// <summary>Publisher requests this run spent, robots excluded. Always populated.</summary>
@@ -2646,7 +2657,11 @@ public sealed class EuRepeatedEnumerationExecutor
                     productRequestCount);
             }
 
-            return EuEnumerationRunResult.Delivered(receipt, productRequestCount);
+            if (profile.Dialect != RepeatedEnumerationSparqlJsonDialect.EuropeanUnionVirtuoso)
+                return EuEnumerationRunResult.Delivered(receipt, productRequestCount);
+            var checkpoint = await EuEnumerationCheckpoint.WriteAsync(
+                _custodyStore, receipt.Delivery, profile, cancellationToken).ConfigureAwait(false);
+            return EuEnumerationRunResult.DeliveredWithCheckpoint(receipt, productRequestCount, checkpoint);
         }
         catch (Exception exception) when (exception is CustodyIntegrityException or CustodyRequiredException)
         {
