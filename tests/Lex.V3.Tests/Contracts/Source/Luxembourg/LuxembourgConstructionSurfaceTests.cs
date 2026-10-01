@@ -74,6 +74,7 @@ public sealed class LuxembourgConstructionSurfaceTests
     [TestMethod]
     public void APartitionChainGrowsOnlyBySplittingALeaf()
     {
+        foreach (var row in ConstructionSurface.Of(typeof(LuxembourgPartitionChain))) System.Console.WriteLine("PIN875_CHAIN " + row);
         CollectionAssert.AreEqual(
             new[]
             {

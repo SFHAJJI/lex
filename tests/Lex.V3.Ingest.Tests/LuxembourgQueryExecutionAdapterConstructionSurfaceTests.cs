@@ -183,6 +183,7 @@ public sealed class LuxembourgQueryExecutionAdapterConstructionSurfaceTests
     [TestMethod]
     public void FamilyEnumerationOutcomeHasExactlyFiveFactoriesOverOnePrivateConstructor()
     {
+        foreach (var row in ConstructionSurface.Of(typeof(LuxembourgFamilyEnumerationOutcome))) System.Console.WriteLine("PIN875_OUTCOME " + row);
         CollectionAssert.AreEqual(
             new[]
             {
