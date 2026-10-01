@@ -133,10 +133,20 @@ public sealed class EuFormexPackagePopulationResult
     /// </summary>
     public string CreateOutcomeDiagnosticsJson() => JsonSerializer.Serialize(new
     {
-        schema = "lex-v3-eu-formex-outcome-diagnostic/1",
+        schema = "lex-v3-eu-formex-outcome-diagnostic/2",
         delivered = Delivered,
         expression_count = Reconciliation?.ExpressionCount,
         enumerated_count = Enumerations.Count,
+        successful_enumeration_count = Enumerations.Count(static enumeration => enumeration.Delivered),
+        failed_enumerations = Enumerations.Where(static enumeration => !enumeration.Delivered).Select(static enumeration => new
+        {
+            work = enumeration.ExpressionIdentity.PublisherWorkId,
+            expression = enumeration.ExpressionIdentity.PublisherExpressionId,
+            language = enumeration.Expression.OfficialLanguage,
+            refusal = ContractWire.NameOf(enumeration.Refusal),
+            detail = enumeration.Detail,
+            product_request_count = enumeration.ProductRequestCount,
+        }),
         eligible_count = Delivered ? (int?)EligibleExpressionCount : null,
         acquired_count = Delivered ? (int?)AcquiredExpressionCount : null,
         not_enumerated_language_out_of_scope_count = Delivered ? (int?)NotEnumeratedExpressionCount : null,

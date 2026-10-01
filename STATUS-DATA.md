@@ -2,7 +2,15 @@
 
 Updated 2026-10-01.
 
-## EU consolidated bodies and states: draft validation
+## EU population refusal and recovery
+
+The frozen EU run at `C:\lex-v3\eu-population-20261001-4` ended at 16:35 UTC with exit 3 after 10,424 wire requests and 685 manifestation enumeration results. It produced no mount. The failed expression is `http://publications.europa.eu/resource/cellar/ecdb2904-4c60-11ec-91ac-01aa75ed71a1.0010`. Its first COUNT is retained, immediately followed by a 122-byte gateway response (SHA-256 `880c929020d4b79bf1995656d21d9a6859aab3a9460f941eb0b1a6e5502ee4cc`). The old code omitted rejected routes, so timing alone does not prove that response's request or HTTP status.
+
+The recovery slice retains all executed enumeration routes before rejection. It permits only this exact gateway body with HTTP 502 at the Publications Office SPARQL endpoint to use the existing bounded retry allowance, backoff and shared wire budget. Other gateway/challenge bytes and Luxembourg responses remain refused. Formex diagnostic version 2 lists every failed enumeration and its underlying detail while leaving an unclosed population's total unknown. No old custody is rewritten or imported.
+
+Local `pwsh -File eng/test-fast.ps1` and touched ingest tests are deferred under the standing memory guard (free RAM below 4 GiB). CI validation and a bounded live proof are pending. No new full acquisition has started. PR #904 remains draft until its March 2017 Luxembourg partition is acquired, derived twice and measured.
+
+## EU consolidated bodies and states: merged foundation
 
 The next checkpoint-bearing EU capture binds consolidated EN/FRA packages to the proven Cellar work/expression and its census relationship to a reviewed seed. An observed work CELEX is optional and never synthesized from the seed/date. A checked retained response (a2da37994258ed7249ca7957e7709f90a5484d7de908e21c7a7f1f2079d49052) confirms many dated works explicitly lack CELEX and also carries the treaty form `02016M/TXT-20151225`. Original seed identities remain separate. An unproven work still keeps `IdentityNotAdmitted`; other languages retain their existing unenumerated typed outcome.
 
@@ -10,9 +18,9 @@ The EU index draft is schema `lex-v3-europe-index/5`. Its `states` table has one
 
 Tests cover original and consolidated EN/FRA acquisition, checked replay, two separate offline CLI processes, whole-mount digest comparisons, multi-date ambiguity, and historical index/checkpoint compatibility. CI36889767805 at 0c985896 passed 5,923 tests with 0 failures and 22 skipped, including the prior query 2, population 1 and package 1 replay cases. The schema 5 fixed-input byte pin is `cb2b04fc0c50aaaaaacedd1261d38829bea8ce54667676a96552090baa7a9f7e`. The subsequent cross-family repair below still requires exact-head green CI. No live consolidated-population claim is made. Query checkpoint 3 and Formex population checkpoint 2 pin the new facts; older versions verify their original digest and acquisition policy.
 
-PR #904's Luxembourg candidate passed CI36883780049: 5,904 passed, 0 failed, 22 skipped. It remains draft until a bounded partition is acquired, derived twice and measured. The active EU run continues unchanged; local fast/ingest tests are deferred under the acquisition and low-memory standing orders. The EU draft is independent preparation while that heavy slot is occupied.
+PR #904's Luxembourg candidate passed CI36883780049: 5,904 passed, 0 failed, 22 skipped. It remains draft until a bounded partition is acquired, derived twice and measured. PR #904 has since imported merged #905 at e95ba92e; its refreshed CI is pending. Local fast/ingest tests remain deferred under the memory guard.
 
-Claude's read-only review found the legacy resolver/reader mismatch and the API's fixed statements that no consolidated version is held. The one repair filters the three legacy identifier/expression surfaces to original text in schema 5 and tests every identifier entry (work, CELEX, expression, article and qualified provision) for consolidated fixtures with and without CELEX. Original EN/FRA resolution and search, state-aware expressions, and held source evidence remain tested. Exact repaired CI and a scoped review confirmation gate merge.
+Claude's read-only review found the legacy resolver/reader mismatch and the API's fixed statements that no consolidated version is held. The one repair filters the three legacy identifier/expression surfaces to original text in schema 5 and tests every identifier entry (work, CELEX, expression, article and qualified provision) for consolidated fixtures with and without CELEX. Original EN/FRA resolution and search, state-aware expressions, and held source evidence remain tested. PR #905 merged as 256bef5b after exact 9fff439e CI36891324272 (5,924 passed, 0 failed, 22 skipped) and scoped Claude MERGE confirmation.
 
 Cross-lane mount gate: capture and offline derivation of consolidated bodies may proceed, but a consolidated capture must not be served until the web lane replaces the API's fixed original-only statements and connects the state-aware reader. The current original-only EU rehearsal and historical indexes are unaffected. API/web changes remain owned by the web lane.
 
@@ -24,7 +32,7 @@ Cross-lane mount gate: capture and offline derivation of consolidated bodies may
 
 PR #899's separate-process tests cover a raw first mount and a Brotli chained mount. Each compares every output digest with the original fixture derivation and a second process, traps network attempts, and verifies the exact file set. The predecessor directory is removed before replay. The read-only Claude repair confirmation returned MERGE. Final e576991e passed CI36882291778 (5,894 passed, 0 failed, 22 skipped), and PR #899 merged as 7a6c3d04.
 
-The active EU retry6 remains on its frozen runtime and predates these catalogs. Its latest retained responses are successful manifestation queries; a completed population mount is not yet available. The next fresh capture must include consolidated EN/FRA packages: the active frozen runtime only admits original seed roots; the draft above adds proven consolidated identities. Non-EN/FRA expressions keep their typed, unenumerated language-out-of-scope outcome.
+The completed EU retry6 used its frozen runtime and predates these catalogs; it ended with the refusal recorded above. The next fresh capture must include consolidated EN/FRA packages: the active frozen runtime only admits original seed roots; the draft above adds proven consolidated identities. Non-EN/FRA expressions keep their typed, unenumerated language-out-of-scope outcome.
 
 Luxembourg launch scope follows the owner's legislative-body family decision. Counts observed on 2026-10-01 are 93,161 subjects under the law prefix, 145,703 under grand-ducal regulations, 21,231 under codes, and 816,645 under the broader legislation prefix. These are IRI-prefix subject counts, not a legal-family census or body count. The candidate March 2017 law partition has S=219, A=1,414, G=114 from six bounded requests, independently reopened by digest. Acquire, derive twice and verify that partition before full-run sizing. Every excluded family still needs an explicit typed scope disposition.
 

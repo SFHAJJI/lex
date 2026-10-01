@@ -16,6 +16,8 @@ public sealed class EuVirtuosoDeadlockRetryTests
     [TestMethod]
     [DataRow(1, 500)]
     [DataRow(2, 500)]
+    [DataRow(1, 502)]
+    [DataRow(2, 502)]
     [DataRow(1, 503)]
     [DataRow(2, 503)]
     public async Task RetainedTransientFailureRetriesTheSameCountOrPageAndProvesBothPasses(int faultAt, int status)
@@ -41,6 +43,7 @@ public sealed class EuVirtuosoDeadlockRetryTests
 
     [TestMethod]
     [DataRow(500)]
+    [DataRow(502)]
     [DataRow(503)]
     public async Task PersistentTransientFailureExhaustsTheExistingFourAttemptAllowance(int status)
     {
@@ -60,6 +63,7 @@ public sealed class EuVirtuosoDeadlockRetryTests
 
     [TestMethod]
     [DataRow(500)]
+    [DataRow(502)]
     [DataRow(503)]
     public async Task ExhaustedWireBudgetStopsBeforeTheRetryIsSent(int status)
     {
@@ -73,6 +77,8 @@ public sealed class EuVirtuosoDeadlockRetryTests
     }
 
     [TestMethod]
+    [DataRow(502, Deadlock)]
+    [DataRow(502, "<html>Verify you are human</html>")]
     [DataRow(403, Deadlock)]
     [DataRow(503, Deadlock)]
     [DataRow(503, "<html>Verify you are human</html>")]
@@ -83,10 +89,11 @@ public sealed class EuVirtuosoDeadlockRetryTests
     public async Task OtherRefusalsNeverGainADeadlockRetry(int status, string body)
     {
         var handler = new DeadlockHandler(1, 10, status, body);
-        var (result, _) = await RunAsync(handler, WireRequestBudget.OfWireRequests(20));
+        var (result, store) = await RunAsync(handler, WireRequestBudget.OfWireRequests(20));
         Assert.IsNull(result.Receipt);
         Assert.IsNotNull(result.Refusal);
         Assert.AreEqual(1, handler.Posts.Count);
+        Assert.AreEqual(status, RetainedRoutes(store).Single().Hops[^1].Status);
     }
 
     [TestMethod]
@@ -98,17 +105,49 @@ public sealed class EuVirtuosoDeadlockRetryTests
         var body = await RetainedFailureBodyAsync(503);
         if (changeBody) body += "\n";
         var handler = new DeadlockHandler(1, 10, status, body);
-        var (result, _) = await RunAsync(handler, WireRequestBudget.OfWireRequests(20));
+        var (result, store) = await RunAsync(handler, WireRequestBudget.OfWireRequests(20));
         Assert.IsNull(result.Receipt);
         Assert.IsNotNull(result.Refusal);
         Assert.AreEqual(1, handler.Posts.Count);
+        Assert.AreEqual(status, RetainedRoutes(store).Single().Hops[^1].Status);
+    }
+
+    [TestMethod]
+    [DataRow(502, true)]
+    [DataRow(403, false)]
+    [DataRow(500, false)]
+    [DataRow(503, false)]
+    [DataRow(504, false)]
+    public async Task GatewayRequiresExactBytesAnd502Status(int status, bool changeBody)
+    {
+        var body = await RetainedFailureBodyAsync(502);
+        if (changeBody) body += "\n";
+        var handler = new DeadlockHandler(1, 10, status, body);
+        var (result, store) = await RunAsync(handler, WireRequestBudget.OfWireRequests(20));
+        Assert.IsNull(result.Receipt);
+        Assert.AreEqual(EuEnumerationRefusal.StatusNotAdmitted, result.Refusal?.Code);
+        Assert.AreEqual(1, handler.Posts.Count);
+        Assert.AreEqual(status, RetainedRoutes(store).Single().Hops[^1].Status);
+    }
+
+    [TestMethod]
+    public async Task MediaTypeRefusalStillRetainsTheExecutedRoute()
+    {
+        var handler = new DeadlockHandler(1, 1, 200, "wrong media type");
+        var (result, store) = await RunAsync(handler, WireRequestBudget.OfWireRequests(20));
+        Assert.IsNull(result.Receipt);
+        Assert.AreEqual(EuEnumerationRefusal.MediaTypeNotAdmitted, result.Refusal?.Code);
+        Assert.AreEqual(1, handler.Posts.Count);
+        Assert.AreEqual(200, RetainedRoutes(store).Single().Hops[^1].Status);
     }
 
     private static async Task<string> RetainedFailureBodyAsync(int status)
     {
         var bytes = await File.ReadAllBytesAsync(Path.Combine(AppContext.BaseDirectory,
-            "Fixtures", "EuDocumentFetch", status == 503 ? "eu-maintenance-503.bin" : "eu-virtuoso-deadlock-500.bin"));
-        Assert.AreEqual(status == 503
+            "Fixtures", "EuDocumentFetch", status == 502 ? "eu-gateway-502.bin" : status == 503 ? "eu-maintenance-503.bin" : "eu-virtuoso-deadlock-500.bin"));
+        Assert.AreEqual(status == 502
+            ? "880c929020d4b79bf1995656d21d9a6859aab3a9460f941eb0b1a6e5502ee4cc"
+            : status == 503
             ? "e7fab335ce5367cfe359f9f7e0ad6ce1838bec9189a216bc3faf437ce169d404"
             : "70769075fe4617e11288eda6ac3120c1b10b7f5e64d90149ff9e8c28431b3627",
             Convert.ToHexStringLower(SHA256.HashData(bytes)));
