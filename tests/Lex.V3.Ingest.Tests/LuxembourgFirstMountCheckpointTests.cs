@@ -82,6 +82,24 @@ public sealed partial class LuxembourgFirstMountAcquisitionTests
     }
 
     [TestMethod]
+    public async Task CompleteLuReplayReprovesAdaptiveSplitFamiliesAndTwoWorkDerivation()
+    {
+        var store = new EuAcquisitionTestFixture.EuInMemoryCustodyStore();
+        var handler = new LuxembourgFamilyHandler(PdfBytes(), includeSecondWork: true, includeBlankNode: true, saturatedRoot: true);
+        var renderers = await LuxembourgRendererSources.FromCheckoutAsync(store, CheckoutRoot(), CancellationToken.None);
+        var captured = await Acquisition(store, handler).RunAsync(LuxembourgActRange.WholePopulation, renderers,
+            LuxembourgAcquisitionTestFixture.TestWireBudget(), CancellationToken.None);
+        Assert.IsTrue(captured.Delivered, captured.Detail);
+        Assert.IsTrue(captured.Run!.FamilyOutcomes.All(outcome => outcome.CoverLeafProofs!.Count > 1));
+        var copy = await CopyVocabularyStoreAsync(store);
+        var reopened = await LuxembourgFirstMountAcquisition.ReopenAsync(copy, captured.CheckpointRef!,
+            LuxembourgActRange.WholePopulation, CancellationToken.None);
+        Assert.AreEqual(captured.Run.CorpusRecordSetRef, reopened.Run!.CorpusRecordSetRef);
+        Assert.AreEqual(captured.AknInventory!.IdentitySha256, reopened.AknInventory!.IdentitySha256);
+        Assert.AreEqual(captured.AknLegalContent!.IdentitySha256, reopened.AknLegalContent!.IdentitySha256);
+    }
+
+    [TestMethod]
     public async Task CompleteLuReplayCancellationDoesNotWrite()
     {
         var capture = await CapturedVocabulary.Value;

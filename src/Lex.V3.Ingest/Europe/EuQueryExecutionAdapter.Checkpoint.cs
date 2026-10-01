@@ -45,7 +45,7 @@ public sealed partial class EuQueryExecutionAdapter
                 objectFactsPolicy.RendererSource.Reference, witnessRendererSource.Reference, documentFetchRendererSource.Reference,
                 context.Objects.ToArray(), context.Tripwires.ToArray(), context.Witness!.CheckpointRef!,
                 context.Witness.AcquisitionRunRef!, result.DocumentAcquisitionCheckpointRef!, context.Manifest!, context.Run!,
-                result.CorpusRecordSetRef!, RunResultDigest(result));
+                result.CorpusRecordSetRef!, result.CorpusRecordSetReceipt!.Reference.ContentSha256, RunResultDigest(result));
             if (document.Census.Any(static family => family.Checkpoint is null) ||
                 document.Objects.Any(static family => family.Checkpoint is null) || document.Witness is null ||
                 document.WitnessRun is null || document.Documents is null)
@@ -163,7 +163,7 @@ public sealed partial class EuQueryExecutionAdapter
     private sealed record RunCheckpoint(string Schema, RunFamily[] Census, string ObjectPlanResourceId,
         SourceArtifactRef ObjectRenderer, SourceArtifactRef WitnessRenderer, SourceArtifactRef DocumentRenderer,
         RunFamily[] Objects, RunTripwire[] Tripwires, SourceArtifactRef Witness, SourceArtifactRef WitnessRun,
-        SourceArtifactRef Documents, SourceArtifactRef Manifest, SourceArtifactRef Run, SourceArtifactRef Corpus, string ResultSha256);
+        SourceArtifactRef Documents, SourceArtifactRef Manifest, SourceArtifactRef Run, SourceArtifactRef Corpus, string CorpusContentSha256, string ResultSha256);
     private sealed record RunFamily(SourceArtifactRef Checkpoint, SourceArtifactRef Run, SourceArtifactRef Profile,
         string PlanResourceId, SourceArtifactRef Renderer, string? Celex, EuObjectFactsQuerySet? Set, string[]? Batch);
     private sealed record RunTripwire(string FamilyKey, SourceArtifactRef Checkpoint);

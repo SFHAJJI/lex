@@ -53,12 +53,29 @@ public sealed partial class EuQueryExecutionAdapterTests
     }
 
     [TestMethod]
+    public async Task CompleteEuReplayPreservesOriginalBodyReceiptsAfterFreshHoldObservations()
+    {
+        var capture = await CaptureEuRunAsync(true);
+        var copy = await CopyLadderStoreAsync(capture.Store);
+        var moving = new LuxembourgGazetteAcquisitionTests.GazetteCustodyStore(copy) { AdvanceObservationPerCreate = true };
+        var result = await EuQueryExecutionAdapter.ReopenAsync(moving, capture.Result.AcquisitionCheckpointRef!, capture.Seeds, CancellationToken.None);
+        Assert.AreEqual(capture.Result.CorpusRecordSetRef, result.CorpusRecordSetRef);
+        var held = capture.Result.DocumentAcquisitionOutcomesByOrdinal!.Values.Where(static outcome => outcome.Receipt is not null).ToArray();
+        Assert.IsTrue(held.Length > 0, "The fixture must exercise a held query body.");
+        foreach (var outcome in held)
+            Assert.IsTrue(moving.ReceiptsByContent[outcome.Receipt!.Reference.ContentSha256].Any(receipt =>
+                DurableBlobWriteReceiptDigest.Of(receipt) != DurableBlobWriteReceiptDigest.Of(outcome.Receipt)),
+                "Replay must freshly hold the same body with a different receipt observation.");
+    }
+
+    [TestMethod]
     [DataRow("root")]
     [DataRow("census")]
     [DataRow("objects")]
     [DataRow("tripwires")]
     [DataRow("witness")]
     [DataRow("documents")]
+    [DataRow("corpus_storage")]
     [DataRow("object_renderer")]
     [DataRow("witness_renderer")]
     public async Task CompleteRunRequiresEveryRetainedDependency(string missing)
@@ -68,6 +85,7 @@ public sealed partial class EuQueryExecutionAdapterTests
         var digest = missing switch
         {
             "root" => capture.Result.AcquisitionCheckpointRef!.Sha256,
+            "corpus_storage" => root["corpus_content_sha256"]!.GetValue<string>(),
             "census" or "objects" or "tripwires" => root[missing]![0]!["checkpoint"]!["sha256"]!.GetValue<string>(),
             _ => root[missing]!["sha256"]!.GetValue<string>(),
         };

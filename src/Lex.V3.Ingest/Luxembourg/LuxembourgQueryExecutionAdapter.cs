@@ -2137,7 +2137,9 @@ public sealed partial class LuxembourgQueryExecutionAdapter
             {
                 if (pair.Value.Receipt is not { } currentReceipt) continue;
                 var record = originalSet.Set.Records.SingleOrDefault(record => record.ObjectOrdinal == pair.Key);
-                if (record?.Body.Receipt is not { } historicalReceipt ||
+                if (record is null) throw new CustodyIntegrityException("Original corpus has no acquired ordinal.");
+                if (record.Body.Kind != CorpusBodyRecordKind.Held) continue; // Final rights may exclude a fetched body.
+                if (record.Body.Receipt is not { } historicalReceipt ||
                     historicalReceipt.Reference.ContentSha256 != currentReceipt.Reference.ContentSha256 ||
                     historicalReceipt.Reference.ByteLength != currentReceipt.Reference.ByteLength ||
                     CustodyMembershipClassifier.Classify(historicalReceipt) != CustodyMembershipClassifier.Classify(currentReceipt))

@@ -32,6 +32,7 @@ public sealed partial class LuxembourgGazetteAcquisitionTests
     [DataRow("family")]
     [DataRow("documents")]
     [DataRow("gazette")]
+    [DataRow("corpus_storage")]
     public async Task CompleteLuQueryRequiresRetainedAcquisitionDependencies(string missing)
     {
         var capture = await CaptureQueryAsync();
@@ -39,6 +40,7 @@ public sealed partial class LuxembourgGazetteAcquisitionTests
         var digest = missing switch
         {
             "root" => capture.Checkpoint.Sha256,
+            "corpus_storage" => root["corpus_content_sha256"]!.GetValue<string>(),
             "family" => root["families"]![0]!["checkpoint"]!["sha256"]!.GetValue<string>(),
             _ => root[missing]!["sha256"]!.GetValue<string>(),
         };
@@ -64,6 +66,7 @@ public sealed partial class LuxembourgGazetteAcquisitionTests
     [DataRow("final_manifest")]
     [DataRow("final_storage")]
     [DataRow("corpus")]
+    [DataRow("corpus_storage")]
     [DataRow("observed")]
     [DataRow("result")]
     public async Task RehashedLuQueryCatalogCannotSubstituteOriginalAssociations(string changed)
@@ -83,6 +86,7 @@ public sealed partial class LuxembourgGazetteAcquisitionTests
             case "selection_storage": root["selection_content_sha256"] = new string('a', 64); break;
             case "final_manifest": root["final_manifest"]!["resource_id"] = NewUrn(); break;
             case "final_storage": root["final_content_sha256"] = new string('a', 64); break;
+            case "corpus_storage": root["corpus_content_sha256"] = new string('a', 64); break;
             case "corpus": root["corpus"]!["resource_id"] = NewUrn(); break;
             case "observed": root["observed"]!["resource_id"] = NewUrn(); break;
             default: root["result_sha256"] = new string('a', 64); break;
