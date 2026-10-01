@@ -14,8 +14,8 @@ custody protection. A failed checkpoint hold produces a typed cover refusal.
 The chain now owns immutable copies of its leaves and history. Twenty-two new cases cover
 history/collection mutation, copied custody, current weaker protection, empty leaves,
 ancestor-ID reuse, missing artifacts, caller pins, rehashed boundary/history changes,
-cancellation and the adapter's custody-failure path. Exact 29d93d19 passed CI 36855669406: 5,370 passed and 22 skipped,
-including all 22 new cases; the required watch exited 0. Integration 8c3f3801 and updated parent PR872 source d834ae22 are included.
+cancellation and the adapter's custody-failure path. Exact 0d11ea0a passed CI 36856826820: 5,378 passed and 22 skipped,
+including all 22 new cases; the required watch exited 0. Merged PR869 integration 1a63b61a and reviewed parent PR872 source 8ba8376a are included.
 Fresh combined CI and read-only Claude review remain required. Local builds/tests remain
 deferred under the acquisition memory guard. PR872 and its PR869 prerequisite must merge first.
 
