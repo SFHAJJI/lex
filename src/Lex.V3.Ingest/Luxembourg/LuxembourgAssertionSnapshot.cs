@@ -59,7 +59,7 @@ internal sealed class LuxembourgAssertionSnapshot
     }
 
     /// <summary>Writes verified rows as they arrive without retaining their union. The source
-    /// must preserve contiguous subject groups and the same proof/admission checks as Write.
+    /// must preserve contiguous subject groups and the proof/admission checks the caller applies before Write.
     /// This method preserves the synchronous writer's bytes and leaves the destination open.</summary>
     internal static async Task<string> WriteAsync(Stream destination, SourceArtifactRef runIdentity,
         SourceArtifactRef observation, IReadOnlyList<SourceArtifactRef> censusProofs,
