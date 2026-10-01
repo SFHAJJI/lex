@@ -13,17 +13,14 @@ CELEX selection mode, annex identities and typed non-EN/FRA outcomes. A missing 
 population checkpoint prevents delivery. Replay sends no requests and introduces no new artifact digests. Enumeration receipt restoration
 repeats checked local holds so current custody guarantees are not inferred from archived receipts.
 
-Thirty-two new draft cases cover copied and weaker custody, original expression references,
-annex identities, language exclusions, automatic CELEX selection, missing nested evidence,
-caller and rehashed association changes, cancellation and failed holds. Initial d5fd69e3 CI36845188277 failed compilation on a missing Derivation namespace import;
-no tests ran. Repaired1009183a CI36845576216 passed all32 new cases:5395 passed/22 skipped,
-three failures (guarded construction, closed vocabulary and anonymous custody-reference exposure).
-Compiled method/enum rows are transcribed; the fingerprint now carries scalar reference fields,
-keeping the ban on new custody-reference producers. The weaker-store case explicitly checks
-RetainedUnenforced proof floors. Fresh CI is required. Local Release, fast and affected ingest tests plus Claude review
-remain required after the active EU run and earlier queue. Pending PR881's final merged head
-must be included before local validation. This restores Formex over an already checked run;
-the complete acquisition catalog and independent offline mount builds remain outstanding.
+All 32 new cases passed at 2f55bc45: CI 36846666698 reported 5,398 passed and 22 skipped,
+with required watch exit zero. Cases cover copied/weaker custody, annex and expression identities,
+language exclusions, automatic CELEX selection, missing evidence, changed associations and holds.
+This branch now includes updated package parent af34feed and integration d56d0539. Fresh combined
+CI and a read-only Claude review remain required; pending PR881 must merge with its final source
+included. Local builds/tests remain deferred under the acquisition memory guard. This restores
+Formex over an already checked run; complete acquisition composition and independent offline
+mount builds remain outstanding.
 
 ## Offline Formex package and annex derivation (Codex, 2026-10-01)
 
