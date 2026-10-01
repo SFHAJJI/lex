@@ -10,7 +10,7 @@ namespace Lex.V3.Ingest.Europe;
 
 public sealed partial class EuCorrigendumTripwireProducer
 {
-    private const string CheckpointSchema = "lex-eu-tripwire-production-checkpoint/1";
+    private const string CheckpointSchema = "lex-eu-tripwire-production-checkpoint/2";
 
     /// <summary>Rebuilds the original tripwire and lineage from its checked expression pairing without publisher traffic.</summary>
     public static async Task<EuCorrigendumTripwireProductionResult> ReopenAsync(
@@ -55,5 +55,5 @@ public sealed partial class EuCorrigendumTripwireProducer
     }
 
     private static byte[] EncodeCheckpoint(TripwireCheckpoint document) => Encoding.UTF8.GetBytes(ContractJson.Serialize(document));
-    private sealed record TripwireCheckpoint(string Schema, SourceArtifactRef Expressions, string CanonicalSha256, string LineageSha256);
+    private sealed record TripwireCheckpoint(string Schema, SourceArtifactRef Expressions, string CanonicalSha256, string LineageSha256, string TripwireReceiptSha256, string LineageReceiptSha256);
 }

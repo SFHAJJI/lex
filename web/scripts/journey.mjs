@@ -482,7 +482,7 @@ async function listFiles(root) {
   return files;
 }
 
-async function startApi(apiOutput, mount, webRoot = null) {
+export async function startApi(apiOutput, mount, webRoot = null) {
   const home = await mkdtemp(join(tmpdir(), "lex-journey-api-"));
   await cp(apiOutput, home, { recursive: true });
   await rm(join(home, "v3-corpus"), { recursive: true, force: true });

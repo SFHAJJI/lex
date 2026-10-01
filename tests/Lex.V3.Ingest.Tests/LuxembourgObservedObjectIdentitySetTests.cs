@@ -17,7 +17,7 @@ namespace Lex.V3.Ingest.Tests;
 /// one thing these bytes must not do: they are the wire form a later reader has to accept.
 /// </remarks>
 [TestClass]
-public sealed class LuxembourgObservedObjectIdentitySetTests
+public sealed partial class LuxembourgObservedObjectIdentitySetTests
 {
     private static readonly SourceArtifactRef RunIdentity = new(
         "urn:uuid:11111111-1111-4111-8111-111111111111", new string('1', 64));
