@@ -5,27 +5,19 @@ every pull request that changes what is served, what is next or what is blocked.
 
 ## Direct Luxembourg scope classification (Codex, 2026-10-01)
 
-Reversible driver decision: construct each final immutable resource resolution during classification,
-then derive its scope input after the global evidence table is fixed. This removes the population-wide
-anonymous intermediate classification array and its retained temporary assertion/relation arrays.
-The existing complete structural validation, object ordering, global target lookup, evidence ordering,
-constructor checks, inbound relations and accounting remain in place. This reduces duplicated working
-state; it does not provide bounded observation, scope or corpus construction.
+The verified profile constructs final resource resolutions after fixing the global evidence
+table. This removes the intermediate classification array and its temporary assertion/relation
+arrays. Complete structural validation, ordering, global target lookup, evidence ordinals,
+constructor checks, inbound relations and accounting remain in the existing path.
 
-Three mixed-population cases permute 130 resources with shared evidence, a body with a replaced
-item, a coordinated-text relation to that body, an inbound citation and empty metadata resources.
-They compare all serialized resolution fields and explicitly check resource/input alignment and the
-global relation result. Initial CI36824262596 built with zero warnings/errors and passed these three
-cases and the ingest suite: 5,256 passed, 22 skipped, two construction-surface pin failures. Those
-pins still included the removed anonymous carrier. Diagnostic CI36825213776 independently printed
-six changed census entries: five carrier counts decrease, and the final resource producer count
-increases. Those exact literal rows are transcribed, and the obsolete typed-role carrier entry is
-removed; constructor/factory assertions remain strict. Both CI runs passed all three new cases and
-all ingests. Repaired b5ea5b92 passed CI36826107033: 5,258 passed, 22 skipped, zero build
-warnings/errors, required watch exit0. The branch now incorporates integration e3984f6b and requires
-fresh CI on that combined head. Local build, required fast tests, affected ingest checks and
-cross-family review remain pending while EU owns the heavy slot. No measured memory saving or full
-Luxembourg capacity is claimed.
+Three cases permute 130 mixed resources with shared evidence, replaced body items, coordinated
+text, inbound citations and empty metadata. They compare every serialized resolution field,
+resource/input alignment and global relations. Exact f98a2546 passed CI36827783161 with
+5,263 tests passed and 22 skipped. The branch now includes integration c27012f4; fresh final-head
+CI and read-only Claude review are required under the 10:35 standing order. No local tests were
+run during active acquisition. The final observation/resource/input graphs still materialize;
+no measured memory saving, bounded full pipeline or full Luxembourg fit is claimed.
+
 
 ## EU mount compatibility and offline derivation order (Codex, 2026-10-01)
 
