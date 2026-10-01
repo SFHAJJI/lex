@@ -2655,7 +2655,7 @@ truthful").
     names their predecessor absent.
 - **Next:** `as_observed` and `verify` quote a state from a retained generation.
 
-Predecessor chaining, the sixth slice, third part (PR #888): a state only a retained generation
+Predecessor chaining, the sixth slice, third part (PR #889): a state only a retained generation
 holds is answered from it, and the permalink the product emitted for it still verifies (G3, and the
 launch contract's "`verify` resolves every citation the product emitted").
 - **Readers at startup.** The mount opens one verified reader per retained generation, newest first,
@@ -3385,7 +3385,7 @@ recorded by PR #862:
    - each build's time in the log (PR #871), then `as_observed` by build snapshot (G4) (PR #874);
    - a generation mount (G3b), retained by S7-A09: generations written and verified (PR #880),
      held to the log by the mount with the depth reported (PR #885), and quoted by `as_observed`
-     and `verify` (PR #888).
+     and `verify` (PR #889).
    `observed_from` stays null until a Luxembourg body's capture time reaches the corpus (data lane);
    `knowable_on` and withdrawal follow it. The owner questions (G1 when a file changes but its text
    does not, "as observed" identified by snapshot with no time, retaining every generation) were
