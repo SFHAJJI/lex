@@ -114,10 +114,9 @@ public sealed class ClosedVocabularyCensusTests
                 "Lex.V3.Ingest.Europe.EuFormexManifestationEnumerationRefusal: None, EnumerationRefused, Enumeratio"
                     + "nProofRefused, VerifiedRowsRefused, RowNotAdmitted, RowNamesAnotherExpression, ManifestationBindin"
                     + "gDeliveredTwice, CheckpointNotRetained",
-                "Lex.V3.Ingest.Europe.EuFormexPackageNotAcquiredReason: None, BodyNotHeld, "
-                    + "LanguageNotAddressable, ManifestationNotSingular, IdentityNotAdmitted, "
-                    + "AnnexXhtmlNotInventoried, AnnexPdfNotServed, AnnexEvidenceNotBound, "
-                    + "AnnexBodyNotClassified",
+                "Lex.V3.Ingest.Europe.EuFormexPackageNotAcquiredReason: None, BodyNotHeld, LanguageNotAddressable, "
+                    + "ManifestationNotSingular, IdentityNotAdmitted, AnnexXhtmlNotInventoried, AnnexPdfNotServed, AnnexE"
+                    + "videnceNotBound, AnnexBodyNotClassified, CheckpointNotRetained",
                 "Lex.V3.Ingest.Europe.EuFormexPackageOutcomeKind: NotEligible, Acquired, "
                     + "Unavailable, Refused, NotAcquired, RouteRefused, PackageRejected, "
                     + "NotEnumeratedLanguageOutOfScope",
@@ -297,8 +296,8 @@ public sealed class ClosedVocabularyCensusTests
                 "Lex.V3.Ingest.Luxembourg.LuxembourgOpinionRequestInventoryRefusal: None, "
                     + "EnumerationRefused, EnumerationProofRefused, VerifiedRowsRefused, "
                     + "RowNotAdmitted, SubjectDeliveredTwice, NonAddressableSubjectObserved",
-                "Lex.V3.Ingest.Luxembourg.LuxembourgPartitionCoverReconciliationRefusal: "
-                    + "LeafExecutorRefused, LeafProofRefused, CoverReconciliationRefused",
+                "Lex.V3.Ingest.Luxembourg.LuxembourgPartitionCoverReconciliationRefusal: LeafExecutorRefused, LeafP"
+                    + "roofRefused, CoverReconciliationRefused, CheckpointNotRetained",
                 "Lex.V3.Ingest.Luxembourg.LuxembourgPdfLayoutEvidenceDisposition: NotApplicable, "
                     + "Admitted, TypedGap",
                 "Lex.V3.Ingest.Luxembourg.LuxembourgPdfLayoutEvidenceGapReason: "

@@ -77,14 +77,17 @@ public sealed class LuxembourgConstructionSurfaceTests
         CollectionAssert.AreEqual(
             new[]
             {
-                "constructor private instance " + N + "LuxembourgPartitionChain::.ctor("
-                + N + "LuxembourgQueryPartitionRange, " + List + N + "LuxembourgQueryPartitionRange>) -> "
-                + N + "LuxembourgPartitionChain",
-                "method public instance " + N + "LuxembourgPartitionChain::SplitLeaf("
-                + "System.String, " + N + "LuxembourgQueryCursor, System.String, System.String) -> "
-                + N + "LuxembourgPartitionChain",
-                "method public static " + N + "LuxembourgPartitionChain::Root("
-                + N + "LuxembourgQueryPartitionRange) -> " + N + "LuxembourgPartitionChain",
+                "constructor private instance Lex.V3.Contracts.Source.Luxembourg.LuxembourgPartitionChain::.ctor(Le"
+                    + "x.V3.Contracts.Source.Luxembourg.LuxembourgQueryPartitionRange, System.Collections.Generic.IReadOn"
+                    + "lyList<Lex.V3.Contracts.Source.Luxembourg.LuxembourgQueryPartitionRange>, System.Collections.Gener"
+                    + "ic.IReadOnlyList<Lex.V3.Contracts.Source.Luxembourg.LuxembourgPartitionSplitStep>) -> Lex.V3.Contr"
+                    + "acts.Source.Luxembourg.LuxembourgPartitionChain",
+                "method public instance Lex.V3.Contracts.Source.Luxembourg.LuxembourgPartitionChain::SplitLeaf(Syst"
+                    + "em.String, Lex.V3.Contracts.Source.Luxembourg.LuxembourgQueryCursor, System.String, System.String)"
+                    + " -> Lex.V3.Contracts.Source.Luxembourg.LuxembourgPartitionChain",
+                "method public static Lex.V3.Contracts.Source.Luxembourg.LuxembourgPartitionChain::Root(Lex.V3.Cont"
+                    + "racts.Source.Luxembourg.LuxembourgQueryPartitionRange) -> Lex.V3.Contracts.Source.Luxembourg.Luxem"
+                    + "bourgPartitionChain",
             },
             ConstructionSurface.Of(typeof(LuxembourgPartitionChain)).ToArray());
     }

@@ -11,6 +11,43 @@ namespace Lex.V3.Tests.Contracts.Source.Luxembourg;
 public sealed class LuxembourgPartitionChainTests
 {
     [TestMethod]
+    [DataRow(false)]
+    [DataRow(true)]
+    public void RecordedSplitsReplayTheOriginalChainIncludingReusedRootIds(bool reuseRootId)
+    {
+        var root = LuxembourgPartitionChain.Root(Range("root", "a", "z"));
+        var first = root.SplitLeaf("root", Cursor("m"), "left", "right");
+        var original = first.SplitLeaf("right", Cursor("t"), reuseRootId ? "root" : "middle", "last");
+        var replay = LuxembourgPartitionChain.Root(original.RootRange);
+        foreach (var step in original.SplitHistory)
+            replay = replay.SplitLeaf(step.LeafPartitionId, step.Boundary, step.LeftPartitionId, step.RightPartitionId);
+        CollectionAssert.AreEqual(original.Leaves.ToArray(), replay.Leaves.ToArray());
+        Assert.AreEqual(0, root.SplitHistory.Count);
+        Assert.AreEqual(1, first.SplitHistory.Count);
+        Assert.AreEqual(2, original.SplitHistory.Count);
+        Assert.AreSame(replay.RootRange.StartInclusive, replay.Leaves[0].StartInclusive);
+        Assert.AreSame(replay.RootRange.EndExclusive, replay.Leaves[^1].EndExclusive);
+        for (var i = 1; i < replay.Leaves.Count; i++)
+            Assert.AreSame(replay.Leaves[i - 1].EndExclusive, replay.Leaves[i].StartInclusive);
+    }
+
+    [TestMethod]
+    public void ThePublishedLeavesAndHistoryCannotBeMutatedThroughCollectionInterfaces()
+    {
+        var chain = LuxembourgPartitionChain.Root(Range("root", "a", "z"))
+            .SplitLeaf("root", Cursor("m"), "left", "right");
+        var leaves = (IList<LuxembourgQueryPartitionRange>)chain.Leaves;
+        var history = (IList<LuxembourgPartitionSplitStep>)chain.SplitHistory;
+        Assert.IsTrue(leaves.IsReadOnly);
+        Assert.IsTrue(history.IsReadOnly);
+        Assert.ThrowsExactly<NotSupportedException>(() => leaves[0] = Range("gap", "b", "m"));
+        Assert.ThrowsExactly<NotSupportedException>(() => history.Clear());
+        Assert.AreSame(chain.RootRange.StartInclusive, chain.Leaves[0].StartInclusive);
+        Assert.AreSame(chain.Leaves[0].EndExclusive, chain.Leaves[1].StartInclusive);
+        Assert.AreEqual(1, chain.SplitHistory.Count);
+    }
+
+    [TestMethod]
     public void TheChainHasNoConstructorTakingAListOfRanges()
     {
         Assert.AreEqual(0, typeof(LuxembourgPartitionChain).GetConstructors().Length);
