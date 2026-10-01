@@ -251,6 +251,8 @@ try
 
     var luxembourg = await new LuxembourgFirstMountAcquisition(store, TimeProvider.System)
         .RunAsync(act, luxembourgRenderers, budget, token);
+    if (luxembourg.Run is { } observedLuxembourg)
+        Console.WriteLine("luxembourg family outcomes: " + Lex.V3.Contracts.ContractJson.Serialize(observedLuxembourg.FamilyOutcomes));
     if (!luxembourg.Delivered)
     {
         Console.Error.WriteLine($"refused: luxembourg: {luxembourg.Refusal}: {luxembourg.Detail} (spent {budget.Spent} of {budget.Limit})");
@@ -260,6 +262,19 @@ try
     Console.WriteLine(
         $"luxembourg: run complete, {luxembourg.Run!.CorpusRecordSet?.Set.Records.Count ?? 0} corpus record(s), "
         + $"vocabulary evidence {luxembourg.VocabularyEvidenceRef!.Sha256[..12]}; spent {budget.Spent} of {budget.Limit}");
+
+    var luRecords = luxembourg.Run!.CorpusRecordSet!.Set.Records;
+    var luBodies = luRecords.Where(record => record.Body.Receipt is not null)
+        .Select(record => record.Body.Receipt!.Reference).DistinctBy(reference => reference.ContentSha256).ToArray();
+    Console.WriteLine("luxembourg record measurements: " + Lex.V3.Contracts.ContractJson.Serialize(new
+    {
+        records = luRecords.Count,
+        uniqueHeldBodyCount = luBodies.Length,
+        uniqueHeldBodyBytes = luBodies.Sum(reference => reference.ByteLength),
+        outcomes = luRecords.GroupBy(record => new { record.Body.Kind, record.Body.NotHeldReason,
+            pendingReason = record.Body.PendingAcquisitionReason?.Kind })
+            .Select(group => new { outcome = group.Key, records = group.Count() }).ToArray(),
+    }));
 
     var build = await new V3FirstMountBuild(store).RunAsync(europe, luxembourg, predecessor, token);
     if (!build.Delivered)
