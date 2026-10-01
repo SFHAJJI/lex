@@ -22,7 +22,7 @@ namespace Lex.V3.Ingest.Tests;
 /// </summary>
 [TestClass]
 [DoNotParallelize]
-public sealed class LuxembourgFirstMountAcquisitionTests
+public sealed partial class LuxembourgFirstMountAcquisitionTests
 {
     private const string Jolux = "http://data.legilux.public.lu/resource/ontology/jolux#";
     private const string RdfType = "http://www.w3.org/1999/02/22-rdf-syntax-ns#type";
