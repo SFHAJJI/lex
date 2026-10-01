@@ -13,14 +13,23 @@ request bytes and reruns the existing binder and complete two-pass comparison. I
 client and performs no custody writes. This uses the existing EU request replay contract; the
 Luxembourg template renderer and LU builder/reader remain outside this slice.
 
-Fourteen draft cases cover an independent copied store, empty/nonempty equality across two opens,
+Twenty draft cases cover an independent copied store, empty/nonempty equality across two opens,
 missing/tampered dependencies, wrong caller identities, rehashed-root substitutions and cancellation.
-They are not yet compiled or run. Local Release, required fast tests, affected ingests and Claude
-review remain queued behind the active EU acquisition and existing local work. Remote CI will
-provide initial compiler/test feedback. No acquisition-completion or custody-floor claim is read
-from the checkpoint. It does not yet restore the complete EU/LU acquisition, Formex/rights/body
-outcomes, or rebuild a mount offline; those remain required follow-on work. Current two-build
-in-process checks remain unchanged. Active EU retry6 uses its frozen old runtime and is untouched.
+Receipt restoration obtains current write/readback receipts for every dependency before calling the
+existing receipt factory. It carries the current store floor, including a weaker copied store, and
+performs no publisher requests. Failure or receipt substitution refuses.
+
+Initial CI36828530216 at35da3bf1 compiled but failed714 tests (4560 passed,22 skipped): the checkpoint
+writer used a descriptive URN where SourceArtifactRef requires a UUID URN, causing broad downstream
+failures. The UUID format is corrected; construction/conformance changes are being captured from
+compiled diagnostics. Six added restoration/custody cases are not yet run. Local Release, required
+fast tests, affected ingests and Claude review remain pending behind active EU acquisition.
+
+No acquisition-completion or custody-floor claim is read from the checkpoint. This does not yet
+restore the complete EU/LU acquisition, Formex/rights/body outcomes, or rebuild a mount offline;
+those remain required follow-on work. Existing in-process two-build checks remain unchanged.
+Active EU retry6 uses its frozen old runtime and is untouched.
+
 ## EU escaped qualifier authority (Codex, 2026-10-01)
 
 EU retry 5 at C:/lex-v3/eu-population-20261001-3 ended at 03:08 UTC with exit 3 after

@@ -71,7 +71,7 @@ public sealed class EuEnumerationCheckpointTests
     {
         var (store, result, _) = await AcquireAsync(3);
         var delivery = result.Receipt!.Delivery;
-        var other = new SourceArtifactRef("urn:lex:other", new string('a', 64));
+        var other = new SourceArtifactRef("urn:uuid:10000000-0000-0000-0000-000000000001", new string('a', 64));
         await Assert.ThrowsExactlyAsync<CustodyIntegrityException>(() => EuEnumerationCheckpoint.OpenAsync(
             new ReadOnlyStore(store), result.CheckpointRef!, changed == "run" ? other : delivery.RunIdentity,
             changed == "profile" ? other : delivery.InterpretationProfileRef, CancellationToken.None));
@@ -96,10 +96,12 @@ public sealed class EuEnumerationCheckpointTests
         else root["schema"] = "lex-eu-enumeration-checkpoint/99";
         var bytes = Encoding.UTF8.GetBytes(root.ToJsonString());
         var held = await store.CreateAsync(bytes, CustodyClass.NightlyFloor90d, CancellationToken.None);
-        var changed = new SourceArtifactRef("urn:lex:changed", held.Reference.ContentSha256);
-        await Assert.ThrowsExactlyAsync<CustodyIntegrityException>(() => EuEnumerationCheckpoint.OpenAsync(
+        var changed = new SourceArtifactRef("urn:uuid:10000000-0000-0000-0000-000000000002", held.Reference.ContentSha256);
+        var exception = await Assert.ThrowsExactlyAsync<CustodyIntegrityException>(() => EuEnumerationCheckpoint.OpenAsync(
             new ReadOnlyStore(store), changed, delivery.RunIdentity, delivery.InterpretationProfileRef,
             CancellationToken.None));
+        if (change == "duplicate_pass") StringAssert.Contains(exception.Message, "repeats an observation");
+        if (change == "partition") StringAssert.Contains(exception.Message, "Recomputed enumeration identity");
     }
 
     [TestMethod]
@@ -116,6 +118,67 @@ public sealed class EuEnumerationCheckpointTests
         Assert.AreEqual(0, readOnly.Writes);
     }
 
+    [TestMethod]
+    [DataRow(false)]
+    [DataRow(true)]
+    public async Task RestoredReceiptUsesCurrentStoreProtectionAndCanProveTheSameFamily(bool unenforced)
+    {
+        var (store, result, handler) = await AcquireAsync(3);
+        var original = result.Receipt!;
+        Assert.AreEqual(CustodyMembership.Floored, original.RetainedFloor);
+        var copy = new EuAcquisitionTestFixture.EuInMemoryCustodyStore(unenforceDigest: _ => unenforced);
+        foreach (var digest in store.WrittenDigestsInOrder.Distinct())
+            await copy.CreateAsync(await store.ReadByDigestAsync(digest, CancellationToken.None),
+                CustodyClass.NightlyFloor90d, CancellationToken.None);
+        var restored = await EuEnumerationCheckpoint.RestoreReceiptAsync(copy, result.CheckpointRef!,
+            original.Delivery.RunIdentity, original.Delivery.InterpretationProfileRef, CancellationToken.None);
+        Assert.AreEqual(ContractJson.Serialize(original.Delivery), ContractJson.Serialize(restored.Delivery));
+        Assert.AreEqual(unenforced ? CustodyMembership.RetainedUnenforced : CustodyMembership.Floored,
+            restored.RetainedFloor);
+        CollectionAssert.AreEquivalent(original.RetainedMembership.Keys.ToArray(), restored.RetainedMembership.Keys.ToArray());
+        var proof = restored.TryProveFamilyEnumeration(restored.Delivery.PartitionKey, out var refusal);
+        Assert.IsNotNull(proof, refusal.ToString());
+        Assert.AreEqual(restored.RetainedFloor, proof.RetainedFloor);
+        Assert.AreEqual(original.Delivery.DeliveredRowCountA, proof.DeliveredRowCount);
+        Assert.AreEqual(4, handler.OccurrenceCountFor("P"));
+    }
+    [TestMethod]
+    [DataRow(false)]
+    [DataRow(true)]
+    public async Task RestoreDoesNotIssueAReceiptWhenCurrentCustodyFails(bool substitutesReceipt)
+    {
+        var (store, result, _) = await AcquireAsync(3);
+        var failing = new FaultedWriteStore(store, substitutesReceipt);
+        Task Restore() => EuEnumerationCheckpoint.RestoreReceiptAsync(failing, result.CheckpointRef!,
+            result.Receipt!.Delivery.RunIdentity, result.Receipt.Delivery.InterpretationProfileRef, CancellationToken.None);
+        if (substitutesReceipt) await Assert.ThrowsExactlyAsync<CustodyIntegrityException>(Restore);
+        else await Assert.ThrowsExactlyAsync<CustodyRequiredException>(Restore);
+    }
+
+    [TestMethod]
+    [DataRow(false)]
+    [DataRow(true)]
+    public async Task CheckpointWriteDoesNotAcceptFailedOrSubstitutedCustody(bool substitutesReceipt)
+    {
+        var (store, result, _) = await AcquireAsync(3);
+        var (plan, _) = EuAcquisitionTestFixture.BuildObjectFactsPlan();
+        Task Write() => EuEnumerationCheckpoint.WriteAsync(new FaultedWriteStore(store, substitutesReceipt),
+            result.Receipt!.Delivery, plan.CreateDeliveryProfile(EuObjectFactsQuerySet.ObjectFacts), CancellationToken.None);
+        if (substitutesReceipt) await Assert.ThrowsExactlyAsync<CustodyIntegrityException>(Write);
+        else await Assert.ThrowsExactlyAsync<CustodyRequiredException>(Write);
+    }
+
+    private sealed class FaultedWriteStore(ICustodyStore inner, bool substitute) : ICustodyStore
+    {
+        public Task<DurableBlobWriteReceipt> CreateAsync(ReadOnlyMemory<byte> bytes, CustodyClass custodyClass,
+            CancellationToken cancellationToken) => substitute
+            ? inner.CreateAsync(Encoding.UTF8.GetBytes("unrelated receipt"), custodyClass, cancellationToken)
+            : throw new CustodyRequiredException("Deliberate current hold failure.");
+        public Task<ReadOnlyMemory<byte>> ReadAsync(DurableBlobRef reference, CancellationToken cancellationToken) =>
+            inner.ReadAsync(reference, cancellationToken);
+        public Task<ReadOnlyMemory<byte>> ReadByDigestAsync(string contentSha256, CancellationToken cancellationToken) =>
+            inner.ReadByDigestAsync(contentSha256, cancellationToken);
+    }
     private static async Task<(EuAcquisitionTestFixture.EuInMemoryCustodyStore Store,
         EuEnumerationRunResult Result, EuAcquisitionTestFixture.ClassifyingHandler Handler)> AcquireAsync(int count)
     {

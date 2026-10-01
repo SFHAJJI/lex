@@ -55,6 +55,10 @@ public sealed class CustodyStoreConformanceTests
     /// </summary>
     private static readonly string[] Exempt =
     [
+        "Lex.V3.Ingest.Tests.EuEnumerationCheckpointTests+FaultedWriteStore: "
+            + "decorates an inner store to refuse writes or substitute an unrelated write receipt",
+        "Lex.V3.Ingest.Tests.EuEnumerationCheckpointTests+ReadOnlyStore: "
+            + "decorates an inner store to forbid writes and inject missing or corrupt read dependencies",
         "Lex.V3.Ingest.Tests.ChunkedDerivedArtifactTests+ReadCountingStore: decorates an "
             + "inner store to count digest-read bytes and optionally corrupt one selected digest "
             + "after holding it",
