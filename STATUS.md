@@ -974,7 +974,7 @@ CI evidence are recorded in the pull request before merge.
 
 ## Heads
 
-- `v3/integration`: `289e72e0` (2026-10-01, PR #860 merged). Build 45 s. Fast lane
+- `v3/integration`: `c585ee60` (2026-10-01, PR #862 merged). Build 45 s. Fast lane
   (`eng/test-fast.ps1`): 3,077 tests, 3,076 pass, 1 skipped (the review of PR #828). Ingest suite: green on CI for PR #760
   (the CI `dotnet` job runs the whole solution on every pull request, about 7 min on the runner;
   green for PR #834);
@@ -1046,7 +1046,7 @@ needs none of those.
 
 `events` and `answer_drift` (PR #760) read a new index table, `events`: the index's append-only
 event log (`seq`, `scope`, `key`, `event`, `observed_from`, `detail_json`; schema
-`lex-v3-luxembourg-index/6`, `user_version` 6, the fixed-input byte pin moved). A build is one
+`lex-v3-luxembourg-index/6`, `user_version` 6, the fixed-input byte pin moved; `/7` since PR #864, below). A build is one
 observation with no predecessor, so its log is a **genesis log**: one `first_sighting` per held
 state, in the states table's key order, numbered from 1, keyed by the state's primary key and
 carrying its digest, with `observed_from` null because no observation time reaches the index (the
@@ -2186,6 +2186,38 @@ at the head of PR #860. Every step passed:
   read back and verified with no failure;
 - the work directory, the artifacts and the container are removed.
 
+Predecessor chaining, the first slice (PR #864): Luxembourg index schema `lex-v3-luxembourg-index/7`,
+`user_version` 7. It still holds a genesis log, now in the shape a chained log needs. The changes are
+confined to the event-log parts of the builder and the reader.
+- `events` drops `UNIQUE(scope, key, event)`, since a replaced file can recur for one state's key;
+  `seq` stays the key.
+- A new `observations` table: one row per build that wrote events. Each row holds:
+  - its corpus;
+  - the index it carried forward (null for the first observation; a check makes this exact);
+  - the events it appended, by sequence number;
+  - its observation time, which a check holds null because none is held.
+  A genesis log has one observation numbering every event (an empty log numbers none: first 1,
+  last 0).
+- A new `log_stamp`: the log's own schema, `lex-v3-event-log/1`, and the digest of exactly its
+  observations and events. A later build can then verify a predecessor's log, which it will carry
+  forward unchanged, across a change to the index's other tables.
+- Each `first_sighting` names the digests of the publisher bodies its state's articles were read
+  from (`source_body_sha256`, sorted, each once). With them a later build can tell a replaced file
+  from an unchanged one by the log alone. The index's own tables hold no body digest, so:
+  - the reader recomputes the whole log from the states and the bodies the log names, and refuses
+    any other row, observation or stamp;
+  - whoever holds the corpus checks the bodies against it (`VerifyEventLogSources`): the build, the
+    mount at open, and the mount writer's verification.
+- Tests:
+  - the genesis log's shape;
+  - seven observation and log-stamp tampers, each refused with the logical-rows stamp recomputed,
+    so only the new checks can refuse;
+  - a body the state was not read from passes the index alone and is refused by the corpus, by the
+    mount and by the mount writer;
+  - a body named twice is not the genesis log.
+- The fixed-input byte pin moves, as a schema change moves it. The schema version and the pin are
+  shared with the data lane.
+
 The live export composer and its journey step (PR #789), the eighth screen. `dist-live/export.html`
 has its own bundle `client-live-export.js`.
 - The page asks what the reading page asks: the same form (`ReadingForm`, now shared), the same one
@@ -2878,7 +2910,7 @@ recorded by PR #862:
    rebases onto the data lane's merges before every pull request, and gets a Codex review of each.
    Any overlap with an open data-lane pull request goes to QUESTIONS.md rather than being edited
    around. The planned slices, one pull request each:
-   - index schema `/7` with the genesis log, an `observations` table and a log stamp;
+   - index schema `/7` with the genesis log, an `observations` table and a log stamp (PR #864);
    - the predecessor as a build input (`--predecessor`), its log carried forward as an exact
      prefix (G3a);
    - comparison events: `first_sighting` and `expression_added` for new keys, `file_replaced` when a

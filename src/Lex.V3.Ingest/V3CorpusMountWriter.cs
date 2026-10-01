@@ -120,6 +120,8 @@ public static class V3CorpusMountWriter
                     corpus.ArtifactRef);
             }
 
+            luxembourg.VerifyEventLogSources(corpus);
+
             var europeManifest = await File.ReadAllBytesAsync(
                 Path.Combine(directory, V3FirstMountBuildResult.EuropeCapabilityManifestFileName), cancellationToken)
                 .ConfigureAwait(false);
