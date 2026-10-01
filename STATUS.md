@@ -31,12 +31,14 @@ and original artifact IDs. Retained request bytes must match the regenerated req
 complete comparison and current custody receipt checks run again without publisher traffic.
 EU and LU share the actual-receipt restoration helper; no saved proof or floor is trusted.
 
-Nineteen draft cases cover empty, nonempty and multi-page enumeration, Unicode cursors,
-independent copied custody, weaker protection, missing dependencies, rehashed substitutions,
-caller pins and cancellation. Exact a2ae09cb passed CI 36833657603: 5,299 passed and 22 skipped,
-including all 19 new cases; the required watch exited 0. Integration a74fece1 is included.
-Fresh combined CI and read-only Claude review are required. Local builds/tests remain
-deferred under the active acquisition memory guard. PR869 must merge before this slice.
+Nineteen cases cover empty, nonempty and multi-page enumeration, Unicode cursors, independent
+custody, weaker protection, missing inputs, caller pins, substitutions and cancellation. Exact
+d834ae22 passed CI 36856207562: 5,356 passed and 22 skipped; the required watch exited zero.
+Claude found no material LU code defect and requested the current parent/base and combined census
+correction. The one repair includes reviewed PR869 source 60c2589c and integration d56d0539,
+sets the union to 262 candidates/140 guarded types, preserves all member pins and copies each
+regenerated request body once. PR869 is merged as 1a63b61a and included; final current-base CI gates this merge.
+Local builds/tests remain deferred under the acquisition memory guard.
 
 Full acquisition catalog restoration and two independent offline mount derivations remain
 outstanding. This does not establish full Luxembourg memory or disk fit. The active EU runtime,
@@ -60,6 +62,23 @@ checks remain deferred under the acquisition memory guard.
 No saved success or protection flag is trusted as a proof. Complete acquisition composition,
 Formex/rights/body outcomes and two independent offline mount processes remain follow-on work.
 The active EU acquisition uses its frozen runtime and remains untouched.
+
+## Compact Luxembourg object identities (Codex, 2026-10-01)
+
+Object identity sets retain sorted 32-byte digests. Binary search preserves exact membership,
+duplicate-set semantics and canonical bytes. Checked reopening enforces the original digest,
+byte equality, ordering and refusal precedence. No publisher or custody admission changes.
+
+All 27 new cases passed at b222687c: CI 36851145863 reported 5,305 passed and 22 skipped,
+with 259 candidates and 139 guarded types after merging integration 65922f24. The required
+CI watch exited 0. Claude reviewed that exact head and requested corrected documentation
+counts; this is the one repair round. The code review found no material defect.
+
+Integration d874273b is now included. Combined CI 36853595395 passed 5,324 tests with 22 skipped; only the candidate total
+failed (260 versus 259). Its complete member pins passed. The candidate total is now
+260; the passing literal pin contains 140 guarded types. Fresh CI gates merge. Local Release build, required fast tests, affected ingest checks and the synthetic
+measurement remain deferred under the acquisition memory guard. No full-LU fit is claimed.
+The remaining observation, scope and corpus graphs still require bounded derivation evidence.
 
 ## Streaming scope verification from source inputs (Codex, 2026-10-01)
 
