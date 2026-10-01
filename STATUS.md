@@ -3,6 +3,25 @@
 Updated 2026-10-01 by the driver. This file replaces the issue-comment ledgers. It is rewritten in
 every pull request that changes what is served, what is next or what is blocked.
 
+## Retained Formex manifestation enumeration (Codex, 2026-10-01)
+
+Reversible driver decision: retain each successful manifestation enumeration's original
+checkpoint association, expression content digest, closed-template renderer/plan identity
+and decoded result digest. Offline restoration checks the caller's expression/run/profile,
+restores both passes with current custody receipts, independently rebinds the original count
+queries and repeats the existing row/proof decoder. No request is sent and original observation
+IDs survive. Failed checkpoint holds return a typed refusal.
+
+Seventeen new cases cover empty/nonempty copied custody, repeat restoration, weaker current
+protection, missing inputs, caller pins, rehashed expression/query/result substitutions,
+cancellation and failed holds. Source is uncompiled; remote CI is requested next. Required
+local Release, fast tests, affected ingests and Claude review wait for the active EU run and
+prior validation queue. Pending PR869 must merge and its final head be included first.
+
+This covers manifestation eligibility evidence only. EN/FRA scope and explicit unenumerated
+other-language outcomes remain the population policy. Package, annex, complete catalog and
+independent offline mount restoration remain outstanding.
+
 ## Retained EU enumeration checkpoints (Codex, 2026-10-01)
 
 Reversible driver decision under Q-20261001-0656-codex: build acquisition persistence before
