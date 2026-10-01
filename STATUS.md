@@ -695,7 +695,7 @@ CI evidence are recorded in the pull request before merge.
 
 ## Heads
 
-- `v3/integration`: `398f936e` (2026-10-01, PR #839 merged). Build 45 s. Fast lane
+- `v3/integration`: `a1752729` (2026-10-01, PR #840 merged). Build 45 s. Fast lane
   (`eng/test-fast.ps1`): 3,077 tests, 3,076 pass, 1 skipped (the review of PR #828). Ingest suite: green on CI for PR #760
   (the CI `dotnet` job runs the whole solution on every pull request, about 7 min on the runner;
   green for PR #834);
@@ -1980,6 +1980,28 @@ The first mount's card reads and renders. At this head it has 3 sets (the two te
 arms and the refusal set) and says "2 gates do not pass", each named not measured. With #842's
 retrieval set it has 4 sets and says 5, as the review of #841 counted. The journey and
 licence-blocked mounts' cards and the platform card read too.
+The retrieval set over any mount (PR #842), the third slice of ruling 2's gates over the real
+mounted corpus (`V3MountedGatesTests.Retrieval.cs`). The judgments are computed from the mount's
+index by the search's own stated matching (`SearchMatching`: a byte-exact substring of an article's
+searchable text, nothing folded):
+- words of the sampled states held by one to five articles (work and publisher article id) of the
+  language, with every hit on the answer's one page: each is judged to find exactly those, which
+  must all rank within the first ten;
+- the same word scoped to its work finds that work's articles; scoped to a work held in the language
+  that lacks it, nothing. A work not held in the language is refused `language_not_available`, so it
+  is never asked;
+- strings held nowhere find nothing;
+- three article permalinks of each held state must be accepted under their own work and anchor,
+  and one naming an anchor the state lacks is refused `anchor_not_in_version` (no hit). The cases are
+  keyed by state, so two states of one work keep their own cases. The review of #842 found both of
+  the last two;
+- a refused search ranks a marker that matches no judgment, so it fails rather than passing as
+  "found nothing".
+Over the fixture (two works) and the journey and licence-blocked mounts (one state, 15 cases each),
+all three gates pass at 1: anchor nDCG@10 (11 cases), no-hit accuracy (4) and resolver exactness
+(3). The judgments control catches the shuffle. The real first mount has no case: all three gates
+are not measured and the control says why. A mutation, word judgments naming another anchor,
+drops nDCG@10 to 0.57 and fails. `TheGatesOverTheMountTheReleaseNames` now writes all three sets.
 
 Evaluation card (PR #769): `EvaluationCard` in `Lex.V3.Contracts.Evaluation` prints the machine
 gates as the card of `36-ideal-evaluation.md` section 6 describes, as far as the launch contract
@@ -2353,8 +2375,8 @@ has not yet run; the bounded first mount above is complete.
    chaining with observation times, so they follow the first mount and the event-log ruling. What
    is left of the launch contract's machine-gates line after that was "V2 absent from the image",
    which the image rehearsal now checks (PR #831, item 7). Ruling 2's gates over the real mounted
-   corpus: PR #838 derives the temporal set from any mount, PR #839 the refusal set; the retrieval
-   set and the release card follow.
+   corpus: PR #838 derives the temporal set from any mount, PR #839 the refusal set, PR #842 the
+   retrieval set; the release card over the rehearsal's mount follows.
 
 ## Owner rulings, 2026-09-30
 
@@ -2535,6 +2557,12 @@ Repair fast lane: 3,065 pass / 1 Windows skip; repair build: zero warnings/error
   whole of the live pages' interface, as the chrome scan holds it. That includes the absence note
   ("This is what this service holds, and does not hold. It is not evidence that the instrument or the
   law does not exist.") and the live banner, both claims the owner reviews.
+
+- A rights question the retrieval set surfaced (PR #842): on the licence-blocked mount, search
+  still matches inside the text the licence withholds. It answers which articles hold a word, and
+  shows none of the text: the licence-blocked journey finds no passage on any page. Whether a
+  non-admitting licence should also keep its text out of search matching is the owner's call
+  (rights). Nothing changes until then.
 
 ## Blocked on the owner
 

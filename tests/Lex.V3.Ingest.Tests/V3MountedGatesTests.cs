@@ -354,7 +354,8 @@ public sealed partial class V3MountedGatesTests
         var timelines = Sample(Timelines(directory), WorkSample, Seed);
         var temporal = RunTemporalGate(mount, timelines);
         var (refusal, _) = RunRefusalGate(mount, directory, timelines);
-        EvaluationCardSet[] sets = [.. temporal, refusal];
+        var retrieval = RunRetrievalGate(mount, directory, timelines);
+        EvaluationCardSet[] sets = [.. temporal, refusal, retrieval];
         var output = Environment.GetEnvironmentVariable(CardOutVariable);
         if (!string.IsNullOrWhiteSpace(output))
         {
@@ -365,9 +366,12 @@ public sealed partial class V3MountedGatesTests
 
         foreach (var set in sets)
         {
-            var gate = set.Gates.Single();
-            Assert.AreNotEqual(GateVerdict.Fail, gate.Verdict, $"{set.Set}, {set.Arm}: a derived case was not answered as the mount's data says");
-            if (gate.Verdict == GateVerdict.Pass && set.CaseCount > 1)
+            foreach (var gate in set.Gates)
+            {
+                Assert.AreNotEqual(GateVerdict.Fail, gate.Verdict, $"{set.Set}, {set.Arm}, {gate.Gate}: a derived case was not answered as the mount's data says");
+            }
+
+            if (set.Gates.All(static gate => gate.Verdict == GateVerdict.Pass) && set.CaseCount > 1)
             {
                 Assert.AreEqual(ControlVerdict.CaughtTheShuffle, set.Control.Verdict, $"{set.Set}, {set.Arm}: {set.Control.Reason}");
             }
