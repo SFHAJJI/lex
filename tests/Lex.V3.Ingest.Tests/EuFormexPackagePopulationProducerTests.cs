@@ -48,7 +48,7 @@ public sealed partial class EuFormexPackagePopulationProducerTests
     {
         using var json = JsonDocument.Parse(result.CreateOutcomeDiagnosticsJson());
         var root = json.RootElement;
-        Assert.AreEqual("lex-v3-eu-formex-outcome-diagnostic/1", root.GetProperty("schema").GetString());
+        Assert.AreEqual("lex-v3-eu-formex-outcome-diagnostic/2", root.GetProperty("schema").GetString());
         Assert.IsTrue(root.GetProperty("delivered").GetBoolean());
         Assert.AreEqual(result.Reconciliation!.ExpressionCount, root.GetProperty("expression_count").GetInt32());
         Assert.AreEqual(result.Enumerations.Count, root.GetProperty("enumerated_count").GetInt32());
@@ -706,6 +706,22 @@ public sealed partial class EuFormexPackagePopulationProducerTests
         Assert.IsFalse(result.Enumerations[0].Delivered);
         Assert.AreEqual(EuFormexManifestationEnumerationRefusal.EnumerationRefused, result.Enumerations[0].Refusal);
         StringAssert.Contains(result.Enumerations[0].Detail, "WireBudgetExhausted");
+        StringAssert.Contains(result.Detail, "WireBudgetExhausted");
+        using var diagnostics = JsonDocument.Parse(result.CreateOutcomeDiagnosticsJson());
+        var root = diagnostics.RootElement;
+        Assert.AreEqual(JsonValueKind.Null, root.GetProperty("expression_count").ValueKind);
+        Assert.AreEqual(0, root.GetProperty("successful_enumeration_count").GetInt32());
+        var failures = root.GetProperty("failed_enumerations").EnumerateArray().ToArray();
+        Assert.AreEqual(result.Enumerations.Count, failures.Length);
+        for (var index = 0; index < failures.Length; index++)
+        {
+            var source = result.Enumerations[index];
+            Assert.AreEqual(source.ExpressionIdentity.PublisherWorkId, failures[index].GetProperty("work").GetString());
+            Assert.AreEqual(source.ExpressionIdentity.PublisherExpressionId, failures[index].GetProperty("expression").GetString());
+            Assert.AreEqual(source.Expression.OfficialLanguage, failures[index].GetProperty("language").GetString());
+            Assert.AreEqual(source.Detail, failures[index].GetProperty("detail").GetString());
+            Assert.AreEqual(source.ProductRequestCount, failures[index].GetProperty("product_request_count").GetInt32());
+        }
         Assert.AreEqual(0, handler.Enumerations.Count, "the ceiling held before the first product request.");
     }
 

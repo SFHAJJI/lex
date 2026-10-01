@@ -27,6 +27,53 @@ public sealed class EuFormexManifestationEnumerationProducerTests
     private const string XsdInteger = "http://www.w3.org/2001/XMLSchema#integer";
 
     [TestMethod]
+    [DataRow(502, "StatusNotAdmitted")]
+    [DataRow(200, "MediaTypeNotAdmitted")]
+    public async Task RefusedResponseDiagnosticsLocateTheExactRetainedBody(int status, string reason)
+    {
+        var store = new EuAcquisitionTestFixture.EuInMemoryCustodyStore();
+        using var handler = new RefusedResponseHandler(status);
+        var expression = Expression(ExpressionA);
+        var producer = new EuFormexManifestationEnumerationProducer(
+            store, new EuAcquisitionTestFixture.FixedTimeProvider(), handler);
+        var result = await producer.RunAsync(new EuFormexManifestationRunRequest(
+            EuFormexManifestationDiscoveryPlan.Create(), expression,
+            "urn:uuid:5c30aa43-66fb-4a16-9e25-c5c02558d337",
+            EuAcquisitionTestFixture.BuildRendererSource(9811), WireRequestBudget.OfWireRequests(20)),
+            EuAcquisitionTestFixture.SourceWitness(), CancellationToken.None);
+        Assert.IsFalse(result.Delivered);
+        Assert.AreEqual(1, result.ProductRequestCount);
+        StringAssert.Contains(result.Detail, reason);
+        StringAssert.Contains(result.Detail, "; status=" + status);
+        var digest = Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(RefusedResponseHandler.Body)));
+        StringAssert.Contains(result.Detail, "; body=" + digest);
+        var bytes = await CustodyRestore.ReadByDigestCheckedAsync(store, digest, CancellationToken.None);
+        Assert.AreEqual(RefusedResponseHandler.Body, Encoding.UTF8.GetString(bytes.Span));
+        var population = EuFormexPackagePopulationResult.Refused(
+            EuFormexPackagePopulationRefusal.EligibilityRefused, "fixture", [result], result.ProductRequestCount);
+        using var json = JsonDocument.Parse(population.CreateOutcomeDiagnosticsJson());
+        Assert.AreEqual(result.Detail, json.RootElement.GetProperty("failed_enumerations")[0].GetProperty("detail").GetString());
+    }
+
+    private sealed class RefusedResponseHandler(int status) : System.Net.Http.HttpMessageHandler
+    {
+        public const string Body = "retained unrecognized response";
+        private readonly System.Net.Http.HttpMessageInvoker _inner = new(new EuAcquisitionTestFixture.ClassifyingHandler(
+            new Dictionary<string, EuAcquisitionTestFixture.FamilyScript>(StringComparer.Ordinal)));
+        protected override Task<System.Net.Http.HttpResponseMessage> SendAsync(
+            System.Net.Http.HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            if (request.Method != System.Net.Http.HttpMethod.Post) return _inner.SendAsync(request, cancellationToken);
+            var content = new System.Net.Http.ByteArrayContent(Encoding.UTF8.GetBytes(Body));
+            content.Headers.TryAddWithoutValidation("Content-Type", "text/plain");
+            content.Headers.ContentLength = Encoding.UTF8.GetByteCount(Body);
+            return Task.FromResult(new System.Net.Http.HttpResponseMessage((System.Net.HttpStatusCode)status)
+                { Version = System.Net.HttpVersion.Version11, RequestMessage = request, Content = content });
+        }
+        protected override void Dispose(bool disposing) { if (disposing) _inner.Dispose(); base.Dispose(disposing); }
+    }
+
+    [TestMethod]
     public async Task NullManifestationCheckpointRefusesBeforeAnyReplayWrites()
     {
         var store = new EuAcquisitionTestFixture.EuInMemoryCustodyStore();

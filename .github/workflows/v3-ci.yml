@@ -100,6 +100,24 @@ jobs:
           dotnet build Lex.V3.slnx --configuration Release --no-restore
           dotnet test --solution Lex.V3.slnx --configuration Release --no-restore --no-build --minimum-expected-tests 1
           pwsh -NoLogo -NoProfile -File ./eng/verify-v3-tree.ps1
+      - name: Retain the tested acquisition runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$CANDIDATE_SHA"
+          artifact_root='artifacts/v3-acquisition-runtime'
+          mkdir -p "$artifact_root/runtime"
+          cp -a src/Lex.V3.Tool/bin/Release/net10.0/. "$artifact_root/runtime/"
+          printf '%s\n' "$CANDIDATE_SHA" > "$artifact_root/source-head.txt"
+          dotnet --info > "$artifact_root/dotnet-info.txt"
+          (cd "$artifact_root" && find runtime -type f -print0 | LC_ALL=C sort -z | xargs -0 sha256sum) > "$artifact_root/runtime-sha256.txt"
+      - name: Upload tested acquisition runtime
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: v3-acquisition-runtime-${{ env.CANDIDATE_SHA }}
+          path: artifacts/v3-acquisition-runtime/
+          if-no-files-found: error
+          retention-days: 3
       - name: Tracked schemas and builder source digest are exact
         shell: bash
         run: |

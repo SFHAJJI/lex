@@ -164,6 +164,7 @@ public sealed class RepeatedEnumerationDeliveryReopenGlue
         var maximumAttempts = session.SourceProfile.MaximumAttempts;
         var attemptOrdinal = 0;
         RoutedHttpAcquisitionSession.AttemptResult attempt;
+        RoutedHttpEvidence? reopenedEvidence = null;
         while (true)
         {
             // BEFORE THE ATTEMPT, NOT AFTER IT. This is the only position that lands between the
@@ -196,23 +197,20 @@ public sealed class RepeatedEnumerationDeliveryReopenGlue
             setCount(currentCount() + 1);
             if (attempt.Kind == OfficialHttpAcquisitionOutcomeKind.ExecutedObservation)
             {
-                if (await IsRetainedEuropeTransientFailureAsync(attempt, cancellationToken).ConfigureAwait(false))
-                {
-                    // Preserve the rejected attempt's complete route before consuming the same
-                    // plan item's already-declared 500/503 retry allowance. The session applies its
-                    // backoff; the next loop iteration reserves the shared wire budget again.
-                    var failedBytes = attempt.Evidence!.CopyCanonicalBytes();
-                    var failedReceipt = await _custodyStore.CreateAsync(
-                        failedBytes, CustodyClass.NightlyFloor90d, cancellationToken).ConfigureAwait(false);
-                    var failedDigest = failedReceipt.Reference.ContentSha256;
-                    var failedRetained = await CustodyRestore.ReadByDigestCheckedAsync(
-                        _custodyStore, failedDigest, cancellationToken).ConfigureAwait(false);
-                    if (!failedRetained.Span.SequenceEqual(failedBytes))
-                        throw new CustodyIntegrityException("The retained transient-failure route differs from its attempted evidence.");
-                    _ = RoutedHttpEvidence.ParseAndVerify(failedRetained.Span);
-                    executorWrittenMembership[failedDigest] = CustodyMembershipClassifier.Classify(failedReceipt);
-                    if (attemptOrdinal < maximumAttempts) continue;
-                }
+                // Retain every executed route before status or media rejection so a refusal
+                // still binds its request to its response. Retry uses the same bounded plan item.
+                var evidenceBytes = attempt.Evidence!.CopyCanonicalBytes();
+                var evidenceReceipt = await _custodyStore.CreateAsync(
+                    evidenceBytes, CustodyClass.NightlyFloor90d, cancellationToken).ConfigureAwait(false);
+                var evidenceDigest = evidenceReceipt.Reference.ContentSha256;
+                var retained = await CustodyRestore.ReadByDigestCheckedAsync(
+                    _custodyStore, evidenceDigest, cancellationToken).ConfigureAwait(false);
+                if (!retained.Span.SequenceEqual(evidenceBytes))
+                    throw new CustodyIntegrityException("The retained route differs from its attempted evidence.");
+                reopenedEvidence = RoutedHttpEvidence.ParseAndVerify(retained.Span);
+                executorWrittenMembership[evidenceDigest] = CustodyMembershipClassifier.Classify(evidenceReceipt);
+                if (await IsRetainedEuropeTransientFailureAsync(attempt, cancellationToken).ConfigureAwait(false)
+                    && attemptOrdinal < maximumAttempts) continue;
                 break;
             }
 
@@ -275,27 +273,13 @@ public sealed class RepeatedEnumerationDeliveryReopenGlue
                 _custodyStore, terminal.Sha256, cancellationToken)
             .ConfigureAwait(false);
 
-        // Write the evidence document, then take the digest FROM THE STORE'S OWN RECEIPT rather
-        // than from a value this run computed itself, and reopen exactly that digest before
-        // trusting it.
-        var evidenceBytes = evidence.CopyCanonicalBytes();
-        var evidenceReceipt = await _custodyStore.CreateAsync(
-                evidenceBytes, CustodyClass.NightlyFloor90d, cancellationToken)
-            .ConfigureAwait(false);
-        var evidenceDigest = evidenceReceipt.Reference.ContentSha256;
-        var reopenedEvidenceBytes = await CustodyRestore.ReadByDigestCheckedAsync(
-                _custodyStore, evidenceDigest, cancellationToken)
-            .ConfigureAwait(false);
-        var reopenedEvidence = RoutedHttpEvidence.ParseAndVerify(reopenedEvidenceBytes.Span);
-        executorWrittenMembership[evidenceDigest] = CustodyMembershipClassifier.Classify(evidenceReceipt);
-
         var transport = new RepeatedEnumerationObservedTransport(
-            logicalRequest, reopenedEvidence, writeReceipt, payload);
+            logicalRequest, reopenedEvidence!, writeReceipt, payload);
         return new ObservationAttemptOutcome(transport, item.RequestOrdinal, null);
     }
 
     // Retry only the observed Publications Office failures: a complete 500 with the Virtuoso
-    // serialization-deadlock signature, or a complete 503 with the exact retained maintenance page.
+    // serialization-deadlock signature, or a complete 502/503 with exact retained gateway/maintenance bytes.
     // Different maintenance bytes remain refused until reviewed; no arbitrary 5xx/challenge retry.
     // The maintenance digest pins the complete 2,005-byte response from the 2026-10-01 run.
     private async Task<bool> IsRetainedEuropeTransientFailureAsync(
@@ -303,13 +287,15 @@ public sealed class RepeatedEnumerationDeliveryReopenGlue
     {
         if (attempt.Evidence is not { Outcome: CompleteHttpRouteOutcome } evidence) return false;
         var terminal = evidence.Hops[^1];
-        if (terminal.Status is not (500 or 503) ||
+        if (terminal.Status is not (500 or 502 or 503) ||
             terminal.RequestUri != "https://publications.europa.eu/webapi/rdf/sparql") return false;
         if (terminal.Status == 503 && terminal.Sha256 !=
             "e7fab335ce5367cfe359f9f7e0ad6ce1838bec9189a216bc3faf437ce169d404") return false;
+        if (terminal.Status == 502 && terminal.Sha256 !=
+            "880c929020d4b79bf1995656d21d9a6859aab3a9460f941eb0b1a6e5502ee4cc") return false;
         var payload = await CustodyRestore.ReadByDigestCheckedAsync(
             _custodyStore, terminal.Sha256, cancellationToken).ConfigureAwait(false);
-        if (terminal.Status == 503) return true; // Full body digest was just independently checked.
+        if (terminal.Status is 502 or 503) return true; // Full body digest was just independently checked.
         var newline = payload.Span.IndexOf((byte)'\n');
         var length = newline < 0 ? payload.Length : newline;
         if (length > 256) return false;
