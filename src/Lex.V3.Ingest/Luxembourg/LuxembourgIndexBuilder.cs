@@ -21,6 +21,7 @@ public enum LuxembourgIndexBuildRefusal
     [JsonStringEnumMemberName("predecessor_mismatch")] PredecessorMismatch = 5,
     [JsonStringEnumMemberName("predecessor_schema_differs")] PredecessorSchemaDiffers = 6,
     [JsonStringEnumMemberName("predecessor_derivation_differs")] PredecessorDerivationDiffers = 7,
+    [JsonStringEnumMemberName("build_time_invalid")] BuildTimeInvalid = 8,
 }
 
 public sealed record LuxembourgIndexBuildResult(
@@ -384,14 +385,17 @@ public sealed record LuxembourgIndexEventLog(long Events, long LastSeq);
 
 /// <summary>
 /// One observation of the index's event log: the build that observed (its corpus), the index whose log it carried
-/// forward (null for the first), and the events it appended by sequence number (an empty range: first is last + 1).
+/// forward (null for the first), the events it appended by sequence number (an empty range: first is last + 1), and
+/// when that build ran (<c>yyyy-MM-ddTHH:mm:ssZ</c>), an upper bound on when its corpus was observed and never an
+/// observation time.
 /// </summary>
 public sealed record LuxembourgIndexObservation(
     long Observation,
     string CorpusSha256,
     string? PredecessorIndexSha256,
     long FirstSeq,
-    long LastSeq);
+    long LastSeq,
+    string BuiltAt);
 
 /// <summary>
 /// Builds the immutable Luxembourg index from the same proof-complete envelope that builds
@@ -399,13 +403,19 @@ public sealed record LuxembourgIndexObservation(
 /// </summary>
 public static class LuxembourgIndexBuilder
 {
-    public const string Schema = "lex-v3-luxembourg-index/7";
+    public const string Schema = "lex-v3-luxembourg-index/8";
 
     /// <summary>
     /// The event log's own schema, stamped apart from the index's (<c>log_stamp</c>), so a later build can verify a
     /// predecessor's log, which it carries forward unchanged, across a change of the index's other tables.
     /// </summary>
-    internal const string EventLogSchema = "lex-v3-event-log/1";
+    internal const string EventLogSchema = "lex-v3-event-log/2";
+
+    /// <summary>
+    /// The form of an observation's build time: UTC to the second. A build time is captured once per build, after
+    /// every fetch, and rounded up to the next second, so it is an upper bound on when the build's corpus was observed.
+    /// </summary>
+    internal const string BuiltAtFormat = "yyyy-MM-ddTHH:mm:ssZ";
     private const int ApplicationId = 0x4c563306;
     private const string Ddl = """
         CREATE TABLE stamp (
@@ -499,12 +509,14 @@ public static class LuxembourgIndexBuilder
           detail_json TEXT COLLATE BINARY NOT NULL
         ) STRICT;
         CREATE INDEX events_event_seq ON events(event, seq);
+        CREATE INDEX events_work_seq ON events(json_extract(key, '$[0]'), seq);
         CREATE TABLE observations (
           observation INTEGER NOT NULL PRIMARY KEY CHECK (observation >= 1),
           corpus_sha256 TEXT COLLATE BINARY NOT NULL CHECK (length(corpus_sha256) = 64),
           predecessor_index_sha256 TEXT COLLATE BINARY CHECK (predecessor_index_sha256 IS NULL OR length(predecessor_index_sha256) = 64),
           first_seq INTEGER NOT NULL CHECK (first_seq >= 1),
           last_seq INTEGER NOT NULL CHECK (last_seq >= first_seq - 1),
+          built_at TEXT COLLATE BINARY NOT NULL CHECK (built_at GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z'),
           observed_from TEXT COLLATE BINARY CHECK (observed_from IS NULL),
           CHECK ((observation = 1) = (predecessor_index_sha256 IS NULL))
         ) STRICT;
@@ -517,22 +529,26 @@ public static class LuxembourgIndexBuilder
 
     public static LuxembourgIndexBuildResult? TryBuild(
         Stage3DerivationProfileEnvelope envelope,
+        DateTimeOffset builtAt,
         out LuxembourgIndexBuildRefusal refusal,
         out string? detail) =>
-        TryBuild(envelope, predecessor: null, out refusal, out detail);
+        TryBuild(envelope, predecessor: null, builtAt, out refusal, out detail);
 
     /// <summary>
     /// Builds the index, its event log chained to <paramref name="predecessor"/> when one is given: the predecessor's
     /// observations and events carried forward unchanged (an exact prefix), then one observation of this build
-    /// appending an event for each state the predecessor's log does not hold (<c>first_sighting</c>, or
-    /// <c>expression_added</c> for a new language of a work and date it holds). A state the log holds with another
-    /// digest or other source bodies refuses <see cref="LuxembourgIndexBuildRefusal.PredecessorStateChanged"/> until
-    /// comparison events are served; a state the log holds and this build does not is silent (absence is not a
-    /// withdrawal). With no predecessor the log is a genesis log.
+    /// appending the comparison events (<c>first_sighting</c>, <c>expression_added</c>, <c>file_replaced</c>, and the
+    /// derived <c>interval_closed</c> and <c>validity_revised</c>). A state the log holds and this build does not is
+    /// silent (absence is not a withdrawal). With no predecessor the log is a genesis log. The observation records
+    /// <paramref name="builtAt"/>, the build's time, which the caller captures once after every fetch and passes to
+    /// each build it compares: UTC to the whole second, later than the predecessor's last build and no earlier than the
+    /// corpus's EU capture, or the build refuses <see cref="LuxembourgIndexBuildRefusal.BuildTimeInvalid"/>. It is an
+    /// upper bound on when the corpus was observed, never an observation time.
     /// </summary>
     public static LuxembourgIndexBuildResult? TryBuild(
         Stage3DerivationProfileEnvelope envelope,
         LuxembourgIndexPredecessor? predecessor,
+        DateTimeOffset builtAt,
         out LuxembourgIndexBuildRefusal refusal,
         out string? detail)
     {
@@ -545,6 +561,13 @@ public static class LuxembourgIndexBuilder
         {
             refusal = LuxembourgIndexBuildRefusal.CorpusRefused;
             detail = $"{corpusRefusal}: {corpusDetail}";
+            return null;
+        }
+
+        var builtAtText = TryBuiltAt(builtAt, predecessor, corpus.VerifiedSet, out detail);
+        if (builtAtText is null)
+        {
+            refusal = LuxembourgIndexBuildRefusal.BuildTimeInvalid;
             return null;
         }
 
@@ -587,7 +610,7 @@ public static class LuxembourgIndexBuilder
         if (predecessor is null)
         {
             events = ProjectGenesisEvents(states, sourceBodies);
-            observations = ProjectGenesisObservations(corpus.ArtifactRef.Sha256, events.Length);
+            observations = ProjectGenesisObservations(corpus.ArtifactRef.Sha256, events.Length, builtAtText);
         }
         else
         {
@@ -605,7 +628,7 @@ public static class LuxembourgIndexBuilder
                 .. predecessor.Observations,
                 new ObservationRow(
                     predecessor.Observations.Count + 1L, corpus.ArtifactRef.Sha256, predecessor.IndexSha256,
-                    predecessor.LastSeq + 1, predecessor.LastSeq + appended.Length, null),
+                    predecessor.LastSeq + 1, predecessor.LastSeq + appended.Length, builtAtText, null),
             ];
         }
 
@@ -1059,12 +1082,12 @@ public static class LuxembourgIndexBuilder
     internal static ObservationRow[] ReadLogObservations(SqliteConnection connection)
     {
         using var command = connection.CreateCommand();
-        command.CommandText = "SELECT observation,corpus_sha256,predecessor_index_sha256,first_seq,last_seq,observed_from FROM observations ORDER BY observation";
+        command.CommandText = "SELECT observation,corpus_sha256,predecessor_index_sha256,first_seq,last_seq,built_at,observed_from FROM observations ORDER BY observation";
         using var reader = command.ExecuteReader();
         var values = new List<ObservationRow>();
         while (reader.Read()) values.Add(new(
             reader.GetInt64(0), reader.GetString(1), reader.IsDBNull(2) ? null : reader.GetString(2),
-            reader.GetInt64(3), reader.GetInt64(4), reader.IsDBNull(5) ? null : reader.GetString(5)));
+            reader.GetInt64(3), reader.GetInt64(4), reader.GetString(5), reader.IsDBNull(6) ? null : reader.GetString(6)));
         return values.ToArray();
     }
 
@@ -1164,7 +1187,8 @@ public static class LuxembourgIndexBuilder
 
     /// <summary>
     /// The log's numbering: observations 1, 2, ... in order, each appending the events after the previous one's (the
-    /// first from 1), the last ending at the log's last event, and the events numbered 1, 2, ... without a gap.
+    /// first from 1), the last ending at the log's last event, and the events numbered 1, 2, ... without a gap; each
+    /// observation's build time a real UTC second later than the one before.
     /// </summary>
     internal static void ValidateLogNumbering(IReadOnlyList<ObservationRow> observations, IReadOnlyList<EventRow> events)
     {
@@ -1182,6 +1206,12 @@ public static class LuxembourgIndexBuilder
             {
                 throw new InvalidDataException("The Luxembourg event log's observations do not number its events.");
             }
+
+            if (ParseBuiltAt(observation.BuiltAt) is not { } builtAt ||
+                (index > 0 && builtAt <= ParseBuiltAt(observations[index - 1].BuiltAt)))
+            {
+                throw new InvalidDataException("The Luxembourg event log's build times are not UTC seconds, each later than the one before.");
+            }
         }
 
         if (observations[^1].LastSeq != events.Count || events.Select(static (value, index) => value.Seq == index + 1).Any(static ok => !ok))
@@ -1192,10 +1222,71 @@ public static class LuxembourgIndexBuilder
 
     /// <summary>
     /// The observations of a genesis log: one, of this build's corpus, with no predecessor, numbering every event the
-    /// log holds (an empty log numbers none: first 1, last 0). No observation time is held, so none is written.
+    /// log holds (an empty log numbers none: first 1, last 0), at the build's time. No observation time is held, so
+    /// none is written.
     /// </summary>
-    internal static ObservationRow[] ProjectGenesisObservations(string corpusSha256, int eventCount) =>
-        [new ObservationRow(1, corpusSha256, null, 1, eventCount, null)];
+    internal static ObservationRow[] ProjectGenesisObservations(string corpusSha256, int eventCount, string builtAt) =>
+        [new ObservationRow(1, corpusSha256, null, 1, eventCount, builtAt, null)];
+
+    /// <summary>A build time in <see cref="BuiltAtFormat"/>, or null when the text is not one.</summary>
+    internal static DateTimeOffset? ParseBuiltAt(string text) =>
+        DateTimeOffset.TryParseExact(
+            text, BuiltAtFormat, CultureInfo.InvariantCulture,
+            DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal, out var value)
+            ? value
+            : null;
+
+    /// <summary>
+    /// The build time this build records, or null with the reason it cannot be: it must be UTC to the whole second
+    /// (the caller rounds up, so the bound stays an upper one), later than the predecessor's last build (a log's
+    /// builds are in time order), and no earlier than the corpus's EU capture, the one observation clock the corpus
+    /// holds. Nothing can check it against the Luxembourg fetches, whose times the corpus does not hold.
+    /// </summary>
+    private static string? TryBuiltAt(
+        DateTimeOffset builtAt,
+        LuxembourgIndexPredecessor? predecessor,
+        VerifiedLexCorpus6ManifestSet corpus,
+        out string? detail)
+    {
+        if (builtAt.Offset != TimeSpan.Zero || builtAt.Ticks % TimeSpan.TicksPerSecond != 0)
+        {
+            detail = $"The build time {builtAt:O} is not a UTC whole second.";
+            return null;
+        }
+
+        var text = builtAt.ToString(BuiltAtFormat, CultureInfo.InvariantCulture);
+        if (predecessor is not null && ParseBuiltAt(predecessor.Observations[^1].BuiltAt) is { } previous && builtAt <= previous)
+        {
+            detail = $"The build time {text} is not later than the predecessor's build at {predecessor.Observations[^1].BuiltAt}.";
+            return null;
+        }
+
+        if (EarlierThanEuCapture(builtAt, corpus) is { } reason)
+        {
+            detail = $"The build time {text} {reason}.";
+            return null;
+        }
+
+        detail = null;
+        return text;
+    }
+
+    /// <summary>
+    /// Why a build time cannot be an upper bound on the corpus's observation, by the one observation clock the corpus
+    /// holds (its EU legal notice's capture), or null when it can be.
+    /// </summary>
+    internal static string? EarlierThanEuCapture(DateTimeOffset builtAt, VerifiedLexCorpus6ManifestSet corpus)
+    {
+        var capturedAt = corpus.Set.EuropeRightsMatrix.CapturedAt;
+        if (!DateTimeOffset.TryParse(
+                capturedAt, CultureInfo.InvariantCulture,
+                DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal, out var captured))
+        {
+            return $"cannot be held to the corpus's EU capture, whose time {capturedAt} is not a timestamp";
+        }
+
+        return builtAt < captured ? $"is earlier than the corpus's EU capture at {capturedAt}" : null;
+    }
 
     /// <summary>The digest of the event log alone (its observations and events), as <c>log_stamp</c> records it.</summary>
     internal static string HashEventLog(IReadOnlyList<ObservationRow> observations, IReadOnlyList<EventRow> events) =>
@@ -1535,7 +1626,7 @@ public static class LuxembourgIndexBuilder
         Execute(connection, "PRAGMA synchronous=FULL");
         Execute(connection, "PRAGMA foreign_keys=ON");
         Execute(connection, $"PRAGMA application_id={ApplicationId}");
-        Execute(connection, "PRAGMA user_version=7");
+        Execute(connection, "PRAGMA user_version=8");
         using var transaction = connection.BeginTransaction();
         Execute(connection, Ddl, transaction);
         foreach (var member in members)
@@ -1592,9 +1683,9 @@ public static class LuxembourgIndexBuilder
         foreach (var observation in observations)
         {
             Insert(connection, transaction,
-                "INSERT INTO observations VALUES($p0,$p1,$p2,$p3,$p4,$p5)",
+                "INSERT INTO observations VALUES($p0,$p1,$p2,$p3,$p4,$p5,$p6)",
                 observation.Observation, observation.CorpusSha256, observation.PredecessorIndexSha256,
-                observation.FirstSeq, observation.LastSeq, observation.ObservedFrom);
+                observation.FirstSeq, observation.LastSeq, observation.BuiltAt, observation.ObservedFrom);
         }
         Insert(connection, transaction, "INSERT INTO log_stamp VALUES(1,$p0,$p1)", EventLogSchema, HashEventLog(observations, events));
         var provenance = SqliteProvenance.Read(connection);
@@ -1651,7 +1742,8 @@ public static class LuxembourgIndexBuilder
                 [member.ObjectRefSha256] = new string('7', 64),
             }));
             BuildDatabase(path, new string('a', 64), HashLogicalRows(members, articles, states, titles, relations, facts, events),
-                members, articles, states, titles, relations, facts, events, ProjectGenesisObservations(new string('a', 64), events.Length));
+                members, articles, states, titles, relations, facts, events,
+                ProjectGenesisObservations(new string('a', 64), events.Length, "2026-01-01T00:00:00Z"));
             return File.ReadAllBytes(path);
         }
         finally
@@ -1901,8 +1993,8 @@ public static class LuxembourgIndexBuilder
 
     /// <summary>
     /// One observation of the event log: the build that observed (its corpus), the index it carried forward (null for
-    /// the first, a genesis log's only observation), the events it appended by sequence number, and its observation
-    /// time (null: none is held).
+    /// the first, a genesis log's only observation), the events it appended by sequence number, the build's time (an
+    /// upper bound on when its corpus was observed), and its observation time (null: none is held).
     /// </summary>
     internal sealed record ObservationRow(
         long Observation,
@@ -1910,6 +2002,7 @@ public static class LuxembourgIndexBuilder
         string? PredecessorIndexSha256,
         long FirstSeq,
         long LastSeq,
+        string BuiltAt,
         string? ObservedFrom);
 
     private sealed record EventLogRows(IReadOnlyList<ObservationRow> Observations, IReadOnlyList<EventRow> Events);
@@ -2114,7 +2207,7 @@ public sealed class LuxembourgIndexReader : IDisposable
             LuxembourgIndexBuilder.EnsureExactSchema(connection);
             if (!string.Equals(Scalar(connection, "PRAGMA integrity_check"), "ok", StringComparison.Ordinal) ||
                 Convert.ToInt32(Scalar(connection, "PRAGMA application_id"), CultureInfo.InvariantCulture) != 0x4c563306 ||
-                Convert.ToInt32(Scalar(connection, "PRAGMA user_version"), CultureInfo.InvariantCulture) != 7)
+                Convert.ToInt32(Scalar(connection, "PRAGMA user_version"), CultureInfo.InvariantCulture) != 8)
             {
                 throw new InvalidDataException("The Luxembourg index failed SQLite integrity or schema identity checks.");
             }
@@ -3211,7 +3304,7 @@ public sealed class LuxembourgIndexReader : IDisposable
             {
                 values.Add(new LuxembourgIndexObservation(
                     reader.GetInt64(0), reader.GetString(1), reader.IsDBNull(2) ? null : reader.GetString(2),
-                    reader.GetInt64(3), reader.GetInt64(4)));
+                    reader.GetInt64(3), reader.GetInt64(4), reader.GetString(5)));
             }
 
             return Array.AsReadOnly(values.ToArray());
@@ -3538,9 +3631,10 @@ public sealed class LuxembourgIndexReader : IDisposable
     }
 
     /// <summary>
-    /// Checks the source bodies the event log names against the corpus this index binds: every state's events name
-    /// exactly the body digests of the members its articles were read from. The index alone holds no body digest, so
-    /// whoever mounts it with its corpus calls this (the mount, the mount writer's verification, the build).
+    /// Checks the event log against the corpus this index binds: every state's events name exactly the body digests of
+    /// the members its articles were read from, and the last build's time is no earlier than the corpus's EU capture.
+    /// The index alone holds neither a body digest nor a capture time, so whoever mounts it with its corpus calls this
+    /// (the mount, the mount writer's verification, the build).
     /// </summary>
     public void VerifyEventLogSources(VerifiedLexCorpus6ManifestSet corpus)
     {
@@ -3563,6 +3657,14 @@ public sealed class LuxembourgIndexReader : IDisposable
                 {
                     throw new InvalidDataException("The Luxembourg event log names source bodies the corpus does not hold for its states.");
                 }
+            }
+
+            // This build's time is an upper bound on its corpus's observation only if it is no earlier than the corpus's
+            // EU capture; the index alone holds no capture time, so the check is made here, with the corpus.
+            var builtAt = LuxembourgIndexBuilder.ReadLogObservations(_connection)[^1].BuiltAt;
+            if (LuxembourgIndexBuilder.EarlierThanEuCapture(LuxembourgIndexBuilder.ParseBuiltAt(builtAt)!.Value, corpus) is { } reason)
+            {
+                throw new InvalidDataException($"The Luxembourg event log's last build time {builtAt} {reason}.");
             }
         }
     }

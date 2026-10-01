@@ -35,7 +35,7 @@
 // per column rather than per table.
 //
 // WHAT THEY ARE NOT. They are not V3 answers and cannot be made into any. The V3 `coverage` answer
-// holds no build time, no publisher name, no document types and no versions; it holds members by
+// states no build time and holds no publisher name, no document types and no versions; it holds members by
 // outcome, capability cells, an operations census and a `not_held` list, none of which is here.
 // The real-data sample for the V3 page belongs in `schemas/v3-platform/answer-samples.json` and
 // will arrive when there is a real V3 mount to drive; until then that file states its own limit and

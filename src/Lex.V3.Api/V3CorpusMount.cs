@@ -3789,8 +3789,8 @@ internal sealed class V3CorpusMount : IDisposable
     [
         ["publisher_universe", "how many acts the publisher holds, or how many of them this mount lacks: the mount records only what was admitted"],
         ["never_consolidated_acts", "the count of as-published acts never consolidated is a corpus-level statement this mount does not carry"],
-        ["first_sighting_and_observation_times", "no observation time is held, so nothing here says when anything was first seen; events serves a genesis log whose first_sighting events say only that a state is first present in that log"],
-        ["build_time_and_currency", "no build time of the corpus or index is held, so nothing here says how current these counts are; the corpus and index digests name exactly which artifacts are mounted"],
+        ["first_sighting_and_observation_times", "no observation time is held, so nothing here says when anything was first seen; events serves the event log, whose first_sighting events say only that a state is first present in that log"],
+        ["build_time_and_currency", "this report states no build time and no build time of the corpus file is held, so nothing here says how current these counts are; the index's event log records when each build ran (events: log.built_at), an upper bound on when its corpus was observed and no measure of currency against the publisher; the corpus and index digests name exactly which artifacts are mounted"],
         ["legal_status", "no status, repeal or commencement fact is counted here; status_on serves the publisher's force assertions per work, verbatim"],
     ];
 
@@ -4073,11 +4073,13 @@ internal sealed class V3CorpusMount : IDisposable
     internal const string EventsGenesisNote =
         "this log comes from one observation with no predecessor, so it holds only first_sighting; first_sighting means first present in this log " +
         "and does not say when the publisher published the text or when it was fetched; observed_from is null because no observation time is held; " +
+        "log.built_at is when the build ran, an upper bound on when its corpus was observed and never an observation time; " +
         "a revision (validity_revised, interval_closed, file_replaced, withdrawn_from_source, ...) needs a later build compared against this one";
 
     internal const string EventsSilenceNote =
         "an empty page says this log holds no further event; it says nothing about whether the publisher changed anything or whether acquisition ran: " +
-        "this mount holds no upstream health and no build time, and every envelope's freshness names upstream health stale";
+        "this mount holds no upstream health, a build's time (log.built_at) says when it ran and not what the publisher did after, and every " +
+        "envelope's freshness names upstream health stale";
 
     internal const string EventNamesNote =
         "the Stage 4 registry names thirteen events; mintable lists the twelve this pipeline may mint, never the coverage event (B42 finding 5.2: a " +
@@ -4091,14 +4093,15 @@ internal sealed class V3CorpusMount : IDisposable
         "build's states with the log before it: first_sighting or expression_added for a state new to the log, file_replaced when a state's source " +
         "bodies differ (its digest changes with its text, not with the bytes alone), and interval_closed or validity_revised when a state's interval " +
         "moved, an end derived from the publisher's start dates and never asserted by the publisher; a state the log holds and a later build lacks " +
-        "stays held, because absence is not a withdrawal; observed_from is null because no observation time is held";
+        "stays held, because absence is not a withdrawal; observed_from is null because no observation time is held, and each build's time " +
+        "(log.built_at, and each ancestor's built_at) is an upper bound on when its corpus was observed";
 
     internal static readonly string[][] EventsChainedNotHeld =
     [
         ["observation_times", "no observation time is held; observed_from is null on every event"],
         ["withdrawal_events", "a state the log holds and a later build lacks stays held: a withdrawal needs three completed runs and a complete enumeration, which no build here proves"],
         ["work_level_events", "events are scoped to states; no work-level event is minted"],
-        ["upstream_health", "no upstream health or build time is held, so silence here is not a statement that the publisher was quiet"],
+        ["upstream_health", "no upstream health is held, and a build's time says when it ran and not what the publisher did after, so silence here is not a statement that the publisher was quiet"],
     ];
 
     internal const string AnswerDriftChainedBasis =
@@ -4116,7 +4119,7 @@ internal sealed class V3CorpusMount : IDisposable
         ["observation_times", "no observation time is held; observed_from is null on every event"],
         ["revision_events", "no predecessor build is compared, so no revision, withdrawal, replacement or relation event is held"],
         ["work_level_events", "events are scoped to states; no work-level event is minted"],
-        ["upstream_health", "no upstream health or build time is held, so silence here is not a statement that the publisher was quiet"],
+        ["upstream_health", "no upstream health is held, and a build's time says when it ran and not what the publisher did after, so silence here is not a statement that the publisher was quiet"],
     ];
 
     internal const string AnswerDriftScope =
@@ -4342,26 +4345,34 @@ internal sealed class V3CorpusMount : IDisposable
     }
 
     /// <summary>
-    /// The log block: its id (the index digest); its basis (a genesis log, or one chained to predecessors); the
-    /// predecessor its last observation carried forward and how many builds were compared; each ancestor log whose
-    /// cursors this log still honours, to its last sequence number; and the events it holds.
+    /// The log block: its id (the index digest); its basis (a genesis log, or one chained to predecessors); when its
+    /// build ran (an upper bound on when its corpus was observed, never an observation time); the predecessor its last
+    /// observation carried forward and how many builds were compared; each ancestor log whose cursors this log still
+    /// honours, to its last sequence number, with when that build ran; and the events it holds.
     /// </summary>
     private static object EventLogBlock(string logId, LuxembourgIndexEventLog log, IReadOnlyList<LuxembourgIndexObservation> observations) => new
     {
         log_id = logId,
         basis = observations.Count <= 1 ? V3EventRegistry.GenesisBasis : V3EventRegistry.ChainedBasis,
+        built_at = observations.Count == 0 ? null : observations[^1].BuiltAt,
         predecessor_index_sha256 = observations.Count == 0 ? null : observations[^1].PredecessorIndexSha256,
         observations_compared = Math.Max(0, observations.Count - 1),
-        ancestors = AncestorLogs(observations).Select(static ancestor => new { log_id = ancestor.LogId, last_seq = ancestor.LastSeq }).ToArray(),
+        ancestors = AncestorLogs(observations)
+            .Select(static ancestor => new { log_id = ancestor.LogId, last_seq = ancestor.LastSeq, built_at = ancestor.BuiltAt })
+            .ToArray(),
         events_held = log.Events,
         last_seq = log.LastSeq,
     };
 
-    /// <summary>The logs this log carries forward, each to the last event it held: an observation's predecessor held the events before it.</summary>
-    private static (string LogId, long LastSeq)[] AncestorLogs(IReadOnlyList<LuxembourgIndexObservation> observations) =>
+    /// <summary>
+    /// The logs this log carries forward, each to the last event it held and with when its build ran: an observation's
+    /// predecessor held the events before it and was built at the observation before it.
+    /// </summary>
+    private static (string LogId, long LastSeq, string BuiltAt)[] AncestorLogs(IReadOnlyList<LuxembourgIndexObservation> observations) =>
         observations
-            .Where(static observation => observation.PredecessorIndexSha256 is not null)
-            .Select(static observation => (observation.PredecessorIndexSha256!, observation.FirstSeq - 1))
+            .Select(static (observation, index) => (observation, index))
+            .Where(static pair => pair.observation.PredecessorIndexSha256 is not null && pair.index > 0)
+            .Select(pair => (pair.observation.PredecessorIndexSha256!, pair.observation.FirstSeq - 1, observations[pair.index - 1].BuiltAt))
             .ToArray();
 
     private static int EventPageLimit(JsonElement parameters)

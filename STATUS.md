@@ -974,7 +974,7 @@ CI evidence are recorded in the pull request before merge.
 
 ## Heads
 
-- `v3/integration`: `b623723b` (2026-10-01, PR #866 merged). Build 45 s. Fast lane
+- `v3/integration`: `e3984f6b` (2026-10-01, PR #867 merged). Build 45 s. Fast lane
   (`eng/test-fast.ps1`): 3,077 tests, 3,076 pass, 1 skipped (the review of PR #828). Ingest suite: green on CI for PR #760
   (the CI `dotnet` job runs the whole solution on every pull request, about 7 min on the runner;
   green for PR #834);
@@ -2270,6 +2270,8 @@ A held state this build lacks stays held: absence is not a withdrawal.
   - Rebuilt with one byte added and the text unchanged, it is `file_replaced` with the digest, and
     so the version, unchanged. **Owner question, asked in PR #867:** should a replaced file whose
     text is unchanged mint a new version? That would change the published permalink scheme.
+    **Answered** by the panel on the owner's behalf (recorded by PR #871): no. Version identity
+    follows the legal text, and the replacement is recorded as built.
 - **`interval_closed`** and **`validity_revised`**, for a state the log held whose applicability
   interval this build's states move. The end is the next later date in the work and language,
   which is this derivation's, never the publisher's, so each event is marked `derived: true` and
@@ -2301,6 +2303,54 @@ A held state this build lacks stays held: absence is not a withdrawal.
     from the first of them, each by its permalink, marked derived.
   On a mount whose chained log holds the act at an earlier date (crafted predecessor, real build),
   `events` and `answer_drift` show the `interval_closed` and its moved dates.
+
+Predecessor chaining, the fifth slice, first part (PR #871): each build's time, the bound that
+`as_observed` will give.
+- The panel answered the chain's three owner questions on the owner's behalf (ANSWERS.md,
+  2026-10-01):
+  - G1: a replaced file whose text is unchanged mints no new version. Version identity follows the
+    wording and text digests, so published permalinks keep resolving. The replacement is still
+    recorded as `file_replaced` with both body digests, as #867 builds it.
+  - `as_observed` may ship identified by a build snapshot. The answer must name the snapshot, give
+    that generation's build time as an upper bound ("observed no later than"), and never state or
+    infer an observation time. A time the snapshots cannot place refuses with an existing typed
+    code.
+  - Generations are retained by the launch contract's retention line (S7-A09):
+    - every generation a published permalink or evidence bundle references, indefinitely;
+    - nightly generations for 90 days;
+    - one complete monthly keeper, indefinitely;
+    - the retained depth reported truthfully.
+  - The slice-4 decision (an ancestor's cursor reads on) stands.
+- Index schema `lex-v3-luxembourg-index/8`, event log `lex-v3-event-log/2`: each observation records
+  `built_at`, UTC to the second. It is hashed into the log stamp and carried forward unchanged by
+  every successor. `observed_from` stays null, because a build time is not an observation time.
+- The build time is a build input, not read inside the builder (a driver decision, below):
+  - `LuxembourgIndexBuilder.TryBuild` takes it;
+  - it must be a UTC whole second, later than the predecessor's last build and no earlier than the
+    corpus's EU capture (the one observation clock the corpus holds), or the build refuses
+    `build_time_invalid`;
+  - nothing can check it against the Luxembourg fetches, whose times the corpus does not hold;
+  - the reader requires each observation's time to be a real UTC second later than the one before.
+- `V3FirstMountBuild` reads its clock once, after every fetch and derivation:
+  - it rounds the time up to the next second, since rounding down could land before the last fetch;
+  - it passes that one time to both builds of the index, so the twice-built comparison holds;
+  - the Tool uses the system clock.
+- `events` now serves `log.built_at` and each ancestor's `built_at`. The sentences that said no
+  build time is held now say what is held:
+  - `coverage` states none, in its `not_held` row and in the Trust and Coverage page's counts note
+    (English and the French draft);
+  - a build's time is not upstream health.
+- An index on each event's work (`events_work_seq`) serves the per-work fold that `as_observed`
+  reads.
+- A `/7` predecessor refuses `predecessor_schema_differs`. No real mount was chainable: the real
+  bounded first mount's index is schema 6.
+- Next, the second part: `as_observed` by snapshot digest.
+  - It answers as `as_of` does, over the states the log held at that snapshot.
+  - It names the snapshot and gives `observed_no_later_than`, its build time.
+  - A state the mounted generation still holds is quoted. A state only an earlier generation held
+    comes as its identity from the log, without text, until the generation mount (slice 6).
+  - Every request by time refuses `snapshot_unknown`, because upper bounds alone place no instant
+    in a snapshot.
 
 The live export composer and its journey step (PR #789), the eighth screen. `dist-live/export.html`
 has its own bundle `client-live-export.js`.
@@ -3000,12 +3050,12 @@ recorded by PR #862:
    - comparison events: `first_sighting` and `expression_added` for new keys, `file_replaced` when a
      source body changes (G1), and the derived `interval_closed` and `validity_revised` (PR #867);
    - `events` and `answer_drift` across the chain (folded into PR #867 by its review);
-   - `as_observed` by observation (G4);
-   - a generation mount (G3b).
+   - each build's time in the log (PR #871), then `as_observed` by build snapshot (G4);
+   - a generation mount (G3b), retained by S7-A09.
    `observed_from` stays null until a Luxembourg body's capture time reaches the corpus (data lane);
    `knowable_on` and withdrawal follow it. The owner questions (G1 when a file changes but its text
-   does not, "as observed" identified by snapshot with no time, retaining every generation) are
-   asked in the pull requests that meet them.
+   does not, "as observed" identified by snapshot with no time, retaining every generation) were
+   answered by the panel on the owner's behalf; PR #871 records the answers.
 2. The index capability manifest's per-operation rows for the unserved operations: one small
    additive pull request.
 3. A credential-free deployment kit, so the owner's go-live is one command (item 7). It holds the
@@ -3227,6 +3277,14 @@ Each is the driver's call under ruling 7 and can be reversed by a later pull req
   from a retired log refuses `snapshot_unknown`. Amended by PR #867: a build chained to a log carries
   it forward with the same numbers, so a cursor of an ancestor the mounted log names
   (`log.ancestors`) reads on; a log not chained to the mounted one is still retired.
+- The build time of the event log (PR #871) is an explicit build input, which the first-mount
+  build reads once from its clock and passes to both index builds. The builder never reads it
+  itself.
+  - The launch contract's two-build line still holds: two independent executions given the same
+    inputs, the build time among them, give the same bytes. A build that must reproduce another
+    takes the other's time.
+  - Rejected: the predecessor's build-report time. It is not hashed, anyone can edit it, and it
+    would leave the mounted generation with no bound.
 - `ask`'s containment card keeps the `point` verdict.
 - The four operations with no data (`as_observed`, `knowable_on`, `concepts`, `transposition`) keep
   the typed transport failure `operation_not_served`, and the platform states, per operation, that

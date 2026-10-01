@@ -497,11 +497,11 @@
               },
               {
                 "item": "first_sighting_and_observation_times",
-                "reason": "no observation time is held, so nothing here says when anything was first seen; events serves a genesis log whose first_sighting events say only that a state is first present in that log"
+                "reason": "no observation time is held, so nothing here says when anything was first seen; events serves the event log, whose first_sighting events say only that a state is first present in that log"
               },
               {
                 "item": "build_time_and_currency",
-                "reason": "no build time of the corpus or index is held, so nothing here says how current these counts are; the corpus and index digests name exactly which artifacts are mounted"
+                "reason": "this report states no build time and no build time of the corpus file is held, so nothing here says how current these counts are; the index\u0027s event log records when each build ran (events: log.built_at), an upper bound on when its corpus was observed and no measure of currency against the publisher; the corpus and index digests name exactly which artifacts are mounted"
               },
               {
                 "item": "legal_status",

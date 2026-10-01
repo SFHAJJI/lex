@@ -25,7 +25,10 @@ public sealed class V3FirstMountBuildTests
         Assert.IsTrue(europe.Delivered, $"{europe.Refusal}: {europe.Detail}");
         Assert.IsTrue(luxembourg.Delivered, $"{luxembourg.Refusal}: {luxembourg.Detail}");
 
-        var build = await new V3FirstMountBuild(store).RunAsync(europe, luxembourg, CancellationToken.None);
+        // One clock read for both runs: the index's event log records the build time, so a run that must reproduce
+        // another takes the other's time.
+        var clock = new FrozenClock(DateTimeOffset.UtcNow);
+        var build = await new V3FirstMountBuild(store, clock).RunAsync(europe, luxembourg, CancellationToken.None);
 
         Assert.IsTrue(build.Delivered, $"{build.Refusal}: {build.Detail}");
         Assert.AreEqual(5, build.Files.Count);
@@ -39,8 +42,8 @@ public sealed class V3FirstMountBuildTests
         Assert.AreEqual(LexCorpus6Stage3Disposition.FormexMainBodyAdmitted, formexOutcomes[0].Disposition,
             "the EU member's Formex package was acquired and its main body admitted.");
 
-        // A second build from the same acquisitions reproduces every artefact byte for byte.
-        var again = await new V3FirstMountBuild(store).RunAsync(europe, luxembourg, CancellationToken.None);
+        // A second build from the same acquisitions at the same build time reproduces every artefact byte for byte.
+        var again = await new V3FirstMountBuild(store, clock).RunAsync(europe, luxembourg, CancellationToken.None);
         Assert.IsTrue(again.Delivered, $"{again.Refusal}: {again.Detail}");
         foreach (var (first, second) in build.Files.Zip(again.Files))
         {
@@ -161,5 +164,25 @@ public sealed class V3FirstMountBuildTests
         }
 
         return directory?.FullName ?? throw new AssertFailedException("Checkout root not found above the test binaries.");
+    }
+
+    /// <summary>
+    /// The build time the event log records is read from the clock rounded up to the next whole second, so it is never
+    /// earlier than the moment it was read: an upper bound on every fetch before it.
+    /// </summary>
+    [TestMethod]
+    public void TheBuildTimeIsTheClockRoundedUpToAWholeUtcSecond()
+    {
+        var whole = new DateTimeOffset(2026, 10, 1, 8, 0, 0, TimeSpan.Zero);
+        Assert.AreEqual(whole, V3FirstMountBuild.BuildTimeOf(whole), "a whole second stays");
+        Assert.AreEqual(whole.AddSeconds(1), V3FirstMountBuild.BuildTimeOf(whole.AddTicks(1)), "any part of a second rounds up");
+        var offset = V3FirstMountBuild.BuildTimeOf(new DateTimeOffset(2026, 10, 1, 10, 0, 0, 500, TimeSpan.FromHours(2)));
+        Assert.AreEqual(whole.AddSeconds(1), offset);
+        Assert.AreEqual(TimeSpan.Zero, offset.Offset, "in UTC");
+    }
+
+    private sealed class FrozenClock(DateTimeOffset now) : TimeProvider
+    {
+        public override DateTimeOffset GetUtcNow() => now;
     }
 }
