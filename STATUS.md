@@ -2270,7 +2270,7 @@ A held state this build lacks stays held: absence is not a withdrawal.
   - Rebuilt with one byte added and the text unchanged, it is `file_replaced` with the digest, and
     so the version, unchanged. **Owner question, asked in PR #867:** should a replaced file whose
     text is unchanged mint a new version? That would change the published permalink scheme.
-    **Answered** by the panel on the owner's behalf (recorded by PR #869): no. Version identity
+    **Answered** by the panel on the owner's behalf (recorded by PR #871): no. Version identity
     follows the legal text, and the replacement is recorded as built.
 - **`interval_closed`** and **`validity_revised`**, for a state the log held whose applicability
   interval this build's states move. The end is the next later date in the work and language,
@@ -2304,7 +2304,7 @@ A held state this build lacks stays held: absence is not a withdrawal.
   On a mount whose chained log holds the act at an earlier date (crafted predecessor, real build),
   `events` and `answer_drift` show the `interval_closed` and its moved dates.
 
-Predecessor chaining, the fifth slice, first part (PR #869): each build's time, the bound that
+Predecessor chaining, the fifth slice, first part (PR #871): each build's time, the bound that
 `as_observed` will give.
 - The panel answered the chain's three owner questions on the owner's behalf (ANSWERS.md,
   2026-10-01):
@@ -3050,12 +3050,12 @@ recorded by PR #862:
    - comparison events: `first_sighting` and `expression_added` for new keys, `file_replaced` when a
      source body changes (G1), and the derived `interval_closed` and `validity_revised` (PR #867);
    - `events` and `answer_drift` across the chain (folded into PR #867 by its review);
-   - each build's time in the log (PR #869), then `as_observed` by build snapshot (G4);
+   - each build's time in the log (PR #871), then `as_observed` by build snapshot (G4);
    - a generation mount (G3b), retained by S7-A09.
    `observed_from` stays null until a Luxembourg body's capture time reaches the corpus (data lane);
    `knowable_on` and withdrawal follow it. The owner questions (G1 when a file changes but its text
    does not, "as observed" identified by snapshot with no time, retaining every generation) were
-   answered by the panel on the owner's behalf; PR #869 records the answers.
+   answered by the panel on the owner's behalf; PR #871 records the answers.
 2. The index capability manifest's per-operation rows for the unserved operations: one small
    additive pull request.
 3. A credential-free deployment kit, so the owner's go-live is one command (item 7). It holds the
@@ -3277,7 +3277,7 @@ Each is the driver's call under ruling 7 and can be reversed by a later pull req
   from a retired log refuses `snapshot_unknown`. Amended by PR #867: a build chained to a log carries
   it forward with the same numbers, so a cursor of an ancestor the mounted log names
   (`log.ancestors`) reads on; a log not chained to the mounted one is still retired.
-- The build time of the event log (PR #869) is an explicit build input, which the first-mount
+- The build time of the event log (PR #871) is an explicit build input, which the first-mount
   build reads once from its clock and passes to both index builds. The builder never reads it
   itself.
   - The launch contract's two-build line still holds: two independent executions given the same
