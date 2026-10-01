@@ -185,7 +185,7 @@ public sealed class EuFormexEligibilityPopulation
             if (!enumeration.Delivered)
             {
                 refusal = EuFormexEligibilityPopulationRefusal.ExpressionEnumerationRefused;
-                detail = enumeration.ExpressionIdentity.PublisherExpressionId + ": " + enumeration.Refusal;
+                detail = enumeration.ExpressionIdentity.PublisherExpressionId + ": " + enumeration.Refusal + ": " + enumeration.Detail;
                 return null;
             }
             if (!expected.TryGetValue(enumeration.ExpressionIdentity, out var expression))
