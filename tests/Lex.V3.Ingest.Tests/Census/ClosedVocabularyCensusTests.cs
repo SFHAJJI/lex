@@ -51,6 +51,7 @@ public sealed class ClosedVocabularyCensusTests
     [TestMethod]
     public void EveryClosedVocabularyInTheSweptAssembliesIsPinnedMemberByMember()
     {
+        foreach (var row in ClosedSurfaceCensus.ClosedVocabularies(CensusScope.SweptHere).Where(row => row.Contains("EuFormexManifestationEnumerationRefusal", StringComparison.Ordinal))) System.Console.WriteLine("PIN876_ENUM " + row);
         CollectionAssert.AreEqual(
             new[]
             {
