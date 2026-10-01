@@ -1,3 +1,29 @@
+## Luxembourg legislative population command (Codex, 2026-10-01)
+
+Reversible driver decision under standing order section 7: `build --lu-population legislative`
+selects the disjoint publisher URI ranges `code/..code0`, `loi/..loi0`, and `rgd/..rgd0` beneath
+`http://data.legilux.public.lu/eli/etat/leg/`. It shares one observed vocabulary, proves each
+S/A/G family with the adaptive cover, and keeps gaps outside the requested scope. Consolidated
+and expression/manifestation descendants inside those ranges keep the existing individual
+scope, source, transport and rights gates. Prefix membership alone does not establish a legal
+family or authorize a body. The legacy bounded range and whole-IRI commands remain compatible.
+
+A retained family manifest lists every observed typeDocument IRI once, explicitly stating that
+its type family was not independently enumerated. Objects found in selected URI ranges retain
+their individual outcomes; outside-range and unobserved-family complements are explicitly
+unenumerated. This is URI-range coverage, not a claim that the prefixes exhaust every legal
+family. The CLI writes a manifest pointer. The population catalog binds that declaration to
+every family plan and regenerates the manifest from verified vocabulary during offline restore.
+`derive` restores either the old bounded catalog or the new population catalog without HTTP.
+
+Validation added: nine-family replay from two copied stores; range/policy/manifest tampering;
+missing scope custody; excluded-gap behavior; raw and Brotli complete mounts in two independent
+CLI processes (including predecessor and consolidated EU); accepted/mixed CLI arguments. Local
+`pwsh -File eng/test-fast.ps1` and touched ingest tests are deferred under the standing 4 GiB
+free-memory rule. Full CI and one Claude review gate merge. No full live population or memory
+fit is claimed. Measured March2017 partition and representative counts below remain the sizing
+evidence; the proposed full run must preserve the resource stop and shared wire ceiling.
+
 # Lex V3 status: the data lane
 
 Updated 2026-10-01.
@@ -1571,4 +1597,4 @@ The real bounded GDPR capture retained six Formex packages. Two originals contai
 
 The parser now admits a CONS.ACT only through one CONS.DOC, its own single BIB.INSTANCE and one ENACTING.TERMS. Amendment-history languages/dates and articles outside operative text do not enter the result. The document bibliographic date keeps its existing article meaning; CONSLEG.DATE is not substituted or treated as applicability. Profile version 4 records the new scope. Exact retained EN/FRA packages are regression fixtures with route/body provenance and SHA-256 pins; mutations cover duplicate or absent document coordinates, wrong language and excluded text. Original ACT behavior remains covered.
 
-Local fast/ingest suites are deferred under the standing 4 GiB memory guard. CI and cross-family review are pending. After merging, rederive the real bounded mount from retained custody and compare two independent runs. No new publisher capture is needed for this parser correction, and full EU/LU population completion is still outstanding.
+Local fast/ingest suites are deferred under the standing 4 GiB memory guard. Exact-head CI 36907840460 passed (5,965 passed / 0 failed / 22 skipped); Claude returned MERGE and PR907 merged as 58502d13. After merging, rederive the real bounded mount from retained custody and compare two independent runs. No new publisher capture is needed for this parser correction, and full EU/LU population completion is still outstanding.
