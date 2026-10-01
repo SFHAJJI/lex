@@ -3,6 +3,23 @@
 Updated 2026-10-01 by the driver. This file replaces the issue-comment ledgers. It is rewritten in
 every pull request that changes what is served, what is next or what is blocked.
 
+## Async Luxembourg assertion snapshot preparation (Codex, 2026-10-01)
+
+Reversible driver decision: let the assertion snapshot writer consume asynchronous verified rows
+through the existing bounded chunk channel. The small-chunk callback receives the channel's linked
+cancellation token, so failed custody can stop a source awaiting its next row. Synchronous and
+asynchronous assertion writing share the same record encoding and domain-separated digest. The
+source remains responsible for publisher proof, census membership, admission and subject grouping;
+the existing snapshot reader still checks the complete sequence before lookup.
+
+Seven unvalidated cases cover exact synchronous/asynchronous bytes, empty input, independent
+small-chunk reopening with duplicate rows and literal metadata, a failed custody write while the
+source waits, source exceptions, wrong observations, null rows and cancellation before writing.
+This follow-on is local preparation on a branch created from origin/v3/integration, with pending
+PR858 merged as an explicit prerequisite. It will not be submitted until that prerequisite is
+reviewed and merged. Required Release build, fast and affected ingest checks, review and final CI
+remain outstanding. No adapter integration, publisher traffic or full-LU fit is claimed.
+
 ## LU assertion snapshot storage (Codex, 2026-10-01)
 
 Reversible driver decision: prepare immutable assertion storage using the existing checked chunk

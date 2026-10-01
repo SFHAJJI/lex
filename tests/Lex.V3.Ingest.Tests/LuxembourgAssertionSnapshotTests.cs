@@ -1,4 +1,5 @@
 using System.Buffers.Binary;
+using System.Runtime.CompilerServices;
 using System.Security.Cryptography;
 using System.Text;
 using Lex.V3.Artifacts;
@@ -192,6 +193,128 @@ public sealed class LuxembourgAssertionSnapshotTests
         Assert.AreEqual(firstHash, secondHash);
         CollectionAssert.AreEqual(first.ToArray(), second.ToArray());
         Assert.AreEqual(CanonicalHash(first.ToArray()), firstHash);
+    }
+
+    [TestMethod]
+    [DataRow(false)]
+    [DataRow(true)]
+    public async Task AsyncRowsKeepCanonicalBytesAndReopenThroughSmallChunks(bool empty)
+    {
+        LuxembourgObservedAssertion[] rows = empty ? [] : Enumerable.Range(0, 13).Select(index =>
+            new LuxembourgObservedAssertion(index < 7 ? "a" : "b", Jolux + "title",
+                LuxembourgAssertionObjectKind.Literal, new string('x', 8192) + "\0é😀", "", "fr", Observation)).ToArray();
+        using var expected = new MemoryStream();
+        var expectedHash = LuxembourgAssertionSnapshot.Write(expected, Run, Observation, Census, Assertions,
+            rows, CancellationToken.None);
+        var passes = 0;
+        var disposed = false;
+        async IAsyncEnumerable<LuxembourgObservedAssertion> Source(
+            [EnumeratorCancellation] CancellationToken token = default)
+        {
+            passes++;
+            try
+            {
+                foreach (var row in rows)
+                {
+                    await Task.Yield();
+                    token.ThrowIfCancellationRequested();
+                    yield return row;
+                }
+            }
+            finally { disposed = true; }
+        }
+        var store = new EuInMemoryCustodyStore();
+        var (root, chunks) = await ChunkedDerivedArtifact.WriteSmallChunksAsync(store, LuxembourgAssertionSnapshot.Kind,
+            (stream, token) => LuxembourgAssertionSnapshot.WriteAsync(stream, Run, Observation, Census, Assertions,
+                Source(), token), CancellationToken.None);
+        Assert.AreEqual(1, passes);
+        Assert.IsTrue(disposed);
+        if (!empty) Assert.IsGreaterThan(1, chunks.Count);
+        var artifact = await ChunkedDerivedArtifact.OpenAsync(store, root.Reference.ContentSha256,
+            LuxembourgAssertionSnapshot.Kind, CancellationToken.None);
+        Assert.AreEqual(expectedHash, artifact.CanonicalSha256);
+        using var reopenedBytes = artifact.OpenRead();
+        using var actual = new MemoryStream();
+        await reopenedBytes.CopyToAsync(actual);
+        CollectionAssert.AreEqual(expected.ToArray(), actual.ToArray());
+        var snapshot = Open(artifact);
+        CollectionAssert.AreEqual(rows.Where(row => row.SubjectIri == "a").ToArray(), snapshot.ReadSubject("a").ToArray());
+        CollectionAssert.AreEqual(rows.Where(row => row.SubjectIri == "b").ToArray(), snapshot.ReadSubject("b").ToArray());
+    }
+
+    [TestMethod]
+    public async Task FailedCustodyCancelsAnAsyncSourceWaitingForItsNextRow()
+    {
+        var disposed = false;
+        var sourceToken = CancellationToken.None;
+        async IAsyncEnumerable<LuxembourgObservedAssertion> Source(
+            [EnumeratorCancellation] CancellationToken token = default)
+        {
+            sourceToken = token;
+            try
+            {
+                yield return new LuxembourgObservedAssertion("a", Jolux + "title",
+                    LuxembourgAssertionObjectKind.Literal, new string('x', ChunkedDerivedArtifact.SmallChunkSize + 100),
+                    "", "fr", Observation);
+                await Task.Delay(Timeout.Infinite, token);
+            }
+            finally { disposed = true; }
+        }
+        var store = new EuInMemoryCustodyStore(failWriteDigest: (_, _) => true);
+        await Assert.ThrowsExactlyAsync<CustodyRequiredException>(async () =>
+            await ChunkedDerivedArtifact.WriteSmallChunksAsync(store, LuxembourgAssertionSnapshot.Kind,
+                (stream, token) => LuxembourgAssertionSnapshot.WriteAsync(stream, Run, Observation, Census, Assertions,
+                    Source(), token), CancellationToken.None).WaitAsync(TimeSpan.FromSeconds(10)));
+        Assert.IsTrue(disposed);
+        Assert.IsTrue(sourceToken.IsCancellationRequested);
+        Assert.AreEqual(1, store.CreateCallCount);
+    }
+
+    [TestMethod]
+    [DataRow("wrong-observation")]
+    [DataRow("null-row")]
+    [DataRow("source-failure")]
+    public async Task AsyncFailureDisposesTheSourceAndLeavesTheDestinationOpen(string fault)
+    {
+        var disposed = false;
+        async IAsyncEnumerable<LuxembourgObservedAssertion> Source()
+        {
+            try
+            {
+                await Task.Yield();
+                if (fault == "source-failure") throw new InvalidOperationException("source failed");
+                yield return fault == "null-row" ? null! : new LuxembourgObservedAssertion("a", Jolux + "title",
+                    LuxembourgAssertionObjectKind.Iri, "value", "", "", Ref('9'));
+            }
+            finally { disposed = true; }
+        }
+        using var output = new MemoryStream();
+        Task Write() => LuxembourgAssertionSnapshot.WriteAsync(output, Run, Observation, Census, Assertions,
+            Source(), CancellationToken.None);
+        if (fault == "null-row") await Assert.ThrowsExactlyAsync<ArgumentNullException>(Write);
+        else await Assert.ThrowsExactlyAsync<InvalidOperationException>(Write);
+        Assert.IsTrue(disposed);
+        Assert.IsTrue(output.CanWrite);
+    }
+
+    [TestMethod]
+    public async Task CancellationBeforeAsyncWritingDoesNotOpenTheSourceOrWriteAHeader()
+    {
+        var opened = false;
+        async IAsyncEnumerable<LuxembourgObservedAssertion> Source()
+        {
+            opened = true;
+            await Task.Yield();
+            yield return Row("a", "title", "value");
+        }
+        using var stop = new CancellationTokenSource();
+        stop.Cancel();
+        using var output = new MemoryStream();
+        await Assert.ThrowsExactlyAsync<OperationCanceledException>(() => LuxembourgAssertionSnapshot.WriteAsync(
+            output, Run, Observation, Census, Assertions, Source(), stop.Token));
+        Assert.IsFalse(opened);
+        Assert.AreEqual(0L, output.Length);
+        Assert.IsTrue(output.CanWrite);
     }
 
     private static async Task<ChunkedDerivedArtifact> Hold(IEnumerable<LuxembourgObservedAssertion> rows)
