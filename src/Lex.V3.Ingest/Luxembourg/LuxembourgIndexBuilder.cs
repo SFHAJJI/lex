@@ -376,10 +376,22 @@ public sealed record LuxembourgIndexEvent(
     string ApplicabilityDate,
     string ExpressionIri,
     string Language,
-    string StateSha256);
+    string StateSha256,
+    string DetailJson);
 
 /// <summary>What the index's event log holds: how many events and the last sequence number (0 when empty).</summary>
 public sealed record LuxembourgIndexEventLog(long Events, long LastSeq);
+
+/// <summary>
+/// One observation of the index's event log: the build that observed (its corpus), the index whose log it carried
+/// forward (null for the first), and the events it appended by sequence number (an empty range: first is last + 1).
+/// </summary>
+public sealed record LuxembourgIndexObservation(
+    long Observation,
+    string CorpusSha256,
+    string? PredecessorIndexSha256,
+    long FirstSeq,
+    long LastSeq);
 
 /// <summary>
 /// Builds the immutable Luxembourg index from the same proof-complete envelope that builds
@@ -3178,7 +3190,62 @@ public sealed class LuxembourgIndexReader : IDisposable
                     reader.GetInt64(0), reader.GetString(1), reader.GetString(3),
                     reader.IsDBNull(4) ? null : reader.GetString(4),
                     key[0], key[1], key[2], key[3],
-                    detail.RootElement.GetProperty("state_sha256").GetString()!));
+                    detail.RootElement.GetProperty("state_sha256").GetString()!,
+                    reader.GetString(5)));
+            }
+
+            return Array.AsReadOnly(values.ToArray());
+        }
+    }
+
+    /// <summary>The observations of the event log, in order (<see cref="LuxembourgIndexQueries.Observations"/>).</summary>
+    public IReadOnlyList<LuxembourgIndexObservation> ResolveObservations()
+    {
+        lock (_gate)
+        {
+            using var command = _connection.CreateCommand();
+            command.CommandText = LuxembourgIndexQueries.Observations;
+            using var reader = command.ExecuteReader();
+            var values = new List<LuxembourgIndexObservation>();
+            while (reader.Read())
+            {
+                values.Add(new LuxembourgIndexObservation(
+                    reader.GetInt64(0), reader.GetString(1), reader.IsDBNull(2) ? null : reader.GetString(2),
+                    reader.GetInt64(3), reader.GetInt64(4)));
+            }
+
+            return Array.AsReadOnly(values.ToArray());
+        }
+    }
+
+    /// <summary>
+    /// The revising events (<c>validity_revised</c>, <c>interval_closed</c>) after a sequence number, in sequence order,
+    /// at most <paramref name="take"/>, optionally of one work (<see cref="LuxembourgIndexQueries.RevisingEventsAfter"/>).
+    /// </summary>
+    public IReadOnlyList<LuxembourgIndexEvent> ResolveRevisingEvents(long afterSeq, string? workKey, int take)
+    {
+        if (afterSeq < 0) throw new ArgumentOutOfRangeException(nameof(afterSeq));
+        if (take < 1) throw new ArgumentOutOfRangeException(nameof(take));
+        lock (_gate)
+        {
+            using var command = _connection.CreateCommand();
+            command.CommandText = LuxembourgIndexQueries.RevisingEventsAfter;
+            command.Parameters.AddWithValue("$events", JsonSerializer.Serialize(V3EventRegistry.Revising));
+            command.Parameters.AddWithValue("$after", afterSeq);
+            command.Parameters.AddWithValue("$work", (object?)workKey ?? DBNull.Value);
+            command.Parameters.AddWithValue("$take", take);
+            using var reader = command.ExecuteReader();
+            var values = new List<LuxembourgIndexEvent>();
+            while (reader.Read())
+            {
+                var key = JsonSerializer.Deserialize<string[]>(reader.GetString(2))!;
+                using var detail = JsonDocument.Parse(reader.GetString(5));
+                values.Add(new LuxembourgIndexEvent(
+                    reader.GetInt64(0), reader.GetString(1), reader.GetString(3),
+                    reader.IsDBNull(4) ? null : reader.GetString(4),
+                    key[0], key[1], key[2], key[3],
+                    detail.RootElement.GetProperty("state_sha256").GetString()!,
+                    reader.GetString(5)));
             }
 
             return Array.AsReadOnly(values.ToArray());

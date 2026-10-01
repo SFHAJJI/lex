@@ -52,4 +52,7 @@ public static class V3EventRegistry
     /// <see cref="FirstSighting"/>, and a revision needs a later build compared against it.
     /// </summary>
     public const string GenesisBasis = "genesis";
+
+    /// <summary>The basis of a log carried forward from a predecessor's and appended to by later builds (predecessor chaining).</summary>
+    public const string ChainedBasis = "chained";
 }

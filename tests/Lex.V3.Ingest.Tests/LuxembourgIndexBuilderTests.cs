@@ -1117,7 +1117,7 @@ public sealed class LuxembourgIndexBuilderTests
     }
 
     /// <summary>The state index's envelope and its first build, with the corpus, for the chained builds.</summary>
-    private static async Task<(Stage3DerivationProfileEnvelope Envelope, LuxembourgIndexBuildResult Built, VerifiedLexCorpus6ManifestSet Corpus)> BuildStateEnvelopeAsync(
+    internal static async Task<(Stage3DerivationProfileEnvelope Envelope, LuxembourgIndexBuildResult Built, VerifiedLexCorpus6ManifestSet Corpus)> BuildStateEnvelopeAsync(
         Func<string, string>? transform = null)
     {
         const string manifestation =
@@ -1159,7 +1159,7 @@ public sealed class LuxembourgIndexBuilderTests
     private static (byte[] Bytes, SourceArtifactRef Reference) Tampered(byte[] source, string tamper, bool restampLog) =>
         Tampered(source, connection => Execute(connection, tamper), restampLog);
 
-    private static (byte[] Bytes, SourceArtifactRef Reference) Tampered(byte[] source, Action<SqliteConnection> tamper, bool restampLog = true)
+    internal static (byte[] Bytes, SourceArtifactRef Reference) Tampered(byte[] source, Action<SqliteConnection> tamper, bool restampLog = true)
     {
         var bytes = MutateDatabase(source, connection =>
         {
