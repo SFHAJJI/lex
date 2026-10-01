@@ -16,9 +16,9 @@ Eight unvalidated cases cover exact synchronous/asynchronous bytes, empty input,
 small-chunk reopening with duplicate rows and literal metadata, a failed custody write while the
 source waits, no root after a source failure, wrong observations, null rows and cancellation before writing.
 This follow-on is local preparation on a branch created from origin/v3/integration, with pending
-PR858 merged as an explicit prerequisite. It will not be submitted until that prerequisite is
-reviewed and merged. Required Release build, fast and affected ingest checks, review and final CI
-remain outstanding. No adapter integration, publisher traffic or full-LU fit is claimed.
+PR858 merged as an explicit prerequisite. Draft CI may validate this follow-on while EU owns the
+local heavy slot; final review and merge wait for PR858. Required local Release build, fast and
+affected ingest checks, review and final CI remain outstanding. No adapter integration, publisher traffic or full-LU fit is claimed.
 
 ## LU assertion snapshot storage (Codex, 2026-10-01)
 
