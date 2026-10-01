@@ -3,6 +3,20 @@
 Updated 2026-10-01 by the driver. This file replaces the issue-comment ledgers. It is rewritten in
 every pull request that changes what is served, what is next or what is blocked.
 
+## Renderer source identities from custody (Codex, 2026-10-01)
+
+Draft: reopen the original six EU and two Luxembourg renderer-source artifacts from a pinned
+file-to-reference mapping. Require the exact declared role names, snapshot the input mapping,
+read each body through the custody digest checker and preserve its original resource ID. This
+removes checkout reads and fresh UUIDs from that part of a future offline reconstruction. It does
+not execute archived source code or establish the complete acquisition catalog.
+
+Twenty-six draft cases cover copied/weak custody, repeat byte/ID equality, dictionary order and
+mutation, all eight missing bodies, exact role names/counts, wrong digests and cancellation. Source
+is uncompiled. Required local Release, fast and affected ingest tests plus Claude review remain queued behind
+the active EU acquisition and earlier data slices. No population or independent-mount completion
+is claimed. The active runtime and the web-owned index builders/readers are unchanged.
+
 ## EU escaped qualifier authority (Codex, 2026-10-01)
 
 EU retry 5 at C:/lex-v3/eu-population-20261001-3 ended at 03:08 UTC with exit 3 after
