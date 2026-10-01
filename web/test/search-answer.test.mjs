@@ -264,6 +264,9 @@ test("each rule an EU answer states about itself is refused when broken, with th
     ["a hit of another wording date", both, (a) => { a.hits[1].wording_date = "2016-05-04"; }, /not in the wording the answer pins/],
     ["a hit in another language", both, (a) => { a.hits[2].language = "fra"; }, /one language asked \(eng\)/],
     ["a hit resolving to another provision", both, (a) => { a.hits[0].resolve.identifier = a.hits[0].resolve.identifier.replace(/=.*$/, "=999"); }, /not to the provision it names/],
+    // The review of #853's reproduction: the second hit's work IRI changed, everything else (the population's
+    // one work included) left as it was.
+    ["hits of two works", both, (a) => { a.hits[1].publisher_work_id = flipLast(a.hits[1].publisher_work_id); }, /the hits are in 2 works, and an EU search is in the one work named/],
     ["hits in two expressions", both, (a) => { a.hits[1].publisher_expression_id += "-other"; a.hits[1].resolve.identifier = `${a.hits[1].publisher_expression_id}#lex-provision=${a.hits[1].publisher_id}`; }, /in 2 expressions/],
     ["one article twice", both, (a) => { a.hits[1] = structuredClone(a.hits[0]); }, /of the wording twice/],
     ["relaxed before strict", both, (a) => { a.hits.reverse(); }, /relaxed never outranks strict/],

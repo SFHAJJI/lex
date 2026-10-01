@@ -903,7 +903,7 @@ CI evidence are recorded in the pull request before merge.
 
 ## Heads
 
-- `v3/integration`: `b159b01f` (2026-10-01, PR #848 merged). Build 45 s. Fast lane
+- `v3/integration`: `50519df6` (2026-10-01, PR #852 merged). Build 45 s. Fast lane
   (`eng/test-fast.ps1`): 3,077 tests, 3,076 pass, 1 skipped (the review of PR #828). Ingest suite: green on CI for PR #760
   (the CI `dotnet` job runs the whole solution on every pull request, about 7 min on the runner;
   green for PR #834);
@@ -1942,7 +1942,10 @@ screens. Until now the screen refused every EU answer as not Luxembourg's.
     `/eu-eurlex/{celex}/{language}/{wording date}--{wording sha256}` agrees with the wording date,
     the digest and the language asked, and each hit's permalink is it with the provision, escaped as
     the platform escapes it (RFC 3986);
-  - the EU cursor `lane.article`, the population scope echoing the request, and one work with hits.
+  - the EU cursor `lane.article`, the population scope echoing the request, and one work with hits;
+  - the hits' own work and expression IRIs are one work and one expression. The review of #853 found
+    a hit of a second work read as a one-work result, because only the population's count was
+    checked.
 - An answer with hits and no pinned wording is refused rather than shown unpinned: a hit this page
   shows must pin its wording (driver decision, below).
 - The screen says the pinned wording once above the hits, with the answer's own sentence on what the

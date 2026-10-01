@@ -155,6 +155,14 @@ test("an EU work's search is the EU results: the pinned wording once, each hit's
   for (const row of value.not_held) assert.ok(shown.includes(`${row.item}: ${row.reason}`), row.item);
   assert.doesNotMatch(markup, /Next page/, "a whole page offers no next page");
 
+  // The review of #853's reproduction, through the screen: a hit of a second work is not shown as a one-work result.
+  const twoWorks = structuredClone(envelope);
+  const second = twoWorks.result.value.hits[1];
+  second.publisher_work_id = `${second.publisher_work_id.slice(0, -1)}${second.publisher_work_id.endsWith("0") ? "1" : "0"}`;
+  const mixed = searchOutcome({ state: "success", envelope: twoWorks });
+  assert.equal(mixed.state, "invalid_envelope");
+  assert.match(mixed.sentence, /the hits are in 2 works/);
+
   const unpinned = structuredClone(envelope);
   unpinned.result.value.pinned_wording = null;
   const refused = searchOutcome({ state: "success", envelope: unpinned });

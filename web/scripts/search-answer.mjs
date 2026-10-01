@@ -526,6 +526,12 @@ export function readEuropeSearch(answer) {
 
   const hits = requireList(requireOwn(answer, 'hits', where), 'hits')
     .map((hit, index) => readEuropeHit(hit, index, { language, wording }));
+  // One work and one expression of it, by the hits' own IRIs, not only by the population's count of works
+  // (review of #853: a hit of a second work read as a one-work result).
+  const works = new Set(hits.map((hit) => hit.publisherWorkIri));
+  if (works.size > 1) {
+    throw new Error(`the hits are in ${works.size} works, and an EU search is in the one work named`);
+  }
   const expressions = new Set(hits.map((hit) => hit.publisherExpressionIri));
   if (expressions.size > 1) {
     throw new Error(`the hits are in ${expressions.size} expressions, and an EU search is in the one wording of one expression`);
