@@ -3,6 +3,55 @@
 Updated 2026-10-01 by the driver. This file replaces the issue-comment ledgers. It is rewritten in
 every pull request that changes what is served, what is next or what is blocked.
 
+## Retained expression production pairings (Codex, 2026-10-01)
+
+Pending869 is the explicit prerequisite for this slice. The expression producer retains its own
+expression/object-facts pairing and original derivation/episode digests. Offline reopening checks
+both enumeration checkpoints and independently rebinds their count templates with the original
+IDs and selected batches, then uses the existing private derive path. It compares both generated
+artifacts byte for byte with the held originals and reports zero newly sent product requests.
+Both expression-first and adapter object-first production paths retain the checkpoint.
+
+Custody protection is part of the derivation identity. A copied store with different protection
+therefore refuses the original-byte equality claim; no historical protection flag is trusted.
+The public reader accepts only a checked checkpoint reference, with no delivery-input API.
+Nineteen draft cases cover the two production orders, empty expressions, copied custody, repeated
+derivation/episode equality, changed protection, missing artifacts, substitutions and cancellation.
+These changes are uncompiled. Remote CI, local Release/fast/affected ingests and cross-family
+review are pending. Local heavy work waits for active EU and prior validation/review steps.
+
+The source starts from integration2668e16b with pending869 included. Full acquisition catalog,
+tripwire/Formex restoration and two independent offline mount builds remain outstanding.
+No full Luxembourg fit or completed EU population claim is made.
+## Retained EU enumeration checkpoints (Codex, 2026-10-01)
+
+Reversible driver decision under Q-20261001-0656-codex: build acquisition persistence before
+launching the full Luxembourg population. The first slice retains each delivered EU enumeration's
+comparison inputs in checked custody and exposes its digest on the executor result. The offline
+reader checks the caller's run/profile pins, reads both counts and all pages, restores the held
+request bytes and reruns the existing binder and complete two-pass comparison. It has no HTTP
+client and performs no custody writes. This uses the existing EU request replay contract; the
+Luxembourg template renderer and LU builder/reader remain outside this slice.
+
+Twenty draft cases cover an independent copied store, empty/nonempty equality across two opens,
+missing/tampered dependencies, wrong caller identities, rehashed-root substitutions and cancellation.
+Receipt restoration obtains current write/readback receipts for every dependency before calling the
+existing receipt factory. It carries the current store floor, including a weaker copied store, and
+performs no publisher requests. Failure or receipt substitution refuses.
+
+CI36829231978 atc043f234 built and passed all20 new cases:5278 passed,22 skipped,2 census
+failures. Initial35da's invalid UUID URN caused broad downstream failures and is corrected.
+The remaining compiled census differences are the new internal completion factory and32 store
+implementations, including two named fault decorators. The literal pins are transcribed from the
+compiled log; pr-869-pin-transcription.json records the exact entry and log digest. Fresh CI must
+verify the pin repair. Local Release, required fast tests, affected ingests and Claude review
+remain pending behind active EU acquisition.
+
+No acquisition-completion or custody-floor claim is read from the checkpoint. This does not yet
+restore the complete EU/LU acquisition, Formex/rights/body outcomes, or rebuild a mount offline;
+those remain required follow-on work. Existing in-process two-build checks remain unchanged.
+Active EU retry6 uses its frozen old runtime and is untouched.
+
 ## EU escaped qualifier authority (Codex, 2026-10-01)
 
 EU retry 5 at C:/lex-v3/eu-population-20261001-3 ended at 03:08 UTC with exit 3 after
@@ -3538,3 +3587,20 @@ and a current storage check before and after its runtime is frozen; it has not s
 
 PRs #827, #829 and #830 are merged. The all-82-seed EU retry remains prepared, with a
 4,999,959,422-byte launch allowance and checks before and after freezing its runtime.
+
+The same slice now also retains the corrigendum tripwire root, pointing to its own expression
+pairing and original canonical/lineage artifacts. Reopening composes only over proof deliveries
+returned by the checked expression reader, then repeats the fold and requires both original
+outputs byte for byte. Eleven additional draft cases cover both production orders, missing
+artifacts, rehashed output and cross-acquisition pairing substitutions, and cancellation.
+Thirty new cases total await current-source CI; initial expression-only CI is still running.
+
+Initial expression-only CI36832422429 at e7f78050 passed5290 tests, skipped22 and failed15. Fourteen failures came from the unused shared budget's invalid limit1 (the contract requires at least2); corrected to2 with an explicit zero-spend postcondition. One construction pin remains. The combined30-case expression/tripwire head needs fresh CI, local validation and review.
+
+Combined CI36833259271 at e0e1aa75 passed all30 new cases:5314 passed,22 skipped,2 failures.
+The old lineage failure fixture assumed lineage was the last write; it now targets lineage's
+schema bytes and verifies exactly one failed write. Two added cases require checkpoint hold
+failures to refuse the enclosing production. A self-audit also added a direct check that both
+retained count plan IDs match the archived request plan ID, with a substitution case (33 new
+cases total). Three compiled construction rows were transcribed with old-literal verification
+and log digest in pr-873-pin-transcription.json. Fresh CI/local validation/review remain required.
