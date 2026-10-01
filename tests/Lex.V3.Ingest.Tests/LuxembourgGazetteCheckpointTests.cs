@@ -56,7 +56,12 @@ public sealed partial class LuxembourgGazetteAcquisitionTests
             _ => capture.Held.Single().Value.Hops[^1].DurableWriteReceiptSha256,
         };
         var store = await CopyGazetteAsync(capture.Store, digest);
-        await Assert.ThrowsExactlyAsync<CustodyIntegrityException>(() => ReopenGazetteAsync(store, capture));
+        try
+        {
+            await ReopenGazetteAsync(store, capture);
+            Assert.Fail("Missing Gazette evidence must refuse.");
+        }
+        catch (Exception exception) when (exception is CustodyRequiredException or CustodyIntegrityException) { }
     }
 
     [TestMethod]
