@@ -3,6 +3,22 @@
 Updated 2026-10-01 by the driver. This file replaces the issue-comment ledgers. It is rewritten in
 every pull request that changes what is served, what is next or what is blocked.
 
+## Offline Formex package and annex derivation (Codex, 2026-10-01)
+
+Draft: retain each package acquisition's ordered ZIP/PDF attempts, original annex profile IDs,
+checked expression/corpus/CELEX input digest, renderer and final outcome digest. Replay selects
+addresses from the same enumeration and uses the same package inventory and annex classification
+core with checked retained transport. It must consume every saved fetch/profile and reproduce the
+original typed outcome and identities. Non-executed attempts remain recorded operational refusals;
+no observation is invented. New replay traffic is zero, distinct from historical acquisition counts.
+
+Thirty-one draft cases cover copied direct/annex/non-acquired outcomes, weaker custody, missing raw
+sources, caller mismatches, rehashed associations, cancellation and typed failed checkpoint holds.
+Source is uncompiled. Required local Release, fast and affected ingest tests plus Claude review
+wait for the active EU run and prior queue. Pending PR876 and PR879 final merged heads are required.
+The population coordinator still needs to retain these associations in the complete acquisition
+catalog and reconstruct its same-object graph before independent offline mounts are possible.
+
 ## Retained Formex manifestation enumeration (Codex, 2026-10-01)
 
 Reversible driver decision: retain each successful manifestation enumeration's original
