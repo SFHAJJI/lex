@@ -1,3 +1,7 @@
+# Lex V3 status: the data lane
+
+Updated 2026-10-01.
+
 ## Luxembourg legislative population command (Codex, 2026-10-01)
 
 Reversible driver decision under standing order section 7: `build --lu-population legislative`
@@ -20,13 +24,31 @@ Validation added: nine-family replay from two copied stores; range/policy/manife
 missing scope custody; excluded-gap behavior; raw and Brotli complete mounts in two independent
 CLI processes (including predecessor and consolidated EU); accepted/mixed CLI arguments. Local
 `pwsh -File eng/test-fast.ps1` and touched ingest tests are deferred under the standing 4 GiB
-free-memory rule. Full CI and one Claude review gate merge. No full live population or memory
+free-memory rule. Initial CI reported 5,971 passed, one stale method-signature pin failed, and
+22 skipped. Claude reproduced that sole blocker. The repair updates the pin and uses the
+existing advancing fixture clock for mocked LU captures; fresh full CI gates merge. No full live population or memory
 fit is claimed. Measured March2017 partition and representative counts below remain the sizing
 evidence; the proposed full run must preserve the resource stop and shared wire ceiling.
 
-# Lex V3 status: the data lane
+### Completed count and real-replay evidence (19:09 UTC)
 
-Updated 2026-10-01.
+The declared URI ranges now have nine independently rehashed single-count observations, using
+18 wire requests: code S21,231 / A112,276 / G0; loi S93,161 / A580,389 / G32,121; rgd
+S145,703 / A914,752 / G63,225. Totals: S260,095 / A1,607,417 / G95,346. Evidence:
+`C:\lex-v3\lanes\lu-legislative-nine-counts-readback.json` and each named root's
+`count-readback.json`. Each two-wire budget intentionally stops after its first COUNT. This
+is sizing evidence, not repeated-enumeration proof or body counts. At the existing 100,000-row
+leaf ceiling those observed counts need at least 25 leaves; actual split shape, overhead and
+future counts can differ. Regulation and dated civil-code body-cost measurements are prepared
+for the next free acquisition slot, using checked EU reuse and 800 requests each.
+
+PR907's merged runtime independently rederived the real bounded custody twice at
+`C:\lex-v3\lu-consolidated-offline-20261001-3`, completed 19:01:31 UTC. Every one of the six
+mount file digests matched, with zero proxy-trap connections. The EU index has 594 articles:
+297 ENG and 297 FRA across six expressions, 99 each, including all four real CONS.ACT packages.
+Both executions exited zero, peaking at 288,542,720 and 292,675,584 bytes. Independent Python
+hash and SQLite readback is retained there. LU article/state/member content is unchanged;
+only its complete-corpus references and observation-log digest change with the new EU content.
 
 ## Measured Luxembourg partition and full-run sizing decision
 

@@ -44,7 +44,7 @@ public sealed partial class V3FirstMountBuildTests
                 Assert.IsTrue(europe.Delivered, europe.Detail);
                 Assert.AreEqual(0, rights.AdapterRequests + rights.FormexEnumerationRequests + rights.FormexPackageRequests);
                 using var luHandler = new LuxembourgFirstMountAcquisitionTests.LuxembourgFamilyHandler(LuxembourgFirstMountAcquisitionTests.PdfBytes());
-                luxembourg = await new LuxembourgFirstMountAcquisition(store, TimeProvider.System, luHandler)
+                luxembourg = await new LuxembourgFirstMountAcquisition(store, new LuxembourgAcquisitionTestFixture.FixedTimeProvider(), luHandler)
                     .RunAsync(LuxembourgFirstMountAcquisitionTests.ActRange,
                         await LuxembourgRendererSources.FromCheckoutAsync(store, CheckoutRoot(), CancellationToken.None),
                         LuxembourgAcquisitionTestFixture.TestWireBudget(), CancellationToken.None);
@@ -52,7 +52,7 @@ public sealed partial class V3FirstMountBuildTests
             if (populationScope)
             {
                 using var luHandler = new LuxembourgFirstMountAcquisitionTests.LuxembourgFamilyHandler(LuxembourgFirstMountAcquisitionTests.PdfBytes());
-                luxembourg = await new LuxembourgFirstMountAcquisition(store, TimeProvider.System, luHandler)
+                luxembourg = await new LuxembourgFirstMountAcquisition(store, new LuxembourgAcquisitionTestFixture.FixedTimeProvider(), luHandler)
                     .RunPopulationAsync(LuxembourgPopulationScope.Legislative,
                         await LuxembourgRendererSources.FromCheckoutAsync(store, CheckoutRoot(), CancellationToken.None),
                         LuxembourgAcquisitionTestFixture.TestWireBudget(), CancellationToken.None);
