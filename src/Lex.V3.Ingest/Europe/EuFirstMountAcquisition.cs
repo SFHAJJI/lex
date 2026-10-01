@@ -148,6 +148,9 @@ public enum EuFirstMountAcquisitionRefusal
     /// <summary>The rights capture refused before population traffic, or its later corpus-identity rebind refused.</summary>
     [JsonStringEnumMemberName("legal_notice_refused")]
     LegalNoticeRefused = 3,
+
+    [JsonStringEnumMemberName("acquisition_checkpoint_not_retained")]
+    AcquisitionCheckpointNotRetained = 4,
 }
 
 /// <summary>
@@ -189,6 +192,11 @@ public sealed class EuFirstMountAcquisitionResult
     public string? Detail { get; }
 
     public bool Delivered => Refusal is null;
+
+    public SourceArtifactRef? CheckpointRef { get; private init; }
+
+    internal EuFirstMountAcquisitionResult WithCheckpoint(SourceArtifactRef checkpoint) =>
+        new(Run, Formex, LegalNotice, Refusal, Detail) { CheckpointRef = checkpoint };
 
     public static EuFirstMountAcquisitionResult Success(
         EuQueryExecutionResult run,
@@ -247,7 +255,7 @@ public sealed class EuFirstMountAcquisitionResult
 /// so the ceiling a person set for the run is the ceiling the run honours.
 /// </para>
 /// </remarks>
-public sealed class EuFirstMountAcquisition
+public sealed partial class EuFirstMountAcquisition
 {
     private readonly ICustodyStore _custodyStore;
     private readonly TimeProvider _timeProvider;
@@ -424,7 +432,17 @@ public sealed class EuFirstMountAcquisition
                 formex);
         }
 
-        return EuFirstMountAcquisitionResult.Success(run, formex, legalNotice);
+        try
+        {
+            var checkpoint = await RetainAcquisitionAsync(selected, rendererSources, run, formex, legalNotice,
+                cancellationToken).ConfigureAwait(false);
+            return EuFirstMountAcquisitionResult.Success(run, formex, legalNotice).WithCheckpoint(checkpoint);
+        }
+        catch (Exception exception) when (exception is CustodyRequiredException or CustodyIntegrityException)
+        {
+            return EuFirstMountAcquisitionResult.Refused(EuFirstMountAcquisitionRefusal.AcquisitionCheckpointNotRetained,
+                exception.Message, run, formex);
+        }
     }
 
     private static string NewUrn() => $"urn:uuid:{Guid.NewGuid():D}";

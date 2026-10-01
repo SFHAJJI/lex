@@ -123,6 +123,28 @@ public sealed partial class EuQueryExecutionAdapter
         }
     }
 
+    // The containing EU catalog must name the same sources that actually bound this query run.
+    internal static async Task VerifyRendererBindingsAsync(ICustodyStore store, SourceArtifactRef checkpoint,
+        EuRendererSources expected, CancellationToken cancellationToken)
+    {
+        var bytes = await CustodyRestore.ReadByDigestCheckedAsync(store, checkpoint.Sha256, cancellationToken).ConfigureAwait(false);
+        try
+        {
+            var document = ContractJson.Deserialize<RunCheckpoint>(new UTF8Encoding(false, true).GetString(bytes.Span));
+            if (document is null || document.Schema != RunCheckpointSchema || !bytes.Span.SequenceEqual(EncodeRunCheckpoint(document)) ||
+                document.Census is null || document.Objects is null || document.Census.Length == 0 ||
+                document.Census.Any(family => family is null || family.Renderer != expected.Census.Reference) ||
+                document.Objects.Any(family => family is null || family.Renderer != expected.ObjectFacts.Reference) ||
+                document.ObjectRenderer != expected.ObjectFacts.Reference || document.WitnessRenderer != expected.Witness.Reference ||
+                document.DocumentRenderer != expected.DocumentFetch.Reference)
+                throw new CustodyIntegrityException("Containing EU catalog disagrees with the query run's renderer roles.");
+        }
+        catch (Exception exception) when (exception is ArgumentException or JsonException or DecoderFallbackException)
+        {
+            throw new CustodyIntegrityException("Query renderer bindings failed independent verification.", exception);
+        }
+    }
+
     private static async Task<MachineQueryRendererSource> OpenRunRendererAsync(ICustodyStore store,
         SourceArtifactRef reference, CancellationToken cancellationToken)
     {

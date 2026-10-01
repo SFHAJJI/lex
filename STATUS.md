@@ -3,6 +3,26 @@
 Updated 2026-10-01 by the driver. This file replaces the issue-comment ledgers. It is rewritten in
 every pull request that changes what is served, what is next or what is blocked.
 
+## Complete EU acquisition catalog (Codex, 2026-10-01)
+
+Reversible driver decision: retain the successful EU acquisition's sorted seed scope, query and
+Formex checkpoints, corpus-bound rights route and all six original renderer role references.
+Reopening checks the nested query renderer roles, restores one checked query run, passes that
+same instance to Formex reconciliation and binds rights to its corpus identity. Every source,
+including the unused legacy legal-notice renderer, is retained. Failed catalog/source retention
+prevents successful delivery. Offline receipt/body holds use the current store; no HTTP session
+is constructed and archived renderer code is not executed.
+
+Twenty-four draft cases cover two independent replay stores, preserved identities and same-run
+association, missing components, rehashed bindings, three valid foreign-acquisition substitutions,
+null roots, exact caller scope, weaker current protection, cancellation and failed root/source holds.
+These changes are uncompiled; full remote CI and read-only Claude review are requested. Local
+Release/fast/ingest checks remain deferred under the acquisition memory guard. This branch starts
+from origin c9e5a40a and includes pending870/882/883/888 with their dependencies; final reviewed
+merged sources must be included before merge. Tests use two stores in one process, not the two
+independent mount processes required by S7-A03. LU acquisition and build-time/predecessor catalog
+composition remain outstanding. No production action or full-LU fit claim.
+
 ## Offline rights-route reopening (Codex, 2026-10-01)
 
 Retained EU rights evidence reopens under its original corpus run identity. The reader has no
