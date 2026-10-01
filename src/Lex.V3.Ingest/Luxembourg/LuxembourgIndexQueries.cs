@@ -177,6 +177,16 @@ internal static class LuxembourgIndexQueries
     /// <see cref="EventsAfter"/>, because an optional filter in one statement hides both ranges from
     /// the planner.
     /// </summary>
+    /// <summary>
+    /// The events of one work up to a sequence number, in order: the log as it stood at an observation, for one work
+    /// (<c>as_observed</c>). A range of the (work, seq) index, never a scan of the log.
+    /// </summary>
+    internal const string WorkEventsUpTo =
+        "SELECT e.seq,e.scope,e.key,e.event,e.observed_from,e.detail_json " +
+        "FROM events e " +
+        "WHERE json_extract(e.key, '$[0]') = $work AND e.seq <= $last " +
+        "ORDER BY e.seq";
+
     internal const string EventsOfNameAfter =
         "SELECT e.seq,e.scope,e.key,e.event,e.observed_from,e.detail_json " +
         "FROM events e " +
@@ -185,7 +195,7 @@ internal static class LuxembourgIndexQueries
 
     /// <summary>The event log's observations, in order.</summary>
     internal const string Observations =
-        "SELECT o.observation,o.corpus_sha256,o.predecessor_index_sha256,o.first_seq,o.last_seq " +
+        "SELECT o.observation,o.corpus_sha256,o.predecessor_index_sha256,o.first_seq,o.last_seq,o.built_at " +
         "FROM observations o ORDER BY o.observation";
 
     /// <summary>

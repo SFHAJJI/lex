@@ -479,12 +479,18 @@ public sealed class V3CorpusCoverageMountTests
             {
                 "how many acts the publisher holds, or how many of them this mount lacks: the mount records only what was admitted",
                 "the count of as-published acts never consolidated is a corpus-level statement this mount does not carry",
-                "no observation time is held, so nothing here says when anything was first seen; events serves a genesis log whose first_sighting events say only that a state is first present in that log",
-                "no build time of the corpus or index is held, so nothing here says how current these counts are; the corpus and index digests name exactly which artifacts are mounted",
+                "no observation time is held, so nothing here says when anything was first seen; events serves the event log, whose first_sighting events say only that a state is first present in that log",
+                "history gives when each build ran, an upper bound on when its corpus was observed and never an observation time, and nothing here says how current these counts are against the publisher; no build time of the corpus file itself is held; the corpus and index digests name exactly which artifacts are mounted",
                 "no status, repeal or commencement fact is counted here; status_on serves the publisher's force assertions per work, verbatim",
             },
             notHeld.Select(static row => row.GetProperty("reason").GetString()).ToArray());
         StringAssert.Contains(body.GetProperty("scope").GetString(), "nothing about what the publisher holds");
+        // A genesis log: one build recorded, its text held by the mount itself, no generation and no retention line applied.
+        var history = body.GetProperty("history");
+        Assert.AreEqual(1, history.GetProperty("snapshots_in_log").GetInt32());
+        Assert.AreEqual(0, history.GetProperty("snapshots_without_text").GetInt32());
+        Assert.AreEqual(JsonValueKind.Null, history.GetProperty("retention_policy").ValueKind);
+        CollectionAssert.AreEqual(new[] { "mounted" }, history.GetProperty("snapshots_with_text")[0].GetProperty("retained_as").EnumerateArray().Select(static r => r.GetString()).ToArray());
         StringAssert.Contains(body.GetProperty("counts_note").GetString(), "a missing publisher date is counted as missing and never dropped");
         // The searchable count is drawn only from dated articles, so it and the undated count are not addends.
         StringAssert.Contains(body.GetProperty("counts_note").GetString(), "are not addends");
@@ -563,6 +569,10 @@ public sealed class V3CorpusCoverageMountTests
             "capability_cells[].operation", "capability_cells[].period_from", "capability_cells[].period_to",
             "capability_cells[].population",
             "counts_note",
+            "history", "history.history_begins", "history.log_records_builds", "history.note", "history.retention_policy",
+            "history.snapshots_in_log", "history.snapshots_with_text", "history.snapshots_with_text[].built_at",
+            "history.snapshots_with_text[].observation", "history.snapshots_with_text[].retained_as",
+            "history.snapshots_with_text[].snapshot_id", "history.snapshots_without_text",
             "languages", "languages[].articles", "languages[].articles_with_searchable_text",
             "languages[].articles_without_publisher_date", "languages[].first_state_date", "languages[].language",
             "languages[].last_state_date", "languages[].searchable_text_held", "languages[].states", "languages[].works",
