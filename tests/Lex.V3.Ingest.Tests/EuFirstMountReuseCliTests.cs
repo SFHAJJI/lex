@@ -29,7 +29,7 @@ public sealed partial class V3FirstMountBuildTests
             if (failure == "changed_renderer")
             {
                 var store = new Lex.V3.Artifacts.FileSystemCustodyStore(Path.Combine(root, "custody"));
-                var (europe, _) = await AcquireCombinedAsync(store);
+                var (europe, _) = await AcquireAsync(store, CheckoutRoot());
                 Assert.IsTrue(europe.Delivered, europe.Detail);
                 await File.WriteAllTextAsync(pointer, ContractJson.Serialize(europe.CheckpointRef!));
                 checkout = Path.Combine(root, "checkout");
