@@ -28,6 +28,17 @@ public sealed class LexV3ToolProgramTests
     }
 
     [TestMethod]
+    public void CompressedCustodyHoldsRenderersBeforeAnInvalidSeedRefusesWithoutTraffic()
+    {
+        var run = Run("build", "--celex", "NOTASEED", "--lu-population", "all",
+            "--wire-ceiling", "5", "--custody-encoding", "brotli");
+        Assert.AreEqual(3, run.ExitCode, run.Transcript);
+        StringAssert.Contains(run.StandardError, "(spent 0 of 5)", run.Transcript);
+        StringAssert.Contains(run.StandardOutput, "renderer sources held", run.Transcript);
+        StringAssert.Contains(run.StandardOutput, "custody_encoding=brotli", run.Transcript);
+    }
+
+    [TestMethod]
     public void ARefusedAcquisitionExitsThreeWithoutACrash()
     {
         var run = Run("build", "--celex", "NOTASEED", "--lu-name", "act", "--lu-start", ValidStart, "--lu-end", ValidEnd,
@@ -41,6 +52,7 @@ public sealed class LexV3ToolProgramTests
     }
 
     [TestMethod]
+    [DataRow("an unknown custody encoding", "--custody-encoding", "other")]
     [DataRow("a name with spaces", "--lu-name", "a b", DisplayName = "an act name outside the key alphabet")]
     [DataRow("a reversed range", "--lu-start", ValidEnd, DisplayName = "a reversed act range")]
     [DataRow("an equal range", "--lu-end", ValidStart, DisplayName = "an empty act range")]
