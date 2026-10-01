@@ -196,10 +196,10 @@ public sealed class RepeatedEnumerationDeliveryReopenGlue
             setCount(currentCount() + 1);
             if (attempt.Kind == OfficialHttpAcquisitionOutcomeKind.ExecutedObservation)
             {
-                if (await IsRetainedEuropeDeadlockAsync(attempt, cancellationToken).ConfigureAwait(false))
+                if (await IsRetainedEuropeTransientFailureAsync(attempt, cancellationToken).ConfigureAwait(false))
                 {
                     // Preserve the rejected attempt's complete route before consuming the same
-                    // plan item's already-declared 500 retry allowance. The session applies its
+                    // plan item's already-declared 500/503 retry allowance. The session applies its
                     // backoff; the next loop iteration reserves the shared wire budget again.
                     var failedBytes = attempt.Evidence!.CopyCanonicalBytes();
                     var failedReceipt = await _custodyStore.CreateAsync(
@@ -208,7 +208,7 @@ public sealed class RepeatedEnumerationDeliveryReopenGlue
                     var failedRetained = await CustodyRestore.ReadByDigestCheckedAsync(
                         _custodyStore, failedDigest, cancellationToken).ConfigureAwait(false);
                     if (!failedRetained.Span.SequenceEqual(failedBytes))
-                        throw new CustodyIntegrityException("The retained deadlock route differs from its attempted evidence.");
+                        throw new CustodyIntegrityException("The retained transient-failure route differs from its attempted evidence.");
                     _ = RoutedHttpEvidence.ParseAndVerify(failedRetained.Span);
                     executorWrittenMembership[failedDigest] = CustodyMembershipClassifier.Classify(failedReceipt);
                     if (attemptOrdinal < maximumAttempts) continue;
@@ -294,18 +294,22 @@ public sealed class RepeatedEnumerationDeliveryReopenGlue
         return new ObservationAttemptOutcome(transport, item.RequestOrdinal, null);
     }
 
-    // A completed Publications Office 500 with the retained Virtuoso serialization-deadlock
-    // signature is the observed transient failure. Do not widen this to arbitrary 5xx bodies,
-    // HTML challenges, capacity refusals, malformed successful responses or another publisher.
-    private async Task<bool> IsRetainedEuropeDeadlockAsync(
+    // Retry only the observed Publications Office failures: a complete 500 with the Virtuoso
+    // serialization-deadlock signature, or a complete 503 with the exact retained maintenance page.
+    // Different maintenance bytes remain refused until reviewed; no arbitrary 5xx/challenge retry.
+    // The maintenance digest pins the complete 2,005-byte response from the 2026-10-01 run.
+    private async Task<bool> IsRetainedEuropeTransientFailureAsync(
         RoutedHttpAcquisitionSession.AttemptResult attempt, CancellationToken cancellationToken)
     {
         if (attempt.Evidence is not { Outcome: CompleteHttpRouteOutcome } evidence) return false;
         var terminal = evidence.Hops[^1];
-        if (terminal.Status != 500 ||
+        if (terminal.Status is not (500 or 503) ||
             terminal.RequestUri != "https://publications.europa.eu/webapi/rdf/sparql") return false;
+        if (terminal.Status == 503 && terminal.Sha256 !=
+            "e7fab335ce5367cfe359f9f7e0ad6ce1838bec9189a216bc3faf437ce169d404") return false;
         var payload = await CustodyRestore.ReadByDigestCheckedAsync(
             _custodyStore, terminal.Sha256, cancellationToken).ConfigureAwait(false);
+        if (terminal.Status == 503) return true; // Full body digest was just independently checked.
         var newline = payload.Span.IndexOf((byte)'\n');
         var length = newline < 0 ? payload.Length : newline;
         if (length > 256) return false;
