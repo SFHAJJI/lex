@@ -3,6 +3,54 @@
 Updated 2026-10-01 by the driver. This file replaces the issue-comment ledgers. It is rewritten in
 every pull request that changes what is served, what is next or what is blocked.
 
+## Compressed local custody for future Luxembourg partitions (Codex, 2026-10-01)
+
+Reversible driver decision: add an explicit Brotli mode to the create-only local custody store and
+`--custody-encoding raw|brotli` to the build tool. Raw remains the default. Compressed objects use
+`<original-sha256>.br` in the existing retention-class directory. Their 16-byte header contains
+`LEXBR01\n` followed by the original byte length as a signed big-endian 64-bit integer; one Brotli
+stream follows. Every receipt, reference, digest-only lookup and readback still names the exact
+original bytes. Reopening this root requires selecting the same mode. No existing custody is
+converted, and no retention enforcement is claimed.
+
+Writes retain the bounded private input copy, flushed temporary file, atomic create-only publish
+and independently decoded readback before any receipt. Reads bound the original and encoded sizes,
+decode with a 64 KiB input buffer, reject incomplete/trailing/concatenated encodings, and check the
+original SHA-256. The decoder uses the consumed/written counts and completion status documented by
+[Microsoft](https://learn.microsoft.com/en-us/dotnet/api/system.io.compression.brotlidecoder.decompress?view=net-10.0).
+The public read contract still returns one whole admitted object in memory. Compression reduces
+retained storage; it does not make the global Luxembourg scope graph disk-backed.
+
+The change adds both custody-obligation checks for both retention classes, empty/random/repetitive
+round trips, concurrent/idempotent creates, nine corruption cases through both read doors and
+create, cross-lane corruption, caller mutation/cancellation, occupied paths, CLI admission and an
+offline two-work Luxembourg acquisition/corpus rebuild with a separate compressed-store reader.
+Clean Release build passed with zero warnings/errors at 630485e4. Required fast tests passed
+(3,105 succeeded, one skipped), and affected ingest passed (42 succeeded, two skipped), including
+the separate-reader two-work acquisition/corpus rebuild. Cross-family review returned MERGE, reproduced these checks and added 248 independent size/pattern
+round trips, including a 256 MiB object. Final exact-head green CI remains required. Full LU partition assembly and population sizing remain unfinished.
+
+A separate generic Brotli measurement reopened the retained 65-row LU response
+ff180f054a3f9bf6a8782b6cee3735ca95303f97565a07b1bab3e9f39e4b4dc9:
+65,175 source bytes became 2,411 Brotli bytes (2,427 including the proposed header), and restoration
+reproduced its original hash. Evidence: C:/lex-v3/lanes/lu-retained-response-brotli-sample-20261001.json.
+This is one sample, not a population storage bound or an end-to-end partition measurement. The previous EU run ended with a cursor refusal; it produced no complete population.
+
+The offline production-store measurement at C:/lex-v3/eu-brotli-sizing-20261001-1 reopened all
+394 retained English bodies byte-for-byte through a separate reader. Their 536,661,019 original
+bytes became 110,968,228 framed bytes. No publisher requests were made. Peak sampled working set
+was 179,286,016 bytes; minimum sampled free space was 5,985,570,816 bytes.
+
+Reversible driver decision: use this explicit mode for fresh EU retry 5 after the cursor and
+schema 4 changes merge. Body allowance is 277,420,570 bytes (twice the measured English sample
+for EN/FRA, plus 25 percent headroom). Keep packages at 564,415,560 bytes, index allowance at
+1,274,491,700 and metadata/runtime/other at 500,000,000. Total working allowance is 2,616,327,830
+bytes. With the 3 GiB reserve and 512 MiB stop margin, 6,374,424,214 bytes must remain free before
+and after freeze. This historical sample is an estimate, not a population storage bound. No ZIP
+or index compression savings are claimed. The guard cannot bound other processes' write bursts.
+The plan and input hashes are in C:/lex-v3/lanes/eu-population-retry5-brotli-sizing-proposed-20261001.json.
+It remains unready until required merges, source comparisons and free-space checks pass.
+
 ## EU XML-entry and article-text byte digests (Codex, 2026-10-01)
 
 Reversible driver decision: the Formex producer hashes the exact decompressed ACT entry bytes,

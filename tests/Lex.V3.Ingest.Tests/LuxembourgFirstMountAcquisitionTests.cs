@@ -1,3 +1,4 @@
+using Lex.V3.Artifacts;
 using System.Net;
 using System.Net.Http;
 using System.Security.Cryptography;
@@ -133,6 +134,35 @@ public sealed class LuxembourgFirstMountAcquisitionTests
             luxembourgOverride: result.Run, luxembourgStore: store);
         var built = LexCorpus6Builder.TryBuild(envelope, out var refusal, out var detail);
         Assert.IsNotNull(built, $"{refusal}: {detail}");
+    }
+
+    [TestMethod]
+    public async Task TwoWorkPopulationAndCorpusReopenFromCompressedCustody()
+    {
+        var root = Directory.CreateTempSubdirectory("lex-lu-compressed-");
+        try
+        {
+            var store = FileSystemCustodyStore.WithBrotliCompression(root.FullName);
+            var handler = new LuxembourgFamilyHandler(PdfBytes(), includeSecondWork: true, includeBlankNode: true,
+                saturatedRoot: true);
+            var renderers = await LuxembourgRendererSources.FromCheckoutAsync(store, CheckoutRoot(), CancellationToken.None);
+            var result = await Acquisition(store, handler).RunAsync(LuxembourgActRange.WholePopulation, renderers,
+                LuxembourgAcquisitionTestFixture.TestWireBudget(), CancellationToken.None);
+            Assert.IsTrue(result.Delivered, $"{result.Refusal}: {result.Detail}");
+            Assert.AreEqual(LuxembourgQueryExecutionCompletion.AllFamiliesProven, result.Run!.Completion);
+            Assert.AreEqual(2, result.Run.CorpusRecordSet!.Set.Records.Count(record => record.Body.Kind == CorpusBodyRecordKind.Held));
+            var reopened = FileSystemCustodyStore.WithBrotliCompression(root.FullName);
+            var envelope = await LexCorpus6BuilderTests.CompleteProfileEnvelopeAsync(
+                luxembourgOverride: result.Run, luxembourgStore: reopened);
+            var first = LexCorpus6Builder.TryBuild(envelope, out var refusal, out var detail);
+            Assert.IsNotNull(first, $"{refusal}: {detail}");
+            var second = LexCorpus6Builder.TryBuild(envelope, out _, out _);
+            Assert.IsNotNull(second);
+            Assert.AreEqual(first.ArtifactRef, second.ArtifactRef);
+            Assert.IsTrue(Directory.EnumerateFiles(root.FullName, "*", SearchOption.AllDirectories)
+                .All(path => path.EndsWith(".br", StringComparison.Ordinal)));
+        }
+        finally { root.Delete(recursive: true); }
     }
 
     [TestMethod]

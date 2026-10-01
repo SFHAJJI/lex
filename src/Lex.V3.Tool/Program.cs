@@ -28,6 +28,7 @@ const string Usage =
     + "  --lu-name      lowercase ASCII key prefixing the act's three family keys\n"
     + "  --lu-start/--lu-end  an ELI key range on the publisher's key order (start inclusive, end exclusive)\n"
     + "  --custody      the run's custody root (FileSystemCustodyStore); everything the run holds goes here\n"
+    + "  --custody-encoding raw (default) or brotli; references always identify original bytes\n"
     + "  --out          the v3-corpus directory to write\n"
     + "  --checkout     the repository root holding the renderer source files\n"
     + "  --wire-ceiling the one ceiling on publisher requests for the whole run, robots included\n"
@@ -35,7 +36,7 @@ const string Usage =
 
 string[] required = ["--celex", "--custody", "--out", "--checkout", "--wire-ceiling"];
 string[] rangeOptions = ["--lu-name", "--lu-start", "--lu-end"];
-string[] admitted = [.. required, .. rangeOptions, "--lu-population"];
+string[] admitted = [.. required, .. rangeOptions, "--lu-population", "--custody-encoding"];
 
 if (args.Length == 0 || !string.Equals(args[0], "build", StringComparison.Ordinal) || (args.Length - 1) % 2 != 0)
 {
@@ -60,6 +61,13 @@ for (var index = 1; index + 1 < args.Length; index += 2)
         Console.Error.WriteLine(Usage);
         return 2;
     }
+}
+
+var custodyEncoding = options.GetValueOrDefault("--custody-encoding", "raw");
+if (custodyEncoding is not ("raw" or "brotli"))
+{
+    Console.Error.WriteLine("--custody-encoding must be raw or brotli.");
+    return 2;
 }
 
 var wholePopulation = options.TryGetValue("--lu-population", out var population);
@@ -124,10 +132,12 @@ try
 {
     var custodyRoot = Path.GetFullPath(options["--custody"]);
     Directory.CreateDirectory(custodyRoot);
-    var store = new FileSystemCustodyStore(custodyRoot);
+    var store = custodyEncoding == "brotli"
+        ? FileSystemCustodyStore.WithBrotliCompression(custodyRoot)
+        : new FileSystemCustodyStore(custodyRoot);
     var budget = WireRequestBudget.OfWireRequests(ceiling);
     var startedAt = DateTimeOffset.UtcNow;
-    Console.WriteLine($"lex-v3 build: custody={custodyRoot} ceiling={ceiling} started={startedAt:O}");
+    Console.WriteLine($"lex-v3 build: custody={custodyRoot} custody_encoding={custodyEncoding} ceiling={ceiling} started={startedAt:O}");
 
     var europeRenderers = await EuRendererSources.FromCheckoutAsync(store, checkout, token);
     var luxembourgRenderers = await LuxembourgRendererSources.FromCheckoutAsync(store, checkout, token);

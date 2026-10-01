@@ -1,3 +1,6 @@
+using System.Buffers;
+using System.Buffers.Binary;
+using System.IO.Compression;
 using Lex.V3.Contracts.Custody;
 
 namespace Lex.V3.Artifacts;
@@ -15,6 +18,7 @@ public sealed class FileSystemCustodyStore : ICustodyStore
     private readonly string _root;
     private readonly TimeProvider _time;
     private readonly Action? _beforePublish;
+    private readonly bool _brotli;
 
     public FileSystemCustodyStore(string root, TimeProvider? time = null)
         : this(root, time, beforePublish: null)
@@ -25,11 +29,23 @@ public sealed class FileSystemCustodyStore : ICustodyStore
         string root,
         TimeProvider? time,
         Action? beforePublish)
+        : this(root, time, beforePublish, brotli: false)
+    {
+    }
+
+    /// <summary>Stores losslessly compressed local objects. References, digests and receipts still
+    /// describe the original bytes; local retention remains explicitly unenforced.
+    /// This mode uses .br files and must be selected again when reopening its root.</summary>
+    public static FileSystemCustodyStore WithBrotliCompression(string root, TimeProvider? time = null) =>
+        new(root, time, beforePublish: null, brotli: true);
+
+    internal FileSystemCustodyStore(string root, TimeProvider? time, Action? beforePublish, bool brotli)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(root);
         _root = Path.GetFullPath(root);
         _time = time ?? TimeProvider.System;
         _beforePublish = beforePublish;
+        _brotli = brotli;
     }
 
     public async Task<DurableBlobWriteReceipt> CreateAsync(
@@ -48,7 +64,7 @@ public sealed class FileSystemCustodyStore : ICustodyStore
             CustodySchemaIds.DurableBlobRef, digest, frozen.LongLength, custodyClass);
         var directory = Path.Combine(_root, ClassSegment(custodyClass));
         EnsureLaneDirectory(directory, create: true);
-        var path = Path.Combine(directory, digest);
+        var path = ObjectPath(directory, digest);
         RejectOccupiedNonFileOrReparsePoint(path);
         var pending = Path.Combine(directory, $"{digest}.{Guid.NewGuid():N}.partial");
 
@@ -62,7 +78,21 @@ public sealed class FileSystemCustodyStore : ICustodyStore
                              bufferSize: 64 * 1024,
                              FileOptions.Asynchronous | FileOptions.WriteThrough))
             {
-                await stream.WriteAsync(frozen, cancellationToken).ConfigureAwait(false);
+                if (_brotli)
+                {
+                    var header = new byte[16];
+                    "LEXBR01\n"u8.CopyTo(header);
+                    BinaryPrimitives.WriteInt64BigEndian(header.AsSpan(8), frozen.LongLength);
+                    await stream.WriteAsync(header, cancellationToken).ConfigureAwait(false);
+                    await using (var encoded = new BrotliStream(stream, CompressionLevel.Optimal, leaveOpen: true))
+                        for (var offset = 0; offset < frozen.Length; offset += 64 * 1024)
+                            await encoded.WriteAsync(frozen.AsMemory(offset, Math.Min(64 * 1024, frozen.Length - offset)),
+                                cancellationToken).ConfigureAwait(false);
+                }
+                else
+                {
+                    await stream.WriteAsync(frozen, cancellationToken).ConfigureAwait(false);
+                }
                 await stream.FlushAsync(cancellationToken).ConfigureAwait(false);
                 stream.Flush(flushToDisk: true);
             }
@@ -111,10 +141,7 @@ public sealed class FileSystemCustodyStore : ICustodyStore
         ArgumentNullException.ThrowIfNull(reference);
         cancellationToken.ThrowIfCancellationRequested();
 
-        var path = Path.Combine(
-            _root,
-            ClassSegment(reference.CustodyClass),
-            reference.ContentSha256);
+        var path = ObjectPath(Path.Combine(_root, ClassSegment(reference.CustodyClass)), reference.ContentSha256);
 
         try
         {
@@ -127,6 +154,14 @@ public sealed class FileSystemCustodyStore : ICustodyStore
                 FileShare.Read,
                 bufferSize: 64 * 1024,
                 FileOptions.Asynchronous | FileOptions.SequentialScan);
+
+            if (_brotli)
+            {
+                var decoded = await ReadCompressedAsync(stream, reference.ByteLength, cancellationToken).ConfigureAwait(false);
+                if (CustodyDigest.Of(decoded, cancellationToken) != reference.ContentSha256)
+                    throw new CustodyIntegrityException("The decompressed bytes differ from their durable reference.");
+                return decoded;
+            }
 
             if (stream.Length != reference.ByteLength)
             {
@@ -178,7 +213,7 @@ public sealed class FileSystemCustodyStore : ICustodyStore
         foreach (var custodyClass in Enum.GetValues<CustodyClass>())
         {
             var directory = Path.Combine(_root, ClassSegment(custodyClass));
-            var path = Path.Combine(directory, contentSha256);
+            var path = ObjectPath(directory, contentSha256);
             if (!Directory.Exists(directory) || !File.Exists(path))
             {
                 continue;
@@ -195,6 +230,14 @@ public sealed class FileSystemCustodyStore : ICustodyStore
                     FileShare.Read,
                     bufferSize: 64 * 1024,
                     FileOptions.Asynchronous | FileOptions.SequentialScan);
+                if (_brotli)
+                {
+                    var decoded = await ReadCompressedAsync(stream, expectedLength: null, cancellationToken).ConfigureAwait(false);
+                    if (CustodyDigest.Of(decoded, cancellationToken) != contentSha256)
+                        throw new CustodyIntegrityException("The decompressed bytes differ from their content address.");
+                    selected ??= decoded;
+                    continue;
+                }
                 if (stream.Length > CustodyBounds.MaxObjectBytes)
                 {
                     throw new CustodyIntegrityException(
@@ -239,6 +282,75 @@ public sealed class FileSystemCustodyStore : ICustodyStore
         return selected
             ?? throw new CustodyIntegrityException(
                 "The content-addressed artifact is not retained by this store.");
+    }
+
+    private string ObjectPath(string directory, string digest) =>
+        Path.Combine(directory, _brotli ? digest + ".br" : digest);
+
+    private static async Task<byte[]> ReadCompressedAsync(
+        FileStream stream, long? expectedLength, CancellationToken cancellationToken)
+    {
+        var header = new byte[16];
+        try { await stream.ReadExactlyAsync(header, cancellationToken).ConfigureAwait(false); }
+        catch (EndOfStreamException exception)
+        {
+            throw new CustodyIntegrityException("The compressed custody header is truncated.", exception);
+        }
+        var length = BinaryPrimitives.ReadInt64BigEndian(header.AsSpan(8));
+        if (!header.AsSpan(0, 8).SequenceEqual("LEXBR01\n"u8) || length < 0 ||
+            length > CustodyBounds.MaxObjectBytes || (expectedLength.HasValue && expectedLength.Value != length))
+            throw new CustodyIntegrityException("The compressed custody header does not bind an admitted object length.");
+        if (stream.Length > 16L + BrotliEncoder.GetMaxCompressedLength(checked((int)length)))
+            throw new CustodyIntegrityException("The compressed custody file exceeds its encoding bound.");
+
+        var bytes = GC.AllocateUninitializedArray<byte>(checked((int)length));
+        var buffer = new byte[64 * 1024];
+        var extra = new byte[1];
+        var decoder = new BrotliDecoder();
+        var available = 0;
+        var offset = 0;
+        var written = 0;
+        var refill = true;
+        try
+        {
+            while (true)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                if (refill)
+                {
+                    var remaining = available - offset;
+                    if (remaining == buffer.Length)
+                        throw new CustodyIntegrityException("The compressed custody decoder made no progress.");
+                    Buffer.BlockCopy(buffer, offset, buffer, 0, remaining);
+                    var count = await stream.ReadAsync(buffer.AsMemory(remaining), cancellationToken).ConfigureAwait(false);
+                    if (count == 0)
+                        throw new CustodyIntegrityException("The compressed custody object is truncated.");
+                    available = remaining + count;
+                    offset = 0;
+                }
+                var full = written == bytes.Length;
+                var status = decoder.Decompress(buffer.AsSpan(offset, available - offset),
+                    full ? extra : bytes.AsSpan(written, Math.Min(64 * 1024, bytes.Length - written)),
+                    out var consumed, out var produced);
+                offset += consumed;
+                if (full && produced != 0)
+                    throw new CustodyIntegrityException("The decompressed custody object exceeds its promised length.");
+                written += produced;
+                if (status == OperationStatus.Done)
+                {
+                    if (written != bytes.Length || offset != available ||
+                        await HasAnotherByteAsync(stream, cancellationToken).ConfigureAwait(false))
+                        throw new CustodyIntegrityException("The compressed custody object has a wrong length or trailing bytes.");
+                    return bytes;
+                }
+                if (status == OperationStatus.InvalidData)
+                    throw new CustodyIntegrityException("The compressed custody object is invalid.");
+                if (status == OperationStatus.DestinationTooSmall && consumed == 0 && produced == 0)
+                    throw new CustodyIntegrityException("The compressed custody decoder made no progress.");
+                refill = status == OperationStatus.NeedMoreData;
+            }
+        }
+        finally { decoder.Dispose(); }
     }
 
     private static async Task<bool> HasAnotherByteAsync(
