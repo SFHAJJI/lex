@@ -13,14 +13,13 @@ bytes and reopens the verified source profile. Required vocabulary remains an ex
 missing observations cannot be supplied from that expectation. Failed checkpoint retention
 stops before population traffic. The checkpoint remains reachable on later run refusals.
 
-Twenty-three new draft cases cover copied/weaker custody, seven missing dependencies, ten
-rehashed association changes, caller pins, cancellation and failed holds. Initial bfb7ffd4 CI36846085303 compiled production code but test compilation failed because
-the test store lacked failSchema. Repaired302a84c4 CI36846408858 passed all23 new cases:
-5339 passed/22 skipped, one construction inventory failure. The exact compiled new association
-method is now transcribed; fresh CI must verify the update. Required local Release, fast and affected ingest tests plus Claude
-review wait for the active EU run and earlier queue. Include pending PR872's final merged head
-before local validation. Full LU acquisition restoration and independent offline mounts remain
-outstanding; this slice makes no full-population memory or completion claim.
+All 23 cases passed at c6b7f796: CI 36847569840 reported 5,340 passed and 22 skipped,
+with required watch exit zero. Coverage includes copied/weaker custody, seven missing dependencies,
+ten rehashed association changes, caller pins, cancellation and failed holds. Merged parent PR872
+and current integration c9e5a40a are included. The census union retains 262 candidates and 140 guarded
+types without changing member pins. Fresh combined CI and read-only Claude review gate merge;
+local builds/tests remain deferred under the acquisition memory guard. Full LU acquisition
+restoration and independent offline mounts remain outstanding; no full-population fit is claimed.
 
 ## Retained Luxembourg enumeration checkpoints (Codex, 2026-10-01)
 
@@ -31,43 +30,140 @@ and original artifact IDs. Retained request bytes must match the regenerated req
 complete comparison and current custody receipt checks run again without publisher traffic.
 EU and LU share the actual-receipt restoration helper; no saved proof or floor is trusted.
 
-Nineteen draft cases cover empty, nonempty and multi-page enumeration, Unicode cursors,
-independent copied custody, weaker protection, missing dependencies, rehashed substitutions,
-caller pins and cancellation. These additions are uncompiled; remote CI is requested next.
-Required local Release, fast tests, affected ingests and Claude review wait for the active EU
-run and earlier validation queue. PR869 must merge and its final changes be included first.
+Nineteen cases cover empty, nonempty and multi-page enumeration, Unicode cursors, independent
+custody, weaker protection, missing inputs, caller pins, substitutions and cancellation. Exact
+d834ae22 passed CI 36856207562: 5,356 passed and 22 skipped; the required watch exited zero.
+Claude found no material LU code defect and requested the current parent/base and combined census
+correction. The one repair includes reviewed PR869 source 60c2589c and integration d56d0539,
+sets the union to 262 candidates/140 guarded types, preserves all member pins and copies each
+regenerated request body once. PR869 is merged as 1a63b61a and included; final current-base CI gates this merge.
+Local builds/tests remain deferred under the acquisition memory guard.
 
 Full acquisition catalog restoration and two independent offline mount derivations remain
 outstanding. This does not establish full Luxembourg memory or disk fit. The active EU runtime,
 queued source heads, LU index builder/reader and web lane are unchanged.
+
 ## Retained EU enumeration checkpoints (Codex, 2026-10-01)
 
-Reversible driver decision under Q-20261001-0656-codex: build acquisition persistence before
-launching the full Luxembourg population. The first slice retains each delivered EU enumeration's
-comparison inputs in checked custody and exposes its digest on the executor result. The offline
-reader checks the caller's run/profile pins, reads both counts and all pages, restores the held
-request bytes and reruns the existing binder and complete two-pass comparison. It has no HTTP
-client and performs no custody writes. This uses the existing EU request replay contract; the
-Luxembourg template renderer and LU builder/reader remain outside this slice.
+Each delivered EU enumeration retains its comparison inputs in checked custody. Offline
+reopening checks the original run/profile, both counts, all pages, request bytes, the binder
+and complete two-pass comparison. The reader has no HTTP client and performs no writes.
+Receipt restoration separately re-holds every receipt member to obtain the current store
+floor. The request body and checkpoint are checked reads but are not receipt members; the
+receipt floor alone does not establish future reopening of the entire checkpoint closure.
 
-Twenty draft cases cover an independent copied store, empty/nonempty equality across two opens,
-missing/tampered dependencies, wrong caller identities, rehashed-root substitutions and cancellation.
-Receipt restoration obtains current write/readback receipts for every dependency before calling the
-existing receipt factory. It carries the current store floor, including a weaker copied store, and
-performs no publisher requests. Failure or receipt substitution refuses.
+All 20 new cases passed at 101e362d. CI 36853853290 reported 5,318 passed and 22 skipped;
+the required watch exited zero. Claude returned MERGE with no material code findings.
+The one repair clarifies the receipt-member boundary and includes integration d874273b,
+preserving both STATUS sections. Fresh final-head CI gates merge. Local Release/fast/ingest
+checks remain deferred under the acquisition memory guard.
 
-CI36829231978 atc043f234 built and passed all20 new cases:5278 passed,22 skipped,2 census
-failures. Initial35da's invalid UUID URN caused broad downstream failures and is corrected.
-The remaining compiled census differences are the new internal completion factory and32 store
-implementations, including two named fault decorators. The literal pins are transcribed from the
-compiled log; pr-869-pin-transcription.json records the exact entry and log digest. Fresh CI must
-verify the pin repair. Local Release, required fast tests, affected ingests and Claude review
-remain pending behind active EU acquisition.
+No saved success or protection flag is trusted as a proof. Complete acquisition composition,
+Formex/rights/body outcomes and two independent offline mount processes remain follow-on work.
+The active EU acquisition uses its frozen runtime and remains untouched.
 
-No acquisition-completion or custody-floor claim is read from the checkpoint. This does not yet
-restore the complete EU/LU acquisition, Formex/rights/body outcomes, or rebuild a mount offline;
-those remain required follow-on work. Existing in-process two-build checks remain unchanged.
-Active EU retry6 uses its frozen old runtime and is untouched.
+## Compact Luxembourg object identities (Codex, 2026-10-01)
+
+Object identity sets retain sorted 32-byte digests. Binary search preserves exact membership,
+duplicate-set semantics and canonical bytes. Checked reopening enforces the original digest,
+byte equality, ordering and refusal precedence. No publisher or custody admission changes.
+
+All 27 new cases passed at b222687c: CI 36851145863 reported 5,305 passed and 22 skipped,
+with 259 candidates and 139 guarded types after merging integration 65922f24. The required
+CI watch exited 0. Claude reviewed that exact head and requested corrected documentation
+counts; this is the one repair round. The code review found no material defect.
+
+Integration d874273b is now included. Combined CI 36853595395 passed 5,324 tests with 22 skipped; only the candidate total
+failed (260 versus 259). Its complete member pins passed. The candidate total is now
+260; the passing literal pin contains 140 guarded types. Fresh CI gates merge. Local Release build, required fast tests, affected ingest checks and the synthetic
+measurement remain deferred under the acquisition memory guard. No full-LU fit is claimed.
+The remaining observation, scope and corpus graphs still require bounded derivation evidence.
+
+## Streaming scope verification from source inputs (Codex, 2026-10-01)
+
+The retained manifest can be verified by independently replaying its original source inputs
+through the existing streaming reducer and canonical writer. Acceptance checks the pinned
+digest, UTF-8, complete byte comparison, both source passes and writer admission/accounting.
+It returns the existing digest/count receipt without materializing a second manifest graph.
+The source factory and evidence resolver must come from original evidence; deriving either
+from the manifest under test would be circular.
+
+PR head b3cafcab passed CI 36850031289: 5,289 tests passed, 22 skipped, including all eleven
+new scope cases. Claude returned MERGE with no material findings. The one editorial repair
+clarifies exception precedence and working buffers in the API remarks and records the review.
+Integration a74fece1 is included; final-head CI gates merge under the 10:35 standing order.
+No local Release/fast/ingest run or synthetic source-replay measurement is claimed.
+
+The measurement remains required before claiming a full Luxembourg memory fit. Working
+storage includes five projection bytes per object, the evidence table, current input, the
+JSON writer buffer and a 4 KiB comparison buffer. An individual JSON element may exceed the
+writer's 64 KiB flush threshold. Factories and resolvers can retain more. This method is not
+wired into the LU adapter and does not provide a bounded downstream manifest view.
+
+
+## Async Luxembourg assertion snapshots (Codex, 2026-10-01)
+
+The snapshot writer now consumes asynchronous verified rows through the bounded small-chunk
+channel. Failed custody cancels the producer's linked token, including a source awaiting its
+next row. Both writer paths share the record encoding and canonical digest. The source remains
+responsible for publisher proofs, census membership, admission and subject grouping.
+
+Eight cases cover equal synchronous/asynchronous bytes, empty input, independently reopened
+small chunks with duplicates and literal metadata, failure during an awaiting source, absence
+of a root after source failure, wrong observations, null rows and early cancellation. Exact
+1f16080f passed CI 36852404133: 5,306 passed, 22 skipped; the required watch exited zero.
+Claude returned MERGE with no material findings. The one editorial repair clarifies the
+caller's proof checks and records this evidence. PR858 is merged as a74fece1 and included.
+Final-head CI still gates merge.
+No local build/test was run under the 10:35 low-memory rule. Adapter integration, complete
+bounded derivation and full-LU memory measurement remain outstanding.
+
+
+## LU assertion snapshot storage (Codex, 2026-10-01)
+
+The immutable assertion snapshot uses the checked chunk reader. Opening validates the complete
+retained sequence and builds a compact subject-digest/offset index. Lookups reopen and recheck
+chunks, preserving row order, duplicates, literal metadata and cross-range dependencies. The
+header binds the run, observation and ordered census/assertion proof references. Integration
+must independently replay those proofs and check census membership before admitting rows.
+
+Each serialized record, including the complete proof-reference header, is limited to 4 MiB.
+Opening refuses noncontiguous repeated subject groups and digest collisions. The writer does
+not detect repeated groups early. Integration must measure header size and proof count before
+launch; an oversized header refuses without truncation. This remains unwired storage support.
+Scope and corpus graphs still materialize, so no full-population memory or disk fit is claimed.
+
+At 168fbe90, the Release build passed with zero warnings/errors, required fast tests passed
+(3,105 passed, one skipped), and affected ingests passed (82 passed, two skipped). Twenty new
+cases cover row preservation, malformed and corrupted storage, binding changes and cancellation.
+CI 36850526856 passed exact 12be52d4 with 5,298 tests passed and 22 skipped. Its member-level
+census and the combined totals of 259 candidates and 139 guarded types all passed.
+
+Claude's read-only cross-family review returned MERGE with no material findings. The one
+editorial repair records that evidence, removes two added byte-order marks and records the
+header-size and writer-order limitations above. Integration c27012f4 is included; merge still
+requires successful CI on the final head. The 10:35 UTC standing order permits that CI-backed
+review during acquisition while memory is below 4 GB. No additional local build was run.
+
+The asynchronous snapshot now uses the bounded small-chunk channel introduced by PR #855.
+No publisher traffic, production action or completed population is claimed by this slice.
+
+
+## Retained custody storage consolidation (Codex, 2026-10-01)
+
+Reversible driver decision: preserve every cited historical custody path while consolidating
+byte-identical files onto NTFS hardlinks to retained run 9. Eight bounded files passed first;
+the expanded operation completed 971 more files at 03:56 UTC with no publisher traffic.
+Every target/master was rehashed and independently read through the frozen product custody
+reader before and after replacement. A flushed per-file journal records each intent and result.
+An independent audit confirms all 971 file identities, path lengths and exact journal coverage.
+
+Evidence: C:/lex-v3/lanes/old-eu-hardlink-expanded-20261001-result.json, its .jsonl journal,
+old-eu-hardlink-expanded-fileids.json, and the bounded2 result and file-ID audit. The expanded
+operation shared 2,754,376,458 logical bytes; free space rose from 4,960,497,664 to 6,416,429,056
+bytes during the operation, with unrelated host writes possible. All original custody paths
+and bytes remain. This does not enforce retention or provide redundant physical copies.
+The next EU launch retains the full 6,374,424,214-byte allowance, checked again after freezing.
 
 ## EU escaped qualifier authority (Codex, 2026-10-01)
 
@@ -1040,7 +1136,7 @@ CI evidence are recorded in the pull request before merge.
 
 ## Heads
 
-- `v3/integration`: `55d58cb2` (2026-10-01, PR #878 merged). Build 45 s. Fast lane
+- `v3/integration`: `65922f24` (2026-10-01, PR #880 merged). Build 45 s. Fast lane
   (`eng/test-fast.ps1`): 3,077 tests, 3,076 pass, 1 skipped (the review of PR #828). Ingest suite: green on CI for PR #760
   (the CI `dotnet` job runs the whole solution on every pull request, about 7 min on the runner;
   green for PR #834);
@@ -2546,6 +2642,37 @@ generations, by the retention line (G3b).
   retained generation. An image built from such a mount carries `generations/` too. No byte budget
   is enforced yet.
 
+Predecessor chaining, the sixth slice, second part (PR #885): the mount holds its generations to
+its log when it opens, and reports the history depth it keeps (S7-A09: "reported history depth is
+truthful").
+- **At open,** `V3CorpusMount.OpenAsync` runs `V3CorpusMountWriter.VerifyGenerationsAsync`, the
+  checks the writer's verification runs, so a mount is held to the same checks where it is built
+  and where it is served.
+  - A generation that does not hold, a chained mount with no retention record, or generations
+    beside a mount with no Luxembourg index all fail the mount closed.
+  - A chained build written without its predecessor's directory records each earlier build as
+    absent (`WriteRetentionRecordAsync`), never claimed.
+- **`coverage` gains `history`:**
+  - whether the log records builds, how many it records and since when;
+  - the retention line that decided (its id, nightly days and evaluation time);
+  - each snapshot whose text the mount holds (the mounted build, and each kept generation with why
+    it is kept);
+  - how many it does not hold, and a note that every time is a build's, never an observation time.
+  - A schema-6 index records no build and says so.
+- **The Trust and Coverage page renders it,** in English with a French draft. The page's tests hold
+  every leaf of it to reach the page, both renderers to agree, and every string to be escaped.
+- **`events`' ancestors gain `text_held` and `retained_as`.**
+- **Tests:**
+  - the chain test's third build mounts and reports three builds, all three with text;
+  - its fourth build, 120 days later, reports four builds, two with text and two without;
+  - each damaged copy that the writer's verification refuses, the mount refuses with the same
+    reason;
+  - a genesis mount reports one build with the mount's own text and no retention line applied;
+  - a schema-6 mount reports no build recorded;
+  - the crafted chained mounts of the events and `as_observed` tests carry a retention record that
+    names their predecessor absent.
+- **Next:** `as_observed` and `verify` quote a state from a retained generation.
+
 The live export composer and its journey step (PR #789), the eighth screen. `dist-live/export.html`
 has its own bundle `client-live-export.js`.
 - The page asks what the reading page asks: the same form (`ReadingForm`, now shared), the same one
@@ -3246,7 +3373,7 @@ recorded by PR #862:
    - `events` and `answer_drift` across the chain (folded into PR #867 by its review);
    - each build's time in the log (PR #871), then `as_observed` by build snapshot (G4) (PR #874);
    - a generation mount (G3b), retained by S7-A09: generations written and verified (PR #880),
-     then read by the mount.
+     held to the log by the mount with the depth reported (PR #885), then quoted.
    `observed_from` stays null until a Luxembourg body's capture time reaches the corpus (data lane);
    `knowable_on` and withdrawal follow it. The owner questions (G1 when a file changes but its text
    does not, "as observed" identified by snapshot with no time, retaining every generation) were
@@ -3604,7 +3731,3 @@ and a current storage check before and after its runtime is frozen; it has not s
 
 PRs #827, #829 and #830 are merged. The all-82-seed EU retry remains prepared, with a
 4,999,959,422-byte launch allowance and checks before and after freezing its runtime.
-
-PR872 initial CI36831746092 compiled and passed all19 new cases:5295 passed,22 skipped,4 census/construction failures. Compiled factory/holder and residual diagnostics are added before literal pin updates; production behavior is unchanged. Local validation and review remain pending.
-
-Diagnostic CI36832711692 repeated5295 passed/22 skipped/4 pin failures. The compiled checkpoint completion factory is now pinned exactly, existing holders verified unchanged, and the private LU schema helper is classified with a reason (258 candidates,8 declined). pr-872-pin-transcription.json records old/new rows and the log digest. Fresh CI must verify the repair.

@@ -58,7 +58,7 @@ internal sealed class ChunkedDerivedArtifact
         IReadOnlyList<DurableBlobWriteReceipt> ChunkReceipts)> WriteAsync(
         ICustodyStore store, string kind, Func<Stream, string> writeCanonical,
         CancellationToken cancellationToken, Action<DurableBlobWriteReceipt>? observeReceipt = null) =>
-        WriteCoreAsync(store, kind, writeCanonical, Schema, ChunkSize, cancellationToken, observeReceipt);
+        WriteCoreAsync(store, kind, AdaptWriter(writeCanonical), Schema, ChunkSize, cancellationToken, observeReceipt);
 
     /// <summary>Small chunks bound the custody bytes loaded by a short random lookup. The v2
     /// root uses exactly 64 KiB chunks; v1 keeps its existing 4 MiB representation unchanged.
@@ -67,12 +67,28 @@ internal sealed class ChunkedDerivedArtifact
         IReadOnlyList<DurableBlobWriteReceipt> ChunkReceipts)> WriteSmallChunksAsync(
         ICustodyStore store, string kind, Func<Stream, string> writeCanonical,
         CancellationToken cancellationToken, Action<DurableBlobWriteReceipt>? observeReceipt = null) =>
+        WriteCoreAsync(store, kind, AdaptWriter(writeCanonical), SmallChunkSchema, SmallChunkSize,
+            cancellationToken, observeReceipt);
+
+    /// <summary>Consumes an asynchronous source through the same bounded channel and exact v2
+    /// encoding. The callback must observe the supplied token, which also cancels when custody
+    /// fails. This prevents a source awaiting its next row from keeping a failed writer alive.</summary>
+    internal static Task<(DurableBlobWriteReceipt RootReceipt,
+        IReadOnlyList<DurableBlobWriteReceipt> ChunkReceipts)> WriteSmallChunksAsync(
+        ICustodyStore store, string kind, Func<Stream, CancellationToken, Task<string>> writeCanonical,
+        CancellationToken cancellationToken, Action<DurableBlobWriteReceipt>? observeReceipt = null) =>
         WriteCoreAsync(store, kind, writeCanonical, SmallChunkSchema, SmallChunkSize,
             cancellationToken, observeReceipt);
 
+    private static Func<Stream, CancellationToken, Task<string>> AdaptWriter(Func<Stream, string> writer)
+    {
+        ArgumentNullException.ThrowIfNull(writer);
+        return (stream, _) => Task.FromResult(writer(stream));
+    }
+
     private static async Task<(DurableBlobWriteReceipt RootReceipt,
         IReadOnlyList<DurableBlobWriteReceipt> ChunkReceipts)> WriteCoreAsync(
-        ICustodyStore store, string kind, Func<Stream, string> writeCanonical,
+        ICustodyStore store, string kind, Func<Stream, CancellationToken, Task<string>> writeCanonical,
         string schema, int chunkSize, CancellationToken cancellationToken,
         Action<DurableBlobWriteReceipt>? observeReceipt)
     {
@@ -85,14 +101,14 @@ internal sealed class ChunkedDerivedArtifact
         {
             SingleReader = true, SingleWriter = true, FullMode = BoundedChannelFullMode.Wait,
         });
-        // The synchronous canonical writer blocks only this worker when the bounded channel fills.
-        // Custody calls stay asynchronous on the consuming path; no synchronization context is blocked.
-        var producer = Task.Run(() =>
+        // Synchronous byte writes block only a worker when the bounded channel fills. Async
+        // sources can await their next row; custody consumption proceeds independently.
+        var producer = Task.Run(async () =>
         {
             try
             {
                 using var output = new ChunkWriteStream(channel.Writer, chunkSize, stop.Token);
-                var digest = writeCanonical(output);
+                var digest = await writeCanonical(output, stop.Token).ConfigureAwait(false);
                 output.Complete();
                 channel.Writer.TryComplete();
                 return digest;

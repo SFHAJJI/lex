@@ -119,14 +119,15 @@ public static class LuxembourgEnumerationCheckpoint
                 if (reboundInput.ArtifactRef != reference.QueryInputRef)
                     throw new CustodyIntegrityException("LU closed-template input differs from retained input.");
                 var opened = MachineQueryBinder.OpenForSend(reboundRequest);
+                var requestBody = opened.CopyRequestBody();
                 var retainedRequestBody = await CustodyRestore.ReadByDigestCheckedAsync(store,
                     evidence.LogicalRequest.Body.Sha256, cancellationToken).ConfigureAwait(false);
-                if (!retainedRequestBody.Span.SequenceEqual(opened.CopyRequestBody()))
+                if (!retainedRequestBody.Span.SequenceEqual(requestBody))
                     throw new CustodyIntegrityException("LU template output differs from the retained request bytes.");
                 resolved.Add(reference, evidence with
                 {
                     Renderer = new TemplateRenderer(reboundPlan.RendererProfileRef, source.Reference,
-                        opened.RequestedUri, opened.CopyRequestBody()),
+                        opened.RequestedUri, requestBody),
                 });
             }
             var comparison = EnumerationDeliveryComparison.Create(profile, document.ProfileRef, document.CountA,
