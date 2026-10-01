@@ -3,12 +3,6 @@
 Updated 2026-10-01 by the driver. This file replaces the issue-comment ledgers. It is rewritten in
 every pull request that changes what is served, what is next or what is blocked.
 
-Validation update: CI 36848599198 compiled and passed all 26 new cases
-(5,321 succeeded, 22 skipped, two census failures). Compiled guard and vocabulary
-rows were checked against previous literals and transcribed; fresh CI must verify them.
-The 10:35 UTC standing order permits full-suite CI and a read-only Claude review while
-free memory is below 4 GB. No local test result is claimed.
-
 ## Retained EU document ladders (Codex, 2026-10-01)
 
 Reversible driver decision: retain the ordered document attempts behind the scope manifest's
@@ -19,16 +13,13 @@ all saved attempts exactly once and repeats checked body holds for the current c
 A successful adapter run exposes its document checkpoint; failed root retention has a distinct
 DocumentCheckpointNotRetained refusal. Offline replay opens no publisher session.
 
-Twenty-six new draft cases cover copied and weaker custody, successful and refused bodies,
-format fallback, missing evidence, rehashed row/order/representation changes, caller pins,
-cancellation and failed holds. Initial76665557 CI36847408312 compiled:5301 passed/22 skipped/22 failures.
-Nineteen cases could not run because the shared two-format recording handler was disposed
-between sessions; seven new cases passed. The fixture lifetime is corrected. The compiled
-new wire token is transcribed; guard/enum failure messages now report exact row differences.
-Fresh CI is required. The active EU run owns the local heavy slot. Required local Release, fast and affected ingest tests and
-Claude review follow the existing queue; pending PR879's final merged head must be included.
-The complete run coordinator, acquisition catalog and independent offline mounts are still
-required. No full-population or byte-stability claim is made here.
+All 26 new cases passed at 7377c0c4: CI 36849937717 reported 5,323 passed and 22 skipped,
+with required watch exit zero. Cases cover copied/weaker custody, successful/refused bodies,
+format fallback, missing evidence, changed row/order/representation, cancellation and failed holds.
+Updated document parent 00e95ae6 and integration 8c3f3801 are included. Fresh combined CI and
+read-only Claude review remain required; final merged PR879 source must remain included.
+Local builds/tests stay deferred under the acquisition memory guard. The complete run coordinator,
+acquisition catalog and independent offline mounts remain outstanding.
 
 ## Offline EU document routes (Codex, 2026-10-01)
 
