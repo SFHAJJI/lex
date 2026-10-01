@@ -67,8 +67,9 @@ internal static class V3McpJsonRpc
         "status_on" => "The publisher's force assertions about a Luxembourg work (in-force status, entry into force, no longer in force), verbatim, beside the state applicable on a date, with one fixed reading of the dates.",
         "browse" => "The Luxembourg works this mount holds, one ordered and paged list with their identifiers, languages, state dates and the publisher's document types; filter by type or language.",
         "ask" => "The contained assistant (Decisions 51 and 91): every question answers the typed presentation result assistant_v3_unavailable, naming the deterministic operations that answer from held law; no model answers.",
-        "events" => "The Luxembourg event log, polled by cursor, at least once: this build's genesis log holds one first_sighting per held state, with no observation time.",
-        "answer_drift" => "The past dated answers a publisher revision invalidated: none can be enumerated from a genesis log, and the answer says why rather than asserting that nothing drifted.",
+        "events" => "The Luxembourg event log, polled by cursor, at least once: a genesis log holds one first_sighting per held state; a chained log adds each later build's comparison events; each build's time, never an observation time.",
+        "answer_drift" => "The past dated answers a publisher revision invalidated, enumerated from the log's revising events; a genesis log holds none, and the answer says why rather than asserting that nothing drifted.",
+        "as_observed" => "The state of a Luxembourg act that applied on a date as one build of the mounted log held it, named by that build's index digest, with its build time as an upper bound on observation; a time refuses, since no observation time is held.",
         _ => throw new InvalidOperationException($"The served operation {operationId} has no MCP tool description."),
     };
 

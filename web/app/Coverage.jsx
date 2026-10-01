@@ -25,8 +25,8 @@
 // one, and two identifiers run together are one identifier a reader cannot look up.
 //
 // There is no build instant anywhere on this page, and no retention sentence, and both are
-// deliberate rather than pending. The answer's own `not_held` carries a row saying no build time is
-// held and another saying no observation time is, and both are rendered with the rest. The page
+// deliberate rather than pending. The answer's own `not_held` carries a row saying it states no build
+// time and another saying no observation time is held, and both are rendered with the rest. The page
 // this replaced stamped `Counts as of index build <instant>.` into its body and both its captions,
 // and printed `Observation history begins August 2026`. The calendar dates that remain -- each
 // language's state range and each measured capability's period -- are the publisher's facts about

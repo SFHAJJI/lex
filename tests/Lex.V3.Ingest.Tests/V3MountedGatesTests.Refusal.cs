@@ -187,6 +187,10 @@ public sealed partial class V3MountedGatesTests
     /// letters or more) in any of its articles, scanned in order (review of #846: the first version read only the first
     /// article, and a short one left the EU unmeasured): a word the work holds, searched in it (answered); the same in a CELEX the index does not hold (<c>identifier_unknown</c>); in a language the work is not
     /// held in (<c>language_not_available</c>); and with a date, which EU search does not serve (<c>retrieval_mode_unavailable</c>).
+    /// And, when the work's expression in that language holds one wording date, the EU permalink grammar's (#850): a
+    /// provision of the wording pinned by its digest, recomputed here by the stated rule, so <c>verify</c> answering it also
+    /// checks the API's digest (answered); the wording pinned by a digest it does not have (<c>pinned_digest_mismatch</c>);
+    /// and a provision the wording does not hold (<c>anchor_not_in_version</c>).
     /// </summary>
     private static void EuropeRefusals(string mountDirectory, IDictionary<string, RefusalRequest> requests)
     {
@@ -222,6 +226,22 @@ public sealed partial class V3MountedGatesTests
         }
 
         requests["eu-dated-search"] = new("search", new { query = word, language, identifier = celex, date = "2020-01-01" }, "retrieval_mode_unavailable");
+
+        var quotedCelex = celex.Replace("'", "''", StringComparison.Ordinal);
+        var quotedLanguage = language.Replace("'", "''", StringComparison.Ordinal);
+        var wordings = Rows(connection, $"SELECT DISTINCT publisher_work_id, publisher_expression_id, wording_date FROM articles WHERE publisher_work_celex = '{quotedCelex}' AND language = '{quotedLanguage}'");
+        if (wordings.Count != 1)
+        {
+            return;
+        }
+
+        var (workId, expressionId, wordingDate) = (wordings[0][0], wordings[0][1], wordings[0][2]);
+        var articles = Rows(connection, $"SELECT publisher_identifier, article_identity_sha256 FROM articles WHERE publisher_expression_id = '{expressionId.Replace("'", "''", StringComparison.Ordinal)}' ORDER BY publisher_identifier, article_identity_sha256");
+        var digest = V3EuropePermalinkTests.WordingSha256ByTheStatedRule(celex, workId, expressionId, language, wordingDate, articles.Select(static row => row[1]));
+        var wording = $"/eu-eurlex/{celex}/{language}/{wordingDate}--{digest}";
+        requests["eu-pinned-provision"] = new("verify", new { identifier = $"{wording}#{Uri.EscapeDataString(articles[0][0])}" }, "answer");
+        requests["eu-pinned-digest-not-held"] = new("verify", new { identifier = $"{wording[..^64]}{new string('0', 64)}" }, "pinned_digest_mismatch");
+        requests["eu-provision-not-held"] = new("verify", new { identifier = $"{wording}#lex-no-such-provision" }, "anchor_not_in_version");
     }
 
     /// <summary>
@@ -351,16 +371,19 @@ public sealed partial class V3MountedGatesTests
     [TestMethod]
     public async Task AnEuIndexGivesItsOwnRefusalRequests()
     {
-        // The GDPR mounted alone in its EU index: no Luxembourg state, yet the refusal set measures the EU's answer and
-        // three EU refusals, and none of their codes is listed as not produced.
+        // The GDPR mounted alone in its EU index: no Luxembourg state, yet the refusal set measures the EU's answers and
+        // five EU refusals (three of search, two of verify over the EU permalink grammar), and none of their codes is
+        // listed as not produced.
         var fixture = await EuropeMountedFixture.CreateAsync();
         await using var cleanup = fixture;
         using var mount = await V3CorpusMount.OpenAsync(fixture.Directory, CancellationToken.None);
         Assert.IsNotNull(mount);
 
         var (set, derived) = RunRefusalGate(mount, fixture.Directory, Timelines(fixture.Directory));
-        CollectionAssert.IsSubsetOf(new[] { "eu-search-held", "eu-unknown-celex", "eu-language-not-held", "eu-dated-search" }, derived.Requests.Keys.ToArray());
-        foreach (var code in new[] { "identifier_unknown", "language_not_available", "retrieval_mode_unavailable" })
+        CollectionAssert.IsSubsetOf(
+            new[] { "eu-search-held", "eu-unknown-celex", "eu-language-not-held", "eu-dated-search", "eu-pinned-provision", "eu-pinned-digest-not-held", "eu-provision-not-held" },
+            derived.Requests.Keys.ToArray());
+        foreach (var code in new[] { "identifier_unknown", "language_not_available", "retrieval_mode_unavailable", "pinned_digest_mismatch", "anchor_not_in_version" })
         {
             Assert.IsFalse(derived.NotProduced.ContainsKey(code), $"{code} is produced by an EU request");
         }
