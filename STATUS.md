@@ -3,6 +3,24 @@
 Updated 2026-10-01 by the driver. This file replaces the issue-comment ledgers. It is rewritten in
 every pull request that changes what is served, what is next or what is blocked.
 
+## Retained EU enumeration checkpoints (Codex, 2026-10-01)
+
+Reversible driver decision under Q-20261001-0656-codex: build acquisition persistence before
+launching the full Luxembourg population. The first slice retains each delivered EU enumeration's
+comparison inputs in checked custody and exposes its digest on the executor result. The offline
+reader checks the caller's run/profile pins, reads both counts and all pages, restores the held
+request bytes and reruns the existing binder and complete two-pass comparison. It has no HTTP
+client and performs no custody writes. This uses the existing EU request replay contract; the
+Luxembourg template renderer and LU builder/reader remain outside this slice.
+
+Fourteen draft cases cover an independent copied store, empty/nonempty equality across two opens,
+missing/tampered dependencies, wrong caller identities, rehashed-root substitutions and cancellation.
+They are not yet compiled or run. Local Release, required fast tests, affected ingests and Claude
+review remain queued behind the active EU acquisition and existing local work. Remote CI will
+provide initial compiler/test feedback. No acquisition-completion or custody-floor claim is read
+from the checkpoint. It does not yet restore the complete EU/LU acquisition, Formex/rights/body
+outcomes, or rebuild a mount offline; those remain required follow-on work. Current two-build
+in-process checks remain unchanged. Active EU retry6 uses its frozen old runtime and is untouched.
 ## EU escaped qualifier authority (Codex, 2026-10-01)
 
 EU retry 5 at C:/lex-v3/eu-population-20261001-3 ended at 03:08 UTC with exit 3 after
