@@ -12,12 +12,14 @@ and original artifact IDs. Retained request bytes must match the regenerated req
 complete comparison and current custody receipt checks run again without publisher traffic.
 EU and LU share the actual-receipt restoration helper; no saved proof or floor is trusted.
 
-Nineteen draft cases cover empty, nonempty and multi-page enumeration, Unicode cursors,
-independent copied custody, weaker protection, missing dependencies, rehashed substitutions,
-caller pins and cancellation. Exact a2ae09cb passed CI 36833657603: 5,299 passed and 22 skipped,
-including all 19 new cases; the required watch exited 0. Integration a74fece1 is included.
-Fresh combined CI and read-only Claude review are required. Local builds/tests remain
-deferred under the active acquisition memory guard. PR869 must merge before this slice.
+Nineteen cases cover empty, nonempty and multi-page enumeration, Unicode cursors, independent
+custody, weaker protection, missing inputs, caller pins, substitutions and cancellation. Exact
+d834ae22 passed CI 36856207562: 5,356 passed and 22 skipped; the required watch exited zero.
+Claude found no material LU code defect and requested the current parent/base and combined census
+correction. The one repair includes reviewed PR869 source 60c2589c and integration d56d0539,
+sets the union to 262 candidates/140 guarded types, preserves all member pins and copies each
+regenerated request body once. PR869 must merge before final current-base CI and this merge.
+Local builds/tests remain deferred under the acquisition memory guard.
 
 Full acquisition catalog restoration and two independent offline mount derivations remain
 outstanding. This does not establish full Luxembourg memory or disk fit. The active EU runtime,
