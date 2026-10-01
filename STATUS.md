@@ -2036,6 +2036,18 @@ The first mount's card reads and renders. At this head it has 3 sets (the two te
 arms and the refusal set) and says "2 gates do not pass", each named not measured. With #842's
 retrieval set it has 4 sets and says 5, as the review of #841 counted. The journey and
 licence-blocked mounts' cards and the platform card read too.
+The retrieval set reads the EU index too (PR #845), so the real bounded first mount's card measures
+retrieval. EU search is served in one work and states the same matching (`EuropeSearchMatching`: a
+byte-exact substring). For a seeded sample of the EU index's works in each language:
+- words held by one to five provisions are judged to find exactly those (the CELEX and the
+  publisher's provision id, as an EU hit names them), searched with the work as scope;
+- strings the work holds nowhere find nothing.
+EU `verify` is not served, so the EU gives no exact-identifier case. On the GDPR fixture and on the
+real first mount, anchor nDCG@10 is 1 over 6 EU word cases and no-hit accuracy 1 over 3. Resolver
+exactness is not measured (no measurable query). So the judgments control does not apply: its rule
+needs every required gate to pass first, and the card says so. A mutation, EU judgments naming
+another provision, drops nDCG@10 to 0 and fails.
+
 The retrieval set over any mount (PR #842), the third slice of ruling 2's gates over the real
 mounted corpus (`V3MountedGatesTests.Retrieval.cs`). The judgments are computed from the mount's
 index by the search's own stated matching (`SearchMatching`: a byte-exact substring of an article's
