@@ -4,6 +4,10 @@ using Lex.V3.Contracts.Source.Core;
 
 namespace Lex.V3.Contracts.Source.Luxembourg;
 
+/// <summary>One applied split, retained so a chain can be rebuilt through its existing checked door.</summary>
+public sealed record LuxembourgPartitionSplitStep(string LeafPartitionId, LuxembourgQueryCursor Boundary,
+    string LeftPartitionId, string RightPartitionId);
+
 /// <summary>
 /// A cover of one root range by adjacent half-open children. Built only by splitting a leaf at one
 /// interior cursor, so a gap or an overlap is not representable. There is deliberately no
@@ -19,13 +23,18 @@ public sealed class LuxembourgPartitionChain
 
     private LuxembourgPartitionChain(
         LuxembourgQueryPartitionRange rootRange,
-        IReadOnlyList<LuxembourgQueryPartitionRange> leaves)
+        IReadOnlyList<LuxembourgQueryPartitionRange> leaves,
+        IReadOnlyList<LuxembourgPartitionSplitStep> splitHistory)
     {
         RootRange = rootRange;
-        _leaves = leaves;
+        _leaves = Array.AsReadOnly(leaves.ToArray());
+        SplitHistory = Array.AsReadOnly(splitHistory.ToArray());
     }
 
     public LuxembourgQueryPartitionRange RootRange { get; }
+
+    /// <summary>The actual applied splits, in order; reopening replays Root/SplitLeaf.</summary>
+    public IReadOnlyList<LuxembourgPartitionSplitStep> SplitHistory { get; }
 
     /// <summary>Leaves in ascending StartInclusive order, contiguous and flush with the root.</summary>
     public IReadOnlyList<LuxembourgQueryPartitionRange> Leaves => _leaves;
@@ -33,7 +42,7 @@ public sealed class LuxembourgPartitionChain
     public static LuxembourgPartitionChain Root(LuxembourgQueryPartitionRange range)
     {
         ArgumentNullException.ThrowIfNull(range);
-        return new LuxembourgPartitionChain(range, [range]);
+        return new LuxembourgPartitionChain(range, [range], []);
     }
 
     /// <summary>
@@ -86,7 +95,8 @@ public sealed class LuxembourgPartitionChain
         next.Add(left);
         next.Add(right);
         next.AddRange(_leaves.Skip(index + 1));
-        return new LuxembourgPartitionChain(RootRange, next);
+        return new LuxembourgPartitionChain(RootRange, next,
+            [.. SplitHistory, new LuxembourgPartitionSplitStep(leafPartitionId, boundary, leftPartitionId, rightPartitionId)]);
     }
 
     private int IndexOfLeaf(string leafPartitionId)

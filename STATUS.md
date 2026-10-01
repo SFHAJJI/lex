@@ -3,6 +3,24 @@
 Updated 2026-10-01 by the driver. This file replaces the issue-comment ledgers. It is rewritten in
 every pull request that changes what is served, what is next or what is blocked.
 
+## Retained Luxembourg cover history (Codex, 2026-10-01)
+
+Reversible driver decision: retain the actual successful split history and every leaf's
+checkpoint before reporting a proven cover. Restoration replays those splits, checks the
+caller's root/run/profile, reopens both passes of every leaf, compares all six query bounds,
+and repeats the existing leaf and cover gates. It keeps the LeafTilingOnly basis and current
+custody protection. A failed checkpoint hold produces a typed cover refusal.
+
+The chain now owns immutable copies of its leaves and history. Twenty-two new cases cover
+history/collection mutation, copied custody, current weaker protection, empty leaves,
+ancestor-ID reuse, missing artifacts, caller pins, rehashed boundary/history changes,
+cancellation and the adapter's custody-failure path. Uncompiled; remote CI requested next.
+Required local Release, fast tests, affected ingests and Claude review follow the active EU
+run and earlier queue. Pending PR872 (and its PR869 prerequisite) must merge first.
+
+This supplies the cover part of the offline acquisition catalog. Complete catalog restoration,
+two independent offline mount derivations and bounded full LU fit remain outstanding.
+
 ## Retained Luxembourg enumeration checkpoints (Codex, 2026-10-01)
 
 This slice depends on pending PR869. The LU executor retains its closed invariant plan wire
