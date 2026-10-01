@@ -1,67 +1,53 @@
-﻿# Lex V3 status
+# Lex V3 status
 
 Updated 2026-10-01 by the driver. This file replaces the issue-comment ledgers. It is rewritten in
 every pull request that changes what is served, what is next or what is blocked.
 
-## Async Luxembourg assertion snapshot preparation (Codex, 2026-10-01)
+## Async Luxembourg assertion snapshots (Codex, 2026-10-01)
 
-Reversible driver decision: let the assertion snapshot writer consume asynchronous verified rows
-through the existing bounded chunk channel. The small-chunk callback receives the channel's linked
-cancellation token, so failed custody can stop a source awaiting its next row. Synchronous and
-asynchronous assertion writing share the same record encoding and domain-separated digest. The
-source remains responsible for publisher proof, census membership, admission and subject grouping;
-the existing snapshot reader still checks the complete sequence before lookup.
+The snapshot writer now consumes asynchronous verified rows through the bounded small-chunk
+channel. Failed custody cancels the producer's linked token, including a source awaiting its
+next row. Both writer paths share the record encoding and canonical digest. The source remains
+responsible for publisher proofs, census membership, admission and subject grouping.
 
-Eight cases cover exact synchronous/asynchronous bytes, empty input, independent
-small-chunk reopening with duplicate rows and literal metadata, a failed custody write while the
-source waits, no root after a source failure, wrong observations, null rows and cancellation before writing.
-Remote CI36818977535 on 0536449f built successfully: 5,267 tests passed, 22 were skipped and the
-sole failure was the receipt-holder surface pin. All eight new cases passed. Diagnostic CI36819699592 independently printed the new small-chunk overload and the changed
-private core signature. Those exact holder entries are now transcribed into the literal pin; no
-receipt constructor was added and no census check is relaxed. Fresh CI must verify the repair. This follow-on is on a branch created from origin/v3/integration, with pending
-PR858 merged as an explicit prerequisite. Draft CI may validate this follow-on while EU owns the
-local heavy slot; final review and merge wait for PR858. Required local Release build, fast and
-affected ingest checks, review and final CI remain outstanding. No adapter integration, publisher traffic or full-LU fit is claimed.
+Eight cases cover equal synchronous/asynchronous bytes, empty input, independently reopened
+small chunks with duplicates and literal metadata, failure during an awaiting source, absence
+of a root after source failure, wrong observations, null rows and early cancellation. Exact
+b7d901c8 passed CI 36851153662: 5,306 passed, 22 skipped; required checks watch exited zero.
+The branch now includes PR858's reviewed source 11c62efd and integration c27012f4. Final-head
+CI and its own read-only Claude review are required. PR858 must merge before this follow-on.
+No local build/test was run under the 10:35 low-memory rule. Adapter integration, complete
+bounded derivation and full-LU memory measurement remain outstanding.
 
-Current evidence: exact8e3226de CI36820458287 passed 5,268 tests with22 skipped.
-The branch now includes integration65922 and PR858 head2b45518e. Fresh exact-head CI
-and the final merged858 head are required. Under the10:35 standing order, Claude can
-review read-only while memory is below4GB; no local build/test or full-LU fit is claimed.
-Combined CI36849715330 passed5,297 tests with22 skipped and one census-total failure:
-the merged guarded-type union is139, not138. The exact member-level census already passed.
-The observed total is now pinned; fresh CI must verify it before review.
 
 ## LU assertion snapshot storage (Codex, 2026-10-01)
 
-Reversible driver decision: prepare immutable assertion storage using the existing checked chunk
-reader. A complete open parses the retained sequence and rebuilds a compact subject-digest/offset
-index. Lookups reopen and recheck chunks, preserving row order, duplicates, literal metadata and
-cross-range dependencies. The header binds run, observation and ordered census/assertion proof
-references. These references do not prove publisher delivery; production integration must compare
-against independently replayed source proofs and check census membership before admission.
+The immutable assertion snapshot uses the checked chunk reader. Opening validates the complete
+retained sequence and builds a compact subject-digest/offset index. Lookups reopen and recheck
+chunks, preserving row order, duplicates, literal metadata and cross-range dependencies. The
+header binds the run, observation and ordered census/assertion proof references. Integration
+must independently replay those proofs and check census membership before admitting rows.
 
-The snapshot requires contiguous subject groups and refuses repeated groups or digest collisions.
-It bounds each serialized record to 4 MiB without truncation. It retains one row during opening,
-compact index entries, and one requested subject's assertions during lookup. No full-population
-memory or disk measurement is claimed. Scope resolution and corpus construction still materialize
-graphs and require the separate bounded paths in the lane design note.
+Each serialized record, including the complete proof-reference header, is limited to 4 MiB.
+Opening refuses noncontiguous repeated subject groups and digest collisions. The writer does
+not detect repeated groups early. Integration must measure header size and proof count before
+launch; an oversized header refuses without truncation. This remains unwired storage support.
+Scope and corpus graphs still materialize, so no full-population memory or disk fit is claimed.
 
-At de9f84ca, the Release build and required fast tests passed. Remote CI and local affected
-ingest tests found the same two census omissions. The new snapshot functional cases passed.
-The actual built assembly's guarded surface was independently rendered: it adds the snapshot's
-private instance constructor, static initializer and internal Open method. Those literal entries
-are now pinned, with exact candidate/guarded counts changed from 255/137 to 256/138. No census
-assertion is loosened. At 168fbe90, repaired Release build passed with zero warnings/errors,
-required fast tests passed (3,105 succeeded, one skipped), and affected ingest tests passed
-(82 succeeded, two skipped). Exact-head CI 36812117581 is green. Cross-family review is pending.
+At 168fbe90, the Release build passed with zero warnings/errors, required fast tests passed
+(3,105 passed, one skipped), and affected ingests passed (82 passed, two skipped). Twenty new
+cases cover row preservation, malformed and corrupted storage, binding changes and cancellation.
+CI 36850526856 passed exact 12be52d4 with 5,298 tests passed and 22 skipped. Its member-level
+census and the combined totals of 259 candidates and 139 guarded types all passed.
 
-The 10:35 UTC standing order permits a read-only cross-family review during the active EU
-run, with CI providing current full-suite evidence while free memory is below 4 GB. The branch
-now includes integration65922; its fresh exact-head CI and review are still required.
+Claude's read-only cross-family review returned MERGE with no material findings. The one
+editorial repair records that evidence, removes two added byte-order marks and records the
+header-size and writer-order limitations above. Integration c27012f4 is included; merge still
+requires successful CI on the final head. The 10:35 UTC standing order permits that CI-backed
+review during acquisition while memory is below 4 GB. No additional local build was run.
 
-This slice uses the existing legacy chunk writer; PR #855's small-chunk profile is now merged.
-EU decoder recovery has priority, with local heavy checks serialized. No publisher requests were
-made for this slice.
+The snapshot uses the legacy chunk writer; PR #855 supplies smaller chunks for its follow-on.
+No publisher traffic, production action or completed population is claimed by this slice.
 
 
 ## Retained custody storage consolidation (Codex, 2026-10-01)
@@ -1051,7 +1037,7 @@ CI evidence are recorded in the pull request before merge.
 
 ## Heads
 
-- `v3/integration`: `55d58cb2` (2026-10-01, PR #878 merged). Build 45 s. Fast lane
+- `v3/integration`: `65922f24` (2026-10-01, PR #880 merged). Build 45 s. Fast lane
   (`eng/test-fast.ps1`): 3,077 tests, 3,076 pass, 1 skipped (the review of PR #828). Ingest suite: green on CI for PR #760
   (the CI `dotnet` job runs the whole solution on every pull request, about 7 min on the runner;
   green for PR #834);
@@ -2557,6 +2543,37 @@ generations, by the retention line (G3b).
   retained generation. An image built from such a mount carries `generations/` too. No byte budget
   is enforced yet.
 
+Predecessor chaining, the sixth slice, second part (PR #885): the mount holds its generations to
+its log when it opens, and reports the history depth it keeps (S7-A09: "reported history depth is
+truthful").
+- **At open,** `V3CorpusMount.OpenAsync` runs `V3CorpusMountWriter.VerifyGenerationsAsync`, the
+  checks the writer's verification runs, so a mount is held to the same checks where it is built
+  and where it is served.
+  - A generation that does not hold, a chained mount with no retention record, or generations
+    beside a mount with no Luxembourg index all fail the mount closed.
+  - A chained build written without its predecessor's directory records each earlier build as
+    absent (`WriteRetentionRecordAsync`), never claimed.
+- **`coverage` gains `history`:**
+  - whether the log records builds, how many it records and since when;
+  - the retention line that decided (its id, nightly days and evaluation time);
+  - each snapshot whose text the mount holds (the mounted build, and each kept generation with why
+    it is kept);
+  - how many it does not hold, and a note that every time is a build's, never an observation time.
+  - A schema-6 index records no build and says so.
+- **The Trust and Coverage page renders it,** in English with a French draft. The page's tests hold
+  every leaf of it to reach the page, both renderers to agree, and every string to be escaped.
+- **`events`' ancestors gain `text_held` and `retained_as`.**
+- **Tests:**
+  - the chain test's third build mounts and reports three builds, all three with text;
+  - its fourth build, 120 days later, reports four builds, two with text and two without;
+  - each damaged copy that the writer's verification refuses, the mount refuses with the same
+    reason;
+  - a genesis mount reports one build with the mount's own text and no retention line applied;
+  - a schema-6 mount reports no build recorded;
+  - the crafted chained mounts of the events and `as_observed` tests carry a retention record that
+    names their predecessor absent.
+- **Next:** `as_observed` and `verify` quote a state from a retained generation.
+
 The live export composer and its journey step (PR #789), the eighth screen. `dist-live/export.html`
 has its own bundle `client-live-export.js`.
 - The page asks what the reading page asks: the same form (`ReadingForm`, now shared), the same one
@@ -3257,7 +3274,7 @@ recorded by PR #862:
    - `events` and `answer_drift` across the chain (folded into PR #867 by its review);
    - each build's time in the log (PR #871), then `as_observed` by build snapshot (G4) (PR #874);
    - a generation mount (G3b), retained by S7-A09: generations written and verified (PR #880),
-     then read by the mount.
+     held to the log by the mount with the depth reported (PR #885), then quoted.
    `observed_from` stays null until a Luxembourg body's capture time reaches the corpus (data lane);
    `knowable_on` and withdrawal follow it. The owner questions (G1 when a file changes but its text
    does not, "as observed" identified by snapshot with no time, retaining every generation) were
