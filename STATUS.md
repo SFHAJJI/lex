@@ -17,7 +17,7 @@ ancestor-ID reuse, missing artifacts, caller pins, rehashed boundary/history cha
 cancellation and the adapter's custody-failure path. Exact 0d11ea0a passed CI 36856826820: 5,378 passed and 22 skipped,
 including all 22 new cases; the required watch exited 0. Merged PR869 integration 1a63b61a and reviewed parent PR872 source 8ba8376a are included.
 Fresh combined CI and read-only Claude review remain required. Local builds/tests remain
-deferred under the acquisition memory guard. PR872 and its PR869 prerequisite must merge first.
+deferred under the acquisition memory guard. PR872 is merged as c9e5a40a and included, along with its merged PR869 prerequisite.
 
 This supplies the cover part of the offline acquisition catalog. Complete catalog restoration,
 two independent offline mount derivations and bounded full LU fit remain outstanding.
