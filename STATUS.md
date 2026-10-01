@@ -22,7 +22,8 @@ The draft expands the seven existing chunk obligations to both profiles and adds
 profile admission, unread-tail corruption, an independent compressed-store reader, legacy root
 bytes and the custody bytes loaded by 100 short random reads. These 23 cases are not yet run.
 Build, required fast tests and affected ingest tests wait for the live acquisition's heavy slot.
-No PR or full-LU fit claim is made yet. Subject indexes, a checked streaming scope-resolution door,
+A draft PR will run existing remote CI while local checks wait; it remains unready for review or
+merge until those checks pass. No full-LU fit claim is made. Subject indexes, a checked streaming scope-resolution door,
 independent bounded manifest reopening and corpus assembly still need implementation.
 
 ## EU object-facts continuation range (Codex, 2026-10-01)
