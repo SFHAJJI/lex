@@ -24,7 +24,7 @@ Tests add exact source-byte mutations (comments, BOM and line endings), an annex
 an article text change, English/French producer-to-index binding, schema 3 LF/CRLF compatibility,
 missing/substituted/version-mixed digests, and hostile logical restamping. The actual schema 2
 bilingual fixture is retained. The synthetic mount ambiguity fixtures explicitly populate their
-own synthetic source/digest rows. Compilation, a fresh deterministic byte pin, required fast and
+own synthetic source/digest rows. The fixed-input schema 4 bytes were derived twice identically (77824 bytes, SHA-256 44a6158077203b3729c2103f3efeb007e3b8d10cd59b6616ee1c50194b205f1c). Required fast and
 affected ingest validation remain queued behind full EU acquisition and the Luxembourg dependency
 slice. No validation success or full EU completion is claimed yet.
 
