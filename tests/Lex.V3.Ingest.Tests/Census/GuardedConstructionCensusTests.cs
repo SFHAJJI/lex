@@ -486,13 +486,13 @@ public sealed class GuardedConstructionCensusTests
                     + "nc",
                 "Lex.V3.Ingest.Europe.EuWitnessTraversalRefusalDetail: constructor internal "
                     + "instance Lex.V3.Ingest.Europe.EuWitnessTraversalRefusalDetail::.ctor",
-                "Lex.V3.Ingest.Europe.EuWitnessTraversalResult: constructor private instance "
-                    + "Lex.V3.Ingest.Europe.EuWitnessTraversalResult::.ctor, "
-                    + "method public instance "
-                    + "Lex.V3.Ingest.Europe.EuRepeatedEnumerationExecutor::RunWitnessTraversalAsync, "
-                    + "method public static "
-                    + "Lex.V3.Ingest.Europe.EuWitnessTraversalResult::Delivered, "
-                    + "method public static Lex.V3.Ingest.Europe.EuWitnessTraversalResult::Refused",
+                "Lex.V3.Ingest.Europe.EuWitnessTraversalResult: constructor private instance Lex.V3.Ingest.Europe.E"
+                    + "uWitnessTraversalResult::.ctor, method internal instance Lex.V3.Ingest.Europe.EuWitnessTraversalRe"
+                    + "sult::WithCheckpoint, method private instance Lex.V3.Ingest.Europe.EuRepeatedEnumerationExecutor::"
+                    + "RunWitnessTraversalCoreAsync, method public instance Lex.V3.Ingest.Europe.EuRepeatedEnumerationExe"
+                    + "cutor::RunWitnessTraversalAsync, method public static Lex.V3.Ingest.Europe.EuRepeatedEnumerationEx"
+                    + "ecutor::RestoreWitnessTraversalAsync, method public static Lex.V3.Ingest.Europe.EuWitnessTraversal"
+                    + "Result::Delivered, method public static Lex.V3.Ingest.Europe.EuWitnessTraversalResult::Refused",
                 "Lex.V3.Ingest.Europe.EuXhtmlAnnexInventory: constructor internal instance "
                     + "Lex.V3.Ingest.Europe.EuXhtmlAnnexInventory::.ctor",
                 "Lex.V3.Ingest.Europe.EuXhtmlAnnexInventoryProductionResult: constructor private "

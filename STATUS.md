@@ -13,8 +13,10 @@ agree. Every saved page must be consumed once. There is no publisher session on 
 
 Twenty-five new cases cover empty and nonempty batches, cursor crossing, copied weaker custody,
 repeat replay, missing dependencies, caller pins, rehashed/reordered/extra pages, cross-run
-substitution, cancellation and typed checkpoint-hold failure. Source is uncompiled; remote CI is
-requested next. Required local Release, fast tests, affected ingests and Claude review wait for
+substitution, cancellation and typed checkpoint-hold failure. All25 passed at63f39c75 in
+CI36838512448:5311 passed,22 skipped and3 surface/vocabulary pins failed. Compiled result
+doors and wire tokens are transcribed; enum diagnostics and fresh CI remain. Required local
+Release, fast tests, affected ingests and Claude review wait for
 the active EU run and prior queue. Pending PR869 must merge and its final head be included first.
 
 This restores the watermark dependency of a future acquisition catalog. Complete run, document,
