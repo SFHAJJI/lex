@@ -3,6 +3,24 @@
 Updated 2026-10-01 by the driver. This file replaces the issue-comment ledgers. It is rewritten in
 every pull request that changes what is served, what is next or what is blocked.
 
+## Retained Luxembourg enumeration checkpoints (Codex, 2026-10-01)
+
+This slice depends on pending PR869. The LU executor retains its closed invariant plan wire
+representation and both enumeration passes. Restoration checks the original plan, renderer,
+run and profile, then regenerates each count/page request with the existing template binder
+and original artifact IDs. Retained request bytes must match the regenerated request. The
+complete comparison and current custody receipt checks run again without publisher traffic.
+EU and LU share the actual-receipt restoration helper; no saved proof or floor is trusted.
+
+Nineteen draft cases cover empty, nonempty and multi-page enumeration, Unicode cursors,
+independent copied custody, weaker protection, missing dependencies, rehashed substitutions,
+caller pins and cancellation. These additions are uncompiled; remote CI is requested next.
+Required local Release, fast tests, affected ingests and Claude review wait for the active EU
+run and earlier validation queue. PR869 must merge and its final changes be included first.
+
+Full acquisition catalog restoration and two independent offline mount derivations remain
+outstanding. This does not establish full Luxembourg memory or disk fit. The active EU runtime,
+queued source heads, LU index builder/reader and web lane are unchanged.
 ## Retained EU enumeration checkpoints (Codex, 2026-10-01)
 
 Reversible driver decision under Q-20261001-0656-codex: build acquisition persistence before
