@@ -44,6 +44,8 @@ public sealed class CensusPartitionTests
     /// </summary>
     private static readonly string[] Declined =
     [
+        "Lex.V3.Ingest.Luxembourg.LuxembourgEnumerationCheckpoint: one private schema identifier; "
+            + "not a selectable vocabulary. Closed-template reopening and unknown-schema refusal are tested.",
         "Lex.V3.Ingest.Europe.EuEnumerationCheckpoint: one private schema identifier; "
             + "not a selectable vocabulary. Canonical reopening and unknown-schema refusal are tested.",
         "Lex.V3.Ingest.Luxembourg.LuxembourgPartitionBoundary: one private Unicode scalar limit; "
@@ -85,21 +87,23 @@ public sealed class CensusPartitionTests
                 .Distinct(StringComparer.Ordinal)
                 .OrderBy(static name => name, StringComparer.Ordinal)
                 .ToArray(),
-            "a swept type is in no pin and on no declined list, so nothing records what it is");
+            "a swept type is in no pin and on no declined list, so nothing records what it is. Missing:\n" +
+            string.Join("\n", ClosedSurfaceCensus.Candidates(CensusScope.SweptHere)
+                .Except(pinned.Concat(Declined.Select(NameOf)), StringComparer.Ordinal)));
     }
 
     [TestMethod]
     public void ThePartitionTotalsAreExactlyThese()
     {
         Assert.AreEqual(
-            260, ClosedSurfaceCensus.Candidates(CensusScope.SweptHere).Count, "candidates");
+            262, ClosedSurfaceCensus.Candidates(CensusScope.SweptHere).Count, "candidates");
         Assert.AreEqual(
             103, ClosedSurfaceCensus.ClosedVocabularies(CensusScope.SweptHere).Count, "vocabularies");
         Assert.AreEqual(
             140, ClosedSurfaceCensus.GuardedConstruction(CensusScope.SweptHere).Count, "guarded types");
         Assert.AreEqual(
             11, ClosedSurfaceCensus.VocabularyRegistries(CensusScope.SweptHere).Count, "registries");
-        Assert.AreEqual(7, Declined.Length, "declined");
+        Assert.AreEqual(8, Declined.Length, "declined");
     }
 
     private static string NameOf(string row) =>
