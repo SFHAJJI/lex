@@ -2480,7 +2480,7 @@ generations, by the retention line (G3b).
   retained generation. An image built from such a mount carries `generations/` too. No byte budget
   is enforced yet.
 
-Predecessor chaining, the sixth slice, second part (PR #883): the mount holds its generations to
+Predecessor chaining, the sixth slice, second part (PR #885): the mount holds its generations to
 its log when it opens, and reports the history depth it keeps (S7-A09: "reported history depth is
 truthful").
 - **At open,** `V3CorpusMount.OpenAsync` runs `V3CorpusMountWriter.VerifyGenerationsAsync`, the
@@ -3211,7 +3211,7 @@ recorded by PR #862:
    - `events` and `answer_drift` across the chain (folded into PR #867 by its review);
    - each build's time in the log (PR #871), then `as_observed` by build snapshot (G4) (PR #874);
    - a generation mount (G3b), retained by S7-A09: generations written and verified (PR #880),
-     held to the log by the mount with the depth reported (PR #883), then quoted.
+     held to the log by the mount with the depth reported (PR #885), then quoted.
    `observed_from` stays null until a Luxembourg body's capture time reaches the corpus (data lane);
    `knowable_on` and withdrawal follow it. The owner questions (G1 when a file changes but its text
    does not, "as observed" identified by snapshot with no time, retaining every generation) were
