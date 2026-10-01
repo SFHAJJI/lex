@@ -16,7 +16,9 @@ namespace Lex.V3.Ingest.Luxembourg;
 /// refusals cannot be reconstructed here. The original attempt ordinal and pinned policy's
 /// retry limit reproduce RetryAllowanceSpent; preceding attempts are not re-proved.
 /// Policy bytes are checked by digest. The profile and retry-limit fields are also checked
-/// against the supported LU profile; this is not a complete request-policy parser.
+/// against the supported LU profile. Plan, parameter-set and renderer-source fields must match
+/// the original bound request; this is not a complete request-policy parser.
+/// This readback does not establish a fresh robots verdict.
 /// Historical write receipts do not establish the current store's retention floor. Lookup
 /// uses retainedRoute.Sha256, not its ResourceId. No new observation or body proof is minted.
 /// </remarks>
