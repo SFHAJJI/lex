@@ -974,7 +974,7 @@ CI evidence are recorded in the pull request before merge.
 
 ## Heads
 
-- `v3/integration`: `a51535ba` (2026-10-01, PR #864 merged). Build 45 s. Fast lane
+- `v3/integration`: `b623723b` (2026-10-01, PR #866 merged). Build 45 s. Fast lane
   (`eng/test-fast.ps1`): 3,077 tests, 3,076 pass, 1 skipped (the review of PR #828). Ingest suite: green on CI for PR #760
   (the CI `dotnet` job runs the whole solution on every pull request, about 7 min on the runner;
   green for PR #834);
@@ -2259,6 +2259,33 @@ predecessor's event log forward.
 - The real bounded first mount's Luxembourg index is schema 6 with no state, so it cannot be a
   predecessor; the first chain starts with the next build.
 
+Predecessor chaining, the third slice (PR #867): comparison events. A chained build compares its
+states with its predecessor's log, key by key, over the keys the log holds and the keys it holds.
+A held state this build lacks stays held: absence is not a withdrawal.
+- **`file_replaced`** (G1): a held state whose source bodies differ. It names the state and bodies
+  it replaces (`replaced_state_sha256`, `replaced_source_body_sha256`).
+  - The state's digest is the permalink's version id, and it changes with the text, not with the
+    bytes alone.
+  - Through the real pipeline: the act rebuilt from its publisher file with one article reworded is
+    `file_replaced` with a new digest, so a new permalink.
+  - Rebuilt with one byte added and the text unchanged, it is `file_replaced` with the digest, and
+    so the version, unchanged. **Owner question, asked in PR #867:** should a replaced file whose
+    text is unchanged mint a new version? That would change the published permalink scheme.
+- **`interval_closed`** and **`validity_revised`**, for a state the log held whose applicability
+  interval this build's states move. The end is the next later date in the work and language,
+  which is this derivation's, never the publisher's, so each event is marked `derived: true` and
+  names `applicable_from`, `previous_to` and `new_to`.
+  - The latest state, followed by a later one, closes.
+  - A state whose next moved earlier, because one was inserted, is revised.
+  - A held state this build lacks closes too.
+- **The same bodies with another digest** are this derivation's change, not the publisher's: the
+  build refuses **`predecessor_derivation_differs`**, which replaces slice 2's interim
+  `predecessor_state_changed`.
+- The reader's history replay (#866) covers the new events with no change: every observation's
+  events are recomputed from the log alone.
+- `withdrawn_from_source` and `resighted` stay unminted. They need the three-run rule (31-v3-spec
+  §91(b)) and a proof of complete enumeration.
+
 The live export composer and its journey step (PR #789), the eighth screen. `dist-live/export.html`
 has its own bundle `client-live-export.js`.
 - The page asks what the reading page asks: the same form (`ReadingForm`, now shared), the same one
@@ -2955,7 +2982,7 @@ recorded by PR #862:
    - the predecessor as a build input (`--predecessor`), its log carried forward as an exact
      prefix (G3a) (PR #866);
    - comparison events: `first_sighting` and `expression_added` for new keys, `file_replaced` when a
-     source body changes (G1), and the derived `interval_closed` and `validity_revised`;
+     source body changes (G1), and the derived `interval_closed` and `validity_revised` (PR #867);
    - `events` and `answer_drift` across the chain;
    - `as_observed` by observation (G4);
    - a generation mount (G3b).
