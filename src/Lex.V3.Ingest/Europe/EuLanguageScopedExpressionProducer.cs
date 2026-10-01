@@ -591,9 +591,18 @@ public sealed partial class EuLanguageScopedExpressionProducer
         SourceArtifactRef checkpoint;
         try
         {
+            if (replay is not null)
+            {
+                derivationReceipt = await RetainedCustodyReceipt.ReopenAsync(_custodyStore, replay.DerivationReceiptSha256,
+                    derivationReceipt, cancellationToken).ConfigureAwait(false);
+                episodeReceipt = await RetainedCustodyReceipt.ReopenAsync(_custodyStore, replay.EpisodeReceiptSha256,
+                    episodeReceipt, cancellationToken).ConfigureAwait(false);
+            }
             checkpoint = replayRef ?? await RetainCheckpointAsync(new ProductionCheckpoint(CheckpointSchema,
                 DescribeFamily(expressionFactsRequest, expressionRun), objectCheckpoint,
-                derivation.DerivationSha256, derivation.EpisodeSha256), cancellationToken).ConfigureAwait(false);
+                derivation.DerivationSha256, derivation.EpisodeSha256,
+                await RetainedCustodyReceipt.HoldAsync(_custodyStore, derivationReceipt, cancellationToken).ConfigureAwait(false),
+                await RetainedCustodyReceipt.HoldAsync(_custodyStore, episodeReceipt, cancellationToken).ConfigureAwait(false)), cancellationToken).ConfigureAwait(false);
         }
         catch (Exception exception) when (exception is CustodyRequiredException or CustodyIntegrityException)
         {

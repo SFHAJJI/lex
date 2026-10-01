@@ -1,8 +1,24 @@
 # Lex V3 status: the data lane
 
-Updated 2026-10-01. The data lane's progress, split out of STATUS.md (which keeps the heads, the owner's open
-items and the pointers) by the standing order of 2026-10-01 13:50 UTC. Every pull request of the data lane
-updates this file, not STATUS.md.
+Updated 2026-10-01.
+
+## Current data lane: complete offline mount command
+
+`Lex.V3.Tool derive --custody <directory> --checkpoint <mount-inputs.json> --out <empty-directory> [--custody-encoding raw|brotli]`
+
+`build` retains the input catalog and prints its reference-file path. `derive` reopens the complete EU and Luxembourg acquisitions, rebuilds the corpus and both indexes, writes the manifests, report and retained generations, and verifies the mount. The original acquisition clock and checked historical receipts preserve output identity; current custody holds are checked independently. No publisher session is opened.
+
+PR #899's separate-process tests cover a raw first mount and a Brotli chained mount. Each compares every output digest with the original fixture derivation and a second process, traps network attempts, and verifies the exact file set. The predecessor directory is removed before replay. Exact bf21939c passed full CI36880064561 after the receipt and exact-file-set repairs; the read-only Claude repair confirmation returned MERGE. Final current-base CI remains the merge gate.
+
+The active EU retry6 remains on its frozen runtime and predates these catalogs. Its latest retained responses are successful manifestation queries; a completed population mount is not yet available. The next fresh capture must include consolidated EN/FRA packages: the current package identity binding only admits original seed roots. Non-EN/FRA expressions keep their typed, unenumerated language-out-of-scope outcome.
+
+Luxembourg launch scope follows the owner's legislative-body family decision. Counts observed on 2026-10-01 are 93,161 subjects under the law prefix, 145,703 under grand-ducal regulations, 21,231 under codes, and 816,645 under the broader legislation prefix. These are IRI-prefix subject counts, not a legal-family census or body count. The candidate March 2017 law partition has S=219, A=1,414, G=114 from six bounded requests, independently reopened by digest. Acquire, derive twice and verify that partition before full-run sizing. Every excluded family still needs an explicit typed scope disposition.
+
+Local fast/ingest tests remain deferred while the EU acquisition occupies the machine and free memory is below 4 GB. GitHub CI runs the full solution. Production signing, deployment and promotion remain outside this lane's authorization.
+
+## Earlier component evidence
+
+The entries below record earlier component checkpoints. Their statements about pending complete offline derivation are superseded by the current command above.
 
 ## Offline Formex package and annex derivation (Codex, 2026-10-01)
 

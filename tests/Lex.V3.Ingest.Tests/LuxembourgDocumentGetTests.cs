@@ -35,7 +35,7 @@ namespace Lex.V3.Ingest.Tests;
 /// </remarks>
 [TestClass]
 [DoNotParallelize]
-public sealed class LuxembourgDocumentGetTests
+public sealed partial class LuxembourgDocumentGetTests
 {
     // The real, live-verified filestore XML manifestation: this exact path returned HTTP 200 with
     // genuine Akoma Ntoso, 19,986 bytes, SHA-256

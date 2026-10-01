@@ -2134,6 +2134,41 @@ public sealed partial class EuQueryExecutionAdapter
         // first place. An object minted but excluded from the body axis still gets a real corpus
         // record: CorpusRecordBuilder's own default path makes it NotHeld, naming the manifest's own
         // disposition as the reason. ----
+        if (context.IsReplay)
+        {
+            // The historical corpus embeds original body receipts, including observation times.
+            // Current acquisition above must still read and hold every body. Preserve historical
+            // receipts only after checking the body and custody membership against today's hold.
+            var originalBytes = await CustodyRestore.ReadByDigestCheckedAsync(_custodyStore,
+                context.Original!.CorpusContentSha256, cancellationToken).ConfigureAwait(false);
+            var (originalReceipt, originalFailure) = await CustodyHold.TryHoldAsync(_custodyStore,
+                originalBytes, cancellationToken).ConfigureAwait(false);
+            if (originalReceipt is null) throw new CustodyRequiredException("Original corpus cannot be held: " + originalFailure);
+            var originalRead = await new CorpusRecordSetReader(_custodyStore).ReadAsync(originalReceipt,
+                context.Original!.Corpus, cancellationToken).ConfigureAwait(false);
+            if (originalRead.VerifiedSet is not { } originalSet)
+                throw new CustodyIntegrityException("Original corpus cannot be verified: " + originalRead.Refusal?.Detail);
+            var historicalOutcomes = documentAcquisitionOutcomesByOrdinal!.ToDictionary();
+            foreach (var pair in historicalOutcomes.ToArray())
+            {
+                if (pair.Value.Receipt is not { } currentReceipt) continue;
+                // An acquisition corpus has one sorted record per manifest ordinal. Indexing
+                // it avoids scanning the entire original corpus again for every held body.
+                if (pair.Key < 0 || pair.Key >= originalSet.Set.Records.Count ||
+                    originalSet.Set.Records[pair.Key].ObjectOrdinal != pair.Key)
+                    throw new CustodyIntegrityException("Original corpus has no acquired ordinal.");
+                var record = originalSet.Set.Records[pair.Key];
+                if (record.Body.Kind != CorpusBodyRecordKind.Held) continue; // Final rights may exclude a fetched body.
+                if (record.Body.Receipt is not { } historicalReceipt ||
+                    historicalReceipt.Reference.ContentSha256 != currentReceipt.Reference.ContentSha256 ||
+                    historicalReceipt.Reference.ByteLength != currentReceipt.Reference.ByteLength ||
+                    CustodyMembershipClassifier.Classify(historicalReceipt) != CustodyMembershipClassifier.Classify(currentReceipt))
+                    throw new CustodyIntegrityException("Original body receipt differs from the freshly verified body or custody membership.");
+                historicalOutcomes[pair.Key] = CorpusAcquisitionOutcome.Held(historicalReceipt);
+            }
+            documentAcquisitionOutcomesByOrdinal = historicalOutcomes;
+        }
+
         var recordSetWriter = new CorpusRecordSetWriter(_custodyStore);
         var recordSetResult = context.IsReplay
             ? await recordSetWriter.RebuildAsync(reopenedManifest, manifestArtifactRef, runIdentityRef,

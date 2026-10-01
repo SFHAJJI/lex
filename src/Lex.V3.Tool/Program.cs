@@ -19,6 +19,8 @@ using Lex.V3.Ingest;
 using Lex.V3.Ingest.Europe;
 using Lex.V3.Ingest.Luxembourg;
 
+if (args.Length > 0 && args[0] == "derive") return await OfflineDeriveCommand.RunAsync(args[1..]);
+
 const string Usage =
     "Usage: Lex.V3.Tool build --celex <CELEX[,CELEX...]|all> --lu-name <key> --lu-start <IRI> --lu-end <IRI>\n"
     + "   or: Lex.V3.Tool build --celex <CELEX[,CELEX...]|all> --lu-population all\n"
@@ -107,6 +109,14 @@ if (options.TryGetValue("--predecessor", out var predecessorDirectory))
     if (predecessor is null)
     {
         Console.Error.WriteLine($"--predecessor refused: {predecessorRefusal}: {predecessorDetail}");
+        return 2;
+    }
+
+    try { await V3OfflineMount.ValidatePredecessorAsync(Path.GetFullPath(predecessorDirectory), CancellationToken.None); }
+    catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or ArgumentException
+        or Lex.V3.Contracts.Custody.CustodyRequiredException or Lex.V3.Contracts.Custody.CustodyIntegrityException)
+    {
+        Console.Error.WriteLine($"--predecessor refused before acquisition: {exception.Message}");
         return 2;
     }
 
@@ -225,7 +235,14 @@ try
         $"luxembourg: run complete, {luxembourg.Run!.CorpusRecordSet?.Set.Records.Count ?? 0} corpus record(s), "
         + $"vocabulary evidence {luxembourg.VocabularyEvidenceRef!.Sha256[..12]}; spent {budget.Spent} of {budget.Limit}");
 
-    var build = await new V3FirstMountBuild(store).RunAsync(europe, luxembourg, predecessor, token);
+    var derivationTime = DateTimeOffset.FromUnixTimeSeconds(DateTimeOffset.UtcNow.ToUnixTimeSeconds() + 1);
+    var generationSource = predecessor is null ? null : new V3GenerationSource(Path.GetFullPath(predecessorDirectory!), referenced);
+    var checkpoint = await V3OfflineMount.CaptureAsync(store, europe, luxembourg, celexes, act,
+        derivationTime, generationSource, token);
+    var checkpointPath = Path.Combine(custodyRoot, "mount-inputs-" + checkpoint.Sha256 + ".json");
+    await File.WriteAllTextAsync(checkpointPath, Lex.V3.Contracts.ContractJson.Serialize(checkpoint), token);
+    Console.WriteLine($"offline inputs: {checkpointPath}; derive --custody {custodyRoot} --checkpoint {checkpointPath} --out <fresh-directory> --custody-encoding {custodyEncoding}");
+    var build = await new V3FirstMountBuild(store, new V3OfflineMount.BuildClock(derivationTime)).RunAsync(europe, luxembourg, predecessor, token);
     if (!build.Delivered)
     {
         Console.Error.WriteLine($"refused: build: {build.Refusal}: {build.Detail} (spent {budget.Spent} of {budget.Limit})");
@@ -239,8 +256,8 @@ try
     var write = await V3CorpusMountWriter.WriteAsync(
         build,
         options["--out"],
-        predecessor is null ? null : new V3GenerationSource(Path.GetFullPath(predecessorDirectory!), referenced),
-        token);
+        generationSource,
+        token, derivationTime);
     foreach (var file in write.Files)
     {
         Console.WriteLine($"wrote {file.Name} {file.ByteLength} bytes sha256={file.Sha256}");

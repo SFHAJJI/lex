@@ -169,6 +169,10 @@ public enum LuxembourgFirstMountAcquisitionRefusal
     /// <summary>The adapter run over the act's families refused, or left no held body to derive from.</summary>
     [JsonStringEnumMemberName("run_refused")]
     RunRefused = 3,
+
+    /// <summary>The complete acquisition catalog or one of its retained inputs is unavailable.</summary>
+    [JsonStringEnumMemberName("acquisition_checkpoint_not_retained")]
+    AcquisitionCheckpointNotRetained = 4,
 }
 
 /// <summary>
@@ -206,9 +210,16 @@ public sealed class LuxembourgFirstMountAcquisitionResult
 
     public SourceArtifactRef? VocabularyCheckpointRef { get; private init; }
 
+    /// <summary>Original vocabulary/query acquisition and renderer bindings for offline derivation.</summary>
+    public SourceArtifactRef? CheckpointRef { get; private init; }
+
     internal LuxembourgFirstMountAcquisitionResult WithVocabularyCheckpoint(SourceArtifactRef reference) =>
         new(Run, Profile, VocabularyEvidenceRef, AknInventory, AknLegalContent, Refusal, Detail)
-            { VocabularyCheckpointRef = reference };
+            { VocabularyCheckpointRef = reference, CheckpointRef = CheckpointRef };
+
+    internal LuxembourgFirstMountAcquisitionResult WithCheckpoint(SourceArtifactRef reference) =>
+        new(Run, Profile, VocabularyEvidenceRef, AknInventory, AknLegalContent, Refusal, Detail)
+            { VocabularyCheckpointRef = VocabularyCheckpointRef, CheckpointRef = reference };
 
     public LuxembourgAknArticleInventoryPopulation? AknInventory { get; }
 
@@ -445,12 +456,29 @@ public sealed partial class LuxembourgFirstMountAcquisition
                 run, profile, vocabularyEvidenceRef).WithVocabularyCheckpoint(vocabularyCheckpoint);
         }
 
+        var unproven = run.FamilyOutcomes.FirstOrDefault(static family => family.Kind is not
+            (LuxembourgFamilyEnumerationOutcomeKind.Proven or LuxembourgFamilyEnumerationOutcomeKind.CoverProven));
+        if (unproven is not null)
+            return LuxembourgFirstMountAcquisitionResult.Refused(LuxembourgFirstMountAcquisitionRefusal.RunRefused,
+                $"Complete offline acquisition requires proven family {unproven.FamilyKey}; observed {unproven.Kind}.",
+                run, profile, vocabularyEvidenceRef).WithVocabularyCheckpoint(vocabularyCheckpoint);
+
         var inventory = await new LuxembourgAknArticleInventoryProducer(_custodyStore)
             .RunAsync(heldBodies, cancellationToken).ConfigureAwait(false);
         var legalContent = await new LuxembourgAknLegalContentProfileProducer(_custodyStore)
             .RunAsync(inventory, cancellationToken).ConfigureAwait(false);
-        return LuxembourgFirstMountAcquisitionResult.Success(run, profile, vocabularyEvidenceRef, inventory, legalContent)
+        var delivered = LuxembourgFirstMountAcquisitionResult.Success(run, profile, vocabularyEvidenceRef, inventory, legalContent)
             .WithVocabularyCheckpoint(vocabularyCheckpoint);
+        try
+        {
+            var checkpoint = await RetainAcquisitionCheckpointAsync(act, rendererSources, delivered, cancellationToken).ConfigureAwait(false);
+            return delivered.WithCheckpoint(checkpoint);
+        }
+        catch (Exception exception) when (exception is CustodyRequiredException or CustodyIntegrityException)
+        {
+            return LuxembourgFirstMountAcquisitionResult.Refused(LuxembourgFirstMountAcquisitionRefusal.AcquisitionCheckpointNotRetained,
+                exception.Message, run, profile, vocabularyEvidenceRef).WithVocabularyCheckpoint(vocabularyCheckpoint);
+        }
     }
 
     /// <summary>

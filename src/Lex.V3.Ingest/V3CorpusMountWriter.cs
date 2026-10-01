@@ -85,7 +85,7 @@ public static class V3CorpusMountWriter
         V3FirstMountBuildResult build,
         string directory,
         V3GenerationSource? generations,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken, DateTimeOffset? derivationInputUtc = null)
     {
         ArgumentNullException.ThrowIfNull(build);
         ArgumentException.ThrowIfNullOrWhiteSpace(directory);
@@ -127,7 +127,7 @@ public static class V3CorpusMountWriter
                     .ConfigureAwait(false);
                 kept = [];
             }
-            var report = RenderReport(build, written, kept);
+            var report = RenderReport(build, written, kept, derivationInputUtc);
             await File.WriteAllBytesAsync(reportTemporary, report, cancellationToken).ConfigureAwait(false);
             File.Move(reportTemporary, reportPath, overwrite: true);
             return new V3CorpusMountWrite(target, written, reportPath, Sha256(report));
@@ -258,11 +258,12 @@ public static class V3CorpusMountWriter
     private static byte[] RenderReport(
         V3FirstMountBuildResult build,
         IReadOnlyList<V3CorpusMountWrittenFile> written,
-        IReadOnlyList<V3RetainedGeneration> generations) =>
+        IReadOnlyList<V3RetainedGeneration> generations, DateTimeOffset? derivationInputUtc) =>
         JsonSerializer.SerializeToUtf8Bytes(new
         {
             schema = "lex-v3-first-mount-report/1",
-            writtenUtc = DateTimeOffset.UtcNow,
+            writtenUtc = derivationInputUtc is null ? DateTimeOffset.UtcNow : (DateTimeOffset?)null,
+            derivationInputUtc,
             corpus = Reference(build.Corpus!.ArtifactRef),
             luxembourgIndex = Reference(build.LuxembourgIndex!.IndexRef),
             luxembourgCapabilityManifest = Reference(build.LuxembourgIndex.CapabilityManifestRef),
