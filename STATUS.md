@@ -750,7 +750,7 @@ CI evidence are recorded in the pull request before merge.
 
 ## Heads
 
-- `v3/integration`: `a1752729` (2026-10-01, PR #840 merged). Build 45 s. Fast lane
+- `v3/integration`: `18b53941` (2026-10-01, PR #843 merged). Build 45 s. Fast lane
   (`eng/test-fast.ps1`): 3,077 tests, 3,076 pass, 1 skipped (the review of PR #828). Ingest suite: green on CI for PR #760
   (the CI `dotnet` job runs the whole solution on every pull request, about 7 min on the runner;
   green for PR #834);
@@ -1815,7 +1815,8 @@ request.
   thresholds, cases, the interval, the bound), the controls, the statistical rows "not yet
   labelled", and the negative-results register.
 - Since PR #833: served as JSON at `/evaluation-card.json` and beside the release assets, signed
-  through the release manifest. Not yet: the gates run over the real mounted corpus.
+  through the release manifest. Since PR #844, the release card is the gates run over the release's
+  own mount.
 
 **The search journey step passes (PR #773, run locally 2026-09-30).** `node scripts/journey.mjs`
 now runs two steps, each with and without the fixture mount, and all four runs pass.
@@ -2057,6 +2058,33 @@ all three gates pass at 1: anchor nDCG@10 (11 cases), no-hit accuracy (4) and re
 (3). The judgments control catches the shuffle. The real first mount has no case: all three gates
 are not measured and the control says why. A mutation, word judgments naming another anchor,
 drops nDCG@10 to 0.57 and fails. `TheGatesOverTheMountTheReleaseNames` now writes all three sets.
+
+The release card is the machine gates run over the release's own mount (PR #844), the last slice of
+ruling 2's gates over the real mounted corpus. The image rehearsal first runs
+`V3MountedGatesTests.TheGatesOverTheMountTheReleaseNames` over the mount it bakes:
+- `V3_EVALUATE_MOUNT` names the mount and `V3_EVALUATION_CARD_OUT` receives the card, built in its
+  own artifacts directory;
+- the card is checked by the page's own rules;
+- it is handed to the live build (the Trust and Coverage page renders it) and served at
+  `/evaluation-card.json`, and the release carries it beside the image under the signed manifest.
+A gate that fails fails the test, and so the rehearsal: no release goes out with a failing gate.
+`--platform-card` keeps the platform's fixture card.
+- On the real bounded first mount the card is the gates over that mount:
+  - the two temporal no-language arms have no case and are not measured, and their controls say why;
+  - the refusal set holds one request (coverage) and names every code the mount cannot produce;
+  - there is no retrieval case, and the page reads all of it (PR #841).
+  The image serves that card at `/evaluation-card.json`, byte for byte the release's. The image was
+  reproduced, the 8 probes passed and the release read back clean.
+- On the journey fixture mount, every gate passes and every control catches its shuffle:
+  - 4 temporal arms of 3 cases;
+  - 13 refusal requests;
+  - 15 retrieval cases, all three gates at 1.
+  The 8 probes verify 105 citations.
+- A mutation, one derived gold changed, fails the gates step, so the rehearsal stops before anything
+  is built, and its work directory is still removed. The first version computed the card before the
+  work directory's `try` and left it behind on such a failure.
+- The test platform takes `-m:1` and `-nodeReuse:false` for its own and then runs no test, so the
+  gates' `dotnet test` passes neither.
 
 Evaluation card (PR #769): `EvaluationCard` in `Lex.V3.Contracts.Evaluation` prints the machine
 gates as the card of `36-ideal-evaluation.md` section 6 describes, as far as the launch contract
@@ -2431,7 +2459,7 @@ has not yet run; the bounded first mount above is complete.
    is left of the launch contract's machine-gates line after that was "V2 absent from the image",
    which the image rehearsal now checks (PR #831, item 7). Ruling 2's gates over the real mounted
    corpus: PR #838 derives the temporal set from any mount, PR #839 the refusal set, PR #842 the
-   retrieval set; the release card over the rehearsal's mount follows.
+   retrieval set, and PR #844 makes the release card the gates run over the rehearsal's own mount.
 
 ## Owner rulings, 2026-09-30
 

@@ -4,7 +4,7 @@
 // release path; production signing, credentials and deployment stay with the owner).
 //
 //   node scripts/image-rehearsal.mjs --mount <a v3-corpus directory with its build-report.json, or the
-//     journey's fixture mount with its journey-mount.json> [--keep] [--no-reproduce] [--no-probe]
+//     journey's fixture mount with its journey-mount.json> [--keep] [--no-reproduce] [--no-probe] [--platform-card]
 //
 // The image is built without a container daemon, by the .NET SDK (`dotnet publish -t:PublishContainer`,
 // the base image pinned by digest in `Lex.V3.Api.csproj`), as an OCI image layout archive. Then:
@@ -18,6 +18,8 @@
 // The signature is the rehearsal's own: an ECDSA P-256 key made for the run and never kept, over a
 // signing payload in the shape container signatures use, naming the manifest digest and saying it is a
 // rehearsal. Verifying it checks the signature, the digest and that rehearsal label.
+// The evaluation card is the machine gates run over the mount the image carries (ruling 2), derived from the
+// mount by `V3MountedGatesTests` (`--platform-card` takes the platform's fixture card instead).
 // Last, the release assets are published into a versioned directory (the image, its signature, the
 // evaluation card the image serves at its stable route `/evaluation-card.json`, which the probes fetch, the mount's report, and a signed release manifest naming each by
 // hash), read back and verified (`release-assets.mjs`).
@@ -397,20 +399,50 @@ export async function mountReport(mountPath) {
   };
 }
 
+/**
+ * The evaluation card over the mount the image carries (ruling 2: the launch card carries machine gates run
+ * over the real mounted corpus): the temporal, refusal and retrieval sets derived from the mount
+ * (`V3MountedGatesTests`), run through the real handler and rendered as the card, built in its own artifacts
+ * directory. A gate that fails fails the test, and so the rehearsal.
+ */
+async function mountedCard({ mountPath, into, log }) {
+  log("running the machine gates over the mount (V3MountedGatesTests)");
+  const output = join(into, "mount-evaluation-card.json");
+  run("dotnet", ["test", join(repository, "tests", "Lex.V3.Ingest.Tests", "Lex.V3.Ingest.Tests.csproj"), "-c", "Release",
+    "-p:UseArtifactsOutput=true", `-p:ArtifactsPath=${join(into, "artifacts")}`,
+    // No -m:1 or -nodeReuse here: the test platform takes them for its own and then runs no test.
+    "--filter", "FullyQualifiedName~TheGatesOverTheMountTheReleaseNames", "-v", "q"],
+  { env: { ...process.env, V3_EVALUATE_MOUNT: mountPath, V3_EVALUATION_CARD_OUT: output } });
+  spawnSync("dotnet", ["build-server", "shutdown"], { encoding: "utf8" });
+  if (!existsSync(output)) throw new Error("the machine gates over the mount wrote no card");
+  return readFile(output);
+}
+
 /** The rehearsal, end to end. Returns its report; throws on the first step that fails. */
-export async function rehearse({ mount, keep = false, probe = true, reproduce = true, log = () => {} }) {
+export async function rehearse({ mount, keep = false, probe = true, reproduce = true, platformCard = false, log = () => {} }) {
   const mountPath = resolve(mount);
   const { kind: mountKind, report, bytes: mountBytes } = await mountReport(mountPath);
-  // The evaluation card the Trust and Coverage page carries, and the release beside it (ruling 2).
-  const card = JSON.parse(await readFile(join(repository, "schemas", "v3-platform", "evaluation-card.json"), "utf8"));
-  const { readEvaluationCard } = await import("./evaluation-card.mjs");
-  readEvaluationCard(card);
   const work = await mkdtemp(join(tmpdir(), "lex-image-rehearsal-"));
   const { sourceDate } = await import("./image-reproducible.mjs");
   const source = sourceDate();
   const result = { mount: mountPath, mountKind, corpusSha256: report.corpus?.Sha256 ?? null, source };
   let container = null;
   try {
+    // The evaluation card the Trust and Coverage page carries and the release carries beside the image: the machine
+    // gates run over this mount (ruling 2), or with `--platform-card` the platform's fixture card. Inside the try, so
+    // a gate that fails still has the work directory removed.
+    const cardBytes = platformCard
+      ? await readFile(join(repository, "schemas", "v3-platform", "evaluation-card.json"))
+      : await mountedCard({ mountPath, into: join(work, "gates"), log });
+    const card = JSON.parse(cardBytes.toString("utf8"));
+    const { readEvaluationCard } = await import("./evaluation-card.mjs");
+    const cardView = readEvaluationCard(card);
+    result.card = {
+      over: platformCard ? "the platform's fixture card" : "the machine gates over this mount",
+      target: card.target,
+      sets: cardView.sets.map((set) => ({ set: set.set, arm: set.arm, cases: set.cases, gates: set.gates.map((gate) => `${gate.gate}: ${gate.verdict}`) })),
+      controls: cardView.controls.map((control) => `${control.set}, ${control.arm}: ${control.verdict}`),
+    };
     const { webRoot, archive, image } = await buildImage({ into: join(work, "first"), mountPath, epoch: source.epoch, card, log });
     result.archiveBytes = (await stat(archive)).size;
 
@@ -525,10 +557,10 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
   const argv = process.argv.slice(2);
   const at = argv.indexOf("--mount");
   if (at < 0 || at + 1 >= argv.length) {
-    console.error("usage: node scripts/image-rehearsal.mjs --mount <v3-corpus directory or journey fixture mount> [--keep] [--no-reproduce] [--no-probe]");
+    console.error("usage: node scripts/image-rehearsal.mjs --mount <v3-corpus directory or journey fixture mount> [--keep] [--no-reproduce] [--no-probe] [--platform-card]");
     process.exit(2);
   }
-  rehearse({ mount: argv[at + 1], keep: argv.includes("--keep"), probe: !argv.includes("--no-probe"), reproduce: !argv.includes("--no-reproduce"), log: (line) => console.error(`- ${line}`) }).then(
+  rehearse({ mount: argv[at + 1], keep: argv.includes("--keep"), probe: !argv.includes("--no-probe"), reproduce: !argv.includes("--no-reproduce"), platformCard: argv.includes("--platform-card"), log: (line) => console.error(`- ${line}`) }).then(
     (result) => { console.log(JSON.stringify(result, null, 2)); },
     (error) => { console.error(error.message); process.exit(1); },
   );
