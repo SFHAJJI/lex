@@ -51,14 +51,13 @@ public sealed class ClosedVocabularyCensusTests
     [TestMethod]
     public void EveryClosedVocabularyInTheSweptAssembliesIsPinnedMemberByMember()
     {
-        CollectionAssert.AreEqual(
-            new[]
+        var expected = new[]
             {
                 "Lex.V3.Ingest.CorpusRecordOutcomeKind: Held, NotHeld, PendingAcquisition",
                 "Lex.V3.Ingest.CorpusRecordSetCompletionState: Complete, Partial",
                 "Lex.V3.Ingest.CorpusRecordSetReadRefusalKind: CustodyBytesNotRetained, "
                     + "CustodyUnavailable, RetainedBytesAreNotThisSet",
-                "Lex.V3.Ingest.CorpusRecordSetWriteRefusalKind: RecordSetNotRetained",
+                "Lex.V3.Ingest.CorpusRecordSetWriteRefusalKind: RecordSetNotRetained, RebuildIdentityDisagrees",
                 "Lex.V3.Ingest.Europe.EuAnnexEvidenceBinder+PageLabelState: Missing, Invalid, Valid",
                 "Lex.V3.Ingest.Europe.EuAnnexEvidenceBindingRefusal: None, ProfileDigestMismatch, "
                     + "ProfileInvalid, ProfileEvidenceMismatch, SourceEvidenceMissingOrAmbiguous, "
@@ -391,7 +390,10 @@ public sealed class ClosedVocabularyCensusTests
                     + "EnvelopeRefused, BodyCompositionRefused, PdfLayoutRefused, "
                     + "PdfTextLayerRefused, ProfileEnvelopeRefused, CorpusRefused, "
                     + "LuxembourgIndexRefused, EuropeIndexRefused, NotByteStable",
-            },
-            ClosedSurfaceCensus.ClosedVocabularies(CensusScope.SweptHere).ToArray());
+            };
+        var actual = ClosedSurfaceCensus.ClosedVocabularies(CensusScope.SweptHere).ToArray();
+        CollectionAssert.AreEqual(expected, actual,
+            "Removed or changed pins:\n" + string.Join("\n", expected.Except(actual, StringComparer.Ordinal)) +
+            "\nActual added or changed entries:\n" + string.Join("\n", actual.Except(expected, StringComparer.Ordinal)));
     }
 }
