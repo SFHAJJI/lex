@@ -1727,6 +1727,185 @@ public sealed class ScopeManifestContractTests
                 ExactResolver.For(profile, evidence, [other])));
     }
 
+    [TestMethod]
+    public void SourceSnapshotReadbackMatchesMaterializedAndStreamingWriters()
+    {
+        var profile = Profile();
+        var evidence = EvidenceArtifacts();
+        var inputs = Enumerable.Range(0, 100)
+            .Select(index => ValidInput(profile, Object($"source-replay-{index}")))
+            .OrderBy(input => ScopeManifestCanonicalWriter.ComputeObjectRefSha256(input.ObjectRef),
+                StringComparer.Ordinal).ToArray();
+        var resolver = ExactResolver.For(profile, evidence, inputs);
+        var bytes = CanonicalBytes(ScopeReducer.Reduce(profile, evidence,
+            inputs.Select(input => input.ObjectRef).ToArray(), inputs, resolver));
+        using var independentWrite = new MemoryStream();
+        var expected = ScopeManifestCanonicalWriter.WriteStreaming(independentWrite, profile,
+            evidence, inputs.Length, _ => inputs, resolver);
+        CollectionAssert.AreEqual(bytes, independentWrite.ToArray());
+        using var retained = new ShortReadStream(bytes);
+        var passes = 0;
+        var actual = VerifiedScopeManifest.VerifyStreamFromSnapshot(ArtifactRefFor(bytes), retained,
+            profile, evidence, inputs.Length, _ => { passes++; return inputs; }, resolver);
+        Assert.AreEqual(2, passes);
+        Assert.AreEqual(expected.ManifestSha256, actual.ManifestSha256);
+        Assert.AreEqual(expected.InputSequenceSha256, actual.InputSequenceSha256);
+        Assert.AreEqual(bytes.LongLength, actual.CanonicalByteCount);
+        Assert.AreEqual(inputs.Length, actual.ObjectCount);
+        Assert.IsTrue(retained.CanRead);
+        Assert.AreEqual(retained.Length, retained.Position);
+    }
+
+    [TestMethod]
+    public void SourceSnapshotReadbackChecksPinBeforeOpeningSource()
+    {
+        var profile = Profile();
+        var evidence = EvidenceArtifacts();
+        var input = ValidInput(profile, Object("replay-pin"));
+        var resolver = ExactResolver.For(profile, evidence, [input]);
+        var bytes = CanonicalBytes(ScopeReducer.Reduce(profile, evidence, [input.ObjectRef], [input], resolver));
+        using var retained = new ShortReadStream(bytes.Concat(new byte[] { (byte)' ' }).ToArray());
+        var opened = false;
+        var refusal = Assert.ThrowsExactly<ArgumentException>(() =>
+            VerifiedScopeManifest.VerifyStreamFromSnapshot(ArtifactRefFor(bytes), retained, profile,
+                evidence, 1, _ => { opened = true; return [input]; }, resolver));
+        Assert.IsFalse(opened);
+        StringAssert.Contains(refusal.Message, "do not match their artifact reference");
+    }
+
+    [TestMethod]
+    [DataRow("leading-space")]
+    [DataRow("trailing-space")]
+    [DataRow("invalid-utf8")]
+    [DataRow("truncated")]
+    public void SourceSnapshotReadbackRejectsSelfHashedInvalidBytes(string mutation)
+    {
+        var profile = Profile();
+        var evidence = EvidenceArtifacts();
+        var input = ValidInput(profile, Object("replay-invalid"));
+        var resolver = ExactResolver.For(profile, evidence, [input]);
+        var bytes = CanonicalBytes(ScopeReducer.Reduce(profile, evidence, [input.ObjectRef], [input], resolver));
+        var mutated = mutation switch
+        {
+            "leading-space" => new byte[] { (byte)' ' }.Concat(bytes).ToArray(),
+            "trailing-space" => bytes.Concat(new byte[] { (byte)' ' }).ToArray(),
+            "invalid-utf8" => bytes.Concat(new byte[] { 0xc3 }).ToArray(),
+            "truncated" => bytes[..^1],
+            _ => throw new InvalidOperationException()
+        };
+        using var retained = new ShortReadStream(mutated);
+        Assert.ThrowsExactly<ArgumentException>(() => VerifiedScopeManifest.VerifyStreamFromSnapshot(
+            ArtifactRefFor(mutated), retained, profile, evidence, 1, _ => [input], resolver));
+    }
+
+    [TestMethod]
+    public void SourceSnapshotReadbackRejectsCanonicalAccountingForgery()
+    {
+        var profile = Profile();
+        var evidence = EvidenceArtifacts();
+        var input = ValidInput(profile, Object("replay-accounting"));
+        var resolver = ExactResolver.For(profile, evidence, [input]);
+        var manifest = ScopeReducer.Reduce(profile, evidence, [input.ObjectRef], [input], resolver).Manifest;
+        var accounting = manifest.Accounting.ToArray();
+        var populated = Array.FindIndex(accounting, part => part.ObjectOrdinals.Count != 0);
+        Assert.IsGreaterThanOrEqualTo(0, populated);
+        accounting[populated] = new ScopeAccountingSet(accounting[populated].Axis,
+            accounting[populated].Disposition, []);
+        var forged = new ScopeManifest(manifest.Schema, manifest.Profile, manifest.CompleteEnumerationRef,
+            manifest.OrderedEvidenceArtifacts, manifest.ObservedObjects, manifest.Rows, accounting,
+            manifest.BodyCandidateOrdinals);
+        var bytes = BytesForUnverified(forged);
+        using var retained = new ShortReadStream(bytes);
+        Assert.ThrowsExactly<ArgumentException>(() => VerifiedScopeManifest.VerifyStreamFromSnapshot(
+            ArtifactRefFor(bytes), retained, profile, evidence, 1, _ => [input], resolver));
+    }
+
+    [TestMethod]
+    public void SourceSnapshotReadbackRejectsSubstitutionEvenWhenReplacementEvidenceIsAdmitted()
+    {
+        var profile = Profile();
+        var evidence = EvidenceArtifacts();
+        var a = ValidInput(profile, Object("replay-original"));
+        var b = ValidInput(profile, Object("replay-replaced"));
+        var resolverA = ExactResolver.For(profile, evidence, [a]);
+        var resolverB = ExactResolver.For(profile, evidence, [b]);
+        var bytesA = CanonicalBytes(ScopeReducer.Reduce(profile, evidence, [a.ObjectRef], [a], resolverA));
+        var bytesB = CanonicalBytes(ScopeReducer.Reduce(profile, evidence, [b.ObjectRef], [b], resolverB));
+        using var retained = new ShortReadStream(bytesA, bytesB);
+        var refusal = Assert.ThrowsExactly<ArgumentException>(() => VerifiedScopeManifest.VerifyStreamFromSnapshot(
+            ArtifactRefFor(bytesA), retained, profile, evidence, 1, _ => [b], resolverB));
+        StringAssert.Contains(refusal.Message, "changed between verification passes");
+    }
+
+    [TestMethod]
+    public void SourceSnapshotReadbackRequiresFreshEnumerationAndSelectorAdmission()
+    {
+        var profile = Profile();
+        var evidence = EvidenceArtifacts();
+        var input = ValidInput(profile, Object("replay-admitted"));
+        var other = ValidInput(profile, Object("replay-other"));
+        var resolver = ExactResolver.For(profile, evidence, [input]);
+        var bytes = CanonicalBytes(ScopeReducer.Reduce(profile, evidence, [input.ObjectRef], [input], resolver));
+        foreach (var untrusted in new IScopeReductionEvidenceResolver[]
+        {
+            ExactResolver.For(profile, evidence, [other]),
+            new CompleteEnumerationRefusingResolver(resolver.CompleteEnumerationRef)
+        })
+        {
+            using var retained = new ShortReadStream(bytes);
+            Assert.ThrowsExactly<InvalidOperationException>(() => VerifiedScopeManifest.VerifyStreamFromSnapshot(
+                ArtifactRefFor(bytes), retained, profile, evidence, 1, _ => [input], untrusted));
+        }
+    }
+
+    [TestMethod]
+    public void SourceSnapshotReadbackRejectsMissingExtraReorderedAndChangingInputs()
+    {
+        var profile = Profile();
+        var evidence = EvidenceArtifacts();
+        var inputs = new[] { ValidInput(profile, Object("replay-1")), ValidInput(profile, Object("replay-2")) }
+            .OrderBy(input => ScopeManifestCanonicalWriter.ComputeObjectRefSha256(input.ObjectRef),
+                StringComparer.Ordinal).ToArray();
+        var resolver = ExactResolver.For(profile, evidence, inputs);
+        var bytes = CanonicalBytes(ScopeReducer.Reduce(profile, evidence,
+            inputs.Select(input => input.ObjectRef).ToArray(), inputs, resolver));
+        foreach (var source in new[] { inputs[..1], inputs.Concat(inputs[..1]).ToArray(), inputs.Reverse().ToArray() })
+        {
+            using var retained = new ShortReadStream(bytes);
+            Assert.ThrowsExactly<InvalidOperationException>(() => VerifiedScopeManifest.VerifyStreamFromSnapshot(
+                ArtifactRefFor(bytes), retained, profile, evidence, 2, _ => source, resolver));
+        }
+        using var changing = new ShortReadStream(bytes);
+        var pass = 0;
+        Assert.ThrowsExactly<InvalidOperationException>(() => VerifiedScopeManifest.VerifyStreamFromSnapshot(
+            ArtifactRefFor(bytes), changing, profile, evidence, 2,
+            _ => ++pass == 1 ? inputs : inputs[..1], resolver));
+    }
+
+    [TestMethod]
+    public void SourceSnapshotReadbackHonorsCancellationAndStreamPosition()
+    {
+        var profile = Profile();
+        var evidence = EvidenceArtifacts();
+        var input = ValidInput(profile, Object("replay-cancel"));
+        var resolver = ExactResolver.For(profile, evidence, [input]);
+        var bytes = CanonicalBytes(ScopeReducer.Reduce(profile, evidence, [input.ObjectRef], [input], resolver));
+        using var retained = new MemoryStream(bytes, writable: false);
+        using var cancelled = new CancellationTokenSource();
+        cancelled.Cancel();
+        Assert.ThrowsExactly<OperationCanceledException>(() => VerifiedScopeManifest.VerifyStreamFromSnapshot(
+            ArtifactRefFor(bytes), retained, profile, evidence, 1, _ => [input], resolver, cancelled.Token));
+        Assert.AreEqual(0L, retained.Position);
+        retained.Position = 1;
+        Assert.ThrowsExactly<ArgumentException>(() => VerifiedScopeManifest.VerifyStreamFromSnapshot(
+            ArtifactRefFor(bytes), retained, profile, evidence, 1, _ => [input], resolver));
+        retained.Position = 0;
+        using var duringReplay = new CancellationTokenSource();
+        Assert.ThrowsExactly<OperationCanceledException>(() => VerifiedScopeManifest.VerifyStreamFromSnapshot(
+            ArtifactRefFor(bytes), retained, profile, evidence, 1,
+            _ => { duringReplay.Cancel(); return [input]; }, resolver, duringReplay.Token));
+    }
+
     private sealed class ShortReadStream(byte[] initial, byte[]? replacement = null) : Stream
     {
         private MemoryStream _inner = new(initial, writable: false);

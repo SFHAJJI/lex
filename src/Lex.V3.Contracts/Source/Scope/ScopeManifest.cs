@@ -998,6 +998,56 @@ public sealed class VerifiedScopeManifest
         return VerifyCanonicalReadback(artifactRef, canonicalStream, verified);
     }
 
+    /// <summary>
+    /// Checks a retained canonical manifest by independently replaying its source inputs through
+    /// the streaming reducer and writer. The input factory and evidence resolver must come from
+    /// the original source evidence, never from the manifest being checked. No materialized
+    /// manifest is required or returned. The receipt binds the compared bytes and input sequence;
+    /// downstream readers still need their own checked representation.
+    /// </summary>
+    /// <remarks>
+    /// Requires a readable, seekable stream at position zero and leaves it open. The complete
+    /// pinned digest and UTF-8 are checked before opening the source snapshot. Both source passes
+    /// then run the existing writer's enumeration, admission, ordering, reduction and accounting
+    /// checks, with exact byte comparison and a final digest check. A different document observed
+    /// during comparison refuses even if its source evidence is admitted. The receipt does not
+    /// lock the caller's stream against later writes. Working storage is the writer's five-byte projection
+    /// per object, evidence table and current input; caller factories/resolvers may retain more.
+    /// Cancellation is checked before and after the initial digest scan and during source replay.
+    /// </remarks>
+    public static ScopeManifestWriteReceipt VerifyStreamFromSnapshot(
+        SourceArtifactRef artifactRef,
+        Stream canonicalStream,
+        ScopeProfileBinding profile,
+        IReadOnlyList<SourceArtifactRef> orderedEvidenceArtifacts,
+        int expectedObjectCount,
+        OpenCanonicalScopePass openCanonicalSnapshot,
+        IScopeReductionEvidenceResolver observationResolver,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(artifactRef);
+        ArgumentNullException.ThrowIfNull(canonicalStream);
+        ArgumentNullException.ThrowIfNull(profile);
+        ArgumentNullException.ThrowIfNull(orderedEvidenceArtifacts);
+        ArgumentNullException.ThrowIfNull(openCanonicalSnapshot);
+        ArgumentNullException.ThrowIfNull(observationResolver);
+        cancellationToken.ThrowIfCancellationRequested();
+        ValidateStreamDigest(artifactRef, canonicalStream);
+        cancellationToken.ThrowIfCancellationRequested();
+
+        canonicalStream.Position = 0;
+        using var comparison = new CanonicalComparisonStream(canonicalStream);
+        var receipt = ScopeManifestCanonicalWriter.WriteStreaming(
+            comparison, profile, orderedEvidenceArtifacts, expectedObjectCount,
+            openCanonicalSnapshot, observationResolver, cancellationToken);
+        comparison.RequireEnd();
+        if (!string.Equals(receipt.ManifestSha256, artifactRef.Sha256, StringComparison.Ordinal))
+            throw new ArgumentException("The scope manifest changed between verification passes.",
+                nameof(canonicalStream));
+        cancellationToken.ThrowIfCancellationRequested();
+        return receipt;
+    }
+
     private static void ValidateStreamDigest(SourceArtifactRef artifactRef, Stream canonicalStream)
     {
         if (!canonicalStream.CanRead || !canonicalStream.CanSeek || canonicalStream.Position != 0)

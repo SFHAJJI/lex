@@ -3,6 +3,22 @@
 Updated 2026-10-01 by the driver. This file replaces the issue-comment ledgers. It is rewritten in
 every pull request that changes what is served, what is next or what is blocked.
 
+## Streaming scope verification from source inputs (Codex, 2026-10-01)
+
+Reversible driver decision: independently replay canonical scope inputs through the existing
+streaming reducer/writer and compare them with retained custody bytes. This checks the complete
+pinned byte sequence without materializing a second scope graph. The new verification method
+returns the existing receipt after digest, UTF-8, exact byte comparison, both source passes and
+all writer admission/accounting checks succeed. Its source factory and evidence resolver must
+come from original source evidence; deriving them from the manifest would be circular.
+
+The draft tests cover parity with both existing writers, short reads, pinned and self-hashed
+mutations, canonical accounting forgery, admitted replacement between passes, fresh admission,
+input count/order/pass drift and cancellation. Local checks and cross-family review are pending.
+The method retains the writer's five-byte-per-object projection and evidence table; caller inputs
+may retain more. It does not yet connect the production LU adapter or provide a downstream
+bounded manifest view. Full population fit is still unproven.
+
 ## EU escaped qualifier authority (Codex, 2026-10-01)
 
 EU retry 5 at C:/lex-v3/eu-population-20261001-3 ended at 03:08 UTC with exit 3 after
