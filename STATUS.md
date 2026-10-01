@@ -1144,7 +1144,7 @@ CI evidence are recorded in the pull request before merge.
 
 ## Heads
 
-- `v3/integration`: `d623bd51` (2026-10-01, PR #900 merged). Build 45 s. Fast lane
+- `v3/integration`: `48422a0f` (2026-10-01, PR #891 merged). Build 45 s. Fast lane
   (`eng/test-fast.ps1`): 3,077 tests, 3,076 pass, 1 skipped (the review of PR #828). Ingest suite: green on CI for PR #760
   (the CI `dotnet` job runs the whole solution on every pull request, about 7 min on the runner;
   green for PR #834);
@@ -3517,6 +3517,22 @@ recorded by PR #862:
    those stay with the owner.
 4. Standing: the real-mount journeys and gates on every new mount the data lane builds, and a
    review of the data lane's pull requests that touch the API when asked.
+   - 2026-10-01 (PR #893): the two data-lane mounts newer than the real bounded first mount. Both
+     are schema 6, and #878 serves them again.
+     - Mounts:
+       - `C:\lex-v3\eu-three-seed-retry-20260930-1\v3-corpus`: 58 members; its EU index holds the
+         SFDR, 32019R2088;
+       - `C:\lex-v3\bounded-en-fr-canary-20260930-1\v3-corpus`: 18 members; the GDPR in English and
+         French.
+     - The mounted gates (`V3MountedGatesTests`) and the EU permalink check pass 21 of 21 on each,
+       and on the first mount.
+     - The EU permalink check searched the GDPR in English, which only some mounts hold. It now takes
+       a work, its language and a word from the named mount's own EU index, and verifies every hit's
+       permalink in that language. On the three-seed mount that is a French SFDR search.
+     - The real-mount journey (`journey.mjs --real-mount --served-by-api`):
+       - three-seed mount: 10 of 10 steps pass. Coverage and radar answer, and the other screens
+         show their refusal cards; the two EU steps ask for the GDPR, which this mount does not hold;
+       - canary mount: 10 of 10 steps pass; coverage and radar answer, the Luxembourg screens show their refusal cards, EU search answers with 61 citations verified, and EU dossier with 2, one per held expression (English and French).
 
 1. Data lane (Codex, Decision 95): bounded first mount and real-data resolve completed above.
    Finish PR #786 and population PR #785, then continue the population work below.
