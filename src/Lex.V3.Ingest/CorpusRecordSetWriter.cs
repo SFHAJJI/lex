@@ -265,7 +265,7 @@ public static class CorpusRecordBuilder
     }
 }
 
-/// <summary>Why <see cref="CorpusRecordSetWriter.WriteAsync"/> refused to complete a run. Closed at one.</summary>
+/// <summary>Why the corpus writer refused to complete an acquisition or rebuild.</summary>
 public enum CorpusRecordSetWriteRefusalKind
 {
     /// <summary>
@@ -278,10 +278,13 @@ public enum CorpusRecordSetWriteRefusalKind
     /// removed that condition, because a record set held without an enforced floor is recorded with
     /// the class it observed and the run continues. This member is RE-CONDITIONED rather than
     /// removed: a genuine custody failure really can happen at this point, and it used to escape
-    /// <c>WriteAsync</c> as an exception instead of being stated. Still closed at one, and the one
-    /// now means something that can actually go wrong.
+    /// <c>WriteAsync</c> as an exception instead of being stated. This member remains the custody failure and
+    /// rebuild identity disagreement is a separate refusal.
     /// </remarks>
     RecordSetNotRetained = 1,
+
+    /// <summary>The newly derived canonical records differ from the required original set identity.</summary>
+    RebuildIdentityDisagrees = 2,
 }
 
 public sealed record CorpusRecordSetWriteRefusal(CorpusRecordSetWriteRefusalKind Kind, string Detail);
@@ -395,22 +398,47 @@ public sealed class CorpusRecordSetWriter
         _custodyStore = custodyStore ?? throw new ArgumentNullException(nameof(custodyStore));
     }
 
-    public async Task<CorpusRecordSetWriteResult> WriteAsync(
+    public Task<CorpusRecordSetWriteResult> WriteAsync(
         ScopeManifest manifest,
         SourceArtifactRef manifestRef,
         SourceArtifactRef runIdentity,
         IReadOnlyDictionary<int, CorpusAcquisitionOutcome>? acquisitionOutcomesByOrdinal,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken) =>
+        WriteCoreAsync(manifest, manifestRef, runIdentity, acquisitionOutcomesByOrdinal, null, cancellationToken);
+
+    /// <summary>
+    /// Rebuilds from checked acquisition inputs, preserving the required original set reference only
+    /// if the newly derived canonical digest agrees. This does not restore the acquisition itself.
+    /// </summary>
+    internal Task<CorpusRecordSetWriteResult> RebuildAsync(
+        ScopeManifest manifest, SourceArtifactRef manifestRef, SourceArtifactRef runIdentity,
+        IReadOnlyDictionary<int, CorpusAcquisitionOutcome>? acquisitionOutcomesByOrdinal,
+        SourceArtifactRef originalSetRef, CancellationToken cancellationToken)
     {
+        ArgumentNullException.ThrowIfNull(originalSetRef);
+        return WriteCoreAsync(manifest, manifestRef, runIdentity, acquisitionOutcomesByOrdinal, originalSetRef, cancellationToken);
+    }
+
+    private async Task<CorpusRecordSetWriteResult> WriteCoreAsync(
+        ScopeManifest manifest, SourceArtifactRef manifestRef, SourceArtifactRef runIdentity,
+        IReadOnlyDictionary<int, CorpusAcquisitionOutcome>? acquisitionOutcomesByOrdinal,
+        SourceArtifactRef? originalSetRef, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
         var records = CorpusRecordBuilder.BuildRecords(
             manifest, manifestRef, runIdentity, acquisitionOutcomesByOrdinal);
         var completion = BuildCompletion(manifest, records);
 
         var set = new CorpusRecordSet(CorpusRecordSetSchemaIds.Set, manifestRef, runIdentity, records);
+        string? measuredSha256 = null;
         var byteLength = ChunkedDerivedArtifact.MeasureCanonicalBytes(
-            output => CorpusRecordSetCanonicalWriter.Write(output, set), cancellationToken);
+            output => measuredSha256 = CorpusRecordSetCanonicalWriter.Write(output, set), cancellationToken);
+        if (originalSetRef is not null && originalSetRef.Sha256 != measuredSha256)
+            return CorpusRecordSetWriteResult.Refused(new CorpusRecordSetWriteRefusal(
+                CorpusRecordSetWriteRefusalKind.RebuildIdentityDisagrees,
+                "Newly derived corpus records differ from the original set identity; no artifact was written."));
         if (byteLength > ChunkedDerivedArtifact.ChunkSize)
-            return await WriteChunkedAsync(set, completion, byteLength, cancellationToken).ConfigureAwait(false);
+            return await WriteChunkedAsync(set, completion, byteLength, originalSetRef, cancellationToken).ConfigureAwait(false);
 
         using var buffer = new MemoryStream();
         var setCanonicalSha256 = CorpusRecordSetCanonicalWriter.Write(buffer, set);
@@ -448,7 +476,7 @@ public sealed class CorpusRecordSetWriter
                 _custodyStore, writeReceipt.Reference.ContentSha256, cancellationToken)
             .ConfigureAwait(false);
 
-        var setArtifactRef = new SourceArtifactRef($"urn:uuid:{Guid.NewGuid():D}", setCanonicalSha256);
+        var setArtifactRef = originalSetRef ?? new SourceArtifactRef($"urn:uuid:{Guid.NewGuid():D}", setCanonicalSha256);
         using var readback = MemoryMarshal.TryGetArray(reopenedBytes, out var retainedBuffer)
             ? new MemoryStream(retainedBuffer.Array!, retainedBuffer.Offset, retainedBuffer.Count, writable: false)
             : new MemoryStream(reopenedBytes.ToArray(), writable: false);
@@ -463,7 +491,7 @@ public sealed class CorpusRecordSetWriter
     }
 
     private async Task<CorpusRecordSetWriteResult> WriteChunkedAsync(
-        CorpusRecordSet set, CorpusRecordSetCompletion completion, long byteLength,
+        CorpusRecordSet set, CorpusRecordSetCompletion completion, long byteLength, SourceArtifactRef? originalSetRef,
         CancellationToken cancellationToken)
     {
         try
@@ -482,7 +510,7 @@ public sealed class CorpusRecordSetWriter
                 rootReceipt.Reference.ContentSha256, ChunkedKind, cancellationToken).ConfigureAwait(false);
             if (artifact.ByteLength != byteLength)
                 throw new CustodyIntegrityException("Corpus serialization changed after byte sizing.");
-            var reference = new SourceArtifactRef($"urn:uuid:{Guid.NewGuid():D}", artifact.CanonicalSha256);
+            var reference = originalSetRef ?? new SourceArtifactRef($"urn:uuid:{Guid.NewGuid():D}", artifact.CanonicalSha256);
             using var readback = artifact.OpenRead();
             var verified = VerifiedCorpusRecordSet.ParseAndVerifyStream(reference, readback);
             return CorpusRecordSetWriteResult.Written(reference, rootReceipt, verified, completion, floor);
