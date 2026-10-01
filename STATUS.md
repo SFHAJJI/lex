@@ -974,7 +974,7 @@ CI evidence are recorded in the pull request before merge.
 
 ## Heads
 
-- `v3/integration`: `2668e16b` (2026-10-01, PR #871 merged). Build 45 s. Fast lane
+- `v3/integration`: `34a9573d` (2026-10-01, PR #874 merged). Build 45 s. Fast lane
   (`eng/test-fast.ps1`): 3,077 tests, 3,076 pass, 1 skipped (the review of PR #828). Ingest suite: green on CI for PR #760
   (the CI `dotnet` job runs the whole solution on every pull request, about 7 min on the runner;
   green for PR #834);
@@ -2380,6 +2380,50 @@ Predecessor chaining, the fifth slice, second part (PR #874): `as_observed` by b
   #867).
 - The registry digest moves with the new request schema, to `c40e23fd…`.
 
+Schema 6 served with its build record absent (PR #878).
+- **The gap.** Since #864 the reader read only the newest schema. So the API refused every Luxembourg
+  index of schema 6 ("the schema differs from the exact terminal schema"). Two such indexes exist:
+  - the data lane's running EU population, frozen at `6eb1d9d9`;
+  - the real bounded first mount, which the web lane's journeys and release rehearsal used.
+
+  The data lane raised it (Q-20261001-0656-codex). CI did not catch it, because the image rehearsal
+  job is skipped there.
+- **The panel's answer**, on the owner's behalf: the web lane adds exact schema-6 read validation for
+  serving.
+  - The new observation and log evidence is explicitly absent, and the operations that need it
+    refuse with their typed codes.
+  - `LuxembourgIndexPredecessor.TryRead` keeps refusing schema 6.
+  - No log stamp and no observation time is invented.
+  - The data lane does not edit these files. Its next step is "acquire once, derive many", so a
+    schema change no longer forces re-acquisition.
+- **What the reader accepts**, by `user_version`, exactly two schemas: 8, and 6.
+  - Schema 6's tables are schema 8's but for the event log: one `events` table of `first_sighting`
+    only, unique per state, with no `observations` and no `log_stamp`.
+  - Any other version refuses, and so do tables that are not exactly that version's.
+  - The DDL is now the shared tables plus each version's event log. It is byte for byte the same,
+    and the fixed-input pin holds.
+- **A schema-6 index is checked as schema 6 checked it**:
+  - its log is exactly its states' genesis log as schema 6 wrote it (state digests only);
+  - its stamp names schema 6;
+  - its logical rows match their stamp.
+- **What a schema-6 mount answers:**
+  - the reader reports `SchemaIdentity`, and `RecordsBuilds` is false;
+  - `events` serves its genesis log with `log.built_at` null, a `legacy_note` and a `build_record`
+    not-held row. Its genesis and silence notes and its upstream-health row are schema 6's own, and
+    claim no build time (review of #878);
+  - `as_observed` refuses `snapshot_unknown`, saying the index names no snapshot;
+  - `coverage`'s build-time row says the index records no build time either;
+  - the corpus check holds only the binding: no source bodies or build time are held to check.
+- **Fixtures:** the real bounded first mount's Luxembourg index, manifest and corpus, byte for byte
+  the files its build report names (`c7f40548…`, `ef03cacd…`, `312d4804…`).
+  - The mount opens and is served with its build record absent.
+  - A schema-6 index with states (the state fixture rewritten into schema 6's tables) serves its
+    genesis log, `as_of` answers, and `as_observed` refuses.
+  - Seven tampers are refused, among them schema 6's tables under `user_version` 7 or 8, an
+    observations table, a stamp naming schema 8, and schema 8's tables under `user_version` 6.
+- **The whole ingest suite also ran with `V3_EVALUATE_MOUNT` naming the real mount**, so its
+  real-mount gates ran on it.
+
 The live export composer and its journey step (PR #789), the eighth screen. `dist-live/export.html`
 has its own bundle `client-live-export.js`.
 - The page asks what the reading page asks: the same form (`ReadingForm`, now shared), the same one
@@ -3366,7 +3410,8 @@ Repair fast lane: 3,065 pass / 1 Windows skip; repair build: zero warnings/error
 
 - The bounded real mount is available at
   `C:\lex-v3\first-mount-decision95-restart-20260930\v3-corpus`; the web lane's journeys run on it
-  (PR #815). The machine gates derive their cases from any mount (PRs #838, #839, #842, #845, #846)
+  (PR #815). Its Luxembourg index is schema 6. The reader refused it from #864 until PR #878, which
+  serves it with its build record absent. The machine gates derive their cases from any mount (PRs #838, #839, #842, #845, #846)
   and the release card is the gates run over the rehearsal's mount (PR #844). The real mount holds
   no Luxembourg state yet, so its temporal set is not measured, and it will be once the data lane's
   full populations land.

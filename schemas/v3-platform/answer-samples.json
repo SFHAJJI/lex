@@ -3669,6 +3669,7 @@
         ],
         "genesis_note": "this log comes from one observation with no predecessor, so it holds only first_sighting; first_sighting means first present in this log and does not say when the publisher published the text or when it was fetched; observed_from is null because no observation time is held; log.built_at is when the build ran, an upper bound on when its corpus was observed and never an observation time; a revision (validity_revised, interval_closed, file_replaced, withdrawn_from_source, ...) needs a later build compared against this one",
         "has_more": false,
+        "legacy_note": null,
         "log": {
           "ancestors": [],
           "basis": "genesis",
