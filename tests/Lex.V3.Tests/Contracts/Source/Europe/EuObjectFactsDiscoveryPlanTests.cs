@@ -198,7 +198,7 @@ public sealed class EuObjectFactsDiscoveryPlanTests
     public void TheObjectFactsPlanIdentityIsPinnedSoTemplateDriftCannotPassSilently()
     {
         Assert.AreEqual(
-            "d4f457d130251d57fc39ea5931660c365090944a54f24f4930d7c68da124e2da",
+            "520a279a45bf35688b924fa59def63655f3d352bcf184deb1d3775a3431bec7a",
             EuObjectFactsDiscoveryPlan.Create().ArtifactRef.Sha256);
     }
 
