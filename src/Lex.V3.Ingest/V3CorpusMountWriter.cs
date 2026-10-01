@@ -234,7 +234,14 @@ public static class V3CorpusMountWriter
             generations = generations.Select(static kept => new { indexSha256 = kept.IndexSha256, observation = kept.Observation, builtAt = kept.BuiltAt, reasons = kept.Reasons }).ToArray(),
         }, new JsonSerializerOptions { WriteIndented = true });
 
-    public static async Task<V3CorpusMountVerification> VerifyAsync(string directory, CancellationToken cancellationToken)
+    public static Task<V3CorpusMountVerification> VerifyAsync(string directory, CancellationToken cancellationToken) =>
+        VerifyAsync(directory, asGeneration: false, cancellationToken);
+
+    /// <summary>
+    /// A directory verified as a mount, or as a generation: a generation is an earlier build kept beside a mount, its own
+    /// earlier builds recorded by the mount that keeps it, so it holds no generations of its own and is not asked for them.
+    /// </summary>
+    private static async Task<V3CorpusMountVerification> VerifyAsync(string directory, bool asGeneration, CancellationToken cancellationToken)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(directory);
         try
@@ -266,7 +273,7 @@ public static class V3CorpusMountWriter
                     Path.Combine(directory, V3FirstMountBuildResult.EuropeIndexFileName), europeManifest, corpus.ArtifactRef,
                     cancellationToken)
                 .ConfigureAwait(false);
-            if (await VerifyGenerationsAsync(directory, luxembourg, cancellationToken).ConfigureAwait(false) is { } generationFailure)
+            if (!asGeneration && await VerifyGenerationsAsync(directory, luxembourg, cancellationToken).ConfigureAwait(false) is { } generationFailure)
             {
                 return new V3CorpusMountVerification(false, generationFailure, corpus.ArtifactRef);
             }
@@ -293,12 +300,16 @@ public static class V3CorpusMountWriter
         CancellationToken cancellationToken)
     {
         var root = Path.Combine(directory, GenerationsDirectoryName);
+        var log = mounted.ResolveObservations();
         if (!Directory.Exists(root))
         {
-            return null;
+            // A genesis log has no earlier build; a chained one must say what became of each (review of #880): without the
+            // record, a mount whose generations were all removed would verify as one that never had any.
+            return log.Count > 1
+                ? $"the mounted log records {log.Count - 1} earlier build(s) and the mount holds no {GenerationsDirectoryName}/{RetentionFileName} saying what became of them"
+                : null;
         }
 
-        var log = mounted.ResolveObservations();
         var mountedLog = LuxembourgIndexPredecessor.TryRead(
                 mounted.IndexRef,
                 await File.ReadAllBytesAsync(Path.Combine(directory, V3FirstMountBuildResult.LuxembourgIndexFileName), cancellationToken).ConfigureAwait(false),
@@ -325,7 +336,7 @@ public static class V3CorpusMountWriter
                 return $"generation {name} does not hold exactly a generation's files";
             }
 
-            var verified = await VerifyAsync(path, cancellationToken).ConfigureAwait(false);
+            var verified = await VerifyAsync(path, asGeneration: true, cancellationToken).ConfigureAwait(false);
             if (!verified.Verified)
             {
                 return $"generation {name} does not verify: {verified.Detail}";
@@ -350,10 +361,21 @@ public static class V3CorpusMountWriter
             }
         }
 
-        using var record = JsonDocument.Parse(await File.ReadAllBytesAsync(Path.Combine(root, RetentionFileName), cancellationToken).ConfigureAwait(false));
-        var referenced = record.RootElement.GetProperty("referenced").EnumerateArray().Select(static value => value.GetString()!).ToHashSet(StringComparer.Ordinal);
-        var decision = V3GenerationRetention.Decide(log, held, referenced);
+        // The line decided over the generations the writer could copy: those it kept, which are held here, and those it
+        // dropped, which are not (review of #880: deciding over the held ones alone would call a dropped nightly absent). A
+        // generation the record calls dropped must have no directory, and the record must be exactly the decision.
         var recorded = await File.ReadAllBytesAsync(Path.Combine(root, RetentionFileName), cancellationToken).ConfigureAwait(false);
+        using var record = JsonDocument.Parse(recorded);
+        var referenced = record.RootElement.GetProperty("referenced").EnumerateArray().Select(static value => value.GetString()!).ToHashSet(StringComparer.Ordinal);
+        var dropped = record.RootElement.GetProperty("dropped").EnumerateArray()
+            .Select(static value => value.GetProperty("index_sha256").GetString()!)
+            .ToHashSet(StringComparer.Ordinal);
+        if (dropped.Overlaps(held))
+        {
+            return $"{RetentionFileName} calls a generation dropped that the mount holds";
+        }
+
+        var decision = V3GenerationRetention.Decide(log, held.Union(dropped).ToHashSet(StringComparer.Ordinal), referenced);
         if (!held.SetEquals(decision.Retained.Select(static kept => kept.IndexSha256)) ||
             !RenderRetention(decision, referenced).SequenceEqual(recorded))
         {

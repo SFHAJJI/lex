@@ -2456,14 +2456,23 @@ generations, by the retention line (G3b).
   - it holds exactly a generation's six files and is itself a mount that verifies;
   - its Luxembourg index is that digest, and its corpus the one its observation names;
   - its log is the mounted log up to its observation;
-  - `retention.json` is the line's decision from the generations held and the references recorded.
+  - `retention.json` is the line's decision over the generations the writer could copy: those it
+    kept, held here, and those it recorded as dropped, which have no directory;
+  - a chained mount must hold `generations/retention.json`, even when it keeps no generation, so a
+    mount whose generations were all removed does not verify as one that never had any. A
+    generation is verified as a generation: its own earlier builds are its mount's to record.
+  - The review of #880 found both gaps. With only the held generations as input, a correctly dropped
+    nightly read as absent and the writer's record was refused; and a chained mount with
+    `generations/` deleted verified.
 - **Tests:**
   - three real first-mount builds on three days, each chained to the last: the third keeps the
     first (its day's last, and October's keeper) and the second (nightly), copied byte for byte,
     and verifies;
-  - four ways a generation can be wrong are refused: a missing file, a directory that is no earlier
-    build, another build's files under a generation's name, and a retention record the line did not
-    decide;
+  - a fourth build 120 days after the first keeps only October's keeper and records the two
+    nightlies, now past 90 days, as dropped; it verifies;
+  - five ways a generation can be wrong are refused: a missing file, a directory that is no earlier
+    build, another build's files under a generation's name, no `generations/` at all, and a
+    retention record the line did not decide;
   - the policy's own tests cover the 90-day edge, a referenced old build, an absent one, and an
     earlier build of the mounted build's day.
 - **Not yet:** the API reads no generation. Next come the mount's own checks of them at open, the

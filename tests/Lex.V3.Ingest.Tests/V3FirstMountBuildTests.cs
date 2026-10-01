@@ -183,12 +183,13 @@ public sealed class V3FirstMountBuildTests
         {
             var directories = new List<string>();
             var day = new DateTimeOffset(2026, 10, 1, 8, 0, 0, TimeSpan.Zero);
-            for (var build = 0; build < 3; build++)
+            var days = new[] { 0, 1, 2, 120 };
+            for (var build = 0; build < days.Length; build++)
             {
                 var predecessor = build == 0
                     ? null
                     : V3FirstMountBuild.ReadPredecessor(directories[^1], out var refusal, out var detail) ?? throw new AssertFailedException($"{refusal}: {detail}");
-                var result = await new V3FirstMountBuild(store, new FrozenClock(day.AddDays(build))).RunAsync(europe, luxembourg, predecessor, CancellationToken.None);
+                var result = await new V3FirstMountBuild(store, new FrozenClock(day.AddDays(days[build]))).RunAsync(europe, luxembourg, predecessor, CancellationToken.None);
                 Assert.IsTrue(result.Delivered, $"{result.Refusal}: {result.Detail}");
                 var directory = Path.Combine(root, $"build-{build + 1}");
                 await V3CorpusMountWriter.WriteAsync(
@@ -226,6 +227,20 @@ public sealed class V3FirstMountBuildTests
                 CollectionAssert.AreEqual(new[] { "nightly" }, kept[1].GetProperty("reasons").EnumerateArray().Select(static r => r.GetString()).ToArray());
             }
 
+            // The fourth build, 120 days after the first (review of #880): the line keeps October's keeper and drops the two
+            // nightlies, now older than 90 days; the dropped ones are not copied, the record says so, and the mount verifies.
+            var fourth = directories[3];
+            CollectionAssert.AreEqual(
+                new[] { IndexOf(directories[0]) },
+                Directory.GetDirectories(Path.Combine(fourth, V3CorpusMountWriter.GenerationsDirectoryName)).Select(Path.GetFileName).ToArray());
+            using (var retention = System.Text.Json.JsonDocument.Parse(File.ReadAllBytes(Path.Combine(fourth, V3CorpusMountWriter.GenerationsDirectoryName, V3CorpusMountWriter.RetentionFileName))))
+            {
+                CollectionAssert.AreEqual(new[] { "monthly_keeper" }, retention.RootElement.GetProperty("retained")[0].GetProperty("reasons").EnumerateArray().Select(static r => r.GetString()).ToArray());
+                CollectionAssert.AreEquivalent(
+                    new[] { IndexOf(directories[1]), IndexOf(directories[2]) },
+                    retention.RootElement.GetProperty("dropped").EnumerateArray().Select(static g => g.GetProperty("index_sha256").GetString()).ToArray());
+            }
+
             // Each way a generation can be wrong, on a copy of the third build.
             foreach (var (what, damage, expected) in new (string, Action<string>, string)[]
                      {
@@ -238,6 +253,8 @@ public sealed class V3FirstMountBuildTests
                              var first = Path.Combine(directory, V3CorpusMountWriter.GenerationsDirectoryName, IndexOf(directories[0]));
                              foreach (var file in Directory.GetFiles(directories[1])) File.Copy(file, Path.Combine(first, Path.GetFileName(file)), overwrite: true);
                          }, "is not the build its observation names"),
+                         ("no generations directory at all", directory => Directory.Delete(Path.Combine(directory, V3CorpusMountWriter.GenerationsDirectoryName), recursive: true),
+                             "holds no generations/retention.json"),
                          ("a retention record naming a reference the line did not decide on", directory =>
                          {
                              var path = Path.Combine(directory, V3CorpusMountWriter.GenerationsDirectoryName, V3CorpusMountWriter.RetentionFileName);
