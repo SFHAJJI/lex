@@ -19,7 +19,9 @@ With -Apply, in order:
    deployed by that digest, never by a tag;
 3. `deploy/main.bicep` is deployed: the image by digest as a new revision with the `candidate` label and no traffic
    while -LiveRevision keeps 100 per cent (on a first deployment ingress admits only -ProbeSourceCidr);
-4. the zero-traffic probe runs against the candidate's own URL (`web/scripts/deploy-probe.mjs --origin`);
+4. the zero-traffic probe runs against the candidate's own URL (`web/scripts/deploy-probe.mjs --origin`), the browser
+   probes included (`--browser`: the journey's real-mount steps through a browser; Chrome or Edge must be installed),
+   unless -SkipBrowserProbe says they are skipped;
 5. if the probe fails, the candidate revision is deactivated (the removal step) and the script exits non-zero.
 Promotion (moving traffic to the candidate) is printed for the owner and never run.
 
@@ -45,6 +47,7 @@ param(
     [Parameter(ParameterSetName = 'Deploy')] [string] $LiveRevision = '',
     [Parameter(ParameterSetName = 'Deploy')] [string] $ProbeSourceCidr = '',
     [Parameter(ParameterSetName = 'Deploy')] [switch] $Apply,
+    [Parameter(ParameterSetName = 'Deploy')] [switch] $SkipBrowserProbe,
 
     [Parameter(Mandatory, ParameterSetName = 'Remove')] [switch] $Remove,
     [Parameter(Mandatory, ParameterSetName = 'Remove')] [string] $Revision
@@ -140,15 +143,18 @@ Run "az deployment group create -g $ResourceGroup -f deploy/main.bicep -p $($par
 
 # 4. The zero-traffic probe against the candidate's own URL.
 Step "probe the candidate"
+$browserProbe = if ($SkipBrowserProbe) { @() } else { @('--browser') }
 if (-not $Apply) {
-    Write-Host "  > node web/scripts/deploy-probe.mjs --origin https://$AppName---candidate.<environment default domain> --release $releasePath --public-key $keyPath"
+    Write-Host "  > node web/scripts/deploy-probe.mjs --origin https://$AppName---candidate.<environment default domain> --release $releasePath --public-key $keyPath $($browserProbe -join ' ')"
+    if ($SkipBrowserProbe) { Write-Host "  (the browser probes are skipped: -SkipBrowserProbe)" }
     Write-Host "== planned only: run again with -Apply to deploy (the owner's decision)"
     exit 0
 }
 $domain = az containerapp env show --ids $EnvironmentId --query properties.defaultDomain -o tsv
 $candidate = az containerapp show -g $ResourceGroup -n $AppName --query properties.latestRevisionName -o tsv
 $origin = "https://$AppName---candidate.$domain"
-& node (Join-Path $checkout 'web/scripts/deploy-probe.mjs') --origin $origin --release $releasePath --public-key $keyPath
+if ($SkipBrowserProbe) { Write-Host "  the browser probes are skipped (-SkipBrowserProbe): only the HTTP probes run" }
+& node (Join-Path $checkout 'web/scripts/deploy-probe.mjs') --origin $origin --release $releasePath --public-key $keyPath @browserProbe
 if ($LASTEXITCODE -ne 0) {
     # 5. The removal step: the candidate never carried traffic (or only the owner's probe), and is deactivated.
     Step "the probe failed: deactivate the candidate $candidate"
@@ -167,3 +173,10 @@ else {
     Write-Host "  > az containerapp ingress traffic set -g $ResourceGroup -n $AppName --revision-weight $candidate=100"
 }
 Write-Host "  To remove it instead: pwsh -File deploy/deploy.ps1 -Subscription $Subscription -ResourceGroup $ResourceGroup -AppName $AppName -Remove -Revision $candidate"
+if (-not [string]::IsNullOrEmpty($LiveRevision)) {
+    # Rollback and forward again are traffic moves, the owner's like promotion: printed, never run.
+    Write-Host "  After promotion, to roll back to $LiveRevision (kept, since every revision is kept):"
+    Write-Host "  > az containerapp ingress traffic set -g $ResourceGroup -n $AppName --revision-weight $LiveRevision=100"
+    Write-Host "  and forward again to the candidate:"
+    Write-Host "  > az containerapp ingress traffic set -g $ResourceGroup -n $AppName --revision-weight $candidate=100"
+}
