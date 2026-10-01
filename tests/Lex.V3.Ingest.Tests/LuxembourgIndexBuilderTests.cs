@@ -38,6 +38,17 @@ public sealed class LuxembourgIndexBuilderTests
 
     internal static readonly DateTimeOffset Latest = BuiltAt.AddHours(2);
 
+    /// <summary>The Luxembourg capability manifest states the platform's operations not served, as the API's coverage does.</summary>
+    [TestMethod]
+    public async Task TheCapabilityManifestStatesTheOperationsNotServed()
+    {
+        var (_, built, _) = await BuildStateEnvelopeAsync();
+        CollectionAssert.AreEqual(
+            Lex.V3.Contracts.Platform.V3UnservedOperations.Rows.ToArray(),
+            built.CapabilityManifest.NotServed.ToArray());
+        StringAssert.Contains(Encoding.UTF8.GetString(built.CapabilityManifestBytes.Span), "\"not_served\":[{\"operation\":\"concepts\",\"reason\":\"operation_not_served\"");
+    }
+
     [TestMethod]
     public void BuilderAndStrictReaderShipAsOneTerminalSlice()
     {

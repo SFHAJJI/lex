@@ -50,6 +50,9 @@ public sealed class EuropeIndexBuilderTests
         Assert.IsNotNull(second, $"{secondRefusal}: {secondDetail}");
         CollectionAssert.AreEqual(first.IndexBytes.ToArray(), second.IndexBytes.ToArray());
         CollectionAssert.AreEqual(first.CapabilityManifestBytes.ToArray(), second.CapabilityManifestBytes.ToArray());
+        CollectionAssert.AreEqual(
+            Lex.V3.Contracts.Platform.V3UnservedOperations.Rows.ToArray(), first.CapabilityManifest.NotServed.ToArray(),
+            "the EU capability manifest states the platform's operations not served");
         var corpus = LexCorpus6Builder.TryBuild(envelope, out _, out _)!;
         using var reader = EuropeIndexReader.OpenAndVerify(
             first.IndexRef, first.IndexBytes.Span, corpus.ArtifactRef, first.CapabilityManifest);

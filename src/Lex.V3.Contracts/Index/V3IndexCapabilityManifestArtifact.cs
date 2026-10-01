@@ -56,6 +56,23 @@ public static class V3IndexCapabilityManifestArtifact
             }
 
             writer.WriteEndArray();
+
+            // Written only when stated, so a manifest from before manifests stated them keeps its exact bytes.
+            if (manifest.NotServed.Count > 0)
+            {
+                writer.WriteStartArray("not_served");
+                foreach (var row in manifest.NotServed)
+                {
+                    writer.WriteStartObject();
+                    writer.WriteString("operation", row.Operation);
+                    writer.WriteString("reason", row.Reason);
+                    writer.WriteString("data_needed", row.DataNeeded);
+                    writer.WriteEndObject();
+                }
+
+                writer.WriteEndArray();
+            }
+
             writer.WriteEndObject();
             writer.Flush();
         }
@@ -159,10 +176,18 @@ public static class V3IndexCapabilityManifestArtifact
                 exception);
         }
 
+        if (wire.NotServed is not null && (wire.NotServed.Count == 0 || wire.NotServed.Any(static row => row is null)))
+        {
+            throw new ArgumentException(
+                "The index capability manifest states an empty or null not-served row.",
+                nameof(canonicalBytes));
+        }
+
         if (!V3IndexCapabilityManifest.TryCreate(
                 wire.Publisher,
                 wire.IndexSha256,
                 cells,
+                (wire.NotServed ?? []).Select(static row => new V3UnservedOperation(row.Operation, row.Reason, row.DataNeeded)),
                 out var manifest,
                 out var refusal))
         {
@@ -188,7 +213,10 @@ public static class V3IndexCapabilityManifestArtifact
         PublisherId Publisher,
         string IndexSha256,
         string PeriodGranularity,
-        IReadOnlyList<WireCell> Cells);
+        IReadOnlyList<WireCell> Cells,
+        IReadOnlyList<WireUnserved>? NotServed = null);
+
+    private sealed record WireUnserved(string Operation, string Reason, string DataNeeded);
 
     private sealed record WireCell(
         string Operation,

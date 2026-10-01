@@ -1825,7 +1825,7 @@ public static class LuxembourgIndexBuilder
                     group.LongCount())))
             .ToArray();
         if (!V3IndexCapabilityManifest.TryCreate(
-                PublisherId.LuLegilux, digest, cells, out var manifest, out var refusal))
+                PublisherId.LuLegilux, digest, cells, V3UnservedOperations.Rows, out var manifest, out var refusal))
         {
             throw new InvalidDataException($"Measured Luxembourg capabilities are invalid: {refusal}.");
         }

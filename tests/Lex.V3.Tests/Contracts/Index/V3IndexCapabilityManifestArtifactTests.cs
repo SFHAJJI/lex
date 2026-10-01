@@ -109,6 +109,55 @@ public sealed class V3IndexCapabilityManifestArtifactTests
         }
     }
 
+    /// <summary>
+    /// A manifest states the registered operations not served beside its cells, in operation order, and reopens exactly;
+    /// a manifest stating none keeps the exact bytes it had before manifests stated them (the pin above).
+    /// </summary>
+    [TestMethod]
+    public void AManifestStatesTheOperationsNotServedInOperationOrderAndReopensExactly()
+    {
+        Assert.IsTrue(V3IndexCapabilityManifest.TryCreate(
+            PublisherId.LuLegilux,
+            IndexDigest,
+            [Cell("search", "fts_title", "title", "fra", 2020, 2024, 41)],
+            [new V3UnservedOperation("transposition", V3UnservedOperation.OperationNotServed, "the links"),
+             new V3UnservedOperation("concepts", V3UnservedOperation.OperationNotServed, "the concepts")],
+            out var manifest,
+            out var refusal), refusal.ToString());
+        var bytes = Write(manifest!, out var digest);
+        StringAssert.EndsWith(
+            Encoding.UTF8.GetString(bytes),
+            "\"population\":41}],\"not_served\":[{\"operation\":\"concepts\",\"reason\":\"operation_not_served\",\"data_needed\":\"the concepts\"},"
+            + "{\"operation\":\"transposition\",\"reason\":\"operation_not_served\",\"data_needed\":\"the links\"}]}\n");
+        var reopened = V3IndexCapabilityManifestArtifact.ParseAndVerify(
+            new SourceArtifactRef(ArtifactResourceId, digest), bytes, PublisherId.LuLegilux, IndexDigest);
+        CollectionAssert.AreEqual(manifest!.NotServed.ToArray(), reopened.NotServed.ToArray());
+
+        foreach (var (what, rows) in new (string, V3UnservedOperation[])[]
+                 {
+                     ("an operation outside the registry", [new V3UnservedOperation("not_an_operation", V3UnservedOperation.OperationNotServed, "x")]),
+                     ("an operation twice", [new V3UnservedOperation("concepts", V3UnservedOperation.OperationNotServed, "a"), new V3UnservedOperation("concepts", V3UnservedOperation.OperationNotServed, "b")]),
+                     ("no data named", [new V3UnservedOperation("concepts", V3UnservedOperation.OperationNotServed, " ")]),
+                     ("a reason other than the transport failure", [new V3UnservedOperation("concepts", "identifier_unknown", "x")]),
+                 })
+        {
+            Assert.IsFalse(V3IndexCapabilityManifest.TryCreate(
+                PublisherId.LuLegilux, IndexDigest, [Cell("search", "fts_title", "title", "fra", 2020, 2024, 41)], rows, out _, out var malformed), what);
+            Assert.AreEqual(V3IndexCapabilityManifestRefusal.MalformedNotServed, malformed, what);
+        }
+
+        // An empty stated list is not the canonical form (absent is), and rows out of operation order are not either.
+        foreach (var (what, changed) in new (string, byte[])[]
+                 {
+                     ("an empty list", Replace(Write(Create(Cell("search", "fts_title", "title", "fra", 2020, 2024, 41)), out _), "]}\n", "],\"not_served\":[]}\n")),
+                     ("rows out of order", Replace(Replace(Replace(bytes, "concepts", "{SWAP}"), "transposition", "concepts"), "{SWAP}", "transposition")),
+                 })
+        {
+            Assert.ThrowsExactly<ArgumentException>(() => V3IndexCapabilityManifestArtifact.ParseAndVerify(
+                new SourceArtifactRef(ArtifactResourceId, V3IndexCapabilityManifestArtifact.ComputeSha256(changed)), changed, PublisherId.LuLegilux, IndexDigest), what);
+        }
+    }
+
     private static byte[] Write(V3IndexCapabilityManifest manifest, out string digest)
     {
         using var stream = new MemoryStream();
