@@ -3,6 +3,51 @@
 Updated 2026-10-01 by the driver. This file replaces the issue-comment ledgers. It is rewritten in
 every pull request that changes what is served, what is next or what is blocked.
 
+## LU assertion snapshot storage (Codex, 2026-10-01)
+
+Reversible driver decision: prepare immutable assertion storage using the existing checked chunk
+reader. A complete open parses the retained sequence and rebuilds a compact subject-digest/offset
+index. Lookups reopen and recheck chunks, preserving row order, duplicates, literal metadata and
+cross-range dependencies. The header binds run, observation and ordered census/assertion proof
+references. These references do not prove publisher delivery; production integration must compare
+against independently replayed source proofs and check census membership before admission.
+
+The draft requires contiguous subject groups and refuses repeated groups or digest collisions.
+It bounds each serialized record to 4 MiB without truncation. It retains one row during opening,
+compact index entries, and one requested subject's assertions during lookup. No full-population
+memory or disk measurement is claimed. Scope resolution and corpus construction still materialize
+graphs and require the separate bounded paths in the lane design note.
+
+At de9f84ca, the Release build and required fast tests passed. Remote CI and local affected
+ingest tests found the same two census omissions. The new snapshot functional cases passed.
+The actual built assembly's guarded surface was independently rendered: it adds the snapshot's
+private instance constructor, static initializer and internal Open method. Those literal entries
+are now pinned, with exact candidate/guarded counts changed from 255/137 to 256/138. No census
+assertion is loosened. At 168fbe90, repaired Release build passed with zero warnings/errors,
+required fast tests passed (3,105 succeeded, one skipped), and affected ingest tests passed
+(82 succeeded, two skipped). Exact-head CI 36812117581 is green. Cross-family review is pending.
+
+This slice uses the existing legacy chunk writer; PR #855's small-chunk profile is now merged.
+EU decoder recovery has priority, with local heavy checks serialized. No publisher requests were
+made for this draft.
+
+
+## Retained custody storage consolidation (Codex, 2026-10-01)
+
+Reversible driver decision: preserve every cited historical custody path while consolidating
+byte-identical files onto NTFS hardlinks to retained run 9. Eight bounded files passed first;
+the expanded operation completed 971 more files at 03:56 UTC with no publisher traffic.
+Every target/master was rehashed and independently read through the frozen product custody
+reader before and after replacement. A flushed per-file journal records each intent and result.
+An independent audit confirms all 971 file identities, path lengths and exact journal coverage.
+
+Evidence: C:/lex-v3/lanes/old-eu-hardlink-expanded-20261001-result.json, its .jsonl journal,
+old-eu-hardlink-expanded-fileids.json, and the bounded2 result and file-ID audit. The expanded
+operation shared 2,754,376,458 logical bytes; free space rose from 4,960,497,664 to 6,416,429,056
+bytes during the operation, with unrelated host writes possible. All original custody paths
+and bytes remain. This does not enforce retention or provide redundant physical copies.
+The next EU launch retains the full 6,374,424,214-byte allowance, checked again after freezing.
+
 ## EU escaped qualifier authority (Codex, 2026-10-01)
 
 EU retry 5 at C:/lex-v3/eu-population-20261001-3 ended at 03:08 UTC with exit 3 after
