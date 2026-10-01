@@ -3,6 +3,22 @@
 Updated 2026-10-01 by the driver. This file replaces the issue-comment ledgers. It is rewritten in
 every pull request that changes what is served, what is next or what is blocked.
 
+## Offline rights-route reopening (Codex, 2026-10-01)
+
+Reversible driver decision under Q-20261001-0656-codex: reopen retained EU rights evidence using
+its original corpus run identity. EuLegalNoticeRouteProducer.ReopenAsync has no transport and
+makes no custody writes. It checks the pinned canonical route and run, every hop's original GET,
+request and redirect policy bytes, body receipt and actual body bytes, then repeats the existing
+route receipt and legal-notice gates. Capture times and bytes remain those originally observed.
+This is a read of historical evidence and does not assert current retention enforcement.
+
+Twelve draft cases cover independent store reopening with and without a redirect, two identical
+reads, missing route/request/policies/receipt/body, corrupted body bytes, wrong corpus identity,
+cancellation and a rehashed route naming an unrelated body receipt. No tests have run yet. Local
+Release, required fast tests, affected ingest tests and Claude review remain pending behind the
+active EU acquisition and earlier local work; remote CI will provide initial compiler feedback.
+This is one component of acquisition restoration. Complete EU/LU outcome catalogs and independent
+offline corpus/index derivations remain outstanding. The active EU runtime is unchanged.
 ## EU escaped qualifier authority (Codex, 2026-10-01)
 
 EU retry 5 at C:/lex-v3/eu-population-20261001-3 ended at 03:08 UTC with exit 3 after
