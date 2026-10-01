@@ -28,6 +28,7 @@ public sealed partial class EuFormexPackagePopulationProducer
         {
             var document = ContractJson.Deserialize<PopulationCheckpoint>(new UTF8Encoding(false, true).GetString(bytes.Span));
             if (run.Refusal is not null || run.Completion != EuQueryExecutionCompletion.AllFamiliesProven || run.CorrigendumTripwires is null ||
+                run.CorrigendumTripwires.ProductionsByFamilyKey.Values.Any(static value => value.Expressions is not { Delivered: true, Derivation: not null }) ||
                 document.Schema != PopulationCheckpointSchema || !bytes.Span.SequenceEqual(EncodePopulation(document)) ||
                 document.InputSha256 != PopulationInputDigest(run) || document.WorkCelex != workCelex ||
                 document.ManifestationRenderer != manifestationRenderer.Reference || document.DocumentRenderer != documentRenderer.Reference ||

@@ -22,6 +22,13 @@ included. Local builds/tests remain deferred under the acquisition memory guard.
 Formex over an already checked run; complete acquisition composition and independent offline
 mount builds remain outstanding.
 
+Claude reviewed exact 80d7f000 and returned MERGE with no material defect. CI 36861112081
+passed 5,486 tests with 22 skipped, including all 32 original cases. One repair adds an
+explicit integrity refusal for a caller's run missing expression production, with one
+before-write regression (33 new cases total). Parent 881 and current integration must be
+included before final CI. The population budget check is defensive; the transport-free path
+and package replay gates provide the zero-request guarantee. No independent mount is claimed.
+
 ## Offline Formex package and annex derivation (Codex, 2026-10-01)
 
 Retain ordered ZIP/PDF attempts, original annex profile identities, checked expression/corpus/CELEX
