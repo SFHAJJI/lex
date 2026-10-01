@@ -19,7 +19,7 @@ namespace Lex.V3.Ingest.Tests;
 public sealed class V3CorpusResolveMountTests
 {
     // These helpers deliberately insert synthetic ambiguity/collision articles. Complete their
-    // schema3 source rows too; these fixture coordinates do not represent retained publisher bytes.
+    // source and digest rows too; these fixture coordinates do not represent retained publisher bytes.
     private static EuropeIndexBuilder.ArticleSourceRow[] CompleteSyntheticEuropeSourceRows(SqliteConnection connection)
     {
         using var insert = connection.CreateCommand();
@@ -36,6 +36,28 @@ public sealed class V3CorpusResolveMountTests
         using var reader = command.ExecuteReader();
         var rows = new List<EuropeIndexBuilder.ArticleSourceRow>();
         while (reader.Read()) rows.Add(new(reader.GetString(0), reader.GetString(1), reader.GetString(2)));
+        return rows.ToArray();
+    }
+
+    private static EuropeIndexBuilder.ArticleDigestRow[] CompleteSyntheticEuropeDigestRows(SqliteConnection connection)
+    {
+        using var command = connection.CreateCommand();
+        command.CommandText = "SELECT a.article_identity_sha256,a.searchable_text,d.source_entry_sha256 " +
+            "FROM articles a LEFT JOIN article_digests d USING(article_identity_sha256) ORDER BY a.article_identity_sha256";
+        var rows = new List<EuropeIndexBuilder.ArticleDigestRow>();
+        using (var reader = command.ExecuteReader())
+            while (reader.Read()) rows.Add(new(reader.GetString(0), reader.IsDBNull(2) ? new string('d', 64) : reader.GetString(2),
+                Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(reader.GetString(1))))));
+        foreach (var row in rows)
+        {
+            using var insert = connection.CreateCommand();
+            insert.CommandText = "INSERT INTO article_digests VALUES($id,$entry,$text) " +
+                "ON CONFLICT(article_identity_sha256) DO UPDATE SET text_sha256=excluded.text_sha256";
+            insert.Parameters.AddWithValue("$id", row.ArticleIdentitySha256);
+            insert.Parameters.AddWithValue("$entry", row.SourceEntrySha256);
+            insert.Parameters.AddWithValue("$text", row.TextSha256);
+            insert.ExecuteNonQuery();
+        }
         return rows.ToArray();
     }
 
@@ -1106,7 +1128,7 @@ public sealed class V3CorpusResolveMountTests
                 using var stamp = connection.CreateCommand();
                 stamp.CommandText = "UPDATE stamp SET logical_rows_sha256=$logical WHERE stamp_id=1";
                 stamp.Parameters.AddWithValue(
-                    "$logical", EuropeIndexBuilder.HashLogicalRows(members, lines, gaps, articles, CompleteSyntheticEuropeSourceRows(connection)));
+                    "$logical", EuropeIndexBuilder.HashLogicalRows(members, lines, gaps, articles, CompleteSyntheticEuropeSourceRows(connection), CompleteSyntheticEuropeDigestRows(connection)));
                 Assert.AreEqual(1, stamp.ExecuteNonQuery());
             }
 
@@ -1165,7 +1187,7 @@ public sealed class V3CorpusResolveMountTests
                 using var stamp = connection.CreateCommand();
                 stamp.CommandText = "UPDATE stamp SET logical_rows_sha256=$logical WHERE stamp_id=1";
                 stamp.Parameters.AddWithValue(
-                    "$logical", EuropeIndexBuilder.HashLogicalRows(members, lines, gaps, articles, CompleteSyntheticEuropeSourceRows(connection)));
+                    "$logical", EuropeIndexBuilder.HashLogicalRows(members, lines, gaps, articles, CompleteSyntheticEuropeSourceRows(connection), CompleteSyntheticEuropeDigestRows(connection)));
                 Assert.AreEqual(1, stamp.ExecuteNonQuery());
             }
 
@@ -2302,7 +2324,7 @@ public sealed class V3CorpusResolveMountTests
                 using var stamp = connection.CreateCommand();
                 stamp.CommandText = "UPDATE stamp SET logical_rows_sha256=$logical WHERE stamp_id=1";
                 stamp.Parameters.AddWithValue(
-                    "$logical", EuropeIndexBuilder.HashLogicalRows(members, lines, gaps, articles, CompleteSyntheticEuropeSourceRows(connection)));
+                    "$logical", EuropeIndexBuilder.HashLogicalRows(members, lines, gaps, articles, CompleteSyntheticEuropeSourceRows(connection), CompleteSyntheticEuropeDigestRows(connection)));
                 Assert.AreEqual(1, stamp.ExecuteNonQuery());
             }
 
