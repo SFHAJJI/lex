@@ -30,9 +30,13 @@ retained row equality and decoding; it does not mint new enumeration proofs or a
 The first diagnostic accidentally selected amendment families too; its 44 wrong-family refusals
 are retained in replay-1. The corrected selector matches the exact date-predicate VALUES block.
 
-PR #855 received one documentation repair after cross-family review and awaits final CI/merge.
-The next full EU run still requires this decoder change reviewed, merged and frozen in a fresh
-custody directory, plus the same measured storage allowance and disk guard.
+PR #859 received cross-family MERGE with no material findings. The reviewer reproduced the
+build, fast tests and all 29 decoder cases, including a counterfactual where the old decoder fails
+the two escaped cases. The one editorial repair records the exact ingest filter:
+`FullyQualifiedName~EuObjectFacts|FullyQualifiedName~EuProduction|FullyQualifiedName~EuRepeatedEnumeration`.
+The AU+TARD escaped case is constructed; MA/PART was observed. Literal matching retains priority,
+and lowercase percent escapes still refuse safely. The next full run requires this change merged
+and frozen in a fresh custody directory, with the measured storage allowance and disk guard.
 
 ## EU object-facts continuation range (Codex, 2026-10-01)
 
