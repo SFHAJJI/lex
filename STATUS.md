@@ -1144,7 +1144,7 @@ CI evidence are recorded in the pull request before merge.
 
 ## Heads
 
-- `v3/integration`: `48422a0f` (2026-10-01, PR #891 merged). Build 45 s. Fast lane
+- `v3/integration`: `2326417b` (2026-10-01, PR #893 merged). Build 45 s. Fast lane
   (`eng/test-fast.ps1`): 3,077 tests, 3,076 pass, 1 skipped (the review of PR #828). Ingest suite: green on CI for PR #760
   (the CI `dotnet` job runs the whole solution on every pull request, about 7 min on the runner;
   green for PR #834);
@@ -3247,13 +3247,40 @@ preceded by its length", while the builder length-prefixes it. A reader who foll
 got another digest. The sentence now reads "over these values, each as UTF-8 preceded by its
 length as four bytes big-endian: the domain tag lex-v3-luxembourg-expression-state/1, the
 publisher, ...". The same wording is in the provenance answer, its test pin, the answer-samples
-census and the web preview's copy. G1 (a replaced publisher file mints a new version and a
-`file_replaced` event), G3 (nothing hard-deleted across builds) and G4 (as-observed answering;
-`as_observed` and `knowable_on` are registered and not served) need predecessor chaining with
-observation times, which follows the first mount (claimed by the web lane in PR #862); see the
-event-log question (b) below. G2's
-detached signature comes from the release pipeline (item 7). The mount is the fixture, so this
-proves the path, not a corpus.
+census and the web preview's copy. G2's detached signature comes from the release pipeline (item 7).
+The mount is the fixture, so this proves the path, not a corpus.
+
+Replay G1, G3 and G4 on the real handler (PR #897). Predecessor chaining (PRs #864 to #889) made the
+other three guarantees provable, and each had been proven in parts: G1 at the builder
+(`LuxembourgIndexBuilderTests`), G3 by the generation mount (`V3CorpusGenerationQuoteTests`), and G4
+by `as_observed` (`V3CorpusAsObservedMountTests`). `V3ReplayGuaranteesTests` now runs all three
+through the real handler, beside G2 and G5, so the launch contract's "replay G1 to G5" has one place.
+- The chain: three real builds of the state fixture on three days, each chained to the one before.
+  Each is written as the mount it would be, with the earlier builds kept beside it as generations and
+  the retention line's record, and each verifies:
+  - the first build reads the publisher's file as held;
+  - the second reads it with one byte added and its text unchanged;
+  - the third reads it with one article reworded.
+- G1, version immutability:
+  - the second build answers the same version id as the first (the panel's G1 answer: no new version
+    for unchanged text), and the third answers a new one;
+  - the latest log holds one `file_replaced` in each later build's events. Each names the version it
+    replaced and the version it holds, and the bodies differ;
+  - the first version id still verifies on the latest mount (`digest_matches`) and names the version
+    that replaced it.
+- G3, nothing hard-deleted:
+  - each earlier build's `events` answer is the latest log's prefix, row for row, every field but the
+    cursor (which names the log it was read from);
+  - every state the log names, held or replaced, verifies on the latest mount: the original from a
+    kept generation, the reworded one from the mounted index.
+  - Which builds keep their text is the retention line's (S7-A09). A state no kept build holds is
+    still named by the log, without text.
+- G4, as-observed answering: `as_observed` at each build's snapshot, asked of the latest mount,
+  answers the version that build's own mount answered, article for article by text digest:
+  - quoted from that build's own generation, or from the mounted index for the latest;
+  - bounded by that build's time (`observed_no_later_than`), claiming no observation time.
+- The mounts are fixtures, so this proves the path, not a corpus. A real chained mount needs a second
+  build from custody, which the data lane's offline derivation will provide.
 
 ## Data
 
@@ -3533,6 +3560,9 @@ recorded by PR #862:
        - three-seed mount: 10 of 10 steps pass. Coverage and radar answer, and the other screens
          show their refusal cards; the two EU steps ask for the GDPR, which this mount does not hold;
        - canary mount: 10 of 10 steps pass; coverage and radar answer, the Luxembourg screens show their refusal cards, EU search answers with 61 citations verified, and EU dossier with 2, one per held expression (English and French).
+   Reversible driver decision, 2026-10-01: with items 2 and 3 in review, the web lane runs replay G1,
+   G3 and G4 on the real handler (PR #897), the launch contract's machine-gates line. The custody
+   half of the release path's first line waits for the data lane's offline derivation.
 
 1. Data lane (Codex, Decision 95): bounded first mount and real-data resolve completed above.
    Finish PR #786 and population PR #785, then continue the population work below.
@@ -3624,9 +3654,8 @@ recorded by PR #862:
    launch card carries the machine gates run over the real mounted corpus, so the gates gain a
    mounted-corpus run once the first mount exists. Replay G1 to G5 (`33-product-spec.md`): G2 snapshot
    determinism and G5 independent verifiability run on the real handler (PR #770). G1 version
-   immutability, G3 bitemporal completeness and G4 as-observed answering need predecessor
-   chaining with observation times, so they follow the first mount and the event-log ruling
-   (predecessor chaining is the web lane's since PR #862). What
+   immutability, G3 bitemporal completeness and G4 as-observed answering run on the real handler
+   over a three-build chain (PR #897), now that predecessor chaining is merged. What
    is left of the launch contract's machine-gates line after that was "V2 absent from the image",
    which the image rehearsal now checks (PR #831, item 7). Ruling 2's gates over the real mounted
    corpus: PR #838 derives the temporal set from any mount, PR #839 the refusal set, PR #842 the
