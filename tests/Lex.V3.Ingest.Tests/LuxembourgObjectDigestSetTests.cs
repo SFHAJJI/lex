@@ -38,6 +38,21 @@ public sealed class LuxembourgObjectDigestSetTests
     }
 
     [TestMethod]
+    [DataRow(0)]
+    [DataRow(16)]
+    [DataRow(32)]
+    [DataRow(48)]
+    [DataRow(63)]
+    public void MembershipChecksTheCompleteDigestIncludingSharedPrefixes(int changedPosition)
+    {
+        var set = LuxembourgObjectDigestSet.FromObservations(Observations(1));
+        var changed = set[0].ToCharArray();
+        changed[changedPosition] = changed[changedPosition] == '0' ? '1' : '0';
+        Assert.IsFalse(set.Contains(new string(changed)));
+        Assert.IsTrue(set.Contains(set[0]));
+    }
+
+    [TestMethod]
     [DataRow(null)]
     [DataRow("")]
     [DataRow("A")]
