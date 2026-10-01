@@ -1767,6 +1767,9 @@ screens refused EU answers by design.
   - otherwise `pinned_digest_mismatch` naming the current digest, `anchor_not_in_version`,
     `language_not_available`, `identifier_unknown` (a work or wording date not held), or
     `no_corpus_mounted`.
+  - The CELEX slot holds the work's CELEX and nothing else. The review of #850 found an article
+    identity there resolved the same work and verified. Only expressions of the work whose CELEX is
+    exactly the slot's are considered, and the wording's CELEX is checked again.
 - On the GDPR fixture a hit's permalink verifies (also under the product's https origin), and the
   digest recomputed from the index by the stated rule equals the API's. Each refusal is held to
   its code.

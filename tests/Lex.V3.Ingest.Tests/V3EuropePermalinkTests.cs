@@ -142,6 +142,12 @@ public sealed class V3EuropePermalinkTests
             "a work the index does not hold");
         Assert.AreEqual("identifier_unknown", (await VerifyAsync(mount, permalink.Replace(date, "1999-01-01", StringComparison.Ordinal))).Refusal?.Code,
             "a wording date the expression does not bear");
+
+        // The review of #850's reproduction: an article identity of the work in the CELEX slot resolves the same work,
+        // and must still be refused: the slot holds the CELEX and nothing else.
+        var articleIdentity = answer.GetProperty("hits")[0].GetProperty("article_identity_sha256").GetString()!;
+        var stolen = await VerifyAsync(mount, permalink.Replace("/32016R0679/", $"/{articleIdentity}/", StringComparison.Ordinal) + "#" + answer.GetProperty("hits")[0].GetProperty("publisher_id").GetString());
+        Assert.AreEqual("identifier_unknown", stolen.Refusal?.Code, $"an article identity in the CELEX slot: {stolen.Result?.Value.GetProperty("verdict")}");
     }
 
     [TestMethod]

@@ -5600,8 +5600,13 @@ internal sealed class V3CorpusMount : IDisposable
                 new V3PlatformOperationRefusal(request, "no_corpus_mounted", unmounted.RootElement));
         }
 
-        var ofWork = _europeReader.ResolveExact(celex);
-        if (ofWork.Count == 0)
+        // Only the expressions of the work whose CELEX is exactly the permalink's: ResolveExact also matches a work or
+        // expression IRI or an article identity, and none of those may stand in the CELEX slot (review of #850).
+        var ofWork = _europeReader.ResolveExact(celex)
+            .Where(expression => _europeReader.ResolveWorkExpressions(expression.PublisherWorkId)
+                .Any(held => string.Equals(held.PublisherWorkCelex, celex, StringComparison.Ordinal)))
+            .ToArray();
+        if (ofWork.Length == 0)
         {
             return Unknown(request, identifier, observedAt, PublisherId.EuEurLex,
                 "a hash-pinned EU permalink of a work this EU index holds");
@@ -5631,7 +5636,9 @@ internal sealed class V3CorpusMount : IDisposable
                 new V3PlatformOperationRefusal(request, "ambiguous_identifier", ambiguous.RootElement));
         }
 
-        if (EuropeWordingOf(expressions[0]) is not { } wording || !string.Equals(wording.WordingDate, wordingDate, StringComparison.Ordinal))
+        if (EuropeWordingOf(expressions[0]) is not { } wording ||
+            !string.Equals(wording.Celex, celex, StringComparison.Ordinal) ||
+            !string.Equals(wording.WordingDate, wordingDate, StringComparison.Ordinal))
         {
             return Unknown(request, identifier, observedAt, PublisherId.EuEurLex,
                 "a hash-pinned EU permalink of the one wording this EU index holds of the expression, at its wording date");
