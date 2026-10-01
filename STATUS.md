@@ -18,7 +18,7 @@ d834ae22 passed CI 36856207562: 5,356 passed and 22 skipped; the required watch 
 Claude found no material LU code defect and requested the current parent/base and combined census
 correction. The one repair includes reviewed PR869 source 60c2589c and integration d56d0539,
 sets the union to 262 candidates/140 guarded types, preserves all member pins and copies each
-regenerated request body once. PR869 must merge before final current-base CI and this merge.
+regenerated request body once. PR869 is merged as 1a63b61a and included; final current-base CI gates this merge.
 Local builds/tests remain deferred under the acquisition memory guard.
 
 Full acquisition catalog restoration and two independent offline mount derivations remain
