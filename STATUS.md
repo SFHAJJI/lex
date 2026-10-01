@@ -974,7 +974,7 @@ CI evidence are recorded in the pull request before merge.
 
 ## Heads
 
-- `v3/integration`: `7acd4462` (2026-10-01, PR #859 merged). Build 45 s. Fast lane
+- `v3/integration`: `289e72e0` (2026-10-01, PR #860 merged). Build 45 s. Fast lane
   (`eng/test-fast.ps1`): 3,077 tests, 3,076 pass, 1 skipped (the review of PR #828). Ingest suite: green on CI for PR #760
   (the CI `dotnet` job runs the whole solution on every pull request, about 7 min on the runner;
   green for PR #834);
@@ -1076,7 +1076,8 @@ reversible: events are scoped to states (no work-level events); the cursor names
 `answer_drift`'s future rows are date intervals per revising event (stated in the answer).
 Deferred to the next index schema: predecessor chaining (the builder takes the previous verified
 index, copies its log unchanged and appends comparison events), `observed_from` from the route
-evidence, and every revision event.
+evidence, and every revision event. The web lane claimed predecessor chaining on 2026-10-01
+(PR #862, the web lane's order under "Next, in order").
 
 `ask` (PR #759) answers the containment and nothing else (Decisions 51 and 91, S4-A05): every
 request, whatever the question, is a success envelope under the `point` verdict whose result is a
@@ -2161,6 +2162,30 @@ judgments control now applies and catches the shuffle. Only the temporal arms ar
 there, since the mount holds no Luxembourg state. A mutant whose EU `verify` names the first
 provision for every request fails the fixture's resolver gate.
 
+The release rehearsal over the real bounded first mount (2026-10-01, recorded by PR #862),
+`node web/scripts/image-rehearsal.mjs --mount C:/lex-v3/first-mount-decision95-restart-20260930/v3-corpus`
+at the head of PR #860. Every step passed:
+- the one-server image (72,561,664 bytes) holds the 26 live page files, the 6 mount files and the 5
+  files the mount's report lists, byte for byte, with no image failure;
+- two builds from scratch give one manifest, `sha256:b330577295f5a4017715420733ff7351e9134b8d36cc917a690db9e1288ff9d6`;
+- V2 is absent: 527 entries scanned, and none of V2's 63 routes fails when asked of the image. A
+  V2-only route answers 404, and a path V2 and V3 share (such as `/`) answers with V3's own bytes;
+- the rehearsal signature verifies;
+- the image runs in WSL and is probed on all ten journey steps:
+  - coverage and radar answer;
+  - the six Luxembourg screens show the refusals the API gives, since the mount holds no
+    Luxembourg state;
+  - the EU search answers with 61 citations verified, and the EU dossier with 1;
+  - no step fails;
+- the card served at `/evaluation-card.json` is the release card, the gates over this mount:
+  - refusal: 8 cases, pass, the shuffle caught;
+  - retrieval: 13 cases, every gate passing, the shuffle caught;
+  - temporal: not measured, since the mount holds no Luxembourg state;
+- the release (version `v3-rehearsal-20261001T033235Z-523f28f8e84b`, manifest
+  `7e6a2f08fefc8699d8e5c317073a206fff9145f0d4c123534e00d1ab3cc34681`, six assets) is published,
+  read back and verified with no failure;
+- the work directory, the artifacts and the container are removed.
+
 The live export composer and its journey step (PR #789), the eighth screen. `dist-live/export.html`
 has its own bundle `client-live-export.js`.
 - The page asks what the reading page asks: the same form (`ReadingForm`, now shared), the same one
@@ -2610,7 +2635,8 @@ publisher, ...". The same wording is in the provenance answer, its test pin, the
 census and the web preview's copy. G1 (a replaced publisher file mints a new version and a
 `file_replaced` event), G3 (nothing hard-deleted across builds) and G4 (as-observed answering;
 `as_observed` and `knowable_on` are registered and not served) need predecessor chaining with
-observation times, which follows the first mount; see the event-log question (b) below. G2's
+observation times, which follows the first mount (claimed by the web lane in PR #862); see the
+event-log question (b) below. G2's
 detached signature comes from the release pipeline (item 7). The mount is the fixture, so this
 proves the path, not a corpus.
 
@@ -2845,6 +2871,36 @@ an Appendix A root receives `not_acquired / identity_not_admitted`; this does no
 wordings. The earlier 82 separate runs remain separate evidence. A complete combined live build
 has not yet run; the bounded first mount above is complete.
 
+The web lane's order, from the panel's answer to Q-20261001-0345-claude (2026-10-01 03:50 UTC),
+recorded by PR #862:
+1. **Predecessor chaining, claimed by the web lane** (item 4). It unblocks G1, G3, G4, `as_observed`
+   and `knowable_on`. The web lane changes only the event-log and chaining parts of the builders,
+   rebases onto the data lane's merges before every pull request, and gets a Codex review of each.
+   Any overlap with an open data-lane pull request goes to QUESTIONS.md rather than being edited
+   around. The planned slices, one pull request each:
+   - index schema `/7` with the genesis log, an `observations` table and a log stamp;
+   - the predecessor as a build input (`--predecessor`), its log carried forward as an exact
+     prefix (G3a);
+   - comparison events: `first_sighting` and `expression_added` for new keys, `file_replaced` when a
+     source body changes (G1), and the derived `interval_closed` and `validity_revised`;
+   - `events` and `answer_drift` across the chain;
+   - `as_observed` by observation (G4);
+   - a generation mount (G3b).
+   `observed_from` stays null until a Luxembourg body's capture time reaches the corpus (data lane);
+   `knowable_on` and withdrawal follow it. The owner questions (G1 when a file changes but its text
+   does not, "as observed" identified by snapshot with no time, retaining every generation) are
+   asked in the pull requests that meet them.
+2. The index capability manifest's per-operation rows for the unserved operations: one small
+   additive pull request.
+3. A credential-free deployment kit, so the owner's go-live is one command (item 7). It holds the
+   Azure definitions for the one-server container, and a deploy script that takes the subscription,
+   the managed identity and the signing identity as parameters and never reads or stores a secret.
+   It validates the templates offline, runs the zero-traffic probe against the deployed revision,
+   removes the revision, and has a runbook here. No Azure login, deployment or production signing:
+   those stay with the owner.
+4. Standing: the real-mount journeys and gates on every new mount the data lane builds, and a
+   review of the data lane's pull requests that touch the API when asked.
+
 1. Data lane (Codex, Decision 95): bounded first mount and real-data resolve completed above.
    Finish PR #786 and population PR #785, then continue the population work below.
 2. Data lane (Codex). Complete the EU and Luxembourg populations under the owner's 2026-09-30
@@ -2862,8 +2918,9 @@ has not yet run; the bounded first mount above is complete.
    log, PR #760). Four remain (`as_observed`, `knowable_on`, `concepts`, `transposition`), all
    needing data the ingest does not produce; they keep `operation_not_served`, and since PR #857
    the coverage answer names, for each, the data that would serve it (driver decision, below), which
-   Trust and Coverage shows. The event log's next step,
-   predecessor chaining with observation times, needs a second build, so it follows the first mount.
+   Trust and Coverage shows. The event log's next step, predecessor chaining with observation
+   times, is the web lane's since 2026-10-01 and is claimed by PR #862 (the web lane's order,
+   above).
 5. EU parity: every temporal and search operation from the EU index; French expressions. EU
    `search` in one work served by PR #761, EU `dossier` by PR #762; the temporal operations,
    `provenance` and `evidence_bundle` wait on consolidation acquisition; the parity details are driver
@@ -2919,12 +2976,14 @@ has not yet run; the bounded first mount above is complete.
    it runs the image (WSL, read-only root, private /tmp) and probes the eight screens against it; PR
    #826: the image is reproducible (two builds from scratch, one manifest digest); PR #828: the
    image probed on the journey's fixture mount, where every screen answers and 105 citations verify;
-   PR #831: V2 absent from the image (no V2 assembly or dependency, V2's 63 routes 404); PR #833:
+   PR #831: V2 absent from the image (no V2 assembly or dependency; of V2's 63 routes, a V2-only
+   one answers 404 and a path both share answers with V3's own bytes); PR #833:
    the release assets (the image, its signature, the evaluation card, the mount's report, a signed
    manifest) published under a version, read back and verified, and the card served at
    `/evaluation-card.json`. The credential-free release steps
-   are rehearsed end to end. Production signing,
-   credentials and deployment stay with the owner.
+   are rehearsed end to end, and since 2026-10-01 over the real bounded first mount too (PR #862).
+   Next in the web lane's order: a credential-free deployment kit. Production signing, credentials
+   and deployment stay with the owner.
 8. Machine gates (launch contract, Evaluation): the temporal, refusal and retrieval case sets run
    against the real handler, and all three shuffled controls are caught (PRs #767 and #768). The
    evaluation card is rendered from them with the statistical rows `not_yet_labelled` (PR #769).
@@ -2933,7 +2992,8 @@ has not yet run; the bounded first mount above is complete.
    mounted-corpus run once the first mount exists. Replay G1 to G5 (`33-product-spec.md`): G2 snapshot
    determinism and G5 independent verifiability run on the real handler (PR #770). G1 version
    immutability, G3 bitemporal completeness and G4 as-observed answering need predecessor
-   chaining with observation times, so they follow the first mount and the event-log ruling. What
+   chaining with observation times, so they follow the first mount and the event-log ruling
+   (predecessor chaining is the web lane's since PR #862). What
    is left of the launch contract's machine-gates line after that was "V2 absent from the image",
    which the image rehearsal now checks (PR #831, item 7). Ruling 2's gates over the real mounted
    corpus: PR #838 derives the temporal set from any mount, PR #839 the refusal set, PR #842 the
