@@ -1,4 +1,4 @@
-using System.Net;
+﻿using System.Net;
 using System.Text;
 using System.Text.Json;
 using Lex.V3.Contracts;
@@ -910,13 +910,13 @@ public sealed partial class EuQueryExecutionAdapterTests
     /// A real single-seed run, identical to
     /// <see cref="AFullRunOverOneSeedWithNoDiscoveredStatesDeliversWithRealMeasuredCounts"/>, makes
     /// several floored custody writes -- family delivery evidence, then the scope manifest, then
-    /// (D1-06c-EU fix two) the corpus/6 record set as this run's own proven literal last step; the one
+    /// (D1-06c-EU fix two) the corpus/6 record set before the final acquisition checkpoint; the one
     /// Minted row's own body axis is TypedQuarantine (see
     /// <see cref="EuQueryExecutionAdapter.RunDocumentAcquisitionAsync"/>'s own remarks), so defect
     /// nine's own gate attempts no document fetch and there is no body write among them. This test
     /// does not hardcode a guess at the exact total: it runs the scenario once against a plain
-    /// enforcing store to discover the real count, then again unenforcing exactly that last call,
-    /// which fix two's own "literal last step" guarantee makes the record-set write whatever the real
+    /// enforcing store to locate the record set receipt in the write sequence, then again unenforcing that call,
+    /// so the record-set write remains the target regardless of the real
     /// total turns out to be.
     /// </remarks>
     [TestMethod]
@@ -1018,11 +1018,13 @@ public sealed partial class EuQueryExecutionAdapterTests
         var totalCustodyWrites = discoveryStore.CreateCallCount;
         Assert.IsTrue(totalCustodyWrites > 0);
 
-        // Pass two, the identical scenario: unenforce exactly the last custody write. Fix two's own
-        // proven "WriteAsync is this run's literal last step" guarantee is what makes that last write
-        // the corpus/6 record set's, whatever the real total turned out to be.
+        // The acquisition checkpoint follows the corpus write. Discover the corpus write's
+        // own ordinal from its checked receipt, keeping this gate independent of later holds.
+        var corpusOrdinal = OrdinalOf(discoveryStore, firstResult.CorpusRecordSetReceipt!.Reference.ContentSha256);
         var result = await RunOnceAsync(
-            new EuAcquisitionTestFixture.EuInMemoryCustodyStore(unenforceCallOrdinal: totalCustodyWrites));
+            new EuAcquisitionTestFixture.EuInMemoryCustodyStore(unenforceCallOrdinal: corpusOrdinal));
+        Assert.AreEqual(CustodyMembership.RetainedUnenforced,
+            CustodyMembershipClassifier.Classify(result.CorpusRecordSetReceipt!));
 
         // RULING lex-event-20260904T213727510Z-671a8c2563684ab49048677997ceef1c. This used to refuse the
         // whole run at its literal last step, so a store publishing no enforcement threw away every
@@ -1052,9 +1054,9 @@ public sealed partial class EuQueryExecutionAdapterTests
                 StringComparison.Ordinal))
             .Ordinal;
         Assert.AreNotEqual(
-            totalCustodyWrites,
+            corpusOrdinal,
             manifestOrdinal,
-            "the manifest must not be the last write, or this would be the record set's gate again.");
+            "the manifest and record set must target different custody writes.");
 
         var manifestUnenforced = await RunOnceAsync(
             new EuAcquisitionTestFixture.EuInMemoryCustodyStore(unenforceCallOrdinal: manifestOrdinal));
@@ -3077,7 +3079,7 @@ public sealed partial class EuQueryExecutionAdapterTests
     public async Task ARecordSetTheStoreCannotReproduceRefusesAsNotRetained()
     {
         var (result, _) = await RunSingleSeedLosingWriteAsync(
-            static (store, _) => store.CreateCallCount);
+            static (store, result) => OrdinalOf(store, result.CorpusRecordSetReceipt!.Reference.ContentSha256));
 
         Assert.IsNotNull(result.Refusal, "a record set that cannot be retained must refuse the run.");
         Assert.AreEqual(EuQueryExecutionRefusal.RecordSetNotRetained, result.Refusal!.Code);

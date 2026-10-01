@@ -3,6 +3,34 @@
 Updated 2026-10-01 by the driver. This file replaces the issue-comment ledgers. It is rewritten in
 every pull request that changes what is served, what is next or what is blocked.
 
+## EU query acquisition replay (Codex, 2026-10-01)
+
+Reversible driver decision: retain the complete successful query adapter's dependency catalog
+before returning success. It binds ordered seeds, original plans/renderers, every census and
+object-family checkpoint, paired expression/tripwire productions, document ladders, watermark
+traversal and original manifest/run/corpus identities. A failed catalog hold has its own refusal.
+Offline reopening independently checks both count templates, derives object batches from the
+proven census closure, checks the paired producer's original P/X proofs, then uses the same
+decode/reduction, document/witness reconciliation and corpus writer. Every catalog association
+must be consumed exactly once. The paired producer reopens its families again through its own
+checked door; this avoids accepting caller-assembled proof inputs. Its repeated read cost is not
+measured. Changed current custody protection refuses the original-byte equality claim.
+
+Thirty-four draft cases cover separate replay stores, served and unserved body policy, original
+identities and same-object expression/tripwire reconciliation, zero traffic and no new artifact
+digests, eight missing dependencies, eighteen rehashed catalog changes, exact caller seed scope,
+weaker custody, cancellation and failed root hold. Existing custody-failure tests now locate the
+corpus write by its actual receipt rather than assuming it is the final write. No assertion is
+relaxed. Source is uncompiled; remote full-suite CI and read-only cross-family review are required
+under the 10:35 standing order. Local builds/tests remain deferred while memory is below4GB.
+
+This branch starts from integration65922 and includes pending873,877,886 and887 (including869
+and879). Their final reviewed/merged source must be included before merge. This restores the EU
+query adapter; rights, Formex population, LU acquisition and top-level mount catalog wiring still
+remain. Two independent full mount processes and their byte comparison are not yet demonstrated.
+The active6eb EU runtime/custody are unchanged; no old-run import or full-LU fit is claimed.
+
+
 ## Retained expression production pairings (Codex, 2026-10-01)
 
 Pending869 is the explicit prerequisite for this slice. The expression producer retains its own
