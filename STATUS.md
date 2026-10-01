@@ -18,9 +18,16 @@ compact index entries, and one requested subject's assertions during lookup. No 
 memory or disk measurement is claimed. Scope resolution and corpus construction still materialize
 graphs and require the separate bounded paths in the lane design note.
 
-The new storage and its tests are unvalidated. They use the existing legacy chunk writer pending
-PR #855's separately reviewed small-chunk profile. EU decoder recovery has priority; local checks
-will follow it, one heavy job at a time. No publisher requests were made for this draft.
+At de9f84ca, the Release build and required fast tests passed. Remote CI and local affected
+ingest tests found the same two census omissions. The new snapshot functional cases passed.
+The actual built assembly's guarded surface was independently rendered: it adds the snapshot's
+private instance constructor, static initializer and internal Open method. Those literal entries
+are now pinned, with exact candidate/guarded counts changed from 255/137 to 256/138. No census
+assertion is loosened. Repaired validation is pending.
+
+This slice uses the existing legacy chunk writer; PR #855's small-chunk profile is now merged.
+EU decoder recovery has priority, with local heavy checks serialized. No publisher requests were
+made for this draft.
 
 ## EU object-facts continuation range (Codex, 2026-10-01)
 
