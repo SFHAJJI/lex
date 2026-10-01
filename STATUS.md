@@ -3769,3 +3769,38 @@ and a current storage check before and after its runtime is frozen; it has not s
 
 PRs #827, #829 and #830 are merged. The all-82-seed EU retry remains prepared, with a
 4,999,959,422-byte launch allowance and checks before and after freezing its runtime.
+## Retained Formex manifestation enumeration (Codex, 2026-10-01)
+
+The retained checkpoint binds each expression to its original enumeration, renderer, plan and
+result digest. Reopening checks both passes with current custody receipts and independently
+rebinds the count queries. It preserves the original observation identities and sends no requests.
+Page requests remain checked against retained evidence and the caller's run pin.
+
+Exact f80bdee6 passed CI 36856566025 with 5,354 passed and 22 skipped, including all 17 original
+cases. Claude found the production code sound but required the merged parent and current base.
+One repair includes merged869/872 at c9e5a40a, checks a single pass value in 1..2 before conversion,
+and refuses a literal-null root with an integrity exception. One new before-writes regression
+brings this slice to 18 cases. Fresh combined CI gates merge; local builds/tests remain deferred
+under the acquisition memory guard. The offline budget records zero sends with a synthetic ceiling
+of two, not the historical wire allowance. Full population/acquisition and mount replay are separate.
+
+## Retained expression production pairings (Codex, 2026-10-01)
+
+This slice depends on PR869. It retains the expression producer's own paired enumerations
+and the corrigendum tripwire built from them. Reopening verifies those enumerations, rebinds
+count templates to original batches and artifact IDs, and repeats the existing private
+production and tripwire fold. Expression derivation, episode, tripwire and lineage must
+match the held originals byte for byte. Both production orders retain checkpoints.
+
+The original 33 new cases passed at 392567c6: CI 36856266903 reported 5,370 passed and
+22 skipped; the required watch exited zero. Claude found no material production defect but
+requested the merged parent/base and combined census fix. The one repair includes merged869
+1a63b61a and the 261/140/7 candidate/guarded/declined union. It adds explicit null-root integrity
+refusals in all three readers, validates one pass value in 1..2 before conversion, and adds three
+null-root regression cases. The repaired head 39b0f98f passed CI 36858496167. Merged LU parent c9e5a40a is now included,
+with the explicit EU null-root guard preserved. Fresh combined CI gates merge; local builds/tests remain deferred under
+the acquisition memory guard. No complete offline mount process is claimed.
+
+The current store's protection is checked again. Changed protection refuses the original
+byte claim because protection is part of derivation identity. Replay reports zero publisher
+requests. Complete offline acquisition composition and independent mount builds remain pending.
