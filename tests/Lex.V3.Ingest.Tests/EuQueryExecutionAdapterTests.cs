@@ -23,7 +23,7 @@ namespace Lex.V3.Ingest.Tests;
 /// or estimated (D1-05c-2 precision six).
 /// </summary>
 [TestClass]
-public sealed class EuQueryExecutionAdapterTests
+public sealed partial class EuQueryExecutionAdapterTests
 {
     private static readonly SourceArtifactRef CompleteEnumerationRef = new(
         "urn:uuid:00000000-0000-4000-8000-0000000000f0",

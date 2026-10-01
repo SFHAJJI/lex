@@ -169,6 +169,7 @@ public sealed class EuRefusalWireNameTests
                 // #418 slice 6: batches that do not pair one to one, refused before the traffic that
                 // would deliver an Expression batch no production covers.
                 "corrigendum_tripwire_batches_not_paired",
+                "document_checkpoint_not_retained",
             }),
             string.Join("\n", WireNames<EuQueryExecutionRefusal>()),
             "a wire name changing is a contract change; a number changing is not.");
