@@ -20,9 +20,12 @@ The canonical payload digest and per-chunk retention evidence remain separate fr
 
 The draft expands the seven existing chunk obligations to both profiles and adds nine cases for
 profile admission, unread-tail corruption, an independent compressed-store reader, legacy root
-bytes and the custody bytes loaded by 100 short random reads. These 23 cases are not yet run.
+bytes and the custody bytes loaded by 100 short random reads. The first remote CI run built successfully and reported no failures in these 23 cases.
+It found three census failures: the new test wrapper needed an explicit exemption, and the two
+new receipt-returning methods needed literal surface pins. Those entries are now added; no
+receipt constructor or census assertion changed. A fresh CI run must verify the repair.
 Build, required fast tests and affected ingest tests wait for the live acquisition's heavy slot.
-A draft PR will run existing remote CI while local checks wait; it remains unready for review or
+Draft PR #855 runs existing remote CI while local checks wait; it remains unready for review or
 merge until those checks pass. No full-LU fit claim is made. Subject indexes, a checked streaming scope-resolution door,
 independent bounded manifest reopening and corpus assembly still need implementation.
 
