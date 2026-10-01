@@ -80,7 +80,7 @@ public sealed partial class EuQueryExecutionAdapter
         try
         {
             var document = ContractJson.Deserialize<RunCheckpoint>(new UTF8Encoding(false, true).GetString(bytes.Span));
-            if (document.Schema != RunCheckpointSchema || !bytes.Span.SequenceEqual(EncodeRunCheckpoint(document)) ||
+            if (document is null || document.Schema != RunCheckpointSchema || !bytes.Span.SequenceEqual(EncodeRunCheckpoint(document)) ||
                 document.Census is null || document.Objects is null || document.Tripwires is null || document.Census.Length == 0 ||
                 document.Witness is null || document.WitnessRun is null || document.Documents is null ||
                 document.Manifest is null || document.Run is null || document.Corpus is null ||

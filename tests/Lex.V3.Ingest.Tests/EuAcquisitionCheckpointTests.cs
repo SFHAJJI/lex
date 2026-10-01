@@ -15,6 +15,18 @@ public sealed partial class EuQueryExecutionAdapterTests
     private static readonly Lazy<Task<RunCapture>> RetainedEuRun = new(() => CaptureEuRunAsync(false));
 
     [TestMethod]
+    public async Task CompleteRunRejectsLiteralNullBeforeReplayWrites()
+    {
+        var store = new EuAcquisitionTestFixture.EuInMemoryCustodyStore();
+        var receipt = await store.CreateAsync("null"u8.ToArray(), CustodyClass.NightlyFloor90d, CancellationToken.None);
+        var checkpoint = new SourceArtifactRef($"urn:uuid:{Guid.NewGuid():D}", receipt.Reference.ContentSha256);
+        var writes = store.WrittenDigestsInOrder.Count;
+        await Assert.ThrowsExactlyAsync<CustodyIntegrityException>(() => EuQueryExecutionAdapter.ReopenAsync(
+            store, checkpoint, ["32016R0679"], CancellationToken.None));
+        Assert.AreEqual(writes, store.WrittenDigestsInOrder.Count);
+    }
+
+    [TestMethod]
     [DataRow(false)]
     [DataRow(true)]
     public async Task CompleteRunReplaysInSeparateStoresWithOriginalIdentitiesAndNoTraffic(bool served)
