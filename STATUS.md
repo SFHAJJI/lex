@@ -3,6 +3,53 @@
 Updated 2026-10-01 by the driver. This file replaces the issue-comment ledgers. It is rewritten in
 every pull request that changes what is served, what is next or what is blocked.
 
+## Retained Luxembourg enumeration checkpoints (Codex, 2026-10-01)
+
+This slice depends on pending PR869. The LU executor retains its closed invariant plan wire
+representation and both enumeration passes. Restoration checks the original plan, renderer,
+run and profile, then regenerates each count/page request with the existing template binder
+and original artifact IDs. Retained request bytes must match the regenerated request. The
+complete comparison and current custody receipt checks run again without publisher traffic.
+EU and LU share the actual-receipt restoration helper; no saved proof or floor is trusted.
+
+Nineteen draft cases cover empty, nonempty and multi-page enumeration, Unicode cursors,
+independent copied custody, weaker protection, missing dependencies, rehashed substitutions,
+caller pins and cancellation. These additions are uncompiled; remote CI is requested next.
+Required local Release, fast tests, affected ingests and Claude review wait for the active EU
+run and earlier validation queue. PR869 must merge and its final changes be included first.
+
+Full acquisition catalog restoration and two independent offline mount derivations remain
+outstanding. This does not establish full Luxembourg memory or disk fit. The active EU runtime,
+queued source heads, LU index builder/reader and web lane are unchanged.
+## Retained EU enumeration checkpoints (Codex, 2026-10-01)
+
+Reversible driver decision under Q-20261001-0656-codex: build acquisition persistence before
+launching the full Luxembourg population. The first slice retains each delivered EU enumeration's
+comparison inputs in checked custody and exposes its digest on the executor result. The offline
+reader checks the caller's run/profile pins, reads both counts and all pages, restores the held
+request bytes and reruns the existing binder and complete two-pass comparison. It has no HTTP
+client and performs no custody writes. This uses the existing EU request replay contract; the
+Luxembourg template renderer and LU builder/reader remain outside this slice.
+
+Twenty draft cases cover an independent copied store, empty/nonempty equality across two opens,
+missing/tampered dependencies, wrong caller identities, rehashed-root substitutions and cancellation.
+Receipt restoration obtains current write/readback receipts for every dependency before calling the
+existing receipt factory. It carries the current store floor, including a weaker copied store, and
+performs no publisher requests. Failure or receipt substitution refuses.
+
+CI36829231978 atc043f234 built and passed all20 new cases:5278 passed,22 skipped,2 census
+failures. Initial35da's invalid UUID URN caused broad downstream failures and is corrected.
+The remaining compiled census differences are the new internal completion factory and32 store
+implementations, including two named fault decorators. The literal pins are transcribed from the
+compiled log; pr-869-pin-transcription.json records the exact entry and log digest. Fresh CI must
+verify the pin repair. Local Release, required fast tests, affected ingests and Claude review
+remain pending behind active EU acquisition.
+
+No acquisition-completion or custody-floor claim is read from the checkpoint. This does not yet
+restore the complete EU/LU acquisition, Formex/rights/body outcomes, or rebuild a mount offline;
+those remain required follow-on work. Existing in-process two-build checks remain unchanged.
+Active EU retry6 uses its frozen old runtime and is untouched.
+
 ## EU escaped qualifier authority (Codex, 2026-10-01)
 
 EU retry 5 at C:/lex-v3/eu-population-20261001-3 ended at 03:08 UTC with exit 3 after
@@ -3538,3 +3585,7 @@ and a current storage check before and after its runtime is frozen; it has not s
 
 PRs #827, #829 and #830 are merged. The all-82-seed EU retry remains prepared, with a
 4,999,959,422-byte launch allowance and checks before and after freezing its runtime.
+
+PR872 initial CI36831746092 compiled and passed all19 new cases:5295 passed,22 skipped,4 census/construction failures. Compiled factory/holder and residual diagnostics are added before literal pin updates; production behavior is unchanged. Local validation and review remain pending.
+
+Diagnostic CI36832711692 repeated5295 passed/22 skipped/4 pin failures. The compiled checkpoint completion factory is now pinned exactly, existing holders verified unchanged, and the private LU schema helper is classified with a reason (258 candidates,8 declined). pr-872-pin-transcription.json records old/new rows and the log digest. Fresh CI must verify the repair.
