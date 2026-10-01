@@ -22,6 +22,8 @@ function Test-V3TrackedPath {
         'README.md',
         'SECURITY.md',
         'STATUS.md',
+        'STATUS-DATA.md',
+        'STATUS-WEB.md',
         'V3-INSTRUCTIONS.md'
     )
 

@@ -8,14 +8,22 @@
 //   `nosniff`);
 // - the card: the evaluation card at its stable route is the release's card, byte for byte, as JSON;
 // - the API: `coverage` answers from the mount the release names, by its corpus digest;
-// - V2 absent: every route V2 served answers 404, except where V3 serves the same path from its own pages.
-// It sends no request anywhere but the origin it is given, and writes nothing.
-import { readFile } from "node:fs/promises";
+// - V2 absent: every route V2 served answers 404, except where V3 serves the same path from its own pages;
+// - the browser probes (`--browser`): the journey's real-mount steps through a browser against the revision, each
+//   page held to what the API answers its request, its hydration, console, paint and security headers, and every
+//   citation verified. Privacy cannot be observed on a remote revision (its process and files are not ours to watch),
+//   so this probe states that rather than passing it: the image run's privacy probe held the same image digest.
+// It sends no request anywhere but the origin it is given, and writes nothing but a temporary copy of the release's
+// mount report, removed when it ends.
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { findBrowser } from "./browser-evidence.mjs";
 import { cspValue } from "./csp.mjs";
 import { CARD_ROUTE } from "./evaluation-card.mjs";
 import { layerTar, readLayout, readOciImage, readTar, servedPaths, v2RouteFailures } from "./image-rehearsal.mjs";
 import { invokedDirectly } from "./invoked-directly.mjs";
+import { realMountRuns } from "./journey.mjs";
 import { ASSETS, RELEASE_MANIFEST, releaseFailures } from "./release-assets.mjs";
 
 const LIVE_PREFIX = "app/v3-web/";
@@ -87,6 +95,43 @@ export async function revisionFailures(origin, { web, card, corpusSha256 }) {
   return failures;
 }
 
+/** What the browser probes cannot observe on a remote revision, stated with every browser probe run. */
+export const REMOTE_PRIVACY_NOTE =
+  "privacy is not observed here: a deployed revision's process output and files are not this probe's to watch; the image run's "
+  + "privacy probe (nothing written after the first answer, no query text, address or user agent recorded) held the same image digest";
+
+/**
+ * A deployed revision as the journey's runner takes a server: its origin, and nothing of its process, which a remote
+ * revision does not expose. The runner's privacy checks therefore have nothing to read here and prove nothing about the
+ * revision; `REMOTE_PRIVACY_NOTE` says so wherever these probes report.
+ */
+export function remoteRevision(origin) {
+  return {
+    origin,
+    output: () => "",
+    outputAtStart: 0,
+    fileWatch: { stop: async () => [] },
+    changedFiles: async () => [],
+    close: async () => {},
+  };
+}
+
+/**
+ * The browser probes of a revision deployed from the release at `releaseDirectory`: the journey's real-mount steps
+ * (`realMountRuns`, or `runs` in a test) through `browser` against `origin`, the release's mount report standing as the
+ * build report they read. Failures, each prefixed with its step; empty when every step passes.
+ */
+export async function browserFailures(origin, releaseDirectory, { browser, runs = realMountRuns }) {
+  const work = await mkdtemp(join(tmpdir(), "lex-deploy-browser-"));
+  try {
+    await writeFile(join(work, "build-report.json"), await readFile(join(releaseDirectory, ASSETS.mountReport)));
+    const results = await runs(null, work, { servedByApi: true, keyboard: false, startServer: async () => remoteRevision(origin) }, browser, null);
+    return results.flatMap(([label, { failures }]) => failures.map((failure) => `${label}: ${failure}`));
+  } finally {
+    await rm(work, { recursive: true, force: true });
+  }
+}
+
 /**
  * The probe of a revision deployed from the release at `releaseDirectory`: the release read back under the signing
  * identity's key (`publicKeyPem`), then the revision held to what the release holds. Failures, empty when both hold.
@@ -111,8 +156,9 @@ if (invokedDirectly(import.meta.url, process.argv[1])) {
   const origin = value("--origin");
   const release = value("--release");
   const publicKey = value("--public-key");
+  const withBrowser = argv.includes("--browser");
   if (release === null || publicKey === null || (origin !== null && !/^https?:\/\//.test(origin))) {
-    console.error("usage: node scripts/deploy-probe.mjs --release <release directory> --public-key <signing identity's public key, PEM> [--origin <the candidate revision's URL>]");
+    console.error("usage: node scripts/deploy-probe.mjs --release <release directory> --public-key <signing identity's public key, PEM> [--origin <the candidate revision's URL> [--browser]]");
     console.error("       without --origin, only the release is read back (deploy.ps1 does this before it touches Azure)");
     process.exit(2);
   }
@@ -123,9 +169,15 @@ if (invokedDirectly(import.meta.url, process.argv[1])) {
     console.log(failures.length === 0 ? `the release at ${release} reads back under the signing identity's key` : `${failures.length} release failure(s)`);
     process.exit(failures.length === 0 ? 0 : 1);
   }
-  deployedReleaseFailures(origin.replace(/\/+$/, ""), release, { publicKeyPem }).then((failures) => {
-    for (const failure of failures) console.error(`- ${failure}`);
-    console.log(failures.length === 0 ? `the revision at ${origin} answers as the release holds` : `${failures.length} probe failure(s)`);
-    process.exit(failures.length === 0 ? 0 : 1);
-  });
+  const target = origin.replace(/\/+$/, "");
+  const failures = await deployedReleaseFailures(target, release, { publicKeyPem });
+  if (failures.length === 0 && withBrowser) {
+    failures.push(...await browserFailures(target, release, { browser: await findBrowser() }));
+    console.log(REMOTE_PRIVACY_NOTE);
+  }
+  for (const failure of failures) console.error(`- ${failure}`);
+  console.log(failures.length === 0
+    ? `the revision at ${origin} answers as the release holds${withBrowser ? ", in the browser too" : ""}`
+    : `${failures.length} probe failure(s)`);
+  process.exit(failures.length === 0 ? 0 : 1);
 }
