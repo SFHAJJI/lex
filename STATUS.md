@@ -25,7 +25,7 @@ The draft adds both custody-obligation checks for both retention classes, empty/
 round trips, concurrent/idempotent creates, nine corruption cases through both read doors and
 create, cross-lane corruption, caller mutation/cancellation, occupied paths, CLI admission and an
 offline two-work Luxembourg acquisition/corpus rebuild with a separate compressed-store reader.
-Clean Release build passed with zero warnings/errors at630485e4. Required fast tests passed
+Clean Release build passed with zero warnings/errors at 630485e4. Required fast tests passed
 (3,105 succeeded, one skipped), and affected ingest passed (42 succeeded, two skipped), including
 the separate-reader two-work acquisition/corpus rebuild. Cross-family review and exact-head
 green CI remain required. Full LU partition assembly and population sizing remain unfinished.
