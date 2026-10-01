@@ -298,6 +298,7 @@ public sealed partial class EuFirstMountAcquisitionTests
         private readonly IReadOnlyDictionary<string, string[]> _formexListedTypesByExpressionIri;
         private readonly byte[] _rightsRobots;
         private readonly HttpStatusCode _noticeStatus;
+        private readonly Func<HttpRequestMessage, byte[]>? _packageBody;
         private readonly Dictionary<string, int> _formexCallsByExpression = new(StringComparer.Ordinal);
         private readonly List<string> _rights = [];
         private static readonly Lazy<byte[]> GdprPackage = new(() => File.ReadAllBytes(
@@ -311,8 +312,10 @@ public sealed partial class EuFirstMountAcquisitionTests
             IReadOnlyDictionary<string, EuAcquisitionTestFixture.FamilyScript> scripts,
             IReadOnlyDictionary<string, string[]> formexListedTypesByExpressionIri,
             string? rightsRobots = null,
-            HttpStatusCode noticeStatus = HttpStatusCode.OK)
+            HttpStatusCode noticeStatus = HttpStatusCode.OK,
+            Func<HttpRequestMessage, byte[]>? packageBody = null)
         {
+            _packageBody = packageBody;
             _noticeStatus = noticeStatus;
             _adapter = new HttpMessageInvoker(new EuAcquisitionTestFixture.ClassifyingHandler(scripts));
             _formexListedTypesByExpressionIri = formexListedTypesByExpressionIri;
@@ -368,7 +371,7 @@ public sealed partial class EuFirstMountAcquisitionTests
             {
                 Interlocked.Increment(ref _formexPackageRequests);
                 return uri.AbsolutePath.EndsWith("/zip", StringComparison.Ordinal)
-                    ? EuAcquisitionTestFixture.BinaryResponse(request, HttpStatusCode.OK, GdprPackage.Value, "application/zip")
+                    ? EuAcquisitionTestFixture.BinaryResponse(request, HttpStatusCode.OK, _packageBody?.Invoke(request) ?? GdprPackage.Value, "application/zip")
                     : EuAcquisitionTestFixture.BinaryResponse(
                         request, HttpStatusCode.SeeOther, [], location: "http://publications.europa.eu" + uri.AbsolutePath + "/zip");
             }

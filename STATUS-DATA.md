@@ -2,15 +2,25 @@
 
 Updated 2026-10-01.
 
+## EU consolidated bodies and states: draft validation
+
+The next checkpoint-bearing EU capture binds consolidated EN/FRA packages to each work's own typed publisher CELEX and its census relationship to a reviewed seed. Original seed identities remain separate. Missing, ambiguous, malformed or unrelated identifiers keep `IdentityNotAdmitted`; other languages retain their existing unenumerated typed outcome.
+
+The EU index draft is schema `lex-v3-europe-index/5`. Its `states` table has one row per census seed/work, including works with absent, unusable or ambiguous dates. `EuropeIndexReader.HasStates` and `ReadStates(seedCelex)` expose the population. Original wording has no inferred consolidation date; a publisher consolidation date is not an applicability date. Same-date works remain ambiguous. Raw RDF terms, each P batch's evidence and the census evidence remain in `facts_json`. Existing article wording dates keep their original meaning. Exact schema 2/3/4 readers remain available, with `HasStates=false`.
+
+Draft tests cover original and consolidated EN/FRA acquisition, checked replay, two separate offline CLI processes and whole-mount digest comparisons, date ambiguity and legacy schema 4. They are not yet compiled or run. The schema 5 fixed-input byte pin still needs its CI-observed value; no green claim or live consolidated-population claim is made. Query checkpoint 3 and Formex population checkpoint 2 pin the new facts; older versions verify their original digest and acquisition policy.
+
+PR #904's Luxembourg candidate passed CI36883780049: 5,904 passed, 0 failed, 22 skipped. It remains draft until a bounded partition is acquired, derived twice and measured. The active EU run continues unchanged; local fast/ingest tests are deferred under the acquisition and low-memory standing orders. The EU draft is independent preparation while that heavy slot is occupied.
+
 ## Current data lane: complete offline mount command
 
 `Lex.V3.Tool derive --custody <directory> --checkpoint <mount-inputs.json> --out <empty-directory> [--custody-encoding raw|brotli]`
 
 `build` retains the input catalog and prints its reference-file path. `derive` reopens the complete EU and Luxembourg acquisitions, rebuilds the corpus and both indexes, writes the manifests, report and retained generations, and verifies the mount. The original acquisition clock and checked historical receipts preserve output identity; current custody holds are checked independently. No publisher session is opened.
 
-PR #899's separate-process tests cover a raw first mount and a Brotli chained mount. Each compares every output digest with the original fixture derivation and a second process, traps network attempts, and verifies the exact file set. The predecessor directory is removed before replay. Exact bf21939c passed full CI36880064561 after the receipt and exact-file-set repairs; the read-only Claude repair confirmation returned MERGE. Final current-base CI remains the merge gate.
+PR #899's separate-process tests cover a raw first mount and a Brotli chained mount. Each compares every output digest with the original fixture derivation and a second process, traps network attempts, and verifies the exact file set. The predecessor directory is removed before replay. The read-only Claude repair confirmation returned MERGE. Final e576991e passed CI36882291778 (5,894 passed, 0 failed, 22 skipped), and PR #899 merged as 7a6c3d04.
 
-The active EU retry6 remains on its frozen runtime and predates these catalogs. Its latest retained responses are successful manifestation queries; a completed population mount is not yet available. The next fresh capture must include consolidated EN/FRA packages: the current package identity binding only admits original seed roots. Non-EN/FRA expressions keep their typed, unenumerated language-out-of-scope outcome.
+The active EU retry6 remains on its frozen runtime and predates these catalogs. Its latest retained responses are successful manifestation queries; a completed population mount is not yet available. The next fresh capture must include consolidated EN/FRA packages: the active frozen runtime only admits original seed roots; the draft above adds proven consolidated identities. Non-EN/FRA expressions keep their typed, unenumerated language-out-of-scope outcome.
 
 Luxembourg launch scope follows the owner's legislative-body family decision. Counts observed on 2026-10-01 are 93,161 subjects under the law prefix, 145,703 under grand-ducal regulations, 21,231 under codes, and 816,645 under the broader legislation prefix. These are IRI-prefix subject counts, not a legal-family census or body count. The candidate March 2017 law partition has S=219, A=1,414, G=114 from six bounded requests, independently reopened by digest. Acquire, derive twice and verify that partition before full-run sizing. Every excluded family still needs an explicit typed scope disposition.
 
@@ -1176,7 +1186,7 @@ CI evidence are recorded in the pull request before merge.
   Custody and canonical evidence: `C:\lex-v3\lanes\rights-probe`; log: `rights-probe.log` beside it.
   This receipt is the Commission policy the notice cites; Decision 95 records the accepted limit
   for Parliament and Council documents. When EU evidence bundles serve text, they must carry
-  `© European Union, https://eur-lex.europa.eu` and the statement that only the electronic Official
+  `Â© European Union, https://eur-lex.europa.eu` and the statement that only the electronic Official
   Journal is authentic. EU text bundles are still the parity slice; this change acquires the receipt.
   Next: rerun the bounded first mount with Lex.V3.Tool, using PR #750's command and the Codex
   checkout. The historical failed attempts below remain evidence of the old route.

@@ -15,9 +15,10 @@ namespace Lex.V3.Ingest.Tests;
 public sealed partial class V3FirstMountBuildTests
 {
     [TestMethod]
-    [DataRow(false, false)]
-    [DataRow(true, true)]
-    public async Task OfflineCommandRebuildsEveryMountFileInTwoSeparateProcesses(bool compressed, bool chained)
+    [DataRow(false, false, false)]
+    [DataRow(true, true, false)]
+    [DataRow(true, false, true)]
+    public async Task OfflineCommandRebuildsEveryMountFileInTwoSeparateProcesses(bool compressed, bool chained, bool consolidated)
     {
         var root = Path.Combine(Path.GetTempPath(), "lex-v3-offline-test-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(root);
@@ -26,6 +27,8 @@ public sealed partial class V3FirstMountBuildTests
             var custody = Path.Combine(root, "custody");
             var store = compressed ? FileSystemCustodyStore.WithBrotliCompression(custody) : new FileSystemCustodyStore(custody);
             var (europe, luxembourg) = await AcquireAsync(store, CheckoutRoot());
+            if (consolidated) europe = await EuFirstMountAcquisitionTests.AcquireConsolidatedAsync(store);
+            var seed = consolidated ? EuFirstMountAcquisitionTests.ConsolidatedSeed : EuAxiomWiringHarness.Seed(null).Celex;
             Assert.IsTrue(europe.Delivered, europe.Detail);
             Assert.IsTrue(luxembourg.Delivered, luxembourg.Detail);
             var time = DateTimeOffset.FromUnixTimeSeconds(DateTimeOffset.UtcNow.ToUnixTimeSeconds() + 1);
@@ -47,7 +50,7 @@ public sealed partial class V3FirstMountBuildTests
                 time = time.AddDays(1);
             }
             var checkpoint = await V3OfflineMount.CaptureAsync(store, europe, luxembourg,
-                new[] { EuAxiomWiringHarness.Seed(null).Celex }, LuxembourgFirstMountAcquisitionTests.ActRange, time, generations, CancellationToken.None);
+                new[] { seed }, LuxembourgFirstMountAcquisitionTests.ActRange, time, generations, CancellationToken.None);
             var referencePath = Path.Combine(root, "inputs.json");
             await File.WriteAllTextAsync(referencePath, ContractJson.Serialize(checkpoint));
             var baseline = await new V3FirstMountBuild(store, new V3OfflineMount.BuildClock(time)).RunAsync(europe, luxembourg, predecessor, CancellationToken.None);
@@ -72,6 +75,19 @@ public sealed partial class V3FirstMountBuildTests
             CollectionAssert.AreEqual(MountDigests(expected), MountDigests(first), "Live derivation and first independent replay\nExpected:\n" + string.Join("\n", MountDigests(expected)) + "\nActual:\n" + string.Join("\n", MountDigests(first)));
             CollectionAssert.AreEqual(MountDigests(first), MountDigests(second), "Every file, including report and generations\nFirst:\n" + string.Join("\n", MountDigests(first)) + "\nSecond:\n" + string.Join("\n", MountDigests(second)));
             Assert.IsTrue((await V3CorpusMountWriter.VerifyAsync(second, CancellationToken.None)).Verified);
+            if (consolidated)
+            {
+                using var connection = Lex.V3.Ingest.Europe.EuropeIndexBuilder.Open(
+                    Path.Combine(second, "europe-index.sqlite3"), Microsoft.Data.Sqlite.SqliteOpenMode.ReadOnly);
+                using var command = connection.CreateCommand();
+                command.CommandText = "SELECT count(*) FROM states";
+                Assert.AreEqual(2L, command.ExecuteScalar());
+                command.CommandText = "SELECT count(DISTINCT publisher_expression_id) FROM articles";
+                Assert.AreEqual(4L, command.ExecuteScalar(), "Both original and consolidated EN/FR texts must reach the complete offline mount.");
+                command.CommandText = "SELECT publisher_work_celex FROM states WHERE publisher_consolidation_date='2024-01-01'";
+                Assert.AreEqual("02016R0679-20240101", command.ExecuteScalar());
+            }
+
             string[] expectedFiles = ["build-report.json", "lex-corpus-6.json", "luxembourg-index.sqlite3",
                 "luxembourg-capability-manifest.json", "europe-index.sqlite3", "europe-capability-manifest.json"];
             if (chained)

@@ -405,18 +405,18 @@ public sealed partial class EuFormexPackagePopulationProducer
                 var expressionCelex = workCelex;
                 if (expressionCelex is null)
                 {
-                    var matches = EuAppendixASeedMap.SeedsInCelexOrder.Where(seed =>
-                        string.Equals(seed.WorkRoot, enumeration.Expression.Identity.PublisherWorkId,
-                            StringComparison.Ordinal)).Take(2).ToArray();
-                    if (matches.Length != 1)
+                    expressionCelex = EuObservedWorkIdentity.Resolve(run,
+                        enumeration.Expression.Identity.PublisherWorkId, context.OriginalWorksOnly);
+                    if (expressionCelex is null)
                     {
                         outcomes.Add(EuFormexPackageOutcome.NotAcquired(
                             enumeration.Expression, EuFormexPackageNotAcquiredReason.IdentityNotAdmitted,
-                            "the expression's work does not bind to exactly one reviewed Appendix A CELEX"));
+                            context.OriginalWorksOnly
+                                ? "the expression's work does not bind to exactly one reviewed Appendix A CELEX"
+                                : "the expression's work has no unique admitted publisher CELEX and census relation"));
                         continue;
                     }
 
-                    expressionCelex = matches[0].Celex;
                 }
 
                 var acquisition = context.IsReplay
