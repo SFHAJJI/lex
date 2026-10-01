@@ -1092,7 +1092,7 @@ CI evidence are recorded in the pull request before merge.
 
 ## Heads
 
-- `v3/integration`: `65922f24` (2026-10-01, PR #880 merged). Build 45 s. Fast lane
+- `v3/integration`: `c9e5a40a` (2026-10-01, PR #872 merged). Build 45 s. Fast lane
   (`eng/test-fast.ps1`): 3,077 tests, 3,076 pass, 1 skipped (the review of PR #828). Ingest suite: green on CI for PR #760
   (the CI `dotnet` job runs the whole solution on every pull request, about 7 min on the runner;
   green for PR #834);
@@ -1480,7 +1480,7 @@ The live reading screen and its journey step (PR #777). `dist-live/reading.html`
   - `no_version_for_date`, because the card's contract requires every absence to carry
     `what_would_answer` from its closed vocabulary (and `asserts_absence_of_law`), and the
     platform's payload names the nearest earlier and later dates instead. Its status line still
-    carries the date to ask again: "The history this index holds for this work begins on …".
+    carries the date to ask again: "The history this index holds for this work begins on â€¦".
     `text_not_available`'s payload does carry both, so its card is shown.
 - Found and fixed on the way: the React refusal card threw on the platform's own `ambiguous_version`
   payload. The platform sends its candidates as bare hash-pinned links, and the string card
@@ -1632,7 +1632,7 @@ least one article permalink, and nothing that is only prose. The journey's own p
 
 The interface languages on the live pages (PR #797, the launch contract's "DE and LB answer
 `localization_unavailable`"). Every live page carries a language list (`LocaleNav`): English,
-Français, Deutsch, Lëtzebuergesch, each named in itself and tagged with its own `lang`, the page's
+FranÃ§ais, Deutsch, LÃ«tzebuergesch, each named in itself and tagged with its own `lang`, the page's
 own language marked current, and each link's `hrefLang` the language of the page it leads to
 (English for an unreviewed language; review of #797). Only English chrome is reviewed (`REVIEWED_CHROME_LOCALES`), so the
 other three lead to `locale-fr.html`, `locale-de.html` and `locale-lb.html`, built into `dist-live`:
@@ -2236,8 +2236,8 @@ holds the two date kinds apart in three places:
   - the entries the EU views use carry no Luxembourg date word ("applies", "version", "state",
     "s'applique");
   - no other entry, page introductions apart, carries an EU one ("wording of", "Wording date",
-    "dated {date}", "libellé du", "Date du libellé").
-  "Wording" and "libellé" alone stay Luxembourg words too: an article's wording changes from state
+    "dated {date}", "libellÃ© du", "Date du libellÃ©").
+  "Wording" and "libellÃ©" alone stay Luxembourg words too: an article's wording changes from state
   to state.
 - **What each screen says and a screen reader hears**, for every census answer on all eight
   screens: the text and the human-read attributes, with the answer's own values taken out, use only
@@ -2404,7 +2404,7 @@ A held state this build lacks stays held: absence is not a withdrawal.
 - The reader's history replay (#866) covers the new events with no change: every observation's
   events are recomputed from the log alone.
 - `withdrawn_from_source` and `resighted` stay unminted. They need the three-run rule (31-v3-spec
-  §91(b)) and a proof of complete enumeration.
+  Â§91(b)) and a proof of complete enumeration.
 - The review of #867 found that a chained log broke the served event operations: `answer_drift`
   threw on any revising event, and `events` called every log genesis. So the fourth slice is part
   of #867:
@@ -2496,7 +2496,7 @@ Predecessor chaining, the fifth slice, second part (PR #874): `as_observed` by b
   A build's time bounds observation only from above.
 - The `answer_drift` and `events` MCP descriptions no longer call every log genesis (stale since
   #867).
-- The registry digest moves with the new request schema, to `c40e23fd…`.
+- The registry digest moves with the new request schema, to `c40e23fdâ€¦`.
 
 Schema 6 served with its build record absent (PR #878).
 - **The gap.** Since #864 the reader read only the newest schema. So the API refused every Luxembourg
@@ -2533,7 +2533,7 @@ Schema 6 served with its build record absent (PR #878).
   - `coverage`'s build-time row says the index records no build time either;
   - the corpus check holds only the binding: no source bodies or build time are held to check.
 - **Fixtures:** the real bounded first mount's Luxembourg index, manifest and corpus, byte for byte
-  the files its build report names (`c7f40548…`, `ef03cacd…`, `312d4804…`).
+  the files its build report names (`c7f40548â€¦`, `ef03cacdâ€¦`, `312d4804â€¦`).
   - The mount opens and is served with its build record absent.
   - A schema-6 index with states (the state fixture rewritten into schema 6's tables) serves its
     genesis log, `as_of` answers, and `as_observed` refuses.
@@ -2629,6 +2629,45 @@ truthful").
     names their predecessor absent.
 - **Next:** `as_observed` and `verify` quote a state from a retained generation.
 
+Predecessor chaining, the sixth slice, third part (PR #889): a state only a retained generation
+holds is answered from it, and the permalink the product emitted for it still verifies (G3, and the
+launch contract's "`verify` resolves every citation the product emitted").
+- **Readers at startup.** The mount opens one verified reader per retained generation, newest first,
+  so no request opens one (the image's private `/tmp` holds every index copy from startup on). The
+  readers are disposed with the mount.
+- **`as_observed`:**
+  - a state the mounted index lacks is served in full from the newest retained generation that holds
+    it, with `text_held: true` and `text_from` naming that generation;
+  - `text_from` is null for a state the mounted index holds;
+  - a state no held build holds stays identity only, without text;
+  - a work the mounted build no longer holds at all is found through the log by its stable work
+    coordinate, and answered from its generation (review of #889). An identifier the log never held
+    keeps `identifier_unknown`.
+- **`verify`:** a pinned permalink whose digest a later build replaced at its coordinate is verified
+  in the retained generation that holds it:
+  - `digest_matches`, with `held_in` naming the generation and `superseded_by` the mounted state that
+    replaced it;
+  - `verified_by` is the generation's own corpus and index, and the sources are its own;
+  - with the generation pruned, it is `pinned_digest_mismatch` naming the current state, as before.
+  - The generation is asked before any refusal over the current states. So the permalink resolves
+    when the coordinate holds another state, several (one per language), or none any more, and
+    `superseded_by` is null in the last case (review of #889).
+  - A driver decision: the verdict stays `digest_matches`, because the digest does match the retained
+    text. The superseded state is named beside it, so a citation checker keeps working and a reader
+    sees that the citation is no longer the current text.
+- **On two real builds of the state fixture,** the second with one article reworded:
+  - `as_observed` at the first build's snapshot serves the original state from the generation;
+  - the permalink emitted before the rewording verifies there, naming the reworded state;
+  - with the generation pruned, the same requests answer without text and as a mismatch;
+  - removing the generation lookup from `verify` fails the test;
+  - a later build that holds the work no longer at all (chained, from the complete envelope, which
+    holds no Luxembourg state) answers `as_observed` from the generation by the work's coordinate,
+    and verifies the old permalink with `superseded_by` null. Reverting either repair fails that
+    test.
+- **What is left of predecessor chaining** is the data lane's part: observation times
+  (`observed_from`) once a Luxembourg body's capture time reaches the corpus, then `knowable_on` and
+  withdrawal.
+
 The live export composer and its journey step (PR #789), the eighth screen. `dist-live/export.html`
 has its own bundle `client-live-export.js`.
 - The page asks what the reading page asks: the same form (`ReadingForm`, now shared), the same one
@@ -2703,7 +2742,7 @@ request.
 
 **The search journey step passes (PR #773, run locally 2026-09-30).** `node scripts/journey.mjs`
 now runs two steps, each with and without the fixture mount, and all four runs pass.
-- The search step loads `/search.html` and waits for hydration. It types "assemblée générale"
+- The search step loads `/search.html` and waits for hydration. It types "assemblÃ©e gÃ©nÃ©rale"
   over the DevTools protocol (`Input.insertText`, so React's own change handler runs) and presses
   the submit button.
 - With the mount, the page ends in the answer, showing "4 with the exact phrase, 1 with every
@@ -3100,7 +3139,7 @@ proves the path, not a corpus.
   Custody and canonical evidence: `C:\lex-v3\lanes\rights-probe`; log: `rights-probe.log` beside it.
   This receipt is the Commission policy the notice cites; Decision 95 records the accepted limit
   for Parliament and Council documents. When EU evidence bundles serve text, they must carry
-  `© European Union, https://eur-lex.europa.eu` and the statement that only the electronic Official
+  `Â© European Union, https://eur-lex.europa.eu` and the statement that only the electronic Official
   Journal is authentic. EU text bundles are still the parity slice; this change acquires the receipt.
   Next: rerun the bounded first mount with Lex.V3.Tool, using PR #750's command and the Codex
   checkout. The historical failed attempts below remain evidence of the old route.
@@ -3329,7 +3368,8 @@ recorded by PR #862:
    - `events` and `answer_drift` across the chain (folded into PR #867 by its review);
    - each build's time in the log (PR #871), then `as_observed` by build snapshot (G4) (PR #874);
    - a generation mount (G3b), retained by S7-A09: generations written and verified (PR #880),
-     held to the log by the mount with the depth reported (PR #885), then quoted.
+     held to the log by the mount with the depth reported (PR #885), and quoted by `as_observed`
+     and `verify` (PR #889).
    `observed_from` stays null until a Luxembourg body's capture time reaches the corpus (data lane);
    `knowable_on` and withdrawal follow it. The owner questions (G1 when a file changes but its text
    does not, "as observed" identified by snapshot with no time, retaining every generation) were
@@ -3476,7 +3516,7 @@ Decision 95 (lex-governance PR #9, merged 2026-09-30) records these rulings and 
   Office route (`https://publications.europa.eu/resource/celex/32011D0833`, `Accept:
   application/xhtml+xml`, `Accept-Language: eng`; observed 2026-09-30: 303 then 200, 48,730 bytes,
   sha256 `2d5bc877...`). Decision 88's one-GET exception for `eur-lex.europa.eu` is withdrawn: no
-  request goes to that host. Served EU text carries "© European Union, https://eur-lex.europa.eu"
+  request goes to that host. Served EU text carries "Â© European Union, https://eur-lex.europa.eu"
   and the statement that only the electronic Official Journal is authentic.
 - Two lanes (amends Decision 94). Codex drives the data lane (the EU rights receipt, the first real
   mount, the populations, French EU bodies, EU parity, release-pipeline pieces without production
@@ -3509,7 +3549,7 @@ Each is the driver's call under ruling 7 and can be reversed by a later pull req
 
 - The EU search screen (PR #853): an EU answer whose hits pin no wording is said as unreadable, not
   shown unpinned, since every citation the live screens show must pin its digest. An EU hit is a
-  "wording of" its date, and the French draft calls the one held wording a "libellé".
+  "wording of" its date, and the French draft calls the one held wording a "libellÃ©".
 - The EU permalink grammar (PR #850): language as a path segment, not only a parameter, so one
   grammar serves English and French expressions. The wording digest is computed in the API (the
   panel's boundary), not stored in the EU index. If the data lane later stores a wording digest, the
@@ -3624,7 +3664,7 @@ Repair fast lane: 3,065 pass / 1 Windows skip; repair build: zero warnings/error
 - EU search on the live search screen waits on an EU permalink grammar (item 5). The real mount's
   EU index answers `search` in one work (for example `32016R0679`, 60 hits for "personal data"), and
   the web search reader refuses the answer by design, reading Luxembourg's only. Each EU hit cites
-  its expression IRI and provision (`…/3e485e15-…-01aa75ed71a1.0006#lex-provision=001`), not a
+  its expression IRI and provision (`â€¦/3e485e15-â€¦-01aa75ed71a1.0006#lex-provision=001`), not a
   hash-pinned permalink. A screen showing those citations would break the launch contract's first
   promise, which the journey holds. Once the grammar exists: the search screen gains the optional
   work identifier, the reader reads the EU answer, and the journey searches the EU work on the real
@@ -3687,3 +3727,60 @@ and a current storage check before and after its runtime is frozen; it has not s
 
 PRs #827, #829 and #830 are merged. The all-82-seed EU retry remains prepared, with a
 4,999,959,422-byte launch allowance and checks before and after freezing its runtime.
+## Retained Luxembourg enumeration checkpoints (Codex, 2026-10-01)
+
+This slice depends on pending PR869. The LU executor retains its closed invariant plan wire
+representation and both enumeration passes. Restoration checks the original plan, renderer,
+run and profile, then regenerates each count/page request with the existing template binder
+and original artifact IDs. Retained request bytes must match the regenerated request. The
+complete comparison and current custody receipt checks run again without publisher traffic.
+EU and LU share the actual-receipt restoration helper; no saved proof or floor is trusted.
+
+Nineteen cases cover empty, nonempty and multi-page enumeration, Unicode cursors, independent
+custody, weaker protection, missing inputs, caller pins, substitutions and cancellation. Exact
+d834ae22 passed CI 36856207562: 5,356 passed and 22 skipped; the required watch exited zero.
+Claude found no material LU code defect and requested the current parent/base and combined census
+correction. The one repair includes reviewed PR869 source 60c2589c and integration d56d0539,
+sets the union to 262 candidates/140 guarded types, preserves all member pins and copies each
+regenerated request body once. PR869 is merged as 1a63b61a and included; final current-base CI gates this merge.
+Local builds/tests remain deferred under the acquisition memory guard.
+
+Full acquisition catalog restoration and two independent offline mount derivations remain
+outstanding. This does not establish full Luxembourg memory or disk fit. The active EU runtime,
+queued source heads, LU index builder/reader and web lane are unchanged.
+
+## Retained EU enumeration checkpoints (Codex, 2026-10-01)
+
+Each delivered EU enumeration retains its comparison inputs in checked custody. Offline
+reopening checks the original run/profile, both counts, all pages, request bytes, the binder
+and complete two-pass comparison. The reader has no HTTP client and performs no writes.
+Receipt restoration separately re-holds every receipt member to obtain the current store
+floor. The request body and checkpoint are checked reads but are not receipt members; the
+receipt floor alone does not establish future reopening of the entire checkpoint closure.
+
+All 20 new cases passed at 101e362d. CI 36853853290 reported 5,318 passed and 22 skipped;
+the required watch exited zero. Claude returned MERGE with no material code findings.
+The one repair clarifies the receipt-member boundary and includes integration d874273b,
+preserving both STATUS sections. Fresh final-head CI gates merge. Local Release/fast/ingest
+checks remain deferred under the acquisition memory guard.
+
+No saved success or protection flag is trusted as a proof. Complete acquisition composition,
+Formex/rights/body outcomes and two independent offline mount processes remain follow-on work.
+The active EU acquisition uses its frozen runtime and remains untouched.
+
+## Compact Luxembourg object identities (Codex, 2026-10-01)
+
+Object identity sets retain sorted 32-byte digests. Binary search preserves exact membership,
+duplicate-set semantics and canonical bytes. Checked reopening enforces the original digest,
+byte equality, ordering and refusal precedence. No publisher or custody admission changes.
+
+All 27 new cases passed at b222687c: CI 36851145863 reported 5,305 passed and 22 skipped,
+with 259 candidates and 139 guarded types after merging integration 65922f24. The required
+CI watch exited 0. Claude reviewed that exact head and requested corrected documentation
+counts; this is the one repair round. The code review found no material defect.
+
+Integration d874273b is now included. Combined CI 36853595395 passed 5,324 tests with 22 skipped; only the candidate total
+failed (260 versus 259). Its complete member pins passed. The candidate total is now
+260; the passing literal pin contains 140 guarded types. Fresh CI gates merge. Local Release build, required fast tests, affected ingest checks and the synthetic
+measurement remain deferred under the acquisition memory guard. No full-LU fit is claimed.
+The remaining observation, scope and corpus graphs still require bounded derivation evidence.

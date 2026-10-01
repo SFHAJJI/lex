@@ -203,14 +203,16 @@ public static class V3CorpusMountWriter
     }
 
     /// <summary>
-    /// Records, for a chained mount that holds none of its earlier builds, the retention line's decision over none held: each
-    /// earlier build absent, none claimed. A genesis log has no earlier build and gets no record.
+    /// Records, for a chained mount, the retention line's decision over the earlier builds held beside it
+    /// (<paramref name="present"/>, none by default: each earlier build absent, none claimed). A genesis log has no earlier
+    /// build and gets no record. The caller places the held generations; this writes only the record.
     /// </summary>
     internal static async Task WriteRetentionRecordAsync(
         string directory,
         SourceArtifactRef indexRef,
         ReadOnlyMemory<byte> indexBytes,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        IReadOnlySet<string>? present = null)
     {
         var log = LogOf(indexRef, indexBytes.Span);
         if (log.Count < 2)
@@ -221,7 +223,7 @@ public static class V3CorpusMountWriter
         var none = new HashSet<string>(StringComparer.Ordinal);
         var root = Path.Combine(directory, GenerationsDirectoryName);
         Directory.CreateDirectory(root);
-        await File.WriteAllBytesAsync(Path.Combine(root, RetentionFileName), RenderRetention(V3GenerationRetention.Decide(log, none, none), none), cancellationToken)
+        await File.WriteAllBytesAsync(Path.Combine(root, RetentionFileName), RenderRetention(V3GenerationRetention.Decide(log, present ?? none, none), none), cancellationToken)
             .ConfigureAwait(false);
     }
 

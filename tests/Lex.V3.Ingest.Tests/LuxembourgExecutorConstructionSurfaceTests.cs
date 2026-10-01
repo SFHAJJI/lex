@@ -92,32 +92,27 @@ public sealed class LuxembourgExecutorConstructionSurfaceTests
     }
 
     /// <summary>
-    /// The run result: two factories, one for each half of "delivered or refused, never both and
-    /// never neither", over one private constructor.
+    /// The run result has a private constructor and delivered/refused factories. The internal
+    /// checkpoint completion factory also requires a delivered receipt; it cannot construct a
+    /// refused or empty result. These exact doors and their holders are pinned below.
     /// </summary>
-    /// <remarks>
-    /// This pin is what holds that invariant now. The constructor used to carry a check for it,
-    /// which no caller could trip, because Delivered and Refused are its only callers and each
-    /// passes exactly one non-null argument. The check was removed as unreachable defense; what
-    /// makes the invariant true is that this list has exactly these two factories in it, so a
-    /// third door taking both, or neither, is a line in a diff here.
-    /// </remarks>
     [TestMethod]
     public void ARunResultIsDeliveredOrRefusedByConstruction()
     {
         CollectionAssert.AreEqual(
             new[]
             {
-                "constructor private instance " + N + "LuxembourgEnumerationRunResult::.ctor("
-                + Core + "RepeatedEnumerationDeliveryReceipt?, "
-                + N + "LuxembourgEnumerationRefusalDetail?, System.Int32) -> "
-                + N + "LuxembourgEnumerationRunResult",
-                "method public static " + N + "LuxembourgEnumerationRunResult::Delivered("
-                + Core + "RepeatedEnumerationDeliveryReceipt, System.Int32) -> "
-                + N + "LuxembourgEnumerationRunResult",
-                "method public static " + N + "LuxembourgEnumerationRunResult::Refused("
-                + N + "LuxembourgEnumerationRefusalDetail, System.Int32) -> "
-                + N + "LuxembourgEnumerationRunResult",
+                "constructor private instance Lex.V3.Ingest.Luxembourg.LuxembourgEnumerationRunResult::.ctor(Lex.V3.Contracts.S"
+                    + "ource.Core.RepeatedEnumerationDeliveryReceipt?, Lex.V3.Ingest.Luxembourg.LuxembourgEnumerationRefusalDetail?, "
+                    + "System.Int32) -> Lex.V3.Ingest.Luxembourg.LuxembourgEnumerationRunResult",
+                "method internal static Lex.V3.Ingest.Luxembourg.LuxembourgEnumerationRunResult::DeliveredWithCheckpoint(Lex.V3"
+                    + ".Contracts.Source.Core.RepeatedEnumerationDeliveryReceipt, System.Int32, Lex.V3.Contracts.Source.Core.SourceAr"
+                    + "tifactRef) -> Lex.V3.Ingest.Luxembourg.LuxembourgEnumerationRunResult",
+                "method public static Lex.V3.Ingest.Luxembourg.LuxembourgEnumerationRunResult::Delivered(Lex.V3.Contracts.Sourc"
+                    + "e.Core.RepeatedEnumerationDeliveryReceipt, System.Int32) -> Lex.V3.Ingest.Luxembourg.LuxembourgEnumerationRunR"
+                    + "esult",
+                "method public static Lex.V3.Ingest.Luxembourg.LuxembourgEnumerationRunResult::Refused(Lex.V3.Ingest.Luxembourg"
+                    + ".LuxembourgEnumerationRefusalDetail, System.Int32) -> Lex.V3.Ingest.Luxembourg.LuxembourgEnumerationRunResult",
             },
             ConstructionSurface.Of(typeof(LuxembourgEnumerationRunResult)).ToArray());
 
