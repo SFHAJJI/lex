@@ -3508,7 +3508,7 @@ recorded by PR #862:
    does not, "as observed" identified by snapshot with no time, retaining every generation) were
    answered by the panel on the owner's behalf; PR #871 records the answers.
 2. The index capability manifest's per-operation rows for the unserved operations: one small
-   additive pull request.
+   additive pull request (PR #891).
 3. A credential-free deployment kit, so the owner's go-live is one command (item 7; PR #890). It holds the
    Azure definitions for the one-server container, and a deploy script that takes the subscription,
    the managed identity and the signing identity as parameters and never reads or stores a secret.
@@ -3743,6 +3743,18 @@ Each is the driver's call under ruling 7 and can be reversed by a later pull req
   (`operations.not_served_data`), which the API owns, rather than in the index capability manifest,
   which the data lane's builders write. The data named are the specification's own
   (`33-product-spec.md`). The index manifest can carry the same rows later without changing them.
+  PR #891 makes it so: the table is `V3UnservedOperations` in Contracts, which the API's `coverage`
+  reads and both index builders state in every capability manifest they write (`not_served`).
+  - The manifest schema stays `/1`: the field is additive and written only when stated, so an
+    earlier manifest keeps its exact bytes and reads back with none. That covers the real bounded
+    first mount's manifest and the data lane's running EU population's.
+  - The reader's canonical re-render holds either shape exact. Malformed rows refuse
+    `malformed_not_served`, and an empty list or rows out of order are not canonical.
+  - A manifest's rows are what the platform did not serve when it was built; `coverage` keeps
+    reporting today's routes.
+  - With this, the launch line "all 27 registered names, each either served or refusing with a typed
+    reason its capability manifest states" holds on a fresh build: the three unserved operations
+    answer `operation_not_served`, and each manifest states the data that would serve them.
 - The web hosting shape of ruling 3 is `Lex.V3.Api` serving the built live pages beside `/api/v3` and
   `/mcp`, with the security headers, rather than an ingress split.
 - Exports (PRs #789 and #790): JSON, CSV and PDF are written from one model, so they cannot
