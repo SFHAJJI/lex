@@ -1,6 +1,7 @@
 using System.Globalization;
 using Lex.V3.Api;
 using Lex.V3.Contracts.Evaluation;
+using Lex.V3.Ingest.Europe;
 using Lex.V3.Ingest.Luxembourg;
 using Microsoft.Data.Sqlite;
 using static Lex.V3.Ingest.Tests.V3CorpusClassificationMountTests;
@@ -15,10 +16,14 @@ namespace Lex.V3.Ingest.Tests;
 /// a string held nowhere must find nothing, as must a word scoped to a work that does not hold it; and an article
 /// permalink must be accepted under its own work and anchor, and one naming an anchor its state lacks refused. The
 /// judgments are the corpus's own truth about its text, so 1.0 is the path's exactness, not a quality claim.
+/// An EU index gives its own cases the same way (<c>EuropeSearchMatching</c> is the same byte-exact substring): a word
+/// held by a few provisions of one work in one language, searched with that work as its scope (EU search is served in
+/// one work), and strings that work holds nowhere. EU <c>verify</c> is not served, so the EU gives no exact case.
 /// </summary>
 public sealed partial class V3MountedGatesTests
 {
-    private const string RetrievalCollection = "lu-mount";
+    private const string RetrievalCollection = "mount";
+    private const int EuropeWorkSample = 2;
     private const int RetrievalFloor = 3;
     private const int MaxWordCases = 6;
     private const int MaxJudgedPerWord = 5;
@@ -30,6 +35,7 @@ public sealed partial class V3MountedGatesTests
     internal static IReadOnlyDictionary<string, RetrievalRequest> RetrievalCases(string mountDirectory, IReadOnlyList<Timeline> timelines)
     {
         var requests = new SortedDictionary<string, RetrievalRequest>(StringComparer.Ordinal);
+        EuropeCases(mountDirectory, requests);
         var held = timelines
             .SelectMany(static timeline => timeline.Dates.Where(static date => date.States.Count == 1).Select(date => (Timeline: timeline, date.Date, State: date.States[0])))
             .ToArray();
@@ -60,7 +66,7 @@ public sealed partial class V3MountedGatesTests
         var workOfWord = new Dictionary<string, string>(StringComparer.Ordinal);
         foreach (var word in words)
         {
-            if (requests.Count >= MaxWordCases)
+            if (requests.Keys.Count(static key => key.StartsWith("word-", StringComparison.Ordinal)) >= MaxWordCases)
             {
                 break;
             }
@@ -125,6 +131,112 @@ public sealed partial class V3MountedGatesTests
     }
 
     /// <summary>
+    /// The EU cases of a mount's EU index, for a seeded sample of its works in each language: words held by one to five
+    /// provisions, each judged to find exactly those (the work's CELEX and the publisher's provision id, as a hit names
+    /// them), and strings the work holds nowhere.
+    /// </summary>
+    private static void EuropeCases(string mountDirectory, IDictionary<string, RetrievalRequest> requests)
+    {
+        var path = Path.Combine(mountDirectory, V3CorpusMount.EuropeIndexFileName);
+        if (!File.Exists(path))
+        {
+            return;
+        }
+
+        using var connection = EuropeIndexBuilder.Open(path, SqliteOpenMode.ReadOnly);
+        var works = SampleEuropeWorks(
+            Rows(connection, "SELECT DISTINCT publisher_work_celex, language FROM articles ORDER BY publisher_work_celex, language")
+                .Select(static row => (row[0], row[1])).ToArray(),
+            EuropeWorkSample, Seed);
+        var random = new SplitMix64(Seed);
+        foreach (var (celex, language) in works)
+        {
+            var words = Rows(connection, $"SELECT searchable_text FROM articles WHERE publisher_work_celex = '{celex.Replace("'", "''", StringComparison.Ordinal)}' AND language = '{language}' ORDER BY article_identity_sha256")
+                .SelectMany(static row => row[0].Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries))
+                .Where(static word => word.Length >= 6 && word.All(char.IsLetter))
+                .Distinct(StringComparer.Ordinal)
+                .ToArray();
+            for (var at = words.Length - 1; at > 0; at--)
+            {
+                var other = random.NextBelow(at + 1);
+                (words[at], words[other]) = (words[other], words[at]);
+            }
+
+            var taken = 0;
+            foreach (var word in words)
+            {
+                if (taken >= MaxWordCases)
+                {
+                    break;
+                }
+
+                var found = EuropeHolding(connection, celex, language, word);
+                if (found.Count is < 1 or > MaxJudgedPerWord)
+                {
+                    continue;
+                }
+
+                requests[$"eu-word-{celex}-{language}-{word}"] = new(EvaluationCaseKind.Retrieval, "search", new { query = word, language, identifier = celex },
+                    found.Select(provision => new JudgedAnchor(celex, provision, JudgedAnchor.SupportingGrade)).ToArray());
+                taken++;
+            }
+
+            foreach (var nothing in NoHitStrings.Where(value => EuropeHolding(connection, celex, language, value).Count == 0))
+            {
+                requests[$"eu-no-hit-{celex}-{language}-{nothing}"] = new(EvaluationCaseKind.Retrieval, "search", new { query = nothing, language, identifier = celex }, []);
+            }
+        }
+    }
+
+    /// <summary>
+    /// A seeded sample of up to <paramref name="perLanguage"/> EU works in each language the index holds, so no held
+    /// language goes unsearched however many works another language has (review of #845: the first version took two
+    /// work-language pairs in all, and could leave French out).
+    /// </summary>
+    internal static IReadOnlyList<(string Celex, string Language)> SampleEuropeWorks(IReadOnlyList<(string Celex, string Language)> pairs, int perLanguage, ulong seed)
+    {
+        var sample = new List<(string Celex, string Language)>();
+        foreach (var language in pairs.Select(static pair => pair.Language).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal))
+        {
+            var ofLanguage = pairs.Where(pair => pair.Language == language).OrderBy(static pair => pair.Celex, StringComparer.Ordinal).ToArray();
+            var random = new SplitMix64(seed);
+            for (var at = ofLanguage.Length - 1; at > 0; at--)
+            {
+                var other = random.NextBelow(at + 1);
+                (ofLanguage[at], ofLanguage[other]) = (ofLanguage[other], ofLanguage[at]);
+            }
+
+            sample.AddRange(ofLanguage.Take(perLanguage));
+        }
+
+        return sample;
+    }
+
+    /// <summary>The provisions of one EU work in one language whose searchable text holds a string, by the EU search's own order.</summary>
+    private static List<string> EuropeHolding(SqliteConnection connection, string celex, string language, string text)
+    {
+        using var command = connection.CreateCommand();
+        command.CommandText =
+            "SELECT publisher_identifier FROM articles WHERE publisher_work_celex = $celex AND language = $language AND instr(searchable_text, $text) > 0 " +
+            "ORDER BY publisher_identifier, article_identity_sha256";
+        command.Parameters.AddWithValue("$celex", celex);
+        command.Parameters.AddWithValue("$language", language);
+        command.Parameters.AddWithValue("$text", text);
+        using var reader = command.ExecuteReader();
+        var found = new List<string>();
+        while (reader.Read())
+        {
+            var provision = reader.GetString(0);
+            if (!found.Contains(provision, StringComparer.Ordinal))
+            {
+                found.Add(provision);
+            }
+        }
+
+        return found;
+    }
+
+    /// <summary>
     /// The (work, article) pairs of one language whose searchable text holds a string, by the search's own order, and
     /// the hits the search would count (one per article per state).
     /// </summary>
@@ -180,13 +292,16 @@ public sealed partial class V3MountedGatesTests
             return request.Operation == "verify"
                 ? [new RankedAnchor(value.GetProperty("work_key").GetString()!, value.GetProperty("requested_anchor").GetString()!)]
                 : value.GetProperty("hits").EnumerateArray()
-                    .Select(static hit => new RankedAnchor(hit.GetProperty("work_key").GetString()!, hit.GetProperty("publisher_id").GetString()!))
+                    // A Luxembourg hit names its work by work key; an EU hit by its CELEX.
+                    .Select(static hit => new RankedAnchor(
+                        (hit.TryGetProperty("work_key", out var work) ? work : hit.GetProperty("celex")).GetString()!,
+                        hit.GetProperty("publisher_id").GetString()!))
                     .Distinct()
                     .ToArray();
         };
         var report = RetrievalEvaluation.Evaluate(cases, arm, RetrievalFloor, ndcgThreshold: 1.0);
         var control = cases.Length == 0
-            ? new ControlResult(ShuffledControlNames.QrelsShuffle, ControlVerdict.NotApplicable, "there is no retrieval case to shuffle: the mount holds no Luxembourg state held alone on its date", Seed)
+            ? new ControlResult(ShuffledControlNames.QrelsShuffle, ControlVerdict.NotApplicable, "there is no retrieval case to shuffle: the mount holds no Luxembourg state held alone on its date and no EU index", Seed)
             : ShuffledControls.QrelsShuffle(cases, arm, (set, run) => RetrievalEvaluation.Evaluate(set, run, RetrievalFloor, ndcgThreshold: 1.0), Seed);
         return EvaluationCard.Retrieval("search and verify, cases derived from the mount's own text", cases, report, 1.0, control);
     }
@@ -260,5 +375,55 @@ public sealed partial class V3MountedGatesTests
         {
             Assert.AreNotEqual(GateVerdict.Fail, gate.Verdict, $"{gate.Gate}: {gate.Value} over {gate.N}");
         }
+    }
+
+    [TestMethod]
+    public async Task AnEuIndexGivesItsOwnRetrievalCasesFromItsText()
+    {
+        // The GDPR mounted alone in its EU index: the EU words and strings held nowhere are measured, scoped to the work,
+        // and resolver exactness has no case (EU verify is not served), so it is not measured and says so.
+        var fixture = await EuropeMountedFixture.CreateAsync();
+        await using var cleanup = fixture;
+        using var mount = await V3CorpusMount.OpenAsync(fixture.Directory, CancellationToken.None);
+        Assert.IsNotNull(mount);
+
+        var requests = RetrievalCases(fixture.Directory, Timelines(fixture.Directory));
+        Assert.IsTrue(requests.Keys.Any(static key => key.StartsWith("eu-word-", StringComparison.Ordinal)), string.Join(", ", requests.Keys));
+        Assert.IsTrue(requests.Keys.Any(static key => key.StartsWith("eu-no-hit-", StringComparison.Ordinal)));
+        var set = RunRetrievalGate(mount, fixture.Directory, Timelines(fixture.Directory));
+        var gates = set.Gates.ToDictionary(static gate => gate.Gate);
+        Assert.AreEqual(GateVerdict.Pass, gates[EvaluationGateNames.AnchorNdcgAt10].Verdict, $"{gates[EvaluationGateNames.AnchorNdcgAt10].Value} over {gates[EvaluationGateNames.AnchorNdcgAt10].N}");
+        Assert.AreEqual(GateVerdict.Pass, gates[EvaluationGateNames.NoHitAccuracy].Verdict);
+        Assert.AreEqual(GateVerdict.NotMeasured, gates[EvaluationGateNames.ResolverExactness].Verdict, "EU verify is not served, so no exact case");
+    }
+
+    [TestMethod]
+    public void TheEuSampleTakesWorksInEveryLanguage()
+    {
+        // The review of #845's reproduction: three English works and one French; the first version's sample of two pairs
+        // in all, after its shuffle, took two English ones and left French unsearched.
+        var pairs = new[] { ("A", "eng"), ("B", "eng"), ("C", "eng"), ("D", "fra") };
+        var sample = SampleEuropeWorks(pairs, EuropeWorkSample, Seed);
+        CollectionAssert.Contains(sample.ToArray(), ("D", "fra"), "the French work is searched");
+        Assert.AreEqual(2, sample.Count(static pair => pair.Language == "eng"), "two of the English works");
+        Assert.AreEqual(3, sample.Count);
+    }
+
+    [TestMethod]
+    public async Task AnEuWorkHeldInFrenchIsSearchedInFrench()
+    {
+        // The GDPR mounted with its French expression in place of the English one: the language the index holds is the
+        // language searched, so a French work gives French cases, and they pass.
+        var fixture = await EuropeMountedFixture.CreateAsync(acquireFrenchExpression: true);
+        await using var cleanup = fixture;
+        using var mount = await V3CorpusMount.OpenAsync(fixture.Directory, CancellationToken.None);
+        Assert.IsNotNull(mount);
+
+        var requests = RetrievalCases(fixture.Directory, Timelines(fixture.Directory));
+        Assert.IsTrue(requests.Keys.Any(static key => key.StartsWith("eu-word-", StringComparison.Ordinal) && key.Contains("-fra-", StringComparison.Ordinal)), string.Join(", ", requests.Keys));
+        Assert.IsFalse(requests.Keys.Any(static key => key.Contains("-eng-", StringComparison.Ordinal)), "no English is held here, so none is asked");
+        var gates = RunRetrievalGate(mount, fixture.Directory, Timelines(fixture.Directory)).Gates.ToDictionary(static gate => gate.Gate);
+        Assert.AreEqual(GateVerdict.Pass, gates[EvaluationGateNames.AnchorNdcgAt10].Verdict, $"{gates[EvaluationGateNames.AnchorNdcgAt10].Value} over {gates[EvaluationGateNames.AnchorNdcgAt10].N}");
+        Assert.AreEqual(GateVerdict.Pass, gates[EvaluationGateNames.NoHitAccuracy].Verdict);
     }
 }
