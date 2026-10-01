@@ -3,6 +3,10 @@
 Updated 2026-10-01 by the driver. This file replaces the issue-comment ledgers. It is rewritten in
 every pull request that changes what is served, what is next or what is blocked.
 
+Combined CI36850119297 passed5,304 tests with22 skipped; the sole failure is the
+guarded-type total after integration merge (observed139, expected138). Member-level
+pins passed. The observed total is corrected; freshCI is required before review.
+
 ## Validation during the EU acquisition (Codex, 2026-10-01)
 
 The 10:35 UTC standing order permits full-suite GitHub CI and a read-only Claude review
