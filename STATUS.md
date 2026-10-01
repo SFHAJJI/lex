@@ -11,10 +11,14 @@ and repeats the existing inventory/annex core using checked retained routes. Con
 fetch/profile and reproduce typed outcomes and identities. Unexecuted attempts remain operational
 refusals; no new observation or publisher request is invented.
 
-All32 cases passed ataf34feed: CI36857633402 reported5,432 passed and22 skipped, with
-required watch exit zero. Merged876/integration1fe27581 and reviewed document parentc98e1bd4
-are included. Pending879 must merge with final source included. Fresh combined CI and read-only
-Claude review remain required; local builds/tests stay deferred under the acquisition memory guard.
+All 32 new cases passed at reviewed 853b1906: CI 36863759397 reported 5,491 passed
+and 22 skipped. Claude returned MERGE with no material findings. The one editorial repair
+restores spacing and records that parent PR 879 is merged as 749e88a3. Fresh current-base
+CI gates merge; local tests remain deferred while the long acquisition holds the heavy slot.
+The input digest currently serializes the corpus for each expression; avoiding that repeated
+work remains a measured performance follow-up. If checkpoint retention fails, acquisition is
+reported as checkpoint_not_retained and carries no annex classification, even after a successful
+fetch. This explicit refusal preserves the replay requirement.
 
 Successful populations expose immutable package results tied to their exact outcome objects.
 Complete acquisition composition and same-run object restoration still gate independent mounts.
