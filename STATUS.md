@@ -2241,7 +2241,10 @@ predecessor's event log forward.
   - it is numbered as observations appending events;
   - its last observation is of the index's corpus;
   - every state is held by the log at its own digest;
-  - the last observation's events are exactly those it must append to the log before it.
+  - the last observation's events are exactly those it must append to the log before it;
+  - every observation's events are exactly those it appends to the log before it, replayed from the
+    log alone (the states it leaves held). The review of #866 found that a carried genesis event
+    renamed `expression_added` passed both the predecessor read and the reader.
   That the log before it is the predecessor's is proven by the build, which copies it.
 - `VerifyEventLogSources` checks the corpus's bodies against the log's last word on each state.
 - Plumbing: `V3FirstMountBuild.ReadPredecessor(directory)` and a `RunAsync` overload, with both

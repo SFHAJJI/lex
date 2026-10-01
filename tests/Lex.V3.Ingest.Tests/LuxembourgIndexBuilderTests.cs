@@ -885,6 +885,8 @@ public sealed class LuxembourgIndexBuilderTests
                      ("UPDATE log_stamp SET log_schema='lex-v3-event-log/0'", false, LuxembourgIndexBuildRefusal.PredecessorSchemaDiffers, "lex-v3-event-log/0"),
                      ("UPDATE log_stamp SET log_rows_sha256='" + new string('0', 64) + "'", false, LuxembourgIndexBuildRefusal.PredecessorMismatch, "does not match its log stamp"),
                      ("UPDATE observations SET last_seq=last_seq+1", true, LuxembourgIndexBuildRefusal.PredecessorMismatch, "do not number its events"),
+                     // The review of #866's reproduction: a genesis observation's event renamed, the log stamp recomputed.
+                     ("UPDATE events SET event='expression_added' WHERE seq=1", true, LuxembourgIndexBuildRefusal.PredecessorMismatch, "holds events that are not the ones it appends"),
                  })
         {
             var (tampered, reference) = Tampered(bytes, tamper, restamp);
@@ -892,6 +894,33 @@ public sealed class LuxembourgIndexBuilderTests
             Assert.AreEqual(expected, refusal, tamper);
             StringAssert.Contains(detail, reason, tamper);
         }
+    }
+
+    /// <summary>
+    /// The review of #866: every observation of a carried log is replayed, not only the last, so a chained index whose
+    /// predecessor part holds an event no build could have written (a genesis event renamed expression_added) is refused
+    /// by the reader, with both stamps recomputed over the change.
+    /// </summary>
+    [TestMethod]
+    public async Task AChainedIndexWhoseCarriedLogHoldsAFalseEventIsRefused()
+    {
+        var (envelope, first, corpus) = await BuildStateEnvelopeAsync();
+        var second = LuxembourgIndexBuilder.TryBuild(
+            envelope, LuxembourgIndexPredecessor.TryRead(first.IndexRef, first.IndexBytes.Span, out _, out _), out var refusal, out var detail);
+        Assert.IsNotNull(second, $"{refusal}: {detail}");
+        var renamed = MutateDatabase(second.IndexBytes.Span, connection =>
+        {
+            Execute(connection, "UPDATE events SET event='expression_added' WHERE seq=1");
+            Execute(connection, "UPDATE stamp SET logical_rows_sha256=$digest WHERE stamp_id=1", ("$digest", LuxembourgIndexBuilder.HashLogicalRows(
+                ReadMembers(connection), ReadArticles(connection), ReadStates(connection), ReadWorkTitles(connection), ReadRelations(connection), ReadWorkFacts(connection), ReadEvents(connection))));
+            Execute(connection, "UPDATE log_stamp SET log_rows_sha256=$digest WHERE log_stamp_id=1",
+                ("$digest", LuxembourgIndexBuilder.HashEventLog(ReadObservations(connection), ReadEvents(connection))));
+        });
+        var digest = Convert.ToHexStringLower(SHA256.HashData(renamed));
+        var exception = Assert.ThrowsExactly<InvalidDataException>(() => LuxembourgIndexReader.OpenAndVerify(
+            new SourceArtifactRef(LexCorpus6Builder.ResourceIdOf(digest), digest), renamed, corpus.ArtifactRef, RebindManifest(second.CapabilityManifest, digest)));
+        StringAssert.Contains(exception.Message, "not the log of its states");
+        StringAssert.Contains(exception.InnerException!.Message, "observation 1 holds events that are not the ones it appends");
     }
 
     /// <summary>

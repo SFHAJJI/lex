@@ -130,7 +130,7 @@ public sealed class LuxembourgIndexPredecessor
             }
 
             LuxembourgIndexBuilder.ValidateLogNumbering(observations, events);
-            _ = LuxembourgIndexBuilder.FoldLog(events);
+            LuxembourgIndexBuilder.ValidateLogHistory(observations, events);
             return new LuxembourgIndexPredecessor(digest, observations, events);
         }
         catch (Exception exception) when (exception is SqliteException or IOException or InvalidDataException)
@@ -1018,6 +1018,7 @@ public static class LuxembourgIndexBuilder
 
         try
         {
+            ValidateLogHistory(observations, events);
             var held = FoldLog(events);
             var sourceBodies = new Dictionary<string, string[]>(StringComparer.Ordinal);
             foreach (var state in states)
@@ -1041,6 +1042,39 @@ public static class LuxembourgIndexBuilder
         catch (InvalidDataException exception)
         {
             throw new InvalidDataException("The Luxembourg index event rows are not the log of its states.", exception);
+        }
+    }
+
+    /// <summary>
+    /// The log's history, replayed from the log alone (review of #866): every observation's events must be exactly the
+    /// ones it appends to the log before it, given the states it leaves the log holding (every state held before, with
+    /// those it replaced, and those it sighted), so an event a build could not have written refuses wherever it sits in
+    /// the log, not only in its last observation. A genesis observation can hold only <c>first_sighting</c>: before it the
+    /// log holds nothing.
+    /// </summary>
+    internal static void ValidateLogHistory(IReadOnlyList<ObservationRow> observations, IReadOnlyList<EventRow> events)
+    {
+        foreach (var observation in observations)
+        {
+            var before = events.Take(checked((int)(observation.FirstSeq - 1))).ToArray();
+            var appended = events.Skip(before.Length).Take(checked((int)(observation.LastSeq - observation.FirstSeq + 1))).ToArray();
+            var after = FoldLog([.. before, .. appended]);
+            var states = after.Values
+                .Select(static held => new StateRow(
+                    held.WorkKey, held.ApplicabilityDate, held.StateSha256, held.ExpressionIri, string.Empty, string.Empty, held.Language, "[]", "[]"))
+                .ToArray();
+            var bodies = new Dictionary<string, string[]>(StringComparer.Ordinal);
+            foreach (var held in after.Values)
+            {
+                bodies[held.StateSha256] = held.SourceBodies.ToArray();
+            }
+
+            var expected = ProjectChainedEvents(FoldLog(before), states, bodies, observation.FirstSeq, out _);
+            if (expected is null || !expected.SequenceEqual(appended))
+            {
+                throw new InvalidDataException(
+                    $"The Luxembourg event log's observation {observation.Observation} holds events that are not the ones it appends.");
+            }
         }
     }
 
