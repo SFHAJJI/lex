@@ -42,6 +42,37 @@ public sealed class V3EuropePermalinkTests
         return text.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries).First(static token => token.Length >= 6 && token.All(char.IsLetter));
     }
 
+    /// <summary>
+    /// The wording digest recomputed by the rule the answer states (<c>EuropeWordingDigestRule</c>), independently of the
+    /// API's code: the domain, the CELEX, the work and expression IRIs, the language, the wording date, then every article
+    /// identity in the publisher's article order, each field a 4-byte big-endian length and its UTF-8 bytes.
+    /// </summary>
+    internal static string WordingSha256ByTheStatedRule(
+        string celex, string workId, string expressionId, string language, string wordingDate, IEnumerable<string> articleIdentities)
+    {
+        using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
+        void Append(string value)
+        {
+            var bytes = Encoding.UTF8.GetBytes(value);
+            var length = new byte[4];
+            BinaryPrimitives.WriteInt32BigEndian(length, bytes.Length);
+            hash.AppendData(length);
+            hash.AppendData(bytes);
+        }
+
+        foreach (var field in new[] { "lex-v3-eu-wording/1", celex, workId, expressionId, language, wordingDate })
+        {
+            Append(field);
+        }
+
+        foreach (var identity in articleIdentities)
+        {
+            Append(identity);
+        }
+
+        return Convert.ToHexStringLower(hash.GetHashAndReset());
+    }
+
     private static async Task<V3Envelope> VerifyAsync(V3CorpusMount mount, string identifier, string? language = null) =>
         await EnvelopeAsync(mount, "/api/v3/verify", "verify", language is null ? new { identifier } : new { identifier, language });
 
@@ -95,27 +126,8 @@ public sealed class V3EuropePermalinkTests
         }
 
         Assert.AreEqual(1, rows.Select(static row => row[4]).Distinct().Count(), "the GDPR's wording holds one date");
-        using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
-        void Append(string value)
-        {
-            var bytes = Encoding.UTF8.GetBytes(value);
-            var length = new byte[4];
-            BinaryPrimitives.WriteInt32BigEndian(length, bytes.Length);
-            hash.AppendData(length);
-            hash.AppendData(bytes);
-        }
-
-        foreach (var field in new[] { "lex-v3-eu-wording/1", rows[0][0], rows[0][1], rows[0][2], rows[0][3], rows[0][4] })
-        {
-            Append(field);
-        }
-
-        foreach (var row in rows)
-        {
-            Append(row[5]);
-        }
-
-        Assert.AreEqual(Convert.ToHexStringLower(hash.GetHashAndReset()), answer.GetProperty("pinned_wording").GetProperty("wording_sha256").GetString());
+        var digest = WordingSha256ByTheStatedRule(rows[0][0], rows[0][1], rows[0][2], rows[0][3], rows[0][4], rows.Select(static row => row[5]));
+        Assert.AreEqual(digest, answer.GetProperty("pinned_wording").GetProperty("wording_sha256").GetString());
     }
 
     [TestMethod]
