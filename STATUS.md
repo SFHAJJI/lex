@@ -3,6 +3,23 @@
 Updated 2026-10-01 by the driver. This file replaces the issue-comment ledgers. It is rewritten in
 every pull request that changes what is served, what is next or what is blocked.
 
+## Direct Luxembourg scope classification (Codex, 2026-10-01)
+
+Reversible driver decision: construct each final immutable resource resolution during classification,
+then derive its scope input after the global evidence table is fixed. This removes the population-wide
+anonymous intermediate classification array and its retained temporary assertion/relation arrays.
+The existing complete structural validation, object ordering, global target lookup, evidence ordering,
+constructor checks, inbound relations and accounting remain in place. This reduces duplicated working
+state; it does not provide bounded observation, scope or corpus construction.
+
+Three draft mixed-population cases permute 130 resources with shared evidence, a body with a replaced
+item, a coordinated-text relation to that body, an inbound citation and empty metadata resources.
+They compare all serialized resolution fields and explicitly check resource/input alignment and the
+global relation result. Existing resolver and ingest checks remain required. No local build, tests,
+measurement or cross-family review has run: EU acquisition owns the heavy slot. Remote CI is the
+first compiler/test feedback; local required fast tests and affected ingest checks follow the queued
+work. No measured memory saving or full Luxembourg capacity is claimed.
+
 ## EU escaped qualifier authority (Codex, 2026-10-01)
 
 EU retry 5 at C:/lex-v3/eu-population-20261001-3 ended at 03:08 UTC with exit 3 after

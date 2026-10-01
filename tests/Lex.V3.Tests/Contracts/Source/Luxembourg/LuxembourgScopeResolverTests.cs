@@ -20,6 +20,54 @@ public sealed class LuxembourgScopeResolverTests
     private const string N = "Lex.V3.Contracts.Source.Luxembourg.";
 
     [TestMethod]
+    [DataRow(0)]
+    [DataRow(1)]
+    [DataRow(2)]
+    public void MixedPopulationKeepsResourceInputAlignmentAndGlobalRelations(int permutation)
+    {
+        var profile = Profile();
+        var body = BodyObservation(previousItemIri: "http://data.legilux.public.lu/file/previous.xml");
+        const string coordinatedIri = ActParentIri + "/coordinated";
+        var coordinated = new LuxembourgResourceObservation(
+            ObjectRef(coordinatedIri), ObservationRef,
+            [Iri(coordinatedIri, RdfType, Jolux + "Act"),
+             Iri(coordinatedIri, Jolux + "typeDocument", JoluxAuthority + "resource-type/TC")],
+            [new LuxembourgObservedRelation(coordinatedIri, Jolux + "consolidates", ActIri,
+                ObservationRef, LuxembourgRelationAuthority.PublisherAsserted),
+             new LuxembourgObservedRelation(coordinatedIri, Jolux + "cites", ActIri,
+                ObservationRef, LuxembourgRelationAuthority.PublisherAsserted)],
+            new LuxembourgSparqlRightsChannelObservations(ObservationRef, SparqlEnumerationRef, []),
+            new LuxembourgInFileRightsChannelObservations(ObservationRef, InFileEnumerationRef, []));
+        var observations = Enumerable.Range(0, 128).Select(EmptyPopulationObservation)
+            .Concat([body, coordinated]).ToArray();
+        var baseline = Assert.IsInstanceOfType<LuxembourgProfileResolution.Resolved>(
+            profile.Resolve(Proven(observations)));
+        var reordered = permutation switch
+        {
+            0 => observations.Reverse().ToArray(),
+            1 => observations.Skip(65).Concat(observations.Take(65)).ToArray(),
+            _ => observations.Where((_, index) => index % 2 == 0)
+                .Concat(observations.Where((_, index) => index % 2 != 0)).ToArray(),
+        };
+        var resolved = Assert.IsInstanceOfType<LuxembourgProfileResolution.Resolved>(
+            profile.Resolve(Proven(reordered)));
+        Assert.AreEqual(ContractJson.Serialize(baseline), ContractJson.Serialize(resolved),
+            "Canonical resources, evidence ordinals, scope inputs, accounting and inbound edges must agree.");
+        Assert.AreEqual(130, resolved.Resources.Count);
+        for (var ordinal = 0; ordinal < resolved.Resources.Count; ordinal++)
+            Assert.AreEqual(resolved.Resources[ordinal].ObjectRef, resolved.ScopeInputs[ordinal].ObjectRef);
+        var consolidated = resolved.Resources.Single(resource => resource.ObjectRef.PublisherUri == coordinatedIri);
+        Assert.AreEqual(LuxembourgConsolidatesShapeState.AcceptedTcToCompatibleAct,
+            consolidated.Relations.Single(relation => relation.PredicateIri == Jolux + "consolidates").ConsolidatesShape?.State);
+        var inbound = resolved.LocalInboundRelations.Single();
+        Assert.AreEqual(ActIri, inbound.SubjectIri);
+        Assert.AreEqual(coordinatedIri, inbound.ObjectIri);
+        var original = resolved.Resources.Single(resource => resource.ObjectRef.PublisherUri == ActIri);
+        Assert.IsTrue(original.IsPublisherActClass);
+        CollectionAssert.AreEqual(new[] { JoluxAuthority + "resource-type/LOI" }, original.LegalTypes.ToArray());
+    }
+
+    [TestMethod]
     public void RepeatedScopeInputsShareOnlyImmutableIdentityFreeValuesWithinOneResolution()
     {
         var profile = Profile();
