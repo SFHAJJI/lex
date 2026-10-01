@@ -101,6 +101,9 @@ public sealed class V3AnswerSamplesTests
         "requested_snapshot",
         "snapshot.snapshot_id",
         "snapshot.corpus_sha256",
+        // `coverage` names each snapshot whose text the mount holds by its index digest, the mounted one included, so it
+        // moves with `index_sha256`; the observation number and build time beside it stay pinned.
+        "history.snapshots_with_text[].snapshot_id",
     ];
 
     /// <summary>Whether a path (operation prefix dropped) of an operation's answer is one the fixture re-mints.</summary>

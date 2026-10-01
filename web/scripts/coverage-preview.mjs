@@ -28,6 +28,14 @@
 //     file whose header promises not to teach one, and asserted by a test. It is also the case
 //     that caught the page saying "No capability was measured" about a mount that had measured
 //     one.
+//
+// All three are one mount, so they carry one history, and it is a CHAINED one, because the captured
+// answer is a genesis log and already shows that case: four builds in the log, the text of three held
+// (the mounted build and two earlier generations the retention line kept, one of them for two
+// reasons) and one named by the log alone. The builds are placed so the retention line
+// (`V3GenerationRetention.Decide`) decides exactly what is listed: the first is its UTC day's last
+// build and its month's earliest, the second September's earliest held, the third neither, and the
+// mounted build is the fourth and last of its day.
 
 import { page } from './render.mjs';
 import { renderCoverage } from './coverage.mjs';
@@ -115,6 +123,48 @@ const NOT_SERVED_DATA = Object.freeze([
   }),
 ]);
 
+// The platform's own sentence, to the character (`V3CorpusMount.HistoryNote`).
+const HISTORY_NOTE =
+  'the builds the mounted Luxembourg log records (its snapshots), and those whose text this mount holds: the mounted build, and each '
+  + 'earlier generation the retention line keeps beside it (S7-A09: referenced generations indefinitely, the last build of each UTC day '
+  + "for 90 days, each UTC month's earliest indefinitely), held to the log when the mount opened; a snapshot without text is named by the "
+  + "log alone, and as_observed answers its states without text; every time here is a build's, an upper bound on observation, never an "
+  + 'observation time';
+
+const HISTORY = Object.freeze({
+  history_begins: '2026-08-31T23:00:00Z',
+  log_records_builds: true,
+  note: HISTORY_NOTE,
+  retention_policy: Object.freeze({
+    evaluated_at: '2026-09-01T18:00:00Z',
+    id: 'lex-v3-generation-retention/1',
+    nightly_days: 90,
+  }),
+  snapshots_in_log: 4,
+  snapshots_with_text: Object.freeze([
+    Object.freeze({
+      built_at: '2026-08-31T23:00:00Z', observation: 1, retained_as: Object.freeze(['nightly', 'monthly_keeper']), snapshot_id: 'a3'.repeat(32),
+    }),
+    Object.freeze({
+      built_at: '2026-09-01T06:00:00Z', observation: 2, retained_as: Object.freeze(['monthly_keeper']), snapshot_id: 'b4'.repeat(32),
+    }),
+    Object.freeze({
+      built_at: '2026-09-01T18:00:00Z', observation: 4, retained_as: Object.freeze(['mounted']), snapshot_id: INDEX,
+    }),
+  ]),
+  snapshots_without_text: 1,
+});
+
+function history() {
+  return {
+    ...HISTORY,
+    retention_policy: { ...HISTORY.retention_policy },
+    snapshots_with_text: HISTORY.snapshots_with_text.map((snapshot) => ({
+      ...snapshot, retained_as: [...snapshot.retained_as],
+    })),
+  };
+}
+
 const NOT_HELD = Object.freeze([
   Object.freeze({
     item: 'publisher_universe',
@@ -134,11 +184,10 @@ const NOT_HELD = Object.freeze([
   }),
   Object.freeze({
     item: 'build_time_and_currency',
-    reason: 'this report states no build time and no build time of the corpus file is held, so '
-      + "nothing here says how current these counts are; the index's event log records when each "
-      + 'build ran (events: log.built_at), an upper bound on when its corpus was observed and no '
-      + 'measure of currency against the publisher; the corpus and index digests name exactly which '
-      + 'artifacts are mounted',
+    reason: 'history gives when each build ran, an upper bound on when its corpus was observed and '
+      + 'never an observation time, and nothing here says how current these counts are against the '
+      + 'publisher; no build time of the corpus file itself is held; the corpus and index digests name '
+      + 'exactly which artifacts are mounted',
   }),
   Object.freeze({
     item: 'legal_status',
@@ -215,6 +264,7 @@ function answer({ requestedLanguage, languages, capabilityCells }) {
   return {
     capability_cells: capabilityCells,
     counts_note: COUNTS_NOTE,
+    history: history(),
     languages,
     languages_held: [...LANGUAGES_HELD],
     members: {
@@ -255,7 +305,9 @@ const WHOLE_MOUNT = {
     + 'periods and knows when its states begin and end; the other holds forty articles of which '
     + 'none carries a publisher date, so nothing about it can be searched and its two date cells '
     + 'say "not stated by the platform" rather than sitting blank. The works column sums past the '
-    + 'total and is meant to: a work published in two languages is one work in two rows.',
+    + 'total and is meant to: a work published in two languages is one work in two rows. Its log '
+    + 'records four builds and the mount holds the text of three: its own and two earlier ones the '
+    + 'retention line kept, each with the reasons it was kept.',
   answer: answer({
     requestedLanguage: null,
     languages: [{ ...FRA }, { ...DEU }],
@@ -311,10 +363,10 @@ export function renderCoveragePreview({ locale = 'en' } = {}) {
       + 'a wrong answer but a comfortable one: a count presented as current, a breakdown that reads '
       + 'as complete because nothing said it was not, two numbers in one row that cannot both be '
       + 'true.</p>\n'
-      + '      <p>Nothing on it says when the counting happened. Its report states no build time and '
-      + 'records that it does not, so what names the artifacts these counts came from is a pair of '
-      + 'digests rather than an instant. The calendar dates in the tables are the publisher’s facts '
-      + 'about the law and are a different kind of thing.</p>\n'
+      + '      <p>Nothing on it says how current the counts are. Its build times, in the history section, '
+      + 'say when each build ran, an upper bound on observation, and none of them dates the counts; what '
+      + 'names the artifacts these counts came from is a pair of digests. The calendar dates in the '
+      + 'tables are the publisher’s facts about the law and are a different kind of thing.</p>\n'
       + '      <p>Every value on this page is synthetic and none of it is law.</p>\n'
       + PREVIEW_ANSWERS.map((preview) => (
         `      <section class="coverage-case"><h2>${preview.heading}</h2>`

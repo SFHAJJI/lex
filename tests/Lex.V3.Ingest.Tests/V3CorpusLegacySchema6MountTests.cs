@@ -84,6 +84,10 @@ public sealed class V3CorpusLegacySchema6MountTests
             using var mount = await V3CorpusMount.OpenAsync(directory, CancellationToken.None);
             Assert.IsNotNull(mount);
             var coverage = (await EnvelopeAsync(mount, "/api/v3/coverage", "coverage", new { })).Result!.Value;
+            var history = coverage.GetProperty("history");
+            Assert.IsFalse(history.GetProperty("log_records_builds").GetBoolean(), "a schema-6 log records no build");
+            Assert.AreEqual(0, history.GetProperty("snapshots_in_log").GetInt32());
+            Assert.AreEqual(V3CorpusMount.HistoryNotRecordedNote, history.GetProperty("note").GetString());
             Assert.AreEqual(indexRef.Sha256, coverage.GetProperty("mounted").GetProperty("index_sha256").GetString());
             var buildTime = coverage.GetProperty("not_held").EnumerateArray().Single(row => row.GetProperty("item").GetString() == "build_time_and_currency");
             Assert.AreEqual(V3CorpusMount.CoverageLegacyBuildTimeRow[1], buildTime.GetProperty("reason").GetString());
