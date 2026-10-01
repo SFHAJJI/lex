@@ -3,6 +3,14 @@
 Updated 2026-10-01 by the driver. This file replaces the issue-comment ledgers. It is rewritten in
 every pull request that changes what is served, what is next or what is blocked.
 
+## EU acquire-once / replay-from-custody operation — consolidated PR #892
+
+Driver decision under the 13:40 UTC standing order: combine the remaining EU witness, renderer, rights, Formex population, document ladders and query replay slices into this catalog operation. This branch includes the exact repaired heads of #870, #877, #882, #883, #886 and #888, including their cross-family review fixes. Those PRs are superseded here; their review and CI evidence remain recorded. #887 supplies the shared corpus identity rebuild and retains its own merge turn.
+
+The operation reopens one EU query run, binds its original corpus identity, restores Formex against that same run, and verifies the rights route and all six retained renderer roles. It creates no publisher requests. The combined branch includes the missing-expression guard, bounded pass validation and shared-renderer foreign-component regression. Fresh combined CI and a fresh review of this consolidated scope precede the final merge lock and exact-head validation.
+
+This is the EU acquisition operation. The complete offline mount CLI, LU query catalog and two independent process mount comparison remain pending. The active population run predates these catalog writers; no automatic import of that older custody is claimed.
+
 ## EU acquisition replay review repair — PR #888
 
 Claude reviewed 977a5fda with no material defect; CI 36862500249 passed 5,546 tests with 22 live-publisher tests skipped, including all 38 checkpoint cases. The repair validates exactly one pass parameter in range 1–2 before casting, removes an assertion against a handler replay cannot access, and corrects the receipt-targeted write comment. Replay itself requires zero wire-budget use. Final merged parents #877, #886 and #887, current-base integration and fresh exact-head CI remain required. #879 is merged.
