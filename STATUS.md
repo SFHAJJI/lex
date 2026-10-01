@@ -3397,3 +3397,5 @@ and a current storage check before and after its runtime is frozen; it has not s
 
 PRs #827, #829 and #830 are merged. The all-82-seed EU retry remains prepared, with a
 4,999,959,422-byte launch allowance and checks before and after freezing its runtime.
+
+PR872 initial CI36831746092 compiled and passed all19 new cases:5295 passed,22 skipped,4 census/construction failures. Compiled factory/holder and residual diagnostics are added before literal pin updates; production behavior is unchanged. Local validation and review remain pending.

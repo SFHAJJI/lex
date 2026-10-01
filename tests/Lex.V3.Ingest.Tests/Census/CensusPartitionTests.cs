@@ -85,7 +85,9 @@ public sealed class CensusPartitionTests
                 .Distinct(StringComparer.Ordinal)
                 .OrderBy(static name => name, StringComparer.Ordinal)
                 .ToArray(),
-            "a swept type is in no pin and on no declined list, so nothing records what it is");
+            "a swept type is in no pin and on no declined list, so nothing records what it is. Missing:\n" +
+            string.Join("\n", ClosedSurfaceCensus.Candidates(CensusScope.SweptHere)
+                .Except(pinned.Concat(Declined.Select(NameOf)), StringComparer.Ordinal)));
     }
 
     [TestMethod]

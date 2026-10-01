@@ -105,6 +105,9 @@ public sealed class LuxembourgExecutorConstructionSurfaceTests
     [TestMethod]
     public void ARunResultIsDeliveredOrRefusedByConstruction()
     {
+        Console.WriteLine("RESULT CONSTRUCTION:\n" + string.Join("\n", ConstructionSurface.Of(typeof(LuxembourgEnumerationRunResult))));
+        Console.WriteLine("RESULT HOLDERS:\n" + string.Join("\n", ConstructionSurface.ProducersIn(
+            typeof(LuxembourgEnumerationRunResult).Assembly, typeof(LuxembourgEnumerationRunResult), true)));
         CollectionAssert.AreEqual(
             new[]
             {
