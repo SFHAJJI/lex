@@ -974,11 +974,11 @@ CI evidence are recorded in the pull request before merge.
 
 ## Heads
 
-- `v3/integration`: `07cfd3c5` (2026-10-01, PR #856 merged). Build 45 s. Fast lane
+- `v3/integration`: `a1a46b33` (2026-10-01, PR #857 merged). Build 45 s. Fast lane
   (`eng/test-fast.ps1`): 3,077 tests, 3,076 pass, 1 skipped (the review of PR #828). Ingest suite: green on CI for PR #760
   (the CI `dotnet` job runs the whole solution on every pull request, about 7 min on the runner;
   green for PR #834);
-  locally about 15 min. 991 web tests pass. The web job's "browser debugger never answered" failures
+  locally about 15 min. 995 web tests pass. The web job's "browser debugger never answered" failures
   (keyboard-walk, and paint-check since #811) are fixed by PR #822: each browser binds its own
   debugging port (`launchBrowser`) instead of a random one another browser starting at the same
   moment could hold.
@@ -2103,6 +2103,52 @@ STATUS item 4.
 - Trust and Coverage shows the rows in a table, in both renderers, captioned "The data that would
   serve each operation with no route". The words have French drafts. The preview answers carry the
   platform's sentences to the character, and the census holds them.
+
+The timeline speech test per publisher (PR #860), the evidence the launch contract names for its
+promise "Luxembourg applicability dates and EU wording-state dates are never merged, in text or in
+speech". Before the EU screens there was nothing EU on a page to merge. `web/test/date-speech.test.mjs`
+holds the two date kinds apart in three places:
+- **What the platform sends:** no EU answer in either census carries a Luxembourg state's date
+  fields (`applicability_date`, `next_applicability_date`, `latest_applicability_date`,
+  `history_begins`, `state_sha256`), and no Luxembourg answer carries an EU wording's
+  (`wording_date`, `wording_dates`, `pinned_wording`).
+- **What the interface table says**, in English and in the French draft:
+  - the entries the EU views use carry no Luxembourg date word ("applies", "version", "state",
+    "s'applique");
+  - no other entry, page introductions apart, carries an EU one ("wording of", "Wording date",
+    "dated {date}", "libellé du", "Date du libellé").
+  "Wording" and "libellé" alone stay Luxembourg words too: an article's wording changes from state
+  to state.
+- **What each screen says and a screen reader hears**, for every census answer on all eight
+  screens: the text and the human-read attributes, with the answer's own values taken out, use only
+  the publisher's own date words. Each publisher's screens are seen saying their own words. The
+  platform's sentences are data here, so an EU answer saying its date is never merged with a
+  Luxembourg applicability date is the promise kept.
+- **Mutations:** each is caught.
+  - An EU hit "version of" fails the table check, the screen check and the borrowed-render check.
+  - A Luxembourg hit "wording of" fails the table and screen checks.
+  - An `applicability_date` added to the EU dossier census answer fails the field check.
+
+The launch contract's first promise over EU answers (PR #860): "verify resolves every citation the
+product emitted". `V3CitationVerificationTests` walked only Luxembourg answers. It now also walks the
+answers the EU screens read, on the GDPR fixture: search in one work, and the dossier.
+- The citations by role (each `permalink`, and any string that is exactly an EU permalink) must be
+  hash-pinned EU permalinks. Each must verify as `digest_matches` for the very wording it pins
+  (`wording_sha256`), and for its provision, unescaped.
+- An EU `resolve.identifier` is the coordinate EU `resolve` answers (a provision or an expression),
+  not a pinned citation, so it is asked of `resolve` and must answer.
+- A mutant that drops the dossier permalink's digest is caught ("not a hash-pinned EU permalink").
+
+The refusal set measures EU `verify` (PR #860). On a mount with an EU index, when the work's
+expression holds one wording date, the mounted refusal set derives three more requests. The wording
+digest is recomputed from the index rows by the stated rule, so `verify` answering also checks the
+API's digest:
+- a pinned provision: answered;
+- a digest the wording does not have: `pinned_digest_mismatch`;
+- a provision the wording does not hold: `anchor_not_in_version`.
+On the real bounded first mount the refusal set is 8 cases (5 before), passing, with the shuffled
+control caught; those two codes are no longer listed as not produced there. A mutant that lets EU
+`verify` answer a provision not held fails the gate.
 
 The live export composer and its journey step (PR #789), the eighth screen. `dist-live/export.html`
 has its own bundle `client-live-export.js`.
