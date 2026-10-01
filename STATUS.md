@@ -1980,6 +1980,21 @@ mount they are given.
 - Next slices: the refusal and retrieval sets derived from a mount, then the card over the release's
   mount in the rehearsal.
 
+The refusal set reads the EU index too (PR #846), so a mount that holds only the EU still measures
+its refusals. From the EU index's first work in its first language:
+- a word it holds, searched in it, must be answered;
+- the same in a CELEX the index does not hold: `identifier_unknown`;
+- in a language the work is not held in: `language_not_available`;
+- with a date, which EU search does not serve: `retrieval_mode_unavailable`.
+A code an EU request produces is no longer listed as not produced. Coverage's own rule is mirrored:
+it refuses `no_corpus_mounted` when the mount holds no Luxembourg index. The first run on the
+EU-only GDPR fixture expected an answer there.
+- On the real bounded first mount the refusal set grows from 1 request to 5 (coverage and the four
+  EU ones), all answered with their code. The verdict control now applies and catches the shuffle.
+- On the GDPR fixture alone: every EU request is answered with its code, and the control catches
+  the shuffle.
+- A mutation, the unknown CELEX given the gold `answer`, fails.
+
 The refusal set over any mount (PR #839), the second slice of ruling 2's gates over the real
 mounted corpus (`V3MountedGatesTests.Refusal.cs`). Each request is built from what the mount holds,
 so the one code the registry says answers it follows from the mount's own data:

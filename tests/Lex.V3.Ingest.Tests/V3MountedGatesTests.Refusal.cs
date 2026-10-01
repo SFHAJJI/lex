@@ -3,6 +3,7 @@ using Lex.V3.Api;
 using Lex.V3.Contracts;
 using Lex.V3.Contracts.Evaluation;
 using Lex.V3.Contracts.Source.Luxembourg;
+using Lex.V3.Ingest.Europe;
 using Lex.V3.Ingest.Luxembourg;
 using Microsoft.Data.Sqlite;
 using static Lex.V3.Ingest.Tests.V3CorpusClassificationMountTests;
@@ -15,7 +16,10 @@ namespace Lex.V3.Ingest.Tests;
 /// registry says answers it follows from the mount's own data (a date before a held work's first state, a
 /// digest that is not its state's, a title two of its works carry). A code this mount cannot produce (no
 /// two states share a date, no member's licence withholds text) is named as not produced, with its reason,
-/// and never faked. A mount with no Luxembourg state holds only what does not need one.
+/// and never faked. A mount with no Luxembourg state holds only what does not need one. An EU index gives EU
+/// requests from its own data (a held work and a word of it, a CELEX it does not hold, a language the work is not
+/// held in, a dated search), so a mount that holds only the EU still measures its refusals; a code an EU request
+/// produces is not listed as not produced.
 /// </summary>
 public sealed partial class V3MountedGatesTests
 {
@@ -41,9 +45,12 @@ public sealed partial class V3MountedGatesTests
 
     internal static RefusalSet RefusalCases(string mountDirectory, IReadOnlyList<Timeline> timelines)
     {
+        // Coverage answers about the Luxembourg index, and refuses no_corpus_mounted when the mount holds none (an EU index
+        // alone): the handler's own rule (its Luxembourg reader is null).
+        var hasLuxembourgIndex = File.Exists(Path.Combine(mountDirectory, V3CorpusMount.IndexFileName));
         var requests = new SortedDictionary<string, RefusalRequest>(StringComparer.Ordinal)
         {
-            ["coverage"] = new("coverage", new { }, "answer"),
+            ["coverage"] = new("coverage", new { }, hasLuxembourgIndex ? "answer" : "no_corpus_mounted"),
         };
         var notProduced = new SortedDictionary<string, string>(StringComparer.Ordinal);
         var hasEuropeIndex = File.Exists(Path.Combine(mountDirectory, V3CorpusMount.EuropeIndexFileName));
@@ -67,7 +74,7 @@ public sealed partial class V3MountedGatesTests
                 notProduced[code] = "the mount holds no Luxembourg state held alone on its date";
             }
 
-            return new RefusalSet(requests, notProduced);
+            return Finished(mountDirectory, requests, notProduced);
         }
 
         var (timeline, date, state) = held;
@@ -157,7 +164,66 @@ public sealed partial class V3MountedGatesTests
             notProduced["text_not_available"] = "every state whose text is admitted holds text";
         }
 
+        return Finished(mountDirectory, requests, notProduced);
+    }
+
+    /// <summary>
+    /// The set with the EU requests the mount's EU index gives, and without a not-produced entry for a code some request
+    /// produces.
+    /// </summary>
+    private static RefusalSet Finished(string mountDirectory, SortedDictionary<string, RefusalRequest> requests, SortedDictionary<string, string> notProduced)
+    {
+        EuropeRefusals(mountDirectory, requests);
+        foreach (var gold in requests.Values.Select(static request => request.Gold))
+        {
+            notProduced.Remove(gold);
+        }
+
         return new RefusalSet(requests, notProduced);
+    }
+
+    /// <summary>
+    /// EU requests from the mount's EU index, for its first work in its first language: a word the work holds, searched in
+    /// it (answered); the same in a CELEX the index does not hold (<c>identifier_unknown</c>); in a language the work is not
+    /// held in (<c>language_not_available</c>); and with a date, which EU search does not serve (<c>retrieval_mode_unavailable</c>).
+    /// </summary>
+    private static void EuropeRefusals(string mountDirectory, IDictionary<string, RefusalRequest> requests)
+    {
+        var path = Path.Combine(mountDirectory, V3CorpusMount.EuropeIndexFileName);
+        if (!File.Exists(path))
+        {
+            return;
+        }
+
+        using var connection = EuropeIndexBuilder.Open(path, SqliteOpenMode.ReadOnly);
+        var work = Rows(connection, "SELECT publisher_work_celex, language, searchable_text FROM articles ORDER BY publisher_work_celex, language, article_identity_sha256 LIMIT 1").FirstOrDefault();
+        if (work is null)
+        {
+            return;
+        }
+
+        var (celex, language) = (work[0], work[1]);
+        var word = work[2].Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries).FirstOrDefault(static token => token.Length >= 6 && token.All(char.IsLetter));
+        if (word is null)
+        {
+            return;
+        }
+
+        requests["eu-search-held"] = new("search", new { query = word, language, identifier = celex }, "answer");
+        const string NotHeld = "32099R9999";
+        if (Scalar(connection, $"SELECT publisher_work_celex FROM articles WHERE publisher_work_celex = '{NotHeld}' LIMIT 1") is null)
+        {
+            requests["eu-unknown-celex"] = new("search", new { query = word, language, identifier = NotHeld }, "identifier_unknown");
+        }
+
+        var held = Rows(connection, $"SELECT DISTINCT language FROM articles WHERE publisher_work_celex = '{celex.Replace("'", "''", StringComparison.Ordinal)}'").Select(static row => row[0]).ToHashSet(StringComparer.Ordinal);
+        var absent = CandidateLanguages.FirstOrDefault(candidate => !held.Contains(candidate));
+        if (absent is not null)
+        {
+            requests["eu-language-not-held"] = new("search", new { query = word, language = absent, identifier = celex }, "language_not_available");
+        }
+
+        requests["eu-dated-search"] = new("search", new { query = word, language, identifier = celex, date = "2020-01-01" }, "retrieval_mode_unavailable");
     }
 
     /// <summary>
@@ -278,5 +344,26 @@ public sealed partial class V3MountedGatesTests
         Assert.IsFalse(derived.NotProduced.ContainsKey("text_withheld"), string.Join("; ", derived.NotProduced.Select(static pair => pair.Key + " (" + pair.Value + ")")));
         Assert.AreEqual("text_withheld", derived.Requests["rights-not-agreed"].Gold);
         Assert.AreEqual(GateVerdict.Pass, set.Gates.Single().Verdict, "the handler withholds it, as derived");
+    }
+
+    [TestMethod]
+    public async Task AnEuIndexGivesItsOwnRefusalRequests()
+    {
+        // The GDPR mounted alone in its EU index: no Luxembourg state, yet the refusal set measures the EU's answer and
+        // three EU refusals, and none of their codes is listed as not produced.
+        var fixture = await EuropeMountedFixture.CreateAsync();
+        await using var cleanup = fixture;
+        using var mount = await V3CorpusMount.OpenAsync(fixture.Directory, CancellationToken.None);
+        Assert.IsNotNull(mount);
+
+        var (set, derived) = RunRefusalGate(mount, fixture.Directory, Timelines(fixture.Directory));
+        CollectionAssert.IsSubsetOf(new[] { "eu-search-held", "eu-unknown-celex", "eu-language-not-held", "eu-dated-search" }, derived.Requests.Keys.ToArray());
+        foreach (var code in new[] { "identifier_unknown", "language_not_available", "retrieval_mode_unavailable" })
+        {
+            Assert.IsFalse(derived.NotProduced.ContainsKey(code), $"{code} is produced by an EU request");
+        }
+
+        Assert.AreEqual(GateVerdict.Pass, set.Gates.Single().Verdict, "every EU request is answered with its own code");
+        Assert.AreEqual(ControlVerdict.CaughtTheShuffle, set.Control.Verdict, set.Control.Reason);
     }
 }
