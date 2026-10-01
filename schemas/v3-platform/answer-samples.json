@@ -117,7 +117,7 @@
         "available_languages": [
           "fra"
         ],
-        "basis": "the event log as it stood at the named snapshot: every state of the work its events had sighted up to that build\u0027s last event, a later event of a state replacing an earlier one and a state once held staying held (absence is not a withdrawal); the state applying on the date is selected among them as as_of selects among the mounted states, and the next date is the next one held at that snapshot; the work is named as the mounted index names it",
+        "basis": "the event log as it stood at the named snapshot: every state of the work its events had sighted up to that build\u0027s last event, a later event of a state replacing an earlier one and a state once held staying held (absence is not a withdrawal); the state applying on the date is selected among them as as_of selects among the mounted states, and the next date is the next one held at that snapshot; the work is named as the mounted index names it, or by its stable work coordinate when only the log still holds it",
         "corpus_sha256": "\u003Cvaries-per-run\u003E",
         "index_sha256": "\u003Cvaries-per-run\u003E",
         "publisher": "lu-legilux",
@@ -445,12 +445,13 @@
             "publisher_work_iri": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3",
             "stable_coordinate": "/lu-legilux/loi-1991-08-10-n3/2024-02-01",
             "state_sha256": "5bca01f82ef3058cfebe7f8a8a6eb1f1fbeeb32b8a1ea7b2c02ac20963235e3a",
+            "text_from": null,
             "text_held": true,
             "validity_conflict_count": 49,
             "validity_conflict_rule": "article_valid_from is the publisher\u0027s article-level applicability date; validity_conflict is true when it is stated and differs from the state\u0027s applicability_date"
           }
         ],
-        "text_note": "a state the mounted index still holds is served in full (text_held true); a state only an earlier build held is named by its permalink, digest and source bodies from the log, without text (text_held false), because no generation that held its text is mounted",
+        "text_note": "a state the mounted index still holds is served in full (text_held true); a state only an earlier build held is served in full from the newest retained generation that holds it (text_held true, text_from naming that generation); a state no held build holds is named by its permalink, digest and source bodies from the log, without text (text_held false)",
         "work_key": "loi-1991-08-10-n3"
       }
     },

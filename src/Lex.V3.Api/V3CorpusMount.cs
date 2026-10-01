@@ -31,11 +31,18 @@ internal sealed class V3CorpusMount : IDisposable
     // keeps no generation.
     private readonly V3RetentionDecision? _generations;
 
+    // One verified reader per retained generation, newest first: a state only an earlier build held is read from the newest
+    // generation that holds it (a state digest fixes its text, so any holder answers alike).
+    private readonly IReadOnlyList<GenerationReader> _generationReaders;
+
+    private sealed record GenerationReader(string IndexSha256, long Observation, string BuiltAt, LuxembourgIndexReader Reader);
+
     private V3CorpusMount(
         LuxembourgIndexReader? reader,
         EuropeIndexReader? europeReader,
         VerifiedLexCorpus6ManifestSet corpus,
-        V3RetentionDecision? generations = null)
+        V3RetentionDecision? generations = null,
+        IReadOnlyList<GenerationReader>? generationReaders = null)
     {
         if (reader is null && europeReader is null)
             throw new ArgumentException("A V3 corpus mount requires at least one publisher index.");
@@ -43,6 +50,7 @@ internal sealed class V3CorpusMount : IDisposable
         _europeReader = europeReader;
         _corpus = corpus ?? throw new ArgumentNullException(nameof(corpus));
         _generations = generations;
+        _generationReaders = generationReaders ?? [];
     }
 
     public static async Task<V3CorpusMount?> OpenAsync(
@@ -83,6 +91,7 @@ internal sealed class V3CorpusMount : IDisposable
         LuxembourgIndexReader? reader = null;
         EuropeIndexReader? europeReader = null;
         V3RetentionDecision? generations = null;
+        var generationReaders = new List<GenerationReader>();
         try
         {
             if (hasIndex)
@@ -103,6 +112,19 @@ internal sealed class V3CorpusMount : IDisposable
                 if (held.Failure is { } failure)
                     throw new InvalidDataException($"The mounted generations do not hold to the mounted log: {failure}.");
                 generations = held.Decision;
+
+                // Each retained generation opened now, verified as at its check, so a request never opens one (the image's
+                // private /tmp holds every index copy from startup on).
+                foreach (var kept in (generations?.Retained ?? []).OrderByDescending(static kept => kept.Observation))
+                {
+                    var generationPath = Path.Combine(directory, V3CorpusMountWriter.GenerationsDirectoryName, kept.IndexSha256);
+                    var generationCapability = await ReadCapabilityAsync(
+                        Path.Combine(generationPath, CapabilityManifestFileName), cancellationToken).ConfigureAwait(false);
+                    generationReaders.Add(new GenerationReader(
+                        kept.IndexSha256, kept.Observation, kept.BuiltAt,
+                        await LuxembourgIndexReader.OpenAndVerifyFileAsync(
+                            Path.Combine(generationPath, IndexFileName), generationCapability, cancellationToken).ConfigureAwait(false)));
+                }
             }
 
             if (hasEuropeIndex)
@@ -114,12 +136,13 @@ internal sealed class V3CorpusMount : IDisposable
                     .ConfigureAwait(false);
             }
 
-            return new V3CorpusMount(reader, europeReader, corpus, generations);
+            return new V3CorpusMount(reader, europeReader, corpus, generations, generationReaders);
         }
         catch
         {
             reader?.Dispose();
             europeReader?.Dispose();
+            foreach (var generation in generationReaders) generation.Reader.Dispose();
             throw;
         }
     }
@@ -397,7 +420,7 @@ internal sealed class V3CorpusMount : IDisposable
         "the event log as it stood at the named snapshot: every state of the work its events had sighted up to that build's last event, " +
         "a later event of a state replacing an earlier one and a state once held staying held (absence is not a withdrawal); the state " +
         "applying on the date is selected among them as as_of selects among the mounted states, and the next date is the next one held at " +
-        "that snapshot; the work is named as the mounted index names it";
+        "that snapshot; the work is named as the mounted index names it, or by its stable work coordinate when only the log still holds it";
 
     internal const string AsObservedBoundNote =
         "observed_no_later_than is when the snapshot's build ran, rounded up to the second, so every state it held was observed no later " +
@@ -405,8 +428,9 @@ internal sealed class V3CorpusMount : IDisposable
         "is placed in either";
 
     internal const string AsObservedTextNote =
-        "a state the mounted index still holds is served in full (text_held true); a state only an earlier build held is named by its " +
-        "permalink, digest and source bodies from the log, without text (text_held false), because no generation that held its text is mounted";
+        "a state the mounted index still holds is served in full (text_held true); a state only an earlier build held is served in full from " +
+        "the newest retained generation that holds it (text_held true, text_from naming that generation); a state no held build holds is " +
+        "named by its permalink, digest and source bodies from the log, without text (text_held false)";
 
     internal const string AsObservedSnapshotWhatWouldAnswer =
         "a snapshot of the mounted log by its index digest: the mounted index (events: log.log_id) or an ancestor it carries forward " +
@@ -474,10 +498,26 @@ internal sealed class V3CorpusMount : IDisposable
                 "The operation request's 'snapshot' is not an index digest.");
         }
 
+        var workKey = "";
         if (RefuseUnlessWorkStates(request, identifier, observedAt, "r6_as_observed", requestedLanguage: null,
                 out var mountedStates, out _) is { } refused)
         {
-            return refused;
+            // A work the mounted build no longer holds at all is still named by the log, since absence is not a withdrawal:
+            // by its stable work coordinate it is answered from the log at the snapshot (review of #889). Any other
+            // identifier, or a work the log never held, keeps the refusal.
+            var logs = _reader?.RecordsBuilds == true ? _reader.ResolveObservations() : [];
+            if (refused.Refusal?.Code != "identifier_unknown" || logs.Count == 0 ||
+                !TryParseStableWorkCoordinate(identifier, out var loggedWork) ||
+                _reader!.ResolveObservedStates(loggedWork, logs[^1].LastSeq).Count == 0)
+            {
+                return refused;
+            }
+
+            workKey = loggedWork;
+        }
+        else
+        {
+            workKey = mountedStates[0].WorkKey;
         }
 
         if (!_reader!.RecordsBuilds)
@@ -499,7 +539,6 @@ internal sealed class V3CorpusMount : IDisposable
         }
 
         var at = observations[generation];
-        var workKey = mountedStates[0].WorkKey;
         var held = _reader.ResolveObservedStates(workKey, at.LastSeq);
         if (held.Count == 0)
         {
@@ -553,6 +592,22 @@ internal sealed class V3CorpusMount : IDisposable
             {
                 var row = JsonSerializer.SerializeToNode(StateRow(full, nextDate))!.AsObject();
                 row["text_held"] = true;
+                row["text_from"] = null;
+                served.Add(row);
+            }
+            else if (FromGeneration(state.WorkKey, state.ApplicabilityDate, state.Language, state.StateSha256) is var (holder, kept))
+            {
+                var dates = holder.Reader.ResolveArticleDates(kept.ArticleIdentities.Distinct(StringComparer.Ordinal).ToArray())
+                    .ToDictionary(static date => date.ArticleIdentitySha256, static date => date.ApplicabilityDate, StringComparer.Ordinal);
+                var row = JsonSerializer.SerializeToNode(
+                    StateRow(kept, nextDate, dates, holder.Reader.ResolveArticlesNotAdmitted([kept.StateSha256])))!.AsObject();
+                row["text_held"] = true;
+                row["text_from"] = new JsonObject
+                {
+                    ["snapshot_id"] = holder.IndexSha256,
+                    ["observation"] = holder.Observation,
+                    ["built_at"] = holder.BuiltAt,
+                };
                 served.Add(row);
             }
             else
@@ -568,6 +623,7 @@ internal sealed class V3CorpusMount : IDisposable
                     ["stable_coordinate"] = $"/lu-legilux/{state.WorkKey}/{state.ApplicabilityDate}",
                     ["permalink"] = ObservedStateUrl(state),
                     ["text_held"] = false,
+                    ["text_from"] = null,
                 });
             }
         }
@@ -2008,7 +2064,9 @@ internal sealed class V3CorpusMount : IDisposable
     internal const string VerifyScope =
         "whether a hash-pinned permalink of this publisher still names the state this index holds at its stable coordinate, by the state digest the index " +
         "computed from the retained publisher bytes under its rule profiles (a matching digest is verified as digest_matches; a digest the coordinate no longer " +
-        "carries is the pinned_digest_mismatch refusal naming the current one); for a work identifier or work coordinate, the current digests of every state " +
+        "carries is the pinned_digest_mismatch refusal naming the current one, unless a retained generation holds that state, when it is verified there as " +
+        "digest_matches with held_in naming the generation and superseded_by the current state of its language, null when the coordinate holds none any " +
+        "more); for a work identifier or work coordinate, the current digests of every state " +
         "held, and for a dated stable coordinate those held exactly there, so a caller can pin them; a pinned permalink may carry an article id after # " +
         "(the article permalink evidence_bundle writes), and then the article must be one the pinned state holds or the answer is anchor_not_in_version; " +
         "nothing about the text or its legal effect is assessed";
@@ -2073,6 +2131,24 @@ internal sealed class V3CorpusMount : IDisposable
             }
 
             var pinnedStates = _reader.ResolveState(workKey, applicabilityDate);
+
+            // A digest the mounted index does not hold at its coordinate, held by a retained generation, is verified there
+            // before any refusal over the current states: the coordinate may hold another state, several (one per
+            // language), or none any more (review of #889). superseded_by names the current state of that language, if any.
+            if (!pinnedStates.Any(state => string.Equals(state.StateSha256, requestedDigest, StringComparison.Ordinal) &&
+                                           (requestedLanguage is null || string.Equals(state.Language, requestedLanguage, StringComparison.Ordinal))) &&
+                FromGeneration(workKey, applicabilityDate, requestedLanguage, requestedDigest) is var (holder, superseded))
+            {
+                var current = pinnedStates.FirstOrDefault(state => string.Equals(state.Language, superseded.Language, StringComparison.Ordinal));
+                return VerifiedPinned(
+                    request, observedAt, identifier, requestedDigest, requestedLanguage, anchor, superseded,
+                    holder.Reader.ResolveState(workKey, applicabilityDate).Select(static state => state.Language)
+                        .Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray(),
+                    holder.Reader, holder.Reader.CorpusRef.Sha256,
+                    new { snapshot_id = holder.IndexSha256, observation = holder.Observation, built_at = holder.BuiltAt },
+                    current is null ? null : new { state_sha256 = current.StateSha256, permalink = StateUrl(current) });
+            }
+
             if (pinnedStates.Count == 0)
             {
                 return Unknown(request, identifier, observedAt, PublisherId.LuLegilux,
@@ -2126,12 +2202,39 @@ internal sealed class V3CorpusMount : IDisposable
                     new V3PlatformOperationRefusal(request, "pinned_digest_mismatch", mismatch.RootElement));
             }
 
-            var verified = matching[0];
+            return VerifiedPinned(
+                request, observedAt, identifier, requestedDigest, requestedLanguage, anchor, matching[0], pinnedLanguages,
+                _reader, _corpus.ArtifactRef.Sha256, heldIn: null, supersededBy: null);
+        }
+
+        return VerifyCoordinate(request, observedAt, identifier, requestedLanguage);
+    }
+
+    /// <summary>
+    /// The <c>verify</c> answer for a pinned permalink whose digest <paramref name="holder"/> holds at its coordinate: the
+    /// mounted index, or a retained generation (<paramref name="heldIn"/> naming it and <paramref name="supersededBy"/> the
+    /// mounted state that replaced it). The article anchor, the sources and the verifying digests are the holder's.
+    /// </summary>
+    private V3PlatformOperationOutcome VerifiedPinned(
+        V3PlatformOperationRequest request,
+        DateTimeOffset observedAt,
+        string identifier,
+        string requestedDigest,
+        string? requestedLanguage,
+        string? anchor,
+        LuxembourgIndexResolvedState verified,
+        string[] pinnedLanguages,
+        LuxembourgIndexReader holder,
+        string corpusSha256,
+        object? heldIn,
+        object? supersededBy)
+    {
+        {
             if (anchor is not null)
             {
                 // The article permalink evidence_bundle writes: the digest verified above, and the
                 // article id must be one this state holds, else the refusal article_history makes.
-                var articleIds = _reader.ResolveArticleIds(verified.StateSha256);
+                var articleIds = holder.ResolveArticleIds(verified.StateSha256);
                 if (!articleIds.Contains(anchor, StringComparer.Ordinal))
                 {
                     using var notInVersion = JsonSerializer.SerializeToDocument(new
@@ -2170,12 +2273,14 @@ internal sealed class V3CorpusMount : IDisposable
                 rule_profile_sha256s = verified.RuleProfileSha256s,
                 articles = verified.ArticleIdentities.Count,
                 article_identities_sha256 = ArticleIdentitiesSha256(verified.ArticleIdentities),
-                sources = _reader.ResolveStateSources(verified.StateSha256).Select(SourceRow).ToArray(),
+                sources = holder.ResolveStateSources(verified.StateSha256).Select(SourceRow).ToArray(),
                 available_languages = pinnedLanguages,
+                held_in = heldIn,
+                superseded_by = supersededBy,
                 verified_by = new
                 {
-                    corpus_sha256 = _corpus.ArtifactRef.Sha256,
-                    index_sha256 = _reader.IndexRef.Sha256,
+                    corpus_sha256 = corpusSha256,
+                    index_sha256 = holder.IndexRef.Sha256,
                     registry_sha256 = V3OperationRegistry.Reviewed.Sha256,
                 },
                 not_held = VerifyNotHeld.Select(static row => new { item = row[0], reason = row[1] }).ToArray(),
@@ -2184,7 +2289,15 @@ internal sealed class V3CorpusMount : IDisposable
                 Context("success", observedAt),
                 new V3PlatformOperationResult(request, "verification", verification.RootElement));
         }
+    }
 
+    /// <summary><c>verify</c> for a work identifier, a work coordinate or a dated stable coordinate: the current digests to pin.</summary>
+    private V3PlatformOperationOutcome VerifyCoordinate(
+        V3PlatformOperationRequest request,
+        DateTimeOffset observedAt,
+        string identifier,
+        string? requestedLanguage)
+    {
         IReadOnlyList<LuxembourgIndexResolvedState> states;
         string[] availableLanguages;
         if (TryParseStableStateCoordinate(identifier, out var coordinateWorkKey, out var coordinateDate))
@@ -5746,6 +5859,28 @@ internal sealed class V3CorpusMount : IDisposable
     {
         _reader?.Dispose();
         _europeReader?.Dispose();
+        foreach (var generation in _generationReaders) generation.Reader.Dispose();
+    }
+
+    /// <summary>
+    /// The newest retained generation holding a state of this work, date and language with this digest, and the state as it
+    /// holds it; null when none does.
+    /// </summary>
+    private (GenerationReader Generation, LuxembourgIndexResolvedState State)? FromGeneration(
+        string workKey, string applicabilityDate, string? language, string stateSha256)
+    {
+        foreach (var generation in _generationReaders)
+        {
+            var state = generation.Reader.ResolveState(workKey, applicabilityDate).FirstOrDefault(candidate =>
+                (language is null || string.Equals(candidate.Language, language, StringComparison.Ordinal)) &&
+                string.Equals(candidate.StateSha256, stateSha256, StringComparison.Ordinal));
+            if (state is not null)
+            {
+                return (generation, state);
+            }
+        }
+
+        return null;
     }
 
     private static string RequiredString(JsonElement parameters, string name) =>

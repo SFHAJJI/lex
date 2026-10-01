@@ -27,6 +27,19 @@ public sealed class EuFormexManifestationEnumerationProducerTests
     private const string XsdInteger = "http://www.w3.org/2001/XMLSchema#integer";
 
     [TestMethod]
+    public async Task NullManifestationCheckpointRefusesBeforeAnyReplayWrites()
+    {
+        var store = new EuAcquisitionTestFixture.EuInMemoryCustodyStore();
+        var receipt = await store.CreateAsync("null"u8.ToArray(), CustodyClass.NightlyFloor90d, CancellationToken.None);
+        var checkpoint = new SourceArtifactRef($"urn:uuid:{Guid.NewGuid():D}", receipt.Reference.ContentSha256);
+        var expected = new SourceArtifactRef($"urn:uuid:{Guid.NewGuid():D}", new string('a', 64));
+        var writes = store.WrittenDigestsInOrder.Count;
+        await Assert.ThrowsExactlyAsync<CustodyIntegrityException>(() => EuFormexManifestationEnumerationProducer.ReopenAsync(
+            store, checkpoint, Expression(ExpressionA), expected, expected, CancellationToken.None));
+        Assert.AreEqual(writes, store.WrittenDigestsInOrder.Count);
+    }
+
+    [TestMethod]
     public void ACompleteExpressionAnswerCarriesEveryTypeAndFindsFormexExactly()
     {
         var expression = Expression(ExpressionA);
