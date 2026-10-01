@@ -268,7 +268,13 @@ public sealed record LuxembourgIndexEventLog(long Events, long LastSeq);
 /// </summary>
 public static class LuxembourgIndexBuilder
 {
-    public const string Schema = "lex-v3-luxembourg-index/6";
+    public const string Schema = "lex-v3-luxembourg-index/7";
+
+    /// <summary>
+    /// The event log's own schema, stamped apart from the index's (<c>log_stamp</c>), so a later build can verify a
+    /// predecessor's log, which it carries forward unchanged, across a change of the index's other tables.
+    /// </summary>
+    internal const string EventLogSchema = "lex-v3-event-log/1";
     private const int ApplicationId = 0x4c563306;
     private const string Ddl = """
         CREATE TABLE stamp (
@@ -359,10 +365,23 @@ public static class LuxembourgIndexBuilder
           key TEXT COLLATE BINARY NOT NULL,
           event TEXT COLLATE BINARY NOT NULL CHECK (event IN ('first_sighting')),
           observed_from TEXT COLLATE BINARY CHECK (observed_from IS NULL),
-          detail_json TEXT COLLATE BINARY NOT NULL,
-          UNIQUE (scope, key, event)
+          detail_json TEXT COLLATE BINARY NOT NULL
         ) STRICT;
         CREATE INDEX events_event_seq ON events(event, seq);
+        CREATE TABLE observations (
+          observation INTEGER NOT NULL PRIMARY KEY CHECK (observation >= 1),
+          corpus_sha256 TEXT COLLATE BINARY NOT NULL CHECK (length(corpus_sha256) = 64),
+          predecessor_index_sha256 TEXT COLLATE BINARY CHECK (predecessor_index_sha256 IS NULL OR length(predecessor_index_sha256) = 64),
+          first_seq INTEGER NOT NULL CHECK (first_seq >= 1),
+          last_seq INTEGER NOT NULL CHECK (last_seq >= first_seq - 1),
+          observed_from TEXT COLLATE BINARY CHECK (observed_from IS NULL),
+          CHECK ((observation = 1) = (predecessor_index_sha256 IS NULL))
+        ) STRICT;
+        CREATE TABLE log_stamp (
+          log_stamp_id INTEGER NOT NULL PRIMARY KEY CHECK (log_stamp_id = 1),
+          log_schema TEXT COLLATE BINARY NOT NULL,
+          log_rows_sha256 TEXT COLLATE BINARY NOT NULL CHECK (length(log_rows_sha256) = 64)
+        ) STRICT;
         """;
 
     public static LuxembourgIndexBuildResult? TryBuild(
@@ -404,13 +423,25 @@ public static class LuxembourgIndexBuilder
         }
 
         var relations = ProjectRelations(articles);
-        var events = ProjectGenesisEvents(states);
+        EventRow[] events;
+        try
+        {
+            events = ProjectGenesisEvents(states, SourceBodiesOfStates(articles, states, BodiesByObjectRef(corpus.VerifiedSet)));
+        }
+        catch (InvalidDataException exception)
+        {
+            refusal = LuxembourgIndexBuildRefusal.DerivationMismatch;
+            detail = exception.Message;
+            return null;
+        }
+
+        var observations = ProjectGenesisObservations(corpus.ArtifactRef.Sha256, events.Length);
         var logicalRowsSha256 = HashLogicalRows(members, articles, states, workTitles, relations, workFacts, events);
         var path = Path.Combine(Path.GetTempPath(), $"lex-v3-lu-index-{Guid.NewGuid():N}.sqlite");
         try
         {
             BuildDatabase(
-                path, corpus.ArtifactRef.Sha256, logicalRowsSha256, members, articles, states, workTitles, relations, workFacts, events);
+                path, corpus.ArtifactRef.Sha256, logicalRowsSha256, members, articles, states, workTitles, relations, workFacts, events, observations);
             var bytes = File.ReadAllBytes(path);
             var digest = Convert.ToHexStringLower(SHA256.HashData(bytes));
             var indexRef = new SourceArtifactRef(LexCorpus6Builder.ResourceIdOf(digest), digest);
@@ -424,6 +455,7 @@ public static class LuxembourgIndexBuilder
                 manifestRef, manifestBytes, PublisherId.LuLegilux, digest);
             using var verified = LuxembourgIndexReader.OpenAndVerify(
                 indexRef, bytes, corpus.ArtifactRef, manifest);
+            verified.VerifyEventLogSources(corpus.VerifiedSet);
             return new LuxembourgIndexBuildResult(
                 indexRef, bytes, manifestRef, manifestBytes, manifest);
         }
@@ -663,22 +695,80 @@ public static class LuxembourgIndexBuilder
     /// comparison can say file_replaced rather than a withdrawal and a new sighting; the detail carries
     /// the state's digest. No observation time is held, so none is written: first_sighting here means
     /// first present in this log, not when the publisher published the text or when it was fetched.
-    /// A pure function of the states, so the reader recomputes it and refuses any other rows.
+    /// The detail also names the digests of the publisher bodies the state's articles were read from
+    /// (<c>source_body_sha256</c>, sorted, each once), so a later build that carries this log forward can tell a
+    /// replaced publisher file from an unchanged one by the log alone. A pure function of the states and their
+    /// source bodies, so the reader recomputes it and refuses any other rows; the bodies themselves are checked
+    /// against the corpus by whoever holds it (<see cref="LuxembourgIndexReader.VerifyEventLogSources"/>).
     /// </summary>
-    internal static EventRow[] ProjectGenesisEvents(IReadOnlyList<StateRow> states) =>
+    internal static EventRow[] ProjectGenesisEvents(IReadOnlyList<StateRow> states, IReadOnlyDictionary<string, string[]> sourceBodies) =>
         states
             .OrderBy(static row => row.WorkKey, StringComparer.Ordinal)
             .ThenBy(static row => row.ApplicabilityDate, StringComparer.Ordinal)
             .ThenBy(static row => row.ExpressionIri, StringComparer.Ordinal)
             .ThenBy(static row => row.Language, StringComparer.Ordinal)
-            .Select(static (row, index) => new EventRow(
+            .Select((row, index) => new EventRow(
                 index + 1L,
                 "state",
                 JsonSerializer.Serialize(new[] { row.WorkKey, row.ApplicabilityDate, row.ExpressionIri, row.Language }),
                 V3EventRegistry.FirstSighting,
                 null,
-                JsonSerializer.Serialize(new { state_sha256 = row.StateSha256 })))
+                JsonSerializer.Serialize(new
+                {
+                    state_sha256 = row.StateSha256,
+                    source_body_sha256 = sourceBodies.TryGetValue(row.StateSha256, out var bodies)
+                        ? bodies.Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray()
+                        : throw new InvalidDataException($"The state {row.StateSha256} has no source bodies for its event."),
+                })))
             .ToArray();
+
+    /// <summary>
+    /// The observations of a genesis log: one, of this build's corpus, with no predecessor, numbering every event the
+    /// log holds (an empty log numbers none: first 1, last 0). No observation time is held, so none is written.
+    /// </summary>
+    internal static ObservationRow[] ProjectGenesisObservations(string corpusSha256, int eventCount) =>
+        [new ObservationRow(1, corpusSha256, null, 1, eventCount, null)];
+
+    /// <summary>The digest of the event log alone (its observations and events), as <c>log_stamp</c> records it.</summary>
+    internal static string HashEventLog(IReadOnlyList<ObservationRow> observations, IReadOnlyList<EventRow> events) =>
+        Convert.ToHexStringLower(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(new EventLogRows(observations, events))));
+
+    /// <summary>The body digest of every Luxembourg member that holds one, by the member's object reference.</summary>
+    internal static IReadOnlyDictionary<string, string> BodiesByObjectRef(VerifiedLexCorpus6ManifestSet corpus) =>
+        corpus.Set.Members
+            .Where(static member => member.Publisher == PublisherId.LuLegilux && member.BodySha256 is not null)
+            .ToDictionary(static member => member.ObjectRefSha256, static member => member.BodySha256!, StringComparer.Ordinal);
+
+    /// <summary>
+    /// The publisher bodies each state's articles were read from: each article identity's member, by its object
+    /// reference, and that member's body digest, sorted and each once. A member that holds no body (one not acquired)
+    /// names none: a build reads articles only from held bodies, so it never meets one, and a body-less member has no
+    /// digest a replaced file could change.
+    /// </summary>
+    internal static IReadOnlyDictionary<string, string[]> SourceBodiesOfStates(
+        IReadOnlyList<ArticleRow> articles,
+        IReadOnlyList<StateRow> states,
+        IReadOnlyDictionary<string, string> bodyByObjectRef)
+    {
+        var objectByArticle = articles.ToDictionary(static article => article.ArticleIdentitySha256, static article => article.ObjectRefSha256, StringComparer.Ordinal);
+        var sources = new Dictionary<string, string[]>(StringComparer.Ordinal);
+        foreach (var state in states)
+        {
+            var identities = JsonSerializer.Deserialize<string[]>(state.ArticleIdentitiesJson)
+                ?? throw new InvalidDataException($"The state {state.StateSha256} names no article identities.");
+            sources[state.StateSha256] = identities
+                .Select(identity => objectByArticle.TryGetValue(identity, out var objectRef)
+                    ? objectRef
+                    : throw new InvalidDataException($"The state {state.StateSha256} names an article the index does not hold."))
+                .Where(bodyByObjectRef.ContainsKey)
+                .Select(objectRef => bodyByObjectRef[objectRef])
+                .Distinct(StringComparer.Ordinal)
+                .Order(StringComparer.Ordinal)
+                .ToArray();
+        }
+
+        return sources;
+    }
 
     private static string LanguageToken(string iri)
     {
@@ -966,7 +1056,8 @@ public static class LuxembourgIndexBuilder
         IReadOnlyList<WorkTitleRow> workTitles,
         IReadOnlyList<RelationRow> relations,
         IReadOnlyList<WorkFactRow> workFacts,
-        IReadOnlyList<EventRow> events)
+        IReadOnlyList<EventRow> events,
+        IReadOnlyList<ObservationRow> observations)
     {
         using var connection = Open(path, SqliteOpenMode.ReadWriteCreate);
         Execute(connection, "PRAGMA page_size=4096");
@@ -976,7 +1067,7 @@ public static class LuxembourgIndexBuilder
         Execute(connection, "PRAGMA synchronous=FULL");
         Execute(connection, "PRAGMA foreign_keys=ON");
         Execute(connection, $"PRAGMA application_id={ApplicationId}");
-        Execute(connection, "PRAGMA user_version=6");
+        Execute(connection, "PRAGMA user_version=7");
         using var transaction = connection.BeginTransaction();
         Execute(connection, Ddl, transaction);
         foreach (var member in members)
@@ -1030,6 +1121,14 @@ public static class LuxembourgIndexBuilder
                 "INSERT INTO events VALUES($p0,$p1,$p2,$p3,$p4,$p5)",
                 value.Seq, value.Scope, value.Key, value.Event, value.ObservedFrom, value.DetailJson);
         }
+        foreach (var observation in observations)
+        {
+            Insert(connection, transaction,
+                "INSERT INTO observations VALUES($p0,$p1,$p2,$p3,$p4,$p5)",
+                observation.Observation, observation.CorpusSha256, observation.PredecessorIndexSha256,
+                observation.FirstSeq, observation.LastSeq, observation.ObservedFrom);
+        }
+        Insert(connection, transaction, "INSERT INTO log_stamp VALUES(1,$p0,$p1)", EventLogSchema, HashEventLog(observations, events));
         var provenance = SqliteProvenance.Read(connection);
         Insert(connection, transaction, "INSERT INTO stamp VALUES(1,$p0,$p1,$p2,$p3,$p4,$p5)",
             Schema, corpusSha256, logicalRowsSha256, provenance.Version,
@@ -1079,9 +1178,12 @@ public static class LuxembourgIndexBuilder
         try
         {
             var relations = ProjectRelations(articles);
-            var events = ProjectGenesisEvents(states);
+            var events = ProjectGenesisEvents(states, SourceBodiesOfStates(articles, states, new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                [member.ObjectRefSha256] = new string('7', 64),
+            }));
             BuildDatabase(path, new string('a', 64), HashLogicalRows(members, articles, states, titles, relations, facts, events),
-                members, articles, states, titles, relations, facts, events);
+                members, articles, states, titles, relations, facts, events, ProjectGenesisObservations(new string('a', 64), events.Length));
             return File.ReadAllBytes(path);
         }
         finally
@@ -1329,6 +1431,21 @@ public static class LuxembourgIndexBuilder
         string? ObservedFrom,
         string DetailJson);
 
+    /// <summary>
+    /// One observation of the event log: the build that observed (its corpus), the index it carried forward (null for
+    /// the first, a genesis log's only observation), the events it appended by sequence number, and its observation
+    /// time (null: none is held).
+    /// </summary>
+    internal sealed record ObservationRow(
+        long Observation,
+        string CorpusSha256,
+        string? PredecessorIndexSha256,
+        long FirstSeq,
+        long LastSeq,
+        string? ObservedFrom);
+
+    private sealed record EventLogRows(IReadOnlyList<ObservationRow> Observations, IReadOnlyList<EventRow> Events);
+
     private sealed record LogicalRows(
         IReadOnlyList<MemberRow> Members,
         IReadOnlyList<ArticleRow> Articles,
@@ -1529,7 +1646,7 @@ public sealed class LuxembourgIndexReader : IDisposable
             LuxembourgIndexBuilder.EnsureExactSchema(connection);
             if (!string.Equals(Scalar(connection, "PRAGMA integrity_check"), "ok", StringComparison.Ordinal) ||
                 Convert.ToInt32(Scalar(connection, "PRAGMA application_id"), CultureInfo.InvariantCulture) != 0x4c563306 ||
-                Convert.ToInt32(Scalar(connection, "PRAGMA user_version"), CultureInfo.InvariantCulture) != 6)
+                Convert.ToInt32(Scalar(connection, "PRAGMA user_version"), CultureInfo.InvariantCulture) != 7)
             {
                 throw new InvalidDataException("The Luxembourg index failed SQLite integrity or schema identity checks.");
             }
@@ -1564,13 +1681,32 @@ public sealed class LuxembourgIndexReader : IDisposable
             var relations = ReadRelations(connection);
             var workFacts = ReadWorkFacts(connection);
             var events = ReadEvents(connection);
+            var observations = ReadObservations(connection);
             ValidateStates(articles, states);
             if (!LuxembourgIndexBuilder.ProjectRelations(articles).SequenceEqual(relations))
                 throw new InvalidDataException(
                     "The Luxembourg index relation rows are not the references its articles carry.");
-            if (!LuxembourgIndexBuilder.ProjectGenesisEvents(states).SequenceEqual(events))
+            // The log is a genesis log of the states: every row recomputed from them and from the source bodies the log
+            // itself names (which only the corpus can confirm: VerifyEventLogSources), its one observation of this
+            // corpus numbering every event, and its own stamp the digest of exactly these rows.
+            var sourceBodies = SourceBodiesInLog(events);
+            LuxembourgIndexBuilder.EventRow[] genesis;
+            try
+            {
+                genesis = LuxembourgIndexBuilder.ProjectGenesisEvents(states, sourceBodies);
+            }
+            catch (InvalidDataException exception)
+            {
+                throw new InvalidDataException("The Luxembourg index event rows are not the genesis log of its states.", exception);
+            }
+
+            if (!genesis.SequenceEqual(events))
                 throw new InvalidDataException(
                     "The Luxembourg index event rows are not the genesis log of its states.");
+            if (!LuxembourgIndexBuilder.ProjectGenesisObservations(corpusSha256, events.Length).SequenceEqual(observations))
+                throw new InvalidDataException(
+                    "The Luxembourg index observations are not the one observation of its genesis log.");
+            VerifyLogStamp(connection, observations, events);
             if (!string.Equals(
                     LuxembourgIndexBuilder.HashLogicalRows(members, articles, states, workTitles, relations, workFacts, events),
                     expectedLogical,
@@ -2878,6 +3014,91 @@ public sealed class LuxembourgIndexReader : IDisposable
             reader.IsDBNull(7) ? null : reader.GetString(7),
             reader.GetString(8), reader.IsDBNull(9) ? null : reader.GetString(9)));
         return values.ToArray();
+    }
+
+    private static LuxembourgIndexBuilder.ObservationRow[] ReadObservations(SqliteConnection connection)
+    {
+        using var command = connection.CreateCommand();
+        command.CommandText = "SELECT observation,corpus_sha256,predecessor_index_sha256,first_seq,last_seq,observed_from FROM observations ORDER BY observation";
+        using var reader = command.ExecuteReader();
+        var values = new List<LuxembourgIndexBuilder.ObservationRow>();
+        while (reader.Read()) values.Add(new(
+            reader.GetInt64(0), reader.GetString(1), reader.IsDBNull(2) ? null : reader.GetString(2),
+            reader.GetInt64(3), reader.GetInt64(4), reader.IsDBNull(5) ? null : reader.GetString(5)));
+        return values.ToArray();
+    }
+
+    /// <summary>The log's own stamp: its schema, and the digest of exactly its observations and events.</summary>
+    private static void VerifyLogStamp(
+        SqliteConnection connection,
+        IReadOnlyList<LuxembourgIndexBuilder.ObservationRow> observations,
+        IReadOnlyList<LuxembourgIndexBuilder.EventRow> events)
+    {
+        using var command = connection.CreateCommand();
+        command.CommandText = "SELECT log_schema,log_rows_sha256 FROM log_stamp WHERE log_stamp_id=1";
+        using var reader = command.ExecuteReader();
+        if (!reader.Read() ||
+            !string.Equals(reader.GetString(0), LuxembourgIndexBuilder.EventLogSchema, StringComparison.Ordinal) ||
+            !string.Equals(reader.GetString(1), LuxembourgIndexBuilder.HashEventLog(observations, events), StringComparison.Ordinal))
+        {
+            throw new InvalidDataException("The Luxembourg event log does not match its log stamp.");
+        }
+    }
+
+    /// <summary>
+    /// The source bodies each event names for its state (<c>source_body_sha256</c>), as the log holds them: each a
+    /// SHA-256 digest. Whether they are the state's bodies only the corpus can say (<see cref="VerifyEventLogSources"/>).
+    /// </summary>
+    private static IReadOnlyDictionary<string, string[]> SourceBodiesInLog(IReadOnlyList<LuxembourgIndexBuilder.EventRow> events)
+    {
+        var sources = new Dictionary<string, string[]>(StringComparer.Ordinal);
+        foreach (var value in events)
+        {
+            try
+            {
+                using var detail = JsonDocument.Parse(value.DetailJson);
+                var state = detail.RootElement.GetProperty("state_sha256").GetString()
+                    ?? throw new InvalidDataException("An event names no state.");
+                var bodies = detail.RootElement.GetProperty("source_body_sha256").EnumerateArray()
+                    .Select(static body => body.GetString() is { Length: 64 } digest && digest.All(static c => c is (>= '0' and <= '9') or (>= 'a' and <= 'f'))
+                        ? digest
+                        : throw new InvalidDataException("An event names a source body that is not a SHA-256 digest."))
+                    .ToArray();
+                sources[state] = bodies;
+            }
+            catch (Exception exception) when (exception is JsonException or KeyNotFoundException or InvalidOperationException)
+            {
+                throw new InvalidDataException("The Luxembourg index event rows are not the genesis log of its states.", exception);
+            }
+        }
+
+        return sources;
+    }
+
+    /// <summary>
+    /// Checks the source bodies the event log names against the corpus this index binds: every state's events name
+    /// exactly the body digests of the members its articles were read from. The index alone holds no body digest, so
+    /// whoever mounts it with its corpus calls this (the mount, the mount writer's verification, the build).
+    /// </summary>
+    public void VerifyEventLogSources(VerifiedLexCorpus6ManifestSet corpus)
+    {
+        ArgumentNullException.ThrowIfNull(corpus);
+        if (corpus.ArtifactRef != CorpusRef)
+        {
+            throw new InvalidDataException("The corpus is not the one this Luxembourg index binds.");
+        }
+
+        lock (_gate)
+        {
+            var expected = LuxembourgIndexBuilder.SourceBodiesOfStates(
+                ReadArticles(_connection), ReadStates(_connection), LuxembourgIndexBuilder.BodiesByObjectRef(corpus));
+            var logged = SourceBodiesInLog(ReadEvents(_connection));
+            if (expected.Count != logged.Count ||
+                expected.Any(pair => !logged.TryGetValue(pair.Key, out var bodies) || !bodies.SequenceEqual(pair.Value, StringComparer.Ordinal)))
+            {
+                throw new InvalidDataException("The Luxembourg event log names source bodies the corpus does not hold for its states.");
+            }
+        }
     }
 
     private static LuxembourgIndexBuilder.EventRow[] ReadEvents(SqliteConnection connection)

@@ -83,6 +83,7 @@ internal sealed class V3CorpusMount : IDisposable
                 if (reader.CorpusRef != corpus.ArtifactRef)
                     throw new InvalidDataException(
                         "The mounted Luxembourg index does not bind the mounted corpus/6 artifact.");
+                reader.VerifyEventLogSources(corpus);
             }
 
             if (hasEuropeIndex)

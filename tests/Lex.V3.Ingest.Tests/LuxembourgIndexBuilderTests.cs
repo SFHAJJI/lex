@@ -18,7 +18,7 @@ public sealed class LuxembourgIndexBuilderTests
     {
         var digest = Convert.ToHexStringLower(SHA256.HashData(
             LuxembourgIndexBuilder.BuildFixedInputDeterminismEvidence()));
-        Assert.AreEqual("7d898d3fddfb60d6df81cf4180ad6c08813bbd76994ea5e519338f1df1f52956", digest);
+        Assert.AreEqual("5013e272cde81684d3f3f759e9179c12a6a9d93c932895b1bd8aa63298a7c1f9", digest);
     }
 
     internal const string Retained1991 = "loi-1991-08-10-n3--2024-02-01--fr.bin";
@@ -29,7 +29,7 @@ public sealed class LuxembourgIndexBuilderTests
         var schema = (string)typeof(LuxembourgIndexBuilder)
             .GetField(nameof(LuxembourgIndexBuilder.Schema))!
             .GetRawConstantValue()!;
-        Assert.AreEqual("lex-v3-luxembourg-index/6", schema);
+        Assert.AreEqual("lex-v3-luxembourg-index/7", schema);
         Assert.IsNotNull(typeof(LuxembourgIndexBuilder).GetMethod(nameof(LuxembourgIndexBuilder.TryBuild)));
         Assert.IsNotNull(typeof(LuxembourgIndexReader).GetMethod(nameof(LuxembourgIndexReader.OpenAndVerify)));
     }
@@ -662,6 +662,199 @@ public sealed class LuxembourgIndexBuilderTests
         StringAssert.Contains(exception.InnerException.Message, "does not match its admitted articles");
     }
 
+    // ---- Index schema /7's event log (STATUS item 4, predecessor chaining, the first slice). ----
+
+    /// <summary>
+    /// A genesis log as schema /7 holds it: one observation, of this build's corpus, with no predecessor, numbering
+    /// every event; the log's own stamp (its schema, and the digest of exactly its observations and events); and each
+    /// event naming the bodies its state's articles were read from, as the corpus holds them, so a later build that
+    /// carries the log forward can tell a replaced publisher file by the log alone.
+    /// </summary>
+    [TestMethod]
+    public async Task TheGenesisLogHasOneObservationItsOwnStampAndEachStatesSourceBodies()
+    {
+        var (built, corpus) = await BuildStateIndexWithCorpusAsync();
+        LuxembourgIndexBuilder.EventRow[] events = [];
+        LuxembourgIndexBuilder.ObservationRow[] observations = [];
+        (string Schema, string Digest) logStamp = default;
+        _ = MutateDatabase(built.IndexBytes.Span, connection =>
+        {
+            events = ReadEvents(connection);
+            observations = ReadObservations(connection);
+            logStamp = ReadLogStamp(connection);
+        });
+
+        Assert.IsNotEmpty(events, "the fixture's state has a first_sighting");
+        CollectionAssert.AreEqual(
+            new[] { new LuxembourgIndexBuilder.ObservationRow(1, corpus.ArtifactRef.Sha256, null, 1, events.Length, null) },
+            observations,
+            "one observation of this corpus, with no predecessor, numbering every event, at no observation time");
+        Assert.AreEqual((LuxembourgIndexBuilder.EventLogSchema, LuxembourgIndexBuilder.HashEventLog(observations, events)), logStamp);
+
+        var held = corpus.Set.Members
+            .Where(static member => member.Publisher == Lex.V3.Contracts.PublisherId.LuLegilux && member.BodySha256 is not null)
+            .Select(static member => member.BodySha256!)
+            .ToHashSet(StringComparer.Ordinal);
+        foreach (var value in events)
+        {
+            var bodies = System.Text.Json.JsonDocument.Parse(value.DetailJson).RootElement.GetProperty("source_body_sha256")
+                .EnumerateArray().Select(static body => body.GetString()!).ToArray();
+            Assert.IsNotEmpty(bodies, $"event {value.Seq} names its state's source bodies");
+            CollectionAssert.AreEqual(bodies.Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray(), bodies, "sorted, each once");
+            Assert.IsTrue(bodies.All(held.Contains), $"event {value.Seq} names a body the corpus holds");
+        }
+
+        using var reader = LuxembourgIndexReader.OpenAndVerify(built.IndexRef, built.IndexBytes.Span, corpus.ArtifactRef, built.CapabilityManifest);
+        reader.VerifyEventLogSources(corpus);
+    }
+
+    /// <summary>
+    /// The observations and the log stamp are the reader's own recomputation, with the logical-rows stamp recomputed
+    /// over the tampered tables so only these checks can refuse: an observation numbering an event the log lacks, of
+    /// another corpus, a second or no observation; a log stamp of other rows, of another log schema, or none.
+    /// </summary>
+    [TestMethod]
+    [DataRow("UPDATE observations SET last_seq=last_seq+1", "not the one observation", DisplayName = "an observation numbering an event the log lacks")]
+    [DataRow("UPDATE observations SET corpus_sha256='bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb'", "not the one observation", DisplayName = "an observation of another corpus")]
+    [DataRow("INSERT INTO observations VALUES(2,'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb','cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc',2,1,NULL)", "not the one observation", DisplayName = "a second observation")]
+    [DataRow("DELETE FROM observations", "not the one observation", DisplayName = "no observation")]
+    [DataRow("UPDATE log_stamp SET log_rows_sha256='0000000000000000000000000000000000000000000000000000000000000000'", "does not match its log stamp", DisplayName = "a log stamp of other rows")]
+    [DataRow("UPDATE log_stamp SET log_schema='lex-v3-event-log/0'", "does not match its log stamp", DisplayName = "a log stamp of another log schema")]
+    [DataRow("DELETE FROM log_stamp", "does not match its log stamp", DisplayName = "no log stamp")]
+    public async Task StrictReaderRejectsATamperedObservationOrLogStamp(string sql, string expected)
+    {
+        var (built, corpusRef) = await BuildStateIndexAsync();
+
+        AssertRecomputedStateTamperRejected(built, corpusRef, connection => Execute(connection, sql), expected);
+    }
+
+    /// <summary>
+    /// Source bodies the index alone cannot confirm: an event naming a body its state was not read from passes the
+    /// reader (the index holds no body digest) and is refused by the corpus; one naming its body twice is not the
+    /// canonical genesis log, and the reader refuses it. Both stamps are recomputed, so only these checks can refuse.
+    /// </summary>
+    [TestMethod]
+    public async Task AnEventsSourceBodiesAreTheCorpusOwnAndCanonical()
+    {
+        var (built, corpus) = await BuildStateIndexWithCorpusAsync();
+        var (foreign, foreignManifest, foreignRef) = Resealed(built, detail => detail["source_body_sha256"] = new System.Text.Json.Nodes.JsonArray(new string('e', 64)));
+        using (var reader = LuxembourgIndexReader.OpenAndVerify(foreignRef, foreign, corpus.ArtifactRef, foreignManifest))
+        {
+            var exception = Assert.ThrowsExactly<InvalidDataException>(() => reader.VerifyEventLogSources(corpus));
+            StringAssert.Contains(exception.Message, "names source bodies the corpus does not hold");
+        }
+
+        var (twice, twiceManifest, twiceRef) = Resealed(built, detail =>
+        {
+            var body = detail["source_body_sha256"]![0]!.GetValue<string>();
+            detail["source_body_sha256"] = new System.Text.Json.Nodes.JsonArray(body, body);
+        });
+        var refused = Assert.ThrowsExactly<InvalidDataException>(() => LuxembourgIndexReader.OpenAndVerify(twiceRef, twice, corpus.ArtifactRef, twiceManifest));
+        StringAssert.Contains(refused.Message, "not the genesis log of its states");
+    }
+
+    /// <summary>
+    /// The mount checks the event log's source bodies against the corpus it mounts, so an index whose log names a body
+    /// the corpus does not hold for the state is not mounted, though the index alone verifies.
+    /// </summary>
+    [TestMethod]
+    public async Task TheMountRefusesAnEventLogNamingABodyItsCorpusDoesNotHoldForTheState()
+    {
+        var fixture = await V3CorpusResolveMountTests.MountedFixture.CreateAsync();
+        await using var cleanup = fixture;
+        var indexPath = Path.Combine(fixture.Directory, Lex.V3.Api.V3CorpusMount.IndexFileName);
+        var bytes = ResealedBytes(await File.ReadAllBytesAsync(indexPath),
+            detail => detail["source_body_sha256"] = new System.Text.Json.Nodes.JsonArray(new string('e', 64)), out var articles, out var titles);
+        await File.WriteAllBytesAsync(indexPath, bytes);
+        var manifest = LuxembourgIndexBuilder.MeasureCapabilities(Convert.ToHexStringLower(SHA256.HashData(bytes)), articles, titles);
+        using (var stream = new MemoryStream())
+        {
+            _ = V3IndexCapabilityManifestArtifact.Write(stream, manifest);
+            await File.WriteAllBytesAsync(Path.Combine(fixture.Directory, Lex.V3.Api.V3CorpusMount.CapabilityManifestFileName), stream.ToArray());
+        }
+
+        var exception = await Assert.ThrowsExactlyAsync<InvalidDataException>(() => Lex.V3.Api.V3CorpusMount.OpenAsync(fixture.Directory, CancellationToken.None));
+        StringAssert.Contains(exception.Message, "names source bodies the corpus does not hold");
+    }
+
+    /// <summary>The state index built with its corpus, for the checks that need the corpus's own body digests.</summary>
+    internal static async Task<(LuxembourgIndexBuildResult Built, VerifiedLexCorpus6ManifestSet Corpus)> BuildStateIndexWithCorpusAsync()
+    {
+        const string manifestation =
+            "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo/fr/xml";
+        const string item =
+            "http://data.legilux.public.lu/filestore/eli/etat/leg/loi/1991/08/10/n3/jo/fr/xml/eli-etat-leg-loi-1991-08-10-n3-jo-fr-xml.xml";
+        var xml = await File.ReadAllBytesAsync(Path.Combine(
+            AppContext.BaseDirectory, "Fixtures", "LuAknLegalContent", Retained1991));
+        ICustodyStore store = new RoutedHttpAcquisitionSessionTests.MultiObjectCustodyStore();
+        var luxembourg = await LuxembourgGazetteAcquisitionTests
+            .CompleteXmlForStage3BodyCompositionAsync(xml, store, manifestation, item);
+        var envelope = await LexCorpus6BuilderTests.CompleteProfileEnvelopeAsync(
+            luxembourgOverride: luxembourg, luxembourgStore: store);
+        var corpus = LexCorpus6Builder.TryBuild(envelope, out var corpusRefusal, out var corpusDetail);
+        Assert.IsNotNull(corpus, $"{corpusRefusal}: {corpusDetail}");
+        var built = LuxembourgIndexBuilder.TryBuild(envelope, out var refusal, out var detail);
+        Assert.IsNotNull(built, $"{refusal}: {detail}");
+        return (built, corpus.VerifiedSet);
+    }
+
+    /// <summary>The index with its first event's detail changed, and both stamps (logical rows, log) recomputed over it.</summary>
+    private static (byte[] Bytes, V3IndexCapabilityManifest Manifest, SourceArtifactRef Reference) Resealed(
+        LuxembourgIndexBuildResult built,
+        Action<System.Text.Json.Nodes.JsonNode> change)
+    {
+        var bytes = ResealedBytes(built.IndexBytes.ToArray(), change, out _, out _);
+        var digest = Convert.ToHexStringLower(SHA256.HashData(bytes));
+        return (bytes, RebindManifest(built.CapabilityManifest, digest), new SourceArtifactRef(LexCorpus6Builder.ResourceIdOf(digest), digest));
+    }
+
+    internal static byte[] ResealedBytes(
+        byte[] source,
+        Action<System.Text.Json.Nodes.JsonNode> change,
+        out LuxembourgIndexBuilder.ArticleRow[] articles,
+        out LuxembourgIndexBuilder.WorkTitleRow[] titles)
+    {
+        LuxembourgIndexBuilder.ArticleRow[] readArticles = [];
+        LuxembourgIndexBuilder.WorkTitleRow[] readTitles = [];
+        var bytes = MutateDatabase(source, connection =>
+        {
+            var first = ReadEvents(connection)[0];
+            var detail = System.Text.Json.Nodes.JsonNode.Parse(first.DetailJson)!;
+            change(detail);
+            Execute(connection, "UPDATE events SET detail_json=$detail WHERE seq=$seq", ("$detail", detail.ToJsonString()), ("$seq", first.Seq));
+            readArticles = ReadArticles(connection);
+            readTitles = ReadWorkTitles(connection);
+            Execute(connection, "UPDATE stamp SET logical_rows_sha256=$digest WHERE stamp_id=1", ("$digest", LuxembourgIndexBuilder.HashLogicalRows(
+                ReadMembers(connection), readArticles, ReadStates(connection), readTitles, ReadRelations(connection), ReadWorkFacts(connection), ReadEvents(connection))));
+            Execute(connection, "UPDATE log_stamp SET log_rows_sha256=$digest WHERE log_stamp_id=1",
+                ("$digest", LuxembourgIndexBuilder.HashEventLog(ReadObservations(connection), ReadEvents(connection))));
+        });
+        articles = readArticles;
+        titles = readTitles;
+        return bytes;
+    }
+
+    internal static LuxembourgIndexBuilder.ObservationRow[] ReadObservations(SqliteConnection connection)
+    {
+        using var command = connection.CreateCommand();
+        command.CommandText = "SELECT observation,corpus_sha256,predecessor_index_sha256,first_seq,last_seq,observed_from FROM observations ORDER BY observation";
+        using var reader = command.ExecuteReader();
+        var rows = new List<LuxembourgIndexBuilder.ObservationRow>();
+        while (reader.Read()) rows.Add(new(
+            reader.GetInt64(0), reader.GetString(1), reader.IsDBNull(2) ? null : reader.GetString(2),
+            reader.GetInt64(3), reader.GetInt64(4), reader.IsDBNull(5) ? null : reader.GetString(5)));
+        return rows.ToArray();
+    }
+
+    private static (string Schema, string Digest) ReadLogStamp(SqliteConnection connection)
+    {
+        using var command = connection.CreateCommand();
+        command.CommandText = "SELECT log_schema,log_rows_sha256 FROM log_stamp WHERE log_stamp_id=1";
+        using var reader = command.ExecuteReader();
+        Assert.IsTrue(reader.Read(), "the log stamp row");
+        return (reader.GetString(0), reader.GetString(1));
+    }
+
     internal static async Task<(LuxembourgIndexBuildResult Built, SourceArtifactRef CorpusRef)>
         BuildStateIndexAsync()
     {
@@ -846,15 +1039,21 @@ public sealed class LuxembourgIndexBuilderTests
     /// </summary>
     internal static LuxembourgIndexBuilder.EventRow[] RefreshGenesisEvents(
         SqliteConnection connection,
-        IReadOnlyList<LuxembourgIndexBuilder.StateRow> states)
+        IReadOnlyList<LuxembourgIndexBuilder.ArticleRow> articles,
+        IReadOnlyList<LuxembourgIndexBuilder.StateRow> states,
+        IReadOnlyDictionary<string, string> bodyByObjectRef)
     {
-        using (var clear = connection.CreateCommand())
+        // The genesis log of the edited states, re-sealed whole: its events (each naming its state's source bodies),
+        // its one observation and its own stamp, as the builder writes them.
+        foreach (var table in new[] { "events", "observations", "log_stamp" })
         {
-            clear.CommandText = "DELETE FROM events";
+            using var clear = connection.CreateCommand();
+            clear.CommandText = $"DELETE FROM {table}";
             clear.ExecuteNonQuery();
         }
 
-        var events = LuxembourgIndexBuilder.ProjectGenesisEvents(states);
+        var events = LuxembourgIndexBuilder.ProjectGenesisEvents(
+            states, LuxembourgIndexBuilder.SourceBodiesOfStates(articles, states, bodyByObjectRef));
         foreach (var value in events)
         {
             using var insert = connection.CreateCommand();
@@ -868,8 +1067,40 @@ public sealed class LuxembourgIndexBuilderTests
             Assert.AreEqual(1, insert.ExecuteNonQuery());
         }
 
+        string corpusSha256;
+        using (var stamp = connection.CreateCommand())
+        {
+            stamp.CommandText = "SELECT corpus_sha256 FROM stamp WHERE stamp_id=1";
+            corpusSha256 = (string)stamp.ExecuteScalar()!;
+        }
+
+        var observations = LuxembourgIndexBuilder.ProjectGenesisObservations(corpusSha256, events.Length);
+        foreach (var observation in observations)
+        {
+            using var insert = connection.CreateCommand();
+            insert.CommandText = "INSERT INTO observations VALUES($observation,$corpus,NULL,$first,$last,NULL)";
+            insert.Parameters.AddWithValue("$observation", observation.Observation);
+            insert.Parameters.AddWithValue("$corpus", observation.CorpusSha256);
+            insert.Parameters.AddWithValue("$first", observation.FirstSeq);
+            insert.Parameters.AddWithValue("$last", observation.LastSeq);
+            Assert.AreEqual(1, insert.ExecuteNonQuery());
+        }
+
+        using (var logStamp = connection.CreateCommand())
+        {
+            logStamp.CommandText = "INSERT INTO log_stamp VALUES(1,$schema,$digest)";
+            logStamp.Parameters.AddWithValue("$schema", LuxembourgIndexBuilder.EventLogSchema);
+            logStamp.Parameters.AddWithValue("$digest", LuxembourgIndexBuilder.HashEventLog(observations, events));
+            Assert.AreEqual(1, logStamp.ExecuteNonQuery());
+        }
+
         return events;
     }
+
+    /// <summary>The body digest of every Luxembourg member of a mount's corpus file, by object reference.</summary>
+    internal static IReadOnlyDictionary<string, string> CorpusBodies(string directory) =>
+        LuxembourgIndexBuilder.BodiesByObjectRef(VerifiedLexCorpus6ManifestSet.ParseCanonicalAndVerify(
+            File.ReadAllBytes(Path.Combine(directory, Lex.V3.Api.V3CorpusMount.CorpusFileName))));
 
     internal static LuxembourgIndexBuilder.WorkFactRow[] ReadWorkFacts(SqliteConnection connection)
     {
