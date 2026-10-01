@@ -16,6 +16,58 @@ namespace Lex.V3.Ingest.Tests;
 public sealed class EuRepeatedEnumerationExecutorTests
 {
     [TestMethod]
+    [DataRow(123, false)]
+    [DataRow(996, false)]
+    [DataRow(997, true)]
+    public async Task ContinuationMustStartStrictlyBeyondThePreviousCursor(int overlap, bool valid)
+    {
+        var root = EuPackRootCanonicalForm.TryCanonicalize(
+            EuAppendixASeedMap.SeedsInCelexOrder[0].WorkRoot, out _)!;
+        string Row(int n) => EuAcquisitionTestFixture.ObjectFactRow(root,
+            "http://publications.europa.eu/ontology/cdm#work_is_about_concept_eurovoc",
+            "http://eurovoc.europa.eu/" + n.ToString("D4", System.Globalization.CultureInfo.InvariantCulture));
+        var first = Enumerable.Range(0, 997).Select(Row).ToArray();
+        var second = new[] { Row(overlap), Row(998) };
+        var all = Enumerable.Range(0, 999).Select(Row).ToArray();
+        var scripts = new Dictionary<string, EuAcquisitionTestFixture.FamilyScript>(StringComparer.Ordinal)
+        {
+            ["P"] = new("P", new[]
+            {
+                EuAcquisitionTestFixture.EuCountJson(999),
+                EuAcquisitionTestFixture.ObjectFactsRowsJson(first),
+                EuAcquisitionTestFixture.ObjectFactsRowsJson(second),
+                EuAcquisitionTestFixture.EuCountJson(999),
+                EuAcquisitionTestFixture.ObjectFactsRowsJson(all.Take(613).ToArray()),
+                EuAcquisitionTestFixture.ObjectFactsRowsJson(all.Skip(613).ToArray()),
+            }),
+        };
+        var (plan, planId) = EuAcquisitionTestFixture.BuildObjectFactsPlan();
+        var handler = new EuAcquisitionTestFixture.ClassifyingHandler(scripts);
+        var request = new EuObjectFactsPartitionRunRequest(plan, planId,
+            EuObjectFactsQuerySet.ObjectFacts, [root],
+            EuAcquisitionTestFixture.BuildRendererSource(9801), EuAcquisitionTestFixture.TestWireBudget());
+        var executor = new EuRepeatedEnumerationExecutor(
+            new EuAcquisitionTestFixture.EuInMemoryCustodyStore(),
+            new EuAcquisitionTestFixture.FixedTimeProvider(), handler);
+        var result = await executor.RunObjectFactsPartitionAsync(
+            request, EuAcquisitionTestFixture.SourceWitness(), CancellationToken.None);
+
+        if (valid)
+        {
+            Assert.IsNotNull(result.Receipt);
+            Assert.IsNull(result.Refusal);
+            Assert.IsNotNull(result.Receipt.TryProveFamilyEnumeration(
+                result.Receipt.Delivery.PartitionKey, out _));
+            Assert.AreEqual(6, handler.OccurrenceCountFor("P"));
+            return;
+        }
+        Assert.IsNull(result.Receipt);
+        Assert.AreEqual(EuEnumerationRefusal.CursorDidNotAdvance, result.Refusal?.Code);
+        Assert.AreEqual(3, handler.OccurrenceCountFor("P"));
+        Assert.AreEqual(3UL, result.Refusal?.RequestOrdinal);
+    }
+
+    [TestMethod]
     public async Task TheEuDialectCountParseAcceptsTheLiteralWireTypeAndRejectsLuTypedLiteral()
     {
         // Print-then-transcribe: EnumerationDeliveryComparison.ParseCount (Core) itself requires
