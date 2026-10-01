@@ -37,6 +37,8 @@ public enum EuLegalNoticeRouteRefusal
     /// terminal with the wrong source media type, a terminal off the pinned origin, or a route the
     /// session sealed as incomplete (a body it could not read to the end). The detail is
     /// <see cref="EuLegalNoticeEvidence.FromRoute"/>'s own reason.
+    /// Offline reopening also uses this refusal for a different corpus identity, an empty route,
+    /// or a route/receipt mismatch; the detail identifies the failed check.
     /// </summary>
     [JsonStringEnumMemberName("notice_route_invalid")]
     NoticeRouteInvalid = 4,
@@ -278,6 +280,7 @@ public sealed class EuLegalNoticeRouteProducer
     /// Reopens a retained rights route under its original corpus identity, without a transport or
     /// new observation. All hop requests, policy bytes, body receipts and bodies must still exist.
     /// Retained receipts describe the original capture; this reader makes no current retention claim.
+    /// The route digest anchors lookup; retainedRoute.ResourceId is not compared.
     /// </summary>
     public static async Task<EuLegalNoticeRouteResult> ReopenAsync(
         ICustodyStore custodyStore,

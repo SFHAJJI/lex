@@ -5,21 +5,61 @@ every pull request that changes what is served, what is next or what is blocked.
 
 ## Offline rights-route reopening (Codex, 2026-10-01)
 
-Reversible driver decision under Q-20261001-0656-codex: reopen retained EU rights evidence using
-its original corpus run identity. EuLegalNoticeRouteProducer.ReopenAsync has no transport and
-makes no custody writes. It checks the pinned canonical route and run, every hop's original GET,
-request and redirect policy bytes, body receipt and actual body bytes, then repeats the existing
-route receipt and legal-notice gates. Capture times and bytes remain those originally observed.
-This is a read of historical evidence and does not assert current retention enforcement.
+Retained EU rights evidence reopens under its original corpus run identity. The reader has no
+transport and performs no writes. It verifies the route digest, every hop's original GET and
+policy bytes, body receipt and actual body bytes, then repeats the existing route and legal-notice
+gates. The route digest is the lookup anchor; the supplied resource identifier is not compared.
+Capture times and receipts remain historical evidence, without a current retention claim.
 
-Twelve draft cases cover independent store reopening with and without a redirect, two identical
-reads, missing route/request/policies/receipt/body, corrupted body bytes, wrong corpus identity,
-cancellation and a rehashed route naming an unrelated body receipt. CI 36831912174 passed exact d72f599e with 5,272 passed and 22 skipped, including all
-12 new cases. The required CI watch exited 0. Integration a74fece1 is now included; fresh
-combined CI and read-only Claude review remain required. Local Release, required fast tests
-and affected ingest tests remain deferred under the acquisition memory guard.
-This is one component of acquisition restoration. Complete EU/LU outcome catalogs and independent
-offline corpus/index derivations remain outstanding. The active EU runtime is unchanged.
+All 12 cases passed at 47eb3e39: CI 36854051881 reported 5,310 passed and 22 skipped, with
+required watch exit zero. Claude returned MERGE with no material code findings. The one repair
+clarifies reopen refusals and digest lookup, makes the literal census entry readable without
+changing its value, and includes integration 8c3f3801 with both STATUS sections preserved.
+Fresh final-head CI gates merge. Local builds/tests remain deferred under the memory guard.
+
+This restores one rights component. Complete acquisition catalogs and independent offline mounts
+remain pending. The active EU runtime is unchanged; no publisher traffic is sent by this slice.
+
+## Streaming scope verification from source inputs (Codex, 2026-10-01)
+
+The retained manifest can be verified by independently replaying its original source inputs
+through the existing streaming reducer and canonical writer. Acceptance checks the pinned
+digest, UTF-8, complete byte comparison, both source passes and writer admission/accounting.
+It returns the existing digest/count receipt without materializing a second manifest graph.
+The source factory and evidence resolver must come from original evidence; deriving either
+from the manifest under test would be circular.
+
+PR head b3cafcab passed CI 36850031289: 5,289 tests passed, 22 skipped, including all eleven
+new scope cases. Claude returned MERGE with no material findings. The one editorial repair
+clarifies exception precedence and working buffers in the API remarks and records the review.
+Integration a74fece1 is included; final-head CI gates merge under the 10:35 standing order.
+No local Release/fast/ingest run or synthetic source-replay measurement is claimed.
+
+The measurement remains required before claiming a full Luxembourg memory fit. Working
+storage includes five projection bytes per object, the evidence table, current input, the
+JSON writer buffer and a 4 KiB comparison buffer. An individual JSON element may exceed the
+writer's 64 KiB flush threshold. Factories and resolvers can retain more. This method is not
+wired into the LU adapter and does not provide a bounded downstream manifest view.
+
+
+## Async Luxembourg assertion snapshots (Codex, 2026-10-01)
+
+The snapshot writer now consumes asynchronous verified rows through the bounded small-chunk
+channel. Failed custody cancels the producer's linked token, including a source awaiting its
+next row. Both writer paths share the record encoding and canonical digest. The source remains
+responsible for publisher proofs, census membership, admission and subject grouping.
+
+Eight cases cover equal synchronous/asynchronous bytes, empty input, independently reopened
+small chunks with duplicates and literal metadata, failure during an awaiting source, absence
+of a root after source failure, wrong observations, null rows and early cancellation. Exact
+1f16080f passed CI 36852404133: 5,306 passed, 22 skipped; the required watch exited zero.
+Claude returned MERGE with no material findings. The one editorial repair clarifies the
+caller's proof checks and records this evidence. PR858 is merged as a74fece1 and included.
+Final-head CI still gates merge.
+No local build/test was run under the 10:35 low-memory rule. Adapter integration, complete
+bounded derivation and full-LU memory measurement remain outstanding.
+
+
 ## LU assertion snapshot storage (Codex, 2026-10-01)
 
 The immutable assertion snapshot uses the checked chunk reader. Opening validates the complete
@@ -46,7 +86,7 @@ header-size and writer-order limitations above. Integration c27012f4 is included
 requires successful CI on the final head. The 10:35 UTC standing order permits that CI-backed
 review during acquisition while memory is below 4 GB. No additional local build was run.
 
-The snapshot uses the legacy chunk writer; PR #855 supplies smaller chunks for its follow-on.
+The asynchronous snapshot now uses the bounded small-chunk channel introduced by PR #855.
 No publisher traffic, production action or completed population is claimed by this slice.
 
 
