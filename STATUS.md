@@ -16,9 +16,9 @@ Eight cases cover exact synchronous/asynchronous bytes, empty input, independent
 small-chunk reopening with duplicate rows and literal metadata, a failed custody write while the
 source waits, no root after a source failure, wrong observations, null rows and cancellation before writing.
 Remote CI36818977535 on 0536449f built successfully: 5,267 tests passed, 22 were skipped and the
-sole failure was the receipt-holder surface pin. All eight new cases passed. Diagnostics now print
-the independently compiled changed signatures before any literal pin is repaired. No census check
-is relaxed. This follow-on is on a branch created from origin/v3/integration, with pending
+sole failure was the receipt-holder surface pin. All eight new cases passed. Diagnostic CI36819699592 independently printed the new small-chunk overload and the changed
+private core signature. Those exact holder entries are now transcribed into the literal pin; no
+receipt constructor was added and no census check is relaxed. Fresh CI must verify the repair. This follow-on is on a branch created from origin/v3/integration, with pending
 PR858 merged as an explicit prerequisite. Draft CI may validate this follow-on while EU owns the
 local heavy slot; final review and merge wait for PR858. Required local Release build, fast and
 affected ingest checks, review and final CI remain outstanding. No adapter integration, publisher traffic or full-LU fit is claimed.

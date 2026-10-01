@@ -224,6 +224,13 @@ public sealed class DurableBlobReceiptFamilyIngestSurfaceTests
                     + "leBlobWriteReceipt, "
                     + "System.Collections.Generic.IReadOnlyList<Lex.V3.Contracts.Custody.DurableBlo"
                     + "bWriteReceipt>>>",
+                "method internal static Lex.V3.Ingest.ChunkedDerivedArtifact::WriteSmallChunksAsync(Lex.V3.Contr"
+                    + "acts.Custody.ICustodyStore, System.String, System.Func<System.IO.Stream, "
+                    + "System.Threading.CancellationToken, System.Threading.Tasks.Task<System.String>>, "
+                    + "System.Threading.CancellationToken, "
+                    + "System.Action<Lex.V3.Contracts.Custody.DurableBlobWriteReceipt>?) -> "
+                    + "System.Threading.Tasks.Task<System.ValueTuple<Lex.V3.Contracts.Custody.DurableBlobWriteReceipt,"
+                    + " System.Collections.Generic.IReadOnlyList<Lex.V3.Contracts.Custody.DurableBlobWriteReceipt>>>",
                 "method internal static "
                     + "Lex.V3.Ingest.CustodyHold::TryHoldAsync(Lex.V3.Contracts.Custody.ICustodySto"
                     + "re, System.ReadOnlyMemory<System.Byte>, "
@@ -259,14 +266,13 @@ public sealed class DurableBlobReceiptFamilyIngestSurfaceTests
                     + "HttpHop>) -> System.Collections.Generic.Dictionary<System.String, "
                     + "Lex.V3.Contracts.Custody.DurableBlobWriteReceipt>",
                 "method private static "
-                    + "Lex.V3.Ingest.ChunkedDerivedArtifact::WriteCoreAsync(Lex.V3.Contracts.Custody.IC"
-                    + "ustodyStore, System.String, System.Func<System.IO.Stream, System.String>, "
-                    + "System.String, System.Int32, System.Threading.CancellationToken, "
+                    + "Lex.V3.Ingest.ChunkedDerivedArtifact::WriteCoreAsync(Lex.V3.Contracts.Custody.ICustodyStore, "
+                    + "System.String, System.Func<System.IO.Stream, System.Threading.CancellationToken, "
+                    + "System.Threading.Tasks.Task<System.String>>, System.String, System.Int32, "
+                    + "System.Threading.CancellationToken, "
                     + "System.Action<Lex.V3.Contracts.Custody.DurableBlobWriteReceipt>?) -> "
-                    + "System.Threading.Tasks.Task<System.ValueTuple<Lex.V3.Contracts.Custody.Durab"
-                    + "leBlobWriteReceipt, "
-                    + "System.Collections.Generic.IReadOnlyList<Lex.V3.Contracts.Custody.DurableBlo"
-                    + "bWriteReceipt>>>",
+                    + "System.Threading.Tasks.Task<System.ValueTuple<Lex.V3.Contracts.Custody.DurableBlobWriteReceipt,"
+                    + " System.Collections.Generic.IReadOnlyList<Lex.V3.Contracts.Custody.DurableBlobWriteReceipt>>>",
                 "property internal instance Lex.V3.Ingest.ChunkedDerivedArtifact::ChunkReceipts() "
                     + "-> "
                     + "System.Collections.Generic.IReadOnlyList<Lex.V3.Contracts.Custody.DurableBlo"
