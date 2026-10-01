@@ -72,7 +72,15 @@ public sealed partial class V3FirstMountBuildTests
             CollectionAssert.AreEqual(MountDigests(expected), MountDigests(first), "Live derivation and first independent replay\nExpected:\n" + string.Join("\n", MountDigests(expected)) + "\nActual:\n" + string.Join("\n", MountDigests(first)));
             CollectionAssert.AreEqual(MountDigests(first), MountDigests(second), "Every file, including report and generations\nFirst:\n" + string.Join("\n", MountDigests(first)) + "\nSecond:\n" + string.Join("\n", MountDigests(second)));
             Assert.IsTrue((await V3CorpusMountWriter.VerifyAsync(second, CancellationToken.None)).Verified);
-            Assert.IsTrue(MountDigests(second).Length >= 7);
+            string[] expectedFiles = ["build-report.json", "lex-corpus-6.json", "luxembourg-index.sqlite3",
+                "luxembourg-capability-manifest.json", "europe-index.sqlite3", "europe-capability-manifest.json"];
+            if (chained)
+                expectedFiles = [.. expectedFiles, "generations/retention.json",
+                    .. expectedFiles.Select(file => $"generations/{predecessor!.IndexSha256}/{file}")];
+            CollectionAssert.AreEqual(expectedFiles.Order(StringComparer.Ordinal).ToArray(),
+                Directory.EnumerateFiles(second, "*", SearchOption.AllDirectories)
+                    .Select(file => Path.GetRelativePath(second, file).Replace('\\', '/')).Order(StringComparer.Ordinal).ToArray(),
+                "The complete mount contains exactly its six files and, when chained, its retained predecessor and retention decision.");
             await Assert.ThrowsExactlyAsync<ArgumentException>(() => V3OfflineMount.DeriveAsync(store, checkpoint, second, CancellationToken.None));
 
             var originalBytes = await store.ReadByDigestAsync(checkpoint.Sha256, CancellationToken.None);
