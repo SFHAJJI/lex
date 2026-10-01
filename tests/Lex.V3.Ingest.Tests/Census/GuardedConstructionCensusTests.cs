@@ -540,6 +540,12 @@ public sealed class GuardedConstructionCensusTests
                     + "Lex.V3.Ingest.Luxembourg.LuxembourgAknLegalContentPopulation::.ctor, "
                     + "method public instance "
                     + "Lex.V3.Ingest.Luxembourg.LuxembourgAknLegalContentProfileProducer::RunAsync",
+                "Lex.V3.Ingest.Luxembourg.LuxembourgAssertionSnapshot: constructor private "
+                    + "instance Lex.V3.Ingest.Luxembourg.LuxembourgAssertionSnapshot::.ctor, "
+                    + "constructor private static "
+                    + "Lex.V3.Ingest.Luxembourg.LuxembourgAssertionSnapshot::.cctor, "
+                    + "method internal static "
+                    + "Lex.V3.Ingest.Luxembourg.LuxembourgAssertionSnapshot::Open",
                 "Lex.V3.Ingest.Luxembourg.LuxembourgConsolidationByActResult: constructor private "
                     + "instance Lex.V3.Ingest.Luxembourg.LuxembourgConsolidationByActResult::.ctor, "
                     + "method internal static "
@@ -680,6 +686,11 @@ public sealed class GuardedConstructionCensusTests
                     + "Lex.V3.Ingest.Luxembourg.LuxembourgInitialDraftInventoryResult::Success, "
                     + "method public instance "
                     + "Lex.V3.Ingest.Luxembourg.LuxembourgInitialDraftInventoryProducer::RunAsync",
+                "Lex.V3.Ingest.Luxembourg.LuxembourgObjectDigestSet: constructor private instance "
+                    + "Lex.V3.Ingest.Luxembourg.LuxembourgObjectDigestSet::.ctor, method internal static "
+                    + "Lex.V3.Ingest.Luxembourg.LuxembourgObjectDigestSet::FromCanonicalArray, "
+                    + "method internal static "
+                    + "Lex.V3.Ingest.Luxembourg.LuxembourgObjectDigestSet::FromObservations",
                 "Lex.V3.Ingest.Luxembourg.LuxembourgObjectPopulationCompletion: constructor "
                     + "private instance "
                     + "Lex.V3.Ingest.Luxembourg.LuxembourgObjectPopulationCompletion::.ctor, "
@@ -1169,6 +1180,7 @@ public sealed class GuardedConstructionCensusTests
                     + "method public static Lex.V3.Ingest.WireRequestBudget::OfWireRequests",
             };
         var actual = ClosedSurfaceCensus.GuardedConstruction(CensusScope.SweptHere).ToArray();
+        // Expected entries stay literal; remote failures print the independently observed changes.
         CollectionAssert.AreEqual(expected, actual,
             "Removed or changed pins:\n" + string.Join("\n", expected.Except(actual, StringComparer.Ordinal)) +
             "\nActual added or changed entries:\n" + string.Join("\n", actual.Except(expected, StringComparer.Ordinal)));
