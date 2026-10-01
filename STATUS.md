@@ -12,12 +12,13 @@ consumes every saved fetch, restores the original observations and repeats curre
 It returns the same held-route map for Gazette reuse. A failed checkpoint hold has the explicit
 DocumentCheckpointNotRetained refusal. Delivered query results carry the phase checkpoint.
 
-Twenty-five new cases are drafted: copied stores with current weaker protection, successful and
-refused outcomes, excluded rows, missing evidence, rehashed bindings, changed selection, null
-root, cancellation and failed checkpoint retention. Local tests are deferred while acquisition
-holds the heavy slot; full CI and official review are pending. Parent PR 895 is still pending.
-Gazette-only fetches, full LU query restoration and independent offline mounts remain outstanding.
-Input/result digest calculation still materializes JSON; this slice makes no full-LU fit claim.
+All 25 new cases passed in initial CI 36866916250: 5,531 passed, 22 skipped and five
+inventory failures. The exact new refusal, constructor signature and four compiled factory
+rows are now pinned, with the CI log digest retained in the lane evidence. No test was weakened.
+Fresh CI and official review remain required; local heavy checks remain deferred. Parent 895
+passed its repaired CI but is not merged. Gazette-only fetches, full LU query restoration and
+independent offline mounts remain outstanding. Input/result digests still materialize JSON;
+this slice makes no full-LU fit claim.
 
 ## Offline Luxembourg document attempts (Codex, 2026-10-01)
 

@@ -338,7 +338,7 @@ public sealed class ClosedVocabularyCensusTests
                     + "GazetteBodyNotProduced, PopulationLedgerNotCompleted, "
                     + "ObservedObjectIdentitySetNotRetained, "
                     + "HeldBodyDerivationPopulationNotCompleted, "
-                    + "SelectedManifestationIdentityNotUnique",
+                    + "SelectedManifestationIdentityNotUnique, DocumentCheckpointNotRetained",
                 "Lex.V3.Ingest.Luxembourg.LuxembourgRelationFamilyAcquisitionState: "
                     + "AcquiredComplete, Unacquired, Incomplete, Uncertain",
                 "Lex.V3.Ingest.Luxembourg.LuxembourgResourceObservationExclusionCause: "
