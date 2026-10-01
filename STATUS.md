@@ -974,7 +974,7 @@ CI evidence are recorded in the pull request before merge.
 
 ## Heads
 
-- `v3/integration`: `34a9573d` (2026-10-01, PR #874 merged). Build 45 s. Fast lane
+- `v3/integration`: `55d58cb2` (2026-10-01, PR #878 merged). Build 45 s. Fast lane
   (`eng/test-fast.ps1`): 3,077 tests, 3,076 pass, 1 skipped (the review of PR #828). Ingest suite: green on CI for PR #760
   (the CI `dotnet` job runs the whole solution on every pull request, about 7 min on the runner;
   green for PR #834);
@@ -2424,6 +2424,53 @@ Schema 6 served with its build record absent (PR #878).
 - **The whole ingest suite also ran with `V3_EVALUATE_MOUNT` naming the real mount**, so its
   real-mount gates ran on it.
 
+Predecessor chaining, the sixth slice, first part (PR #880): a chained build keeps its earlier
+generations, by the retention line (G3b).
+- **The line.** The panel applied the launch's retention line, Stage 7 S7-A09
+  (`lex-governance/stages/STAGE-7.md:37-38`), to the generation mount:
+  - every generation a published permalink or evidence bundle references, indefinitely;
+  - nightlies for 90 days;
+  - one complete monthly keeper, indefinitely;
+  - the retained depth reported truthfully.
+- **`V3GenerationRetention.Decide`** decides from the log alone. "Now" is the mounted build's own
+  time, never the clock, so two builds of one chain decide alike. It keeps each held generation
+  that is any of these:
+  - referenced;
+  - the last build of its UTC day (the mounted build's day included) within 90 days;
+  - its UTC month's earliest held generation.
+
+  It reports the rest as dropped, and those no longer held as absent: never claimed.
+  - Nothing records which permalinks or bundles were published. So `referenced` comes from the new
+    Tool option `--referenced <file>`, a JSON array of index digests. It means the generations
+    promoted to production, which is empty until the owner promotes one.
+  - Every verified generation counts as "complete".
+- **The writer** handles a chained build (`--predecessor`):
+  - it copies the kept generations whole out of the predecessor's directory (the predecessor itself,
+    or a generation it kept) into `generations/{luxembourg index digest}/`: the five mount files and
+    the build report;
+  - it records the decision in `generations/retention.json` and lists the generations in the build
+    report;
+  - nothing is deleted anywhere, and the predecessor's directory is only read.
+- **`VerifyAsync`** holds each generation to the mounted log:
+  - its name is an index the log names as a predecessor;
+  - it holds exactly a generation's six files and is itself a mount that verifies;
+  - its Luxembourg index is that digest, and its corpus the one its observation names;
+  - its log is the mounted log up to its observation;
+  - `retention.json` is the line's decision from the generations held and the references recorded.
+- **Tests:**
+  - three real first-mount builds on three days, each chained to the last: the third keeps the
+    first (its day's last, and October's keeper) and the second (nightly), copied byte for byte,
+    and verifies;
+  - four ways a generation can be wrong are refused: a missing file, a directory that is no earlier
+    build, another build's files under a generation's name, and a retention record the line did not
+    decide;
+  - the policy's own tests cover the 90-day edge, a referenced old build, an absent one, and an
+    earlier build of the mounted build's day.
+- **Not yet:** the API reads no generation. Next come the mount's own checks of them at open, the
+  depth `coverage` and `events` report, and then `as_observed` and `verify` quoting a state from a
+  retained generation. An image built from such a mount carries `generations/` too. No byte budget
+  is enforced yet.
+
 The live export composer and its journey step (PR #789), the eighth screen. `dist-live/export.html`
 has its own bundle `client-live-export.js`.
 - The page asks what the reading page asks: the same form (`ReadingForm`, now shared), the same one
@@ -3123,7 +3170,8 @@ recorded by PR #862:
      source body changes (G1), and the derived `interval_closed` and `validity_revised` (PR #867);
    - `events` and `answer_drift` across the chain (folded into PR #867 by its review);
    - each build's time in the log (PR #871), then `as_observed` by build snapshot (G4) (PR #874);
-   - a generation mount (G3b), retained by S7-A09.
+   - a generation mount (G3b), retained by S7-A09: generations written and verified (PR #880),
+     then read by the mount.
    `observed_from` stays null until a Luxembourg body's capture time reaches the corpus (data lane);
    `knowable_on` and withdrawal follow it. The owner questions (G1 when a file changes but its text
    does not, "as observed" identified by snapshot with no time, retaining every generation) were
