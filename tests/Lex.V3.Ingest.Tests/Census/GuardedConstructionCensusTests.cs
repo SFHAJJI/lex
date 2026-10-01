@@ -78,13 +78,12 @@ public sealed class GuardedConstructionCensusTests
                     + "method public instance Lex.V3.Ingest.CorpusRecordSetReader::ReadAsync, "
                     + "method public static Lex.V3.Ingest.CorpusRecordSetReadResult::Refused, "
                     + "method public static Lex.V3.Ingest.CorpusRecordSetReadResult::Reopened",
-                "Lex.V3.Ingest.CorpusRecordSetWriteResult: constructor private instance "
-                    + "Lex.V3.Ingest.CorpusRecordSetWriteResult::.ctor, "
-                    + "method private instance "
-                    + "Lex.V3.Ingest.CorpusRecordSetWriter::WriteChunkedAsync, "
-                    + "method public instance Lex.V3.Ingest.CorpusRecordSetWriter::WriteAsync, "
-                    + "method public static Lex.V3.Ingest.CorpusRecordSetWriteResult::Refused, "
-                    + "method public static Lex.V3.Ingest.CorpusRecordSetWriteResult::Written",
+                "Lex.V3.Ingest.CorpusRecordSetWriteResult: constructor private instance Lex.V3.Ingest.CorpusRecordS"
+                    + "etWriteResult::.ctor, method internal instance Lex.V3.Ingest.CorpusRecordSetWriter::RebuildAsync, "
+                    + "method private instance Lex.V3.Ingest.CorpusRecordSetWriter::WriteChunkedAsync, method private ins"
+                    + "tance Lex.V3.Ingest.CorpusRecordSetWriter::WriteCoreAsync, method public instance Lex.V3.Ingest.Co"
+                    + "rpusRecordSetWriter::WriteAsync, method public static Lex.V3.Ingest.CorpusRecordSetWriteResult::Re"
+                    + "fused, method public static Lex.V3.Ingest.CorpusRecordSetWriteResult::Written",
                 "Lex.V3.Ingest.Europe.EuAmendmentAttributionCoverage: constructor private instance "
                     + "Lex.V3.Ingest.Europe.EuAmendmentAttributionCoverage::.ctor, "
                     + "constructor private static "

@@ -19,7 +19,7 @@ namespace Lex.V3.Ingest.Tests;
 /// without a caller supplying a real <see cref="DurableBlobWriteReceipt"/>).
 /// </summary>
 [TestClass]
-public sealed class CorpusRecordSetWriterTests
+public sealed partial class CorpusRecordSetWriterTests
 {
     private const string Digest =
         "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";

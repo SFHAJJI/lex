@@ -73,6 +73,8 @@ those remain required follow-on work. Existing in-process two-build checks remai
 Active EU retry6 uses its frozen old runtime and is untouched.
 Validation update: CI 36848599198 compiled and passed all 26 new cases
 (5,321 succeeded, 22 skipped, two census failures). Compiled guard and vocabulary
+Validation update: CI 36848707285 compiled and passed all 16 new cases
+(5,292 succeeded, 22 skipped, two census failures). Compiled guard and vocabulary
 rows were checked against previous literals and transcribed; fresh CI must verify them.
 The 10:35 UTC standing order permits full-suite CI and a read-only Claude review while
 free memory is below 4 GB. No local test result is claimed.
@@ -114,6 +116,21 @@ the document-fetch result factory list. The new ReopenAsync door is now pinned f
 fresh CI must verify the transcription. No implementation failure was reported.
 Local Release, required fast tests, affected ingest tests and Claude review remain queued behind
 the active EU run and prior data slices. No population completion or complete offline rebuild is claimed.
+## Corpus rebuild identity (Codex, 2026-10-01)
+
+Reversible driver decision: the internal corpus rebuild path takes the original set reference
+and rederives the records from checked acquisition inputs. It compares their domain-separated
+canonical digest before any custody write. A mismatch returns RebuildIdentityDisagrees;
+a match preserves the original resource ID through the normal checked hold and reopen path,
+for both inline and chunked storage. Normal acquisition still creates a fresh set identity.
+The returned retention floor is measured from the current write closure.
+
+Sixteen new draft cases cover two separate stores, inline and chunked bytes, weaker current
+custody, changed digest/manifest/run/outcomes before writes, failed holds and cancellation.
+Source is uncompiled locally because the active EU run owns the heavy slot; remote CI requested.
+Required local Release, fast and affected ingest tests plus Claude review remain pending.
+This is the corpus writer component. Full acquisition restoration and two independent mount
+processes remain required; the tests do not claim that full release acceptance.
 
 ## EU escaped qualifier authority (Codex, 2026-10-01)
 
