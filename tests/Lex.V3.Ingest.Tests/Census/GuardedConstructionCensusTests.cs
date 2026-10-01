@@ -58,6 +58,7 @@ public sealed class GuardedConstructionCensusTests
     [TestMethod]
     public void EveryConstructionRestrictedTypeInTheSweptAssembliesHasExactlyTheseDoors()
     {
+        foreach (var row in ClosedSurfaceCensus.GuardedConstruction(CensusScope.SweptHere)) System.Console.WriteLine("PIN879_GUARD " + row);
         CollectionAssert.AreEqual(
             new[]
             {

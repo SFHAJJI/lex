@@ -13,6 +13,8 @@ No transport is opened and no new observation or current retention guarantee is 
 and incomplete routes retain their original outcomes. Package inventories, annex classification,
 query binding and complete acquisition catalog reconstruction remain separate work.
 
+All19 new cases passed in initial CI36840785524:5291 passed,22 skipped and one construction
+census failed. A compiled-surface diagnostic is pending; no implementation failure was reported.
 Local Release, required fast tests, affected ingest tests and Claude review remain queued behind
 the active EU run and prior data slices. No population completion or complete offline rebuild is claimed.
 
