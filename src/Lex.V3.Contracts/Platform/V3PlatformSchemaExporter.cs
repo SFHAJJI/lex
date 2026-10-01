@@ -293,6 +293,13 @@ public static class V3PlatformSchemaExporter
             ("identifier", NonBlankString()),
             ("after", EventCursor()),
             ("limit", RowLimit())),
+        "as_observed" => Parameters(
+            ["identifier", "date"],
+            ("identifier", NonBlankString()),
+            ("date", CivilDate()),
+            ("language", NonBlankString()),
+            ("snapshot", Hash()),
+            ("at", NonBlankString())),
         _ => ClosedObject(),
     };
 

@@ -27,16 +27,22 @@ internal sealed class V3CorpusMount : IDisposable
     private readonly EuropeIndexReader? _europeReader;
     private readonly VerifiedLexCorpus6ManifestSet _corpus;
 
+    // The retention line's decision the mounted generations carry, held to the mounted log at open; null when the mount
+    // keeps no generation.
+    private readonly V3RetentionDecision? _generations;
+
     private V3CorpusMount(
         LuxembourgIndexReader? reader,
         EuropeIndexReader? europeReader,
-        VerifiedLexCorpus6ManifestSet corpus)
+        VerifiedLexCorpus6ManifestSet corpus,
+        V3RetentionDecision? generations = null)
     {
         if (reader is null && europeReader is null)
             throw new ArgumentException("A V3 corpus mount requires at least one publisher index.");
         _reader = reader;
         _europeReader = europeReader;
         _corpus = corpus ?? throw new ArgumentNullException(nameof(corpus));
+        _generations = generations;
     }
 
     public static async Task<V3CorpusMount?> OpenAsync(
@@ -66,11 +72,17 @@ internal sealed class V3CorpusMount : IDisposable
                 "A V3 corpus mount requires the exact corpus and a complete index/capability pair.");
         }
 
+        if (!hasIndex && Directory.Exists(Path.Combine(directory, V3CorpusMountWriter.GenerationsDirectoryName)))
+        {
+            throw new InvalidDataException("A V3 corpus mount keeps generations only of a Luxembourg event log it holds.");
+        }
+
         var corpusBytes = await File.ReadAllBytesAsync(corpusPath, cancellationToken)
             .ConfigureAwait(false);
         var corpus = VerifiedLexCorpus6ManifestSet.ParseCanonicalAndVerify(corpusBytes);
         LuxembourgIndexReader? reader = null;
         EuropeIndexReader? europeReader = null;
+        V3RetentionDecision? generations = null;
         try
         {
             if (hasIndex)
@@ -84,6 +96,13 @@ internal sealed class V3CorpusMount : IDisposable
                     throw new InvalidDataException(
                         "The mounted Luxembourg index does not bind the mounted corpus/6 artifact.");
                 reader.VerifyEventLogSources(corpus);
+
+                // The generations beside the mount, held to its log as the mount writer's verification holds them; any that
+                // does not hold fails the mount closed, like every other check here.
+                var held = await V3CorpusMountWriter.VerifyGenerationsAsync(directory, reader, cancellationToken).ConfigureAwait(false);
+                if (held.Failure is { } failure)
+                    throw new InvalidDataException($"The mounted generations do not hold to the mounted log: {failure}.");
+                generations = held.Decision;
             }
 
             if (hasEuropeIndex)
@@ -95,7 +114,7 @@ internal sealed class V3CorpusMount : IDisposable
                     .ConfigureAwait(false);
             }
 
-            return new V3CorpusMount(reader, europeReader, corpus);
+            return new V3CorpusMount(reader, europeReader, corpus, generations);
         }
         catch
         {
@@ -372,6 +391,247 @@ internal sealed class V3CorpusMount : IDisposable
         return V3PlatformOperationOutcome.Success(
             Context("success", observedAt),
             new V3PlatformOperationResult(request, "work_resolution", result.RootElement));
+    }
+
+    internal const string AsObservedBasis =
+        "the event log as it stood at the named snapshot: every state of the work its events had sighted up to that build's last event, " +
+        "a later event of a state replacing an earlier one and a state once held staying held (absence is not a withdrawal); the state " +
+        "applying on the date is selected among them as as_of selects among the mounted states, and the next date is the next one held at " +
+        "that snapshot; the work is named as the mounted index names it";
+
+    internal const string AsObservedBoundNote =
+        "observed_no_later_than is when the snapshot's build ran, rounded up to the second, so every state it held was observed no later " +
+        "than that; no observation time is held, so nothing here says when a state was first observed, and no time between two snapshots " +
+        "is placed in either";
+
+    internal const string AsObservedTextNote =
+        "a state the mounted index still holds is served in full (text_held true); a state only an earlier build held is named by its " +
+        "permalink, digest and source bodies from the log, without text (text_held false), because no generation that held its text is mounted";
+
+    internal const string AsObservedSnapshotWhatWouldAnswer =
+        "a snapshot of the mounted log by its index digest: the mounted index (events: log.log_id) or an ancestor it carries forward " +
+        "(events: log.ancestors[].log_id)";
+
+    internal const string AsObservedAtWhatWouldAnswer =
+        "a snapshot by its index digest instead of a time: no observation time is held and a build's time bounds observation only from " +
+        "above, so no time can be placed in a snapshot without guessing; the mounted index (events: log.log_id) or an ancestor it carries " +
+        "forward (events: log.ancestors[].log_id)";
+
+    internal const string AsObservedLegacyWhatWouldAnswer =
+        "a mount whose Luxembourg index records its builds (lex-v3-luxembourg-index/8); this one is lex-v3-luxembourg-index/6, built " +
+        "before builds were recorded, so it names no snapshot and no build time";
+
+    internal const string AsObservedNotHeldWorkWhatWouldAnswer =
+        "a work the log held at this snapshot; this one was first sighted by a later build (events: first_sighting)";
+
+    /// <summary>
+    /// <c>as_observed</c> for Luxembourg, by build snapshot (the panel's ruling on the owner's behalf): the state of one
+    /// work that applied on a date as the event log held it at one build of the mounted chain, named by that build's
+    /// index digest. The log is folded up to the snapshot's last event and the state is selected as <c>as_of</c>
+    /// selects; the answer names the snapshot and gives its build time as an upper bound (<c>observed_no_later_than</c>),
+    /// never an observation time. A state the mounted index still holds is served in full; one only an earlier build
+    /// held is named by its identity from the log, without text. A request by time (<c>at</c>) refuses
+    /// <c>snapshot_unknown</c>, as does a digest that is no snapshot of this log: upper bounds alone place no instant.
+    /// </summary>
+    public V3PlatformOperationOutcome AsObserved(
+        V3PlatformOperationRequest request,
+        DateTimeOffset observedAt)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        if (!string.Equals(request.OperationId, "as_observed", StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException("The mounted corpus observed-state operation only accepts as_observed/1.");
+        }
+
+        var identifier = RequiredString(request.Parameters, "identifier");
+        var requestedDate = RequiredString(request.Parameters, "date");
+        var requestedLanguage = OptionalLanguage(request.Parameters);
+        if (!DateOnly.TryParseExact(
+                requestedDate, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out _))
+        {
+            throw new V3TransportFailureException(
+                V3TransportFailureKind.RequestSchemaInvalid,
+                "The requested date is not a civil calendar date.");
+        }
+
+        if (request.Parameters.TryGetProperty("snapshot", out _) == request.Parameters.TryGetProperty("at", out _))
+        {
+            throw new V3TransportFailureException(
+                V3TransportFailureKind.RequestSchemaInvalid,
+                "as_observed takes exactly one of 'snapshot' (an index digest) and 'at' (a time).");
+        }
+
+        if (request.Parameters.TryGetProperty("at", out _))
+        {
+            return SnapshotUnknown(request, observedAt, RequiredString(request.Parameters, "at"), AsObservedAtWhatWouldAnswer);
+        }
+
+        var snapshot = RequiredString(request.Parameters, "snapshot");
+        if (snapshot.Length != 64 || !snapshot.All(static c => c is (>= '0' and <= '9') or (>= 'a' and <= 'f')))
+        {
+            throw new V3TransportFailureException(
+                V3TransportFailureKind.RequestSchemaInvalid,
+                "The operation request's 'snapshot' is not an index digest.");
+        }
+
+        if (RefuseUnlessWorkStates(request, identifier, observedAt, "r6_as_observed", requestedLanguage: null,
+                out var mountedStates, out _) is { } refused)
+        {
+            return refused;
+        }
+
+        if (!_reader!.RecordsBuilds)
+        {
+            return SnapshotUnknown(request, observedAt, snapshot, AsObservedLegacyWhatWouldAnswer);
+        }
+
+        // Snapshot k is the build of observation k: the index its successor names as predecessor, or the mounted one.
+        var observations = _reader.ResolveObservations();
+        var generation = Enumerable.Range(0, observations.Count).FirstOrDefault(
+            k => string.Equals(
+                k + 1 < observations.Count ? observations[k + 1].PredecessorIndexSha256 : _reader.IndexRef.Sha256,
+                snapshot,
+                StringComparison.Ordinal),
+            -1);
+        if (generation < 0)
+        {
+            return SnapshotUnknown(request, observedAt, snapshot, AsObservedSnapshotWhatWouldAnswer);
+        }
+
+        var at = observations[generation];
+        var workKey = mountedStates[0].WorkKey;
+        var held = _reader.ResolveObservedStates(workKey, at.LastSeq);
+        if (held.Count == 0)
+        {
+            return Unknown(request, identifier, observedAt, PublisherId.LuLegilux, AsObservedNotHeldWorkWhatWouldAnswer);
+        }
+
+        var heldLanguages = held.Select(static state => state.Language)
+            .Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray();
+        if (requestedLanguage is not null && !heldLanguages.Contains(requestedLanguage, StringComparer.Ordinal))
+        {
+            using var unavailableLanguage = JsonSerializer.SerializeToDocument(new
+            {
+                requested_language = requestedLanguage,
+                available_languages = heldLanguages,
+            });
+            return V3PlatformOperationOutcome.Refused(
+                Context("refusal", observedAt),
+                new V3PlatformOperationRefusal(request, "language_not_available", unavailableLanguage.RootElement));
+        }
+
+        var scope = requestedLanguage is null
+            ? held
+            : held.Where(state => string.Equals(state.Language, requestedLanguage, StringComparison.Ordinal)).ToArray();
+        var mounted = mountedStates.ToLookup(static state => state.StateSha256, StringComparer.Ordinal);
+        var served = new List<JsonNode>();
+        var ambiguous = new List<string>();
+        foreach (var language in requestedLanguage is null ? heldLanguages : [requestedLanguage])
+        {
+            var ofLanguage = scope.Where(state => string.Equals(state.Language, language, StringComparison.Ordinal)).ToArray();
+            var atOrBefore = ofLanguage.Where(state => string.CompareOrdinal(state.ApplicabilityDate, requestedDate) <= 0).ToArray();
+            if (atOrBefore.Length == 0)
+            {
+                continue;
+            }
+
+            var selectedDate = atOrBefore.Max(static state => state.ApplicabilityDate)!;
+            var selected = atOrBefore.Where(state => string.Equals(state.ApplicabilityDate, selectedDate, StringComparison.Ordinal)).ToArray();
+            if (selected.Length > 1)
+            {
+                ambiguous.AddRange(selected.Select(ObservedStateUrl));
+                continue;
+            }
+
+            var nextDate = ofLanguage
+                .Select(static state => state.ApplicabilityDate)
+                .Where(date => string.CompareOrdinal(date, requestedDate) > 0)
+                .Order(StringComparer.Ordinal)
+                .FirstOrDefault();
+            var state = selected[0];
+            if (mounted[state.StateSha256].FirstOrDefault(candidate => string.Equals(candidate.Language, state.Language, StringComparison.Ordinal)) is { } full)
+            {
+                var row = JsonSerializer.SerializeToNode(StateRow(full, nextDate))!.AsObject();
+                row["text_held"] = true;
+                served.Add(row);
+            }
+            else
+            {
+                served.Add(new JsonObject
+                {
+                    ["language"] = state.Language,
+                    ["applicability_date"] = state.ApplicabilityDate,
+                    ["next_applicability_date"] = nextDate,
+                    ["state_sha256"] = state.StateSha256,
+                    ["expression_iri"] = state.ExpressionIri,
+                    ["source_body_sha256"] = new JsonArray(state.SourceBodySha256.Select(static body => (JsonNode?)JsonValue.Create(body)).ToArray()),
+                    ["stable_coordinate"] = $"/lu-legilux/{state.WorkKey}/{state.ApplicabilityDate}",
+                    ["permalink"] = ObservedStateUrl(state),
+                    ["text_held"] = false,
+                });
+            }
+        }
+
+        if (ambiguous.Count != 0)
+        {
+            return RefuseAmbiguousVersion(request, observedAt, requestedDate, ambiguous.Order(StringComparer.Ordinal).ToArray(), bound: null);
+        }
+
+        if (served.Count == 0)
+        {
+            return RefuseNoVersionForDate(request, observedAt, scope.Select(static state => state.ApplicabilityDate).ToArray(), requestedDate, bound: null);
+        }
+
+        using var result = JsonSerializer.SerializeToDocument(new
+        {
+            requested_identifier = identifier,
+            requested_date = requestedDate,
+            requested_language = requestedLanguage,
+            requested_snapshot = snapshot,
+            publisher = "lu-legilux",
+            work_key = workKey,
+            snapshot = new
+            {
+                snapshot_id = snapshot,
+                observation = at.Observation,
+                observations_in_log = observations.Count,
+                mounted = generation == observations.Count - 1,
+                corpus_sha256 = at.CorpusSha256,
+                observed_no_later_than = at.BuiltAt,
+                observation_time_held = false,
+                bound_note = AsObservedBoundNote,
+            },
+            basis = AsObservedBasis,
+            text_note = AsObservedTextNote,
+            states = served,
+            articles_not_admitted_note = ArticlesNotAdmittedNote,
+            available_languages = heldLanguages,
+            corpus_sha256 = _corpus.ArtifactRef.Sha256,
+            index_sha256 = _reader.IndexRef.Sha256,
+        });
+        return V3PlatformOperationOutcome.Success(
+            Context("success", observedAt),
+            new V3PlatformOperationResult(request, "version_state", result.RootElement));
+    }
+
+    private static string ObservedStateUrl(LuxembourgIndexObservedState state) =>
+        $"/lu-legilux/{state.WorkKey}/{state.ApplicabilityDate}--{state.StateSha256}";
+
+    /// <summary>The one <c>snapshot_unknown</c> refusal of <c>as_observed</c>: the snapshot or time asked for, and what would answer.</summary>
+    private V3PlatformOperationOutcome SnapshotUnknown(
+        V3PlatformOperationRequest request,
+        DateTimeOffset observedAt,
+        string snapshotId,
+        string whatWouldAnswer)
+    {
+        using var unknown = JsonSerializer.SerializeToDocument(new
+        {
+            snapshot_id = snapshotId,
+            what_would_answer = whatWouldAnswer,
+        });
+        return V3PlatformOperationOutcome.Refused(
+            Context("refusal", observedAt),
+            new V3PlatformOperationRefusal(request, "snapshot_unknown", unknown.RootElement));
     }
 
     /// <summary>
@@ -2514,10 +2774,18 @@ internal sealed class V3CorpusMount : IDisposable
         DateTimeOffset observedAt,
         IReadOnlyList<LuxembourgIndexResolvedState> scope,
         string requestedDate,
+        string? bound) =>
+        RefuseNoVersionForDate(request, observedAt, scope.Select(static state => state.ApplicabilityDate).ToArray(), requestedDate, bound);
+
+    /// <summary>The same refusal over the publisher dates of the states it is given (<c>as_observed</c> gives a snapshot's).</summary>
+    private V3PlatformOperationOutcome RefuseNoVersionForDate(
+        V3PlatformOperationRequest request,
+        DateTimeOffset observedAt,
+        IReadOnlyList<string> scopeDates,
+        string requestedDate,
         string? bound)
     {
-        var dates = scope.Select(static state => state.ApplicabilityDate)
-            .Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray();
+        var dates = scopeDates.Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray();
         var payload = new JsonObject { ["requested_date"] = requestedDate };
         if (bound is not null)
         {
@@ -3771,12 +4039,10 @@ internal sealed class V3CorpusMount : IDisposable
     /// </summary>
     internal static readonly IReadOnlyDictionary<string, string> NotServedDataNeeded = new Dictionary<string, string>(StringComparer.Ordinal)
     {
-        ["as_observed"] =
-            "observation times: when this corpus first observed each held state (observed_from), recorded by builds chained to their " +
-            "predecessors in the event log; a single build holds no observation time, so no answer can be replayed as it was observed",
         ["knowable_on"] =
             "each held state's publication date beside its observation time (observed_from), so a date is answered with what a reader " +
-            "could have known on it, never with the publisher's valid-from date; the observation times need builds chained to their predecessors",
+            "could have known on it, never with the publisher's valid-from date; the observation times need each Luxembourg body's capture time " +
+            "in the corpus, which no build records yet: a build's time bounds observation only from above",
         ["concepts"] =
             "the concept data attached to EU works: EuroVoc descriptors, EU directory codes and subject matters as the Publications Office " +
             "records them; the EU index holds none of them",
@@ -3785,12 +4051,71 @@ internal sealed class V3CorpusMount : IDisposable
             "measures for Luxembourg, each kept as its publisher asserts it and never merged; neither is acquired",
     };
 
+    /// <summary>The build-time row on a mount whose Luxembourg index is schema 6, which records no build time at all.</summary>
+    internal static readonly string[] CoverageLegacyBuildTimeRow =
+        ["build_time_and_currency", "this report states no build time and no build time of the corpus file is held, so nothing here says how current these counts are; this Luxembourg index is lex-v3-luxembourg-index/6 and its event log records no build time either; the corpus and index digests name exactly which artifacts are mounted"];
+
+    internal const string HistoryNote =
+        "the builds the mounted Luxembourg log records (its snapshots), and those whose text this mount holds: the mounted build, and each " +
+        "earlier generation the retention line keeps beside it (S7-A09: referenced generations indefinitely, the last build of each UTC day " +
+        "for 90 days, each UTC month's earliest indefinitely), held to the log when the mount opened; a snapshot without text is named by the " +
+        "log alone, and as_observed answers its states without text; every time here is a build's, an upper bound on observation, never an " +
+        "observation time";
+
+    internal const string HistoryNotRecordedNote =
+        "the mounted Luxembourg index is lex-v3-luxembourg-index/6 and records no build, so it names no snapshot and keeps no generation";
+
+    /// <summary>
+    /// The retained history depth (S7-A09's "reported history depth is truthful"): how many builds the mounted log records and
+    /// since when, which of them this mount holds the text of (the mounted build and each retained generation, with why it is
+    /// kept), how many it does not, and the retention line that decided. Null without a Luxembourg index.
+    /// </summary>
+    private object? HistoryBlock()
+    {
+        if (_reader is null)
+        {
+            return null;
+        }
+
+        if (!_reader.RecordsBuilds)
+        {
+            return new
+            {
+                log_records_builds = false,
+                snapshots_in_log = 0,
+                history_begins = (string?)null,
+                retention_policy = (object?)null,
+                snapshots_with_text = Array.Empty<object>(),
+                snapshots_without_text = 0,
+                note = HistoryNotRecordedNote,
+            };
+        }
+
+        var observations = _reader.ResolveObservations();
+        var withText = (_generations?.Retained ?? [])
+            .Select(static kept => new { snapshot_id = kept.IndexSha256, observation = kept.Observation, built_at = kept.BuiltAt, retained_as = kept.Reasons.ToArray() })
+            .Append(new { snapshot_id = _reader.IndexRef.Sha256, observation = observations[^1].Observation, built_at = observations[^1].BuiltAt, retained_as = new[] { "mounted" } })
+            .ToArray();
+        return new
+        {
+            log_records_builds = true,
+            snapshots_in_log = observations.Count,
+            history_begins = observations[0].BuiltAt,
+            retention_policy = _generations is null
+                ? null
+                : new { id = _generations.PolicyId, nightly_days = V3GenerationRetention.NightlyDays, evaluated_at = _generations.EvaluatedAt },
+            snapshots_with_text = withText,
+            snapshots_without_text = observations.Count - withText.Length,
+            note = HistoryNote,
+        };
+    }
+
     internal static readonly string[][] CoverageNotHeld =
     [
         ["publisher_universe", "how many acts the publisher holds, or how many of them this mount lacks: the mount records only what was admitted"],
         ["never_consolidated_acts", "the count of as-published acts never consolidated is a corpus-level statement this mount does not carry"],
         ["first_sighting_and_observation_times", "no observation time is held, so nothing here says when anything was first seen; events serves the event log, whose first_sighting events say only that a state is first present in that log"],
-        ["build_time_and_currency", "this report states no build time and no build time of the corpus file is held, so nothing here says how current these counts are; the index's event log records when each build ran (events: log.built_at), an upper bound on when its corpus was observed and no measure of currency against the publisher; the corpus and index digests name exactly which artifacts are mounted"],
+        ["build_time_and_currency", "history gives when each build ran, an upper bound on when its corpus was observed and never an observation time, and nothing here says how current these counts are against the publisher; no build time of the corpus file itself is held; the corpus and index digests name exactly which artifacts are mounted"],
         ["legal_status", "no status, repeal or commencement fact is counted here; status_on serves the publisher's force assertions per work, verbatim"],
     ];
 
@@ -3882,6 +4207,7 @@ internal sealed class V3CorpusMount : IDisposable
                 index_sha256 = _reader.IndexRef.Sha256,
                 registry_sha256 = V3OperationRegistry.Reviewed.Sha256,
             },
+            history = HistoryBlock(),
             totals = new
             {
                 members = coverage.Members,
@@ -3931,7 +4257,10 @@ internal sealed class V3CorpusMount : IDisposable
                     .ToArray(),
                 note = CoverageOperationsNote,
             },
-            not_held = CoverageNotHeld.Select(static row => new { item = row[0], reason = row[1] }).ToArray(),
+            not_held = CoverageNotHeld
+                .Select(row => _reader.RecordsBuilds || row[0] != "build_time_and_currency" ? row : CoverageLegacyBuildTimeRow)
+                .Select(static row => new { item = row[0], reason = row[1] })
+                .ToArray(),
         });
         return V3PlatformOperationOutcome.Success(
             Context("success", observedAt),
@@ -4076,6 +4405,22 @@ internal sealed class V3CorpusMount : IDisposable
         "log.built_at is when the build ran, an upper bound on when its corpus was observed and never an observation time; " +
         "a revision (validity_revised, interval_closed, file_replaced, withdrawn_from_source, ...) needs a later build compared against this one";
 
+    /// <summary>The genesis note on a schema-6 index, which records no build time: the same, without the build-time sentence.</summary>
+    internal const string EventsGenesisNoteLegacy =
+        "this log comes from one observation with no predecessor, so it holds only first_sighting; first_sighting means first present in this log " +
+        "and does not say when the publisher published the text or when it was fetched; observed_from is null because no observation time is held, " +
+        "and log.built_at is null because this index records no build time (legacy_note); " +
+        "a revision (validity_revised, interval_closed, file_replaced, withdrawn_from_source, ...) needs a later build compared against this one";
+
+    /// <summary>The silence note on a schema-6 index, which records no build time.</summary>
+    internal const string EventsSilenceNoteLegacy =
+        "an empty page says this log holds no further event; it says nothing about whether the publisher changed anything or whether acquisition ran: " +
+        "this mount holds no upstream health and its index records no build time, and every envelope's freshness names upstream health stale";
+
+    /// <summary>The upstream-health row on a schema-6 index, which records no build time.</summary>
+    internal static readonly string[] EventsUpstreamHealthLegacy =
+        ["upstream_health", "no upstream health and no build time is held, so silence here is not a statement that the publisher was quiet"];
+
     internal const string EventsSilenceNote =
         "an empty page says this log holds no further event; it says nothing about whether the publisher changed anything or whether acquisition ran: " +
         "this mount holds no upstream health, a build's time (log.built_at) says when it ran and not what the publisher did after, and every " +
@@ -4087,6 +4432,15 @@ internal sealed class V3CorpusMount : IDisposable
         "file_replaced, interval_closed and validity_revised; withdrawn_from_source and resighted need three completed runs and a complete " +
         "enumeration, and metadata_revised and the relation and future-state events need data this index does not hold, so none of them is minted; " +
         "in_this_log names those this log holds";
+
+    internal const string EventsLegacyNote =
+        "this Luxembourg index is lex-v3-luxembourg-index/6, built before the event log recorded builds: its log is a genesis log of " +
+        "first_sighting events naming state digests only, and it records no build time, no corpus per build, no source bodies and no log " +
+        "stamp, so log.built_at is null, no build bounds when anything was observed, as_observed names no snapshot of it, and it cannot be " +
+        "a predecessor";
+
+    internal static readonly string[] EventsLegacyNotHeld =
+        ["build_record", "this index is schema 6: its log records no build, no build time, no source bodies and no log stamp, and nothing stands in for them"];
 
     internal const string EventsChainedNote =
         "this log carries its predecessors' observations unchanged and appends one observation per later build; each appended event compares that " +
@@ -4218,16 +4572,21 @@ internal sealed class V3CorpusMount : IDisposable
             has_more = hasMore,
             next_after = $"{logId}:{nextSeq}",
             delivery = EventsDeliveryNote,
-            genesis_note = EventsGenesisNote,
+            genesis_note = _reader.RecordsBuilds ? EventsGenesisNote : EventsGenesisNoteLegacy,
             chained_note = chained ? EventsChainedNote : null,
-            silence_note = EventsSilenceNote,
+            legacy_note = _reader.RecordsBuilds ? null : EventsLegacyNote,
+            silence_note = _reader.RecordsBuilds ? EventsSilenceNote : EventsSilenceNoteLegacy,
             event_names = new
             {
                 mintable = V3EventRegistry.Mintable,
                 in_this_log = V3EventRegistry.Mintable.Where(name => _reader.CountEvents([name]) > 0).ToArray(),
                 note = EventNamesNote,
             },
-            not_held = (chained ? EventsChainedNotHeld : EventsNotHeld).Select(static row => new { item = row[0], reason = row[1] }).ToArray(),
+            not_held = (chained ? EventsChainedNotHeld : EventsNotHeld)
+                .Select(row => _reader.RecordsBuilds || row[0] != "upstream_health" ? row : EventsUpstreamHealthLegacy)
+                .Concat(_reader.RecordsBuilds ? [] : [EventsLegacyNotHeld])
+                .Select(static row => new { item = row[0], reason = row[1] })
+                .ToArray(),
         });
         return V3PlatformOperationOutcome.Success(
             Context("success", observedAt),
@@ -4350,7 +4709,7 @@ internal sealed class V3CorpusMount : IDisposable
     /// observation carried forward and how many builds were compared; each ancestor log whose cursors this log still
     /// honours, to its last sequence number, with when that build ran; and the events it holds.
     /// </summary>
-    private static object EventLogBlock(string logId, LuxembourgIndexEventLog log, IReadOnlyList<LuxembourgIndexObservation> observations) => new
+    private object EventLogBlock(string logId, LuxembourgIndexEventLog log, IReadOnlyList<LuxembourgIndexObservation> observations) => new
     {
         log_id = logId,
         basis = observations.Count <= 1 ? V3EventRegistry.GenesisBasis : V3EventRegistry.ChainedBasis,
@@ -4358,11 +4717,22 @@ internal sealed class V3CorpusMount : IDisposable
         predecessor_index_sha256 = observations.Count == 0 ? null : observations[^1].PredecessorIndexSha256,
         observations_compared = Math.Max(0, observations.Count - 1),
         ancestors = AncestorLogs(observations)
-            .Select(static ancestor => new { log_id = ancestor.LogId, last_seq = ancestor.LastSeq, built_at = ancestor.BuiltAt })
+            .Select(ancestor => new
+            {
+                log_id = ancestor.LogId,
+                last_seq = ancestor.LastSeq,
+                built_at = ancestor.BuiltAt,
+                text_held = RetainedAs(ancestor.LogId).Length != 0,
+                retained_as = RetainedAs(ancestor.LogId),
+            })
             .ToArray(),
         events_held = log.Events,
         last_seq = log.LastSeq,
     };
+
+    /// <summary>Why the retention line keeps an earlier build of the mounted log beside the mount; none when it is not kept.</summary>
+    private string[] RetainedAs(string indexSha256) =>
+        _generations?.Retained.FirstOrDefault(kept => string.Equals(kept.IndexSha256, indexSha256, StringComparison.Ordinal))?.Reasons.ToArray() ?? [];
 
     /// <summary>
     /// The logs this log carries forward, each to the last event it held and with when its build ran: an observation's

@@ -167,6 +167,160 @@ public sealed class V3FirstMountBuildTests
     }
 
     /// <summary>
+    /// Generations (predecessor chaining, slice 6): three builds of one chain on three days, each chained to the one before.
+    /// The second keeps the first as a generation, and the third keeps both, each copied whole from its predecessor's
+    /// directory, held to the mounted log and recorded with the retention line's reasons; the directory verifies. Then each
+    /// way a generation can be wrong is refused: a file missing, a directory that is no earlier build, a generation that is
+    /// not the build its observation names, and a retention record that is not the line's decision.
+    /// </summary>
+    [TestMethod]
+    public async Task AChainKeepsItsEarlierBuildsAsGenerationsHeldToItsLog()
+    {
+        var store = new EuAcquisitionTestFixture.EuInMemoryCustodyStore();
+        var (europe, luxembourg) = await AcquireAsync(store, CheckoutRoot());
+        var root = Path.Combine(Path.GetTempPath(), "lex-v3-generations-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            var directories = new List<string>();
+            var day = new DateTimeOffset(2026, 10, 1, 8, 0, 0, TimeSpan.Zero);
+            var days = new[] { 0, 1, 2, 120 };
+            for (var build = 0; build < days.Length; build++)
+            {
+                var predecessor = build == 0
+                    ? null
+                    : V3FirstMountBuild.ReadPredecessor(directories[^1], out var refusal, out var detail) ?? throw new AssertFailedException($"{refusal}: {detail}");
+                var result = await new V3FirstMountBuild(store, new FrozenClock(day.AddDays(days[build]))).RunAsync(europe, luxembourg, predecessor, CancellationToken.None);
+                Assert.IsTrue(result.Delivered, $"{result.Refusal}: {result.Detail}");
+                var directory = Path.Combine(root, $"build-{build + 1}");
+                await V3CorpusMountWriter.WriteAsync(
+                    result, directory,
+                    build == 0 ? null : new V3GenerationSource(directories[^1], new HashSet<string>(StringComparer.Ordinal)),
+                    CancellationToken.None);
+                var verified = await V3CorpusMountWriter.VerifyAsync(directory, CancellationToken.None);
+                Assert.IsTrue(verified.Verified, $"build {build + 1}: {verified.Detail}");
+                directories.Add(directory);
+            }
+
+            string IndexOf(string directory) =>
+                Convert.ToHexStringLower(SHA256.HashData(File.ReadAllBytes(Path.Combine(directory, V3FirstMountBuildResult.LuxembourgIndexFileName))));
+            var third = directories[2];
+            var generations = Path.Combine(third, V3CorpusMountWriter.GenerationsDirectoryName);
+            CollectionAssert.AreEquivalent(
+                new[] { IndexOf(directories[0]), IndexOf(directories[1]) },
+                Directory.GetDirectories(generations).Select(Path.GetFileName).ToArray(),
+                "the third build keeps the first two, each by its Luxembourg index digest");
+            foreach (var name in new[] { V3FirstMountBuildResult.LuxembourgIndexFileName, V3FirstMountBuildResult.CorpusFileName, "build-report.json" })
+            {
+                CollectionAssert.AreEqual(
+                    File.ReadAllBytes(Path.Combine(directories[0], name)),
+                    File.ReadAllBytes(Path.Combine(generations, IndexOf(directories[0]), name)),
+                    $"the first build's {name}, copied whole");
+            }
+
+            using (var retention = System.Text.Json.JsonDocument.Parse(File.ReadAllBytes(Path.Combine(generations, V3CorpusMountWriter.RetentionFileName))))
+            {
+                Assert.AreEqual(V3GenerationRetention.PolicyId, retention.RootElement.GetProperty("policy").GetString());
+                Assert.AreEqual("2026-10-03T08:00:00Z", retention.RootElement.GetProperty("evaluated_at").GetString());
+                var kept = retention.RootElement.GetProperty("retained").EnumerateArray().ToArray();
+                CollectionAssert.AreEqual(new[] { "nightly", "monthly_keeper" }, kept[0].GetProperty("reasons").EnumerateArray().Select(static r => r.GetString()).ToArray(),
+                    "the first build: its day's last, within 90 days, and October's earliest");
+                CollectionAssert.AreEqual(new[] { "nightly" }, kept[1].GetProperty("reasons").EnumerateArray().Select(static r => r.GetString()).ToArray());
+            }
+
+            // The fourth build, 120 days after the first (review of #880): the line keeps October's keeper and drops the two
+            // nightlies, now older than 90 days; the dropped ones are not copied, the record says so, and the mount verifies.
+            var fourth = directories[3];
+            CollectionAssert.AreEqual(
+                new[] { IndexOf(directories[0]) },
+                Directory.GetDirectories(Path.Combine(fourth, V3CorpusMountWriter.GenerationsDirectoryName)).Select(Path.GetFileName).ToArray());
+            using (var retention = System.Text.Json.JsonDocument.Parse(File.ReadAllBytes(Path.Combine(fourth, V3CorpusMountWriter.GenerationsDirectoryName, V3CorpusMountWriter.RetentionFileName))))
+            {
+                CollectionAssert.AreEqual(new[] { "monthly_keeper" }, retention.RootElement.GetProperty("retained")[0].GetProperty("reasons").EnumerateArray().Select(static r => r.GetString()).ToArray());
+                CollectionAssert.AreEquivalent(
+                    new[] { IndexOf(directories[1]), IndexOf(directories[2]) },
+                    retention.RootElement.GetProperty("dropped").EnumerateArray().Select(static g => g.GetProperty("index_sha256").GetString()).ToArray());
+            }
+
+            // The API's mount holds the generations to its log when it opens, and reports the depth it keeps: three builds
+            // recorded, the text of all three held (the mounted build and the two generations, each with why it is kept).
+            using (var mount = await V3CorpusMount.OpenAsync(third, CancellationToken.None))
+            {
+                Assert.IsNotNull(mount);
+                var history = (await V3CorpusClassificationMountTests.EnvelopeAsync(mount, "/api/v3/coverage", "coverage", new { })).Result!.Value.GetProperty("history");
+                Assert.IsTrue(history.GetProperty("log_records_builds").GetBoolean());
+                Assert.AreEqual(3, history.GetProperty("snapshots_in_log").GetInt32());
+                Assert.AreEqual("2026-10-01T08:00:00Z", history.GetProperty("history_begins").GetString());
+                Assert.AreEqual(V3GenerationRetention.PolicyId, history.GetProperty("retention_policy").GetProperty("id").GetString());
+                Assert.AreEqual(0, history.GetProperty("snapshots_without_text").GetInt32());
+                var withText = history.GetProperty("snapshots_with_text").EnumerateArray().ToArray();
+                CollectionAssert.AreEqual(
+                    new[] { IndexOf(directories[0]), IndexOf(directories[1]), IndexOf(third) },
+                    withText.Select(static snapshot => snapshot.GetProperty("snapshot_id").GetString()).ToArray());
+                CollectionAssert.AreEqual(new[] { "mounted" }, withText[2].GetProperty("retained_as").EnumerateArray().Select(static r => r.GetString()).ToArray());
+
+                var ancestors = (await V3CorpusClassificationMountTests.EnvelopeAsync(mount, "/api/v3/events", "events", new { })).Result!.Value
+                    .GetProperty("log").GetProperty("ancestors").EnumerateArray().ToArray();
+                Assert.AreEqual(2, ancestors.Length);
+                Assert.IsTrue(ancestors.All(static ancestor => ancestor.GetProperty("text_held").GetBoolean()), "both earlier builds are kept beside the mount");
+                CollectionAssert.AreEqual(new[] { "nightly" }, ancestors[1].GetProperty("retained_as").EnumerateArray().Select(static r => r.GetString()).ToArray());
+            }
+
+            // The fourth build's mount: four builds recorded, the text of two held (the mounted build and October's keeper),
+            // and the two dropped nightlies named by the log alone.
+            using (var mount = await V3CorpusMount.OpenAsync(fourth, CancellationToken.None))
+            {
+                Assert.IsNotNull(mount);
+                var history = (await V3CorpusClassificationMountTests.EnvelopeAsync(mount, "/api/v3/coverage", "coverage", new { })).Result!.Value.GetProperty("history");
+                Assert.AreEqual(4, history.GetProperty("snapshots_in_log").GetInt32());
+                Assert.AreEqual(2, history.GetProperty("snapshots_with_text").GetArrayLength());
+                Assert.AreEqual(2, history.GetProperty("snapshots_without_text").GetInt32());
+            }
+
+            // Each way a generation can be wrong, on a copy of the third build.
+            foreach (var (what, damage, expected) in new (string, Action<string>, string)[]
+                     {
+                         ("a generation missing a file", directory => File.Delete(Path.Combine(directory, V3CorpusMountWriter.GenerationsDirectoryName, IndexOf(directories[0]), V3FirstMountBuildResult.EuropeIndexFileName)),
+                             "does not hold exactly a generation's files"),
+                         ("a directory that is no earlier build", directory => Directory.CreateDirectory(Path.Combine(directory, V3CorpusMountWriter.GenerationsDirectoryName, new string('f', 64))),
+                             "is no earlier build of the mounted log"),
+                         ("the second build's files under the first's name", directory =>
+                         {
+                             var first = Path.Combine(directory, V3CorpusMountWriter.GenerationsDirectoryName, IndexOf(directories[0]));
+                             foreach (var file in Directory.GetFiles(directories[1])) File.Copy(file, Path.Combine(first, Path.GetFileName(file)), overwrite: true);
+                         }, "is not the build its observation names"),
+                         ("no generations directory at all", directory => Directory.Delete(Path.Combine(directory, V3CorpusMountWriter.GenerationsDirectoryName), recursive: true),
+                             "holds no generations/retention.json"),
+                         ("a retention record naming a reference the line did not decide on", directory =>
+                         {
+                             var path = Path.Combine(directory, V3CorpusMountWriter.GenerationsDirectoryName, V3CorpusMountWriter.RetentionFileName);
+                             File.WriteAllText(path, File.ReadAllText(path).Replace("\"referenced\": []", "\"referenced\": [\"" + IndexOf(directories[0]) + "\"]", StringComparison.Ordinal));
+                         }, "is not the decision the retention line makes"),
+                     })
+            {
+                var copy = Path.Combine(root, "damaged-" + Guid.NewGuid().ToString("N"));
+                CopyDirectory(third, copy);
+                damage(copy);
+                var verified = await V3CorpusMountWriter.VerifyAsync(copy, CancellationToken.None);
+                Assert.IsFalse(verified.Verified, what);
+                StringAssert.Contains(verified.Detail, expected, what);
+                var refused = await Assert.ThrowsExactlyAsync<InvalidDataException>(() => V3CorpusMount.OpenAsync(copy, CancellationToken.None), what);
+                StringAssert.Contains(refused.Message, expected, $"the mount refuses it as the writer's verification does: {what}");
+            }
+        }
+        finally
+        {
+            if (Directory.Exists(root)) Directory.Delete(root, recursive: true);
+        }
+    }
+
+    private static void CopyDirectory(string source, string destination)
+    {
+        Directory.CreateDirectory(destination);
+        foreach (var file in Directory.GetFiles(source)) File.Copy(file, Path.Combine(destination, Path.GetFileName(file)));
+        foreach (var child in Directory.GetDirectories(source)) CopyDirectory(child, Path.Combine(destination, Path.GetFileName(child)));
+    }
+
+    /// <summary>
     /// The build time the event log records is read from the clock rounded up to the next whole second, so it is never
     /// earlier than the moment it was read: an upper bound on every fetch before it.
     /// </summary>
