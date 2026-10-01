@@ -138,9 +138,13 @@ public sealed class V3CitationVerificationTests
 
         await CollectAsync("search", new { query = "joint controllers", language = "eng", identifier = "32016R0679" });
         await CollectAsync("dossier", new { identifier = "32016R0679" });
+        // The EU reading screen's answer: the bundle of the original wording, on its wording date as the dossier pins it.
+        var wordingDate = (await EnvelopeAsync(mount, "dossier", new { identifier = "32016R0679" })).Result!.Value
+            .GetProperty("expressions")[0].GetProperty("pinned_wording").GetProperty("wording_date").GetString();
+        await CollectAsync("evidence_bundle", new { identifier = "32016R0679", date = wordingDate });
 
-        // Both EU screens' answers contributed, with a provision permalink among them, or the walk proves less than it says.
-        CollectionAssert.AreEquivalent(new[] { "search", "dossier" }, permalinks.Select(static entry => entry.Operation).Distinct(StringComparer.Ordinal).ToArray());
+        // Every EU answer contributed, with a provision permalink among them, or the walk proves less than it says.
+        CollectionAssert.AreEquivalent(new[] { "search", "dossier", "evidence_bundle" }, permalinks.Select(static entry => entry.Operation).Distinct(StringComparer.Ordinal).ToArray());
         Assert.IsTrue(permalinks.Any(static entry => entry.Permalink.Contains('#', StringComparison.Ordinal)), "no EU provision permalink was emitted");
         CollectionAssert.AreEquivalent(new[] { "search", "dossier" }, coordinates.Select(static entry => entry.Operation).Distinct(StringComparer.Ordinal).ToArray());
 
