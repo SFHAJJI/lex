@@ -13,9 +13,9 @@ duplicate-set semantics and the existing canonical identity artifact. It does no
 proofs, custody admission or complete-enumeration checks. Binary search trades lookup work for
 less retained memory; full pipeline memory remains to be measured.
 
-Fifteen draft cases cover complete-digest membership and sorted-set parity over 1,024 distinct identities plus duplicates, indexed
+Seventeen draft cases cover complete-digest membership and sorted-set parity over 1,024 distinct identities plus duplicates, indexed
 and enumerated access, absent and malformed digests, input-list mutation, empty/repeated sets,
-legacy canonical bytes/digests and independent reopening, nulls and cancellation. Existing
+legacy canonical bytes/digests and independent reopening, nulls, cancellation and mismatched source counts. Existing
 resolver and retained-identity checks will run too. Code is unvalidated; census diagnostics will
 print the actual new construction entry before pin updates. Local heavy checks remain serialized
 behind the active EU acquisition and previously queued reviews/validation.

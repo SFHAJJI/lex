@@ -128,6 +128,25 @@ public sealed class LuxembourgObjectDigestSetTests
             LuxembourgObjectDigestSet.FromObservations([], cancelled.Token));
     }
 
+    [TestMethod]
+    [DataRow(0)]
+    [DataRow(2)]
+    public void DeclaredCountCannotOmitOrInventAnEnumeratedIdentity(int declaredCount)
+    {
+        var source = new WrongCountList(Observations(1), declaredCount);
+        Assert.ThrowsExactly<InvalidOperationException>(() => LuxembourgObjectDigestSet.FromObservations(source));
+    }
+
+    private sealed class WrongCountList(LuxembourgResourceObservation[] values, int count)
+        : IReadOnlyList<LuxembourgResourceObservation>
+    {
+        public int Count => count;
+        public LuxembourgResourceObservation this[int index] => values[index];
+        public IEnumerator<LuxembourgResourceObservation> GetEnumerator() =>
+            ((IEnumerable<LuxembourgResourceObservation>)values).GetEnumerator();
+        System.Collections.IEnumerator System.Collections.IEnumerable.GetEnumerator() => GetEnumerator();
+    }
+
     private static LuxembourgResourceObservation[] Observations(int count) => Enumerable.Range(0, count)
         .Select(index => LuxembourgObservedObjectIdentitySetTests.Observation(
             $"https://data.legilux.lu/eli/compact/{index:D5}")).ToArray();

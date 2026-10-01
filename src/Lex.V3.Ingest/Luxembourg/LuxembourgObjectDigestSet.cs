@@ -24,15 +24,19 @@ internal sealed class LuxembourgObjectDigestSet : IReadOnlyList<string>
         ArgumentNullException.ThrowIfNull(observations);
         cancellationToken.ThrowIfCancellationRequested();
         var values = new Digest[observations.Count];
-        for (var index = 0; index < values.Length; index++)
+        var index = 0;
+        foreach (var observation in observations)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            var observation = observations[index];
+            if (index == values.Length)
+                throw new InvalidOperationException("Observation enumeration exceeds its declared count.");
             ArgumentNullException.ThrowIfNull(observation);
             var hex = ScopeManifestCanonicalWriter.ComputeObjectRefSha256(observation.ObjectRef);
-            if (!Digest.TryParse(hex, out values[index]))
+            if (!Digest.TryParse(hex, out values[index++]))
                 throw new InvalidOperationException("Object identity writer returned a non-canonical digest.");
         }
+        if (index != values.Length)
+            throw new InvalidOperationException("Observation enumeration ended before its declared count.");
         Array.Sort(values);
         cancellationToken.ThrowIfCancellationRequested();
         var distinct = 0;
@@ -40,6 +44,7 @@ internal sealed class LuxembourgObjectDigestSet : IReadOnlyList<string>
             if (distinct == 0 || values[distinct - 1].CompareTo(value) != 0)
                 values[distinct++] = value;
         if (distinct != values.Length) Array.Resize(ref values, distinct);
+        cancellationToken.ThrowIfCancellationRequested();
         return new LuxembourgObjectDigestSet(values);
     }
 
