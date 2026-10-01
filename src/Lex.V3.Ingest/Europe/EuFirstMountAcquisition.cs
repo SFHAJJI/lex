@@ -63,6 +63,34 @@ public sealed class EuRendererSources
     public MachineQueryRendererSource LegalNotice { get; }
 
     /// <summary>
+    /// Reopens the caller's original file-to-artifact mapping from custody, preserving every resource ID.
+    /// The mapping must name exactly RendererFiles. No checkout, new receipt or publisher request is used.
+    /// These retained bytes identify renderer source; this method does not execute archived code.
+    /// </summary>
+    public static async Task<EuRendererSources> FromCustodyAsync(ICustodyStore custodyStore,
+        IReadOnlyDictionary<string, SourceArtifactRef> referencesByFile, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(custodyStore);
+        ArgumentNullException.ThrowIfNull(referencesByFile);
+        cancellationToken.ThrowIfCancellationRequested();
+        if (referencesByFile.Count != RendererFiles.Count)
+            throw new ArgumentException("The retained renderer mapping has the wrong number of roles.", nameof(referencesByFile));
+        var snapshot = referencesByFile.ToDictionary(static pair => pair.Key, static pair => pair.Value, StringComparer.Ordinal);
+        if (!snapshot.Keys.Order(StringComparer.Ordinal).SequenceEqual(RendererFiles.Order(StringComparer.Ordinal), StringComparer.Ordinal) ||
+            snapshot.Values.Any(static reference => reference is null))
+            throw new ArgumentException("The retained renderer mapping does not name the exact declared files.", nameof(referencesByFile));
+        var sources = new MachineQueryRendererSource[RendererFiles.Count];
+        for (var index = 0; index < RendererFiles.Count; index++)
+        {
+            var reference = snapshot[RendererFiles[index]];
+            var bytes = await CustodyRestore.ReadByDigestCheckedAsync(custodyStore, reference.Sha256, cancellationToken).ConfigureAwait(false);
+            sources[index] = MachineQueryRendererSource.Open(reference, bytes.Span);
+        }
+        cancellationToken.ThrowIfCancellationRequested();
+        return new EuRendererSources(sources[0], sources[1], sources[2], sources[3], sources[4], sources[5]);
+    }
+
+    /// <summary>
     /// Reads the six renderer files under <paramref name="checkoutRoot"/>, holds each in
     /// <paramref name="custodyStore"/> and opens it as a renderer source whose reference carries a
     /// fresh resource id and the held bytes' digest. Throws when a file is missing or custody refuses
@@ -120,6 +148,10 @@ public enum EuFirstMountAcquisitionRefusal
     /// <summary>The rights capture refused before population traffic, or its later corpus-identity rebind refused.</summary>
     [JsonStringEnumMemberName("legal_notice_refused")]
     LegalNoticeRefused = 3,
+
+    /// <summary>The acquisition catalog or one of its renderer sources could not be retained.</summary>
+    [JsonStringEnumMemberName("acquisition_checkpoint_not_retained")]
+    AcquisitionCheckpointNotRetained = 4,
 }
 
 /// <summary>
@@ -161,6 +193,12 @@ public sealed class EuFirstMountAcquisitionResult
     public string? Detail { get; }
 
     public bool Delivered => Refusal is null;
+
+    /// <summary>The retained acquisition catalog, present only after its successful custody hold.</summary>
+    public SourceArtifactRef? CheckpointRef { get; private init; }
+
+    internal EuFirstMountAcquisitionResult WithCheckpoint(SourceArtifactRef checkpoint) =>
+        new(Run, Formex, LegalNotice, Refusal, Detail) { CheckpointRef = checkpoint };
 
     public static EuFirstMountAcquisitionResult Success(
         EuQueryExecutionResult run,
@@ -219,7 +257,7 @@ public sealed class EuFirstMountAcquisitionResult
 /// so the ceiling a person set for the run is the ceiling the run honours.
 /// </para>
 /// </remarks>
-public sealed class EuFirstMountAcquisition
+public sealed partial class EuFirstMountAcquisition
 {
     private readonly ICustodyStore _custodyStore;
     private readonly TimeProvider _timeProvider;
@@ -396,7 +434,17 @@ public sealed class EuFirstMountAcquisition
                 formex);
         }
 
-        return EuFirstMountAcquisitionResult.Success(run, formex, legalNotice);
+        try
+        {
+            var checkpoint = await RetainAcquisitionAsync(selected, rendererSources, run, formex, legalNotice,
+                cancellationToken).ConfigureAwait(false);
+            return EuFirstMountAcquisitionResult.Success(run, formex, legalNotice).WithCheckpoint(checkpoint);
+        }
+        catch (Exception exception) when (exception is CustodyRequiredException or CustodyIntegrityException)
+        {
+            return EuFirstMountAcquisitionResult.Refused(EuFirstMountAcquisitionRefusal.AcquisitionCheckpointNotRetained,
+                exception.Message, run, formex);
+        }
     }
 
     private static string NewUrn() => $"urn:uuid:{Guid.NewGuid():D}";

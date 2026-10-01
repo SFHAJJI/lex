@@ -117,6 +117,7 @@ public sealed class EuRefusalWireNameTests
                 // PAGES one batch may walk, this one bounds how many REQUESTS the whole run may
                 // send. A reader told only "exhausted" could not tell which limit to raise.
                 "wire_budget_exhausted",
+                "checkpoint_not_retained",
             }),
             string.Join("\n", WireNames<EuWitnessTraversalRefusal>()),
             "a wire name changing is a contract change; a number changing is not.");
@@ -168,6 +169,8 @@ public sealed class EuRefusalWireNameTests
                 // #418 slice 6: batches that do not pair one to one, refused before the traffic that
                 // would deliver an Expression batch no production covers.
                 "corrigendum_tripwire_batches_not_paired",
+                "document_checkpoint_not_retained",
+                "acquisition_checkpoint_not_retained",
             }),
             string.Join("\n", WireNames<EuQueryExecutionRefusal>()),
             "a wire name changing is a contract change; a number changing is not.");

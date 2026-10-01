@@ -20,6 +20,54 @@ public sealed class LuxembourgScopeResolverTests
     private const string N = "Lex.V3.Contracts.Source.Luxembourg.";
 
     [TestMethod]
+    [DataRow(0)]
+    [DataRow(1)]
+    [DataRow(2)]
+    public void MixedPopulationKeepsResourceInputAlignmentAndGlobalRelations(int permutation)
+    {
+        var profile = Profile();
+        var body = BodyObservation(previousItemIri: "http://data.legilux.public.lu/file/previous.xml");
+        const string coordinatedIri = ActParentIri + "/coordinated";
+        var coordinated = new LuxembourgResourceObservation(
+            ObjectRef(coordinatedIri), ObservationRef,
+            [Iri(coordinatedIri, RdfType, Jolux + "Act"),
+             Iri(coordinatedIri, Jolux + "typeDocument", JoluxAuthority + "resource-type/TC")],
+            [new LuxembourgObservedRelation(coordinatedIri, Jolux + "consolidates", ActIri,
+                ObservationRef, LuxembourgRelationAuthority.PublisherAsserted),
+             new LuxembourgObservedRelation(coordinatedIri, Jolux + "cites", ActIri,
+                ObservationRef, LuxembourgRelationAuthority.PublisherAsserted)],
+            new LuxembourgSparqlRightsChannelObservations(ObservationRef, SparqlEnumerationRef, []),
+            new LuxembourgInFileRightsChannelObservations(ObservationRef, InFileEnumerationRef, []));
+        var observations = Enumerable.Range(0, 128).Select(EmptyPopulationObservation)
+            .Concat([body, coordinated]).ToArray();
+        var baseline = Assert.IsInstanceOfType<LuxembourgProfileResolution.Resolved>(
+            profile.Resolve(Proven(observations)));
+        var reordered = permutation switch
+        {
+            0 => observations.Reverse().ToArray(),
+            1 => observations.Skip(65).Concat(observations.Take(65)).ToArray(),
+            _ => observations.Where((_, index) => index % 2 == 0)
+                .Concat(observations.Where((_, index) => index % 2 != 0)).ToArray(),
+        };
+        var resolved = Assert.IsInstanceOfType<LuxembourgProfileResolution.Resolved>(
+            profile.Resolve(Proven(reordered)));
+        Assert.AreEqual(ContractJson.Serialize(baseline), ContractJson.Serialize(resolved),
+            "Canonical resources, evidence ordinals, scope inputs, accounting and inbound edges must agree.");
+        Assert.AreEqual(130, resolved.Resources.Count);
+        for (var ordinal = 0; ordinal < resolved.Resources.Count; ordinal++)
+            Assert.AreEqual(resolved.Resources[ordinal].ObjectRef, resolved.ScopeInputs[ordinal].ObjectRef);
+        var consolidated = resolved.Resources.Single(resource => resource.ObjectRef.PublisherUri == coordinatedIri);
+        Assert.AreEqual(LuxembourgConsolidatesShapeState.AcceptedTcToCompatibleAct,
+            consolidated.Relations.Single(relation => relation.PredicateIri == Jolux + "consolidates").ConsolidatesShape?.State);
+        var inbound = resolved.LocalInboundRelations.Single();
+        Assert.AreEqual(ActIri, inbound.SubjectIri);
+        Assert.AreEqual(coordinatedIri, inbound.ObjectIri);
+        var original = resolved.Resources.Single(resource => resource.ObjectRef.PublisherUri == ActIri);
+        Assert.IsTrue(original.IsPublisherActClass);
+        CollectionAssert.AreEqual(new[] { JoluxAuthority + "resource-type/LOI" }, original.LegalTypes.ToArray());
+    }
+
+    [TestMethod]
     public void RepeatedScopeInputsShareOnlyImmutableIdentityFreeValuesWithinOneResolution()
     {
         var profile = Profile();
@@ -1542,56 +1590,25 @@ public sealed class LuxembourgScopeResolverTests
             },
             ConstructionSurface.Of(typeof(LuxembourgTypedRoleResolution)).ToArray());
 
-        // Fold-in: paired the way the sibling Luxembourg pin file pairs every Of pin with a
-        // ProducersIn assertion. The resolver's own ResolveTypedRole, the per-resource projection
-        // closure that carries it into the anonymous type ResolveTypedRole's caller builds, and
-        // LuxembourgResourceResolution's own TypedRole property (and its backing field) are the
-        // only places elsewhere in Contracts that hand out a typed-role resolution.
-        CollectionAssert.AreEqual(
-            new[]
+        // The final resource carries the role through its property/backing field. The resolver's
+        // direct role method is the remaining external producer; there is no anonymous carrier.
+        var expectedProducers = new[]
             {
                 "field private instance " + N
                     + "LuxembourgResourceResolution::<TypedRole>k__BackingField -> "
                     + N + "LuxembourgTypedRoleResolution",
-                // The display-class ordinal moved from 24 to 27 when D1-06c-LU-2's repair made the
-                // three userFormat sets internal and added KnownUserFormatIris beside them (RULING
-                // lex-event-20260904T194556163Z-dd9191017eaf4c3b83ea04862933006f item three). The
-                // compiler numbers generated types by declaration position; this is not a new way
-                // to hand out a typed-role resolution. Re-printed after the change, not guessed.
-                "method internal instance " + N + "LuxembourgScopeResolver+<>c__DisplayClass27_0"
-                    + "::<Resolve>b__3(" + N + "LuxembourgResourceObservation) -> "
-                    + "<>f__AnonymousType0<" + N + "LuxembourgResourceObservation, "
-                    + "Lex.V3.Contracts.LuScopeDimensions, "
-                    + "System.Collections.Generic.IReadOnlyList<"
-                    + N + "LuxembourgResolvedAssertion>, "
-                    + "System.Collections.Generic.IReadOnlyList<" + N
-                    + "LuxembourgResolvedRelation>, " + N + "LuxembourgWemiTopologyResolution, "
-                    // #419 slice 6c: the classified tuple also carries the publication form, so the
-                    // anonymous type gained one type argument. Re-printed, not guessed.
-                    // #419 slice 7: two more, the resolver's own act test and the publisher's legal
-                    // types, which the population ledger folds. The type arguments are what the
-                    // initializer actually yields - IriValues returns an array, so String[] here
-                    // rather than the read-only list the record exposes. Re-printed, not guessed.
-                    + N + "LuxembourgBodyJoinResolution, " + N + "LuxembourgTypedRoleResolution, "
-                    + N + "LuxembourgPublicationForm, System.Boolean, System.String[]>",
                 "method private static " + N + "LuxembourgScopeResolver::ResolveTypedRole("
                     + N + "LuxembourgResourceObservation) -> "
                     + N + "LuxembourgTypedRoleResolution",
                 "property public instance " + N + "LuxembourgResourceResolution::TypedRole() -> "
                     + N + "LuxembourgTypedRoleResolution",
-            },
-            ConstructionSurface.ProducersIn(
-                typeof(LuxembourgTypedRoleResolution).Assembly,
-                typeof(LuxembourgTypedRoleResolution),
-                true).ToArray(),
-            "something other than the resolver now hands out a typed-role resolution");
-
-        // The compiler-generated display-class ordinal above (24_0, was 23_0 before item 18 added
-        // a new member to LuxembourgScopeResolver ahead of it) shifts whenever unrelated members
-        // are added to the class, even without touching ResolveTypedRole itself or adding any new
-        // closure -- exactly the brittleness item 15's reviewer flagged in this same pin. Re-print
-        // and re-transcribe this assertion's expected array whenever LuxembourgScopeResolver next
-        // gains or loses a member ahead of ResolveTypedRole's own closure.
+            };
+        var actualProducers = ConstructionSurface.ProducersIn(
+            typeof(LuxembourgTypedRoleResolution).Assembly,
+            typeof(LuxembourgTypedRoleResolution), true).ToArray();
+        CollectionAssert.AreEqual(expectedProducers, actualProducers,
+            "Removed or changed typed-role pins:\n" + string.Join("\n", expectedProducers.Except(actualProducers, StringComparer.Ordinal)) +
+            "\nActual added or changed typed-role entries:\n" + string.Join("\n", actualProducers.Except(expectedProducers, StringComparer.Ordinal)));
     }
 
     /// <summary>

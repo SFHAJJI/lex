@@ -51,14 +51,13 @@ public sealed class ClosedVocabularyCensusTests
     [TestMethod]
     public void EveryClosedVocabularyInTheSweptAssembliesIsPinnedMemberByMember()
     {
-        CollectionAssert.AreEqual(
-            new[]
+        var expected = new[]
             {
                 "Lex.V3.Ingest.CorpusRecordOutcomeKind: Held, NotHeld, PendingAcquisition",
                 "Lex.V3.Ingest.CorpusRecordSetCompletionState: Complete, Partial",
                 "Lex.V3.Ingest.CorpusRecordSetReadRefusalKind: CustodyBytesNotRetained, "
                     + "CustodyUnavailable, RetainedBytesAreNotThisSet",
-                "Lex.V3.Ingest.CorpusRecordSetWriteRefusalKind: RecordSetNotRetained",
+                "Lex.V3.Ingest.CorpusRecordSetWriteRefusalKind: RecordSetNotRetained, RebuildIdentityDisagrees",
                 "Lex.V3.Ingest.Europe.EuAnnexEvidenceBinder+PageLabelState: Missing, Invalid, Valid",
                 "Lex.V3.Ingest.Europe.EuAnnexEvidenceBindingRefusal: None, ProfileDigestMismatch, "
                     + "ProfileInvalid, ProfileEvidenceMismatch, SourceEvidenceMissingOrAmbiguous, "
@@ -91,8 +90,12 @@ public sealed class ClosedVocabularyCensusTests
                     + "WireBudgetExhausted",
                 "Lex.V3.Ingest.Europe.EuFamilyEnumerationOutcomeKind: Proven, ExecutorRefused, "
                     + "ProofRefused",
-                "Lex.V3.Ingest.Europe.EuFirstMountAcquisitionRefusal: None, RunRefused, "
-                    + "FormexRefused, LegalNoticeRefused",
+                "Lex.V3.Ingest.Europe.EuFirstMountAcquisitionRefusal: "
+                    + "None, "
+                    + "RunRefused, "
+                    + "FormexRefused, "
+                    + "LegalNoticeRefused, "
+                    + "AcquisitionCheckpointNotRetained",
                 "Lex.V3.Ingest.Europe.EuFormexAnnexClassificationReconciliationRefusal: None, "
                     + "AcquiredInventoryClaimedTwice, ClassificationOutsideAcquiredPopulation, "
                     + "ClassificationInventoryDisagrees, ClassificationSuppliedTwice, "
@@ -125,9 +128,8 @@ public sealed class ClosedVocabularyCensusTests
                     + "OutcomeOutsideExpressionPopulation, ExpressionContentDisagrees, "
                     + "ExpressionDisposedTwice, OutcomeMissing, EligibleExpressionMarkedIneligible, "
                     + "IneligibleExpressionHasPackageOutcome, EnumerationDispositionDisagrees",
-                "Lex.V3.Ingest.Europe.EuFormexPackagePopulationRefusal: None, RunNotComplete, "
-                    + "ExpressionSelectionInvalid, EligibilityRefused, OutcomePopulationRefused, "
-                    + "ReconciliationRefused",
+                "Lex.V3.Ingest.Europe.EuFormexPackagePopulationRefusal: None, RunNotComplete, ExpressionSelectionIn"
+                    + "valid, EligibilityRefused, OutcomePopulationRefused, ReconciliationRefused, CheckpointNotRetained",
                 "Lex.V3.Ingest.Europe.EuFormexRunOutcomeReconciliationRefusal: None, RunNotComplete, "
                     + "RunExpressionProductionInvalid, PopulationOutsideRun, "
                     + "PopulationProductionDisagrees, PopulationSuppliedTwice, PopulationMissing, "
@@ -174,18 +176,15 @@ public sealed class ClosedVocabularyCensusTests
                     + "VerifiedRowsRefused",
                 "Lex.V3.Ingest.Europe.EuQueryExecutionCompletion: AllFamiliesProven, "
                     + "PartialFamilyRefused",
-                "Lex.V3.Ingest.Europe.EuQueryExecutionRefusal: None, CensusFamilyNotProven, "
-                    + "ObjectFactsFamilyNotProven, FamilyRowsNotVerified, RootBindingRefused, "
-                    + "RecordFormNotResolved, ObjectDecodeRefused, ScopeManifestNotRetained, "
-                    + "ManifestBindingRefused, WatermarkBootstrapRefused, WatermarkPlanRefused, "
-                    + "RootWatermarkBindingRefused, WitnessBindingRefused, "
-                    + "WitnessReconciliationRefused, ScopeReductionRefused, WitnessTraversalRefused, "
-                    + "DocumentFetchSessionNotStarted, DocumentBodyNotRetained, "
-                    + "AcquisitionOutcomeNotRepresentable, RecordSetNotRetained, "
-                    + "ReifiedAxiomDecodeRefused, LocatedAmendmentDecodeRefused, "
-                    + "LocatedAmendmentCorpusScopeUnproven, "
-                    + "CensusRequestCarriesADifferentWireBudget, DocumentFetchWireBudgetExhausted, "
-                    + "CorrigendumTripwireProductionRefused, CorrigendumTripwireBatchesNotPaired",
+                "Lex.V3.Ingest.Europe.EuQueryExecutionRefusal: None, CensusFamilyNotProven, ObjectFactsFamilyNotPro"
+                    + "ven, FamilyRowsNotVerified, RootBindingRefused, RecordFormNotResolved, ObjectDecodeRefused, ScopeM"
+                    + "anifestNotRetained, ManifestBindingRefused, WatermarkBootstrapRefused, WatermarkPlanRefused, RootW"
+                    + "atermarkBindingRefused, WitnessBindingRefused, WitnessReconciliationRefused, ScopeReductionRefused"
+                    + ", WitnessTraversalRefused, DocumentFetchSessionNotStarted, DocumentBodyNotRetained, AcquisitionOut"
+                    + "comeNotRepresentable, RecordSetNotRetained, ReifiedAxiomDecodeRefused, LocatedAmendmentDecodeRefus"
+                    + "ed, LocatedAmendmentCorpusScopeUnproven, CensusRequestCarriesADifferentWireBudget, DocumentFetchWi"
+                    + "reBudgetExhausted, CorrigendumTripwireProductionRefused, CorrigendumTripwireBatchesNotPaired, Docu"
+                    + "mentCheckpointNotRetained, AcquisitionCheckpointNotRetained",
                 "Lex.V3.Ingest.Europe.EuTranspositionBridgePopulationRefusal: None, WorkScopeEmpty, "
                     + "WorkScopeNotUnique, WorkScopeNotAdmitted, SourceNotDelivered, "
                     + "SourceWorkOutsideScope, BridgeRefused, JoinEvidenceNotHeld, "
@@ -197,10 +196,10 @@ public sealed class ClosedVocabularyCensusTests
                     + "SourceNotDelivered, NimWorkIdentityNotConsistent, LegiluxIdentityNotSingular, "
                     + "LegiluxIdentityNotInNimPopulation, LegiluxIdentityContradictsNim, "
                     + "IdentityObservationUnused, PopulationRefused",
-                "Lex.V3.Ingest.Europe.EuWitnessTraversalRefusal: None, RobotsBootstrapRefused, "
-                    + "BindRefused, ObservationNotExecuted, StatusNotAdmitted, MediaTypeNotAdmitted, "
-                    + "PageBodyMalformed, CrossingRefused, StepRefused, EntrySetRefused, "
-                    + "PageBudgetExhausted, PageDecodeFailedOnOurSide, WireBudgetExhausted",
+                "Lex.V3.Ingest.Europe.EuWitnessTraversalRefusal: None, RobotsBootstrapRefused, BindRefused, Observa"
+                    + "tionNotExecuted, StatusNotAdmitted, MediaTypeNotAdmitted, PageBodyMalformed, CrossingRefused, Step"
+                    + "Refused, EntrySetRefused, PageBudgetExhausted, PageDecodeFailedOnOurSide, WireBudgetExhausted, Che"
+                    + "ckpointNotRetained",
                 "Lex.V3.Ingest.Europe.EuXhtmlAnnexInventoryRefusal: None, ProfileDigestMismatch, "
                     + "ProfileInvalid, ProfileDoesNotNameTransport, RetainedBytesUnavailable, "
                     + "XhtmlInvalid, PublisherAnnexConventionAbsent, "
@@ -391,7 +390,10 @@ public sealed class ClosedVocabularyCensusTests
                     + "EnvelopeRefused, BodyCompositionRefused, PdfLayoutRefused, "
                     + "PdfTextLayerRefused, ProfileEnvelopeRefused, CorpusRefused, "
                     + "LuxembourgIndexRefused, EuropeIndexRefused, NotByteStable",
-            },
-            ClosedSurfaceCensus.ClosedVocabularies(CensusScope.SweptHere).ToArray());
+            };
+        var actual = ClosedSurfaceCensus.ClosedVocabularies(CensusScope.SweptHere).ToArray();
+        CollectionAssert.AreEqual(expected, actual,
+            "Removed or changed pins:\n" + string.Join("\n", expected.Except(actual, StringComparer.Ordinal)) +
+            "\nActual added or changed entries:\n" + string.Join("\n", actual.Except(expected, StringComparer.Ordinal)));
     }
 }
