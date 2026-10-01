@@ -434,6 +434,20 @@ public sealed class V3CorpusCoverageMountTests
         // It states a fact about the mount and says what a request for an unserved operation returns.
         var note = operations.GetProperty("note").GetString();
         StringAssert.Contains(note, "a request for an unserved operation answers the transport failure operation_not_served");
+
+        // And, for each unserved operation, the data that would serve it: one row per unserved operation, in the same
+        // order, each with a sentence; the table names exactly the unserved operations, so a newly served one leaves it
+        // and a newly unserved one cannot be listed without saying what it needs.
+        var rows = operations.GetProperty("not_served_data").EnumerateArray().ToArray();
+        CollectionAssert.AreEqual(notServed, rows.Select(static row => row.GetProperty("operation").GetString()!).ToArray());
+        foreach (var row in rows)
+        {
+            Assert.IsFalse(string.IsNullOrWhiteSpace(row.GetProperty("data_needed").GetString()), row.GetProperty("operation").GetString());
+        }
+
+        CollectionAssert.AreEquivalent(notServed, V3CorpusMount.NotServedDataNeeded.Keys.ToArray(),
+            "NotServedDataNeeded names exactly the registered operations this mount does not serve");
+        StringAssert.Contains(note, "not_served_data names, for each unserved operation, the data that would serve it");
     }
 
     [TestMethod]
@@ -559,7 +573,8 @@ public sealed class V3CorpusCoverageMountTests
             "members.gaps", "members.gaps[].gap", "members.gaps[].members", "members.gaps_note", "members.with_gaps",
             "mounted", "mounted.corpus_sha256", "mounted.index_sha256", "mounted.publisher", "mounted.registry_sha256",
             "not_held", "not_held[].item", "not_held[].reason",
-            "operations", "operations.not_served_operations", "operations.note", "operations.registered",
+            "operations", "operations.not_served_data", "operations.not_served_data[].data_needed", "operations.not_served_data[].operation",
+            "operations.not_served_operations", "operations.note", "operations.registered",
             "operations.served_operations",
             "requested_language",
             "scope",

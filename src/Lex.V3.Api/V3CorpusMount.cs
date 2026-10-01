@@ -3758,7 +3758,31 @@ internal sealed class V3CorpusMount : IDisposable
     internal const string CoverageOperationsNote =
         "served_operations are the routes this mount answers and not_served_operations are registered with no route on it; " +
         "a request for an unserved operation answers the transport failure operation_not_served (HTTP 404, below the envelope), " +
-        "which tells it apart from a path nothing names (unknown_route)";
+        "which tells it apart from a path nothing names (unknown_route); not_served_data names, for each unserved operation, " +
+        "the data that would serve it, none of which the ingest produces";
+
+    /// <summary>
+    /// The data that would serve each registered operation this mount has no route for (the driver decision in STATUS:
+    /// they keep the transport failure <c>operation_not_served</c>, and the platform says, per operation, which data
+    /// would serve it). The data are the specification's own (<c>33-product-spec.md</c>: the publication-time view, the
+    /// bitemporal replay, the EuroVoc concepts and the transposition bridge). A served operation never appears here, and
+    /// an unserved one without an entry fails the coverage tests.
+    /// </summary>
+    internal static readonly IReadOnlyDictionary<string, string> NotServedDataNeeded = new Dictionary<string, string>(StringComparer.Ordinal)
+    {
+        ["as_observed"] =
+            "observation times: when this corpus first observed each held state (observed_from), recorded by builds chained to their " +
+            "predecessors in the event log; a single build holds no observation time, so no answer can be replayed as it was observed",
+        ["knowable_on"] =
+            "each held state's publication date beside its observation time (observed_from), so a date is answered with what a reader " +
+            "could have known on it, never with the publisher's valid-from date; the observation times need builds chained to their predecessors",
+        ["concepts"] =
+            "the concept data attached to EU works: EuroVoc descriptors, EU directory codes and subject matters as the Publications Office " +
+            "records them; the EU index holds none of them",
+        ["transposition"] =
+            "the transposition links: Legilux's transposes and draftTransposes assertions and the Publications Office's national implementing " +
+            "measures for Luxembourg, each kept as its publisher asserts it and never merged; neither is acquired",
+    };
 
     internal static readonly string[][] CoverageNotHeld =
     [
@@ -3895,6 +3919,15 @@ internal sealed class V3CorpusMount : IDisposable
                 registered = registered.Length,
                 served_operations = served,
                 not_served_operations = registered.Except(served, StringComparer.Ordinal).ToArray(),
+                not_served_data = registered.Except(served, StringComparer.Ordinal)
+                    .Select(static operation => new
+                    {
+                        operation,
+                        data_needed = NotServedDataNeeded.TryGetValue(operation, out var needed)
+                            ? needed
+                            : throw new InvalidOperationException($"The unserved operation {operation} states no data that would serve it."),
+                    })
+                    .ToArray(),
                 note = CoverageOperationsNote,
             },
             not_held = CoverageNotHeld.Select(static row => new { item = row[0], reason = row[1] }).ToArray(),
