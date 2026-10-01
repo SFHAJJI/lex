@@ -24,12 +24,12 @@ public sealed class LuxembourgDocumentFetchRouteReaderTests
     [DataRow(1, true)]
     public async Task CopiedRoutesReopenTwiceWithOriginalOutcomesAndNoTraffic(int shape, bool unenforced)
     {
-        var (store, route, address, handler) = await AcquireAsync(shape);
+        var (store, route, address, handler, bound) = await AcquireAsync(shape);
         var copy = await CopyAsync(store, unenforced: unenforced);
         var writes = copy.CreateCallCount;
         var requests = handler.RequestCount;
-        var first = await ReopenAsync(copy, route, address);
-        var second = await ReopenAsync(copy, route, address);
+        var first = await ReopenAsync(copy, route, address, bound);
+        var second = await ReopenAsync(copy, route, address, bound);
         CollectionAssert.AreEqual(route.CopyCanonicalBytes(), first.Evidence!.CopyCanonicalBytes());
         CollectionAssert.AreEqual(first.Evidence.CopyCanonicalBytes(), second.Evidence!.CopyCanonicalBytes());
         Assert.AreEqual(shape == 4, first.RetryAllowanceSpent);
@@ -50,7 +50,7 @@ public sealed class LuxembourgDocumentFetchRouteReaderTests
     [DataRow("redirect_policy")]
     public async Task EveryTransportDependencyMustStillExist(string missing)
     {
-        var (store, route, address, _) = await AcquireAsync(1);
+        var (store, route, address, _, bound) = await AcquireAsync(1);
         var request = HttpLogicalRequest.ParseAndVerify((await store.ReadByDigestAsync(route.Hops[0].LogicalRequestSha256, CancellationToken.None)).Span);
         var digest = missing switch
         {
@@ -63,7 +63,7 @@ public sealed class LuxembourgDocumentFetchRouteReaderTests
             _ => request.RedirectPolicySha256,
         };
         var copy = await CopyAsync(store, omit: digest);
-        await Assert.ThrowsExactlyAsync<CustodyRequiredException>(() => ReopenAsync(copy, route, address));
+        await Assert.ThrowsExactlyAsync<CustodyRequiredException>(() => ReopenAsync(copy, route, address, bound));
     }
 
     [TestMethod]
@@ -72,21 +72,30 @@ public sealed class LuxembourgDocumentFetchRouteReaderTests
     [DataRow("address")]
     [DataRow("format")]
     [DataRow("provenance")]
+    [DataRow("plan")]
+    [DataRow("input")]
+    [DataRow("renderer")]
     public async Task CallerPinsCannotSelectAnotherRunRequestOrRepresentation(string changed)
     {
-        var (store, route, address, _) = await AcquireAsync(0);
+        var (store, route, address, _, bound) = await AcquireAsync(0);
         var other = Address(changed == "address" ? StoreUri.Replace("a439", "a440", StringComparison.Ordinal) : StoreUri,
             changed == "format" ? LuxembourgUserFormatToken.Xml : LuxembourgUserFormatToken.XmlAkomaNtoso,
             changed == "provenance" ? "/eli/etat/leg/loi/2017/03/14/a440/jo" : ActPath);
+        var expectedBound = changed is "plan" or "input" or "renderer"
+            ? new LuxembourgDocumentFetchPlan(address).Bind(
+                changed == "plan" ? "urn:uuid:00000000-0000-4000-8000-000000000083" : "urn:uuid:00000000-0000-4000-8000-000000000081",
+                changed == "input" ? "urn:uuid:00000000-0000-4000-8000-000000000084" : "urn:uuid:00000000-0000-4000-8000-000000000082",
+                LuxembourgAcquisitionTestFixture.DocumentFetchRendererSource(changed == "renderer" ? 8402 : 8401)).Request
+            : bound;
         await Assert.ThrowsExactlyAsync<CustodyIntegrityException>(() => LuxembourgDocumentFetchRouteReader.ReopenAsync(
             store, Reference(route), changed == "run" ? new SourceArtifactRef("urn:uuid:00000000-0000-4000-8000-000000000099", new string('a',64)) : route.RunIdentity,
-            changed == "request" ? new string('a',64) : route.Hops[0].LogicalRequestSha256, other, CancellationToken.None));
+            changed == "request" ? new string('a',64) : route.Hops[0].LogicalRequestSha256, other, expectedBound, CancellationToken.None));
     }
 
     [TestMethod]
     public async Task RehashedUnrelatedReceiptCannotStandInForTheTerminalWrite()
     {
-        var (store, route, address, _) = await AcquireAsync(1);
+        var (store, route, address, _, bound) = await AcquireAsync(1);
         var unrelated = await store.CreateAsync("unrelated"u8.ToArray(), CustodyClass.NightlyFloor90d, CancellationToken.None);
         var receipt = Encoding.UTF8.GetBytes(ContractJson.Serialize(unrelated));
         await store.CreateAsync(receipt, CustodyClass.NightlyFloor90d, CancellationToken.None);
@@ -98,17 +107,17 @@ public sealed class LuxembourgDocumentFetchRouteReaderTests
         await store.CreateAsync(bytes, CustodyClass.NightlyFloor90d, CancellationToken.None);
         await Assert.ThrowsExactlyAsync<CustodyIntegrityException>(() => LuxembourgDocumentFetchRouteReader.ReopenAsync(store,
             new SourceArtifactRef(Reference(route).ResourceId, CustodyDigest.Of(bytes)), route.RunIdentity,
-            route.Hops[0].LogicalRequestSha256, address, CancellationToken.None));
+            route.Hops[0].LogicalRequestSha256, address, bound, CancellationToken.None));
     }
 
     [TestMethod]
     public async Task CancellationDoesNotOpenATransport()
     {
-        var (store, route, address, handler) = await AcquireAsync(0);
+        var (store, route, address, handler, bound) = await AcquireAsync(0);
         var requests = handler.RequestCount;
         using var source = new CancellationTokenSource(); source.Cancel();
         await Assert.ThrowsExactlyAsync<OperationCanceledException>(() => LuxembourgDocumentFetchRouteReader.ReopenAsync(
-            store, Reference(route), route.RunIdentity, route.Hops[0].LogicalRequestSha256, address, source.Token));
+            store, Reference(route), route.RunIdentity, route.Hops[0].LogicalRequestSha256, address, bound, source.Token));
         Assert.AreEqual(requests, handler.RequestCount);
     }
 
@@ -120,11 +129,11 @@ public sealed class LuxembourgDocumentFetchRouteReaderTests
     [DataRow("header")]
     public async Task RehashedUnsupportedPolicyOrNegotiatedRequestCannotBecomeALuxembourgFetch(string changed)
     {
-        var (store, route, address, _) = await AcquireAsync(0);
+        var (store, route, address, _, bound) = await AcquireAsync(0);
         var request = HttpLogicalRequest.ParseAndVerify((await store.ReadByDigestAsync(
             route.Hops[0].LogicalRequestSha256, CancellationToken.None)).Span);
         var originalPolicy = Encoding.UTF8.GetString((await store.ReadByDigestAsync(request.RequestPolicySha256, CancellationToken.None)).Span);
-        var profile = OfficialMachineQuerySourceProfiles.Resolve(OfficialMachineQuerySourceProfileId.LuxembourgDocumentFetch);
+        var profile = OfficialMachineQuerySourceProfiles.ResolveFor(MachineQueryBinder.OpenIdentity(bound));
         var policy = changed switch
         {
             "profile" => originalPolicy.Replace(profile.ArtifactRef.Sha256, new string('a', 64), StringComparison.Ordinal),
@@ -148,14 +157,14 @@ public sealed class LuxembourgDocumentFetchRouteReaderTests
         var writes = store.CreateCallCount;
         await Assert.ThrowsExactlyAsync<CustodyIntegrityException>(() => LuxembourgDocumentFetchRouteReader.ReopenAsync(store,
             new SourceArtifactRef(Reference(route).ResourceId, CustodyDigest.Of(routeBytes)), route.RunIdentity,
-            digest, address, CancellationToken.None));
+            digest, address, bound, CancellationToken.None));
         Assert.AreEqual(writes, store.CreateCallCount);
     }
 
     private static SourceArtifactRef Reference(RoutedHttpEvidence route) =>
         new("urn:uuid:00000000-0000-4000-8000-000000000098", CustodyDigest.Of(route.CopyCanonicalBytes()));
-    private static Task<LuxembourgDocumentGetAttemptResult> ReopenAsync(ICustodyStore store, RoutedHttpEvidence route, LuxembourgDocumentFetchAddress address) =>
-        LuxembourgDocumentFetchRouteReader.ReopenAsync(store, Reference(route), route.RunIdentity, route.Hops[0].LogicalRequestSha256, address, CancellationToken.None);
+    private static Task<LuxembourgDocumentGetAttemptResult> ReopenAsync(ICustodyStore store, RoutedHttpEvidence route, LuxembourgDocumentFetchAddress address, BoundMachineRequest bound) =>
+        LuxembourgDocumentFetchRouteReader.ReopenAsync(store, Reference(route), route.RunIdentity, route.Hops[0].LogicalRequestSha256, address, bound, CancellationToken.None);
     private const string StoreUri = "http://data.legilux.public.lu/filestore/eli/etat/leg/loi/2017/03/14/a439/jo/fr/xml/eli-etat-leg-loi-2017-03-14-a439-jo-fr-xml.xml";
     private const string ActPath = "/eli/etat/leg/loi/2017/03/14/a439/jo";
     private static LuxembourgDocumentFetchAddress Address(string uri = StoreUri,
@@ -170,7 +179,7 @@ public sealed class LuxembourgDocumentFetchRouteReaderTests
         return copy;
     }
     private static async Task<(EuAcquisitionTestFixture.EuInMemoryCustodyStore Store, RoutedHttpEvidence Route,
-        LuxembourgDocumentFetchAddress Address, RouteHandler Handler)> AcquireAsync(int shape)
+        LuxembourgDocumentFetchAddress Address, RouteHandler Handler, BoundMachineRequest Bound)> AcquireAsync(int shape)
     {
         var address = Address();
         var bound = new LuxembourgDocumentFetchPlan(address).Bind("urn:uuid:00000000-0000-4000-8000-000000000081",
@@ -191,7 +200,7 @@ public sealed class LuxembourgDocumentFetchRouteReaderTests
             Assert.AreEqual(shape == 2 ? 404 : shape == 4 ? 503 : 200, result.Evidence.Hops[^1].Status);
             Assert.AreEqual(shape == 4, result.RetryAllowanceSpent);
         }
-        return (store, result.Evidence, address, handler);
+        return (store, result.Evidence, address, handler, bound.Request);
     }
     private sealed class RouteHandler(int shape) : HttpMessageHandler
     {

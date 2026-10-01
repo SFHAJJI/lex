@@ -24,19 +24,25 @@ public static class LuxembourgDocumentFetchRouteReader
 {
     public static async Task<LuxembourgDocumentGetAttemptResult> ReopenAsync(ICustodyStore store,
         SourceArtifactRef retainedRoute, SourceArtifactRef expectedRun, string expectedLogicalRequestSha256,
-        LuxembourgDocumentFetchAddress expectedAddress, CancellationToken cancellationToken)
+        LuxembourgDocumentFetchAddress expectedAddress, BoundMachineRequest originalBoundRequest, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(store);
         ArgumentNullException.ThrowIfNull(retainedRoute);
         ArgumentNullException.ThrowIfNull(expectedRun);
         ArgumentNullException.ThrowIfNull(expectedAddress);
+        ArgumentNullException.ThrowIfNull(originalBoundRequest);
         ArgumentException.ThrowIfNullOrWhiteSpace(expectedLogicalRequestSha256);
         cancellationToken.ThrowIfCancellationRequested();
         var bytes = await CustodyRestore.ReadByDigestCheckedAsync(store, retainedRoute.Sha256, cancellationToken).ConfigureAwait(false);
         try
         {
             var route = RoutedHttpEvidence.ParseAndVerify(bytes.Span);
-            var profile = OfficialMachineQuerySourceProfiles.Resolve(OfficialMachineQuerySourceProfileId.LuxembourgDocumentFetch);
+            var identity = MachineQueryBinder.OpenIdentity(originalBoundRequest);
+            var profile = OfficialMachineQuerySourceProfiles.ResolveFor(identity);
+            if (profile.Id != OfficialMachineQuerySourceProfileId.LuxembourgDocumentFetch ||
+                identity.RequestedUri != expectedAddress.FetchUri.AbsoluteUri ||
+                identity.RenderReceipt.RendererProfileRef != expectedAddress.ArtifactRef)
+                throw new CustodyIntegrityException("Bound request does not name the selected Luxembourg document.");
             if (route.RunIdentity != expectedRun || route.Hops.Count != 1 ||
                 route.RequestOrdinal != profile.FirstProductRequestOrdinal ||
                 route.AttemptOrdinal >= (ulong)profile.MaximumAttempts ||
@@ -59,6 +65,9 @@ public static class LuxembourgDocumentFetchRouteReader
                 var policy = new UTF8Encoding(false, true).GetString(policyBytes.Span).Split('\n');
                 if (policy.Length < 2 || policy[0] != "lex-http-request-policy/1" || policy[1] != "machine_query_get" ||
                     !HasExactly(policy, "source_profile=", $"{profile.ArtifactRef.ResourceId}\t{profile.ArtifactRef.Sha256}") ||
+                    !HasExactly(policy, "query_plan=", $"{identity.RenderReceipt.QueryPlanRef.ResourceId}\t{identity.RenderReceipt.QueryPlanRef.Sha256}") ||
+                    !HasExactly(policy, "ordered_parameter_set=", $"{identity.RenderReceipt.OrderedParameterSetRef.ResourceId}\t{identity.RenderReceipt.OrderedParameterSetRef.Sha256}") ||
+                    !HasExactly(policy, "renderer_source=", $"{identity.RenderReceipt.RendererSourceRef.ResourceId}\t{identity.RenderReceipt.RendererSourceRef.Sha256}") ||
                     !HasExactly(policy, "renderer_profile=", $"{expectedAddress.ArtifactRef.ResourceId}\t{expectedAddress.ArtifactRef.Sha256}") ||
                     !HasExactly(policy, "maximum_attempts=", profile.MaximumAttempts.ToString(CultureInfo.InvariantCulture)))
                     throw new CustodyIntegrityException("Document policy does not bind the supported Luxembourg profile and retry limit.");
