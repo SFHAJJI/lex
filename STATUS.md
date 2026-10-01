@@ -3,6 +3,10 @@
 Updated 2026-10-01 by the driver. This file replaces the issue-comment ledgers. It is rewritten in
 every pull request that changes what is served, what is next or what is blocked.
 
+Combined CI36849715330 passed5,297 tests with22 skipped and one census-total failure:
+the merged guarded-type union is139, not138. The exact member-level census already passed.
+The observed total is now pinned; fresh CI must verify it before review.
+
 ## LU assertion snapshot storage (Codex, 2026-10-01)
 
 Reversible driver decision: prepare immutable assertion storage using the existing checked chunk
