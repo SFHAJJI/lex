@@ -2168,7 +2168,8 @@ at the head of PR #860. Every step passed:
 - the one-server image (72,561,664 bytes) holds the 26 live page files, the 6 mount files and the 5
   files the mount's report lists, byte for byte, with no image failure;
 - two builds from scratch give one manifest, `sha256:b330577295f5a4017715420733ff7351e9134b8d36cc917a690db9e1288ff9d6`;
-- V2 is absent: 527 entries scanned, and V2's 63 routes asked of the image all 404;
+- V2 is absent: 527 entries scanned, and none of V2's 63 routes fails when asked of the image. A
+  V2-only route answers 404, and a path V2 and V3 share (such as `/`) answers with V3's own bytes;
 - the rehearsal signature verifies;
 - the image runs in WSL and is probed on all ten journey steps:
   - coverage and radar answer;
