@@ -750,7 +750,7 @@ CI evidence are recorded in the pull request before merge.
 
 ## Heads
 
-- `v3/integration`: `9041cbc2` (2026-10-01, PR #845 merged). Build 45 s. Fast lane
+- `v3/integration`: `c949c9e1` (2026-10-01, PR #847 merged). Build 45 s. Fast lane
   (`eng/test-fast.ps1`): 3,077 tests, 3,076 pass, 1 skipped (the review of PR #828). Ingest suite: green on CI for PR #760
   (the CI `dotnet` job runs the whole solution on every pull request, about 7 min on the runner;
   green for PR #834);
@@ -1980,6 +1980,26 @@ mount they are given.
 - Next slices: the refusal and retrieval sets derived from a mount, then the card over the release's
   mount in the rehearsal.
 
+The refusal set reads the EU index too (PR #846), so a mount that holds only the EU still measures
+its refusals. From the EU index's first work in its first language that holds a usable word in any
+article (scanned in order; the review of #846 found the first version read only the first article,
+so a short one left the EU unmeasured):
+- a word it holds, searched in it, must be answered;
+- the same in a CELEX the index does not hold: `identifier_unknown`;
+- in a language the work is not held in: `language_not_available`;
+- with a date, which EU search does not serve: `retrieval_mode_unavailable`.
+A code an EU request produces is no longer listed as not produced. Coverage's own rule is mirrored:
+it refuses `no_corpus_mounted` when the mount holds no Luxembourg index. The first run on the
+EU-only GDPR fixture expected an answer there.
+- On the real bounded first mount the refusal set grows from 1 request to 5 (coverage and the four
+  EU ones), all answered with their code. The verdict control now applies and catches the shuffle.
+- On the GDPR fixture alone: every EU request is answered with its code, and the control catches
+  the shuffle.
+- The release-mount run requires the EU requests whenever the EU index holds a usable word.
+- Two mutations:
+  - the unknown CELEX given the gold `answer` fails;
+  - reading only the first article fails the short-first-article test.
+
 The refusal set over any mount (PR #839), the second slice of ruling 2's gates over the real
 mounted corpus (`V3MountedGatesTests.Refusal.cs`). Each request is built from what the mount holds,
 so the one code the registry says answers it follows from the mount's own data:
@@ -2647,8 +2667,10 @@ Repair fast lane: 3,065 pass / 1 Windows skip; repair build: zero warnings/error
 
 - The bounded real mount is available at
   `C:\lex-v3\first-mount-decision95-restart-20260930\v3-corpus`; the web lane's journeys run on it
-  (PR #815). The machine gates' mounted-corpus run needs case sets written for a real corpus, whose
-  Luxembourg side holds no state yet. The data lane continues the full EU and Luxembourg populations.
+  (PR #815). The machine gates derive their cases from any mount (PRs #838, #839, #842, #845, #846)
+  and the release card is the gates run over the rehearsal's mount (PR #844). The real mount holds
+  no Luxembourg state yet, so its temporal set is not measured, and it will be once the data lane's
+  full populations land.
 - EU search on the live search screen waits on an EU permalink grammar (item 5). The real mount's
   EU index answers `search` in one work (for example `32016R0679`, 60 hits for "personal data"), and
   the web search reader refuses the answer by design, reading Luxembourg's only. Each EU hit cites
