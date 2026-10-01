@@ -48,30 +48,59 @@ internal sealed class LuxembourgAssertionSnapshot
         ArgumentNullException.ThrowIfNull(rows);
         using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
         hash.AppendData(Domain);
-        WriteRecord(HeaderBytes(runIdentity, observation, censusProofs, assertionProofs));
+        WriteRecord(destination, hash, HeaderBytes(runIdentity, observation, censusProofs, assertionProofs), cancellationToken);
         foreach (var row in rows)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            ArgumentNullException.ThrowIfNull(row);
-            if (row.ObservationRef != observation)
-                throw new InvalidOperationException("An assertion snapshot cannot mix run observations.");
-            WriteRecord(JsonSerializer.SerializeToUtf8Bytes(ToStored(row)));
+            WriteRecord(destination, hash, AssertionBytes(row, observation), cancellationToken);
         }
         cancellationToken.ThrowIfCancellationRequested();
         return Convert.ToHexStringLower(hash.GetHashAndReset());
+    }
 
-        void WriteRecord(byte[] bytes)
+    /// <summary>Writes verified rows as they arrive without retaining their union. The source
+    /// must preserve contiguous subject groups and the proof/admission checks the caller applies before Write.
+    /// This method preserves the synchronous writer's bytes and leaves the destination open.</summary>
+    internal static async Task<string> WriteAsync(Stream destination, SourceArtifactRef runIdentity,
+        SourceArtifactRef observation, IReadOnlyList<SourceArtifactRef> censusProofs,
+        IReadOnlyList<SourceArtifactRef> assertionProofs, IAsyncEnumerable<LuxembourgObservedAssertion> rows,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(destination);
+        ArgumentNullException.ThrowIfNull(rows);
+        cancellationToken.ThrowIfCancellationRequested();
+        using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
+        hash.AppendData(Domain);
+        WriteRecord(destination, hash, HeaderBytes(runIdentity, observation, censusProofs, assertionProofs), cancellationToken);
+        await foreach (var row in rows.WithCancellation(cancellationToken).ConfigureAwait(false))
         {
             cancellationToken.ThrowIfCancellationRequested();
-            if (bytes.Length == 0 || bytes.Length > MaximumRecordBytes)
-                throw new InvalidOperationException("An assertion snapshot record exceeds its storage bound.");
-            Span<byte> length = stackalloc byte[4];
-            BinaryPrimitives.WriteInt32LittleEndian(length, bytes.Length);
-            destination.Write(length);
-            destination.Write(bytes);
-            hash.AppendData(length);
-            hash.AppendData(bytes);
+            WriteRecord(destination, hash, AssertionBytes(row, observation), cancellationToken);
         }
+        cancellationToken.ThrowIfCancellationRequested();
+        return Convert.ToHexStringLower(hash.GetHashAndReset());
+    }
+
+    private static byte[] AssertionBytes(LuxembourgObservedAssertion row, SourceArtifactRef observation)
+    {
+        ArgumentNullException.ThrowIfNull(row);
+        if (row.ObservationRef != observation)
+            throw new InvalidOperationException("An assertion snapshot cannot mix run observations.");
+        return JsonSerializer.SerializeToUtf8Bytes(ToStored(row));
+    }
+
+    private static void WriteRecord(Stream destination, IncrementalHash hash, byte[] bytes,
+        CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        if (bytes.Length == 0 || bytes.Length > MaximumRecordBytes)
+            throw new InvalidOperationException("An assertion snapshot record exceeds its storage bound.");
+        Span<byte> length = stackalloc byte[4];
+        BinaryPrimitives.WriteInt32LittleEndian(length, bytes.Length);
+        destination.Write(length);
+        destination.Write(bytes);
+        hash.AppendData(length);
+        hash.AppendData(bytes);
     }
 
     /// <summary>Rebuilds every index entry by parsing the entire verified sequence. No caller index

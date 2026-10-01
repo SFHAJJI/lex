@@ -25,30 +25,62 @@ queued source heads, LU index builder/reader and web lane are unchanged.
 
 ## Retained EU enumeration checkpoints (Codex, 2026-10-01)
 
-Reversible driver decision under Q-20261001-0656-codex: build acquisition persistence before
-launching the full Luxembourg population. The first slice retains each delivered EU enumeration's
-comparison inputs in checked custody and exposes its digest on the executor result. The offline
-reader checks the caller's run/profile pins, reads both counts and all pages, restores the held
-request bytes and reruns the existing binder and complete two-pass comparison. It has no HTTP
-client and performs no custody writes. This uses the existing EU request replay contract; the
-Luxembourg template renderer and LU builder/reader remain outside this slice.
+Each delivered EU enumeration retains its comparison inputs in checked custody. Offline
+reopening checks the original run/profile, both counts, all pages, request bytes, the binder
+and complete two-pass comparison. The reader has no HTTP client and performs no writes.
+Receipt restoration separately re-holds every receipt member to obtain the current store
+floor. The request body and checkpoint are checked reads but are not receipt members; the
+receipt floor alone does not establish future reopening of the entire checkpoint closure.
 
-Twenty draft cases cover an independent copied store, empty/nonempty equality across two opens,
-missing/tampered dependencies, wrong caller identities, rehashed-root substitutions and cancellation.
-Receipt restoration obtains current write/readback receipts for every dependency before calling the
-existing receipt factory. It carries the current store floor, including a weaker copied store, and
-performs no publisher requests. Failure or receipt substitution refuses.
+All 20 new cases passed at 101e362d. CI 36853853290 reported 5,318 passed and 22 skipped;
+the required watch exited zero. Claude returned MERGE with no material code findings.
+The one repair clarifies the receipt-member boundary and includes integration d874273b,
+preserving both STATUS sections. Fresh final-head CI gates merge. Local Release/fast/ingest
+checks remain deferred under the acquisition memory guard.
 
-CI 36830097555 passed exact 87ffce64: 5,280 passed, 22 skipped, including all 20 new
-cases. The required CI watch exited 0. Integration a74fece1 is now included; fresh combined
-CI and read-only Claude review remain required. Local builds and tests are deferred under
-the active acquisition memory guard. The acquisition reader performs no writes; the receipt
-restorer performs checked local holds to obtain the current store floor.
+No saved success or protection flag is trusted as a proof. Complete acquisition composition,
+Formex/rights/body outcomes and two independent offline mount processes remain follow-on work.
+The active EU acquisition uses its frozen runtime and remains untouched.
 
-No acquisition-completion or custody-floor claim is read from the checkpoint. This does not yet
-restore the complete EU/LU acquisition, Formex/rights/body outcomes, or rebuild a mount offline;
-those remain required follow-on work. Existing in-process two-build checks remain unchanged.
-Active EU retry6 uses its frozen old runtime and is untouched.
+## Streaming scope verification from source inputs (Codex, 2026-10-01)
+
+The retained manifest can be verified by independently replaying its original source inputs
+through the existing streaming reducer and canonical writer. Acceptance checks the pinned
+digest, UTF-8, complete byte comparison, both source passes and writer admission/accounting.
+It returns the existing digest/count receipt without materializing a second manifest graph.
+The source factory and evidence resolver must come from original evidence; deriving either
+from the manifest under test would be circular.
+
+PR head b3cafcab passed CI 36850031289: 5,289 tests passed, 22 skipped, including all eleven
+new scope cases. Claude returned MERGE with no material findings. The one editorial repair
+clarifies exception precedence and working buffers in the API remarks and records the review.
+Integration a74fece1 is included; final-head CI gates merge under the 10:35 standing order.
+No local Release/fast/ingest run or synthetic source-replay measurement is claimed.
+
+The measurement remains required before claiming a full Luxembourg memory fit. Working
+storage includes five projection bytes per object, the evidence table, current input, the
+JSON writer buffer and a 4 KiB comparison buffer. An individual JSON element may exceed the
+writer's 64 KiB flush threshold. Factories and resolvers can retain more. This method is not
+wired into the LU adapter and does not provide a bounded downstream manifest view.
+
+
+## Async Luxembourg assertion snapshots (Codex, 2026-10-01)
+
+The snapshot writer now consumes asynchronous verified rows through the bounded small-chunk
+channel. Failed custody cancels the producer's linked token, including a source awaiting its
+next row. Both writer paths share the record encoding and canonical digest. The source remains
+responsible for publisher proofs, census membership, admission and subject grouping.
+
+Eight cases cover equal synchronous/asynchronous bytes, empty input, independently reopened
+small chunks with duplicates and literal metadata, failure during an awaiting source, absence
+of a root after source failure, wrong observations, null rows and early cancellation. Exact
+1f16080f passed CI 36852404133: 5,306 passed, 22 skipped; the required watch exited zero.
+Claude returned MERGE with no material findings. The one editorial repair clarifies the
+caller's proof checks and records this evidence. PR858 is merged as a74fece1 and included.
+Final-head CI still gates merge.
+No local build/test was run under the 10:35 low-memory rule. Adapter integration, complete
+bounded derivation and full-LU memory measurement remain outstanding.
+
 
 ## LU assertion snapshot storage (Codex, 2026-10-01)
 
@@ -76,7 +108,7 @@ header-size and writer-order limitations above. Integration c27012f4 is included
 requires successful CI on the final head. The 10:35 UTC standing order permits that CI-backed
 review during acquisition while memory is below 4 GB. No additional local build was run.
 
-The snapshot uses the legacy chunk writer; PR #855 supplies smaller chunks for its follow-on.
+The asynchronous snapshot now uses the bounded small-chunk channel introduced by PR #855.
 No publisher traffic, production action or completed population is claimed by this slice.
 
 
