@@ -4330,6 +4330,22 @@ internal sealed class V3CorpusMount : IDisposable
         "log.built_at is when the build ran, an upper bound on when its corpus was observed and never an observation time; " +
         "a revision (validity_revised, interval_closed, file_replaced, withdrawn_from_source, ...) needs a later build compared against this one";
 
+    /// <summary>The genesis note on a schema-6 index, which records no build time: the same, without the build-time sentence.</summary>
+    internal const string EventsGenesisNoteLegacy =
+        "this log comes from one observation with no predecessor, so it holds only first_sighting; first_sighting means first present in this log " +
+        "and does not say when the publisher published the text or when it was fetched; observed_from is null because no observation time is held, " +
+        "and log.built_at is null because this index records no build time (legacy_note); " +
+        "a revision (validity_revised, interval_closed, file_replaced, withdrawn_from_source, ...) needs a later build compared against this one";
+
+    /// <summary>The silence note on a schema-6 index, which records no build time.</summary>
+    internal const string EventsSilenceNoteLegacy =
+        "an empty page says this log holds no further event; it says nothing about whether the publisher changed anything or whether acquisition ran: " +
+        "this mount holds no upstream health and its index records no build time, and every envelope's freshness names upstream health stale";
+
+    /// <summary>The upstream-health row on a schema-6 index, which records no build time.</summary>
+    internal static readonly string[] EventsUpstreamHealthLegacy =
+        ["upstream_health", "no upstream health and no build time is held, so silence here is not a statement that the publisher was quiet"];
+
     internal const string EventsSilenceNote =
         "an empty page says this log holds no further event; it says nothing about whether the publisher changed anything or whether acquisition ran: " +
         "this mount holds no upstream health, a build's time (log.built_at) says when it ran and not what the publisher did after, and every " +
@@ -4481,10 +4497,10 @@ internal sealed class V3CorpusMount : IDisposable
             has_more = hasMore,
             next_after = $"{logId}:{nextSeq}",
             delivery = EventsDeliveryNote,
-            genesis_note = EventsGenesisNote,
+            genesis_note = _reader.RecordsBuilds ? EventsGenesisNote : EventsGenesisNoteLegacy,
             chained_note = chained ? EventsChainedNote : null,
             legacy_note = _reader.RecordsBuilds ? null : EventsLegacyNote,
-            silence_note = EventsSilenceNote,
+            silence_note = _reader.RecordsBuilds ? EventsSilenceNote : EventsSilenceNoteLegacy,
             event_names = new
             {
                 mintable = V3EventRegistry.Mintable,
@@ -4492,6 +4508,7 @@ internal sealed class V3CorpusMount : IDisposable
                 note = EventNamesNote,
             },
             not_held = (chained ? EventsChainedNotHeld : EventsNotHeld)
+                .Select(row => _reader.RecordsBuilds || row[0] != "upstream_health" ? row : EventsUpstreamHealthLegacy)
                 .Concat(_reader.RecordsBuilds ? [] : [EventsLegacyNotHeld])
                 .Select(static row => new { item = row[0], reason = row[1] })
                 .ToArray(),

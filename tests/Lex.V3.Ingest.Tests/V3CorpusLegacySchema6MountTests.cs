@@ -97,6 +97,16 @@ public sealed class V3CorpusLegacySchema6MountTests
             Assert.AreEqual(0, events.GetProperty("events").GetArrayLength(), "the real mount holds no Luxembourg state");
             Assert.AreEqual(V3CorpusMount.EventsLegacyNote, events.GetProperty("legacy_note").GetString());
             CollectionAssert.Contains(events.GetProperty("not_held").EnumerateArray().Select(static row => row.GetProperty("item").GetString()).ToArray(), "build_record");
+
+            // No sentence of the answer claims a build time this index does not record (review of #878): the genesis and
+            // silence notes and the upstream-health row are schema 6's own, and nothing says when a build ran.
+            Assert.AreEqual(V3CorpusMount.EventsGenesisNoteLegacy, events.GetProperty("genesis_note").GetString());
+            Assert.AreEqual(V3CorpusMount.EventsSilenceNoteLegacy, events.GetProperty("silence_note").GetString());
+            var text = events.GetRawText();
+            foreach (var claim in new[] { "when the build ran", "says when it ran", "built_at is when", "a build's time (log.built_at)" })
+            {
+                Assert.IsFalse(text.Contains(claim, StringComparison.Ordinal), $"a schema-6 events answer claims a build time: {claim}");
+            }
         }
         finally
         {

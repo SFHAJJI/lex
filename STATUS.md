@@ -2409,7 +2409,8 @@ Schema 6 served with its build record absent (PR #878).
 - **What a schema-6 mount answers:**
   - the reader reports `SchemaIdentity`, and `RecordsBuilds` is false;
   - `events` serves its genesis log with `log.built_at` null, a `legacy_note` and a `build_record`
-    not-held row;
+    not-held row. Its genesis and silence notes and its upstream-health row are schema 6's own, and
+    claim no build time (review of #878);
   - `as_observed` refuses `snapshot_unknown`, saying the index names no snapshot;
   - `coverage`'s build-time row says the index records no build time either;
   - the corpus check holds only the binding: no source bodies or build time are held to check.
