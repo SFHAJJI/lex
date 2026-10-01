@@ -30,9 +30,15 @@ fresh exact-head CI remains required after this documentation repair and any bas
 
 Population checkpoint: EU retry 3 ended after 490 of 20,000 allowed requests, with 79 of 82 census
 families proven and three retained HTTP 503 maintenance responses. PR #840 narrowly retries that
-exact body within the existing four-attempt limit. A fresh 60-request three-family proof/reopen
+exact body within the existing four-attempt limit. It merged at a1752729 after final green CI.
+A fresh 60-request three-family proof/reopen
 must precede the next full run. The previous storage plan reserved only 1 GB; the panel's new
-3 GB floor requires updated sizing and runtime guards before launch. No new full run has started.
+3 GB floor requires updated sizing and runtime guards before launch. No new full run has started. The new governor checks free space every 100 ms and stops only
+its owned process tree below 3.5 GiB; scheduling delays and foreign writes remain limits. Both normal
+child exit and an induced safe resource stop were tested. The current conservative retry-4 proposal
+requires 8,026,491,262 free bytes before and after freeze; this host does not yet meet it.
+Reclaimed 894,621,742 bytes of inactive ignored legacy Ingest/test build output; preserved source,
+web, Git data, custody and frozen evidence. Further measured sizing and recovery remain required.
 Offline Luxembourg run 2 measured 70,855,000 additional retained bytes for 9,000 synthetic subjects
 and 61,000 admitted assertions through semantic/typed/scope stages. It excludes later stages and
 relations and does not establish whole-population fit.
@@ -51,6 +57,44 @@ followed by disk-backed assembly with global relation/original-Act dependencies 
 one partition end to end first. Partitioning is not implemented yet. Use 3 GiB as the conservative
 free-space floor and stop our own run with a margin before it. No production signing, credentials,
 deployment or promotion.
+
+## Retained EU maintenance response retry (Codex, 2026-10-01)
+
+The fresh full EU retry ended after 490 of 20,000 requests with 79 of 82 census families proven.
+Three refusals bind HTTP 503 to the same retained 2,005-byte maintenance page for
+12016E/TXT, 32022L2555 and 32023R1115. Its SHA-256 is
+e7fab335ce5367cfe359f9f7e0ad6ce1838bec9189a216bc3faf437ce169d404.
+The run remains refused; custody and resource samples are preserved at
+C:/lex-v3/eu-population-20261001-1. It produced no Formex or full population result.
+
+Reversible driver decision: permit the existing four-attempt retry only for a complete 503 from
+the exact Publications Office SPARQL endpoint with that independently reopened body digest.
+Retain each failed route, charge every wire attempt, and keep the session's 1, 2 and 4 second
+backoff. This adds no Retry-After handling. Longer maintenance still refuses after the existing
+attempt allowance. Different bodies, challenges, statuses and publishers keep their refusal paths.
+The 503 test double labels the body text/plain; recognition depends on the complete body digest,
+not media type. No recovery during a real maintenance window is claimed.
+
+Validation at 8fad46c9 passed a clean build (44.91 s), required fast suite (3,085 passed, one
+platform skip, 65.046 s), and 137 affected ingest tests (two live EU skips, 51.204 s). The ten new
+cases cover count/page recovery, attempt lineage and route custody, exhaustion, wire budget,
+changed bytes, wrong statuses and the exact page from Luxembourg. Claude's required review of
+5cfba613 returned MERGE with no material findings, reproduced these checks and caught four
+mutations when the digest guard was removed and two when the endpoint guard was removed.
+The one repair corrects prose and records the retry limits; production and test code are unchanged.
+Initial CI36792824118 passed; the refreshed head still requires green CI before exact-head merge.
+Commands, results and review remain under C:/lex-v3/lanes/eu-maintenance-* and reviews/claude-pr-840-*.
+
+Before another full attempt, prove and independently reopen the three affected census families in
+fresh custody with a shared 60-request ceiling. Keep at least 3 GB free during runs, as the panel
+ordered. No production signing, credentials, deployment or promotion.
+
+The separate offline Luxembourg diagnostic at merged 7144666c used no publisher traffic. Its
+largest synthetic case retained 70,855,000 additional managed bytes across semantic, typed and
+scope results for 9,000 subjects and 61,000 admitted assertions; OS peak working set was
+160,976,896 bytes. Evidence: C:/lex-v3/lu-combined-graph-20261001-2. It repeats one assertion
+pattern, excludes relations and later stages, and establishes no full population fit. The initial
+probe's unadmitted-predicate refusal remains preserved with its frozen source and runtime in run1.
 
 ## Luxembourg identity canonical output (Codex, 2026-09-30)
 
@@ -706,11 +750,11 @@ CI evidence are recorded in the pull request before merge.
 
 ## Heads
 
-- `v3/integration`: `7144666c` (2026-10-01, PR #835 merged). Build 45 s. Fast lane
+- `v3/integration`: `398f936e` (2026-10-01, PR #839 merged). Build 45 s. Fast lane
   (`eng/test-fast.ps1`): 3,077 tests, 3,076 pass, 1 skipped (the review of PR #828). Ingest suite: green on CI for PR #760
   (the CI `dotnet` job runs the whole solution on every pull request, about 7 min on the runner;
   green for PR #834);
-  locally about 15 min. 979 web tests pass. The web job's "browser debugger never answered" failures
+  locally about 15 min. 980 web tests pass. The web job's "browser debugger never answered" failures
   (keyboard-walk, and paint-check since #811) are fixed by PR #822: each browser binds its own
   debugging port (`launchBrowser`) instead of a random one another browser starting at the same
   moment could hold.
@@ -938,7 +982,7 @@ schema's `parameters` shape, and whose call runs the same dispatch the REST rout
 endpoint test proves it for all twenty-three. The launch-contract line "REST and MCP derive identical
 envelopes from the registry" is the owner's to tick.
 
-Web: 41 React components, 979 tests. Preview screens render fixtures. The V3 Luxembourg search
+Web: 41 React components, 980 tests. Preview screens render fixtures. The V3 Luxembourg search
 answer has a reader (PR #771). The answer census now samples `search` five ways from the real handler:
 - a phrase with 4 strict hits and 1 relaxed hit;
 - the same phrase one hit per page, with its cursor;
@@ -1976,6 +2020,21 @@ so the one code the registry says answers it follows from the mount's own data:
 - Two mutations:
   - the day-before-history request given the gold `answer` fails the refusal tests;
   - the first version's `non_admitting` guess fails the `conflict` case.
+
+The page reads a card over a mount the gates found nothing to ask of (PR #841). Over the real
+bounded first mount the temporal no-language arms and the retrieval set have no case, and the page's
+card reader refused a set of no case. `readEvaluationCard` now accepts one only as honest emptiness:
+- a gate may count no case only when it is not measured for `no_measurable_query`;
+- a set of no case must have every gate that way;
+- a control over no case can only be `not_applicable`, with its reason;
+- a set or control of no case carries the digest of no case, `EMPTY_CASES_SHA256` (the SHA-256 of
+  `[]`, as the platform renders it). The review of #841 found another digest was accepted.
+A scored gate over no case, another not-measured reason over no case, a control over no case that
+"caught" something, and a no-case digest that is not the empty list's are refused.
+The first mount's card reads and renders. At this head it has 3 sets (the two temporal no-language
+arms and the refusal set) and says "2 gates do not pass", each named not measured. With #842's
+retrieval set it has 4 sets and says 5, as the review of #841 counted. The journey and
+licence-blocked mounts' cards and the platform card read too.
 
 Evaluation card (PR #769): `EvaluationCard` in `Lex.V3.Contracts.Evaluation` prints the machine
 gates as the card of `36-ideal-evaluation.md` section 6 describes, as far as the launch contract

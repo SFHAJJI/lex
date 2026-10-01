@@ -14,16 +14,14 @@ public sealed class EuVirtuosoDeadlockRetryTests
     private const string Deadlock = "Virtuoso 40001 Error SR...: Transaction deadlock, from SQL built-in function.\n\nSPARQL query:\nSELECT * WHERE {}";
 
     [TestMethod]
-    [DataRow(1)]
-    [DataRow(2)]
-    public async Task RetainedDeadlockRetriesTheSameCountOrPageAndProvesBothPasses(int faultAt)
+    [DataRow(1, 500)]
+    [DataRow(2, 500)]
+    [DataRow(1, 503)]
+    [DataRow(2, 503)]
+    public async Task RetainedTransientFailureRetriesTheSameCountOrPageAndProvesBothPasses(int faultAt, int status)
     {
-        var retained = await File.ReadAllBytesAsync(Path.Combine(AppContext.BaseDirectory,
-            "Fixtures", "EuDocumentFetch", "eu-virtuoso-deadlock-500.bin"));
-        Assert.AreEqual("70769075fe4617e11288eda6ac3120c1b10b7f5e64d90149ff9e8c28431b3627",
-            Convert.ToHexStringLower(SHA256.HashData(retained)));
-        var body = Encoding.UTF8.GetString(retained);
-        var handler = new DeadlockHandler(faultAt, 1, 500, body);
+        var body = await RetainedFailureBodyAsync(status);
+        var handler = new DeadlockHandler(faultAt, 1, status, body);
         var budget = WireRequestBudget.OfWireRequests(20);
         var (result, store) = await RunAsync(handler, budget);
         Assert.IsNull(result.Refusal, result.Refusal?.Code.ToString());
@@ -33,7 +31,7 @@ public sealed class EuVirtuosoDeadlockRetryTests
         Assert.AreEqual(7, budget.Spent, "Both robots hops and every application attempt are charged.");
         Assert.AreEqual(handler.Posts[faultAt - 1], handler.Posts[faultAt]);
         var evidence = RetainedRoutes(store);
-        var failed = evidence.Single(route => route.Hops[^1].Status == 500);
+        var failed = evidence.Single(route => route.Hops[^1].Status == status);
         var recovered = evidence.Single(route => route.RequestOrdinal == failed.RequestOrdinal
             && route.AttemptOrdinal == failed.AttemptOrdinal + 1);
         Assert.AreEqual(failed.RunIdentity, recovered.RunIdentity);
@@ -42,26 +40,30 @@ public sealed class EuVirtuosoDeadlockRetryTests
     }
 
     [TestMethod]
-    public async Task PersistentDeadlockExhaustsTheExistingFourAttemptAllowance()
+    [DataRow(500)]
+    [DataRow(503)]
+    public async Task PersistentTransientFailureExhaustsTheExistingFourAttemptAllowance(int status)
     {
-        var handler = new DeadlockHandler(1, 10, 500, Deadlock);
+        var handler = new DeadlockHandler(1, 10, status, await RetainedFailureBodyAsync(status));
         var budget = WireRequestBudget.OfWireRequests(20);
         var (result, store) = await RunAsync(handler, budget);
         Assert.IsNull(result.Receipt);
         Assert.AreEqual(EuEnumerationRefusal.StatusNotAdmitted, result.Refusal?.Code);
-        Assert.AreEqual(500, result.Refusal?.TerminalStatus);
+        Assert.AreEqual(status, result.Refusal?.TerminalStatus);
         Assert.AreEqual(4, handler.Posts.Count);
         Assert.AreEqual(4, result.ProductRequestCount);
         Assert.AreEqual(6, budget.Spent);
         CollectionAssert.AreEqual(new ulong[] { 0, 1, 2, 3 }, RetainedRoutes(store)
-            .Where(route => route.Hops[^1].Status == 500).Select(route => route.AttemptOrdinal)
+            .Where(route => route.Hops[^1].Status == status).Select(route => route.AttemptOrdinal)
             .Order().ToArray());
     }
 
     [TestMethod]
-    public async Task ExhaustedWireBudgetStopsBeforeTheRetryIsSent()
+    [DataRow(500)]
+    [DataRow(503)]
+    public async Task ExhaustedWireBudgetStopsBeforeTheRetryIsSent(int status)
     {
-        var handler = new DeadlockHandler(1, 10, 500, Deadlock);
+        var handler = new DeadlockHandler(1, 10, status, await RetainedFailureBodyAsync(status));
         var budget = WireRequestBudget.OfWireRequests(3);
         var (result, _) = await RunAsync(handler, budget);
         Assert.IsNull(result.Receipt);
@@ -73,6 +75,8 @@ public sealed class EuVirtuosoDeadlockRetryTests
     [TestMethod]
     [DataRow(403, Deadlock)]
     [DataRow(503, Deadlock)]
+    [DataRow(503, "<html>Verify you are human</html>")]
+    [DataRow(503, "<html><title>Web Site Under Maintenance</title></html>")]
     [DataRow(500, "<html>Verify you are human</html>")]
     [DataRow(500, "Virtuoso 42000 Error SR171: Transaction deadlock")]
     [DataRow(500, "Virtuoso 40001 Error SR...: capacity limit")]
@@ -83,6 +87,32 @@ public sealed class EuVirtuosoDeadlockRetryTests
         Assert.IsNull(result.Receipt);
         Assert.IsNotNull(result.Refusal);
         Assert.AreEqual(1, handler.Posts.Count);
+    }
+
+    [TestMethod]
+    [DataRow(503, true)]
+    [DataRow(403, false)]
+    [DataRow(500, false)]
+    public async Task MaintenanceRequiresBothExactBytesAnd503Status(int status, bool changeBody)
+    {
+        var body = await RetainedFailureBodyAsync(503);
+        if (changeBody) body += "\n";
+        var handler = new DeadlockHandler(1, 10, status, body);
+        var (result, _) = await RunAsync(handler, WireRequestBudget.OfWireRequests(20));
+        Assert.IsNull(result.Receipt);
+        Assert.IsNotNull(result.Refusal);
+        Assert.AreEqual(1, handler.Posts.Count);
+    }
+
+    private static async Task<string> RetainedFailureBodyAsync(int status)
+    {
+        var bytes = await File.ReadAllBytesAsync(Path.Combine(AppContext.BaseDirectory,
+            "Fixtures", "EuDocumentFetch", status == 503 ? "eu-maintenance-503.bin" : "eu-virtuoso-deadlock-500.bin"));
+        Assert.AreEqual(status == 503
+            ? "e7fab335ce5367cfe359f9f7e0ad6ce1838bec9189a216bc3faf437ce169d404"
+            : "70769075fe4617e11288eda6ac3120c1b10b7f5e64d90149ff9e8c28431b3627",
+            Convert.ToHexStringLower(SHA256.HashData(bytes)));
+        return Encoding.UTF8.GetString(bytes);
     }
 
     private static async Task<(EuEnumerationRunResult Result,

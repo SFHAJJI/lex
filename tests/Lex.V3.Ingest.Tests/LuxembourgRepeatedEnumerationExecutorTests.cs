@@ -2063,8 +2063,12 @@ public sealed class LuxembourgRepeatedEnumerationExecutorTests
     [DataRow(500, "{\"meta\":1,\"title\":\"Read timed out\",\"code\":\"error.unknown\"}")]
     // The shared EU deadlock retry must not retry the same signature from Luxembourg.
     [DataRow(500, "Virtuoso 40001 Error SR...: Transaction deadlock, from SQL built-in function.")]
+    [DataRow(503, "retained-eu-maintenance-fixture")]
     public async Task AdaptiveCoverDoesNotSplitOtherHttpFailures(int status, string error)
     {
+        if (error == "retained-eu-maintenance-fixture")
+            error = await File.ReadAllTextAsync(Path.Combine(AppContext.BaseDirectory,
+                "Fixtures", "EuDocumentFetch", "eu-maintenance-503.bin"));
         var (request, witness) = BuildRequest();
         var store = new RoutedHttpAcquisitionSessionAuditTests.RecordingCustodyStore { RefuseFallback = true };
         var handler = LuxembourgAcquisitionTestFixture.AllowRobotsThenHandler((ordinal, req) =>
