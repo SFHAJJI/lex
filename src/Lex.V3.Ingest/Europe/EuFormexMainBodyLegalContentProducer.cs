@@ -165,9 +165,9 @@ public sealed class EuFormexMainBodyLegalContentPopulation
 public sealed class EuFormexMainBodyLegalContentProducer
 {
     public const string Profile =
-        "lex-v3-eu-formex-main-body-profile/3;root=ACT;units=ARTICLE;" +
+        "lex-v3-eu-formex-main-body-profile/4;root=ACT,CONS.ACT;units=ARTICLE;" +
         "tokens=text,reference,footnote-with-body;oj-reference-target=publisher-attributes;" +
-        "exclude=recitals,final,annex;language=matches-expression-with-en-eng-fr-fra-authority-aliases";
+        "exclude=recitals,final,annex;consolidated=one-cons-doc,one-bib-instance,one-enacting-terms;language=matches-expression-with-en-eng-fr-fra-authority-aliases";
     public static string ProfileSha256 { get; } = Convert.ToHexStringLower(
         SHA256.HashData(Encoding.UTF8.GetBytes(Profile)));
 
@@ -289,23 +289,57 @@ public sealed class EuFormexMainBodyLegalContentProducer
                         $"Formex XML entry {entry.FullName} is invalid");
                 }
 
-                if (!string.Equals(document.Root?.Name.LocalName, "ACT", StringComparison.Ordinal)) continue;
+                var rootName = document.Root?.Name.LocalName;
+                if (rootName is not ("ACT" or "CONS.ACT")) continue;
                 actCount++;
                 var sourceEntrySha256 = HashEntry(entry, cancellationToken);
-                var language = RequiredSingleValue(document.Root!, "LG.DOC");
-                var publisherDate = document.Root!.Descendants()
-                    .FirstOrDefault(static value => value.Name.LocalName == "BIB.INSTANCE")?
-                    .Elements().FirstOrDefault(static value => value.Name.LocalName == "DATE")?
-                    .Attribute("ISO")?.Value;
+                var articleRoot = document.Root!;
+                string? language;
+                string? publisherDate;
+                if (rootName == "CONS.ACT")
+                {
+                    // Consolidated Formex wraps the operative text in CONS.DOC. Its
+                    // bibliography has other dates/languages in amendment history;
+                    // only the document's own BIB.INSTANCE supplies these coordinates.
+                    var documents = document.Root!.Elements()
+                        .Where(static value => value.Name.LocalName == "CONS.DOC").ToArray();
+                    if (documents.Length != 1)
+                        return Refused(EuFormexMainBodyLegalContentDisposition.UnsupportedContentShape,
+                            "a CONS.ACT must contain exactly one CONS.DOC");
+                    var bibliographies = documents[0].Elements()
+                        .Where(static value => value.Name.LocalName == "BIB.INSTANCE").ToArray();
+                    var operative = documents[0].Elements()
+                        .Where(static value => value.Name.LocalName == "ENACTING.TERMS").ToArray();
+                    if (bibliographies.Length != 1 || operative.Length != 1)
+                        return Refused(EuFormexMainBodyLegalContentDisposition.UnsupportedContentShape,
+                            "a CONS.DOC must contain one BIB.INSTANCE and one ENACTING.TERMS");
+                    var languages = bibliographies[0].Elements()
+                        .Where(static value => value.Name.LocalName == "LG.DOC").ToArray();
+                    var dates = bibliographies[0].Elements()
+                        .Where(static value => value.Name.LocalName == "DATE").ToArray();
+                    language = languages.Length == 1 ? languages[0].Value.Trim() : null;
+                    // Keep the existing article bibliographic date meaning. CONSLEG.DATE
+                    // is a separate publisher state coordinate, never an applicability date.
+                    publisherDate = dates.Length == 1 ? dates[0].Attribute("ISO")?.Value : null;
+                    articleRoot = operative[0];
+                }
+                else
+                {
+                    language = RequiredSingleValue(document.Root!, "LG.DOC");
+                    publisherDate = document.Root!.Descendants()
+                        .FirstOrDefault(static value => value.Name.LocalName == "BIB.INSTANCE")?
+                        .Elements().FirstOrDefault(static value => value.Name.LocalName == "DATE")?
+                        .Attribute("ISO")?.Value;
+                }
                 if (string.IsNullOrWhiteSpace(language) || string.IsNullOrWhiteSpace(publisherDate))
                     return Refused(EuFormexMainBodyLegalContentDisposition.UnsupportedContentShape,
-                        $"Formex ACT entry {entry.FullName} lacks one language or publisher date");
+                        $"Formex main-body entry {entry.FullName} lacks one language or publisher date");
 
                 if (NormalizeLanguage(language) != NormalizeLanguage(source.Expression.OfficialLanguage))
                     return Refused(EuFormexMainBodyLegalContentDisposition.UnsupportedContentShape,
-                        $"Formex ACT entry {entry.FullName} language does not match its proven expression language");
+                        $"Formex main-body entry {entry.FullName} language does not match its proven expression language");
 
-                foreach (var element in document.Root.Descendants()
+                foreach (var element in articleRoot.Descendants()
                     .Where(static value => value.Name.LocalName == "ARTICLE"))
                 {
                     var identifier = element.Attribute("IDENTIFIER")?.Value;
@@ -313,7 +347,7 @@ public sealed class EuFormexMainBodyLegalContentProducer
                         value.Name.LocalName == "TI.ART")?.Value;
                     if (string.IsNullOrWhiteSpace(identifier) || string.IsNullOrWhiteSpace(heading))
                         return Refused(EuFormexMainBodyLegalContentDisposition.UnsupportedContentShape,
-                            $"Formex ACT entry {entry.FullName} contains an article without one identifier and heading");
+                            $"Formex main-body entry {entry.FullName} contains an article without one identifier and heading");
                     var tokens = TokensOf(element);
                     if (tokens.Count == 0)
                         return Refused(EuFormexMainBodyLegalContentDisposition.UnsupportedContentShape,
@@ -337,13 +371,13 @@ public sealed class EuFormexMainBodyLegalContentProducer
 
             if (actCount == 0)
                 return Refused(EuFormexMainBodyLegalContentDisposition.MainBodyMissing,
-                    "the retained Formex package contains no ACT unit");
+                    "the retained Formex package contains no ACT or CONS.ACT unit");
             if (actCount != 1)
                 return Refused(EuFormexMainBodyLegalContentDisposition.UnsupportedContentShape,
-                    "the retained Formex package contains more than one ACT main-body unit");
+                    "the retained Formex package contains more than one ACT/CONS.ACT main-body unit");
             if (articles.Count == 0)
                 return Refused(EuFormexMainBodyLegalContentDisposition.UnsupportedContentShape,
-                    "the retained Formex ACT contains no ARTICLE unit");
+                    "the retained Formex main body contains no ARTICLE unit");
             return (EuFormexMainBodyLegalContentDisposition.Admitted,
                 Array.AsReadOnly(articles.ToArray()), null);
         }

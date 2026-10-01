@@ -1,6 +1,7 @@
 using System.IO.Compression;
 using System.Security.Cryptography;
 using System.Text;
+using System.Xml.Linq;
 using Lex.V3.Contracts.Derivation;
 using Lex.V3.Contracts.Source.Europe;
 using Lex.V3.Ingest.Europe;
@@ -10,6 +11,92 @@ namespace Lex.V3.Ingest.Tests;
 [TestClass]
 public sealed class EuFormexMainBodyLegalContentProducerTests
 {
+    [TestMethod]
+    [DataRow("eng", "EN")]
+    [DataRow("fra", "FR")]
+    public async Task RetainedConsolidatedPackagesProduceTheirOwnOrderedArticles(string fixtureLanguage, string language)
+    {
+        var bytes = await ReadConsolidatedPackage(fixtureLanguage);
+        Assert.AreEqual(fixtureLanguage == "eng"
+            ? "cd8d38e54cc111b17ea2dcae8f1e0e265e3255cc8b76776e8160706b39d13491"
+            : "37e5d9e73433d7586d787331974e11ba7e837212b32cba3d1b0bb0d26b5cf859", Sha(bytes));
+        var outcome = await Produce(bytes, language);
+        Assert.HasCount(99, outcome.Articles);
+        AssertDigests(bytes, outcome.Articles);
+        CollectionAssert.AreEqual(Enumerable.Range(1, 99).Select(n => n.ToString("D3")).ToArray(),
+            outcome.Articles.Select(a => a.PublisherIdentifier).ToArray());
+        Assert.IsTrue(outcome.Articles.All(a => a.Language == language && a.PublisherDate == "20160504"),
+            "The document bibliographic date remains distinct from CONSLEG.DATE=20180523.");
+        Assert.IsTrue(outcome.Articles.All(a => a.PackageEntry.StartsWith("CL2016R0679", StringComparison.Ordinal)));
+        Assert.AreEqual("Article 1", outcome.Articles[0].Heading);
+    }
+
+    [TestMethod]
+    [DataRow("duplicate-document")]
+    [DataRow("duplicate-bibliography")]
+    [DataRow("duplicate-operative-text")]
+    [DataRow("duplicate-language")]
+    [DataRow("duplicate-date")]
+    [DataRow("missing-date")]
+    [DataRow("wrong-language")]
+    [DataRow("missing-operative-text")]
+    public async Task ConsolidatedDocumentAmbiguityOrMissingCoordinatesRefuses(string change)
+    {
+        var bytes = RewriteConsolidated(await ReadConsolidatedPackage("eng"), root =>
+        {
+            var doc = root.Element("CONS.DOC")!;
+            var bib = doc.Element("BIB.INSTANCE")!;
+            switch (change)
+            {
+                case "duplicate-document": root.Add(new XElement(doc)); break;
+                case "duplicate-bibliography": doc.Add(new XElement(bib)); break;
+                case "duplicate-operative-text": doc.Add(new XElement(doc.Element("ENACTING.TERMS")!)); break;
+                case "duplicate-language": bib.Add(new XElement(bib.Element("LG.DOC")!)); break;
+                case "duplicate-date": bib.Add(new XElement(bib.Element("DATE")!)); break;
+                case "missing-date": bib.Element("DATE")!.Remove(); break;
+                case "wrong-language": bib.Element("LG.DOC")!.Value = "FR"; break;
+                case "missing-operative-text": doc.Element("ENACTING.TERMS")!.Remove(); break;
+                default: throw new ArgumentOutOfRangeException(nameof(change));
+            }
+        });
+        var result = await Produce(bytes, requireAdmitted: false);
+        Assert.AreEqual(EuFormexMainBodyLegalContentDisposition.UnsupportedContentShape, result.Disposition);
+        Assert.HasCount(0, result.Articles);
+    }
+
+    [TestMethod]
+    public async Task ConsolidatedBibliographicHistoryAndNonOperativeArticlesCannotEnterLegalText()
+    {
+        var bytes = RewriteConsolidated(await ReadConsolidatedPackage("eng"), root =>
+        {
+            var doc = root.Element("CONS.DOC")!;
+            doc.Element("FAM.COMP")!.Add(new XElement("LG.DOC", "FR"));
+            foreach (var parent in new[] { root, doc.Element("PREAMBLE")!, doc.Element("FINAL")! })
+                parent.Add(new XElement("ARTICLE", new XAttribute("IDENTIFIER", "999"),
+                    new XElement("TI.ART", "History only"), new XElement("P", "EXCLUDED_SENTINEL")));
+        });
+        var result = await Produce(bytes);
+        Assert.HasCount(99, result.Articles);
+        Assert.IsFalse(result.Articles.Any(a => a.SearchableText.Contains("EXCLUDED_SENTINEL", StringComparison.Ordinal)));
+    }
+
+    private static Task<byte[]> ReadConsolidatedPackage(string language) => File.ReadAllBytesAsync(Path.Combine(
+        AppContext.BaseDirectory, "Fixtures", "EuDocumentFetch", $"gdpr-consolidated-{language}-fmx4-body.bin"));
+
+    private static byte[] RewriteConsolidated(byte[] package, Action<XElement> rewrite)
+    {
+        using var input = new MemoryStream(package);
+        using var archive = new ZipArchive(input, ZipArchiveMode.Read);
+        var main = archive.Entries.Single(e => e.FullName.EndsWith(".xml", StringComparison.Ordinal)
+            && !e.FullName.EndsWith(".doc.xml", StringComparison.Ordinal));
+        return RewriteEntry(package, main.FullName, bytes =>
+        {
+            var document = XDocument.Parse(Encoding.UTF8.GetString(bytes), LoadOptions.PreserveWhitespace);
+            rewrite(document.Root!);
+            return Encoding.UTF8.GetBytes(document.ToString(SaveOptions.DisableFormatting));
+        });
+    }
+
     [TestMethod]
     public async Task RetainedPublisherPackageProducesOrderedMainBodyArticles()
     {
@@ -215,7 +302,7 @@ public sealed class EuFormexMainBodyLegalContentProducerTests
         return output.ToArray();
     }
 
-    private static async Task<EuFormexMainBodyLegalContentOutcome> Produce(byte[] bytes)
+    private static async Task<EuFormexMainBodyLegalContentOutcome> Produce(byte[] bytes, string language = "EN", bool requireAdmitted = true)
     {
         var fixture = await EuFormexAnnexInventoryProducerTests.FixtureAsync(bytes);
         var inventory = await new EuFormexAnnexInventoryProducer(fixture.Store).RunAsync(
@@ -223,7 +310,7 @@ public sealed class EuFormexMainBodyLegalContentProducerTests
         Assert.IsNotNull(inventory.Inventory, inventory.Detail);
         var expression = LanguageScopedExpression.FromRetainedSource(
             new LanguageScopedExpressionIdentity(fixture.Binding.Expression.ParentKeyRef!.PublisherUri,
-                fixture.Binding.Expression.PublisherUri), "EN", null, fixture.Binding.Expression,
+                fixture.Binding.Expression.PublisherUri), language, null, fixture.Binding.Expression,
             LanguageScopedExpressionLineage.FromContributions(
                 [new(LanguageScopedExpressionContribution.IdentityAndLanguage, fixture.Receipt)]));
         var run = await EuAxiomWiringHarness.RunAsync(
@@ -232,7 +319,8 @@ public sealed class EuFormexMainBodyLegalContentProducerTests
             [EuFormexPackageOutcome.Acquired(expression, inventory.Inventory)]);
         var result = await new EuFormexMainBodyLegalContentProducer(fixture.Store).RunAsync(formex, CancellationToken.None);
         var outcome = result.Outcomes.Single();
-        Assert.AreEqual(EuFormexMainBodyLegalContentDisposition.Admitted, outcome.Disposition, outcome.Detail);
+        if (requireAdmitted)
+            Assert.AreEqual(EuFormexMainBodyLegalContentDisposition.Admitted, outcome.Disposition, outcome.Detail);
         return outcome;
     }
 
