@@ -349,8 +349,11 @@ public sealed class V3CorpusAsOfMountTests
         Assert.AreEqual(V3Verdicts.Answer, luxembourgOnCombined.Verdict);
         Assert.AreEqual(PublisherId.LuLegilux, luxembourgOnCombined.Context.Publisher);
         Assert.AreEqual(TimelineSemantics.PublisherApplicability, luxembourgOnCombined.Context.TimelineSemantics);
+        // This combined fixture's EU index has no states table (no census facts), so the EU time view does not answer and
+        // the act keeps the mode refusal with EU context.
         var euOnCombined = await AsOfAsync(combined, "32016R0679", "2024-01-01");
-        Assert.AreEqual(V3Verdicts.Answer, euOnCombined.Verdict, euOnCombined.Refusal?.Code);
+        Assert.AreEqual(V3Verdicts.Refuse, euOnCombined.Verdict);
+        Assert.AreEqual("retrieval_mode_unavailable", euOnCombined.Refusal!.Code);
         Assert.AreEqual(PublisherId.EuEurLex, euOnCombined.Context.Publisher);
         Assert.AreEqual(TimelineSemantics.OfficialConsolidationState, euOnCombined.Context.TimelineSemantics);
     }

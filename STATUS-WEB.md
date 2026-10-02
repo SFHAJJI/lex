@@ -2226,6 +2226,37 @@ web lane's order 2, from the owner's proxy's journey corrections of 2026-10-01 1
   Local builds, test runs and browser runs wait for free memory above 4 GB (standing order of 10:35
   UTC); CI runs the whole solution.
 
+## The EU time view (PR #909, sole driver, 2026-10-02)
+
+The owner's main use case ("users primarily want a temporal view of EU texts") over the EU index's states
+table (schema 5, PR #905): every work the publisher's census discovered for a seed act, the original and
+each consolidated version, with the publisher's consolidation date or a typed reason it has none.
+- `timeline`, `as_of` and `evidence_bundle` at any date answer EU acts from it (`V3CorpusMount.EuropeTime.cs`);
+  `verify` verifies a consolidated wording's permalink; `dossier` gains `wording_timeline`, and a
+  consolidated version's work IRI, CELEX or expression names its act's dossier. `consolidations_held` and the
+  `later_wordings` rows of dossier and search say what the mount holds. An EU index with no states table
+  keeps the original-wording path (PR #903) and the mode refusals.
+- The reading screen reads the time view's bundle: each wording headed as the original or the consolidated
+  wording of its date, with the dates it answers ("to the day before {next}") or that it is the latest held.
+- Driver decision (reversible), the selection rule: per language, the latest dated wording at or before the
+  date answers until the next; works sharing a date answer only if every text the corpus holds for that date
+  is the same (the work whose CELEX names that version represents them); two different held texts are
+  refused `ambiguous_version`; a same-date or undated version whose text is not held is disclosed beside the
+  answer; an undated version makes the dates ambiguous only when a held text of it differs; a date after the
+  latest consolidation is answered by it as dated, and `not_held` says an amendment the publisher has not yet
+  consolidated is not seen. An EU date is a wording date, never an applicability date.
+- Real data that shaped it: the real consolidated GDPR mount (`C:\lex-v3\lu-consolidated-offline-20261001-3`)
+  holds the original (2016-04-27) and four works dated 2016-05-04, one with CELEX `02016R0679-20160504`, two
+  holding byte-identical English and French text; the GDPR from 2016-05-04 answers with the CELEX-designated
+  consolidation and discloses the other three.
+- Evidence: `V3CorpusEuropeTimeViewTests` on a mount derived from the consolidated fixture (the timeline by
+  CELEX and by consolidated work, as_of between, after and before the wordings, the bundle and its verified
+  permalinks, the original pin, a tampered digest, the dossier by consolidated CELEX); the EU mount and mode
+  tests restated; the answer and envelope samples re-rendered (only the EU dossier changes).
+- Not yet: EU `article_history`, `diff` and `changes_in_period` (the history, compare and radar screens'
+  EU paths), fixtures for same-date different texts and undated versions, and a real-mount test over the
+  full EU population when it lands.
+
 ## Next, in order (web lane; the data lane's items 1 to 3 are in STATUS-DATA.md)
 
 The web lane's order since the owner's proxy's journey corrections (2026-10-01 14:30 UTC,
