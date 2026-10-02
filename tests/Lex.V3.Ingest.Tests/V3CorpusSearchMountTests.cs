@@ -184,6 +184,12 @@ public sealed class V3CorpusSearchMountTests
         var body = envelope.Result!.Value;
         Assert.AreEqual(0, body.GetProperty("hits").GetArrayLength(), "withheld text is not matched");
         Assert.AreEqual(V3CorpusMount.SearchRightsRule, body.GetProperty("rights_rule").GetString());
+        // Nor counted: the population says nothing about the text it did not match.
+        var population = body.GetProperty("population");
+        Assert.AreEqual(0, population.GetProperty("strict_hits").GetInt32());
+        Assert.AreEqual(0, population.GetProperty("relaxed_hits").GetInt32());
+        Assert.AreEqual(2, found.GetProperty("population").GetProperty("strict_hits").GetInt32()
+            + found.GetProperty("population").GetProperty("relaxed_hits").GetInt32(), "the admitted mount counts the same text");
         foreach (var mode in new[] { "strict", "relaxed" })
         {
             Assert.AreEqual(0, (await SearchAsync(withheldMount, Phrase, mode: mode)).Result!.Value.GetProperty("hits").GetArrayLength(), mode);
