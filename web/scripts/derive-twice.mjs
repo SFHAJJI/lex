@@ -3,9 +3,13 @@
 // "derivation and indexes are byte-stable across two independent executions; evidence: two-build digest comparison in the
 // release pipeline").
 //
-// Each execution is the offline derive command (`Lex.V3.Tool derive --custody --checkpoint --out`), which opens no publisher
-// session. Every proxy variable points at a local trap that counts connections, so an attempt at the network fails the
-// comparison even if the command would have survived it. The first mount is what the image then carries.
+// Each execution is the offline derive command (`Lex.V3.Tool derive --custody --checkpoint --out`). That it sends no
+// publisher request rests on its code path: derive reopens retained custody and constructs no publisher session (the only
+// publisher client, RoutedHttpAcquisitionSession, is built by acquisition alone), which V3OfflineMountTests holds in
+// separate processes. The proxy-variable trap here is a narrower, second check: every proxy variable points at a local
+// listener that counts connections, which catches a client that honours the proxy environment. It does not see a client
+// built with UseProxy = false (the publisher client is one), raw sockets or DNS, and the evidence says so
+// (DERIVE_TRAP_LIMITS). The first mount is what the image then carries.
 
 import { createHash } from "node:crypto";
 import { spawn } from "node:child_process";
@@ -14,6 +18,12 @@ import { readdir, readFile, rm } from "node:fs/promises";
 import { join, relative, sep } from "node:path";
 
 const sha256 = (bytes) => createHash("sha256").update(bytes).digest("hex");
+
+/** What the proxy-variable trap observes, and what it does not: said beside its count, never implied by it. */
+export const DERIVE_TRAP_LIMITS =
+  "counts connections from clients that honour the proxy environment variables; it does not see a client built with " +
+  "UseProxy = false (the publisher client is one), raw sockets or DNS. That derive sends no publisher request rests on its " +
+  "code path, which constructs no publisher session, held by V3OfflineMountTests in separate processes.";
 
 /** Every file under `directory`, as sorted `{ name, sha256 }` with `/`-separated relative names. */
 export async function mountDigests(directory) {
@@ -78,11 +88,14 @@ export async function deriveTwice({ runner, custody, checkpoint, custodyEncoding
   } finally {
     await new Promise((done) => trap.close(done));
   }
-  if (connections !== 0) throw new Error(`the derive command attempted the network ${connections} time(s); a derivation from custody opens no session`);
+  if (connections !== 0) throw new Error(`the derive command connected to the proxy-variable trap ${connections} time(s); a derivation from custody opens no session`);
   const first = await mountDigests(join(into, "derive-a"));
   const second = await mountDigests(join(into, "derive-b"));
   if (first.length === 0) throw new Error("the derive command wrote no mount file");
   const differences = digestDifferences(first, second);
   if (differences.length !== 0) throw new Error(`the two derivations differ: ${differences.join(", ")}`);
-  return { mount: join(into, "derive-a"), files: first, executions, independentProcesses: 2, proxyTrapConnections: connections };
+  return {
+    mount: join(into, "derive-a"), files: first, executions, independentProcesses: 2,
+    proxyVariableTrapConnections: connections, trapLimits: DERIVE_TRAP_LIMITS,
+  };
 }
