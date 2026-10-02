@@ -79,7 +79,7 @@ test('the same content reads identically under all three shells', () => {
     'Applicable from 2001-01-01 to 2002-01-01',
     'no_version_for_date',
     'history_begins',
-    'No earlier state is held',
+    'No earlier version is held',
   ]) {
     assert.ok(texts[0].includes(fragment), `${fragment} is missing, so this proves nothing`);
   }

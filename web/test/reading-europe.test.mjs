@@ -15,7 +15,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { ExportAnswerView, ReadingAnswerView } from "../.react-build/app.mjs";
 import { liveChrome } from "../scripts/live-chrome.mjs";
 import { exportState } from "../scripts/live-export.mjs";
-import { readingOutcome } from "../scripts/live-reading.mjs";
+import { LIVE_READING_EUROPE_REFUSAL_SENTENCES, LIVE_READING_REFUSAL_SENTENCES, readingOutcome } from "../scripts/live-reading.mjs";
 import { EUROPE_TEXT_ACKNOWLEDGEMENT, readEuropeEvidenceBundle, readEvidenceBundleAnswer } from "../scripts/reading-answer.mjs";
 import { escapeProvision } from "../scripts/search-answer.mjs";
 
@@ -160,6 +160,30 @@ test("the reading screen shows the EU wording: the acknowledgement and authentic
   walk(europeBundle());
   for (const value of data.filter((item) => item.length > 0).sort((a, b) => b.length - a.length)) said = said.split(value).join(" ");
   assert.doesNotMatch(said, /\b(?:appl(?:y|ies|ied|ying|icability)|versions?|states?)\b|s[’']appliqu|applicab/i, "an EU wording date is never said as an applicability date");
+});
+
+test("an EU refusal on the reading screen is said in EU words: no sentence or hint on its card speaks of applicability (review of #903)", () => {
+  const refused = (code, payload) => readingOutcome({ state: "refusal", envelope: { refusal: { code, helpful_payload: payload }, context: { publisher: "eu-eurlex" } } });
+  const later = refused("no_version_for_date", {
+    requested_date: "2021-04-27", history_begins: "2016-04-27", nearest_earlier: "2016-04-27", nearest_later: null,
+    what_would_answer: ["new_official_observation"], asserts_absence_of_law: false,
+  });
+  assert.equal(later.sentence, LIVE_READING_EUROPE_REFUSAL_SENTENCES.no_version_for_date);
+  const before = refused("no_version_for_date", {
+    requested_date: "2016-04-26", history_begins: "2016-04-27", nearest_earlier: null, nearest_later: "2016-04-27",
+    what_would_answer: ["new_official_observation"], asserts_absence_of_law: false,
+  });
+  for (const outcome of [later, before]) {
+    const shown = renderToStaticMarkup(h(ReadingAnswerView, { outcome, chrome: liveChrome() }));
+    assert.doesNotMatch(shown, /appl(y|ies|icable|icability)/i, "no EU refusal speaks of applicability");
+    assert.doesNotMatch(shown, /states?/, "nor of Luxembourg's states");
+  }
+  for (const code of Object.keys(LIVE_READING_EUROPE_REFUSAL_SENTENCES)) {
+    assert.doesNotMatch(LIVE_READING_EUROPE_REFUSAL_SENTENCES[code], /appl(y|ies|icable|icability)/i, code);
+  }
+  // A Luxembourg refusal keeps its own sentence.
+  const luxembourg = readingOutcome({ state: "refusal", envelope: { refusal: { code: "no_version_for_date", helpful_payload: later.payload }, context: { publisher: "lu-legilux" } } });
+  assert.equal(luxembourg.sentence, LIVE_READING_REFUSAL_SENTENCES.no_version_for_date);
 });
 
 test("the export composer reads an EU wording and says it is not composed, offering no file", () => {

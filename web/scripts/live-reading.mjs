@@ -49,6 +49,26 @@ export const LIVE_READING_REFUSAL_SENTENCES = Object.freeze({
   retrieval_mode_unavailable: "This index cannot read this work's text.",
 });
 
+/**
+ * The same refusals for an EU work (the envelope's publisher is eu-eurlex): an EU date is the date of a wording of the
+ * act, never an applicability date, so no EU refusal says that a version "applies" (review of #903: the Luxembourg
+ * sentences merged the two publishers' dates in speech).
+ */
+export const LIVE_READING_EUROPE_REFUSAL_SENTENCES = Object.freeze({
+  identifier_unknown: "This index holds no work under that identifier.",
+  language_not_available: "This work is not held in the language asked for.",
+  no_version_for_date: "This index holds no wording of this EU act for that date.",
+  ambiguous_version: "This index holds different texts of this EU act for that date, so none is chosen.",
+  text_withheld: "This wording's text is withheld: its rights did not admit it.",
+  text_not_available: "This index knows this wording of the EU act but holds no text for it.",
+  retrieval_mode_unavailable: "This index cannot read this work's text.",
+});
+
+/** The refusal sentences for a refusal's publisher, as its envelope context names it. */
+export function readingRefusalSentences(context) {
+  return context?.publisher === "eu-eurlex" ? LIVE_READING_EUROPE_REFUSAL_SENTENCES : LIVE_READING_REFUSAL_SENTENCES;
+}
+
 export const LIVE_READING_IDLE = liveChrome().reading.idle;
 export const LIVE_READING_LOADING = liveChrome().common.loading;
 
@@ -107,7 +127,7 @@ export function readingOutcome(asked) {
     const { code, helpful_payload: payload } = asked.envelope.refusal;
     const sentence = code === "no_corpus_mounted"
       ? noCorpusMountedSentence(payload)
-      : LIVE_READING_REFUSAL_SENTENCES[code] ?? unexpectedRefusalSentence(code);
+      : readingRefusalSentences(asked.envelope.context)[code] ?? unexpectedRefusalSentence(code);
     try {
       validateRefusal({ code, sentence, payload });
     } catch (error) {

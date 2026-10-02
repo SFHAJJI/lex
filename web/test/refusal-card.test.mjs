@@ -186,7 +186,7 @@ test('an absent nearest state must be stated, not omitted', () => {
   // The card supplies the words, so two refusals of the same shape read identically. A caller
   // writing its own sentinel would make "none held", "n/a" and "" three answers to one
   // question, and only one of them would survive a byte comparison.
-  assert.ok(stated.includes('No earlier state is held'));
+  assert.ok(stated.includes('No earlier version is held'));
 
   // Blank is neither a state nor a declaration that there is none, and it used to render as
   // nothing at all, which is where an absent key left the reader in the first place.
@@ -1021,7 +1021,7 @@ test('a nearest state that does not exist is declared, not omitted and not inven
 
   const html = renderRefusalCard({ ...base, payload: declared });
   assert.ok(
-    html.includes('No earlier state is held: the requested date precedes this history.'),
+    html.includes('No earlier version is held: the requested date precedes this history.'),
     'a declared absence must be said in words, not dropped',
   );
   assert.ok(html.includes('nearest_earlier'), 'the key itself must still be visible');
@@ -1032,7 +1032,7 @@ test('a nearest state that does not exist is declared, not omitted and not inven
     ...base,
     payload: { ...declared, nearest_earlier: '2017-12-19', nearest_later: null },
   });
-  assert.ok(after.includes('No later state is held: the requested date follows every state held.'));
+  assert.ok(after.includes('No later version is held: the requested date follows every version held.'));
 
   // Absent is not the same as null, and stays refused: a reader cannot tell an absent key
   // from a state nobody looked for.

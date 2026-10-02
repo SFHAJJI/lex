@@ -780,8 +780,8 @@ const DATED_KEYS = new Map([
 ]);
 
 const NULL_SENTENCE = new Map([
-  ['nearest_earlier', 'No earlier state is held: the requested date precedes this history.'],
-  ['nearest_later', 'No later state is held: the requested date follows every state held.'],
+  ['nearest_earlier', 'No earlier version is held: the requested date precedes this history.'],
+  ['nearest_later', 'No later version is held: the requested date follows every version held.'],
 ]);
 
 /** How an offered state is described, in the words both renderers use. */

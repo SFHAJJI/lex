@@ -359,7 +359,9 @@ export function journeyVerdict(observed, expected) {
     // body digests, its official source, and a permalink that pins its very article (review of #805:
     // the export composer quoted 49 articles and cited only their state).
     for (const quote of observed.quotes) {
-      if (!quote.codes.some((code) => code.match(PINNED_PERMALINK)?.[2] === quote.article)) {
+      // Either publisher's grammar: a Luxembourg state permalink or an EU wording permalink (review of #903: the
+      // Luxembourg-only rule failed every EU quote).
+      if (!quote.codes.some((code) => pinnedCitation(code)?.anchor === quote.article)) {
         failures.push(`the quote of ${quote.article} carries no citation that pins it`);
       }
       const digests = quote.codes.filter((code) => /^[0-9a-f]{64}$/.test(code)).length;

@@ -2202,10 +2202,22 @@ web lane's order 2, from the owner's proxy's journey corrections of 2026-10-01 1
     - each `text_sha256` is recomputed;
     - every article permalink verifies as `digest_matches`;
     - the day before and five years after are each refused, and German refuses;
-    - with no language, the English and French wordings are each quoted under their own permalink.
+    - with no language, the French-only fixture's one held wording is quoted under its own permalink,
+      and English refuses `language_not_available` naming French. No fixture holds two languages of one
+      work: a bundle with two wordings (their order, `served_languages`, the web reader's language rule)
+      is exercised only by the journey's EU reading step on the real bilingual canary mount, not yet run.
   - The EU citation walk (`V3CitationVerificationTests`) now verifies the bundle's permalinks too.
   - Web: `reading-europe.test.mjs` covers the reader, fourteen broken rules, the escaped provision, the
     reading screen and the export composer. The chrome scan passes with both EU views.
+  - Review of #903 (an independent Claude review; the owner's order of 2026-10-02 excludes Codex):
+    - the journey's quote check read Luxembourg permalinks only, so every EU quote failed it; it now reads
+      either publisher's (`pinnedCitation`), and `journey-verdict.test.mjs` holds EU quotes to it;
+    - an EU refusal on the reading and export screens was said in Luxembourg's words ("applies on that
+      date"); EU refusals now have their own sentences (`LIVE_READING_EUROPE_REFUSAL_SENTENCES`, French
+      drafted in `refusal-sentences.mjs`), and the card's date hints say "version", true of both
+      publishers; a test holds every EU refusal sentence and card to no applicability word;
+    - the served scope now says what `body_sha256` is (the corpus member's retained manifestation) and
+      that the text is read from the Formex package (`package_sha256`, `source_entry_sha256`).
 - **Not yet:**
   - the journey's EU reading step on the real canary mount (GDPR in English and French) in a browser;
   - an EU bundle captured in the answer census, which replaces the web tests' hand-built answer;

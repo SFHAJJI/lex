@@ -5525,10 +5525,12 @@ internal sealed class V3CorpusMount : IDisposable
     internal const string EuropeEvidenceBundleScope =
         "the evidence a reader needs to quote the original wording of an EU work the mounted EU index holds: for each held expression in the " +
         "served languages whose wording date is the requested date, the hash-pinned permalink and stable coordinate of that wording, the corpus " +
-        "members its articles were read from with their retained body digests, and every article with its publisher id and heading, its text (the " +
-        "text the index searches), the digest of that text, the digest of the publisher body it was read from, its official source and an article " +
-        "permalink (the wording permalink and the publisher's provision id after #, which verify accepts); an article whose text is empty is named " +
-        "under articles_without_text and is not served as a quote";
+        "members its articles belong to with their retained body digests, and every article with its publisher id and heading, its text (the " +
+        "text the index searches), the digest of that text (text_sha256), the digest of the corpus member's retained publisher body (body_sha256: " +
+        "the manifestation the corpus holds for the expression, such as its XHTML or PDF), the digest of the Formex package the text was read from " +
+        "(package_sha256) and of the package entry (source_entry_sha256), both null on an EU index that predates them, its official source and an " +
+        "article permalink (the wording permalink and the publisher's provision id after #, which verify accepts); an article whose text is empty is " +
+        "named under articles_without_text and is not served as a quote";
 
     internal const string EuropeEvidenceBundleDateRule =
         "the EU index holds one wording of each expression, the original act's, dated by its Formex act date; no consolidated version is held, so " +
