@@ -2375,8 +2375,8 @@ Each is the driver's call under ruling 7 and can be reversed by a later pull req
     publishers' official search actions; a list of publishers known to be out of scope (a CSSF
     circular, a court decision) would produce it, and none is kept at launch.
   - `rate_limited`: the one-server host applies no per-client limit at launch, since it keeps no IP
-    address or user agent (the launch contract's privacy line). Cost under abuse is bounded at
-    deployment by the container platform's replica ceiling (the deployment kit's parameter); a
+    address or user agent (the launch contract's privacy line). Cost under abuse is bounded by the one
+    replica the deployment kit runs (`minReplicas` and `maxReplicas` 1 in `deploy/main.bicep`); a
     per-client limit that needs no identifying record is follow-on work.
   - `upstream_unreachable`: serving never contacts a publisher (a mount is served from its own files;
     the zero-traffic probes hold it), so no upstream can be unreachable at request time.
