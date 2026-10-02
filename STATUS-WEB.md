@@ -2359,6 +2359,27 @@ Each is the driver's call under ruling 7 and can be reversed by a later pull req
   Claude subagent with a fresh context, read-only, reporting only material and reproduced findings
   (`C:\lex-v3\lanes\claude-review-instructions.md`); one repair round, then merge on green CI. The
   owner's open questions are decided by the driver under that delegation and recorded here.
+- The six refusal codes no operation produces at launch (the refusal census's `not_produced` list),
+  each unreachable by construction, decided under that delegation (2026-10-02). The launch contract's
+  refusal line holds them in the closed registry with their payloads; the refusal case set measures the
+  fourteen produced codes.
+  - `advice_boundary`: no model plans an answer (`ask` answers the containment card
+    `assistant_v3_unavailable`, PR #759), so no question is ever classed as legal advice; a future
+    assistant's planner produces it.
+  - `derivation_refused`: the API serves no derived text and no operation derives at request time;
+    derivation happens at build time, where a refusal is a failed build, never a served answer.
+  - `not_transposable`: `transposition` is unserved (`operation_not_served`, with the data that would
+    serve it in `coverage`, PR #857); a served transposition answers it for an instrument that is not
+    a directive.
+  - `out_of_corpus_scope`: an identifier neither index holds answers `identifier_unknown` with the
+    publishers' official search actions; a list of publishers known to be out of scope (a CSSF
+    circular, a court decision) would produce it, and none is kept at launch.
+  - `rate_limited`: the one-server host applies no per-client limit at launch, since it keeps no IP
+    address or user agent (the launch contract's privacy line). Cost under abuse is bounded at
+    deployment by the container platform's replica ceiling (the deployment kit's parameter); a
+    per-client limit that needs no identifying record is follow-on work.
+  - `upstream_unreachable`: serving never contacts a publisher (a mount is served from its own files;
+    the zero-traffic probes hold it), so no upstream can be unreachable at request time.
 - The rights question PR #842 surfaced, decided under that delegation (2026-10-02): a licence that does
   not admit a text keeps it out of search matching too. A search hit says which articles hold a word,
   which is information read from the text; `search` now matches only states whose text
