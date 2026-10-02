@@ -79,7 +79,7 @@ export const LIVE_CHROME_FR_DRAFT = Object.freeze({
     title: 'Lecture',
     eyebrow: 'Lecture',
     heading: 'Le texte à une date',
-    intro: 'Le texte d’un acte luxembourgeois tel qu’il se présentait à une date, article par article, tel que l’éditeur l’a écrit, avec ce qu’il faut pour le citer. L’identifiant et la date sont envoyés à ce serveur dans la requête et nulle part ailleurs, et cette page ne conserve rien.',
+    intro: 'Le texte d’un acte luxembourgeois tel qu’il se présentait à une date, ou la rédaction originale d’un acte de l’UE à sa propre date, article par article, tel que l’éditeur l’a écrit, avec ce qu’il faut pour le citer. L’identifiant et la date sont envoyés à ce serveur dans la requête et nulle part ailleurs, et cette page ne conserve rien.',
     idle: 'Saisissez un identifiant d’acte et une date pour lire le texte qui s’appliquait à cette date.',
     rights: 'Texte communiqué sous {rights}. Lu au {date}.',
     rightsIn: 'Texte communiqué sous {rights}. Lu au {date} en {language}.',
@@ -93,6 +93,11 @@ export const LIVE_CHROME_FR_DRAFT = Object.freeze({
     evidence: 'Empreinte du texte {text}, empreinte du corps {body}, source officielle {source}, {permalink}',
     withoutText: 'Détenus sans texte : {articles}.',
     notHeldHeading: 'Ce que cette lecture ne contient pas',
+    europeWordingHeading: '{celex}, {language}, la rédaction originale du {date} (la date de l’acte dans le paquet Formex de l’éditeur ; aucune rédaction ultérieure n’est détenue)',
+    europeCounts: Object.freeze({
+      one: '{count} article cité ; sans texte : {withoutText}.',
+      other: '{count} articles cités ; sans texte : {withoutText}.',
+    }),
   }),
   history: Object.freeze({
     title: 'Historique d’une disposition',
@@ -206,6 +211,7 @@ export const LIVE_CHROME_FR_DRAFT = Object.freeze({
     formatRefused: 'Le format {format} n’est pas proposé pour cet export : {reason}.',
     composeFailed: 'Cet export ne peut pas être composé : {reason}.',
     jsonSummary: 'Le JSON tel qu’il sera enregistré',
+    europeNotComposed: 'Il s’agit d’un texte de l’UE. Son export n’est pas encore composé : le compositeur n’épingle que les articles des actes luxembourgeois, et aucun fichier n’est proposé pour un texte de l’UE.',
   }),
   card: Object.freeze({
     heading: 'Fiche d’évaluation',
@@ -271,6 +277,10 @@ export const LIVE_CHROME_FR_DRAFT = Object.freeze({
     nullSentences: Object.freeze({
       nearest_earlier: 'Aucune version antérieure n’est détenue : la date demandée précède cet historique.',
       nearest_later: 'Aucune version postérieure n’est détenue : la date demandée suit toutes les versions détenues.',
+    }),
+    europeNullSentences: Object.freeze({
+      nearest_earlier: 'Aucune rédaction antérieure n’est détenue : la date demandée précède cet historique.',
+      nearest_later: 'Aucune rédaction postérieure n’est détenue : la date demandée suit toutes les rédactions détenues.',
     }),
     candidate: 'applicable à partir du {validFrom}, empreinte {hash}, {published}',
     candidateWithdrawalNotStated: 'applicable à partir du {validFrom}, empreinte {hash}, {published}, retrait non indiqué par la plateforme',

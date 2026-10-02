@@ -9,11 +9,12 @@
 // with no second request;
 // with a mount, the page must end in the answer, and the one request must carry exactly what was
 // typed and nothing else. Without a mount, each must end in the refusal card for
-// `no_corpus_mounted`. Two EU steps ask for the GDPR by its CELEX: the search page with English chosen
-// in the form's language select (`EU_SEARCH_STEP`), and the dossier page (`EU_DOSSIER_STEP`). They
-// need an EU index, so on the fixture mount (Luxembourg only) each must end in the refusal card
-// `no_corpus_mounted` naming the EU index, and on a real mount whose build report names an EU index
-// each must end in the API's answer, every EU citation pinned and verified. In every run, what the
+// `no_corpus_mounted`. Three EU steps ask for the GDPR by its CELEX: the search page with English chosen
+// in the form's language select (`EU_SEARCH_STEP`), the dossier page (`EU_DOSSIER_STEP`), and the
+// reading page on the GDPR's wording date (`EU_READING_STEP`). They need an EU index, so on the fixture
+// mount (Luxembourg only) the search and dossier steps must end in the refusal card `no_corpus_mounted`
+// naming the EU index, and on a real mount whose build report names an EU index each of the three must
+// end in the API's answer, every EU citation pinned and verified. In every run, what the
 // browser did is measured, not assumed: exactly one request to the API (`POST /api/v3/{operation}`,
 // no query string, no referrer, no cookie), every other request a same-origin asset, the page still
 // at its own address with no history entry added and no history state written, no cookie set,
@@ -239,6 +240,25 @@ export const EU_DOSSIER_STEP = Object.freeze({
   body: Object.freeze({ operation_id: "dossier", parameters: Object.freeze({ identifier: EU_SEARCH_IDENTIFIER }) }),
 });
 
+/** The date the EU reading asks: the GDPR's Formex act date, the date of the one wording an EU index holds of it. */
+export const EU_READING_DATE = "2016-04-27";
+
+/**
+ * The EU reading step: the reading page asked for the same EU work by its CELEX on its wording date, in any
+ * held language. Where an EU index holds it, the original wording is quoted with Decision 95's
+ * acknowledgement, and every article permalink the page prints is verified.
+ */
+export const EU_READING_STEP = Object.freeze({
+  path: "/reading.html",
+  cites: true,
+  operation: "evidence_bundle",
+  typed: Object.freeze([EU_SEARCH_IDENTIFIER, EU_READING_DATE]),
+  body: Object.freeze({
+    operation_id: "evidence_bundle",
+    parameters: Object.freeze({ identifier: EU_SEARCH_IDENTIFIER, date: EU_READING_DATE }),
+  }),
+});
+
 /**
  * What one run must show, as failures (empty means the run passed).
  *
@@ -339,7 +359,9 @@ export function journeyVerdict(observed, expected) {
     // body digests, its official source, and a permalink that pins its very article (review of #805:
     // the export composer quoted 49 articles and cited only their state).
     for (const quote of observed.quotes) {
-      if (!quote.codes.some((code) => code.match(PINNED_PERMALINK)?.[2] === quote.article)) {
+      // Either publisher's grammar: a Luxembourg state permalink or an EU wording permalink (review of #903: the
+      // Luxembourg-only rule failed every EU quote).
+      if (!quote.codes.some((code) => pinnedCitation(code)?.anchor === quote.article)) {
         failures.push(`the quote of ${quote.article} carries no citation that pins it`);
       }
       const digests = quote.codes.filter((code) => /^[0-9a-f]{64}$/.test(code)).length;
@@ -903,7 +925,9 @@ export async function run(apiOutput, mount, expected, browser, liveRoot) {
  */
 export function realMountSteps(report) {
   const steps = Object.entries(JOURNEY_STEPS).map(([name, step]) => [name, step]);
-  return report.europeIndex ? [...steps, ["eu search", EU_SEARCH_STEP], ["eu dossier", EU_DOSSIER_STEP]] : steps;
+  return report.europeIndex
+    ? [...steps, ["eu search", EU_SEARCH_STEP], ["eu dossier", EU_DOSSIER_STEP], ["eu reading", EU_READING_STEP]]
+    : steps;
 }
 
 export async function realMountRuns(apiOutput, mount, options, browser, liveRoot) {

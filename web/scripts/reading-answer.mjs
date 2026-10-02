@@ -21,8 +21,25 @@
 // The text digests are not recomputed here (the reader is synchronous and the browser's digest is
 // not); `V3ReplayGuaranteesTests` recomputes them from the publisher's file, and the tests of this
 // reader check the captured answer's digests with Node's own SHA-256.
+//
+// An EU work's bundle (publisher `eu-eurlex`) quotes the original wording the EU index holds, and has
+// its own shape, read by `readEuropeEvidenceBundle`; `readEvidenceBundleAnswer` sends an answer to the
+// reader its publisher names. Its rules, each the answer's own:
+//  - it carries Decision 95's acknowledgement, exactly, and the authenticity statement, and holds no
+//    consolidation;
+//  - each wording is of the work, in a language it is held in (the one asked, when one was asked), in
+//    the languages' order, dated by the date asked (the original wording answers only its own date),
+//    and pinned: `/eu-eurlex/{celex}/{language}/{wording date}--{wording sha256}`, its coordinate the
+//    same without the digest;
+//  - every source was acquired; each quoted article has text in its wording's language, whose UTF-8
+//    length is the one stated, read from one of the wording's sources, pointing at an official source,
+//    with the wording's permalink and the provision after `#`, escaped as the platform escapes it.
 
 import { isCalendarDate } from './temporal.mjs';
+import { escapeProvision } from './search-answer.mjs';
+
+/** The acknowledgement every EU text served carries (Decision 95). */
+export const EUROPE_TEXT_ACKNOWLEDGEMENT = '© European Union, https://eur-lex.europa.eu';
 
 const DIGEST = /^[0-9a-f]{64}$/;
 
@@ -305,4 +322,164 @@ export function readEvidenceBundle(answer) {
     indexSha256: requireDigest(requireOwn(verifiedBy, 'index_sha256', 'verified_by'), 'verified_by.index_sha256'),
     registrySha256: requireDigest(requireOwn(verifiedBy, 'registry_sha256', 'verified_by'), 'verified_by.registry_sha256'),
   });
+}
+
+function readEuropeWording(wording, index, { celex, date }) {
+  const where = `wording ${index + 1}`;
+  const expressionIri = requireText(requireOwn(wording, 'publisher_expression_id', where), `${where} publisher_expression_id`);
+  const language = requireText(requireOwn(wording, 'language', where), `${where} language`);
+  const wordingDate = requireDate(requireOwn(wording, 'wording_date', where), `${where} wording_date`);
+  if (wordingDate !== date) {
+    throw new Error(`${where} is the wording of ${wordingDate}, and the bundle was asked for ${date}; the original wording answers only its own date`);
+  }
+  const wordingSha256 = requireDigest(requireOwn(wording, 'wording_sha256', where), `${where} wording_sha256`);
+  const permalink = requireText(requireOwn(wording, 'permalink', where), `${where} permalink`);
+  const expected = `/eu-eurlex/${celex}/${language}/${wordingDate}--${wordingSha256}`;
+  if (permalink !== expected) {
+    throw new Error(`${where} carries the permalink ${JSON.stringify(permalink)}, not the wording it pins (${expected})`);
+  }
+  const stableCoordinate = requireText(requireOwn(wording, 'stable_coordinate', where), `${where} stable_coordinate`);
+  if (stableCoordinate !== `/eu-eurlex/${celex}/${language}/${wordingDate}`) {
+    throw new Error(`${where} carries the coordinate ${JSON.stringify(stableCoordinate)}, not its permalink's without the digest`);
+  }
+
+  const sources = Object.freeze(requireList(requireOwn(wording, 'sources', where), `${where} sources`).map((source, at) => {
+    const label = `${where} sources[${at}]`;
+    const outcome = requireText(requireOwn(source, 'outcome', label), `${label}.outcome`);
+    if (outcome !== 'acquired') throw new Error(`${label} is ${outcome}; text is quoted only from acquired sources`);
+    return Object.freeze({
+      objectRefSha256: requireDigest(requireOwn(source, 'object_ref_sha256', label), `${label}.object_ref_sha256`),
+      outcome,
+      bodySha256: requireDigest(requireOwn(source, 'body_sha256', label), `${label}.body_sha256`),
+    });
+  }));
+  if (sources.length === 0) throw new Error(`${where} names no source, and a quotation needs the body it was read from`);
+  const bodies = new Set(sources.map((source) => source.bodySha256));
+
+  const articles = Object.freeze(requireList(requireOwn(wording, 'articles', where), `${where} articles`).map((article, at) => {
+    const label = `${where} article ${at + 1}`;
+    const publisherId = requireText(requireOwn(article, 'publisher_id', label), `${label} publisher_id`);
+    const text = requireText(requireOwn(article, 'text', label), `${label} text`);
+    const articleLanguage = requireText(requireOwn(article, 'language', label), `${label} language`);
+    if (articleLanguage !== language) throw new Error(`${label} is in ${articleLanguage}, and its wording is in ${language}`);
+    const textByteLength = requireCount(requireOwn(article, 'text_byte_length', label), `${label} text_byte_length`);
+    if (encoder.encode(text).length !== textByteLength) {
+      throw new Error(`${label} states ${textByteLength} bytes of text and carries ${encoder.encode(text).length}`);
+    }
+    const bodySha256 = requireDigest(requireOwn(article, 'body_sha256', label), `${label} body_sha256`);
+    if (!bodies.has(bodySha256)) throw new Error(`${label} was read from a body its wording does not name as a source`);
+    const articlePermalink = requireText(requireOwn(article, 'article_permalink', label), `${label} article_permalink`);
+    if (articlePermalink !== `${permalink}#${escapeProvision(publisherId)}`) {
+      throw new Error(`${label} carries the permalink ${JSON.stringify(articlePermalink)}, not its wording's with ${publisherId} after #`);
+    }
+    const heading = requireOwn(article, 'heading', label);
+    if (typeof heading !== 'string') throw new Error(`${label} heading is not text`);
+    return Object.freeze({
+      articleIdentitySha256: requireDigest(requireOwn(article, 'article_identity_sha256', label), `${label} article_identity_sha256`),
+      publisherId,
+      heading,
+      text,
+      textSha256: requireDigest(requireOwn(article, 'text_sha256', label), `${label} text_sha256`),
+      textByteLength,
+      bodySha256,
+      officialSource: requireText(requireOwn(article, 'official_source', label), `${label} official_source`),
+      permalink: articlePermalink,
+    });
+  }));
+  const ids = new Set();
+  for (const article of articles) {
+    if (ids.has(article.publisherId)) throw new Error(`${where} quotes ${article.publisherId} twice`);
+    ids.add(article.publisherId);
+  }
+  const articlesWithoutText = Object.freeze(requireList(requireOwn(wording, 'articles_without_text', where), `${where} articles_without_text`).map((article, at) => {
+    const label = `${where} articles_without_text[${at}]`;
+    return Object.freeze({
+      articleIdentitySha256: requireDigest(requireOwn(article, 'article_identity_sha256', label), `${label}.article_identity_sha256`),
+      publisherId: requireText(requireOwn(article, 'publisher_id', label), `${label}.publisher_id`),
+    });
+  }));
+  if (articles.length === 0) throw new Error(`${where} quotes no article; a wording with no text is refused, not answered`);
+
+  return Object.freeze({ expressionIri, language, wordingDate, wordingSha256, permalink, stableCoordinate, sources, articles, articlesWithoutText });
+}
+
+/**
+ * Reads one V3 EU `evidence_bundle` answer into the view a live reading screen renders: the original
+ * wording of each held expression on its wording date, with the acknowledgement and authenticity
+ * statement Decision 95 requires beside the text.
+ *
+ * @param {object} answer the `result.value` of an evidence_bundle envelope
+ * @returns {object} a frozen view; throws on any answer the rules above do not allow
+ */
+export function readEuropeEvidenceBundle(answer) {
+  const where = 'this evidence bundle';
+  const publisher = requireOwn(answer, 'publisher', where);
+  if (publisher !== 'eu-eurlex') {
+    throw new Error(`this evidence bundle is ${JSON.stringify(publisher)}'s; this reader reads the EU (eu-eurlex) bundle only`);
+  }
+  const acknowledgement = requireText(requireOwn(answer, 'acknowledgement', where), 'acknowledgement');
+  if (acknowledgement !== EUROPE_TEXT_ACKNOWLEDGEMENT) {
+    throw new Error(`EU text is served with the acknowledgement ${JSON.stringify(EUROPE_TEXT_ACKNOWLEDGEMENT)}, not ${JSON.stringify(acknowledgement)}`);
+  }
+  if (requireBoolean(requireOwn(answer, 'consolidations_held', where), 'consolidations_held')) {
+    throw new Error('this reader reads the original wording; a bundle that holds consolidations is another shape');
+  }
+  const celex = requireText(requireOwn(answer, 'celex', where), 'celex');
+  const date = requireDate(requireOwn(answer, 'requested_date', where), 'requested_date');
+  const language = requireTextOrNull(requireOwn(answer, 'requested_language', where), 'requested_language');
+  const availableLanguages = Object.freeze(requireList(requireOwn(answer, 'available_languages', where), 'available_languages')
+    .map((item, index) => requireText(item, `available_languages[${index}]`)));
+  if (language !== null && !availableLanguages.includes(language)) {
+    throw new Error(`the language asked for, ${language}, is not one the work is held in`);
+  }
+
+  const wordings = requireList(requireOwn(answer, 'wordings', where), 'wordings')
+    .map((wording, index) => readEuropeWording(wording, index, { celex, date }));
+  if (wordings.length === 0) throw new Error('a bundle is answered with at least one wording; none is refused, not answered');
+  const expressions = new Set();
+  for (const [index, wording] of wordings.entries()) {
+    if (expressions.has(wording.expressionIri)) throw new Error(`the expression ${wording.expressionIri} is quoted twice`);
+    expressions.add(wording.expressionIri);
+    if (index > 0 && wording.language < wordings[index - 1].language) {
+      throw new Error(`the wording in ${wording.language} follows the one in ${wordings[index - 1].language}; the wordings are in the languages' order`);
+    }
+    if (!availableLanguages.includes(wording.language)) throw new Error(`a wording is in ${wording.language}, which the work is not said to be held in`);
+    if (language !== null && wording.language !== language) throw new Error(`a wording is in ${wording.language}, and the bundle was asked in ${language}`);
+  }
+
+  const items = new Set();
+  const notHeld = Object.freeze(requireList(requireOwn(answer, 'not_held', where), 'not_held').map((row, index) => {
+    const item = requireText(requireOwn(row, 'item', `not_held[${index}]`), `not_held[${index}].item`);
+    if (items.has(item)) throw new Error(`not_held names ${item} twice`);
+    items.add(item);
+    return Object.freeze({ item, reason: requireText(requireOwn(row, 'reason', `not_held[${index}]`), `not_held[${index}].reason`) });
+  }));
+
+  return Object.freeze({
+    publisher,
+    identifier: requireText(requireOwn(answer, 'requested_identifier', where), 'requested_identifier'),
+    celex,
+    publisherWorkIri: requireText(requireOwn(answer, 'publisher_work_id', where), 'publisher_work_id'),
+    date,
+    language,
+    availableLanguages,
+    acknowledgement,
+    authenticity: requireText(requireOwn(answer, 'authenticity', where), 'authenticity'),
+    wordings: Object.freeze(wordings),
+    rightsRule: requireText(requireOwn(answer, 'rights_rule', where), 'rights_rule'),
+    dateRule: requireText(requireOwn(answer, 'date_rule', where), 'date_rule'),
+    dateSemantics: requireText(requireOwn(answer, 'date_semantics', where), 'date_semantics'),
+    digestRule: requireText(requireOwn(answer, 'digest_rule', where), 'digest_rule'),
+    notHeld,
+    scope: requireText(requireOwn(answer, 'scope', where), 'scope'),
+    corpusSha256: requireDigest(requireOwn(answer, 'corpus_sha256', where), 'corpus_sha256'),
+    indexSha256: requireDigest(requireOwn(answer, 'index_sha256', where), 'index_sha256'),
+  });
+}
+
+/** Reads an evidence bundle with the reader its publisher names: Luxembourg's, or the EU's. */
+export function readEvidenceBundleAnswer(answer) {
+  return answer !== null && typeof answer === 'object' && answer.publisher === 'eu-eurlex'
+    ? readEuropeEvidenceBundle(answer)
+    : readEvidenceBundle(answer);
 }

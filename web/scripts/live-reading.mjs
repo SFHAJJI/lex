@@ -3,12 +3,12 @@
 // The fourth screen that reads a served answer. It asks `evidence_bundle` with the work identifier
 // and the date the reader typed and, when one is chosen, a language, through the one client module,
 // and turns what comes back into one view state. Every rule about what a bundle may say stays in
-// `reading-answer.mjs` (`readEvidenceBundle`), and every rule about a refusal in `refusal-card.mjs`;
+// `reading-answer.mjs` (`readEvidenceBundleAnswer`: Luxembourg's bundle or the EU's), and every rule about a refusal in `refusal-card.mjs`;
 // this file builds the request, decides which of them a state goes to, and holds the sentences a page
 // needs for the states that carry no answer.
 
 import { askV3 } from "./v3-client.mjs";
-import { readEvidenceBundle } from "./reading-answer.mjs";
+import { readEvidenceBundleAnswer } from "./reading-answer.mjs";
 import { validateRefusal } from "./refusal-card.mjs";
 import { noCorpusMountedSentence, historyBeginsHint } from "./live-refusals.mjs";
 import { isCalendarDate } from "./temporal.mjs";
@@ -48,6 +48,26 @@ export const LIVE_READING_REFUSAL_SENTENCES = Object.freeze({
   text_not_available: "This index holds this state but no text for it.",
   retrieval_mode_unavailable: "This index cannot read this work's text.",
 });
+
+/**
+ * The same refusals for an EU work (the envelope's publisher is eu-eurlex): an EU date is the date of a wording of the
+ * act, never an applicability date, so no EU refusal says that a version "applies" (review of #903: the Luxembourg
+ * sentences merged the two publishers' dates in speech).
+ */
+export const LIVE_READING_EUROPE_REFUSAL_SENTENCES = Object.freeze({
+  identifier_unknown: "This index holds no work under that identifier.",
+  language_not_available: "This work is not held in the language asked for.",
+  no_version_for_date: "This index holds no wording of this EU act for that date.",
+  ambiguous_version: "This index holds different texts of this EU act for that date, so none is chosen.",
+  text_withheld: "This wording's text is withheld: its rights did not admit it.",
+  text_not_available: "This index knows this wording of the EU act but holds no text for it.",
+  retrieval_mode_unavailable: "This index cannot read this work's text.",
+});
+
+/** The refusal sentences for a refusal's publisher, as its envelope context names it. */
+export function readingRefusalSentences(context) {
+  return context?.publisher === "eu-eurlex" ? LIVE_READING_EUROPE_REFUSAL_SENTENCES : LIVE_READING_REFUSAL_SENTENCES;
+}
 
 export const LIVE_READING_IDLE = liveChrome().reading.idle;
 export const LIVE_READING_LOADING = liveChrome().common.loading;
@@ -92,12 +112,12 @@ export function readingParameters({ identifier, date, language = "" }) {
 
 /**
  * Maps what `askV3` returned to the view: `success` with the reading view (read by
- * `readEvidenceBundle`), `refusal` with the refusal card's inputs, or a state that carries a sentence.
+ * `readEvidenceBundleAnswer`, Luxembourg's or the EU's), `refusal` with the refusal card's inputs, or a state that carries a sentence.
  */
 export function readingOutcome(asked) {
   if (asked.state === "success") {
     try {
-      return { state: "success", view: readEvidenceBundle(asked.envelope.result.value), context: asked.envelope.context };
+      return { state: "success", view: readEvidenceBundleAnswer(asked.envelope.result.value), context: asked.envelope.context };
     } catch (error) {
       return { state: "invalid_envelope", sentence: invalidAnswerSentence(error.message) };
     }
@@ -107,7 +127,7 @@ export function readingOutcome(asked) {
     const { code, helpful_payload: payload } = asked.envelope.refusal;
     const sentence = code === "no_corpus_mounted"
       ? noCorpusMountedSentence(payload)
-      : LIVE_READING_REFUSAL_SENTENCES[code] ?? unexpectedRefusalSentence(code);
+      : readingRefusalSentences(asked.envelope.context)[code] ?? unexpectedRefusalSentence(code);
     try {
       validateRefusal({ code, sentence, payload });
     } catch (error) {
