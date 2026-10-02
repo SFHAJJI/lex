@@ -17,13 +17,20 @@ public sealed partial class V3FirstMountBuildTests
     private const string GdprSeed = "32016R0679";
     private const string ConsolidationDate = "2024-01-01";
 
-    private static async Task<(string Root, string Mount)> ConsolidatedMountAsync(bool missingStateCelex = false)
+    private static Task<(string Root, string Mount)> ConsolidatedMountAsync(bool missingStateCelex = false) =>
+        MountOfAsync(store => EuFirstMountAcquisitionTests.AcquireConsolidatedAsync(store, missingStateCelex));
+
+    private static Task<(string Root, string Mount)> ConsolidatedWorksMountAsync(params EuFirstMountAcquisitionTests.ConsolidatedWorkSpec[] works) =>
+        MountOfAsync(store => EuFirstMountAcquisitionTests.AcquireConsolidatedWorksAsync(store, works));
+
+    private static async Task<(string Root, string Mount)> MountOfAsync(
+        Func<FileSystemCustodyStore, Task<Lex.V3.Ingest.Europe.EuFirstMountAcquisitionResult>> acquireEurope)
     {
         var root = Path.Combine(Path.GetTempPath(), "lex-v3-eu-time-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(root);
         var store = new FileSystemCustodyStore(Path.Combine(root, "custody"));
         var (_, luxembourg) = await AcquireAsync(store, CheckoutRoot());
-        var europe = await EuFirstMountAcquisitionTests.AcquireConsolidatedAsync(store, missingStateCelex);
+        var europe = await acquireEurope(store);
         Assert.IsTrue(europe.Delivered, europe.Detail);
         Assert.IsTrue(luxembourg.Delivered, luxembourg.Detail);
         var time = DateTimeOffset.FromUnixTimeSeconds(1_800_000_000);

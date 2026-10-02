@@ -2253,9 +2253,26 @@ each consolidated version, with the publisher's consolidation date or a typed re
   CELEX and by consolidated work, as_of between, after and before the wordings, the bundle and its verified
   permalinks, the original pin, a tampered digest, the dossier by consolidated CELEX); the EU mount and mode
   tests restated; the answer and envelope samples re-rendered (only the EU dossier changes).
+- Review of #909 (independent Claude review), repaired:
+  - the bundle now discloses, beside each wording, the works sharing its date and the versions with no
+    usable date (`same_date_works`, `unplaced_versions`), and the reading screen says them;
+  - the time view serves its own statements: the bundle's scope (`EuropeTimeEvidenceBundleScope`), the digest
+    rule naming the seed act's CELEX (`EuropeStateDigestRule`), the dossier timeline's own date semantics, and
+    the bundle's and verify's full not-held rows; the reading copy no longer calls the next wording "held";
+  - `text_held` says whether a text is held for the date (it was false on a date holding two different texts);
+    verify on such a date refuses `ambiguous_version` rather than naming one text as current;
+  - the EU `text_not_available` payload is Luxembourg's shape, which the reading card admits, and an EU
+    `ambiguous_version` carries the registry's fields with its candidates pinned (an undated one by its
+    expression); the reading screen says an EU ambiguity in its EU sentence and shows no Luxembourg card;
+  - `V3CorpusEuropeTimeViewBranchTests` cover the branches on mounts from a generalised consolidated fixture
+    (`EuConsolidatedWorksFixture.cs`): works sharing a date with one text (the CELEX-designated work answers,
+    the others disclosed), with two texts (ambiguous, none chosen, not by verify either), the latest wording
+    with no text in a language (`text_not_available` there, the other language answering), and undated
+    versions (disclosed when their text is the same, ambiguous at every date when it differs).
+- The GDPR outcome above was read from the real consolidated mount's index by inspection, not by a test; a
+  real-mount test over the full EU population follows when it lands.
 - Not yet: EU `article_history`, `diff` and `changes_in_period` (the history, compare and radar screens'
-  EU paths), fixtures for same-date different texts and undated versions, and a real-mount test over the
-  full EU population when it lands.
+  EU paths).
 
 ## Next, in order (web lane; the data lane's items 1 to 3 are in STATUS-DATA.md)
 

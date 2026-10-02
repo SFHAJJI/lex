@@ -416,7 +416,18 @@ function readEuropeWording(wording, index, { celex, date }) {
   }));
   if (articles.length === 0) throw new Error(`${where} quotes no article; a wording with no text is refused, not answered`);
 
-  return Object.freeze({ expressionIri, language, kind, wordingDate, nextDate, wordingSha256, permalink, stableCoordinate, sources, articles, articlesWithoutText });
+  // The time view's disclosure beside the wording: the other works the census dated to its day, and the versions with no
+  // usable date, each with whether its text is held here (absent on the original-wording bundle of an index with no states).
+  const disclosed = (key) => (Object.hasOwn(wording, key)
+    ? Object.freeze(requireList(wording[key], `${where} ${key}`).map((row, at) => {
+      const label = `${where} ${key}[${at}]`;
+      const textHeld = requireBoolean(requireOwn(row, 'text_held', label), `${label}.text_held`);
+      return Object.freeze({ workIri: requireText(requireOwn(row, 'publisher_work_id', label), `${label}.publisher_work_id`), textHeld });
+    }))
+    : Object.freeze([]));
+  const sameDateWorks = disclosed('same_date_works');
+  const unplacedVersions = disclosed('unplaced_versions');
+  return Object.freeze({ expressionIri, language, kind, wordingDate, nextDate, wordingSha256, permalink, stableCoordinate, sources, articles, articlesWithoutText, sameDateWorks, unplacedVersions });
 }
 
 /**

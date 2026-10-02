@@ -216,6 +216,35 @@ test("a time-view bundle reads: a consolidated version answers the dates from it
   assert.throws(() => readEuropeEvidenceBundle(timeView((copy) => { copy.wordings[0].kind = "applicable_version"; })), /original wording or a consolidated version/);
 });
 
+test("the time view's disclosure is shown beside the wording: the other works of its date and the undated versions (review of #909)", () => {
+  const view = readEuropeEvidenceBundle(europeBundle((copy) => {
+    copy.requested_date = "2025-03-01";
+    Object.assign(copy.wordings[0], { kind: "original_wording", next_date: null,
+      same_date_works: [{ publisher_work_id: `${WORK}-b`, text_held: true }, { publisher_work_id: `${WORK}-c`, text_held: false }],
+      unplaced_versions: [{ publisher_work_id: `${WORK}-d`, text_held: false }] });
+  }));
+  assert.deepEqual(view.wordings[0].sameDateWorks.map((row) => row.textHeld), [true, false]);
+  const markup = renderToStaticMarkup(h(ReadingAnswerView, { outcome: { state: "success", view } }));
+  assert.ok(markup.includes("2 other publisher works carry this date: 1 with this same text held here, 1 with no text held here."), markup);
+  assert.ok(markup.includes("1 wording of this act has no usable publisher date and is not placed in time"));
+  // A bundle with no disclosure (an index with no states) shows none.
+  const plain = renderToStaticMarkup(h(ReadingAnswerView, { outcome: { state: "success", view: readEuropeEvidenceBundle(europeBundle()) } }));
+  assert.ok(!plain.includes("data-disclosure"));
+});
+
+test("an EU ambiguity says its EU sentence and shows no Luxembourg card; an EU text_not_available shows its card (review of #909)", () => {
+  const eu = { publisher: "eu-eurlex" };
+  const ambiguous = readingOutcome({ state: "refusal", envelope: { refusal: { code: "ambiguous_version", helpful_payload: {
+    requested_date: "2025-03-01", candidates: [`/eu-eurlex/32016R0679/eng/2024-01-01--${"1".repeat(64)}`, `/eu-eurlex/32016R0679/eng/2024-01-01--${"2".repeat(64)}`] } }, context: eu } });
+  assert.equal(ambiguous.card, false);
+  assert.equal(ambiguous.sentence, LIVE_READING_EUROPE_REFUSAL_SENTENCES.ambiguous_version, "the EU sentence, not a card that cannot be shown");
+  const unavailable = readingOutcome({ state: "refusal", envelope: { refusal: { code: "text_not_available", helpful_payload: {
+    official_identity: WORK, official_source: WORK, retained_transport_evidence: "none", language: "eng",
+    what_would_answer: ["new_official_observation"], asserts_absence_of_law: false } }, context: eu } });
+  assert.equal(unavailable.card, true, "the payload the API sends is one the card admits");
+  assert.equal(unavailable.sentence, LIVE_READING_EUROPE_REFUSAL_SENTENCES.text_not_available);
+});
+
 test("the export composer reads an EU wording and says it is not composed, offering no file", () => {
   const outcome = readingOutcome({ state: "success", envelope: envelopeOf(europeBundle()) });
   const markup = renderToStaticMarkup(h(ExportAnswerView, { outcome, pins: new Set(), onPin: () => {} }));

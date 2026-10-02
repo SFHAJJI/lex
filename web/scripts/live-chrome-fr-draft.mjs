@@ -96,7 +96,15 @@ export const LIVE_CHROME_FR_DRAFT = Object.freeze({
     europeWordingHeading: '{celex}, {language}, la rédaction originale du {date} (la date de l’acte dans le paquet Formex de l’éditeur ; aucune rédaction ultérieure n’est détenue)',
     europeOriginalHeading: '{celex}, {language}, la rédaction originale du {date} (la date de l’acte dans le paquet Formex de l’éditeur)',
     europeConsolidatedHeading: '{celex}, {language}, la rédaction consolidée du {date} (la date de consolidation de l’éditeur)',
-    europeHoldsUntil: 'Cette rédaction répond pour les dates du {date} à la veille du {next}, date de la rédaction suivante détenue.',
+    europeHoldsUntil: 'Cette rédaction répond pour les dates du {date} à la veille du {next}, date de la rédaction suivante.',
+    europeSameDateWorks: Object.freeze({
+      one: '{count} autre œuvre de l’éditeur porte cette date : {held} dont ce même texte est détenu ici, {notHeld} sans texte détenu ici.',
+      other: '{count} autres œuvres de l’éditeur portent cette date : {held} dont ce même texte est détenu ici, {notHeld} sans texte détenu ici.',
+    }),
+    europeUnplaced: Object.freeze({
+      one: '{count} rédaction de cet acte n’a pas de date de l’éditeur exploitable et n’est pas située dans le temps : {held} dont ce même texte est détenu ici, {notHeld} sans texte détenu ici.',
+      other: '{count} rédactions de cet acte n’ont pas de date de l’éditeur exploitable et ne sont pas situées dans le temps : {held} dont ce même texte est détenu ici, {notHeld} sans texte détenu ici.',
+    }),
     europeLatest: 'Il s’agit de la dernière rédaction détenue : elle répond pour toute date ultérieure, et une modification que l’éditeur n’a pas encore consolidée n’y figure pas.',
     europeCounts: Object.freeze({
       one: '{count} article cité ; sans texte : {withoutText}.',

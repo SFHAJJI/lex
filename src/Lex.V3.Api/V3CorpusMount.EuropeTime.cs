@@ -37,6 +37,40 @@ internal sealed partial class V3CorpusMount
         "each with its date, whether its text is held, its hash-pinned permalink when it is, and the works that share its date; the versions " +
         "with no usable publisher date are listed apart with the typed reason";
 
+    internal const string EuropeStateDigestRule =
+        "the SHA-256, under the domain lex-v3-eu-wording/1, of the seed act's CELEX (the act a consolidated version consolidates; for the " +
+        "original wording, its work's own CELEX, which is the same), the publisher's work and expression IRIs of the wording, the language, the " +
+        "wording date (the original's Formex date or the publisher's consolidation date) and every article identity of the expression in the " +
+        "publisher's article order, each field written as a 4-byte big-endian length and its UTF-8 bytes; each article identity is itself the " +
+        "SHA-256 of that article's text and tokens, so the digest pins the whole held wording, computed here from the EU index, which stores no " +
+        "wording digest";
+
+    internal const string EuropeTimeEvidenceBundleScope =
+        "the evidence a reader needs to quote the wording of an EU act that answers the requested date under the selection rule: for each served " +
+        "language, the wording dated at or before the requested date that holds until its next_date, with the works that share its date and the " +
+        "versions with no usable date disclosed beside it; its hash-pinned permalink and stable coordinate, the corpus members its articles belong " +
+        "to with their retained body digests, and every article with its publisher id and heading, its text (the text the index searches), the " +
+        "digest of that text (text_sha256), the digest of the corpus member's retained publisher body (body_sha256: the manifestation the corpus " +
+        "holds for the expression, such as its XHTML or PDF), the digest of the Formex package the text was read from (package_sha256) and of the " +
+        "package entry (source_entry_sha256), its official source and an article permalink (the wording permalink and the publisher's provision " +
+        "id after #, which verify accepts); an article whose text is empty is named under articles_without_text and is not served as a quote";
+
+    internal static readonly string[][] EuropeTimeBundleNotHeld =
+    [
+        ["publisher_signature", "no signature or attestation of the publisher is held; the digests are this index's own reading of the retained package"],
+        ["unconsolidated_amendments", "an amendment the publisher has not yet consolidated is not held: the latest consolidated wording answers every later date, as dated"],
+        ["force_dates", "no entry-into-force, application or end-of-validity date is held; a wording date is none of them"],
+        ["observation_time", "when the publisher served the retained package is not held, so no observation time is stated"],
+        ["markup_and_notes", "the Formex markup, notes and tables are not served as structure; the text is the article's searchable text, in publisher order"],
+    ];
+
+    internal static readonly string[][] EuropeTimeVerifyNotHeld =
+    [
+        ["publisher_signature", "no signature or attestation of the publisher is held; the digest is this index's own reading of the retained wording"],
+        ["unconsolidated_amendments", "an amendment the publisher has not yet consolidated is not held, so no later wording can be pinned"],
+        ["text_verification", "the text itself is not compared here; each article identity is a digest of its text and tokens"],
+    ];
+
     internal static readonly string[][] EuropeTimeNotHeld =
     [
         ["unconsolidated_amendments", "an amendment the publisher has not yet consolidated is not held: the latest consolidated wording answers every later date, as dated"],
@@ -326,7 +360,6 @@ internal sealed partial class V3CorpusMount
     /// <summary>One dated wording as the time view serves it, with the works that share its date.</summary>
     private object EuropeDatedRow(string seed, EuropeDatedWording entry, string? nextDate)
     {
-        var answerText = entry.Answer is null ? null : EuropeTextKeyOf(entry.Answer.ExpressionId);
         var pin = entry.Answer is null ? ((string Sha256, string Permalink, IReadOnlyList<string> Provisions)?)null : EuropeStatePin(seed, entry.Answer, entry.Date);
         return new
         {
@@ -335,7 +368,7 @@ internal sealed partial class V3CorpusMount
                 ? (entry.Works.Any(static state => state.DateStatus == EuropeIndexStateDateStatus.OriginalWording) ? "original_wording" : "consolidated_version")
                 : EuropeKindOf(entry.Answer.State),
             basis = entry.Basis,
-            text_held = entry.Answer is not null,
+            text_held = entry.Held.Count > 0,
             publisher_work_id = entry.Answer?.State.PublisherWorkIri,
             celex = entry.Answer?.State.PublisherWorkCelex,
             publisher_expression_id = entry.Answer?.ExpressionId,
@@ -344,24 +377,31 @@ internal sealed partial class V3CorpusMount
             stable_coordinate = pin is null ? null : EuropeStableCoordinate(pin.Value.Permalink),
             permalink = pin?.Permalink,
             next_date = nextDate,
-            same_date_works = entry.Works
-                .Where(state => entry.Answer is null || !string.Equals(state.PublisherWorkIri, entry.Answer.State.PublisherWorkIri, StringComparison.Ordinal))
-                .Select(state =>
-                {
-                    var held = entry.Held.Where(candidate => string.Equals(candidate.State.PublisherWorkIri, state.PublisherWorkIri, StringComparison.Ordinal)).ToArray();
-                    return new
-                    {
-                        publisher_work_id = state.PublisherWorkIri,
-                        celex = state.PublisherWorkCelex,
-                        kind = EuropeKindOf(state),
-                        text_held = held.Length > 0,
-                        publisher_expression_ids = held.Select(static candidate => candidate.ExpressionId).ToArray(),
-                        same_text = held.Length == 0 || answerText is null
-                            ? (bool?)null
-                            : held.All(candidate => string.Equals(EuropeTextKeyOf(candidate.ExpressionId), answerText, StringComparison.Ordinal)),
-                    };
-                }).ToArray(),
+            same_date_works = EuropeSameDateWorks(entry),
         };
+    }
+
+    /// <summary>The other works the census dated to an entry's day: whether each holds text here and whether that text is the answer's.</summary>
+    private object[] EuropeSameDateWorks(EuropeDatedWording entry)
+    {
+        var answerText = entry.Answer is null ? null : EuropeTextKeyOf(entry.Answer.ExpressionId);
+        return entry.Works
+            .Where(state => entry.Answer is null || !string.Equals(state.PublisherWorkIri, entry.Answer.State.PublisherWorkIri, StringComparison.Ordinal))
+            .Select(state =>
+            {
+                var held = entry.Held.Where(candidate => string.Equals(candidate.State.PublisherWorkIri, state.PublisherWorkIri, StringComparison.Ordinal)).ToArray();
+                return (object)new
+                {
+                    publisher_work_id = state.PublisherWorkIri,
+                    celex = state.PublisherWorkCelex,
+                    kind = EuropeKindOf(state),
+                    text_held = held.Length > 0,
+                    publisher_expression_ids = held.Select(static candidate => candidate.ExpressionId).ToArray(),
+                    same_text = held.Length == 0 || answerText is null
+                        ? (bool?)null
+                        : held.All(candidate => string.Equals(EuropeTextKeyOf(candidate.ExpressionId), answerText, StringComparison.Ordinal)),
+                };
+            }).ToArray();
     }
 
     private object EuropeUnplacedRow((EuropeIndexState State, EuropeWordingCandidate? Held) unplaced, string? answerText) => new
@@ -482,7 +522,7 @@ internal sealed partial class V3CorpusMount
             }).ToArray(),
             date_semantics = EuropeStateDateSemantics,
             selection_rule = EuropeSelectionRule,
-            digest_rule = EuropeWordingDigestRule,
+            digest_rule = EuropeStateDigestRule,
             not_held = EuropeTimeNotHeld.Select(static row => new { item = row[0], reason = row[1] }).ToArray(),
             corpus_sha256 = _corpus.ArtifactRef.Sha256,
             index_sha256 = _europeReader!.IndexRef.Sha256,
@@ -552,19 +592,19 @@ internal sealed partial class V3CorpusMount
             .ToArray();
         if (ambiguous.Length > 0)
         {
+            // A dated candidate is named by its hash-pinned permalink; a version with no usable date has no date to pin, so it is
+            // named by its expression.
             var candidates = ambiguous.SelectMany(selection =>
-                    (selection.Entry is { Answer: null } entry ? entry.Held.Select(static candidate => candidate.ExpressionId) : Array.Empty<string>())
-                    .Concat(selection.Entry?.Answer is { } answer ? new[] { answer.ExpressionId } : Array.Empty<string>())
+                    (selection.Entry is { } entry
+                        ? (entry.Answer is null ? entry.Held : new EuropeWordingCandidate[] { entry.Answer })
+                            .Select(candidate => EuropeStatePin(timeline.SeedCelex, candidate, entry.Date).Permalink)
+                        : Array.Empty<string>())
                     .Concat(selection.ConflictingUnplaced.Select(static unplaced => unplaced.Held!.ExpressionId)))
                 .Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray();
             using var document = JsonSerializer.SerializeToDocument(new
             {
                 requested_date = requestedDate,
                 candidates,
-                reason = ambiguous.Any(static selection => selection.ConflictingUnplaced.Count > 0)
-                    ? "a held text of a version with no usable publisher date differs from the wording of the date, so the date cannot be answered"
-                    : "the corpus holds different texts for the wording of this date, so it cannot be answered",
-                selection_rule = EuropeSelectionRule,
             });
             return V3PlatformOperationOutcome.Refused(
                 Context("refusal", observedAt, PublisherId.EuEurLex),
@@ -582,17 +622,21 @@ internal sealed partial class V3CorpusMount
         var withoutText = selections.Where(static selection => selection.Entry is { Basis: "text_not_held" }).ToArray();
         if (withoutText.Length > 0)
         {
-            var works = withoutText.SelectMany(static selection => selection.Entry!.Works)
-                .Select(static state => state.PublisherWorkIri).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray();
+            // The publisher's work that represents the date (the one whose CELEX names the version, else the first), named as
+            // Luxembourg's refusal names its state; no permalink can pin a wording whose text is not held.
+            var entry = withoutText[0].Entry!;
+            var named = entry.Works.FirstOrDefault(state =>
+                    state.DateStatus == EuropeIndexStateDateStatus.OriginalWording ||
+                    string.Equals(state.PublisherWorkCelex, EuropeConsolidatedCelex(timeline.SeedCelex, entry.Date), StringComparison.Ordinal))
+                ?? entry.Works[0];
             using var unavailable = JsonSerializer.SerializeToDocument(new
             {
-                official_identity = works[0],
-                official_source = works[0],
+                official_identity = named.PublisherWorkIri,
+                official_source = named.PublisherWorkIri,
                 retained_transport_evidence = "none",
-                requested_date = requestedDate,
-                wording_date = withoutText[0].Entry!.Date,
-                publisher_works = works,
+                language = withoutText[0].Language,
                 what_would_answer = new[] { "new_official_observation" },
+                asserts_absence_of_law = false,
             });
             return V3PlatformOperationOutcome.Refused(
                 Context("refusal", observedAt, PublisherId.EuEurLex),
@@ -651,7 +695,7 @@ internal sealed partial class V3CorpusMount
             available_languages = timeline.Languages,
             date_semantics = EuropeStateDateSemantics,
             selection_rule = EuropeSelectionRule,
-            digest_rule = EuropeWordingDigestRule,
+            digest_rule = EuropeStateDigestRule,
             not_held = EuropeTimeNotHeld.Select(static row => new { item = row[0], reason = row[1] }).ToArray(),
             corpus_sha256 = _corpus.ArtifactRef.Sha256,
             index_sha256 = _europeReader!.IndexRef.Sha256,
@@ -729,6 +773,10 @@ internal sealed partial class V3CorpusMount
                 wording_sha256 = pin.Sha256,
                 stable_coordinate = EuropeStableCoordinate(pin.Permalink),
                 permalink = pin.Permalink,
+                same_date_works = EuropeSameDateWorks(entry),
+                unplaced_versions = timeline.ByLanguage[candidate.Language].Unplaced
+                    .Select(unplaced => EuropeUnplacedRow(unplaced, EuropeTextKeyOf(candidate.ExpressionId)))
+                    .ToArray(),
                 sources = articles.Select(static article => article.ObjectRefSha256).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal)
                     .Select(objectRef => EuropeMemberOf(objectRef)!)
                     .Select(static member => new
@@ -778,7 +826,7 @@ internal sealed partial class V3CorpusMount
 
         using var result = JsonSerializer.SerializeToDocument(new
         {
-            scope = EuropeEvidenceBundleScope,
+            scope = EuropeTimeEvidenceBundleScope,
             requested_identifier = identifier,
             requested_date = requestedDate,
             requested_language = requestedLanguage,
@@ -793,9 +841,9 @@ internal sealed partial class V3CorpusMount
             rights_rule = EuropeEvidenceBundleRightsRule,
             date_rule = EuropeSelectionRule,
             date_semantics = EuropeStateDateSemantics,
-            digest_rule = EuropeWordingDigestRule,
+            digest_rule = EuropeStateDigestRule,
             consolidations_held = EuropeConsolidationsHeld(timeline),
-            not_held = EuropeTimeNotHeld.Select(static row => new { item = row[0], reason = row[1] }).ToArray(),
+            not_held = EuropeTimeBundleNotHeld.Select(static row => new { item = row[0], reason = row[1] }).ToArray(),
             corpus_sha256 = _corpus.ArtifactRef.Sha256,
             index_sha256 = _europeReader!.IndexRef.Sha256,
         });
@@ -854,18 +902,30 @@ internal sealed partial class V3CorpusMount
 
         var pins = entry.Held.Select(candidate => (Candidate: candidate, Pin: EuropeStatePin(seed, candidate, wordingDate))).ToArray();
         var match = pins.FirstOrDefault(pinned => string.Equals(pinned.Pin.Sha256, requestedDigest, StringComparison.Ordinal));
+        if (match.Candidate is null && entry.Answer is null)
+        {
+            // Held texts that differ have no single current pin, and none is chosen: the date is ambiguous.
+            using var ambiguousDate = JsonSerializer.SerializeToDocument(new
+            {
+                requested_date = wordingDate,
+                candidates = pins.Select(static pinned => pinned.Pin.Permalink).Order(StringComparer.Ordinal).ToArray(),
+            });
+            return V3PlatformOperationOutcome.Refused(
+                Context("refusal", observedAt, PublisherId.EuEurLex),
+                new V3PlatformOperationRefusal(request, "ambiguous_version", ambiguousDate.RootElement));
+        }
+
         if (match.Candidate is null)
         {
-            // The current wording of that date, when the date has one; held texts that differ have no single current pin.
-            var current = entry.Answer is null ? pins[0] : pins.First(pinned => ReferenceEquals(pinned.Candidate, entry.Answer));
+            // The current wording of that date: the one the date answers with.
+            var current = pins.First(pinned => ReferenceEquals(pinned.Candidate, entry.Answer));
             using var mismatch = JsonSerializer.SerializeToDocument(new
             {
                 requested_digest = requestedDigest,
                 current_digest = current.Pin.Sha256,
                 stable_coordinate = EuropeStableCoordinate(current.Pin.Permalink),
                 current_hash_pinned_url = current.Pin.Permalink,
-                candidates = entry.Answer is null ? pins.Select(static pinned => pinned.Pin.Permalink).ToArray() : null,
-                digest_rule = EuropeWordingDigestRule,
+                digest_rule = EuropeStateDigestRule,
             });
             return V3PlatformOperationOutcome.Refused(
                 Context("refusal", observedAt, PublisherId.EuEurLex),
@@ -906,7 +966,7 @@ internal sealed partial class V3CorpusMount
             wording_date = wordingDate,
             wording_date_semantics = EuropeStateDateSemantics,
             wording_sha256 = match.Pin.Sha256,
-            digest_rule = EuropeWordingDigestRule,
+            digest_rule = EuropeStateDigestRule,
             stable_coordinate = EuropeStableCoordinate(match.Pin.Permalink),
             permalink = match.Pin.Permalink,
             provisions = match.Pin.Provisions.Count,
@@ -918,7 +978,7 @@ internal sealed partial class V3CorpusMount
                 index_sha256 = _europeReader!.IndexRef.Sha256,
                 registry_sha256 = V3OperationRegistry.Reviewed.Sha256,
             },
-            not_held = EuropeTimeNotHeld.Select(static row => new { item = row[0], reason = row[1] }).ToArray(),
+            not_held = EuropeTimeVerifyNotHeld.Select(static row => new { item = row[0], reason = row[1] }).ToArray(),
         });
         return V3PlatformOperationOutcome.Success(
             Context("success", observedAt, PublisherId.EuEurLex),
@@ -954,6 +1014,7 @@ internal sealed partial class V3CorpusMount
         return new
         {
             seed_celex = seed,
+            date_semantics = EuropeStateDateSemantics,
             consolidations_held = EuropeConsolidationsHeld(timeline),
             languages = served.Select(language =>
             {
@@ -965,7 +1026,7 @@ internal sealed partial class V3CorpusMount
                     {
                         wording_date = entry.Date,
                         basis = entry.Basis,
-                        text_held = entry.Answer is not null,
+                        text_held = entry.Held.Count > 0,
                         works = entry.Works.Count,
                     }).ToArray(),
                     unplaced_versions = ofLanguage.Unplaced.Count,
