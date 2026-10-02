@@ -115,26 +115,31 @@ public sealed class V3CorpusEuropeEvidenceBundleMountTests
     }
 
     [TestMethod]
-    public async Task WithNoLanguageEveryHeldExpressionOfTheWordingDateIsQuotedEachUnderItsOwnPermalink()
+    public async Task WithNoLanguageEveryHeldExpressionOfTheWordingDateIsQuotedUnderItsOwnPermalink()
     {
+        // The French-only fixture: the work's one held expression is French (the fixture replaces the English body with a
+        // French one). With no language asked, the bundle serves exactly the held languages; asking for English, which is
+        // not held, refuses with the held language named. Two held expressions of one work are journeyed on the real
+        // bilingual canary mount (STATUS-WEB.md, the real-mount journey).
         var fixture = await EuropeMountedFixture.CreateAsync(acquireFrenchExpression: true);
         await using var cleanup = fixture;
         using var mount = await V3CorpusMount.OpenAsync(fixture.Directory, CancellationToken.None);
         Assert.IsNotNull(mount);
-        var english = await PinnedWordingAsync(mount, "eng");
         var french = await PinnedWordingAsync(mount, "fra");
-        Assert.AreEqual(english.WordingDate, french.WordingDate, "the fixture's two expressions share the act date");
 
-        var bundle = (await EnvelopeAsync(mount, Route, "evidence_bundle", new { identifier = "32016R0679", date = english.WordingDate })).Result!.Value;
-        CollectionAssert.AreEqual(new[] { "eng", "fra" }, bundle.GetProperty("served_languages").EnumerateArray().Select(static value => value.GetString()).ToArray());
-        var wordings = bundle.GetProperty("wordings").EnumerateArray().ToArray();
-        CollectionAssert.AreEqual(new[] { english.Permalink, french.Permalink }, wordings.Select(static wording => wording.GetProperty("permalink").GetString()).ToArray());
-        foreach (var wording in wordings)
-        {
-            var language = wording.GetProperty("language").GetString();
-            Assert.IsTrue(wording.GetProperty("articles").EnumerateArray().All(article => article.GetProperty("language").GetString() == language), $"{language}: its own articles");
-            Assert.IsTrue(wording.GetProperty("articles").GetArrayLength() > 0, $"{language}: text is quoted");
-        }
+        var envelope = await EnvelopeAsync(mount, Route, "evidence_bundle", new { identifier = "32016R0679", date = french.WordingDate });
+        Assert.IsNull(envelope.Refusal, envelope.Refusal?.Code);
+        var bundle = envelope.Result!.Value;
+        CollectionAssert.AreEqual(new[] { "fra" }, bundle.GetProperty("served_languages").EnumerateArray().Select(static value => value.GetString()).ToArray());
+        var wording = bundle.GetProperty("wordings").EnumerateArray().Single();
+        Assert.AreEqual(french.Permalink, wording.GetProperty("permalink").GetString(), "the wording EU dossier pins");
+        Assert.AreEqual("fra", wording.GetProperty("language").GetString());
+        Assert.IsTrue(wording.GetProperty("articles").GetArrayLength() > 0, "text is quoted");
+        Assert.IsTrue(wording.GetProperty("articles").EnumerateArray().All(static article => article.GetProperty("language").GetString() == "fra"), "its own articles");
+
+        var english = await EnvelopeAsync(mount, Route, "evidence_bundle", new { identifier = "32016R0679", date = french.WordingDate, language = "eng" });
+        Assert.AreEqual("language_not_available", english.Refusal?.Code);
+        CollectionAssert.AreEqual(new[] { "fra" }, english.Refusal!.HelpfulPayload.GetProperty("available_languages").EnumerateArray().Select(static value => value.GetString()).ToArray());
     }
 
     /// <summary>Every article of an expression as the EU index stores it, in the publisher's article id and identity order.</summary>
