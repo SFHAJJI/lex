@@ -2199,7 +2199,15 @@ which follows the items below:
    It builds the tool once from a clean `origin/v3/integration`, freezes it with the renderer sources
    and their digests, then runs both builds into `C:\lex-v3\chained-canary-20261001\{a,b}`. Its
    ledger is `C:\lex-v3\lanes\claude-web-notes.md`.
-2. **Then the release path's custody half**, once the data lane names its offline derive command:
+2. **The release path's custody half (done, 2026-10-02):** `node web/scripts/image-rehearsal.mjs --custody
+   <custody> --checkpoint <mount-inputs.json> --tool <Lex.V3.Tool.dll>` runs the data lane's offline
+   `derive` twice in separate processes with every proxy variable pointing at a local trap
+   (`derive-twice.mjs`), compares every mount file byte for byte, and only then builds, rehearsal-signs,
+   probes and publishes the image over the first derivation; the report carries the derivation's
+   evidence (files, digests, both executions, trap connections). `derive-twice.test.mjs` holds it to a
+   stand-in tool that agrees, differs in one file, or reaches for the network. The real run waits for the
+   complete populations' custody. Originally:
+   **Then the release path's custody half**, once the data lane names its offline derive command:
    the release command runs it twice, compares every digest, then images, signs with the rehearsal
    identity, publishes and reads back. If the command is not named by the time item 1 is done, the web
    lane asks in QUESTIONS.md.

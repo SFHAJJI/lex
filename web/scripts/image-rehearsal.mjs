@@ -553,14 +553,38 @@ export async function rehearse({ mount, keep = false, probe = true, reproduce = 
   }
 }
 
+/**
+ * The release command from custody: the mount derived twice by independent processes and compared file for file
+ * (`derive-twice.mjs`), then the rehearsal over the first derivation, with the derivation's evidence in the report.
+ */
+export async function rehearseFromCustody({ tool, custody, checkpoint, custodyEncoding = "brotli", log = () => {}, ...options }) {
+  const { deriveTwice } = await import("./derive-twice.mjs");
+  const into = await mkdtemp(join(tmpdir(), "lex-release-derive-"));
+  try {
+    const derived = await deriveTwice({ runner: ["dotnet", resolve(tool)], custody: resolve(custody), checkpoint: resolve(checkpoint), custodyEncoding, into, log });
+    log(`the two derivations agree on ${derived.files.length} files`);
+    const result = await rehearse({ mount: derived.mount, log, ...options });
+    return { derivation: { custody: resolve(custody), checkpoint: resolve(checkpoint), ...derived, mount: undefined }, ...result };
+  } finally {
+    await rm(into, { recursive: true, force: true });
+  }
+}
+
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   const argv = process.argv.slice(2);
-  const at = argv.indexOf("--mount");
-  if (at < 0 || at + 1 >= argv.length) {
-    console.error("usage: node scripts/image-rehearsal.mjs --mount <v3-corpus directory or journey fixture mount> [--keep] [--no-reproduce] [--no-probe] [--platform-card]");
+  const value = (name) => { const at = argv.indexOf(name); return at < 0 || at + 1 >= argv.length ? null : argv[at + 1]; };
+  const options = { keep: argv.includes("--keep"), probe: !argv.includes("--no-probe"), reproduce: !argv.includes("--no-reproduce"), platformCard: argv.includes("--platform-card"), log: (line) => console.error(`- ${line}`) };
+  const custody = value("--custody");
+  const run = custody !== null
+    ? (value("--checkpoint") && value("--tool")
+      ? rehearseFromCustody({ tool: value("--tool"), custody, checkpoint: value("--checkpoint"), custodyEncoding: value("--custody-encoding") ?? "brotli", ...options })
+      : null)
+    : value("--mount") !== null ? rehearse({ mount: value("--mount"), ...options }) : null;
+  if (run === null) {
+    console.error("usage: node scripts/image-rehearsal.mjs (--mount <v3-corpus directory or journey fixture mount> | --custody <custody directory> --checkpoint <mount-inputs.json> --tool <Lex.V3.Tool.dll> [--custody-encoding raw|brotli]) [--keep] [--no-reproduce] [--no-probe] [--platform-card]");
     process.exit(2);
   }
-  rehearse({ mount: argv[at + 1], keep: argv.includes("--keep"), probe: !argv.includes("--no-probe"), reproduce: !argv.includes("--no-reproduce"), platformCard: argv.includes("--platform-card"), log: (line) => console.error(`- ${line}`) }).then(
+  run.then(
     (result) => { console.log(JSON.stringify(result, null, 2)); },
     (error) => { console.error(error.message); process.exit(1); },
   );
