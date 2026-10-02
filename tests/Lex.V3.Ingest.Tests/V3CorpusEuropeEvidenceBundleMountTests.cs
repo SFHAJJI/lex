@@ -83,7 +83,7 @@ public sealed class V3CorpusEuropeEvidenceBundleMountTests
     }
 
     [TestMethod]
-    public async Task ADateOtherThanTheWordingDateIsRefusedAndTheOriginalWordingIsNeverServedAsALaterOne()
+    public async Task ADateBeforeTheWordingIsRefusedAndALaterDateIsAnsweredByTheLatestWordingAsDated()
     {
         var fixture = await EuropeMountedFixture.CreateAsync();
         await using var cleanup = fixture;
@@ -98,12 +98,17 @@ public sealed class V3CorpusEuropeEvidenceBundleMountTests
         Assert.AreEqual(JsonValueKind.Null, before.Refusal.HelpfulPayload.GetProperty("nearest_earlier").ValueKind);
         Assert.AreEqual(wordingDate, before.Refusal.HelpfulPayload.GetProperty("nearest_later").GetString());
 
-        // A later date is refused too: with no consolidation held, the original wording is not the wording of that date.
+        // A later date is answered by the latest wording the EU census holds, as dated (the EU time view, #909): here the
+        // original, since the census discovered no consolidated version; it has no next date, and the answer says that an
+        // amendment the publisher has not consolidated is not seen.
         var after = await EnvelopeAsync(mount, Route, "evidence_bundle", new { identifier = "32016R0679", date = day.AddYears(5).ToString("yyyy-MM-dd"), language = "eng" });
-        Assert.AreEqual("no_version_for_date", after.Refusal?.Code);
-        Assert.AreEqual(wordingDate, after.Refusal!.HelpfulPayload.GetProperty("nearest_earlier").GetString());
-        Assert.AreEqual(JsonValueKind.Null, after.Refusal.HelpfulPayload.GetProperty("nearest_later").ValueKind);
-        Assert.IsFalse(after.Refusal.HelpfulPayload.GetProperty("asserts_absence_of_law").GetBoolean());
+        Assert.IsNull(after.Refusal, after.Refusal?.Code);
+        var later = after.Result!.Value.GetProperty("wordings").EnumerateArray().Single();
+        Assert.AreEqual(wordingDate, later.GetProperty("wording_date").GetString());
+        Assert.AreEqual("original_wording", later.GetProperty("kind").GetString());
+        Assert.AreEqual(JsonValueKind.Null, later.GetProperty("next_date").ValueKind);
+        Assert.IsTrue(after.Result.Value.GetProperty("not_held").EnumerateArray()
+            .Any(static row => row.GetProperty("item").GetString() == "unconsolidated_amendments"));
 
         var german = await EnvelopeAsync(mount, Route, "evidence_bundle", new { identifier = "32016R0679", date = wordingDate, language = "deu" });
         Assert.AreEqual("language_not_available", german.Refusal?.Code);

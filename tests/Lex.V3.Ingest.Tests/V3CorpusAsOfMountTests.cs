@@ -280,7 +280,7 @@ public sealed class V3CorpusAsOfMountTests
     }
 
     [TestMethod]
-    public async Task EuIdentifiersAndEuOnlyMountsRefuseTheModeWithEuContext()
+    public async Task EuIdentifiersAreRefusedTheModeWithNoEuIndexAndAnsweredWithEuContextByTheEuTimeView()
     {
         var luxembourg = await MountedFixture.CreateAsync();
         await using var cleanupLuxembourg = luxembourg;
@@ -329,13 +329,13 @@ public sealed class V3CorpusAsOfMountTests
                     onEuropeOnly.Context.TimelineSemantics, luxembourgIdentifier);
             }
 
-            // An EU identifier on the same mount is refused the mode, with EU context.
+            // An EU identifier on the same mount is answered by the EU time view (the EU index's census holds the act),
+            // with EU context.
             var euOnEuropeOnly = await AsOfAsync(europeMount, "32016R0679", "2024-01-01");
-            Assert.AreEqual("retrieval_mode_unavailable", euOnEuropeOnly.Refusal!.Code);
+            Assert.AreEqual(V3Verdicts.Answer, euOnEuropeOnly.Verdict, euOnEuropeOnly.Refusal?.Code);
+            Assert.AreEqual("version_state", euOnEuropeOnly.Result!.ObjectType);
             Assert.AreEqual(PublisherId.EuEurLex, euOnEuropeOnly.Context.Publisher);
-            CollectionAssert.AreEqual(new[] { "r0_exact_coordinate" },
-                euOnEuropeOnly.Refusal.HelpfulPayload.GetProperty("available_modes").EnumerateArray()
-                    .Select(static value => value.GetString()).ToArray());
+            Assert.AreEqual(TimelineSemantics.OfficialConsolidationState, euOnEuropeOnly.Context.TimelineSemantics);
         }
 
         // Combined mount, built as the resolve tests build it: the Luxembourg fixture with the EU index
@@ -350,8 +350,7 @@ public sealed class V3CorpusAsOfMountTests
         Assert.AreEqual(PublisherId.LuLegilux, luxembourgOnCombined.Context.Publisher);
         Assert.AreEqual(TimelineSemantics.PublisherApplicability, luxembourgOnCombined.Context.TimelineSemantics);
         var euOnCombined = await AsOfAsync(combined, "32016R0679", "2024-01-01");
-        Assert.AreEqual(V3Verdicts.Refuse, euOnCombined.Verdict);
-        Assert.AreEqual("retrieval_mode_unavailable", euOnCombined.Refusal!.Code);
+        Assert.AreEqual(V3Verdicts.Answer, euOnCombined.Verdict, euOnCombined.Refusal?.Code);
         Assert.AreEqual(PublisherId.EuEurLex, euOnCombined.Context.Publisher);
         Assert.AreEqual(TimelineSemantics.OfficialConsolidationState, euOnCombined.Context.TimelineSemantics);
     }
