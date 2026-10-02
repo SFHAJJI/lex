@@ -1,6 +1,6 @@
 # Lex V3 status: the web lane
 
-Updated 2026-10-01. The web lane's progress, split out of STATUS.md (which keeps the heads, the owner's open
+Updated 2026-10-03. The web lane's progress, split out of STATUS.md (which keeps the heads, the owner's open
 items and the pointers) by the standing order of 2026-10-01 13:50 UTC. Every pull request of the web lane
 updates this file, not STATUS.md.
 
@@ -2274,6 +2274,95 @@ each consolidated version, with the publisher's consolidation date or a typed re
 - Not yet: EU `article_history`, `diff` and `changes_in_period` (the history, compare and radar screens'
   EU paths).
 
+## The French interface (sole driver, 2026-10-03)
+
+The French interface ships (branch `writer/french-chrome`, on the EU time view's PR #909; the launch
+contract's line "Chrome in FR and EN; DE and LB answer `localization_unavailable`").
+- **The review.** The French was reviewed by Claude (AI reviewer), under the owner's delegation of
+  2026-10-02 (the owner delegated every decision of the review to the driver). It is an AI
+  legal-language review with its evidence, not a review by a person. Its record, every changed entry
+  with its reason and source, is `C:\lex-v3\lanes\fr-review\review.md`: 129 of 370 entries changed
+  (61 in wording, 68 in typography). The receipt is `CHROME_REVIEWS.fr` in `localization.mjs`:
+  `reviewed_by` "Claude (AI reviewer), under the owner's delegation of 2026-10-02", `reviewed_on`
+  2026-10-03. `provenanceOf` now calls a review `review` (it said `human_review`), and the receipt
+  names who reviewed.
+- **Terminology** (the review's decisions, sourced from Legilux's own French labels and the
+  Interinstitutional Style Guide): a work is an "acte" and its title an "intitulé"; a Luxembourg state
+  is a "version", "applicable à partir du"; a wording (an EU act's, or a Luxembourg article's from
+  state to state) is a "libellé", and an EU consolidated wording a "libellé consolidé", not EUR-Lex's
+  "version consolidée", because "version" is the Luxembourg state's word and the date rule keeps them
+  apart; an EU date is never "applicable". Held is "détenu" (never "disponible"), searchable
+  "interrogeable", served "communiqué", evidence "élément de preuve", legal advice "consultation
+  juridique", a build "déploiement", a release "mise en production", a gate "critère", the outcome
+  token "disposition" a "classement", EU "de l’UE". A no-break space (U+00A0) stands before
+  : ; ! ? % and » and after «, and the apostrophe is ’.
+- **What ships.** The draft module became the reviewed table (`web/scripts/live-chrome-fr.mjs`,
+  `LIVE_CHROME_FR`, with the refusal French as `REFUSALS_FR`). `LIVE_CHROME` holds `en` and `fr`,
+  and `fr` is in `REVIEWED_CHROME_LOCALES`, so the live build writes the eight pages and their
+  scripts under `/fr/`. The language list links Français to `/fr/index.html`, and no
+  `locale-fr.html` is built; German and Luxembourgish still answer `localization_unavailable`.
+- **Refusals in French.** A French page says the 26 refusal sentences by code (EU refusals
+  included), each screen's two sentences for a refusal named only by its code, and the two hints in
+  the reviewed French, keyed by the English the screens hold. A sentence with no French throws
+  (`refusalSentence`) rather than being said in English, and `refusal-sentences.test.mjs` holds every
+  served sentence to one French sentence. English pages and English sentences are unchanged.
+- **The English the review raised, fixed with its French:** `reading.idle` no longer says "applied"
+  before the publisher is known (the review's own pair); `reading.intro` reads an EU work in the
+  wording that answers the date, original or consolidated; `dossier.euExpressions`, and for the same
+  claim `dossier.intro` and `search.euWording`, say "original wording", no longer "the one wording
+  held". An EU refusal card offers wordings by their dates ("wording of {date}", "libellé du {date}")
+  and its `ambiguous_version` note says "ranks neither wording" (`refusalCardCopyFor`, now used by
+  every live screen). The date-speech test now holds all 20 EU-only entries, and the EU refusal
+  sentences in both languages.
+- **Separators.** A label's colon and a list's separator are table entries (`dossier.titleGroup`,
+  `search.ambiguousWork`, `common.listSeparator`), used by the dossier's titles, search's ambiguous
+  works, history's runs and own dates, and the evaluation card's lists, so French sets a no-break
+  space before ":" and ";".
+- **English marked English.** On a French page, the platform's English carries `lang="en"`
+  (`ENGLISH_LANG`, `inEnglish`): the not-held reasons, the rules, scopes, notes, caveats and date
+  semantics, the EU acknowledgement and authenticity statement, a refusal payload's values, the
+  evaluation card's reasons, notes and results, the export's watermark and rights rule. The
+  sentences with no reviewed French (a transport failure, an answer a page cannot read, a request
+  it will not send, the card's own reason a refusal card cannot be shown, the export's reasons) are
+  said in English and marked English (`englishRun`, `statement`, `StatusSentence`). English pages
+  carry no new attribute.
+- **Written by the driver after the review**, in its vocabulary and typography, for the owner to
+  revise with the rest: `reading.idle` (the review's proposal), `reading.intro`, `dossier.intro`,
+  `dossier.euExpressions`, `search.euWording`, `dossier.titleGroup`, `search.ambiguousWork`,
+  `common.listSeparator`, `refusalCard.europeCandidate`,
+  `refusalCard.europeCandidateWithdrawalNotStated`, `refusalCard.europePublished` and
+  `refusalCard.europeNotes.ambiguous_version`. `node web/scripts/refusal-sentences.mjs` prints every
+  French sentence and entry beside its English.
+- **Evidence.** Every live page and every census answer and refusal (with its card shown and not
+  shown), each transport failure and unreadable answer, the EU reading and the evaluation card,
+  rendered in English before and after: 123 renders, 10 differ, each as intended (the French link in
+  the language list on the 8 pages, `search.euWording` and `dossier.euExpressions`; the two intros
+  behind the list). New tests: `live-french.test.mjs` (the French pages' refusals, the unshown
+  sentence's English reason, the platform's English marked on every screen, the EU card's wordings,
+  the separators, the English-only states); the chrome scan's French pass (the pages compiled for
+  French with the French table and refusal French pseudo-localised: no text bypasses them, and none
+  of their words is marked English); `live-locale-build.test.mjs` (the product build's `/fr/` pages
+  say the French table and none of the English, English as the English bundle renders it);
+  `live-chrome.test.mjs` (shape, typography, the receipt). The web suite, run file by file
+  (`node --test --test-concurrency=1`, memory being short during the acquisition) without the three
+  tests that start a browser (`keyboard-walk`, `paint-check`, `launch-browser`, which CI runs): 1,022
+  tests, 1,021 pass. The one failure, `image-run.test.mjs`'s writable-mount case, spawns `awk`, which
+  this machine's shell lacks; it fails the same on the commit this branch started from.
+- **Driver decisions (reversible).** The receipt's wording, under the owner's delegation (the review
+  left it to the owner as a public claim). The review's own choices, recorded as it asked: U+00A0
+  everywhere (U+202F before ; ! ? would be the Imprimerie nationale refinement); "libellé consolidé"
+  rather than EUR-Lex's "version consolidée"; the compare sides "Date de départ" and "Date
+  d’arrivée"; both "contient" and "détient" for "holds". The English-only status sentences are
+  marked English rather than translated without review. `build-live.mjs` lost its stand-in `tables`
+  hook: French is a product language now. Every live script carries both tables (a bundle cannot
+  leave the other language's out of `LIVE_CHROME`).
+- **Not yet:**
+  - French for the sentences that have none (above), reviewed as the rest was;
+  - a browser journey over the `/fr/` pages (hydration, keyboard): browsers do not run on this
+    machine during the acquisition, and the journey visits English pages only;
+  - the platform's English stays English: if the EU authenticity statement is ever localized, the
+    review's term is "fait foi".
+
 ## Next, in order (web lane; the data lane's items 1 to 3 are in STATUS-DATA.md)
 
 The web lane's order since the owner's proxy's journey corrections (2026-10-01 14:30 UTC,
@@ -2424,10 +2513,10 @@ The plan, in order (its items 1 to 3 are the data lane's, in STATUS-DATA.md):
    PR #810: Trust and Coverage's words in the table, so the chrome scan exempts nothing; PR #811:
    the accessibility and scope line held on the live screens; PR #813: a reviewed language builds
    its own pages; PR #815: the eight screens against the real bounded mount; PR #834: the
-   licence-blocked journey. Next: the
-   owner's review of the French drafts (`node web/scripts/live-chrome-fr-draft.mjs`), then the
-   reviewed table in `LIVE_CHROME` and `fr` in `REVIEWED_CHROME_LOCALES`, which builds `/fr/*.html`. French ships only once
-   reviewed (Decision 41). Hosting (ruling 3): `Lex.V3.Api`
+   licence-blocked journey. The French interface ships (branch `writer/french-chrome`): reviewed by
+   Claude (AI reviewer) under the owner's delegation of 2026-10-02, the reviewed table in
+   `LIVE_CHROME` and `fr` in `REVIEWED_CHROME_LOCALES`, which builds `/fr/*.html` (Decision 41); the
+   owner may revise any entry. Hosting (ruling 3): `Lex.V3.Api`
    serves the live pages on the API's origin with `frame-ancestors`, HSTS and `Referrer-Policy`,
    and a live page never shows the synthetic banner on a real mount. J1 to J8 are restated as V3
    steps by the driver (they exist only in the pre-V3 pack, `05-user-journeys.md`).

@@ -70,20 +70,21 @@ Decision 95 (lex-governance PR #9, merged 2026-09-30) records these rulings and 
 
 ## For the weekly checkpoint
 
-- The French and English refusal sentences, one short list (ruling 4): PR #793. The 20 sentences the
+- The French and English refusal sentences, one short list (ruling 4): PR #793. The 26 sentences the
   live pages say by refusal code, each page's two sentences for a refusal named only by its code,
   and the two hints a card that cannot be shown still carries (the date the history begins, the
-  nearest article ids; review of #793), English as served and French as the driver's draft. Printed from the pages' own sentences by
-  `node web/scripts/refusal-sentences.mjs`; a test holds every served sentence to one draft. Nothing
-  French ships until the owner's reviewed wording replaces the drafts.
-- The live pages' French interface copy, drafted for review (Decision 41: French chrome ships only
-  once reviewed): every entry of the chrome table so far (each page's title, eyebrow, heading and
-  introduction, the forms' labels and buttons), printed by `node web/scripts/live-chrome-fr-draft.mjs`
-  (PR #800). Since then it has grown to every sentence of the live screens (PRs #803, #804, #806),
-  the evaluation card (PR #807), the refusal card (PR #809) and Trust and Coverage (PR #810): the
-  whole of the live pages' interface, as the chrome scan holds it. That includes the absence note
-  ("This is what this service holds, and does not hold. It is not evidence that the instrument or the
-  law does not exist.") and the live banner, both claims the owner reviews.
+  nearest article ids; review of #793). The French is no longer a draft: under the owner's
+  delegation of 2026-10-02 it was reviewed by Claude (AI reviewer), not by a person, and it ships on
+  the French pages (branch `writer/french-chrome`). The owner may revise any sentence. Printed,
+  English beside French, by `node web/scripts/refusal-sentences.mjs`; a test holds every served
+  sentence to one French sentence. The review's record: `C:\lex-v3\lanes\fr-review\review.md`.
+- The live pages' French interface copy (Decision 41): the whole chrome table, reviewed under the same
+  delegation by the same AI reviewer (129 of 370 entries changed, each with its reason and source in
+  the record) and shipped as the French pages under `/fr/`, with a receipt that says so
+  (`CHROME_REVIEWS` in `web/scripts/localization.mjs`). That includes the absence note ("Ce n’est pas
+  un élément de preuve de l’inexistence de l’acte ou de la règle de droit.") and the live banner, both
+  claims the owner may revise; `node web/scripts/refusal-sentences.mjs` prints every entry beside its
+  English, and STATUS-WEB.md lists the entries the driver wrote after the review.
 
 - A rights question the retrieval set surfaced (PR #842): on the licence-blocked mount, search
   still matches inside the text the licence withholds. It answers which articles hold a word, and
