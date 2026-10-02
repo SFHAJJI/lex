@@ -9,10 +9,11 @@
 // `client-live-dossier.js`), `reading.html` (reading, script `client-live-reading.js`) and `history.html`
 // (provision history, script `client-live-history.js`), `compare.html` (compare, script
 // `client-live-compare.js`), `radar.html` (change radar, script `client-live-radar.js`) and
-// `export.html` (export composer, script `client-live-export.js`).
+// `export.html` (export composer, script `client-live-export.js`). The same eight, in French, are under
+// `fr/`; German and Luxembourgish are `locale-de.html` and `locale-lb.html`, which say they are not
+// reviewed.
 
 import { cp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
-import { dirname } from "node:path";
 import { pathToFileURL } from "node:url";
 
 import { tokenCss } from "./design-tokens.mjs";
@@ -34,36 +35,14 @@ const PAGES = Object.freeze([
   ["live-export-page", "renderLiveExportPage", "export.html", "client-live-export-entry.jsx", "client-live-export.js"],
 ]);
 
-/** A build plugin that puts a stand-in table for `locale` beside English in the chrome table's module. */
-function standInTable(locale, table) {
-  const TABLE = "export const LIVE_CHROME = Object.freeze({ en: EN });";
-  return {
-    name: "stand-in-chrome-table",
-    setup(builder) {
-      builder.onLoad({ filter: /live-chrome\.mjs$/ }, async (args) => {
-        const source = await readFile(args.path, "utf8");
-        if (source.split(TABLE).length !== 2) throw new Error("the chrome table is not exported as the stand-in build expects");
-        return {
-          contents: source.replace(TABLE, `export const LIVE_CHROME = Object.freeze({ en: EN, ${JSON.stringify(locale)}: ${JSON.stringify(table)} });`),
-          loader: "js",
-          resolveDir: dirname(args.path),
-        };
-      });
-    },
-  };
-}
-
 /**
  * The eight pages and their scripts for one interface language: English at the root, any other under
  * its own path (`/fr/`), each page and the script that hydrates it compiled for that language.
  */
-async function buildPages(destination, { card, locale, table = null, buildTag = "" }) {
+async function buildPages(destination, { card, locale, buildTag = "" }) {
   const { bundle, bundleClient } = await import("./react-build.mjs");
   const english = locale === "en";
-  const options = english ? {} : {
-    define: { __LEX_CHROME_LOCALE__: JSON.stringify(locale) },
-    plugins: table === null ? undefined : [standInTable(locale, table)],
-  };
+  const options = english ? {} : { define: { __LEX_CHROME_LOCALE__: JSON.stringify(locale) } };
   // A caller's tag keeps its intermediate bundles apart from another build running at the same time.
   const suffix = `${buildTag ? `.${buildTag}` : ""}${english ? "" : `.${locale}`}`;
   const out = english ? destination : new URL(`${locale}/`, destination);
@@ -79,7 +58,7 @@ async function buildPages(destination, { card, locale, table = null, buildTag = 
  * Builds the live pages into `destination`. `card` is the evaluation card the Trust and Coverage page carries: the
  * platform's rendered card when none is given, the release card when a release build hands one (ruling 2).
  */
-export async function buildLive(destination = LIVE_DESTINATION, { card, tables = {}, buildTag = "" } = {}) {
+export async function buildLive(destination = LIVE_DESTINATION, { card, buildTag = "" } = {}) {
   await rm(destination, { force: true, recursive: true });
   await mkdir(destination, { recursive: true });
   for (const asset of ["styles.css", "favicon.svg", "fonts"]) {
@@ -100,10 +79,9 @@ ${tokenCss()}`, "utf8");
   await writeFile(new URL(CARD_ROUTE.slice(1), destination), `${JSON.stringify(card ?? platformCard, null, 2)}
 `, "utf8");
   // Every other reviewed interface language, under its own path, its bundles compiled for it
-  // (Decision 41: none but English is reviewed today, so this builds nothing yet). `tables` lets a
-  // test build a stand-in language without it being reviewed; the product build passes none.
-  const others = [...new Set([...REVIEWED_CHROME_LOCALES.filter((code) => code !== "en"), ...Object.keys(tables)])];
-  for (const locale of others) await buildPages(destination, { card, locale, table: tables[locale] ?? null, buildTag });
+  // (Decision 41): French, reviewed by Claude (AI reviewer) under the owner's delegation of
+  // 2026-10-02, at `/fr/`.
+  for (const locale of REVIEWED_CHROME_LOCALES.filter((code) => code !== "en")) await buildPages(destination, { card, locale, buildTag });
   // One static page per chrome locale without reviewed copy: localization_unavailable, in English and
   // labelled English, with no script (Decision 41; the launch contract's DE and LB line).
   const { bundle } = await import("./react-build.mjs");

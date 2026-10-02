@@ -10,9 +10,9 @@
 import { askV3 } from "./v3-client.mjs";
 import { readDiff } from "./compare-answer.mjs";
 import { validateRefusal } from "./refusal-card.mjs";
-import { noCorpusMountedSentence, historyBeginsHint } from "./live-refusals.mjs";
+import { historyBeginsHint, noCorpusMountedSentence, tableRefusalSentence, unshownRefusal } from "./live-refusals.mjs";
 import { isCalendarDate } from "./temporal.mjs";
-import { liveChrome } from "./live-chrome.mjs";
+import { englishStatement, fillText, liveChrome, refusalTemplate } from "./live-chrome.mjs";
 
 /**
  * The languages the form offers besides "any": the platform answers a language the work is not held
@@ -41,10 +41,16 @@ export const LIVE_COMPARE_REFUSAL_SENTENCES = Object.freeze({
 export const LIVE_COMPARE_IDLE = liveChrome().compare.idle;
 export const LIVE_COMPARE_LOADING = liveChrome().common.loading;
 
+const UNEXPECTED = "The comparison was refused with {code}.";
+const UNSHOWN = "The comparison was refused with {code}, and its card cannot be shown: {reason}.";
+
 export function unexpectedRefusalSentence(code) {
-  return `The comparison was refused with ${code}.`;
+  return fillText(refusalTemplate("compare", "unexpected", UNEXPECTED), { code });
 }
 
+// A transport failure, an answer this page cannot read and a request it will not send have no reviewed
+// wording but the English: a page in another language says them in English, marked English
+// (`englishStatement`).
 export function transportFailureSentence(code) {
   if (code === "request_schema_invalid") {
     return "This server refused the comparison as it was asked (request_schema_invalid).";
@@ -53,7 +59,7 @@ export function transportFailureSentence(code) {
 }
 
 export function unshownRefusalSentence(code, reason) {
-  return `The comparison was refused with ${code}, and its card cannot be shown: ${reason}.`;
+  return unshownRefusal("compare", UNSHOWN, code, reason).sentence;
 }
 
 export function invalidAnswerSentence(reason) {
@@ -83,8 +89,8 @@ export function compareParameters({ identifier, dateFrom, dateTo, language = "" 
 /** What an absence whose card cannot be shown still carries: the date the held history begins. */
 function retryHint(code, payload) {
   return code === "no_version_for_date" && isCalendarDate(payload?.history_begins)
-    ? ` ${historyBeginsHint(payload.history_begins)}`
-    : "";
+    ? historyBeginsHint(payload.history_begins)
+    : null;
 }
 
 /**
@@ -96,7 +102,7 @@ export function compareOutcome(asked) {
     try {
       return { state: "success", view: readDiff(asked.envelope.result.value), context: asked.envelope.context };
     } catch (error) {
-      return { state: "invalid_envelope", sentence: invalidAnswerSentence(error.message) };
+      return { state: "invalid_envelope", ...englishStatement(invalidAnswerSentence(error.message)) };
     }
   }
 
@@ -104,7 +110,7 @@ export function compareOutcome(asked) {
     const { code, helpful_payload: payload } = asked.envelope.refusal;
     const sentence = code === "no_corpus_mounted"
       ? noCorpusMountedSentence(payload)
-      : LIVE_COMPARE_REFUSAL_SENTENCES[code] ?? unexpectedRefusalSentence(code);
+      : tableRefusalSentence(LIVE_COMPARE_REFUSAL_SENTENCES, code, unexpectedRefusalSentence);
     try {
       validateRefusal({ code, sentence, payload });
     } catch (error) {
@@ -112,7 +118,7 @@ export function compareOutcome(asked) {
         state: "refusal",
         code,
         card: false,
-        sentence: `${unshownRefusalSentence(code, error.message)}${retryHint(code, payload)}`,
+        ...unshownRefusal("compare", UNSHOWN, code, error.message, retryHint(code, payload)),
         context: asked.envelope.context,
       };
     }
@@ -120,10 +126,10 @@ export function compareOutcome(asked) {
   }
 
   if (asked.state === "transport_failure") {
-    return { state: "transport_failure", sentence: transportFailureSentence(asked.code) };
+    return { state: "transport_failure", ...englishStatement(transportFailureSentence(asked.code)) };
   }
 
-  return { state: "invalid_envelope", sentence: invalidAnswerSentence(asked.reason) };
+  return { state: "invalid_envelope", ...englishStatement(invalidAnswerSentence(asked.reason)) };
 }
 
 /** Asks the live API one comparison and returns the view state. */
@@ -146,7 +152,7 @@ export function createCompareSession({ contract, fetchImpl, onOutcome }) {
       try {
         compareParameters(request);
       } catch (error) {
-        onOutcome({ state: "invalid_request", sentence: `${error.message}.` });
+        onOutcome({ state: "invalid_request", ...englishStatement(`${error.message}.`) });
         return false;
       }
       const own = new AbortController();
@@ -158,7 +164,7 @@ export function createCompareSession({ contract, fetchImpl, onOutcome }) {
         })
         .catch((error) => {
           if (error?.name !== "AbortError" && !own.signal.aborted) {
-            onOutcome({ state: "invalid_envelope", sentence: invalidAnswerSentence(String(error?.message ?? error)) });
+            onOutcome({ state: "invalid_envelope", ...englishStatement(invalidAnswerSentence(String(error?.message ?? error))) });
           }
         });
       return true;

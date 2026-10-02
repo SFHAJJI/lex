@@ -9,7 +9,7 @@
 
 import { composeExport, exportCsv, exportJson } from './export-build.mjs';
 import { exportPdf, pdfRefusal } from './export-pdf.mjs';
-import { fillText, liveChrome } from './live-chrome.mjs';
+import { englishRun, fillParts, liveChrome, statement } from './live-chrome.mjs';
 
 const COPY = liveChrome().export;
 
@@ -27,8 +27,9 @@ export const EXPORT_FORMATS = Object.freeze([
   Object.freeze({ id: 'pdf', label: COPY.save.pdf, extension: 'pdf', mediaType: 'application/pdf', write: exportPdf, refusal: pdfRefusal }),
 ]);
 
-export function formatRefusedSentence(format, reason) {
-  return fillText(COPY.formatRefused, { format: format.id.toUpperCase(), reason });
+/** Why a format is not offered, in the table's words around the writer's own reason, which is English (`statement`). */
+export function formatRefused(format, reason) {
+  return statement(fillParts(COPY.formatRefused, { format: format.id.toUpperCase(), reason: englishRun(reason) }));
 }
 
 /** One pin: the state's digest and the article's publisher id, which together name one article. */
@@ -42,8 +43,12 @@ function unpin(key) {
   return { stateSha256: key.slice(0, split), publisherId: key.slice(split + 1) };
 }
 
-export function composeFailedSentence(reason) {
-  return fillText(COPY.composeFailed, { reason });
+/**
+ * Why an export cannot be composed, in the table's words around the composer's own reason, which is English: a
+ * page in another language marks it so (`statement`).
+ */
+export function composeFailed(reason) {
+  return statement(fillParts(COPY.composeFailed, { reason: englishRun(reason) }));
 }
 
 /**
@@ -64,7 +69,7 @@ export function exportState(outcome, pins) {
     });
     return { state: 'composed', model };
   } catch (error) {
-    return { state: 'failed', sentence: composeFailedSentence(error.message) };
+    return { state: 'failed', ...composeFailed(error.message) };
   }
 }
 

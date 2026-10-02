@@ -1,16 +1,16 @@
-// The live pages' refusal sentences, in English as served and in French as the driver's draft, for the
-// owner's review at the weekly checkpoint (Decision 95, ruling 4).
+// The live pages' French beside their English, printed for the owner, who may revise any of it: the refusal
+// sentences (Decision 95, ruling 4) and the interface table (Decision 41).
 //
 // The English sentences are collected from the live screens themselves (each screen's refusal table,
 // the shared `no_corpus_mounted` sentence for each index a payload can name, and the two sentences a
 // page says when it names a refusal only by its code), so the list is the product's and cannot drift
-// from it. The French column is a draft: no French string ships until it is reviewed
-// (`localization.mjs`: never machine-translated authoritative copy), and nothing in the product imports
-// this file. A test holds every served English sentence to one French draft and no draft to a sentence
-// the pages no longer say. The list is printed, not checked in (the tree admits no such file), and
-// goes to the checkpoint in the pull request that changes it:
+// from it. The French is the reviewed French the French pages say (`live-chrome-fr.mjs`), reviewed by
+// Claude (AI reviewer), under the owner's delegation of 2026-10-02. A test holds every served English
+// sentence to one French sentence and no French sentence to one the pages no longer say. Nothing in the
+// product imports this file (it imports every screen). The list is printed, not checked in (the tree
+// admits no such file), and goes to the checkpoint in the pull request that changes it:
 //
-//   node web/scripts/refusal-sentences.mjs > refusal-sentences.md
+//   node web/scripts/refusal-sentences.mjs > french-and-english.md
 
 import { pathToFileURL } from 'node:url';
 
@@ -22,6 +22,8 @@ import * as history from './live-history.mjs';
 import * as compare from './live-compare.mjs';
 import * as radar from './live-radar.mjs';
 import { historyBeginsHint, nearestAnchorsHint, noCorpusMountedSentence } from './live-refusals.mjs';
+import { LIVE_CHROME, entriesOf } from './live-chrome.mjs';
+import { REFUSALS_FR } from './live-chrome-fr.mjs';
 
 /** The live screens, in the launch contract's order, each with its refusal table. */
 export const SCREENS = Object.freeze([
@@ -37,87 +39,19 @@ export const SCREENS = Object.freeze([
 /** The screens that say `no_corpus_mounted` with the shared sentence naming the missing index. */
 const NAMING_THE_INDEX = Object.freeze(['search', 'dossier', 'reading', 'history', 'compare', 'radar']);
 
-/**
- * The French drafts, keyed by the English sentence they translate. "Work" is "acte", "state" is
- * "version" (the consolidated text as it stood from a date), "build" is "déploiement".
- */
-export const FRENCH_DRAFTS = Object.freeze({
-  'This build has no index mounted.': 'Ce déploiement n’a aucun index monté.',
-  'This build has no Luxembourg index mounted.': 'Ce déploiement n’a pas d’index luxembourgeois monté.',
-  'This build has no EU index mounted.': 'Ce déploiement n’a pas d’index de l’Union européenne monté.',
-  "This build has no index mounted for this request's publisher.": 'Ce déploiement n’a pas d’index monté pour l’éditeur de cette demande.',
-  'This index holds no searchable text in the language asked for.': 'Cet index ne contient aucun texte consultable dans la langue demandée.',
-  'This index holds no work under that identifier.': 'Cet index ne contient aucun acte sous cet identifiant.',
-  'That identifier names more than one held work or expression, so none is searched.': 'Cet identifiant désigne plusieurs actes ou expressions détenus ; la recherche ne porte donc sur aucun d’eux.',
-  'This work is not held in the language asked for.': 'Cet acte n’est pas disponible dans la langue demandée.',
-  'That identifier names more than one held work, so no dossier is chosen.': 'Cet identifiant désigne plusieurs actes détenus ; aucun dossier n’est donc retenu.',
-  'No state of this work that this index holds applies on that date.': 'Aucune version de cet acte contenue dans cet index ne s’applique à cette date.',
-  'Several states of this work apply on that date, and none is chosen.': 'Plusieurs versions de cet acte s’appliquent à cette date, et aucune n’est retenue.',
-  "This state's text is withheld: its rights did not admit it.": 'Le texte de cette version n’est pas communiqué : ses droits ne le permettaient pas.',
-  'This index holds this state but no text for it.': 'Cet index contient cette version, mais aucun texte pour elle.',
-  "This index cannot read this work's text.": 'Cet index ne peut pas lire le texte de cet acte.',
-  'No state of this work that this index holds carries that article id.': 'Aucune version de cet acte contenue dans cet index ne comporte cet identifiant d’article.',
-  "This index cannot trace this work's articles.": 'Cet index ne peut pas retracer les articles de cet acte.',
-  'No state of this work that this index holds applies on one of the dates.': 'Aucune version de cet acte contenue dans cet index ne s’applique à l’une des deux dates.',
-  'Several states of this work apply on one of the dates, and none is chosen.': 'Plusieurs versions de cet acte s’appliquent à l’une des deux dates, et aucune n’est retenue.',
-  'The two states were read under different rule profiles, so they are not compared.': 'Les deux versions ont été lues selon des profils de règles différents ; elles ne sont donc pas comparées.',
-  "This index cannot compare this work's states.": 'Cet index ne peut pas comparer les versions de cet acte.',
-  'This index holds no state in the language asked for.': 'Cet index ne contient aucune version dans la langue demandée.',
-  "This index cannot list this work's changes.": 'Cet index ne peut pas lister les modifications de cet acte.',
-  'This index holds no wording of this EU act for that date.': 'Cet index ne contient aucune version du texte de cet acte de l’Union pour cette date.',
-  'This index holds different texts of this EU act for that date, so none is chosen.': 'Cet index contient des textes différents de cet acte de l’Union pour cette date ; aucun n’est donc retenu.',
-  "This wording's text is withheld: its rights did not admit it.": 'Le texte de cette version de l’acte de l’Union n’est pas communiqué : ses droits ne le permettaient pas.',
-  'This index knows this wording of the EU act but holds no text for it.': 'Cet index connaît cette version de l’acte de l’Union, mais n’en contient aucun texte.',
-});
-
-/**
- * The French drafts of the two sentences a page says when it names a refusal only by its code, per
- * screen (the noun and its agreement differ), with the same `{code}` and `{reason}` placeholders.
- */
-export const FRENCH_TEMPLATE_DRAFTS = Object.freeze({
-  coverage: Object.freeze({
-    unexpected: 'Le rapport de couverture a été refusé avec le code {code}.',
-    unshown: 'Le rapport de couverture a été refusé avec le code {code}, et sa fiche ne peut pas être affichée : {reason}.',
-  }),
-  search: Object.freeze({
-    unexpected: 'La recherche a été refusée avec le code {code}.',
-    unshown: 'La recherche a été refusée avec le code {code}, et sa fiche ne peut pas être affichée : {reason}.',
-  }),
-  dossier: Object.freeze({
-    unexpected: 'Le dossier a été refusé avec le code {code}.',
-    unshown: 'Le dossier a été refusé avec le code {code}, et sa fiche ne peut pas être affichée : {reason}.',
-  }),
-  reading: Object.freeze({
-    unexpected: 'La lecture a été refusée avec le code {code}.',
-    unshown: 'La lecture a été refusée avec le code {code}, et sa fiche ne peut pas être affichée : {reason}.',
-  }),
-  history: Object.freeze({
-    unexpected: 'L’historique de la disposition a été refusé avec le code {code}.',
-    unshown: 'L’historique de la disposition a été refusé avec le code {code}, et sa fiche ne peut pas être affichée : {reason}.',
-  }),
-  compare: Object.freeze({
-    unexpected: 'La comparaison a été refusée avec le code {code}.',
-    unshown: 'La comparaison a été refusée avec le code {code}, et sa fiche ne peut pas être affichée : {reason}.',
-  }),
-  radar: Object.freeze({
-    unexpected: 'Le radar des modifications a été refusé avec le code {code}.',
-    unshown: 'Le radar des modifications a été refusé avec le code {code}, et sa fiche ne peut pas être affichée : {reason}.',
-  }),
-});
+/** The French each page says, keyed as the screens hold the English (`REFUSALS_FR`, reviewed). */
+export const FRENCH_SENTENCES = REFUSALS_FR.sentences;
+export const FRENCH_TEMPLATES = REFUSALS_FR.templates;
+export const FRENCH_HINTS = REFUSALS_FR.hints;
 
 /**
  * The hints a refusal whose card cannot be shown carries after its sentence, with the pages that say
- * them, as templates, and their French drafts (review of #793: the list left them out).
+ * them, as templates (review of #793: the list left them out).
  */
 export const SERVED_HINTS = Object.freeze([
   Object.freeze({ template: historyBeginsHint('{date}'), code: 'no_version_for_date', screens: Object.freeze(['reading', 'compare']) }),
   Object.freeze({ template: nearestAnchorsHint(['{ids}']), code: 'anchor_not_in_version', screens: Object.freeze(['history']) }),
 ]);
-
-export const FRENCH_HINT_DRAFTS = Object.freeze({
-  'The history this index holds for this work begins on {date}.': 'L’historique que cet index contient pour cet acte commence le {date}.',
-  'The nearest article ids this index holds are {ids}.': 'Les identifiants d’article les plus proches que cet index contient sont {ids}.',
-});
 
 /**
  * Every refusal sentence the live pages say for a code, once each, with the pages and codes that say
@@ -171,20 +105,20 @@ export function renderCheckpointList() {
     'sentences at the weekly checkpoint. This is the list, printed by `node web/scripts/refusal-sentences.mjs`',
     'from the sentences the live pages say, so it is the product\'s own.',
     '',
-    '- **English**: served today, on the live pages.',
-    '- **French**: the driver\'s draft. Nothing French ships until it is reviewed (no',
-    '  machine-translated authoritative copy); the reviewed wording then replaces the draft here and',
-    '  ships with the French interface.',
-    '- Vocabulary in the drafts: a *work* is an *acte*, a *state* is a *version* (the text as it stood',
-    '  from a date), a *build* is a *déploiement*, a refusal *card* is a *fiche*.',
+    '- **English**: served on the English pages.',
+    '- **French**: served on the French pages (`/fr/`), reviewed by Claude (AI reviewer), under the',
+    '  owner\'s delegation of 2026-10-02. The owner may revise any sentence; the revision replaces it',
+    '  in `web/scripts/live-chrome-fr.mjs`.',
+    '- Vocabulary: a *work* is an *acte*, a Luxembourg *state* is a *version*, an EU *wording* is a',
+    '  *libellé*, a *build* is a *déploiement*, a refusal *card* is a *fiche*.',
     '',
     `## Refusal sentences by code (${sentences.length})`,
     '',
-    '| # | Code | Pages | English (served) | French (draft) |',
+    '| # | Code | Pages | English (served) | French (served) |',
     '|---|------|-------|------------------|----------------|',
     ...sentences.map((row, index) => {
       const codes = [...new Set(row.uses.map((use) => `\`${use.code}\``))].join(', ');
-      return `| ${index + 1} | ${codes} | ${pagesOf(row.uses)} | ${row.sentence} | ${FRENCH_DRAFTS[row.sentence] ?? '(no draft)'} |`;
+      return `| ${index + 1} | ${codes} | ${pagesOf(row.uses)} | ${row.sentence} | ${FRENCH_SENTENCES[row.sentence] ?? '(no French)'} |`;
     }),
     '',
     '`no_corpus_mounted` names the index its payload says is missing (Luxembourg, EU, or neither), so',
@@ -195,14 +129,14 @@ export function renderCheckpointList() {
     'A code a page has no sentence for, and a refusal whose card cannot be shown, are said with the code',
     '(and the reason the card cannot be shown). `{code}` and `{reason}` are filled when said.',
     '',
-    '| Page | English (served) | French (draft) |',
+    '| Page | English (served) | French (served) |',
     '|------|------------------|----------------|',
     ...servedRefusalTemplates().flatMap((row) => {
       const name = SCREENS.find((screen) => screen.id === row.screen).name;
-      const drafts = FRENCH_TEMPLATE_DRAFTS[row.screen] ?? {};
+      const french = FRENCH_TEMPLATES[row.screen] ?? {};
       return [
-        `| ${name} | ${row.unexpected} | ${drafts.unexpected ?? '(no draft)'} |`,
-        `| ${name} | ${row.unshown} | ${drafts.unshown ?? '(no draft)'} |`,
+        `| ${name} | ${row.unexpected} | ${french.unexpected ?? '(no French)'} |`,
+        `| ${name} | ${row.unshown} | ${french.unshown ?? '(no French)'} |`,
       ];
     }),
     '',
@@ -210,14 +144,31 @@ export function renderCheckpointList() {
     '',
     'Said after the sentence above, so the reader can ask again. `{date}` and `{ids}` are filled when said.',
     '',
-    '| Code | Pages | English (served) | French (draft) |',
+    '| Code | Pages | English (served) | French (served) |',
     '|------|-------|------------------|----------------|',
-    ...SERVED_HINTS.map((hint) => `| \`${hint.code}\` | ${pagesOf(hint.screens.map((screen) => ({ screen })))} | ${hint.template} | ${FRENCH_HINT_DRAFTS[hint.template] ?? '(no draft)'} |`),
+    ...SERVED_HINTS.map((hint) => `| \`${hint.code}\` | ${pagesOf(hint.screens.map((screen) => ({ screen })))} | ${hint.template} | ${FRENCH_HINTS[hint.template] ?? '(no French)'} |`),
     '',
   ];
   return lines.join('\n');
 }
 
+/** The interface table, English beside French, entry by entry (what the draft module printed for the review). */
+export function renderChromeList() {
+  const french = new Map(entriesOf(LIVE_CHROME.fr));
+  return [
+    '# The live pages\' interface copy, English and French',
+    '',
+    'Every entry of the chrome table the live pages render (`web/scripts/live-chrome.mjs`, and',
+    '`web/scripts/live-chrome-fr.mjs` for the French). A no-break space (U+00A0) stands before : ; ! ? %',
+    'and » and after « in the French.',
+    '',
+    '| Entry | English | French |',
+    '|-------|---------|--------|',
+    ...entriesOf(LIVE_CHROME.en).map(([path, english]) => `| \`${path}\` | ${english} | ${french.get(path) ?? '(no French)'} |`),
+    '',
+  ].join('\n');
+}
+
 if (import.meta.url === pathToFileURL(process.argv[1]).href) {
-  process.stdout.write(renderCheckpointList());
+  process.stdout.write(`${renderCheckpointList()}\n${renderChromeList()}`);
 }

@@ -93,7 +93,7 @@ test("a served dossier is the work, its states and what it does not hold, read b
   assert.equal((markup.match(/<li><strong>/g) ?? []).length, value.not_held.length);
 });
 
-test("an EU work's dossier is the work by its CELEX, its expressions with the one wording held of each, pinned, and what it does not hold", async () => {
+test("an EU work's dossier is the work by its CELEX, its expressions with the original wording of each, pinned, and what it does not hold", async () => {
   const envelope = envelopeOf("one EU work by its CELEX");
   const value = envelope.result.value;
   const request = { identifier: "32016R0679" };
@@ -107,7 +107,7 @@ test("an EU work's dossier is the work by its CELEX, its expressions with the on
   const shown = text(markup);
   assert.ok(markup.includes("<h2>32016R0679</h2>"), "the work is named by its CELEX");
   assert.ok(markup.includes(`<code>${value.publisher_work_id}</code>`));
-  assert.ok(shown.includes("1 expression held, in its one original wording."));
+  assert.ok(shown.includes("1 expression held, shown with its original wording."));
   const [expression] = value.expressions;
   assert.ok(markup.includes(`data-pinned-wording="${expression.pinned_wording.wording_sha256}"`));
   assert.ok(markup.includes(`<code>${expression.pinned_wording.permalink}</code>`), "the expression is pinned by its wording's permalink");
