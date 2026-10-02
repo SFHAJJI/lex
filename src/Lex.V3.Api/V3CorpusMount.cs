@@ -13,7 +13,7 @@ using Lex.V3.Ingest.Luxembourg;
 
 namespace Lex.V3.Api;
 
-internal sealed class V3CorpusMount : IDisposable
+internal sealed partial class V3CorpusMount : IDisposable
 {
     public const string IndexFileName = "luxembourg-index.sqlite3";
     public const string CapabilityManifestFileName = "luxembourg-capability-manifest.json";
