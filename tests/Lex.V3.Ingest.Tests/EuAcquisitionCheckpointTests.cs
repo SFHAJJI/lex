@@ -53,12 +53,58 @@ public sealed partial class EuQueryExecutionAdapterTests
     }
 
     [TestMethod]
+    public async Task HistoricalQueryCheckpointRecomputesWorkFactsFromOriginalEvidence()
+    {
+        var capture = await RetainedEuRun.Value;
+        var original = capture.Result;
+        var root = await RunRootAsync(capture.Store, original.AcquisitionCheckpointRef!);
+        root["schema"] = "lex-eu-acquisition-checkpoint/2";
+        // The exact schema-2 payload predates ObservedWorkFacts. The replay must obtain
+        // those facts from the original retained P rows, not from a caller-supplied upgrade.
+        var oldPayload = new
+        {
+            original.ScopeManifestCanonicalSha256, original.CorpusRecordSetRef, original.ObservedObjectCount,
+            original.ObservedExpressionCount, original.FamilyOutcomes, original.ReductionExclusions,
+            original.ObservedManifestationTypesByCelex, original.ObservedExpressionsByCelex,
+            original.MintedRowsByOrdinal, original.DateAxioms, original.LocatedAmendmentObservations,
+            original.WitnessTerminations,
+        };
+        root["result_sha256"] = Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(
+            Encoding.UTF8.GetBytes(ContractJson.Serialize(oldPayload))));
+        var bytes = Encoding.UTF8.GetBytes(root.ToJsonString(new JsonSerializerOptions { WriteIndented = false }));
+        var held = await capture.Store.CreateAsync(bytes, CustodyClass.NightlyFloor90d, CancellationToken.None);
+        var checkpoint = new SourceArtifactRef(original.AcquisitionCheckpointRef!.ResourceId, held.Reference.ContentSha256);
+        var replay = await EuQueryExecutionAdapter.ReopenAsync(capture.Store, checkpoint, capture.Seeds, CancellationToken.None);
+        Assert.IsNull(replay.Refusal, replay.Refusal?.Detail);
+        Assert.AreEqual(original.CorpusRecordSetRef, replay.CorpusRecordSetRef);
+        Assert.IsTrue(replay.ObservedWorkFacts.Count > 0);
+        Assert.AreEqual(ContractJson.Serialize(original.ObservedWorkFacts), ContractJson.Serialize(replay.ObservedWorkFacts));
+    }
+
+    [TestMethod]
+    public async Task CompleteEuReplayPreservesOriginalBodyReceiptsAfterFreshHoldObservations()
+    {
+        var capture = await CaptureEuRunAsync(true);
+        var copy = await CopyLadderStoreAsync(capture.Store);
+        var moving = new LuxembourgGazetteAcquisitionTests.GazetteCustodyStore(copy) { AdvanceObservationPerCreate = true };
+        var result = await EuQueryExecutionAdapter.ReopenAsync(moving, capture.Result.AcquisitionCheckpointRef!, capture.Seeds, CancellationToken.None);
+        Assert.AreEqual(capture.Result.CorpusRecordSetRef, result.CorpusRecordSetRef);
+        var held = capture.Result.DocumentAcquisitionOutcomesByOrdinal!.Values.Where(static outcome => outcome.Receipt is not null).ToArray();
+        Assert.IsTrue(held.Length > 0, "The fixture must exercise a held query body.");
+        foreach (var outcome in held)
+            Assert.IsTrue(moving.ReceiptsByContent[outcome.Receipt!.Reference.ContentSha256].Any(receipt =>
+                DurableBlobWriteReceiptDigest.Of(receipt) != DurableBlobWriteReceiptDigest.Of(outcome.Receipt)),
+                "Replay must freshly hold the same body with a different receipt observation.");
+    }
+
+    [TestMethod]
     [DataRow("root")]
     [DataRow("census")]
     [DataRow("objects")]
     [DataRow("tripwires")]
     [DataRow("witness")]
     [DataRow("documents")]
+    [DataRow("corpus_storage")]
     [DataRow("object_renderer")]
     [DataRow("witness_renderer")]
     public async Task CompleteRunRequiresEveryRetainedDependency(string missing)
@@ -68,6 +114,7 @@ public sealed partial class EuQueryExecutionAdapterTests
         var digest = missing switch
         {
             "root" => capture.Result.AcquisitionCheckpointRef!.Sha256,
+            "corpus_storage" => root["corpus_content_sha256"]!.GetValue<string>(),
             "census" or "objects" or "tripwires" => root[missing]![0]!["checkpoint"]!["sha256"]!.GetValue<string>(),
             _ => root[missing]!["sha256"]!.GetValue<string>(),
         };
@@ -271,7 +318,7 @@ public sealed partial class EuQueryExecutionAdapterTests
         var unusedRendererSha = EuAcquisitionTestFixture.BuildRendererSource(1009).Reference.Sha256;
         var store = new EuAcquisitionTestFixture.EuInMemoryCustodyStore(
             failWriteDigest: (digest, _) => failUnusedRenderer && digest == unusedRendererSha,
-            failSchema: failRoot ? "lex-eu-acquisition-checkpoint/1" : null);
+            failSchema: failRoot ? "lex-eu-acquisition-checkpoint/3" : null);
         var executor = new EuRepeatedEnumerationExecutor(
             store, new EuAcquisitionTestFixture.FixedTimeProvider(), handler);
         var adapter = new EuQueryExecutionAdapter(store, executor);

@@ -94,7 +94,7 @@ public sealed partial class EuCorrigendumTripwireProducerTests
     [DataRow(true)]
     public async Task CheckpointHoldFailureRefusesTheProduction(bool expressionCheckpoint)
     {
-        var schema = expressionCheckpoint ? "lex-eu-expression-production-checkpoint/1" : "lex-eu-tripwire-production-checkpoint/1";
+        var schema = expressionCheckpoint ? "lex-eu-expression-production-checkpoint/2" : "lex-eu-tripwire-production-checkpoint/2";
         var store = new CountingCustodyStore(new EuAcquisitionTestFixture.EuInMemoryCustodyStore(), failSchema: schema);
         var (result, _, _) = await RunAsync(FourLanguageRows(), CorrigendumRows(), store);
         Assert.IsFalse(result.Delivered);

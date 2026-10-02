@@ -1,8 +1,119 @@
 # Lex V3 status: the data lane
 
-Updated 2026-10-01. The data lane's progress, split out of STATUS.md (which keeps the heads, the owner's open
-items and the pointers) by the standing order of 2026-10-01 13:50 UTC. Every pull request of the data lane
-updates this file, not STATUS.md.
+Updated 2026-10-01.
+
+## Luxembourg legislative population command (Codex, 2026-10-01)
+
+Reversible driver decision under standing order section 7: `build --lu-population legislative`
+selects the disjoint publisher URI ranges `code/..code0`, `loi/..loi0`, and `rgd/..rgd0` beneath
+`http://data.legilux.public.lu/eli/etat/leg/`. It shares one observed vocabulary, proves each
+S/A/G family with the adaptive cover, and keeps gaps outside the requested scope. Consolidated
+and expression/manifestation descendants inside those ranges keep the existing individual
+scope, source, transport and rights gates. Prefix membership alone does not establish a legal
+family or authorize a body. The legacy bounded range and whole-IRI commands remain compatible.
+
+A retained family manifest lists every observed typeDocument IRI once, explicitly stating that
+its type family was not independently enumerated. Objects found in selected URI ranges retain
+their individual outcomes; outside-range and unobserved-family complements are explicitly
+unenumerated. This is URI-range coverage, not a claim that the prefixes exhaust every legal
+family. The CLI writes a manifest pointer. The population catalog binds that declaration to
+every family plan and regenerates the manifest from verified vocabulary during offline restore.
+`derive` restores either the old bounded catalog or the new population catalog without HTTP.
+
+Validation added: nine-family replay from two copied stores; range/policy/manifest tampering;
+missing scope custody; excluded-gap behavior; raw and Brotli complete mounts in two independent
+CLI processes (including predecessor and consolidated EU); accepted/mixed CLI arguments. Local
+`pwsh -File eng/test-fast.ps1` and touched ingest tests are deferred under the standing 4 GiB
+free-memory rule. Initial CI reported 5,971 passed, one stale method-signature pin failed, and
+22 skipped. Claude reproduced that sole blocker. The repair updates the pin and uses the
+existing advancing fixture clock for mocked LU captures; fresh full CI gates merge. No full live population or memory
+fit is claimed. Measured March2017 partition and representative counts below remain the sizing
+evidence; the proposed full run must preserve the resource stop and shared wire ceiling.
+
+### Completed count and real-replay evidence (19:09 UTC)
+
+The declared URI ranges now have nine independently rehashed single-count observations, using
+18 wire requests: code S21,231 / A112,276 / G0; loi S93,161 / A580,389 / G32,121; rgd
+S145,703 / A914,752 / G63,225. Totals: S260,095 / A1,607,417 / G95,346. Evidence:
+`C:\lex-v3\lanes\lu-legislative-nine-counts-readback.json` and each named root's
+`count-readback.json`. Each two-wire budget intentionally stops after its first COUNT. This
+is sizing evidence, not repeated-enumeration proof or body counts. At the existing 100,000-row
+leaf ceiling those observed counts need at least 25 leaves; actual split shape, overhead and
+future counts can differ. Regulation and dated civil-code body-cost measurements are prepared
+for the next free acquisition slot, using checked EU reuse and 800 requests each.
+
+PR907's merged runtime independently rederived the real bounded custody twice at
+`C:\lex-v3\lu-consolidated-offline-20261001-3`, completed 19:01:31 UTC. Every one of the six
+mount file digests matched, with zero proxy-trap connections. The EU index has 594 articles:
+297 ENG and 297 FRA across six expressions, 99 each, including all four real CONS.ACT packages.
+Both executions exited zero, peaking at 288,542,720 and 292,675,584 bytes. Independent Python
+hash and SQLite readback is retained there. LU article/state/member content is unchanged;
+only its complete-corpus references and observation-log digest change with the new EU content.
+
+## Measured Luxembourg partition and full-run sizing decision
+
+The bounded March 2017 law acquisition completed at 18:03:53 UTC, exit 0, from exact CI runtime `614a9e1509f28f53d77dfdf8a69da35339407da5` (green workflow 36897978670). Evidence: `C:\lex-v3\lu-legislative-measurement-20261001-1\summary.json`, `measurement.json`, `sizing-scenarios.json` and `verified-digests.txt`. The acquisition used 276 requests (EU 135, LU 141) within 800, with proven LU S=219, A=1,414, G=114. Combined elapsed time was 20m01.8s; it is not isolated LU timing.
+
+LU has 219 records: 22 held bodies totaling 3,239,169 logical bytes, 171 point records and 26 typed quarantines. Of the 22 held bodies, 12 have corpus outcome `acquired` and 10 `rights_withheld` with `typed_quarantine_in_file_reading_rejected`; held bytes do not imply permission to serve. The EU subset has six acquired package records and two typed quarantines; only two packages admit a main body, producing 99 English and 99 French GDPR articles. Four acquired packages have `formex_main_body_missing`. Five EU states are retained: one original and four ambiguous (three without CELEX). No complete consolidated-body coverage is claimed.
+
+Two independent `Lex.V3.Tool derive` processes completed at 18:08 UTC, each with zero proxy-trap connections. All six files match the acquired mount byte for byte; an independent Python SHA-256/file-set comparison confirmed this. Corpus content identity is `dd3b9c18eb7cb4fefd1c9fb59b36f8a85f28ad9a5fce4af3df58a89d95b874ce`; EU index SHA-256 `4aabc56fbe67837e47fb42706ab293f8719c23d08b3dbe714f171a389cbe99ea`; LU index SHA-256 `738902acebc4dcaa00226b8190c49f866bbc3b48fb5fdee95d6302cc7b31ece0`.
+
+Compressed custody is 4,534,940 bytes. Sampled acquisition peak RSS was 254,136,320 bytes; offline derives peaked at 203,833,344 and 207,671,296 bytes and took about 12 seconds each. Acquisition retained its original 2 GiB start / 1 GiB stop guard. A separate offline continuation used 1.5 GiB start / 1 GiB stop after measuring the actual build. Every phase preserved the disk guard (3 GiB floor plus 512 MiB stop margin); none was resource-stopped. These are sampled process measurements, not whole-population bounds.
+
+Reversible sizing decision: do not multiply this sample into a claim that the whole population fits. The three observed law/regulation/code prefixes total 260,095 subjects. A same-density scenario yields about 167,459 LU requests, 26,129 held bodies, 3.85 GB logical bodies and 5.39 GB compressed custody including repeated GDPR overhead. Those figures are planning scenarios only: this sample contains fixed vocabulary cost, other families differ, and consolidated descendants must not be counted twice. Next acquire representative regulation/code ranges, prove their S/A/G counts, and close the legislative family scope manifest before committing the full LU ceiling. Excluded families receive a typed family disposition. Full-run memory fit remains unproven.
+
+The EU language decision remains: enumerate original and consolidated EN/FRA expressions; retain the contract's explicit language-out-of-scope outcome for other languages without Formex enumeration. All 24-language enumeration would spend traffic on bodies outside the served scope. The next full EU run uses fresh custody, checkpoint writers and the merged gateway recovery; the old refused run stays retained.
+
+Validation: repaired code `3d75dc0d` passed workflow 36902789017 (5,953 passed, 0 failed, 22 skipped). Local `pwsh -File eng/test-fast.ps1` and touched ingest suites remain deferred under the standing 4 GiB memory guard; CI ran the complete solution. Claude's original code review returned MERGE; scoped confirmation of the renderer-binding repair, hidden-file guard and measured evidence returned MERGE. PR #904 merged as 6f42f296 after exact 576697df CI36905375699 (5,953 passed, 0 failed, 22 skipped). The independent Python comparison is now retained as independent-python-comparison.json. The measured immutable 614a9e15 runtime used direct acquisition, so it did not execute the later repaired reuse path.
+
+
+## EU population refusal and recovery
+
+The frozen EU run at `C:\lex-v3\eu-population-20261001-4` ended at 16:35 UTC with exit 3 after 10,424 wire requests and 685 manifestation enumeration results. It produced no mount. The failed expression is `http://publications.europa.eu/resource/cellar/ecdb2904-4c60-11ec-91ac-01aa75ed71a1.0010`. Its first COUNT is retained, immediately followed by a 122-byte gateway response (SHA-256 `880c929020d4b79bf1995656d21d9a6859aab3a9460f941eb0b1a6e5502ee4cc`). The old code omitted rejected routes, so timing alone does not prove that response's request or HTTP status.
+
+The recovery slice retains all executed enumeration routes before rejection. It permits only this exact gateway body with HTTP 502 at the Publications Office SPARQL endpoint to use the existing bounded retry allowance, backoff and shared wire budget. Other gateway/challenge bytes and Luxembourg responses remain refused. Formex diagnostic version 2 lists every failed enumeration and its underlying detail while leaving an unclosed population's total unknown. No old custody is rewritten or imported.
+
+Local `pwsh -File eng/test-fast.ps1` and touched ingest tests are deferred under the standing memory guard (free RAM below 4 GiB). PR #906 merged as c8683373 after CI36895673765 (5,937 passed, 0 failed, 22 skipped) and Claude MERGE. A bounded live proof is pending. No new full acquisition has started. PR #904 has completed its measured partition and two independent derives; see the current evidence above.
+
+## Bounded Luxembourg acquisition and independent derivation
+
+PR #904 reuses a complete checked EU population when requested, renews the rights notice once, and reports LU family proofs, record outcomes and unique held-body bytes. Tests cover consolidated EN/FRA packages with nullable CELEX through reuse and two complete offline derives. It now imports merged #906, including retained refused routes and bounded gateway retry. Refusal diagnostics also name the terminal HTTP status and retained body digest when available, so the exact response can be located without scanning custody by time.
+
+Claude returned MERGE for the code at 614a9e15 while explicitly excluding the pending live measurement. The repair requires current document-fetch source bytes at the reuse boundary and refuses a mismatch before rights traffic, with library and real CLI regressions. CI rejects hidden runtime paths before upload so the file manifest and artifact cannot diverge silently. The active direct-acquisition runtime remains frozen to the reviewed head; it does not call reuse.
+
+The same PR retains the Tool runtime already built and tested in CI for three days, with exact source head, SDK information and every file digest. The frozen runner checked the successful workflow, file manifest, assembly source stamps, Windows native SQLite and Git renderer bytes before the completed acquisition. The obsolete local-compile queue was stopped before publisher traffic. Final measurement and sizing are recorded above. No local compilation or test suite runs below the standing 4 GiB floor.
+
+## EU consolidated bodies and states: merged foundation
+
+The next checkpoint-bearing EU capture binds consolidated EN/FRA packages to the proven Cellar work/expression and its census relationship to a reviewed seed. An observed work CELEX is optional and never synthesized from the seed/date. A checked retained response (a2da37994258ed7249ca7957e7709f90a5484d7de908e21c7a7f1f2079d49052) confirms many dated works explicitly lack CELEX and also carries the treaty form `02016M/TXT-20151225`. Original seed identities remain separate. An unproven work still keeps `IdentityNotAdmitted`; other languages retain their existing unenumerated typed outcome.
+
+The EU index is schema `lex-v3-europe-index/5`. Its `states` table has one row per census seed/work, including works with absent, unusable or ambiguous dates. `EuropeIndexReader.HasStates`, `ReadStates(seedCelex)` and `ReadStateExpressions(seedCelex)` expose the population and held expressions. Schema 5 article CELEX values may be null. The legacy resolver, expression reader and expression search expose only original legal text in schema 5. Consolidated bodies, with or without CELEX, remain available through the state-aware surface with their seed/Cellar identities. This prevents the existing API from resolving a work that its legacy expression reader cannot return. Original wording has no inferred consolidation date; a publisher consolidation date is not an applicability date. Same-date works remain ambiguous. Raw RDF terms, each P batch's evidence and the census evidence remain in `facts_json`. Existing article wording dates keep their original meaning. Exact schema 2/3/4 readers remain available, with `HasStates=false`.
+
+Tests cover original and consolidated EN/FRA acquisition, checked replay, two separate offline CLI processes, whole-mount digest comparisons, multi-date ambiguity, and historical index/checkpoint compatibility. CI36889767805 at 0c985896 passed 5,923 tests with 0 failures and 22 skipped, including the prior query 2, population 1 and package 1 replay cases. The schema 5 fixed-input byte pin is `cb2b04fc0c50aaaaaacedd1261d38829bea8ce54667676a96552090baa7a9f7e`. The subsequent cross-family repair passed exact-head CI and merged, as recorded below. No live consolidated-population claim is made. Query checkpoint 3 and Formex population checkpoint 2 pin the new facts; older versions verify their original digest and acquisition policy.
+
+PR #904's Luxembourg candidate passed CI36883780049: 5,904 passed, 0 failed, 22 skipped. It remains draft until a bounded partition is acquired, derived twice and measured. PR #904 has since imported merged #905 at e95ba92e; it passed CI36893963644 (5,936 passed, 0 failed, 22 skipped). Local fast/ingest tests remain deferred under the memory guard.
+
+Claude's read-only review found the legacy resolver/reader mismatch and the API's fixed statements that no consolidated version is held. The one repair filters the three legacy identifier/expression surfaces to original text in schema 5 and tests every identifier entry (work, CELEX, expression, article and qualified provision) for consolidated fixtures with and without CELEX. Original EN/FRA resolution and search, state-aware expressions, and held source evidence remain tested. PR #905 merged as 256bef5b after exact 9fff439e CI36891324272 (5,924 passed, 0 failed, 22 skipped) and scoped Claude MERGE confirmation.
+
+Cross-lane mount gate: capture and offline derivation of consolidated bodies may proceed, but a consolidated capture must not be served until the web lane replaces the API's fixed original-only statements and connects the state-aware reader. The current original-only EU rehearsal and historical indexes are unaffected. API/web changes remain owned by the web lane.
+
+## Current data lane: complete offline mount command
+
+`Lex.V3.Tool derive --custody <directory> --checkpoint <mount-inputs.json> --out <empty-directory> [--custody-encoding raw|brotli]`
+
+`build` retains the input catalog and prints its reference-file path. `derive` reopens the complete EU and Luxembourg acquisitions, rebuilds the corpus and both indexes, writes the manifests, report and retained generations, and verifies the mount. The original acquisition clock and checked historical receipts preserve output identity; current custody holds are checked independently. No publisher session is opened.
+
+PR #899's separate-process tests cover a raw first mount and a Brotli chained mount. Each compares every output digest with the original fixture derivation and a second process, traps network attempts, and verifies the exact file set. The predecessor directory is removed before replay. The read-only Claude repair confirmation returned MERGE. Final e576991e passed CI36882291778 (5,894 passed, 0 failed, 22 skipped), and PR #899 merged as 7a6c3d04.
+
+The completed EU retry6 used its frozen runtime and predates these catalogs; it ended with the refusal recorded above. The next fresh capture must include consolidated EN/FRA packages: the active frozen runtime only admits original seed roots; the draft above adds proven consolidated identities. Non-EN/FRA expressions keep their typed, unenumerated language-out-of-scope outcome.
+
+Luxembourg launch scope follows the owner's legislative-body family decision. Counts observed on 2026-10-01 are 93,161 subjects under the law prefix, 145,703 under grand-ducal regulations, 21,231 under codes, and 816,645 under the broader legislation prefix. These are IRI-prefix subject counts, not a legal-family census or body count. The candidate March 2017 law partition has S=219, A=1,414, G=114 from six bounded requests, independently reopened by digest. Acquire, derive twice and verify that partition before full-run sizing. Every excluded family still needs an explicit typed scope disposition.
+
+Local fast/ingest tests remain deferred while the EU acquisition occupies the machine and free memory is below 4 GB. GitHub CI runs the full solution. Production signing, deployment and promotion remain outside this lane's authorization.
+
+## Earlier component evidence
+
+The entries below record earlier component checkpoints. Their statements about pending complete offline derivation are superseded by the current command above.
 
 ## Offline Formex package and annex derivation (Codex, 2026-10-01)
 
@@ -1501,3 +1612,11 @@ now succeeds. Fresh full CI gates merge; local tests remain deferred under the a
 memory guard. The checkpoint reference still needs a containing LU acquisition catalog or
 CLI output to make it discoverable from a real run. Full LU acquisition restoration and
 independent offline mounts remain outstanding; no full-population fit is claimed.
+
+## Real consolidated Formex main-body support (2026-10-01)
+
+The real bounded GDPR capture retained six Formex packages. Two originals contain ACT roots and already yield 99 articles each. Four consolidated packages contain CONS.ACT roots with 99 articles each; the previous parser reported main_body_missing because it only recognized ACT. This is reproduced by reopening the held package checkpoints, routes and bodies with no HTTP requests. Evidence is C:\lex-v3\lu-legislative-measurement-20261001-1\formex-structure-audit.json. The selected XHTML corpus body is a separate representation and did not cause this Formex gap.
+
+The parser now admits a CONS.ACT only through one CONS.DOC, its own single BIB.INSTANCE and one ENACTING.TERMS. Amendment-history languages/dates and articles outside operative text do not enter the result. The document bibliographic date keeps its existing article meaning; CONSLEG.DATE is not substituted or treated as applicability. Profile version 4 records the new scope. Exact retained EN/FRA packages are regression fixtures with route/body provenance and SHA-256 pins; mutations cover duplicate or absent document coordinates, wrong language and excluded text. Original ACT behavior remains covered.
+
+Local fast/ingest suites are deferred under the standing 4 GiB memory guard. Exact-head CI 36907840460 passed (5,965 passed / 0 failed / 22 skipped); Claude returned MERGE and PR907 merged as 58502d13. After merging, rederive the real bounded mount from retained custody and compare two independent runs. No new publisher capture is needed for this parser correction, and full EU/LU population completion is still outstanding.

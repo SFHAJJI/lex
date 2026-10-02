@@ -10,7 +10,8 @@ namespace Lex.V3.Ingest.Europe;
 
 public sealed partial class EuQueryExecutionAdapter
 {
-    private const string RunCheckpointSchema = "lex-eu-acquisition-checkpoint/1";
+    private const string RunCheckpointSchema = "lex-eu-acquisition-checkpoint/3";
+    private const string PriorRunCheckpointSchema = "lex-eu-acquisition-checkpoint/2";
 
     public async Task<EuQueryExecutionResult> RunAsync(
         IReadOnlyList<(EuCensusPartitionRunRequest Request, BoundMachineRequest SourceWitness)> censusFamilies,
@@ -45,7 +46,7 @@ public sealed partial class EuQueryExecutionAdapter
                 objectFactsPolicy.RendererSource.Reference, witnessRendererSource.Reference, documentFetchRendererSource.Reference,
                 context.Objects.ToArray(), context.Tripwires.ToArray(), context.Witness!.CheckpointRef!,
                 context.Witness.AcquisitionRunRef!, result.DocumentAcquisitionCheckpointRef!, context.Manifest!, context.Run!,
-                result.CorpusRecordSetRef!, RunResultDigest(result));
+                result.CorpusRecordSetRef!, result.CorpusRecordSetReceipt!.Reference.ContentSha256, RunResultDigest(result));
             if (document.Census.Any(static family => family.Checkpoint is null) ||
                 document.Objects.Any(static family => family.Checkpoint is null) || document.Witness is null ||
                 document.WitnessRun is null || document.Documents is null)
@@ -80,7 +81,7 @@ public sealed partial class EuQueryExecutionAdapter
         try
         {
             var document = ContractJson.Deserialize<RunCheckpoint>(new UTF8Encoding(false, true).GetString(bytes.Span));
-            if (document is null || document.Schema != RunCheckpointSchema || !bytes.Span.SequenceEqual(EncodeRunCheckpoint(document)) ||
+            if (document is null || (document.Schema != RunCheckpointSchema && document.Schema != PriorRunCheckpointSchema) || !bytes.Span.SequenceEqual(EncodeRunCheckpoint(document)) ||
                 document.Census is null || document.Objects is null || document.Tripwires is null || document.Census.Length == 0 ||
                 document.Witness is null || document.WitnessRun is null || document.Documents is null ||
                 document.Manifest is null || document.Run is null || document.Corpus is null ||
@@ -113,7 +114,7 @@ public sealed partial class EuQueryExecutionAdapter
             var result = await new EuQueryExecutionAdapter(store, new EuRepeatedEnumerationExecutor(store, TimeProvider.System))
                 .RunCoreAsync(requests, policy, witness, null, documents, null, budget, cancellationToken, context).ConfigureAwait(false);
             context.RequireEnd();
-            if (result.Refusal is not null || budget.Spent != 0 || RunResultDigest(result) != document.ResultSha256)
+            if (result.Refusal is not null || budget.Spent != 0 || RunResultDigest(result, document.Schema == PriorRunCheckpointSchema) != document.ResultSha256)
                 throw new CustodyIntegrityException("Retained acquisition did not reproduce its original result: " + result.Refusal?.Detail);
             return result.WithAcquisitionCheckpoint(checkpoint);
         }
@@ -131,7 +132,7 @@ public sealed partial class EuQueryExecutionAdapter
         try
         {
             var document = ContractJson.Deserialize<RunCheckpoint>(new UTF8Encoding(false, true).GetString(bytes.Span));
-            if (document is null || document.Schema != RunCheckpointSchema || !bytes.Span.SequenceEqual(EncodeRunCheckpoint(document)) ||
+            if (document is null || (document.Schema != RunCheckpointSchema && document.Schema != PriorRunCheckpointSchema) || !bytes.Span.SequenceEqual(EncodeRunCheckpoint(document)) ||
                 document.Census is null || document.Objects is null || document.Census.Length == 0 ||
                 document.Census.Any(family => family is null || family.Renderer != expected.Census.Reference) ||
                 document.Objects.Any(family => family is null || family.Renderer != expected.ObjectFacts.Reference) ||
@@ -153,17 +154,25 @@ public sealed partial class EuQueryExecutionAdapter
     }
 
     private static byte[] EncodeRunCheckpoint(RunCheckpoint value) => Encoding.UTF8.GetBytes(ContractJson.Serialize(value));
-    private static string RunResultDigest(EuQueryExecutionResult result) => CustodyDigest.Of(Encoding.UTF8.GetBytes(ContractJson.Serialize(new
+    private static string RunResultDigest(EuQueryExecutionResult result, bool priorSchema = false)
     {
-        result.ScopeManifestCanonicalSha256, result.CorpusRecordSetRef, result.ObservedObjectCount, result.ObservedExpressionCount,
-        result.FamilyOutcomes, result.ReductionExclusions, result.ObservedManifestationTypesByCelex, result.ObservedExpressionsByCelex,
-        result.MintedRowsByOrdinal, result.DateAxioms, result.LocatedAmendmentObservations, result.WitnessTerminations,
-    })));
+        var prior = new
+        {
+            result.ScopeManifestCanonicalSha256, result.CorpusRecordSetRef, result.ObservedObjectCount, result.ObservedExpressionCount,
+            result.FamilyOutcomes, result.ReductionExclusions, result.ObservedManifestationTypesByCelex, result.ObservedExpressionsByCelex,
+            result.MintedRowsByOrdinal, result.DateAxioms, result.LocatedAmendmentObservations, result.WitnessTerminations,
+        };
+        // Schema 2 still verifies its exact original digest. New facts are recomputed from the
+        // same checked P rows; schema 3 additionally pins that projection in the result digest.
+        return CustodyDigest.Of(Encoding.UTF8.GetBytes(priorSchema
+            ? ContractJson.Serialize(prior)
+            : ContractJson.Serialize(new { Prior = prior, result.ObservedWorkFacts })));
+    }
 
     private sealed record RunCheckpoint(string Schema, RunFamily[] Census, string ObjectPlanResourceId,
         SourceArtifactRef ObjectRenderer, SourceArtifactRef WitnessRenderer, SourceArtifactRef DocumentRenderer,
         RunFamily[] Objects, RunTripwire[] Tripwires, SourceArtifactRef Witness, SourceArtifactRef WitnessRun,
-        SourceArtifactRef Documents, SourceArtifactRef Manifest, SourceArtifactRef Run, SourceArtifactRef Corpus, string ResultSha256);
+        SourceArtifactRef Documents, SourceArtifactRef Manifest, SourceArtifactRef Run, SourceArtifactRef Corpus, string CorpusContentSha256, string ResultSha256);
     private sealed record RunFamily(SourceArtifactRef Checkpoint, SourceArtifactRef Run, SourceArtifactRef Profile,
         string PlanResourceId, SourceArtifactRef Renderer, string? Celex, EuObjectFactsQuerySet? Set, string[]? Batch);
     private sealed record RunTripwire(string FamilyKey, SourceArtifactRef Checkpoint);

@@ -318,9 +318,18 @@ public sealed partial class EuCorrigendumTripwireProducer
         SourceArtifactRef checkpoint;
         try
         {
+            if (replay is not null)
+            {
+                tripwireReceipt = await RetainedCustodyReceipt.ReopenAsync(_custodyStore, replay.TripwireReceiptSha256,
+                    tripwireReceipt, cancellationToken).ConfigureAwait(false);
+                lineageReceipt = await RetainedCustodyReceipt.ReopenAsync(_custodyStore, replay.LineageReceiptSha256,
+                    lineageReceipt, cancellationToken).ConfigureAwait(false);
+            }
             checkpoint = replayRef ?? await RetainCheckpointAsync(new TripwireCheckpoint(CheckpointSchema,
                 expressions.CheckpointRef ?? throw new CustodyIntegrityException("Expression checkpoint is absent."),
-                CustodyDigest.Of(set.CanonicalBytes.Span), CustodyDigest.Of(set.LineageBytes.Span)), cancellationToken)
+                CustodyDigest.Of(set.CanonicalBytes.Span), CustodyDigest.Of(set.LineageBytes.Span),
+                await RetainedCustodyReceipt.HoldAsync(_custodyStore, tripwireReceipt, cancellationToken).ConfigureAwait(false),
+                await RetainedCustodyReceipt.HoldAsync(_custodyStore, lineageReceipt, cancellationToken).ConfigureAwait(false)), cancellationToken)
                 .ConfigureAwait(false);
         }
         catch (Exception exception) when (exception is CustodyRequiredException or CustodyIntegrityException)

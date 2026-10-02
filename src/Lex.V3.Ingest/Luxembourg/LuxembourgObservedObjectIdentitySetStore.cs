@@ -88,17 +88,39 @@ public sealed class LuxembourgObservedObjectIdentitySetWriter
         _custodyStore = custodyStore ?? throw new ArgumentNullException(nameof(custodyStore));
     }
 
-    public async Task<LuxembourgObservedObjectIdentitySetWriteResult> WriteAsync(
+    public Task<LuxembourgObservedObjectIdentitySetWriteResult> WriteAsync(
         SourceArtifactRef runIdentity,
         IReadOnlyList<LuxembourgResourceObservation> observations,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken) => WriteCoreAsync(runIdentity, observations, null, cancellationToken);
+
+    /// <summary>
+    /// Preserves the original identity only after newly derived canonical bytes reproduce its digest.
+    /// The containing acquisition replay remains responsible for proving the observation inputs.
+    /// Current custody holds and independent readback still run; historical receipts are not reused.
+    /// </summary>
+    /// <remarks>The caller must obtain originalSet from its verified retained catalog. Its ResourceId
+    /// is not encoded in these canonical bytes and cannot be independently checked by this writer.</remarks>
+    internal Task<LuxembourgObservedObjectIdentitySetWriteResult> RebuildAsync(
+        SourceArtifactRef runIdentity, IReadOnlyList<LuxembourgResourceObservation> observations,
+        SourceArtifactRef originalSet, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(originalSet);
+        return WriteCoreAsync(runIdentity, observations, originalSet, cancellationToken);
+    }
+
+    private async Task<LuxembourgObservedObjectIdentitySetWriteResult> WriteCoreAsync(
+        SourceArtifactRef runIdentity, IReadOnlyList<LuxembourgResourceObservation> observations,
+        SourceArtifactRef? originalSet, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(runIdentity);
         ArgumentNullException.ThrowIfNull(observations);
+        cancellationToken.ThrowIfCancellationRequested();
 
         var set = LuxembourgObservedObjectIdentitySet.FromObservations(runIdentity, observations);
         using var buffer = new MemoryStream();
         var setCanonicalSha256 = LuxembourgObservedObjectIdentitySetCanonicalWriter.Write(buffer, set);
+        if (originalSet is not null && originalSet.Sha256 != setCanonicalSha256)
+            throw new CustodyIntegrityException("Rebuilt Luxembourg observed identities differ from the original set.");
         // The owned buffer remains alive until hold and independent readback finish.
         var setBytes = new ReadOnlyMemory<byte>(buffer.GetBuffer(), 0, checked((int)buffer.Length));
 
@@ -121,7 +143,7 @@ public sealed class LuxembourgObservedObjectIdentitySetWriter
             .ReadByDigestCheckedAsync(_custodyStore, writeReceipt.Reference.ContentSha256, cancellationToken)
             .ConfigureAwait(false);
 
-        var setArtifactRef = new SourceArtifactRef($"urn:uuid:{Guid.NewGuid():D}", setCanonicalSha256);
+        var setArtifactRef = originalSet ?? new SourceArtifactRef($"urn:uuid:{Guid.NewGuid():D}", setCanonicalSha256);
         var verifiedSet = VerifiedLuxembourgObservedObjectIdentitySet
             .ParseAndVerify(setArtifactRef, reopenedBytes.Span);
 

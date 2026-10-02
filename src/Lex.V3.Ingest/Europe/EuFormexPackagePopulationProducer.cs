@@ -133,10 +133,20 @@ public sealed class EuFormexPackagePopulationResult
     /// </summary>
     public string CreateOutcomeDiagnosticsJson() => JsonSerializer.Serialize(new
     {
-        schema = "lex-v3-eu-formex-outcome-diagnostic/1",
+        schema = "lex-v3-eu-formex-outcome-diagnostic/2",
         delivered = Delivered,
         expression_count = Reconciliation?.ExpressionCount,
         enumerated_count = Enumerations.Count,
+        successful_enumeration_count = Enumerations.Count(static enumeration => enumeration.Delivered),
+        failed_enumerations = Enumerations.Where(static enumeration => !enumeration.Delivered).Select(static enumeration => new
+        {
+            work = enumeration.ExpressionIdentity.PublisherWorkId,
+            expression = enumeration.ExpressionIdentity.PublisherExpressionId,
+            language = enumeration.Expression.OfficialLanguage,
+            refusal = ContractWire.NameOf(enumeration.Refusal),
+            detail = enumeration.Detail,
+            product_request_count = enumeration.ProductRequestCount,
+        }),
         eligible_count = Delivered ? (int?)EligibleExpressionCount : null,
         acquired_count = Delivered ? (int?)AcquiredExpressionCount : null,
         not_enumerated_language_out_of_scope_count = Delivered ? (int?)NotEnumeratedExpressionCount : null,
@@ -271,8 +281,8 @@ public sealed partial class EuFormexPackagePopulationProducer
     }
 
     /// <summary>
-    /// Acquires a combined run, binding each original work to its own reviewed Appendix A CELEX.
-    /// An expression outside that map receives a typed outcome rather than another work's identifier.
+    /// Acquires a combined run using original roots and census-proven consolidated Cellar work identities.
+    /// Observed work CELEX values remain optional; another work's identifier never fills an absence.
     /// </summary>
     public Task<EuFormexPackagePopulationResult> RunAsync(
         EuQueryExecutionResult run,
@@ -405,18 +415,19 @@ public sealed partial class EuFormexPackagePopulationProducer
                 var expressionCelex = workCelex;
                 if (expressionCelex is null)
                 {
-                    var matches = EuAppendixASeedMap.SeedsInCelexOrder.Where(seed =>
-                        string.Equals(seed.WorkRoot, enumeration.Expression.Identity.PublisherWorkId,
-                            StringComparison.Ordinal)).Take(2).ToArray();
-                    if (matches.Length != 1)
+                    expressionCelex = EuObservedWorkIdentity.Resolve(run,
+                        enumeration.Expression.Identity.PublisherWorkId, context.OriginalWorksOnly);
+                    if (expressionCelex is null && (context.OriginalWorksOnly ||
+                        !EuObservedWorkIdentity.IsProven(run, enumeration.Expression.Identity.PublisherWorkId)))
                     {
                         outcomes.Add(EuFormexPackageOutcome.NotAcquired(
                             enumeration.Expression, EuFormexPackageNotAcquiredReason.IdentityNotAdmitted,
-                            "the expression's work does not bind to exactly one reviewed Appendix A CELEX"));
+                            context.OriginalWorksOnly
+                                ? "the expression's work does not bind to exactly one reviewed Appendix A CELEX"
+                                : "the expression's work has no admitted original root or proven census relation"));
                         continue;
                     }
 
-                    expressionCelex = matches[0].Celex;
                 }
 
                 var acquisition = context.IsReplay

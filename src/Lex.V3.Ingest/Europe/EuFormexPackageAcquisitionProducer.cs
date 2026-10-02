@@ -231,14 +231,14 @@ public sealed partial class EuFormexPackageAcquisitionProducer
     private async Task<EuFormexPackageAcquisitionResult> RunCoreAsync(
         EuFormexManifestationEnumerationResult enumeration,
         VerifiedCorpusRecordSet? corpusRecordSet,
-        string workCelex,
+        string? workCelex,
         MachineQueryRendererSource documentFetchRendererSource,
         WireRequestBudget wireBudget,
         PackageReplayContext context,
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(enumeration);
-        ArgumentException.ThrowIfNullOrWhiteSpace(workCelex);
+        if (workCelex is not null) ArgumentException.ThrowIfNullOrWhiteSpace(workCelex);
         ArgumentNullException.ThrowIfNull(documentFetchRendererSource);
         ArgumentNullException.ThrowIfNull(wireBudget);
         if (!enumeration.IsFormexEligible)
