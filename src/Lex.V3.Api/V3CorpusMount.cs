@@ -3469,6 +3469,16 @@ internal sealed class V3CorpusMount : IDisposable
 
     internal const string SearchPageIs = "the first hits in the stated order, not the best hits";
 
+    /// <summary>
+    /// The owner's rights ruling (decided by the sole driver under the owner's delegation of 2026-10-02, on the question PR #842
+    /// surfaced): a licence that does not admit a text keeps it out of search matching too, since a hit says which articles
+    /// hold a word.
+    /// </summary>
+    internal const string SearchRightsRule =
+        "a state is searched only when its text is one evidence_bundle would quote: every source acquired and admitted by its rights; the " +
+        "text of any other state is not matched, so no hit and no count says which of its articles hold a word, and nothing about that " +
+        "text is stated here";
+
     internal const string SearchHitUnit =
         "a hit is one article of one held state, not a provision: a provision whose wording never changed is a hit in every state that holds it";
 
@@ -3687,6 +3697,26 @@ internal sealed class V3CorpusMount : IDisposable
                 ? (relaxedFound ?? []).Where(hit => !strictKeys.Contains((hit.StateSha256, hit.ArticleIdentitySha256))).ToArray()
                 : relaxedFound ?? [];
 
+        // Rights before any hit is served (SearchRightsRule): a state whose text its rights did not admit is not matched, so
+        // no answer says which of its articles hold a word. The rule is evidence_bundle's, applied per state.
+        var admittedByState = new Dictionary<string, bool>(StringComparer.Ordinal);
+        bool Admitted(LuxembourgIndexSearchHit hit)
+        {
+            if (!admittedByState.TryGetValue(hit.StateSha256, out var admitted))
+            {
+                var sources = _reader.ResolveStateSources(hit.StateSha256);
+                admitted = sources.Count > 0 && sources.All(source =>
+                    string.Equals(source.Outcome, AcquiredOutcomeToken, StringComparison.Ordinal) &&
+                    string.Equals(source.RightsDisposition, EvidenceBundleAdmittingRightsDisposition, StringComparison.Ordinal));
+                admittedByState[hit.StateSha256] = admitted;
+            }
+
+            return admitted;
+        }
+
+        strict = strict.Where(Admitted).ToArray();
+        relaxed = relaxed.Where(Admitted).ToArray();
+
         var ambiguousWorks = new List<object>();
         if (requestedDate is not null)
         {
@@ -3783,6 +3813,7 @@ internal sealed class V3CorpusMount : IDisposable
             publisher = "lu-legilux",
             ranking = SearchRanking,
             matching = SearchMatching,
+            rights_rule = SearchRightsRule,
             hit_unit = SearchHitUnit,
             lanes = SearchLanes,
             searchable_text_held_for_language = measured,

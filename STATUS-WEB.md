@@ -2354,6 +2354,18 @@ The plan, in order (its items 1 to 3 are the data lane's, in STATUS-DATA.md):
 
 Each is the driver's call under ruling 7 and can be reversed by a later pull request that says why.
 
+- The sole-driver period (the owner's order of 2026-10-02: one Claude driver, no Codex, no other
+  Claude, full authorisation, never ask the owner): each pull request is reviewed by an independent
+  Claude subagent with a fresh context, read-only, reporting only material and reproduced findings
+  (`C:\lex-v3\lanes\claude-review-instructions.md`); one repair round, then merge on green CI. The
+  owner's open questions are decided by the driver under that delegation and recorded here.
+- The rights question PR #842 surfaced, decided under that delegation (2026-10-02): a licence that does
+  not admit a text keeps it out of search matching too. A search hit says which articles hold a word,
+  which is information read from the text; `search` now matches only states whose text
+  `evidence_bundle` would quote (every source acquired and admitted by its rights), and states that
+  rule (`SearchRightsRule`). It counts nothing about the text it does not match, since a count of
+  withheld matches would say the same thing.
+
 - The image rehearsal (PR #821):
   - It builds with the .NET SDK's container support, needing no daemon: this machine has no
     container runtime, and the base image stays pinned by digest in the project.
