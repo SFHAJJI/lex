@@ -216,6 +216,12 @@ export function EuropeReadingView({ view }) {
   );
 }
 
+/** The refusal card's words for a refusal's publisher: an EU refusal's declared nulls speak of wordings, never states. */
+export function refusalCardCopyFor(context) {
+  const copy = liveChrome().refusalCard;
+  return context?.publisher === 'eu-eurlex' ? { ...copy, nullSentences: copy.europeNullSentences } : copy;
+}
+
 /** One view state, laid out: the reading, the refusal card, or the sentence a state carries. */
 export function ReadingAnswerView({ outcome }) {
   if (outcome.state === 'success') {
@@ -229,7 +235,7 @@ export function ReadingAnswerView({ outcome }) {
   if (outcome.state === 'refusal' && outcome.card) {
     return (
       <section data-answer-state="refusal">
-        <RefusalCard code={outcome.code} sentence={outcome.sentence} payload={outcome.payload} copy={liveChrome().refusalCard} />
+        <RefusalCard code={outcome.code} sentence={outcome.sentence} payload={outcome.payload} copy={refusalCardCopyFor(outcome.context)} />
       </section>
     );
   }

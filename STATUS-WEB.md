@@ -2214,8 +2214,9 @@ web lane's order 2, from the owner's proxy's journey corrections of 2026-10-01 1
       either publisher's (`pinnedCitation`), and `journey-verdict.test.mjs` holds EU quotes to it;
     - an EU refusal on the reading and export screens was said in Luxembourg's words ("applies on that
       date"); EU refusals now have their own sentences (`LIVE_READING_EUROPE_REFUSAL_SENTENCES`, French
-      drafted in `refusal-sentences.mjs`), and the card's date hints say "version", true of both
-      publishers; a test holds every EU refusal sentence and card to no applicability word;
+      drafted in `refusal-sentences.mjs`), and an EU refusal card's date hints speak of wordings
+      (`europeNullSentences`), Luxembourg's of states; a test holds every EU refusal sentence and card
+      to no applicability, state or version word;
     - the served scope now says what `body_sha256` is (the corpus member's retained manifestation) and
       that the text is read from the Formex package (`package_sha256`, `source_entry_sha256`).
 - **Not yet:**

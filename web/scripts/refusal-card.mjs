@@ -779,9 +779,15 @@ const DATED_KEYS = new Map([
   ['no_version_for_date', new Set(['history_begins', 'nearest_earlier', 'nearest_later'])],
 ]);
 
+/** The same declared nulls for an EU refusal, in the EU's words: its dates are a wording's, never a state's (review of #903). */
+const EUROPE_NULL_SENTENCE = new Map([
+  ['nearest_earlier', 'No earlier wording is held: the requested date precedes this history.'],
+  ['nearest_later', 'No later wording is held: the requested date follows every wording held.'],
+]);
+
 const NULL_SENTENCE = new Map([
-  ['nearest_earlier', 'No earlier version is held: the requested date precedes this history.'],
-  ['nearest_later', 'No later version is held: the requested date follows every version held.'],
+  ['nearest_earlier', 'No earlier state is held: the requested date precedes this history.'],
+  ['nearest_later', 'No later state is held: the requested date follows every state held.'],
 ]);
 
 /** How an offered state is described, in the words both renderers use. */
@@ -804,6 +810,7 @@ export const REFUSAL_CARD_COPY = Object.freeze({
   routes: Object.freeze(Object.fromEntries(WHAT_WOULD_ANSWER_LABEL)),
   notes: MANDATED_NOTE,
   nullSentences: Object.freeze(Object.fromEntries(NULL_SENTENCE)),
+  europeNullSentences: Object.freeze(Object.fromEntries(EUROPE_NULL_SENTENCE)),
   candidate: CANDIDATE,
   candidateWithdrawalNotStated: CANDIDATE_WITHDRAWAL_NOT_STATED,
   published: PUBLISHED,

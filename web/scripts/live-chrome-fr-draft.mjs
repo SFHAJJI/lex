@@ -278,6 +278,10 @@ export const LIVE_CHROME_FR_DRAFT = Object.freeze({
       nearest_earlier: 'Aucune version antérieure n’est détenue : la date demandée précède cet historique.',
       nearest_later: 'Aucune version postérieure n’est détenue : la date demandée suit toutes les versions détenues.',
     }),
+    europeNullSentences: Object.freeze({
+      nearest_earlier: 'Aucune rédaction antérieure n’est détenue : la date demandée précède cet historique.',
+      nearest_later: 'Aucune rédaction postérieure n’est détenue : la date demandée suit toutes les rédactions détenues.',
+    }),
     candidate: 'applicable à partir du {validFrom}, empreinte {hash}, {published}',
     candidateWithdrawalNotStated: 'applicable à partir du {validFrom}, empreinte {hash}, {published}, retrait non indiqué par la plateforme',
     published: 'publiée le {date}',

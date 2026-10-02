@@ -176,7 +176,7 @@ test("an EU refusal on the reading screen is said in EU words: no sentence or hi
   for (const outcome of [later, before]) {
     const shown = renderToStaticMarkup(h(ReadingAnswerView, { outcome, chrome: liveChrome() }));
     assert.doesNotMatch(shown, /appl(y|ies|icable|icability)/i, "no EU refusal speaks of applicability");
-    assert.doesNotMatch(shown, /states?/, "nor of Luxembourg's states");
+    assert.doesNotMatch(shown, /(?:states?|versions?)/i, "nor of Luxembourg's states or versions");
   }
   for (const code of Object.keys(LIVE_READING_EUROPE_REFUSAL_SENTENCES)) {
     assert.doesNotMatch(LIVE_READING_EUROPE_REFUSAL_SENTENCES[code], /appl(y|ies|icable|icability)/i, code);
