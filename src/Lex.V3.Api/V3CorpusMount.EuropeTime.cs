@@ -93,14 +93,14 @@ internal sealed partial class V3CorpusMount
             if (_europeSeedsByIdentifier is null)
             {
                 var map = new Dictionary<string, SortedSet<string>>(StringComparer.Ordinal);
-                void Add(string key, string seed)
+                void Add(string key, string seedCelex)
                 {
                     if (!map.TryGetValue(key, out var seeds))
                     {
                         map[key] = seeds = new SortedSet<string>(StringComparer.Ordinal);
                     }
 
-                    seeds.Add(seed);
+                    seeds.Add(seedCelex);
                 }
 
                 var states = EuropeStatesLocked();
@@ -923,6 +923,20 @@ internal sealed partial class V3CorpusMount
         return V3PlatformOperationOutcome.Success(
             Context("success", observedAt, PublisherId.EuEurLex),
             new V3PlatformOperationResult(request, "verification", verification.RootElement));
+    }
+
+    /// <summary>
+    /// A fixed not-held list as an answer serves it: its <c>later_wordings</c> row, which says no consolidated version is held, is
+    /// replaced by <paramref name="laterWordingsWhenHeld"/> when the act's census holds the text of one.
+    /// </summary>
+    private object[] EuropeNotHeldRows(string[][] rows, string? seed, string laterWordingsWhenHeld)
+    {
+        var held = seed is not null && EuropeConsolidationsHeld(EuropeTimelineOf(seed));
+        return rows.Select(row => (object)new
+        {
+            item = row[0],
+            reason = held && string.Equals(row[0], "later_wordings", StringComparison.Ordinal) ? laterWordingsWhenHeld : row[1],
+        }).ToArray();
     }
 
     /// <summary>The time view's summary for EU dossier: each language's dated wordings and unplaced versions, as timeline lists them.</summary>
