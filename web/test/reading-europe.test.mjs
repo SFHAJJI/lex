@@ -109,8 +109,8 @@ test("the EU bundle reads: the wording on its date, pinned, its quoted articles 
 test("each rule the EU bundle states about itself is refused when broken, with that rule's reason", () => {
   const cases = [
     ["another acknowledgement", (b) => { b.acknowledgement = "© EU"; }, /acknowledgement/],
-    ["a consolidation held", (b) => { b.consolidations_held = true; }, /original wording/],
-    ["a wording of another date", (b) => { b.wordings[0].wording_date = "2016-05-04"; }, /answers only its own date/],
+    // A held consolidation is no longer a broken rule: the time view (#909) quotes consolidated versions.
+    ["a wording of a later date", (b) => { b.wordings[0].wording_date = "2016-05-04"; }, /never answers a date before its own/],
     ["a permalink of another wording", (b) => { b.wordings[0].permalink = PERMALINK.replace("--5", "--6"); }, /not the wording it pins/],
     ["a coordinate that is not the permalink's", (b) => { b.wordings[0].stable_coordinate = "/eu-eurlex/32016R0679/eng"; }, /coordinate/],
     ["a source not acquired", (b) => { b.wordings[0].sources[0].outcome = "rights_withheld"; }, /only from acquired sources/],
@@ -184,6 +184,36 @@ test("an EU refusal on the reading screen is said in EU words: no sentence or hi
   // A Luxembourg refusal keeps its own sentence.
   const luxembourg = readingOutcome({ state: "refusal", envelope: { refusal: { code: "no_version_for_date", helpful_payload: later.payload }, context: { publisher: "lu-legilux" } } });
   assert.equal(luxembourg.sentence, LIVE_READING_REFUSAL_SENTENCES.no_version_for_date);
+});
+
+test("a time-view bundle reads: a consolidated version answers the dates from its own, and the page says how long it holds (#909)", () => {
+  const consolidatedSha = "7".repeat(64);
+  const consolidated = `/eu-eurlex/32016R0679/eng/2024-01-01--${consolidatedSha}`;
+  const timeView = (change = () => {}) => europeBundle((copy) => {
+    copy.requested_date = "2025-03-01";
+    copy.consolidations_held = true;
+    const wording = copy.wordings[0];
+    Object.assign(wording, { kind: "consolidated_version", wording_date: "2024-01-01", next_date: null, wording_sha256: consolidatedSha,
+      permalink: consolidated, stable_coordinate: "/eu-eurlex/32016R0679/eng/2024-01-01", basis: "single_work" });
+    for (const article of wording.articles) article.article_permalink = `${consolidated}#${escapeProvision(article.publisher_id)}`;
+    change(copy);
+  });
+  const view = readEuropeEvidenceBundle(timeView());
+  assert.equal(view.consolidationsHeld, true);
+  assert.equal(view.wordings[0].kind, "consolidated_version");
+  assert.equal(view.wordings[0].nextDate, null);
+  const markup = renderToStaticMarkup(h(ReadingAnswerView, { outcome: { state: "success", view } }));
+  assert.ok(markup.includes("the consolidated wording of 2024-01-01"), "the heading names the kind and its date");
+  assert.ok(markup.includes(liveChrome().reading.europeLatest), "the latest wording says it answers every later date");
+  assert.doesNotMatch(markup, /no later wording is held/, "the original-only heading is not used");
+
+  const bounded = readEuropeEvidenceBundle(timeView((copy) => { copy.wordings[0].next_date = "2026-01-01"; }));
+  const boundedMarkup = renderToStaticMarkup(h(ReadingAnswerView, { outcome: { state: "success", view: bounded } }));
+  assert.ok(boundedMarkup.includes("to the day before 2026-01-01"), "a wording with a next date says where it ends");
+
+  assert.throws(() => readEuropeEvidenceBundle(timeView((copy) => { copy.requested_date = "2023-12-31"; })), /never answers a date before its own/);
+  assert.throws(() => readEuropeEvidenceBundle(timeView((copy) => { copy.wordings[0].next_date = "2025-03-01"; })), /the next wording answers that date/);
+  assert.throws(() => readEuropeEvidenceBundle(timeView((copy) => { copy.wordings[0].kind = "applicable_version"; })), /original wording or a consolidated version/);
 });
 
 test("the export composer reads an EU wording and says it is not composed, offering no file", () => {

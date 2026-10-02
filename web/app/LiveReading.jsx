@@ -167,8 +167,20 @@ function EuropeWordingReading({ wording, celex }) {
   return (
     <section data-wording={wording.wordingSha256}>
       <h2>
-        <Say template={COPY.europeWordingHeading} values={{ celex, language: wording.language, date: wording.wordingDate }} />
+        <Say
+          template={wording.nextDate === undefined
+            ? COPY.europeWordingHeading
+            : wording.kind === 'consolidated_version' ? COPY.europeConsolidatedHeading : COPY.europeOriginalHeading}
+          values={{ celex, language: wording.language, date: wording.wordingDate }}
+        />
       </h2>
+      {wording.nextDate === undefined ? null : (
+        <p data-wording-holds="">
+          {wording.nextDate === null
+            ? COPY.europeLatest
+            : <Say template={COPY.europeHoldsUntil} values={{ date: wording.wordingDate, next: wording.nextDate }} />}
+        </p>
+      )}
       <p>
         <code>{wording.permalink}</code>
       </p>

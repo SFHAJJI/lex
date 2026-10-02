@@ -63,7 +63,7 @@ const LUXEMBOURG_DATE_FIELDS = new Set(["applicability_date", "next_applicabilit
 const EUROPE_DATE_FIELDS = new Set(["wording_date", "wording_dates", "pinned_wording"]);
 
 /** The interface entries the EU views say, which name the EU date and only it. */
-const EUROPE_ENTRIES = new Set(["search.euWording", "search.euHit", "search.notHeldHeading", "dossier.euExpressions.one", "dossier.euExpressions.other", "dossier.wordingDate", "reading.europeWordingHeading"]);
+const EUROPE_ENTRIES = new Set(["search.euWording", "search.euHit", "search.notHeldHeading", "dossier.euExpressions.one", "dossier.euExpressions.other", "dossier.wordingDate", "reading.europeWordingHeading", "reading.europeOriginalHeading", "reading.europeConsolidatedHeading", "reading.europeHoldsUntil", "reading.europeLatest"]);
 
 function fieldsOf(node, found = new Set()) {
   if (Array.isArray(node)) node.forEach((item) => fieldsOf(item, found));

@@ -94,6 +94,10 @@ export const LIVE_CHROME_FR_DRAFT = Object.freeze({
     withoutText: 'Détenus sans texte : {articles}.',
     notHeldHeading: 'Ce que cette lecture ne contient pas',
     europeWordingHeading: '{celex}, {language}, la rédaction originale du {date} (la date de l’acte dans le paquet Formex de l’éditeur ; aucune rédaction ultérieure n’est détenue)',
+    europeOriginalHeading: '{celex}, {language}, la rédaction originale du {date} (la date de l’acte dans le paquet Formex de l’éditeur)',
+    europeConsolidatedHeading: '{celex}, {language}, la rédaction consolidée du {date} (la date de consolidation de l’éditeur)',
+    europeHoldsUntil: 'Cette rédaction répond pour les dates du {date} à la veille du {next}, date de la rédaction suivante détenue.',
+    europeLatest: 'Il s’agit de la dernière rédaction détenue : elle répond pour toute date ultérieure, et une modification que l’éditeur n’a pas encore consolidée n’y figure pas.',
     europeCounts: Object.freeze({
       one: '{count} article cité ; sans texte : {withoutText}.',
       other: '{count} articles cités ; sans texte : {withoutText}.',
