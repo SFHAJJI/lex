@@ -11,9 +11,10 @@
 // a field called `reviewed_by` while the API and the comments claimed a named human had
 // reviewed them. That was a claim to evidence the module did not possess, which is the same
 // defect it exists to prevent, aimed at itself. A string now carries either a source master,
-// meaning the specification ships this exact wording, or a human review receipt with a
-// reviewer identity and a real date. Never both, and `reviewed_by` is emitted only for the
-// second.
+// meaning the specification ships this exact wording, or a review receipt naming its reviewer
+// and a real date. Never both, and `reviewed_by` is emitted only for the second. A receipt
+// names the reviewer as what it is: the French interface's names an AI reviewer acting under the
+// owner's delegation (`CHROME_REVIEWS`), and no receipt names a person who did not review.
 //
 // Authenticity. The first version mapped the publisher key `lu-legilux` to French-only and
 // treated every other publisher as needing no qualification. That is authenticity inferred
@@ -48,11 +49,29 @@ export const LOCALIZATION_UNAVAILABLE = 'localization_unavailable';
 export const RESOURCE_AUTHENTICITY_SCHEMA = 'lex-v3-resource-authenticity/1';
 
 /**
+ * The review receipts of the live pages' interface tables (`live-chrome.mjs`: the chrome table and
+ * the refusal sentences the screens say), one per language that is not the English source. A
+ * language is offered as reviewed chrome only with one (`REVIEWED_CHROME_LOCALES`).
+ *
+ * French was reviewed by an AI reviewer under the owner's delegation of 2026-10-02 (the owner
+ * delegated every decision of that review to the driver); the review's record is
+ * `C:\lex-v3\lanes\fr-review\review.md`. The receipt says exactly that. It is not a human
+ * legal-language review and does not say it is one.
+ */
+export const CHROME_REVIEWS = Object.freeze({
+  fr: Object.freeze({
+    reviewed_by: "Claude (AI reviewer), under the owner's delegation of 2026-10-02",
+    reviewed_on: '2026-10-03',
+  }),
+});
+
+/**
  * The shipped strings.
  *
  * `source_basis` means the specification ships this exact wording. `reviewed_by` with
- * `reviewed_on` means a named person reviewed a translation on a real date. An entry may
- * carry one or the other, never both, and an entry carrying neither is absent.
+ * `reviewed_on` means the named reviewer reviewed a translation on a real date; the name says
+ * who or what reviewed it (`CHROME_REVIEWS`). An entry may carry one or the other, never both,
+ * and an entry carrying neither is absent.
  */
 const STRINGS = Object.freeze({
   'refusal.advice_boundary.sentence': Object.freeze({
@@ -88,12 +107,11 @@ const STRINGS = Object.freeze({
   }),
 });
 
-/** True when a named person reviewed this entry on a real date. */
+/** True when the entry names its reviewer and a real review date. */
 export function isReviewed(entry) {
   // Own properties only. An entry whose prototype supplies `reviewed_by` and `reviewed_on`
-  // would otherwise become claimed human-review evidence, which is the same defect as a
-  // closed vocabulary reached through `toString`, aimed at the field that says a person
-  // looked at this.
+  // would otherwise become claimed review evidence, which is the same defect as a closed
+  // vocabulary reached through `toString`, aimed at the field that names who looked at this.
   return Boolean(
     entry &&
       Object.hasOwn(entry, 'reviewed_by') &&
@@ -116,8 +134,9 @@ export function isSourceMaster(entry) {
 
 /**
  * What may be served, and under which claim. An entry that is both a source master and a
- * human review is refused rather than resolved: the two are different provenances and a
- * string cannot be served under both.
+ * review is refused rather than resolved: the two are different provenances and a string
+ * cannot be served under both. A review is `review`, with its receipt; whether a person or an
+ * AI reviewer reviewed it is what the receipt's `reviewed_by` says, not what the kind claims.
  */
 export function provenanceOf(entry) {
   if (
@@ -133,7 +152,7 @@ export function provenanceOf(entry) {
   if (master === reviewed) return null;
   return master
     ? { kind: 'source_master', source_basis: entry.source_basis }
-    : { kind: 'human_review', reviewed_by: entry.reviewed_by, reviewed_on: entry.reviewed_on };
+    : { kind: 'review', reviewed_by: entry.reviewed_by, reviewed_on: entry.reviewed_on };
 }
 
 /** The locales a key is genuinely servable in, in the order the interface offers them. */

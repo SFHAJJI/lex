@@ -11,17 +11,18 @@
 // linked: this origin serves no reading page for them yet.
 //
 // An EU work's dossier (`view.publisher` "eu-eurlex") is laid out with its own words: its CELEX and
-// work IRI, and each expression the EU index holds with the date of its one held wording (never an
+// work IRI, and each expression the EU index holds with the date of its original wording (never an
 // applicability date or a state; the answer's `date_semantics` says what the date is, shown as sent),
-// its article count and the permalink that pins that wording.
+// its article count and the permalink that pins that wording. The consolidated wordings the EU time
+// view serves are read on the reading screen.
 
 import { useEffect, useRef, useState } from 'react';
 
 import { RefusalCard } from './RefusalCard.jsx';
 import { DOSSIER_LANGUAGES, LIVE_DOSSIER_IDLE, createDossierSession } from '../scripts/live-dossier.mjs';
-import { LiveAnswer, Say } from './LiveAnswer.jsx';
+import { LiveAnswer, Say, StatusSentence, inEnglish, refusalCardCopyFor } from './LiveAnswer.jsx';
 import { quotationLanguageTag } from '../scripts/live-reading.mjs';
-import { countedEntry, liveChrome } from '../scripts/live-chrome.mjs';
+import { ENGLISH_LANG, countedEntry, liveChrome } from '../scripts/live-chrome.mjs';
 
 /** The forms' labels and buttons, and this screen's sentences, from the interface copy table. */
 const FORM = liveChrome().form;
@@ -45,20 +46,26 @@ export function DossierTitles({ titles }) {
       {titles.map((group) => (
         <li key={`${group.language}.${group.expressionIri}`}>
           {/* The publisher's titles are statute text, marked in their own language, apart from the
-              interface's (the launch contract's statute-language line). */}
-          {group.language}:{' '}
-          {[
-            ...group.titles.map((entry) => ({ title: entry.title, short: false })),
-            ...group.shortTitles.map((entry) => ({ title: entry.title, short: true })),
-          ].map((entry, index) => {
-            const title = <span lang={quotationLanguageTag(group.language)}>{entry.title}</span>;
-            return (
-              <span key={`${index}.${entry.title}`}>
-                {index === 0 ? '' : '; '}
-                {entry.short ? <Say template={COPY.shortTitle} values={{ title }} /> : title}
-              </span>
-            );
-          })}
+              interface's (the launch contract's statute-language line). The label's colon and the
+              separator between titles are the table's, so each language sets its own typography. */}
+          <Say
+            template={COPY.titleGroup}
+            values={{
+              language: group.language,
+              titles: [
+                ...group.titles.map((entry) => ({ title: entry.title, short: false })),
+                ...group.shortTitles.map((entry) => ({ title: entry.title, short: true })),
+              ].map((entry, index) => {
+                const title = <span lang={quotationLanguageTag(group.language)}>{entry.title}</span>;
+                return (
+                  <span key={`${index}.${entry.title}`}>
+                    {index === 0 ? '' : COMMON.listSeparator}
+                    {entry.short ? <Say template={COPY.shortTitle} values={{ title }} /> : title}
+                  </span>
+                );
+              }),
+            }}
+          />
         </li>
       ))}
     </ul>
@@ -105,21 +112,21 @@ export function DossierView({ view }) {
           ))}
         </tbody>
       </table>
-      <p>{asSentence(view.articlesNotAdmittedNote)}</p>
+      <p lang={ENGLISH_LANG}>{asSentence(view.articlesNotAdmittedNote)}</p>
       <h3>{COPY.notHeldHeading}</h3>
       <ul data-not-held={view.notHeld.length}>
         {view.notHeld.map((row) => (
           <li key={row.item}>
-            <Say template={COMMON.notHeldRow} values={{ item: <strong>{row.item}</strong>, reason: row.reason }} />
+            <Say template={COMMON.notHeldRow} values={{ item: <strong>{row.item}</strong>, reason: inEnglish(row.reason) }} />
           </li>
         ))}
       </ul>
-      <p>{asSentence(view.scope)}</p>
+      <p lang={ENGLISH_LANG}>{asSentence(view.scope)}</p>
     </>
   );
 }
 
-/** One EU dossier view, laid out: the work, its expressions with the one wording held of each, pinned, and what it does not hold. */
+/** One EU dossier view, laid out: the work, its expressions with the original wording of each, pinned, and what it does not hold. */
 export function EuropeDossierView({ view }) {
   return (
     <>
@@ -150,16 +157,16 @@ export function EuropeDossierView({ view }) {
           ))}
         </tbody>
       </table>
-      <p data-date-semantics="">{asSentence(view.dateSemantics)}</p>
+      <p data-date-semantics="" lang={ENGLISH_LANG}>{asSentence(view.dateSemantics)}</p>
       <h3>{COPY.notHeldHeading}</h3>
       <ul data-not-held={view.notHeld.length}>
         {view.notHeld.map((row) => (
           <li key={row.item}>
-            <Say template={COMMON.notHeldRow} values={{ item: <strong>{row.item}</strong>, reason: row.reason }} />
+            <Say template={COMMON.notHeldRow} values={{ item: <strong>{row.item}</strong>, reason: inEnglish(row.reason) }} />
           </li>
         ))}
       </ul>
-      <p>{asSentence(view.scope)}</p>
+      <p lang={ENGLISH_LANG}>{asSentence(view.scope)}</p>
     </>
   );
 }
@@ -177,14 +184,14 @@ export function DossierAnswerView({ outcome }) {
   if (outcome.state === 'refusal' && outcome.card) {
     return (
       <section data-answer-state="refusal">
-        <RefusalCard code={outcome.code} sentence={outcome.sentence} payload={outcome.payload} copy={liveChrome().refusalCard} />
+        <RefusalCard code={outcome.code} sentence={outcome.sentence} payload={outcome.payload} copy={refusalCardCopyFor(outcome.context)} />
       </section>
     );
   }
 
   return (
     <section data-answer-state={outcome.state}>
-      <p role="status">{outcome.sentence}</p>
+      <StatusSentence outcome={outcome} />
     </section>
   );
 }

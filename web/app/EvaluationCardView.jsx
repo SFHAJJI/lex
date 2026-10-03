@@ -6,13 +6,16 @@
 // sentence. Each case set is a table with its caption, every verdict a word, every rate beside its
 // Wilson interval and every 1 beside its rule-of-three bound; the shuffled controls are shown like
 // any other number; the statistical rows say "not yet labelled"; the negative results are listed.
+// The card's own sentences (its target, reasons, notes, rows and results) are the platform's English,
+// marked English on a page in another language (`inEnglish`).
 
-import { Say } from './LiveAnswer.jsx';
+import { Say, inEnglish } from './LiveAnswer.jsx';
 import { fillCounted, fillText, liveChrome } from '../scripts/live-chrome.mjs';
 import { CARD_ROUTE } from '../scripts/evaluation-card.mjs';
 
 /** The card's words, from the interface copy table. */
 const CARD = liveChrome().card;
+const COMMON = liveChrome().common;
 
 function Summary({ view }) {
   if (view.gatesNotPassing.length === 0 && view.controlsNotCaught.length === 0) {
@@ -22,7 +25,7 @@ function Summary({ view }) {
   const controls = fillCounted(CARD.controlsNotCaught, view.controlsNotCaught.length);
   const listed = (summary, rows, template, name) => (rows.length === 0 ? summary : fillText(CARD.listed, {
     summary,
-    list: rows.map((row) => fillText(template, { [name]: row[name], set: row.set, arm: row.arm, verdict: name === 'gate' ? CARD.verdict[row.verdict] : CARD.controlVerdict[row.verdict] })).join('; '),
+    list: rows.map((row) => fillText(template, { [name]: row[name], set: row.set, arm: row.arm, verdict: name === 'gate' ? CARD.verdict[row.verdict] : CARD.controlVerdict[row.verdict] })).join(COMMON.listSeparator),
   }));
   return (
     <p data-card-summary="not-clean">
@@ -42,7 +45,7 @@ function GateRow({ gate }) {
   return (
     <tr data-verdict={gate.verdict}>
       <th scope="row">{gate.gate}</th>
-      <td>{gate.reason === null ? verdict : fillText(CARD.verdictReason, { verdict, reason: gate.reason })}</td>
+      <td>{gate.reason === null ? verdict : <Say template={CARD.verdictReason} values={{ verdict, reason: inEnglish(gate.reason) }} />}</td>
       <td>{gate.value === null ? CARD.none : gate.value}</td>
       <td>{gate.threshold}</td>
       <td>{gate.n}</td>
@@ -57,7 +60,7 @@ export function EvaluationCardView({ view }) {
   return (
     <section data-evaluation-card="">
       <h2>{CARD.heading}</h2>
-      <p data-card-target=""><Say template={CARD.target} values={{ target: view.target }} /></p>
+      <p data-card-target=""><Say template={CARD.target} values={{ target: inEnglish(view.target) }} /></p>
       <p data-card-json=""><a href={CARD_ROUTE}>{CARD.machineReadable}</a></p>
       <Summary view={view} />
       {view.sets.map((set) => (
@@ -92,11 +95,11 @@ export function EvaluationCardView({ view }) {
                 set: control.set,
                 arm: control.arm,
                 verdict: CARD.controlVerdict[control.verdict],
-                reason: control.reason,
+                reason: inEnglish(control.reason),
                 seed: control.seed,
                 cases: control.cases,
                 digest: <code>{control.casesSha256}</code>,
-                ...(control.note === null ? {} : { note: control.note }),
+                ...(control.note === null ? {} : { note: inEnglish(control.note) }),
               }}
             />
           </li>
@@ -106,7 +109,7 @@ export function EvaluationCardView({ view }) {
       <ul data-statistical-rows={view.statisticalRows.length}>
         {view.statisticalRows.map((row) => (
           <li key={row.dataset}>
-            <Say template={CARD.statistical} values={{ dataset: row.dataset, name: row.name, gates: row.gates, governedBy: row.governedBy }} />
+            <Say template={CARD.statistical} values={{ dataset: row.dataset, name: inEnglish(row.name), gates: inEnglish(row.gates), governedBy: inEnglish(row.governedBy) }} />
           </li>
         ))}
       </ul>
@@ -116,7 +119,13 @@ export function EvaluationCardView({ view }) {
           <li key={row.hypothesis}>
             <Say
               template={CARD.negative}
-              values={{ hypothesis: row.hypothesis, dataset: row.dataset, result: row.result, decision: row.decision, reverse: row.whatWouldReverseIt }}
+              values={{
+                hypothesis: inEnglish(row.hypothesis),
+                dataset: inEnglish(row.dataset),
+                result: inEnglish(row.result),
+                decision: inEnglish(row.decision),
+                reverse: inEnglish(row.whatWouldReverseIt),
+              }}
             />
           </li>
         ))}

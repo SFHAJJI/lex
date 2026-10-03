@@ -10,9 +10,9 @@
 import { askV3 } from "./v3-client.mjs";
 import { readEvidenceBundleAnswer } from "./reading-answer.mjs";
 import { validateRefusal } from "./refusal-card.mjs";
-import { noCorpusMountedSentence, historyBeginsHint } from "./live-refusals.mjs";
+import { historyBeginsHint, noCorpusMountedSentence, tableRefusalSentence, unshownRefusal } from "./live-refusals.mjs";
 import { isCalendarDate } from "./temporal.mjs";
-import { liveChrome } from "./live-chrome.mjs";
+import { englishStatement, fillText, liveChrome, refusalTemplate } from "./live-chrome.mjs";
 
 /**
  * The languages the form offers besides "any": the platform answers a language the work is not held
@@ -72,10 +72,16 @@ export function readingRefusalSentences(context) {
 export const LIVE_READING_IDLE = liveChrome().reading.idle;
 export const LIVE_READING_LOADING = liveChrome().common.loading;
 
+const UNEXPECTED = "The reading was refused with {code}.";
+const UNSHOWN = "The reading was refused with {code}, and its card cannot be shown: {reason}.";
+
 export function unexpectedRefusalSentence(code) {
-  return `The reading was refused with ${code}.`;
+  return fillText(refusalTemplate("reading", "unexpected", UNEXPECTED), { code });
 }
 
+// A transport failure, an answer this page cannot read and a request it will not send have no reviewed
+// wording but the English: a page in another language says them in English, marked English
+// (`englishStatement`).
 export function transportFailureSentence(code) {
   if (code === "request_schema_invalid") {
     return "This server refused the reading request as it was asked (request_schema_invalid).";
@@ -84,7 +90,7 @@ export function transportFailureSentence(code) {
 }
 
 export function unshownRefusalSentence(code, reason) {
-  return `The reading was refused with ${code}, and its card cannot be shown: ${reason}.`;
+  return unshownRefusal("reading", UNSHOWN, code, reason).sentence;
 }
 
 export function invalidAnswerSentence(reason) {
@@ -119,7 +125,7 @@ export function readingOutcome(asked) {
     try {
       return { state: "success", view: readEvidenceBundleAnswer(asked.envelope.result.value), context: asked.envelope.context };
     } catch (error) {
-      return { state: "invalid_envelope", sentence: invalidAnswerSentence(error.message) };
+      return { state: "invalid_envelope", ...englishStatement(invalidAnswerSentence(error.message)) };
     }
   }
 
@@ -127,7 +133,7 @@ export function readingOutcome(asked) {
     const { code, helpful_payload: payload } = asked.envelope.refusal;
     const sentence = code === "no_corpus_mounted"
       ? noCorpusMountedSentence(payload)
-      : readingRefusalSentences(asked.envelope.context)[code] ?? unexpectedRefusalSentence(code);
+      : tableRefusalSentence(readingRefusalSentences(asked.envelope.context), code, unexpectedRefusalSentence);
     // An EU ambiguity names wordings, which the refusal card (built on Luxembourg's states, "applicable from") cannot
     // describe: the page says its EU sentence and shows no card (review of #909).
     if (code === "ambiguous_version" && asked.envelope.context?.publisher === "eu-eurlex") {
@@ -139,13 +145,13 @@ export function readingOutcome(asked) {
       // The date a reader needs to ask again travels with the refusal even when its card cannot be
       // shown (review of #777): the work's history as this index holds it begins on history_begins.
       const retry = code === "no_version_for_date" && isCalendarDate(payload?.history_begins)
-        ? ` ${historyBeginsHint(payload.history_begins)}`
-        : "";
+        ? historyBeginsHint(payload.history_begins)
+        : null;
       return {
         state: "refusal",
         code,
         card: false,
-        sentence: `${unshownRefusalSentence(code, error.message)}${retry}`,
+        ...unshownRefusal("reading", UNSHOWN, code, error.message, retry),
         context: asked.envelope.context,
       };
     }
@@ -153,10 +159,10 @@ export function readingOutcome(asked) {
   }
 
   if (asked.state === "transport_failure") {
-    return { state: "transport_failure", sentence: transportFailureSentence(asked.code) };
+    return { state: "transport_failure", ...englishStatement(transportFailureSentence(asked.code)) };
   }
 
-  return { state: "invalid_envelope", sentence: invalidAnswerSentence(asked.reason) };
+  return { state: "invalid_envelope", ...englishStatement(invalidAnswerSentence(asked.reason)) };
 }
 
 /** Asks the live API one reading and returns the view state. */
@@ -179,7 +185,7 @@ export function createReadingSession({ contract, fetchImpl, onOutcome }) {
       try {
         readingParameters(request);
       } catch (error) {
-        onOutcome({ state: "invalid_request", sentence: `${error.message}.` });
+        onOutcome({ state: "invalid_request", ...englishStatement(`${error.message}.`) });
         return false;
       }
       const own = new AbortController();
@@ -191,7 +197,7 @@ export function createReadingSession({ contract, fetchImpl, onOutcome }) {
         })
         .catch((error) => {
           if (error?.name !== "AbortError" && !own.signal.aborted) {
-            onOutcome({ state: "invalid_envelope", sentence: invalidAnswerSentence(String(error?.message ?? error)) });
+            onOutcome({ state: "invalid_envelope", ...englishStatement(invalidAnswerSentence(String(error?.message ?? error))) });
           }
         });
       return true;
