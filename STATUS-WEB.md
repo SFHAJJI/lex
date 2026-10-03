@@ -2727,10 +2727,59 @@ Each is the driver's call under ruling 7 and can be reversed by a later pull req
     `malformed_not_served`, and an empty list or rows out of order are not canonical.
   - A manifest's rows are what the platform did not serve when it was built; `coverage` keeps
     reporting today's routes.
-  - With this, the launch line "all 27 registered names, each either served or refusing with a typed
-    reason its capability manifest states" holds on a fresh build: the three unserved operations
-    answer `operation_not_served`, and each manifest states that reason and the data that would serve
-    them.
+  - This made the launch line "all 27 registered names, each either served or refusing with a typed
+    reason its capability manifest states" hold for the three unserved operations only. It did not
+    hold for EU identifiers: 13 routed operations refuse an EU identifier `retrieval_mode_unavailable`,
+    and no manifest stated it (found by the sole driver's audit, 2026-10-03; the earlier statement
+    here that the line held on a fresh build was wrong). The capability slice below states them.
+- **The EU capability rows (sole driver, 2026-10-03).** Each EU capability manifest now states the
+  operations an EU identifier is refused, so the launch line holds for EU identifiers: the 13 refuse
+  every EU-shaped identifier the mode, held or not, since they serve none; the operations that serve
+  EU acts (`as_of` and `timeline` where the EU index holds a census, `dossier`, `search` and
+  `evidence_bundle`) answer an EU-shaped identifier the EU index does not hold `identifier_unknown`
+  with EU context:
+  - The manifest's `not_served` rows may carry a second reason, `retrieval_mode_unavailable` (the
+    registry's refusal for an operation routed for another publisher's identifiers only), beside
+    `operation_not_served`; any other reason stays `malformed_not_served`. The row shape is
+    unchanged, so the schema stays `/1`.
+  - `V3EuropeRefusedOperations` (Contracts) lists the 13: `answer_drift`, `article_history`,
+    `as_observed`, `changes_in_period`, `citation`, `cited_by`, `classification`, `diff`,
+    `in_force_on`, `manifestation`, `provenance`, `relations` and `status_on`, each with what would
+    serve it. The EU index builder states it beside `V3UnservedOperations` (16 rows); the Luxembourg
+    manifest keeps its 3. Several are data held but not served, and the rows say so (review of #913):
+    the Formex references are extracted with each article and held as reference tokens (`citation`,
+    `relations`), and the census acquires the force facts and date axioms into custody without any
+    build indexing them (`in_force_on`, `status_on`).
+  - `coverage` reports the mounted EU manifest's refusals (`operations.refused_for_eu`, with a note)
+    when an EU index is mounted; a mount with no EU index answers the block exactly as before, so
+    the answer and envelope samples (a Luxembourg-only mount) do not change.
+  - `V3CorpusEuropeCapabilityMountTests` holds it on the time-view mount: every stated row is the
+    refusal an EU identifier receives (code, EU context, the registry's fields), the seven operations
+    the time view serves for an EU act answer (`as_of`, `timeline`, `evidence_bundle`, `verify` of
+    a pinned EU permalink, `dossier`, `search` in one EU work, `resolve`), and the 27 registered
+    operations are each accounted for once (the four left take no work identifier: `ask`,
+    `browse`, `coverage`, `events`).
+  - Attribution follows the identifier (reviews of #913): this service's own EU coordinates
+    (`/eu-eurlex/…`, as a path or under its origin) are EU-shaped, so a refused operation refuses
+    them the mode with EU context and `resolve` answers them with EU context (they were answered
+    "no publisher shape" with Luxembourg context); `as_observed` by time refuses an EU identifier
+    the mode, as by snapshot (it answered `snapshot_unknown` with Luxembourg context).
+  - `as_of` and `timeline`, where the EU index holds a census: an identifier the census does not
+    list answers through its act when the EU index resolves it (another form of the original
+    wording's identifier, or a provision coordinate that resolution checks against its articles) or
+    when it is a provision coordinate of an expression the census lists whose articles hold that
+    provision (a consolidated expression's); any other EU-shaped identifier is `identifier_unknown`
+    with EU context, as `dossier` and `search` answer it: an unknown CELEX, a provision the
+    expression does not hold, and this service's own coordinates, which name a wording rather than
+    an act (as Luxembourg's `as_of` refuses its own permalinks). On an EU index with no census (an
+    empty states table, or a schema before 5) they keep the mode refusal.
+  - Not covered by a manifest row, by design: request variants that refuse within a served
+    operation (`verify` of a bare EU identifier rather than a pinned permalink; `search` in an EU
+    work at a date, since the search reads the original wording only). Real EU mounts built before
+    this slice keep a manifest that states the three unserved operations only, and `coverage`
+    reports what the mounted manifest states, so it lists no EU refusal there (a test rewrites a
+    mount's manifest to that earlier form); the final mount is derived from custody by the release
+    command, so it carries the 16 rows.
 - The web hosting shape of ruling 3 is `Lex.V3.Api` serving the built live pages beside `/api/v3` and
   `/mcp`, with the security headers, rather than an ingress split.
 - Exports (PRs #789 and #790): JSON, CSV and PDF are written from one model, so they cannot
