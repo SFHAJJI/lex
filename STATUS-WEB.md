@@ -2394,7 +2394,12 @@ MCP and events) follow, each proved in this job.
 
 The specification's journeys (the review pack's `05-user-journeys.md`) mapped onto the suite (sole driver,
 2026-10-03): J1 is the reading step (every article permalink verified), J3 compare, J4 export, J8's radar
-the radar step; what the eight steps did not walk now runs on the fixture mount too:
+the radar step. J3 and J8's radar are walked in their no-change form only: the fixture mount holds one state,
+so the compare step asks one date twice ("The same version applied on both dates.") and the radar's one-day
+window shows that state "not compared: the first state this index holds"; a comparison of two different
+states and a compared radar row are held by unit tests only (#783, #787) until a two-state mount joins the
+job (review of #915). What the eight steps did not walk now runs on the fixture mount too, in the browser
+(J1's refusal, J2, J5) or as API checks in the same job (J6, J7, J8's events):
 - J1's refusal: the reading asked for 2019-03-15, before the work's one state, refuses `no_version_for_date`,
   saying no earlier state is held and where the history begins;
 - J2: a citizen's question searched as typed ("combien de jours de congé j'ai le droit quand mon père est
