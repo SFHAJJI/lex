@@ -96,6 +96,25 @@ test("the derive tool is bound to the release source only when its CI artifact n
   }
 });
 
+test("the release from custody refuses a derive tool its CI artifact does not bind to the checkout", async () => {
+  const { rehearseFromCustody } = await import("../scripts/image-rehearsal.mjs");
+  const root = await mkdtemp(join(tmpdir(), "lex-tool-refusal-"));
+  try {
+    const { mkdir } = await import("node:fs/promises");
+    await mkdir(join(root, "runtime"));
+    const tool = join(root, "runtime", "Lex.V3.Tool.dll");
+    await writeFile(tool, "tool bytes");
+    const release = () => rehearseFromCustody({ tool, custody: join(root, "custody"), checkpoint: join(root, "mount-inputs.json") });
+    // No stamp beside runtime/: nothing names the commit the tool was built from. Refused before any derive runs.
+    await assert.rejects(release(), /the derive tool is not bound to the source the image is built from: no .*source-head\.txt names the commit/);
+    // A stamp naming another commit than this checkout's is refused the same way.
+    await writeFile(join(root, "source-head.txt"), "0".repeat(40) + "\n");
+    await assert.rejects(release(), /the derive tool is not bound to the source the image is built from: it was built from 0{40}, and the checkout is [0-9a-f]{40}/);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 test("digest lists are compared by name: a file only one side holds is a difference", async () => {
   assert.deepEqual(digestDifferences([{ name: "a", sha256: "1" }], [{ name: "a", sha256: "1" }, { name: "b", sha256: "2" }]), ["b"]);
   assert.deepEqual(digestDifferences([{ name: "a", sha256: "1" }], [{ name: "a", sha256: "2" }]), ["a"]);

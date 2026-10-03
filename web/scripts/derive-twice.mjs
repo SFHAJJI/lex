@@ -4,9 +4,10 @@
 // release pipeline").
 //
 // Each execution is the offline derive command (`Lex.V3.Tool derive --custody --checkpoint --out`). That it sends no
-// publisher request rests on its code path: derive reopens retained custody and constructs no publisher session (the only
-// publisher client, RoutedHttpAcquisitionSession, is built by acquisition alone), which V3OfflineMountTests holds in
-// separate processes. The proxy-variable trap here is a narrower, second check: every proxy variable points at a local
+// publisher request rests on its code path: derive (V3OfflineMount.DeriveAsync) takes only the custody store and reopens
+// retained custody, constructing no publisher session (the only publisher client, RoutedHttpAcquisitionSession, is built by
+// acquisition alone), and every replay door refuses when any wire budget was spent. The proxy-variable trap here is a
+// narrower, second check: every proxy variable points at a local
 // listener that counts connections, which catches a client that honours the proxy environment. It does not see a client
 // built with UseProxy = false (the publisher client is one), raw sockets or DNS, and the evidence says so
 // (DERIVE_TRAP_LIMITS). The first mount is what the image then carries.
@@ -23,7 +24,8 @@ const sha256 = (bytes) => createHash("sha256").update(bytes).digest("hex");
 export const DERIVE_TRAP_LIMITS =
   "counts connections from clients that honour the proxy environment variables; it does not see a client built with " +
   "UseProxy = false (the publisher client is one), raw sockets or DNS. That derive sends no publisher request rests on its " +
-  "code path, which constructs no publisher session, held by V3OfflineMountTests in separate processes.";
+  "code path: derive takes only the custody store and constructs no publisher session, and every replay door refuses when " +
+  "any wire budget was spent.";
 
 /** Every file under `directory`, as sorted `{ name, sha256 }` with `/`-separated relative names. */
 export async function mountDigests(directory) {
@@ -61,7 +63,8 @@ function runProcess(command, args, env) {
 /**
  * Derives the mount twice and compares it. `runner` is the command that runs the tool (`["dotnet", "<Lex.V3.Tool.dll>"]`);
  * `into` receives `derive-a` and `derive-b`. Returns the first mount's path and the evidence; throws when an execution fails,
- * attempts the network, or the two mounts differ in any file.
+ * connects to the proxy-variable trap (which sees only clients that honour the proxy variables: DERIVE_TRAP_LIMITS), or the two
+ * mounts differ in any file.
  */
 export async function deriveTwice({ runner, custody, checkpoint, custodyEncoding = "brotli", into, log = () => {} }) {
   if (!Array.isArray(runner) || runner.length === 0) throw new Error("deriveTwice needs the command that runs the derive tool");
