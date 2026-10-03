@@ -2411,9 +2411,15 @@ the radar step; what the eight steps did not walk now runs on the fixture mount 
   protocol revision stated; the event log polled twice answers the same events, nothing more from its own
   `next_after`, `snapshot_unknown` for another log's cursor, every event permalink verifies, and
   `answer_drift` on the genesis log names no invalidated answer and does not assert the absence of drift.
-Still to come: J2's hand-off to the contained assistant and J6 (an ask page, which no live page has yet). The
-publishers' own search pages are not offered on the `identifier_unknown` card: the handoff registry admits no
-real host yet (`HANDOFF_HOSTS`), and adding one is an editorial decision recorded when it is made.
+- J6 at the API: `ask`, put a question that must be refused as legal advice, answers the contained
+  assistant's card (Decision 91): the verdict `point`, `assistant_v3_unavailable`, the question not read, the
+  model gloss disabled, and the reader handed to `resolve`, `as_of` and `evidence_bundle` (and `search`) on
+  their served routes, nothing of the question in the card; `ask` is also in J7's REST and MCP comparison.
+Driver decisions (reversible): no live page asks `ask` and none offers J2's "ask in your own words" hand-off
+while the assistant is contained, since a page whose one answer is that no question is answered would add a
+route to nothing; J6 is held at the API, where the containment is decided. The publishers' own search pages are
+not offered on the `identifier_unknown` card: the handoff registry admits no real host yet (`HANDOFF_HOSTS`), and
+adding one is an editorial decision recorded when it is made.
 
 ## Next, in order (web lane; the data lane's items 1 to 3 are in STATUS-DATA.md)
 

@@ -7,6 +7,8 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  ADVICE_QUESTION,
+  ASK_PRIMARY_TEXT_ROUTES,
   DOSSIER_IDENTIFIER,
   EARLY_READING_DATE,
   EU_DOSSIER_ON_FIXTURE,
@@ -22,6 +24,7 @@ import {
   READING_DATE,
   SEARCH_PHRASE,
   UNKNOWN_LAW,
+  askCardFailures,
   envelopeIdentityFailures,
   expectedFromEnvelope,
   fixtureMountExpectations,
@@ -626,4 +629,38 @@ test("journey J7 asks every request the journeys' pages make, each once", () => 
   for (const step of [...Object.values(JOURNEY_STEPS), ...specificationJourneyExpectations().map(([, expected]) => expected.step)]) {
     assert.ok(keys.includes(JSON.stringify(step.body ?? { operation_id: "coverage", parameters: {} })), `${step.path} ${step.operation}`);
   }
+});
+
+test("journey J6: ask answers the contained assistant's card, never a conclusion, and hands the reader to the primary text", () => {
+  const card = () => ({
+    verdict: "point",
+    result: {
+      value: {
+        presentation_result: "assistant_v3_unavailable",
+        containment: { decisions: ["51", "91"], model_gloss: "disabled" },
+        question_read: false,
+        deterministic_actions: ["resolve", "search", "as_of", "evidence_bundle"].map((operation) => ({ operation_id: operation, route: `/api/v3/${operation}` })),
+      },
+    },
+  });
+  assert.deepEqual(askCardFailures(card()), []);
+  assert.deepEqual(ASK_PRIMARY_TEXT_ROUTES, ["resolve", "as_of", "evidence_bundle"]);
+  const answered = card();
+  answered.verdict = "answer";
+  assert.ok(askCardFailures(answered).some((failure) => /verdict answer, not point/.test(failure)), "an answer is a conclusion");
+  const read = card();
+  read.result.value.question_read = true;
+  assert.ok(askCardFailures(read).some((failure) => /not read/.test(failure)));
+  const glossed = card();
+  glossed.result.value.containment.model_gloss = "enabled";
+  assert.ok(askCardFailures(glossed).some((failure) => /model gloss is enabled/.test(failure)));
+  const narrow = card();
+  narrow.result.value.deterministic_actions = narrow.result.value.deterministic_actions.filter((action) => action.operation_id !== "evidence_bundle");
+  assert.ok(askCardFailures(narrow).some((failure) => /evidence_bundle/.test(failure)), "the card must hand the reader to the quoted text");
+  const misrouted = card();
+  misrouted.result.value.deterministic_actions[0].route = "/api/v3/ask";
+  assert.ok(askCardFailures(misrouted).some((failure) => /names the route \/api\/v3\/ask/.test(failure)));
+  const echoed = card();
+  echoed.result.value.note = `you asked: ${ADVICE_QUESTION}`;
+  assert.ok(askCardFailures(echoed).some((failure) => /question's words/.test(failure)), "nothing of the question is in the card");
 });

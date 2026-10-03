@@ -1158,15 +1158,48 @@ export async function eventsFailures(origin) {
   return failures;
 }
 
+/** Journey J6: a question that must be refused as legal advice, put to `ask` in the reader's own words. */
+export const ADVICE_QUESTION = "Mon employeur peut-il me refuser un congé parental si je travaille à temps partiel ?";
+
+/** The operations the contained assistant must hand a reader to instead: the primary text, read deterministically. */
+export const ASK_PRIMARY_TEXT_ROUTES = Object.freeze(["resolve", "as_of", "evidence_bundle"]);
+
 /**
- * Journeys J7 and J8 at the API, against one API process over the mount: each page request through REST and
- * MCP, then the event log polled. Returns `[name, failures]` pairs.
+ * Journey J6 at the API, as failures: `ask` answers the contained assistant's card (Decision 91), never a legal
+ * conclusion. The verdict is `point`, the presentation `assistant_v3_unavailable`, the question is not read, the
+ * model gloss is disabled, and the card hands the reader to the deterministic operations that deliver the
+ * primary text, each on its own served route; nothing of the question is in the card.
+ */
+export function askCardFailures(envelope) {
+  const failures = [];
+  if (envelope?.verdict !== "point") failures.push(`ask answered the verdict ${envelope?.verdict}, not point`);
+  const value = envelope?.result?.value;
+  if (value?.presentation_result !== "assistant_v3_unavailable") failures.push(`ask presented ${value?.presentation_result}, not assistant_v3_unavailable`);
+  if (value?.question_read !== false) failures.push("the ask card does not say the question was not read");
+  if (value?.containment?.model_gloss !== "disabled") failures.push(`the model gloss is ${value?.containment?.model_gloss}, not disabled`);
+  const actions = Array.isArray(value?.deterministic_actions) ? value.deterministic_actions : [];
+  for (const operation of ASK_PRIMARY_TEXT_ROUTES) {
+    if (!actions.some((action) => action.operation_id === operation)) failures.push(`the ask card does not hand the reader to ${operation}`);
+  }
+  for (const action of actions) {
+    if (action.route !== `/api/v3/${action.operation_id}`) failures.push(`the action ${action.operation_id} names the route ${action.route}`);
+  }
+  if (JSON.stringify(value ?? null).includes(ADVICE_QUESTION)) failures.push("the ask card carries the question's words");
+  return failures;
+}
+
+/**
+ * Journeys J6, J7 and J8 at the API, against one API process over the mount: `ask` answered as the contained
+ * assistant's card; each page request, and ask, events and answer drift, through REST and MCP; then the event log
+ * polled. Returns `[name, failures]` pairs.
  */
 export async function apiJourneyRuns(apiOutput, mount) {
   const api = await startApi(apiOutput, mount);
   try {
     const results = [];
-    for (const body of [...pageRequestBodies(), { operation_id: "events", parameters: {} }, { operation_id: "answer_drift", parameters: {} }]) {
+    const ask = { operation_id: "ask", parameters: { question: ADVICE_QUESTION } };
+    results.push(["J6, a question that must be refused as legal advice", askCardFailures((await postJson(`${api.origin}/api/v3/ask`, ask)).json)]);
+    for (const body of [...pageRequestBodies(), ask, { operation_id: "events", parameters: {} }, { operation_id: "answer_drift", parameters: {} }]) {
       const rest = await postJson(`${api.origin}/api/v3/${body.operation_id}`, body);
       const mcp = await postJson(`${api.origin}/mcp`, {
         jsonrpc: "2.0", id: body.operation_id, method: "tools/call", params: { name: body.operation_id, arguments: body.parameters },
@@ -1240,7 +1273,8 @@ async function main(argv) {
     results.push(["eu search, with the fixture mount", await run(apiOutput, mount, { servedByApi, keyboard, ...EU_SEARCH_ON_FIXTURE }, browser, liveRoot)]);
     results.push(["eu dossier, with the fixture mount", await run(apiOutput, mount, { servedByApi, keyboard, ...EU_DOSSIER_ON_FIXTURE }, browser, liveRoot)]);
   }
-  // Journeys J7 and J8 at the API (no page asks MCP or polls events), on the fixture mount.
+  // Journeys J6, J7 and J8 at the API (no page asks the contained assistant or MCP, or polls events), on the
+  // fixture mount.
   const apiResults = realMount || licenceBlocked ? [] : await apiJourneyRuns(apiOutput, mount);
   let failed = false;
   for (const [label, failures] of apiResults) {
