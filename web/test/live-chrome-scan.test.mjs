@@ -22,7 +22,6 @@
 // turn may hold none of the table's words.
 
 import assert from "node:assert/strict";
-import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 import test from "node:test";
@@ -30,6 +29,8 @@ import { dirname } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 import { build } from "esbuild";
+
+import { europeEnvelope } from "../scripts/europe-bundle-sample.mjs";
 
 const require = createRequire(import.meta.url);
 const { createElement: h } = require("react");
@@ -119,50 +120,11 @@ async function frenchPseudoBuild() {
 }
 
 /**
- * An EU reading's answer, built by hand in the shape `V3CorpusMount.EvidenceBundleEurope` sends, until the census captures
- * an EU bundle: the reading and export screens show it, and every word they add to its data must be the table's.
+ * Every pin of an EU reading, each article of each wording, quoted or held without text: the EU export is scanned with
+ * all of them, so its panel says every kind of line it has.
  */
-function europeReadingEnvelope() {
-  const sha = (text) => createHash("sha256").update(text, "utf8").digest("hex");
-  const permalink = `/eu-eurlex/32016R0679/eng/2016-04-27--${"5".repeat(64)}`;
-  const text = "This Regulation lays down rules relating to the protection of natural persons with regard to the processing of personal data.";
-  return {
-    result: {
-      operation_id: "evidence_bundle",
-      object_type: "evidence_bundle",
-      value: {
-        scope: "the evidence a reader needs to quote the original wording of an EU work",
-        requested_identifier: "32016R0679", requested_date: "2016-04-27", requested_language: "eng", publisher: "eu-eurlex",
-        publisher_work_id: "http://publications.europa.eu/resource/cellar/3e485e15", celex: "32016R0679",
-        available_languages: ["eng"], served_languages: ["eng"],
-        wordings: [{
-          publisher_expression_id: "http://publications.europa.eu/resource/cellar/3e485e15.0006", language: "eng", wording_date: "2016-04-27",
-          wording_sha256: "5".repeat(64), stable_coordinate: "/eu-eurlex/32016R0679/eng/2016-04-27", permalink,
-          sources: [{ object_ref_sha256: "c".repeat(64), outcome: "acquired", body_sha256: "b".repeat(64) }],
-          articles: [{
-            article_identity_sha256: "a".repeat(64), publisher_id: "001", heading: "Subject-matter and objectives", language: "eng", text,
-            text_sha256: sha(text), text_byte_length: Buffer.byteLength(text, "utf8"), body_sha256: "b".repeat(64),
-            official_source: "http://publications.europa.eu/resource/cellar/3e485e15.0006.02/DOC_1", article_permalink: `${permalink}#001`,
-          }],
-          articles_without_text: [{ article_identity_sha256: "e".repeat(64), publisher_id: "099" }],
-          annexes_not_served: [{
-            disposition: "annex_text_not_available", annexes: 2, annex_identities_sha256: ["7".repeat(64), "8".repeat(64)], served_as: "text_not_available",
-            official_identity: "http://publications.europa.eu/resource/cellar/3e485e15.0006",
-            official_source: "https://publications.europa.eu/resource/cellar/3e485e15.0006.02",
-            reason: "every page of the publisher PDF the annex maps to is an image with no text layer: the annex is image-only, so there is no text of it to serve",
-          }],
-        }],
-        acknowledgement: "\u00a9 European Union, https://eur-lex.europa.eu",
-        authenticity: "Only the Official Journal of the European Union published in electronic form is authentic and produces legal effects (Regulation (EU) No 216/2013, Article 1(2)).",
-        rights_rule: "rights are enforced when the bundle is composed", date_rule: "the original wording answers only its own date",
-        date_semantics: "the wording date is the Formex act date", digest_rule: "the wording digest rule", consolidations_held: false,
-        not_held: [{ item: "later_wordings", reason: "no consolidated version is held" }],
-        corpus_sha256: "1".repeat(64), index_sha256: "2".repeat(64),
-      },
-    },
-    context: { publisher: "eu-eurlex" },
-  };
-}
+const everyEuropePin = (view, pinKey) => new Set(view.wordings.flatMap((wording) => [...wording.articles, ...wording.articlesWithoutText]
+  .map((article) => pinKey(wording.wordingSha256, article.publisherId))));
 
 const ENTITIES = { "&amp;": "&", "&lt;": "<", "&gt;": ">", "&quot;": '"', "&#x27;": "'", "&#39;": "'", "&nbsp;": " " };
 const decode = (text) => text.replace(/&(?:amp|lt|gt|quot|nbsp|#x27|#39);/g, (entity) => ENTITIES[entity]);
@@ -303,14 +265,20 @@ test("no interface text on a live page or a census answer bypasses the chrome ta
       }
     }
   }
-  // The EU reading, on the reading screen and in the export composer (which says it is not composed).
+  // The EU reading (the hand-built EU bundle the web tests share, until the census captures one), on the reading screen
+  // and in the export composer, with every article pinned.
   {
     const { readingOutcome } = await import(new URL("scripts/live-reading.mjs", web).href);
-    const envelope = europeReadingEnvelope();
+    const { exportState, pinKey } = await import(new URL("scripts/live-export.mjs", web).href);
+    const envelope = europeEnvelope();
     const outcome = readingOutcome({ state: "success", envelope });
     assert.equal(outcome.state, "success", "the EU reading reads");
     scan("reading: an EU original wording", renderToStaticMarkup(h(app.ReadingAnswerView, { outcome })), dataOf(envelope));
-    scan("export: an EU original wording", renderToStaticMarkup(h(app.ExportAnswerView, { outcome, pins: new Set(), onPin: () => {} })), dataOf(envelope));
+    const pins = everyEuropePin(outcome.view, pinKey);
+    scan("export: an EU original wording", renderToStaticMarkup(h(app.ExportAnswerView, { outcome, pins, onPin: () => {} })), dataOf(envelope));
+    const composed = exportState(outcome, pins);
+    assert.equal(composed.state, "composed", "export: an EU original wording");
+    scan("export panel: an EU original wording", renderToStaticMarkup(h(app.ExportPanel, { outcome, pins, onSave: () => {} })).replace(/<pre>[\s\S]*?<\/pre>/, ""), dataOf(envelope, composed.model));
   }
   assert.deepEqual([...answered].sort(), [...screens.map(([name]) => name), "coverage"].sort(), "every screen had a census answer to scan");
   assert.deepEqual([...refused].sort(), [...screens.map(([name]) => name), "coverage"].sort(), "every screen had a census refusal to scan");
@@ -403,7 +371,7 @@ test("no interface text on a French page or a census answer bypasses the French 
     }
   }
   {
-    const envelope = europeReadingEnvelope();
+    const envelope = europeEnvelope();
     const outcome = app.readingOutcome({ state: "success", envelope });
     assert.equal(outcome.state, "success", "the EU reading reads");
     const reading = renderToStaticMarkup(h(app.ReadingAnswerView, { outcome }));
@@ -412,7 +380,11 @@ test("no interface text on a French page or a census answer bypasses the French 
     const [annexLine] = reading.match(/<p data-annexes-not-served="2"[^>]*>[\s\S]*?<\/p>/) ?? [];
     const { reason } = envelope.result.value.wordings[0].annexes_not_served[0];
     assert.ok(annexLine?.includes(`<span lang="en">${reason}</span>`), `the annex's reason is marked English on a French page: ${annexLine}`);
-    scan("export: an EU original wording", renderToStaticMarkup(h(app.ExportAnswerView, { outcome, pins: new Set(), onPin: () => {} })), dataOf(envelope));
+    const pins = everyEuropePin(outcome.view, app.pinKey);
+    scan("export: an EU original wording", renderToStaticMarkup(h(app.ExportAnswerView, { outcome, pins, onPin: () => {} })), dataOf(envelope));
+    const composed = app.exportState(outcome, pins);
+    assert.equal(composed.state, "composed", "export: an EU original wording");
+    scan("export panel: an EU original wording", renderToStaticMarkup(h(app.ExportPanel, { outcome, pins, onSave: () => {} })).replace(/<pre>[\s\S]*?<\/pre>/, ""), dataOf(envelope, composed.model));
   }
   assert.ok(unshown >= 3, `refusals whose card cannot be shown were said (${unshown})`);
   assert.ok(marked >= 50, `the platform's English was marked English (${marked} elements)`);

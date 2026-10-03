@@ -81,6 +81,7 @@ import { createLiveServer } from "./serve-live.mjs";
 import { Session, findBrowser, launchBrowser } from "./browser-evidence.mjs";
 import { cspValue } from "./csp.mjs";
 import { EXPORT_WATERMARK } from "./export-build.mjs";
+import { EUROPE_TEXT_ACKNOWLEDGEMENT } from "./reading-answer.mjs";
 
 export const ANSWER_DEADLINE_MS = 30_000;
 
@@ -1238,9 +1239,12 @@ export function twoStateExpectations(journeyMount) {
 }
 
 /**
- * The EU annex control mount (`journey-mount.json` names `eu_annex`): the reading and dossier pages for the act whose
- * annex the publisher's PDF holds only as images. Each page must say that the annex is not served as text, and neither
- * the annex's text nor its title may appear anywhere on the page: the launch contract's annex line, walked in a browser.
+ * The EU annex control mount (`journey-mount.json` names `eu_annex`): the reading, dossier and export composer pages for
+ * the act whose annex the publisher's PDF holds only as images. Each page must say that the annex is not served as
+ * text, and neither the annex's text nor its title may appear anywhere on the page, in its text or its markup (the JSON
+ * the export shows included): the launch contract's annex line, walked in a browser. The export composer pins both
+ * articles of the control case's wording, and must show the composed EU export with the annex listed as excluded, the
+ * watermark, Decision 95's acknowledgement and the PDF offered.
  */
 export function europeAnnexExpectations(journeyMount) {
   const { celex, wording_date: date, annexes, absent_texts: absentTexts } = journeyMount.eu_annex;
@@ -1255,12 +1259,21 @@ export function europeAnnexExpectations(journeyMount) {
     typed: celex,
     body: Object.freeze({ operation_id: "dossier", parameters: Object.freeze({ identifier: celex }) }),
   });
+  const exporting = Object.freeze({
+    ...JOURNEY_STEPS.export,
+    typed: Object.freeze([celex, date]),
+    // The control case's wording quotes two articles: both are pinned, and the export must be composed with its annex.
+    then: Object.freeze({ click: "input[data-pin]", count: 2, until: "[data-export-state=composed] [data-export-annexes]" }),
+    body: Object.freeze({ operation_id: "evidence_bundle", parameters: Object.freeze({ identifier: celex, date }) }),
+  });
   const line = annexes === 1
     ? "1 annex of the English wording is not served as text, and is never searched, quoted or exported"
     : `${annexes} annexes of the English wording are not served as text, and are never searched, quoted or exported`;
+  const exported = [line, "2 articles pinned: 2 exported with text, 0 excluded.", EXPORT_WATERMARK, EUROPE_TEXT_ACKNOWLEDGEMENT, "Save as PDF"];
   return [
     ["the annex control case read on its wording date", { step: reading, state: "success", texts: [line], absentTexts }],
     ["the annex control case's dossier", { step: dossier, state: "success", texts: [line], absentTexts }],
+    ["the annex control case exported", { step: exporting, state: "success", texts: exported, absentTexts }],
   ];
 }
 

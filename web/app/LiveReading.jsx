@@ -175,16 +175,26 @@ function EuropeDisclosure({ template, rows, name }) {
   );
 }
 
+/**
+ * An EU wording's heading: its act, its language, and its date as the original or the consolidated wording's, never
+ * an applicability date. Shared with the export composer, which reads the same wordings.
+ */
+export function EuropeWordingHeading({ wording, celex }) {
+  return (
+    <Say
+      template={wording.nextDate === undefined
+        ? COPY.europeWordingHeading
+        : wording.kind === 'consolidated_version' ? COPY.europeConsolidatedHeading : COPY.europeOriginalHeading}
+      values={{ celex, language: wording.language, date: wording.wordingDate }}
+    />
+  );
+}
+
 function EuropeWordingReading({ wording, celex }) {
   return (
     <section data-wording={wording.wordingSha256}>
       <h2>
-        <Say
-          template={wording.nextDate === undefined
-            ? COPY.europeWordingHeading
-            : wording.kind === 'consolidated_version' ? COPY.europeConsolidatedHeading : COPY.europeOriginalHeading}
-          values={{ celex, language: wording.language, date: wording.wordingDate }}
-        />
+        <EuropeWordingHeading wording={wording} celex={celex} />
       </h2>
       {wording.nextDate === undefined ? null : (
         <p data-wording-holds="">

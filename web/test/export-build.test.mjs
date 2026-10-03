@@ -2,16 +2,32 @@
 //
 // The bundle comes from `schemas/v3-platform/answer-samples.json` (operation `evidence_bundle`),
 // read by `readEvidenceBundle`. The launch contract asks that exports "preserve citations, rights,
-// watermarks and exclusions"; each of those is checked in both formats.
+// watermarks and exclusions"; each of those is checked in both formats. An EU export is composed from
+// the hand-built EU bundle the web tests share (`scripts/europe-bundle-sample.mjs`), until the census
+// captures one, and is held to the same line with Decision 95's acknowledgement in place of a rights
+// disposition, its annexes excluded, and its wording dates never written as Luxembourg dates.
 
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 
-import { readEvidenceBundle } from "../scripts/reading-answer.mjs";
-import { CSV_COLUMNS, EXPORT_SCHEMA, EXPORT_WATERMARK, composeExport, exportCsv, exportJson } from "../scripts/export-build.mjs";
+import { EUROPE_TEXT_ACKNOWLEDGEMENT, readEuropeEvidenceBundle, readEvidenceBundle } from "../scripts/reading-answer.mjs";
+import {
+  CSV_COLUMNS,
+  EUROPE_CSV_COLUMNS,
+  EUROPE_EXPORT_SCHEMA,
+  EUROPE_WITHOUT_TEXT,
+  EXPORT_SCHEMA,
+  EXPORT_WATERMARK,
+  composeEuropeExport,
+  composeExport,
+  exportCsv,
+  exportJson,
+} from "../scripts/export-build.mjs";
 import { WATERMARK_PREVIEW } from "../scripts/export-composer.mjs";
+import { EUROPE_SAMPLE, europeBundle } from "../scripts/europe-bundle-sample.mjs";
+import { escapeProvision } from "../scripts/search-answer.mjs";
 
 const SAMPLES = new URL("../../schemas/v3-platform/answer-samples.json", import.meta.url);
 
@@ -132,4 +148,162 @@ test("CSV quoting keeps commas, quotes and line breaks inside a field", async ()
   const rows = parseCsv(exportCsv(model));
   assert.equal(rows[1][12], 'Il dit « oui », puis "non",\nencore.');
   assert.equal(rows.length, 2, "a line break inside a quoted field does not start a row");
+});
+
+/** The EU sample read as an EU reading, with `change` applied to its bundle, and its export of what `pick` pins. */
+function europeExport(change = () => {}, pick = (wording) => [...wording.articles, ...wording.articlesWithoutText]) {
+  const view = readEuropeEvidenceBundle(europeBundle(change));
+  const pinned = view.wordings.flatMap((wording) => pick(wording).map((article) => ({ wordingSha256: wording.wordingSha256, publisherId: article.publisherId })));
+  return { view, model: composeEuropeExport({ view, pinned, observedAt: OBSERVED, registrySha256: EUROPE_SAMPLE.registrySha256 }) };
+}
+
+/** A French wording beside the sample's English one, with no annex. */
+function withFrench(bundle) {
+  const french = structuredClone(bundle.wordings[0]);
+  const permalink = `/eu-eurlex/${EUROPE_SAMPLE.celex}/fra/${EUROPE_SAMPLE.wordingDate}--${"6".repeat(64)}`;
+  Object.assign(french, {
+    publisher_expression_id: `${EUROPE_SAMPLE.work}.0008`, language: "fra", wording_sha256: "6".repeat(64), permalink,
+    stable_coordinate: `/eu-eurlex/${EUROPE_SAMPLE.celex}/fra/${EUROPE_SAMPLE.wordingDate}`, annexes_not_served: [],
+  });
+  for (const article of french.articles) Object.assign(article, { language: "fra", article_permalink: `${permalink}#${escapeProvision(article.publisher_id)}` });
+  Object.assign(bundle, { requested_language: null, available_languages: ["eng", "fra"], served_languages: ["eng", "fra"] });
+  bundle.wordings.push(french);
+}
+
+const recordOf = (columns, row) => Object.fromEntries(columns.map((column, position) => [column, row[position]]));
+
+test("an EU export carries each article's citation, text, digests, language, wording date, official source and acknowledgement, in both formats", () => {
+  const { view, model } = europeExport();
+  const [wording] = view.wordings;
+  const json = JSON.parse(exportJson(model));
+  assert.equal(json.schema, EUROPE_EXPORT_SCHEMA);
+  assert.equal(json.watermark, EXPORT_WATERMARK);
+  assert.equal(json.observed_at, OBSERVED);
+  assert.equal(json.acknowledgement, EUROPE_TEXT_ACKNOWLEDGEMENT, "Decision 95's acknowledgement, exactly");
+  assert.equal(json.authenticity, view.authenticity);
+  assert.equal(json.rights_rule, view.rightsRule);
+  assert.equal(json.wording_date_semantics, view.dateSemantics, "the file says what its dates are");
+  assert.deepEqual(json.verified_by, { corpus_sha256: view.corpusSha256, index_sha256: view.indexSha256, registry_sha256: EUROPE_SAMPLE.registrySha256 });
+  assert.deepEqual(json.items.map((item) => item.article), ["001", "002"]);
+  for (const [index, item] of json.items.entries()) {
+    const source = wording.articles[index];
+    assert.equal(item.citation, `${wording.permalink}#${source.publisherId}`, "the citation is the article permalink, which pins the wording");
+    assert.equal(item.wording_permalink, wording.permalink);
+    assert.deepEqual([item.language, item.wording_kind, item.wording_date], ["eng", "original_wording", "2016-04-27"]);
+    assert.equal(item.heading, source.heading);
+    assert.equal(item.text, source.text);
+    assert.equal(createHash("sha256").update(item.text, "utf8").digest("hex"), item.text_sha256, "the text still hashes to its digest");
+    assert.equal(Buffer.byteLength(item.text, "utf8"), item.text_byte_length);
+    assert.equal(item.body_sha256, source.bodySha256);
+    assert.equal(item.official_source, source.officialSource);
+    assert.equal(item.acknowledgement, EUROPE_TEXT_ACKNOWLEDGEMENT, "every item carries the acknowledgement");
+  }
+
+  const csv = parseCsv(exportCsv(model));
+  assert.deepEqual(csv[0], [...EUROPE_CSV_COLUMNS]);
+  assert.equal(csv.length, 5, "two items, one excluded article, one annex row");
+  for (const row of csv.slice(1)) {
+    const record = recordOf(EUROPE_CSV_COLUMNS, row);
+    // A row copied out alone still says its act, its wording's date, what it was served with and what answered it.
+    assert.deepEqual([record.celex, record.language, record.wording_date], [EUROPE_SAMPLE.celex, "eng", "2016-04-27"]);
+    assert.equal(record.watermark, EXPORT_WATERMARK);
+    assert.equal(record.acknowledgement, EUROPE_TEXT_ACKNOWLEDGEMENT, "every row carries the acknowledgement");
+    assert.equal(record.authenticity, view.authenticity, "and the authenticity statement");
+    assert.equal(record.observed_at, OBSERVED);
+    assert.equal(record.rights_rule, view.rightsRule);
+    assert.deepEqual([record.corpus_sha256, record.index_sha256, record.registry_sha256], [view.corpusSha256, view.indexSha256, EUROPE_SAMPLE.registrySha256]);
+  }
+  for (const [index, row] of csv.slice(1, 3).entries()) {
+    const record = recordOf(EUROPE_CSV_COLUMNS, row);
+    assert.equal(record.status, "exported");
+    assert.equal(record.citation, json.items[index].citation);
+    assert.equal(record.text, json.items[index].text, "the text survives quoting whole");
+    assert.equal(record.text_sha256, json.items[index].text_sha256);
+  }
+});
+
+test("an EU export excludes an article held without text, cited, and lists its wording's annexes with their reason, never a text", () => {
+  const { view, model } = europeExport();
+  const [wording] = view.wordings;
+  const json = JSON.parse(exportJson(model));
+  assert.deepEqual(json.excluded, [{
+    celex: EUROPE_SAMPLE.celex, language: "eng", wording_kind: "original_wording", wording_date: "2016-04-27", article: "099",
+    citation: `${wording.permalink}#099`, wording_permalink: wording.permalink, reason: EUROPE_WITHOUT_TEXT,
+  }], "an excluded article keeps its citation and says why");
+  const [annex] = wording.annexesNotServed;
+  assert.deepEqual(json.annexes_not_served, [{
+    celex: EUROPE_SAMPLE.celex, language: "eng", wording_kind: "original_wording", wording_date: "2016-04-27", wording_permalink: wording.permalink,
+    official_identity: annex.officialIdentity, disposition: "annex_text_not_available", annexes: 2, annex_identities_sha256: [...annex.identities],
+    served_as: "text_not_available", reason: annex.reason, official_source: annex.officialSource,
+  }], "each annex row as the platform lists it, and nothing else: no text, no heading");
+  assert.ok(!json.items.some((item) => item.article === "099"), "never quoted empty");
+
+  const rows = parseCsv(exportCsv(model)).slice(1).map((row) => recordOf(EUROPE_CSV_COLUMNS, row));
+  const excludedRow = rows.find((record) => record.article === "099");
+  assert.equal(excludedRow.status, `excluded: ${EUROPE_WITHOUT_TEXT}`);
+  assert.equal(excludedRow.citation, `${wording.permalink}#099`, "the excluded row is cited");
+  assert.equal(excludedRow.text, "");
+  const annexRow = rows.find((record) => record.status.startsWith("excluded: annex_"));
+  assert.equal(annexRow.status, "excluded: annex_text_not_available");
+  assert.deepEqual([annexRow.annexes, annexRow.reason, annexRow.official_source], ["2", annex.reason, annex.officialSource]);
+  assert.deepEqual([annexRow.article, annexRow.citation, annexRow.text, annexRow.text_sha256], ["", "", "", ""], "an annex row names no article and holds no text");
+  assert.equal(annexRow.wording_permalink, wording.permalink);
+
+  // A provision held without text is cited as the platform escapes it in a permalink.
+  const { model: escaped } = europeExport((b) => { b.wordings[0].articles_without_text[0].publisher_id = "Article 1(2)"; });
+  assert.equal(escaped.excluded[0].citation, `${wording.permalink}#Article%201%282%29`);
+
+  // The annexes travel with an export of their own wording only.
+  const { model: french } = europeExport(withFrench, (held) => (held.language === "fra" ? held.articles.slice(0, 1) : []));
+  assert.deepEqual(french.items.map((item) => [item.language, item.publisherId]), [["fra", "001"]]);
+  assert.deepEqual(french.annexesNotServed, [], "the annexes of the English wording are not the French wording's");
+  const { model: english } = europeExport(withFrench, (held) => (held.language === "eng" ? held.articles.slice(0, 1) : []));
+  assert.deepEqual(english.annexesNotServed.map((row) => [row.language, row.count]), [["eng", 2]]);
+});
+
+test("an EU export's files name no Luxembourg date or rights disposition, and a Luxembourg export's no EU wording", async () => {
+  const fieldsOf = (node, found = new Set()) => {
+    if (Array.isArray(node)) node.forEach((item) => fieldsOf(item, found));
+    else if (node !== null && typeof node === "object") {
+      for (const [key, value] of Object.entries(node)) {
+        found.add(key);
+        fieldsOf(value, found);
+      }
+    }
+    return found;
+  };
+  const LUXEMBOURG_ONLY = ["work_key", "applies_from", "state_permalink", "rights_disposition", "article_valid_from", "validity_conflict", "notes"];
+  const EUROPE_ONLY = ["celex", "wording_kind", "wording_date", "wording_permalink", "wording_date_semantics", "acknowledgement", "authenticity", "heading", "annexes_not_served", "annexes"];
+
+  const { model } = europeExport();
+  const europeJson = exportJson(model);
+  const europeCsv = exportCsv(model);
+  const borrowed = (field) => LUXEMBOURG_ONLY.includes(field) || /applicab|state/.test(field);
+  assert.deepEqual([...fieldsOf(JSON.parse(europeJson))].filter(borrowed), [], "no Luxembourg date or disposition in the EU JSON");
+  assert.deepEqual(EUROPE_CSV_COLUMNS.filter(borrowed), [], "nor among the EU CSV's columns");
+  for (const file of [europeJson, europeCsv]) {
+    assert.ok(!file.includes("agreed_same_run_cc_by"), "EU text is never said to be served under Luxembourg's rights disposition");
+  }
+
+  const view = readEvidenceBundle(await bundle());
+  const [state] = view.states;
+  const luxembourg = composeExport({ view, pinned: state.articles.slice(0, 2).map((article) => ({ stateSha256: state.stateSha256, publisherId: article.publisherId })), observedAt: OBSERVED });
+  const europeOnly = (field) => EUROPE_ONLY.includes(field) || /wording/.test(field);
+  assert.deepEqual([...fieldsOf(JSON.parse(exportJson(luxembourg)))].filter(europeOnly), [], "no EU wording in the Luxembourg JSON");
+  assert.deepEqual(CSV_COLUMNS.filter(europeOnly), [], "nor among the Luxembourg CSV's columns");
+});
+
+test("an EU export never names an article the reader was not shown, and needs a pin, a time and the registry that answered", async () => {
+  const view = readEuropeEvidenceBundle(europeBundle());
+  const [wording] = view.wordings;
+  const compose = (change) => () => composeEuropeExport({
+    view, pinned: [{ wordingSha256: wording.wordingSha256, publisherId: "001" }], observedAt: OBSERVED, registrySha256: EUROPE_SAMPLE.registrySha256, ...change,
+  });
+  assert.throws(compose({ pinned: [{ wordingSha256: wording.wordingSha256, publisherId: "999" }] }), /holds no article/);
+  assert.throws(compose({ pinned: [{ wordingSha256: "0".repeat(64), publisherId: "001" }] }), /holds no article/, "a pin names its wording");
+  assert.throws(compose({ pinned: [] }), /at least one pinned article/);
+  assert.throws(compose({ observedAt: "" }), /when the answering snapshot was observed/);
+  assert.throws(compose({ registrySha256: undefined }), /names the registry that answered/);
+  assert.throws(compose({ view: readEvidenceBundle(await bundle()) }), /composed from an EU reading/, "a Luxembourg reading is never composed as EU text");
+  assert.equal(compose({})().items.length, 1);
 });

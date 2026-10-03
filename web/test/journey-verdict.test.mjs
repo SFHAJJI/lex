@@ -41,6 +41,7 @@ import {
   watchFiles,
 } from "../scripts/journey.mjs";
 import { cspValue } from "../scripts/csp.mjs";
+import { EXPORT_WATERMARK } from "../scripts/export-build.mjs";
 
 const ORIGIN = "http://127.0.0.1:5000";
 const CORPUS = "a".repeat(64);
@@ -700,4 +701,38 @@ test("on the EU annex control mount the reading and dossier pages say the annex 
     assert.deepEqual(expected.absentTexts, ["Hambali", "ANNEXSENTINELZQXV"], "the annex's text and title appear nowhere on either page");
   }
   assert.throws(() => europeAnnexExpectations({ eu_annex: { ...mount.eu_annex, absent_texts: [] } }), /no annex text to look for/);
+});
+
+test("on the EU annex control mount the export composer pins both articles and shows the EU export, its annex excluded and never its text", () => {
+  const mount = { eu_annex: { celex: "32016R0679", wording_date: "2026-08-26", annexes: 1, absent_texts: ["Hambali", "ANNEXSENTINELZQXV"] } };
+  const [, , [name, exporting]] = europeAnnexExpectations(mount);
+  assert.match(name, /exported/);
+  assert.equal(exporting.step.path, "/export.html");
+  assert.deepEqual(exporting.step.typed, ["32016R0679", "2026-08-26"]);
+  assert.deepEqual(exporting.step.body, { operation_id: "evidence_bundle", parameters: { identifier: "32016R0679", date: "2026-08-26" } }, "the export asks the reading, and nothing else");
+  assert.deepEqual(exporting.step.then, { click: "input[data-pin]", count: 2, until: "[data-export-state=composed] [data-export-annexes]" }, "both articles pinned, and the export must list the annex");
+  assert.deepEqual(exporting.texts, [
+    "1 annex of the English wording is not served as text, and is never searched, quoted or exported",
+    "2 articles pinned: 2 exported with text, 0 excluded.",
+    EXPORT_WATERMARK,
+    "© European Union, https://eur-lex.europa.eu",
+    "Save as PDF",
+  ]);
+  assert.deepEqual(exporting.absentTexts, ["Hambali", "ANNEXSENTINELZQXV"], "the annex's text and title appear nowhere on the page");
+
+  // Held to it: the composed export passes; the annex's text in the JSON the page shows, no annex listed, or no PDF fails.
+  const observed = goodSearch();
+  observed.requests = [
+    { url: `${ORIGIN}/export.html`, method: "GET", headers: {} },
+    { url: `${ORIGIN}/api/v3/evidence_bundle`, method: "POST", headers: {}, headersSent: true, postData: JSON.stringify(exporting.step.body) },
+  ];
+  observed.location = `${ORIGIN}/export.html`;
+  observed.text = exporting.texts.join("\n");
+  observed.html = '<details><summary>The JSON as it will be saved</summary><pre>{"annexes_not_served": [{"annexes": 1}]}</pre></details>';
+  observed.then = "reached";
+  const expected = { origin: ORIGIN, ...exporting };
+  assert.deepEqual(journeyVerdict(observed, expected), []);
+  assert.ok(journeyVerdict({ ...observed, html: '<pre>{"text": "Hambali"}</pre>' }, expected).includes('the page\'s markup carries withheld text "Hambali"'), "the annex's text in the JSON shown");
+  assert.ok(journeyVerdict({ ...observed, then: "clicked" }, expected).some((failure) => /never showed \[data-export-state=composed\] \[data-export-annexes\]/.test(failure)), "no annex listed");
+  assert.ok(journeyVerdict({ ...observed, text: observed.text.replace("Save as PDF", "") }, expected).includes('the page does not show "Save as PDF"'), "no PDF offered");
 });

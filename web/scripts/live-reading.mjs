@@ -119,11 +119,19 @@ export function readingParameters({ identifier, date, language = "" }) {
 /**
  * Maps what `askV3` returned to the view: `success` with the reading view (read by
  * `readEvidenceBundleAnswer`, Luxembourg's or the EU's), `refusal` with the refusal card's inputs, or a state that carries a sentence.
+ * A success carries the envelope's context and the registry digest it is bound to (`readV3Envelope`
+ * holds it to the reviewed one): an EU bundle names its corpus and index but not the registry, and an
+ * export names all three.
  */
 export function readingOutcome(asked) {
   if (asked.state === "success") {
     try {
-      return { state: "success", view: readEvidenceBundleAnswer(asked.envelope.result.value), context: asked.envelope.context };
+      return {
+        state: "success",
+        view: readEvidenceBundleAnswer(asked.envelope.result.value),
+        context: asked.envelope.context,
+        registrySha256: asked.envelope.registry_sha256,
+      };
     } catch (error) {
       return { state: "invalid_envelope", ...englishStatement(invalidAnswerSentence(error.message)) };
     }

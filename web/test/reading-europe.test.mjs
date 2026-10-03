@@ -2,104 +2,24 @@
 // screen with the acknowledgement and authenticity statement Decision 95 requires (the owner's proxy, 2026-10-01
 // 14:30 UTC: serve EU text now).
 //
-// The answer here is built by hand in the shape `V3CorpusMount.EvidenceBundleEurope` sends (the API's own tests hold
-// that shape to the real handler on the GDPR fixture). It stands in until the answer census
-// (`schemas/v3-platform/answer-samples.json`) captures an EU bundle; that capture replaces it.
+// The answer here is the hand-built EU bundle the web tests share (`scripts/europe-bundle-sample.mjs`), in the shape
+// `V3CorpusMount.EvidenceBundleEurope` sends; it stands in until the answer census captures an EU bundle.
 
 import assert from "node:assert/strict";
-import { createHash } from "node:crypto";
 import test from "node:test";
 import { createElement as h } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 
 import { ExportAnswerView, ReadingAnswerView } from "../.react-build/app.mjs";
+import { EUROPE_SAMPLE, europeAnnexRow as annexRow, europeBundle, europeEnvelope as envelopeOf, sha256 } from "../scripts/europe-bundle-sample.mjs";
+import { EUROPE_EXPORT_SCHEMA } from "../scripts/export-build.mjs";
 import { liveChrome } from "../scripts/live-chrome.mjs";
-import { exportState } from "../scripts/live-export.mjs";
+import { NOTHING_PINNED, exportState, pinKey } from "../scripts/live-export.mjs";
 import { LIVE_READING_EUROPE_REFUSAL_SENTENCES, LIVE_READING_REFUSAL_SENTENCES, readingOutcome } from "../scripts/live-reading.mjs";
 import { EUROPE_TEXT_ACKNOWLEDGEMENT, readEuropeEvidenceBundle, readEvidenceBundleAnswer } from "../scripts/reading-answer.mjs";
 import { escapeProvision } from "../scripts/search-answer.mjs";
 
-const sha256 = (text) => createHash("sha256").update(text, "utf8").digest("hex");
-/** One annex row as the platform lists it beside an EU wording or expression, with `change` applied. */
-const annexRow = (change = {}) => ({
-  disposition: "annex_text_not_available",
-  annexes: 1,
-  annex_identities_sha256: ["a".repeat(64)],
-  served_as: "text_not_available",
-  official_identity: "http://publications.europa.eu/resource/cellar/3e485e15-11bd-11e6-ba9a-01aa75ed71a1.0006",
-  official_source: "https://publications.europa.eu/resource/cellar/3e485e15-11bd-11e6-ba9a-01aa75ed71a1.0006.02",
-  reason: "every page of the publisher PDF the annex maps to is an image with no text layer: the annex is image-only, so there is no text of it to serve",
-  ...change,
-});
-
-const WORK = "http://publications.europa.eu/resource/cellar/3e485e15-11bd-11e6-ba9a-01aa75ed71a1";
-const WORDING_SHA = "5".repeat(64);
-const BODY = "b".repeat(64);
-const PERMALINK = `/eu-eurlex/32016R0679/eng/2016-04-27--${WORDING_SHA}`;
-const ARTICLES = [
-  ["001", "Subject-matter and objectives", "This Regulation lays down rules relating to the protection of natural persons with regard to the processing of personal data."],
-  ["002", "Material scope", "This Regulation applies to the processing of personal data wholly or partly by automated means."],
-];
-
-/** An EU bundle as the platform sends it, with `change` applied to a fresh copy. */
-function europeBundle(change = () => {}) {
-  const bundle = {
-    scope: "the evidence a reader needs to quote the original wording of an EU work the mounted EU index holds",
-    requested_identifier: "32016R0679",
-    requested_date: "2016-04-27",
-    requested_language: "eng",
-    publisher: "eu-eurlex",
-    publisher_work_id: WORK,
-    celex: "32016R0679",
-    available_languages: ["eng"],
-    served_languages: ["eng"],
-    wordings: [{
-      publisher_expression_id: `${WORK}.0006`,
-      language: "eng",
-      wording_date: "2016-04-27",
-      wording_sha256: WORDING_SHA,
-      stable_coordinate: "/eu-eurlex/32016R0679/eng/2016-04-27",
-      permalink: PERMALINK,
-      sources: [{ object_ref_sha256: "c".repeat(64), outcome: "acquired", body_sha256: BODY, body_byte_length: 1024, body_receipt_sha256: "d".repeat(64) }],
-      articles: ARTICLES.map(([id, heading, text]) => ({
-        article_identity_sha256: sha256(`identity ${id}`),
-        publisher_id: id,
-        heading,
-        language: "eng",
-        text,
-        text_sha256: sha256(text),
-        text_byte_length: Buffer.byteLength(text, "utf8"),
-        body_sha256: BODY,
-        package_entry: "L_2016119EN.01000101.xml",
-        package_sha256: "e".repeat(64),
-        source_entry_sha256: "f".repeat(64),
-        official_source: "http://publications.europa.eu/resource/cellar/3e485e15-11bd-11e6-ba9a-01aa75ed71a1.0006.02/DOC_1",
-        article_permalink: `${PERMALINK}#${escapeProvision(id)}`,
-        provision_coordinate: `${WORK}.0006#lex-provision=${escapeProvision(id)}`,
-      })),
-      articles_without_text: [],
-      annexes_not_served: [],
-    }],
-    acknowledgement: "© European Union, https://eur-lex.europa.eu",
-    authenticity: "Only the Official Journal of the European Union published in electronic form is authentic and produces legal effects (Regulation (EU) No 216/2013, Article 1(2)); this text is a reproduction read from the Publications Office's Formex package, not the authentic edition.",
-    rights_rule: "rights are enforced when the bundle is composed, before any text is read",
-    date_rule: "the EU index holds one wording of each expression, the original act's, dated by its Formex act date",
-    date_semantics: "the wording date is the date the publisher's Formex package gives the act",
-    digest_rule: "the SHA-256, under the domain lex-v3-eu-wording/1, of the work's CELEX",
-    consolidations_held: false,
-    not_held: [
-      { item: "later_wordings", reason: "no consolidated version is held, so only the original wording is served, and only for its own wording date" },
-      { item: "force_dates", reason: "no entry-into-force, application or end-of-validity date is held; the wording date is none of them" },
-    ],
-    corpus_sha256: "1".repeat(64),
-    index_sha256: "2".repeat(64),
-  };
-  const copy = structuredClone(bundle);
-  change(copy);
-  return copy;
-}
-
-const envelopeOf = (value) => ({ result: { operation_id: "evidence_bundle", object_type: "evidence_bundle", value }, context: { publisher: "eu-eurlex" } });
+const { work: WORK, bodySha256: BODY, permalink: PERMALINK, articles: ARTICLES } = EUROPE_SAMPLE;
 
 test("the EU bundle reads: the wording on its date, pinned, its quoted articles with their evidence, and what it does not hold", () => {
   const view = readEuropeEvidenceBundle(europeBundle());
@@ -193,7 +113,7 @@ test("an annex the wording does not serve as text is said beside it, with the pl
     officialSource: row.official_source,
     reason: row.reason,
   }]);
-  assert.deepEqual(readEuropeEvidenceBundle(europeBundle()).wordings[0].annexesNotServed, [], "a wording with no annex lists none");
+  assert.deepEqual(readEuropeEvidenceBundle(europeBundle((b) => { b.wordings[0].annexes_not_served = []; })).wordings[0].annexesNotServed, [], "a wording with no annex lists none");
 
   const markup = renderToStaticMarkup(h(ReadingAnswerView, { outcome: readingOutcome({ state: "success", envelope: envelopeOf(bundle) }) }));
   assert.match(markup, /<p data-annexes-not-served="2" data-annex-disposition="annex_text_not_available">/);
@@ -286,11 +206,25 @@ test("an EU ambiguity says its EU sentence and shows no Luxembourg card; an EU t
   assert.equal(unavailable.sentence, LIVE_READING_EUROPE_REFUSAL_SENTENCES.text_not_available);
 });
 
-test("the export composer reads an EU wording and says it is not composed, offering no file", () => {
+test("the export composer reads an EU wording to pin from: a pin per article, quoted or held without text, below the acknowledgement", () => {
   const outcome = readingOutcome({ state: "success", envelope: envelopeOf(europeBundle()) });
+  const [wording] = outcome.view.wordings;
   const markup = renderToStaticMarkup(h(ExportAnswerView, { outcome, pins: new Set(), onPin: () => {} }));
-  assert.ok(markup.includes(liveChrome().export.europeNotComposed.slice(0, 40)));
-  assert.match(markup, /<blockquote lang="en">/);
-  assert.doesNotMatch(markup, /type="checkbox"/, "nothing is offered to pin");
-  assert.deepEqual(exportState(outcome, new Set()), { state: "none" });
+  assert.equal([...markup.matchAll(/data-pin=""/g)].length, wording.articles.length + wording.articlesWithoutText.length, "every article can be pinned");
+  assert.doesNotMatch(markup, /\sname=/, "a pin carries no name");
+  assert.ok(markup.indexOf(EUROPE_TEXT_ACKNOWLEDGEMENT) < markup.indexOf("<blockquote"), "the acknowledgement stands above the text");
+  assert.match(markup, /data-authenticity=""[^>]*>Only the Official Journal of the European Union published in electronic form is authentic/);
+  assert.match(markup, /the original wording of 2016-04-27/, "the wording is headed as the reading screen heads it");
+  assert.match(markup, /<span lang="en">Subject-matter and objectives<\/span><blockquote lang="en">This Regulation lays down rules/);
+  assert.ok(markup.includes(`<code>${PERMALINK}#001</code>`) && markup.includes(sha256(ARTICLES[0][2])), "each quote carries its evidence");
+  const [annexLine] = markup.match(/<p data-annexes-not-served="2" data-annex-disposition="annex_text_not_available">[\s\S]*?<\/p>/) ?? [];
+  assert.ok(annexLine?.includes("are not served as text"), "the annexes are said beside the wording");
+  assert.ok(!annexLine.includes("<input"), "and no pin reaches an annex");
+
+  assert.deepEqual(exportState(outcome, new Set()), { state: "empty", sentence: NOTHING_PINNED });
+  const panel = exportState(outcome, new Set([pinKey(wording.wordingSha256, "002")]));
+  assert.equal(panel.state, "composed", panel.sentence);
+  assert.equal(panel.model.schema, EUROPE_EXPORT_SCHEMA, "an EU wording is composed into the EU export");
+  assert.deepEqual(panel.model.items.map((item) => item.citation), [`${PERMALINK}#002`]);
+  assert.equal(liveChrome().export.europeNotComposed, undefined, "the composer no longer says EU text is not composed");
 });
