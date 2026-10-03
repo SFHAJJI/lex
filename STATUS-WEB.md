@@ -2392,6 +2392,40 @@ It is not yet a required check: it becomes one once it has passed on the base. T
 specification's J1 to J8 ask for (a search with no hit, a law the corpus does not hold, the contained assistant,
 MCP and events) follow, each proved in this job.
 
+The specification's journeys (the review pack's `05-user-journeys.md`) mapped onto the suite (sole driver,
+2026-10-03): J1 is the reading step (every article permalink verified), J3 compare, J4 export, J8's radar
+the radar step. J3 and J8's radar are walked in their no-change form only: the fixture mount holds one state,
+so the compare step asks one date twice ("The same version applied on both dates.") and the radar's one-day
+window shows that state "not compared: the first state this index holds"; a comparison of two different
+states and a compared radar row are held by unit tests only (#783, #787) until a two-state mount joins the
+job (review of #915). What the eight steps did not walk now runs on the fixture mount too, in the browser
+(J1's refusal, J2, J5) or as API checks in the same job (J6, J7, J8's events):
+- J1's refusal: the reading asked for 2019-03-15, before the work's one state, refuses `no_version_for_date`,
+  saying no earlier state is held and where the history begins;
+- J2: a citizen's question searched as typed ("combien de jours de congé j'ai le droit quand mon père est
+  décédé") answers with no hit, and the search page now says, under its no-hit sentence, the refusal card's
+  absence note ("It is not evidence that the instrument or the law does not exist."), in the reviewed French
+  on the French pages;
+- J4: the export pins three articles, not one ("3 articles pinned: 3 exported with text, 0 excluded.");
+- J5: the dossier asked for "Circulaire CSSF 20/747" refuses `identifier_unknown` with the population this
+  build searched and the absence note.
+- J7 and J8 at the API, on the fixture mount (no page asks MCP or polls events): every request the journeys'
+  pages make, and `events` and `answer_drift`, asked through REST and as an MCP tool call of one API process
+  must answer one envelope, apart from the two fields that name the request and the moment it was answered
+  (`request_ref`, `context.freshness.observed_at`), with the MCP text equal to its structured content and the
+  protocol revision stated; the event log polled twice answers the same events, nothing more from its own
+  `next_after`, `snapshot_unknown` for another log's cursor, every event permalink verifies, and
+  `answer_drift` on the genesis log names no invalidated answer and does not assert the absence of drift.
+- J6 at the API: `ask`, put a question that must be refused as legal advice, answers the contained
+  assistant's card (Decision 91): the verdict `point`, `assistant_v3_unavailable`, the question not read, the
+  model gloss disabled, and the reader handed to `resolve`, `as_of` and `evidence_bundle` (and `search`) on
+  their served routes, nothing of the question in the card; `ask` is also in J7's REST and MCP comparison.
+Driver decisions (reversible): no live page asks `ask` and none offers J2's "ask in your own words" hand-off
+while the assistant is contained, since a page whose one answer is that no question is answered would add a
+route to nothing; J6 is held at the API, where the containment is decided. The publishers' own search pages are
+not offered on the `identifier_unknown` card: the handoff registry admits no real host yet (`HANDOFF_HOSTS`), and
+adding one is an editorial decision recorded when it is made.
+
 ## Next, in order (web lane; the data lane's items 1 to 3 are in STATUS-DATA.md)
 
 The web lane's order since the owner's proxy's journey corrections (2026-10-01 14:30 UTC,

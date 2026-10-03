@@ -189,8 +189,9 @@ export const JOURNEY_STEPS = Object.freeze({
     cites: true,
     operation: "evidence_bundle",
     typed: Object.freeze([DOSSIER_IDENTIFIER, READING_DATE]),
-    // Once the reading has answered: pin the first article, and the export must be composed.
-    then: Object.freeze({ click: "input[data-pin]", until: "[data-export-state=composed]" }),
+    // Once the reading has answered: pin the first three articles (journey J4, an answer across several
+    // provisions), and the export must be composed.
+    then: Object.freeze({ click: "input[data-pin]", count: 3, until: "[data-export-state=composed]" }),
     body: Object.freeze({
       operation_id: "evidence_bundle",
       parameters: Object.freeze({ identifier: DOSSIER_IDENTIFIER, date: READING_DATE }),
@@ -793,9 +794,16 @@ async function observe(browser, pageOrigin, step, { keyboard = false } = {}) {
     // reach its state before the deadline.
     let then;
     if (step.then !== undefined && answerState === "success") {
-      then = keyboard
-        ? await keyboardPin(session, sessionId, evaluate, keys.stops)
-        : await evaluate(`(() => { const node = document.querySelector(${JSON.stringify(step.then.click)}); if (node === null) return "absent"; node.click(); return "clicked"; })()`);
+      // `count` matches are clicked, the first first (journey J4 pins several provisions); one when it is not given.
+      const count = step.then.count ?? 1;
+      if (keyboard) {
+        for (let pinned = 0; pinned < count; pinned += 1) {
+          then = await keyboardPin(session, sessionId, evaluate, keys.stops);
+          if (then !== "clicked") break;
+        }
+      } else {
+        then = await evaluate(`(() => { const nodes = [...document.querySelectorAll(${JSON.stringify(step.then.click)})].slice(0, ${count}); if (nodes.length < ${count}) return "absent"; for (const node of nodes) node.click(); return "clicked"; })()`);
+      }
       while (then === "clicked" && Date.now() < deadline) {
         if (await evaluate(`document.querySelector(${JSON.stringify(step.then.until)}) !== null`)) then = "reached";
         else await new Promise((resolve) => setTimeout(resolve, 100));
@@ -974,8 +982,235 @@ export function fixtureMountExpectations(journeyMount) {
     ["history", { step: history, state: "success", texts: [`${HISTORY_ANCHOR} in loi-1991-08-10-n3`, "Carried by 1 held state, from 2024-02-01", "first held wording"] }],
     ["compare", { step: compare, state: "success", texts: [`loi-1991-08-10-n3: ${READING_DATE} against ${READING_DATE}.`, "The same version applied on both dates."] }],
     ["radar", { step: radar, state: "success", texts: [`${READING_DATE} to ${READING_DATE}: 1 state of 1 work, of 1 held.`, "not compared: the first state this index holds"] }],
-    ["export", { step: exporting, state: "success", texts: ["1 article pinned: 1 exported with text, 0 excluded.", EXPORT_WATERMARK, "Text served under agreed_same_run_cc_by."] }],
+    ["export", { step: exporting, state: "success", texts: ["3 articles pinned: 3 exported with text, 0 excluded.", EXPORT_WATERMARK, "Text served under agreed_same_run_cc_by."] }],
   ];
+}
+
+/** Journey J1's refusal: a reading asked for a date before the work's first held state. */
+export const EARLY_READING_DATE = "2019-03-15";
+export const EARLY_READING_STEP = Object.freeze({
+  path: "/reading.html",
+  cites: true,
+  operation: "evidence_bundle",
+  typed: Object.freeze([DOSSIER_IDENTIFIER, EARLY_READING_DATE]),
+  body: Object.freeze({
+    operation_id: "evidence_bundle",
+    parameters: Object.freeze({ identifier: DOSSIER_IDENTIFIER, date: EARLY_READING_DATE }),
+  }),
+});
+
+/** Journey J2: a citizen's question searched as typed, which no held article carries. */
+export const NO_HIT_PHRASE = "combien de jours de congé j'ai le droit quand mon père est décédé";
+export const NO_HIT_SEARCH_STEP = Object.freeze({
+  path: "/search.html",
+  cites: true,
+  operation: "search",
+  typed: NO_HIT_PHRASE,
+  body: Object.freeze({ operation_id: "search", parameters: Object.freeze({ query: NO_HIT_PHRASE, language: "fra" }) }),
+});
+
+/** Journey J5: a law the corpus does not hold, asked for by its name. */
+export const UNKNOWN_LAW = "Circulaire CSSF 20/747";
+export const UNKNOWN_LAW_STEP = Object.freeze({
+  path: "/dossier.html",
+  cites: true,
+  operation: "dossier",
+  typed: UNKNOWN_LAW,
+  body: Object.freeze({ operation_id: "dossier", parameters: Object.freeze({ identifier: UNKNOWN_LAW }) }),
+});
+
+/**
+ * What the specification's journeys the eight steps do not walk must show on the fixture mount
+ * (the review pack's `05-user-journeys.md`; J3, J4 and J8's radar are the compare, export and radar steps):
+ * - J1, a date before the work's history: the reading refuses `no_version_for_date`, saying no earlier state
+ *   is held and where the history begins, never another date's text;
+ * - J2, a question no held article carries: the search answers with no hit, says what was matched, and that
+ *   this is not evidence that the law does not exist;
+ * - J5, a law the corpus does not hold: the dossier refuses `identifier_unknown`, with the population this
+ *   build searched and the same absence note.
+ */
+export function specificationJourneyExpectations() {
+  const absence = "It is not evidence that the instrument or the law does not exist.";
+  return [
+    ["J1, a date before the history", { step: EARLY_READING_STEP, state: "refusal", refusalCode: "no_version_for_date", texts: ["No earlier state is held: the requested date precedes this history.", "2024-02-01"] }],
+    ["J2, a question no article carries", { step: NO_HIT_SEARCH_STEP, state: "success", nothingToCite: true, texts: ["0 with the exact phrase, 0 with every word, in 0 works.", absence] }],
+    ["J5, a law not held", { step: UNKNOWN_LAW_STEP, state: "refusal", refusalCode: "identifier_unknown", texts: ["This build's Luxembourg index holds 1 Luxembourg work, with states dated from 2024-02-01 to 2024-02-01.", absence] }],
+  ];
+}
+
+/** The MCP protocol revision the API states on every MCP answer (`V3McpJsonRpc.ProtocolVersion`). */
+export const MCP_PROTOCOL_VERSION = "2025-06-18";
+
+/**
+ * An envelope without the two fields that name the request and the moment it was answered, which differ for
+ * any two requests (`request_ref`, a digest of the server's trace id; `context.freshness.observed_at`, its
+ * clock): what REST and MCP must answer identically.
+ */
+export function withoutRequestFields(envelope) {
+  const copy = structuredClone(envelope ?? null);
+  if (copy !== null && typeof copy === "object") {
+    delete copy.request_ref;
+    if (copy.context?.freshness !== undefined) delete copy.context.freshness.observed_at;
+  }
+  return copy;
+}
+
+/** The first path at which two JSON values differ, for a failure that says where. */
+function firstDifference(left, right, path = "") {
+  if (Object.is(left, right)) return null;
+  if (typeof left !== "object" || typeof right !== "object" || left === null || right === null || Array.isArray(left) !== Array.isArray(right)) {
+    return path || "(the root)";
+  }
+  for (const key of new Set([...Object.keys(left), ...Object.keys(right)])) {
+    const found = firstDifference(left[key], right[key], `${path}${Array.isArray(left) ? `[${key}]` : `.${key}`}`);
+    if (found !== null) return found;
+  }
+  return null;
+}
+
+/**
+ * Journey J7, the developer consuming the MCP server: one request answered through REST
+ * (`{status, json}`) and as an MCP tool call of the same process (`{status, protocolVersion, json}`), as
+ * failures. The tool result's structured content and its text are the REST envelope, apart from the two
+ * request fields; the answer states the protocol revision; neither path is an error.
+ */
+export function envelopeIdentityFailures(rest, mcp) {
+  const failures = [];
+  if (rest.status !== 200) failures.push(`REST answered HTTP ${rest.status}`);
+  if (mcp.status !== 200) failures.push(`MCP answered HTTP ${mcp.status}`);
+  if (mcp.protocolVersion !== MCP_PROTOCOL_VERSION) failures.push(`MCP answered protocol ${mcp.protocolVersion ?? "none"}, not ${MCP_PROTOCOL_VERSION}`);
+  const result = mcp.json?.result;
+  if (mcp.json?.error !== undefined || result === undefined) {
+    failures.push(`MCP answered no tool result: ${JSON.stringify(mcp.json?.error ?? mcp.json).slice(0, 200)}`);
+    return failures;
+  }
+  if (result.isError !== false) failures.push(`the tool result says isError ${result.isError}`);
+  let text;
+  try {
+    text = JSON.parse(result.content?.[0]?.text ?? "");
+  } catch {
+    failures.push("the tool result's text is not the envelope as JSON");
+  }
+  if (text !== undefined && firstDifference(text, result.structuredContent) !== null) {
+    failures.push(`the tool result's text and its structured content differ at ${firstDifference(text, result.structuredContent)}`);
+  }
+  const difference = firstDifference(withoutRequestFields(result.structuredContent), withoutRequestFields(rest.json));
+  if (difference !== null) failures.push(`MCP and REST answered different envelopes, first at ${difference}`);
+  return failures;
+}
+
+/** Every request the pages of the journeys make: the eight steps', J1's, J2's and J5's, each once. */
+export function pageRequestBodies() {
+  const bodies = [...Object.values(JOURNEY_STEPS), EARLY_READING_STEP, NO_HIT_SEARCH_STEP, UNKNOWN_LAW_STEP].map((step) => step.body ?? COVERAGE_BODY);
+  return [...new Map(bodies.map((body) => [JSON.stringify(body), body])).values()];
+}
+
+async function postJson(url, body) {
+  const answer = await fetch(url, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+  const text = await answer.text();
+  let json = null;
+  try {
+    json = JSON.parse(text);
+  } catch {
+    // Not JSON: the failure names the status.
+  }
+  return { status: answer.status, protocolVersion: answer.headers.get("mcp-protocol-version"), json };
+}
+
+/**
+ * Journey J8, monitoring, at the API: the event log polled as a client polls it, as failures. The same
+ * request answers the same events (the log is append-only); from its own `next_after` it answers nothing more;
+ * a cursor from another log is refused `snapshot_unknown`, never read as this log's; every event's permalink
+ * verifies; and `answer_drift` on a genesis log names no invalidated answer and asserts no absence of drift.
+ */
+export async function eventsFailures(origin) {
+  const failures = [];
+  const ask = (operation, parameters) => postJson(`${origin}/api/v3/${operation}`, { operation_id: operation, parameters });
+  const first = await ask("events", {});
+  const value = first.json?.result?.value;
+  if (first.json?.verdict !== "answer" || !Array.isArray(value?.events)) {
+    failures.push(`events answered no event list: ${JSON.stringify(first.json).slice(0, 200)}`);
+    return failures;
+  }
+  if (value.events.length === 0) failures.push("the fixture mount's log holds no event to poll");
+  const again = await ask("events", {});
+  const repeated = firstDifference(withoutRequestFields(first.json), withoutRequestFields(again.json));
+  if (repeated !== null) failures.push(`the same events request answered differently, first at ${repeated}`);
+  if (value.has_more === false) {
+    const after = await ask("events", { after: value.next_after });
+    const rest = after.json?.result?.value;
+    if (!Array.isArray(rest?.events) || rest.events.length !== 0 || rest.has_more !== false) {
+      failures.push(`from its own next_after the log answered more: ${JSON.stringify(after.json).slice(0, 200)}`);
+    }
+  }
+  const foreign = await ask("events", { after: `${"0".repeat(64)}:1` });
+  if (foreign.json?.refusal?.code !== "snapshot_unknown") failures.push(`a cursor from another log answered ${foreign.json?.refusal?.code ?? foreign.json?.verdict}, not snapshot_unknown`);
+  for (const event of value.events) {
+    const checked = await ask("verify", { identifier: event.permalink });
+    if (checked.json?.result?.value?.verdict !== "digest_matches") failures.push(`event ${event.seq}'s permalink ${event.permalink} does not verify`);
+  }
+  const drift = await ask("answer_drift", {});
+  const driftValue = drift.json?.result?.value;
+  if (!Array.isArray(driftValue?.invalidated_answers) || driftValue.invalidated_answers.length !== 0) {
+    failures.push(`answer_drift on a genesis log named invalidated answers: ${JSON.stringify(drift.json).slice(0, 200)}`);
+  }
+  if (driftValue?.asserts_no_drift_in_law !== false) failures.push("answer_drift asserts no drift in the law, which no log can show");
+  return failures;
+}
+
+/** Journey J6: a question that must be refused as legal advice, put to `ask` in the reader's own words. */
+export const ADVICE_QUESTION = "Mon employeur peut-il me refuser un congé parental si je travaille à temps partiel ?";
+
+/** The operations the contained assistant must hand a reader to instead: the primary text, read deterministically. */
+export const ASK_PRIMARY_TEXT_ROUTES = Object.freeze(["resolve", "as_of", "evidence_bundle"]);
+
+/**
+ * Journey J6 at the API, as failures: `ask` answers the contained assistant's card (Decision 91), never a legal
+ * conclusion. The verdict is `point`, the presentation `assistant_v3_unavailable`, the question is not read, the
+ * model gloss is disabled, and the card hands the reader to the deterministic operations that deliver the
+ * primary text, each on its own served route; nothing of the question is in the card.
+ */
+export function askCardFailures(envelope) {
+  const failures = [];
+  if (envelope?.verdict !== "point") failures.push(`ask answered the verdict ${envelope?.verdict}, not point`);
+  const value = envelope?.result?.value;
+  if (value?.presentation_result !== "assistant_v3_unavailable") failures.push(`ask presented ${value?.presentation_result}, not assistant_v3_unavailable`);
+  if (value?.question_read !== false) failures.push("the ask card does not say the question was not read");
+  if (value?.containment?.model_gloss !== "disabled") failures.push(`the model gloss is ${value?.containment?.model_gloss}, not disabled`);
+  const actions = Array.isArray(value?.deterministic_actions) ? value.deterministic_actions : [];
+  for (const operation of ASK_PRIMARY_TEXT_ROUTES) {
+    if (!actions.some((action) => action.operation_id === operation)) failures.push(`the ask card does not hand the reader to ${operation}`);
+  }
+  for (const action of actions) {
+    if (action.route !== `/api/v3/${action.operation_id}`) failures.push(`the action ${action.operation_id} names the route ${action.route}`);
+  }
+  if (JSON.stringify(value ?? null).includes(ADVICE_QUESTION)) failures.push("the ask card carries the question's words");
+  return failures;
+}
+
+/**
+ * Journeys J6, J7 and J8 at the API, against one API process over the mount: `ask` answered as the contained
+ * assistant's card; each page request, and ask, events and answer drift, through REST and MCP; then the event log
+ * polled. Returns `[name, failures]` pairs.
+ */
+export async function apiJourneyRuns(apiOutput, mount) {
+  const api = await startApi(apiOutput, mount);
+  try {
+    const results = [];
+    const ask = { operation_id: "ask", parameters: { question: ADVICE_QUESTION } };
+    results.push(["J6, a question that must be refused as legal advice", askCardFailures((await postJson(`${api.origin}/api/v3/ask`, ask)).json)]);
+    for (const body of [...pageRequestBodies(), ask, { operation_id: "events", parameters: {} }, { operation_id: "answer_drift", parameters: {} }]) {
+      const rest = await postJson(`${api.origin}/api/v3/${body.operation_id}`, body);
+      const mcp = await postJson(`${api.origin}/mcp`, {
+        jsonrpc: "2.0", id: body.operation_id, method: "tools/call", params: { name: body.operation_id, arguments: body.parameters },
+      });
+      results.push([`J7, ${body.operation_id} ${JSON.stringify(body.parameters)} through REST and MCP`, envelopeIdentityFailures(rest, mcp)]);
+    }
+    results.push(["J8, the event log polled and answer drift", await eventsFailures(api.origin)]);
+    return results;
+  } finally {
+    await api.close();
+  }
 }
 
 /**
@@ -1030,11 +1265,23 @@ async function main(argv) {
       results.push([`${name}, with the fixture mount`, await run(apiOutput, mount, { servedByApi, keyboard, ...expected }, browser, liveRoot)]);
       results.push([`${name}, with no mount`, await run(apiOutput, null, { servedByApi, keyboard, step: expected.step, state: "refusal", refusalCode: "no_corpus_mounted" }, browser, liveRoot)]);
     }
+    // The specification's journeys the eight steps do not walk (J1's refusal, J2, J5).
+    for (const [name, expected] of specificationJourneyExpectations()) {
+      results.push([`${name}, with the fixture mount`, await run(apiOutput, mount, { servedByApi, keyboard, ...expected }, browser, liveRoot)]);
+    }
     // The EU steps: the fixture mount holds no EU index, so the EU work is refused for the EU corpus.
     results.push(["eu search, with the fixture mount", await run(apiOutput, mount, { servedByApi, keyboard, ...EU_SEARCH_ON_FIXTURE }, browser, liveRoot)]);
     results.push(["eu dossier, with the fixture mount", await run(apiOutput, mount, { servedByApi, keyboard, ...EU_DOSSIER_ON_FIXTURE }, browser, liveRoot)]);
   }
+  // Journeys J6, J7 and J8 at the API (no page asks the contained assistant or MCP, or polls events), on the
+  // fixture mount.
+  const apiResults = realMount || licenceBlocked ? [] : await apiJourneyRuns(apiOutput, mount);
   let failed = false;
+  for (const [label, failures] of apiResults) {
+    console.log(`${label}: ${failures.length === 0 ? "PASS" : "FAIL"}`);
+    for (const failure of failures) console.log(`  - ${failure}`);
+    failed ||= failures.length > 0;
+  }
   for (const [label, { observed, failures }] of results) {
     const toApi = observed.requests.filter((request) => new URL(request.url).pathname.startsWith("/api/")).length;
     console.log(`${label}: ${observed.answerState}; ${observed.requests.length} requests (${toApi} to the API); ` +

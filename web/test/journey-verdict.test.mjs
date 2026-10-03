@@ -7,7 +7,10 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  ADVICE_QUESTION,
+  ASK_PRIMARY_TEXT_ROUTES,
   DOSSIER_IDENTIFIER,
+  EARLY_READING_DATE,
   EU_DOSSIER_ON_FIXTURE,
   EU_DOSSIER_STEP,
   EU_SEARCH_IDENTIFIER,
@@ -16,13 +19,21 @@ import {
   EU_SEARCH_STEP,
   HISTORY_ANCHOR,
   JOURNEY_STEPS,
+  MCP_PROTOCOL_VERSION,
+  NO_HIT_SEARCH_STEP,
   READING_DATE,
   SEARCH_PHRASE,
+  UNKNOWN_LAW,
+  askCardFailures,
+  envelopeIdentityFailures,
   expectedFromEnvelope,
   fixtureMountExpectations,
   journeyVerdict,
   pinnedCitation,
+  pageRequestBodies,
   realMountSteps,
+  specificationJourneyExpectations,
+  withoutRequestFields,
   EU_READING_DATE,
   EU_READING_STEP,
   watchFiles,
@@ -228,6 +239,7 @@ test("a radar run types two dates and is held to exactly those in the body", () 
 
 test("an export run reads, pins, and is held to the composed export and to its one request", () => {
   assert.deepEqual(JOURNEY_STEPS.export.typed, [DOSSIER_IDENTIFIER, READING_DATE]);
+  assert.equal(JOURNEY_STEPS.export.then.count, 3, "journey J4: an answer across several provisions, three pinned for one export");
   assert.deepEqual(JOURNEY_STEPS.export.body, JOURNEY_STEPS.reading.body, "the export asks the reading, and nothing else");
   const observed = goodSearch();
   observed.requests = [
@@ -546,4 +558,109 @@ test("a keyboard run that chooses an option counts the select among the fields T
   assert.deepEqual(journeyVerdict(observed, expected), []);
   assert.ok(journeyVerdict({ ...observed, keyboard: { ...observed.keyboard, placed: 2 } }, expected).includes("Tab reached 2 of the form's 3 fields"),
     "a select never reached fails as a field never reached");
+});
+
+test("the specification's journeys the eight steps do not walk are held to their own outcome: J1's refusal, J2's no hit, J5's law not held", () => {
+  const expectations = specificationJourneyExpectations();
+  assert.deepEqual(expectations.map(([name]) => name.slice(0, 2)), ["J1", "J2", "J5"]);
+  for (const [name, expected] of expectations) {
+    assert.equal(expected.step.body.operation_id, expected.step.operation, name);
+    assert.ok(expected.texts.length > 0, `${name} names the texts it must show`);
+  }
+  const byJourney = Object.fromEntries(expectations.map(([name, expected]) => [name.slice(0, 2), expected]));
+  assert.deepEqual(byJourney.J1.step.body.parameters, { identifier: DOSSIER_IDENTIFIER, date: EARLY_READING_DATE });
+  assert.ok(EARLY_READING_DATE < READING_DATE, "J1 asks a date before the fixture's one state");
+  assert.equal(byJourney.J1.refusalCode, "no_version_for_date");
+  assert.equal(byJourney.J2.state, "success");
+  assert.equal(byJourney.J2.nothingToCite, true, "a search with no hit cites nothing, and says so");
+  assert.equal(byJourney.J5.refusalCode, "identifier_unknown");
+  assert.deepEqual(byJourney.J5.step.body.parameters, { identifier: UNKNOWN_LAW });
+
+  // J2's page with no hit is excused from citing only because it says it holds nothing, and it must say that
+  // the absence is not evidence that the law does not exist.
+  const observed = goodSearch();
+  observed.requests = [
+    { url: `${ORIGIN}/search.html`, method: "GET", headers: {} },
+    { url: `${ORIGIN}/api/v3/search`, method: "POST", headers: {}, headersSent: true, postData: JSON.stringify(NO_HIT_SEARCH_STEP.body) },
+  ];
+  observed.text = byJourney.J2.texts.join(" ");
+  observed.citations = [];
+  observed.emptyAnswer = true;
+  const expected = { origin: ORIGIN, ...byJourney.J2 };
+  assert.deepEqual(journeyVerdict(observed, expected), []);
+  assert.ok(journeyVerdict({ ...observed, emptyAnswer: false }, expected).includes("the page printed no citation"), "a page that does not say it holds nothing must cite");
+  assert.ok(journeyVerdict({ ...observed, text: byJourney.J2.texts[0] }, expected).some((failure) => /It is not evidence/.test(failure)), "the absence note is required");
+});
+
+test("journey J7: REST and MCP answer one envelope, apart from the request's own reference and the moment it was answered", () => {
+  const envelope = (refFill, at, verdict = "answer") => ({
+    verdict,
+    request_ref: refFill.repeat(64),
+    context: { publisher: "lu-legilux", freshness: { observed_at: at, built_at: "2026-10-01T00:00:00Z" } },
+    result: { value: { hits: [] } },
+  });
+  const rest = { status: 200, json: envelope("a", "2026-10-03T02:00:00Z") };
+  const tool = (structured, text = JSON.stringify(structured)) => ({
+    status: 200,
+    protocolVersion: MCP_PROTOCOL_VERSION,
+    json: { jsonrpc: "2.0", id: "search", result: { isError: false, structuredContent: structured, content: [{ type: "text", text }] } },
+  });
+  assert.deepEqual(envelopeIdentityFailures(rest, tool(envelope("b", "2026-10-03T02:00:01Z"))), [], "the request reference and the observation time may differ");
+  assert.deepEqual(withoutRequestFields(rest.json).context.freshness, { built_at: "2026-10-01T00:00:00Z" }, "only the observation time is set aside");
+
+  const refused = envelope("b", "2026-10-03T02:00:01Z", "refuse");
+  assert.ok(envelopeIdentityFailures(rest, tool(refused)).some((failure) => /different envelopes, first at \.verdict/.test(failure)), "a different verdict is named");
+  const built = envelope("b", "2026-10-03T02:00:01Z");
+  built.context.freshness.built_at = "2026-10-02T00:00:00Z";
+  assert.ok(envelopeIdentityFailures(rest, tool(built)).some((failure) => /context\.freshness\.built_at/.test(failure)), "any other field of freshness must agree");
+  assert.ok(envelopeIdentityFailures(rest, tool(envelope("a", "x"), "{}")).some((failure) => /text and its structured content differ/.test(failure)), "the text is the structured content");
+  assert.ok(envelopeIdentityFailures(rest, { ...tool(envelope("a", "x")), protocolVersion: null }).some((failure) => /protocol none/.test(failure)), "the protocol revision is stated");
+  assert.ok(envelopeIdentityFailures(rest, { status: 200, protocolVersion: MCP_PROTOCOL_VERSION, json: { jsonrpc: "2.0", id: 1, error: { code: -32602 } } }).some((failure) => /no tool result/.test(failure)), "a JSON-RPC error fails");
+  const flagged = tool(envelope("a", "x"));
+  flagged.json.result.isError = true;
+  assert.ok(envelopeIdentityFailures(rest, flagged).some((failure) => /isError true/.test(failure)), "a tool error fails");
+  assert.ok(envelopeIdentityFailures({ ...rest, status: 500 }, tool(envelope("a", "x"))).some((failure) => /REST answered HTTP 500/.test(failure)));
+});
+
+test("journey J7 asks every request the journeys' pages make, each once", () => {
+  const bodies = pageRequestBodies();
+  const keys = bodies.map((body) => JSON.stringify(body));
+  assert.equal(new Set(keys).size, keys.length, "each request once");
+  for (const step of [...Object.values(JOURNEY_STEPS), ...specificationJourneyExpectations().map(([, expected]) => expected.step)]) {
+    assert.ok(keys.includes(JSON.stringify(step.body ?? { operation_id: "coverage", parameters: {} })), `${step.path} ${step.operation}`);
+  }
+});
+
+test("journey J6: ask answers the contained assistant's card, never a conclusion, and hands the reader to the primary text", () => {
+  const card = () => ({
+    verdict: "point",
+    result: {
+      value: {
+        presentation_result: "assistant_v3_unavailable",
+        containment: { decisions: ["51", "91"], model_gloss: "disabled" },
+        question_read: false,
+        deterministic_actions: ["resolve", "search", "as_of", "evidence_bundle"].map((operation) => ({ operation_id: operation, route: `/api/v3/${operation}` })),
+      },
+    },
+  });
+  assert.deepEqual(askCardFailures(card()), []);
+  assert.deepEqual(ASK_PRIMARY_TEXT_ROUTES, ["resolve", "as_of", "evidence_bundle"]);
+  const answered = card();
+  answered.verdict = "answer";
+  assert.ok(askCardFailures(answered).some((failure) => /verdict answer, not point/.test(failure)), "an answer is a conclusion");
+  const read = card();
+  read.result.value.question_read = true;
+  assert.ok(askCardFailures(read).some((failure) => /not read/.test(failure)));
+  const glossed = card();
+  glossed.result.value.containment.model_gloss = "enabled";
+  assert.ok(askCardFailures(glossed).some((failure) => /model gloss is enabled/.test(failure)));
+  const narrow = card();
+  narrow.result.value.deterministic_actions = narrow.result.value.deterministic_actions.filter((action) => action.operation_id !== "evidence_bundle");
+  assert.ok(askCardFailures(narrow).some((failure) => /evidence_bundle/.test(failure)), "the card must hand the reader to the quoted text");
+  const misrouted = card();
+  misrouted.result.value.deterministic_actions[0].route = "/api/v3/ask";
+  assert.ok(askCardFailures(misrouted).some((failure) => /names the route \/api\/v3\/ask/.test(failure)));
+  const echoed = card();
+  echoed.result.value.note = `you asked: ${ADVICE_QUESTION}`;
+  assert.ok(askCardFailures(echoed).some((failure) => /question's words/.test(failure)), "nothing of the question is in the card");
 });
