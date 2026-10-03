@@ -29,7 +29,9 @@ below:
   - EU `in_force_on` is a typed refusal the EU manifest states: asserted at every case date, and measured in the
     refusal set.
   - The mounted gates derive EU cases from the EU index's states table (`V3MountedGatesTests.Europe.cs`).
-  - Bounded mount: to be run later.
+  - Bounded mount: not measured, and it never can be for this line. It holds no Luxembourg state, and its EU index is
+    schema 2, with no states table, so the EU arm has no case there (review of #923). A real mount with a schema-5 EU
+    index, such as #907's rederivation, can run the EU arm.
   - Waits: the Luxembourg population, and the EU population mount.
 - **Every absence typed.**
   - CI: the refusal set, and the registry digest in every envelope.
@@ -2722,7 +2724,8 @@ date" now measures EU dated selection, the owner's main use case.
   acquisition holds the memory; CI builds and runs it.
 - **Driver decisions (reversible).** EU `in_force_on` is guarded, not an arm. A request with no language is keyed by
   the answering languages' keys, sorted and joined. The mounted EU sample is the Luxembourg one: 40 acts, seed 20260930.
-- **Not yet:** the bounded mount's run, and the EU population mount.
+- **Not yet:** the EU population mount. The bounded mount cannot measure it: its EU index is schema 2, with no states
+  table (review of #923).
 
 ## Next, in order (web lane; the data lane's items 1 to 3 are in STATUS-DATA.md)
 
