@@ -204,11 +204,11 @@ public sealed partial class V3FirstMountBuildTests
         Assert.IsFalse(Directory.Exists(output));
     }
 
-    private static string[] MountDigests(string directory) => Directory.EnumerateFiles(directory, "*", SearchOption.AllDirectories)
+    internal static string[] MountDigests(string directory) => Directory.EnumerateFiles(directory, "*", SearchOption.AllDirectories)
         .Select(path => Path.GetRelativePath(directory, path).Replace('\\', '/') + " " + Convert.ToHexStringLower(SHA256.HashData(File.ReadAllBytes(path))))
         .Order(StringComparer.Ordinal).ToArray();
 
-    private static async Task RunOfflineCommandAsync(string custody, string checkpoint, string output, bool compressed, string proxy)
+    internal static async Task RunOfflineCommandAsync(string custody, string checkpoint, string output, bool compressed, string proxy)
     {
         var configuration = new DirectoryInfo(AppContext.BaseDirectory).Parent!.Name;
         var tool = Path.Combine(CheckoutRoot(), "src", "Lex.V3.Tool", "bin", configuration, "net10.0", "Lex.V3.Tool.dll");

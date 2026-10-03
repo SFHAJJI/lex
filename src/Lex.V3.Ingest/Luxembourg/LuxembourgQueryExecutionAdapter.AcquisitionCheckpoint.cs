@@ -55,39 +55,10 @@ public sealed partial class LuxembourgQueryExecutionAdapter
                 var sourceBytes = await CustodyRestore.ReadByDigestCheckedAsync(store, family.Renderer.Sha256, cancellationToken).ConfigureAwait(false);
                 var source = MachineQueryRendererSource.Open(family.Renderer, sourceBytes.Span);
                 var request = new LuxembourgPartitionRunRequest(plan, family.Plan.ResourceId, family.Set, family.Range, source);
-                var legs = new List<FamilyRowsLeg>();
-                if (family.Kind == LuxembourgFamilyEnumerationOutcomeKind.Proven)
-                {
-                    var receipt = await LuxembourgEnumerationCheckpoint.RestoreReceiptAsync(store, family.Checkpoint,
-                        family.Run, family.Profile, cancellationToken).ConfigureAwait(false);
-                    var proof = receipt.TryProveFamilyEnumeration(family.Range.PartitionId, out var refusal)
-                        ?? throw new CustodyIntegrityException("Retained LU family no longer proves: " + refusal);
-                    legs.Add(new(proof, receipt, request));
-                }
-                else if (family.Kind == LuxembourgFamilyEnumerationOutcomeKind.CoverProven)
-                {
-                    var cover = await LuxembourgPartitionCoverCheckpoint.RestoreAsync(store, family.Checkpoint,
-                        family.Range, family.Run, family.Profile, cancellationToken).ConfigureAwait(false);
-                    for (var index = 0; index < cover.Chain.Leaves.Count; index++)
-                    {
-                        var leaf = cover.Chain.Leaves[index];
-                        var receipt = cover.LeafReceipts[index];
-                        var proof = receipt.TryProveFamilyEnumeration(leaf.PartitionId, out var refusal)
-                            ?? throw new CustodyIntegrityException("Retained LU leaf no longer proves: " + refusal);
-                        legs.Add(new(proof, receipt, request with { Partition = leaf }));
-                    }
-                }
-                else throw new CustodyIntegrityException("The LU catalog requires proven original families.");
-                if (legs.Count == 0) throw new CustodyIntegrityException("A retained LU family has no proven legs.");
-                BoundMachineRequest? first = null;
-                foreach (var leg in legs)
-                {
-                    var original = await VerifyQueryTemplateAsync(store, leg, cancellationToken).ConfigureAwait(false);
-                    first ??= original;
-                }
+                var (legs, first) = await RestoreFamilyLegsAsync(store, family, request, cancellationToken).ConfigureAwait(false);
                 replay.Legs.Add(family.Range.PartitionId, legs);
                 // A bound retained count supplies the required input type. Replay never executes this witness.
-                families.Add((request, first!, null));
+                families.Add((request, first, null));
             }
             var budget = WireRequestBudget.OfWireRequests(2);
             var adapter = new LuxembourgQueryExecutionAdapter(store,

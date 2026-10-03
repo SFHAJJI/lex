@@ -107,6 +107,33 @@ public sealed class LexV3ToolProgramTests
     }
 
     [TestMethod]
+    [DataRow("missing")]
+    [DataRow("empty")]
+    [DataRow("not_a_journal")]
+    public void AResumeJournalThatDoesNotReadExitsTwoBeforeAnyWork(string journal)
+    {
+        var path = Path.Combine(Path.GetTempPath(), "lex-v3-journal-" + Guid.NewGuid().ToString("N") + ".jsonl");
+        if (journal != "missing")
+        {
+            File.WriteAllText(path, journal == "empty" ? string.Empty : "{\"seq\":0}\n");
+        }
+
+        try
+        {
+            var run = Run("build", "--celex", "NOTASEED", "--lu-name", "act", "--lu-start", ValidStart, "--lu-end", ValidEnd,
+                "--wire-ceiling", "5", "--resume-from", path);
+            Assert.AreEqual(2, run.ExitCode, run.Transcript);
+            StringAssert.Contains(run.StandardError, "--resume-from refused before any request", run.Transcript);
+            Assert.DoesNotContain("renderer sources", run.StandardOutput, run.Transcript);
+            Assert.DoesNotContain("Unhandled exception", run.StandardError, run.Transcript);
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    [TestMethod]
     public void AnUnknownARepeatedOrAMissingOptionExitsTwo()
     {
         var unknown = Run("build", "--celex", "NOTASEED", "--lu-name", "act", "--lu-start", ValidStart, "--lu-end", ValidEnd,

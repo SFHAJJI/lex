@@ -113,12 +113,20 @@ public sealed partial class EuFormexPackagePopulationProducer
         internal bool OriginalWorksOnly => document?.Schema == PriorPopulationCheckpointSchema;
         internal List<EnumerationCheckpoint> Enumerations { get; } = [];
         internal List<PackageCheckpoint> Packages { get; } = [];
-        internal void CaptureEnumeration(string family, EuFormexManifestationEnumerationResult enumeration) =>
-            Enumerations.Add(new EnumerationCheckpoint(family, enumeration.Expression.CanonicalContentSha256,
+        internal EnumerationCheckpoint CaptureEnumeration(string family, EuFormexManifestationEnumerationResult enumeration)
+        {
+            var captured = new EnumerationCheckpoint(family, enumeration.Expression.CanonicalContentSha256,
                 enumeration.CheckpointRef ?? throw new CustodyIntegrityException("A delivered enumeration lost its checkpoint."),
-                enumeration.Proof!.AcquisitionRunRef, enumeration.Proof.InterpretationProfileRef));
-        internal void CapturePackage(EuFormexPackageAcquisitionResult acquisition) =>
-            Packages.Add(new PackageCheckpoint(acquisition.Outcome.Expression.CanonicalContentSha256, acquisition.CheckpointRef));
+                enumeration.Proof!.AcquisitionRunRef, enumeration.Proof.InterpretationProfileRef);
+            Enumerations.Add(captured);
+            return captured;
+        }
+        internal PackageCheckpoint CapturePackage(EuFormexPackageAcquisitionResult acquisition)
+        {
+            var captured = new PackageCheckpoint(acquisition.Outcome.Expression.CanonicalContentSha256, acquisition.CheckpointRef);
+            Packages.Add(captured);
+            return captured;
+        }
         internal async Task<EuFormexManifestationEnumerationResult> EnumerateAsync(ICustodyStore store, string family,
             LanguageScopedExpression expression, CancellationToken cancellationToken)
         {
