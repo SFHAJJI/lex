@@ -2308,7 +2308,22 @@ which follows the items below:
    It builds the tool once from a clean `origin/v3/integration`, freezes it with the renderer sources
    and their digests, then runs both builds into `C:\lex-v3\chained-canary-20261001\{a,b}`. Its
    ledger is `C:\lex-v3\lanes\claude-web-notes.md`.
-2. **Then the release path's custody half**, once the data lane names its offline derive command:
+2. **The release path's custody half (done, 2026-10-02):** `node web/scripts/image-rehearsal.mjs --custody
+   <custody> --checkpoint <mount-inputs.json> --tool <Lex.V3.Tool.dll>` runs the data lane's offline
+   `derive` twice in separate processes (`derive-twice.mjs`), compares every mount file byte for byte,
+   and only then builds, rehearsal-signs, probes and publishes the image over the first derivation. The
+   tool must be this commit's CI runtime artifact (its `source-head.txt` equals the checkout the image is
+   built from; `--allow-unbound-tool` runs a rehearsal that says otherwise), and the report carries the
+   tool's and the checkpoint's digests, every file's digest and both executions. That derive sends no
+   publisher request rests on its code path (derive takes only the custody store and constructs no
+   publisher session, and every replay door refuses when any wire budget was spent); a proxy-variable
+   trap is a narrower second check, which does not see
+   the publisher client (built with `UseProxy = false`), raw sockets or DNS, and the report says so
+   (review of #911). `derive-twice.test.mjs` holds it to a stand-in tool that agrees, differs in one file,
+   or connects through the proxy variables, the binding to the CI artifact's stamp, and the release's
+   refusal of a tool that is not bound (re-review of #911). The real run
+   waits for the complete populations' custody. Originally:
+   **Then the release path's custody half**, once the data lane names its offline derive command:
    the release command runs it twice, compares every digest, then images, signs with the rehearsal
    identity, publishes and reads back. If the command is not named by the time item 1 is done, the web
    lane asks in QUESTIONS.md.
