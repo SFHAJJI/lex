@@ -20,10 +20,12 @@
 // page's `search.intro`, `search.idle` and `search.noHit` once search matches only the text its rights admit (PR #910),
 // and `common.europeAnnexes`, the line for the annexes an EU wording does not serve as text (PR #919; both forms changed
 // in its review: a search covers the text it "interroge", and an annex is served "sous forme de texte").
-// The export composer's entries for the EU export, written after that addendum, await the review of the EU export's
-// pull request, which records them in the addendum (Decision 41): `export.intro` (changed to name EU text, the
+// The export composer's entries for the EU export were reviewed by the same reviewer, under the same delegation, in the
+// review of PR #920 (the record's addendum; all four approved): `export.intro` (changed to name EU text, the
 // acknowledgement and authenticity statement it is served with, and what an export excludes), `export.europeRights`,
-// `export.europeItem` and `export.europeExcluded`.
+// `export.europeItem` and `export.europeExcluded`. The acknowledgement is "la mention de la source" (the Publications
+// Office's own term for the condition it meets) and the authenticity statement "la déclaration sur l’édition qui fait
+// foi" (never "authentique").
 // No French entry ships unreviewed.
 //
 // Vocabulary: a work is an "acte" (a publisher's Cellar work, one record of an EU act, is an "œuvre de l’éditeur"), a

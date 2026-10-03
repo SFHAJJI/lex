@@ -2510,7 +2510,8 @@ export was not composed.
 - **What an EU export carries.**
   - Each item: its CELEX, language, wording kind and wording date (never an applicability date), the article id and
     heading, its citation (the article permalink, which pins the wording), the wording permalink, the text with its
-    digest and byte length, the body digest, the official source, and Decision 95's acknowledgement.
+    digest and byte length, the body digest, the official source, Decision 95's acknowledgement and the authenticity
+    statement (each item, so an item taken out of the file alone still says them; review of #920).
   - The export: the watermark, when the answering snapshot was observed, the acknowledgement, the authenticity
     statement, the platform's rights rule and its statement of what a wording date is, and the corpus, index and
     registry digests (the registry digest is the envelope's, which `readingOutcome` now passes on: the EU bundle names
@@ -2520,7 +2521,8 @@ export was not composed.
     `agreed_same_run_cc_by`. CSV (`EUROPE_CSV_COLUMNS`) repeats the watermark, acknowledgement, authenticity
     statement, observation time, rights rule and three digests on every row.
   - PDF: the acknowledgement, authenticity statement, rule and date statement on the first page; each item headed
-    "001 {heading} (eng, original wording of {date})" (or "consolidated"), with its acknowledgement; the
+    "001 {heading} (eng, original wording of {date})" (or "consolidated"), with its acknowledgement and authenticity
+    statement; the
     acknowledgement at the foot of every page, above the page number. Its refusal (a character the standard fonts
     cannot set) is read off its own layout, so the panel never offers a PDF that then fails.
 - **What it excludes.**
@@ -2533,9 +2535,10 @@ export was not composed.
   and the authenticity statement below.", each item "({language}, wording of {date})", each exclusion, and the annex
   line under `data-export-annexes`.
 - **Chrome.** New: `export.europeRights`, `export.europeItem`, `export.europeExcluded`. Changed: `export.intro` names
-  EU text. Removed: `export.europeNotComposed`. The French drafts await this pull request's review under Decision 41
-  (listed in `live-chrome-fr.mjs`'s header); `date-speech.test.mjs` holds the three new entries to no Luxembourg date
-  word, in both languages.
+  EU text. Removed: `export.europeNotComposed`. The French was reviewed under Decision 41 in this pull request's
+  review (the record's addendum: all four forms approved, with two new terminology rows, "mention de la source" for the
+  acknowledgement and "déclaration sur l’édition qui fait foi" for the authenticity statement); `date-speech.test.mjs`
+  holds the three new entries to no Luxembourg date word, in both languages.
 - **Evidence.**
   - `export-build.test.mjs`, `export-pdf.test.mjs`, `live-export.test.mjs` and `reading-europe.test.mjs`:
     - citations, digests, language, wording date, acknowledgement and authenticity statement on each EU item and row;

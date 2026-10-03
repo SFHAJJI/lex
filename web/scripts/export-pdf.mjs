@@ -302,6 +302,7 @@ function europeLayout(model, unsettable = null) {
     add(item.bodySha256, { font: 'mono', size: 8, label: 'body sha-256    ' });
     add(item.officialSource, { font: 'mono', size: 8, label: 'official source ' });
     add(`Acknowledgement: ${item.acknowledgement}`, { size: 9 });
+    add(`Authenticity: ${item.authenticity}`, { size: 9 });
     gap(3);
     add(item.text);
   }

@@ -164,6 +164,7 @@ export function composeEuropeExport({ view, pinned, observedAt, registrySha256 }
         bodySha256: article.bodySha256,
         officialSource: article.officialSource,
         acknowledgement: view.acknowledgement,
+        authenticity: view.authenticity,
       }));
     }
     for (const entry of wording.articlesWithoutText) {
@@ -301,6 +302,7 @@ function europeExportJson(model) {
       body_sha256: item.bodySha256,
       official_source: item.officialSource,
       acknowledgement: item.acknowledgement,
+      authenticity: item.authenticity,
     })),
     excluded: model.excluded.map((entry) => ({
       celex: entry.celex,

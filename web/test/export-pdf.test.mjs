@@ -301,6 +301,8 @@ test("each EU item is headed by its wording's kind and date, and carries its cit
     assert.ok(prose.includes(normalised(item.text)), `${item.publisherId}: the text, every word of it`);
   }
   assert.equal(runs.filter((run) => run.text === `Acknowledgement: ${EUROPE_TEXT_ACKNOWLEDGEMENT}`).length, model.items.length, "each item carries the acknowledgement");
+  assert.equal(prose.split(normalised(`Authenticity: ${model.authenticity}`)).length - 1, model.items.length,
+    "and the authenticity statement, on any page it falls (review of #920)");
   assert.ok(!prose.includes("agreed_same_run_cc_by") && !prose.includes("Rights:"), "and no rights disposition");
 
   const { model: later } = europeModelOf(consolidated, (wording) => wording.articles.slice(0, 1));
@@ -310,9 +312,13 @@ test("each EU item is headed by its wording's kind and date, and carries its cit
 
 test("an EU export's exclusions are set: the article held without text, cited, and each annex row with its count, reason and official source", () => {
   const { model } = europeModelOf();
-  const runs = readPdf(exportPdf(model)).flat();
-  const prose = normalised(runs.filter((run) => run.font === "F1").map((run) => run.text).join(" "));
-  const mono = runs.filter((run) => run.font === "F2").map((run) => run.text).join("");
+  const pages = readPdf(exportPdf(model));
+  // The body's runs, so a sentence that runs onto the next page reads whole, without that page's foot and head between
+  // its lines; every run, head and foot included, must still fit the page.
+  const body = europeBodyOf(pages);
+  const runs = pages.flat();
+  const prose = normalised(body.filter((run) => run.font === "F1").map((run) => run.text).join(" "));
+  const mono = body.filter((run) => run.font === "F2").map((run) => run.text).join("");
   const [excluded] = model.excluded;
   const [annex] = model.annexesNotServed;
   assert.ok(prose.includes("3 articles pinned: 2 exported with text, 1 excluded."));

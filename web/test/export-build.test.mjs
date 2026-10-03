@@ -197,6 +197,7 @@ test("an EU export carries each article's citation, text, digests, language, wor
     assert.equal(item.body_sha256, source.bodySha256);
     assert.equal(item.official_source, source.officialSource);
     assert.equal(item.acknowledgement, EUROPE_TEXT_ACKNOWLEDGEMENT, "every item carries the acknowledgement");
+    assert.equal(item.authenticity, view.authenticity, "and the authenticity statement, so an item taken out alone still says it (review of #920)");
   }
 
   const csv = parseCsv(exportCsv(model));
