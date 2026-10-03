@@ -511,6 +511,15 @@ jobs:
       - name: The journeys over the licence-blocked mount
         shell: bash
         run: node web/scripts/journey.mjs --api "$RUNNER_TEMP/api" --mount "$RUNNER_TEMP/licence-blocked-mount" | tee "$RUNNER_TEMP/journeys-licence-blocked.txt"
+      # The same runs by keyboard alone (Tab reaches every field, every character arrives by a key press, every
+      # focus stop shows where focus is), on the pages the API itself serves (ruling 3's production arrangement,
+      # held to its security headers): the launch contract's keyboard path and the served pages' headers.
+      - name: The journeys by keyboard, the pages served by the API, over the fixture mount and with no mount
+        shell: bash
+        run: node web/scripts/journey.mjs --api "$RUNNER_TEMP/api" --mount "$RUNNER_TEMP/journey-mount" --keyboard --served-by-api | tee "$RUNNER_TEMP/journeys-fixture-keyboard-served.txt"
+      - name: The licence-blocked journeys by keyboard, the pages served by the API
+        shell: bash
+        run: node web/scripts/journey.mjs --api "$RUNNER_TEMP/api" --mount "$RUNNER_TEMP/licence-blocked-mount" --keyboard --served-by-api | tee "$RUNNER_TEMP/journeys-licence-blocked-keyboard-served.txt"
       - name: Upload the journey reports
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
