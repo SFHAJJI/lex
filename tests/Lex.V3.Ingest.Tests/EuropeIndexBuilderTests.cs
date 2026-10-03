@@ -51,8 +51,11 @@ public sealed class EuropeIndexBuilderTests
         CollectionAssert.AreEqual(first.IndexBytes.ToArray(), second.IndexBytes.ToArray());
         CollectionAssert.AreEqual(first.CapabilityManifestBytes.ToArray(), second.CapabilityManifestBytes.ToArray());
         CollectionAssert.AreEqual(
-            Lex.V3.Contracts.Platform.V3UnservedOperations.Rows.ToArray(), first.CapabilityManifest.NotServed.ToArray(),
-            "the EU capability manifest states the platform's operations not served");
+            Lex.V3.Contracts.Platform.V3UnservedOperations.Rows.Concat(Lex.V3.Contracts.Platform.V3EuropeRefusedOperations.Rows)
+                .OrderBy(static row => row.Operation, StringComparer.Ordinal).ToArray(),
+            first.CapabilityManifest.NotServed.ToArray(),
+            "the EU capability manifest states the platform's operations not served and the operations an EU identifier is refused, in operation order");
+        Assert.HasCount(16, first.CapabilityManifest.NotServed, "3 operations no route serves and 13 refused for an EU identifier");
         var corpus = LexCorpus6Builder.TryBuild(envelope, out _, out _)!;
         using var reader = EuropeIndexReader.OpenAndVerify(
             first.IndexRef, first.IndexBytes.Span, corpus.ArtifactRef, first.CapabilityManifest);
