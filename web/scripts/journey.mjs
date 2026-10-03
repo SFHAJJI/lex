@@ -1038,6 +1038,148 @@ export function specificationJourneyExpectations() {
   ];
 }
 
+/** The MCP protocol revision the API states on every MCP answer (`V3McpJsonRpc.ProtocolVersion`). */
+export const MCP_PROTOCOL_VERSION = "2025-06-18";
+
+/**
+ * An envelope without the two fields that name the request and the moment it was answered, which differ for
+ * any two requests (`request_ref`, a digest of the server's trace id; `context.freshness.observed_at`, its
+ * clock): what REST and MCP must answer identically.
+ */
+export function withoutRequestFields(envelope) {
+  const copy = structuredClone(envelope ?? null);
+  if (copy !== null && typeof copy === "object") {
+    delete copy.request_ref;
+    if (copy.context?.freshness !== undefined) delete copy.context.freshness.observed_at;
+  }
+  return copy;
+}
+
+/** The first path at which two JSON values differ, for a failure that says where. */
+function firstDifference(left, right, path = "") {
+  if (Object.is(left, right)) return null;
+  if (typeof left !== "object" || typeof right !== "object" || left === null || right === null || Array.isArray(left) !== Array.isArray(right)) {
+    return path || "(the root)";
+  }
+  for (const key of new Set([...Object.keys(left), ...Object.keys(right)])) {
+    const found = firstDifference(left[key], right[key], `${path}${Array.isArray(left) ? `[${key}]` : `.${key}`}`);
+    if (found !== null) return found;
+  }
+  return null;
+}
+
+/**
+ * Journey J7, the developer consuming the MCP server: one request answered through REST
+ * (`{status, json}`) and as an MCP tool call of the same process (`{status, protocolVersion, json}`), as
+ * failures. The tool result's structured content and its text are the REST envelope, apart from the two
+ * request fields; the answer states the protocol revision; neither path is an error.
+ */
+export function envelopeIdentityFailures(rest, mcp) {
+  const failures = [];
+  if (rest.status !== 200) failures.push(`REST answered HTTP ${rest.status}`);
+  if (mcp.status !== 200) failures.push(`MCP answered HTTP ${mcp.status}`);
+  if (mcp.protocolVersion !== MCP_PROTOCOL_VERSION) failures.push(`MCP answered protocol ${mcp.protocolVersion ?? "none"}, not ${MCP_PROTOCOL_VERSION}`);
+  const result = mcp.json?.result;
+  if (mcp.json?.error !== undefined || result === undefined) {
+    failures.push(`MCP answered no tool result: ${JSON.stringify(mcp.json?.error ?? mcp.json).slice(0, 200)}`);
+    return failures;
+  }
+  if (result.isError !== false) failures.push(`the tool result says isError ${result.isError}`);
+  let text;
+  try {
+    text = JSON.parse(result.content?.[0]?.text ?? "");
+  } catch {
+    failures.push("the tool result's text is not the envelope as JSON");
+  }
+  if (text !== undefined && firstDifference(text, result.structuredContent) !== null) {
+    failures.push(`the tool result's text and its structured content differ at ${firstDifference(text, result.structuredContent)}`);
+  }
+  const difference = firstDifference(withoutRequestFields(result.structuredContent), withoutRequestFields(rest.json));
+  if (difference !== null) failures.push(`MCP and REST answered different envelopes, first at ${difference}`);
+  return failures;
+}
+
+/** Every request the pages of the journeys make: the eight steps', J1's, J2's and J5's, each once. */
+export function pageRequestBodies() {
+  const bodies = [...Object.values(JOURNEY_STEPS), EARLY_READING_STEP, NO_HIT_SEARCH_STEP, UNKNOWN_LAW_STEP].map((step) => step.body ?? COVERAGE_BODY);
+  return [...new Map(bodies.map((body) => [JSON.stringify(body), body])).values()];
+}
+
+async function postJson(url, body) {
+  const answer = await fetch(url, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+  const text = await answer.text();
+  let json = null;
+  try {
+    json = JSON.parse(text);
+  } catch {
+    // Not JSON: the failure names the status.
+  }
+  return { status: answer.status, protocolVersion: answer.headers.get("mcp-protocol-version"), json };
+}
+
+/**
+ * Journey J8, monitoring, at the API: the event log polled as a client polls it, as failures. The same
+ * request answers the same events (the log is append-only); from its own `next_after` it answers nothing more;
+ * a cursor from another log is refused `snapshot_unknown`, never read as this log's; every event's permalink
+ * verifies; and `answer_drift` on a genesis log names no invalidated answer and asserts no absence of drift.
+ */
+export async function eventsFailures(origin) {
+  const failures = [];
+  const ask = (operation, parameters) => postJson(`${origin}/api/v3/${operation}`, { operation_id: operation, parameters });
+  const first = await ask("events", {});
+  const value = first.json?.result?.value;
+  if (first.json?.verdict !== "answer" || !Array.isArray(value?.events)) {
+    failures.push(`events answered no event list: ${JSON.stringify(first.json).slice(0, 200)}`);
+    return failures;
+  }
+  if (value.events.length === 0) failures.push("the fixture mount's log holds no event to poll");
+  const again = await ask("events", {});
+  const repeated = firstDifference(withoutRequestFields(first.json), withoutRequestFields(again.json));
+  if (repeated !== null) failures.push(`the same events request answered differently, first at ${repeated}`);
+  if (value.has_more === false) {
+    const after = await ask("events", { after: value.next_after });
+    const rest = after.json?.result?.value;
+    if (!Array.isArray(rest?.events) || rest.events.length !== 0 || rest.has_more !== false) {
+      failures.push(`from its own next_after the log answered more: ${JSON.stringify(after.json).slice(0, 200)}`);
+    }
+  }
+  const foreign = await ask("events", { after: `${"0".repeat(64)}:1` });
+  if (foreign.json?.refusal?.code !== "snapshot_unknown") failures.push(`a cursor from another log answered ${foreign.json?.refusal?.code ?? foreign.json?.verdict}, not snapshot_unknown`);
+  for (const event of value.events) {
+    const checked = await ask("verify", { identifier: event.permalink });
+    if (checked.json?.result?.value?.verdict !== "digest_matches") failures.push(`event ${event.seq}'s permalink ${event.permalink} does not verify`);
+  }
+  const drift = await ask("answer_drift", {});
+  const driftValue = drift.json?.result?.value;
+  if (!Array.isArray(driftValue?.invalidated_answers) || driftValue.invalidated_answers.length !== 0) {
+    failures.push(`answer_drift on a genesis log named invalidated answers: ${JSON.stringify(drift.json).slice(0, 200)}`);
+  }
+  if (driftValue?.asserts_no_drift_in_law !== false) failures.push("answer_drift asserts no drift in the law, which no log can show");
+  return failures;
+}
+
+/**
+ * Journeys J7 and J8 at the API, against one API process over the mount: each page request through REST and
+ * MCP, then the event log polled. Returns `[name, failures]` pairs.
+ */
+export async function apiJourneyRuns(apiOutput, mount) {
+  const api = await startApi(apiOutput, mount);
+  try {
+    const results = [];
+    for (const body of [...pageRequestBodies(), { operation_id: "events", parameters: {} }, { operation_id: "answer_drift", parameters: {} }]) {
+      const rest = await postJson(`${api.origin}/api/v3/${body.operation_id}`, body);
+      const mcp = await postJson(`${api.origin}/mcp`, {
+        jsonrpc: "2.0", id: body.operation_id, method: "tools/call", params: { name: body.operation_id, arguments: body.parameters },
+      });
+      results.push([`J7, ${body.operation_id} ${JSON.stringify(body.parameters)} through REST and MCP`, envelopeIdentityFailures(rest, mcp)]);
+    }
+    results.push(["J8, the event log polled and answer drift", await eventsFailures(api.origin)]);
+    return results;
+  } finally {
+    await api.close();
+  }
+}
+
 /**
  * The EU search step on the fixture mount, which holds no EU index: the page must show the refusal card
  * `no_corpus_mounted`, naming the EU index as the one missing.
@@ -1098,7 +1240,14 @@ async function main(argv) {
     results.push(["eu search, with the fixture mount", await run(apiOutput, mount, { servedByApi, keyboard, ...EU_SEARCH_ON_FIXTURE }, browser, liveRoot)]);
     results.push(["eu dossier, with the fixture mount", await run(apiOutput, mount, { servedByApi, keyboard, ...EU_DOSSIER_ON_FIXTURE }, browser, liveRoot)]);
   }
+  // Journeys J7 and J8 at the API (no page asks MCP or polls events), on the fixture mount.
+  const apiResults = realMount || licenceBlocked ? [] : await apiJourneyRuns(apiOutput, mount);
   let failed = false;
+  for (const [label, failures] of apiResults) {
+    console.log(`${label}: ${failures.length === 0 ? "PASS" : "FAIL"}`);
+    for (const failure of failures) console.log(`  - ${failure}`);
+    failed ||= failures.length > 0;
+  }
   for (const [label, { observed, failures }] of results) {
     const toApi = observed.requests.filter((request) => new URL(request.url).pathname.startsWith("/api/")).length;
     console.log(`${label}: ${observed.answerState}; ${observed.requests.length} requests (${toApi} to the API); ` +

@@ -2398,8 +2398,15 @@ the radar step; what the eight steps did not walk now runs on the fixture mount 
 - J4: the export pins three articles, not one ("3 articles pinned: 3 exported with text, 0 excluded.");
 - J5: the dossier asked for "Circulaire CSSF 20/747" refuses `identifier_unknown` with the population this
   build searched and the absence note.
-Still to come: J2's hand-off to the contained assistant and J6 (an ask page, which no live page has yet), J7
-(REST and MCP answering one envelope, API-level) and J8's events. The publishers' own search pages are not
+- J7 and J8 at the API, on the fixture mount (no page asks MCP or polls events): every request the journeys'
+  pages make, and `events` and `answer_drift`, asked through REST and as an MCP tool call of one API process
+  must answer one envelope, apart from the two fields that name the request and the moment it was answered
+  (`request_ref`, `context.freshness.observed_at`), with the MCP text equal to its structured content and the
+  protocol revision stated; the event log polled twice answers the same events, nothing more from its own
+  `next_after`, `snapshot_unknown` for another log's cursor, every event permalink verifies, and
+  `answer_drift` on the genesis log names no invalidated answer and does not assert the absence of drift.
+Still to come: J2's hand-off to the contained assistant and J6 (an ask page, which no live page has yet). The
+publishers' own search pages are not
 offered on the `identifier_unknown` card: the handoff registry admits no real host yet (`HANDOFF_HOSTS`), and
 adding one is an editorial decision recorded when it is made.
 

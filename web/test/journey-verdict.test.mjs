@@ -17,16 +17,20 @@ import {
   EU_SEARCH_STEP,
   HISTORY_ANCHOR,
   JOURNEY_STEPS,
+  MCP_PROTOCOL_VERSION,
   NO_HIT_SEARCH_STEP,
   READING_DATE,
   SEARCH_PHRASE,
   UNKNOWN_LAW,
+  envelopeIdentityFailures,
   expectedFromEnvelope,
   fixtureMountExpectations,
   journeyVerdict,
   pinnedCitation,
+  pageRequestBodies,
   realMountSteps,
   specificationJourneyExpectations,
+  withoutRequestFields,
   EU_READING_DATE,
   EU_READING_STEP,
   watchFiles,
@@ -583,4 +587,43 @@ test("the specification's journeys the eight steps do not walk are held to their
   assert.deepEqual(journeyVerdict(observed, expected), []);
   assert.ok(journeyVerdict({ ...observed, emptyAnswer: false }, expected).includes("the page printed no citation"), "a page that does not say it holds nothing must cite");
   assert.ok(journeyVerdict({ ...observed, text: byJourney.J2.texts[0] }, expected).some((failure) => /It is not evidence/.test(failure)), "the absence note is required");
+});
+
+test("journey J7: REST and MCP answer one envelope, apart from the request's own reference and the moment it was answered", () => {
+  const envelope = (refFill, at, verdict = "answer") => ({
+    verdict,
+    request_ref: refFill.repeat(64),
+    context: { publisher: "lu-legilux", freshness: { observed_at: at, built_at: "2026-10-01T00:00:00Z" } },
+    result: { value: { hits: [] } },
+  });
+  const rest = { status: 200, json: envelope("a", "2026-10-03T02:00:00Z") };
+  const tool = (structured, text = JSON.stringify(structured)) => ({
+    status: 200,
+    protocolVersion: MCP_PROTOCOL_VERSION,
+    json: { jsonrpc: "2.0", id: "search", result: { isError: false, structuredContent: structured, content: [{ type: "text", text }] } },
+  });
+  assert.deepEqual(envelopeIdentityFailures(rest, tool(envelope("b", "2026-10-03T02:00:01Z"))), [], "the request reference and the observation time may differ");
+  assert.deepEqual(withoutRequestFields(rest.json).context.freshness, { built_at: "2026-10-01T00:00:00Z" }, "only the observation time is set aside");
+
+  const refused = envelope("b", "2026-10-03T02:00:01Z", "refuse");
+  assert.ok(envelopeIdentityFailures(rest, tool(refused)).some((failure) => /different envelopes, first at \.verdict/.test(failure)), "a different verdict is named");
+  const built = envelope("b", "2026-10-03T02:00:01Z");
+  built.context.freshness.built_at = "2026-10-02T00:00:00Z";
+  assert.ok(envelopeIdentityFailures(rest, tool(built)).some((failure) => /context\.freshness\.built_at/.test(failure)), "any other field of freshness must agree");
+  assert.ok(envelopeIdentityFailures(rest, tool(envelope("a", "x"), "{}")).some((failure) => /text and its structured content differ/.test(failure)), "the text is the structured content");
+  assert.ok(envelopeIdentityFailures(rest, { ...tool(envelope("a", "x")), protocolVersion: null }).some((failure) => /protocol none/.test(failure)), "the protocol revision is stated");
+  assert.ok(envelopeIdentityFailures(rest, { status: 200, protocolVersion: MCP_PROTOCOL_VERSION, json: { jsonrpc: "2.0", id: 1, error: { code: -32602 } } }).some((failure) => /no tool result/.test(failure)), "a JSON-RPC error fails");
+  const flagged = tool(envelope("a", "x"));
+  flagged.json.result.isError = true;
+  assert.ok(envelopeIdentityFailures(rest, flagged).some((failure) => /isError true/.test(failure)), "a tool error fails");
+  assert.ok(envelopeIdentityFailures({ ...rest, status: 500 }, tool(envelope("a", "x"))).some((failure) => /REST answered HTTP 500/.test(failure)));
+});
+
+test("journey J7 asks every request the journeys' pages make, each once", () => {
+  const bodies = pageRequestBodies();
+  const keys = bodies.map((body) => JSON.stringify(body));
+  assert.equal(new Set(keys).size, keys.length, "each request once");
+  for (const step of [...Object.values(JOURNEY_STEPS), ...specificationJourneyExpectations().map(([, expected]) => expected.step)]) {
+    assert.ok(keys.includes(JSON.stringify(step.body ?? { operation_id: "coverage", parameters: {} })), `${step.path} ${step.operation}`);
+  }
 });
