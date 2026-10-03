@@ -2387,7 +2387,10 @@ Each is the driver's call under ruling 7 and can be reversed by a later pull req
   which is information read from the text; `search` now matches only states whose text
   `evidence_bundle` would quote (every source acquired and admitted by its rights), and states that
   rule (`SearchRightsRule`). It counts nothing about the text it does not match, since a count of
-  withheld matches would say the same thing.
+  withheld matches would say the same thing. The search page says the same: its intro, its prompt and
+  its no-hit sentence speak of the text this server holds and may search, and the intro says text its
+  rights withhold is not searched (review of #910: on the licence-blocked journey the old no-hit
+  sentence said the held text lacked a phrase it holds). The French draft says the same.
 
 - The image rehearsal (PR #821):
   - It builds with the .NET SDK's container support, needing no daemon: this machine has no
