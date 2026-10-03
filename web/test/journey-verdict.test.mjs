@@ -33,6 +33,7 @@ import {
   pageRequestBodies,
   realMountSteps,
   specificationJourneyExpectations,
+  twoStateExpectations,
   withoutRequestFields,
   EU_READING_DATE,
   EU_READING_STEP,
@@ -663,4 +664,21 @@ test("journey J6: ask answers the contained assistant's card, never a conclusion
   const echoed = card();
   echoed.result.value.note = `you asked: ${ADVICE_QUESTION}`;
   assert.ok(askCardFailures(echoed).some((failure) => /question's words/.test(failure)), "nothing of the question is in the card");
+});
+
+
+test("on the two-state mount journey J3 compares two different states and journey J8's radar shows the change", () => {
+  const mount = { work_key: "lu-legilux/loi-1991-08-10-n3", first_date: READING_DATE, later_date: "2025-01-01", amended_article: "art_7" };
+  const [[j3, compare], [j8, radar]] = twoStateExpectations(mount);
+  assert.match(j3, /^J3/);
+  assert.match(j8, /^J8/);
+  assert.equal(compare.step.operation, "diff");
+  assert.deepEqual(compare.step.typed, [DOSSIER_IDENTIFIER, READING_DATE, "2025-01-01"]);
+  assert.deepEqual(compare.step.body.parameters, { identifier: DOSSIER_IDENTIFIER, date_from: READING_DATE, date_to: "2025-01-01" });
+  assert.ok(compare.texts.includes("art_7: changed"), "the amended article is named as changed");
+  assert.ok(compare.texts.includes("1 changed, 0 added, 0 removed"));
+  assert.equal(radar.step.operation, "changes_in_period");
+  assert.deepEqual(radar.step.body.parameters, { date_from: READING_DATE, date_to: "2025-01-01" });
+  assert.ok(radar.texts.includes(`wording changed from the state of ${READING_DATE}`), "the later state is compared with the one it replaced");
+  assert.equal(JOURNEY_STEPS.compare.typed[1], JOURNEY_STEPS.compare.typed[2], "the one-state fixture's compare asks one date twice, the reason this mount exists");
 });
