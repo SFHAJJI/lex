@@ -1575,6 +1575,28 @@ public sealed partial class LuxembourgQueryExecutionAdapter
                 continue;
             }
 
+            // A family an interrupted run proved and journaled is restored as a full replay restores it, when its
+            // journaled record names this family's set, range, plan and renderer; otherwise it is enumerated below.
+            if (await TryResumeFamilyAsync(partitionRequest, cancellationToken).ConfigureAwait(false) is { } resumed)
+            {
+                var resumedLegs = resumed.Legs;
+                outcomes.Add(resumed.Family.Kind == LuxembourgFamilyEnumerationOutcomeKind.Proven
+                    ? LuxembourgFamilyEnumerationOutcome.ProvenWithCheckpoint(familyKey, resumedLegs[0].Proof, resumed.Family.Checkpoint)
+                    : LuxembourgFamilyEnumerationOutcome.CoverProvenWithCheckpoint(familyKey,
+                        resumedLegs.Select(static leg => leg.Proof).ToArray(), resumed.Family.Checkpoint));
+                if (isCensusFamily) censusLegs.AddRange(resumedLegs);
+                if (isAssertionFamily) assertionLegs.AddRange(resumedLegs);
+                if (isRelationFamily)
+                {
+                    relationLegs.AddRange(resumedLegs);
+                    sawRelationFamily = true;
+                    relationProof = resumedLegs[0].Proof;
+                }
+                await JournalFamilyAsync(resumed.Family, resumed.PlanBytes, partitionRequest.RendererSource, cancellationToken)
+                    .ConfigureAwait(false);
+                continue;
+            }
+
             if (adaptive)
             {
                 var execution = await _executor.RunAdaptiveCoverAsync(
@@ -1584,6 +1606,7 @@ public sealed partial class LuxembourgQueryExecutionAdapter
                 if (reconciled.Legs is { } adaptiveLegs)
                 {
                     outcomes.Add(LuxembourgFamilyEnumerationOutcome.CoverProvenWithCheckpoint(familyKey, reconciled.LeafProofs!, reconciled.CheckpointRef!));
+                    await JournalLiveFamilyAsync(partitionRequest, outcomes[^1], cancellationToken).ConfigureAwait(false);
                     if (isCensusFamily) censusLegs.AddRange(adaptiveLegs);
                     if (isAssertionFamily) assertionLegs.AddRange(adaptiveLegs);
                     if (isRelationFamily) relationLegs.AddRange(adaptiveLegs);
@@ -1605,6 +1628,7 @@ public sealed partial class LuxembourgQueryExecutionAdapter
                 if (proof is not null)
                 {
                     outcomes.Add(LuxembourgFamilyEnumerationOutcome.ProvenWithCheckpoint(familyKey, proof, runResult.CheckpointRef!));
+                    await JournalLiveFamilyAsync(partitionRequest, outcomes[^1], cancellationToken).ConfigureAwait(false);
                     if (isRelationFamily)
                     {
                         sawRelationFamily = true;
@@ -1644,6 +1668,7 @@ public sealed partial class LuxembourgQueryExecutionAdapter
                 if (coverOutcome.Legs is { } legs)
                 {
                     outcomes.Add(LuxembourgFamilyEnumerationOutcome.CoverProvenWithCheckpoint(familyKey, coverOutcome.LeafProofs!, coverOutcome.CheckpointRef!));
+                    await JournalLiveFamilyAsync(partitionRequest, outcomes[^1], cancellationToken).ConfigureAwait(false);
                     if (isCensusFamily)
                     {
                         censusLegs.AddRange(legs);

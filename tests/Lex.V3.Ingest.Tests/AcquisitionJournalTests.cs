@@ -64,7 +64,7 @@ public sealed class AcquisitionJournalTests
             "no_header" => Chain(held, (AcquisitionJournal.EuropeAdapterPhase, "query", 0), (AcquisitionJournal.EuropeAdapterPhase, "other", 0)),
             "unit_twice" => Chain(held, (AcquisitionJournal.HeaderPhase, AcquisitionJournal.Schema, 0),
                 (AcquisitionJournal.EuropeFormexEnumerationPhase, held[1], 0), (AcquisitionJournal.EuropeFormexEnumerationPhase, held[1], 0)),
-            "unknown_phase" => Chain(held, (AcquisitionJournal.HeaderPhase, AcquisitionJournal.Schema, 0), ("lu-document", "1", 0)),
+            "unknown_phase" => Chain(held, (AcquisitionJournal.HeaderPhase, AcquisitionJournal.Schema, 0), ("eu-unknown-unit", "1", 0)),
             "spend_decreases" => Chain(held, (AcquisitionJournal.HeaderPhase, AcquisitionJournal.Schema, 0),
                 (AcquisitionJournal.EuropeAdapterPhase, "query", 5), (AcquisitionJournal.EuropeCatalogPhase, "europe", 4)),
             _ => throw new AssertFailedException(fault),

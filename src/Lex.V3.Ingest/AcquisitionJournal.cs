@@ -127,6 +127,21 @@ public sealed class AcquisitionJournal : IAcquisitionJournal, IAsyncDisposable
     /// <summary>The retained EU acquisition catalog, keyed <c>europe</c>: the whole EU half, reused through its checked reopen.</summary>
     internal const string EuropeCatalogPhase = "eu-catalog";
 
+    /// <summary>The Luxembourg declared scope and plan identity, keyed <c>scope</c>: every Luxembourg unit binds to them.</summary>
+    internal const string LuxembourgScopePhase = "lu-scope";
+
+    /// <summary>The Luxembourg vocabulary checkpoint and observation, keyed <c>vocabulary</c>.</summary>
+    internal const string LuxembourgVocabularyPhase = "lu-vocabulary";
+
+    /// <summary>One proven Luxembourg query family (a partition or a reconciled cover), keyed by its partition id.</summary>
+    internal const string LuxembourgQueryFamilyPhase = "lu-query-family";
+
+    /// <summary>One selected-document GET, keyed by its manifest ordinal and address digest.</summary>
+    internal const string LuxembourgDocumentPhase = "lu-document";
+
+    /// <summary>One Gazette listing GET, keyed by its act's ordinal and address digest.</summary>
+    internal const string LuxembourgGazettePhase = "lu-gazette";
+
     private readonly Stream _stream;
     private readonly WireRequestBudget _budget;
     private readonly TimeProvider _timeProvider;
@@ -263,7 +278,8 @@ public sealed class AcquisitionJournal : IAcquisitionJournal, IAsyncDisposable
 
     /// <summary>The unit phases this build writes and resumes. A journal naming any other phase does not resume here.</summary>
     internal static bool IsUnitPhase(string phase) => phase is EuropeAdapterPhase or EuropeFormexEnumerationPhase
-        or EuropeFormexPackagePhase or EuropeCatalogPhase;
+        or EuropeFormexPackagePhase or EuropeCatalogPhase or LuxembourgScopePhase or LuxembourgVocabularyPhase
+        or LuxembourgQueryFamilyPhase or LuxembourgDocumentPhase or LuxembourgGazettePhase;
 
     /// <summary>
     /// One line, read only when it is exactly the canonical form this journal writes: strict UTF-8, the contract

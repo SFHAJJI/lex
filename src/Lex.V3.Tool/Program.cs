@@ -405,7 +405,10 @@ try
         Console.WriteLine($"europe checkpoint: {pointer}");
     }
 
-    var luAcquisition = new LuxembourgFirstMountAcquisition(store, TimeProvider.System);
+    // The Luxembourg half journals into the same journal and, resuming, takes the units its interrupted run journaled:
+    // the scope and plan identity, the vocabulary, each proven family and each executed document and Gazette GET, each
+    // admitted through its own checked reader when it still binds to this run, and acquired again when it does not.
+    var luAcquisition = new LuxembourgFirstMountAcquisition(store, TimeProvider.System, journal, resume);
     if (populationScope is not null)
         Console.WriteLine("luxembourg declared scope: " + Lex.V3.Contracts.ContractJson.Serialize(new
         {
@@ -422,6 +425,10 @@ try
         Console.Error.WriteLine($"refused: luxembourg: {luxembourg.Refusal}: {luxembourg.Detail} (spent {budget.Spent} of {budget.Limit})");
         return 3;
     }
+
+    if (luxembourg.Resumption is { } luxembourgResumption)
+        Console.WriteLine($"luxembourg resumed from journal {luxembourgResumption.JournalSha256} through seq {luxembourgResumption.LastSeq}: "
+            + Lex.V3.Contracts.ContractJson.Serialize(luxembourgResumption.Phases));
 
     Console.WriteLine(
         $"luxembourg: run complete, {luxembourg.Run!.CorpusRecordSet?.Set.Records.Count ?? 0} corpus record(s), "

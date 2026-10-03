@@ -263,7 +263,7 @@ public sealed partial class EuFirstMountAcquisitionTests
     private sealed record InterruptedRun(EuRendererSources Europe, LuxembourgRendererSources Luxembourg,
         AcquisitionJournalHeader Header, string? JournalLocation);
 
-    private sealed record JournalUnit(string Phase, string Key, JsonNode Payload, string[] Held);
+    internal sealed record JournalUnit(string Phase, string Key, JsonNode Payload, string[] Held);
 
     // The interrupted run every resume test starts from: the consolidated fixture stopped at the first request of its
     // second package, mid-family. Its journal then names the adapter run, the enumerations of the first family and the
@@ -333,7 +333,7 @@ public sealed partial class EuFirstMountAcquisitionTests
 
     // The interrupted journal written again through the production writer after edit, so its chain is whole and only its
     // content says what changed.
-    private static async Task<byte[]> RejournalAsync(byte[] journal, AcquisitionJournalHeader header, Action<List<JournalUnit>> edit)
+    internal static async Task<byte[]> RejournalAsync(byte[] journal, AcquisitionJournalHeader header, Action<List<JournalUnit>> edit)
     {
         var units = Encoding.UTF8.GetString(journal).Split('\n', StringSplitOptions.RemoveEmptyEntries).Skip(1)
             .Select(static line => JsonNode.Parse(line)!)

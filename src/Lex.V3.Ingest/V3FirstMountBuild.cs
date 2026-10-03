@@ -368,7 +368,7 @@ public sealed class V3FirstMountBuild
 
         // A population acquired across an interruption says so in the build report (V3CorpusMountWriter). The catalogs
         // carry the resumption, so an offline derivation states it exactly as the acquiring build did.
-        return V3FirstMountBuildResult.Success(corpus, luxembourgIndex, europeIndex, europe.Resumption);
+        return V3FirstMountBuildResult.Success(corpus, luxembourgIndex, europeIndex, europe.Resumption, luxembourg.Resumption);
     }
 
     private static bool SameArtefact(

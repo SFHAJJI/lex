@@ -31,7 +31,11 @@ public sealed partial class LuxembourgQueryExecutionAdapter
         ArgumentNullException.ThrowIfNull(held);
         var addressSnapshot = addresses.ToDictionary();
         var heldSnapshot = held.ToDictionary();
-        var capture = new DocumentReplay(null);
+        // The Gazette selection's input digest names the document phase's held routes, so a resume replays Gazette GETs
+        // only after a document phase that held the same routes.
+        var capture = Progress is null ? new DocumentReplay(null)
+            : new DocumentReplay(null, Progress, AcquisitionJournal.LuxembourgGazettePhase,
+                GazetteInputDigest(resolved, manifest, addressSnapshot, heldSnapshot));
         var result = await RunGazetteAcquisitionCoreAsync(resolved, manifest, addressSnapshot, heldSnapshot,
             renderer, budget, cancellationToken, capture).ConfigureAwait(false);
         if (result.Refusal is not null) return (result, null);
