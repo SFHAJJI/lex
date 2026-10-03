@@ -34,6 +34,17 @@ public sealed partial class EuFirstMountAcquisitionTests
 
     internal static async Task<EuFirstMountAcquisitionResult> AcquireConsolidatedAsync(ICustodyStore store, bool missingStateCelex = true)
     {
+        var renderers = await EuRendererSources.FromCheckoutAsync(store, CheckoutRoot(), CancellationToken.None);
+        return await Acquisition(store, ConsolidatedHandler(missingStateCelex)).RunAsync([ConsolidatedSeed], renderers,
+            EuAcquisitionTestFixture.TestWireBudget(), CancellationToken.None);
+    }
+
+    /// <summary>
+    /// The consolidated fixture's scripted transport: the GDPR's original wording and one consolidated work, each in
+    /// English and French, every expression listing one Formex package. A fresh one per run, since each answers in order.
+    /// </summary>
+    internal static CompositeHandler ConsolidatedHandler(bool missingStateCelex = true)
+    {
         var root = EuAxiomWiringHarness.SeedRoot(ConsolidatedSeed);
         var works = new[] { root, ConsolidatedWork }.Order(StringComparer.Ordinal).ToArray();
         var scripts = EuAxiomWiringHarness.Scripts(root, work => EuAcquisitionTestFixture.AxiomAbsenceScriptFor(work));
@@ -70,12 +81,9 @@ public sealed partial class EuFirstMountAcquisitionTests
         scripts["L"] = EuAcquisitionTestFixture.LocatedAmendmentAbsenceScriptFor(works);
         var english = File.ReadAllBytes(Path.Combine(AppContext.BaseDirectory, "Fixtures", "EuDocumentFetch", "gdpr-fmx4-200-body.bin"));
         var french = SyntheticFrenchPackage(english);
-        var handler = new CompositeHandler(scripts, works.SelectMany(work => new[] { work + ".0001", work + ".0002" })
+        return new CompositeHandler(scripts, works.SelectMany(work => new[] { work + ".0001", work + ".0002" })
             .ToDictionary(expression => expression, _ => new[] { "fmx4" }, StringComparer.Ordinal),
             packageBody: request => request.RequestUri!.AbsolutePath.Contains(".0002.", StringComparison.Ordinal) ? french : english);
-        var renderers = await EuRendererSources.FromCheckoutAsync(store, CheckoutRoot(), CancellationToken.None);
-        return await Acquisition(store, handler).RunAsync([ConsolidatedSeed], renderers,
-            EuAcquisitionTestFixture.TestWireBudget(), CancellationToken.None);
     }
 
     // A synthetic language-binding fixture, not a claimed French legal text. The held publisher

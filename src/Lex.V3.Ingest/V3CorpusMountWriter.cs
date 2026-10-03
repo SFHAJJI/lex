@@ -258,8 +258,9 @@ public static class V3CorpusMountWriter
     private static byte[] RenderReport(
         V3FirstMountBuildResult build,
         IReadOnlyList<V3CorpusMountWrittenFile> written,
-        IReadOnlyList<V3RetainedGeneration> generations, DateTimeOffset? derivationInputUtc) =>
-        JsonSerializer.SerializeToUtf8Bytes(new
+        IReadOnlyList<V3RetainedGeneration> generations, DateTimeOffset? derivationInputUtc)
+    {
+        var report = new
         {
             schema = "lex-v3-first-mount-report/1",
             writtenUtc = derivationInputUtc is null ? DateTimeOffset.UtcNow : (DateTimeOffset?)null,
@@ -273,7 +274,53 @@ public static class V3CorpusMountWriter
             builtTwiceAndEqual = true,
             files = written,
             generations = generations.Select(static kept => new { indexSha256 = kept.IndexSha256, observation = kept.Observation, builtAt = kept.BuiltAt, reasons = kept.Reasons }).ToArray(),
-        }, new JsonSerializerOptions { WriteIndented = true });
+        };
+        var options = new JsonSerializerOptions { WriteIndented = true };
+        var resumed = build.EuropeResumption ?? build.LuxembourgResumption;
+        if (resumed is null)
+        {
+            return JsonSerializer.SerializeToUtf8Bytes(report, options);
+        }
+
+        // A mount whose population was acquired across an interruption says so: from which journal, with what spends and
+        // in which two windows, and nothing in it reads as one observation window. Every value comes from the catalogs,
+        // so an offline derivation writes these bytes exactly as the acquiring build did. A mount that was not resumed
+        // keeps exactly the report above.
+        var node = JsonSerializer.SerializeToNode(report, options)!.AsObject();
+        node["resumedFrom"] = JsonSerializer.SerializeToNode(new
+        {
+            journalSha256 = resumed.JournalSha256,
+            lastSeq = resumed.LastSeq,
+            record = Reference(resumed.Record),
+        }, options);
+        node["resumption"] = JsonSerializer.SerializeToNode(new
+        {
+            statement = "This population was acquired by a run resumed from an interrupted run's progress journal. Units "
+                + "counted as replayed were observed by the interrupted run, between previousRun.startedAt and "
+                + "previousRun.lastJournaledAt, and admitted again through their own checked readers; units counted as live "
+                + "were observed by the resumed run after resumedRun.resumedAt. It was not observed in one window. The "
+                + "interrupted run spent at least previousRun.wireSpentAtLeast requests and at most its previousRun.wireCeiling.",
+            previousRun = new
+            {
+                startedAt = resumed.PreviousStartedAt,
+                lastJournaledAt = resumed.PreviousLastJournaledAt,
+                wireSpentAtLeast = resumed.PreviousWireSpentAtLeast,
+                wireCeiling = resumed.PreviousWireCeiling,
+            },
+            resumedRun = new { resumedAt = resumed.ResumedAt },
+            europe = ResumedHalf(build.EuropeResumption),
+            luxembourg = ResumedHalf(build.LuxembourgResumption),
+        }, options);
+        return JsonSerializer.SerializeToUtf8Bytes(node, options);
+    }
+
+    /// <summary>One resumed half as its catalog states it: replayed and live units per phase, and the resumed run's spend and time when the catalog was retained.</summary>
+    private static object? ResumedHalf(AcquisitionResumption? resumption) => resumption is null ? null : new
+    {
+        phases = resumption.Phases.Select(static phase => new { phase = phase.Phase, replayed = phase.Replayed, live = phase.Live }).ToArray(),
+        wireSpentThroughCatalog = resumption.WireSpent,
+        catalogedAt = resumption.CatalogedAt,
+    };
 
     public static Task<V3CorpusMountVerification> VerifyAsync(string directory, CancellationToken cancellationToken) =>
         VerifyAsync(directory, asGeneration: false, cancellationToken);

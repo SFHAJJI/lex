@@ -72,13 +72,17 @@ public sealed class V3FirstMountBuildResult
         LuxembourgIndexBuildResult? luxembourgIndex,
         EuropeIndexBuildResult? europeIndex,
         V3FirstMountBuildRefusal? refusal,
-        string? detail)
+        string? detail,
+        AcquisitionResumption? europeResumption = null,
+        AcquisitionResumption? luxembourgResumption = null)
     {
         Corpus = corpus;
         LuxembourgIndex = luxembourgIndex;
         EuropeIndex = europeIndex;
         Refusal = refusal;
         Detail = detail;
+        EuropeResumption = europeResumption;
+        LuxembourgResumption = luxembourgResumption;
     }
 
     public LexCorpus6BuildResult? Corpus { get; }
@@ -86,6 +90,12 @@ public sealed class V3FirstMountBuildResult
     public LuxembourgIndexBuildResult? LuxembourgIndex { get; }
 
     public EuropeIndexBuildResult? EuropeIndex { get; }
+
+    /// <summary>What the EU catalog says about the resumed run that acquired its population; null for one observed in one run.</summary>
+    public AcquisitionResumption? EuropeResumption { get; }
+
+    /// <summary>What the Luxembourg catalog says about the resumed run that acquired its population; null for one observed in one run.</summary>
+    public AcquisitionResumption? LuxembourgResumption { get; }
 
     public V3FirstMountBuildRefusal? Refusal { get; }
 
@@ -105,15 +115,19 @@ public sealed class V3FirstMountBuildResult
         ]
         : [];
 
+    /// <param name="europeResumption">The EU acquisition's resumption, carried to the build report.</param>
+    /// <param name="luxembourgResumption">The Luxembourg acquisition's resumption, carried to the build report.</param>
     public static V3FirstMountBuildResult Success(
         LexCorpus6BuildResult corpus,
         LuxembourgIndexBuildResult luxembourgIndex,
-        EuropeIndexBuildResult europeIndex)
+        EuropeIndexBuildResult europeIndex,
+        AcquisitionResumption? europeResumption = null,
+        AcquisitionResumption? luxembourgResumption = null)
     {
         ArgumentNullException.ThrowIfNull(corpus);
         ArgumentNullException.ThrowIfNull(luxembourgIndex);
         ArgumentNullException.ThrowIfNull(europeIndex);
-        return new(corpus, luxembourgIndex, europeIndex, null, null);
+        return new(corpus, luxembourgIndex, europeIndex, null, null, europeResumption, luxembourgResumption);
     }
 
     public static V3FirstMountBuildResult Refused(V3FirstMountBuildRefusal refusal, string detail)
@@ -352,7 +366,9 @@ public sealed class V3FirstMountBuild
                     : $"two builds of the Europe index differ: {europeIndex.IndexRef.Sha256} then {europeIndexAgain.IndexRef.Sha256}");
         }
 
-        return V3FirstMountBuildResult.Success(corpus, luxembourgIndex, europeIndex);
+        // A population acquired across an interruption says so in the build report (V3CorpusMountWriter). The catalogs
+        // carry the resumption, so an offline derivation states it exactly as the acquiring build did.
+        return V3FirstMountBuildResult.Success(corpus, luxembourgIndex, europeIndex, europe.Resumption);
     }
 
     private static bool SameArtefact(

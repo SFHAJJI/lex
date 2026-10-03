@@ -1,6 +1,20 @@
 # Lex V3 status: the data lane
 
-Updated 2026-10-01.
+Updated 2026-10-03.
+
+## Resuming an interrupted acquisition: the journal and the EU half (Claude, 2026-10-03)
+
+Every `build` now writes a progress journal beside its custody (`acquisition-progress-<utc>-<id>.jsonl`): append-only JSON lines chained by SHA-256, one per unit, each appended only after the unit's custody holds returned and naming the unit's existing checkpoint record and the objects it depends on. The first line names the source head, the digest of the arguments (seeds, Luxembourg selection, encoding, `--eu-checkpoint`), the renderer references and the journal it resumed, if any. The journal only says where to look: a resumed run admits each unit through the checked reader a full replay uses.
+
+`build --resume-from <journal>` verifies everything before any request: the chain (an unterminated last line is dropped, any other fault refuses), the first line against this build's source and these arguments, and every object any line names, read back from `--custody`. It holds the journal's exact bytes with a `lex-v3-acquisition-resume/1` record, reopens the renderer sources from custody by the journaled references once the checkout's bytes are shown to be the same, and starts a journal of its own naming the one it resumed. A journal that does not verify exits 2 with nothing spent.
+
+EU half: a journaled adapter run reopens through `EuQueryExecutionAdapter.ReopenAsync`, and journaled Formex enumerations and packages through their own reopen paths, all before the rights request (which every build renews, Decision 95). The population walk takes them by expression and acquires the rest live, recording both in walk order, so the population checkpoint reopens exactly as an uninterrupted run's. A journaled EU catalog is reused through `ReuseAsync`. A unit the walk would not reach, a foreign adapter run, swapped checkpoints or a changed renderer refuse before any request. A resumed run's EU catalog is `lex-eu-first-mount-acquisition/2` with its resumption (resume record, the interrupted run's window and spend bounds, replayed and live units per phase, this run's spend and time); every other run writes `/1` unchanged, and readers take both. `build-report.json` gains `resumedFrom` and `resumption` only for a resumed population, and `derive` rebuilds them from the catalogs. A unit in flight at the stop is redone; the interrupted run's spend is reported as at least its last journaled spend and at most its ceiling.
+
+Luxembourg half: not in this slice. A resumed run acquires its Luxembourg half live, and the Luxembourg acquisition journals nothing yet.
+
+Tests: `AcquisitionJournalTests` (read-back, torn tail dropped, ten faults, invocation and held-object checks), `V3FirstMountBuildTests.AResumeJournalIsVerifiedBeforeAnyRequest` (the tool as a process behind a proxy trap: every tampered journal exits 2), `EuFirstMountAcquisitionTests.AnInterruptedPopulationResumesReplayingWhatItsJournalNamesAndAcquiringOnlyTheRest` (interrupted mid-family; on resume no adapter request, only the remaining Formex requests, the old root unchanged, projections without URNs equal to an uninterrupted run's, the mount equal to two derive processes), `EuFirstMountAcquisitionTests.AJournalThatDoesNotDescribeThisAcquisitionRefusesBeforeAnyRequest` and `LexV3ToolProgramTests.AResumeJournalThatDoesNotReadExitsTwoBeforeAnyWork`. None ran locally: EU run 11 occupies the machine, so CI is the compiler.
+
+EU runs 9 and 10 ran tool b5239b6f, which predates the journal: they cannot be resumed, and neither can any run on a tool built before this slice. The runner change that uses it (`-ResumeFrom <old root>`: a fresh root, custody objects hard-linked except `*.partial`, only the original `--eu-checkpoint` pointer, never the journal, `--resume-from` passed, the old root's snapshot verified after) is a proposal for the driver and is not installed.
 
 ## Luxembourg legislative population command (Codex, 2026-10-01)
 

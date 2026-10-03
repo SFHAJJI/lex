@@ -9,8 +9,17 @@
 // Luxembourg act range binds its three family ranges at construction, so an act the plan cannot
 // name is a usage error, not a refusal after the EU side has spent the budget.
 //
-// Exit codes: 0 built and verified; 1 an unexpected failure (printed); 2 usage; 3 a typed refusal
-// (printed with the wire spend); 4 the written directory did not verify; 130 cancelled.
+// Every run writes a progress journal beside its custody (AcquisitionJournal): one line per unit
+// whose evidence custody holds. --resume-from names an interrupted run's journal. It is verified
+// before any request (its hash chain, its first line against this build's source and these
+// arguments, every object it names read back from --custody), held in custody with a resume
+// record, and the units it names are replayed through their own checked readers while the rest
+// is acquired live; the run's catalogs and build report then say it resumed, from what and with
+// what spends. A journal that does not verify is a usage error: nothing is spent.
+//
+// Exit codes: 0 built and verified; 1 an unexpected failure (printed); 2 usage, or a --resume-from
+// journal that does not verify; 3 a typed refusal (printed with the wire spend); 4 the written
+// directory did not verify; 130 cancelled.
 
 using System.Runtime.InteropServices;
 using Lex.V3.Artifacts;
@@ -40,11 +49,15 @@ const string Usage =
     + "                 and the earlier generations the retention line keeps are copied from it into <out>/generations\n"
     + "  --referenced   with --predecessor: a JSON array of Luxembourg index digests a published permalink or evidence bundle references,\n"
     + "                 each kept indefinitely (none is recorded anywhere else)\n"
-    + "Exit codes: 0 built and verified, 1 unexpected failure, 2 usage, 3 typed refusal, 4 written directory did not verify, 130 cancelled";
+    + "  --resume-from  an interrupted run's progress journal (acquisition-progress-*.jsonl), verified before any request; the same\n"
+    + "                 arguments and source build are required, and --custody holds the interrupted run's objects (never the journal)\n"
+    + "Exit codes: 0 built and verified, 1 unexpected failure, 2 usage or a journal that does not verify, 3 typed refusal,\n"
+    + "            4 written directory did not verify, 130 cancelled";
 
 string[] required = ["--celex", "--custody", "--out", "--checkout", "--wire-ceiling"];
 string[] rangeOptions = ["--lu-name", "--lu-start", "--lu-end"];
-string[] admitted = [.. required, .. rangeOptions, "--lu-population", "--custody-encoding", "--predecessor", "--referenced", "--eu-checkpoint"];
+string[] admitted = [.. required, .. rangeOptions, "--lu-population", "--custody-encoding", "--predecessor", "--referenced", "--eu-checkpoint",
+    "--resume-from"];
 
 if (args.Length == 0 || !string.Equals(args[0], "build", StringComparison.Ordinal) || (args.Length - 1) % 2 != 0)
 {
@@ -169,6 +182,22 @@ if (options.TryGetValue("--eu-checkpoint", out var euCheckpointPath))
     }
 }
 
+// The interrupted run's journal is read here, before anything else is opened; its lines and its first line are verified
+// once custody is open, against this build and these arguments, and still before any request.
+byte[]? interruptedJournal = null;
+if (options.TryGetValue("--resume-from", out var resumePath))
+{
+    try
+    {
+        interruptedJournal = await File.ReadAllBytesAsync(Path.GetFullPath(resumePath));
+    }
+    catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or ArgumentException)
+    {
+        Console.Error.WriteLine($"--resume-from refused before any request: the journal does not read: {exception.Message}");
+        return 2;
+    }
+}
+
 var checkout = Path.GetFullPath(options["--checkout"]);
 if (!Directory.Exists(checkout))
 {
@@ -195,6 +224,15 @@ catch (ArgumentException exception)
     return 2;
 }
 
+var celexes = options["--celex"] == "all"
+    ? EuAppendixASeedMap.SeedsInCelexOrder.Select(seed => seed.Celex).ToArray()
+    : options["--celex"].Split(',', StringSplitOptions.None);
+
+// One renderer source type's files, out of the references a verified journal names by file.
+static IReadOnlyDictionary<string, Lex.V3.Contracts.Source.Core.SourceArtifactRef> Roles(
+    IReadOnlyDictionary<string, Lex.V3.Contracts.Source.Core.SourceArtifactRef> held, IReadOnlyList<string> files) =>
+    files.ToDictionary(file => file, file => held[file], StringComparer.Ordinal);
+
 using var cancellation = new CancellationTokenSource();
 Console.CancelKeyPress += (_, eventArgs) =>
 {
@@ -219,32 +257,123 @@ try
     var startedAt = DateTimeOffset.UtcNow;
     Console.WriteLine($"lex-v3 build: custody={custodyRoot} custody_encoding={custodyEncoding} ceiling={ceiling} started={startedAt:O}");
 
-    var europeRenderers = retainedEuCheckpoint is null ? await EuRendererSources.FromCheckoutAsync(store, checkout, token) : null;
-    var luxembourgRenderers = await LuxembourgRendererSources.FromCheckoutAsync(store, checkout, token);
-    Console.WriteLine(retainedEuCheckpoint is null ? "renderer sources held: 6 Europe, 2 Luxembourg"
-        : "renderer sources held: 2 Luxembourg; Europe sources reopen from retained custody");
+    // A resume is verified whole before any request: the journal's lines, its first line against this build and these
+    // arguments, and every object it names, read back from this custody; then its bytes and a resume record are held.
+    var source = AcquisitionJournal.CurrentSource();
+    var arguments = AcquisitionJournal.DigestArguments(celexes, act, populationScope, custodyEncoding, retainedEuCheckpoint);
+    AcquisitionResume? resume = null;
+    if (interruptedJournal is not null)
+    {
+        try
+        {
+            resume = await AcquisitionResume.OpenAsync(store, interruptedJournal, source, arguments, TimeProvider.System, token);
+        }
+        catch (Exception exception) when (exception is Lex.V3.Contracts.Custody.CustodyRequiredException or Lex.V3.Contracts.Custody.CustodyIntegrityException)
+        {
+            Console.Error.WriteLine($"--resume-from refused before any request: {exception.Message}");
+            return 2;
+        }
 
-    var celexes = options["--celex"] == "all"
-        ? EuAppendixASeedMap.SeedsInCelexOrder.Select(seed => seed.Celex).ToArray()
-        : options["--celex"].Split(',', StringSplitOptions.None);
+        Console.WriteLine($"resume: journal {resume.JournalSha256} verified through seq {resume.LastSeq}; "
+            + $"the interrupted run spent at least {resume.LastWireSpent} of its ceiling {resume.Header.WireCeiling}; "
+            + $"resume record {resume.Record!.Sha256}");
+    }
+
+    EuRendererSources? europeRenderers;
+    LuxembourgRendererSources luxembourgRenderers;
+    if (resume is null)
+    {
+        europeRenderers = retainedEuCheckpoint is null ? await EuRendererSources.FromCheckoutAsync(store, checkout, token) : null;
+        luxembourgRenderers = await LuxembourgRendererSources.FromCheckoutAsync(store, checkout, token);
+        Console.WriteLine(retainedEuCheckpoint is null ? "renderer sources held: 6 Europe, 2 Luxembourg"
+            : "renderer sources held: 2 Luxembourg; Europe sources reopen from retained custody");
+    }
+    else
+    {
+        // The interrupted run's renderer sources reopen from custody by the references its journal names, once the
+        // checkout is shown to hold the same bytes: opening the checkout afresh would mint new identities, which every
+        // replayed unit's renderer binding refuses.
+        try
+        {
+            IReadOnlyList<string> europeFiles = retainedEuCheckpoint is null ? EuRendererSources.RendererFiles : [];
+            var held = await resume.VerifyRenderersAsync(checkout, [.. europeFiles, .. LuxembourgRendererSources.RendererFiles], token);
+            europeRenderers = retainedEuCheckpoint is null
+                ? await EuRendererSources.FromCustodyAsync(store, Roles(held, EuRendererSources.RendererFiles), token)
+                : null;
+            luxembourgRenderers = await LuxembourgRendererSources.FromCustodyAsync(store,
+                Roles(held, LuxembourgRendererSources.RendererFiles), token);
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or ArgumentException
+            or Lex.V3.Contracts.Custody.CustodyRequiredException or Lex.V3.Contracts.Custody.CustodyIntegrityException)
+        {
+            Console.Error.WriteLine($"--resume-from refused before any request: renderer sources: {exception.Message}");
+            return 2;
+        }
+
+        Console.WriteLine($"renderer sources reopened from custody: {(europeRenderers is null ? 0 : 6)} Europe, 2 Luxembourg, "
+            + "the bytes the interrupted run held");
+    }
+
+    // This run's own journal, written beside custody: one line for each unit whose evidence custody holds.
+    var journalRenderers = new List<AcquisitionJournalRenderer>();
+    if (europeRenderers is not null)
+    {
+        var europeSources = new[] { europeRenderers.Census, europeRenderers.ObjectFacts, europeRenderers.Witness,
+            europeRenderers.DocumentFetch, europeRenderers.FormexManifestation, europeRenderers.LegalNotice };
+        for (var index = 0; index < europeSources.Length; index++)
+            journalRenderers.Add(new AcquisitionJournalRenderer(EuRendererSources.RendererFiles[index], europeSources[index].Reference));
+    }
+
+    journalRenderers.Add(new AcquisitionJournalRenderer(LuxembourgRendererSources.RendererFiles[0], luxembourgRenderers.Query.Reference));
+    journalRenderers.Add(new AcquisitionJournalRenderer(LuxembourgRendererSources.RendererFiles[1], luxembourgRenderers.DocumentFetch.Reference));
+    await using var journal = AcquisitionJournal.CreateInCustody(custodyRoot,
+        new AcquisitionJournalHeader(source, arguments, ceiling, journalRenderers.ToArray(), resume?.Continuation),
+        budget, TimeProvider.System);
+    Console.WriteLine($"progress journal: {journal.Location}");
+
     Console.WriteLine($"europe selection: {celexes.Length} seed(s)");
-    var euAcquisition = new EuFirstMountAcquisition(store, TimeProvider.System);
+    var euAcquisition = new EuFirstMountAcquisition(store, TimeProvider.System, journal, resume);
+    Lex.V3.Contracts.Source.Core.SourceArtifactRef? resumedEuCatalog = null;
+    if (resume is not null)
+    {
+        try
+        {
+            resumedEuCatalog = await euAcquisition.PrepareResumeAsync(celexes, europeRenderers, retainedEuCheckpoint, token);
+        }
+        catch (Exception exception) when (exception is Lex.V3.Contracts.Custody.CustodyRequiredException or Lex.V3.Contracts.Custody.CustodyIntegrityException)
+        {
+            Console.Error.WriteLine($"--resume-from refused before any request: europe: {exception.Message}");
+            return 2;
+        }
+    }
+
+    // The EU catalog the interrupted run journaled is reused exactly as a retained one is: its checked reopen admits the
+    // whole population before the one new rights request.
+    var reusedEuCheckpoint = resumedEuCatalog ?? retainedEuCheckpoint;
     EuFirstMountAcquisitionResult europe;
-    if (retainedEuCheckpoint is not null)
+    if (reusedEuCheckpoint is not null)
     {
         try
         {
             var currentDocumentFetchSource = await File.ReadAllBytesAsync(Path.Combine(checkout,
                 "src/Lex.V3.Contracts/Source/Europe/EuDocumentFetchPlan.cs"), token);
-            europe = await euAcquisition.ReuseAsync(retainedEuCheckpoint, celexes,
+            europe = await euAcquisition.ReuseAsync(reusedEuCheckpoint, celexes,
                 currentDocumentFetchSource, budget, token);
         }
         catch (Exception exception) when (exception is Lex.V3.Contracts.Custody.CustodyRequiredException or Lex.V3.Contracts.Custody.CustodyIntegrityException)
         {
+            if (resumedEuCatalog is not null)
+            {
+                Console.Error.WriteLine($"--resume-from refused before any request: europe catalog: {exception.Message}");
+                return 2;
+            }
+
             Console.Error.WriteLine($"refused: retained europe acquisition: {exception.Message} (spent {budget.Spent} of {budget.Limit})");
             return 3;
         }
-        Console.WriteLine("europe input: retained population; new rights notice required for this build");
+        Console.WriteLine(resumedEuCatalog is null
+            ? "europe input: retained population; new rights notice required for this build"
+            : "europe input: the population the interrupted run retained; new rights notice required for this build");
     }
     else
     {
@@ -266,6 +395,9 @@ try
         + $"spent {budget.Spent} of {budget.Limit}");
 
     Console.WriteLine("europe formex outcomes: " + europe.Formex.CreateOutcomeDiagnosticsJson());
+    if (europe.Resumption is { } europeResumption)
+        Console.WriteLine($"europe resumed from journal {europeResumption.JournalSha256} through seq {europeResumption.LastSeq}: "
+            + Lex.V3.Contracts.ContractJson.Serialize(europeResumption.Phases));
     if (europe.CheckpointRef is { } euCheckpoint)
     {
         var pointer = Path.Combine(custodyRoot, $"eu-acquisition-{euCheckpoint.Sha256}.json");
