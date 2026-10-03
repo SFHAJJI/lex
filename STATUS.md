@@ -85,11 +85,9 @@ Decision 95 (lex-governance PR #9, merged 2026-09-30) records these rulings and 
   ("This is what this service holds, and does not hold. It is not evidence that the instrument or the
   law does not exist.") and the live banner, both claims the owner reviews.
 
-- A rights question the retrieval set surfaced (PR #842): on the licence-blocked mount, search
-  still matches inside the text the licence withholds. It answers which articles hold a word, and
-  shows none of the text: the licence-blocked journey finds no passage on any page. Whether a
-  non-admitting licence should also keep its text out of search matching is the owner's call
-  (rights). Nothing changes until then.
+- The rights question the retrieval set surfaced (PR #842) is decided under the owner's delegation of
+  2026-10-02: a non-admitting licence keeps its text out of search matching too (STATUS-WEB.md, driver
+  decisions).
 
 ## Blocked on the owner
 
