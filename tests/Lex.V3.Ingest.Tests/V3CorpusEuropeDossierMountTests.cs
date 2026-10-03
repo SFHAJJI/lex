@@ -51,10 +51,12 @@ public sealed class V3CorpusEuropeDossierMountTests
             var member = expression.GetProperty("members").EnumerateArray().Single();
             Assert.AreEqual(64, member.GetProperty("object_ref_sha256").GetString()!.Length);
             Assert.AreEqual("acquired", member.GetProperty("outcome").GetString());
+            Assert.AreEqual(0, expression.GetProperty("annexes_not_served").GetArrayLength(),
+                "the GDPR's Formex package holds no annex unit, so the corpus classified no annex on its member.");
             Assert.IsFalse(body.GetProperty("consolidations_held").GetBoolean());
             StringAssert.Contains(body.GetProperty("date_semantics").GetString(), "never merged with a Luxembourg applicability date");
             CollectionAssert.AreEqual(
-                new[] { "titles", "later_wordings", "force_dates", "document_type", "corrigenda", "other_languages" },
+                new[] { "titles", "later_wordings", "force_dates", "document_type", "corrigenda", "other_languages", "annexes" },
                 body.GetProperty("not_held").EnumerateArray().Select(static row => row.GetProperty("item").GetString()).ToArray());
             Assert.IsFalse(ContainsProperty(body, "applicability_date"), "an EU record never carries a Luxembourg applicability date.");
 

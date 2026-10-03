@@ -53,7 +53,9 @@ internal sealed partial class V3CorpusMount
         "digest of that text (text_sha256), the digest of the corpus member's retained publisher body (body_sha256: the manifestation the corpus " +
         "holds for the expression, such as its XHTML or PDF), the digest of the Formex package the text was read from (package_sha256) and of the " +
         "package entry (source_entry_sha256), its official source and an article permalink (the wording permalink and the publisher's provision " +
-        "id after #, which verify accepts); an article whose text is empty is named under articles_without_text and is not served as a quote";
+        "id after #, which verify accepts); an article whose text is empty is named under articles_without_text and is not served as a quote; " +
+        "the annexes the corpus classified on those members are listed under annexes_not_served, each served as text not available with the " +
+        "official source to read it, and never quoted";
 
     internal static readonly string[][] EuropeTimeBundleNotHeld =
     [
@@ -62,6 +64,7 @@ internal sealed partial class V3CorpusMount
         ["force_dates", "no entry-into-force, application or end-of-validity date is held; a wording date is none of them"],
         ["observation_time", "when the publisher served the retained package is not held, so no observation time is stated"],
         ["markup_and_notes", "the Formex markup, notes and tables are not served as structure; the text is the article's searchable text, in publisher order"],
+        ["annexes", EuropeAnnexesNotHeldReason],
     ];
 
     internal static readonly string[][] EuropeTimeVerifyNotHeld =
@@ -898,6 +901,9 @@ internal sealed partial class V3CorpusMount
                     article_identity_sha256 = article.ArticleIdentitySha256,
                     publisher_id = article.PublisherIdentifier,
                 }).ToArray(),
+                annexes_not_served = EuropeAnnexesNotServed(
+                    articles.Select(static article => article.ObjectRefSha256), candidate.ExpressionId,
+                    () => EuropeOfficialSourceOf(articles, candidate.State.PublisherWorkIri)),
             };
         }).ToArray();
 

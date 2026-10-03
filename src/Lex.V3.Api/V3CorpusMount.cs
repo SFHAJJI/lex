@@ -5555,6 +5555,7 @@ internal sealed partial class V3CorpusMount : IDisposable
         ["document_type", "the publisher's document type is not held for EU works"],
         ["corrigenda", "corrigendum lines are recorded by the index per corrected work root and are not joined to the work here, because the join between a corrected work root and the work's publisher identifier is not established"],
         ["other_languages", "an expression in a language the index holds no wording in is not listed; French expressions are not acquired (Decision 89)"],
+        ["annexes", EuropeAnnexesNotHeldReason],
     ];
 
     /// <summary>
@@ -5615,7 +5616,13 @@ internal sealed partial class V3CorpusMount : IDisposable
             celex = expressions[0].PublisherWorkCelex,
             available_languages = languages,
             expression_count = listed.Length,
-            expressions = listed.Select(expression => (Expression: expression, Wording: EuropeWordingOf(expression.PublisherExpressionId))).Select(static entry => new
+            expressions = listed.Select(expression => (
+                Expression: expression,
+                Wording: EuropeWordingOf(expression.PublisherExpressionId),
+                Annexes: EuropeAnnexesNotServed(
+                    expression.Members.Select(static member => member.ObjectRefSha256),
+                    expression.PublisherExpressionId,
+                    () => EuropeOfficialSourceOf(EuropeArticlesOf(expression.PublisherExpressionId), works[0])))).Select(static entry => new
             {
                 publisher_expression_id = entry.Expression.PublisherExpressionId,
                 language = entry.Expression.Language,
@@ -5627,6 +5634,8 @@ internal sealed partial class V3CorpusMount : IDisposable
                     outcome = member.Outcome,
                     content_class = member.ContentClass,
                 }).ToArray(),
+                // The annexes the corpus classified on those members: never served as text (EuropeAnnexesNotHeldReason).
+                annexes_not_served = entry.Annexes,
                 // The expression is an identifier EU resolve answers.
                 resolve = new { identifier = entry.Expression.PublisherExpressionId },
                 // The one held wording of the expression, pinned (the EU permalink grammar, as EU search pins it), or null
@@ -5660,7 +5669,8 @@ internal sealed partial class V3CorpusMount : IDisposable
         "the manifestation the corpus holds for the expression, such as its XHTML or PDF), the digest of the Formex package the text was read from " +
         "(package_sha256) and of the package entry (source_entry_sha256), both null on an EU index that predates them, its official source and an " +
         "article permalink (the wording permalink and the publisher's provision id after #, which verify accepts); an article whose text is empty is " +
-        "named under articles_without_text and is not served as a quote";
+        "named under articles_without_text and is not served as a quote; the annexes the corpus classified on those members are listed under " +
+        "annexes_not_served, each served as text not available with the official source to read it, and never quoted";
 
     internal const string EuropeEvidenceBundleDateRule =
         "the EU index holds one wording of each expression, the original act's, dated by its Formex act date; no consolidated version is held, so " +
@@ -5687,6 +5697,7 @@ internal sealed partial class V3CorpusMount : IDisposable
         ["force_dates", "no entry-into-force, application or end-of-validity date is held; the wording date is none of them"],
         ["observation_time", "when the publisher served the retained package is not held, so no observation time is stated"],
         ["markup_and_notes", "the Formex markup, notes and tables are not served as structure; the text is the article's searchable text, in publisher order"],
+        ["annexes", EuropeAnnexesNotHeldReason],
     ];
 
     /// <summary>
@@ -5857,6 +5868,9 @@ internal sealed partial class V3CorpusMount : IDisposable
                     article_identity_sha256 = article.ArticleIdentitySha256,
                     publisher_id = article.PublisherIdentifier,
                 }).ToArray(),
+                annexes_not_served = EuropeAnnexesNotServed(
+                    articles.Select(static article => article.ObjectRefSha256), wording.ExpressionId,
+                    () => EuropeOfficialSourceOf(articles, wording.WorkId)),
             };
         }).ToArray();
 
