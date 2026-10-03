@@ -89,6 +89,23 @@ jobs:
         with:
           name: s0-05-windows-logical
           path: artifacts/s0-05/windows
+      # TEMPORARY (removed before merge): render the evaluation card this branch's gates measure, as an artifact.
+      - name: Render the evaluation card (temporary)
+        shell: bash
+        run: |
+          set -uo pipefail
+          dotnet restore Lex.V3.slnx --locked-mode
+          dotnet build Lex.V3.slnx --configuration Release --no-restore
+          V3_RENDER_EVALUATION_CARD=1 dotnet test tests/Lex.V3.Ingest.Tests/Lex.V3.Ingest.Tests.csproj --configuration Release --no-restore --no-build             --filter "FullyQualifiedName~TheEvaluationCardIsWhatTheMachineGatesMeasureNow" || true
+          mkdir -p "$RUNNER_TEMP/rendered-card"
+          cp schemas/v3-platform/evaluation-card.json "$RUNNER_TEMP/rendered-card/"
+          git checkout -- schemas/v3-platform/evaluation-card.json
+      - name: Upload the rendered evaluation card (temporary)
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: rendered-evaluation-card
+          path: ${{ runner.temp }}/rendered-card/
       - name: Locked restore, build, full tests, and V3 tree
         shell: bash
         run: |
