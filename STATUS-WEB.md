@@ -2388,17 +2388,21 @@ by the API:
 - by keyboard alone, on the pages the API itself serves (`--keyboard --served-by-api`), for both mounts: Tab
   reaches every field, every character arrives by a key press, every focus stop shows where focus is, and the
   served pages carry their security headers (review of #914).
-It is not yet a required check: it becomes one once it has passed on the base. The new journey steps the
+It became a required check of `v3/integration` on 2026-10-03, once it had passed on the base (push run
+37089873768): the required checks are `dotnet`, `web`, `canon-windows` and `journeys`. The new journey steps the
 specification's J1 to J8 ask for (a search with no hit, a law the corpus does not hold, the contained assistant,
 MCP and events) follow, each proved in this job.
 
 The specification's journeys (the review pack's `05-user-journeys.md`) mapped onto the suite (sole driver,
 2026-10-03): J1 is the reading step (every article permalink verified), J3 compare, J4 export, J8's radar
-the radar step. J3 and J8's radar are walked in their no-change form only: the fixture mount holds one state,
-so the compare step asks one date twice ("The same version applied on both dates.") and the radar's one-day
-window shows that state "not compared: the first state this index holds"; a comparison of two different
-states and a compared radar row are held by unit tests only (#783, #787) until a two-state mount joins the
-job (review of #915). What the eight steps did not walk now runs on the fixture mount too, in the browser
+the radar step. On the fixture mount, which holds one state, J3 and J8's radar are walked in their no-change
+form (the compare step asks one date twice, "The same version applied on both dates."; the radar's one-day
+window shows that state "not compared: the first state this index holds"). The two-state journey mount
+(`TheTwoStateJourneyMountHoldsALaterStateWithOneArticleAmended`: the fixture's work with a later state dated
+2025-01-01 in which one article is amended) walks them with a real change, by pointer and by keyboard: J3
+compares the two states ("1 changed, 0 added, 0 removed", the amended article named as changed) and J8's radar
+lists the later state compared with the one it replaced ("wording changed from the state of 2024-02-01").
+What the eight steps did not walk now runs on the fixture mount too, in the browser
 (J1's refusal, J2, J5) or as API checks in the same job (J6, J7, J8's events):
 - J1's refusal: the reading asked for 2019-03-15, before the work's one state, refuses `no_version_for_date`,
   saying no earlier state is held and where the history begins;
@@ -2439,8 +2443,14 @@ The web lane's order since the owner's proxy's journey corrections (2026-10-01 1
 3. The EU time view (`as_of`, `timeline`, history, compare, radar) on the data lane's EU states table
    as it lands, the API and screens built against its schema early.
 4. When the queue is clear: the image-only annex control case (search, quote and export keep it out,
-   officially linked; a real candidate is the 2024/1620 annex the three-seed retry retained), and the
-   J1 to J8 mapping.
+   officially linked), and the J1 to J8 mapping (done above, 2026-10-03). The 2024/1620 annexes the
+   three-seed retry retained are structured text, not image-only (`C:\lex-v3\lanes\image-only-annex-handoff.md`,
+   `annex-2024-1620-control-audit.json`), so they are no candidate; no real image-only EU annex is held on this
+   machine yet. Today an image-only annex is the corpus outcome `annex_text_not_available` on its work's
+   member, copied into the EU index's member row, and annexes never become articles, so search, quotes and
+   exports leave them out by construction; nothing past the corpus tests it, and the annex's official PDF
+   address is not kept, so no answer can yet say "text not available, officially linked" for an annex. Next:
+   a synthetic end-to-end control case, then the official link carried into the index and answered.
 A pull request that does not move a launch-contract line, or directly unblock one, waits. Merges take
 turns through `C:\lex-v3\lanes\MERGE-LOCK`, and related work goes in one bigger pull request.
 

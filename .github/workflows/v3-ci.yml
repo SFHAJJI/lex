@@ -496,15 +496,17 @@ jobs:
       - name: Publish the API
         shell: bash
         run: dotnet publish src/Lex.V3.Api/Lex.V3.Api.csproj --configuration Release --output "$RUNNER_TEMP/api" -v q
-      - name: Write the journey fixture and licence-blocked mounts
+      - name: Write the journey fixture, licence-blocked and two-state mounts
         shell: bash
         run: |
           set -euo pipefail
           V3_WRITE_JOURNEY_MOUNT="$RUNNER_TEMP/journey-mount" V3_WRITE_LICENCE_BLOCKED_MOUNT="$RUNNER_TEMP/licence-blocked-mount" \
+            V3_WRITE_TWO_STATE_JOURNEY_MOUNT="$RUNNER_TEMP/two-state-mount" \
             dotnet test tests/Lex.V3.Ingest.Tests/Lex.V3.Ingest.Tests.csproj --configuration Release -v q \
-            --filter "FullyQualifiedName~TheJourneyMountIsTheFixtureMountWrittenWhereTheJourneyAsks|FullyQualifiedName~TheLicenceBlockedMountIsTheFixtureMountWithANonAdmittingLicence"
+            --filter "FullyQualifiedName~TheJourneyMountIsTheFixtureMountWrittenWhereTheJourneyAsks|FullyQualifiedName~TheLicenceBlockedMountIsTheFixtureMountWithANonAdmittingLicence|FullyQualifiedName~TheTwoStateJourneyMountHoldsALaterStateWithOneArticleAmended"
           test -s "$RUNNER_TEMP/journey-mount/journey-mount.json"
           test -s "$RUNNER_TEMP/licence-blocked-mount/journey-mount.json"
+          test -s "$RUNNER_TEMP/two-state-mount/journey-mount.json"
       - name: The journeys over the fixture mount and with no mount
         shell: bash
         run: node web/scripts/journey.mjs --api "$RUNNER_TEMP/api" --mount "$RUNNER_TEMP/journey-mount" | tee "$RUNNER_TEMP/journeys-fixture.txt"
@@ -520,6 +522,13 @@ jobs:
       - name: The licence-blocked journeys by keyboard, the pages served by the API
         shell: bash
         run: node web/scripts/journey.mjs --api "$RUNNER_TEMP/api" --mount "$RUNNER_TEMP/licence-blocked-mount" --keyboard --served-by-api | tee "$RUNNER_TEMP/journeys-licence-blocked-keyboard-served.txt"
+      # Journeys J3 and J8 with a real change: two states of the work, one article amended in the later.
+      - name: The two-state journeys, by pointer and by keyboard on the pages the API serves
+        shell: bash
+        run: |
+          set -euo pipefail
+          node web/scripts/journey.mjs --api "$RUNNER_TEMP/api" --mount "$RUNNER_TEMP/two-state-mount" | tee "$RUNNER_TEMP/journeys-two-state.txt"
+          node web/scripts/journey.mjs --api "$RUNNER_TEMP/api" --mount "$RUNNER_TEMP/two-state-mount" --keyboard --served-by-api | tee "$RUNNER_TEMP/journeys-two-state-keyboard-served.txt"
       - name: Upload the journey reports
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02

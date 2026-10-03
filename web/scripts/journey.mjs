@@ -1214,6 +1214,30 @@ export async function apiJourneyRuns(apiOutput, mount) {
 }
 
 /**
+ * The two-state mount (`journey-mount.json` names `later_date`): the fixture's work with a later state in which
+ * one article is amended. Journey J3 compares the two states and journey J8's radar lists the later state compared
+ * with the one it replaced, each showing that change (review of #915: the one-state fixture shows neither).
+ */
+export function twoStateExpectations(journeyMount) {
+  const { first_date: first, later_date: later, amended_article: amended } = journeyMount;
+  const compare = Object.freeze({
+    ...JOURNEY_STEPS.compare,
+    typed: Object.freeze([DOSSIER_IDENTIFIER, first, later]),
+    body: Object.freeze({ operation_id: "diff", parameters: Object.freeze({ identifier: DOSSIER_IDENTIFIER, date_from: first, date_to: later }) }),
+  });
+  const radar = Object.freeze({
+    ...JOURNEY_STEPS.radar,
+    typed: Object.freeze([first, later]),
+    body: Object.freeze({ operation_id: "changes_in_period", parameters: Object.freeze({ date_from: first, date_to: later }) }),
+  });
+  const counts = "1 changed, 0 added, 0 removed";
+  return [
+    ["J3, two states compared", { step: compare, state: "success", texts: [`${journeyMount.work_key.split("/").pop()}: ${first} against ${later}.`, counts, `${amended}: changed`] }],
+    ["J8, the period's change on the radar", { step: radar, state: "success", texts: [`wording changed from the state of ${first}`, `: ${counts}`] }],
+  ];
+}
+
+/**
  * The EU search step on the fixture mount, which holds no EU index: the page must show the refusal card
  * `no_corpus_mounted`, naming the EU index as the one missing.
  */
@@ -1248,8 +1272,10 @@ async function main(argv) {
   if (!(await readdir(apiOutput)).includes("Lex.V3.Api.dll")) throw new Error(`${apiOutput} holds no Lex.V3.Api.dll`);
   const realMount = argv.includes("--real-mount");
   const journeyMount = realMount ? null : JSON.parse(await readFile(join(mount, "journey-mount.json"), "utf8"));
-  // A fixture mount that names a rights disposition is the licence-blocked mount.
+  // A fixture mount that names a rights disposition is the licence-blocked mount; one that names a later date is the
+  // two-state mount.
   const licenceBlocked = journeyMount?.rights_disposition !== undefined;
+  const twoState = journeyMount?.later_date !== undefined;
   // `--live-root` serves a directory built elsewhere instead of building one: how a deliberately
   // broken page is shown to fail the journey.
   const liveRoot = argv.includes("--live-root") ? argument("--live-root") : await buildLive();
@@ -1259,7 +1285,11 @@ async function main(argv) {
   const results = [];
   if (realMount) results.push(...await realMountRuns(apiOutput, mount, { servedByApi, keyboard }, browser, liveRoot));
   else if (licenceBlocked) results.push(...await licenceBlockedRuns(apiOutput, mount, { servedByApi, keyboard }, browser, liveRoot));
-  else {
+  else if (twoState) {
+    for (const [name, expected] of twoStateExpectations(journeyMount)) {
+      results.push([`${name}, with the two-state mount`, await run(apiOutput, mount, { servedByApi, keyboard, ...expected }, browser, liveRoot)]);
+    }
+  } else {
     // Each step with the fixture mount, then with no mount, where every page shows the refusal card.
     for (const [name, expected] of fixtureMountExpectations(journeyMount)) {
       results.push([`${name}, with the fixture mount`, await run(apiOutput, mount, { servedByApi, keyboard, ...expected }, browser, liveRoot)]);
@@ -1275,7 +1305,7 @@ async function main(argv) {
   }
   // Journeys J6, J7 and J8 at the API (no page asks the contained assistant or MCP, or polls events), on the
   // fixture mount.
-  const apiResults = realMount || licenceBlocked ? [] : await apiJourneyRuns(apiOutput, mount);
+  const apiResults = realMount || licenceBlocked || twoState ? [] : await apiJourneyRuns(apiOutput, mount);
   let failed = false;
   for (const [label, failures] of apiResults) {
     console.log(`${label}: ${failures.length === 0 ? "PASS" : "FAIL"}`);
