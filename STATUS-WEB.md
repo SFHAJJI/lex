@@ -2433,6 +2433,15 @@ route to nothing; J6 is held at the API, where the containment is decided. The p
 not offered on the `identifier_unknown` card: the handoff registry admits no real host yet (`HANDOFF_HOSTS`), and
 adding one is an editorial decision recorded when it is made.
 
+
+A failed file watch is a failure the run states, never a crash. The base's push run of 67bae40e lost its `journeys`
+job to an unhandled `ENOENT ... scandir` from the recursive watch on the API's temporary directory. That directory
+was removed while the watch was still open. The API journeys never stopped their watch, and a run that threw closed
+the API before stopping it. Now:
+- the watch records an error as an `["error", message]` event;
+- the verdict says "the file watch failed, so the run cannot say the API touched no file";
+- `stop()` answers the same events however often it is called;
+- the API's `close()` stops the watch before removing its directory.
 ## EU annexes in the answers (sole driver, 2026-10-03)
 
 An EU annex never becomes an article of the EU index, so no annex text is searched, quoted or exported. Until now

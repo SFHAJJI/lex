@@ -302,6 +302,36 @@ test("a file written and deleted while the run is watched fails it, though both 
   }
 });
 
+test("a file watch that failed fails the run with its reason, never as a file the API touched", () => {
+  const observed = goodSearch();
+  const expected = { origin: ORIGIN, step: JOURNEY_STEPS.search, state: "success" };
+  const message = "ENOENT: no such file or directory, scandir '/tmp/lex-journey-api-x/runtimes/linux-musl-arm64'";
+  const failures = journeyVerdict({ ...observed, api: { output: "", changedFiles: [], fileEvents: [["error", message]] } }, expected);
+  assert.deepEqual(failures, [`the file watch failed, so the run cannot say the API touched no file: ${message}`],
+    "a failed watch is said as a failed watch, not as a file the API touched");
+});
+
+test("a watch that fails is recorded as an event, not thrown, and its stop is one promise however often it is asked (review of #921)", async () => {
+  // The watch the journeys hold is replaced by one this test fails at will: the base's push run of 67bae40e died of
+  // the error this emits, unhandled, when a recursive watch on Linux walked a directory being removed.
+  const fs = await import("node:fs");
+  const { syncBuiltinESMExports } = await import("node:module");
+  const { EventEmitter } = await import("node:events");
+  const original = fs.default.watch;
+  const failing = Object.assign(new EventEmitter(), { close() {} });
+  fs.default.watch = () => failing;
+  syncBuiltinESMExports();
+  try {
+    const watched = watchFiles("a directory the stub never reads");
+    failing.emit("error", new Error("ENOENT: no such file or directory, scandir"));
+    assert.equal(watched.stop(), watched.stop(), "the run and the API's close get one stop, not two");
+    assert.deepEqual(await watched.stop(), [["error", "ENOENT: no such file or directory, scandir"]]);
+  } finally {
+    fs.default.watch = original;
+    syncBuiltinESMExports();
+  }
+});
+
 test("the answer is held to a polite live region that exists before it arrives (the screen-reader path)", () => {
   const observed = { ...goodSearch(), liveRegion: { atLoad: "polite", atEnd: "polite" } };
   const expected = { origin: ORIGIN, step: JOURNEY_STEPS.search, state: "success" };

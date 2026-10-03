@@ -383,7 +383,10 @@ export function journeyVerdict(observed, expected) {
     if (observed.api.output.includes("127.0.0.1")) failures.push("the API process recorded an address");
     if (observed.api.output.trim() !== "") failures.push(`the API process wrote output during the run: ${observed.api.output.trim().slice(0, 200)}`);
     if (observed.api.changedFiles.length > 0) failures.push(`the API process wrote files: ${observed.api.changedFiles.join(", ")}`);
-    const touched = [...new Set((observed.api.fileEvents ?? []).map(([, path]) => path))];
+    const fileEvents = observed.api.fileEvents ?? [];
+    const watchErrors = fileEvents.filter(([event]) => event === "error").map(([, message]) => message);
+    if (watchErrors.length > 0) failures.push(`the file watch failed, so the run cannot say the API touched no file: ${watchErrors.join("; ")}`);
+    const touched = [...new Set(fileEvents.filter(([event]) => event !== "error").map(([, path]) => path))];
     if (touched.length > 0) failures.push(`the API process touched files while serving the run: ${touched.join(", ")}`);
   }
   if (expected.servedByApi) {
@@ -480,16 +483,27 @@ async function freePort() {
  * Every change the file system reports under a directory from now until `stop()`, as `[event, path]`.
  * Two listings, one before and one after, cannot see a file written and deleted between them (review
  * of #801); a watch held for the whole interval does.
+ *
+ * A watch that fails is reported as an `["error", message]` event, which the verdict says, instead of an
+ * unhandled error that ends the whole process: on Linux a recursive watch walks the directories under it,
+ * and one removed while it walks fails it (`ENOENT ... scandir`, the base's push run of 67bae40e, where the
+ * API's directory was removed while its watch was still open). `stop()` may be called more than once, and
+ * answers the same events each time.
  */
 export function watchFiles(root) {
   const events = [];
   const watcher = watch(root, { recursive: true }, (event, name) => { events.push([event, String(name ?? "")]); });
+  watcher.on("error", (error) => { events.push(["error", String(error?.message ?? error)]); });
+  let stopped = null;
   return {
-    async stop() {
-      // The system reports a change after it happens; a short wait lets the last ones arrive.
-      await new Promise((resolve) => setTimeout(resolve, 250));
-      watcher.close();
-      return events;
+    stop() {
+      stopped ??= (async () => {
+        // The system reports a change after it happens; a short wait lets the last ones arrive.
+        await new Promise((resolve) => setTimeout(resolve, 250));
+        watcher.close();
+        return events;
+      })();
+      return stopped;
     },
   };
 }
@@ -535,14 +549,18 @@ export async function startApi(apiOutput, mount, webRoot = null) {
       });
       if (answer.status === 200) {
         const filesAtStart = await listFiles(home);
+        const fileWatch = watchFiles(home);
         return {
-          origin, child, stderr: () => stderr, output: () => output, outputAtStart: output.length, fileWatch: watchFiles(home),
+          origin, child, stderr: () => stderr, output: () => output, outputAtStart: output.length, fileWatch,
           /** The files under the API's directory that were added or changed since it first answered. */
           async changedFiles() {
             const filesAtEnd = await listFiles(home);
             return [...filesAtEnd].filter(([path, facts]) => filesAtStart.get(path) !== facts).map(([path]) => path);
           },
           async close() {
+            // The watch ends before its directory is removed, whether or not the run stopped it (a run that
+            // threw, or the API journeys, which watch nothing): removing a watched directory can fail its watch.
+            await fileWatch.stop();
             child.kill();
             await new Promise((resolve) => setTimeout(resolve, 500));
             await rm(home, { recursive: true, force: true }).catch(() => {});
