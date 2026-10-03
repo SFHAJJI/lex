@@ -2375,6 +2375,23 @@ contract's line "Chrome in FR and EN; DE and LB answer `localization_unavailable
   - the platform's English stays English: if the EU authenticity statement is ever localized, the
     review's term is "fait foi".
 
+## The journeys in CI (sole driver, 2026-10-03)
+
+The launch line "Journeys J1 to J8 pass in a real browser" was evidenced only by runs on the driver's machine, which
+cannot start a browser while a population acquisition holds its memory. CI's new `journeys` job runs the suite on
+every pull request: the API published from the commit, the journey fixture and licence-blocked mounts written by
+their tests, and `web/scripts/journey.mjs` over each in the runner's Chrome, every citation a page prints verified
+by the API:
+- by pointer, on pages served by the Node test server (`serve-live.mjs`): the fixture mount's eight steps, the
+  same with no mount, and the two EU steps, which end in `no_corpus_mounted` because the fixture mount holds no
+  EU index (so CI exercises no EU answer, citation or acknowledgement); the licence-blocked mount's eight steps;
+- by keyboard alone, on the pages the API itself serves (`--keyboard --served-by-api`), for both mounts: Tab
+  reaches every field, every character arrives by a key press, every focus stop shows where focus is, and the
+  served pages carry their security headers (review of #914).
+It is not yet a required check: it becomes one once it has passed on the base. The new journey steps the
+specification's J1 to J8 ask for (a search with no hit, a law the corpus does not hold, the contained assistant,
+MCP and events) follow, each proved in this job.
+
 ## Next, in order (web lane; the data lane's items 1 to 3 are in STATUS-DATA.md)
 
 The web lane's order since the owner's proxy's journey corrections (2026-10-01 14:30 UTC,

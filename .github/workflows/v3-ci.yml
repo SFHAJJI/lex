@@ -466,6 +466,68 @@ jobs:
       - run: npm test
         working-directory: web
 
+  journeys:
+    name: journeys
+    # The launch contract's "Journeys J1 to J8 pass in a real browser", on every pull request: the journey suite
+    # (web/scripts/journey.mjs) runs the live pages against the API published from this commit, in the runner's
+    # Chrome, over the journey fixture mount and with no mount, then over the licence-blocked mount, every
+    # citation a page prints verified by the API. It needs no driver's machine, so a step is proved before it
+    # merges.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+          ref: ${{ env.CANDIDATE_SHA }}
+      - name: Verify exact candidate checkout
+        shell: bash
+        run: test "$(git rev-parse HEAD)" = "$CANDIDATE_SHA"
+      - uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1 # v5
+        with:
+          global-json-file: global.json
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: npm ci
+        working-directory: web
+      - name: Publish the API
+        shell: bash
+        run: dotnet publish src/Lex.V3.Api/Lex.V3.Api.csproj --configuration Release --output "$RUNNER_TEMP/api" -v q
+      - name: Write the journey fixture and licence-blocked mounts
+        shell: bash
+        run: |
+          set -euo pipefail
+          V3_WRITE_JOURNEY_MOUNT="$RUNNER_TEMP/journey-mount" V3_WRITE_LICENCE_BLOCKED_MOUNT="$RUNNER_TEMP/licence-blocked-mount" \
+            dotnet test tests/Lex.V3.Ingest.Tests/Lex.V3.Ingest.Tests.csproj --configuration Release -v q \
+            --filter "FullyQualifiedName~TheJourneyMountIsTheFixtureMountWrittenWhereTheJourneyAsks|FullyQualifiedName~TheLicenceBlockedMountIsTheFixtureMountWithANonAdmittingLicence"
+          test -s "$RUNNER_TEMP/journey-mount/journey-mount.json"
+          test -s "$RUNNER_TEMP/licence-blocked-mount/journey-mount.json"
+      - name: The journeys over the fixture mount and with no mount
+        shell: bash
+        run: node web/scripts/journey.mjs --api "$RUNNER_TEMP/api" --mount "$RUNNER_TEMP/journey-mount" | tee "$RUNNER_TEMP/journeys-fixture.txt"
+      - name: The journeys over the licence-blocked mount
+        shell: bash
+        run: node web/scripts/journey.mjs --api "$RUNNER_TEMP/api" --mount "$RUNNER_TEMP/licence-blocked-mount" | tee "$RUNNER_TEMP/journeys-licence-blocked.txt"
+      # The same runs by keyboard alone (Tab reaches every field, every character arrives by a key press, every
+      # focus stop shows where focus is), on the pages the API itself serves (ruling 3's production arrangement,
+      # held to its security headers): the launch contract's keyboard path and the served pages' headers.
+      - name: The journeys by keyboard, the pages served by the API, over the fixture mount and with no mount
+        shell: bash
+        run: node web/scripts/journey.mjs --api "$RUNNER_TEMP/api" --mount "$RUNNER_TEMP/journey-mount" --keyboard --served-by-api | tee "$RUNNER_TEMP/journeys-fixture-keyboard-served.txt"
+      - name: The licence-blocked journeys by keyboard, the pages served by the API
+        shell: bash
+        run: node web/scripts/journey.mjs --api "$RUNNER_TEMP/api" --mount "$RUNNER_TEMP/licence-blocked-mount" --keyboard --served-by-api | tee "$RUNNER_TEMP/journeys-licence-blocked-keyboard-served.txt"
+      - name: Upload the journey reports
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: journeys
+          path: ${{ runner.temp }}/journeys-*.txt
+          if-no-files-found: ignore
+
   image-rehearsal:
     name: image-rehearsal
     # The release pipeline's credential-free rehearsal (web/scripts/image-rehearsal.mjs), without its WSL
