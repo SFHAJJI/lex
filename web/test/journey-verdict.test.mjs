@@ -301,6 +301,27 @@ test("a file written and deleted while the run is watched fails it, though both 
   }
 });
 
+test("a file watch that failed fails the run with its reason, and a watch stopped twice answers the same events", async () => {
+  const observed = goodSearch();
+  const expected = { origin: ORIGIN, step: JOURNEY_STEPS.search, state: "success" };
+  const message = "ENOENT: no such file or directory, scandir '/tmp/lex-journey-api-x/runtimes/linux-musl-arm64'";
+  const failures = journeyVerdict({ ...observed, api: { output: "", changedFiles: [], fileEvents: [["error", message]] } }, expected);
+  assert.deepEqual(failures, [`the file watch failed, so the run cannot say the API touched no file: ${message}`],
+    "a failed watch is said as a failed watch, not as a file the API touched");
+
+  const { mkdtemp, rm } = await import("node:fs/promises");
+  const { tmpdir } = await import("node:os");
+  const { join } = await import("node:path");
+  const home = await mkdtemp(join(tmpdir(), "lex-journey-watch-"));
+  try {
+    const watched = watchFiles(home);
+    const first = await watched.stop();
+    assert.equal(await watched.stop(), first, "the API's close stops a watch the run already stopped, and gets the same events");
+  } finally {
+    await rm(home, { recursive: true, force: true });
+  }
+});
+
 test("the answer is held to a polite live region that exists before it arrives (the screen-reader path)", () => {
   const observed = { ...goodSearch(), liveRegion: { atLoad: "polite", atEnd: "polite" } };
   const expected = { origin: ORIGIN, step: JOURNEY_STEPS.search, state: "success" };
