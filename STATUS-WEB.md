@@ -2386,6 +2386,23 @@ the API. It is not yet a required check: it becomes one once it has passed on th
 specification's J1 to J8 ask for (a search with no hit, a law the corpus does not hold, the contained assistant,
 MCP and events) follow, each proved in this job.
 
+The specification's journeys (the review pack's `05-user-journeys.md`) mapped onto the suite (sole driver,
+2026-10-03): J1 is the reading step (every article permalink verified), J3 compare, J4 export, J8's radar
+the radar step; what the eight steps did not walk now runs on the fixture mount too:
+- J1's refusal: the reading asked for 2019-03-15, before the work's one state, refuses `no_version_for_date`,
+  saying no earlier state is held and where the history begins;
+- J2: a citizen's question searched as typed ("combien de jours de congé j'ai le droit quand mon père est
+  décédé") answers with no hit, and the search page now says, under its no-hit sentence, the refusal card's
+  absence note ("It is not evidence that the instrument or the law does not exist."), in the reviewed French
+  on the French pages;
+- J4: the export pins three articles, not one ("3 articles pinned: 3 exported with text, 0 excluded.");
+- J5: the dossier asked for "Circulaire CSSF 20/747" refuses `identifier_unknown` with the population this
+  build searched and the absence note.
+Still to come: J2's hand-off to the contained assistant and J6 (an ask page, which no live page has yet), J7
+(REST and MCP answering one envelope, API-level) and J8's events. The publishers' own search pages are not
+offered on the `identifier_unknown` card: the handoff registry admits no real host yet (`HANDOFF_HOSTS`), and
+adding one is an editorial decision recorded when it is made.
+
 ## Next, in order (web lane; the data lane's items 1 to 3 are in STATUS-DATA.md)
 
 The web lane's order since the owner's proxy's journey corrections (2026-10-01 14:30 UTC,

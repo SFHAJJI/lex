@@ -8,6 +8,7 @@ import test from "node:test";
 
 import {
   DOSSIER_IDENTIFIER,
+  EARLY_READING_DATE,
   EU_DOSSIER_ON_FIXTURE,
   EU_DOSSIER_STEP,
   EU_SEARCH_IDENTIFIER,
@@ -16,13 +17,16 @@ import {
   EU_SEARCH_STEP,
   HISTORY_ANCHOR,
   JOURNEY_STEPS,
+  NO_HIT_SEARCH_STEP,
   READING_DATE,
   SEARCH_PHRASE,
+  UNKNOWN_LAW,
   expectedFromEnvelope,
   fixtureMountExpectations,
   journeyVerdict,
   pinnedCitation,
   realMountSteps,
+  specificationJourneyExpectations,
   EU_READING_DATE,
   EU_READING_STEP,
   watchFiles,
@@ -228,6 +232,7 @@ test("a radar run types two dates and is held to exactly those in the body", () 
 
 test("an export run reads, pins, and is held to the composed export and to its one request", () => {
   assert.deepEqual(JOURNEY_STEPS.export.typed, [DOSSIER_IDENTIFIER, READING_DATE]);
+  assert.equal(JOURNEY_STEPS.export.then.count, 3, "journey J4: an answer across several provisions, three pinned for one export");
   assert.deepEqual(JOURNEY_STEPS.export.body, JOURNEY_STEPS.reading.body, "the export asks the reading, and nothing else");
   const observed = goodSearch();
   observed.requests = [
@@ -546,4 +551,36 @@ test("a keyboard run that chooses an option counts the select among the fields T
   assert.deepEqual(journeyVerdict(observed, expected), []);
   assert.ok(journeyVerdict({ ...observed, keyboard: { ...observed.keyboard, placed: 2 } }, expected).includes("Tab reached 2 of the form's 3 fields"),
     "a select never reached fails as a field never reached");
+});
+
+test("the specification's journeys the eight steps do not walk are held to their own outcome: J1's refusal, J2's no hit, J5's law not held", () => {
+  const expectations = specificationJourneyExpectations();
+  assert.deepEqual(expectations.map(([name]) => name.slice(0, 2)), ["J1", "J2", "J5"]);
+  for (const [name, expected] of expectations) {
+    assert.equal(expected.step.body.operation_id, expected.step.operation, name);
+    assert.ok(expected.texts.length > 0, `${name} names the texts it must show`);
+  }
+  const byJourney = Object.fromEntries(expectations.map(([name, expected]) => [name.slice(0, 2), expected]));
+  assert.deepEqual(byJourney.J1.step.body.parameters, { identifier: DOSSIER_IDENTIFIER, date: EARLY_READING_DATE });
+  assert.ok(EARLY_READING_DATE < READING_DATE, "J1 asks a date before the fixture's one state");
+  assert.equal(byJourney.J1.refusalCode, "no_version_for_date");
+  assert.equal(byJourney.J2.state, "success");
+  assert.equal(byJourney.J2.nothingToCite, true, "a search with no hit cites nothing, and says so");
+  assert.equal(byJourney.J5.refusalCode, "identifier_unknown");
+  assert.deepEqual(byJourney.J5.step.body.parameters, { identifier: UNKNOWN_LAW });
+
+  // J2's page with no hit is excused from citing only because it says it holds nothing, and it must say that
+  // the absence is not evidence that the law does not exist.
+  const observed = goodSearch();
+  observed.requests = [
+    { url: `${ORIGIN}/search.html`, method: "GET", headers: {} },
+    { url: `${ORIGIN}/api/v3/search`, method: "POST", headers: {}, headersSent: true, postData: JSON.stringify(NO_HIT_SEARCH_STEP.body) },
+  ];
+  observed.text = byJourney.J2.texts.join(" ");
+  observed.citations = [];
+  observed.emptyAnswer = true;
+  const expected = { origin: ORIGIN, ...byJourney.J2 };
+  assert.deepEqual(journeyVerdict(observed, expected), []);
+  assert.ok(journeyVerdict({ ...observed, emptyAnswer: false }, expected).includes("the page printed no citation"), "a page that does not say it holds nothing must cite");
+  assert.ok(journeyVerdict({ ...observed, text: byJourney.J2.texts[0] }, expected).some((failure) => /It is not evidence/.test(failure)), "the absence note is required");
 });

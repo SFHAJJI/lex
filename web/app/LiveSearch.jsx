@@ -189,13 +189,17 @@ export function SearchResultsView({ view, onNextPage }) {
       <SearchWorkResolution resolution={view.workResolution} />
       {europe ? <EuropeWording view={view} /> : <AmbiguousWorks works={view.ambiguousWorks} date={view.date} />}
       {view.hits.length === 0 ? (
-        view.searchableTextHeld ? (
-          <p data-no-hit=""><Say template={COPY.noHit} values={{ query: view.query }} /> {inEnglish(asSentence(view.matching))}</p>
-        ) : (
-          <p data-no-hit="">
-            <Say template={COPY.noText} values={{ language: view.language, languages: view.searchableLanguages.join(', ') }} />
-          </p>
-        )
+        <>
+          {view.searchableTextHeld ? (
+            <p data-no-hit=""><Say template={COPY.noHit} values={{ query: view.query }} /> {inEnglish(asSentence(view.matching))}</p>
+          ) : (
+            <p data-no-hit="">
+              <Say template={COPY.noText} values={{ language: view.language, languages: view.searchableLanguages.join(', ') }} />
+            </p>
+          )}
+          {/* A search with no hit is not evidence that the law does not exist, said as the refusal card says it (journey J2). */}
+          <p data-absence-note="">{liveChrome().refusalCard.absenceNote}</p>
+        </>
       ) : (
         <>
           <p lang={ENGLISH_LANG}>{asSentence(view.pageIs)} {asSentence(view.hitUnit)}</p>

@@ -189,8 +189,9 @@ export const JOURNEY_STEPS = Object.freeze({
     cites: true,
     operation: "evidence_bundle",
     typed: Object.freeze([DOSSIER_IDENTIFIER, READING_DATE]),
-    // Once the reading has answered: pin the first article, and the export must be composed.
-    then: Object.freeze({ click: "input[data-pin]", until: "[data-export-state=composed]" }),
+    // Once the reading has answered: pin the first three articles (journey J4, an answer across several
+    // provisions), and the export must be composed.
+    then: Object.freeze({ click: "input[data-pin]", count: 3, until: "[data-export-state=composed]" }),
     body: Object.freeze({
       operation_id: "evidence_bundle",
       parameters: Object.freeze({ identifier: DOSSIER_IDENTIFIER, date: READING_DATE }),
@@ -793,9 +794,16 @@ async function observe(browser, pageOrigin, step, { keyboard = false } = {}) {
     // reach its state before the deadline.
     let then;
     if (step.then !== undefined && answerState === "success") {
-      then = keyboard
-        ? await keyboardPin(session, sessionId, evaluate, keys.stops)
-        : await evaluate(`(() => { const node = document.querySelector(${JSON.stringify(step.then.click)}); if (node === null) return "absent"; node.click(); return "clicked"; })()`);
+      // `count` matches are clicked, the first first (journey J4 pins several provisions); one when it is not given.
+      const count = step.then.count ?? 1;
+      if (keyboard) {
+        for (let pinned = 0; pinned < count; pinned += 1) {
+          then = await keyboardPin(session, sessionId, evaluate, keys.stops);
+          if (then !== "clicked") break;
+        }
+      } else {
+        then = await evaluate(`(() => { const nodes = [...document.querySelectorAll(${JSON.stringify(step.then.click)})].slice(0, ${count}); if (nodes.length < ${count}) return "absent"; for (const node of nodes) node.click(); return "clicked"; })()`);
+      }
       while (then === "clicked" && Date.now() < deadline) {
         if (await evaluate(`document.querySelector(${JSON.stringify(step.then.until)}) !== null`)) then = "reached";
         else await new Promise((resolve) => setTimeout(resolve, 100));
@@ -974,7 +982,59 @@ export function fixtureMountExpectations(journeyMount) {
     ["history", { step: history, state: "success", texts: [`${HISTORY_ANCHOR} in loi-1991-08-10-n3`, "Carried by 1 held state, from 2024-02-01", "first held wording"] }],
     ["compare", { step: compare, state: "success", texts: [`loi-1991-08-10-n3: ${READING_DATE} against ${READING_DATE}.`, "The same version applied on both dates."] }],
     ["radar", { step: radar, state: "success", texts: [`${READING_DATE} to ${READING_DATE}: 1 state of 1 work, of 1 held.`, "not compared: the first state this index holds"] }],
-    ["export", { step: exporting, state: "success", texts: ["1 article pinned: 1 exported with text, 0 excluded.", EXPORT_WATERMARK, "Text served under agreed_same_run_cc_by."] }],
+    ["export", { step: exporting, state: "success", texts: ["3 articles pinned: 3 exported with text, 0 excluded.", EXPORT_WATERMARK, "Text served under agreed_same_run_cc_by."] }],
+  ];
+}
+
+/** Journey J1's refusal: a reading asked for a date before the work's first held state. */
+export const EARLY_READING_DATE = "2019-03-15";
+export const EARLY_READING_STEP = Object.freeze({
+  path: "/reading.html",
+  cites: true,
+  operation: "evidence_bundle",
+  typed: Object.freeze([DOSSIER_IDENTIFIER, EARLY_READING_DATE]),
+  body: Object.freeze({
+    operation_id: "evidence_bundle",
+    parameters: Object.freeze({ identifier: DOSSIER_IDENTIFIER, date: EARLY_READING_DATE }),
+  }),
+});
+
+/** Journey J2: a citizen's question searched as typed, which no held article carries. */
+export const NO_HIT_PHRASE = "combien de jours de congé j'ai le droit quand mon père est décédé";
+export const NO_HIT_SEARCH_STEP = Object.freeze({
+  path: "/search.html",
+  cites: true,
+  operation: "search",
+  typed: NO_HIT_PHRASE,
+  body: Object.freeze({ operation_id: "search", parameters: Object.freeze({ query: NO_HIT_PHRASE, language: "fra" }) }),
+});
+
+/** Journey J5: a law the corpus does not hold, asked for by its name. */
+export const UNKNOWN_LAW = "Circulaire CSSF 20/747";
+export const UNKNOWN_LAW_STEP = Object.freeze({
+  path: "/dossier.html",
+  cites: true,
+  operation: "dossier",
+  typed: UNKNOWN_LAW,
+  body: Object.freeze({ operation_id: "dossier", parameters: Object.freeze({ identifier: UNKNOWN_LAW }) }),
+});
+
+/**
+ * What the specification's journeys the eight steps do not walk must show on the fixture mount
+ * (the review pack's `05-user-journeys.md`; J3, J4 and J8's radar are the compare, export and radar steps):
+ * - J1, a date before the work's history: the reading refuses `no_version_for_date`, saying no earlier state
+ *   is held and where the history begins, never another date's text;
+ * - J2, a question no held article carries: the search answers with no hit, says what was matched, and that
+ *   this is not evidence that the law does not exist;
+ * - J5, a law the corpus does not hold: the dossier refuses `identifier_unknown`, with the population this
+ *   build searched and the same absence note.
+ */
+export function specificationJourneyExpectations() {
+  const absence = "It is not evidence that the instrument or the law does not exist.";
+  return [
+    ["J1, a date before the history", { step: EARLY_READING_STEP, state: "refusal", refusalCode: "no_version_for_date", texts: ["No earlier state is held: the requested date precedes this history.", "2024-02-01"] }],
+    ["J2, a question no article carries", { step: NO_HIT_SEARCH_STEP, state: "success", nothingToCite: true, texts: ["0 with the exact phrase, 0 with every word, in 0 works.", absence] }],
+    ["J5, a law not held", { step: UNKNOWN_LAW_STEP, state: "refusal", refusalCode: "identifier_unknown", texts: ["This build's Luxembourg index holds 1 Luxembourg work, with states dated from 2024-02-01 to 2024-02-01.", absence] }],
   ];
 }
 
@@ -1029,6 +1089,10 @@ async function main(argv) {
     for (const [name, expected] of fixtureMountExpectations(journeyMount)) {
       results.push([`${name}, with the fixture mount`, await run(apiOutput, mount, { servedByApi, keyboard, ...expected }, browser, liveRoot)]);
       results.push([`${name}, with no mount`, await run(apiOutput, null, { servedByApi, keyboard, step: expected.step, state: "refusal", refusalCode: "no_corpus_mounted" }, browser, liveRoot)]);
+    }
+    // The specification's journeys the eight steps do not walk (J1's refusal, J2, J5).
+    for (const [name, expected] of specificationJourneyExpectations()) {
+      results.push([`${name}, with the fixture mount`, await run(apiOutput, mount, { servedByApi, keyboard, ...expected }, browser, liveRoot)]);
     }
     // The EU steps: the fixture mount holds no EU index, so the EU work is refused for the EU corpus.
     results.push(["eu search, with the fixture mount", await run(apiOutput, mount, { servedByApi, keyboard, ...EU_SEARCH_ON_FIXTURE }, browser, liveRoot)]);
