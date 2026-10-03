@@ -4,6 +4,114 @@ Updated 2026-10-03. The web lane's progress, split out of STATUS.md (which keeps
 items and the pointers) by the standing order of 2026-10-01 13:50 UTC. Every pull request of the web lane
 updates this file, not STATUS.md.
 
+## The launch contract, line by line (2026-10-03)
+
+This section says where each line of LAUNCH-CONTRACT.md stands. No box is ticked: the contract holds on the exact
+tuple promoted to production, and that tuple is built from the complete populations. Four kinds of evidence appear
+below:
+- **CI:** the evidence runs on every pull request, over fixture mounts.
+- **Real data:** a run on real retained custody (STATUS-DATA.md).
+- **Bounded mount:** a run on the real bounded first mount (`C:\lex-v3\first-mount-decision95-restart-20260930`,
+  EU only), in the release rehearsal of 2026-10-01 (PR #862).
+- **Waits:** what the line still needs.
+
+**Promises to the reader**
+- **Every quote pinned, every citation verified.**
+  - CI: the `journeys` job verifies every citation the pages print, over four fixture mounts (the Luxembourg fixture,
+    licence-blocked, two-state, and the EU annex control).
+  - Bounded mount: 61 EU search citations and 1 dossier citation verified.
+  - Waits: the population mount.
+- **No dated request silently gets another date.**
+  - CI: the temporal set passes at 100 percent on the Luxembourg fixture mount (its `as_of` and `in_force_on`
+    arms), and its date-shift control catches a shifted set (`V3MachineGatesTests`).
+  - **Gap.** The temporal set measures Luxembourg only. EU dated answers have been served since #909: `as_of`,
+    `timeline`, and `evidence_bundle` at a date. They refuse `ambiguous_version` or `no_version_for_date` rather than
+    choose. `V3CorpusEuropeTimeViewTests` and `V3CorpusEuropeTimeViewBranchTests` hold that, but no case of the
+    contract's named evidence measures it, even once the populations land.
+  - Bounded mount: not measured, because it holds no Luxembourg state and the set has no EU cases.
+  - Waits: EU cases in the temporal set (below), and the Luxembourg population.
+- **Every absence typed.**
+  - CI: the refusal set, and the registry digest in every envelope.
+  - Bounded mount: 8 refusal cases pass (coverage and seven EU requests), with the shuffled control caught.
+  - The six codes no operation produces are recorded as driver decisions.
+  - Waits: the Luxembourg population. Every Luxembourg code is "not produced" on the bounded mount, so 9 of the 14
+    produced codes are measured on fixtures only.
+- **Image-only annexes stay out.** The control case holds at the API (#918), on the reading and dossier pages in a
+  browser (#919), and in the export (#920). No real image-only EU annex is held yet.
+- **Rights at compose time.** The evidence-bundle rights tests (`V3CorpusEvidenceBundleMountTests`, the refusal
+  gates), and the licence-blocked journeys in CI, by pointer and by keyboard.
+- **Luxembourg and EU dates never merged.** `date-speech.test.mjs`, per publisher, in English and in French (CI).
+- **No model retrieves, reranks or authors text.**
+  - `ask` answers `assistant_v3_unavailable` (J6 in CI, `AssistantContainmentTests`).
+  - `NoModelDependencyCensusTests` checks every production reference and package manifest.
+- **Byte-stable derivation.**
+  - Real data: two independent `Lex.V3.Tool derive` processes over real bounded custody reproduced every mount file
+    byte for byte. This happened twice on 2026-10-01: the March 2017 measurement, and #907's rederivation.
+  - CI: #899's two-process tests, and the release command's `derive-twice.test.mjs` (#911).
+  - The image: two builds give one manifest (#826; the bounded mount's rehearsal). That is image reproducibility,
+    over an already-derived mount.
+  - Waits: the complete populations' two derives. EU run 9 derives twice and compares when its acquisition ends.
+
+**Surface at launch**
+- **All 27 operations served or refusing with a typed reason the manifest states:** Luxembourg, and EU (#913).
+- **REST and MCP derive identical envelopes:** J7 compares 13 requests through both (CI).
+- **Events:** append-only, cursor polling, `answer_drift`, no webhooks: J8 (CI).
+- **The eight screens, and J1 to J8 in a real browser.**
+  - CI, on fixture mounts, in Chrome, by pointer and by keyboard: J1 to J5 and J8's radar (#914 to #916), and the EU
+    annex walks of #919 and #920.
+  - CI, as API checks in the same job, with no browser:
+    - J6: no live page asks `ask` while the assistant is contained, a reversible driver decision;
+    - J7;
+    - J8's event polling: no page polls events.
+
+    Reading the browser line as covering these is a reading the owner has to accept at sign-off.
+  - **Gap.** The real-mount mode (`--real-mount`) walks the eight steps and the three EU steps only. So J2's no-hit
+    search, J5's unknown law, J6, J7 and J8's events do not yet run on a real mount.
+  - Waits: the population mount, and that mode (below).
+- **Exports in PDF, JSON and CSV keep citations, rights, watermarks and exclusions:** Luxembourg (#789, #790) and EU
+  (#920).
+- **Chrome in French and English; German and Luxembourgish answer `localization_unavailable`; statute language
+  marked:** #912 and the chrome scans (CI).
+- **Accessibility.**
+  - No meaning by colour alone, linear diff, explicit dates, bracket tables whole: #811 (`live-a11y.test.mjs` and the
+    journey's paint check).
+  - Keyboard and screen-reader paths: #802, and the keyboard journeys (CI).
+- **Security headers on the real host; no query text, IP address or user agent recorded:**
+  - CI: checked on the pages the API serves.
+  - Waits: the deployment. The Azure subscription is disabled.
+
+**Data at launch**
+- **The complete EU population, English and French:** EU run 9, acquiring since 2026-10-02 22:17 UTC.
+- **The Luxembourg population:** follows run 9, one run after the other (`claude-lu-population-run.ps1`).
+- **Robots read per URL; the rights receipt fetched once per build on the Publications Office route; no request to
+  eur-lex.europa.eu; transport bytes retained before decode:** by construction in the acquisition (STATUS-DATA.md).
+
+**Release path**
+- **One command from custody to signed, published, read-back assets.**
+  - The rehearsal from an already-derived mount (`--mount`) passes with a rehearsal identity: on the bounded mount
+    (#862), and in CI's `image-rehearsal` job, on push.
+  - **Gap.** The release command's custody path (`--custody`, #911: derive twice from custody, compare every digest,
+    then build, sign and publish) has run only against a stand-in derive tool, in `derive-twice.test.mjs`.
+  - Waits: the populations' custody for its real run, and the owner's production signing identity.
+- **Zero-traffic deploy, probes, promotion, a second revision, rollback, V2 retired:** wait for Azure.
+- **Owner sign-off:** the owner's.
+
+**Evaluation at launch**
+- **Machine gates:**
+  - Bounded mount: the refusal and retrieval gates pass, with their shuffled controls caught, and V2 is absent from
+    the image.
+  - Waits: the temporal set waits for Luxembourg states and for EU cases, and the G1 to G5 replay waits for the
+    chained canary, after the populations.
+- **The evaluation card, with its statistical rows "not yet labelled":** on the Trust and Coverage page (#792; its
+  words joined the chrome table in #807), and with the release assets (#833; since #844 its gates are the release's
+  own mount's).
+
+**Gaps this table found (the review of #922), next:**
+1. EU cases in the temporal set, derived from the EU index's states table, so the contract's named evidence measures
+   EU dated selection, the owner's main use case. This can run on fixtures now and on the population mount later.
+2. A population-mount mode for J2, J5, J6, J7 and J8's events.
+3. The release command's custody path, end to end with the real derive tool, once the populations' custody exists.
+
 ## Served today
 
 REST at `/api/v3/`, from a mounted `v3-corpus` directory, **Luxembourg only**: `resolve`, `as_of`,
