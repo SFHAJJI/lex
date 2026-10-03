@@ -178,6 +178,17 @@ public sealed partial class EuropeIndexReader
                 .ThenBy(row => row.PublisherWorkIri, StringComparer.Ordinal).ToArray());
     }
 
+    /// <summary>
+    /// Every discovered work of every seed, validated as <see cref="ReadStates(string)"/> validates them, in state-identity
+    /// order: one read for a reader that maps an identifier to its seed.
+    /// </summary>
+    public IReadOnlyList<EuropeIndexState> ReadAllStates()
+    {
+        if (!HasStates) throw new InvalidOperationException("This historical EU index has no states table.");
+        lock (_gate)
+            return Array.AsReadOnly(ReadStates(_connection));
+    }
+
     public IReadOnlyList<EuropeIndexStateExpression> ReadStateExpressions(string seedCelex)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(seedCelex);

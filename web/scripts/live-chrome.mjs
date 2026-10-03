@@ -80,7 +80,7 @@ const EN = Object.freeze({
     title: "Reading",
     eyebrow: "Reading",
     heading: "The text on a date",
-    intro: "The text of one Luxembourg work as it stood on one date, article by article, as the publisher wrote it, with what a quotation of it needs. The identifier and the date go to this server in the request and nowhere else, and this page keeps nothing.",
+    intro: "The text of one Luxembourg work as it stood on one date, or the original wording of one EU work on its own date, article by article, as the publisher wrote it, with what a quotation of it needs. The identifier and the date go to this server in the request and nowhere else, and this page keeps nothing.",
     idle: "Type a work identifier and a date to read the text that applied on it.",
     rights: "Text served under {rights}. Read on {date}.",
     rightsIn: "Text served under {rights}. Read on {date} in {language}.",
@@ -94,6 +94,23 @@ const EN = Object.freeze({
     evidence: "Text digest {text}, body digest {body}, official source {source}, {permalink}",
     withoutText: "Held without text: {articles}.",
     notHeldHeading: "What this reading does not hold",
+    europeWordingHeading: "{celex}, {language}, the original wording of {date} (the act's date in the publisher's Formex package; no later wording is held)",
+    europeOriginalHeading: "{celex}, {language}, the original wording of {date} (the act's date in the publisher's Formex package)",
+    europeConsolidatedHeading: "{celex}, {language}, the consolidated wording of {date} (the publisher's consolidation date)",
+    europeHoldsUntil: "This wording answers the dates from {date} to the day before {next}, the date of the next wording.",
+    europeSameDateWorks: Object.freeze({
+      one: "{count} other publisher work carries this date: {held} with this same text held here, {notHeld} with no text held here.",
+      other: "{count} other publisher works carry this date: {held} with this same text held here, {notHeld} with no text held here.",
+    }),
+    europeUnplaced: Object.freeze({
+      one: "{count} wording of this act has no usable publisher date and is not placed in time: {held} with this same text held here, {notHeld} with no text held here.",
+      other: "{count} wordings of this act have no usable publisher date and are not placed in time: {held} with this same text held here, {notHeld} with no text held here.",
+    }),
+    europeLatest: "This is the latest wording held: it answers every later date, and an amendment the publisher has not yet consolidated is not in it.",
+    europeCounts: Object.freeze({
+      one: "{count} article quoted, {withoutText} held without text.",
+      other: "{count} articles quoted, {withoutText} held without text.",
+    }),
   }),
   history: Object.freeze({
     title: "Provision history",
@@ -207,6 +224,7 @@ const EN = Object.freeze({
     formatRefused: "{format} is not offered for this export: {reason}.",
     composeFailed: "This export cannot be composed: {reason}.",
     jsonSummary: "The JSON as it will be saved",
+    europeNotComposed: "This is EU text. Its export is not composed yet: the composer pins the articles of Luxembourg works only, so no file is offered for EU text.",
   }),
   card: Object.freeze({
     heading: "Evaluation card",

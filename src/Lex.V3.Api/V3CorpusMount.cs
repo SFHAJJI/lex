@@ -13,7 +13,7 @@ using Lex.V3.Ingest.Luxembourg;
 
 namespace Lex.V3.Api;
 
-internal sealed class V3CorpusMount : IDisposable
+internal sealed partial class V3CorpusMount : IDisposable
 {
     public const string IndexFileName = "luxembourg-index.sqlite3";
     public const string CapabilityManifestFileName = "luxembourg-capability-manifest.json";
@@ -719,6 +719,17 @@ internal sealed class V3CorpusMount : IDisposable
                 "The requested date is not a civil calendar date.");
         }
 
+        // An EU act whose census the EU index holds is answered by the EU time view (V3CorpusMount.EuropeTime.cs).
+        if (LocateEuropeSeed(request, identifier, observedAt, out var europeSeed) is { } refusedEurope)
+        {
+            return refusedEurope;
+        }
+
+        if (europeSeed is not null)
+        {
+            return AsOfEurope(request, identifier, europeSeed, requestedDate, requestedLanguage, observedAt);
+        }
+
         if (RefuseUnlessWorkStates(request, identifier, observedAt, "r6_as_of", requestedLanguage,
                 out var states, out var availableLanguages) is { } refused)
         {
@@ -997,6 +1008,34 @@ internal sealed class V3CorpusMount : IDisposable
                 "The requested date is not a civil calendar date.");
         }
 
+        // An EU work the EU index holds is answered from it (the owner's proxy, 2026-10-01 14:30 UTC: serve EU text now,
+        // from the original wording the EU index holds); a Luxembourg work takes the path below, unchanged. With no EU index
+        // mounted, an EU identifier keeps the refusal it had (retrieval_mode_unavailable), which the refusal census pins.
+        if (_europeReader is not null)
+        {
+            // An EU act whose census the EU index holds is quoted at the requested date by the EU time view; an index with
+            // no states table keeps the original-wording path below.
+            if (LocateEuropeSeed(request, identifier, observedAt, out var europeSeed) is { } refusedSeed)
+            {
+                return refusedSeed;
+            }
+
+            if (europeSeed is not null)
+            {
+                return EvidenceBundleEuropeAtDate(request, identifier, europeSeed, requestedDate, requestedLanguage, observedAt);
+            }
+
+            if (LocateEuropeWork(request, identifier, observedAt, out var europe) is { } refusedEurope)
+            {
+                return refusedEurope;
+            }
+
+            if (europe.Count > 0)
+            {
+                return EvidenceBundleEurope(request, identifier, europe, requestedDate, requestedLanguage, observedAt);
+            }
+        }
+
         if (RefuseUnlessWorkStates(request, identifier, observedAt, "r7_evidence_bundle", requestedLanguage,
                 out var states, out var availableLanguages) is { } refused)
         {
@@ -1198,6 +1237,11 @@ internal sealed class V3CorpusMount : IDisposable
     private LexCorpus6Member? MemberOf(string objectRefSha256) =>
         _corpus.Set.Members.FirstOrDefault(candidate =>
             candidate.Publisher == PublisherId.LuLegilux &&
+            string.Equals(candidate.ObjectRefSha256, objectRefSha256, StringComparison.Ordinal));
+
+    private LexCorpus6Member? EuropeMemberOf(string objectRefSha256) =>
+        _corpus.Set.Members.FirstOrDefault(candidate =>
+            candidate.Publisher == PublisherId.EuEurLex &&
             string.Equals(candidate.ObjectRefSha256, objectRefSha256, StringComparison.Ordinal));
 
     /// <summary>The article's notes, each the publisher's marker and the text of its body's text and reference tokens, in order.</summary>
@@ -2117,7 +2161,8 @@ internal sealed class V3CorpusMount : IDisposable
         var requestedLanguage = OptionalLanguage(request.Parameters);
         if (TryParseEuropePermalink(identifier, out var celex, out var europeLanguage, out var wordingDate, out var europeDigest, out var provision))
         {
-            return VerifyEurope(request, identifier, celex, europeLanguage, wordingDate, europeDigest, provision, requestedLanguage, observedAt);
+            return VerifyEuropeState(request, identifier, celex, europeLanguage, wordingDate, europeDigest, provision, requestedLanguage, observedAt)
+                ?? VerifyEurope(request, identifier, celex, europeLanguage, wordingDate, europeDigest, provision, requestedLanguage, observedAt);
         }
 
         if (TryParsePinnedPermalink(identifier, out var workKey, out var applicabilityDate, out var requestedDigest, out var anchor))
@@ -4040,6 +4085,7 @@ internal sealed class V3CorpusMount : IDisposable
 
         var page = all.Skip(start).Take(limit).ToArray();
         var truncated = start + page.Length < all.Length;
+        var searchSeed = EuropeSeedsOf(resolved[0].PublisherWorkId) is [var heldSeed] ? heldSeed : null;
         using var result = JsonSerializer.SerializeToDocument(new
         {
             requested_query = query,
@@ -4055,7 +4101,7 @@ internal sealed class V3CorpusMount : IDisposable
             hit_unit = EuropeSearchHitUnit,
             lanes = SearchLanes,
             date_semantics = EuropeWordingDateSemantics,
-            consolidations_held = false,
+            consolidations_held = searchSeed is not null && EuropeConsolidationsHeld(EuropeTimelineOf(searchSeed)),
             text_served = false,
             searchable_text_held_for_language = measured,
             searchable_languages = _europeReader.SearchableLanguages(),
@@ -4108,7 +4154,8 @@ internal sealed class V3CorpusMount : IDisposable
                 // The hash-pinned provision permalink verify checks (null when the wording has no single date).
                 permalink = wording is { } pinned ? EuropeProvisionPermalink(pinned.Permalink, entry.Hit.PublisherIdentifier) : null,
             }).ToArray(),
-            not_held = EuropeSearchNotHeld.Select(static row => new { item = row[0], reason = row[1] }).ToArray(),
+            not_held = EuropeNotHeldRows(EuropeSearchNotHeld, searchSeed,
+                "consolidated versions of this act are held and answered by timeline, as_of and evidence_bundle; this search reads the original wording only, and a date is not answered here"),
             corpus_sha256 = _corpus.ArtifactRef.Sha256,
             index_sha256 = _europeReader.IndexRef.Sha256,
         });
@@ -5258,6 +5305,17 @@ internal sealed class V3CorpusMount : IDisposable
 
         var identifier = RequiredString(request.Parameters, "identifier");
         var requestedLanguage = OptionalLanguage(request.Parameters);
+        // An EU act whose census the EU index holds is answered by the EU time view (V3CorpusMount.EuropeTime.cs).
+        if (LocateEuropeSeed(request, identifier, observedAt, out var europeSeed) is { } refusedEurope)
+        {
+            return refusedEurope;
+        }
+
+        if (europeSeed is not null)
+        {
+            return TimelineEurope(request, identifier, europeSeed, requestedLanguage, observedAt);
+        }
+
         if (RefuseUnlessWorkStates(request, identifier, observedAt, "r6_timeline", requestedLanguage,
                 out var states, out var availableLanguages) is { } refused)
         {
@@ -5326,6 +5384,20 @@ internal sealed class V3CorpusMount : IDisposable
 
         var identifier = RequiredString(request.Parameters, "identifier");
         var requestedLanguage = OptionalLanguage(request.Parameters);
+
+        // A consolidated version's identifier (its work IRI, CELEX or expression) names its act's dossier, read through the
+        // original work the EU census binds it to.
+        if (LocateEuropeSeed(request, identifier, observedAt, out var europeSeed) is { } refusedSeed)
+        {
+            return refusedSeed;
+        }
+
+        if (europeSeed is not null && _europeReader!.ResolveExact(identifier).Count == 0 &&
+            _europeReader.ResolveExact(europeSeed) is { Count: > 0 } original)
+        {
+            return DossierEurope(request, identifier, original, requestedLanguage, observedAt);
+        }
+
         if (LocateEuropeWork(request, identifier, observedAt, out var europe) is { } refusedEurope)
         {
             return refusedEurope;
@@ -5456,6 +5528,7 @@ internal sealed class V3CorpusMount : IDisposable
         var listed = expressions
             .Where(expression => requestedLanguage is null || string.Equals(expression.Language, requestedLanguage, StringComparison.Ordinal))
             .ToArray();
+        var dossierSeed = EuropeSeedsOf(works[0]) is [var heldSeed] ? heldSeed : null;
         using var result = JsonSerializer.SerializeToDocument(new
         {
             scope = EuropeDossierScope,
@@ -5491,14 +5564,252 @@ internal sealed class V3CorpusMount : IDisposable
             }).ToArray(),
             digest_rule = EuropeWordingDigestRule,
             date_semantics = EuropeWordingDateSemantics,
-            consolidations_held = false,
-            not_held = EuropeDossierNotHeld.Select(static row => new { item = row[0], reason = row[1] }).ToArray(),
+            wording_timeline = EuropeDossierTimeline(dossierSeed, requestedLanguage),
+            consolidations_held = dossierSeed is not null && EuropeConsolidationsHeld(EuropeTimelineOf(dossierSeed)),
+            not_held = EuropeNotHeldRows(EuropeDossierNotHeld, dossierSeed,
+                "consolidated versions of this act are held: wording_timeline lists them, and timeline, as_of and evidence_bundle answer them; the expressions listed here are the original act's"),
             corpus_sha256 = _corpus.ArtifactRef.Sha256,
             index_sha256 = _europeReader.IndexRef.Sha256,
         });
         return V3PlatformOperationOutcome.Success(
             Context("success", observedAt, PublisherId.EuEurLex),
             new V3PlatformOperationResult(request, "work_record", result.RootElement));
+    }
+
+    internal const string EuropeEvidenceBundleScope =
+        "the evidence a reader needs to quote the original wording of an EU work the mounted EU index holds: for each held expression in the " +
+        "served languages whose wording date is the requested date, the hash-pinned permalink and stable coordinate of that wording, the corpus " +
+        "members its articles belong to with their retained body digests, and every article with its publisher id and heading, its text (the " +
+        "text the index searches), the digest of that text (text_sha256), the digest of the corpus member's retained publisher body (body_sha256: " +
+        "the manifestation the corpus holds for the expression, such as its XHTML or PDF), the digest of the Formex package the text was read from " +
+        "(package_sha256) and of the package entry (source_entry_sha256), both null on an EU index that predates them, its official source and an " +
+        "article permalink (the wording permalink and the publisher's provision id after #, which verify accepts); an article whose text is empty is " +
+        "named under articles_without_text and is not served as a quote";
+
+    internal const string EuropeEvidenceBundleDateRule =
+        "the EU index holds one wording of each expression, the original act's, dated by its Formex act date; no consolidated version is held, so " +
+        "that wording answers only its own date: a date before it, or after it, is refused no_version_for_date naming the held wording dates, and " +
+        "the original wording is never served as the wording of a later date (driver decision on EU parity (b), PR #761)";
+
+    internal const string EuropeEvidenceBundleRightsRule =
+        "rights are enforced when the bundle is composed, before any text is read: every corpus member the served expression's articles come from " +
+        "must have been acquired, which an EU build reaches only after retaining the Decision 95 rights receipt (Commission Decision 2011/833/EU, " +
+        "fetched on the Publications Office route, never from eur-lex.europa.eu); under any other outcome the bundle refuses text_withheld and " +
+        "names the official identity, the official link and the retained body digest; every text served carries the acknowledgement and the " +
+        "authenticity statement Decision 95 requires";
+
+    internal const string EuropeTextAcknowledgement = "© European Union, https://eur-lex.europa.eu";
+
+    internal const string EuropeTextAuthenticity =
+        "Only the Official Journal of the European Union published in electronic form is authentic and produces legal effects (Regulation (EU) " +
+        "No 216/2013, Article 1(2)); this text is a reproduction read from the Publications Office's Formex package, not the authentic edition.";
+
+    internal static readonly string[][] EuropeEvidenceBundleNotHeld =
+    [
+        ["publisher_signature", "no signature or attestation of the publisher is held; the digests are this index's own reading of the retained package"],
+        ["later_wordings", "no consolidated version is held, so only the original wording is served, and only for its own wording date"],
+        ["force_dates", "no entry-into-force, application or end-of-validity date is held; the wording date is none of them"],
+        ["observation_time", "when the publisher served the retained package is not held, so no observation time is stated"],
+        ["markup_and_notes", "the Formex markup, notes and tables are not served as structure; the text is the article's searchable text, in publisher order"],
+    ];
+
+    /// <summary>
+    /// EU <c>evidence_bundle</c>: the original wording of each held expression of one EU work, quoted under the rights rule, for
+    /// the requested date only when it is that wording's Formex act date (<see cref="EuropeEvidenceBundleDateRule"/>). Refuses
+    /// as EU dossier does for an ambiguous work or a language the work does not hold.
+    /// </summary>
+    private V3PlatformOperationOutcome EvidenceBundleEurope(
+        V3PlatformOperationRequest request,
+        string identifier,
+        IReadOnlyList<EuropeIndexResolvedExpression> resolved,
+        string requestedDate,
+        string? requestedLanguage,
+        DateTimeOffset observedAt)
+    {
+        ArgumentNullException.ThrowIfNull(_europeReader);
+        var works = resolved.Select(static expression => expression.PublisherWorkId)
+            .Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray();
+        if (works.Length > 1)
+        {
+            using var ambiguous = JsonSerializer.SerializeToDocument(new { requested_identifier = identifier, candidates = works });
+            return V3PlatformOperationOutcome.Refused(
+                Context("refusal", observedAt, PublisherId.EuEurLex),
+                new V3PlatformOperationRefusal(request, "ambiguous_identifier", ambiguous.RootElement));
+        }
+
+        var expressions = _europeReader.ResolveWorkExpressions(works[0]);
+        var languages = expressions.Select(static expression => expression.Language)
+            .Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray();
+        if (requestedLanguage is not null && !languages.Contains(requestedLanguage, StringComparer.Ordinal))
+        {
+            using var unavailableLanguage = JsonSerializer.SerializeToDocument(new
+            {
+                requested_language = requestedLanguage,
+                available_languages = languages,
+            });
+            return V3PlatformOperationOutcome.Refused(
+                Context("refusal", observedAt, PublisherId.EuEurLex),
+                new V3PlatformOperationRefusal(request, "language_not_available", unavailableLanguage.RootElement));
+        }
+
+        // The one pinned wording of each expression in the served languages; an expression with no single wording date has
+        // no wording a permalink can pin, so it is not quoted.
+        var wordings = expressions
+            .Where(expression => requestedLanguage is null || string.Equals(expression.Language, requestedLanguage, StringComparison.Ordinal))
+            .Select(expression => EuropeWordingOf(expression.PublisherExpressionId))
+            .OfType<(string Celex, string WorkId, string ExpressionId, string Language, string WordingDate, IReadOnlyList<string> Provisions, string Sha256, string Permalink)>()
+            .OrderBy(static wording => wording.Language, StringComparer.Ordinal)
+            .ThenBy(static wording => wording.ExpressionId, StringComparer.Ordinal)
+            .ToArray();
+        if (wordings.Length == 0)
+        {
+            using var unavailable = JsonSerializer.SerializeToDocument(new
+            {
+                official_identity = works[0],
+                official_source = works[0],
+                retained_transport_evidence = "none",
+                requested_language = requestedLanguage,
+                // No held expression has a single wording date a permalink could pin.
+                what_would_answer = new[] { "new_official_observation" },
+            });
+            return V3PlatformOperationOutcome.Refused(
+                Context("refusal", observedAt, PublisherId.EuEurLex),
+                new V3PlatformOperationRefusal(request, "text_not_available", unavailable.RootElement));
+        }
+
+        // The date rule: only a wording's own date answers.
+        var selected = wordings.Where(wording => string.Equals(wording.WordingDate, requestedDate, StringComparison.Ordinal)).ToArray();
+        if (selected.Length == 0)
+        {
+            var dates = wordings.Select(static wording => wording.WordingDate).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray();
+            using var noVersion = JsonSerializer.SerializeToDocument(new
+            {
+                requested_date = requestedDate,
+                history_begins = dates[0],
+                nearest_earlier = dates.LastOrDefault(date => string.CompareOrdinal(date, requestedDate) < 0),
+                nearest_later = dates.FirstOrDefault(date => string.CompareOrdinal(date, requestedDate) > 0),
+                what_would_answer = new[] { "new_official_observation" },
+                asserts_absence_of_law = false,
+            });
+            return V3PlatformOperationOutcome.Refused(
+                Context("refusal", observedAt, PublisherId.EuEurLex),
+                new V3PlatformOperationRefusal(request, "no_version_for_date", noVersion.RootElement));
+        }
+
+        // ---- Rights at compose time, per selected wording, before any text is served. ----
+        var articlesByExpression = new Dictionary<string, IReadOnlyList<EuropeIndexArticleText>>(StringComparer.Ordinal);
+        foreach (var wording in selected)
+        {
+            var articles = _europeReader.ResolveExpressionArticles(wording.ExpressionId);
+            articlesByExpression[wording.ExpressionId] = articles;
+            var members = articles.Select(static article => article.ObjectRefSha256).Distinct(StringComparer.Ordinal)
+                .Select(objectRef => (ObjectRef: objectRef, Member: EuropeMemberOf(objectRef)))
+                .ToArray();
+            var blocking = members.FirstOrDefault(static entry => entry.Member is null || entry.Member.Outcome != LexCorpus6OutcomeKind.Acquired);
+            if (articles.Count == 0 || blocking.ObjectRef is not null)
+            {
+                using var withheld = JsonSerializer.SerializeToDocument(new
+                {
+                    official_identity = wording.ExpressionId,
+                    official_link = articles.Select(static article => article.OfficialSourceUri).FirstOrDefault(static uri => uri is not null) ?? wording.WorkId,
+                    content_sha256 = blocking.Member?.BodySha256 ?? wording.Sha256,
+                    stable_coordinate = EuropeStableCoordinate(wording.Permalink),
+                    permalink = wording.Permalink,
+                    language = wording.Language,
+                    source_outcome = blocking.Member is null ? null : ContractWire.NameOf(blocking.Member.Outcome),
+                    rule = EuropeEvidenceBundleRightsRule,
+                });
+                return V3PlatformOperationOutcome.Refused(
+                    Context("refusal", observedAt, PublisherId.EuEurLex),
+                    new V3PlatformOperationRefusal(request, "text_withheld", withheld.RootElement));
+            }
+        }
+
+        var bundles = selected.Select(wording =>
+        {
+            var articles = articlesByExpression[wording.ExpressionId];
+            var quoted = articles.Where(static article => article.Text.Length > 0).ToArray();
+            return new
+            {
+                publisher_expression_id = wording.ExpressionId,
+                language = wording.Language,
+                wording_date = wording.WordingDate,
+                wording_sha256 = wording.Sha256,
+                stable_coordinate = EuropeStableCoordinate(wording.Permalink),
+                permalink = wording.Permalink,
+                sources = articles.Select(static article => article.ObjectRefSha256).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal)
+                    .Select(objectRef => EuropeMemberOf(objectRef)!)
+                    .Select(static member => new
+                    {
+                        object_ref_sha256 = member.ObjectRefSha256,
+                        outcome = ContractWire.NameOf(member.Outcome),
+                        body_sha256 = member.BodySha256,
+                        body_byte_length = member.BodyByteLength,
+                        body_receipt_sha256 = member.BodyReceiptSha256,
+                    })
+                    .ToArray(),
+                articles = quoted.Select(article =>
+                {
+                    var textBytes = Encoding.UTF8.GetBytes(article.Text);
+                    var textSha256 = Convert.ToHexStringLower(SHA256.HashData(textBytes));
+                    if (article.TextSha256 is not null && !string.Equals(article.TextSha256, textSha256, StringComparison.Ordinal))
+                    {
+                        // The index records the digest of the very text it searches; a difference is a damaged index, never a quote.
+                        throw new InvalidDataException($"The EU index's text digest for article {article.ArticleIdentitySha256} is not its text's.");
+                    }
+
+                    return new
+                    {
+                        article_identity_sha256 = article.ArticleIdentitySha256,
+                        publisher_id = article.PublisherIdentifier,
+                        heading = article.Heading,
+                        language = article.Language,
+                        text = article.Text,
+                        text_sha256 = textSha256,
+                        text_byte_length = textBytes.Length,
+                        body_sha256 = EuropeMemberOf(article.ObjectRefSha256)!.BodySha256,
+                        package_entry = article.PackageEntry,
+                        package_sha256 = article.PackageSha256,
+                        source_entry_sha256 = article.SourceEntrySha256,
+                        official_source = article.OfficialSourceUri ?? wording.WorkId,
+                        article_permalink = EuropeProvisionPermalink(wording.Permalink, article.PublisherIdentifier),
+                        provision_coordinate = wording.ExpressionId + "#lex-provision=" + Uri.EscapeDataString(article.PublisherIdentifier),
+                    };
+                }).ToArray(),
+                articles_without_text = articles.Where(static article => article.Text.Length == 0).Select(static article => new
+                {
+                    article_identity_sha256 = article.ArticleIdentitySha256,
+                    publisher_id = article.PublisherIdentifier,
+                }).ToArray(),
+            };
+        }).ToArray();
+
+        using var result = JsonSerializer.SerializeToDocument(new
+        {
+            scope = EuropeEvidenceBundleScope,
+            requested_identifier = identifier,
+            requested_date = requestedDate,
+            requested_language = requestedLanguage,
+            publisher = EuropePermalinkPublisher,
+            publisher_work_id = works[0],
+            celex = selected[0].Celex,
+            available_languages = languages,
+            served_languages = selected.Select(static wording => wording.Language).Distinct(StringComparer.Ordinal).ToArray(),
+            wordings = bundles,
+            acknowledgement = EuropeTextAcknowledgement,
+            authenticity = EuropeTextAuthenticity,
+            rights_rule = EuropeEvidenceBundleRightsRule,
+            date_rule = EuropeEvidenceBundleDateRule,
+            date_semantics = EuropeWordingDateSemantics,
+            digest_rule = EuropeWordingDigestRule,
+            consolidations_held = false,
+            not_held = EuropeEvidenceBundleNotHeld.Select(static row => new { item = row[0], reason = row[1] }).ToArray(),
+            corpus_sha256 = _corpus.ArtifactRef.Sha256,
+            index_sha256 = _europeReader.IndexRef.Sha256,
+        });
+        return V3PlatformOperationOutcome.Success(
+            Context("success", observedAt, PublisherId.EuEurLex),
+            new V3PlatformOperationResult(request, "evidence_bundle", result.RootElement));
     }
 
     internal const string DossierScope =

@@ -714,6 +714,27 @@ public sealed record EuropeIndexArticleSourceEvidence(
 /// Package SHA-256 and official URI remain in the article source coordinates.</summary>
 public sealed record EuropeIndexArticleByteDigests(string ArticleIdentitySha256, string SourceEntrySha256, string TextSha256);
 
+/// <summary>
+/// One held article of an EU expression with its text, as an evidence bundle quotes it: the article identity, the corpus
+/// member it was read from, the publisher's article id and heading, the Formex act date of the wording, the language, the
+/// package entry, and the text the index searches (<c>searchable_text</c>). Where the index stores them (schema 3 and
+/// 4), the package digest and official source URI; where it stores them (schema 4), the digests of the XML entry and of
+/// the text's UTF-8 bytes.
+/// </summary>
+public sealed record EuropeIndexArticleText(
+    string ArticleIdentitySha256,
+    string ObjectRefSha256,
+    string PublisherIdentifier,
+    string Heading,
+    string WordingDate,
+    string Language,
+    string PackageEntry,
+    string Text,
+    string? PackageSha256,
+    string? OfficialSourceUri,
+    string? SourceEntrySha256,
+    string? TextSha256);
+
 /// <summary>A verified read-only mount of one exact EU index.</summary>
 public sealed partial class EuropeIndexReader : IDisposable
 {
@@ -900,6 +921,42 @@ public sealed partial class EuropeIndexReader : IDisposable
             command.Parameters.AddWithValue("$identity", articleIdentitySha256);
             using var reader = command.ExecuteReader();
             return reader.Read() ? new(reader.GetString(0), reader.GetString(1), reader.GetString(2)) : null;
+        }
+    }
+
+    /// <summary>
+    /// Every held article of one EU expression with its text, in the publisher's article id and article identity order,
+    /// the order the wording digest reads them in. Empty when the index holds no article of that expression. The source
+    /// coordinates and byte digests are null on an index schema that stores none.
+    /// </summary>
+    public IReadOnlyList<EuropeIndexArticleText> ResolveExpressionArticles(string publisherExpressionId)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(publisherExpressionId);
+        lock (_gate)
+        {
+            using var command = _connection.CreateCommand();
+            command.CommandText =
+                "SELECT a.article_identity_sha256,a.object_ref_sha256,a.publisher_identifier,a.heading,a.wording_date,a.language," +
+                "a.package_entry,a.searchable_text," +
+                (HasArticleSourceEvidence ? "s.package_sha256,s.official_source_uri," : "NULL,NULL,") +
+                (HasArticleByteDigests ? "d.source_entry_sha256,d.text_sha256 " : "NULL,NULL ") +
+                "FROM articles a " +
+                (HasArticleSourceEvidence ? "LEFT JOIN article_sources s USING(article_identity_sha256) " : "") +
+                (HasArticleByteDigests ? "LEFT JOIN article_digests d USING(article_identity_sha256) " : "") +
+                "WHERE a.publisher_expression_id=$expression ORDER BY a.publisher_identifier,a.article_identity_sha256";
+            command.Parameters.AddWithValue("$expression", publisherExpressionId);
+            using var reader = command.ExecuteReader();
+            var values = new List<EuropeIndexArticleText>();
+            while (reader.Read())
+            {
+                string? Optional(int ordinal) => reader.IsDBNull(ordinal) ? null : reader.GetString(ordinal);
+                values.Add(new EuropeIndexArticleText(
+                    reader.GetString(0), reader.GetString(1), reader.GetString(2), reader.GetString(3), reader.GetString(4),
+                    reader.GetString(5), reader.GetString(6), reader.GetString(7),
+                    Optional(8), Optional(9), Optional(10), Optional(11)));
+            }
+
+            return Array.AsReadOnly(values.ToArray());
         }
     }
 

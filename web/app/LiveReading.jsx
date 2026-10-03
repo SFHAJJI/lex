@@ -12,6 +12,10 @@
 // state's shows both dates, and this page does not decide which controlled. An article held without
 // text is named as such, never shown as an empty quotation. The form's controls carry no `name`, and
 // permalinks are printed, not linked.
+//
+// An EU work's reading is the original wording the EU index holds, on its own date: each wording is
+// headed by its Formex act date (never an applicability date), and the acknowledgement and authenticity
+// statement Decision 95 requires stand above the text, as the platform words them.
 
 import { useEffect, useRef, useState } from 'react';
 
@@ -141,12 +145,114 @@ export function ReadingView({ view }) {
   );
 }
 
+function EuropeArticle({ article, wording }) {
+  return (
+    <li id={`${wording.language}-${article.publisherId}`} data-article={article.publisherId}>
+      <h3>
+        {article.publisherId}
+        {article.heading.length > 0 ? (
+          <>
+            {' '}
+            <span lang={quotationLanguageTag(wording.language)}>{article.heading}</span>
+          </>
+        ) : null}
+      </h3>
+      <blockquote lang={quotationLanguageTag(wording.language)}>{article.text}</blockquote>
+      <QuoteEvidence article={article} />
+    </li>
+  );
+}
+
+/** One disclosure line beside an EU wording: how many other versions there are and whether their text is held here. */
+function EuropeDisclosure({ template, rows, name }) {
+  if (rows.length === 0) return null;
+  const held = rows.filter((row) => row.textHeld).length;
+  return (
+    <p data-disclosure={name}>
+      <Say template={countedEntry(template, rows.length)} values={{ count: rows.length, held, notHeld: rows.length - held }} />
+    </p>
+  );
+}
+
+function EuropeWordingReading({ wording, celex }) {
+  return (
+    <section data-wording={wording.wordingSha256}>
+      <h2>
+        <Say
+          template={wording.nextDate === undefined
+            ? COPY.europeWordingHeading
+            : wording.kind === 'consolidated_version' ? COPY.europeConsolidatedHeading : COPY.europeOriginalHeading}
+          values={{ celex, language: wording.language, date: wording.wordingDate }}
+        />
+      </h2>
+      {wording.nextDate === undefined ? null : (
+        <p data-wording-holds="">
+          {wording.nextDate === null
+            ? COPY.europeLatest
+            : <Say template={COPY.europeHoldsUntil} values={{ date: wording.wordingDate, next: wording.nextDate }} />}
+        </p>
+      )}
+      <EuropeDisclosure template={COPY.europeSameDateWorks} rows={wording.sameDateWorks} name="same-date" />
+      <EuropeDisclosure template={COPY.europeUnplaced} rows={wording.unplacedVersions} name="unplaced" />
+      <p>
+        <code>{wording.permalink}</code>
+      </p>
+      <p data-counts="">
+        <Say
+          template={countedEntry(COPY.europeCounts, wording.articles.length)}
+          values={{ count: wording.articles.length, withoutText: wording.articlesWithoutText.length }}
+        />
+      </p>
+      <ol className="articles">
+        {wording.articles.map((article) => (
+          <EuropeArticle key={article.articleIdentitySha256} article={article} wording={wording} />
+        ))}
+      </ol>
+      {wording.articlesWithoutText.length > 0 ? (
+        <p data-without-text="">
+          <Say template={COPY.withoutText} values={{ articles: wording.articlesWithoutText.map((entry) => entry.publisherId).join(', ') }} />
+        </p>
+      ) : null}
+    </section>
+  );
+}
+
+/**
+ * One EU reading view, laid out: the acknowledgement and authenticity statement, each held wording's
+ * quoted text, and what the bundle does not hold.
+ */
+export function EuropeReadingView({ view }) {
+  return (
+    <>
+      <p data-acknowledgement="">{view.acknowledgement}</p>
+      <p data-authenticity="">{view.authenticity}</p>
+      {view.wordings.map((wording) => (
+        <EuropeWordingReading key={wording.wordingSha256} wording={wording} celex={view.celex} />
+      ))}
+      <h3>{COPY.notHeldHeading}</h3>
+      <ul data-not-held={view.notHeld.length}>
+        {view.notHeld.map((row) => (
+          <li key={row.item}>
+            <Say template={COMMON.notHeldRow} values={{ item: <strong>{row.item}</strong>, reason: row.reason }} />
+          </li>
+        ))}
+      </ul>
+    </>
+  );
+}
+
+/** The refusal card's words for a refusal's publisher: an EU refusal's declared nulls speak of wordings, never states. */
+export function refusalCardCopyFor(context) {
+  const copy = liveChrome().refusalCard;
+  return context?.publisher === 'eu-eurlex' ? { ...copy, nullSentences: copy.europeNullSentences } : copy;
+}
+
 /** One view state, laid out: the reading, the refusal card, or the sentence a state carries. */
 export function ReadingAnswerView({ outcome }) {
   if (outcome.state === 'success') {
     return (
       <section data-answer-state="success">
-        <ReadingView view={outcome.view} />
+        {outcome.view.publisher === 'eu-eurlex' ? <EuropeReadingView view={outcome.view} /> : <ReadingView view={outcome.view} />}
       </section>
     );
   }
@@ -154,7 +260,7 @@ export function ReadingAnswerView({ outcome }) {
   if (outcome.state === 'refusal' && outcome.card) {
     return (
       <section data-answer-state="refusal">
-        <RefusalCard code={outcome.code} sentence={outcome.sentence} payload={outcome.payload} copy={liveChrome().refusalCard} />
+        <RefusalCard code={outcome.code} sentence={outcome.sentence} payload={outcome.payload} copy={refusalCardCopyFor(outcome.context)} />
       </section>
     );
   }

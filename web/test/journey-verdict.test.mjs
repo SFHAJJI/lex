@@ -23,6 +23,8 @@ import {
   journeyVerdict,
   pinnedCitation,
   realMountSteps,
+  EU_READING_DATE,
+  EU_READING_STEP,
   watchFiles,
 } from "../scripts/journey.mjs";
 import { cspValue } from "../scripts/csp.mjs";
@@ -364,6 +366,21 @@ test("every quotation carries its digests, its official source and a citation pi
     .includes("the quote of art_15 does not show its text digest, body digest and official source"), "no official source");
 });
 
+test("an EU quotation is pinned by its EU wording permalink, its provision escaped as the platform escapes it (review of #903)", () => {
+  const digest = "c".repeat(64);
+  const wording = `/eu-eurlex/32016R0679/eng/2016-04-27--${digest}`;
+  const source = "http://publications.europa.eu/resource/cellar/3e485e15-11bd-11e6-ba9a-01aa75ed71a1.0006.02/DOC_1";
+  const quoted = (article, codes) => ({ article, codes });
+  const expected = { origin: ORIGIN, step: JOURNEY_STEPS.search, state: "success" };
+  const verdict = (quotes) => journeyVerdict({ ...goodSearch(), quotes }, expected);
+  assert.deepEqual(verdict([quoted("001", [digest, "d".repeat(64), source, `${wording}#001`])]), [], "an EU quote with its own provision permalink passes");
+  assert.deepEqual(verdict([quoted("art 1", [digest, "d".repeat(64), source, `${wording}#art%201`])]), [], "a provision id is compared unescaped");
+  assert.ok(verdict([quoted("002", [digest, "d".repeat(64), source, `${wording}#001`])])
+    .includes("the quote of 002 carries no citation that pins it"), "another provision's permalink does not pin this one");
+  assert.ok(verdict([quoted("001", [digest, "d".repeat(64), source, wording])])
+    .includes("the quote of 001 carries no citation that pins it"), "the wording permalink alone pins no provision");
+});
+
 test("nothing on the page means anything by colour alone: painted elements say what they are", () => {
   const expected = { origin: ORIGIN, step: JOURNEY_STEPS.search, state: "success" };
   assert.deepEqual(journeyVerdict({ ...goodSearch(), paint: { painted: 4, unnamed: [] } }, expected), [], "a page whose painted elements all speak passes");
@@ -463,9 +480,16 @@ test("the EU search step names the GDPR by its CELEX, chooses English and is hel
   const report = { corpus: { Sha256: "a".repeat(64) }, luxembourgIndex: { Sha256: "b".repeat(64) } };
   assert.deepEqual(realMountSteps(report).map(([name]) => name), Object.keys(JOURNEY_STEPS), "a real mount without an EU index runs the eight");
   const withEurope = realMountSteps({ ...report, europeIndex: { Sha256: "c".repeat(64) } });
-  assert.deepEqual(withEurope.map(([name]) => name), [...Object.keys(JOURNEY_STEPS), "eu search", "eu dossier"], "and one with an EU index runs the EU search and dossier too");
-  assert.equal(withEurope.at(-2)[1], EU_SEARCH_STEP);
-  assert.equal(withEurope.at(-1)[1], EU_DOSSIER_STEP);
+  assert.deepEqual(withEurope.map(([name]) => name), [...Object.keys(JOURNEY_STEPS), "eu search", "eu dossier", "eu reading"],
+    "and one with an EU index runs the EU search, dossier and reading too");
+  assert.equal(withEurope.at(-3)[1], EU_SEARCH_STEP);
+  assert.equal(withEurope.at(-2)[1], EU_DOSSIER_STEP);
+  assert.equal(withEurope.at(-1)[1], EU_READING_STEP);
+  // The EU reading: the same work on its wording date (the GDPR's Formex act date), on the reading page.
+  assert.deepEqual(EU_READING_STEP.body, { operation_id: "evidence_bundle", parameters: { identifier: "32016R0679", date: EU_READING_DATE } });
+  assert.equal(EU_READING_DATE, "2016-04-27");
+  assert.equal(EU_READING_STEP.path, JOURNEY_STEPS.reading.path, "the same reading page");
+  assert.ok(EU_READING_STEP.cites, "every EU article permalink the page prints is verified");
   assert.deepEqual(EU_DOSSIER_STEP.body, { operation_id: "dossier", parameters: { identifier: "32016R0679" } }, "the same work, any held language");
   assert.equal(EU_DOSSIER_STEP.path, JOURNEY_STEPS.dossier.path, "the same dossier page");
   assert.deepEqual(EU_DOSSIER_ON_FIXTURE, { ...EU_SEARCH_ON_FIXTURE, step: EU_DOSSIER_STEP });
