@@ -2412,9 +2412,8 @@ the radar step; what the eight steps did not walk now runs on the fixture mount 
   `next_after`, `snapshot_unknown` for another log's cursor, every event permalink verifies, and
   `answer_drift` on the genesis log names no invalidated answer and does not assert the absence of drift.
 Still to come: J2's hand-off to the contained assistant and J6 (an ask page, which no live page has yet). The
-publishers' own search pages are not
-offered on the `identifier_unknown` card: the handoff registry admits no real host yet (`HANDOFF_HOSTS`), and
-adding one is an editorial decision recorded when it is made.
+publishers' own search pages are not offered on the `identifier_unknown` card: the handoff registry admits no
+real host yet (`HANDOFF_HOSTS`), and adding one is an editorial decision recorded when it is made.
 
 ## Next, in order (web lane; the data lane's items 1 to 3 are in STATUS-DATA.md)
 
