@@ -519,8 +519,11 @@ public static partial class EuropeIndexBuilder
                 DateOnly.ParseExact(group.Key.WordingDate, "yyyy-MM-dd", CultureInfo.InvariantCulture),
                 group.LongCount()))
             .ToArray();
+        // The EU manifest states the operations no route serves and the operations an EU identifier is refused, each with its
+        // typed reason (the launch contract: "each either served or refusing with a typed reason its capability manifest states").
         if (!V3IndexCapabilityManifest.TryCreate(
-                PublisherId.EuEurLex, digest, cells, V3UnservedOperations.Rows, out var manifest, out var refusal))
+                PublisherId.EuEurLex, digest, cells, V3UnservedOperations.Rows.Concat(V3EuropeRefusedOperations.Rows),
+                out var manifest, out var refusal))
             throw new InvalidDataException($"Measured EU capabilities are invalid: {refusal}.");
         return manifest!;
     }
@@ -761,6 +764,12 @@ public sealed partial class EuropeIndexReader : IDisposable
     public long CorrigendumGapCount => Count("corrigendum_gaps");
     public SourceArtifactRef IndexRef => _indexRef;
     public SourceArtifactRef CorpusRef => _corpusRef;
+
+    /// <summary>
+    /// The operations the mounted EU capability manifest states are not served for EU identifiers, each with its typed reason
+    /// and the data that would serve it; empty for a manifest written before manifests stated them.
+    /// </summary>
+    public IReadOnlyList<V3UnservedOperation> NotServed => _capabilityManifest.NotServed;
 
     public static EuropeIndexReader OpenAndVerify(
         SourceArtifactRef indexRef,

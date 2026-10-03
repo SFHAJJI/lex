@@ -458,6 +458,83 @@ internal sealed partial class V3CorpusMount
         return null;
     }
 
+    /// <summary>
+    /// The seed act for <c>as_of</c> and <c>timeline</c> (reviews of #913). The census's own identifiers first. Then, where the
+    /// mounted EU index holds a census (the time view), an EU-shaped identifier answers through its act when the EU index
+    /// resolves it (another form of the original wording's identifier, or one of its provision coordinates, which that
+    /// resolution checks against its articles), or when it is a provision coordinate of an expression the census lists whose
+    /// articles hold that provision (a consolidated expression's, which the original-wording resolution does not reach). Any
+    /// other EU-shaped identifier is <c>identifier_unknown</c> with EU context, as <c>dossier</c> and <c>search</c> answer it,
+    /// this service's own EU coordinates included, as Luxembourg's <c>as_of</c> refuses its own permalinks. Without a census, or
+    /// for an identifier of no EU shape, the caller's path answers as before.
+    /// </summary>
+    private V3PlatformOperationOutcome? LocateEuropeSeedForTime(
+        V3PlatformOperationRequest request,
+        string identifier,
+        DateTimeOffset observedAt,
+        out string? seed)
+    {
+        var located = LocateEuropeSeed(request, identifier, observedAt, out seed);
+        if (located is not null || seed is not null || !HasEuropeCensus() || !IsEuropeanUnionShaped(identifier))
+        {
+            return located;
+        }
+
+        foreach (var key in EuropeSeedKeysOf(identifier))
+        {
+            located = LocateEuropeSeed(request, key, observedAt, out seed);
+            if (located is not null || seed is not null)
+            {
+                return located;
+            }
+        }
+
+        return Unknown(request, identifier, observedAt, PublisherId.EuEurLex,
+            "an EU act the mounted EU census holds: its CELEX, a Cellar work or expression IRI, or a provision coordinate of one of " +
+            "its held expressions naming an article that expression holds");
+    }
+
+    /// <summary>Whether the mounted EU index holds a census, so the time view answers: a states table with at least one row.</summary>
+    private bool HasEuropeCensus()
+    {
+        if (_europeReader is not { HasStates: true })
+        {
+            return false;
+        }
+
+        lock (_europeTimeGate)
+        {
+            return EuropeStatesLocked().Count > 0;
+        }
+    }
+
+    /// <summary>
+    /// The census identifiers an EU-shaped identifier leads to: the expressions the EU index resolves it to, and the expression of
+    /// a provision coordinate (<c>{expression}#lex-provision={id}</c>) when the census lists that expression and its articles hold
+    /// that provision. Nothing else: a coordinate naming an article, a date, a digest or an expression the corpus does not hold
+    /// leads nowhere.
+    /// </summary>
+    private IEnumerable<string> EuropeSeedKeysOf(string identifier)
+    {
+        foreach (var expression in _europeReader!.ResolveExact(identifier))
+        {
+            yield return expression.PublisherExpressionId;
+        }
+
+        const string Marker = "#lex-provision=";
+        var at = identifier.IndexOf(Marker, StringComparison.Ordinal);
+        if (at > 0)
+        {
+            var expressionId = identifier[..at];
+            var provision = Uri.UnescapeDataString(identifier[(at + Marker.Length)..]);
+            if (provision.Length > 0 && EuropeSeedsOf(expressionId).Count > 0 &&
+                EuropeArticlesOf(expressionId).Any(article => string.Equals(article.PublisherIdentifier, provision, StringComparison.Ordinal)))
+            {
+                yield return expressionId;
+            }
+        }
+    }
+
     private static PublisherId PublisherForIdentifierInBoth(string identifier) =>
         IsEuropeanUnionShaped(identifier) ? PublisherId.EuEurLex : PublisherId.LuLegilux;
 
