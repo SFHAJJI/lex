@@ -15,12 +15,13 @@ namespace Lex.V3.Ingest.Tests;
 public sealed partial class V3FirstMountBuildTests
 {
     private const string GdprSeed = "32016R0679";
-    private const string ConsolidationDate = "2024-01-01";
+    internal const string ConsolidationDate = "2024-01-01";
 
     private static Task<(string Root, string Mount)> ConsolidatedMountAsync(bool missingStateCelex = false) =>
         MountOfAsync(store => EuFirstMountAcquisitionTests.AcquireConsolidatedAsync(store, missingStateCelex));
 
-    private static Task<(string Root, string Mount)> ConsolidatedWorksMountAsync(params EuFirstMountAcquisitionTests.ConsolidatedWorkSpec[] works) =>
+    /// <summary>A mount derived from the generalised consolidated fixture: the directory to delete, and the mount's.</summary>
+    internal static Task<(string Root, string Mount)> ConsolidatedWorksMountAsync(params EuFirstMountAcquisitionTests.ConsolidatedWorkSpec[] works) =>
         MountOfAsync(store => EuFirstMountAcquisitionTests.AcquireConsolidatedWorksAsync(store, works));
 
     private static async Task<(string Root, string Mount)> MountOfAsync(

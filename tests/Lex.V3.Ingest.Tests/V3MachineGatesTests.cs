@@ -2,8 +2,11 @@ using System.Globalization;
 using System.Text;
 using System.Text.Json;
 using Lex.V3.Api;
+using Lex.V3.Contracts;
 using Lex.V3.Contracts.Evaluation;
 using Lex.V3.Contracts.Platform;
+using Lex.V3.Ingest.Europe;
+using Microsoft.Data.Sqlite;
 using static Lex.V3.Ingest.Tests.V3CorpusClassificationMountTests;
 using static Lex.V3.Ingest.Tests.V3CorpusResolveMountTests;
 
@@ -29,7 +32,10 @@ namespace Lex.V3.Ingest.Tests;
 /// </para>
 /// <para>
 /// The temporal set runs through four arms: <c>as_of</c> and <c>in_force_on</c>, each asked with the work's language
-/// and with none, since the contract names both operations and each has its own selection. The refusal set covers
+/// and with none, since the contract names both operations and each has its own selection. EU dated selection runs
+/// through three more, on an EU fixture mount: EU <c>as_of</c> in English, in French and with no language, a wording
+/// keyed by its kind and hash-pinned permalink. EU <c>in_force_on</c> is no arm: it is a typed refusal the EU capability
+/// manifest states, the same on every date, so it is held to that refusal at every case date. The refusal set covers
 /// every code the refusal census records as produced, across three mounts (the rights and empty-text cases need
 /// their own). The retrieval set's judgments are written from the corpus the test builds, so its nDCG threshold is
 /// 1.0: the path's exactness, not a quality claim.
@@ -49,9 +55,13 @@ public sealed class V3MachineGatesTests
     private const string CardRenderVariable = "V3_RENDER_EVALUATION_CARD";
 
     private const string CardTarget =
-        "the test fixture's Luxembourg mount, asked through the real handler (THE MOUNT IS A FIXTURE): the machine gates " +
+        "the test fixture's Luxembourg mount, and for the EU temporal arms an EU fixture mount (the GDPR's original wording and " +
+        "consolidated versions on two later dates), asked through the real handler (THE MOUNT IS A FIXTURE): the machine gates " +
         "prove the served path, not a corpus. The cases are purpose-built evidence for the harness (Decision 92), and no " +
         "release, image or snapshot identity exists yet (STATUS item 7), so this card is not a release card.";
+
+    /// <summary>The GDPR's Formex act date, which dates its original wording: the EU fixture mount's first date.</summary>
+    private const string EuropeOriginalDate = "2016-04-27";
 
     private static string Shift(string date, int days) =>
         DateOnly.ParseExact(date, "yyyy-MM-dd", CultureInfo.InvariantCulture).AddDays(days)
@@ -62,6 +72,10 @@ public sealed class V3MachineGatesTests
     [TestMethod]
     public async Task TheTemporalCaseSetPassesAtOneHundredPercentAndTheDateShiftControlCatchesAShiftedSet() =>
         await RunTemporalGateAsync();
+
+    [TestMethod]
+    public async Task TheEuTemporalCaseSetPassesAtOneHundredPercentAndTheDateShiftControlCatchesAShiftedSet() =>
+        await RunEuropeTemporalGateAsync();
 
     [TestMethod]
     public async Task TheRefusalCaseSetPassesAtOneHundredPercentAndTheVerdictShuffleControlCatchesAShuffledSet() =>
@@ -79,7 +93,8 @@ public sealed class V3MachineGatesTests
     [TestMethod]
     public async Task TheEvaluationCardIsWhatTheMachineGatesMeasureNow()
     {
-        EvaluationCardSet[] sets = [.. await RunTemporalGateAsync(), .. await RunRefusalGateAsync(), .. await RunRetrievalGateAsync()];
+        EvaluationCardSet[] sets =
+            [.. await RunTemporalGateAsync(), .. await RunEuropeTemporalGateAsync(), .. await RunRefusalGateAsync(), .. await RunRetrievalGateAsync()];
         CollectionAssert.AreEquivalent(
             new[] { ShuffledControlNames.DateShuffle, ShuffledControlNames.VerdictShuffle, ShuffledControlNames.QrelsShuffle },
             sets.Select(static set => set.Control.Name).Distinct().ToArray(),
@@ -156,6 +171,72 @@ public sealed class V3MachineGatesTests
         }
 
         return [.. sets];
+    }
+
+    /// <summary>
+    /// The EU arms of the temporal set, on <see cref="EuropeTemporalMountAsync"/>'s mount: EU <c>as_of</c> in English, in French and
+    /// with no language, over <see cref="EuropeTemporalCases"/>, each with its date control. EU <c>in_force_on</c> is then held to the
+    /// refusal the EU capability manifest states for it, at every case date.
+    /// </summary>
+    private static async Task<EvaluationCardSet[]> RunEuropeTemporalGateAsync()
+    {
+        var (root, directory) = await EuropeTemporalMountAsync();
+        try
+        {
+            using var mount = await V3CorpusMount.OpenAsync(directory, CancellationToken.None);
+            Assert.IsNotNull(mount);
+            var act = EuFirstMountAcquisitionTests.ConsolidatedSeed;
+            using (var connection = EuropeIndexBuilder.Open(Path.Combine(directory, V3CorpusMount.EuropeIndexFileName), SqliteOpenMode.ReadOnly))
+            {
+                CollectionAssert.AreEqual(
+                    new[] { EuropeOriginalDate },
+                    Column(connection, "SELECT DISTINCT wording_date FROM articles WHERE publisher_work_id = $work", ("$work", EuAxiomWiringHarness.SeedRoot(act))),
+                    "the original wording is dated by the act's Formex date, in English and in French");
+            }
+
+            var sets = new List<EvaluationCardSet>();
+            var asked = new List<(string? Language, DateOnly Day)>();
+            var latestDate = Day(Shift(EuropeOriginalDate, 2 * Spacing));
+            foreach (var language in new[] { "eng", "fra", null })
+            {
+                var name = language is null ? "EU as_of with no language" : $"EU as_of in {language}";
+                var arm = EuropeAsOfArm(mount, language);
+                var cases = EuropeTemporalCases(directory, language);
+                var report = TemporalEvaluation.Evaluate(cases, arm, floor: cases.Length);
+                Assert.AreEqual(1.0, report.Exactness.Value, $"{name}: every dated request selects exactly its wording or refuses as it must.");
+                Assert.AreEqual(GateVerdict.Pass, report.Gate.Verdict, name);
+                Assert.AreEqual(EvaluationGateNames.TemporalExactness, report.Gate.Name);
+
+                // The same design as the Luxembourg arms: a forward shift of one interval breaks every case before the latest
+                // wording, and leaves the latest wording answering every case at or after it.
+                var beforeLatest = cases.Where(value => value.AsOf < latestDate).ToArray();
+                var control = ShuffledControls.DateShuffle(
+                    beforeLatest, arm, (set, run) => TemporalEvaluation.Evaluate(set, run, floor: set.Count), [Spacing], Seed);
+                Assert.AreEqual(ControlVerdict.CaughtTheShuffle, control.Verdict, $"{name}: {control.Reason}");
+                sets.Add(EvaluationCard.Temporal(
+                    name, cases, report, beforeLatest, control,
+                    "the cases at or after the latest held wording are outside the control by its design: a forward shift leaves the same wording answering, so they cannot break"));
+                asked.AddRange(cases.Select(value => (language, value.AsOf)));
+            }
+
+            // EU in_force_on is no arm of the set: it is a typed refusal the EU capability manifest states (no build indexes the force
+            // dates the census acquires, and a wording date is never one), the same on every date, so no date shift could break it.
+            // It is held to that refusal instead, with EU context, on every day the arms ask, in each language and with none.
+            CollectionAssert.Contains(V3EuropeRefusedOperations.Rows.Select(static row => row.Operation).ToArray(), "in_force_on");
+            foreach (var (language, day) in asked)
+            {
+                var refused = await EnvelopeAsync(mount, "/api/v3/in_force_on", "in_force_on", EuropeDatedRequest(act, day, language));
+                var what = $"in_force_on {language ?? "with no language"} on {day.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)}";
+                Assert.AreEqual("retrieval_mode_unavailable", refused.Refusal?.Code, what);
+                Assert.AreEqual(PublisherId.EuEurLex, refused.Context.Publisher, what);
+            }
+
+            return [.. sets];
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
     }
 
     private static async Task<EvaluationCardSet[]> RunRefusalGateAsync()
@@ -431,5 +512,145 @@ public sealed class V3MachineGatesTests
         return rows.Length == 1 && rows[0].GetProperty("state").ValueKind == JsonValueKind.Object
             ? rows[0].GetProperty("state").GetProperty("state_sha256").GetString()
             : null;
+    };
+
+    /// <summary>
+    /// The EU fixture mount of the temporal set, one EU act in three held dates, in English and in French: the GDPR's original
+    /// wording, dated by its Formex date; one interval later, two consolidated versions whose held texts differ (the first named by
+    /// the CELEX the publisher gives that version, the second with none), so that date is ambiguous in both languages; two
+    /// intervals later, one consolidated version held singly. Returns the directory to delete and the mount's.
+    /// </summary>
+    internal static Task<(string Root, string Mount)> EuropeTemporalMountAsync()
+    {
+        var act = EuFirstMountAcquisitionTests.ConsolidatedSeed;
+        var twinDate = Shift(EuropeOriginalDate, Spacing);
+        var latestDate = Shift(EuropeOriginalDate, 2 * Spacing);
+        var otherEnglish = V3FirstMountBuildTests.OtherEnglishPackage;
+        return V3FirstMountBuildTests.ConsolidatedWorksMountAsync(
+            new(V3FirstMountBuildTests.WorkB, twinDate, V3MountedGatesTests.EuropeConsolidatedCelex(act, twinDate),
+                V3FirstMountBuildTests.EnglishPackage, V3FirstMountBuildTests.FrenchPackage),
+            new(V3FirstMountBuildTests.WorkC, twinDate, null, otherEnglish, EuFirstMountAcquisitionTests.FrenchOf(otherEnglish)),
+            new(V3FirstMountBuildTests.WorkE, latestDate, V3MountedGatesTests.EuropeConsolidatedCelex(act, latestDate),
+                V3FirstMountBuildTests.EnglishPackage, V3FirstMountBuildTests.FrenchPackage));
+    }
+
+    /// <summary>
+    /// The EU set's cases on <see cref="EuropeTemporalMountAsync"/>'s mount, in one language or with none, the days the Luxembourg
+    /// set asks: the day before the original wording; its first day, a day inside its window and its last day; the two versions'
+    /// day and a day inside their window (ambiguous: their texts differ); the latest version's day and a day long after it. A
+    /// wording is expected by its kind and hash-pinned permalink, the digest recomputed from the mount's EU index by the stated
+    /// rule; with no language, by English's and French's, sorted and joined.
+    /// </summary>
+    internal static TemporalCase[] EuropeTemporalCases(string mountDirectory, string? language)
+    {
+        const string NoVersion = "refusal:no_version_for_date";
+        const string Ambiguous = "refusal:ambiguous_version";
+        var act = EuFirstMountAcquisitionTests.ConsolidatedSeed;
+        var first = EuropeOriginalDate;
+        var twinDate = Shift(first, Spacing);
+        var latestDate = Shift(first, 2 * Spacing);
+        string[] languages = language is null ? ["eng", "fra"] : [language];
+        string Key(string work, string kind, string date) => string.Join('+', languages
+            .Select(served => $"{kind}:{EuropeWordingPermalink(mountDirectory, act, work, served, date)}")
+            .Order(StringComparer.Ordinal));
+        var original = Key(EuAxiomWiringHarness.SeedRoot(act), "original_wording", first);
+        var latest = Key(V3FirstMountBuildTests.WorkE, "consolidated_version", latestDate);
+        return
+        [
+            new TemporalCase("before-history", act, Day(Shift(first, -1)), NoVersion),
+            new TemporalCase("first-day", act, Day(first), original),
+            new TemporalCase("inside-first", act, Day(Shift(first, 100)), original),
+            new TemporalCase("last-day-of-first", act, Day(Shift(twinDate, -1)), original),
+            new TemporalCase("twin-day", act, Day(twinDate), Ambiguous),
+            new TemporalCase("inside-twins", act, Day(Shift(twinDate, 100)), Ambiguous),
+            new TemporalCase("latest-day", act, Day(latestDate), latest),
+            new TemporalCase("after-latest", act, Day(Shift(latestDate, 1000)), latest),
+        ];
+    }
+
+    /// <summary>
+    /// The hash-pinned permalink of a work's one held expression in a language at a wording date, the digest recomputed from the
+    /// mount's EU index by the stated rule (<see cref="V3EuropePermalinkTests.WordingSha256ByTheStatedRule"/>): the act's CELEX,
+    /// the work and the expression, the language, the date, and the expression's article identities in the publisher's order.
+    /// </summary>
+    private static string EuropeWordingPermalink(string mountDirectory, string act, string work, string language, string date)
+    {
+        using var connection = EuropeIndexBuilder.Open(Path.Combine(mountDirectory, V3CorpusMount.EuropeIndexFileName), SqliteOpenMode.ReadOnly);
+        var expressions = Column(connection, "SELECT DISTINCT publisher_expression_id FROM articles WHERE publisher_work_id = $work AND language = $language",
+            ("$work", work), ("$language", language));
+        Assert.HasCount(1, expressions, $"{work} holds one expression in {language}");
+        var identities = Column(connection,
+            "SELECT article_identity_sha256 FROM articles WHERE publisher_expression_id = $expression ORDER BY publisher_identifier, article_identity_sha256",
+            ("$expression", expressions[0]));
+        Assert.IsNotEmpty(identities);
+        return $"/eu-eurlex/{act}/{language}/{date}--{V3EuropePermalinkTests.WordingSha256ByTheStatedRule(act, work, expressions[0], language, date, identities)}";
+    }
+
+    /// <summary>One text column of a query over an index, its parameters bound by name.</summary>
+    private static List<string> Column(SqliteConnection connection, string sql, params (string Name, string Value)[] parameters)
+    {
+        using var command = connection.CreateCommand();
+        command.CommandText = sql;
+        foreach (var (name, value) in parameters)
+        {
+            command.Parameters.AddWithValue(name, value);
+        }
+
+        using var reader = command.ExecuteReader();
+        var values = new List<string>();
+        while (reader.Read())
+        {
+            values.Add(reader.GetString(0));
+        }
+
+        return values;
+    }
+
+    private static object EuropeDatedRequest(string act, DateOnly asOf, string? language)
+    {
+        var date = asOf.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+        return language is null
+            ? new { identifier = act, date }
+            : new { identifier = act, date, language };
+    }
+
+    /// <summary>
+    /// EU <c>as_of</c>'s selection for an act named by its seed CELEX, keyed as the EU cases key it: each wording served by its kind
+    /// and hash-pinned permalink (EU <c>as_of</c> serves no state digest), the keys of the languages that answer sorted and joined
+    /// with <c>+</c>; a refusal, its code. Null, so the case fails, for anything else: an answer or refusal without EU context, a
+    /// permalink that is not the act's wording in the language, date and digest the answer states, a wording dated after the
+    /// requested date, or a request in one language answered by anything but that language's one wording.
+    /// </summary>
+    internal static TemporalArm EuropeAsOfArm(V3CorpusMount mount, string? language) => (workKey, asOf) =>
+    {
+        var envelope = EnvelopeAsync(mount, "/api/v3/as_of", "as_of", EuropeDatedRequest(workKey, asOf, language)).GetAwaiter().GetResult();
+        if (envelope.Context.Publisher != PublisherId.EuEurLex)
+        {
+            return null;
+        }
+
+        if (envelope.Refusal is { } refusal)
+        {
+            return "refusal:" + refusal.Code;
+        }
+
+        var date = asOf.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+        var keys = new List<string>();
+        foreach (var state in envelope.Result!.Value.GetProperty("states").EnumerateArray())
+        {
+            var served = state.GetProperty("language").GetString();
+            var wording = state.GetProperty("wording");
+            var wordingDate = wording.GetProperty("wording_date").GetString();
+            var permalink = wording.GetProperty("permalink").GetString();
+            if ((language is not null && served != language) || wordingDate is null || string.CompareOrdinal(wordingDate, date) > 0 ||
+                permalink != $"/eu-eurlex/{workKey}/{served}/{wordingDate}--{wording.GetProperty("wording_sha256").GetString()}")
+            {
+                return null;
+            }
+
+            keys.Add($"{wording.GetProperty("kind").GetString()}:{permalink}");
+        }
+
+        return keys.Count == 0 || (language is not null && keys.Count != 1) ? null : string.Join('+', keys.Order(StringComparer.Ordinal));
     };
 }
