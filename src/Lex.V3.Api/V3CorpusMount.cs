@@ -487,7 +487,13 @@ internal sealed partial class V3CorpusMount : IDisposable
 
         if (request.Parameters.TryGetProperty("at", out _))
         {
-            return SnapshotUnknown(request, observedAt, RequiredString(request.Parameters, "at"), AsObservedAtWhatWouldAnswer);
+            var at = RequiredString(request.Parameters, "at");
+            // An EU identifier is refused the mode with EU context, as its snapshot form is: the event log records Luxembourg's
+            // builds only, and attribution follows the identifier (review of #913: it was answered snapshot_unknown with
+            // Luxembourg context).
+            return IsEuropeanUnionShaped(identifier)
+                ? ModeUnavailable(request, observedAt, PublisherId.EuEurLex, "r6_as_observed")
+                : SnapshotUnknown(request, observedAt, at, AsObservedAtWhatWouldAnswer);
         }
 
         var snapshot = RequiredString(request.Parameters, "snapshot");
@@ -719,8 +725,9 @@ internal sealed partial class V3CorpusMount : IDisposable
                 "The requested date is not a civil calendar date.");
         }
 
-        // An EU act whose census the EU index holds is answered by the EU time view (V3CorpusMount.EuropeTime.cs).
-        if (LocateEuropeSeed(request, identifier, observedAt, out var europeSeed) is { } refusedEurope)
+        // An EU act whose census the EU index holds is answered by the EU time view (V3CorpusMount.EuropeTime.cs); an EU
+        // identifier it does not hold is unknown there (review of #913).
+        if (LocateEuropeSeedForTime(request, identifier, observedAt, out var europeSeed) is { } refusedEurope)
         {
             return refusedEurope;
         }
@@ -5342,8 +5349,9 @@ internal sealed partial class V3CorpusMount : IDisposable
 
         var identifier = RequiredString(request.Parameters, "identifier");
         var requestedLanguage = OptionalLanguage(request.Parameters);
-        // An EU act whose census the EU index holds is answered by the EU time view (V3CorpusMount.EuropeTime.cs).
-        if (LocateEuropeSeed(request, identifier, observedAt, out var europeSeed) is { } refusedEurope)
+        // An EU act whose census the EU index holds is answered by the EU time view (V3CorpusMount.EuropeTime.cs); an EU
+        // identifier it does not hold is unknown there (review of #913).
+        if (LocateEuropeSeedForTime(request, identifier, observedAt, out var europeSeed) is { } refusedEurope)
         {
             return refusedEurope;
         }
@@ -6251,7 +6259,19 @@ internal sealed partial class V3CorpusMount : IDisposable
     private static bool IsEuropeanUnionShaped(string identifier) =>
         OfficialIdentifier.EliMintedBy(identifier) == PublisherId.EuEurLex ||
         OfficialIdentifier.ProfileOf(identifier) is not null ||
-        IsEuropeanUnionPublisherAddress(identifier);
+        IsEuropeanUnionPublisherAddress(identifier) ||
+        IsEuropeCoordinate(identifier);
+
+    /// <summary>This service's origin, under which its EU coordinates may also be written.</summary>
+    private const string EuropeCoordinateOrigin = "https://law.soufien.lu";
+
+    /// <summary>
+    /// This service's own EU coordinates: a wording's permalink or stable coordinate (<c>/eu-eurlex/…</c>), as a path or under
+    /// its origin. They name EU law, so they are EU-shaped (review of #913: they were answered as having no publisher shape).
+    /// </summary>
+    private static bool IsEuropeCoordinate(string identifier) =>
+        identifier.StartsWith("/" + EuropePermalinkPublisher + "/", StringComparison.Ordinal) ||
+        identifier.StartsWith(EuropeCoordinateOrigin + "/" + EuropePermalinkPublisher + "/", StringComparison.Ordinal);
 
     /// <summary>The identifier forms this product and Legilux mint for Luxembourg law.</summary>
     private static bool IsLuxembourgShaped(string identifier) =>

@@ -25,7 +25,8 @@ public static class V3EuropeRefusedOperations
             "article_history",
             V3UnservedOperation.RetrievalModeUnavailable,
             "one article followed across an EU act's dated wordings, matched by the publisher's article identifier from wording to " +
-            "wording; the wordings and their articles are held and served (timeline, as_of), and this build does not derive the alignment"),
+            "wording; the wordings are held (timeline and as_of serve each wording, evidence_bundle its articles), and this build does " +
+            "not derive the alignment"),
         new V3UnservedOperation(
             "as_observed",
             V3UnservedOperation.RetrievalModeUnavailable,
@@ -39,13 +40,14 @@ public static class V3EuropeRefusedOperations
         new V3UnservedOperation(
             "citation",
             V3UnservedOperation.RetrievalModeUnavailable,
-            "the references the publisher marked up in an EU wording's Formex text, extracted per article; this build reads each " +
-            "article's text and not its marked-up references"),
+            "a route that serves the references the publisher marked up in an EU wording's Formex text, with their targets resolved " +
+            "to acts; the references are extracted with each article (its reference tokens) and held in the EU index, and no route " +
+            "serves them or resolves their targets"),
         new V3UnservedOperation(
             "cited_by",
             V3UnservedOperation.RetrievalModeUnavailable,
-            "the references whose target is an EU act, matched to the act's EU identifiers (its CELEX, Cellar and ELI forms) in the " +
-            "held EU wordings and Luxembourg states; no reference target is matched to an EU act"),
+            "the references whose target is an EU act, from the held EU wordings and Luxembourg states, resolved to the act's EU " +
+            "identifiers (its CELEX, Cellar and ELI forms); no reference target is resolved to an EU act"),
         new V3UnservedOperation(
             "classification",
             V3UnservedOperation.RetrievalModeUnavailable,
@@ -59,8 +61,9 @@ public static class V3EuropeRefusedOperations
         new V3UnservedOperation(
             "in_force_on",
             V3UnservedOperation.RetrievalModeUnavailable,
-            "the entry-into-force, application and end-of-validity dates the Publications Office records for EU acts, which no build " +
-            "acquires; an EU wording date is never one of them, so the time view cannot answer an applicability question"),
+            "the entry-into-force and application dates the Publications Office asserts for EU acts, indexed: the census acquires " +
+            "them as reified date axioms and keeps them in custody, and no build indexes them; an EU wording date is never one of " +
+            "them, so the time view cannot answer an applicability question"),
         new V3UnservedOperation(
             "manifestation",
             V3UnservedOperation.RetrievalModeUnavailable,
@@ -74,12 +77,14 @@ public static class V3EuropeRefusedOperations
         new V3UnservedOperation(
             "relations",
             V3UnservedOperation.RetrievalModeUnavailable,
-            "the reference edges of an EU work in both directions, which need the references citation and cited_by would read for EU " +
-            "works; neither is extracted"),
+            "a route that serves an EU work's reference edges in both directions: the outbound edges are its articles' reference " +
+            "tokens, held in the EU index, and the inbound need every held text's references resolved to EU acts; neither direction " +
+            "is served"),
         new V3UnservedOperation(
             "status_on",
             V3UnservedOperation.RetrievalModeUnavailable,
-            "the Publications Office's force assertions about an EU work (in force, date of effect, end of validity), verbatim, which " +
-            "no build acquires"),
+            "the Publications Office's force assertions about an EU work (in force, entry into force, end of validity), verbatim and " +
+            "indexed: the census acquires them (its in-force fact and reified date axioms) and keeps them in custody, and no build " +
+            "indexes them"),
     });
 }

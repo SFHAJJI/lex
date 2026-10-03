@@ -1,7 +1,10 @@
+using System.Security.Cryptography;
 using System.Text.Json;
 using Lex.V3.Api;
 using Lex.V3.Contracts;
+using Lex.V3.Contracts.Index;
 using Lex.V3.Contracts.Platform;
+using Lex.V3.Contracts.Source.Core;
 using static Lex.V3.Ingest.Tests.V3CorpusClassificationMountTests;
 
 namespace Lex.V3.Ingest.Tests;
@@ -100,6 +103,105 @@ public sealed partial class V3FirstMountBuildTests
                     .Order(StringComparer.Ordinal)
                     .ToArray(),
                 "the 27 registered operations, each once");
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [TestMethod]
+    public async Task AnEuIdentifierIsAttributedToTheEuWhateverItsFormAndOnlyOneNoIndexHoldsIsUnknownToTheTimeView()
+    {
+        var (root, directory) = await ConsolidatedMountAsync();
+        try
+        {
+            using var mount = await V3CorpusMount.OpenAsync(directory, CancellationToken.None);
+            Assert.IsNotNull(mount);
+            var asOf = await EnvelopeAsync(mount, "/api/v3/as_of", "as_of", new { identifier = GdprSeed, date = "2025-03-01", language = "eng" });
+            Assert.IsNull(asOf.Refusal, asOf.Refusal?.Code);
+            var wording = asOf.Result!.Value.GetProperty("states")[0].GetProperty("wording");
+            var coordinate = wording.GetProperty("stable_coordinate").GetString()!;
+            var permalink = wording.GetProperty("permalink").GetString()!;
+
+            // as_observed by time refuses an EU identifier the mode with EU context, as by snapshot (review of #913: it answered
+            // snapshot_unknown with Luxembourg context).
+            var byTime = await EnvelopeAsync(mount, "/api/v3/as_observed", "as_observed", new { identifier = GdprSeed, date = "2025-03-01", at = "2026-10-01T08:30:00Z" });
+            Assert.AreEqual("retrieval_mode_unavailable", byTime.Refusal?.Code);
+            Assert.AreEqual(PublisherId.EuEurLex, byTime.Context.Publisher);
+
+            // This service's own EU coordinates are EU-shaped: an operation refused for EU identifiers refuses them the mode with EU
+            // context (review of #913: they were answered identifier_unknown, "no publisher shape", with Luxembourg context) ...
+            foreach (var identifier in new[] { coordinate, permalink, "https://law.soufien.lu" + permalink })
+            {
+                var history = await EnvelopeAsync(mount, "/api/v3/article_history", "article_history", new { identifier, anchor = "art_1", language = "eng" });
+                Assert.AreEqual("retrieval_mode_unavailable", history.Refusal?.Code, identifier);
+                Assert.AreEqual(PublisherId.EuEurLex, history.Context.Publisher, identifier);
+            }
+
+            // ... and the time view answers the act they name, as it answers a provision coordinate of a held expression, the
+            // consolidated wording's included.
+            var bundle = await EnvelopeAsync(mount, "/api/v3/evidence_bundle", "evidence_bundle", new { identifier = GdprSeed, date = "2025-03-01", language = "eng" });
+            Assert.IsNull(bundle.Refusal, bundle.Refusal?.Code);
+            var provision = bundle.Result!.Value.GetProperty("wordings")[0].GetProperty("articles")[0].GetProperty("provision_coordinate").GetString()!;
+            foreach (var identifier in new[] { coordinate, provision })
+            {
+                var answered = await EnvelopeAsync(mount, "/api/v3/as_of", "as_of", new { identifier, date = "2025-03-01", language = "eng" });
+                Assert.IsNull(answered.Refusal, $"{identifier}: {answered.Refusal?.Code}");
+                Assert.AreEqual(GdprSeed, answered.Result!.Value.GetProperty("seed_celex").GetString(), identifier);
+                var listed = await EnvelopeAsync(mount, "/api/v3/timeline", "timeline", new { identifier, language = "eng" });
+                Assert.IsNull(listed.Refusal, $"{identifier}: {listed.Refusal?.Code}");
+            }
+
+            // An EU identifier no index holds is unknown, with EU context, in as_of and timeline as in dossier: these operations
+            // serve EU acts, so the mode refusal does not describe it (review of #913).
+            foreach (var (operation, request) in new (string, object)[]
+                     {
+                         ("as_of", new { identifier = "32099R9999", date = "2025-03-01", language = "eng" }),
+                         ("timeline", new { identifier = "32099R9999", language = "eng" }),
+                         ("dossier", new { identifier = "32099R9999" }),
+                     })
+            {
+                var envelope = await EnvelopeAsync(mount, "/api/v3/" + operation, operation, request);
+                Assert.AreEqual("identifier_unknown", envelope.Refusal?.Code, operation);
+                Assert.AreEqual(PublisherId.EuEurLex, envelope.Context.Publisher, operation);
+            }
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [TestMethod]
+    public async Task CoverageReportsTheMountedEuManifestSoAManifestWrittenBeforeTheRowsStatesNoEuRefusal()
+    {
+        var (root, directory) = await ConsolidatedMountAsync();
+        try
+        {
+            // The EU manifest as a build before the EU rows wrote it: the same cells, and the three operations no route serves.
+            var path = Path.Combine(directory, V3CorpusMount.EuropeCapabilityManifestFileName);
+            var bytes = await File.ReadAllBytesAsync(path);
+            var digest = V3IndexCapabilityManifestArtifact.ComputeSha256(bytes);
+            var indexSha256 = Convert.ToHexStringLower(SHA256.HashData(await File.ReadAllBytesAsync(Path.Combine(directory, V3CorpusMount.EuropeIndexFileName))));
+            var mounted = V3IndexCapabilityManifestArtifact.ParseAndVerify(
+                new SourceArtifactRef(LexCorpus6Builder.ResourceIdOf(digest), digest), bytes, PublisherId.EuEurLex, indexSha256);
+            Assert.HasCount(16, mounted.NotServed, "a current build states the 3 unserved operations and the 13 EU refusals");
+            Assert.IsTrue(V3IndexCapabilityManifest.TryCreate(
+                PublisherId.EuEurLex, indexSha256, mounted.Cells, V3UnservedOperations.Rows, out var earlier, out var refusal), refusal.ToString());
+            using (var stream = File.Create(path))
+            {
+                _ = V3IndexCapabilityManifestArtifact.Write(stream, earlier!);
+            }
+
+            using var mount = await V3CorpusMount.OpenAsync(directory, CancellationToken.None);
+            Assert.IsNotNull(mount, "an earlier manifest still mounts: the reader checks its cells");
+            var operations = (await EnvelopeAsync(mount, "/api/v3/coverage", "coverage", new { })).Result!.Value.GetProperty("operations");
+            Assert.AreEqual(0, operations.GetProperty("refused_for_eu").GetArrayLength(),
+                "coverage reports what the mounted manifest states, not the platform's table");
+            // The API refuses as it does on any mount; only the statement is missing.
+            var refused = await EnvelopeAsync(mount, "/api/v3/diff", "diff", EuropeRefusedRequests["diff"]);
+            Assert.AreEqual("retrieval_mode_unavailable", refused.Refusal?.Code);
         }
         finally
         {

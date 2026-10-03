@@ -458,6 +458,69 @@ internal sealed partial class V3CorpusMount
         return null;
     }
 
+    /// <summary>
+    /// The seed act for <c>as_of</c> and <c>timeline</c> (review of #913). The census's own identifiers first; then, for an
+    /// EU-shaped identifier on a mount whose EU index has the time view, the act its expressions belong to when the EU index
+    /// resolves it (a provision coordinate of a held expression, another form of a held work's identifier), or the CELEX of this
+    /// service's own EU coordinate. An EU-shaped identifier none of these finds is <c>identifier_unknown</c> with EU context, as
+    /// <c>dossier</c> and <c>search</c> answer it: these operations serve EU acts, so the mode refusal does not describe it.
+    /// Without the time view, or for an identifier of no EU shape, the caller's path answers as before.
+    /// </summary>
+    private V3PlatformOperationOutcome? LocateEuropeSeedForTime(
+        V3PlatformOperationRequest request,
+        string identifier,
+        DateTimeOffset observedAt,
+        out string? seed)
+    {
+        var located = LocateEuropeSeed(request, identifier, observedAt, out seed);
+        if (located is not null || seed is not null || _europeReader is not { HasStates: true } || !IsEuropeanUnionShaped(identifier))
+        {
+            return located;
+        }
+
+        foreach (var key in EuropeSeedKeysOf(identifier))
+        {
+            located = LocateEuropeSeed(request, key, observedAt, out seed);
+            if (located is not null || seed is not null)
+            {
+                return located;
+            }
+        }
+
+        return Unknown(request, identifier, observedAt, PublisherId.EuEurLex,
+            "an EU act the mounted EU census holds: its CELEX, a Cellar work or expression IRI, a provision coordinate of a held " +
+            "expression, or this service's EU coordinate of one of its wordings");
+    }
+
+    /// <summary>
+    /// The census identifiers an EU-shaped identifier leads to: the expressions the EU index resolves it to, the expression of a
+    /// provision coordinate (<c>{expression}#lex-provision=…</c>, a consolidated expression's included, which the original-wording
+    /// resolution does not reach), then the CELEX segment of this service's own EU coordinate (<c>/eu-eurlex/{celex}/…</c>).
+    /// </summary>
+    private IEnumerable<string> EuropeSeedKeysOf(string identifier)
+    {
+        foreach (var expression in _europeReader!.ResolveExact(identifier))
+        {
+            yield return expression.PublisherExpressionId;
+        }
+
+        var provision = identifier.IndexOf("#lex-provision=", StringComparison.Ordinal);
+        if (provision > 0)
+        {
+            yield return identifier[..provision];
+        }
+
+        if (IsEuropeCoordinate(identifier))
+        {
+            var path = identifier.StartsWith("/", StringComparison.Ordinal) ? identifier : identifier[EuropeCoordinateOrigin.Length..];
+            var segments = path.Split('#')[0].Split('/', StringSplitOptions.RemoveEmptyEntries);
+            if (segments.Length >= 2)
+            {
+                yield return segments[1];
+            }
+        }
+    }
+
     private static PublisherId PublisherForIdentifierInBoth(string identifier) =>
         IsEuropeanUnionShaped(identifier) ? PublisherId.EuEurLex : PublisherId.LuLegilux;
 

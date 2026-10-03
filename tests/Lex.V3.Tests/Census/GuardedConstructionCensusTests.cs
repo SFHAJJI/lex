@@ -80,6 +80,7 @@ public sealed class GuardedConstructionCensusTests
                     + "method private instance Lex.V3.Api.V3CorpusMount::EvidenceBundleEurope, "
                     + "method private instance Lex.V3.Api.V3CorpusMount::EvidenceBundleEuropeAtDate, "
                     + "method private instance Lex.V3.Api.V3CorpusMount::LocateEuropeSeed, "
+                    + "method private instance Lex.V3.Api.V3CorpusMount::LocateEuropeSeedForTime, "
                     + "method private instance Lex.V3.Api.V3CorpusMount::LocateEuropeWork, "
                     + "method private instance Lex.V3.Api.V3CorpusMount::ModeUnavailable, "
                     + "method private instance Lex.V3.Api.V3CorpusMount::RefuseAmbiguousVersion, "
