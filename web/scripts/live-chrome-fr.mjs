@@ -109,7 +109,6 @@ export const LIVE_CHROME_FR = Object.freeze({
     europeOriginalHeading: '{celex}, {language}, le libellé original du {date} (la date de l’acte dans le paquet Formex de l’éditeur)',
     europeConsolidatedHeading: '{celex}, {language}, le libellé consolidé du {date} (la date de consolidation de l’éditeur)',
     europeHoldsUntil: 'Ce libellé sert de réponse pour les dates du {date} à la veille du {next}, date du libellé suivant.',
-    europeLatest: 'Il s’agit du dernier libellé détenu : il sert de réponse pour toute date ultérieure, et une modification que l’éditeur n’a pas encore consolidée n’y figure pas.',
     europeSameDateWorks: Object.freeze({
       one: '{count} autre œuvre de l’éditeur porte cette date : {held} dont ce même texte est détenu ici, {notHeld} sans texte détenu ici.',
       other: '{count} autres œuvres de l’éditeur portent cette date : {held} dont ce même texte est détenu ici, {notHeld} sans texte détenu ici.',
@@ -118,6 +117,7 @@ export const LIVE_CHROME_FR = Object.freeze({
       one: '{count} libellé de cet acte n’a pas de date de l’éditeur exploitable et n’est pas situé dans le temps : {held} dont ce même texte est détenu ici, {notHeld} sans texte détenu ici.',
       other: '{count} libellés de cet acte n’ont pas de date de l’éditeur exploitable et ne sont pas situés dans le temps : {held} dont ce même texte est détenu ici, {notHeld} sans texte détenu ici.',
     }),
+    europeLatest: 'Il s’agit du dernier libellé détenu : il sert de réponse pour toute date ultérieure, et une modification que l’éditeur n’a pas encore consolidée n’y figure pas.',
     europeCounts: Object.freeze({
       one: '{count} article cité ; détenus sans texte : {withoutText}.',
       other: '{count} articles cités ; détenus sans texte : {withoutText}.',
