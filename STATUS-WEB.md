@@ -2462,9 +2462,19 @@ A read of the build (2026-10-03) backs that wording:
 The annex's own PDF address is not carried into the index, so the link is the expression's.
 
 The GDPR fixture holds no annex: its dossier and both bundles answer the empty list, and the samples carry it. The
-grouping, the reasons and the link are held by unit tests (`V3CorpusEuropeAnnexTests`). The end-to-end control
-case is the next pull request: a synthetic image-only annex through the real acquisition, kept out of search,
-quotes and exports, and listed with its link.
+grouping, the reasons and the link are held by unit tests (`V3CorpusEuropeAnnexTests`).
+
+The end-to-end control case (#918, `EuAnnexControlCaseTests`) is the launch contract's named evidence:
+- **Source.** The real 2026/1965 Formex package and work XHTML, acquired through the Formex package producer over the
+  GDPR's seed. The annex title is rewritten to a sentinel in both, and the publisher's PDF is made image-only (seven
+  labelled pages, each an image with no text layer).
+- **Corpus and index.** The annex is classified `annex_text_not_available` on the member the articles are read from,
+  and the EU index copies that outcome. No article holds the annex's text ("Hambali", a word only the annex holds)
+  or its title.
+- **Answers.** Search finds the main body and none of the annex. Dossier and both evidence_bundle paths list the
+  annex with the official source the articles cite. No answer carries the annex's text or title.
+
+The launch contract's box stays unticked until the production build holds it.
 
 ## Next, in order (web lane; the data lane's items 1 to 3 are in STATUS-DATA.md)
 
@@ -2483,9 +2493,9 @@ The web lane's order since the owner's proxy's journey corrections (2026-10-01 1
    three-seed retry retained are structured text, not image-only (`C:\lex-v3\lanes\image-only-annex-handoff.md`,
    `annex-2024-1620-control-audit.json`), so they are no candidate; no real image-only EU annex is held on this
    machine yet. EU dossier and evidence_bundle now list each annex the corpus classified as
-   `annexes_not_served`: `text_not_available`, linked to the expression's official source (above,
-   2026-10-03). Next: the synthetic end-to-end control case, which carries an image-only annex through the
-   acquisition and holds it out of search, quotes and exports.
+   `annexes_not_served`: `text_not_available`, linked to the expression's official source. The synthetic
+   end-to-end control case holds that through the acquisition (#918; above, 2026-10-03). Next: the annex
+   line on the EU reading and dossier pages, walked in a browser over the control case's mount.
 A pull request that does not move a launch-contract line, or directly unblock one, waits. Merges take
 turns through `C:\lex-v3\lanes\MERGE-LOCK`, and related work goes in one bigger pull request.
 
