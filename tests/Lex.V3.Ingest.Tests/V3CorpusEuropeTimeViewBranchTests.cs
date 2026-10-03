@@ -124,7 +124,8 @@ public sealed partial class V3FirstMountBuildTests
     [TestMethod]
     public async Task TheLatestWordingWithNoTextInALanguageIsTextNotAvailableThereWhileTheOtherLanguageAnswers()
     {
-        var (root, directory) = await ConsolidatedWorksMountAsync(new(WorkB, ConsolidationDate, Designated, null, FrenchPackage));
+        var (root, directory) = await ConsolidatedWorksMountAsync(
+            new EuFirstMountAcquisitionTests.ConsolidatedWorkSpec(WorkB, ConsolidationDate, Designated, null, FrenchPackage));
         try
         {
             using var mount = await V3CorpusMount.OpenAsync(directory, CancellationToken.None);
