@@ -84,7 +84,8 @@ Decision 95 (lex-governance PR #9, merged 2026-09-30) records these rulings and 
   (`CHROME_REVIEWS` in `web/scripts/localization.mjs`). That includes the absence note ("Ce n’est pas
   un élément de preuve de l’inexistence de l’acte ou de la règle de droit.") and the live banner, both
   claims the owner may revise; `node web/scripts/refusal-sentences.mjs` prints every entry beside its
-  English, and STATUS-WEB.md lists the entries the driver wrote after the review.
+  English. The entries written after the review were reviewed in its addendum of 2026-10-03, so no
+  French entry ships unreviewed (STATUS-WEB.md lists them).
 
 - A rights question the retrieval set surfaced (PR #842): on the licence-blocked mount, search
   still matches inside the text the licence withholds. It answers which articles hold a word, and

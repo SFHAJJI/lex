@@ -2312,7 +2312,7 @@ contract's line "Chrome in FR and EN; DE and LB answer `localization_unavailable
   claim `dossier.intro` and `search.euWording`, say "original wording", no longer "the one wording
   held". An EU refusal card offers wordings by their dates ("wording of {date}", "libellé du {date}")
   and its `ambiguous_version` note says "ranks neither wording" (`refusalCardCopyFor`, now used by
-  every live screen). The date-speech test now holds all 20 EU-only entries, and the EU refusal
+  every live screen). The date-speech test now holds all 24 EU-only entries, and the EU refusal
   sentences in both languages.
 - **Separators.** A label's colon and a list's separator are table entries (`dossier.titleGroup`,
   `search.ambiguousWork`, `common.listSeparator`), used by the dossier's titles, search's ambiguous
@@ -2326,13 +2326,23 @@ contract's line "Chrome in FR and EN; DE and LB answer `localization_unavailable
   it will not send, the card's own reason a refusal card cannot be shown, the export's reasons) are
   said in English and marked English (`englishRun`, `statement`, `StatusSentence`). English pages
   carry no new attribute.
-- **Written by the driver after the review**, in its vocabulary and typography, for the owner to
-  revise with the rest: `reading.idle` (the review's proposal), `reading.intro`, `dossier.intro`,
-  `dossier.euExpressions`, `search.euWording`, `dossier.titleGroup`, `search.ambiguousWork`,
-  `common.listSeparator`, `refusalCard.europeCandidate`,
-  `refusalCard.europeCandidateWithdrawalNotStated`, `refusalCard.europePublished` and
-  `refusalCard.europeNotes.ambiguous_version`. `node web/scripts/refusal-sentences.mjs` prints every
-  French sentence and entry beside its English.
+- **Reviewed in an addendum (2026-10-03).** The review of #912 found entries written after the
+  review shipping under its receipt unreviewed. Decision 41 lets French ship only after review, so the
+  same AI reviewer, under the same delegation, reviewed every one (the record's addendum, 21 forms: 17
+  approved, 4 changed):
+  - the driver's earlier entries: `reading.idle` (the review's proposal), `reading.intro`,
+    `dossier.intro`, `dossier.euExpressions`, `search.euWording`, `dossier.titleGroup`,
+    `search.ambiguousWork`, `common.listSeparator`, `refusalCard.europeCandidate`,
+    `refusalCard.europeCandidateWithdrawalNotStated`, `refusalCard.europePublished` and
+    `refusalCard.europeNotes.ambiguous_version`;
+  - the time view's (#909): `reading.europeHoldsUntil`, and `reading.europeSameDateWorks` and
+    `reading.europeUnplaced`, whose counts now read as labelled counts ("avec ce même texte détenu
+    ici : {held}") because "{held} dont ce même texte…" misreads after a number; a publisher's Cellar
+    work is an "œuvre de l’éditeur" (the FRBR term), never "acte" or "version";
+  - the search page's under the rights rule (#910): `search.intro`, `search.idle` and `search.noHit`
+    (with U+00A0 inside the guillemets).
+  No French entry ships unreviewed. `node web/scripts/refusal-sentences.mjs` prints every French
+  sentence and entry beside its English.
 - **Evidence.** Every live page and every census answer and refusal (with its card shown and not
   shown), each transport failure and unreadable answer, the EU reading and the evaluation card,
   rendered in English before and after: 123 renders, 10 differ, each as intended (the French link in

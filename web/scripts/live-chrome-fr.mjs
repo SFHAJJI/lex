@@ -9,19 +9,22 @@
 // `localization.mjs`. The owner may revise any entry: `node web/scripts/refusal-sentences.mjs` prints every one
 // beside its English.
 //
-// Entries the driver wrote after the review, in its vocabulary and typography (STATUS-WEB.md lists them):
-// `reading.idle` (the review's own proposal), `reading.intro`, `dossier.intro`, `dossier.euExpressions` and
-// `search.euWording` (the EU time view serves consolidated wordings, so the original is no longer the one wording
-// held), the separators the pages wrote in their markup (`dossier.titleGroup`, `search.ambiguousWork`,
-// `common.listSeparator`), and an EU refusal card's offered wordings and their note
-// (`refusalCard.europeCandidate`, `refusalCard.europeCandidateWithdrawalNotStated`,
-// `refusalCard.europePublished`, `refusalCard.europeNotes.ambiguous_version`).
+// Entries written after the review were reviewed in its addendum of 2026-10-03, by the same reviewer under the same
+// delegation (the record's addendum section; STATUS-WEB.md lists them): `reading.idle` (the review's own proposal),
+// `reading.intro`, `dossier.intro`, `dossier.euExpressions` and `search.euWording` (the EU time view serves
+// consolidated wordings, so the original is no longer the one wording held), the separators the pages wrote in their
+// markup (`dossier.titleGroup`, `search.ambiguousWork`, `common.listSeparator`), an EU refusal card's offered wordings
+// and their note (`refusalCard.europeCandidate`, `refusalCard.europeCandidateWithdrawalNotStated`,
+// `refusalCard.europePublished`, `refusalCard.europeNotes.ambiguous_version`), the time view's
+// `reading.europeHoldsUntil`, `reading.europeSameDateWorks` and `reading.europeUnplaced` (PR #909), and the search
+// page's `search.intro`, `search.idle` and `search.noHit` once search matches only the text its rights admit (PR #910).
+// No French entry ships unreviewed.
 //
-// Vocabulary: a work is an "acte", a Luxembourg state a "version", the publisher's article id an "identifiant
-// d’article"; a wording (of an EU act, or of a Luxembourg article from state to state) is a "libellé", never a
-// "rédaction" or a "formulation", and an EU date is never "applicable"; held is "détenu", never "disponible"; a build
-// is a "déploiement"; legal advice is "consultation juridique". Typography: a no-break space (U+00A0) stands before
-// : ; ! ? % and » and after «, and the apostrophe is ’.
+// Vocabulary: a work is an "acte" (a publisher's Cellar work, one record of an EU act, is an "œuvre de l’éditeur"), a
+// Luxembourg state a "version", the publisher's article id an "identifiant d’article"; a wording (of an EU act, or of a
+// Luxembourg article from state to state) is a "libellé", never a "rédaction" or a "formulation", and an EU date is never
+// "applicable"; held is "détenu", never "disponible"; a build is a "déploiement"; legal advice is "consultation
+// juridique". Typography: a no-break space (U+00A0) stands before : ; ! ? % and » and after «, and the apostrophe is ’.
 //
 // This module is data only: the live pages' bundles carry it, so it imports nothing and reads nothing.
 
@@ -110,12 +113,12 @@ export const LIVE_CHROME_FR = Object.freeze({
     europeConsolidatedHeading: '{celex}, {language}, le libellé consolidé du {date} (la date de consolidation de l’éditeur)',
     europeHoldsUntil: 'Ce libellé sert de réponse pour les dates du {date} à la veille du {next}, date du libellé suivant.',
     europeSameDateWorks: Object.freeze({
-      one: '{count} autre œuvre de l’éditeur porte cette date : {held} dont ce même texte est détenu ici, {notHeld} sans texte détenu ici.',
-      other: '{count} autres œuvres de l’éditeur portent cette date : {held} dont ce même texte est détenu ici, {notHeld} sans texte détenu ici.',
+      one: '{count} autre œuvre de l’éditeur porte cette date ; avec ce même texte détenu ici : {held} ; sans texte détenu ici : {notHeld}.',
+      other: '{count} autres œuvres de l’éditeur portent cette date ; avec ce même texte détenu ici : {held} ; sans texte détenu ici : {notHeld}.',
     }),
     europeUnplaced: Object.freeze({
-      one: '{count} libellé de cet acte n’a pas de date de l’éditeur exploitable et n’est pas situé dans le temps : {held} dont ce même texte est détenu ici, {notHeld} sans texte détenu ici.',
-      other: '{count} libellés de cet acte n’ont pas de date de l’éditeur exploitable et ne sont pas situés dans le temps : {held} dont ce même texte est détenu ici, {notHeld} sans texte détenu ici.',
+      one: '{count} libellé de cet acte n’a pas de date de l’éditeur exploitable et n’est pas situé dans le temps ; avec ce même texte détenu ici : {held} ; sans texte détenu ici : {notHeld}.',
+      other: '{count} libellés de cet acte n’ont pas de date de l’éditeur exploitable et ne sont pas situés dans le temps ; avec ce même texte détenu ici : {held} ; sans texte détenu ici : {notHeld}.',
     }),
     europeLatest: 'Il s’agit du dernier libellé détenu : il sert de réponse pour toute date ultérieure, et une modification que l’éditeur n’a pas encore consolidée n’y figure pas.',
     europeCounts: Object.freeze({

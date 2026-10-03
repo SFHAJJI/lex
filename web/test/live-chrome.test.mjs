@@ -118,8 +118,9 @@ test("the French keeps the review's typography: a no-break space before : ; ! ? 
   ];
   assert.ok(french.length > 350, "the table and the refusal sentences are both read");
   for (const [path, text] of french) {
-    assert.doesNotMatch(text, / [:;!?%»]/, `${path}: an ordinary space before a high sign lets it start a line`);
-    assert.doesNotMatch(text, /« /, `${path}: an ordinary space after «`);
+    // The no-break space is required, not only an ordinary space refused: "acte:" or "«{query}»" fails too (review of #912).
+    assert.doesNotMatch(text, /(?<![  ])[:;!?%»]/, `${path}: a high sign without a no-break space before it`);
+    assert.doesNotMatch(text, /«(?![  ])/, `${path}: « without a no-break space after it`);
     assert.doesNotMatch(text, /'/, `${path}: a straight apostrophe`);
     assert.doesNotMatch(text, / {2}/, `${path}: a double space`);
   }

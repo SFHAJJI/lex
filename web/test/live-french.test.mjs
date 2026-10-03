@@ -320,3 +320,37 @@ test("a state with no French is said in English and marked English on a French p
   assert.equal(session.ask({ query: " ", language: "fra" }), false);
   assert.deepEqual(said, [{ state: "invalid_request", sentence: "a search needs a phrase to look for.", runs: [{ lang: "en", text: "a search needs a phrase to look for." }] }]);
 });
+
+test("the evaluation card's and the export panel's English is marked English on a French page (review of #912)", async () => {
+  // The card as the platform publishes it, and the same card with its first set emptied, so that each gate carries a reason.
+  const { EMPTY_CASES_SHA256, readEvaluationCard } = await import("../scripts/evaluation-card.mjs");
+  const card = JSON.parse(await readFile(new URL("../schemas/v3-platform/evaluation-card.json", web), "utf8"));
+  const emptied = structuredClone(card);
+  Object.assign(emptied.machine_gates[0], { cases: 0, cases_sha256: EMPTY_CASES_SHA256 });
+  emptied.machine_gates[0].gates = emptied.machine_gates[0].gates.map((gate) => ({ gate: gate.gate, verdict: "not_measured", value: null, threshold: gate.threshold, n: 0, not_measured_reason: "no_measurable_query" }));
+  Object.assign(emptied.shuffled_controls[0], { verdict: "not_applicable", cases: 0, cases_sha256: EMPTY_CASES_SHA256, reason: "there is no temporal case to shift: the mount holds no Luxembourg state for this arm" });
+  delete emptied.shuffled_controls[0].note;
+  for (const view of [readEvaluationCard(card), readEvaluationCard(emptied)]) {
+    const markup = renderToStaticMarkup(h(french.EvaluationCardView, { view }));
+    const englishOf = [
+      ["target", view.target],
+      ...view.sets.flatMap((set) => set.gates.filter((gate) => gate.reason !== null).map((gate) => [`${set.set} ${gate.gate}'s reason`, gate.reason])),
+      ...view.controls.flatMap((control) => [[`${control.control}'s reason`, control.reason], ...(control.note === null ? [] : [[`${control.control}'s note`, control.note]])]),
+      ...view.statisticalRows.flatMap((row) => [[`${row.dataset}'s name`, row.name], [`${row.dataset}'s gates`, row.gates], [`${row.dataset}'s governance`, row.governedBy]]),
+      ...view.negativeResults.flatMap((row) => [row.hypothesis, row.dataset, row.result, row.decision, row.whatWouldReverseIt].map((text) => [`a negative result's ${text}`, text])),
+    ];
+    for (const [what, text] of englishOf) assert.ok(markup.includes(`<span lang="en">${escaped(text)}</span>`), `the card's ${what} is marked English`);
+  }
+  assert.ok(readEvaluationCard(emptied).sets[0].gates.every((gate) => gate.reason !== null), "the emptied set's gates each carry a reason, so their marking is read");
+
+  // The export panel: the watermark and the platform's rights rule, which the exported file carries in English.
+  const envelope = envelopeOf("evidence_bundle", "the work on its state's date");
+  const outcome = frenchModule("live-reading.mjs").readingOutcome({ state: "success", envelope });
+  const { exportState, pinKey } = await import("../scripts/live-export.mjs");
+  const pins = new Set(outcome.view.states.flatMap((held) => [...held.articles, ...held.articlesWithoutText].map((article) => pinKey(held.stateSha256, article.publisherId))));
+  const composed = exportState(outcome, pins);
+  assert.equal(composed.state, "composed");
+  const panel = renderToStaticMarkup(h(french.ExportPanel, { outcome, pins, onSave: () => {} }));
+  assert.ok(panel.includes(`<p data-watermark="" lang="en">${escaped(composed.model.watermark)}</p>`), "the watermark is marked English");
+  assert.ok(panel.includes(`<span lang="en">${escaped(composed.model.rightsRule)}</span>`), "the rights rule is marked English");
+});
