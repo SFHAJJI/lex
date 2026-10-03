@@ -17,10 +17,10 @@ import { useEffect, useRef, useState } from 'react';
 
 import { QuoteEvidence, ReadingAnswerView, ReadingForm } from './LiveReading.jsx';
 import { createReadingSession, quotationLanguageTag } from '../scripts/live-reading.mjs';
-import { EXPORT_FORMATS, LIVE_EXPORT_IDLE, exportState, formatRefusedSentence, pinKey, saveExport } from '../scripts/live-export.mjs';
+import { EXPORT_FORMATS, LIVE_EXPORT_IDLE, exportState, formatRefused, pinKey, saveExport } from '../scripts/live-export.mjs';
 import { exportJson } from '../scripts/export-build.mjs';
-import { countedEntry, fillText, liveChrome } from '../scripts/live-chrome.mjs';
-import { LiveAnswer, Say } from './LiveAnswer.jsx';
+import { ENGLISH_LANG, countedEntry, fillText, liveChrome } from '../scripts/live-chrome.mjs';
+import { LiveAnswer, Said, Say, StatusSentence, inEnglish } from './LiveAnswer.jsx';
 
 /** The forms' labels and buttons, and this screen's sentences, from the interface copy table. */
 const FORM = liveChrome().form;
@@ -96,9 +96,10 @@ export function ExportPreview({ model, onSave }) {
       <p data-export-counts="">
         <Say template={countedEntry(COPY.counts, total)} values={{ count: total, withText: model.items.length, excluded: model.excluded.length }} />
       </p>
-      <p data-watermark="">{model.watermark}</p>
+      {/* The watermark is the file's own English, and the rights rule the platform's. */}
+      <p data-watermark="" lang={ENGLISH_LANG}>{model.watermark}</p>
       <p data-rights="">
-        <Say template={COPY.rights} values={{ rights: model.rightsDisposition }} /> {model.rightsRule}
+        <Say template={COPY.rights} values={{ rights: model.rightsDisposition }} /> {inEnglish(model.rightsRule)}
       </p>
       <p>
         <Say
@@ -156,7 +157,7 @@ export function ExportPreview({ model, onSave }) {
       </p>
       {refused.map(({ format, reason }) => (
         <p key={format.id} data-format-refused={format.id}>
-          {formatRefusedSentence(format, reason)}
+          <Said statement={formatRefused(format, reason)} />
         </p>
       ))}
       <details>
@@ -174,7 +175,7 @@ export function ExportPanel({ outcome, pins, onSave }) {
   return (
     <section data-export-state={panel.state}>
       <h2>{COPY.panelHeading}</h2>
-      {panel.state === 'composed' ? <ExportPreview model={panel.model} onSave={onSave} /> : <p role="status">{panel.sentence}</p>}
+      {panel.state === 'composed' ? <ExportPreview model={panel.model} onSave={onSave} /> : <StatusSentence outcome={panel} />}
     </section>
   );
 }

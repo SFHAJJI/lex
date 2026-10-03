@@ -17,8 +17,8 @@ import { useEffect, useRef, useState } from 'react';
 
 import { RefusalCard } from './RefusalCard.jsx';
 import { HISTORY_LANGUAGES, LIVE_HISTORY_IDLE, createHistorySession } from '../scripts/live-history.mjs';
-import { fillCounted, fillText, liveChrome } from '../scripts/live-chrome.mjs';
-import { LiveAnswer, Say } from './LiveAnswer.jsx';
+import { ENGLISH_LANG, fillCounted, fillText, liveChrome } from '../scripts/live-chrome.mjs';
+import { LiveAnswer, Say, StatusSentence, refusalCardCopyFor } from './LiveAnswer.jsx';
 
 /** The forms' labels and buttons, and this screen's sentences, from the interface copy table. */
 const FORM = liveChrome().form;
@@ -54,7 +54,7 @@ export function HistoryView({ view }) {
       <p data-history-summary="">
         {carried}{' '}
         {fillCounted(COPY.absent, view.absent.length, {})}{' '}
-        {runs.map(([language, count]) => fillCounted(COPY.runs, count, { language, distinct: view.distinctWordings[language] })).join('; ')}.
+        {runs.map(([language, count]) => fillCounted(COPY.runs, count, { language, distinct: view.distinctWordings[language] })).join(COMMON.listSeparator)}.
       </p>
       <table>
         <thead>
@@ -83,7 +83,7 @@ export function HistoryView({ view }) {
                     .map((article) => (article.validFrom === null
                       ? COPY.ownDateNotStated
                       : article.validityConflict ? fillText(COPY.ownDateDiffers, { date: article.validFrom }) : article.validFrom))
-                    .join('; ')}
+                    .join(COMMON.listSeparator)}
                 </td>
                 <td><code>{row.permalink}</code></td>
               </tr>
@@ -103,7 +103,7 @@ export function HistoryView({ view }) {
           </ul>
         </>
       ) : null}
-      <p>{asSentence(view.wordingRule)}</p>
+      <p lang={ENGLISH_LANG}>{asSentence(view.wordingRule)}</p>
     </>
   );
 }
@@ -121,14 +121,14 @@ export function HistoryAnswerView({ outcome }) {
   if (outcome.state === 'refusal' && outcome.card) {
     return (
       <section data-answer-state="refusal">
-        <RefusalCard code={outcome.code} sentence={outcome.sentence} payload={outcome.payload} copy={liveChrome().refusalCard} />
+        <RefusalCard code={outcome.code} sentence={outcome.sentence} payload={outcome.payload} copy={refusalCardCopyFor(outcome.context)} />
       </section>
     );
   }
 
   return (
     <section data-answer-state={outcome.state}>
-      <p role="status">{outcome.sentence}</p>
+      <StatusSentence outcome={outcome} />
     </section>
   );
 }

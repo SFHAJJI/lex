@@ -797,6 +797,20 @@ const PUBLISHED = 'published {date}';
 const PUBLICATION_NOT_STATED = 'publication date not stated by the platform';
 
 /**
+ * How an offered EU wording is described: by its date as a wording's, never as an applicability date
+ * (the French review's item 3). Said by the live pages only, for a refusal whose envelope names the EU
+ * publisher; an EU `ambiguous_version` today offers expression ids, which the card does not accept, so
+ * these words wait for EU candidates that are reading URLs. `published` has its own entry because a
+ * language may agree it with "wording" where it agrees the state's with "state".
+ */
+const EUROPE_CANDIDATE = 'wording of {validFrom}, hash {hash}, {published}';
+const EUROPE_CANDIDATE_WITHDRAWAL_NOT_STATED = 'wording of {validFrom}, hash {hash}, {published}, withdrawal not stated by the platform';
+/** The note such a card carries, in the same words: what the publisher does not rank is a wording, not a state. */
+const EUROPE_NOTE = Object.freeze({
+  ambiguous_version: 'The publisher ranks neither wording. There is no default and no remembered choice.',
+});
+
+/**
  * Every word the card itself says, in English, from the constants above: one source for the string
  * renderer and for the live pages' chrome table (`live-chrome.mjs`), which drafts the French beside
  * it. Templates carry `{name}` placeholders; `routes`, `notes` and `nullSentences` are keyed by the
@@ -815,6 +829,10 @@ export const REFUSAL_CARD_COPY = Object.freeze({
   candidateWithdrawalNotStated: CANDIDATE_WITHDRAWAL_NOT_STATED,
   published: PUBLISHED,
   publicationNotStated: PUBLICATION_NOT_STATED,
+  europeCandidate: EUROPE_CANDIDATE,
+  europeCandidateWithdrawalNotStated: EUROPE_CANDIDATE_WITHDRAWAL_NOT_STATED,
+  europePublished: PUBLISHED,
+  europeNotes: EUROPE_NOTE,
 });
 
 function requirePayload(code, payload) {

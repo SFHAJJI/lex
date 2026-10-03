@@ -14,7 +14,7 @@
 // screen reader read English law in a French voice.
 
 import { REFUSAL_CARD_COPY, candidateView, validateRefusal } from '../scripts/refusal-card.mjs';
-import { fillText } from '../scripts/live-chrome.mjs';
+import { ENGLISH_LANG, fillText } from '../scripts/live-chrome.mjs';
 import { Say } from './LiveAnswer.jsx';
 import { TOKENS } from '../scripts/design-tokens.mjs';
 import { handoffUri } from '../scripts/routes.mjs';
@@ -109,7 +109,9 @@ function Payload({ parts, copy }) {
           {parts.rows.map((row) => (
             <div className="strip-row" key={row.key}>
               <dt>{row.key}</dt>
-              <dd>{row.declaredNull ? copy.nullSentences[row.key] : row.value}</dd>
+              {/* A declared null is the card's own sentence; any other value is the platform's, in English
+                  where it is words, so a page in another language marks it English. */}
+              <dd lang={row.declaredNull ? undefined : ENGLISH_LANG}>{row.declaredNull ? copy.nullSentences[row.key] : row.value}</dd>
             </div>
           ))}
         </dl>

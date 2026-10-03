@@ -13,21 +13,22 @@
 // text is named as such, never shown as an empty quotation. The form's controls carry no `name`, and
 // permalinks are printed, not linked.
 //
-// An EU work's reading is the original wording the EU index holds, on its own date: each wording is
-// headed by its Formex act date (never an applicability date), and the acknowledgement and authenticity
-// statement Decision 95 requires stand above the text, as the platform words them.
+// An EU work's reading is the wording that answers the date asked, original or consolidated: each wording
+// is headed by its own date as a wording's (never an applicability date), and the acknowledgement and
+// authenticity statement Decision 95 requires stand above the text, as the platform words them (in
+// English, marked English on a page in another language).
 
 import { useEffect, useRef, useState } from 'react';
 
 import { RefusalCard } from './RefusalCard.jsx';
-import { LiveAnswer, Say } from './LiveAnswer.jsx';
+import { LiveAnswer, Say, StatusSentence, inEnglish, refusalCardCopyFor } from './LiveAnswer.jsx';
 import {
   LIVE_READING_IDLE,
   READING_LANGUAGES,
   createReadingSession,
   quotationLanguageTag,
 } from '../scripts/live-reading.mjs';
-import { countedEntry, liveChrome } from '../scripts/live-chrome.mjs';
+import { ENGLISH_LANG, countedEntry, liveChrome } from '../scripts/live-chrome.mjs';
 
 /** The forms' labels and buttons, and this screen's sentences, from the interface copy table. */
 const FORM = liveChrome().form;
@@ -137,7 +138,7 @@ export function ReadingView({ view }) {
       <ul data-not-held={view.notHeld.length}>
         {view.notHeld.map((row) => (
           <li key={row.item}>
-            <Say template={COMMON.notHeldRow} values={{ item: <strong>{row.item}</strong>, reason: row.reason }} />
+            <Say template={COMMON.notHeldRow} values={{ item: <strong>{row.item}</strong>, reason: inEnglish(row.reason) }} />
           </li>
         ))}
       </ul>
@@ -224,8 +225,8 @@ function EuropeWordingReading({ wording, celex }) {
 export function EuropeReadingView({ view }) {
   return (
     <>
-      <p data-acknowledgement="">{view.acknowledgement}</p>
-      <p data-authenticity="">{view.authenticity}</p>
+      <p data-acknowledgement="" lang={ENGLISH_LANG}>{view.acknowledgement}</p>
+      <p data-authenticity="" lang={ENGLISH_LANG}>{view.authenticity}</p>
       {view.wordings.map((wording) => (
         <EuropeWordingReading key={wording.wordingSha256} wording={wording} celex={view.celex} />
       ))}
@@ -233,18 +234,12 @@ export function EuropeReadingView({ view }) {
       <ul data-not-held={view.notHeld.length}>
         {view.notHeld.map((row) => (
           <li key={row.item}>
-            <Say template={COMMON.notHeldRow} values={{ item: <strong>{row.item}</strong>, reason: row.reason }} />
+            <Say template={COMMON.notHeldRow} values={{ item: <strong>{row.item}</strong>, reason: inEnglish(row.reason) }} />
           </li>
         ))}
       </ul>
     </>
   );
-}
-
-/** The refusal card's words for a refusal's publisher: an EU refusal's declared nulls speak of wordings, never states. */
-export function refusalCardCopyFor(context) {
-  const copy = liveChrome().refusalCard;
-  return context?.publisher === 'eu-eurlex' ? { ...copy, nullSentences: copy.europeNullSentences } : copy;
 }
 
 /** One view state, laid out: the reading, the refusal card, or the sentence a state carries. */
@@ -267,7 +262,7 @@ export function ReadingAnswerView({ outcome }) {
 
   return (
     <section data-answer-state={outcome.state}>
-      <p role="status">{outcome.sentence}</p>
+      <StatusSentence outcome={outcome} />
     </section>
   );
 }

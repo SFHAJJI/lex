@@ -1,49 +1,54 @@
 // The checkpoint list of refusal sentences (Decision 95, ruling 4), held to what the live pages say.
 //
-// Every English sentence a live page says for a refusal must have exactly one French draft, no draft may
-// stand for a sentence the pages no longer say, each template draft carries the placeholders its English
-// carries, the printed list has no row without a draft, and nothing in the product imports the drafts:
-// no French string ships before it is reviewed.
+// Every English sentence a live page says for a refusal must have exactly one French sentence (the
+// reviewed French the French pages say, `live-chrome-fr.mjs`), no French sentence may stand for one the
+// pages no longer say, each French template carries the placeholders its English carries, the printed
+// list has no row without its French, and nothing in the product imports the list (it imports every
+// screen). A missing French sentence fails here; on a page it throws rather than being said in English.
 
 import assert from "node:assert/strict";
 import { readFile, readdir } from "node:fs/promises";
 import test from "node:test";
 
 import {
-  FRENCH_DRAFTS,
-  FRENCH_HINT_DRAFTS,
+  FRENCH_HINTS,
+  FRENCH_SENTENCES,
+  FRENCH_TEMPLATES,
   SERVED_HINTS,
-  FRENCH_TEMPLATE_DRAFTS,
   SCREENS,
   renderCheckpointList,
   servedRefusalSentences,
   servedRefusalTemplates,
 } from "../scripts/refusal-sentences.mjs";
+import { refusalSentence } from "../scripts/live-chrome.mjs";
 
-test("every served refusal sentence has one French draft, and every draft a served sentence", () => {
+test("every served refusal sentence has one French sentence, and every French sentence a served sentence", () => {
   const served = servedRefusalSentences().map((row) => row.sentence);
   assert.equal(new Set(served).size, served.length, "each sentence is listed once");
-  assert.deepEqual(served.filter((sentence) => FRENCH_DRAFTS[sentence] === undefined), [], "no served sentence lacks a draft");
-  assert.deepEqual(Object.keys(FRENCH_DRAFTS).filter((sentence) => !served.includes(sentence)), [], "no draft stands for a sentence the pages no longer say");
+  assert.deepEqual(served.filter((sentence) => FRENCH_SENTENCES[sentence] === undefined), [], "no served sentence lacks its French");
+  assert.deepEqual(Object.keys(FRENCH_SENTENCES).filter((sentence) => !served.includes(sentence)), [], "no French sentence stands for one the pages no longer say");
   assert.ok(served.includes("This build has no Luxembourg index mounted.") && served.includes("This build has no EU index mounted."), "each index a payload can name");
+  for (const sentence of served) assert.equal(refusalSentence(sentence, "fr"), FRENCH_SENTENCES[sentence], "a French page says the listed French");
+  assert.throws(() => refusalSentence("A sentence the pages started to say.", "fr"), /no reviewed "fr" wording/, "a sentence with no French is never said in English in its place");
 });
 
-test("each page's two code-only sentences have drafts with the same placeholders", () => {
+test("each page's two code-only sentences have French with the same placeholders", () => {
   const templates = servedRefusalTemplates();
   assert.deepEqual(templates.map((row) => row.screen), SCREENS.map((screen) => screen.id));
-  assert.deepEqual(Object.keys(FRENCH_TEMPLATE_DRAFTS), SCREENS.map((screen) => screen.id));
+  assert.deepEqual(Object.keys(FRENCH_TEMPLATES), SCREENS.map((screen) => screen.id));
   for (const row of templates) {
     for (const kind of ["unexpected", "unshown"]) {
       const placeholders = (text) => [...text.matchAll(/\{[a-z]+\}/g)].map((match) => match[0]);
-      assert.deepEqual(placeholders(FRENCH_TEMPLATE_DRAFTS[row.screen][kind]), placeholders(row[kind]), `${row.screen} ${kind}`);
+      assert.deepEqual(placeholders(FRENCH_TEMPLATES[row.screen][kind]), placeholders(row[kind]), `${row.screen} ${kind}`);
     }
   }
 });
 
-test("the printed list carries every sentence with its draft, and no row without one", () => {
+test("the printed list carries every sentence with its French, and no row without it", () => {
   const list = renderCheckpointList();
-  for (const row of servedRefusalSentences()) assert.ok(list.includes(`| ${row.sentence} | ${FRENCH_DRAFTS[row.sentence]} |`), row.sentence);
-  assert.ok(!list.includes("(no draft)"));
+  for (const row of servedRefusalSentences()) assert.ok(list.includes(`| ${row.sentence} | ${FRENCH_SENTENCES[row.sentence]} |`), row.sentence);
+  assert.ok(!list.includes("(no French)"));
+  assert.match(list, /reviewed by Claude \(AI reviewer\), under the/);
 });
 
 test("the hints a card that cannot be shown still carries are in the list, as the pages say them (review of #793)", async () => {
@@ -72,20 +77,21 @@ test("the hints a card that cannot be shown still carries are in the list, as th
   }
   const list = renderCheckpointList();
   for (const hint of SERVED_HINTS) {
-    assert.ok(list.includes(`| ${hint.template} | ${FRENCH_HINT_DRAFTS[hint.template]} |`), hint.template);
+    assert.ok(list.includes(`| ${hint.template} | ${FRENCH_HINTS[hint.template]} |`), hint.template);
     const placeholders = (text) => [...text.matchAll(/\{[a-z]+\}/g)].map((match) => match[0]);
-    assert.deepEqual(placeholders(FRENCH_HINT_DRAFTS[hint.template]), placeholders(hint.template));
+    assert.deepEqual(placeholders(FRENCH_HINTS[hint.template]), placeholders(hint.template));
   }
-  assert.deepEqual(Object.keys(FRENCH_HINT_DRAFTS).sort(), SERVED_HINTS.map((hint) => hint.template).sort(), "no hint draft stands for a hint the pages no longer say");
+  assert.deepEqual(Object.keys(FRENCH_HINTS).sort(), SERVED_HINTS.map((hint) => hint.template).sort(), "no French hint stands for a hint the pages no longer say");
 });
 
-test("nothing the product ships imports the drafts", async () => {
+test("nothing the product ships imports the list", async () => {
   for (const directory of ["../app/", "../scripts/"]) {
     for (const name of await readdir(new URL(directory, import.meta.url))) {
       if (!/\.(mjs|jsx)$/.test(name) || name === "refusal-sentences.mjs") continue;
       const source = await readFile(new URL(`${directory}${name}`, import.meta.url), "utf8");
-      // An import of the module, not a mention of it: a comment may name the drafts' file.
-      assert.doesNotMatch(source, /(?:from\s+|import\s*\(\s*)["'][^"']*refusal-sentences(?:\.mjs)?["']/, `${name} imports the unreviewed French drafts`);
+      // An import of the module, not a mention of it: a comment may name the list's file. The list imports every
+      // screen, so a screen importing it would import itself.
+      assert.doesNotMatch(source, /(?:from\s+|import\s*\(\s*)["'][^"']*refusal-sentences(?:\.mjs)?["']/, `${name} imports the checkpoint list`);
     }
   }
 });

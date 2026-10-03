@@ -17,8 +17,8 @@
 import { askV3 } from "./v3-client.mjs";
 import { readSearchAnswer } from "./search-answer.mjs";
 import { validateRefusal } from "./refusal-card.mjs";
-import { noCorpusMountedSentence } from "./live-refusals.mjs";
-import { liveChrome } from "./live-chrome.mjs";
+import { noCorpusMountedSentence, tableRefusalSentence, unshownRefusal } from "./live-refusals.mjs";
+import { englishStatement, fillText, liveChrome, refusalTemplate } from "./live-chrome.mjs";
 
 /** The ceiling on a query's characters, the platform's own (`SearchMaxQueryCharacters`). */
 export const SEARCH_QUERY_MAX = 512;
@@ -63,10 +63,16 @@ export const LIVE_SEARCH_REFUSAL_SENTENCES = Object.freeze({
 export const LIVE_SEARCH_IDLE = liveChrome().search.idle;
 export const LIVE_SEARCH_LOADING = liveChrome().common.loading;
 
+const UNEXPECTED = "The search was refused with {code}.";
+const UNSHOWN = "The search was refused with {code}, and its card cannot be shown: {reason}.";
+
 export function unexpectedRefusalSentence(code) {
-  return `The search was refused with ${code}.`;
+  return fillText(refusalTemplate("search", "unexpected", UNEXPECTED), { code });
 }
 
+// A transport failure, an answer this page cannot read and a request it will not send have no reviewed
+// wording but the English: a page in another language says them in English, marked English
+// (`englishStatement`).
 export function transportFailureSentence(code) {
   // The server was reached and refused the request as asked: in practice a cursor from a result this
   // server no longer holds, since the form checks the phrase's own limits before sending it.
@@ -77,7 +83,7 @@ export function transportFailureSentence(code) {
 }
 
 export function unshownRefusalSentence(code, reason) {
-  return `The search was refused with ${code}, and its card cannot be shown: ${reason}.`;
+  return unshownRefusal("search", UNSHOWN, code, reason).sentence;
 }
 
 export function invalidAnswerSentence(reason) {
@@ -128,7 +134,7 @@ export function searchOutcome(asked) {
     try {
       return { state: "success", view: readSearchAnswer(asked.envelope.result.value), context: asked.envelope.context };
     } catch (error) {
-      return { state: "invalid_envelope", sentence: invalidAnswerSentence(error.message) };
+      return { state: "invalid_envelope", ...englishStatement(invalidAnswerSentence(error.message)) };
     }
   }
 
@@ -136,7 +142,7 @@ export function searchOutcome(asked) {
     const { code, helpful_payload: payload } = asked.envelope.refusal;
     const sentence = code === "no_corpus_mounted"
       ? noCorpusMountedSentence(payload)
-      : LIVE_SEARCH_REFUSAL_SENTENCES[code] ?? unexpectedRefusalSentence(code);
+      : tableRefusalSentence(LIVE_SEARCH_REFUSAL_SENTENCES, code, unexpectedRefusalSentence);
     try {
       validateRefusal({ code, sentence, payload });
     } catch (error) {
@@ -144,7 +150,7 @@ export function searchOutcome(asked) {
         state: "refusal",
         code,
         card: false,
-        sentence: unshownRefusalSentence(code, error.message),
+        ...unshownRefusal("search", UNSHOWN, code, error.message),
         context: asked.envelope.context,
       };
     }
@@ -152,10 +158,10 @@ export function searchOutcome(asked) {
   }
 
   if (asked.state === "transport_failure") {
-    return { state: "transport_failure", sentence: transportFailureSentence(asked.code) };
+    return { state: "transport_failure", ...englishStatement(transportFailureSentence(asked.code)) };
   }
 
-  return { state: "invalid_envelope", sentence: invalidAnswerSentence(asked.reason) };
+  return { state: "invalid_envelope", ...englishStatement(invalidAnswerSentence(asked.reason)) };
 }
 
 /** Asks the live API one search and returns the view state. */
@@ -177,7 +183,7 @@ export function startLiveSearch({ contract, fetchImpl, request, onOutcome }) {
     })
     .catch((error) => {
       if (error?.name !== "AbortError" && !controller.signal.aborted) {
-        onOutcome({ state: "invalid_envelope", sentence: invalidAnswerSentence(String(error?.message ?? error)) });
+        onOutcome({ state: "invalid_envelope", ...englishStatement(invalidAnswerSentence(String(error?.message ?? error))) });
       }
     });
   return () => controller.abort();
@@ -199,7 +205,7 @@ export function createSearchSession({ contract, fetchImpl, onOutcome }) {
       try {
         searchParameters(request);
       } catch (error) {
-        onOutcome({ state: "invalid_request", sentence: `${error.message}.` });
+        onOutcome({ state: "invalid_request", ...englishStatement(`${error.message}.`) });
         return false;
       }
       last = request;

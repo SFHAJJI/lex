@@ -1,7 +1,7 @@
 // The live page a request for an unreviewed interface language gets: `localization_unavailable`.
 //
-// Built into `dist-live/` as `locale-<code>.html` for every chrome locale without reviewed copy (French,
-// German and Luxembourgish today; Decision 41). It says what the preview's page says
+// Built into `dist-live/` as `locale-<code>.html` for every chrome locale without reviewed copy (German
+// and Luxembourgish; French is reviewed and has its own pages; Decision 41). It says what the preview's page says
 // (`localeUnavailableCopy`), in English and labelled English, under the live banner, since a live page
 // never says "synthetic" (Decision 95, ruling 3). It has no script and asks nothing.
 

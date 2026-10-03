@@ -25,6 +25,10 @@
 // evidence values carry a space between them. React puts none there, the string renderer joins with
 // one, and two identifiers run together are one identifier a reader cannot look up.
 //
+// The answer's own sentences (its scope, its notes, the data an unserved operation needs, the reason
+// each thing is not held) are the platform's English, shown as sent and marked English on a page in
+// another language (`ENGLISH_LANG`, `inEnglish`), so a screen reader does not read them in its voice.
+//
 // There is no build instant on the counts anywhere on this page, and no retention sentence, and both
 // are deliberate rather than pending. The answer's own `not_held` carries a row saying it states no build
 // time and another saying no observation time is held, and both are rendered with the rest. The page
@@ -42,8 +46,8 @@
 
 import { Fragment } from 'react';
 
-import { Say } from './LiveAnswer.jsx';
-import { fillText } from '../scripts/live-chrome.mjs';
+import { Say, inEnglish } from './LiveAnswer.jsx';
+import { ENGLISH_LANG, fillText } from '../scripts/live-chrome.mjs';
 import {
   COVERAGE_COLUMNS,
   COVERAGE_COPY,
@@ -154,7 +158,7 @@ function History({ history, copy }) {
       <section className="coverage-block">
         <h2>{copy.headings.history}</h2>
         <p className="coverage-held">{copy.noBuildsRecorded}</p>
-        <p className="coverage-note">{history.note}</p>
+        <p className="coverage-note" lang={ENGLISH_LANG}>{history.note}</p>
       </section>
     );
   }
@@ -186,7 +190,7 @@ function History({ history, copy }) {
           </tr>
         ))}
       </FacetTable>
-      <p className="coverage-note">{history.note}</p>
+      <p className="coverage-note" lang={ENGLISH_LANG}>{history.note}</p>
     </section>
   );
 }
@@ -207,7 +211,7 @@ export function Coverage({ answer, copy = COVERAGE_COPY }) {
     <section className="coverage">
       <section className="coverage-block">
         <h2>{copy.headings.about}</h2>
-        <p className="coverage-scope">{view.scope}</p>
+        <p className="coverage-scope" lang={ENGLISH_LANG}>{view.scope}</p>
         <dl className="coverage-facts">
           <Row label={copy.facts.publisher}><Evidence value={view.mounted.publisher} /></Row>
           <Row label={copy.facts.corpus}><Evidence value={view.mounted.corpus_sha256} /></Row>
@@ -218,7 +222,7 @@ export function Coverage({ answer, copy = COVERAGE_COPY }) {
       </section>
       <section className="coverage-block">
         <h2>{copy.headings.counted}</h2>
-        <p className="coverage-note">{view.countsNote}</p>
+        <p className="coverage-note" lang={ENGLISH_LANG}>{view.countsNote}</p>
       </section>
       <section className="coverage-block">
         <h2>{copy.headings.holds}</h2>
@@ -272,7 +276,7 @@ export function Coverage({ answer, copy = COVERAGE_COPY }) {
             ))}
           </FacetTable>
         )}
-        <p className="coverage-note">{view.members.gapsNote}</p>
+        <p className="coverage-note" lang={ENGLISH_LANG}>{view.members.gapsNote}</p>
         {view.members.articleOutcomes.length === 0 ? (
           <p className="coverage-note">{copy.noArticleOutcomes}</p>
         ) : (
@@ -285,7 +289,7 @@ export function Coverage({ answer, copy = COVERAGE_COPY }) {
             ))}
           </FacetTable>
         )}
-        <p className="coverage-note">{view.members.articleOutcomesNote}</p>
+        <p className="coverage-note" lang={ENGLISH_LANG}>{view.members.articleOutcomesNote}</p>
       </section>
       <section className="coverage-block">
         <h2>{copy.headings.asked}</h2>
@@ -305,12 +309,12 @@ export function Coverage({ answer, copy = COVERAGE_COPY }) {
             {view.operations.notServedData.map((row) => (
               <tr key={row.operation}>
                 <td><Evidence value={row.operation} /></td>
-                <td>{row.dataNeeded}</td>
+                <td lang={ENGLISH_LANG}>{row.dataNeeded}</td>
               </tr>
             ))}
           </FacetTable>
         )}
-        <p className="coverage-note">{view.operations.note}</p>
+        <p className="coverage-note" lang={ENGLISH_LANG}>{view.operations.note}</p>
       </section>
       <History history={view.history} copy={copy} />
       <section className="coverage-block">
@@ -344,7 +348,7 @@ export function Coverage({ answer, copy = COVERAGE_COPY }) {
         <ul className="coverage-not-held">
           {view.notHeld.map((held) => (
             <li key={held.item}>
-              <Say template={copy.notHeldRow} values={{ item: <Evidence value={held.item} />, reason: held.reason }} />
+              <Say template={copy.notHeldRow} values={{ item: <Evidence value={held.item} />, reason: inEnglish(held.reason) }} />
             </li>
           ))}
         </ul>

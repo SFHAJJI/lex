@@ -14,7 +14,8 @@
 import { askV3 } from "./v3-client.mjs";
 import { readCoverage } from "./coverage.mjs";
 import { validateRefusal } from "./refusal-card.mjs";
-import { liveChrome } from "./live-chrome.mjs";
+import { tableRefusalSentence, unshownRefusal } from "./live-refusals.mjs";
+import { englishStatement, fillText, liveChrome, refusalTemplate } from "./live-chrome.mjs";
 
 /**
  * The one sentence per refusal code a coverage request can meet. `coverage` takes no parameters,
@@ -28,10 +29,16 @@ export const LIVE_COVERAGE_REFUSAL_SENTENCES = Object.freeze({
 
 export const LIVE_COVERAGE_LOADING = liveChrome().coverage.loading;
 
+const UNEXPECTED = "The coverage report was refused with {code}.";
+const UNSHOWN = "The coverage report was refused with {code}, and its card cannot be shown: {reason}.";
+
 /** The sentence for a refusal this page names only by its code. */
 export function unexpectedRefusalSentence(code) {
-  return `The coverage report was refused with ${code}.`;
+  return fillText(refusalTemplate("coverage", "unexpected", UNEXPECTED), { code });
 }
+
+// A transport failure and an answer this page cannot read have no reviewed wording but the English: a
+// page in another language says them in English, marked English (`englishStatement`).
 
 /** The sentence for a transport failure, which carries the problem code the API sent below the envelope. */
 export function transportFailureSentence(code) {
@@ -40,7 +47,7 @@ export function transportFailureSentence(code) {
 
 /** The sentence for a refusal whose card the refusal card's own rules will not show. */
 export function unshownRefusalSentence(code, reason) {
-  return `The coverage report was refused with ${code}, and its card cannot be shown: ${reason}.`;
+  return unshownRefusal("coverage", UNSHOWN, code, reason).sentence;
 }
 
 /** The sentence for an answer that is not one this page can read. */
@@ -58,14 +65,14 @@ export function coverageOutcome(asked) {
     try {
       readCoverage(answer);
     } catch (error) {
-      return { state: "invalid_envelope", sentence: invalidAnswerSentence(error.message) };
+      return { state: "invalid_envelope", ...englishStatement(invalidAnswerSentence(error.message)) };
     }
     return { state: "success", answer, context: asked.envelope.context };
   }
 
   if (asked.state === "refusal") {
     const { code, helpful_payload: payload } = asked.envelope.refusal;
-    const sentence = LIVE_COVERAGE_REFUSAL_SENTENCES[code] ?? unexpectedRefusalSentence(code);
+    const sentence = tableRefusalSentence(LIVE_COVERAGE_REFUSAL_SENTENCES, code, unexpectedRefusalSentence);
     // The card is checked here, before anything renders, as a success answer is checked by the
     // coverage reader: a refusal the card's rules refuse (a payload without the evidence the card
     // requires, a code whose card needs governing text) would otherwise throw during render and
@@ -77,7 +84,7 @@ export function coverageOutcome(asked) {
         state: "refusal",
         code,
         card: false,
-        sentence: unshownRefusalSentence(code, error.message),
+        ...unshownRefusal("coverage", UNSHOWN, code, error.message),
         context: asked.envelope.context,
       };
     }
@@ -85,10 +92,10 @@ export function coverageOutcome(asked) {
   }
 
   if (asked.state === "transport_failure") {
-    return { state: "transport_failure", sentence: transportFailureSentence(asked.code) };
+    return { state: "transport_failure", ...englishStatement(transportFailureSentence(asked.code)) };
   }
 
-  return { state: "invalid_envelope", sentence: invalidAnswerSentence(asked.reason) };
+  return { state: "invalid_envelope", ...englishStatement(invalidAnswerSentence(asked.reason)) };
 }
 
 /** Asks the live API for its coverage report and returns the view state. */
@@ -110,7 +117,7 @@ export function startLiveCoverage({ contract, fetchImpl, onOutcome }) {
     })
     .catch((error) => {
       if (error?.name !== "AbortError" && !controller.signal.aborted) {
-        onOutcome({ state: "invalid_envelope", sentence: invalidAnswerSentence(String(error?.message ?? error)) });
+        onOutcome({ state: "invalid_envelope", ...englishStatement(invalidAnswerSentence(String(error?.message ?? error))) });
       }
     });
   return () => controller.abort();

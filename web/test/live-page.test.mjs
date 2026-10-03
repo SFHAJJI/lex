@@ -185,8 +185,9 @@ test("every live page offers the interface languages, each named in itself; an u
     const nav = html.slice(html.indexOf('<nav aria-label="Interface language"'), html.indexOf("</nav>") + 6);
     assert.deepEqual([...nav.matchAll(/<a href="([^"]+)" lang="([a-z]+)" hrefLang="([a-z]+)"[^>]*>([^<]+)<\/a>/g)].map((m) => [m[1], m[2], m[3], m[4]]), [
       ["/", "en", "en", "English"],
-      // The name in its own language; the destination's language, English, as hrefLang (review of #797).
-      ["/locale-fr.html", "fr", "en", "Français"],
+      // The name in its own language; the destination's language as hrefLang: French for the reviewed French
+      // pages, English for the page that says a language is not reviewed (review of #797).
+      ["/fr/index.html", "fr", "fr", "Français"],
       ["/locale-de.html", "de", "en", "Deutsch"],
       ["/locale-lb.html", "lb", "en", "Lëtzebuergesch"],
     ]);
@@ -198,7 +199,8 @@ test("every live page offers the interface languages, each named in itself; an u
   try {
     await buildLive(new URL(`file:///${destination.replaceAll("\\", "/")}/`));
     await assert.rejects(readFile(join(destination, "locale-en.html")), "English chrome is reviewed: no refusal page for it");
-    for (const [code, name] of [["fr", "French"], ["de", "German"], ["lb", "Luxembourgish"]]) {
+    await assert.rejects(readFile(join(destination, "locale-fr.html")), "French chrome is reviewed: its pages are under fr/, and no refusal page stands for it");
+    for (const [code, name] of [["de", "German"], ["lb", "Luxembourgish"]]) {
       const html = await readFile(join(destination, `locale-${code}.html`), "utf8");
       assert.match(html, /<html lang="en"/, `${code}: written in English and labelled English`);
       assert.ok(html.includes(`This interface has no reviewed copy in ${name}`));

@@ -139,7 +139,7 @@ test("an EU work's search is the EU results: the pinned wording once, each hit's
   const shown = text(markup);
   assert.ok(markup.includes(`data-pinned-wording="${value.pinned_wording.wording_sha256}"`));
   assert.ok(markup.includes(`<code>${value.pinned_wording.permalink}</code>`), "the wording's permalink is printed once, above the hits");
-  assert.ok(shown.includes(`Every hit is in the one wording of 32016R0679 this server holds in eng, dated ${value.pinned_wording.wording_date} and pinned by its digest`));
+  assert.ok(shown.includes(`Every hit is in the original wording of 32016R0679 this server holds in eng, dated ${value.pinned_wording.wording_date} and pinned by its digest`));
   assert.ok(shown.includes(`The wording date (wording_date in search, wording_dates in dossier) is the date the publisher's Formex package gives the act`),
     "the answer's own sentence says what the date is, as a sentence");
   for (const hit of value.hits) {
