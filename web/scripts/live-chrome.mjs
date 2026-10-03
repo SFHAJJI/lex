@@ -95,6 +95,18 @@ const EN = Object.freeze({
     withoutText: "Held without text: {articles}.",
     notHeldHeading: "What this reading does not hold",
     europeWordingHeading: "{celex}, {language}, the original wording of {date} (the act's date in the publisher's Formex package; no later wording is held)",
+    europeOriginalHeading: "{celex}, {language}, the original wording of {date} (the act's date in the publisher's Formex package)",
+    europeConsolidatedHeading: "{celex}, {language}, the consolidated wording of {date} (the publisher's consolidation date)",
+    europeHoldsUntil: "This wording answers the dates from {date} to the day before {next}, the date of the next wording.",
+    europeSameDateWorks: Object.freeze({
+      one: "{count} other publisher work carries this date: {held} with this same text held here, {notHeld} with no text held here.",
+      other: "{count} other publisher works carry this date: {held} with this same text held here, {notHeld} with no text held here.",
+    }),
+    europeUnplaced: Object.freeze({
+      one: "{count} wording of this act has no usable publisher date and is not placed in time: {held} with this same text held here, {notHeld} with no text held here.",
+      other: "{count} wordings of this act have no usable publisher date and are not placed in time: {held} with this same text held here, {notHeld} with no text held here.",
+    }),
+    europeLatest: "This is the latest wording held: it answers every later date, and an amendment the publisher has not yet consolidated is not in it.",
     europeCounts: Object.freeze({
       one: "{count} article quoted, {withoutText} held without text.",
       other: "{count} articles quoted, {withoutText} held without text.",

@@ -163,12 +163,37 @@ function EuropeArticle({ article, wording }) {
   );
 }
 
+/** One disclosure line beside an EU wording: how many other versions there are and whether their text is held here. */
+function EuropeDisclosure({ template, rows, name }) {
+  if (rows.length === 0) return null;
+  const held = rows.filter((row) => row.textHeld).length;
+  return (
+    <p data-disclosure={name}>
+      <Say template={countedEntry(template, rows.length)} values={{ count: rows.length, held, notHeld: rows.length - held }} />
+    </p>
+  );
+}
+
 function EuropeWordingReading({ wording, celex }) {
   return (
     <section data-wording={wording.wordingSha256}>
       <h2>
-        <Say template={COPY.europeWordingHeading} values={{ celex, language: wording.language, date: wording.wordingDate }} />
+        <Say
+          template={wording.nextDate === undefined
+            ? COPY.europeWordingHeading
+            : wording.kind === 'consolidated_version' ? COPY.europeConsolidatedHeading : COPY.europeOriginalHeading}
+          values={{ celex, language: wording.language, date: wording.wordingDate }}
+        />
       </h2>
+      {wording.nextDate === undefined ? null : (
+        <p data-wording-holds="">
+          {wording.nextDate === null
+            ? COPY.europeLatest
+            : <Say template={COPY.europeHoldsUntil} values={{ date: wording.wordingDate, next: wording.nextDate }} />}
+        </p>
+      )}
+      <EuropeDisclosure template={COPY.europeSameDateWorks} rows={wording.sameDateWorks} name="same-date" />
+      <EuropeDisclosure template={COPY.europeUnplaced} rows={wording.unplacedVersions} name="unplaced" />
       <p>
         <code>{wording.permalink}</code>
       </p>

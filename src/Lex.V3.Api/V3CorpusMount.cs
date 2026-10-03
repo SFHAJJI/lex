@@ -13,7 +13,7 @@ using Lex.V3.Ingest.Luxembourg;
 
 namespace Lex.V3.Api;
 
-internal sealed class V3CorpusMount : IDisposable
+internal sealed partial class V3CorpusMount : IDisposable
 {
     public const string IndexFileName = "luxembourg-index.sqlite3";
     public const string CapabilityManifestFileName = "luxembourg-capability-manifest.json";
@@ -719,6 +719,17 @@ internal sealed class V3CorpusMount : IDisposable
                 "The requested date is not a civil calendar date.");
         }
 
+        // An EU act whose census the EU index holds is answered by the EU time view (V3CorpusMount.EuropeTime.cs).
+        if (LocateEuropeSeed(request, identifier, observedAt, out var europeSeed) is { } refusedEurope)
+        {
+            return refusedEurope;
+        }
+
+        if (europeSeed is not null)
+        {
+            return AsOfEurope(request, identifier, europeSeed, requestedDate, requestedLanguage, observedAt);
+        }
+
         if (RefuseUnlessWorkStates(request, identifier, observedAt, "r6_as_of", requestedLanguage,
                 out var states, out var availableLanguages) is { } refused)
         {
@@ -1002,6 +1013,18 @@ internal sealed class V3CorpusMount : IDisposable
         // mounted, an EU identifier keeps the refusal it had (retrieval_mode_unavailable), which the refusal census pins.
         if (_europeReader is not null)
         {
+            // An EU act whose census the EU index holds is quoted at the requested date by the EU time view; an index with
+            // no states table keeps the original-wording path below.
+            if (LocateEuropeSeed(request, identifier, observedAt, out var europeSeed) is { } refusedSeed)
+            {
+                return refusedSeed;
+            }
+
+            if (europeSeed is not null)
+            {
+                return EvidenceBundleEuropeAtDate(request, identifier, europeSeed, requestedDate, requestedLanguage, observedAt);
+            }
+
             if (LocateEuropeWork(request, identifier, observedAt, out var europe) is { } refusedEurope)
             {
                 return refusedEurope;
@@ -2138,7 +2161,8 @@ internal sealed class V3CorpusMount : IDisposable
         var requestedLanguage = OptionalLanguage(request.Parameters);
         if (TryParseEuropePermalink(identifier, out var celex, out var europeLanguage, out var wordingDate, out var europeDigest, out var provision))
         {
-            return VerifyEurope(request, identifier, celex, europeLanguage, wordingDate, europeDigest, provision, requestedLanguage, observedAt);
+            return VerifyEuropeState(request, identifier, celex, europeLanguage, wordingDate, europeDigest, provision, requestedLanguage, observedAt)
+                ?? VerifyEurope(request, identifier, celex, europeLanguage, wordingDate, europeDigest, provision, requestedLanguage, observedAt);
         }
 
         if (TryParsePinnedPermalink(identifier, out var workKey, out var applicabilityDate, out var requestedDigest, out var anchor))
@@ -4061,6 +4085,7 @@ internal sealed class V3CorpusMount : IDisposable
 
         var page = all.Skip(start).Take(limit).ToArray();
         var truncated = start + page.Length < all.Length;
+        var searchSeed = EuropeSeedsOf(resolved[0].PublisherWorkId) is [var heldSeed] ? heldSeed : null;
         using var result = JsonSerializer.SerializeToDocument(new
         {
             requested_query = query,
@@ -4076,7 +4101,7 @@ internal sealed class V3CorpusMount : IDisposable
             hit_unit = EuropeSearchHitUnit,
             lanes = SearchLanes,
             date_semantics = EuropeWordingDateSemantics,
-            consolidations_held = false,
+            consolidations_held = searchSeed is not null && EuropeConsolidationsHeld(EuropeTimelineOf(searchSeed)),
             text_served = false,
             searchable_text_held_for_language = measured,
             searchable_languages = _europeReader.SearchableLanguages(),
@@ -4129,7 +4154,8 @@ internal sealed class V3CorpusMount : IDisposable
                 // The hash-pinned provision permalink verify checks (null when the wording has no single date).
                 permalink = wording is { } pinned ? EuropeProvisionPermalink(pinned.Permalink, entry.Hit.PublisherIdentifier) : null,
             }).ToArray(),
-            not_held = EuropeSearchNotHeld.Select(static row => new { item = row[0], reason = row[1] }).ToArray(),
+            not_held = EuropeNotHeldRows(EuropeSearchNotHeld, searchSeed,
+                "consolidated versions of this act are held and answered by timeline, as_of and evidence_bundle; this search reads the original wording only, and a date is not answered here"),
             corpus_sha256 = _corpus.ArtifactRef.Sha256,
             index_sha256 = _europeReader.IndexRef.Sha256,
         });
@@ -5279,6 +5305,17 @@ internal sealed class V3CorpusMount : IDisposable
 
         var identifier = RequiredString(request.Parameters, "identifier");
         var requestedLanguage = OptionalLanguage(request.Parameters);
+        // An EU act whose census the EU index holds is answered by the EU time view (V3CorpusMount.EuropeTime.cs).
+        if (LocateEuropeSeed(request, identifier, observedAt, out var europeSeed) is { } refusedEurope)
+        {
+            return refusedEurope;
+        }
+
+        if (europeSeed is not null)
+        {
+            return TimelineEurope(request, identifier, europeSeed, requestedLanguage, observedAt);
+        }
+
         if (RefuseUnlessWorkStates(request, identifier, observedAt, "r6_timeline", requestedLanguage,
                 out var states, out var availableLanguages) is { } refused)
         {
@@ -5347,6 +5384,20 @@ internal sealed class V3CorpusMount : IDisposable
 
         var identifier = RequiredString(request.Parameters, "identifier");
         var requestedLanguage = OptionalLanguage(request.Parameters);
+
+        // A consolidated version's identifier (its work IRI, CELEX or expression) names its act's dossier, read through the
+        // original work the EU census binds it to.
+        if (LocateEuropeSeed(request, identifier, observedAt, out var europeSeed) is { } refusedSeed)
+        {
+            return refusedSeed;
+        }
+
+        if (europeSeed is not null && _europeReader!.ResolveExact(identifier).Count == 0 &&
+            _europeReader.ResolveExact(europeSeed) is { Count: > 0 } original)
+        {
+            return DossierEurope(request, identifier, original, requestedLanguage, observedAt);
+        }
+
         if (LocateEuropeWork(request, identifier, observedAt, out var europe) is { } refusedEurope)
         {
             return refusedEurope;
@@ -5477,6 +5528,7 @@ internal sealed class V3CorpusMount : IDisposable
         var listed = expressions
             .Where(expression => requestedLanguage is null || string.Equals(expression.Language, requestedLanguage, StringComparison.Ordinal))
             .ToArray();
+        var dossierSeed = EuropeSeedsOf(works[0]) is [var heldSeed] ? heldSeed : null;
         using var result = JsonSerializer.SerializeToDocument(new
         {
             scope = EuropeDossierScope,
@@ -5512,8 +5564,10 @@ internal sealed class V3CorpusMount : IDisposable
             }).ToArray(),
             digest_rule = EuropeWordingDigestRule,
             date_semantics = EuropeWordingDateSemantics,
-            consolidations_held = false,
-            not_held = EuropeDossierNotHeld.Select(static row => new { item = row[0], reason = row[1] }).ToArray(),
+            wording_timeline = EuropeDossierTimeline(dossierSeed, requestedLanguage),
+            consolidations_held = dossierSeed is not null && EuropeConsolidationsHeld(EuropeTimelineOf(dossierSeed)),
+            not_held = EuropeNotHeldRows(EuropeDossierNotHeld, dossierSeed,
+                "consolidated versions of this act are held: wording_timeline lists them, and timeline, as_of and evidence_bundle answer them; the expressions listed here are the original act's"),
             corpus_sha256 = _corpus.ArtifactRef.Sha256,
             index_sha256 = _europeReader.IndexRef.Sha256,
         });

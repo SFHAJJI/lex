@@ -329,8 +329,24 @@ function readEuropeWording(wording, index, { celex, date }) {
   const expressionIri = requireText(requireOwn(wording, 'publisher_expression_id', where), `${where} publisher_expression_id`);
   const language = requireText(requireOwn(wording, 'language', where), `${where} language`);
   const wordingDate = requireDate(requireOwn(wording, 'wording_date', where), `${where} wording_date`);
-  if (wordingDate !== date) {
+  // A wording answers the dates from its own until the next wording held (the EU time view); it never answers a date
+  // before its own. An index with no states serves only the original wording, on its own date, which this rule admits.
+  if (wordingDate > date) {
+    throw new Error(`${where} is the wording of ${wordingDate}, and the bundle was asked for ${date}; a wording never answers a date before its own`);
+  }
+  const kind = Object.hasOwn(wording, 'kind') ? requireText(wording.kind, `${where} kind`) : 'original_wording';
+  if (kind !== 'original_wording' && kind !== 'consolidated_version') {
+    throw new Error(`${where} is a ${JSON.stringify(kind)}; an EU wording is the original wording or a consolidated version`);
+  }
+  if (!Object.hasOwn(wording, 'kind') && wordingDate !== date) {
     throw new Error(`${where} is the wording of ${wordingDate}, and the bundle was asked for ${date}; the original wording answers only its own date`);
+  }
+  // Present on the time view's wordings: the next wording's date, or null for the latest held.
+  const nextDate = Object.hasOwn(wording, 'next_date')
+    ? (wording.next_date === null ? null : requireDate(wording.next_date, `${where} next_date`))
+    : undefined;
+  if (typeof nextDate === 'string' && !(date < nextDate)) {
+    throw new Error(`${where} holds until ${nextDate}, and the bundle was asked for ${date}; the next wording answers that date`);
   }
   const wordingSha256 = requireDigest(requireOwn(wording, 'wording_sha256', where), `${where} wording_sha256`);
   const permalink = requireText(requireOwn(wording, 'permalink', where), `${where} permalink`);
@@ -400,7 +416,18 @@ function readEuropeWording(wording, index, { celex, date }) {
   }));
   if (articles.length === 0) throw new Error(`${where} quotes no article; a wording with no text is refused, not answered`);
 
-  return Object.freeze({ expressionIri, language, wordingDate, wordingSha256, permalink, stableCoordinate, sources, articles, articlesWithoutText });
+  // The time view's disclosure beside the wording: the other works the census dated to its day, and the versions with no
+  // usable date, each with whether its text is held here (absent on the original-wording bundle of an index with no states).
+  const disclosed = (key) => (Object.hasOwn(wording, key)
+    ? Object.freeze(requireList(wording[key], `${where} ${key}`).map((row, at) => {
+      const label = `${where} ${key}[${at}]`;
+      const textHeld = requireBoolean(requireOwn(row, 'text_held', label), `${label}.text_held`);
+      return Object.freeze({ workIri: requireText(requireOwn(row, 'publisher_work_id', label), `${label}.publisher_work_id`), textHeld });
+    }))
+    : Object.freeze([]));
+  const sameDateWorks = disclosed('same_date_works');
+  const unplacedVersions = disclosed('unplaced_versions');
+  return Object.freeze({ expressionIri, language, kind, wordingDate, nextDate, wordingSha256, permalink, stableCoordinate, sources, articles, articlesWithoutText, sameDateWorks, unplacedVersions });
 }
 
 /**
@@ -421,9 +448,7 @@ export function readEuropeEvidenceBundle(answer) {
   if (acknowledgement !== EUROPE_TEXT_ACKNOWLEDGEMENT) {
     throw new Error(`EU text is served with the acknowledgement ${JSON.stringify(EUROPE_TEXT_ACKNOWLEDGEMENT)}, not ${JSON.stringify(acknowledgement)}`);
   }
-  if (requireBoolean(requireOwn(answer, 'consolidations_held', where), 'consolidations_held')) {
-    throw new Error('this reader reads the original wording; a bundle that holds consolidations is another shape');
-  }
+  const consolidationsHeld = requireBoolean(requireOwn(answer, 'consolidations_held', where), 'consolidations_held');
   const celex = requireText(requireOwn(answer, 'celex', where), 'celex');
   const date = requireDate(requireOwn(answer, 'requested_date', where), 'requested_date');
   const language = requireTextOrNull(requireOwn(answer, 'requested_language', where), 'requested_language');
@@ -465,6 +490,7 @@ export function readEuropeEvidenceBundle(answer) {
     availableLanguages,
     acknowledgement,
     authenticity: requireText(requireOwn(answer, 'authenticity', where), 'authenticity'),
+    consolidationsHeld,
     wordings: Object.freeze(wordings),
     rightsRule: requireText(requireOwn(answer, 'rights_rule', where), 'rights_rule'),
     dateRule: requireText(requireOwn(answer, 'date_rule', where), 'date_rule'),
