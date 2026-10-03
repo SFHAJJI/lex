@@ -2562,9 +2562,11 @@ Each is the driver's call under ruling 7 and can be reversed by a later pull req
     and no manifest stated it (found by the sole driver's audit, 2026-10-03; the earlier statement
     here that the line held on a fresh build was wrong). The capability slice below states them.
 - **The EU capability rows (sole driver, 2026-10-03).** Each EU capability manifest now states the
-  operations an EU identifier is refused, so the launch line holds for the EU identifiers the mounted
-  indexes hold, and an EU-shaped identifier they do not hold answers `identifier_unknown` with EU
-  context, as an unknown identifier does everywhere:
+  operations an EU identifier is refused, so the launch line holds for EU identifiers: the 13 refuse
+  every EU-shaped identifier the mode, held or not, since they serve none; the operations that serve
+  EU acts (`as_of` and `timeline` where the EU index holds a census, `dossier`, `search` and
+  `evidence_bundle`) answer an EU-shaped identifier the EU index does not hold `identifier_unknown`
+  with EU context:
   - The manifest's `not_served` rows may carry a second reason, `retrieval_mode_unavailable` (the
     registry's refusal for an operation routed for another publisher's identifiers only), beside
     `operation_not_served`; any other reason stays `malformed_not_served`. The row shape is
@@ -2586,15 +2588,20 @@ Each is the driver's call under ruling 7 and can be reversed by a later pull req
     a pinned EU permalink, `dossier`, `search` in one EU work, `resolve`), and the 27 registered
     operations are each accounted for once (the four left take no work identifier: `ask`,
     `browse`, `coverage`, `events`).
-  - Attribution follows the identifier (review of #913): this service's own EU coordinates
+  - Attribution follows the identifier (reviews of #913): this service's own EU coordinates
     (`/eu-eurlex/…`, as a path or under its origin) are EU-shaped, so a refused operation refuses
-    them the mode with EU context (they were answered "no publisher shape" with Luxembourg context);
-    `as_observed` by time refuses an EU identifier the mode, as by snapshot (it answered
-    `snapshot_unknown` with Luxembourg context); and `as_of` and `timeline` answer an EU identifier
-    the census does not list through the act the EU index resolves it to (a provision coordinate, a
-    consolidated expression's included, or this service's EU coordinate by its CELEX), and an EU
-    identifier no index holds is `identifier_unknown` with EU context, as `dossier` and `search`
-    answer it, rather than the mode refusal.
+    them the mode with EU context and `resolve` answers them with EU context (they were answered
+    "no publisher shape" with Luxembourg context); `as_observed` by time refuses an EU identifier
+    the mode, as by snapshot (it answered `snapshot_unknown` with Luxembourg context).
+  - `as_of` and `timeline`, where the EU index holds a census: an identifier the census does not
+    list answers through its act when the EU index resolves it (another form of the original
+    wording's identifier, or a provision coordinate that resolution checks against its articles) or
+    when it is a provision coordinate of an expression the census lists whose articles hold that
+    provision (a consolidated expression's); any other EU-shaped identifier is `identifier_unknown`
+    with EU context, as `dossier` and `search` answer it: an unknown CELEX, a provision the
+    expression does not hold, and this service's own coordinates, which name a wording rather than
+    an act (as Luxembourg's `as_of` refuses its own permalinks). On an EU index with no census (an
+    empty states table, or a schema before 5) they keep the mode refusal.
   - Not covered by a manifest row, by design: request variants that refuse within a served
     operation (`verify` of a bare EU identifier rather than a pinned permalink; `search` in an EU
     work at a date, since the search reads the original wording only). Real EU mounts built before

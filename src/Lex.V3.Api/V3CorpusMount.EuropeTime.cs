@@ -459,12 +459,14 @@ internal sealed partial class V3CorpusMount
     }
 
     /// <summary>
-    /// The seed act for <c>as_of</c> and <c>timeline</c> (review of #913). The census's own identifiers first; then, for an
-    /// EU-shaped identifier on a mount whose EU index has the time view, the act its expressions belong to when the EU index
-    /// resolves it (a provision coordinate of a held expression, another form of a held work's identifier), or the CELEX of this
-    /// service's own EU coordinate. An EU-shaped identifier none of these finds is <c>identifier_unknown</c> with EU context, as
-    /// <c>dossier</c> and <c>search</c> answer it: these operations serve EU acts, so the mode refusal does not describe it.
-    /// Without the time view, or for an identifier of no EU shape, the caller's path answers as before.
+    /// The seed act for <c>as_of</c> and <c>timeline</c> (reviews of #913). The census's own identifiers first. Then, where the
+    /// mounted EU index holds a census (the time view), an EU-shaped identifier answers through its act when the EU index
+    /// resolves it (another form of the original wording's identifier, or one of its provision coordinates, which that
+    /// resolution checks against its articles), or when it is a provision coordinate of an expression the census lists whose
+    /// articles hold that provision (a consolidated expression's, which the original-wording resolution does not reach). Any
+    /// other EU-shaped identifier is <c>identifier_unknown</c> with EU context, as <c>dossier</c> and <c>search</c> answer it,
+    /// this service's own EU coordinates included, as Luxembourg's <c>as_of</c> refuses its own permalinks. Without a census, or
+    /// for an identifier of no EU shape, the caller's path answers as before.
     /// </summary>
     private V3PlatformOperationOutcome? LocateEuropeSeedForTime(
         V3PlatformOperationRequest request,
@@ -473,7 +475,7 @@ internal sealed partial class V3CorpusMount
         out string? seed)
     {
         var located = LocateEuropeSeed(request, identifier, observedAt, out seed);
-        if (located is not null || seed is not null || _europeReader is not { HasStates: true } || !IsEuropeanUnionShaped(identifier))
+        if (located is not null || seed is not null || !HasEuropeCensus() || !IsEuropeanUnionShaped(identifier))
         {
             return located;
         }
@@ -488,14 +490,29 @@ internal sealed partial class V3CorpusMount
         }
 
         return Unknown(request, identifier, observedAt, PublisherId.EuEurLex,
-            "an EU act the mounted EU census holds: its CELEX, a Cellar work or expression IRI, a provision coordinate of a held " +
-            "expression, or this service's EU coordinate of one of its wordings");
+            "an EU act the mounted EU census holds: its CELEX, a Cellar work or expression IRI, or a provision coordinate of one of " +
+            "its held expressions naming an article that expression holds");
+    }
+
+    /// <summary>Whether the mounted EU index holds a census, so the time view answers: a states table with at least one row.</summary>
+    private bool HasEuropeCensus()
+    {
+        if (_europeReader is not { HasStates: true })
+        {
+            return false;
+        }
+
+        lock (_europeTimeGate)
+        {
+            return EuropeStatesLocked().Count > 0;
+        }
     }
 
     /// <summary>
-    /// The census identifiers an EU-shaped identifier leads to: the expressions the EU index resolves it to, the expression of a
-    /// provision coordinate (<c>{expression}#lex-provision=…</c>, a consolidated expression's included, which the original-wording
-    /// resolution does not reach), then the CELEX segment of this service's own EU coordinate (<c>/eu-eurlex/{celex}/…</c>).
+    /// The census identifiers an EU-shaped identifier leads to: the expressions the EU index resolves it to, and the expression of
+    /// a provision coordinate (<c>{expression}#lex-provision={id}</c>) when the census lists that expression and its articles hold
+    /// that provision. Nothing else: a coordinate naming an article, a date, a digest or an expression the corpus does not hold
+    /// leads nowhere.
     /// </summary>
     private IEnumerable<string> EuropeSeedKeysOf(string identifier)
     {
@@ -504,19 +521,16 @@ internal sealed partial class V3CorpusMount
             yield return expression.PublisherExpressionId;
         }
 
-        var provision = identifier.IndexOf("#lex-provision=", StringComparison.Ordinal);
-        if (provision > 0)
+        const string Marker = "#lex-provision=";
+        var at = identifier.IndexOf(Marker, StringComparison.Ordinal);
+        if (at > 0)
         {
-            yield return identifier[..provision];
-        }
-
-        if (IsEuropeCoordinate(identifier))
-        {
-            var path = identifier.StartsWith("/", StringComparison.Ordinal) ? identifier : identifier[EuropeCoordinateOrigin.Length..];
-            var segments = path.Split('#')[0].Split('/', StringSplitOptions.RemoveEmptyEntries);
-            if (segments.Length >= 2)
+            var expressionId = identifier[..at];
+            var provision = Uri.UnescapeDataString(identifier[(at + Marker.Length)..]);
+            if (provision.Length > 0 && EuropeSeedsOf(expressionId).Count > 0 &&
+                EuropeArticlesOf(expressionId).Any(article => string.Equals(article.PublisherIdentifier, provision, StringComparison.Ordinal)))
             {
-                yield return segments[1];
+                yield return expressionId;
             }
         }
     }

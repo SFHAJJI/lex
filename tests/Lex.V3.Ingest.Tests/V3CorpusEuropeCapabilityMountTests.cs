@@ -139,33 +139,39 @@ public sealed partial class V3FirstMountBuildTests
                 Assert.AreEqual(PublisherId.EuEurLex, history.Context.Publisher, identifier);
             }
 
-            // ... and the time view answers the act they name, as it answers a provision coordinate of a held expression, the
-            // consolidated wording's included.
+            // ... and the time view answers a provision coordinate of a held expression through its act, the consolidated
+            // wording's included, when that expression holds the article.
             var bundle = await EnvelopeAsync(mount, "/api/v3/evidence_bundle", "evidence_bundle", new { identifier = GdprSeed, date = "2025-03-01", language = "eng" });
             Assert.IsNull(bundle.Refusal, bundle.Refusal?.Code);
             var provision = bundle.Result!.Value.GetProperty("wordings")[0].GetProperty("articles")[0].GetProperty("provision_coordinate").GetString()!;
-            foreach (var identifier in new[] { coordinate, provision })
+            var answered = await EnvelopeAsync(mount, "/api/v3/as_of", "as_of", new { identifier = provision, date = "2025-03-01", language = "eng" });
+            Assert.IsNull(answered.Refusal, $"{provision}: {answered.Refusal?.Code}");
+            Assert.AreEqual(GdprSeed, answered.Result!.Value.GetProperty("seed_celex").GetString());
+            var listed = await EnvelopeAsync(mount, "/api/v3/timeline", "timeline", new { identifier = provision, language = "eng" });
+            Assert.IsNull(listed.Refusal, $"{provision}: {listed.Refusal?.Code}");
+
+            // An EU identifier no index holds is unknown, with EU context, in as_of and timeline as in dossier: an unknown CELEX, a
+            // provision coordinate naming an article its expression does not hold, and this service's own coordinates, which name
+            // a wording rather than an act (as Luxembourg's as_of refuses its own permalinks). Every absence is typed (reviews of
+            // #913).
+            var expression = provision[..provision.IndexOf("#lex-provision=", StringComparison.Ordinal)];
+            foreach (var identifier in new[] { "32099R9999", expression + "#lex-provision=no-such-article", coordinate, permalink })
             {
-                var answered = await EnvelopeAsync(mount, "/api/v3/as_of", "as_of", new { identifier, date = "2025-03-01", language = "eng" });
-                Assert.IsNull(answered.Refusal, $"{identifier}: {answered.Refusal?.Code}");
-                Assert.AreEqual(GdprSeed, answered.Result!.Value.GetProperty("seed_celex").GetString(), identifier);
-                var listed = await EnvelopeAsync(mount, "/api/v3/timeline", "timeline", new { identifier, language = "eng" });
-                Assert.IsNull(listed.Refusal, $"{identifier}: {listed.Refusal?.Code}");
+                foreach (var (operation, request) in new (string, object)[]
+                         {
+                             ("as_of", new { identifier, date = "2025-03-01", language = "eng" }),
+                             ("timeline", new { identifier, language = "eng" }),
+                         })
+                {
+                    var envelope = await EnvelopeAsync(mount, "/api/v3/" + operation, operation, request);
+                    Assert.AreEqual("identifier_unknown", envelope.Refusal?.Code, $"{operation} {identifier}");
+                    Assert.AreEqual(PublisherId.EuEurLex, envelope.Context.Publisher, $"{operation} {identifier}");
+                }
             }
 
-            // An EU identifier no index holds is unknown, with EU context, in as_of and timeline as in dossier: these operations
-            // serve EU acts, so the mode refusal does not describe it (review of #913).
-            foreach (var (operation, request) in new (string, object)[]
-                     {
-                         ("as_of", new { identifier = "32099R9999", date = "2025-03-01", language = "eng" }),
-                         ("timeline", new { identifier = "32099R9999", language = "eng" }),
-                         ("dossier", new { identifier = "32099R9999" }),
-                     })
-            {
-                var envelope = await EnvelopeAsync(mount, "/api/v3/" + operation, operation, request);
-                Assert.AreEqual("identifier_unknown", envelope.Refusal?.Code, operation);
-                Assert.AreEqual(PublisherId.EuEurLex, envelope.Context.Publisher, operation);
-            }
+            var dossier = await EnvelopeAsync(mount, "/api/v3/dossier", "dossier", new { identifier = "32099R9999" });
+            Assert.AreEqual("identifier_unknown", dossier.Refusal?.Code);
+            Assert.AreEqual(PublisherId.EuEurLex, dossier.Context.Publisher);
         }
         finally
         {

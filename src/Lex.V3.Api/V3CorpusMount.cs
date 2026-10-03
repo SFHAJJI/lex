@@ -487,13 +487,13 @@ internal sealed partial class V3CorpusMount : IDisposable
 
         if (request.Parameters.TryGetProperty("at", out _))
         {
-            var at = RequiredString(request.Parameters, "at");
+            var requestedAt = RequiredString(request.Parameters, "at");
             // An EU identifier is refused the mode with EU context, as its snapshot form is: the event log records Luxembourg's
             // builds only, and attribution follows the identifier (review of #913: it was answered snapshot_unknown with
             // Luxembourg context).
             return IsEuropeanUnionShaped(identifier)
                 ? ModeUnavailable(request, observedAt, PublisherId.EuEurLex, "r6_as_observed")
-                : SnapshotUnknown(request, observedAt, at, AsObservedAtWhatWouldAnswer);
+                : SnapshotUnknown(request, observedAt, requestedAt, AsObservedAtWhatWouldAnswer);
         }
 
         var snapshot = RequiredString(request.Parameters, "snapshot");
@@ -6871,7 +6871,8 @@ internal sealed partial class V3CorpusMount : IDisposable
     private PublisherId PublisherFor(string identifier) =>
         OfficialIdentifier.EliMintedBy(identifier) ??
         (OfficialIdentifier.ProfileOf(identifier) is not null ||
-         IsEuropeanUnionPublisherAddress(identifier)
+         IsEuropeanUnionPublisherAddress(identifier) ||
+         IsEuropeCoordinate(identifier)
             ? PublisherId.EuEurLex
             : _reader is null ? PublisherId.EuEurLex : PublisherId.LuLegilux);
 
