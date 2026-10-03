@@ -57,6 +57,26 @@ public sealed class V3CorpusEuropeEvidenceBundleMountTests
         Assert.AreEqual(wordingDate, wording.GetProperty("wording_date").GetString());
         Assert.IsTrue(wording.GetProperty("sources").EnumerateArray().All(static source => source.GetProperty("outcome").GetString() == "acquired"));
 
+        // The GDPR's Formex package holds no annex unit, so no annex is listed; the bundle still says that no annex text is held.
+        // The act's CELEX is a census identifier, so this bundle is the EU time view's.
+        Assert.AreEqual(V3CorpusMount.EuropeTimeEvidenceBundleScope, bundle.GetProperty("scope").GetString());
+        Assert.AreEqual(0, wording.GetProperty("annexes_not_served").GetArrayLength());
+        Assert.AreEqual(V3CorpusMount.EuropeAnnexesNotHeldReason, bundle.GetProperty("not_held").EnumerateArray()
+            .Single(static row => row.GetProperty("item").GetString() == "annexes").GetProperty("reason").GetString());
+
+        // An identifier the census does not hold (an article identity) reaches the original-wording path, the one an EU index
+        // with no states table answers: the same wording under that path's own scope, with the same empty annex list and
+        // annexes row (review of #917).
+        var byArticle = await EnvelopeAsync(mount, Route, "evidence_bundle", new { identifier = fixture.ArticleIdentitySha256, date = wordingDate, language = "eng" });
+        Assert.IsNull(byArticle.Refusal, byArticle.Refusal?.Code);
+        var original = byArticle.Result!.Value;
+        Assert.AreEqual(V3CorpusMount.EuropeEvidenceBundleScope, original.GetProperty("scope").GetString(), "an article identity reaches the original-wording path");
+        var originalWording = original.GetProperty("wordings").EnumerateArray().Single();
+        Assert.AreEqual(permalink, originalWording.GetProperty("permalink").GetString(), "the same wording on either path");
+        Assert.AreEqual(0, originalWording.GetProperty("annexes_not_served").GetArrayLength());
+        Assert.AreEqual(V3CorpusMount.EuropeAnnexesNotHeldReason, original.GetProperty("not_held").EnumerateArray()
+            .Single(static row => row.GetProperty("item").GetString() == "annexes").GetProperty("reason").GetString());
+
         // Every article with text the index holds of the expression is quoted, in its order, with the index's own text.
         var held = ArticleTexts(fixture.Directory, expressionId);
         var articles = wording.GetProperty("articles").EnumerateArray().ToArray();
@@ -109,6 +129,9 @@ public sealed class V3CorpusEuropeEvidenceBundleMountTests
         Assert.AreEqual(JsonValueKind.Null, later.GetProperty("next_date").ValueKind);
         Assert.IsTrue(after.Result.Value.GetProperty("not_held").EnumerateArray()
             .Any(static row => row.GetProperty("item").GetString() == "unconsolidated_amendments"));
+        Assert.AreEqual(0, later.GetProperty("annexes_not_served").GetArrayLength());
+        Assert.AreEqual(V3CorpusMount.EuropeAnnexesNotHeldReason, after.Result.Value.GetProperty("not_held").EnumerateArray()
+            .Single(static row => row.GetProperty("item").GetString() == "annexes").GetProperty("reason").GetString());
 
         var german = await EnvelopeAsync(mount, Route, "evidence_bundle", new { identifier = "32016R0679", date = wordingDate, language = "deu" });
         Assert.AreEqual("language_not_available", german.Refusal?.Code);

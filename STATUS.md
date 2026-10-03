@@ -1,6 +1,6 @@
 # Lex V3 status
 
-Updated 2026-10-01 by the driver. This file holds the heads, the owner's open items and the pointers to the two
+Updated 2026-10-03 by the driver. This file holds the heads, the owner's open items and the pointers to the two
 lane files (the standing order of 2026-10-01 13:50 UTC: STATUS.md was edited by nearly every pull request and was
 the most frequent conflict). Each lane writes its progress in its own file, in the pull request that makes it:
 
@@ -13,16 +13,15 @@ A feature pull request edits its lane file, not this one; this file changes for 
 
 ## Heads
 
-- `v3/integration`: `a90ab742` (2026-10-01, PR #897 merged). Build 45 s. Fast lane
-  (`eng/test-fast.ps1`): 3,077 tests, 3,076 pass, 1 skipped (the review of PR #828). Ingest suite: green on CI for PR #760
-  (the CI `dotnet` job runs the whole solution on every pull request, about 7 min on the runner;
-  green for PR #834);
-  locally about 15 min. 1,008 web tests pass. The web job's "browser debugger never answered" failures
-  (keyboard-walk, and paint-check since #811) are fixed by PR #822: each browser binds its own
-  debugging port (`launchBrowser`) instead of a random one another browser starting at the same
-  moment could hold.
-- Driver: Claude Opus 5.5 since 2026-09-29 (the Fable 5.1 driver ran out of tokens on 2026-09-28
-  after PR #757; the user default model is now `claude-opus-5-5`).
+- `v3/integration`: `40a9434f` (2026-10-03, PR #916 merged). The required checks are strict: `dotnet` (the
+  whole solution, about 12 min on the runner), `web` (1,040 web tests), `canon-windows` and `journeys`. `journeys`
+  walks J1 to J8 in Chrome over three fixture mounts (the fixture, licence-blocked and two-state mounts), by pointer
+  and by keyboard on the pages the API serves.
+- Driver: Claude Opus 5.5, the sole driver since 2026-10-02. The owner's order: no Codex, no other Claude session,
+  full authorisation, and the owner is never asked. Each pull request is reviewed by an independent Claude subagent
+  (STATUS-WEB.md, driver decisions). The data lane's file (`STATUS-DATA.md`) is kept by this driver too.
+- Populations: EU run 9 (`C:\lex-v3\eu-population-20261002-9`) has been acquiring since 2026-10-02 (35,728 custody
+  objects at 03:36 UTC on 2026-10-03). The Luxembourg population follows it, sequentially.
 - Plan: `C:\lex-v3\V3-FINISH-PLAN-2026-09-27.md` (owner's copy). Decision 94 (one driver, one queue,
   one review per pull request) merged in lex-governance on 2026-09-27. Launch target 2026-11-07.
 
@@ -66,7 +65,8 @@ Decision 95 (lex-governance PR #9, merged 2026-09-30) records these rulings and 
   credentials) in `C:\lex-v3\worktrees\codex-data`. This driver keeps the web lane. Every pull
   request is reviewed by the other model family before merge (`C:\lex-v3\lanes\review-by-codex.ps1`
   for this lane's pull requests), with one repair round and a merge on green CI. Production
-  signing, deployment and promotion still wait for the owner.
+  signing, deployment and promotion still wait for the owner. Suspended by the owner's order of 2026-10-02:
+  one driver, Claude, runs both lanes (heads).
 
 ## For the weekly checkpoint
 
@@ -94,5 +94,6 @@ Decision 95 (lex-governance PR #9, merged 2026-09-30) records these rulings and 
 ## Blocked on the owner
 
 Only money, legal or public claims, credentials and going live (ruling 7):
-- Azure production credentials and the signing identity, needed by week 5.
+- Azure production credentials and the signing identity, needed by week 5. The Azure subscription is disabled
+  (read-only, observed 2026-10-02 22:33 UTC): going live needs its billing re-enabled.
 - The weekly 30-minute checkpoint slot.

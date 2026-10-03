@@ -2430,6 +2430,42 @@ route to nothing; J6 is held at the API, where the containment is decided. The p
 not offered on the `identifier_unknown` card: the handoff registry admits no real host yet (`HANDOFF_HOSTS`), and
 adding one is an editorial decision recorded when it is made.
 
+## EU annexes in the answers (sole driver, 2026-10-03)
+
+An EU annex never becomes an article of the EU index, so no annex text is searched, quoted or exported. Until now
+no answer said so, and no answer could show an image-only annex as "text not available, officially linked" (the
+launch contract's annex line). EU `dossier` (per expression) and EU `evidence_bundle` (per wording, original or
+dated) now list `annexes_not_served`: the annexes the corpus classified on the members the expression's articles
+were read from. These are the Stage 3 outcomes of domain `europe_annex_body`, which the EU index copies into its
+member rows. Each disposition has one row, and each row carries:
+- the number of annexes and their semantic identities;
+- `served_as: text_not_available`;
+- the expression as `official_identity`;
+- its official source: the Publications Office address of the package its articles were read from, or the work;
+- a fixed reason per disposition:
+  - `annex_text_not_available`: every PDF page the annex maps to is an image with no text layer (image-only);
+  - `annex_body_contains_text`: a mapped page has a text layer, so the annex is not image-only. Its text is still
+    not served, because annexes are not indexed;
+  - `annex_body_contains_no_image`, `annex_mapped_page_outside_document` and `annex_mapping_unresolved`: the body
+    was not classified as image-only.
+
+Each of these answers' `not_held` gains an `annexes` row. It says that no annex text is held, and that an empty
+list says only that the corpus classified no annex on those members, never that the act has none.
+
+A read of the build (2026-10-03) backs that wording:
+- The corpus inventories only the root `ANNEX` units of an acquired Formex package.
+- A package whose annex chain fails is not acquired, and its expression has no articles.
+- So, by construction, the list for an expression whose articles are served holds each root `ANNEX` unit of its
+  package.
+- An annex inside the main document is not listed, and neither is an annex of a package that was not acquired.
+
+The annex's own PDF address is not carried into the index, so the link is the expression's.
+
+The GDPR fixture holds no annex: its dossier and both bundles answer the empty list, and the samples carry it. The
+grouping, the reasons and the link are held by unit tests (`V3CorpusEuropeAnnexTests`). The end-to-end control
+case is the next pull request: a synthetic image-only annex through the real acquisition, kept out of search,
+quotes and exports, and listed with its link.
+
 ## Next, in order (web lane; the data lane's items 1 to 3 are in STATUS-DATA.md)
 
 The web lane's order since the owner's proxy's journey corrections (2026-10-01 14:30 UTC,
@@ -2446,11 +2482,10 @@ The web lane's order since the owner's proxy's journey corrections (2026-10-01 1
    officially linked), and the J1 to J8 mapping (done above, 2026-10-03). The 2024/1620 annexes the
    three-seed retry retained are structured text, not image-only (`C:\lex-v3\lanes\image-only-annex-handoff.md`,
    `annex-2024-1620-control-audit.json`), so they are no candidate; no real image-only EU annex is held on this
-   machine yet. Today an image-only annex is the corpus outcome `annex_text_not_available` on its work's
-   member, copied into the EU index's member row, and annexes never become articles, so search, quotes and
-   exports leave them out by construction; nothing past the corpus tests it, and the annex's official PDF
-   address is not kept, so no answer can yet say "text not available, officially linked" for an annex. Next:
-   a synthetic end-to-end control case, then the official link carried into the index and answered.
+   machine yet. EU dossier and evidence_bundle now list each annex the corpus classified as
+   `annexes_not_served`: `text_not_available`, linked to the expression's official source (above,
+   2026-10-03). Next: the synthetic end-to-end control case, which carries an image-only annex through the
+   acquisition and holds it out of search, quotes and exports.
 A pull request that does not move a launch-contract line, or directly unblock one, waits. Merges take
 turns through `C:\lex-v3\lanes\MERGE-LOCK`, and related work goes in one bigger pull request.
 
@@ -2645,6 +2680,10 @@ Each is the driver's call under ruling 7 and can be reversed by a later pull req
   Claude subagent with a fresh context, read-only, reporting only material and reproduced findings
   (`C:\lex-v3\lanes\claude-review-instructions.md`); one repair round, then merge on green CI. The
   owner's open questions are decided by the driver under that delegation and recorded here.
+- EU annexes (2026-10-03): dossier and evidence_bundle list the annexes the corpus classified under
+  `annexes_not_served`. Every one is served as `text_not_available`, whatever its disposition, and linked to its
+  expression's official source. No annex text is served even where the publisher's PDF has a text layer; that
+  waits until annexes are indexed as units of their own, with their own rights rule and citations.
 - The six refusal codes no operation produces at launch (the refusal census's `not_produced` list),
   each unreachable by construction, decided under that delegation (2026-10-02). The launch contract's
   refusal line holds them in the closed registry with their payloads; the refusal case set measures the

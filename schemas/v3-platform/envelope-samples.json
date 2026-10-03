@@ -1525,6 +1525,7 @@
             "expression_count": 1,
             "expressions": [
               {
+                "annexes_not_served": [],
                 "article_count": 99,
                 "language": "eng",
                 "members": [
@@ -1573,6 +1574,10 @@
               {
                 "item": "other_languages",
                 "reason": "an expression in a language the index holds no wording in is not listed; French expressions are not acquired (Decision 89)"
+              },
+              {
+                "item": "annexes",
+                "reason": "no annex text is held: annexes are not indexed as articles, so no annex is searched, quoted or exported; annexes_not_served lists the annexes the corpus classified against the publisher PDF on the members an expression was read from, with the official source to read them, and an empty list says only that the corpus classified none there, not that the act has none"
               }
             ],
             "publisher": "eu-eurlex",
