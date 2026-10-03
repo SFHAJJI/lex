@@ -75,6 +75,7 @@ const EUROPE_ENTRIES = new Set([
   "refusalCard.europeCandidate", "refusalCard.europeCandidateWithdrawalNotStated", "refusalCard.europePublished",
   "refusalCard.europeNotes.ambiguous_version",
   "reading.europeSameDateWorks.one", "reading.europeSameDateWorks.other", "reading.europeUnplaced.one", "reading.europeUnplaced.other",
+  "common.europeAnnexes.one", "common.europeAnnexes.other",
 ]);
 
 function fieldsOf(node, found = new Set()) {

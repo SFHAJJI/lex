@@ -24,6 +24,7 @@
 // wording date. An expression that pins no wording is refused here rather than shown unpinned.
 
 import { isCalendarDate } from './temporal.mjs';
+import { readAnnexesNotServed } from './europe-annexes.mjs';
 
 const DIGEST = /^[0-9a-f]{64}$/;
 
@@ -277,6 +278,8 @@ function readEuropeExpression(expression, index, celex) {
     }))),
     coordinate,
     wording: Object.freeze({ wordingDate, wordingSha256, permalink }),
+    // The annexes of its members, never served as text: each disposition's count, reason and official source.
+    annexesNotServed: readAnnexesNotServed(expression, where),
   });
 }
 

@@ -17,7 +17,8 @@
 // and their note (`refusalCard.europeCandidate`, `refusalCard.europeCandidateWithdrawalNotStated`,
 // `refusalCard.europePublished`, `refusalCard.europeNotes.ambiguous_version`), the time view's
 // `reading.europeHoldsUntil`, `reading.europeSameDateWorks` and `reading.europeUnplaced` (PR #909), and the search
-// page's `search.intro`, `search.idle` and `search.noHit` once search matches only the text its rights admit (PR #910).
+// page's `search.intro`, `search.idle` and `search.noHit` once search matches only the text its rights admit (PR #910),
+// and `common.europeAnnexes`, the line for the annexes an EU wording does not serve as text (the annex pull request).
 // No French entry ships unreviewed.
 //
 // Vocabulary: a work is an "acte" (a publisher's Cellar work, one record of an EU act, is an "œuvre de l’éditeur"), a
@@ -420,6 +421,10 @@ export const LIVE_CHROME_FR = Object.freeze({
     noneHeld: 'aucune détenue',
     notHeldRow: '{item} : {reason}',
     listSeparator: ' ; ',
+    europeAnnexes: Object.freeze({
+      one: '{count} annexe du libellé en {language} n’est pas communiquée en texte et n’est jamais recherchée, citée ni exportée : {reason}. Source officielle {source}.',
+      other: '{count} annexes du libellé en {language} ne sont pas communiquées en texte et ne sont jamais recherchées, citées ni exportées : {reason}. Source officielle {source}.',
+    }),
   }),
   form: Object.freeze({
     workIdentifier: 'Identifiant de l’acte',

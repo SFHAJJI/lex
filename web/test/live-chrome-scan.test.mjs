@@ -145,6 +145,12 @@ function europeReadingEnvelope() {
             official_source: "http://publications.europa.eu/resource/cellar/3e485e15.0006.02/DOC_1", article_permalink: `${permalink}#001`,
           }],
           articles_without_text: [{ article_identity_sha256: "e".repeat(64), publisher_id: "099" }],
+          annexes_not_served: [{
+            disposition: "annex_text_not_available", annexes: 2, annex_identities_sha256: ["7".repeat(64), "8".repeat(64)], served_as: "text_not_available",
+            official_identity: "http://publications.europa.eu/resource/cellar/3e485e15.0006",
+            official_source: "https://publications.europa.eu/resource/cellar/3e485e15.0006.02",
+            reason: "every page of the publisher PDF the annex maps to is an image with no text layer: the annex is image-only, so there is no text of it to serve",
+          }],
         }],
         acknowledgement: "\u00a9 European Union, https://eur-lex.europa.eu",
         authenticity: "Only the Official Journal of the European Union published in electronic form is authentic and produces legal effects (Regulation (EU) No 216/2013, Article 1(2)).",

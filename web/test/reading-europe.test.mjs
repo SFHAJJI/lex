@@ -20,6 +20,18 @@ import { EUROPE_TEXT_ACKNOWLEDGEMENT, readEuropeEvidenceBundle, readEvidenceBund
 import { escapeProvision } from "../scripts/search-answer.mjs";
 
 const sha256 = (text) => createHash("sha256").update(text, "utf8").digest("hex");
+/** One annex row as the platform lists it beside an EU wording or expression, with `change` applied. */
+const annexRow = (change = {}) => ({
+  disposition: "annex_text_not_available",
+  annexes: 1,
+  annex_identities_sha256: ["a".repeat(64)],
+  served_as: "text_not_available",
+  official_identity: "http://publications.europa.eu/resource/cellar/3e485e15-11bd-11e6-ba9a-01aa75ed71a1.0006",
+  official_source: "https://publications.europa.eu/resource/cellar/3e485e15-11bd-11e6-ba9a-01aa75ed71a1.0006.02",
+  reason: "every page of the publisher PDF the annex maps to is an image with no text layer: the annex is image-only, so there is no text of it to serve",
+  ...change,
+});
+
 const WORK = "http://publications.europa.eu/resource/cellar/3e485e15-11bd-11e6-ba9a-01aa75ed71a1";
 const WORDING_SHA = "5".repeat(64);
 const BODY = "b".repeat(64);
@@ -66,6 +78,7 @@ function europeBundle(change = () => {}) {
         provision_coordinate: `${WORK}.0006#lex-provision=${escapeProvision(id)}`,
       })),
       articles_without_text: [],
+      annexes_not_served: [],
     }],
     acknowledgement: "© European Union, https://eur-lex.europa.eu",
     authenticity: "Only the Official Journal of the European Union published in electronic form is authentic and produces legal effects (Regulation (EU) No 216/2013, Article 1(2)); this text is a reproduction read from the Publications Office's Formex package, not the authentic edition.",
@@ -122,6 +135,12 @@ test("each rule the EU bundle states about itself is refused when broken, with t
     ["the same provision quoted twice", (b) => { b.wordings[0].articles[1] = b.wordings[0].articles[0]; }, /quotes 001 twice/],
     ["no wording", (b) => { b.wordings = []; }, /at least one wording/],
     ["a Luxembourg bundle", (b) => { b.publisher = "lu-legilux"; }, /reads the EU/],
+    ["the annex list dropped", (b) => { delete b.wordings[0].annexes_not_served; }, /has no annexes_not_served/],
+    ["an annex served as text", (b) => { b.wordings[0].annexes_not_served = [annexRow({ served_as: "text" })]; }, /an annex's text is never served/],
+    ["an annex disposition outside the corpus's", (b) => { b.wordings[0].annexes_not_served = [annexRow({ disposition: "annex_quoted" })]; }, /not an annex disposition/],
+    ["one annex disposition listed twice", (b) => { b.wordings[0].annexes_not_served = [annexRow(), annexRow()]; }, /repeats the disposition/],
+    ["an annex count its digests are not", (b) => { b.wordings[0].annexes_not_served = [annexRow({ annexes: 2 })]; }, /does not name exactly that many annex digests/],
+    ["an annex with no official source", (b) => { b.wordings[0].annexes_not_served = [annexRow({ official_source: "" })]; }, /official_source is not text/],
   ];
   for (const [what, change, reason] of cases) {
     assert.throws(() => readEuropeEvidenceBundle(europeBundle(change)), reason, what);
@@ -160,6 +179,28 @@ test("the reading screen shows the EU wording: the acknowledgement and authentic
   walk(europeBundle());
   for (const value of data.filter((item) => item.length > 0).sort((a, b) => b.length - a.length)) said = said.split(value).join(" ");
   assert.doesNotMatch(said, /\b(?:appl(?:y|ies|ied|ying|icability)|versions?|states?)\b|s[’']appliqu|applicab/i, "an EU wording date is never said as an applicability date");
+});
+
+test("an annex the wording does not serve as text is said beside it, with the platform's reason and the official source", () => {
+  const row = annexRow({ annexes: 2, annex_identities_sha256: ["a".repeat(64), "b".repeat(64)] });
+  const bundle = europeBundle((b) => { b.wordings[0].annexes_not_served = [row]; });
+  const [wording] = readEuropeEvidenceBundle(bundle).wordings;
+  assert.deepEqual(wording.annexesNotServed, [{
+    disposition: "annex_text_not_available",
+    count: 2,
+    identities: ["a".repeat(64), "b".repeat(64)],
+    officialIdentity: row.official_identity,
+    officialSource: row.official_source,
+    reason: row.reason,
+  }]);
+  assert.deepEqual(readEuropeEvidenceBundle(europeBundle()).wordings[0].annexesNotServed, [], "a wording with no annex lists none");
+
+  const markup = renderToStaticMarkup(h(ReadingAnswerView, { outcome: readingOutcome({ state: "success", envelope: envelopeOf(bundle) }) }));
+  assert.match(markup, /<p data-annexes-not-served="2" data-annex-disposition="annex_text_not_available">/);
+  const said = markup.replace(/<[^>]+>/g, "").replace(/&#x27;/g, "'");
+  assert.ok(said.includes(`2 annexes of the English wording are not served as text, and are never searched, quoted or exported: ${row.reason}. Official source ${row.official_source}.`), said);
+  assert.ok(markup.includes(`<code>${row.official_source}</code>`), "the official source is printed, not linked");
+  assert.ok(markup.indexOf("data-annexes-not-served") > markup.lastIndexOf("<blockquote"), "the annexes are said after the quoted text, never among it");
 });
 
 test("an EU refusal on the reading screen is said in EU words: no sentence or hint on its card speaks of applicability (review of #903)", () => {

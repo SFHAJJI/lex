@@ -1238,6 +1238,33 @@ export function twoStateExpectations(journeyMount) {
 }
 
 /**
+ * The EU annex control mount (`journey-mount.json` names `eu_annex`): the reading and dossier pages for the act whose
+ * annex the publisher's PDF holds only as images. Each page must say that the annex is not served as text, and neither
+ * the annex's text nor its title may appear anywhere on the page: the launch contract's annex line, walked in a browser.
+ */
+export function europeAnnexExpectations(journeyMount) {
+  const { celex, wording_date: date, annexes, absent_texts: absentTexts } = journeyMount.eu_annex;
+  if (!Array.isArray(absentTexts) || absentTexts.length === 0) throw new Error("the EU annex mount names no annex text to look for");
+  const reading = Object.freeze({
+    ...EU_READING_STEP,
+    typed: Object.freeze([celex, date]),
+    body: Object.freeze({ operation_id: "evidence_bundle", parameters: Object.freeze({ identifier: celex, date }) }),
+  });
+  const dossier = Object.freeze({
+    ...EU_DOSSIER_STEP,
+    typed: celex,
+    body: Object.freeze({ operation_id: "dossier", parameters: Object.freeze({ identifier: celex }) }),
+  });
+  const line = annexes === 1
+    ? "1 annex of the English wording is not served as text, and is never searched, quoted or exported"
+    : `${annexes} annexes of the English wording are not served as text, and are never searched, quoted or exported`;
+  return [
+    ["the annex control case read on its wording date", { step: reading, state: "success", texts: [line], absentTexts }],
+    ["the annex control case's dossier", { step: dossier, state: "success", texts: [line], absentTexts }],
+  ];
+}
+
+/**
  * The EU search step on the fixture mount, which holds no EU index: the page must show the refusal card
  * `no_corpus_mounted`, naming the EU index as the one missing.
  */
@@ -1276,6 +1303,8 @@ async function main(argv) {
   // two-state mount.
   const licenceBlocked = journeyMount?.rights_disposition !== undefined;
   const twoState = journeyMount?.later_date !== undefined;
+  // One that names an EU annex is the image-only annex control mount.
+  const europeAnnex = journeyMount?.eu_annex !== undefined;
   // `--live-root` serves a directory built elsewhere instead of building one: how a deliberately
   // broken page is shown to fail the journey.
   const liveRoot = argv.includes("--live-root") ? argument("--live-root") : await buildLive();
@@ -1288,6 +1317,10 @@ async function main(argv) {
   else if (twoState) {
     for (const [name, expected] of twoStateExpectations(journeyMount)) {
       results.push([`${name}, with the two-state mount`, await run(apiOutput, mount, { servedByApi, keyboard, ...expected }, browser, liveRoot)]);
+    }
+  } else if (europeAnnex) {
+    for (const [name, expected] of europeAnnexExpectations(journeyMount)) {
+      results.push([`${name}, with the EU annex control mount`, await run(apiOutput, mount, { servedByApi, keyboard, ...expected }, browser, liveRoot)]);
     }
   } else {
     // Each step with the fixture mount, then with no mount, where every page shows the refusal card.
@@ -1305,7 +1338,7 @@ async function main(argv) {
   }
   // Journeys J6, J7 and J8 at the API (no page asks the contained assistant or MCP, or polls events), on the
   // fixture mount.
-  const apiResults = realMount || licenceBlocked || twoState ? [] : await apiJourneyRuns(apiOutput, mount);
+  const apiResults = realMount || licenceBlocked || twoState || europeAnnex ? [] : await apiJourneyRuns(apiOutput, mount);
   let failed = false;
   for (const [label, failures] of apiResults) {
     console.log(`${label}: ${failures.length === 0 ? "PASS" : "FAIL"}`);

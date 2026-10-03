@@ -18,7 +18,7 @@
 
 import { Fragment } from 'react';
 
-import { ENGLISH_LANG, fillParts, liveChrome } from '../scripts/live-chrome.mjs';
+import { ENGLISH_LANG, countedEntry, fillParts, liveChrome } from '../scripts/live-chrome.mjs';
 
 export function Say({ template, values }) {
   return fillParts(template, values).map((part, index) => (typeof part === 'string' ? part : <Fragment key={index}>{part}</Fragment>));
@@ -30,6 +30,29 @@ export function Say({ template, values }) {
  */
 export function inEnglish(text) {
   return ENGLISH_LANG === undefined ? text : <span lang={ENGLISH_LANG}>{text}</span>;
+}
+
+/**
+ * The annexes an EU wording or expression lists as not served (`scripts/europe-annexes.mjs`), one line per disposition: how
+ * many annexes of the wording in `language` are not served as text and never searched, quoted or exported, the platform's
+ * reason (in English) and the official source, printed, not linked.
+ */
+export function EuropeAnnexes({ rows, language }) {
+  if (rows.length === 0) return null;
+  const common = liveChrome().common;
+  return rows.map((row) => (
+    <p key={row.disposition} data-annexes-not-served={row.count} data-annex-disposition={row.disposition}>
+      <Say
+        template={countedEntry(common.europeAnnexes, row.count)}
+        values={{
+          count: row.count,
+          language: common.languageNames[language] ?? language,
+          reason: inEnglish(row.reason),
+          source: <code>{row.officialSource}</code>,
+        }}
+      />
+    </p>
+  ));
 }
 
 /** A statement (`statement` in `live-chrome.mjs`) laid out: its sentence, or its runs with each English run marked. */
