@@ -2478,6 +2478,44 @@ The plan, in order (its items 1 to 3 are the data lane's, in STATUS-DATA.md):
 
 Each is the driver's call under ruling 7 and can be reversed by a later pull request that says why.
 
+- The sole-driver period (the owner's order of 2026-10-02: one Claude driver, no Codex, no other
+  Claude, full authorisation, never ask the owner): each pull request is reviewed by an independent
+  Claude subagent with a fresh context, read-only, reporting only material and reproduced findings
+  (`C:\lex-v3\lanes\claude-review-instructions.md`); one repair round, then merge on green CI. The
+  owner's open questions are decided by the driver under that delegation and recorded here.
+- The six refusal codes no operation produces at launch (the refusal census's `not_produced` list),
+  each unreachable by construction, decided under that delegation (2026-10-02). The launch contract's
+  refusal line holds them in the closed registry with their payloads; the refusal case set measures the
+  fourteen produced codes.
+  - `advice_boundary`: no model plans an answer (`ask` answers the containment card
+    `assistant_v3_unavailable`, PR #759), so no question is ever classed as legal advice; a future
+    assistant's planner produces it.
+  - `derivation_refused`: the API serves no derived text and no operation derives at request time;
+    derivation happens at build time, where a refusal is a failed build, never a served answer.
+  - `not_transposable`: `transposition` is unserved (`operation_not_served`, with the data that would
+    serve it in `coverage`, PR #857); a served transposition answers it for an instrument that is not
+    a directive.
+  - `out_of_corpus_scope`: an identifier neither index holds answers `identifier_unknown`, naming this
+    service's own `search` as the way forward (`official_search_actions`); a list of publishers known to
+    be out of scope (a CSSF circular, a court decision) would produce it, and none is kept at launch.
+  - `rate_limited`: the one-server host applies no per-client limit at launch, since it keeps no IP
+    address or user agent (the launch contract's privacy line). Cost under abuse is bounded by one
+    replica per revision (`minReplicas` and `maxReplicas` 1 in `deploy/main.bicep`); the kit runs in
+    multiple-revision mode, so each active revision runs its own replica. A per-client limit that needs
+    no identifying record is follow-on work.
+  - `upstream_unreachable`: serving never contacts a publisher: the API holds no HTTP client, and the
+    only publisher client (`RoutedHttpAcquisitionSession`) is built by acquisition, which the API never
+    references; a mount is served from its own files, so no upstream can be unreachable at request time.
+- The rights question PR #842 surfaced, decided under that delegation (2026-10-02): a licence that does
+  not admit a text keeps it out of search matching too. A search hit says which articles hold a word,
+  which is information read from the text; `search` now matches only states whose text
+  `evidence_bundle` would quote (every source acquired and admitted by its rights), and states that
+  rule (`SearchRightsRule`). It counts nothing about the text it does not match, since a count of
+  withheld matches would say the same thing. The search page says the same: its intro, its prompt and
+  its no-hit sentence speak of the text this server holds and may search, and the intro says text its
+  rights withhold is not searched (review of #910: on the licence-blocked journey the old no-hit
+  sentence said the held text lacked a phrase it holds). The French draft says the same.
+
 - The image rehearsal (PR #821):
   - It builds with the .NET SDK's container support, needing no daemon: this machine has no
     container runtime, and the base image stays pinned by digest in the project.
