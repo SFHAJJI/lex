@@ -12,15 +12,21 @@
 // printed, not linked. The export panel shows, before anything is saved, what the file will carry:
 // the counts, the watermark, the rights, each item's citation and digest, the exclusions with their
 // reason, and the JSON itself.
+//
+// An EU reading is pinned from as the reading screen shows it: below Decision 95's acknowledgement and
+// authenticity statement, each wording headed by its own date as a wording's, with the annexes it does
+// not serve as text, which no pin reaches. Its panel says the acknowledgement every exported article
+// carries and the authenticity statement, dates each item as its wording is, and lists the annexes of
+// each wording an article is pinned from as excluded, with the platform's reason and official source.
 
 import { useEffect, useRef, useState } from 'react';
 
-import { QuoteEvidence, ReadingAnswerView, ReadingForm } from './LiveReading.jsx';
+import { EuropeWordingHeading, QuoteEvidence, ReadingAnswerView, ReadingForm } from './LiveReading.jsx';
 import { createReadingSession, quotationLanguageTag } from '../scripts/live-reading.mjs';
 import { EXPORT_FORMATS, LIVE_EXPORT_IDLE, exportState, formatRefused, pinKey, saveExport } from '../scripts/live-export.mjs';
-import { exportJson } from '../scripts/export-build.mjs';
+import { EUROPE_EXPORT_SCHEMA, exportJson } from '../scripts/export-build.mjs';
 import { ENGLISH_LANG, countedEntry, fillText, liveChrome } from '../scripts/live-chrome.mjs';
-import { LiveAnswer, Said, Say, StatusSentence, inEnglish } from './LiveAnswer.jsx';
+import { EuropeAnnexes, LiveAnswer, Said, Say, StatusSentence, inEnglish } from './LiveAnswer.jsx';
 
 /** The forms' labels and buttons, and this screen's sentences, from the interface copy table. */
 const FORM = liveChrome().form;
@@ -35,6 +41,30 @@ function Pin({ checked, onPin, label }) {
     <label>
       <input type="checkbox" data-pin="" checked={checked} onChange={(event) => onPin(event.target.checked)} /> {label}
     </label>
+  );
+}
+
+/**
+ * The articles held without text in a state or a wording (whose digest is `digest`), each with a pin: an export
+ * records a pinned one as excluded, with its reason.
+ */
+function WithoutTextPins({ entries, digest, pins, onPin }) {
+  if (entries.length === 0) return null;
+  return (
+    <>
+      <h3>{COPY.withoutTextHeading}</h3>
+      <ul data-without-text={entries.length}>
+        {entries.map((entry) => {
+          const key = pinKey(digest, entry.publisherId);
+          return (
+            <li key={entry.articleIdentitySha256}>
+              <Pin checked={pins.has(key)} onPin={(on) => onPin(key, on)} label={fillText(COPY.pin, { article: entry.publisherId })} />{' '}
+              {COPY.withoutTextNote}
+            </li>
+          );
+        })}
+      </ul>
+    </>
   );
 }
 
@@ -63,56 +93,54 @@ function StatePins({ state, workKey, pins, onPin }) {
           );
         })}
       </ol>
-      {state.articlesWithoutText.length > 0 ? (
-        <>
-          <h3>{COPY.withoutTextHeading}</h3>
-          <ul data-without-text={state.articlesWithoutText.length}>
-            {state.articlesWithoutText.map((entry) => {
-              const key = pinKey(state.stateSha256, entry.publisherId);
-              return (
-                <li key={entry.articleIdentitySha256}>
-                  <Pin checked={pins.has(key)} onPin={(on) => onPin(key, on)} label={fillText(COPY.pin, { article: entry.publisherId })} />{' '}
-                  {COPY.withoutTextNote}
-                </li>
-              );
-            })}
-          </ul>
-        </>
-      ) : null}
+      <WithoutTextPins entries={state.articlesWithoutText} digest={state.stateSha256} pins={pins} onPin={onPin} />
     </section>
   );
 }
 
-/** One composed export, laid out as the file will carry it, with the buttons that save it. */
-export function ExportPreview({ model, onSave }) {
-  const total = model.items.length + model.excluded.length;
-  // A format that cannot carry this model (a PDF whose text the standard fonts cannot set) is not
-  // offered, and the page says why, rather than a button that fails.
-  const judged = EXPORT_FORMATS.map((format) => ({ format, reason: format.refusal(model) }));
-  const offered = judged.filter((entry) => entry.reason === null).map((entry) => entry.format);
-  const refused = judged.filter((entry) => entry.reason !== null);
+/**
+ * One EU wording to pin from, headed as the reading screen heads it: each quoted article with its pin, its heading
+ * and text in the wording's language, and its evidence; the articles held without text; and the annexes the wording
+ * does not serve as text.
+ */
+function WordingPins({ wording, celex, pins, onPin }) {
+  const statuteLanguage = quotationLanguageTag(wording.language);
+  return (
+    <section data-wording={wording.wordingSha256}>
+      <h2>
+        <EuropeWordingHeading wording={wording} celex={celex} />
+      </h2>
+      <p>
+        <code>{wording.permalink}</code>
+      </p>
+      <ol className="articles">
+        {wording.articles.map((article) => {
+          const key = pinKey(wording.wordingSha256, article.publisherId);
+          return (
+            <li key={article.articleIdentitySha256} data-article={article.publisherId}>
+              <Pin checked={pins.has(key)} onPin={(on) => onPin(key, on)} label={fillText(COPY.pin, { article: article.publisherId })} />
+              {article.heading.length > 0 ? (
+                <>
+                  {' '}
+                  <span lang={statuteLanguage}>{article.heading}</span>
+                </>
+              ) : null}
+              <blockquote lang={statuteLanguage}>{article.text}</blockquote>
+              <QuoteEvidence article={article} />
+            </li>
+          );
+        })}
+      </ol>
+      <WithoutTextPins entries={wording.articlesWithoutText} digest={wording.wordingSha256} pins={pins} onPin={onPin} />
+      <EuropeAnnexes rows={wording.annexesNotServed} language={wording.language} />
+    </section>
+  );
+}
+
+/** A Luxembourg export's items and exclusions, each dated by its state. */
+function ExportEntries({ model }) {
   return (
     <>
-      <p data-export-counts="">
-        <Say template={countedEntry(COPY.counts, total)} values={{ count: total, withText: model.items.length, excluded: model.excluded.length }} />
-      </p>
-      {/* The watermark is the file's own English, and the rights rule the platform's. */}
-      <p data-watermark="" lang={ENGLISH_LANG}>{model.watermark}</p>
-      <p data-rights="">
-        <Say template={COPY.rights} values={{ rights: model.rightsDisposition }} /> {inEnglish(model.rightsRule)}
-      </p>
-      <p>
-        <Say
-          template={COPY.snapshot}
-          values={{
-            date: model.date,
-            observedAt: model.observedAt,
-            corpus: <code>{model.verifiedBy.corpusSha256}</code>,
-            index: <code>{model.verifiedBy.indexSha256}</code>,
-            registry: <code>{model.verifiedBy.registrySha256}</code>,
-          }}
-        />
-      </p>
       <ol data-export-items={model.items.length}>
         {model.items.map((item) => (
           <li key={item.citation}>
@@ -148,6 +176,105 @@ export function ExportPreview({ model, onSave }) {
           ))}
         </ul>
       ) : null}
+    </>
+  );
+}
+
+/**
+ * An EU export's items and exclusions, each dated as its wording is, and the annexes of each wording an article is
+ * pinned from, which the file lists as excluded and never holds the text of.
+ */
+function EuropeExportEntries({ model }) {
+  return (
+    <>
+      <ol data-export-items={model.items.length}>
+        {model.items.map((item) => (
+          <li key={item.citation}>
+            <Say
+              template={COPY.europeItem}
+              values={{
+                article: <strong>{item.publisherId}</strong>,
+                language: item.language,
+                date: item.wordingDate,
+                citation: <code>{item.citation}</code>,
+                digest: <code>{item.textSha256}</code>,
+                source: <code>{item.officialSource}</code>,
+              }}
+            />
+          </li>
+        ))}
+      </ol>
+      {model.excluded.length > 0 ? (
+        <ul data-export-excluded={model.excluded.length}>
+          {model.excluded.map((entry) => (
+            <li key={entry.citation}>
+              <Say
+                template={COPY.europeExcluded}
+                values={{
+                  article: <strong>{entry.publisherId}</strong>,
+                  language: entry.language,
+                  date: entry.wordingDate,
+                  reason: entry.reason,
+                  citation: <code>{entry.citation}</code>,
+                }}
+              />
+            </li>
+          ))}
+        </ul>
+      ) : null}
+      {model.annexesNotServed.length > 0 ? (
+        <div data-export-annexes={model.annexesNotServed.length}>
+          {model.annexesNotServed.map((row) => (
+            <EuropeAnnexes key={`${row.wordingPermalink} ${row.disposition}`} rows={[row]} language={row.language} />
+          ))}
+        </div>
+      ) : null}
+    </>
+  );
+}
+
+/** One composed export, laid out as the file will carry it, with the buttons that save it. */
+export function ExportPreview({ model, onSave }) {
+  const europe = model.schema === EUROPE_EXPORT_SCHEMA;
+  const total = model.items.length + model.excluded.length;
+  // A format that cannot carry this model (a PDF whose text the standard fonts cannot set) is not
+  // offered, and the page says why, rather than a button that fails.
+  const judged = EXPORT_FORMATS.map((format) => ({ format, reason: format.refusal(model) }));
+  const offered = judged.filter((entry) => entry.reason === null).map((entry) => entry.format);
+  const refused = judged.filter((entry) => entry.reason !== null);
+  return (
+    <>
+      <p data-export-counts="">
+        <Say template={countedEntry(COPY.counts, total)} values={{ count: total, withText: model.items.length, excluded: model.excluded.length }} />
+      </p>
+      {/* The watermark is the file's own English, and the rights rule the platform's. */}
+      <p data-watermark="" lang={ENGLISH_LANG}>{model.watermark}</p>
+      {europe ? (
+        <>
+          {/* EU text has no rights disposition: it is served with Decision 95's acknowledgement and authenticity statement. */}
+          <p data-rights="">
+            <Say template={COPY.europeRights} values={{ acknowledgement: inEnglish(model.acknowledgement) }} /> {inEnglish(model.rightsRule)}
+          </p>
+          <p data-authenticity="" lang={ENGLISH_LANG}>{model.authenticity}</p>
+        </>
+      ) : (
+        <p data-rights="">
+          <Say template={COPY.rights} values={{ rights: model.rightsDisposition }} /> {inEnglish(model.rightsRule)}
+        </p>
+      )}
+      <p>
+        <Say
+          template={COPY.snapshot}
+          values={{
+            date: model.date,
+            observedAt: model.observedAt,
+            corpus: <code>{model.verifiedBy.corpusSha256}</code>,
+            index: <code>{model.verifiedBy.indexSha256}</code>,
+            registry: <code>{model.verifiedBy.registrySha256}</code>,
+          }}
+        />
+      </p>
+      {europe ? <EuropeExportEntries model={model} /> : <ExportEntries model={model} />}
       <p>
         {offered.map((format) => (
           <button key={format.id} type="button" data-save={format.id} onClick={() => onSave(format)}>
@@ -184,16 +311,6 @@ export function ExportPanel({ outcome, pins, onSave }) {
 export function ExportAnswerView({ outcome, pins, onPin }) {
   if (outcome.state !== 'success') return <ReadingAnswerView outcome={outcome} />;
   const { view } = outcome;
-  if (view.publisher === 'eu-eurlex') {
-    // EU text is read here as the reading screen reads it, with its acknowledgement and permalinks; the composer
-    // pins Luxembourg states' articles only, and says so rather than offering a file it cannot compose.
-    return (
-      <>
-        <p data-export-not-composed="">{COPY.europeNotComposed}</p>
-        <ReadingAnswerView outcome={outcome} />
-      </>
-    );
-  }
   return (
     <section data-answer-state="success">
       <p>
@@ -203,9 +320,20 @@ export function ExportAnswerView({ outcome, pins, onPin }) {
           <Say template={COPY.readOnIn} values={{ date: view.date, language: view.language }} />
         )}
       </p>
-      {view.states.map((state) => (
-        <StatePins key={state.stateSha256} state={state} workKey={view.workKey} pins={pins} onPin={onPin} />
-      ))}
+      {view.publisher === 'eu-eurlex' ? (
+        <>
+          {/* EU text stands below Decision 95's acknowledgement and authenticity statement, as on the reading screen. */}
+          <p data-acknowledgement="" lang={ENGLISH_LANG}>{view.acknowledgement}</p>
+          <p data-authenticity="" lang={ENGLISH_LANG}>{view.authenticity}</p>
+          {view.wordings.map((wording) => (
+            <WordingPins key={wording.wordingSha256} wording={wording} celex={view.celex} pins={pins} onPin={onPin} />
+          ))}
+        </>
+      ) : (
+        view.states.map((state) => (
+          <StatePins key={state.stateSha256} state={state} workKey={view.workKey} pins={pins} onPin={onPin} />
+        ))
+      )}
     </section>
   );
 }

@@ -2194,8 +2194,9 @@ web lane's order 2, from the owner's proxy's journey corrections of 2026-10-01 1
   - each wording headed by its Formex act date, never an applicability date;
   - each quote with its evidence line.
   The export composer shows the EU text and says it is not composed: it pins Luxembourg states'
-  articles only, so it offers no file. The chrome table gains the EU heading and counts and the export
-  sentence, each with a French draft, and the chrome scan renders both EU views.
+  articles only, so it offers no file (the EU export, below, now composes it). The chrome table gains
+  the EU heading and counts and the export sentence, each with a French draft, and the chrome scan
+  renders both EU views.
 - **Evidence:**
   - `V3CorpusEuropeEvidenceBundleMountTests` on the retained GDPR fixture, through the real handler:
     - every article with text is quoted, in the index's order, with the index's own text;
@@ -2221,8 +2222,7 @@ web lane's order 2, from the owner's proxy's journey corrections of 2026-10-01 1
       that the text is read from the Formex package (`package_sha256`, `source_entry_sha256`).
 - **Not yet:**
   - the journey's EU reading step on the real canary mount (GDPR in English and French) in a browser;
-  - an EU bundle captured in the answer census, which replaces the web tests' hand-built answer;
-  - the EU export.
+  - an EU bundle captured in the answer census, which replaces the web tests' hand-built answer.
   Local builds, test runs and browser runs wait for free memory above 4 GB (standing order of 10:35
   UTC); CI runs the whole solution.
 
@@ -2506,6 +2506,83 @@ The annex on the pages, and in a browser:
 
 The launch contract's box stays unticked until the production build holds it.
 
+## The EU export (sole driver, 2026-10-03)
+
+The export composer now composes EU text (the launch contract's lines "Exports PDF, JSON, CSV preserve citations,
+rights, watermarks and exclusions" and the annex line). Until now it showed an EU reading with no pin and said its
+export was not composed.
+- **What is composed.** An EU reading is pinned from as the reading screen shows it: the acknowledgement and
+  authenticity statement above the text, each wording headed by its wording date, the annex line beside it, and a pin
+  for each quoted article and each article held without text (keyed by the wording's digest and the provision id).
+  `composeEuropeExport` (`web/scripts/export-build.mjs`) composes the pins into a model of its own,
+  `lex-v3-export-eu/1`, never through the Luxembourg one (`lex-v3-export/1`, unchanged).
+- **What an EU export carries.**
+  - Each item: its CELEX, language, wording kind and wording date (never an applicability date), the article id and
+    heading, its citation (the article permalink, which pins the wording), the wording permalink, the text with its
+    digest and byte length, the body digest, the official source, Decision 95's acknowledgement and the authenticity
+    statement (each item, so an item taken out of the file alone still says them; review of #920).
+  - The export: the watermark, when the answering snapshot was observed, the acknowledgement, the authenticity
+    statement, the platform's rights rule and its statement of what a wording date is, and the corpus, index and
+    registry digests (the registry digest is the envelope's, which `readingOutcome` now passes on: the EU bundle names
+    no registry).
+  - JSON writes these under their own members (`wording_date`, `wording_kind`, `acknowledgement`, `authenticity`,
+    `annexes_not_served`), never `applies_from`, `state_permalink` or `rights_disposition`; no EU file says
+    `agreed_same_run_cc_by`. CSV (`EUROPE_CSV_COLUMNS`) repeats the watermark, acknowledgement, authenticity
+    statement, observation time, rights rule and three digests on every row.
+  - PDF: the acknowledgement, authenticity statement, rule and date statement on the first page; each item headed
+    "001 {heading} (eng, original wording of {date})" (or "consolidated"), with its acknowledgement and authenticity
+    statement; the
+    acknowledgement at the foot of every page, above the page number. Its refusal (a character the standard fonts
+    cannot set) is read off its own layout, so the panel never offers a PDF that then fails.
+- **What it excludes.**
+  - A pinned article held without text: cited (the wording permalink and the escaped provision), with the reason
+    `articles_without_text` (the bundle's own list name; the API sends no reason code).
+  - Every annex row of a wording an article is pinned from: the disposition, count, identities,
+    `served_as: text_not_available`, the platform's reason and the official source. There is no text field to
+    carry. In CSV an annex row reads `excluded: <disposition>`, with no article, citation or text.
+- **The panel** says "Text served with the acknowledgement {acknowledgement}, which every exported article carries,
+  and the authenticity statement below.", each item "({language}, wording of {date})", each exclusion, and the annex
+  line under `data-export-annexes`.
+- **Chrome.** New: `export.europeRights`, `export.europeItem`, `export.europeExcluded`. Changed: `export.intro` names
+  EU text. Removed: `export.europeNotComposed`. The French was reviewed under Decision 41 in this pull request's
+  review (the record's addendum: all four forms approved, with two new terminology rows, "mention de la source" for the
+  acknowledgement and "déclaration sur l’édition qui fait foi" for the authenticity statement); `date-speech.test.mjs`
+  holds the three new entries to no Luxembourg date word, in both languages.
+- **Evidence.**
+  - `export-build.test.mjs`, `export-pdf.test.mjs`, `live-export.test.mjs` and `reading-europe.test.mjs`:
+    - citations, digests, language, wording date, acknowledgement and authenticity statement on each EU item and row;
+    - the exclusions and annex rows, with no text;
+    - no Luxembourg date field or disposition in the EU files, and no EU wording field in Luxembourg's;
+    - composing refuses a pin the reader was not shown, and an export with no observation time or registry;
+    - the PDF's watermark and acknowledgement on every page, its own words (the data taken out) holding no
+      Luxembourg date word, the refusal per field, and the same model giving the same bytes;
+    - the page's pins, the panel, the JSON shown equal to the JSON saved, the file names and the saved bytes, through
+      the census envelope carrying the EU sample and the real envelope reader.
+  - The chrome scan (English and French) and `live-french.test.mjs` scan the EU export view and panel with every
+    article pinned; `date-speech.test.mjs` renders the EU and Luxembourg export composer that way, each in its own
+    date words.
+  - The hand-built EU bundle, which two test files copied, is one module, `web/scripts/europe-bundle-sample.mjs`,
+    now with an article without text, an annex row, an observation time and a registry digest.
+  - The Luxembourg export is unchanged: the JSON, CSV and PDF of the 14 models the existing export tests compose (12
+    PDFs; the other two are refused) are byte-identical before and after this change, and so is the export page's
+    markup for the census answer (26 renders, English and French).
+  - The journey: `europeAnnexExpectations` gains the export step on the EU annex control mount. It pins both articles,
+    and the page must show the composed panel with the annex excluded, the counts, the watermark, the acknowledgement
+    and "Save as PDF", with neither the annex's text nor its title in its text or markup (the JSON shown included).
+    CI's `journeys` job runs it with the other two, by pointer and by keyboard; it was not run on this machine, where
+    no browser runs during the acquisition. `journey-verdict.test.mjs` holds the step's expectations.
+  - `npm test` in `web/`: 1,058 of 1,058 pass (1,042 before).
+- **Driver decisions (reversible).** The exclusion reason `articles_without_text`; an annex row travels with any
+  export that pins an article of its wording; the date statement on the PDF's first page; the acknowledgement on its
+  own footer line.
+- **Not yet:**
+  - an EU bundle captured in the answer census (the export's tests read the hand-built one);
+  - the EU export over a real EU mount in a browser (the control case is a fixture);
+  - the PDF stays untagged: the statute language is marked in the page's markup and carried per item in JSON and
+    CSV, not in the PDF.
+
+The launch contract's export and annex boxes stay unticked until the production build holds them.
+
 ## Next, in order (web lane; the data lane's items 1 to 3 are in STATUS-DATA.md)
 
 The web lane's order since the owner's proxy's journey corrections (2026-10-01 14:30 UTC,
@@ -2525,7 +2602,9 @@ The web lane's order since the owner's proxy's journey corrections (2026-10-01 1
    machine yet. EU dossier and evidence_bundle now list each annex the corpus classified as
    `annexes_not_served`: `text_not_available`, linked to the expression's official source. The synthetic
    end-to-end control case holds that through the acquisition (#918), and the EU reading and dossier
-   pages say the annex line, walked in a browser over the control case's mount (above, 2026-10-03).
+   pages say the annex line, walked in a browser over the control case's mount (above, 2026-10-03). The
+   EU export lists the annex as excluded, never its text, and its journey step joins those walks (the EU
+   export, above).
 A pull request that does not move a launch-contract line, or directly unblock one, waits. Merges take
 turns through `C:\lex-v3\lanes\MERGE-LOCK`, and related work goes in one bigger pull request.
 

@@ -354,3 +354,26 @@ test("the evaluation card's and the export panel's English is marked English on 
   assert.ok(panel.includes(`<p data-watermark="" lang="en">${escaped(composed.model.watermark)}</p>`), "the watermark is marked English");
   assert.ok(panel.includes(`<span lang="en">${escaped(composed.model.rightsRule)}</span>`), "the rights rule is marked English");
 });
+
+test("the EU export panel says its sentences in French and marks the platform's English: the acknowledgement, the authenticity statement, the rule, an annex's reason", async () => {
+  // The hand-built EU bundle the web tests share, until the census captures one.
+  const { europeEnvelope } = await import("../scripts/europe-bundle-sample.mjs");
+  const { exportState, pinKey } = await import("../scripts/live-export.mjs");
+  const envelope = europeEnvelope();
+  const outcome = frenchModule("live-reading.mjs").readingOutcome({ state: "success", envelope });
+  const pins = new Set(outcome.view.wordings.flatMap((wording) => [...wording.articles, ...wording.articlesWithoutText].map((article) => pinKey(wording.wordingSha256, article.publisherId))));
+  const { state, model } = exportState(outcome, pins);
+  assert.equal(state, "composed");
+  const panel = renderToStaticMarkup(h(french.ExportPanel, { outcome, pins, onSave: () => {} }));
+  assert.ok(panel.includes(`<p data-watermark="" lang="en">${escaped(model.watermark)}</p>`), "the watermark is marked English");
+  assert.ok(panel.includes(`<span lang="en">${escaped(model.acknowledgement)}</span>`), "the acknowledgement is marked English inside the French sentence");
+  assert.ok(panel.includes(`<p data-authenticity="" lang="en">${escaped(model.authenticity)}</p>`), "the authenticity statement is marked English");
+  assert.ok(panel.includes(`<span lang="en">${escaped(model.rightsRule)}</span>`), "the rights rule is marked English");
+  assert.ok(panel.includes(`<span lang="en">${escaped(model.annexesNotServed[0].reason)}</span>`), "an annex's reason is marked English");
+  const said = unmarked(panel.replace(/<pre>[\s\S]*?<\/pre>/, ""));
+  assert.ok(said.includes(`(eng, libellé du 2016-04-27)${NB}: `), "an EU item is dated as its wording is, in the reviewed table's French");
+  assert.ok(said.includes(FR.export.europeRights.split("{acknowledgement}")[0]), "the acknowledgement is introduced in French");
+  assert.doesNotMatch(said, /applicab|s’appliqu|\bversions?\b/i, "never as a version that applies");
+  const englishOutcome = (await englishModule("live-reading.mjs")).readingOutcome({ state: "success", envelope });
+  assert.doesNotMatch(renderToStaticMarkup(h(english.ExportPanel, { outcome: englishOutcome, pins, onSave: () => {} })), /\slang=/, "the English page marks nothing");
+});

@@ -3,11 +3,12 @@
 // The eighth live screen. It asks what the reading screen asks (`evidence_bundle`, through
 // `live-reading.mjs`: the same request, the same outcome mapping and the same refusal sentences,
 // because what is refused is the reading an export would be composed from), and composes what the
-// reader pins with `export-build.mjs`. Composing and saving send nothing: the one request is the
+// reader pins with `export-build.mjs`: a Luxembourg state's articles with `composeExport`, an EU
+// wording's with `composeEuropeExport`. Composing and saving send nothing: the one request is the
 // reading. This file holds the pin keys, the file names, the saving and the sentences the page needs;
 // what an export carries is decided in `export-build.mjs`.
 
-import { composeExport, exportCsv, exportJson } from './export-build.mjs';
+import { composeEuropeExport, composeExport, exportCsv, exportJson } from './export-build.mjs';
 import { exportPdf, pdfRefusal } from './export-pdf.mjs';
 import { englishRun, fillParts, liveChrome, statement } from './live-chrome.mjs';
 
@@ -32,15 +33,19 @@ export function formatRefused(format, reason) {
   return statement(fillParts(COPY.formatRefused, { format: format.id.toUpperCase(), reason: englishRun(reason) }));
 }
 
-/** One pin: the state's digest and the article's publisher id, which together name one article. */
-export function pinKey(stateSha256, publisherId) {
-  return `${stateSha256}#${publisherId}`;
+/**
+ * One pin: the digest of what the article is read in (a Luxembourg state, or an EU wording) and the
+ * article's publisher id, which together name one article.
+ */
+export function pinKey(digest, publisherId) {
+  return `${digest}#${publisherId}`;
 }
 
-function unpin(key) {
-  // A state digest is hex, so the first '#' ends it; a publisher id may hold anything after.
+/** A pin taken apart: its digest under `digestName` (`stateSha256` or `wordingSha256`), and its publisher id. */
+function unpin(key, digestName) {
+  // A digest is hex, so the first '#' ends it; a publisher id may hold anything after.
   const split = key.indexOf('#');
-  return { stateSha256: key.slice(0, split), publisherId: key.slice(split + 1) };
+  return { [digestName]: key.slice(0, split), publisherId: key.slice(split + 1) };
 }
 
 /**
@@ -58,15 +63,23 @@ export function composeFailed(reason) {
  */
 export function exportState(outcome, pins) {
   if (outcome.state !== 'success') return { state: 'none' };
-  // An EU reading is not composed (the answer view says so beside the text): nothing can be pinned from it.
-  if (outcome.view?.publisher === 'eu-eurlex') return { state: 'none' };
   if (pins.size === 0) return { state: 'empty', sentence: NOTHING_PINNED };
+  const observedAt = outcome.context?.freshness?.observed_at;
   try {
-    const model = composeExport({
-      view: outcome.view,
-      pinned: [...pins].map(unpin),
-      observedAt: outcome.context?.freshness?.observed_at,
-    });
+    // An EU reading is composed into its own model, never the Luxembourg one: its wordings are dated as wordings,
+    // and its text carries Decision 95's acknowledgement rather than a rights disposition.
+    const model = outcome.view.publisher === 'eu-eurlex'
+      ? composeEuropeExport({
+        view: outcome.view,
+        pinned: [...pins].map((key) => unpin(key, 'wordingSha256')),
+        observedAt,
+        registrySha256: outcome.registrySha256,
+      })
+      : composeExport({
+        view: outcome.view,
+        pinned: [...pins].map((key) => unpin(key, 'stateSha256')),
+        observedAt,
+      });
     return { state: 'composed', model };
   } catch (error) {
     return { state: 'failed', ...composeFailed(error.message) };

@@ -20,6 +20,12 @@
 // page's `search.intro`, `search.idle` and `search.noHit` once search matches only the text its rights admit (PR #910),
 // and `common.europeAnnexes`, the line for the annexes an EU wording does not serve as text (PR #919; both forms changed
 // in its review: a search covers the text it "interroge", and an annex is served "sous forme de texte").
+// The export composer's entries for the EU export were reviewed by the same reviewer, under the same delegation, in the
+// review of PR #920 (the record's addendum; all four approved): `export.intro` (changed to name EU text, the
+// acknowledgement and authenticity statement it is served with, and what an export excludes), `export.europeRights`,
+// `export.europeItem` and `export.europeExcluded`. The acknowledgement is "la mention de la source" (the Publications
+// Office's own term for the condition it meets) and the authenticity statement "la déclaration sur l’édition qui fait
+// foi" (never "authentique").
 // No French entry ships unreviewed.
 //
 // Vocabulary: a work is an "acte" (a publisher's Cellar work, one record of an EU act, is an "œuvre de l’éditeur"), a
@@ -219,7 +225,7 @@ export const LIVE_CHROME_FR = Object.freeze({
     title: 'Composition d’export',
     eyebrow: 'Composition d’export',
     heading: 'Emporter des articles, avec leurs citations',
-    intro: 'Lisez un acte luxembourgeois à une date, épinglez les articles dont vous avez besoin et enregistrez-les en JSON, CSV ou PDF. Chaque article exporté porte sa citation, l’empreinte de son texte, sa source officielle et les droits sous lesquels il a été communiqué, et chaque export porte le filigrane. L’identifiant et la date sont envoyés à ce serveur dans la requête et nulle part ailleurs ; le fichier est créé dans cette page, et cette page ne conserve rien.',
+    intro: 'Lisez un acte luxembourgeois à une date, ou un acte de l’UE dans le libellé qui sert de réponse pour cette date, épinglez les articles dont vous avez besoin et enregistrez-les en JSON, CSV ou PDF. Chaque article exporté porte sa citation, l’empreinte de son texte et sa source officielle, avec les droits sous lesquels il a été communiqué ou, pour un texte de l’UE, la mention de la source avec laquelle il a été communiqué et la déclaration sur l’édition qui fait foi ; chaque export porte le filigrane et indique ce qu’il exclut, avec la raison de chaque exclusion. L’identifiant et la date sont envoyés à ce serveur dans la requête et nulle part ailleurs ; le fichier est créé dans cette page, et cette page ne conserve rien.',
     idle: 'Saisissez un identifiant d’acte et une date, puis épinglez les articles à emporter.',
     readOn: 'Lu au {date}. Épinglez les articles à exporter.',
     readOnIn: 'Lu au {date} en {language}. Épinglez les articles à exporter.',
@@ -236,11 +242,13 @@ export const LIVE_CHROME_FR = Object.freeze({
     snapshot: 'Lu au {date}, à partir de l’instantané observé le {observedAt}. Corpus {corpus}, index {index}, registre {registry}.',
     item: '{article} ({language}, applicable à partir du {from}) : {citation}, empreinte du texte {digest}, source officielle {source}',
     excluded: '{article} ({language}, applicable à partir du {from}) : exclu, {reason}, {citation}',
+    europeRights: 'Texte communiqué avec la mention de la source {acknowledgement}, que porte chaque article exporté, et avec la déclaration ci-dessous sur l’édition qui fait foi.',
+    europeItem: '{article} ({language}, libellé du {date}) : {citation}, empreinte du texte {digest}, source officielle {source}',
+    europeExcluded: '{article} ({language}, libellé du {date}) : exclu, {reason}, {citation}',
     save: Object.freeze({ json: 'Enregistrer en JSON', csv: 'Enregistrer en CSV', pdf: 'Enregistrer en PDF' }),
     formatRefused: 'Le format {format} n’est pas proposé pour cet export : {reason}.',
     composeFailed: 'Cet export ne peut pas être composé : {reason}.',
     jsonSummary: 'Le JSON tel qu’il sera enregistré',
-    europeNotComposed: 'Il s’agit d’un texte de l’UE. Son export n’est pas encore composé : l’outil de composition d’export n’épingle que les articles des actes luxembourgeois ; aucun fichier n’est donc proposé pour un texte de l’UE.',
   }),
   card: Object.freeze({
     heading: 'Fiche d’évaluation',
