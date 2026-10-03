@@ -91,9 +91,6 @@ jobs:
           path: artifacts/s0-05/windows
       - name: Locked restore, build, full tests, and V3 tree
         shell: bash
-        env:
-          V3_RENDER_ANSWER_SAMPLES: "1"
-          V3_RENDER_ENVELOPE_SAMPLES: "1"
         run: |
           set -euo pipefail
           test -z "$(git status --porcelain)"
@@ -103,16 +100,6 @@ jobs:
           dotnet build Lex.V3.slnx --configuration Release --no-restore
           dotnet test --solution Lex.V3.slnx --configuration Release --no-restore --no-build --minimum-expected-tests 1
           pwsh -NoLogo -NoProfile -File ./eng/verify-v3-tree.ps1
-      - name: TEMPORARY rendered samples (removed before merge)
-        if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
-        with:
-          name: rendered-samples-${{ env.CANDIDATE_SHA }}
-          path: |
-            schemas/v3-platform/answer-samples.json
-            schemas/v3-platform/envelope-samples.json
-          if-no-files-found: error
-          retention-days: 1
       - name: Retain the tested acquisition runtime
         shell: bash
         run: |
