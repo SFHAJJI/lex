@@ -2353,11 +2353,13 @@ contract's line "Chrome in FR and EN; DE and LB answer `localization_unavailable
   French with the French table and refusal French pseudo-localised: no text bypasses them, and none
   of their words is marked English); `live-locale-build.test.mjs` (the product build's `/fr/` pages
   say the French table and none of the English, English as the English bundle renders it);
-  `live-chrome.test.mjs` (shape, typography, the receipt). The web suite, run file by file
-  (`node --test --test-concurrency=1`, memory being short during the acquisition) without the three
-  tests that start a browser (`keyboard-walk`, `paint-check`, `launch-browser`, which CI runs): 1,022
-  tests, 1,021 pass. The one failure, `image-run.test.mjs`'s writable-mount case, spawns `awk`, which
-  this machine's shell lacks; it fails the same on the commit this branch started from.
+  `live-chrome.test.mjs` (shape, typography, the receipt). Review of #912: `live-french.test.mjs` also
+  holds the evaluation card's and the export panel's English marking (removing a mark fails it), and
+  the typography test requires the no-break space rather than only refusing an ordinary one. On the
+  head merged with #910, the files this slice and #910 touch (`node --test --test-concurrency=1` over
+  the chrome, French, search, locale, reading, date-speech, refusal and localization tests, memory
+  being short during the acquisition) pass 281 of 281; CI's web job runs every file, the browser
+  tests included.
 - **Driver decisions (reversible).** The receipt's wording, under the owner's delegation (the review
   left it to the owner as a public claim). The review's own choices, recorded as it asked: U+00A0
   everywhere (U+202F before ; ! ? would be the Imprimerie nationale refinement); "libellé consolidé"
