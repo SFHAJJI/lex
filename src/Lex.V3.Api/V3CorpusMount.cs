@@ -3987,10 +3987,10 @@ internal sealed partial class V3CorpusMount : IDisposable
     /// EU <c>search</c> in one work (lane R2): the two lexical lanes of the Luxembourg search over the one
     /// held wording of the work's expression in the language asked, with its refusals. A language the work
     /// holds no expression in is <c>language_not_available</c>; two expressions in it are
-    /// <c>ambiguous_identifier</c>, never one of them; a date is refused <c>retrieval_mode_unavailable</c>,
-    /// because one work on a date is <c>as_of</c>'s question and EU <c>as_of</c> is not served (the index
-    /// holds one original wording and no consolidation, so no date after it could be answered honestly);
-    /// a mode other than the two lanes is refused as the Luxembourg search refuses it. Each hit names its
+    /// <c>ambiguous_identifier</c>, never one of them; a date is refused <c>retrieval_mode_unavailable</c>:
+    /// the search reads the original wording only, and the wording that answers a date is <c>as_of</c>'s
+    /// question, which the EU time view answers (V3CorpusMount.EuropeTime.cs); searching that wording at a
+    /// date is not built yet; a mode other than the two lanes is refused as the Luxembourg search refuses it. Each hit names its
     /// article, the Formex act date of the wording (<c>wording_date</c>, with its meaning in the answer,
     /// never an applicability date), and the provision coordinate <c>resolve</c> answers; no text is served.
     /// </summary>
@@ -4200,6 +4200,58 @@ internal sealed partial class V3CorpusMount : IDisposable
     internal static readonly IReadOnlyDictionary<string, string> NotServedDataNeeded =
         V3UnservedOperations.Rows.ToDictionary(static row => row.Operation, static row => row.DataNeeded, StringComparer.Ordinal);
 
+    internal const string CoverageEuropeRefusedNote =
+        "refused_for_eu lists the operations the mounted EU index's capability manifest states an EU identifier is refused: a request " +
+        "for one with an EU identifier answers the reason given (retrieval_mode_unavailable, naming the requested mode and the modes " +
+        "available), and data_needed names the EU data that would serve it; an operation the EU time view serves for an EU act is not " +
+        "listed, and an empty list means the mounted manifest states none";
+
+    /// <summary>
+    /// The coverage answer's operations block: the routes this mount answers and the registered operations with none, and,
+    /// when an EU index is mounted, the operations its capability manifest states an EU identifier is refused, each with its
+    /// typed reason and the EU data that would serve it (the launch contract: "each either served or refusing with a typed
+    /// reason its capability manifest states"). A mount with no EU index answers the block exactly as before.
+    /// </summary>
+    private object CoverageOperations(string[] registered, string[] served)
+    {
+        var notServed = registered.Except(served, StringComparer.Ordinal).ToArray();
+        var notServedData = notServed
+            .Select(static operation => new
+            {
+                operation,
+                data_needed = NotServedDataNeeded.TryGetValue(operation, out var needed)
+                    ? needed
+                    : throw new InvalidOperationException($"The unserved operation {operation} states no data that would serve it."),
+            })
+            .ToArray();
+        if (_europeReader is null)
+        {
+            return new
+            {
+                registered = registered.Length,
+                served_operations = served,
+                not_served_operations = notServed,
+                not_served_data = notServedData,
+                note = CoverageOperationsNote,
+            };
+        }
+
+        return new
+        {
+            registered = registered.Length,
+            served_operations = served,
+            not_served_operations = notServed,
+            not_served_data = notServedData,
+            note = CoverageOperationsNote,
+            refused_for_eu = _europeReader.NotServed
+                .Where(static row => string.Equals(
+                    row.Reason, Lex.V3.Contracts.Index.V3UnservedOperation.RetrievalModeUnavailable, StringComparison.Ordinal))
+                .Select(static row => new { operation = row.Operation, reason = row.Reason, data_needed = row.DataNeeded })
+                .ToArray(),
+            refused_for_eu_note = CoverageEuropeRefusedNote,
+        };
+    }
+
     /// <summary>The build-time row on a mount whose Luxembourg index is schema 6, which records no build time at all.</summary>
     internal static readonly string[] CoverageLegacyBuildTimeRow =
         ["build_time_and_currency", "this report states no build time and no build time of the corpus file is held, so nothing here says how current these counts are; this Luxembourg index is lex-v3-luxembourg-index/6 and its event log records no build time either; the corpus and index digests name exactly which artifacts are mounted"];
@@ -4390,22 +4442,7 @@ internal sealed partial class V3CorpusMount : IDisposable
                     population = cell.Population,
                 })
                 .ToArray(),
-            operations = new
-            {
-                registered = registered.Length,
-                served_operations = served,
-                not_served_operations = registered.Except(served, StringComparer.Ordinal).ToArray(),
-                not_served_data = registered.Except(served, StringComparer.Ordinal)
-                    .Select(static operation => new
-                    {
-                        operation,
-                        data_needed = NotServedDataNeeded.TryGetValue(operation, out var needed)
-                            ? needed
-                            : throw new InvalidOperationException($"The unserved operation {operation} states no data that would serve it."),
-                    })
-                    .ToArray(),
-                note = CoverageOperationsNote,
-            },
+            operations = CoverageOperations(registered, served),
             not_held = CoverageNotHeld
                 .Select(row => _reader.RecordsBuilds || row[0] != "build_time_and_currency" ? row : CoverageLegacyBuildTimeRow)
                 .Select(static row => new { item = row[0], reason = row[1] })

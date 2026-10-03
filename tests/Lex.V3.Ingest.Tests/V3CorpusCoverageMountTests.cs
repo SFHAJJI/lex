@@ -434,6 +434,8 @@ public sealed class V3CorpusCoverageMountTests
         // It states a fact about the mount and says what a request for an unserved operation returns.
         var note = operations.GetProperty("note").GetString();
         StringAssert.Contains(note, "a request for an unserved operation answers the transport failure operation_not_served");
+        // A mount with no EU index states no EU refusal: the block is what it was before EU manifests stated them.
+        Assert.IsFalse(operations.TryGetProperty("refused_for_eu", out _), "no EU index, no EU refusals");
 
         // And, for each unserved operation, the data that would serve it: one row per unserved operation, in the same
         // order, each with a sentence; the table names exactly the unserved operations, so a newly served one leaves it

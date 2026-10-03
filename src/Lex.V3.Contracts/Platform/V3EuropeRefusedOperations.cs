@@ -1,0 +1,85 @@
+using Lex.V3.Contracts.Index;
+
+namespace Lex.V3.Contracts.Platform;
+
+/// <summary>
+/// The registered operations routed for Luxembourg works that refuse an EU identifier, each with the typed reason a request
+/// answers (<see cref="V3UnservedOperation.RetrievalModeUnavailable"/>, naming the requested mode and the modes available) and
+/// the EU data that would serve it. The launch contract's line "each either served or refusing with a typed reason its
+/// capability manifest states": the EU index builder states this table in every EU capability manifest it writes, beside
+/// <see cref="V3UnservedOperations"/>, the API's <c>coverage</c> answer reports the mounted EU manifest's statement, and the
+/// API's tests hold each row to the refusal an EU identifier receives. An operation the EU time view serves for an EU act
+/// (<c>as_of</c>, <c>timeline</c>, <c>evidence_bundle</c>, <c>verify</c> of a pinned EU permalink, <c>dossier</c>,
+/// <c>search</c> in one EU work, <c>resolve</c>) never appears here.
+/// </summary>
+public static class V3EuropeRefusedOperations
+{
+    public static IReadOnlyList<V3UnservedOperation> Rows { get; } = Array.AsReadOnly(new[]
+    {
+        new V3UnservedOperation(
+            "answer_drift",
+            V3UnservedOperation.RetrievalModeUnavailable,
+            "the EU index's builds recorded in the event log, whose revising events would name the EU answers a later consolidation " +
+            "invalidated; the log records Luxembourg's builds only, and timeline serves an EU act's wordings by their dates"),
+        new V3UnservedOperation(
+            "article_history",
+            V3UnservedOperation.RetrievalModeUnavailable,
+            "one article followed across an EU act's dated wordings, matched by the publisher's article identifier from wording to " +
+            "wording; the wordings and their articles are held and served (timeline, as_of), and this build does not derive the alignment"),
+        new V3UnservedOperation(
+            "as_observed",
+            V3UnservedOperation.RetrievalModeUnavailable,
+            "the EU index's builds recorded in the event log, so that a past build's EU wordings could be named by its index digest; the " +
+            "log records Luxembourg's builds only"),
+        new V3UnservedOperation(
+            "changes_in_period",
+            V3UnservedOperation.RetrievalModeUnavailable,
+            "the EU wordings dated in a period, each compared with the wording it follows; timeline lists each act's wordings by their " +
+            "dates, and this build does not derive the comparison"),
+        new V3UnservedOperation(
+            "citation",
+            V3UnservedOperation.RetrievalModeUnavailable,
+            "the references the publisher marked up in an EU wording's Formex text, extracted per article; this build reads each " +
+            "article's text and not its marked-up references"),
+        new V3UnservedOperation(
+            "cited_by",
+            V3UnservedOperation.RetrievalModeUnavailable,
+            "the references whose target is an EU act, matched to the act's EU identifiers (its CELEX, Cellar and ELI forms) in the " +
+            "held EU wordings and Luxembourg states; no reference target is matched to an EU act"),
+        new V3UnservedOperation(
+            "classification",
+            V3UnservedOperation.RetrievalModeUnavailable,
+            "the Publications Office's typed facts about an EU work (resource type, author, form and dates), verbatim, as an index " +
+            "field; the census retains a few of them per discovered work, and this build does not serve them as a classification"),
+        new V3UnservedOperation(
+            "diff",
+            V3UnservedOperation.RetrievalModeUnavailable,
+            "two dated wordings of an EU act compared article by article; each wording is held and served with its digests (as_of, " +
+            "evidence_bundle), and this build does not derive the comparison"),
+        new V3UnservedOperation(
+            "in_force_on",
+            V3UnservedOperation.RetrievalModeUnavailable,
+            "the entry-into-force, application and end-of-validity dates the Publications Office records for EU acts, which no build " +
+            "acquires; an EU wording date is never one of them, so the time view cannot answer an applicability question"),
+        new V3UnservedOperation(
+            "manifestation",
+            V3UnservedOperation.RetrievalModeUnavailable,
+            "an EU expression's manifestations with their formats, the retained one marked with its body digest, as one answer; " +
+            "acquisition enumerates them, and this build serves the retained bodies' digests in evidence_bundle but not the listing"),
+        new V3UnservedOperation(
+            "provenance",
+            V3UnservedOperation.RetrievalModeUnavailable,
+            "a dated EU wording's retained sources, rule profiles and digests in provenance's shape; evidence_bundle carries an EU " +
+            "wording's corpus members and digests, and this build does not compose the provenance record"),
+        new V3UnservedOperation(
+            "relations",
+            V3UnservedOperation.RetrievalModeUnavailable,
+            "the reference edges of an EU work in both directions, which need the references citation and cited_by would read for EU " +
+            "works; neither is extracted"),
+        new V3UnservedOperation(
+            "status_on",
+            V3UnservedOperation.RetrievalModeUnavailable,
+            "the Publications Office's force assertions about an EU work (in force, date of effect, end of validity), verbatim, which " +
+            "no build acquires"),
+    });
+}

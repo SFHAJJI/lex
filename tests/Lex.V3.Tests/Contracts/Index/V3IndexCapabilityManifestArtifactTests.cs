@@ -158,6 +158,29 @@ public sealed class V3IndexCapabilityManifestArtifactTests
         }
     }
 
+    [TestMethod]
+    public void AManifestStatesAnOperationRefusedForItsPublishersIdentifiersByTheModeRefusalAndReopensExactly()
+    {
+        // An operation routed for another publisher's identifiers only is stated with the registry's refusal
+        // retrieval_mode_unavailable, beside an operation no route serves, in operation order.
+        Assert.IsTrue(V3IndexCapabilityManifest.TryCreate(
+            PublisherId.EuEurLex,
+            IndexDigest,
+            [],
+            [new V3UnservedOperation("diff", V3UnservedOperation.RetrievalModeUnavailable, "two wordings compared"),
+             new V3UnservedOperation("concepts", V3UnservedOperation.OperationNotServed, "the concepts")],
+            out var manifest,
+            out var refusal), refusal.ToString());
+        var bytes = Write(manifest!, out var digest);
+        StringAssert.EndsWith(
+            Encoding.UTF8.GetString(bytes),
+            "\"not_served\":[{\"operation\":\"concepts\",\"reason\":\"operation_not_served\",\"data_needed\":\"the concepts\"},"
+            + "{\"operation\":\"diff\",\"reason\":\"retrieval_mode_unavailable\",\"data_needed\":\"two wordings compared\"}]}\n");
+        var reopened = V3IndexCapabilityManifestArtifact.ParseAndVerify(
+            new SourceArtifactRef(ArtifactResourceId, digest), bytes, PublisherId.EuEurLex, IndexDigest);
+        CollectionAssert.AreEqual(manifest!.NotServed.ToArray(), reopened.NotServed.ToArray());
+    }
+
     private static byte[] Write(V3IndexCapabilityManifest manifest, out string digest)
     {
         using var stream = new MemoryStream();
