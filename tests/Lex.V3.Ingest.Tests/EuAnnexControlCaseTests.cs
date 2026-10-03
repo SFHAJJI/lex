@@ -26,16 +26,16 @@ public sealed partial class EuFormexPackagePopulationProducerTests
 
     private const string ControlCelex = "32016R0679";
 
+    private const string EuAnnexMountVariable = "V3_WRITE_EU_ANNEX_MOUNT";
+
     /// <summary>
-    /// The real 2026/1965 package and work XHTML, whose one annex holds structured text, with the annex title rewritten to a
-    /// sentinel in both (the binder pairs the Formex and XHTML annexes by title), and the publisher's PDF made image-only: seven
-    /// pages labelled 1 to 7, each an image with no text layer. The run is over the GDPR's seed, whose CELEX every EU answer and
-    /// permalink can carry. The annex is classified text not available, recorded on the member the articles are read from, and
-    /// copied into the EU index; no article holds its text; search finds none of it; dossier and both evidence_bundle paths list
-    /// it as text_not_available with the expression's official source; and no answer carries its text or title.
+    /// The control case's acquisition: the real 2026/1965 package and work XHTML, whose one annex holds structured text, with
+    /// the annex title rewritten to a sentinel in both (the binder pairs the Formex and XHTML annexes by title), and the
+    /// publisher's PDF made image-only: seven pages labelled 1 to 7, each an image with no text layer. The run is over the
+    /// GDPR's seed, whose CELEX every EU answer and permalink can carry.
     /// </summary>
-    [TestMethod]
-    public async Task TheImageOnlyAnnexControlCaseIsTextNotAvailableOfficiallyLinkedAndOutOfSearchQuotesAndExports()
+    private static async Task<(EuFormexPackagePopulationResult Result, LanguageScopedExpression English, EuAcquisitionTestFixture.EuInMemoryCustodyStore Store)>
+        AcquireAnnexControlAsync()
     {
         var package = EuFirstMountAcquisitionTests.RewrittenPackage(
             await FixtureAsync("new-fmx4-200-body.bin"), "<P>ANNEX</P>", $"<P>{AnnexSentinel}</P>");
@@ -50,6 +50,28 @@ public sealed partial class EuFormexPackagePopulationProducerTests
             heldXhtml: xhtml,
             englishTypes: ["fmx4", "pdfa2a"],
             seedCelex: ControlCelex);
+        return (result, english, store);
+    }
+
+    /// <summary>The control case's Stage 3 envelope: the acquisition with its annex classification, ready for the corpus and the EU index.</summary>
+    private static Task<Stage3DerivationProfileEnvelope> AnnexControlEnvelopeAsync(
+        EuFormexPackagePopulationResult result, EuAcquisitionTestFixture.EuInMemoryCustodyStore store) =>
+        LexCorpus6BuilderTests.CompleteProfileEnvelopeAsync(
+            europeOverride: result.Reconciliation!.Run,
+            formexOverride: result.Reconciliation,
+            formexStore: store,
+            formexClassifications: Stage3EvidenceEnvelopeTests.CompleteClassifications(result.Reconciliation, result.AnnexClassifications));
+
+    /// <summary>
+    /// The control case through the corpus, the EU index and the API: the annex is classified text not available, recorded on
+    /// the member the articles are read from, and copied into the EU index; no article holds its text; search finds none of
+    /// it; dossier and both evidence_bundle paths list it as text_not_available with the expression's official source; and no
+    /// answer carries its text or title.
+    /// </summary>
+    [TestMethod]
+    public async Task TheImageOnlyAnnexControlCaseIsTextNotAvailableOfficiallyLinkedAndOutOfSearchQuotesAndExports()
+    {
+        var (result, english, store) = await AcquireAnnexControlAsync();
 
         // Acquisition: the package is acquired with its one annex, classified image-only against the PDF.
         var outcome = result.Reconciliation!.Outcomes.Single(value => value.ExpressionIdentity == english.Identity);
@@ -61,11 +83,7 @@ public sealed partial class EuFormexPackagePopulationProducerTests
         Assert.AreEqual("image_only", annex.ReasonCode);
 
         // Corpus: the member the articles are read from carries the admitted main body and the annex, text not available.
-        var envelope = await LexCorpus6BuilderTests.CompleteProfileEnvelopeAsync(
-            europeOverride: result.Reconciliation.Run,
-            formexOverride: result.Reconciliation,
-            formexStore: store,
-            formexClassifications: Stage3EvidenceEnvelopeTests.CompleteClassifications(result.Reconciliation, result.AnnexClassifications));
+        var envelope = await AnnexControlEnvelopeAsync(result, store);
         var corpus = LexCorpus6Builder.TryBuild(envelope, out var refusal, out var detail);
         Assert.IsNotNull(corpus, $"{refusal}: {detail}");
         var annexOutcome = new LexCorpus6Stage3Outcome(
@@ -144,6 +162,57 @@ public sealed partial class EuFormexPackagePopulationProducerTests
         AssertAnnexRow(expression, english.Identity.PublisherExpressionId, officialSource!, annex.SemanticIdentitySha256, "dossier");
         Assert.AreEqual(V3CorpusMount.EuropeAnnexesNotHeldReason, dossier.Result.Value.GetProperty("not_held").EnumerateArray()
             .Single(static row => row.GetProperty("item").GetString() == "annexes").GetProperty("reason").GetString());
+    }
+
+    /// <summary>
+    /// Writes the control case's mount where the journeys ask (<c>V3_WRITE_EU_ANNEX_MOUNT</c>), with a <c>journey-mount.json</c>
+    /// naming the act, its wording date, the number of annexes not served as text and the texts no page may show, so CI walks
+    /// the EU reading and dossier pages over an image-only annex in a real browser.
+    /// </summary>
+    [TestMethod]
+    public async Task TheEuAnnexJourneyMountIsTheControlCaseWrittenWhereTheJourneyAsks()
+    {
+        var target = Environment.GetEnvironmentVariable(EuAnnexMountVariable);
+        if (string.IsNullOrWhiteSpace(target))
+        {
+            Assert.Inconclusive($"{EuAnnexMountVariable} names no directory, so no EU annex journey mount is written.");
+        }
+
+        var (result, _, store) = await AcquireAnnexControlAsync();
+        var fixture = await EuropeMountedFixture.FromEnvelopeAsync(await AnnexControlEnvelopeAsync(result, store));
+        await using var cleanup = fixture;
+        Directory.CreateDirectory(target);
+        foreach (var name in new[] { V3CorpusMount.EuropeIndexFileName, V3CorpusMount.EuropeCapabilityManifestFileName, V3CorpusMount.CorpusFileName })
+        {
+            File.Copy(Path.Combine(fixture.Directory, name), Path.Combine(target, name), overwrite: true);
+        }
+
+        string wordingDate;
+        using (var mount = await V3CorpusMount.OpenAsync(target, CancellationToken.None))
+        {
+            Assert.IsNotNull(mount, "the EU annex directory mounts through the API's own verifier.");
+            var dossier = await EnvelopeAsync(mount, "/api/v3/dossier", "dossier", new { identifier = ControlCelex });
+            Assert.IsNull(dossier.Refusal, dossier.Refusal?.Code);
+            var expression = dossier.Result!.Value.GetProperty("expressions").EnumerateArray().Single();
+            Assert.AreEqual(1, expression.GetProperty("annexes_not_served").EnumerateArray().Single().GetProperty("annexes").GetInt32());
+            wordingDate = expression.GetProperty("pinned_wording").GetProperty("wording_date").GetString()!;
+        }
+
+        var manifest = JsonSerializer.Serialize(new
+        {
+            schema = "lex-v3-journey-mount/1",
+            note = "the image-only annex control case (THE MOUNT IS A FIXTURE): the 2026/1965 package acquired over the GDPR's seed with its publisher PDF made image-only, written for the journeys that read an EU act whose annex is not served as text",
+            corpus_sha256 = fixture.CorpusSha256,
+            europe_index_sha256 = fixture.IndexSha256,
+            eu_annex = new
+            {
+                celex = ControlCelex,
+                wording_date = wordingDate,
+                annexes = 1,
+                absent_texts = new[] { AnnexOnlyWord, AnnexSentinel },
+            },
+        }, new JsonSerializerOptions { WriteIndented = true });
+        await File.WriteAllTextAsync(Path.Combine(target, "journey-mount.json"), manifest + "\n");
     }
 
     /// <summary>The one annex row: image-only, served as text not available, linked to the expression's official source.</summary>

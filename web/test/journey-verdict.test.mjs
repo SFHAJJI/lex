@@ -34,6 +34,7 @@ import {
   realMountSteps,
   specificationJourneyExpectations,
   twoStateExpectations,
+  europeAnnexExpectations,
   withoutRequestFields,
   EU_READING_DATE,
   EU_READING_STEP,
@@ -681,4 +682,22 @@ test("on the two-state mount journey J3 compares two different states and journe
   assert.deepEqual(radar.step.body.parameters, { date_from: READING_DATE, date_to: "2025-01-01" });
   assert.ok(radar.texts.includes(`wording changed from the state of ${READING_DATE}`), "the later state is compared with the one it replaced");
   assert.equal(JOURNEY_STEPS.compare.typed[1], JOURNEY_STEPS.compare.typed[2], "the one-state fixture's compare asks one date twice, the reason this mount exists");
+});
+
+test("on the EU annex control mount the reading and dossier pages say the annex is not served as text, and never show it", () => {
+  const mount = { eu_annex: { celex: "32016R0679", wording_date: "2026-08-26", annexes: 1, absent_texts: ["Hambali", "ANNEXSENTINELZQXV"] } };
+  const [[readName, read], [dossierName, dossier]] = europeAnnexExpectations(mount);
+  assert.match(readName, /read on its wording date/);
+  assert.match(dossierName, /dossier/);
+  assert.equal(read.step.operation, "evidence_bundle");
+  assert.deepEqual(read.step.typed, ["32016R0679", "2026-08-26"]);
+  assert.deepEqual(read.step.body.parameters, { identifier: "32016R0679", date: "2026-08-26" });
+  assert.equal(dossier.step.operation, "dossier");
+  assert.deepEqual(dossier.step.body.parameters, { identifier: "32016R0679" });
+  for (const expected of [read, dossier]) {
+    assert.equal(expected.state, "success");
+    assert.deepEqual(expected.texts, ["1 annex of the English wording is not served as text, and is never searched, quoted or exported"]);
+    assert.deepEqual(expected.absentTexts, ["Hambali", "ANNEXSENTINELZQXV"], "the annex's text and title appear nowhere on either page");
+  }
+  assert.throws(() => europeAnnexExpectations({ eu_annex: { ...mount.eu_annex, absent_texts: [] } }), /no annex text to look for/);
 });

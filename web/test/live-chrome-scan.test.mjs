@@ -145,6 +145,12 @@ function europeReadingEnvelope() {
             official_source: "http://publications.europa.eu/resource/cellar/3e485e15.0006.02/DOC_1", article_permalink: `${permalink}#001`,
           }],
           articles_without_text: [{ article_identity_sha256: "e".repeat(64), publisher_id: "099" }],
+          annexes_not_served: [{
+            disposition: "annex_text_not_available", annexes: 2, annex_identities_sha256: ["7".repeat(64), "8".repeat(64)], served_as: "text_not_available",
+            official_identity: "http://publications.europa.eu/resource/cellar/3e485e15.0006",
+            official_source: "https://publications.europa.eu/resource/cellar/3e485e15.0006.02",
+            reason: "every page of the publisher PDF the annex maps to is an image with no text layer: the annex is image-only, so there is no text of it to serve",
+          }],
         }],
         acknowledgement: "\u00a9 European Union, https://eur-lex.europa.eu",
         authenticity: "Only the Official Journal of the European Union published in electronic form is authentic and produces legal effects (Regulation (EU) No 216/2013, Article 1(2)).",
@@ -400,7 +406,12 @@ test("no interface text on a French page or a census answer bypasses the French 
     const envelope = europeReadingEnvelope();
     const outcome = app.readingOutcome({ state: "success", envelope });
     assert.equal(outcome.state, "success", "the EU reading reads");
-    scan("reading: an EU original wording", renderToStaticMarkup(h(app.ReadingAnswerView, { outcome })), dataOf(envelope));
+    const reading = renderToStaticMarkup(h(app.ReadingAnswerView, { outcome }));
+    scan("reading: an EU original wording", reading, dataOf(envelope));
+    // The annex line says the platform's reason in English, marked English on the French page (review of #919).
+    const [annexLine] = reading.match(/<p data-annexes-not-served="2"[^>]*>[\s\S]*?<\/p>/) ?? [];
+    const { reason } = envelope.result.value.wordings[0].annexes_not_served[0];
+    assert.ok(annexLine?.includes(`<span lang="en">${reason}</span>`), `the annex's reason is marked English on a French page: ${annexLine}`);
     scan("export: an EU original wording", renderToStaticMarkup(h(app.ExportAnswerView, { outcome, pins: new Set(), onPin: () => {} })), dataOf(envelope));
   }
   assert.ok(unshown >= 3, `refusals whose card cannot be shown were said (${unshown})`);

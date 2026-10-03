@@ -306,6 +306,11 @@ const EN = Object.freeze({
     // Between the items of a list said in one line: its spaces are its content (French sets a no-break
     // space before the semicolon).
     listSeparator: "; ",
+    // The annexes of one EU wording a corpus disposition holds, never served as text (`europe-annexes.mjs`).
+    europeAnnexes: Object.freeze({
+      one: "{count} annex of the {language} wording is not served as text, and is never searched, quoted or exported: {reason}. Official source {source}.",
+      other: "{count} annexes of the {language} wording are not served as text, and are never searched, quoted or exported: {reason}. Official source {source}.",
+    }),
   }),
   form: Object.freeze({
     workIdentifier: "Work identifier",

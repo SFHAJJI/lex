@@ -37,6 +37,7 @@
 
 import { isCalendarDate } from './temporal.mjs';
 import { escapeProvision } from './search-answer.mjs';
+import { readAnnexesNotServed } from './europe-annexes.mjs';
 
 /** The acknowledgement every EU text served carries (Decision 95). */
 export const EUROPE_TEXT_ACKNOWLEDGEMENT = '© European Union, https://eur-lex.europa.eu';
@@ -427,7 +428,12 @@ function readEuropeWording(wording, index, { celex, date }) {
     : Object.freeze([]));
   const sameDateWorks = disclosed('same_date_works');
   const unplacedVersions = disclosed('unplaced_versions');
-  return Object.freeze({ expressionIri, language, kind, wordingDate, nextDate, wordingSha256, permalink, stableCoordinate, sources, articles, articlesWithoutText, sameDateWorks, unplacedVersions });
+  // The annexes of the wording's sources, never quoted: each disposition's count, reason and official source.
+  const annexesNotServed = readAnnexesNotServed(wording, where);
+  return Object.freeze({
+    expressionIri, language, kind, wordingDate, nextDate, wordingSha256, permalink, stableCoordinate, sources, articles, articlesWithoutText,
+    sameDateWorks, unplacedVersions, annexesNotServed,
+  });
 }
 
 /**

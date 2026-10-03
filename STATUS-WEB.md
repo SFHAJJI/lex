@@ -2341,6 +2341,9 @@ contract's line "Chrome in FR and EN; DE and LB answer `localization_unavailable
     work is an "œuvre de l’éditeur" (the FRBR term), never "acte" or "version";
   - the search page's under the rights rule (#910): `search.intro`, `search.idle` and `search.noHit`
     (with U+00A0 inside the guillemets).
+  - `common.europeAnnexes` (the EU annex line, #919), reviewed by the same AI reviewer, under the same delegation, in
+    the review of #919 (the record's addendum: both forms changed, "interrogée" for the text a search covers, as in
+    `search.intro`, and "sous forme de texte" for "as text").
   No French entry ships unreviewed. `node web/scripts/refusal-sentences.mjs` prints every French
   sentence and entry beside its English.
 - **Evidence.** Every live page and every census answer and refusal (with its card shown and not
@@ -2474,6 +2477,24 @@ The end-to-end control case (#918, `EuAnnexControlCaseTests`) is the launch cont
 - **Answers.** Search finds the main body and none of the annex. Dossier and both evidence_bundle paths list the
   annex with the official source the articles cite. No answer carries the annex's text or title.
 
+The annex on the pages, and in a browser:
+- **The pages.** The EU reading page (per wording) and the EU dossier page (per expression) say the annex line,
+  `common.europeAnnexes`. For example: "1 annex of the English wording is not served as text, and is never
+  searched, quoted or exported: {the platform's reason, marked English}. Official source {the source, printed, not
+  linked}."
+- **The reader** (`web/scripts/europe-annexes.mjs`) throws on a row it must not show:
+  - one served as anything but `text_not_available`;
+  - a disposition outside the corpus's five;
+  - one disposition listed twice;
+  - a count its digests are not;
+  - a missing official source.
+- **The browser walk.** CI's `journeys` job writes the control case's mount
+  (`TheEuAnnexJourneyMountIsTheControlCaseWrittenWhereTheJourneyAsks`, `V3_WRITE_EU_ANNEX_MOUNT`) and walks the EU
+  reading and dossier pages over it, by pointer and by keyboard on the pages the API serves.
+  - Each page must say the annex line.
+  - Each citation it prints must verify.
+  - Neither the annex's text nor its title may appear anywhere in its text or markup (`europeAnnexExpectations`).
+
 The launch contract's box stays unticked until the production build holds it.
 
 ## Next, in order (web lane; the data lane's items 1 to 3 are in STATUS-DATA.md)
@@ -2494,8 +2515,8 @@ The web lane's order since the owner's proxy's journey corrections (2026-10-01 1
    `annex-2024-1620-control-audit.json`), so they are no candidate; no real image-only EU annex is held on this
    machine yet. EU dossier and evidence_bundle now list each annex the corpus classified as
    `annexes_not_served`: `text_not_available`, linked to the expression's official source. The synthetic
-   end-to-end control case holds that through the acquisition (#918; above, 2026-10-03). Next: the annex
-   line on the EU reading and dossier pages, walked in a browser over the control case's mount.
+   end-to-end control case holds that through the acquisition (#918), and the EU reading and dossier
+   pages say the annex line, walked in a browser over the control case's mount (above, 2026-10-03).
 A pull request that does not move a launch-contract line, or directly unblock one, waits. Merges take
 turns through `C:\lex-v3\lanes\MERGE-LOCK`, and related work goes in one bigger pull request.
 
