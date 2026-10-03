@@ -18,8 +18,8 @@ namespace Lex.V3.Ingest.Tests;
 /// two states share a date, no member's licence withholds text) is named as not produced, with its reason,
 /// and never faked. A mount with no Luxembourg state holds only what does not need one. An EU index gives EU
 /// requests from its own data (a held work and a word of it, a CELEX it does not hold, a language the work is not
-/// held in, a dated search), so a mount that holds only the EU still measures its refusals; a code an EU request
-/// produces is not listed as not produced.
+/// held in, a dated search, a date asked of <c>in_force_on</c>), so a mount that holds only the EU still measures its
+/// refusals; a code an EU request produces is not listed as not produced.
 /// </summary>
 public sealed partial class V3MountedGatesTests
 {
@@ -185,8 +185,11 @@ public sealed partial class V3MountedGatesTests
     /// <summary>
     /// EU requests from the mount's EU index, for its first work in its first language that holds a usable word (six
     /// letters or more) in any of its articles, scanned in order (review of #846: the first version read only the first
-    /// article, and a short one left the EU unmeasured): a word the work holds, searched in it (answered); the same in a CELEX the index does not hold (<c>identifier_unknown</c>); in a language the work is not
+    /// article, and a short one left the EU unmeasured), among the wordings EU search answers by CELEX
+    /// (<see cref="EuropeSearchedArticles"/>): a word the work holds, searched in it (answered); the same in a CELEX the index does not hold (<c>identifier_unknown</c>); in a language the work is not
     /// held in (<c>language_not_available</c>); and with a date, which EU search does not serve (<c>retrieval_mode_unavailable</c>).
+    /// The work asked of <c>in_force_on</c> at a date (<c>retrieval_mode_unavailable</c>: the EU capability manifest states it refused,
+    /// since no build indexes the force dates and a wording date is never one).
     /// And, when the work's expression in that language holds one wording date, the EU permalink grammar's (#850): a
     /// provision of the wording pinned by its digest, recomputed here by the stated rule, so <c>verify</c> answering it also
     /// checks the API's digest (answered); the wording pinned by a digest it does not have (<c>pinned_digest_mismatch</c>);
@@ -201,7 +204,7 @@ public sealed partial class V3MountedGatesTests
         }
 
         using var connection = EuropeIndexBuilder.Open(path, SqliteOpenMode.ReadOnly);
-        var usable = Rows(connection, "SELECT publisher_work_celex, language, searchable_text FROM articles ORDER BY publisher_work_celex, language, article_identity_sha256")
+        var usable = Rows(connection, $"SELECT publisher_work_celex, language, searchable_text FROM articles WHERE {EuropeSearchedArticles(connection)} ORDER BY publisher_work_celex, language, article_identity_sha256")
             .Select(static row => (Celex: row[0], Language: row[1], Word: UsableWord(row[2])))
             .FirstOrDefault(static row => row.Word is not null);
         if (usable.Word is null)
@@ -226,6 +229,7 @@ public sealed partial class V3MountedGatesTests
         }
 
         requests["eu-dated-search"] = new("search", new { query = word, language, identifier = celex, date = "2020-01-01" }, "retrieval_mode_unavailable");
+        requests["eu-in-force-on"] = new("in_force_on", new { identifier = celex, date = "2020-01-01", language }, "retrieval_mode_unavailable");
 
         var quotedCelex = celex.Replace("'", "''", StringComparison.Ordinal);
         var quotedLanguage = language.Replace("'", "''", StringComparison.Ordinal);
@@ -291,6 +295,19 @@ public sealed partial class V3MountedGatesTests
             "ORDER BY s.work_key, s.applicability_date, s.language LIMIT 1").FirstOrDefault();
         return row is null ? null : (row[0], row[1], row[2]);
     }
+
+    /// <summary>
+    /// The EU articles <c>search</c> and the original-wording <c>verify</c> answer by their work's CELEX, as SQL over <c>articles</c>:
+    /// the EU index reader's own condition (<c>ResolveExact</c>). The article carries a CELEX: since schema 5 a consolidated version
+    /// the publisher gives none holds NULL there, and reading it threw before any card was written. And on an index with a states
+    /// table it is an original legal text: a consolidated version is answered by the time view alone (the EU temporal cases), and
+    /// EU search refuses its CELEX <c>identifier_unknown</c>, so a set derived from it would fail on a correct mount.
+    /// </summary>
+    private static string EuropeSearchedArticles(SqliteConnection connection) =>
+        "publisher_work_celex IS NOT NULL" + (HasStatesTable(connection)
+            ? " AND EXISTS (SELECT 1 FROM members m WHERE m.object_ref_sha256 = articles.object_ref_sha256 AND m.content_class = " +
+              $"'{ContractWire.NameOf(Lex.V3.Contracts.Source.Europe.EuContentClass.OriginalLegalText)}')"
+            : "");
 
     private static string? Scalar(SqliteConnection connection, string sql) => Rows(connection, sql).FirstOrDefault()?[0];
 
@@ -372,8 +389,8 @@ public sealed partial class V3MountedGatesTests
     public async Task AnEuIndexGivesItsOwnRefusalRequests()
     {
         // The GDPR mounted alone in its EU index: no Luxembourg state, yet the refusal set measures the EU's answers and
-        // five EU refusals (three of search, two of verify over the EU permalink grammar), and none of their codes is
-        // listed as not produced.
+        // six EU refusals (three of search, in_force_on, which the EU capability manifest states refused, and two of verify
+        // over the EU permalink grammar), and none of their codes is listed as not produced.
         var fixture = await EuropeMountedFixture.CreateAsync();
         await using var cleanup = fixture;
         using var mount = await V3CorpusMount.OpenAsync(fixture.Directory, CancellationToken.None);
@@ -381,7 +398,7 @@ public sealed partial class V3MountedGatesTests
 
         var (set, derived) = RunRefusalGate(mount, fixture.Directory, Timelines(fixture.Directory));
         CollectionAssert.IsSubsetOf(
-            new[] { "eu-search-held", "eu-unknown-celex", "eu-language-not-held", "eu-dated-search", "eu-pinned-provision", "eu-pinned-digest-not-held", "eu-provision-not-held" },
+            new[] { "eu-search-held", "eu-unknown-celex", "eu-language-not-held", "eu-dated-search", "eu-in-force-on", "eu-pinned-provision", "eu-pinned-digest-not-held", "eu-provision-not-held" },
             derived.Requests.Keys.ToArray());
         foreach (var code in new[] { "identifier_unknown", "language_not_available", "retrieval_mode_unavailable", "pinned_digest_mismatch", "anchor_not_in_version" })
         {

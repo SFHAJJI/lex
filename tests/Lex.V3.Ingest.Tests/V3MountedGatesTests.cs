@@ -12,7 +12,8 @@ namespace Lex.V3.Ingest.Tests;
 /// <summary>
 /// The machine gates over a mounted corpus whose states no test built (ruling 2: the launch card carries
 /// machine gates run over the real mounted corpus, not fixture-only scores). The cases are derived from
-/// the mount's own Luxembourg index, so the gates run over whatever mount they are given: the fixture on
+/// the mount's own Luxembourg index, and the EU temporal cases from its EU index's states table
+/// (<c>V3MountedGatesTests.Europe.cs</c>), so the gates run over whatever mount they are given: the fixture on
 /// every run, and the mount <c>V3_EVALUATE_MOUNT</c> names when it names one (the release rehearsal's).
 /// </summary>
 /// <remarks>
@@ -218,14 +219,25 @@ public sealed partial class V3MountedGatesTests
         string WorkExpectedAt(string work, DateOnly day) => works[work].Expected(day);
         arms.Add(("as_of with no language", DefaultAsOfArm(mount), workCases, WorkExpectedAt));
         arms.Add(("in_force_on with no language", DefaultInForceOnArm(mount), workCases, WorkExpectedAt));
+        return TemporalSets(arms, shift, "there is no temporal case to shift: the mount holds no Luxembourg state for this arm");
+    }
 
+    /// <summary>
+    /// One card set per arm, over its cases, with the date control over the cases its timeline says the shift changes; an arm
+    /// with no case is not measured, and its control says why (<paramref name="noCase"/>).
+    /// </summary>
+    private static EvaluationCardSet[] TemporalSets(
+        IReadOnlyList<(string Name, TemporalArm Arm, IReadOnlyList<TemporalCase> Cases, Func<string, DateOnly, string> ExpectedAt)> arms,
+        int shift,
+        string noCase)
+    {
         var sets = new List<EvaluationCardSet>();
         foreach (var (name, arm, cases, expectedAt) in arms)
         {
             var report = TemporalEvaluation.Evaluate(cases, arm, floor: Math.Max(1, cases.Count));
             var controlCases = cases.Where(value => expectedAt(value.WorkKey, value.AsOf.AddDays(shift)) != value.ExpectedStateKey).ToArray();
             var control = cases.Count == 0
-                ? new ControlResult(ShuffledControlNames.DateShuffle, ControlVerdict.NotApplicable, "there is no temporal case to shift: the mount holds no Luxembourg state for this arm", Seed)
+                ? new ControlResult(ShuffledControlNames.DateShuffle, ControlVerdict.NotApplicable, noCase, Seed)
                 : ShuffledControls.DateShuffle(
                     controlCases, arm, (set, run) => TemporalEvaluation.Evaluate(set, run, floor: Math.Max(1, set.Count)), [shift], Seed);
             sets.Add(EvaluationCard.Temporal(
@@ -353,24 +365,25 @@ public sealed partial class V3MountedGatesTests
         Assert.IsNotNull(mount, $"{directory} does not mount.");
         var timelines = Sample(Timelines(directory), WorkSample, Seed);
         var temporal = RunTemporalGate(mount, timelines);
+        var europeTemporal = RunEuropeTemporalGate(mount, directory);
         var (refusal, derived) = RunRefusalGate(mount, directory, timelines);
-        // An EU index that holds a usable word must give the EU requests (review of #846).
+        // An EU index that holds a usable word in a wording EU search answers must give the EU requests (review of #846).
         var europe = Path.Combine(directory, V3CorpusMount.EuropeIndexFileName);
         if (File.Exists(europe))
         {
             using var connection = Lex.V3.Ingest.Europe.EuropeIndexBuilder.Open(europe, Microsoft.Data.Sqlite.SqliteOpenMode.ReadOnly);
-            if (Rows(connection, "SELECT searchable_text FROM articles").Any(static row => UsableWord(row[0]) is not null))
+            if (Rows(connection, $"SELECT searchable_text FROM articles WHERE {EuropeSearchedArticles(connection)}").Any(static row => UsableWord(row[0]) is not null))
             {
                 Assert.IsTrue(derived.Requests.ContainsKey("eu-search-held"), "the EU index holds a usable word, so the refusal set holds the EU requests");
             }
         }
         var retrieval = RunRetrievalGate(mount, directory, timelines);
-        EvaluationCardSet[] sets = [.. temporal, refusal, retrieval];
+        EvaluationCardSet[] sets = [.. temporal, .. europeTemporal, refusal, retrieval];
         var output = Environment.GetEnvironmentVariable(CardOutVariable);
         if (!string.IsNullOrWhiteSpace(output))
         {
             var corpus = Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(await File.ReadAllBytesAsync(Path.Combine(directory, V3CorpusMount.CorpusFileName))));
-            var target = $"the mount whose corpus file is sha256:{corpus}, asked through the real handler; the cases are derived from its own Luxembourg index";
+            var target = $"the mount whose corpus file is sha256:{corpus}, asked through the real handler; the cases are derived from its own Luxembourg and EU indexes";
             await File.WriteAllTextAsync(output, EvaluationCard.ToText(EvaluationCard.Render(target, sets)));
         }
 

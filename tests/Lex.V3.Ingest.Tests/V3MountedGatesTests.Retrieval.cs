@@ -133,7 +133,8 @@ public sealed partial class V3MountedGatesTests
     }
 
     /// <summary>
-    /// The EU cases of a mount's EU index, for a seeded sample of its works in each language: words held by one to five
+    /// The EU cases of a mount's EU index, for a seeded sample of its works in each language among the wordings EU search
+    /// answers by CELEX (<see cref="EuropeSearchedArticles"/>): words held by one to five
     /// provisions, each judged to find exactly those (the work's CELEX and the publisher's provision id, as a hit names
     /// them), and strings the work holds nowhere. When the work's expression in the language holds one wording date, its
     /// first three provisions' permalinks (the digest recomputed by the stated rule) are exact cases, each judged to
@@ -149,7 +150,7 @@ public sealed partial class V3MountedGatesTests
 
         using var connection = EuropeIndexBuilder.Open(path, SqliteOpenMode.ReadOnly);
         var works = SampleEuropeWorks(
-            Rows(connection, "SELECT DISTINCT publisher_work_celex, language FROM articles ORDER BY publisher_work_celex, language")
+            Rows(connection, $"SELECT DISTINCT publisher_work_celex, language FROM articles WHERE {EuropeSearchedArticles(connection)} ORDER BY publisher_work_celex, language")
                 .Select(static row => (row[0], row[1])).ToArray(),
             EuropeWorkSample, Seed);
         var random = new SplitMix64(Seed);

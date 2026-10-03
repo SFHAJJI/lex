@@ -23,13 +23,16 @@ below:
   - Waits: the population mount.
 - **No dated request silently gets another date.**
   - CI: the temporal set passes at 100 percent on the Luxembourg fixture mount (its `as_of` and `in_force_on`
-    arms), and its date-shift control catches a shifted set (`V3MachineGatesTests`).
-  - **Gap.** The temporal set measures Luxembourg only. EU dated answers have been served since #909: `as_of`,
-    `timeline`, and `evidence_bundle` at a date. They refuse `ambiguous_version` or `no_version_for_date` rather than
-    choose. `V3CorpusEuropeTimeViewTests` and `V3CorpusEuropeTimeViewBranchTests` hold that, but no case of the
-    contract's named evidence measures it, even once the populations land.
-  - Bounded mount: not measured, because it holds no Luxembourg state and the set has no EU cases.
-  - Waits: EU cases in the temporal set (below), and the Luxembourg population.
+    arms) and on an EU fixture mount (the original wording, two different texts on one later date, and a later
+    consolidation; EU `as_of` in English, in French and with no language), each arm with its date-shift control
+    caught (`V3MachineGatesTests`).
+  - EU `in_force_on` is a typed refusal the EU manifest states: asserted at every case date, and measured in the
+    refusal set.
+  - The mounted gates derive EU cases from the EU index's states table (`V3MountedGatesTests.Europe.cs`).
+  - Bounded mount: not measured, and it never can be for this line. It holds no Luxembourg state, and its EU index is
+    schema 2, with no states table, so the EU arm has no case there (review of #923). A real mount with a schema-5 EU
+    index, such as #907's rederivation, can run the EU arm.
+  - Waits: the Luxembourg population, and the EU population mount.
 - **Every absence typed.**
   - CI: the refusal set, and the registry digest in every envelope.
   - Bounded mount: 8 refusal cases pass (coverage and seven EU requests), with the shuffled control caught.
@@ -100,17 +103,15 @@ below:
 - **Machine gates:**
   - Bounded mount: the refusal and retrieval gates pass, with their shuffled controls caught, and V2 is absent from
     the image.
-  - Waits: the temporal set waits for Luxembourg states and for EU cases, and the G1 to G5 replay waits for the
-    chained canary, after the populations.
+  - Waits: the temporal set waits for Luxembourg states and the EU population mount, and the G1 to G5 replay waits
+    for the chained canary, after the populations.
 - **The evaluation card, with its statistical rows "not yet labelled":** on the Trust and Coverage page (#792; its
   words joined the chrome table in #807), and with the release assets (#833; since #844 its gates are the release's
   own mount's).
 
 **Gaps this table found (the review of #922), next:**
-1. EU cases in the temporal set, derived from the EU index's states table, so the contract's named evidence measures
-   EU dated selection, the owner's main use case. This can run on fixtures now and on the population mount later.
-2. A population-mount mode for J2, J5, J6, J7 and J8's events.
-3. The release command's custody path, end to end with the real derive tool, once the populations' custody exists.
+1. A population-mount mode for J2, J5, J6, J7 and J8's events.
+2. The release command's custody path, end to end with the real derive tool, once the populations' custody exists.
 
 ## Served today
 
@@ -2690,6 +2691,41 @@ export was not composed.
     CSV, not in the PDF.
 
 The launch contract's export and annex boxes stay unticked until the production build holds them.
+
+## EU cases in the temporal set (sole driver, 2026-10-03)
+
+The first gap the review of #922 found: the contract's named evidence for "no dated request silently gets another
+date" now measures EU dated selection, the owner's main use case.
+- **The machine gates** (`V3MachineGatesTests`) gain three arms, EU `as_of` in English, in French and with no
+  language, on an EU fixture mount from the consolidated fixture: the GDPR's original wording (2016-04-27, its Formex
+  date, checked from the index), two consolidated versions on 2017-06-01 whose texts differ (one with the CELEX the
+  publisher gives that version, one with none), and one on 2018-07-06. Each arm asks the Luxembourg set's eight days,
+  passes at 100 percent, and its date-shift control (400 days, over the six cases before the latest wording) is caught.
+  - A wording is keyed by its kind and permalink (`original_wording:/eu-eurlex/...`); EU `as_of` serves no state
+    digest. The digest is recomputed from the index by the stated rule. The arm fails a case whose permalink is not the
+    act's wording in the language, date and digest the answer states, or whose wording postdates the request.
+  - EU `in_force_on` is no arm: it refuses `retrieval_mode_unavailable` on every date, so no shift could break it and
+    its control could never be caught. The gate asserts that refusal, with EU context, at every case date.
+- **The mounted gates** derive EU cases from a mount's states table by the time view's stated rule, restated from the
+  tables (`V3MountedGatesTests.Europe.cs`). On the machine gates' fixture the derived timelines select what its
+  hand-written cases expect. The gate also passes on the three branch mounts of `V3CorpusEuropeTimeViewBranchTests` and
+  on the EU-only fixture, whose census holds the original wording alone. A mount with no EU index reports its EU arm
+  not measured, with the reason. The release card's target names the mount's Luxembourg and EU indexes.
+- **Fixed: a consolidated version with no CELEX broke the mounted refusal and retrieval sets.** Since schema 5 such a
+  version's articles hold a NULL `publisher_work_celex`, and both sets read every article's CELEX as text, so they threw
+  before any card was written. They now read only the articles EU `search` and the original-wording `verify` answer by
+  CELEX (the EU index reader's own condition): a CELEX, and on an index with a states table an original legal text. A
+  consolidated version's CELEX sorts before its act's and is refused `identifier_unknown` by EU search, so a set derived
+  from it would fail on a correct mount. `AnEuWorkWithNoCelexNeitherBreaksTheRefusalAndRetrievalSetsNorEntersThem` holds
+  both, and runs both sets' EU half on that mount. The refusal set gains `eu-in-force-on`.
+- **The evaluation card** grows from 6 to 9 sets, rendered in CI (`V3_RENDER_EVALUATION_CARD=1`).
+  `evaluation-card.test.mjs` no longer assumes 6 sets or the refusal set's place, and holds for both cards.
+- **Evidence.** `npm test` in `web/`: 1,060 of 1,060 pass. The C# was not built on this machine, where the EU
+  acquisition holds the memory; CI builds and runs it.
+- **Driver decisions (reversible).** EU `in_force_on` is guarded, not an arm. A request with no language is keyed by
+  the answering languages' keys, sorted and joined. The mounted EU sample is the Luxembourg one: 40 acts, seed 20260930.
+- **Not yet:** the EU population mount. The bounded mount cannot measure it: its EU index is schema 2, with no states
+  table (review of #923).
 
 ## Next, in order (web lane; the data lane's items 1 to 3 are in STATUS-DATA.md)
 

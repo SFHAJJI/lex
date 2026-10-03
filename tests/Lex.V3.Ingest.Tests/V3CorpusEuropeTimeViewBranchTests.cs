@@ -14,14 +14,15 @@ namespace Lex.V3.Ingest.Tests;
 /// </summary>
 public sealed partial class V3FirstMountBuildTests
 {
-    private const string WorkB = "http://publications.europa.eu/resource/cellar/bbbbbbbb-0000-0000-0000-00000000000b";
-    private const string WorkC = "http://publications.europa.eu/resource/cellar/cccccccc-0000-0000-0000-00000000000c";
-    private const string WorkD = "http://publications.europa.eu/resource/cellar/dddddddd-0000-0000-0000-00000000000d";
-    private const string Designated = "02016R0679-20240101";
+    internal const string WorkB = "http://publications.europa.eu/resource/cellar/bbbbbbbb-0000-0000-0000-00000000000b";
+    internal const string WorkC = "http://publications.europa.eu/resource/cellar/cccccccc-0000-0000-0000-00000000000c";
+    internal const string WorkD = "http://publications.europa.eu/resource/cellar/dddddddd-0000-0000-0000-00000000000d";
+    internal const string WorkE = "http://publications.europa.eu/resource/cellar/eeeeeeee-0000-0000-0000-00000000000e";
+    internal const string Designated = "02016R0679-20240101";
 
-    private static byte[] EnglishPackage => EuFirstMountAcquisitionTests.GdprEnglishPackage();
-    private static byte[] FrenchPackage => EuFirstMountAcquisitionTests.FrenchOf(EnglishPackage);
-    private static byte[] OtherEnglishPackage => EuFirstMountAcquisitionTests.RewrittenPackage(EnglishPackage, "natural persons", "natural humans");
+    internal static byte[] EnglishPackage => EuFirstMountAcquisitionTests.GdprEnglishPackage();
+    internal static byte[] FrenchPackage => EuFirstMountAcquisitionTests.FrenchOf(EnglishPackage);
+    internal static byte[] OtherEnglishPackage => EuFirstMountAcquisitionTests.RewrittenPackage(EnglishPackage, "natural persons", "natural humans");
 
     private static Task<V3Envelope> EuAsOfAsync(V3CorpusMount mount, string date, string? language = "eng") =>
         language is null

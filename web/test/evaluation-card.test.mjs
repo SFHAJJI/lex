@@ -65,7 +65,7 @@ test("each rule of the card, broken, is refused with that rule's reason", () => 
     ["a value that is no share of its cases", (c) => { Object.assign(firstGate(c), { value: 0.9, verdict: "fail", wilson_95: [0, 1] }); delete firstGate(c).rule_of_three_failure_upper_95; }, /is not a share of its 8 cases/],
     ["a stratum larger than its set", (c) => { firstGate(c).n = 99; }, /counts 99 cases in its stratum, and its set holds 8/],
     ["a digest that is not one", (c) => { c.machine_gates[0].cases_sha256 = "x"; }, /cases_sha256 is not a SHA-256 digest/],
-    ["a missing control", (c) => { c.shuffled_controls.pop(); }, /shuffled controls for 6 case sets, and each set has one/],
+    ["a missing control", (c) => { c.shuffled_controls.pop(); }, new RegExp(`shuffled controls for ${card.machine_gates.length} case sets, and each set has one`)],
     ["controls out of order", (c) => { c.shuffled_controls.reverse(); }, /is the control of .*, and the set in its place is/],
     ["a control verdict outside the vocabulary", (c) => { c.shuffled_controls[0].verdict = "caught"; }, /verdict "caught" is not one of caught_the_shuffle/],
     ["a control over fewer cases, unexplained", (c) => { delete c.shuffled_controls[0].note; }, /ran over fewer cases than its set, and does not say why/],
@@ -119,14 +119,17 @@ test("the live build carries the card it is handed, as a release build will hand
 });
 
 test("a card whose gate fails says so above its tables, and the page will not print a card that breaks its rules", () => {
+  // The refusal set wherever the card places it (the temporal sets before it are as many as their arms): one of its 18
+  // requests answered with another code.
+  const refusal = (copy) => copy.machine_gates.find((set) => set.set === "refusal");
   const failing = mutate((c) => {
-    const gate = c.machine_gates[4].gates[0];
+    const gate = refusal(c).gates[0];
     Object.assign(gate, { verdict: "fail", value: 0.9444, wilson_95: wilson95(17, 18) });
     delete gate.rule_of_three_failure_upper_95;
     c.shuffled_controls[1].verdict = "missed_the_shuffle";
   });
   const markup = unescape(renderToStaticMarkup(h(EvaluationCardView, { view: readEvaluationCard(failing) })));
-  assert.ok(markup.includes(`1 gate does not pass (verdict_exact_match in ${failing.machine_gates[4].set}, ${failing.machine_gates[4].arm}: fail)`));
+  assert.ok(markup.includes(`1 gate does not pass (verdict_exact_match in ${refusal(failing).set}, ${refusal(failing).arm}: fail)`));
   assert.ok(markup.includes(`1 shuffled control did not catch the shuffle (${failing.shuffled_controls[1].control} in ${failing.shuffled_controls[1].set}, ${failing.shuffled_controls[1].arm}: missed the shuffle)`));
   assert.throws(() => renderLiveCoveragePage({ card: mutate((c) => { c.statistical_rows[0].status = "labelled"; }) }), /Decision 92/);
 });
