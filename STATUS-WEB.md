@@ -2341,8 +2341,9 @@ contract's line "Chrome in FR and EN; DE and LB answer `localization_unavailable
     work is an "œuvre de l’éditeur" (the FRBR term), never "acte" or "version";
   - the search page's under the rights rule (#910): `search.intro`, `search.idle` and `search.noHit`
     (with U+00A0 inside the guillemets).
-  - `common.europeAnnexes` (the EU annex line), reviewed by the same AI reviewer, under the same delegation, in the
-    review of the pull request that adds it (the record's addendum).
+  - `common.europeAnnexes` (the EU annex line, #919), reviewed by the same AI reviewer, under the same delegation, in
+    the review of #919 (the record's addendum: both forms changed, "interrogée" for the text a search covers, as in
+    `search.intro`, and "sous forme de texte" for "as text").
   No French entry ships unreviewed. `node web/scripts/refusal-sentences.mjs` prints every French
   sentence and entry beside its English.
 - **Evidence.** Every live page and every census answer and refusal (with its card shown and not

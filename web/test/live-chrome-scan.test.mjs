@@ -406,7 +406,12 @@ test("no interface text on a French page or a census answer bypasses the French 
     const envelope = europeReadingEnvelope();
     const outcome = app.readingOutcome({ state: "success", envelope });
     assert.equal(outcome.state, "success", "the EU reading reads");
-    scan("reading: an EU original wording", renderToStaticMarkup(h(app.ReadingAnswerView, { outcome })), dataOf(envelope));
+    const reading = renderToStaticMarkup(h(app.ReadingAnswerView, { outcome }));
+    scan("reading: an EU original wording", reading, dataOf(envelope));
+    // The annex line says the platform's reason in English, marked English on the French page (review of #919).
+    const [annexLine] = reading.match(/<p data-annexes-not-served="2"[^>]*>[\s\S]*?<\/p>/) ?? [];
+    const { reason } = envelope.result.value.wordings[0].annexes_not_served[0];
+    assert.ok(annexLine?.includes(`<span lang="en">${reason}</span>`), `the annex's reason is marked English on a French page: ${annexLine}`);
     scan("export: an EU original wording", renderToStaticMarkup(h(app.ExportAnswerView, { outcome, pins: new Set(), onPin: () => {} })), dataOf(envelope));
   }
   assert.ok(unshown >= 3, `refusals whose card cannot be shown were said (${unshown})`);
