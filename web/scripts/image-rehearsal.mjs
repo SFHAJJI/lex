@@ -36,7 +36,7 @@ import { createHash, createPublicKey, generateKeyPairSync, sign, verify } from "
 import { existsSync } from "node:fs";
 import { mkdtemp, readFile, readdir, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join, relative, resolve, sep } from "node:path";
+import { dirname, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { gunzipSync } from "node:zlib";
 
@@ -553,14 +553,69 @@ export async function rehearse({ mount, keep = false, probe = true, reproduce = 
   }
 }
 
+/**
+ * The release command from custody: the mount derived twice by independent processes and compared file for file
+ * (`derive-twice.mjs`), then the rehearsal over the first derivation, with the derivation's evidence in the report.
+ */
+export async function rehearseFromCustody({ tool, custody, checkpoint, custodyEncoding = "brotli", allowUnboundTool = false, log = () => {}, ...options }) {
+  const { deriveTwice } = await import("./derive-twice.mjs");
+  const binding = await toolBinding(resolve(tool));
+  if (!binding.bound && !allowUnboundTool) {
+    throw new Error(`the derive tool is not bound to the source the image is built from: ${binding.reason}; ` +
+      "use this commit's CI runtime artifact, or pass --allow-unbound-tool for a rehearsal that says so");
+  }
+  const into = await mkdtemp(join(tmpdir(), "lex-release-derive-"));
+  try {
+    const derived = await deriveTwice({ runner: ["dotnet", resolve(tool)], custody: resolve(custody), checkpoint: resolve(checkpoint), custodyEncoding, into, log });
+    log(`the two derivations agree on ${derived.files.length} files`);
+    const result = await rehearse({ mount: derived.mount, log, ...options });
+    const { mount: _derivedMount, ...evidence } = derived;
+    return {
+      derivation: {
+        custody: resolve(custody),
+        checkpoint: { path: resolve(checkpoint), sha256: sha256(await readFile(resolve(checkpoint))) },
+        tool: binding,
+        ...evidence,
+      },
+      ...result,
+    };
+  } finally {
+    await rm(into, { recursive: true, force: true });
+  }
+}
+
+/**
+ * Whether the derive tool is the one this commit's CI built: the CI runtime artifact's layout (`<artifact>/runtime/` beside
+ * `<artifact>/source-head.txt`) names the commit it was built from, which must be the checkout the image is built from.
+ */
+export async function toolBinding(toolPath, checkoutHead = null) {
+  const head = checkoutHead ?? run("git", ["-C", repository, "rev-parse", "HEAD"]).stdout.trim();
+  const toolSha256 = sha256(await readFile(toolPath));
+  const stamp = join(dirname(dirname(toolPath)), "source-head.txt");
+  if (!existsSync(stamp)) {
+    return { path: toolPath, sha256: toolSha256, checkoutHead: head, bound: false, reason: `no ${stamp} names the commit it was built from` };
+  }
+  const sourceHead = (await readFile(stamp, "utf8")).trim();
+  return sourceHead === head
+    ? { path: toolPath, sha256: toolSha256, sourceHead, checkoutHead: head, bound: true }
+    : { path: toolPath, sha256: toolSha256, sourceHead, checkoutHead: head, bound: false, reason: `it was built from ${sourceHead}, and the checkout is ${head}` };
+}
+
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   const argv = process.argv.slice(2);
-  const at = argv.indexOf("--mount");
-  if (at < 0 || at + 1 >= argv.length) {
-    console.error("usage: node scripts/image-rehearsal.mjs --mount <v3-corpus directory or journey fixture mount> [--keep] [--no-reproduce] [--no-probe] [--platform-card]");
+  const value = (name) => { const at = argv.indexOf(name); return at < 0 || at + 1 >= argv.length ? null : argv[at + 1]; };
+  const options = { keep: argv.includes("--keep"), probe: !argv.includes("--no-probe"), reproduce: !argv.includes("--no-reproduce"), platformCard: argv.includes("--platform-card"), log: (line) => console.error(`- ${line}`) };
+  const custody = value("--custody");
+  const run = custody !== null
+    ? (value("--checkpoint") && value("--tool")
+      ? rehearseFromCustody({ tool: value("--tool"), custody, checkpoint: value("--checkpoint"), custodyEncoding: value("--custody-encoding") ?? "brotli", allowUnboundTool: argv.includes("--allow-unbound-tool"), ...options })
+      : null)
+    : value("--mount") !== null ? rehearse({ mount: value("--mount"), ...options }) : null;
+  if (run === null) {
+    console.error("usage: node scripts/image-rehearsal.mjs (--mount <v3-corpus directory or journey fixture mount> | --custody <custody directory> --checkpoint <mount-inputs.json> --tool <this commit's CI runtime artifact runtime/Lex.V3.Tool.dll> [--custody-encoding raw|brotli] [--allow-unbound-tool]) [--keep] [--no-reproduce] [--no-probe] [--platform-card]");
     process.exit(2);
   }
-  rehearse({ mount: argv[at + 1], keep: argv.includes("--keep"), probe: !argv.includes("--no-probe"), reproduce: !argv.includes("--no-reproduce"), platformCard: argv.includes("--platform-card"), log: (line) => console.error(`- ${line}`) }).then(
+  run.then(
     (result) => { console.log(JSON.stringify(result, null, 2)); },
     (error) => { console.error(error.message); process.exit(1); },
   );

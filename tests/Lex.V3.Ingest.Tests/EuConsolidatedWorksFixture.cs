@@ -96,13 +96,15 @@ public sealed partial class EuFirstMountAcquisitionTests
 
         var english = GdprEnglishPackage();
         var french = SyntheticFrenchPackage(english);
-        // A language a work holds no package in lists no Formex manifestation for it, so its text is not held there.
+        // A language a work holds no package in lists no Formex manifestation for it: its enumeration completes empty, so the
+        // expression is proven not eligible and its text is not held there. Every expression is enumerated, since acquisition
+        // requires a completed enumeration for each English and French expression.
         var listed = new Dictionary<string, string[]>(StringComparer.Ordinal);
         foreach (var work in works)
         {
             var spec = work == root ? null : byWork[work];
-            if (spec is null || spec.EnglishPackage is not null) listed[work + ".0001"] = ["fmx4"];
-            if (spec is null || spec.FrenchPackage is not null) listed[work + ".0002"] = ["fmx4"];
+            listed[work + ".0001"] = spec is null || spec.EnglishPackage is not null ? new[] { "fmx4" } : Array.Empty<string>();
+            listed[work + ".0002"] = spec is null || spec.FrenchPackage is not null ? new[] { "fmx4" } : Array.Empty<string>();
         }
 
         byte[] Body(HttpRequestMessage request)

@@ -4982,6 +4982,7 @@
         "requested_language": "fra",
         "requested_mode": null,
         "requested_query": "assembl\u00E9e g\u00E9n\u00E9rale",
+        "rights_rule": "a state is searched only when its text is one evidence_bundle would quote: every source acquired and admitted by its rights; the text of any other state is not matched, so no hit and no count says which of its articles hold a word, and nothing about that text is stated here",
         "searchable_languages": [
           "fra"
         ],
@@ -5060,6 +5061,7 @@
         "requested_language": "fra",
         "requested_mode": null,
         "requested_query": "assembl\u00E9e g\u00E9n\u00E9rale",
+        "rights_rule": "a state is searched only when its text is one evidence_bundle would quote: every source acquired and admitted by its rights; the text of any other state is not matched, so no hit and no count says which of its articles hold a word, and nothing about that text is stated here",
         "searchable_languages": [
           "fra"
         ],
@@ -5189,6 +5191,7 @@
         "requested_language": "fra",
         "requested_mode": null,
         "requested_query": "assembl\u00E9e g\u00E9n\u00E9rale",
+        "rights_rule": "a state is searched only when its text is one evidence_bundle would quote: every source acquired and admitted by its rights; the text of any other state is not matched, so no hit and no count says which of its articles hold a word, and nothing about that text is stated here",
         "searchable_languages": [
           "fra"
         ],
@@ -5335,6 +5338,7 @@
         "requested_language": "fra",
         "requested_mode": "relaxed",
         "requested_query": "assembl\u00E9e g\u00E9n\u00E9rale",
+        "rights_rule": "a state is searched only when its text is one evidence_bundle would quote: every source acquired and admitted by its rights; the text of any other state is not matched, so no hit and no count says which of its articles hold a word, and nothing about that text is stated here",
         "searchable_languages": [
           "fra"
         ],
@@ -5395,6 +5399,7 @@
         "requested_language": "fra",
         "requested_mode": null,
         "requested_query": "z\u00E9phyr",
+        "rights_rule": "a state is searched only when its text is one evidence_bundle would quote: every source acquired and admitted by its rights; the text of any other state is not matched, so no hit and no count says which of its articles hold a word, and nothing about that text is stated here",
         "searchable_languages": [
           "fra"
         ],
