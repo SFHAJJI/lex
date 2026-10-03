@@ -53,6 +53,8 @@ export function composeFailedSentence(reason) {
  */
 export function exportState(outcome, pins) {
   if (outcome.state !== 'success') return { state: 'none' };
+  // An EU reading is not composed (the answer view says so beside the text): nothing can be pinned from it.
+  if (outcome.view?.publisher === 'eu-eurlex') return { state: 'none' };
   if (pins.size === 0) return { state: 'empty', sentence: NOTHING_PINNED };
   try {
     const model = composeExport({

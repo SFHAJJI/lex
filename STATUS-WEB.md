@@ -2165,6 +2165,115 @@ through the real handler, beside G2 and G5, so the launch contract's "replay G1 
 - The mounts are fixtures, so this proves the path, not a corpus. A real chained mount needs a second
   build from custody, which the data lane's offline derivation will provide.
 
+EU text served: EU `evidence_bundle` and the reading screen over the original wording (PR #903; the
+web lane's order 2, from the owner's proxy's journey corrections of 2026-10-01 14:30 UTC).
+- **The answer.** EU `evidence_bundle` answers a work the mounted EU index holds from that index. It
+  quotes, for each held expression in the served languages, every article of the one held wording:
+  - the article's text, which is the text the index searches;
+  - the digest of that text, held to the index's own stored text digest (a difference is a damaged
+    index and throws, never a quote);
+  - the corpus body digest, the official source, and an article permalink that EU `verify` accepts
+    (the wording permalink plus the provision after `#`).
+- **The date.** It answers on the wording's own Formex act date only. No consolidation is held, so a
+  date before or after it refuses `no_version_for_date`, naming the held wording dates (the EU parity
+  driver decision (b), PR #761). The original wording is never served as a later date's.
+- **Decision 95.** Every EU answer carries the acknowledgement "© European Union,
+  https://eur-lex.europa.eu" and the statement that only the Official Journal published in
+  electronic form is authentic (Regulation (EU) No 216/2013, Article 1(2)).
+- **Rights at compose time.** Every corpus member the articles come from must be acquired, which an
+  EU build reaches only after retaining the Decision 95 receipt. Otherwise the answer refuses
+  `text_withheld`.
+- **Refusals.**
+  - An ambiguous work or a language not held refuses as EU `dossier` does.
+  - With no EU index mounted, an EU identifier keeps the refusal it had, `retrieval_mode_unavailable`,
+    which the refusal census pins; EU `dossier` answers `no_corpus_mounted` there. Aligning the two is
+    a follow-up, once the samples can be re-rendered.
+- **The screens.** The reading screen reads the EU bundle (`readEuropeEvidenceBundle`, holding it to
+  its own rules) and shows:
+  - the acknowledgement and authenticity statement above the text;
+  - each wording headed by its Formex act date, never an applicability date;
+  - each quote with its evidence line.
+  The export composer shows the EU text and says it is not composed: it pins Luxembourg states'
+  articles only, so it offers no file. The chrome table gains the EU heading and counts and the export
+  sentence, each with a French draft, and the chrome scan renders both EU views.
+- **Evidence:**
+  - `V3CorpusEuropeEvidenceBundleMountTests` on the retained GDPR fixture, through the real handler:
+    - every article with text is quoted, in the index's order, with the index's own text;
+    - each `text_sha256` is recomputed;
+    - every article permalink verifies as `digest_matches`;
+    - the day before and five years after are each refused, and German refuses;
+    - with no language, the French-only fixture's one held wording is quoted under its own permalink,
+      and English refuses `language_not_available` naming French. No fixture holds two languages of one
+      work: a bundle with two wordings (their order, `served_languages`, the web reader's language rule)
+      is exercised only by the journey's EU reading step on the real bilingual canary mount, not yet run.
+  - The EU citation walk (`V3CitationVerificationTests`) now verifies the bundle's permalinks too.
+  - Web: `reading-europe.test.mjs` covers the reader, fourteen broken rules, the escaped provision, the
+    reading screen and the export composer. The chrome scan passes with both EU views.
+  - Review of #903 (an independent Claude review; the owner's order of 2026-10-02 excludes Codex):
+    - the journey's quote check read Luxembourg permalinks only, so every EU quote failed it; it now reads
+      either publisher's (`pinnedCitation`), and `journey-verdict.test.mjs` holds EU quotes to it;
+    - an EU refusal on the reading and export screens was said in Luxembourg's words ("applies on that
+      date"); EU refusals now have their own sentences (`LIVE_READING_EUROPE_REFUSAL_SENTENCES`, French
+      drafted in `refusal-sentences.mjs`), and an EU refusal card's date hints speak of wordings
+      (`europeNullSentences`), Luxembourg's of states; a test holds every EU refusal sentence and card
+      to no applicability, state or version word;
+    - the served scope now says what `body_sha256` is (the corpus member's retained manifestation) and
+      that the text is read from the Formex package (`package_sha256`, `source_entry_sha256`).
+- **Not yet:**
+  - the journey's EU reading step on the real canary mount (GDPR in English and French) in a browser;
+  - an EU bundle captured in the answer census, which replaces the web tests' hand-built answer;
+  - the EU export.
+  Local builds, test runs and browser runs wait for free memory above 4 GB (standing order of 10:35
+  UTC); CI runs the whole solution.
+
+## The EU time view (PR #909, sole driver, 2026-10-02)
+
+The owner's main use case ("users primarily want a temporal view of EU texts") over the EU index's states
+table (schema 5, PR #905): every work the publisher's census discovered for a seed act, the original and
+each consolidated version, with the publisher's consolidation date or a typed reason it has none.
+- `timeline`, `as_of` and `evidence_bundle` at any date answer EU acts from it (`V3CorpusMount.EuropeTime.cs`);
+  `verify` verifies a consolidated wording's permalink; `dossier` gains `wording_timeline`, and a
+  consolidated version's work IRI, CELEX or expression names its act's dossier. `consolidations_held` and the
+  `later_wordings` rows of dossier and search say what the mount holds. An EU index with no states table
+  keeps the original-wording path (PR #903) and the mode refusals.
+- The reading screen reads the time view's bundle: each wording headed as the original or the consolidated
+  wording of its date, with the dates it answers ("to the day before {next}") or that it is the latest held.
+- Driver decision (reversible), the selection rule: per language, the latest dated wording at or before the
+  date answers until the next; works sharing a date answer only if every text the corpus holds for that date
+  is the same (the work whose CELEX names that version represents them); two different held texts are
+  refused `ambiguous_version`; a same-date or undated version whose text is not held is disclosed beside the
+  answer; an undated version makes the dates ambiguous only when a held text of it differs; a date after the
+  latest consolidation is answered by it as dated, and `not_held` says an amendment the publisher has not yet
+  consolidated is not seen. An EU date is a wording date, never an applicability date.
+- Real data that shaped it: the real consolidated GDPR mount (`C:\lex-v3\lu-consolidated-offline-20261001-3`)
+  holds the original (2016-04-27) and four works dated 2016-05-04, one with CELEX `02016R0679-20160504`, two
+  holding byte-identical English and French text; the GDPR from 2016-05-04 answers with the CELEX-designated
+  consolidation and discloses the other three.
+- Evidence: `V3CorpusEuropeTimeViewTests` on a mount derived from the consolidated fixture (the timeline by
+  CELEX and by consolidated work, as_of between, after and before the wordings, the bundle and its verified
+  permalinks, the original pin, a tampered digest, the dossier by consolidated CELEX); the EU mount and mode
+  tests restated; the answer and envelope samples re-rendered (only the EU dossier changes).
+- Review of #909 (independent Claude review), repaired:
+  - the bundle now discloses, beside each wording, the works sharing its date and the versions with no
+    usable date (`same_date_works`, `unplaced_versions`), and the reading screen says them;
+  - the time view serves its own statements: the bundle's scope (`EuropeTimeEvidenceBundleScope`), the digest
+    rule naming the seed act's CELEX (`EuropeStateDigestRule`), the dossier timeline's own date semantics, and
+    the bundle's and verify's full not-held rows; the reading copy no longer calls the next wording "held";
+  - `text_held` says whether a text is held for the date (it was false on a date holding two different texts);
+    verify on such a date refuses `ambiguous_version` rather than naming one text as current;
+  - the EU `text_not_available` payload is Luxembourg's shape, which the reading card admits, and an EU
+    `ambiguous_version` carries the registry's fields with its candidates pinned (an undated one by its
+    expression); the reading screen says an EU ambiguity in its EU sentence and shows no Luxembourg card;
+  - `V3CorpusEuropeTimeViewBranchTests` cover the branches on mounts from a generalised consolidated fixture
+    (`EuConsolidatedWorksFixture.cs`): works sharing a date with one text (the CELEX-designated work answers,
+    the others disclosed), with two texts (ambiguous, none chosen, not by verify either), the latest wording
+    with no text in a language (`text_not_available` there, the other language answering), and undated
+    versions (disclosed when their text is the same, ambiguous at every date when it differs).
+- The GDPR outcome above was read from the real consolidated mount's index by inspection, not by a test; a
+  real-mount test over the full EU population follows when it lands.
+- Not yet: EU `article_history`, `diff` and `changes_in_period` (the history, compare and radar screens'
+  EU paths).
+
 ## Next, in order (web lane; the data lane's items 1 to 3 are in STATUS-DATA.md)
 
 The web lane's order since the owner's proxy's journey corrections (2026-10-01 14:30 UTC,

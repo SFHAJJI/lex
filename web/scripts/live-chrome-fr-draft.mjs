@@ -79,7 +79,7 @@ export const LIVE_CHROME_FR_DRAFT = Object.freeze({
     title: 'Lecture',
     eyebrow: 'Lecture',
     heading: 'Le texte à une date',
-    intro: 'Le texte d’un acte luxembourgeois tel qu’il se présentait à une date, article par article, tel que l’éditeur l’a écrit, avec ce qu’il faut pour le citer. L’identifiant et la date sont envoyés à ce serveur dans la requête et nulle part ailleurs, et cette page ne conserve rien.',
+    intro: 'Le texte d’un acte luxembourgeois tel qu’il se présentait à une date, ou la rédaction originale d’un acte de l’UE à sa propre date, article par article, tel que l’éditeur l’a écrit, avec ce qu’il faut pour le citer. L’identifiant et la date sont envoyés à ce serveur dans la requête et nulle part ailleurs, et cette page ne conserve rien.',
     idle: 'Saisissez un identifiant d’acte et une date pour lire le texte qui s’appliquait à cette date.',
     rights: 'Texte communiqué sous {rights}. Lu au {date}.',
     rightsIn: 'Texte communiqué sous {rights}. Lu au {date} en {language}.',
@@ -93,6 +93,23 @@ export const LIVE_CHROME_FR_DRAFT = Object.freeze({
     evidence: 'Empreinte du texte {text}, empreinte du corps {body}, source officielle {source}, {permalink}',
     withoutText: 'Détenus sans texte : {articles}.',
     notHeldHeading: 'Ce que cette lecture ne contient pas',
+    europeWordingHeading: '{celex}, {language}, la rédaction originale du {date} (la date de l’acte dans le paquet Formex de l’éditeur ; aucune rédaction ultérieure n’est détenue)',
+    europeOriginalHeading: '{celex}, {language}, la rédaction originale du {date} (la date de l’acte dans le paquet Formex de l’éditeur)',
+    europeConsolidatedHeading: '{celex}, {language}, la rédaction consolidée du {date} (la date de consolidation de l’éditeur)',
+    europeHoldsUntil: 'Cette rédaction répond pour les dates du {date} à la veille du {next}, date de la rédaction suivante.',
+    europeSameDateWorks: Object.freeze({
+      one: '{count} autre œuvre de l’éditeur porte cette date : {held} dont ce même texte est détenu ici, {notHeld} sans texte détenu ici.',
+      other: '{count} autres œuvres de l’éditeur portent cette date : {held} dont ce même texte est détenu ici, {notHeld} sans texte détenu ici.',
+    }),
+    europeUnplaced: Object.freeze({
+      one: '{count} rédaction de cet acte n’a pas de date de l’éditeur exploitable et n’est pas située dans le temps : {held} dont ce même texte est détenu ici, {notHeld} sans texte détenu ici.',
+      other: '{count} rédactions de cet acte n’ont pas de date de l’éditeur exploitable et ne sont pas situées dans le temps : {held} dont ce même texte est détenu ici, {notHeld} sans texte détenu ici.',
+    }),
+    europeLatest: 'Il s’agit de la dernière rédaction détenue : elle répond pour toute date ultérieure, et une modification que l’éditeur n’a pas encore consolidée n’y figure pas.',
+    europeCounts: Object.freeze({
+      one: '{count} article cité ; sans texte : {withoutText}.',
+      other: '{count} articles cités ; sans texte : {withoutText}.',
+    }),
   }),
   history: Object.freeze({
     title: 'Historique d’une disposition',
@@ -206,6 +223,7 @@ export const LIVE_CHROME_FR_DRAFT = Object.freeze({
     formatRefused: 'Le format {format} n’est pas proposé pour cet export : {reason}.',
     composeFailed: 'Cet export ne peut pas être composé : {reason}.',
     jsonSummary: 'Le JSON tel qu’il sera enregistré',
+    europeNotComposed: 'Il s’agit d’un texte de l’UE. Son export n’est pas encore composé : le compositeur n’épingle que les articles des actes luxembourgeois, et aucun fichier n’est proposé pour un texte de l’UE.',
   }),
   card: Object.freeze({
     heading: 'Fiche d’évaluation',
@@ -271,6 +289,10 @@ export const LIVE_CHROME_FR_DRAFT = Object.freeze({
     nullSentences: Object.freeze({
       nearest_earlier: 'Aucune version antérieure n’est détenue : la date demandée précède cet historique.',
       nearest_later: 'Aucune version postérieure n’est détenue : la date demandée suit toutes les versions détenues.',
+    }),
+    europeNullSentences: Object.freeze({
+      nearest_earlier: 'Aucune rédaction antérieure n’est détenue : la date demandée précède cet historique.',
+      nearest_later: 'Aucune rédaction postérieure n’est détenue : la date demandée suit toutes les rédactions détenues.',
     }),
     candidate: 'applicable à partir du {validFrom}, empreinte {hash}, {published}',
     candidateWithdrawalNotStated: 'applicable à partir du {validFrom}, empreinte {hash}, {published}, retrait non indiqué par la plateforme',

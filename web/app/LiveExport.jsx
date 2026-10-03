@@ -183,6 +183,16 @@ export function ExportPanel({ outcome, pins, onSave }) {
 export function ExportAnswerView({ outcome, pins, onPin }) {
   if (outcome.state !== 'success') return <ReadingAnswerView outcome={outcome} />;
   const { view } = outcome;
+  if (view.publisher === 'eu-eurlex') {
+    // EU text is read here as the reading screen reads it, with its acknowledgement and permalinks; the composer
+    // pins Luxembourg states' articles only, and says so rather than offering a file it cannot compose.
+    return (
+      <>
+        <p data-export-not-composed="">{COPY.europeNotComposed}</p>
+        <ReadingAnswerView outcome={outcome} />
+      </>
+    );
+  }
   return (
     <section data-answer-state="success">
       <p>

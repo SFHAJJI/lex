@@ -28,7 +28,7 @@ export const SCREENS = Object.freeze([
   Object.freeze({ id: 'coverage', name: 'Trust and Coverage', module: coverage, table: coverage.LIVE_COVERAGE_REFUSAL_SENTENCES }),
   Object.freeze({ id: 'search', name: 'Search', module: search, table: search.LIVE_SEARCH_REFUSAL_SENTENCES }),
   Object.freeze({ id: 'dossier', name: 'Work dossier', module: dossier, table: dossier.LIVE_DOSSIER_REFUSAL_SENTENCES }),
-  Object.freeze({ id: 'reading', name: 'Reading and Export composer', module: reading, table: reading.LIVE_READING_REFUSAL_SENTENCES }),
+  Object.freeze({ id: 'reading', name: 'Reading and Export composer', module: reading, table: reading.LIVE_READING_REFUSAL_SENTENCES, europeTable: reading.LIVE_READING_EUROPE_REFUSAL_SENTENCES }),
   Object.freeze({ id: 'history', name: 'Provision history', module: history, table: history.LIVE_HISTORY_REFUSAL_SENTENCES }),
   Object.freeze({ id: 'compare', name: 'Compare', module: compare, table: compare.LIVE_COMPARE_REFUSAL_SENTENCES }),
   Object.freeze({ id: 'radar', name: 'Radar', module: radar, table: radar.LIVE_RADAR_REFUSAL_SENTENCES }),
@@ -64,6 +64,10 @@ export const FRENCH_DRAFTS = Object.freeze({
   "This index cannot compare this work's states.": 'Cet index ne peut pas comparer les versions de cet acte.',
   'This index holds no state in the language asked for.': 'Cet index ne contient aucune version dans la langue demandée.',
   "This index cannot list this work's changes.": 'Cet index ne peut pas lister les modifications de cet acte.',
+  'This index holds no wording of this EU act for that date.': 'Cet index ne contient aucune version du texte de cet acte de l’Union pour cette date.',
+  'This index holds different texts of this EU act for that date, so none is chosen.': 'Cet index contient des textes différents de cet acte de l’Union pour cette date ; aucun n’est donc retenu.',
+  "This wording's text is withheld: its rights did not admit it.": 'Le texte de cette version de l’acte de l’Union n’est pas communiqué : ses droits ne le permettaient pas.',
+  'This index knows this wording of the EU act but holds no text for it.': 'Cet index connaît cette version de l’acte de l’Union, mais n’en contient aucun texte.',
 });
 
 /**
@@ -128,6 +132,8 @@ export function servedRefusalSentences() {
   };
   for (const screen of SCREENS) {
     for (const [code, sentence] of Object.entries(screen.table)) add(sentence, screen.id, code);
+    // A screen that words an EU refusal apart says those sentences too (review of #903).
+    for (const [code, sentence] of Object.entries(screen.europeTable ?? {})) add(sentence, screen.id, code);
     if (screen.id === NAMING_THE_INDEX[0]) {
       for (const requiredCorpus of ['lu', 'eu', null]) {
         for (const id of NAMING_THE_INDEX) add(noCorpusMountedSentence({ required_corpus: requiredCorpus }), id, 'no_corpus_mounted');

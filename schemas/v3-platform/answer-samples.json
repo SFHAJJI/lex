@@ -3634,7 +3634,26 @@
         "publisher_work_id": "http://publications.europa.eu/resource/cellar/3e485e15-11bd-11e6-ba9a-01aa75ed71a1",
         "requested_identifier": "32016R0679",
         "requested_language": null,
-        "scope": "the EU work as the mounted EU index holds it: its expressions, the one wording held of each with the Formex act date, the article count and the corpus members the articles were read from; a record of this corpus and not of what the publisher holds, and a missing expression or wording here is neither absent from the publisher\u0027s record nor absent from law; with a language, only that language\u0027s expressions are listed and available_languages still lists every language the work has"
+        "scope": "the EU work as the mounted EU index holds it: its expressions, the one wording held of each with the Formex act date, the article count and the corpus members the articles were read from; a record of this corpus and not of what the publisher holds, and a missing expression or wording here is neither absent from the publisher\u0027s record nor absent from law; with a language, only that language\u0027s expressions are listed and available_languages still lists every language the work has",
+        "wording_timeline": {
+          "consolidations_held": false,
+          "date_semantics": "an EU wording date is the date of a wording of the act: for the original wording, the date the publisher\u0027s Formex package gives the act; for a consolidated version, the publisher\u0027s consolidation date (cdm:act_consolidated_date) of that version; it is not an entry-into-force, application or publication date, and an EU date is never merged with a Luxembourg applicability date",
+          "languages": [
+            {
+              "language": "eng",
+              "unplaced_versions": 0,
+              "wordings": [
+                {
+                  "basis": "single_work",
+                  "text_held": true,
+                  "wording_date": "2016-04-27",
+                  "works": 1
+                }
+              ]
+            }
+          ],
+          "seed_celex": "32016R0679"
+        }
       }
     },
     {
