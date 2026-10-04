@@ -23,8 +23,9 @@ in English: search, dossier, reading, provision history, compare, radar, trust a
 
 ## What waits on the owner
 
-- Azure: the subscription is enabled again, but the Container Apps environment must be resumed, and the
-  registrar's name servers for soufien.lu must be checked. Both block V2 today and V3 later.
+- Azure: the subscription is disabled and read-only, and only the owner can re-enable it, by settling the
+  billing. Then the hosting environment should resume and the soufien.lu name can be checked. This blocks V2
+  today and V3 later.
 - The release signing key: made when the release command can take one; the driver is adding that option.
 - The word to go live, once the real mount passes its gates.
 

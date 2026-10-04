@@ -96,11 +96,12 @@ Decision 95 (lex-governance PR #9, merged 2026-09-30) records these rulings and 
 ## Blocked on the owner
 
 Only money, legal or public claims, credentials and going live (ruling 7):
-- Azure. The subscription reads `Enabled` again (2026-10-04, `az account show`), but the Container Apps
-  environment `cae-platform-law` is still suspended from the disablement (`ManagedClusterSuspended` on every
-  call that reaches its compute), so V2 at law.soufien.lu is down and V3 cannot deploy there until it
-  resumes; the `soufien.lu` zone also does not resolve publicly. The signing identity is made when the
-  release command can take one (OWNER-BRIEF.md).
+- Azure. The subscription is `Disabled` on the control plane (pay-as-you-go, spending limit off; every write is
+  refused with `ReadOnlyDisabledSubscription`, observed 2026-10-04; a CLI account list had cached `Enabled`).
+  Re-enabling it is the owner's billing action. Until then the Container Apps environment `cae-platform-law`
+  stays `ManagedClusterSuspended`, so V2 at law.soufien.lu is down and V3 cannot deploy there, and the
+  `soufien.lu` zone does not resolve publicly. The signing identity is made when the release command can
+  take one (OWNER-BRIEF.md).
 - The weekly 30-minute checkpoint slot.
 - The owner's rulings of 2026-10-04 (relayed by the audit session): the French copy accepted, the acquisition
   code frozen until the combined mount exists, the stage milestones closed, `OWNER-BRIEF.md` kept current.
