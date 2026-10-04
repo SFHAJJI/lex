@@ -561,8 +561,8 @@ public sealed partial class LuxembourgFirstMountAcquisition
             // spend, and what each phase replayed and acquired live. It was not observed in one window.
             var resumption = _resume is null || progress is null ? null : _resume.Summarize(progress.Phases(
                     AcquisitionJournal.LuxembourgScopePhase, AcquisitionJournal.LuxembourgVocabularyPhase,
-                    AcquisitionJournal.LuxembourgQueryFamilyPhase, AcquisitionJournal.LuxembourgDocumentPhase,
-                    AcquisitionJournal.LuxembourgGazettePhase),
+                    AcquisitionJournal.LuxembourgQueryFamilyPhase, AcquisitionJournal.LuxembourgCoverLeafPhase,
+                    AcquisitionJournal.LuxembourgDocumentPhase, AcquisitionJournal.LuxembourgGazettePhase),
                 wireBudget.Spent, _timeProvider.GetUtcNow());
             var checkpoint = await RetainAcquisitionCheckpointAsync(scope, legacyAct is not null, scopeRef, rendererSources, delivered,
                 resumption, cancellationToken).ConfigureAwait(false);

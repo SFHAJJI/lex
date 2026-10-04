@@ -227,6 +227,65 @@ public sealed partial class LuxembourgRepeatedEnumerationExecutorTests
 
     private sealed record RunBlock(SourceArtifactRef Run, int LeafCount);
 
+    [TestMethod]
+    public async Task AResumedCoverSendsNothingForItsDeliveredLeavesAndProvesAcrossBothRuns()
+    {
+        // The interrupted run: the root splits, the left leaf is delivered (and reported), the right leaf's first request
+        // stops the run, as a kill would.
+        var store = new RoutedHttpAcquisitionSessionAuditTests.RecordingCustodyStore { RefuseFallback = true };
+        var (request, witness) = BuildRequest();
+        using var stop = new CancellationTokenSource();
+        using var interrupted = new RotationHandler((ordinal, req) =>
+        {
+            if (ordinal == 6)
+            {
+                stop.Cancel();
+                throw new OperationCanceledException(stop.Token);
+            }
+
+            return LeafScript(ordinal, req);
+        });
+        var delivered = new List<LuxembourgCoverLeafDelivered>();
+        await Assert.ThrowsAsync<OperationCanceledException>(() => new LuxembourgRepeatedEnumerationExecutor(store, new RotationClock(),
+            interrupted).RunAdaptiveCoverAsync(request, witness, WireRequestBudget.OfWireRequests(30), stop.Token, long.MaxValue, null,
+            leaf =>
+            {
+                delivered.Add(leaf);
+                return Task.CompletedTask;
+            }));
+        Assert.HasCount(1, delivered, "one leaf was delivered before the stop");
+        var left = delivered[0];
+        Assert.AreEqual(0, left.Index);
+        Assert.HasCount(1, left.Splits, "the root's split, as it stood when the left leaf was delivered");
+
+        // What a resume rebuilds from the report: the chain from its split history, the leaf through its own checkpoint.
+        var chain = LuxembourgPartitionChain.Root(request.Partition);
+        foreach (var step in left.Splits) chain = chain.SplitLeaf(step.LeafPartitionId, step.Boundary, step.LeftPartitionId, step.RightPartitionId);
+        Assert.AreEqual(left.Leaf, chain.Leaves[0]);
+        var receipt = await LuxembourgEnumerationCheckpoint.RestoreReceiptAsync(store, left.Checkpoint, left.Run,
+            left.InterpretationProfileRef, CancellationToken.None);
+        var point = new LuxembourgCoverResumePoint(chain, [receipt], [left.Checkpoint], left.InterpretationProfileRef);
+
+        // The resumed run sends only the right leaf's four requests, on a session of its own, and the cover reconciles
+        // over both runs.
+        using var handler = new RotationHandler(static (ordinal, req) => LeafScript(ordinal + 5, req));
+        var result = await new LuxembourgRepeatedEnumerationExecutor(store, new RotationClock(), handler)
+            .RunAdaptiveCoverAsync(request, witness, WireRequestBudget.OfWireRequests(30), CancellationToken.None, long.MaxValue, point, null);
+        Assert.AreEqual(1, handler.RobotsFetches);
+        Assert.AreEqual(4, handler.ProductRequests, "nothing was sent for the delivered leaf");
+        Assert.IsTrue(result.Results.All(static leaf => leaf.Receipt is not null));
+        Assert.AreEqual(left.Run, result.Results[0].Receipt!.Delivery.RunIdentity);
+        Assert.AreNotEqual(left.Run, result.Results[1].Receipt!.Delivery.RunIdentity);
+        Assert.IsNotNull(LuxembourgPartitionCover.TryCreate(result.Chain, result.Results.Select(static leaf => leaf.Receipt!).ToArray(),
+            null, out var refusal), refusal.ToString());
+
+        // A resume point under another profile reference is refused before anything is sent.
+        await Assert.ThrowsExactlyAsync<ArgumentException>(() => new LuxembourgRepeatedEnumerationExecutor(store, new RotationClock(), handler)
+            .RunAdaptiveCoverAsync(request, witness, WireRequestBudget.OfWireRequests(30), CancellationToken.None, long.MaxValue,
+                point with { InterpretationProfileRef = left.InterpretationProfileRef with { Sha256 = new string('0', 64) } }, null));
+        Assert.AreEqual(4, handler.ProductRequests);
+    }
+
     // The cover's product requests by ordinal: the root's COUNT answers a capacity failure (so it splits), then each leaf
     // answers COUNT 0, an empty page, COUNT 0 and an empty page.
     private static HttpResponseMessage LeafScript(int ordinal, HttpRequestMessage request)

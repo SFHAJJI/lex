@@ -134,7 +134,9 @@ public sealed class LuxembourgExecutorConstructionSurfaceTests
                     + "Lex.V3.Contracts.Source.Core.BoundMachineRequest, "
                     + "Lex.V3.Ingest.WireRequestBudget, System.Boolean, "
                     + "System.Threading.CancellationToken, "
-                    + "System.Int64) -> "
+                    // A resumed cover's delivered leaves, and the callback that journals each leaf this run delivers.
+                    + "System.Int64, Lex.V3.Ingest.Luxembourg.LuxembourgCoverResumePoint?, "
+                    + "System.Func<Lex.V3.Ingest.Luxembourg.LuxembourgCoverLeafDelivered, System.Threading.Tasks.Task>?) -> "
                     + "System.Threading.Tasks.Task<System.ValueTuple<Lex.V3.Contracts.Source.Luxemb"
                     + "ourg.LuxembourgPartitionChain, "
                     + "System.Collections.Generic.IReadOnlyList<Lex.V3.Ingest.Luxembourg.Luxembourg"

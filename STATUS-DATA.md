@@ -2,6 +2,40 @@
 
 Updated 2026-10-04.
 
+## An interrupted Luxembourg cover resumes after its delivered leaves (Claude, 2026-10-04)
+
+Reversible driver decision, for the Luxembourg legislative population run.
+
+**The problem.** The resume (#924) journals a Luxembourg family only once its whole cover is proven. A run stopped while a family's cover was in progress therefore restarted that family from its first leaf. A stop in hour 20 of the regulations' assertions (about 22-23.5 hours) lost 20 hours. A breaker stop (#925) is exactly the stop its own message says to resume after.
+
+**The change: each leaf is journaled as it is delivered.**
+- **The journal.** Each leaf an adaptive cover proves and retains is journaled as `lu-cover-leaf`, keyed `family#index`. The line holds:
+  - the family's set, range, plan and renderer;
+  - the chain's split history at that moment;
+  - the leaf, its enumeration checkpoint, and the run and profile it was proven under.
+- **The resume.** It restores the leaves in index order as far as each still binds and proves:
+  - its record names this family and its index;
+  - its split history, replayed from the root, places it there, with the leaves accepted before it still first;
+  - its checkpoint restores under its run and the cover's one profile;
+  - its query bounds are its leaf's, and it proves that leaf.
+- **The prefix.** The first leaf that fails ends the prefix, and the cover goes on from there on a session of the resumed run. The accepted leaves are journaled again, so a resume of a resumed run finds them. Nothing is admitted on the journal's word.
+- **Across runs.** The cover then spans the interrupted run's leaves and the resumed run's, as contiguous blocks (#927), under the interrupted run's interpretation profile reference, checked against the plan's profile.
+- **A family record that does not restore** is rebuilt from its delivered leaves when they restore. The resumption summary counts replayed and live leaves under `lu-cover-leaf`.
+
+**Unchanged:**
+- the family journal line and the catalogs (a family's run is still its first leaf's);
+- a run that is not resumed, except that it writes the leaf lines;
+- the census: the cover's callback is a method group on a small helper, not a new lambda in the adapter's pinned method.
+
+The pinned `RunCoverCoreAsync` signature gains the resume point and the leaf callback.
+
+**Tests:**
+- `AResumedCoverSendsNothingForItsDeliveredLeavesAndProvesAcrossBothRuns`: a cover stopped at its second leaf resumes from the reported leaf with only that leaf's four requests sent, and the cover reconciles over both runs. A resume point under another profile is refused before anything is sent.
+- `AFamilyWhoseRecordDoesNotRestoreIsRebuiltFromItsDeliveredLeaves`: two families without their records are rebuilt from their leaves with no request, and the leaves are journaled again.
+- The existing "enumerated again" test now strips those families' leaf lines too.
+
+CI compiles and runs these: local memory is reserved for the EU population run.
+
 ## A Luxembourg partition cover longer than one robots generation (Claude, 2026-10-04)
 
 Reversible driver decision, for the Luxembourg legislative population run.

@@ -422,6 +422,23 @@ public sealed class LuxembourgDocumentGetAttemptResult
     }
 }
 
+/// <summary>
+/// Where an unfinished adaptive cover continues: the chain as it stood when the interrupted run last delivered a leaf,
+/// that run's delivered leaves (a prefix of the chain's leaves) restored and proven again by the caller, with their
+/// enumeration checkpoints, and the interpretation profile reference they were proven under.
+/// </summary>
+internal sealed record LuxembourgCoverResumePoint(LuxembourgPartitionChain Chain,
+    IReadOnlyList<RepeatedEnumerationDeliveryReceipt> Receipts, IReadOnlyList<SourceArtifactRef> Checkpoints,
+    SourceArtifactRef InterpretationProfileRef);
+
+/// <summary>
+/// One leaf an adaptive cover has just proven and retained: the chain's split history at that moment, the leaf's index
+/// and range, its enumeration checkpoint, and the run and interpretation profile it was proven under. What a journal
+/// records so a resume can continue the cover after it.
+/// </summary>
+internal sealed record LuxembourgCoverLeafDelivered(IReadOnlyList<LuxembourgPartitionSplitStep> Splits, int Index,
+    LuxembourgQueryPartitionRange Leaf, SourceArtifactRef Checkpoint, SourceArtifactRef Run, SourceArtifactRef InterpretationProfileRef);
+
 public sealed class LuxembourgRepeatedEnumerationExecutor
 {
     private readonly ICustodyStore _custodyStore;
@@ -899,7 +916,9 @@ public sealed class LuxembourgRepeatedEnumerationExecutor
         WireRequestBudget wireBudget,
         bool adaptive,
         CancellationToken cancellationToken,
-        long maximumLeafRows = long.MaxValue)
+        long maximumLeafRows = long.MaxValue,
+        LuxembourgCoverResumePoint? resumeFrom = null,
+        Func<LuxembourgCoverLeafDelivered, Task>? onLeafDelivered = null)
     {
         ArgumentNullException.ThrowIfNull(rootRequest);
         ArgumentNullException.ThrowIfNull(chain);
@@ -923,6 +942,23 @@ public sealed class LuxembourgRepeatedEnumerationExecutor
         var sharedProfileRef = RepeatedEnumerationInterpretationProfileIdentity.Create(NewUrn(), sharedProfile);
 
         var results = new List<LuxembourgEnumerationRunResult>(chain.Leaves.Count);
+        if (resumeFrom is not null)
+        {
+            // The leaves an interrupted run delivered, restored and proven again by the caller: the cover goes on from the
+            // first leaf after them, under the profile reference they were proven under (one reference per cover), on a
+            // session of this run. Nothing is sent for them.
+            RepeatedEnumerationInterpretationProfileIdentity.Validate(resumeFrom.InterpretationProfileRef, sharedProfile);
+            if (resumeFrom.Chain != chain || resumeFrom.Receipts.Count != resumeFrom.Checkpoints.Count ||
+                resumeFrom.Receipts.Count > chain.Leaves.Count)
+                throw new ArgumentException("The resume point does not describe this cover's delivered leaves.", nameof(resumeFrom));
+            sharedProfileRef = resumeFrom.InterpretationProfileRef;
+            for (var restored = 0; restored < resumeFrom.Receipts.Count; restored++)
+            {
+                results.Add(LuxembourgEnumerationRunResult.DeliveredWithCheckpoint(resumeFrom.Receipts[restored], 0,
+                    resumeFrom.Checkpoints[restored]));
+            }
+        }
+
         var productRequests = 0;
         var splitNumber = 0;
         var splitPrefix = "split-" + Guid.NewGuid().ToString("N");
@@ -930,7 +966,7 @@ public sealed class LuxembourgRepeatedEnumerationExecutor
         RoutedHttpAcquisitionSession? runner = null;
         try
         {
-            for (var index = 0; index < chain.Leaves.Count;)
+            for (var index = results.Count; index < chain.Leaves.Count;)
             {
                 cancellationToken.ThrowIfCancellationRequested();
                 if (runner is null || runner.RobotsPolicyRemaining < runner.SourceProfile.MaximumRobotsPolicyAge / 2)
@@ -1009,6 +1045,12 @@ public sealed class LuxembourgRepeatedEnumerationExecutor
 
                 results.Add(result);
                 index++;
+                if (onLeafDelivered is not null && result.Receipt is { } delivered && result.CheckpointRef is { } leafCheckpoint)
+                {
+                    await onLeafDelivered(new LuxembourgCoverLeafDelivered(chain.SplitHistory, index - 1, leaf, leafCheckpoint,
+                        delivered.Delivery.RunIdentity, delivered.Delivery.InterpretationProfileRef)).ConfigureAwait(false);
+                }
+
                 if (adaptive && result.Refusal is { } failedLeaf)
                 {
                     // A cover requires every leaf. Keep the ordered result shape without sending
@@ -1062,6 +1104,28 @@ public sealed class LuxembourgRepeatedEnumerationExecutor
     // compiler-generated lambdas by its member ordinal, which a field declared before it would move.
     // One per executor, so one per acquisition run: the Legilux gateway read-timeout policy and breaker.
     private readonly LuxembourgGatewayTimeouts _gatewayTimeouts;
+
+    /// <summary>
+    /// <see cref="RunAdaptiveCoverAsync(LuxembourgPartitionRunRequest, BoundMachineRequest, WireRequestBudget, CancellationToken, long)"/>,
+    /// continuing an interrupted run's cover from <paramref name="resumeFrom"/> when there is one, and telling
+    /// <paramref name="onLeafDelivered"/> about each leaf this run proves and retains, once its checkpoint is held.
+    /// Declared here, after RunCoverCoreAsync in member order, for the construction-surface pins.
+    /// </summary>
+    internal Task<(LuxembourgPartitionChain Chain, IReadOnlyList<LuxembourgEnumerationRunResult> Results,
+        int ProductRequestCount)> RunAdaptiveCoverAsync(
+        LuxembourgPartitionRunRequest rootRequest,
+        BoundMachineRequest sourceWitness,
+        WireRequestBudget wireBudget,
+        CancellationToken cancellationToken,
+        long maximumLeafRows,
+        LuxembourgCoverResumePoint? resumeFrom,
+        Func<LuxembourgCoverLeafDelivered, Task>? onLeafDelivered)
+    {
+        ArgumentNullException.ThrowIfNull(rootRequest);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(maximumLeafRows);
+        return RunCoverCoreAsync(rootRequest, resumeFrom?.Chain ?? LuxembourgPartitionChain.Root(rootRequest.Partition),
+            sourceWitness, wireBudget, adaptive: true, cancellationToken, maximumLeafRows, resumeFrom, onLeafDelivered);
+    }
 
     // A refusal whose retained body is the Legilux gateway's exact read-timeout envelope, after the glue spent the sends
     // the policy allows (or allowed none, for a first-pass COUNT).
