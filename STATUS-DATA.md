@@ -50,6 +50,53 @@ Reversible driver decision, for the Luxembourg legislative population run.
 - the ingest suite's Luxembourg, census, surface, resume and journal tests: 1,193 total, 0 failed, 12 live canaries skipped;
 - the contract cover, surface and census tests pass.
 
+## Legilux gateway read timeouts: retry, then split, then stop (Claude, 2026-10-04)
+
+Reversible driver decision, for the Luxembourg legislative population run.
+
+**The problem.** The gateway in front of the Legilux SPARQL endpoint cuts a query at about 45 seconds. It answers HTTP 500 with one 120-byte JSON envelope: `{"meta":"error","id":"<uuid>","title":"Read timed out","code":"error.unknown","data":null}`, with a fresh lowercase id in every response. The 2026-09-30 count probe and population preflight custody retained it; one example is object `79282f1f…`. Until now, only a first-pass COUNT was split on it. A page or a second-pass COUNT that timed out refused the leaf, the cover and the run. In a run of about 5,900 SPARQL requests at a median of 25 seconds, the root count of the largest family took 42.4 seconds, so one slow page could lose the run.
+
+**The policy** (`LuxembourgGatewayTimeouts`, the shared glue, the Luxembourg executor):
+- **Retry.** A page (either pass) or a second-pass COUNT that answers exactly this envelope is sent again as the same plan item, at most three sends in all.
+  - Each retry first waits the profile's own maximum retry delay (30 s) on the run's clock. The session then adds its own backoff and origin pacing.
+  - Every send is reserved from the run's one wire budget before it goes out.
+  - Every attempt is retained as its own route before the retry is decided, as for the Publications Office retries.
+- **No retry for a first-pass COUNT.** It is split at once, as before: a split costs a few cheap counts, while a retry repeats a 45-second query.
+- **Split.** When the sends are spent, the leaf asks for smaller leaves (`PartitionRequired`), and the adaptive cover splits it through the existing chain.
+  - Each child proves its own two passes.
+  - The abandoned leaf's partial passes stay in custody, referenced by no leaf checkpoint or cover.
+- **Stop.** A breaker, one per run, counts envelopes since the last admitted page. At eight, the leaf refuses and the cover stops, and every later pass of the run refuses without sending. The run ends with a typed refusal, to be resumed (#924) after the publisher recovers.
+
+**Only that envelope.** Any other body, status or endpoint refuses exactly as before, including:
+- the loose timeout shape without an id, which first-pass COUNTs still split on;
+- 502, 503 and 504 carrying the same body.
+
+**What does not change:**
+- the profile and its digest;
+- `RoutedHttpAcquisitionSession`; the envelope check reads custody in the glue, outside the session (Decision 71);
+- checkpoint schemas, the construction-surface pins and the closed-vocabulary census;
+- the EU retries.
+
+**Limits:**
+- **Pages.** Only COUNT timeouts were retained; that pages answer the same envelope is inferred from the same gateway. A page timeout in another shape refuses as before.
+- **Waiting.** The 30-second wait is a judgement, not a measurement.
+- **Wire ceiling.** Size `--wire-ceiling` with about 10% headroom over the ~5,900 SPARQL requests, for retries and re-enumerated leaves.
+- **24 hours.** A cover's single session still ages out after 24 hours (the largest family runs about 22-23.5 hours). That is a separate slice.
+
+**Tests** (`LuxembourgGatewayTimeoutRetryTests`):
+- `TheRetainedGatewayTimeoutIsRecognizedByItsTemplate`: the retained bytes, pinned by digest, and a fresh id.
+- `AGatewayTimeoutIsRetriedAsTheSamePlanItemThenAdmitted`: a first-pass page, the second-pass COUNT or a second-pass page, timing out once or twice. It is admitted with the expected sends, budget and product count, one 30-second wait per retry, then the session's backoff.
+- `ARequestThatKeepsTimingOutIsSplitAfterThreeSends`: a page, and a second-pass COUNT after a completed first pass. No fourth send; two children prove; the cover holds.
+- `WithoutSplittingAPageThatKeepsTimingOutAsksForSmallerLeaves`
+- `EightGatewayTimeoutsWithoutAnAdmittedPageStopTheRun`: a later cover of the same run sends only its robots fetch.
+- `ABodyThatIsNotExactlyTheGatewayTimeoutIsRefusedOnItsFirstSend`: thirteen near misses, each sent once with no wait.
+
+Existing tests:
+- `AdaptiveCoverSplitsRetainedInitialCountCapacityFailures` gains the exact envelope: still split, never retried.
+- The loose-shape test is renamed `AnUnrecognizedTimeoutShapeAfterTheFirstPassStopsRatherThanSplitting`.
+
+**Local evidence:** 182 executor, retry, pin and census tests pass (2 live canaries skipped). With the retry disabled, all nine retry and split cases fail.
+
 ## Resuming an interrupted acquisition: the journal, the EU half and the Luxembourg half (Claude, 2026-10-03)
 
 Every `build` now writes a progress journal beside its custody (`acquisition-progress-<utc>-<id>.jsonl`): append-only JSON lines chained by SHA-256, one per unit, each appended only after the unit's custody holds returned and naming the unit's existing checkpoint record and the objects it depends on. The first line names the source head, the digest of the arguments (seeds, Luxembourg selection, encoding, `--eu-checkpoint`), the renderer references and the journal it resumed, if any. The journal only says where to look: a resumed run admits each unit through the checked reader a full replay uses.

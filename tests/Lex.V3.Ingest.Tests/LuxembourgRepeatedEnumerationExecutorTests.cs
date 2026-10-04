@@ -2026,6 +2026,9 @@ public sealed partial class LuxembourgRepeatedEnumerationExecutorTests
 
     [TestMethod]
     [DataRow("{\"meta\":\"error\",\"title\":\"Read timed out\",\"code\":\"error.unknown\"}")]
+    // The gateway's exact read-timeout envelope on a first-pass COUNT is split at once, never retried: a split costs a few
+    // cheap counts, a retry repeats a 45-second query. Ordinal 2 is already the left child's COUNT.
+    [DataRow(RetainedGatewayTimeout)]
     [DataRow("Virtuoso 22026 Error SR319: Max row length is exceeded when trying to store a string of 75 chars into a temp col")]
     public async Task AdaptiveCoverSplitsRetainedInitialCountCapacityFailures(string error)
     {
@@ -2121,8 +2124,10 @@ public sealed partial class LuxembourgRepeatedEnumerationExecutorTests
         Assert.AreEqual(2, cover.LeafDeliveredRowCountSum);
     }
 
+    // The loose timeout shape (no id, no data) is not the gateway's envelope: after the first pass it is neither retried nor
+    // split, and the run refuses as before. The exact envelope's retry-then-split path is LuxembourgGatewayTimeoutRetryTests.
     [TestMethod]
-    public async Task CapacityFailureAfterTheFirstPassStopsRatherThanSplittingChangedEvidence()
+    public async Task AnUnrecognizedTimeoutShapeAfterTheFirstPassStopsRatherThanSplitting()
     {
         var (request, witness) = BuildRequest();
         var store = new RoutedHttpAcquisitionSessionAuditTests.RecordingCustodyStore { RefuseFallback = true };

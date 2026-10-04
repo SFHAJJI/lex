@@ -455,6 +455,7 @@ public sealed class LuxembourgRepeatedEnumerationExecutor
         _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
         _testHandlerOverride = testHandlerOverride;
         _reopenGlue = new RepeatedEnumerationDeliveryReopenGlue(_custodyStore);
+        _gatewayTimeouts = new LuxembourgGatewayTimeouts(_timeProvider);
     }
 
     /// <summary>One partition, one session, two passes.</summary>
@@ -1056,6 +1057,23 @@ public sealed class LuxembourgRepeatedEnumerationExecutor
         catch (System.Text.Json.JsonException) { return false; }
     }
 
+    // Declared here, after RunCoverCoreAsync, not with the other fields: the construction-surface pins name that method's
+    // compiler-generated lambdas by its member ordinal, which a field declared before it would move.
+    // One per executor, so one per acquisition run: the Legilux gateway read-timeout policy and breaker.
+    private readonly LuxembourgGatewayTimeouts _gatewayTimeouts;
+
+    // A refusal whose retained body is the Legilux gateway's exact read-timeout envelope, after the glue spent the sends
+    // the policy allows (or allowed none, for a first-pass COUNT).
+    private async Task<bool> IsGatewayTimeoutAsync(LuxembourgEnumerationRefusalDetail refusal, CancellationToken cancellationToken)
+    {
+        if (refusal.Code != LuxembourgEnumerationRefusal.StatusNotAdmitted ||
+            refusal.TerminalStatus != 500 || refusal.ResponseBodySha256 is not { } digest)
+            return false;
+        var bytes = await CustodyRestore.ReadByDigestCheckedAsync(_custodyStore, digest, cancellationToken)
+            .ConfigureAwait(false);
+        return LuxembourgGatewayTimeouts.IsEnvelope(bytes.Span);
+    }
+
     private sealed record PassOutcome(LuxembourgDeliveryPass? Pass, LuxembourgEnumerationRefusalDetail? Refusal);
 
     private async Task<PassOutcome> RunPassAsync(
@@ -1071,19 +1089,31 @@ public sealed class LuxembourgRepeatedEnumerationExecutor
         CancellationToken cancellationToken,
         long maximumLeafRows)
     {
+        // An open gateway breaker sends nothing more in this run: the publisher answered nothing but read timeouts since
+        // its last admitted page, and the run ends with a typed refusal to be resumed once it recovers.
+        if (_gatewayTimeouts.IsOpen)
+        {
+            return new PassOutcome(null, new LuxembourgEnumerationRefusalDetail(
+                LuxembourgEnumerationRefusal.ObservationNotExecuted, null, null, null, null, null, null, [],
+                $"not attempted: {_gatewayTimeouts.Consecutive} consecutive Legilux gateway read timeouts since the last "
+                + "admitted page; resume after the publisher recovers"));
+        }
+
         var countBound = request.InvariantPlan.BindCount(
             request.InvariantPlanResourceId, NewUrn(), NewUrn(), request.SetId, pass, request.Partition,
             request.RendererSource);
         var countIdentity = RepeatedEnumerationObservationIdentity.NewObservation();
+        // A first-pass COUNT is never retried on a gateway read timeout (it splits below, which is cheaper than repeating
+        // a 45-second query); a second-pass COUNT is, because losing it would discard the completed first pass.
         var countOutcome = ToObserveOutcome(await _reopenGlue.ObserveAsync(
                 session, countBound.Request, profile, executorWrittenMembership, currentCount, setCount,
-                cancellationToken, wireBudget)
+                cancellationToken, wireBudget, _gatewayTimeouts, retryGatewayTimeout: pass == LuxembourgQueryPass.Pass2)
             .ConfigureAwait(false));
         if (countOutcome.Refusal is not null)
         {
             // A retained, explicit query-capacity failure is a reason to subdivide, never
             // evidence of any rows. Other HTTP errors and challenges remain hard refusals.
-            if (pass == LuxembourgQueryPass.Pass1 &&
+            if (pass == LuxembourgQueryPass.Pass1 && !_gatewayTimeouts.IsOpen &&
                 await IsCountCapacityFailureAsync(countOutcome.Refusal, cancellationToken).ConfigureAwait(false))
             {
                 var failure = countOutcome.Refusal;
@@ -1093,6 +1123,24 @@ public sealed class LuxembourgRepeatedEnumerationExecutor
                     failure.ObservedMediaType, null, failure.UnenforcedDigests,
                     "retained initial COUNT reports publisher query capacity failure; smaller proven leaves required"));
             }
+
+            // A COUNT that answered the gateway's read timeout on every allowed send: on the second pass the completed
+            // first pass stays retained and unused and smaller leaves prove the range instead (nothing here asserts the
+            // range's size); with the breaker open, on either pass, the run stops.
+            if ((pass == LuxembourgQueryPass.Pass2 || _gatewayTimeouts.IsOpen) &&
+                await IsGatewayTimeoutAsync(countOutcome.Refusal, cancellationToken).ConfigureAwait(false))
+            {
+                var failure = countOutcome.Refusal;
+                var stop = _gatewayTimeouts.IsOpen;
+                return new PassOutcome(null, new LuxembourgEnumerationRefusalDetail(
+                    stop ? LuxembourgEnumerationRefusal.StatusNotAdmitted : LuxembourgEnumerationRefusal.PartitionRequired,
+                    failure.RequestOrdinal, failure.AttemptOrdinalReached, failure.TerminalStatus, failure.ResponseBodySha256,
+                    failure.ObservedMediaType, null, failure.UnenforcedDigests,
+                    (pass == LuxembourgQueryPass.Pass1 ? "first-pass COUNT: " : "second-pass COUNT: ") + (stop
+                        ? $"Legilux gateway read timeout, {_gatewayTimeouts.Consecutive} consecutive since the last admitted page, so this run stops; resume after the publisher recovers"
+                        : "retained Legilux gateway read timeout on every allowed send of one plan item; the completed first pass stays retained and unused; smaller proven leaves required")));
+            }
+
             return new PassOutcome(null, countOutcome.Refusal);
         }
 
@@ -1174,12 +1222,30 @@ public sealed class LuxembourgRepeatedEnumerationExecutor
                 cursor, selected, countObservation.HttpEvidenceRef, request.RendererSource);
             var pageOutcome = ToObserveOutcome(await _reopenGlue.ObserveAsync(
                     session, pageBound.Request, profile, executorWrittenMembership, currentCount, setCount,
-                    cancellationToken, wireBudget)
+                    cancellationToken, wireBudget, _gatewayTimeouts, retryGatewayTimeout: true)
                 .ConfigureAwait(false));
             if (pageOutcome.Refusal is not null)
             {
+                // A page that answered the gateway's read timeout on every allowed send: this leaf's partial passes stay
+                // retained and unused and smaller leaves prove the range instead; with the breaker open, the run stops.
+                if (await IsGatewayTimeoutAsync(pageOutcome.Refusal, cancellationToken).ConfigureAwait(false))
+                {
+                    var failure = pageOutcome.Refusal;
+                    var stop = _gatewayTimeouts.IsOpen;
+                    var where = $"pass {(pass == LuxembourgQueryPass.Pass1 ? 1 : 2)} page {deliveryPass.Pages.Count + 1}: ";
+                    return new PassOutcome(null, new LuxembourgEnumerationRefusalDetail(
+                        stop ? LuxembourgEnumerationRefusal.StatusNotAdmitted : LuxembourgEnumerationRefusal.PartitionRequired,
+                        failure.RequestOrdinal, failure.AttemptOrdinalReached, failure.TerminalStatus, failure.ResponseBodySha256,
+                        failure.ObservedMediaType, null, failure.UnenforcedDigests,
+                        where + (stop
+                            ? $"Legilux gateway read timeout, {_gatewayTimeouts.Consecutive} consecutive since the last admitted page, so this run stops; resume after the publisher recovers"
+                            : "retained Legilux gateway read timeout on every allowed send of one plan item; this leaf's partial passes stay retained and unused; smaller proven leaves required")));
+                }
+
                 return new PassOutcome(null, pageOutcome.Refusal);
             }
+
+            _gatewayTimeouts.RecordPageAdmitted();
 
             var transport = pageOutcome.Transport!;
             IReadOnlyList<LuxembourgQueryCursor> rows;
