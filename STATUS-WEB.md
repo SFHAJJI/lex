@@ -116,14 +116,24 @@ below:
       populations take: the EU original and consolidated wordings, and the Luxembourg legislative population scope. It
       is held brotli-encoded, with its derive checkpoint and the file digests of the mount the live build writes from
       the same acquisitions.
-    - **The tool.** It is laid out as the CI runtime artifact is, so the release command binds it to the checkout.
+    - **The tool.** It is the dll the job built from this checkout. Its informational version must name the commit
+      before it is laid out as the CI runtime artifact is, and the release command binds it to the checkout.
     - **The derivation.** Two `Lex.V3.Tool derive` processes must agree file for file. Their files must equal the live
       build's, and nothing may reach the proxy-variable trap.
     - **The image.** The image is then built twice and must be identical. It is verified, rehearsal-signed, published
       and read back.
-    - **The card over that mount.** Locally, on 2026-10-04, its gates passed: the three EU `as_of` arms (6 cases each,
-      shuffles caught), the refusal set and the retrieval set (26 cases). The two Luxembourg temporal arms are not
-      measured, because the fixture's population scope holds no Luxembourg state.
+    - **The card over that mount.** CI requires the three EU `as_of` arms, the refusal set and the retrieval set to
+      have cases and pass every gate (review of #930: a card of `not_measured` arms passed before). On 2026-10-04 they
+      did, in CI and locally: the EU arms 6 cases each with their shuffles caught, the refusal set 9 cases, the retrieval
+      set 26.
+    - **What it does not cover: Luxembourg text.** The Luxembourg half of this custody is the legislative scope's
+      fixture. It holds one work, whose four members are unavailable or rights-withheld, so the derived Luxembourg
+      index holds no state, article or relation (review of #930).
+      - The two Luxembourg temporal arms are therefore not measured.
+      - The refusal set leaves nine codes not produced, eight of them for want of a Luxembourg state held alone on its
+        date.
+      - Deriving Luxembourg documents and states from custody is held only by the act-range rows of
+        `V3OfflineMountTests` (#899) until the population custody exists.
   - Waits: the populations' custody for the real run, and the owner's production signing identity.
 - **Zero-traffic deploy, probes, promotion, a second revision, rollback, V2 retired:** wait for Azure.
 - **Owner sign-off:** the owner's.
@@ -142,7 +152,8 @@ below:
 1. Done (2026-10-04): a population-mount mode for J2, J5, J6, J7 and J8's events. It runs when the population mount
    exists.
 2. Done in CI (2026-10-04) over fixture custody: the release command's custody path, end to end with this commit's own
-   derive tool. The run on the populations' custody waits for that custody.
+   derive tool. The fixture's Luxembourg half derives no state or text (above), and the run on the populations' custody
+   waits for that custody.
 
 ## Served today
 

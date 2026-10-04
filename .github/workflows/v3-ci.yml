@@ -609,7 +609,10 @@ jobs:
         run: |
           set -euo pipefail
           # The derive tool laid out as the CI runtime artifact is (runtime/ beside source-head.txt), so the release
-          # command binds it to this checkout; the test step above built it.
+          # command binds it to this checkout. The test step above built it; the stamp is written only once the dll's
+          # own informational version names this commit (the SDK's +<commit> suffix), so the binding is checked, not
+          # assumed.
+          grep -aqF "+$CANDIDATE_SHA" src/Lex.V3.Tool/bin/Release/net10.0/Lex.V3.Tool.dll
           tool="$RUNNER_TEMP/derive-tool"
           mkdir -p "$tool/runtime"
           cp -a src/Lex.V3.Tool/bin/Release/net10.0/. "$tool/runtime/"
@@ -628,6 +631,8 @@ jobs:
             and (.v2Absent.failures | length) == 0
             and .signatureVerified == true
             and .card.over == "the machine gates over this mount"
+            and ([.card.sets[] | select(.arm | startswith("EU as_of")) | select(.cases > 0 and all(.gates[]; endswith(": pass")))] | length) == 3
+            and ([.card.sets[] | select(.set == "refusal" or .set == "retrieval") | select(.cases > 0 and all(.gates[]; endswith(": pass")))] | length) == 2
             and (.release.readBackFailures | length) == 0
             and .removed.work == true and .removed.artifacts == true
           ' "$RUNNER_TEMP/custody-rehearsal.json"
