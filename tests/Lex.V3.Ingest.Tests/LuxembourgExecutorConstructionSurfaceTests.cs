@@ -234,6 +234,9 @@ public sealed class LuxembourgExecutorConstructionSurfaceTests
                 "constructor public instance " + N + "LuxembourgRepeatedEnumerationExecutor::.ctor("
                 + "Lex.V3.Contracts.Custody.ICustodyStore, System.TimeProvider) -> "
                 + N + "LuxembourgRepeatedEnumerationExecutor",
+                // A document phase's shared session holds the executor that opened it: a holder, not a door.
+                "field private instance " + N + "LuxembourgRepeatedEnumerationExecutor+DocumentGetBatch::_executor -> "
+                + N + "LuxembourgRepeatedEnumerationExecutor",
             },
             ConstructionSurface.Of(typeof(LuxembourgRepeatedEnumerationExecutor)).ToArray());
     }

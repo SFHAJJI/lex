@@ -523,14 +523,22 @@ public sealed class GuardedConstructionCensusTests
                     + "Lex.V3.Ingest.Luxembourg.LuxembourgConsolidationByActResult::Success, "
                     + "method public instance "
                     + "Lex.V3.Ingest.Luxembourg.LuxembourgConsolidationByActProducer::RunAsync",
+                // The document phase's shared session (DocumentGetBatch), its attempt loop and the reader's doors for a shared
+                // session's GETs and refusals produce attempt results too, beside the single-GET door.
                 "Lex.V3.Ingest.Luxembourg.LuxembourgDocumentGetAttemptResult: constructor private instance Lex.V3.Ingest.L"
                     + "uxembourg.LuxembourgDocumentGetAttemptResult::.ctor, method internal instance Lex.V3.Ingest.Luxembourg.Lu"
-                    + "xembourgQueryExecutionAdapter+DocumentReplay::FetchAsync, method public instance Lex.V3.Ingest.Luxembourg"
-                    + ".LuxembourgRepeatedEnumerationExecutor::RunDocumentGetAsync, method public static Lex.V3.Ingest.Luxembour"
-                    + "g.LuxembourgDocumentFetchRouteReader::ReopenAsync, method public static Lex.V3.Ingest.Luxembourg.Luxembou"
-                    + "rgDocumentGetAttemptResult::Executed, method public static Lex.V3.Ingest.Luxembourg.LuxembourgDocumentGet"
-                    + "AttemptResult::Refused, method public static Lex.V3.Ingest.Luxembourg.LuxembourgDocumentGetAttemptResult:"
-                    + ":RobotsRefused",
+                    + "xembourgQueryExecutionAdapter+DocumentReplay::FetchAsync, method internal instance Lex.V3.Ingest.Luxembour"
+                    + "g.LuxembourgRepeatedEnumerationExecutor+DocumentGetBatch::RunAsync, method internal static Lex.V3.Ingest.Lu"
+                    + "xembourg.LuxembourgDocumentFetchRouteReader::ReopenAdmittedAsync, method internal static Lex.V3.Ingest.Luxe"
+                    + "mbourg.LuxembourgDocumentFetchRouteReader::ReopenRobotsRefusalAsync, method private instance Lex.V3.Ingest."
+                    + "Luxembourg.LuxembourgRepeatedEnumerationExecutor::RunOpenedDocumentAsync, method private static Lex.V3.Inge"
+                    + "st.Luxembourg.LuxembourgDocumentFetchRouteReader::ReopenCoreAsync, method private static Lex.V3.Ingest.Lux"
+                    + "embourg.LuxembourgQueryExecutionAdapter+DocumentReplay::ReopenExecutedAsync, method public instance Lex.V3."
+                    + "Ingest.Luxembourg.LuxembourgRepeatedEnumerationExecutor::RunDocumentGetAsync, method public static Lex.V3.I"
+                    + "ngest.Luxembourg.LuxembourgDocumentFetchRouteReader::ReopenAsync, method public static Lex.V3.Ingest.Luxemb"
+                    + "ourg.LuxembourgDocumentGetAttemptResult::Executed, method public static Lex.V3.Ingest.Luxembourg.Luxembour"
+                    + "gDocumentGetAttemptResult::Refused, method public static Lex.V3.Ingest.Luxembourg.LuxembourgDocumentGetAtt"
+                    + "emptResult::RobotsRefused",
                 "Lex.V3.Ingest.Luxembourg.LuxembourgDraftGraphBatchCover: constructor private "
                     + "instance Lex.V3.Ingest.Luxembourg.LuxembourgDraftGraphBatchCover::.ctor, "
                     + "method public static "

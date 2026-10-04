@@ -123,7 +123,7 @@ public sealed partial class LuxembourgGazetteAcquisitionTests
     [TestMethod]
     public async Task GazetteCheckpointHoldFailureIsTyped()
     {
-        var store = new EuAcquisitionTestFixture.EuInMemoryCustodyStore(failSchema: "lex-lu-gazette-checkpoint/1");
+        var store = new EuAcquisitionTestFixture.EuInMemoryCustodyStore(failSchema: "lex-lu-gazette-checkpoint/2");
         await CaptureGazetteAsync(0, store, expectHoldFailure: true);
     }
 
@@ -193,6 +193,35 @@ public sealed partial class LuxembourgGazetteAcquisitionTests
         return new(store, result.Checkpoint!, profile, resolved, manifest, addresses,
             documents.Data.HeldEvidenceByOrdinal!, renderer, handler,
             ContractJson.Serialize(new { result.Data.Sets, result.Data.FetchRefusals, result.Data.ContradictoryLegalValues }));
+    }
+
+    [TestMethod]
+    public async Task AVersionOneGazetteCheckpointStillReplaysUnderTheDocumentRulesOfItsVersion()
+    {
+        // The one listing GET is its phase session's first product request, as a session per GET made it: the same record
+        // under /1, without the robots route, is a /1 Gazette checkpoint, replayed under the /1 document rules.
+        var capture = await CaptureGazetteAsync(0);
+        var original = (await capture.Store.ReadByDigestAsync(capture.Checkpoint.Sha256, CancellationToken.None)).ToArray();
+        var root = await GazetteRootAsync(capture);
+        Assert.AreEqual("lex-lu-gazette-checkpoint/2", root["schema"]!.GetValue<string>());
+        CollectionAssert.AreEqual(original, Encoding.UTF8.GetBytes(root.ToJsonString()), "the edits below write canonical bytes");
+
+        async Task<SourceArtifactRef> HoldAsync(JsonNode document)
+        {
+            var bytes = Encoding.UTF8.GetBytes(document.ToJsonString());
+            var receipt = await capture.Store.CreateAsync(bytes, CustodyClass.NightlyFloor90d, CancellationToken.None);
+            return new SourceArtifactRef(capture.Checkpoint.ResourceId, receipt.Reference.ContentSha256);
+        }
+
+        var versionOne = root.DeepClone();
+        versionOne["schema"] = "lex-lu-gazette-checkpoint/1";
+        foreach (var fetch in versionOne["fetches"]!.AsArray()) fetch!.AsObject().Remove("robots");
+        await ReopenGazetteAsync(capture.Store, capture with { Checkpoint = await HoldAsync(versionOne) });
+
+        var mixed = root.DeepClone();
+        mixed["schema"] = "lex-lu-gazette-checkpoint/1";
+        var mixedRef = await HoldAsync(mixed);
+        await Assert.ThrowsExactlyAsync<CustodyIntegrityException>(() => ReopenGazetteAsync(capture.Store, capture with { Checkpoint = mixedRef }));
     }
 
     private static async Task ReopenGazetteAsync(ICustodyStore store, GazetteCapture capture) =>
