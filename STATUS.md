@@ -74,14 +74,15 @@ Decision 95 (lex-governance PR #9, merged 2026-09-30) records these rulings and 
 - The French and English refusal sentences, one short list (ruling 4): PR #793. The 26 sentences the
   live pages say by refusal code, each page's two sentences for a refusal named only by its code,
   and the two hints a card that cannot be shown still carries (the date the history begins, the
-  nearest article ids; review of #793). The French is no longer a draft: under the owner's
-  delegation of 2026-10-02 it was reviewed by Claude (AI reviewer), not by a person, and it ships on
-  the French pages (branch `writer/french-chrome`). The owner may revise any sentence. Printed,
+  nearest article ids; review of #793). The French was reviewed by Claude (AI reviewer) under the
+  owner's delegation of 2026-10-02 and accepted by the owner in person on 2026-10-04 ("i did review
+  it and its ok"); it ships on the French pages. The owner may still revise any sentence. Printed,
   English beside French, by `node web/scripts/refusal-sentences.mjs`; a test holds every served
   sentence to one French sentence. The review's record: `C:\lex-v3\lanes\fr-review\review.md`.
 - The live pages' French interface copy (Decision 41): the whole chrome table, reviewed under the same
   delegation by the same AI reviewer (129 of 370 entries changed, each with its reason and source in
-  the record) and shipped as the French pages under `/fr/`, with a receipt that says so
+  the record), accepted by the owner on 2026-10-04 with the refusal sentences, and shipped as the
+  French pages under `/fr/`, with a receipt that says so
   (`CHROME_REVIEWS` in `web/scripts/localization.mjs`). That includes the absence note ("Ce n’est pas
   un élément de preuve de l’inexistence de l’acte ou de la règle de droit.") and the live banner, both
   claims the owner may revise; `node web/scripts/refusal-sentences.mjs` prints every entry beside its
@@ -95,6 +96,12 @@ Decision 95 (lex-governance PR #9, merged 2026-09-30) records these rulings and 
 ## Blocked on the owner
 
 Only money, legal or public claims, credentials and going live (ruling 7):
-- Azure production credentials and the signing identity, needed by week 5. The Azure subscription is disabled
-  (read-only, observed 2026-10-02 22:33 UTC): going live needs its billing re-enabled.
+- Azure. The subscription is `Disabled` on the control plane (pay-as-you-go, spending limit off; every write is
+  refused with `ReadOnlyDisabledSubscription`, observed 2026-10-04; a CLI account list had cached `Enabled`).
+  Re-enabling it is the owner's billing action. Until then the Container Apps environment `cae-platform-law`
+  stays `ManagedClusterSuspended`, so V2 at law.soufien.lu is down and V3 cannot deploy there, and the
+  `soufien.lu` zone does not resolve publicly. The signing identity is made when the release command can
+  take one (OWNER-BRIEF.md).
 - The weekly 30-minute checkpoint slot.
+- The owner's rulings of 2026-10-04 (relayed by the audit session): the French copy accepted, the acquisition
+  code frozen until the combined mount exists, the stage milestones closed, `OWNER-BRIEF.md` kept current.

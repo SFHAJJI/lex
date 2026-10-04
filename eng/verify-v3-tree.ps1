@@ -19,6 +19,7 @@ function Test-V3TrackedPath {
         'LAUNCH-CONTRACT.md',
         'Lex.V3.slnx',
         'LICENSE',
+        'OWNER-BRIEF.md',
         'README.md',
         'SECURITY.md',
         'STATUS.md',
