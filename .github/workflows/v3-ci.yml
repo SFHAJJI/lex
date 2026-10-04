@@ -550,9 +550,12 @@ jobs:
     # The release pipeline's credential-free rehearsal (web/scripts/image-rehearsal.mjs), without its WSL
     # probes, which need the driver's machine: the image built twice from scratch and held to one
     # digest, verified (V2 absent), rehearsal-signed, its evaluation card the machine gates run over
-    # the journey fixture mount, and the release published, read back and verified. It runs on every
-    # push to v3/integration, so it adds nothing to a pull request's wait, and on a pull request
-    # whose branch name contains "rehearsal", so a change to the rehearsal proves it before merging.
+    # the journey fixture mount, and the release published, read back and verified. Then the release
+    # command's custody path (--custody) with this commit's own derive tool: the mount derived twice
+    # from fixture custody by two processes, held to the live build's files, then the same image steps.
+    # It runs on every push to v3/integration, so it adds nothing to a pull request's wait, and on a
+    # pull request whose branch name contains "rehearsal", so a change to the rehearsal proves it
+    # before merging.
     if: github.event_name == 'push' || contains(github.head_ref, 'rehearsal')
     runs-on: ubuntu-24.04
     timeout-minutes: 45
@@ -594,10 +597,52 @@ jobs:
             and (.release.readBackFailures | length) == 0
             and .removed.work == true and .removed.artifacts == true
           ' "$RUNNER_TEMP/image-rehearsal.json"
+      - name: Write the release custody
+        shell: bash
+        run: |
+          set -euo pipefail
+          V3_WRITE_RELEASE_CUSTODY="$RUNNER_TEMP/release-custody" dotnet test tests/Lex.V3.Ingest.Tests/Lex.V3.Ingest.Tests.csproj --configuration Release --filter "FullyQualifiedName~TheReleaseCustodyIsTheFixtureAcquisitionWrittenWhereTheRehearsalAsks" -v q
+          test -s "$RUNNER_TEMP/release-custody/mount-inputs.json"
+          test -s "$RUNNER_TEMP/release-custody/expected-mount.json"
+      - name: Rehearse the release from custody with this commit's derive tool
+        shell: bash
+        run: |
+          set -euo pipefail
+          # The derive tool laid out as the CI runtime artifact is (runtime/ beside source-head.txt), so the release
+          # command binds it to this checkout. The test step above built it; the stamp is written only once the dll's
+          # own informational version names this commit (the SDK's +<commit> suffix), so the binding is checked, not
+          # assumed.
+          grep -aqF "+$CANDIDATE_SHA" src/Lex.V3.Tool/bin/Release/net10.0/Lex.V3.Tool.dll
+          tool="$RUNNER_TEMP/derive-tool"
+          mkdir -p "$tool/runtime"
+          cp -a src/Lex.V3.Tool/bin/Release/net10.0/. "$tool/runtime/"
+          printf '%s\n' "$CANDIDATE_SHA" > "$tool/source-head.txt"
+          node web/scripts/image-rehearsal.mjs --custody "$RUNNER_TEMP/release-custody/custody" --checkpoint "$RUNNER_TEMP/release-custody/mount-inputs.json" --tool "$tool/runtime/Lex.V3.Tool.dll" --no-probe > "$RUNNER_TEMP/custody-rehearsal.json"
+          jq -e --arg head "$CANDIDATE_SHA" --slurpfile expected "$RUNNER_TEMP/release-custody/expected-mount.json" '
+            .derivation.tool.bound == true
+            and .derivation.tool.sourceHead == $head
+            and .derivation.independentProcesses == 2
+            and ([.derivation.executions[].exitCode] == [0, 0])
+            and .derivation.proxyVariableTrapConnections == 0
+            and .derivation.files == $expected[0].files
+            and .mountKind == "real"
+            and .reproduced.identical == true
+            and (.imageFailures | length) == 0
+            and (.v2Absent.failures | length) == 0
+            and .signatureVerified == true
+            and .card.over == "the machine gates over this mount"
+            and ([.card.sets[] | select(.arm | startswith("EU as_of")) | select(.cases > 0 and all(.gates[]; endswith(": pass")))] | length) == 3
+            and ([.card.sets[] | select(.set == "refusal" or .set == "retrieval") | select(.cases > 0 and all(.gates[]; endswith(": pass")))] | length) == 2
+            and (.release.readBackFailures | length) == 0
+            and .removed.work == true and .removed.artifacts == true
+          ' "$RUNNER_TEMP/custody-rehearsal.json"
       - name: Upload the rehearsal report
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: image-rehearsal
-          path: ${{ runner.temp }}/image-rehearsal.json
+          path: |
+            ${{ runner.temp }}/image-rehearsal.json
+            ${{ runner.temp }}/custody-rehearsal.json
+            ${{ runner.temp }}/release-custody/expected-mount.json
           if-no-files-found: ignore

@@ -20,8 +20,9 @@ A feature pull request edits its lane file, not this one; this file changes for 
 - Driver: Claude Opus 5.5, the sole driver since 2026-10-02. The owner's order: no Codex, no other Claude session,
   full authorisation, and the owner is never asked. Each pull request is reviewed by an independent Claude subagent
   (STATUS-WEB.md, driver decisions). The data lane's file (`STATUS-DATA.md`) is kept by this driver too.
-- Populations: EU run 9 (`C:\lex-v3\eu-population-20261002-9`) has been acquiring since 2026-10-02 (35,728 custody
-  objects at 03:36 UTC on 2026-10-03). The Luxembourg population follows it, sequentially.
+- Populations: EU run 14 (`C:\lex-v3\eu-population-20261004-14`) has been acquiring since 2026-10-04 08:55 UTC, on
+  the resumable tool (#924). Runs 9 to 13 stopped before the end, and their custody is kept. The Luxembourg population
+  follows it, sequentially (STATUS-DATA.md).
 - Plan: `C:\lex-v3\V3-FINISH-PLAN-2026-09-27.md` (owner's copy). Decision 94 (one driver, one queue,
   one review per pull request) merged in lex-governance on 2026-09-27. Launch target 2026-11-07.
 
