@@ -57,7 +57,7 @@ namespace Lex.V3.Ingest.Tests;
 /// </list>
 /// </remarks>
 [TestClass]
-public sealed class LuxembourgRepeatedEnumerationExecutorTests
+public sealed partial class LuxembourgRepeatedEnumerationExecutorTests
 {
     [TestMethod]
     public async Task ADisallowedRobotsAnswerSpendsNoProductRequest()

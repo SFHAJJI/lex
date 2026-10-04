@@ -2,6 +2,54 @@
 
 Updated 2026-10-04.
 
+## A Luxembourg partition cover longer than one robots generation (Claude, 2026-10-04)
+
+Reversible driver decision, for the Luxembourg legislative population run.
+
+**The problem.** A session's robots permission lasts 24 hours from its robots fetch: the profile's maximum robots policy age, checked by UTC and monotonic time at every send. Each family's partition cover ran on one session. The largest family, the regulations' assertions, takes about 22-23.5 hours, and the gateway retries of #925 lengthen it. At expiry:
+- the send gate refuses the next request, and the leaf refuses `ObservationNotExecuted`;
+- the cover and the family are lost, and the run refuses;
+- a resume (#924) starts the family again from its first leaf, into the same wall.
+
+**The fix: one session per robots generation, in the executor.**
+- **Rotation.** `RunCoverCoreAsync` replaces its session between leaves once less than half the maximum age (12 hours) remains. The session gains `RobotsPolicyRemaining`, computed by the same rule as its send gate.
+  - Each new session fetches and evaluates robots for itself (Decision 83).
+  - A robots refusal at a replacement refuses every remaining leaf without sending (Decision 67).
+- **Restart.** A leaf whose session expired while it ran is restarted whole on a fresh session, once; a second expiry refuses.
+- **Leaves never span runs.** A leaf's two passes always share one run.
+
+**The cover proof.**
+- `LuxembourgPartitionCover.TryCreate` now accepts several runs when they form contiguous blocks of leaves: a run that reappears after another refuses `leaf_run_identity_differs`.
+- A cover with a root count stays one run.
+- One interpretation profile is still required, and so one source profile, now also checked.
+- `RunIdentity` is the first leaf's run.
+
+**The checkpoint.**
+- A cover of one run is written as `lex-lu-partition-cover-checkpoint/1`, byte for byte as before.
+- A cover over several runs is written as `/2`, which names its run blocks in order. Each leaf is restored under its own block's run. The first block must be the caller's run, and the blocks must be distinct and add up to the leaves.
+- The adapter, the journal and the catalog are unchanged; a family's run is still its first leaf's.
+
+**Unchanged:**
+- the profile and its digest;
+- the send gate's rule, now shared with `RobotsPolicyRemaining`;
+- the construction-surface pins: the cover's two refusal lambdas keep their ordinals, now applied to the leaves not yet run;
+- the census: the `/2` schema name lives on its nested record, not as a second constant on the static checkpoint class.
+
+**Next:** journal each delivered leaf (`lu-cover-leaf`), so a resume continues an unfinished cover rather than starting the family again (design in the driver's notes).
+
+**Tests:**
+- `LuxembourgCoverRotationTests`:
+  - the session's remaining validity falls with its clock and is zero at 24 hours;
+  - a cover outlasting half a generation replaces its session between leaves. That takes two robots fetches, two runs and a `/2` checkpoint that round-trips; the wrong first run is refused;
+  - a leaf that expires mid-run is restarted whole, once;
+  - a second expiry refuses rather than looping;
+  - a robots 503 at a replacement refuses the remaining leaves with nothing sent.
+- `LuxembourgPartitionCoverTests`: two runs in contiguous blocks make one cover; a run that reappears refuses; two runs beside a root count refuse.
+
+**Local:**
+- the ingest suite's Luxembourg, census, surface, resume and journal tests: 1,193 total, 0 failed, 12 live canaries skipped;
+- the contract cover, surface and census tests pass.
+
 ## Resuming an interrupted acquisition: the journal, the EU half and the Luxembourg half (Claude, 2026-10-03)
 
 Every `build` now writes a progress journal beside its custody (`acquisition-progress-<utc>-<id>.jsonl`): append-only JSON lines chained by SHA-256, one per unit, each appended only after the unit's custody holds returned and naming the unit's existing checkpoint record and the objects it depends on. The first line names the source head, the digest of the arguments (seeds, Luxembourg selection, encoding, `--eu-checkpoint`), the renderer references and the journal it resumed, if any. The journal only says where to look: a resumed run admits each unit through the checked reader a full replay uses.
