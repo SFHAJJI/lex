@@ -133,9 +133,20 @@ public sealed partial class LuxembourgQueryExecutionAdapter
     }
 
     /// <summary>The leaf callback a family's adaptive cover is given: this adapter's journal, for that family's request.</summary>
-    private sealed class CoverLeafJournal(LuxembourgQueryExecutionAdapter adapter, LuxembourgPartitionRunRequest request,
-        CancellationToken cancellationToken)
+    private sealed class CoverLeafJournal
     {
-        internal Task AppendAsync(LuxembourgCoverLeafDelivered leaf) => adapter.JournalCoverLeafAsync(request, leaf, cancellationToken);
+        private readonly LuxembourgQueryExecutionAdapter _adapter;
+        private readonly LuxembourgPartitionRunRequest _request;
+        private readonly CancellationToken _cancellationToken;
+
+        public CoverLeafJournal(LuxembourgQueryExecutionAdapter adapter, LuxembourgPartitionRunRequest request,
+            CancellationToken cancellationToken)
+        {
+            _adapter = adapter;
+            _request = request;
+            _cancellationToken = cancellationToken;
+        }
+
+        internal Task AppendAsync(LuxembourgCoverLeafDelivered leaf) => _adapter.JournalCoverLeafAsync(_request, leaf, _cancellationToken);
     }
 }

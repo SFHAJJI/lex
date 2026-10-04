@@ -127,6 +127,19 @@ public sealed class LuxembourgExecutorConstructionSurfaceTests
                     + "Lex.V3.Ingest.Luxembourg.LuxembourgRepeatedEnumerationExecutor+<>c::<RunCove"
                     + "rCoreAsync>b__13_1(Lex.V3.Contracts.Source.Luxembourg.LuxembourgQueryPartiti"
                     + "onRange) -> Lex.V3.Ingest.Luxembourg.LuxembourgEnumerationRunResult",
+                // The adapter's door to a resumed cover (the resume point and the per-leaf journal callback): it carries
+                // the same results RunCoverCoreAsync produces, and makes none.
+                "method internal instance "
+                    + "Lex.V3.Ingest.Luxembourg.LuxembourgRepeatedEnumerationExecutor::RunAdaptiveC"
+                    + "overAsync(Lex.V3.Ingest.Luxembourg.LuxembourgPartitionRunRequest, "
+                    + "Lex.V3.Contracts.Source.Core.BoundMachineRequest, "
+                    + "Lex.V3.Ingest.WireRequestBudget, System.Threading.CancellationToken, "
+                    + "System.Int64, Lex.V3.Ingest.Luxembourg.LuxembourgCoverResumePoint?, "
+                    + "System.Func<Lex.V3.Ingest.Luxembourg.LuxembourgCoverLeafDelivered, System.Threading.Tasks.Task>?) -> "
+                    + "System.Threading.Tasks.Task<System.ValueTuple<Lex.V3.Contracts.Source.Luxemb"
+                    + "ourg.LuxembourgPartitionChain, "
+                    + "System.Collections.Generic.IReadOnlyList<Lex.V3.Ingest.Luxembourg.Luxembourg"
+                    + "EnumerationRunResult>, System.Int32>>",
                 "method private instance "
                     + "Lex.V3.Ingest.Luxembourg.LuxembourgRepeatedEnumerationExecutor::RunCoverCore"
                     + "Async(Lex.V3.Ingest.Luxembourg.LuxembourgPartitionRunRequest, "
@@ -261,6 +274,10 @@ public sealed class LuxembourgExecutorConstructionSurfaceTests
                 + "::Deconstruct(out Lex.V3.Contracts.Source.Absence.AbsenceFamilyEnumerationProof&, "
                 + "out " + Core + "RepeatedEnumerationDeliveryReceipt&, "
                 + "out " + N + "LuxembourgPartitionRunRequest&) -> System.Void",
+                // The adapter's per-leaf journal callback for one family's cover carries that family's request to the
+                // journal record; it never makes or alters one.
+                "field private instance " + N + "LuxembourgQueryExecutionAdapter+CoverLeafJournal::_request -> "
+                + N + "LuxembourgPartitionRunRequest",
                 "field private instance " + N + "LuxembourgQueryExecutionAdapter+FamilyRowsLeg"
                 + "::<PartitionRequest>k__BackingField -> " + N + "LuxembourgPartitionRunRequest",
                 "property public instance " + N + "LuxembourgQueryExecutionAdapter+FamilyRowsLeg"

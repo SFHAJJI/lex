@@ -559,8 +559,10 @@ public sealed class GuardedConstructionCensusTests
                     + "Deconstruct, "
                     + "constructor internal instance "
                     + "Lex.V3.Ingest.Luxembourg.LuxembourgEnumerationRefusalDetail::.ctor",
+                // The internal RunAdaptiveCoverAsync is the adapter's door to a resumed cover, beside the public one.
                 "Lex.V3.Ingest.Luxembourg.LuxembourgEnumerationRunResult: constructor private instance Lex.V3.Ingest.Luxembourg"
-                    + ".LuxembourgEnumerationRunResult::.ctor, method internal static Lex.V3.Ingest.Luxembourg.LuxembourgEnumerationR"
+                    + ".LuxembourgEnumerationRunResult::.ctor, method internal instance Lex.V3.Ingest.Luxembourg.LuxembourgRepeatedEnu"
+                    + "merationExecutor::RunAdaptiveCoverAsync, method internal static Lex.V3.Ingest.Luxembourg.LuxembourgEnumerationR"
                     + "unResult::DeliveredWithCheckpoint, method private instance Lex.V3.Ingest.Luxembourg.LuxembourgRepeatedEnumerat"
                     + "ionExecutor::RunCoverCoreAsync, method private instance Lex.V3.Ingest.Luxembourg.LuxembourgRepeatedEnumeration"
                     + "Executor::RunPartitionOnSessionAsync, method public instance Lex.V3.Ingest.Luxembourg.LuxembourgRepeatedEnumer"
