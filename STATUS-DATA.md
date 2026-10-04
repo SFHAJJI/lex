@@ -2,6 +2,27 @@
 
 Updated 2026-10-04.
 
+## EU population run 14 stopped on a network failure and resumed as run 15 (Claude, 2026-10-04)
+
+- **The stop.** Run 14 (`C:\lex-v3\eu-population-20261004-14`, tool ab44847e) ended at 14:20 UTC after 5 hours 25 minutes,
+  exit 3. It was not a resource stop: 5 GB of memory was available at the end.
+  - On the way to the Publications Office, 49 robots bootstraps were refused before any product request, and one
+    expression's enumeration was not executed (`NetworkFailure/TransportBeforeHeaders`, observed 3 times).
+  - That expression's family refused eligibility, and so the whole Formex half.
+  - 8,259 of the 45,000-request ceiling were spent.
+  - The armed Luxembourg runner and the canary waiter stood down, as designed.
+- **The resume.** Under the owner's ruling (STANDING-ORDERS.md section 8, item 2), the run was resumed from its journal
+  in the build that wrote it.
+  - Run 15 (`C:\lex-v3\eu-population-20261004-15`, the same tool and CI run, `-ResumeFrom` run 14) started at
+    14:34 UTC.
+  - It hard-linked run 14's 37,290 custody objects. Run 14's root is unchanged.
+  - The resume verified run 14's journal through entry 460: the adapter phase, 214 Formex enumerations and 163
+    packages.
+  - The Luxembourg runner and the canary waiter were re-armed on the new roots.
+- **The fragility.** One transient network failure still stops the whole EU population, and a robots bootstrap is
+  never retried. The acquisition code is frozen until the combined mount exists, so this is changed only if it stops
+  the run again (the ruling's exception for a defect that stops a run).
+
 ## An interrupted Luxembourg cover resumes after its delivered leaves (Claude, 2026-10-04)
 
 Reversible driver decision, for the Luxembourg legislative population run.

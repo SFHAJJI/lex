@@ -2985,6 +2985,12 @@ Each is the driver's call under ruling 7 and can be reversed by a later pull req
   Claude subagent with a fresh context, read-only, reporting only material and reproduced findings
   (`C:\lex-v3\lanes\claude-review-instructions.md`); one repair round, then merge on green CI. The
   owner's open questions are decided by the driver under that delegation and recorded here.
+- Documentation-only pull requests while a population run is active (2026-10-04). Such a pull request changes
+  `OWNER-BRIEF.md` and the status files only: no code, CI or tests. It merges on green CI without the subagent
+  review, and the next reviewed pull request reviews it. Code pull requests still wait for their review.
+  - The reason: on 2026-10-04 a review subagent twice drove the machine's commit headroom to 0.4-0.5 GB, the EU
+    runner's stop line.
+  - The owner's ruling wants the brief current whenever a run starts, ends or stops.
 - EU annexes (2026-10-03): dossier and evidence_bundle list the annexes the corpus classified under
   `annexes_not_served`. Every one is served as `text_not_available`, whatever its disposition, and linked to its
   expression's official source. No annex text is served even where the publisher's PDF has a text layer; that
