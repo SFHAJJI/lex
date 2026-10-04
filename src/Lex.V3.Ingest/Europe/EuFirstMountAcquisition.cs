@@ -197,8 +197,14 @@ public sealed class EuFirstMountAcquisitionResult
     /// <summary>The retained acquisition catalog, present only after its successful custody hold.</summary>
     public SourceArtifactRef? CheckpointRef { get; private init; }
 
-    internal EuFirstMountAcquisitionResult WithCheckpoint(SourceArtifactRef checkpoint) =>
-        new(Run, Formex, LegalNotice, Refusal, Detail) { CheckpointRef = checkpoint };
+    /// <summary>
+    /// What the catalog says about the resumed run that acquired this population: present only when the population was
+    /// acquired across an interruption, so a mount built from it never reads as observed in one window.
+    /// </summary>
+    public AcquisitionResumption? Resumption { get; private init; }
+
+    internal EuFirstMountAcquisitionResult WithCheckpoint(SourceArtifactRef checkpoint, AcquisitionResumption? resumption = null) =>
+        new(Run, Formex, LegalNotice, Refusal, Detail) { CheckpointRef = checkpoint, Resumption = resumption };
 
     public static EuFirstMountAcquisitionResult Success(
         EuQueryExecutionResult run,
@@ -262,21 +268,38 @@ public sealed partial class EuFirstMountAcquisition
     private readonly ICustodyStore _custodyStore;
     private readonly TimeProvider _timeProvider;
     private readonly System.Net.Http.HttpMessageHandler? _testHandlerOverride;
+    private readonly IAcquisitionJournal? _journal;
+    private readonly AcquisitionResume? _resume;
+    private ResumeReplay? _replay;
 
     public EuFirstMountAcquisition(ICustodyStore custodyStore, TimeProvider timeProvider)
         : this(custodyStore, timeProvider, testHandlerOverride: null)
     {
     }
 
-    /// <summary>Test-only seam, the same one every Europe producer declares; production code calls the public constructor.</summary>
+    /// <summary>
+    /// An acquisition that writes each unit it holds to <paramref name="journal"/> and, given <paramref name="resume"/>,
+    /// replays the units an interrupted run's journal names instead of acquiring them again (<see cref="PrepareResumeAsync"/>).
+    /// </summary>
+    public EuFirstMountAcquisition(ICustodyStore custodyStore, TimeProvider timeProvider,
+        IAcquisitionJournal? journal, AcquisitionResume? resume)
+        : this(custodyStore, timeProvider, testHandlerOverride: null, journal, resume)
+    {
+    }
+
+    /// <summary>Test-only seam, the same one every Europe producer declares; production code calls a public constructor.</summary>
     internal EuFirstMountAcquisition(
         ICustodyStore custodyStore,
         TimeProvider timeProvider,
-        System.Net.Http.HttpMessageHandler? testHandlerOverride)
+        System.Net.Http.HttpMessageHandler? testHandlerOverride,
+        IAcquisitionJournal? journal = null,
+        AcquisitionResume? resume = null)
     {
         _custodyStore = custodyStore ?? throw new ArgumentNullException(nameof(custodyStore));
         _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
         _testHandlerOverride = testHandlerOverride;
+        _journal = journal;
+        _resume = resume;
     }
 
     /// <param name="celex">The work, which must be an Appendix A seed for the adapter to admit it.</param>
@@ -367,8 +390,18 @@ public sealed partial class EuFirstMountAcquisition
         }
 
         var sparqlWitness = censusFamilies[0].SourceWitness;
+        // A resumed acquisition reopens everything the interrupted run's journal names before its first request (here,
+        // unless the caller already prepared it), so a journal that does not describe this acquisition refuses while
+        // nothing has been spent.
+        if (_resume is not null && _replay is null)
+            await PrepareResumeAsync(selected, rendererSources, null, cancellationToken).ConfigureAwait(false);
+        if (_replay?.Catalog is not null)
+            throw new InvalidOperationException("The interrupted run retained its EU catalog; a resumed build reuses it through ReuseAsync.");
+
         // Decision 95: acquire the rights receipt before population traffic. Rebinding below
         // retains the same hops under the adapter's eventual identity without another GET.
+        // A resumed run renews it too: replayed observations stay historical, and this build's
+        // rights receipt is this build's own.
         var noticeProducer = new EuLegalNoticeRouteProducer(_custodyStore, _timeProvider, _testHandlerOverride);
         var capturedNotice = await noticeProducer.CaptureAsync(
             rendererSources.DocumentFetch, wireBudget, cancellationToken).ConfigureAwait(false);
@@ -379,19 +412,31 @@ public sealed partial class EuFirstMountAcquisition
                 $"{capturedNotice.Refusal}: {capturedNotice.Detail}");
         }
 
-        var executor = new EuRepeatedEnumerationExecutor(_custodyStore, _timeProvider, _testHandlerOverride);
-        var adapter = new EuQueryExecutionAdapter(_custodyStore, executor);
-        var run = await adapter.RunAsync(
-                censusFamilies,
-                new EuObjectFactsBatchPolicy(
-                    EuObjectFactsDiscoveryPlan.Create(), NewUrn(), rendererSources.ObjectFacts, sparqlWitness),
-                rendererSources.Witness,
-                sparqlWitness,
-                rendererSources.DocumentFetch,
-                documentFetchWitness!,
-                wireBudget,
-                cancellationToken)
-            .ConfigureAwait(false);
+        // A journaled adapter run was reopened before the first request through its own checked reader and keeps the
+        // interrupted run's identity; only an adapter run the journal does not name runs live.
+        var replayedRun = _replay?.Run;
+        EuQueryExecutionResult run;
+        if (replayedRun is not null)
+        {
+            run = replayedRun;
+        }
+        else
+        {
+            var executor = new EuRepeatedEnumerationExecutor(_custodyStore, _timeProvider, _testHandlerOverride);
+            var adapter = new EuQueryExecutionAdapter(_custodyStore, executor);
+            run = await adapter.RunAsync(
+                    censusFamilies,
+                    new EuObjectFactsBatchPolicy(
+                        EuObjectFactsDiscoveryPlan.Create(), NewUrn(), rendererSources.ObjectFacts, sparqlWitness),
+                    rendererSources.Witness,
+                    sparqlWitness,
+                    rendererSources.DocumentFetch,
+                    documentFetchWitness!,
+                    wireBudget,
+                    cancellationToken)
+                .ConfigureAwait(false);
+        }
+
         if (run.Refusal is { } runRefusal)
         {
             return EuFirstMountAcquisitionResult.Refused(
@@ -400,7 +445,13 @@ public sealed partial class EuFirstMountAcquisition
                 run);
         }
 
-        var formex = await new EuFormexPackagePopulationProducer(_custodyStore, _timeProvider, _testHandlerOverride)
+        // The adapter checkpoint is held before the adapter returns, so it is journaled now, replayed or live alike.
+        if (_journal is not null && run.AcquisitionCheckpointRef is { } query)
+            await _journal.AppendAsync(AcquisitionJournal.EuropeAdapterPhase, AdapterKey,
+                AcquisitionJournal.Payload(query), [query.Sha256]).ConfigureAwait(false);
+
+        var progress = _replay?.Formex ?? (_journal is null ? null : new EuFormexPopulationProgress(_journal));
+        var formex = await new EuFormexPackagePopulationProducer(_custodyStore, _timeProvider, _testHandlerOverride, progress)
             .RunAsync(run, rendererSources.FormexManifestation, rendererSources.DocumentFetch, sparqlWitness, wireBudget, cancellationToken)
             .ConfigureAwait(false);
         if (!formex.Delivered)
@@ -436,9 +487,22 @@ public sealed partial class EuFirstMountAcquisition
 
         try
         {
+            // A resumed run's catalog says so: what it replayed and what it acquired live, per phase, and its own
+            // spend and time so far (AcquisitionResumption). A run that was not resumed retains the catalog it always did.
+            var resumption = _resume?.Summarize(
+            [
+                new AcquisitionResumedPhase(AcquisitionJournal.EuropeAdapterPhase, replayedRun is null ? 0 : 1, replayedRun is null ? 1 : 0),
+                new AcquisitionResumedPhase(AcquisitionJournal.EuropeFormexEnumerationPhase,
+                    progress?.ReplayedEnumerations ?? 0, progress?.LiveEnumerations ?? 0),
+                new AcquisitionResumedPhase(AcquisitionJournal.EuropeFormexPackagePhase,
+                    progress?.ReplayedPackages ?? 0, progress?.LivePackages ?? 0),
+            ], wireBudget.Spent, _timeProvider.GetUtcNow());
             var checkpoint = await RetainAcquisitionAsync(selected, rendererSources, run, formex, legalNotice,
-                cancellationToken).ConfigureAwait(false);
-            return EuFirstMountAcquisitionResult.Success(run, formex, legalNotice).WithCheckpoint(checkpoint);
+                resumption, cancellationToken).ConfigureAwait(false);
+            if (_journal is not null)
+                await _journal.AppendAsync(AcquisitionJournal.EuropeCatalogPhase, CatalogKey,
+                    AcquisitionJournal.Payload(checkpoint), [checkpoint.Sha256]).ConfigureAwait(false);
+            return EuFirstMountAcquisitionResult.Success(run, formex, legalNotice).WithCheckpoint(checkpoint, resumption);
         }
         catch (Exception exception) when (exception is CustodyRequiredException or CustodyIntegrityException)
         {

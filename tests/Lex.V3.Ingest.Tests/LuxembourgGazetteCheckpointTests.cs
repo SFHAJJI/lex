@@ -146,7 +146,8 @@ public sealed partial class LuxembourgGazetteAcquisitionTests
         GazetteCheckpointHandler Handler, string ResultJson);
 
     private static async Task<GazetteCapture> CaptureGazetteAsync(int shape,
-        EuAcquisitionTestFixture.EuInMemoryCustodyStore? suppliedStore = null, bool expectHoldFailure = false)
+        EuAcquisitionTestFixture.EuInMemoryCustodyStore? suppliedStore = null, bool expectHoldFailure = false,
+        LuxembourgAcquisitionProgress? progress = null)
     {
         var store = suppliedStore ?? new EuAcquisitionTestFixture.EuInMemoryCustodyStore();
         var evidence = new SourceArtifactRef(NewUrn(), new string('1', 64));
@@ -169,7 +170,10 @@ public sealed partial class LuxembourgGazetteAcquisitionTests
         var renderer = LuxembourgAcquisitionTestFixture.DocumentFetchRendererSource(420);
         var handler = new GazetteCheckpointHandler(shape);
         var adapter = new LuxembourgQueryExecutionAdapter(store,
-            new LuxembourgRepeatedEnumerationExecutor(store, new LuxembourgAcquisitionTestFixture.FixedTimeProvider(), handler), profile);
+            new LuxembourgRepeatedEnumerationExecutor(store, new LuxembourgAcquisitionTestFixture.FixedTimeProvider(), handler), profile)
+        {
+            Progress = progress,
+        };
         var documents = await adapter.RunDocumentAcquisitionWithCheckpointAsync(manifest, addresses, renderer,
             LuxembourgAcquisitionTestFixture.TestWireBudget(), CancellationToken.None);
         Assert.IsNull(documents.Data.Refusal, documents.Data.Refusal?.Detail);

@@ -242,22 +242,29 @@ public sealed partial class EuFormexPackagePopulationProducer
     private readonly ICustodyStore _custodyStore;
     private readonly EuFormexManifestationEnumerationProducer _enumerations;
     private readonly EuFormexPackageAcquisitionProducer _acquisitions;
+    private readonly EuFormexPopulationProgress? _progress;
 
     public EuFormexPackagePopulationProducer(ICustodyStore custodyStore, TimeProvider timeProvider)
         : this(custodyStore, timeProvider, testHandlerOverride: null)
     {
     }
 
-    /// <summary>Test-only seam, the same one every Europe producer declares.</summary>
+    /// <summary>
+    /// Test-only seam, the same one every Europe producer declares, and the journaled acquisition's door:
+    /// <paramref name="progress"/> carries the journal each unit is written to once it is held, and the units an
+    /// interrupted run finished, already reopened by <see cref="PrepareResumeAsync"/>.
+    /// </summary>
     internal EuFormexPackagePopulationProducer(
         ICustodyStore custodyStore,
         TimeProvider timeProvider,
-        System.Net.Http.HttpMessageHandler? testHandlerOverride)
+        System.Net.Http.HttpMessageHandler? testHandlerOverride,
+        EuFormexPopulationProgress? progress = null)
     {
         _custodyStore = custodyStore ?? throw new ArgumentNullException(nameof(custodyStore));
         ArgumentNullException.ThrowIfNull(timeProvider);
         _enumerations = new EuFormexManifestationEnumerationProducer(custodyStore, timeProvider, testHandlerOverride);
         _acquisitions = new EuFormexPackageAcquisitionProducer(custodyStore, timeProvider, testHandlerOverride);
+        _progress = progress;
     }
 
     /// <param name="run">The complete EU run whose expressions are populated; the reconciliation binds to it by reference.</param>
@@ -330,6 +337,12 @@ public sealed partial class EuFormexPackagePopulationProducer
                 productRequests);
         }
 
+        // A journaled run writes each unit with the digest of the input it was acquired for, the same digest the
+        // population checkpoint carries, so a resume can tell this run's units from another's before any request.
+        // A full replay never journals: it acquires nothing.
+        var progress = context.IsReplay ? null : _progress;
+        var inputDigest = progress?.Journal is null ? null : PopulationInputDigest(run);
+
         // Every request is bound before the first one is sent. Binding is pure (it canonicalizes
         // the expression's selection and nothing else), so an expression that cannot be enumerated
         // refuses the run before any family's traffic is spent on a result that is refused anyway.
@@ -381,10 +394,37 @@ public sealed partial class EuFormexPackagePopulationProducer
             var batch = new List<EuFormexManifestationEnumerationResult>(requests.Count);
             foreach (var request in requests)
             {
-                var enumeration = context.IsReplay
-                    ? await context.EnumerateAsync(_custodyStore, familyKey, request.Expression, cancellationToken).ConfigureAwait(false)
-                    : await _enumerations.RunAsync(request.Request!, sourceWitness!, cancellationToken).ConfigureAwait(false);
-                if (!context.IsReplay && enumeration.Delivered) context.CaptureEnumeration(familyKey, enumeration);
+                // Three sources, one walk. A full replay reopens each unit at its position in the checkpoint; a
+                // resumed run takes the units its interrupted run finished, each already reopened by its own checked
+                // reader before any request; every other unit is acquired live. Replayed and live units are recorded
+                // alike, in walk order, so the population checkpoint a resumed run retains names every unit and
+                // reopens exactly as an uninterrupted run's does.
+                EuFormexManifestationEnumerationResult enumeration;
+                if (context.IsReplay)
+                {
+                    enumeration = await context.EnumerateAsync(_custodyStore, familyKey, request.Expression, cancellationToken)
+                        .ConfigureAwait(false);
+                }
+                else if (progress is not null && progress.Enumerations.Remove(request.Expression.CanonicalContentSha256, out var resumed))
+                {
+                    enumeration = resumed;
+                    progress.ReplayedEnumerations++;
+                }
+                else
+                {
+                    enumeration = await _enumerations.RunAsync(request.Request!, sourceWitness!, cancellationToken).ConfigureAwait(false);
+                    if (progress is not null) progress.LiveEnumerations++;
+                }
+
+                if (!context.IsReplay && enumeration.Delivered)
+                {
+                    var captured = context.CaptureEnumeration(familyKey, enumeration);
+                    if (progress?.Journal is { } journal)
+                        await journal.AppendAsync(AcquisitionJournal.EuropeFormexEnumerationPhase, captured.ExpressionSha256,
+                            AcquisitionJournal.Payload(new JournaledEnumeration(inputDigest!, captured)),
+                            [captured.Checkpoint.Sha256]).ConfigureAwait(false);
+                }
+
                 productRequests += enumeration.ProductRequestCount;
                 batch.Add(enumeration);
                 enumerations.Add(enumeration);
@@ -412,29 +452,46 @@ public sealed partial class EuFormexPackagePopulationProducer
                 }
 
                 eligible++;
-                var expressionCelex = workCelex;
-                if (expressionCelex is null)
+                if (!TryAdmitCelex(run, workCelex, enumeration.Expression.Identity.PublisherWorkId,
+                        context.OriginalWorksOnly, out var expressionCelex))
                 {
-                    expressionCelex = EuObservedWorkIdentity.Resolve(run,
-                        enumeration.Expression.Identity.PublisherWorkId, context.OriginalWorksOnly);
-                    if (expressionCelex is null && (context.OriginalWorksOnly ||
-                        !EuObservedWorkIdentity.IsProven(run, enumeration.Expression.Identity.PublisherWorkId)))
-                    {
-                        outcomes.Add(EuFormexPackageOutcome.NotAcquired(
-                            enumeration.Expression, EuFormexPackageNotAcquiredReason.IdentityNotAdmitted,
-                            context.OriginalWorksOnly
-                                ? "the expression's work does not bind to exactly one reviewed Appendix A CELEX"
-                                : "the expression's work has no admitted original root or proven census relation"));
-                        continue;
-                    }
-
+                    outcomes.Add(EuFormexPackageOutcome.NotAcquired(
+                        enumeration.Expression, EuFormexPackageNotAcquiredReason.IdentityNotAdmitted,
+                        context.OriginalWorksOnly
+                            ? "the expression's work does not bind to exactly one reviewed Appendix A CELEX"
+                            : "the expression's work has no admitted original root or proven census relation"));
+                    continue;
                 }
 
-                var acquisition = context.IsReplay
-                    ? await context.AcquireAsync(_custodyStore, enumeration, run, expressionCelex, documentFetchRendererSource, cancellationToken).ConfigureAwait(false)
-                    : await _acquisitions.RunAsync(enumeration, run.CorpusRecordSet, expressionCelex,
+                EuFormexPackageAcquisitionResult acquisition;
+                if (context.IsReplay)
+                {
+                    acquisition = await context.AcquireAsync(_custodyStore, enumeration, run, expressionCelex,
+                        documentFetchRendererSource, cancellationToken).ConfigureAwait(false);
+                }
+                else if (progress is not null && progress.Packages.Remove(enumeration.Expression.CanonicalContentSha256, out var resumed))
+                {
+                    acquisition = resumed;
+                    progress.ReplayedPackages++;
+                }
+                else
+                {
+                    acquisition = await _acquisitions.RunAsync(enumeration, run.CorpusRecordSet, expressionCelex,
                         documentFetchRendererSource, wireBudget, cancellationToken).ConfigureAwait(false);
-                if (!context.IsReplay) context.CapturePackage(acquisition);
+                    if (progress is not null) progress.LivePackages++;
+                }
+
+                if (!context.IsReplay)
+                {
+                    // A package whose checkpoint was not retained has nothing to journal; the population refuses it
+                    // when it retains its own checkpoint, and a resume acquires it again.
+                    var captured = context.CapturePackage(acquisition);
+                    if (progress?.Journal is { } journal && captured.Checkpoint is { } held)
+                        await journal.AppendAsync(AcquisitionJournal.EuropeFormexPackagePhase, captured.ExpressionSha256,
+                            AcquisitionJournal.Payload(new JournaledPackage(inputDigest!, familyKey, captured)),
+                            [held.Sha256]).ConfigureAwait(false);
+                }
+
                 acquisitions.Add(acquisition);
                 productRequests += acquisition.ProductRequestCount;
                 outcomes.Add(acquisition.Outcome);
@@ -478,6 +535,10 @@ public sealed partial class EuFormexPackagePopulationProducer
         }
         try
         {
+            // Every unit reopened for a resume was reached by this walk (PrepareResumeAsync walked the same families
+            // the same way); one left over would mean the population closed without a unit the journal promised.
+            if (progress is not null && (progress.Enumerations.Count != 0 || progress.Packages.Count != 0))
+                throw new CustodyIntegrityException("Formex units reopened from the interrupted run's journal were never reached.");
             var checkpoint = await RetainPopulationAsync(run, result, manifestationRendererSource,
                 documentFetchRendererSource, workCelex, context, cancellationToken).ConfigureAwait(false);
             return result.WithCheckpoint(checkpoint);
@@ -487,6 +548,18 @@ public sealed partial class EuFormexPackagePopulationProducer
             return EuFormexPackagePopulationResult.Refused(EuFormexPackagePopulationRefusal.CheckpointNotRetained,
                 exception.Message, enumerations, productRequests);
         }
+    }
+
+    /// <summary>
+    /// The CELEX an acquired package carries: the caller's work, else the run's own binding of the expression's work.
+    /// A work that binds to none is still admitted, without a CELEX, when the census proves it; otherwise no package is
+    /// requested. The live walk and a resume's preparation ask this one question, so they cannot disagree on it.
+    /// </summary>
+    private static bool TryAdmitCelex(EuQueryExecutionResult run, string? workCelex, string publisherWorkId,
+        bool originalWorksOnly, out string? celex)
+    {
+        celex = workCelex ?? EuObservedWorkIdentity.Resolve(run, publisherWorkId, originalWorksOnly);
+        return celex is not null || workCelex is null && !originalWorksOnly && EuObservedWorkIdentity.IsProven(run, publisherWorkId);
     }
 
     private static string NewUrn() => $"urn:uuid:{Guid.NewGuid():D}";

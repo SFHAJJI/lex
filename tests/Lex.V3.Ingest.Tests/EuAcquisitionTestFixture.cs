@@ -1285,14 +1285,15 @@ internal static class EuAcquisitionTestFixture
             Task.FromResult<ReadOnlyMemory<byte>>(_byDigest[contentSha256]);
     }
 
-    internal sealed class FixedTimeProvider : TimeProvider
+    /// <summary>A clock that advances two seconds per reading from a fixed epoch, or from <paramref name="offset"/> after it (a later run).</summary>
+    internal sealed class FixedTimeProvider(TimeSpan offset = default) : TimeProvider
     {
         private static readonly DateTimeOffset Epoch = new(2026, 9, 4, 0, 0, 0, TimeSpan.Zero);
         private long _ticks;
 
         public override long TimestampFrequency => TimeSpan.TicksPerSecond;
 
-        public override DateTimeOffset GetUtcNow() => Epoch.AddTicks(Interlocked.Add(ref _ticks, TimeSpan.FromSeconds(2).Ticks));
+        public override DateTimeOffset GetUtcNow() => Epoch.Add(offset).AddTicks(Interlocked.Add(ref _ticks, TimeSpan.FromSeconds(2).Ticks));
 
         public override long GetTimestamp() => Interlocked.Add(ref _ticks, TimeSpan.FromSeconds(2).Ticks);
     }

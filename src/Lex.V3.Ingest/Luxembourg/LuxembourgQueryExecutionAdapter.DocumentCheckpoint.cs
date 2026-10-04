@@ -25,7 +25,10 @@ public sealed partial class LuxembourgQueryExecutionAdapter
     {
         ArgumentNullException.ThrowIfNull(addresses);
         var snapshot = addresses.ToDictionary();
-        var capture = new DocumentReplay(null);
+        // A journaled run journals each GET under this selection's input digest, and a resumed one replays only the GETs
+        // its interrupted run journaled for the same selection.
+        var capture = Progress is null ? new DocumentReplay(null)
+            : new DocumentReplay(null, Progress, AcquisitionJournal.LuxembourgDocumentPhase, DocumentInputDigest(manifest, snapshot));
         var result = await RunDocumentAcquisitionCoreAsync(manifest, snapshot, renderer, budget, cancellationToken, capture).ConfigureAwait(false);
         if (result.Refusal is not null) return (result, null);
         try
@@ -113,25 +116,55 @@ public sealed partial class LuxembourgQueryExecutionAdapter
         SourceArtifactRef? Route, SourceArtifactRef? Run, string? RequestSha256,
         LuxembourgDocumentGetAttemptRefusal? Refusal, string? DeniedRobotsPath, string? Detail);
 
-    private sealed class DocumentReplay(DocumentCheckpoint? document)
+    /// <summary>
+    /// One phase's GETs: captured live (no checkpoint), or replayed in order from a retained checkpoint. A live phase of
+    /// a journaled run also journals each executed GET under <paramref name="phase"/> and the selection's
+    /// <paramref name="inputSha256"/>, and, resuming, first takes the GET its interrupted run journaled for the same
+    /// selection, row and address, admitted through the retained-route reader a full replay uses.
+    /// </summary>
+    private sealed class DocumentReplay(DocumentCheckpoint? document, LuxembourgAcquisitionProgress? progress = null,
+        string phase = "", string inputSha256 = "")
     {
+        private readonly HashSet<string> _journaled = new(StringComparer.Ordinal);
         private int _index;
         internal List<DocumentFetch> Fetches { get; } = [];
         internal async Task<LuxembourgDocumentGetAttemptResult> FetchAsync(ICustodyStore store,
             LuxembourgRepeatedEnumerationExecutor executor, int ordinal, LuxembourgDocumentFetchAddress address,
             MachineQueryRendererSource renderer, WireRequestBudget budget, CancellationToken cancellationToken)
         {
+            if (document is null && TakeJournaled(ordinal, address) is { } journaled)
+            {
+                try
+                {
+                    var journaledRequest = new LuxembourgDocumentFetchPlan(address).Bind(journaled.PlanId, journaled.InputId, renderer);
+                    var reopened = await LuxembourgDocumentFetchRouteReader.ReopenAsync(store, journaled.Route!, journaled.Run!,
+                        journaled.RequestSha256!, address, journaledRequest.Request, cancellationToken).ConfigureAwait(false);
+                    Fetches.Add(journaled);
+                    progress?.Tally(phase, replayed: true);
+                    await JournalAsync(journaled).ConfigureAwait(false);
+                    return reopened;
+                }
+                catch (Exception exception) when (exception is ArgumentException or CustodyRequiredException
+                    or CustodyIntegrityException)
+                {
+                    // A journaled GET that no longer reopens is fetched again: the journal only says where to look.
+                }
+            }
+
             if (document is null)
             {
                 var bound = new LuxembourgDocumentFetchPlan(address).Bind(
                     $"urn:uuid:{Guid.NewGuid():D}", $"urn:uuid:{Guid.NewGuid():D}", renderer);
                 var attempt = await executor.RunDocumentGetAsync(bound.Request, budget, cancellationToken).ConfigureAwait(false);
                 var route = attempt.Evidence;
-                Fetches.Add(new DocumentFetch(ordinal, address.ArtifactRef, bound.MachinePlanRef.ResourceId,
+                var captured = new DocumentFetch(ordinal, address.ArtifactRef, bound.MachinePlanRef.ResourceId,
                     bound.InputArtifact.ArtifactRef.ResourceId,
                     route is null ? null : new SourceArtifactRef($"urn:uuid:{Guid.NewGuid():D}", CustodyDigest.Of(route.CopyCanonicalBytes())),
                     route?.RunIdentity, route?.Hops[0].LogicalRequestSha256,
-                    attempt.Refusal, attempt.DeniedRobotsPath, attempt.Detail));
+                    attempt.Refusal, attempt.DeniedRobotsPath, attempt.Detail);
+                Fetches.Add(captured);
+                progress?.Tally(phase, replayed: false);
+                await JournalAsync(captured).ConfigureAwait(false);
                 return attempt;
             }
             if (_index >= document.Fetches.Length)
@@ -161,6 +194,44 @@ public sealed partial class LuxembourgQueryExecutionAdapter
         {
             if (document is null || _index != document.Fetches.Length)
                 throw new CustodyIntegrityException("Document checkpoint contains unconsumed fetches.");
+        }
+
+        /// <summary>
+        /// The executed GET the interrupted run journaled for this selection, row and address, taken once. Null when there
+        /// is none, or when the journaled record is not one an executed GET leaves: that GET is fetched again.
+        /// </summary>
+        private DocumentFetch? TakeJournaled(int ordinal, LuxembourgDocumentFetchAddress address)
+        {
+            if (progress?.Resume is not { } resume ||
+                !resume.TryTake(phase, FetchKey(ordinal, address.ArtifactRef), out var payload))
+                return null;
+            try
+            {
+                var journaled = ContractJson.Deserialize<JournaledFetch>(payload.GetRawText());
+                var fetch = journaled.Fetch;
+                return journaled.InputSha256 == inputSha256 && fetch.Ordinal == ordinal && fetch.Address == address.ArtifactRef &&
+                    fetch.Route is not null && fetch.Run is not null && fetch.RequestSha256 is not null &&
+                    fetch.Refusal is null && fetch.DeniedRobotsPath is null && fetch.Detail is null
+                    ? fetch
+                    : null;
+            }
+            catch (Exception exception) when (exception is ArgumentException or JsonException)
+            {
+                return null;
+            }
+        }
+
+        /// <summary>
+        /// Journals an executed GET once its route is held (the executor holds it before it returns). A robots refusal or
+        /// a GET that did not execute is not journaled: a resume asks again in its own window.
+        /// </summary>
+        private async Task JournalAsync(DocumentFetch fetch)
+        {
+            if (progress?.Journal is not { } journal || fetch.Route is null) return;
+            var key = FetchKey(fetch.Ordinal, fetch.Address);
+            if (!_journaled.Add(key)) return;
+            await journal.AppendAsync(phase, key, AcquisitionJournal.Payload(new JournaledFetch(inputSha256, fetch)),
+                [fetch.Route.Sha256]).ConfigureAwait(false);
         }
     }
 }

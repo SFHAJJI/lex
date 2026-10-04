@@ -1,5 +1,3 @@
-using System.Text;
-using Lex.V3.Contracts;
 using Lex.V3.Contracts.Custody;
 using Lex.V3.Contracts.Source.Core;
 
@@ -13,6 +11,19 @@ public sealed partial class EuFirstMountAcquisition
     /// historical. All checkpoint inputs and the current document-fetch renderer bytes verify
     /// before the first publisher request.
     /// </summary>
+    /// <remarks>
+    /// <para>
+    /// A population acquired across an interruption keeps saying so: the renewed catalog carries the
+    /// reused catalog's resumption forward, and with it the windows of the runs that observed it.
+    /// </para>
+    /// <para>
+    /// A resumed build records a resumption of its own for the EU half only when the interrupted run
+    /// acquired that population itself and journaled its catalog: the population was then observed in the
+    /// interrupted run's window, not in this build's. When the interrupted run only renewed a retained
+    /// population this build also names, the EU half was observed by the run that acquired it, as that
+    /// catalog states, and the interruption belongs to the other half's resumption alone.
+    /// </para>
+    /// </remarks>
     public async Task<EuFirstMountAcquisitionResult> ReuseAsync(SourceArtifactRef checkpoint,
         IReadOnlyList<string> expectedSeeds, ReadOnlyMemory<byte> currentDocumentFetchSource,
         WireRequestBudget wireBudget, CancellationToken cancellationToken)
@@ -25,7 +36,7 @@ public sealed partial class EuFirstMountAcquisition
         var seeds = expectedSeeds.Order(StringComparer.Ordinal).ToArray();
         var original = await ReopenAsync(_custodyStore, checkpoint, seeds, cancellationToken).ConfigureAwait(false);
         var bytes = await CustodyRestore.ReadByDigestCheckedAsync(_custodyStore, checkpoint.Sha256, cancellationToken).ConfigureAwait(false);
-        var catalog = ContractJson.Deserialize<AcquisitionCatalog>(new UTF8Encoding(false, true).GetString(bytes.Span));
+        var catalog = ReadCatalog(bytes.Span, out _);
         var sources = await EuRendererSources.FromCustodyAsync(_custodyStore,
             catalog.Renderers.ToDictionary(static role => role.File, static role => role.Reference, StringComparer.Ordinal),
             cancellationToken).ConfigureAwait(false);
@@ -38,9 +49,17 @@ public sealed partial class EuFirstMountAcquisition
                 $"{rights.Refusal}: {rights.Detail}", original.Run, original.Formex);
         try
         {
+            var observedByInterruptedRun = _replay is not null && _replay.Catalog == checkpoint && _replay.CatalogAcquiredByInterruptedRun;
+            var resumption = original.Resumption ?? (observedByInterruptedRun
+                ? _resume!.Summarize([new AcquisitionResumedPhase(AcquisitionJournal.EuropeCatalogPhase, 1, 0)],
+                    wireBudget.Spent, _timeProvider.GetUtcNow())
+                : null);
             var renewed = await RetainAcquisitionAsync(seeds, sources, original.Run!, original.Formex!, rights,
-                cancellationToken).ConfigureAwait(false);
-            return EuFirstMountAcquisitionResult.Success(original.Run!, original.Formex!, rights).WithCheckpoint(renewed);
+                resumption, cancellationToken).ConfigureAwait(false);
+            if (_journal is not null)
+                await _journal.AppendAsync(AcquisitionJournal.EuropeCatalogPhase, CatalogKey,
+                    AcquisitionJournal.Payload(renewed), [renewed.Sha256]).ConfigureAwait(false);
+            return EuFirstMountAcquisitionResult.Success(original.Run!, original.Formex!, rights).WithCheckpoint(renewed, resumption);
         }
         catch (Exception exception) when (exception is CustodyRequiredException or CustodyIntegrityException)
         {
