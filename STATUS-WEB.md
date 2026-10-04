@@ -70,11 +70,14 @@ below:
     Reading the browser line as covering these is a reading the owner has to accept at sign-off.
   - The real-mount mode (`--real-mount`) now walks every journey the fixture mounts walk (2026-10-04). The image
     rehearsal and the deploy probe use the same mode.
-    - In the browser: the eight steps, J2's question, J5's law not held, and the three EU steps when an EU index is
-      mounted.
+    - In the browser: the eight steps, J1's date before the history, J2's question, J5's law not held, and the three
+      EU steps when an EU index is mounted.
+    - J1 asks the fixture's work on 1900-01-01, before any state a population holds. Its reading must refuse
+      `no_version_for_date`, saying no earlier state is held, whatever the API answers.
     - J5 must refuse `identifier_unknown` with the absence note, whatever the API answers.
     - J2 must show the absence note when the population carries no hit.
-    - At the API of the same server: J6, J7 and J8's event polling. J8 verifies the first 25 event permalinks, since a
+    - At the API of the same server: J6, J7 and J8's event polling. J8 follows the log's own cursor to the next page
+      and checks it starts where the first ended, repeating none. It verifies the first 25 event permalinks, since a
       population log holds thousands.
     - A mount with no Luxembourg state, such as the bounded EU-only mount, cannot show J8: its log holds no event, and
       the run fails saying so.
@@ -99,8 +102,10 @@ below:
 
 **Release path**
 - **One command from custody to signed, published, read-back assets.**
-  - The rehearsal from an already-derived mount (`--mount`) passes with a rehearsal identity: on the bounded mount
-    (#862), and in CI's `image-rehearsal` job, on push.
+  - The rehearsal from an already-derived mount (`--mount`) passes with a rehearsal identity in CI's `image-rehearsal`
+    job, on push, and passed on the bounded mount (#862).
+  - With its probes, a rehearsal on the bounded mount now fails journey J8 (its log holds no event; #926). Its
+    rehearsal of record is #862's.
   - **Gap.** The release command's custody path (`--custody`, #911: derive twice from custody, compare every digest,
     then build, sign and publish) has run only against a stand-in derive tool, in `derive-twice.test.mjs`.
   - Waits: the populations' custody for its real run, and the owner's production signing identity.

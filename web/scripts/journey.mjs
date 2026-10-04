@@ -889,6 +889,15 @@ export function expectedFromEnvelope(envelope) {
   throw new Error(`the API answered neither an answer nor a typed refusal: ${JSON.stringify(envelope).slice(0, 200)}`);
 }
 
+/**
+ * What a page is held to once the API has answered its request (`fromApi`): the API's outcome, then the step's own
+ * refinement of it, given what the API answered (`realMountExpectations`), which may hold the page to more.
+ */
+export function expectedForAnswer(expected, envelope) {
+  const derived = { ...expected, ...expectedFromEnvelope(envelope) };
+  return derived.refine ? { ...derived, ...derived.refine(envelope) } : derived;
+}
+
 /** The request a step's page asks: its body, or coverage's, which the page asks as it loads. */
 const COVERAGE_BODY = Object.freeze({ operation_id: "coverage", parameters: Object.freeze({}) });
 
@@ -925,10 +934,7 @@ export async function run(apiOutput, mount, expected, browser, liveRoot) {
     // Asked before the browser, of the same server, with the page's own request.
     const body = expected.step.body ?? COVERAGE_BODY;
     const answer = await fetch(`${api.origin}/api/v3/${body.operation_id}`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
-    const envelope = await answer.json();
-    expected = { ...expected, ...expectedFromEnvelope(envelope) };
-    // A step may hold the page to more than the API's outcome, given what the API answered (`realMountExpectations`).
-    if (expected.refine) expected = { ...expected, ...expected.refine(envelope) };
+    expected = expectedForAnswer(expected, await answer.json());
   }
   const live = expected.servedByApi ? null : createLiveServer({ root: liveRoot, apiOrigin: api.origin });
   const pageOrigin = live === null ? api.origin : await listen(live);
@@ -949,14 +955,16 @@ export async function run(apiOutput, mount, expected, browser, liveRoot) {
 /**
  * The steps against a real mount (`--real-mount`): each page is held to what the API answers its
  * request, and to every invariant a run checks. The coverage page must name the mounted corpus and
- * Luxembourg index by the digests the mount's build report records. Journeys J2 (a question no article
- * carries) and J5 (a law the corpus does not hold) run as on the fixture mount. When the build report
- * names an EU index, the EU steps run too: the GDPR searched by its CELEX, its dossier and its reading,
- * every EU citation pinned and verified (`realMountSteps`).
+ * Luxembourg index by the digests the mount's build report records. Journeys J1 (a date before the work's
+ * history: on a real mount, a date before any held Luxembourg state), J2 (a question no article carries) and
+ * J5 (a law the corpus does not hold) run as on the fixture mount. When the build report names an EU index,
+ * the EU steps run too: the GDPR searched by its CELEX, its dossier and its reading, every EU citation
+ * pinned and verified (`realMountSteps`).
  */
 export function realMountSteps(report) {
   const steps = [
     ...Object.entries(JOURNEY_STEPS),
+    ["J1, a date before the history", PRE_HISTORY_READING_STEP],
     ["J2, a question no article carries", NO_HIT_SEARCH_STEP],
     ["J5, a law not held", UNKNOWN_LAW_STEP],
   ];
@@ -967,12 +975,15 @@ export function realMountSteps(report) {
 
 /**
  * What a real mount's page is held to beyond the API's outcome, for the specification's journeys:
+ * - J1: the date precedes every held state, so the reading must refuse `no_version_for_date`, saying no earlier
+ *   state is held, whatever the API answered (another date's text would be the defect);
  * - J5: the law is not held, so the dossier must refuse `identifier_unknown` with the absence note, whatever the
  *   API answered (an answer would be the defect);
  * - J2: when the API finds no hit, the page must say that this is not evidence that the law does not exist; a
  *   population that does carry the words answers hits, held like any search.
  */
 export function realMountExpectations(step) {
+  if (step === PRE_HISTORY_READING_STEP) return { refine: () => ({ state: "refusal", refusalCode: "no_version_for_date", texts: [NO_EARLIER_STATE] }) };
   if (step === UNKNOWN_LAW_STEP) return { refine: () => ({ state: "refusal", refusalCode: "identifier_unknown", texts: [ABSENCE_NOTE] }) };
   if (step === NO_HIT_SEARCH_STEP) return { refine: (envelope) => (expectedFromEnvelope(envelope).nothingToCite ? { texts: [ABSENCE_NOTE] } : {}) };
   return {};
@@ -988,15 +999,16 @@ const API_ONLY_OBSERVED = Object.freeze({ answerState: "api", requests: [], cons
  * The real mount's journeys: each step through the browser (`realMountSteps`), then journeys J6, J7 and J8 at the
  * API of the same kind of server (`apiJourneyRuns`), J8 verifying the first `REAL_MOUNT_EVENTS_VERIFIED` events'
  * permalinks. Returns `[label, { observed, failures }]` pairs; an API journey's `observed` is `API_ONLY_OBSERVED`.
+ * `runStep` and `apiRuns` stand for `run` and `apiJourneyRuns`, so a test can see what each is asked.
  */
-export async function realMountRuns(apiOutput, mount, options, browser, liveRoot) {
+export async function realMountRuns(apiOutput, mount, options, browser, liveRoot, { runStep = run, apiRuns = apiJourneyRuns } = {}) {
   const report = JSON.parse(await readFile(join(mount, "build-report.json"), "utf8"));
   const runs = [];
   for (const [name, step] of realMountSteps(report)) {
     const digests = name === "coverage" ? { corpusSha256: report.corpus.Sha256, indexSha256: report.luxembourgIndex.Sha256 } : {};
-    runs.push([`${name}, with the real mount`, await run(apiOutput, mount, { ...options, step, fromApi: true, ...digests, ...realMountExpectations(step) }, browser, liveRoot)]);
+    runs.push([`${name}, with the real mount`, await runStep(apiOutput, mount, { ...options, step, fromApi: true, ...digests, ...realMountExpectations(step) }, browser, liveRoot)]);
   }
-  for (const [label, failures] of await apiJourneyRuns(apiOutput, mount, { startServer: options.startServer, eventsToVerify: REAL_MOUNT_EVENTS_VERIFIED })) {
+  for (const [label, failures] of await apiRuns(apiOutput, mount, { startServer: options.startServer, eventsToVerify: REAL_MOUNT_EVENTS_VERIFIED })) {
     runs.push([`${label}, with the real mount`, { observed: API_ONLY_OBSERVED, failures }]);
   }
   return runs;
@@ -1056,6 +1068,23 @@ export const EARLY_READING_STEP = Object.freeze({
 /** What a page says beside an absence it reports (J2's no hit, J5's law not held): absence in this build is not absence in law. */
 export const ABSENCE_NOTE = "It is not evidence that the instrument or the law does not exist.";
 
+/** What J1's refusal says: no state is held before the requested date. */
+export const NO_EARLIER_STATE = "No earlier state is held: the requested date precedes this history.";
+
+/**
+ * Journey J1 on a real mount: the same work asked on a date before any Luxembourg state a population holds (the
+ * fixture's date sits before its one state, but a population's history of the work may begin earlier).
+ */
+export const PRE_HISTORY_DATE = "1900-01-01";
+export const PRE_HISTORY_READING_STEP = Object.freeze({
+  ...EARLY_READING_STEP,
+  typed: Object.freeze([DOSSIER_IDENTIFIER, PRE_HISTORY_DATE]),
+  body: Object.freeze({
+    operation_id: "evidence_bundle",
+    parameters: Object.freeze({ identifier: DOSSIER_IDENTIFIER, date: PRE_HISTORY_DATE }),
+  }),
+});
+
 /** Journey J2: a citizen's question searched as typed, which no held article carries. */
 export const NO_HIT_PHRASE = "combien de jours de congé j'ai le droit quand mon père est décédé";
 export const NO_HIT_SEARCH_STEP = Object.freeze({
@@ -1089,7 +1118,7 @@ export const UNKNOWN_LAW_STEP = Object.freeze({
 export function specificationJourneyExpectations() {
   const absence = ABSENCE_NOTE;
   return [
-    ["J1, a date before the history", { step: EARLY_READING_STEP, state: "refusal", refusalCode: "no_version_for_date", texts: ["No earlier state is held: the requested date precedes this history.", "2024-02-01"] }],
+    ["J1, a date before the history", { step: EARLY_READING_STEP, state: "refusal", refusalCode: "no_version_for_date", texts: [NO_EARLIER_STATE, "2024-02-01"] }],
     ["J2, a question no article carries", { step: NO_HIT_SEARCH_STEP, state: "success", nothingToCite: true, texts: ["0 with the exact phrase, 0 with every word, in 0 works.", absence] }],
     ["J5, a law not held", { step: UNKNOWN_LAW_STEP, state: "refusal", refusalCode: "identifier_unknown", texts: ["This build's Luxembourg index holds 1 Luxembourg work, with states dated from 2024-02-01 to 2024-02-01.", absence] }],
   ];
@@ -1176,7 +1205,9 @@ async function postJson(url, body) {
 
 /**
  * Journey J8, monitoring, at the API: the event log polled as a client polls it, as failures. The same
- * request answers the same events (the log is append-only); from its own `next_after` it answers nothing more;
+ * request answers the same events (the log is append-only); the first page is numbered without a gap; from its own
+ * `next_after` a log that said it has more answers the next events, starting where the first page ended and repeating
+ * none, and one that said it has no more answers nothing more;
  * a cursor from another log is refused `snapshot_unknown`, never read as this log's; every event's permalink
  * verifies (the first `verifyAtMost` of the first page, on a real mount whose log holds thousands); and
  * `answer_drift` on a genesis log names no invalidated answer and asserts no absence of drift.
@@ -1194,7 +1225,18 @@ export async function eventsFailures(origin, { verifyAtMost = Number.POSITIVE_IN
   const again = await ask("events", {});
   const repeated = firstDifference(withoutRequestFields(first.json), withoutRequestFields(again.json));
   if (repeated !== null) failures.push(`the same events request answered differently, first at ${repeated}`);
-  if (value.has_more === false) {
+  const numbered = value.events.map((event) => event.seq);
+  if (numbered.some((seq, index) => index > 0 && seq !== numbered[index - 1] + 1)) failures.push(`the first page's events are not numbered without a gap: ${numbered.slice(0, 10).join(",")}`);
+  if (value.has_more === true) {
+    const last = numbered.at(-1);
+    if (!String(value.next_after).endsWith(`:${last}`)) failures.push(`next_after ${value.next_after} does not name the last event served (${last})`);
+    const next = await ask("events", { after: value.next_after });
+    const following = next.json?.result?.value?.events;
+    if (!Array.isArray(following) || following.length === 0) failures.push(`from next_after a log that has more answered nothing: ${JSON.stringify(next.json).slice(0, 200)}`);
+    else if (following[0].seq !== last + 1 || following.some((event) => event.seq <= last)) {
+      failures.push(`the next page does not start where the first ended: ${following[0].seq} after ${last}`);
+    }
+  } else if (value.has_more === false) {
     const after = await ask("events", { after: value.next_after });
     const rest = after.json?.result?.value;
     if (!Array.isArray(rest?.events) || rest.events.length !== 0 || rest.has_more !== false) {
