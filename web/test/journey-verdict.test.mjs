@@ -32,6 +32,17 @@ import {
   pinnedCitation,
   pageRequestBodies,
   realMountSteps,
+  realMountExpectations,
+  realMountRuns,
+  expectedForAnswer,
+  PRE_HISTORY_READING_STEP,
+  PRE_HISTORY_DATE,
+  NO_EARLIER_STATE,
+  REAL_MOUNT_EVENTS_VERIFIED,
+  ABSENCE_NOTE,
+  UNKNOWN_LAW_STEP,
+  eventsFailures,
+  apiJourneyRuns,
   specificationJourneyExpectations,
   twoStateExpectations,
   europeAnnexExpectations,
@@ -523,9 +534,11 @@ test("the EU search step names the GDPR by its CELEX, chooses English and is hel
   assert.ok(!Object.values(JOURNEY_STEPS).includes(EU_SEARCH_STEP), "not one of the eight steps every mount runs: it needs an EU index");
 
   const report = { corpus: { Sha256: "a".repeat(64) }, luxembourgIndex: { Sha256: "b".repeat(64) } };
-  assert.deepEqual(realMountSteps(report).map(([name]) => name), Object.keys(JOURNEY_STEPS), "a real mount without an EU index runs the eight");
+  const specification = ["J1, a date before the history", "J2, a question no article carries", "J5, a law not held"];
+  assert.deepEqual(realMountSteps(report).map(([name]) => name), [...Object.keys(JOURNEY_STEPS), ...specification],
+    "a real mount without an EU index runs the eight, then J2 and J5");
   const withEurope = realMountSteps({ ...report, europeIndex: { Sha256: "c".repeat(64) } });
-  assert.deepEqual(withEurope.map(([name]) => name), [...Object.keys(JOURNEY_STEPS), "eu search", "eu dossier", "eu reading"],
+  assert.deepEqual(withEurope.map(([name]) => name), [...Object.keys(JOURNEY_STEPS), ...specification, "eu search", "eu dossier", "eu reading"],
     "and one with an EU index runs the EU search, dossier and reading too");
   assert.equal(withEurope.at(-3)[1], EU_SEARCH_STEP);
   assert.equal(withEurope.at(-2)[1], EU_DOSSIER_STEP);
@@ -765,4 +778,180 @@ test("on the EU annex control mount the export composer pins both articles and s
   assert.ok(journeyVerdict({ ...observed, html: '<pre>{"text": "Hambali"}</pre>' }, expected).includes('the page\'s markup carries withheld text "Hambali"'), "the annex's text in the JSON shown");
   assert.ok(journeyVerdict({ ...observed, then: "clicked" }, expected).some((failure) => /never showed \[data-export-state=composed\] \[data-export-annexes\]/.test(failure)), "no annex listed");
   assert.ok(journeyVerdict({ ...observed, text: observed.text.replace("Save as PDF", "") }, expected).includes('the page does not show "Save as PDF"'), "no PDF offered");
+});
+
+test("on a real mount J5 must refuse identifier_unknown with the absence note whatever the API answers, and J2 says the note only when nothing was found", () => {
+  const steps = Object.fromEntries(realMountSteps({ corpus: {}, luxembourgIndex: {} }).map(([name, step]) => [name.slice(0, 2), step]));
+  const j5 = realMountExpectations(steps.J5);
+  assert.equal(steps.J5, UNKNOWN_LAW_STEP);
+  for (const envelope of [{ verdict: "refuse", refusal: { code: "identifier_unknown" } }, { verdict: "answer", result: { value: {} } }]) {
+    assert.deepEqual(j5.refine(envelope), { state: "refusal", refusalCode: "identifier_unknown", texts: [ABSENCE_NOTE] },
+      "an answer to a law the corpus does not hold would be the defect, so the page is held to the refusal regardless");
+  }
+  const j2 = realMountExpectations(steps.J2);
+  assert.equal(steps.J2, NO_HIT_SEARCH_STEP);
+  assert.deepEqual(j2.refine({ verdict: "answer", result: { value: { hits: [] } } }), { texts: [ABSENCE_NOTE] });
+  assert.deepEqual(j2.refine({ verdict: "answer", result: { value: { hits: [{ id: 1 }] } } }), {},
+    "a population that does carry the words answers hits, held like any search");
+  assert.deepEqual(realMountExpectations(JOURNEY_STEPS.search), {}, "the eight steps are held to the API's outcome alone");
+
+  // J1 on a real mount: the fixture's work on a date before any state a population could hold.
+  assert.equal(steps.J1, PRE_HISTORY_READING_STEP);
+  assert.deepEqual(PRE_HISTORY_READING_STEP.body.parameters, { identifier: DOSSIER_IDENTIFIER, date: PRE_HISTORY_DATE });
+  assert.deepEqual(PRE_HISTORY_READING_STEP.typed, [DOSSIER_IDENTIFIER, PRE_HISTORY_DATE]);
+  assert.equal(PRE_HISTORY_READING_STEP.path, "/reading.html");
+  assert.deepEqual(realMountExpectations(steps.J1).refine({ verdict: "answer", result: { value: {} } }),
+    { state: "refusal", refusalCode: "no_version_for_date", texts: [NO_EARLIER_STATE] }, "another date's text would be the defect");
+});
+
+test("a page's expectation is the API's outcome, then the step's own refinement of it, which wins", () => {
+  const answered = { verdict: "answer", result: { value: { hits: [] } } };
+  assert.deepEqual(expectedForAnswer({ step: NO_HIT_SEARCH_STEP }, answered), { step: NO_HIT_SEARCH_STEP, state: "success", nothingToCite: true });
+  const j5 = { step: UNKNOWN_LAW_STEP, ...realMountExpectations(UNKNOWN_LAW_STEP) };
+  const held = expectedForAnswer(j5, { verdict: "answer", result: { value: {} } });
+  assert.equal(held.state, "refusal", "a law the corpus does not hold must be refused even when the API answers it");
+  assert.equal(held.refusalCode, "identifier_unknown");
+  assert.deepEqual(held.texts, [ABSENCE_NOTE]);
+  const j2 = { step: NO_HIT_SEARCH_STEP, ...realMountExpectations(NO_HIT_SEARCH_STEP) };
+  assert.deepEqual(expectedForAnswer(j2, answered).texts, [ABSENCE_NOTE], "the refinement sees the envelope the outcome came from");
+  assert.equal(expectedForAnswer(j2, { verdict: "answer", result: { value: { hits: [{}] } } }).texts, undefined);
+});
+
+test("the real-mount runs give each step its expectations, then the API journeys against the same server, J8 bounded", async () => {
+  const { mkdtemp, writeFile, rm } = await import("node:fs/promises");
+  const { tmpdir } = await import("node:os");
+  const { join } = await import("node:path");
+  const mount = await mkdtemp(join(tmpdir(), "lex-real-mount-"));
+  try {
+    await writeFile(join(mount, "build-report.json"), JSON.stringify({ corpus: { Sha256: "a".repeat(64) }, luxembourgIndex: { Sha256: "b".repeat(64) } }));
+    const asked = [];
+    const startServer = async () => ({ origin: "http://127.0.0.1:1", close: async () => {} });
+    const runs = await realMountRuns("api", mount, { servedByApi: true, keyboard: false, startServer }, "browser", "live", {
+      runStep: async (apiOutput, givenMount, expected) => {
+        asked.push(expected);
+        return { observed: { answerState: "success" }, failures: [] };
+      },
+      apiRuns: async (apiOutput, givenMount, options) => {
+        assert.equal(options.startServer, startServer, "the API journeys ask the same kind of server the pages do");
+        assert.equal(options.eventsToVerify, REAL_MOUNT_EVENTS_VERIFIED);
+        return [["J6, a question", []], ["J8, the event log", ["a failure"]]];
+      },
+    });
+    assert.equal(asked.length, Object.keys(JOURNEY_STEPS).length + 3);
+    assert.ok(asked.every((expected) => expected.fromApi === true && expected.servedByApi === true));
+    assert.equal(asked.find((expected) => expected.step === JOURNEY_STEPS.coverage).corpusSha256, "a".repeat(64));
+    for (const step of [PRE_HISTORY_READING_STEP, NO_HIT_SEARCH_STEP, UNKNOWN_LAW_STEP]) {
+      assert.equal(typeof asked.find((expected) => expected.step === step)?.refine, "function", "each specification journey carries its refinement");
+    }
+    assert.deepEqual(runs.slice(-2).map(([label, { failures }]) => [label, failures]),
+      [["J6, a question, with the real mount", []], ["J8, the event log, with the real mount", ["a failure"]]]);
+    assert.equal(runs.at(-1)[1].observed.answerState, "api");
+  } finally {
+    await rm(mount, { recursive: true, force: true });
+  }
+});
+
+/**
+ * A stand-in API answering events, verify and answer_drift as a genesis log of `count` events does, counting verify
+ * requests. It pages as the real `events` does: at most `limit` events after the cursor, `has_more`, and `next_after`
+ * naming the last event served (the log's last when there is no more); a cursor past the last event is refused.
+ * `overlap` makes the second page repeat the first page's last event, as a broken log would.
+ */
+async function eventLogServer(count, { limit = 200, overlap = false } = {}) {
+  const { createServer } = await import("node:http");
+  const logId = "e".repeat(64);
+  const events = Array.from({ length: count }, (_, index) => ({ seq: index + 1, permalink: `/lu-legilux/w${index}/2024-02-01--${"f".repeat(64)}` }));
+  const page = (after) => {
+    const rest = events.filter((event) => event.seq > (overlap && after > 0 ? after - 1 : after));
+    const served = rest.slice(0, limit);
+    const hasMore = rest.length > limit;
+    return { events: served, has_more: hasMore, next_after: `${logId}:${hasMore ? served.at(-1).seq : count}` };
+  };
+  let verified = 0;
+  const server = createServer((request, response) => {
+    let text = "";
+    request.on("data", (chunk) => { text += chunk; });
+    request.on("end", () => {
+      const { operation_id: operation, parameters = {} } = JSON.parse(text || "{}");
+      let body;
+      if (operation === "events" && parameters.after === `${"0".repeat(64)}:1`) body = { verdict: "refuse", refusal: { code: "snapshot_unknown" } };
+      else if (operation === "events") {
+        const after = parameters.after === undefined ? 0 : Number(parameters.after.split(":")[1]);
+        if (after > count) {
+          response.writeHead(400, { "content-type": "application/json" });
+          response.end(JSON.stringify({ verdict: "refuse", refusal: { code: "request_schema_invalid" } }));
+          return;
+        }
+        body = { verdict: "answer", result: { value: page(after) } };
+      }
+      else if (operation === "verify") {
+        verified += 1;
+        body = { verdict: "answer", result: { value: { verdict: "digest_matches" } } };
+      } else if (operation === "answer_drift") body = { verdict: "answer", result: { value: { invalidated_answers: [], asserts_no_drift_in_law: false } } };
+      else body = { verdict: "refuse", refusal: { code: "operation_unknown" } };
+      response.writeHead(200, { "content-type": "application/json" });
+      response.end(JSON.stringify(body));
+    });
+  });
+  await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+  return {
+    origin: `http://127.0.0.1:${server.address().port}`,
+    verified: () => verified,
+    close: () => new Promise((resolve) => server.close(resolve)),
+  };
+}
+
+test("journey J8 on a real mount follows the log's own cursor, verifies a bounded number of permalinks, and an empty log cannot show the journey", async () => {
+  // A population log answers a page at a time: the journey reads on from next_after and checks the next page starts
+  // where the first ended.
+  const population = await eventLogServer(65, { limit: 30 });
+  try {
+    assert.deepEqual(await eventsFailures(population.origin, { verifyAtMost: REAL_MOUNT_EVENTS_VERIFIED }), []);
+    assert.equal(population.verified(), REAL_MOUNT_EVENTS_VERIFIED, "a population log holds thousands of events; the journey verifies the first few");
+  } finally {
+    await population.close();
+  }
+  const broken = await eventLogServer(65, { limit: 30, overlap: true });
+  try {
+    const failures = await eventsFailures(broken.origin, { verifyAtMost: 1 });
+    assert.ok(failures.some((failure) => /does not start where the first ended/.test(failure)), failures.join("; "));
+  } finally {
+    await broken.close();
+  }
+  const fixture = await eventLogServer(5);
+  try {
+    assert.deepEqual(await eventsFailures(fixture.origin), []);
+    assert.equal(fixture.verified(), 5, "the fixture mount's log is one page, verified whole, as before");
+  } finally {
+    await fixture.close();
+  }
+  const empty = await eventLogServer(0);
+  try {
+    const failures = await eventsFailures(empty.origin, { verifyAtMost: REAL_MOUNT_EVENTS_VERIFIED });
+    assert.ok(failures.some((failure) => /holds no event to poll.*cannot show journey J8/.test(failure)), failures.join("; "));
+  } finally {
+    await empty.close();
+  }
+});
+
+test("the API journeys run against the server the caller starts (the release image, a deployed revision) and close it", async () => {
+  const server = await eventLogServer(3);
+  let started = 0;
+  let closed = 0;
+  try {
+    const results = await apiJourneyRuns(null, null, {
+      startServer: async () => {
+        started += 1;
+        return { origin: server.origin, close: async () => { closed += 1; } };
+      },
+      eventsToVerify: 2,
+    });
+    assert.equal(started, 1);
+    assert.equal(closed, 1);
+    assert.deepEqual(results.map(([name]) => name.slice(0, 2)).filter((name, index, all) => all.indexOf(name) === index), ["J6", "J7", "J8"]);
+    assert.deepEqual(results.at(-1)[1], [], "J8 against the stand-in log passes");
+    assert.equal(server.verified(), 2, "and verified the two permalinks it was allowed");
+  } finally {
+    await server.close();
+  }
 });
