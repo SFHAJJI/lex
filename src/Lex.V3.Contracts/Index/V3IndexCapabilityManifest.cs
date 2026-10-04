@@ -30,14 +30,22 @@ public enum V3IndexCapabilityManifestRefusal
 }
 
 /// <summary>
-/// One registered operation the platform does not serve, as an index's capability manifest states it: the operation, the
-/// typed reason a request for it answers (<see cref="OperationNotServed"/>, the transport failure), and the data that would
-/// serve it (<see cref="Platform.V3UnservedOperations"/> is the platform's table the builders write).
+/// One registered operation the platform does not serve for the index's publisher, as the index's capability manifest states
+/// it: the operation, the typed reason a request for it answers, and the data that would serve it. The reason is
+/// <see cref="OperationNotServed"/> for an operation no route serves (<see cref="Platform.V3UnservedOperations"/>), or
+/// <see cref="RetrievalModeUnavailable"/> for an operation routed for another publisher's identifiers only
+/// (<see cref="Platform.V3EuropeRefusedOperations"/>); the builders write those tables.
 /// </summary>
 public sealed record V3UnservedOperation(string Operation, string Reason, string DataNeeded)
 {
     /// <summary>The typed reason a request for a registered operation with no route answers: the transport failure.</summary>
     public const string OperationNotServed = "operation_not_served";
+
+    /// <summary>
+    /// The typed reason a request answers when the operation is routed but not for this publisher's identifiers: the registry's
+    /// refusal <c>retrieval_mode_unavailable</c>, naming the requested mode and the modes available.
+    /// </summary>
+    public const string RetrievalModeUnavailable = "retrieval_mode_unavailable";
 }
 
 public enum V3IndexCapabilityLookupOutcome
@@ -148,8 +156,9 @@ public sealed class V3IndexCapabilityManifest
     public IReadOnlyList<V3IndexCapabilityCell> Cells { get; }
 
     /// <summary>
-    /// The registered operations the platform did not serve when the index was built, each with the data that would serve
-    /// it, in operation order; empty for a manifest written before manifests stated them.
+    /// The registered operations the platform did not serve for this publisher when the index was built, each with the typed
+    /// reason a request answers and the data that would serve it, in operation order; empty for a manifest written before
+    /// manifests stated them.
     /// </summary>
     public IReadOnlyList<V3UnservedOperation> NotServed { get; }
 
@@ -163,8 +172,9 @@ public sealed class V3IndexCapabilityManifest
 
     /// <summary>
     /// The manifest with the operations not served stated beside the cells: each a registered operation, at most once, with
-    /// the typed reason a request for it answers (<see cref="V3UnservedOperation.OperationNotServed"/>) and non-blank data
-    /// that would serve it; held in operation order.
+    /// the typed reason a request for it answers (<see cref="V3UnservedOperation.OperationNotServed"/> or
+    /// <see cref="V3UnservedOperation.RetrievalModeUnavailable"/>) and non-blank data that would serve it; held in operation
+    /// order.
     /// </summary>
     public static bool TryCreate(
         PublisherId publisher,
@@ -178,7 +188,8 @@ public sealed class V3IndexCapabilityManifest
         ArgumentNullException.ThrowIfNull(notServed);
         var unserved = notServed.ToArray();
         if (unserved.Any(static row => row is null || string.IsNullOrWhiteSpace(row.Operation) || string.IsNullOrWhiteSpace(row.DataNeeded) ||
-                                       !string.Equals(row.Reason, V3UnservedOperation.OperationNotServed, StringComparison.Ordinal) ||
+                                       (!string.Equals(row.Reason, V3UnservedOperation.OperationNotServed, StringComparison.Ordinal) &&
+                                        !string.Equals(row.Reason, V3UnservedOperation.RetrievalModeUnavailable, StringComparison.Ordinal)) ||
                                        !V3ContractVocabulary.OperationIds.Contains(row.Operation, StringComparer.Ordinal)) ||
             unserved.Select(static row => row.Operation).Distinct(StringComparer.Ordinal).Count() != unserved.Length)
         {

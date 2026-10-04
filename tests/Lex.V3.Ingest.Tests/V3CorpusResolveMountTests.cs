@@ -951,6 +951,10 @@ public sealed class V3CorpusResolveMountTests
         }
     }
 
+    private static EuropeIndexState[] ReadEuropeStates(SqliteConnection connection) =>
+        (EuropeIndexState[])typeof(EuropeIndexReader).GetMethod("ReadStates",
+            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)!.Invoke(null, [connection])!;
+
     private static DefaultHttpContext Request(string identifier)
     {
         return RequestBody(
@@ -1128,7 +1132,7 @@ public sealed class V3CorpusResolveMountTests
                 using var stamp = connection.CreateCommand();
                 stamp.CommandText = "UPDATE stamp SET logical_rows_sha256=$logical WHERE stamp_id=1";
                 stamp.Parameters.AddWithValue(
-                    "$logical", EuropeIndexBuilder.HashLogicalRows(members, lines, gaps, articles, CompleteSyntheticEuropeSourceRows(connection), CompleteSyntheticEuropeDigestRows(connection)));
+                    "$logical", EuropeIndexBuilder.HashLogicalRows(members, lines, gaps, articles, CompleteSyntheticEuropeSourceRows(connection), CompleteSyntheticEuropeDigestRows(connection), ReadEuropeStates(connection)));
                 Assert.AreEqual(1, stamp.ExecuteNonQuery());
             }
 
@@ -1187,7 +1191,7 @@ public sealed class V3CorpusResolveMountTests
                 using var stamp = connection.CreateCommand();
                 stamp.CommandText = "UPDATE stamp SET logical_rows_sha256=$logical WHERE stamp_id=1";
                 stamp.Parameters.AddWithValue(
-                    "$logical", EuropeIndexBuilder.HashLogicalRows(members, lines, gaps, articles, CompleteSyntheticEuropeSourceRows(connection), CompleteSyntheticEuropeDigestRows(connection)));
+                    "$logical", EuropeIndexBuilder.HashLogicalRows(members, lines, gaps, articles, CompleteSyntheticEuropeSourceRows(connection), CompleteSyntheticEuropeDigestRows(connection), ReadEuropeStates(connection)));
                 Assert.AreEqual(1, stamp.ExecuteNonQuery());
             }
 
@@ -2228,10 +2232,16 @@ public sealed class V3CorpusResolveMountTests
         public string CorpusSha256 { get; }
         public string IndexSha256 { get; private set; }
 
-        public static async Task<EuropeMountedFixture> CreateAsync(bool acquireFrenchExpression = false)
+        public static async Task<EuropeMountedFixture> CreateAsync(bool acquireFrenchExpression = false) =>
+            await FromEnvelopeAsync(await EuropeIndexBuilderTests.RetainedGdprEnvelopeAsync(
+                acquireFrenchExpression: acquireFrenchExpression));
+
+        /// <summary>
+        /// The mount of one EU envelope: its corpus and EU index built and written where the API mounts them, named by its one
+        /// admitted expression and that expression's first article.
+        /// </summary>
+        public static async Task<EuropeMountedFixture> FromEnvelopeAsync(Stage3DerivationProfileEnvelope envelope)
         {
-            var envelope = await EuropeIndexBuilderTests.RetainedGdprEnvelopeAsync(
-                acquireFrenchExpression: acquireFrenchExpression);
             var corpus = LexCorpus6Builder.TryBuild(
                 envelope, out var corpusRefusal, out var corpusDetail);
             Assert.IsNotNull(corpus, $"{corpusRefusal}: {corpusDetail}");
@@ -2325,7 +2335,7 @@ public sealed class V3CorpusResolveMountTests
                 using var stamp = connection.CreateCommand();
                 stamp.CommandText = "UPDATE stamp SET logical_rows_sha256=$logical WHERE stamp_id=1";
                 stamp.Parameters.AddWithValue(
-                    "$logical", EuropeIndexBuilder.HashLogicalRows(members, lines, gaps, articles, CompleteSyntheticEuropeSourceRows(connection), CompleteSyntheticEuropeDigestRows(connection)));
+                    "$logical", EuropeIndexBuilder.HashLogicalRows(members, lines, gaps, articles, CompleteSyntheticEuropeSourceRows(connection), CompleteSyntheticEuropeDigestRows(connection), ReadEuropeStates(connection)));
                 Assert.AreEqual(1, stamp.ExecuteNonQuery());
             }
 

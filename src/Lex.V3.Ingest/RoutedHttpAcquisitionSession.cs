@@ -153,6 +153,33 @@ internal sealed class RoutedHttpAcquisitionSession : IDisposable
 
     internal OfficialMachineQuerySourceProfile SourceProfile => _profile;
 
+    /// <summary>
+    /// How long this run's robots generation may still be used before every send refuses: the profile's maximum robots
+    /// policy age less the larger of the generation's UTC and monotonic ages, by the same rule the send gate applies.
+    /// Zero before the generation has started, once it has expired, and when the UTC clock reads earlier than its start.
+    /// A caller that runs long work on one session (a Luxembourg partition cover) reads it to replace the session between
+    /// units of work rather than let a unit be cut off by the gate.
+    /// </summary>
+    internal TimeSpan RobotsPolicyRemaining
+    {
+        get
+        {
+            DateTimeOffset? observedAt;
+            long? observedTimestamp;
+            lock (_generationLock)
+            {
+                observedAt = _robotsStartedAt;
+                observedTimestamp = _robotsStartedTimestamp;
+            }
+
+            if (observedAt is null || observedTimestamp is null) return TimeSpan.Zero;
+            var age = GenerationAge(observedAt.Value, observedTimestamp.Value, _timeProvider.GetUtcNow(), _timeProvider.GetTimestamp());
+            if (age is null) return TimeSpan.Zero;
+            var remaining = _profile.MaximumRobotsPolicyAge - age.Value;
+            return remaining > TimeSpan.Zero ? remaining : TimeSpan.Zero;
+        }
+    }
+
     internal static Task<StartResult> StartAsync(
         BoundMachineRequest sourceWitness,
         ICustodyStore custodyStore,
@@ -196,6 +223,30 @@ internal sealed class RoutedHttpAcquisitionSession : IDisposable
         return session.BootstrapRobotsAsync(cancellationToken);
     }
 
+    /// <summary>
+    /// Opens a plan item for a URL other than this run's source witness only when this run's own admitted robots policy
+    /// allows that exact URL (Decision 83): the verdict is computed here, from the bytes this run's bootstrap fetched and
+    /// held, before any request ordinal is allocated. A Luxembourg document phase sends many documents through one run
+    /// this way, so one robots fetch serves them all and every one is still evaluated literally.
+    /// </summary>
+    /// <returns>
+    /// The opened item and <see cref="RobotsPolicyEvaluationResult.Allowed"/>; or no item, with
+    /// <see cref="RobotsPolicyEvaluationResult.Denied"/> (the publisher's own refusal of that path) or
+    /// <see cref="RobotsPolicyEvaluationResult.UnsafeToInterpret"/>, and the path evaluated.
+    /// </returns>
+    internal (IPlanItem? Item, RobotsPolicyEvaluationResult Verdict, string EvaluatedPath) OpenPlanItemAdmittedByRobots(
+        BoundMachineRequest request)
+    {
+        ThrowIfDisposed();
+        ArgumentNullException.ThrowIfNull(request);
+        var identity = MachineQueryBinder.OpenIdentity(request);
+        var path = Uri.TryCreate(identity.RequestedUri, UriKind.Absolute, out var parsed) ? parsed.PathAndQuery : identity.RequestedUri;
+        var verdict = EvaluateAdmittedRobots(identity.RequestedUri);
+        return verdict == RobotsPolicyEvaluationResult.Allowed
+            ? (OpenPlanItem(request), verdict, path)
+            : (null, verdict, path);
+    }
+
     internal IPlanItem OpenPlanItem(BoundMachineRequest request)
     {
         ThrowIfDisposed();
@@ -207,6 +258,15 @@ internal sealed class RoutedHttpAcquisitionSession : IDisposable
             throw new ArgumentException(
                 "An acquisition run cannot cross its source profile or robots generation.",
                 nameof(request));
+        }
+
+        // Decision 83: the bootstrap evaluated the source witness's own URL; any other URL this run opens must be allowed
+        // by the same admitted policy, evaluated literally, or nothing is opened for it.
+        if (!string.Equals(identity.RequestedUri, _sourceWitnessIdentity.RequestedUri, StringComparison.Ordinal) &&
+            EvaluateAdmittedRobots(identity.RequestedUri) != RobotsPolicyEvaluationResult.Allowed)
+        {
+            throw new InvalidOperationException(
+                "This run's robots policy does not allow the requested URL; nothing is opened for it.");
         }
 
         ulong ordinal;
@@ -634,16 +694,21 @@ internal sealed class RoutedHttpAcquisitionSession : IDisposable
                 ?? throw new InvalidOperationException("The robots generation has no monotonic anchor.");
         }
 
-        var utcAge = now - observedAt;
-        var monotonicAge = _timeProvider.GetElapsedTime(
-            observedTimestamp,
-            nowTimestamp);
-        if (utcAge < TimeSpan.Zero ||
-            utcAge >= _profile.MaximumRobotsPolicyAge ||
-            monotonicAge >= _profile.MaximumRobotsPolicyAge)
+        var age = GenerationAge(observedAt, observedTimestamp, now, nowTimestamp);
+        if (age is null || age.Value >= _profile.MaximumRobotsPolicyAge)
         {
             throw new RobotsPolicyExpiredException();
         }
+    }
+
+    // The age of the robots generation started at (observedAt, observedTimestamp): the larger of its UTC and monotonic
+    // ages, or null when the UTC clock reads earlier than its start. One rule for the send gate and RobotsPolicyRemaining.
+    private TimeSpan? GenerationAge(DateTimeOffset observedAt, long observedTimestamp, DateTimeOffset now, long nowTimestamp)
+    {
+        var utcAge = now - observedAt;
+        if (utcAge < TimeSpan.Zero) return null;
+        var monotonicAge = _timeProvider.GetElapsedTime(observedTimestamp, nowTimestamp);
+        return utcAge > monotonicAge ? utcAge : monotonicAge;
     }
 
     private void EnsureGenerationActive()

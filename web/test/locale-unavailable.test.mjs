@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { CHROME_LOCALES } from '../scripts/localization.mjs';
+import { CHROME_LOCALES, CHROME_REVIEWS } from '../scripts/localization.mjs';
 import {
   REVIEWED_CHROME_LOCALES,
   renderLocaleUnavailable,
@@ -54,11 +54,15 @@ test('a reviewed locale is not refused, and a locale outside the four is not off
 
 test('the reviewed set is honest about how little has been reviewed', () => {
   // If this ever grows, it grows because a legal-language review happened, not because a
-  // string got translated. Asserting the exact set makes that a deliberate edit.
-  assert.deepEqual([...REVIEWED_CHROME_LOCALES], ['en']);
+  // string got translated. Asserting the exact set makes that a deliberate edit. French grew
+  // it: reviewed by an AI reviewer under the owner's delegation, as its receipt says.
+  assert.deepEqual([...REVIEWED_CHROME_LOCALES], ['en', 'fr']);
   for (const one of REVIEWED_CHROME_LOCALES) {
     assert.ok(CHROME_LOCALES.includes(one), `${one} is reviewed but is not a chrome locale`);
   }
+  assert.deepEqual(Object.keys(CHROME_REVIEWS), REVIEWED_CHROME_LOCALES.filter((one) => one !== 'en'), 'every reviewed language but the English source has its receipt');
+  const html = renderLocaleUnavailable({ requested: 'de' });
+  assert.ok(html.includes('Reviewed interface languages today: English (en), French (fr).'));
 });
 
 test('values are escaped rather than trusted', () => {

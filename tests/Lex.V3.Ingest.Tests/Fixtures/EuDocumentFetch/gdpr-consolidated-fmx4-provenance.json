@@ -1,0 +1,28 @@
+{
+  "schema": "lex-retained-formex-test-fixture/1",
+  "basis": "Exact retained package bytes reopened through product digest reader; no publisher requests for this audit.",
+  "packages": [
+    {
+      "file": "gdpr-consolidated-fra-fmx4-body.bin",
+      "sha256": "37e5d9e73433d7586d787331974e11ba7e837212b32cba3d1b0bb0d26b5cf859",
+      "route_sha256": "448056bcab43b3e59c8003a8f6a5c8532957e7d3d6b0f1cc8590d9f1996c67e2",
+      "request_uri": "https://publications.europa.eu/resource/cellar/5f2552c2-cc45-11e6-ad7c-01aa75ed71a1.0021.01",
+      "http_status": 200,
+      "language": "fra",
+      "capture_source_head": "614a9e1509f28f53d77dfdf8a69da35339407da5",
+      "captured_root": "C:\\lex-v3\\lu-legislative-measurement-20261001-1",
+      "checkpoint_sha256": "1f54994c6d69df77b8ac617c2ea21b81476e9508531e7415eb75eab1a744d7b2"
+    },
+    {
+      "file": "gdpr-consolidated-eng-fmx4-body.bin",
+      "sha256": "cd8d38e54cc111b17ea2dcae8f1e0e265e3255cc8b76776e8160706b39d13491",
+      "route_sha256": "e8ca0aa2436bb566cca42c1593bc77c12ac70587507f1504106a5e143a9d3b78",
+      "request_uri": "https://publications.europa.eu/resource/cellar/5f2552c2-cc45-11e6-ad7c-01aa75ed71a1.0022.01",
+      "http_status": 200,
+      "language": "eng",
+      "capture_source_head": "614a9e1509f28f53d77dfdf8a69da35339407da5",
+      "captured_root": "C:\\lex-v3\\lu-legislative-measurement-20261001-1",
+      "checkpoint_sha256": "8353fc638d166d6d73ecc8fdc0db01e8b1fe94d332349351a86c6942980e0a32"
+    }
+  ]
+}

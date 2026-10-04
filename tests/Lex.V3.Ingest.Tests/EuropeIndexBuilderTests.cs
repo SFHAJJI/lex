@@ -19,7 +19,7 @@ public sealed class EuropeIndexBuilderTests
     {
         var digest = Convert.ToHexStringLower(SHA256.HashData(
             EuropeIndexBuilder.BuildFixedInputDeterminismEvidence()));
-        Assert.AreEqual("44a6158077203b3729c2103f3efeb007e3b8d10cd59b6616ee1c50194b205f1c", digest);
+        Assert.AreEqual("cb2b04fc0c50aaaaaacedd1261d38829bea8ce54667676a96552090baa7a9f7e", digest);
     }
 
     [TestMethod]
@@ -51,8 +51,11 @@ public sealed class EuropeIndexBuilderTests
         CollectionAssert.AreEqual(first.IndexBytes.ToArray(), second.IndexBytes.ToArray());
         CollectionAssert.AreEqual(first.CapabilityManifestBytes.ToArray(), second.CapabilityManifestBytes.ToArray());
         CollectionAssert.AreEqual(
-            Lex.V3.Contracts.Platform.V3UnservedOperations.Rows.ToArray(), first.CapabilityManifest.NotServed.ToArray(),
-            "the EU capability manifest states the platform's operations not served");
+            Lex.V3.Contracts.Platform.V3UnservedOperations.Rows.Concat(Lex.V3.Contracts.Platform.V3EuropeRefusedOperations.Rows)
+                .OrderBy(static row => row.Operation, StringComparer.Ordinal).ToArray(),
+            first.CapabilityManifest.NotServed.ToArray(),
+            "the EU capability manifest states the platform's operations not served and the operations an EU identifier is refused, in operation order");
+        Assert.HasCount(16, first.CapabilityManifest.NotServed, "3 operations no route serves and 13 refused for an EU identifier");
         var corpus = LexCorpus6Builder.TryBuild(envelope, out _, out _)!;
         using var reader = EuropeIndexReader.OpenAndVerify(
             first.IndexRef, first.IndexBytes.Span, corpus.ArtifactRef, first.CapabilityManifest);
@@ -215,7 +218,8 @@ public sealed class EuropeIndexBuilderTests
                     ReadRows<EuropeIndexBuilder.CorrigendumLineRow>(connection, "ReadLines"),
                     ReadRows<EuropeIndexBuilder.CorrigendumGapRow>(connection, "ReadGaps"), articles,
                     ReadRows<EuropeIndexBuilder.ArticleSourceRow>(connection, "ReadArticleSources"));
-                EuropeIndexBuilder.Execute(connection, "DROP TABLE article_digests; PRAGMA user_version=3;");
+                EuropeIndexBuilder.Execute(connection, "DROP TABLE states; DROP TABLE article_digests; PRAGMA user_version=3;");
+                EuropeIndexBuilder.Execute(connection, "PRAGMA writable_schema=ON; UPDATE sqlite_schema SET sql=replace(sql,'publisher_work_celex TEXT COLLATE BINARY,','publisher_work_celex TEXT COLLATE BINARY NOT NULL,') WHERE name='articles'; PRAGMA writable_schema=OFF;");
                 using var command = connection.CreateCommand();
                 command.CommandText = "UPDATE stamp SET schema_identity='lex-v3-europe-index/3',logical_rows_sha256=$logical";
                 command.Parameters.AddWithValue("$logical", logical);
@@ -233,6 +237,44 @@ public sealed class EuropeIndexBuilderTests
             Assert.AreEqual(1, reader.ArticleCount);
             Assert.IsNotNull(reader.ReadArticleSourceEvidence(new string('5', 64)));
             Assert.IsNull(reader.ReadArticleByteDigests(new string('5', 64)));
+        }
+        finally { EuropeIndexBuilder.DeleteDatabase(path); }
+    }
+
+    [TestMethod]
+    public void Schema4RemainsReadableWithoutInventingStates()
+    {
+        var bytes = EuropeIndexBuilder.BuildFixedInputDeterminismEvidence();
+        var path = Path.Combine(Path.GetTempPath(), $"lex-v3-schema4-test-{Guid.NewGuid():N}.sqlite");
+        try
+        {
+            File.WriteAllBytes(path, bytes);
+            EuropeIndexBuilder.ArticleRow[] articles;
+            using (var connection = EuropeIndexBuilder.Open(path, SqliteOpenMode.ReadWrite))
+            {
+                articles = ReadRows<EuropeIndexBuilder.ArticleRow>(connection, "ReadArticles");
+                var logical = EuropeIndexBuilder.HashLogicalRows(
+                    ReadRows<EuropeIndexBuilder.MemberRow>(connection, "ReadMembers"),
+                    ReadRows<EuropeIndexBuilder.CorrigendumLineRow>(connection, "ReadLines"),
+                    ReadRows<EuropeIndexBuilder.CorrigendumGapRow>(connection, "ReadGaps"), articles,
+                    ReadRows<EuropeIndexBuilder.ArticleSourceRow>(connection, "ReadArticleSources"),
+                    ReadRows<EuropeIndexBuilder.ArticleDigestRow>(connection, "ReadArticleDigests"));
+                EuropeIndexBuilder.Execute(connection, "DROP TABLE states; PRAGMA user_version=4;");
+                EuropeIndexBuilder.Execute(connection, "PRAGMA writable_schema=ON; UPDATE sqlite_schema SET sql=replace(sql,'publisher_work_celex TEXT COLLATE BINARY,','publisher_work_celex TEXT COLLATE BINARY NOT NULL,') WHERE name='articles'; PRAGMA writable_schema=OFF;");
+                using var command = connection.CreateCommand();
+                command.CommandText = "UPDATE stamp SET schema_identity='lex-v3-europe-index/4',logical_rows_sha256=$logical";
+                command.Parameters.AddWithValue("$logical", logical);
+                command.ExecuteNonQuery();
+            }
+            bytes = File.ReadAllBytes(path);
+            var sha = Convert.ToHexStringLower(SHA256.HashData(bytes));
+            var corpusSha = new string('a', 64);
+            using var reader = EuropeIndexReader.OpenAndVerify(new(LexCorpus6Builder.ResourceIdOf(sha), sha), bytes,
+                new(LexCorpus6Builder.ResourceIdOf(corpusSha), corpusSha), EuropeIndexBuilder.MeasureCapabilities(sha, articles));
+            Assert.IsTrue(reader.HasArticleByteDigests);
+            Assert.IsFalse(reader.HasStates);
+            Assert.ThrowsExactly<InvalidOperationException>(() => reader.ReadStates("32016R0679"));
+            Assert.AreEqual(1, reader.ArticleCount);
         }
         finally { EuropeIndexBuilder.DeleteDatabase(path); }
     }
@@ -275,7 +317,8 @@ public sealed class EuropeIndexBuilderTests
                     ReadRows<EuropeIndexBuilder.CorrigendumGapRow>(connection, "ReadGaps"),
                     ReadRows<EuropeIndexBuilder.ArticleRow>(connection, "ReadArticles"),
                     ReadRows<EuropeIndexBuilder.ArticleSourceRow>(connection, "ReadArticleSources"),
-                    ReadRows<EuropeIndexBuilder.ArticleDigestRow>(connection, "ReadArticleDigests"));
+                    ReadRows<EuropeIndexBuilder.ArticleDigestRow>(connection, "ReadArticleDigests"),
+                    ReadRows<EuropeIndexState>(connection, "ReadStates"));
                 using var command = connection.CreateCommand();
                 command.CommandText = "UPDATE stamp SET logical_rows_sha256=$logical";
                 command.Parameters.AddWithValue("$logical", logical);

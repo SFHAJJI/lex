@@ -93,7 +93,7 @@ test("a served dossier is the work, its states and what it does not hold, read b
   assert.equal((markup.match(/<li><strong>/g) ?? []).length, value.not_held.length);
 });
 
-test("an EU work's dossier is the work by its CELEX, its expressions with the one wording held of each, pinned, and what it does not hold", async () => {
+test("an EU work's dossier is the work by its CELEX, its expressions with the original wording of each, pinned, and what it does not hold", async () => {
   const envelope = envelopeOf("one EU work by its CELEX");
   const value = envelope.result.value;
   const request = { identifier: "32016R0679" };
@@ -107,7 +107,7 @@ test("an EU work's dossier is the work by its CELEX, its expressions with the on
   const shown = text(markup);
   assert.ok(markup.includes("<h2>32016R0679</h2>"), "the work is named by its CELEX");
   assert.ok(markup.includes(`<code>${value.publisher_work_id}</code>`));
-  assert.ok(shown.includes("1 expression held, in its one original wording."));
+  assert.ok(shown.includes("1 expression held, shown with its original wording."));
   const [expression] = value.expressions;
   assert.ok(markup.includes(`data-pinned-wording="${expression.pinned_wording.wording_sha256}"`));
   assert.ok(markup.includes(`<code>${expression.pinned_wording.permalink}</code>`), "the expression is pinned by its wording's permalink");
@@ -116,6 +116,21 @@ test("an EU work's dossier is the work by its CELEX, its expressions with the on
   assert.doesNotMatch(markup, /data-state=/);
   assert.ok(shown.includes("The wording date (wording_date in search, wording_dates in dossier) is the date the publisher's Formex package gives the act"));
   for (const row of value.not_held) assert.ok(shown.includes(row.item), `the dossier says it does not hold ${row.item}`);
+
+  // An annex of the expression is said below the table, with the platform's reason and the official source.
+  const annexed = structuredClone(envelope);
+  const source = `${expression.publisher_expression_id}.02`;
+  annexed.result.value.expressions[0].annexes_not_served = [{
+    disposition: "annex_mapping_unresolved", annexes: 1, annex_identities_sha256: ["a".repeat(64)], served_as: "text_not_available",
+    official_identity: expression.publisher_expression_id, official_source: source,
+    reason: "the annex could not be mapped to pages of the publisher PDF, so its body was not classified and its text is not served",
+  }];
+  const annexMarkup = view(dossierOutcome({ state: "success", envelope: annexed }));
+  assert.match(annexMarkup, /<p data-annexes-not-served="1" data-annex-disposition="annex_mapping_unresolved">/);
+  assert.ok(text(annexMarkup).includes("1 annex of the English wording is not served as text, and is never searched, quoted or exported: the annex could not be mapped"));
+  assert.ok(annexMarkup.includes(`<code>${source}</code>`));
+  assert.ok(annexMarkup.indexOf("data-annexes-not-served") > annexMarkup.indexOf("</table>"), "said below the expressions");
+  assert.doesNotMatch(markup, /data-annexes-not-served/, "the captured dossier lists no annex, and the page says none");
 
   const unpinned = structuredClone(envelope);
   unpinned.result.value.expressions[0].pinned_wording = null;

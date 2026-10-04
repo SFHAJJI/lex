@@ -100,6 +100,28 @@ jobs:
           dotnet build Lex.V3.slnx --configuration Release --no-restore
           dotnet test --solution Lex.V3.slnx --configuration Release --no-restore --no-build --minimum-expected-tests 1
           pwsh -NoLogo -NoProfile -File ./eng/verify-v3-tree.ps1
+      - name: Retain the tested acquisition runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$CANDIDATE_SHA"
+          artifact_root='artifacts/v3-acquisition-runtime'
+          mkdir -p "$artifact_root/runtime"
+          cp -a src/Lex.V3.Tool/bin/Release/net10.0/. "$artifact_root/runtime/"
+          if [ -n "$(find "$artifact_root/runtime" -name '.*' -print -quit)" ]; then
+            echo 'Runtime contains hidden paths that upload-artifact would omit.' >&2
+            exit 1
+          fi
+          printf '%s\n' "$CANDIDATE_SHA" > "$artifact_root/source-head.txt"
+          dotnet --info > "$artifact_root/dotnet-info.txt"
+          (cd "$artifact_root" && find runtime -type f -print0 | LC_ALL=C sort -z | xargs -0 sha256sum) > "$artifact_root/runtime-sha256.txt"
+      - name: Upload tested acquisition runtime
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: v3-acquisition-runtime-${{ env.CANDIDATE_SHA }}
+          path: artifacts/v3-acquisition-runtime/
+          if-no-files-found: error
+          retention-days: 3
       - name: Tracked schemas and builder source digest are exact
         shell: bash
         run: |
@@ -444,14 +466,96 @@ jobs:
       - run: npm test
         working-directory: web
 
+  journeys:
+    name: journeys
+    # The launch contract's "Journeys J1 to J8 pass in a real browser", on every pull request: the journey suite
+    # (web/scripts/journey.mjs) runs the live pages against the API published from this commit, in the runner's
+    # Chrome, over the journey fixture mount and with no mount, then over the licence-blocked mount, every
+    # citation a page prints verified by the API. It needs no driver's machine, so a step is proved before it
+    # merges.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+          ref: ${{ env.CANDIDATE_SHA }}
+      - name: Verify exact candidate checkout
+        shell: bash
+        run: test "$(git rev-parse HEAD)" = "$CANDIDATE_SHA"
+      - uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1 # v5
+        with:
+          global-json-file: global.json
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: npm ci
+        working-directory: web
+      - name: Publish the API
+        shell: bash
+        run: dotnet publish src/Lex.V3.Api/Lex.V3.Api.csproj --configuration Release --output "$RUNNER_TEMP/api" -v q
+      - name: Write the journey fixture, licence-blocked, two-state and EU annex mounts
+        shell: bash
+        run: |
+          set -euo pipefail
+          V3_WRITE_JOURNEY_MOUNT="$RUNNER_TEMP/journey-mount" V3_WRITE_LICENCE_BLOCKED_MOUNT="$RUNNER_TEMP/licence-blocked-mount" \
+            V3_WRITE_TWO_STATE_JOURNEY_MOUNT="$RUNNER_TEMP/two-state-mount" V3_WRITE_EU_ANNEX_MOUNT="$RUNNER_TEMP/eu-annex-mount" \
+            dotnet test tests/Lex.V3.Ingest.Tests/Lex.V3.Ingest.Tests.csproj --configuration Release -v q \
+            --filter "FullyQualifiedName~TheJourneyMountIsTheFixtureMountWrittenWhereTheJourneyAsks|FullyQualifiedName~TheLicenceBlockedMountIsTheFixtureMountWithANonAdmittingLicence|FullyQualifiedName~TheTwoStateJourneyMountHoldsALaterStateWithOneArticleAmended|FullyQualifiedName~TheEuAnnexJourneyMountIsTheControlCaseWrittenWhereTheJourneyAsks"
+          test -s "$RUNNER_TEMP/journey-mount/journey-mount.json"
+          test -s "$RUNNER_TEMP/licence-blocked-mount/journey-mount.json"
+          test -s "$RUNNER_TEMP/two-state-mount/journey-mount.json"
+          test -s "$RUNNER_TEMP/eu-annex-mount/journey-mount.json"
+      - name: The journeys over the fixture mount and with no mount
+        shell: bash
+        run: node web/scripts/journey.mjs --api "$RUNNER_TEMP/api" --mount "$RUNNER_TEMP/journey-mount" | tee "$RUNNER_TEMP/journeys-fixture.txt"
+      - name: The journeys over the licence-blocked mount
+        shell: bash
+        run: node web/scripts/journey.mjs --api "$RUNNER_TEMP/api" --mount "$RUNNER_TEMP/licence-blocked-mount" | tee "$RUNNER_TEMP/journeys-licence-blocked.txt"
+      # The same runs by keyboard alone (Tab reaches every field, every character arrives by a key press, every
+      # focus stop shows where focus is), on the pages the API itself serves (ruling 3's production arrangement,
+      # held to its security headers): the launch contract's keyboard path and the served pages' headers.
+      - name: The journeys by keyboard, the pages served by the API, over the fixture mount and with no mount
+        shell: bash
+        run: node web/scripts/journey.mjs --api "$RUNNER_TEMP/api" --mount "$RUNNER_TEMP/journey-mount" --keyboard --served-by-api | tee "$RUNNER_TEMP/journeys-fixture-keyboard-served.txt"
+      - name: The licence-blocked journeys by keyboard, the pages served by the API
+        shell: bash
+        run: node web/scripts/journey.mjs --api "$RUNNER_TEMP/api" --mount "$RUNNER_TEMP/licence-blocked-mount" --keyboard --served-by-api | tee "$RUNNER_TEMP/journeys-licence-blocked-keyboard-served.txt"
+      # Journeys J3 and J8 with a real change: two states of the work, one article amended in the later.
+      - name: The two-state journeys, by pointer and by keyboard on the pages the API serves
+        shell: bash
+        run: |
+          set -euo pipefail
+          node web/scripts/journey.mjs --api "$RUNNER_TEMP/api" --mount "$RUNNER_TEMP/two-state-mount" | tee "$RUNNER_TEMP/journeys-two-state.txt"
+          node web/scripts/journey.mjs --api "$RUNNER_TEMP/api" --mount "$RUNNER_TEMP/two-state-mount" --keyboard --served-by-api | tee "$RUNNER_TEMP/journeys-two-state-keyboard-served.txt"
+      # The launch contract's annex line in a browser: an EU act whose annex the publisher's PDF holds only as images.
+      - name: The EU annex control journeys, by pointer and by keyboard on the pages the API serves
+        shell: bash
+        run: |
+          set -euo pipefail
+          node web/scripts/journey.mjs --api "$RUNNER_TEMP/api" --mount "$RUNNER_TEMP/eu-annex-mount" | tee "$RUNNER_TEMP/journeys-eu-annex.txt"
+          node web/scripts/journey.mjs --api "$RUNNER_TEMP/api" --mount "$RUNNER_TEMP/eu-annex-mount" --keyboard --served-by-api | tee "$RUNNER_TEMP/journeys-eu-annex-keyboard-served.txt"
+      - name: Upload the journey reports
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: journeys
+          path: ${{ runner.temp }}/journeys-*.txt
+          if-no-files-found: ignore
+
   image-rehearsal:
     name: image-rehearsal
     # The release pipeline's credential-free rehearsal (web/scripts/image-rehearsal.mjs), without its WSL
     # probes, which need the driver's machine: the image built twice from scratch and held to one
     # digest, verified (V2 absent), rehearsal-signed, its evaluation card the machine gates run over
-    # the journey fixture mount, and the release published, read back and verified. It runs on every
-    # push to v3/integration, so it adds nothing to a pull request's wait, and on a pull request
-    # whose branch name contains "rehearsal", so a change to the rehearsal proves it before merging.
+    # the journey fixture mount, and the release published, read back and verified. Then the release
+    # command's custody path (--custody) with this commit's own derive tool: the mount derived twice
+    # from fixture custody by two processes, held to the live build's files, then the same image steps.
+    # It runs on every push to v3/integration, so it adds nothing to a pull request's wait, and on a
+    # pull request whose branch name contains "rehearsal", so a change to the rehearsal proves it
+    # before merging.
     if: github.event_name == 'push' || contains(github.head_ref, 'rehearsal')
     runs-on: ubuntu-24.04
     timeout-minutes: 45
@@ -493,10 +597,52 @@ jobs:
             and (.release.readBackFailures | length) == 0
             and .removed.work == true and .removed.artifacts == true
           ' "$RUNNER_TEMP/image-rehearsal.json"
+      - name: Write the release custody
+        shell: bash
+        run: |
+          set -euo pipefail
+          V3_WRITE_RELEASE_CUSTODY="$RUNNER_TEMP/release-custody" dotnet test tests/Lex.V3.Ingest.Tests/Lex.V3.Ingest.Tests.csproj --configuration Release --filter "FullyQualifiedName~TheReleaseCustodyIsTheFixtureAcquisitionWrittenWhereTheRehearsalAsks" -v q
+          test -s "$RUNNER_TEMP/release-custody/mount-inputs.json"
+          test -s "$RUNNER_TEMP/release-custody/expected-mount.json"
+      - name: Rehearse the release from custody with this commit's derive tool
+        shell: bash
+        run: |
+          set -euo pipefail
+          # The derive tool laid out as the CI runtime artifact is (runtime/ beside source-head.txt), so the release
+          # command binds it to this checkout. The test step above built it; the stamp is written only once the dll's
+          # own informational version names this commit (the SDK's +<commit> suffix), so the binding is checked, not
+          # assumed.
+          grep -aqF "+$CANDIDATE_SHA" src/Lex.V3.Tool/bin/Release/net10.0/Lex.V3.Tool.dll
+          tool="$RUNNER_TEMP/derive-tool"
+          mkdir -p "$tool/runtime"
+          cp -a src/Lex.V3.Tool/bin/Release/net10.0/. "$tool/runtime/"
+          printf '%s\n' "$CANDIDATE_SHA" > "$tool/source-head.txt"
+          node web/scripts/image-rehearsal.mjs --custody "$RUNNER_TEMP/release-custody/custody" --checkpoint "$RUNNER_TEMP/release-custody/mount-inputs.json" --tool "$tool/runtime/Lex.V3.Tool.dll" --no-probe > "$RUNNER_TEMP/custody-rehearsal.json"
+          jq -e --arg head "$CANDIDATE_SHA" --slurpfile expected "$RUNNER_TEMP/release-custody/expected-mount.json" '
+            .derivation.tool.bound == true
+            and .derivation.tool.sourceHead == $head
+            and .derivation.independentProcesses == 2
+            and ([.derivation.executions[].exitCode] == [0, 0])
+            and .derivation.proxyVariableTrapConnections == 0
+            and .derivation.files == $expected[0].files
+            and .mountKind == "real"
+            and .reproduced.identical == true
+            and (.imageFailures | length) == 0
+            and (.v2Absent.failures | length) == 0
+            and .signatureVerified == true
+            and .card.over == "the machine gates over this mount"
+            and ([.card.sets[] | select(.arm | startswith("EU as_of")) | select(.cases > 0 and all(.gates[]; endswith(": pass")))] | length) == 3
+            and ([.card.sets[] | select(.set == "refusal" or .set == "retrieval") | select(.cases > 0 and all(.gates[]; endswith(": pass")))] | length) == 2
+            and (.release.readBackFailures | length) == 0
+            and .removed.work == true and .removed.artifacts == true
+          ' "$RUNNER_TEMP/custody-rehearsal.json"
       - name: Upload the rehearsal report
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: image-rehearsal
-          path: ${{ runner.temp }}/image-rehearsal.json
+          path: |
+            ${{ runner.temp }}/image-rehearsal.json
+            ${{ runner.temp }}/custody-rehearsal.json
+            ${{ runner.temp }}/release-custody/expected-mount.json
           if-no-files-found: ignore

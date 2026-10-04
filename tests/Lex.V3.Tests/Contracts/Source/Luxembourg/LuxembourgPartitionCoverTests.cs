@@ -138,8 +138,10 @@ public sealed class LuxembourgPartitionCoverTests
         Assert.AreEqual(LuxembourgPartitionCoverRefusal.LeafPartitionRequired, refusal);
     }
 
+    // A cover that outlasted one robots generation: its session was replaced between leaves, so its leaves were proved
+    // under two runs, each a contiguous block. Each leaf's own two passes are one run; the cover names the first.
     [TestMethod]
-    public void LeavesFromTwoRunsAreNotOneObservation()
+    public void LeavesFromTwoRunsInContiguousBlocksAreOneCover()
     {
         var chain = TwoLeafChain();
         var left = Receipt(new RepeatedEnumerationDeliveryProofTests.Fixture(partitionKey: "left")
@@ -152,7 +154,46 @@ public sealed class LuxembourgPartitionCoverTests
         var cover = LuxembourgPartitionCover.TryCreate(
             chain, [left, right], rootReceipt: null, out var refusal);
 
+        Assert.AreEqual(LuxembourgPartitionCoverRefusal.None, refusal);
+        Assert.IsNotNull(cover);
+        Assert.AreEqual(left.Delivery.RunIdentity, cover.RunIdentity);
+        Assert.AreEqual(LuxembourgPartitionCoverBasis.LeafTilingOnly, cover.Basis);
+    }
+
+    [TestMethod]
+    public void ARunThatReappearsAfterAnotherIsNotACover()
+    {
+        var chain = TwoLeafChain().SplitLeaf("right", Cursor("t"), "right-left", "right-right");
+        var first = Receipt(new RepeatedEnumerationDeliveryProofTests.Fixture(partitionKey: "left")
+            .Create("a,b", "a,b"));
+        var second = Receipt(new RepeatedEnumerationDeliveryProofTests.Fixture(
+            partitionKey: "right-left",
+            runIdentitySeed: 950).Create("a,b", "a,b"));
+        var third = Receipt(new RepeatedEnumerationDeliveryProofTests.Fixture(partitionKey: "right-right")
+            .Create("a,b", "a,b"));
+        Assert.AreEqual(first.Delivery.RunIdentity, third.Delivery.RunIdentity);
+
+        var cover = LuxembourgPartitionCover.TryCreate(
+            chain, [first, second, third], rootReceipt: null, out var refusal);
+
         Assert.IsNull(cover);
+        Assert.AreEqual(LuxembourgPartitionCoverRefusal.LeafRunIdentityDiffers, refusal);
+    }
+
+    [TestMethod]
+    public void LeavesFromTwoRunsBesideARootCountAreNotOneObservation()
+    {
+        var chain = TwoLeafChain();
+        var left = Receipt(new RepeatedEnumerationDeliveryProofTests.Fixture(
+            partitionKey: "left", expectedCount: 2).Create("a,b", "a,b"));
+        var right = Receipt(new RepeatedEnumerationDeliveryProofTests.Fixture(
+            partitionKey: "right", expectedCount: 3, runIdentitySeed: 950).Create("a,b,c", "a,b,c"));
+        var root = Receipt(new RepeatedEnumerationDeliveryProofTests.Fixture(
+            partitionKey: "root", expectedCount: 5).Create("a,b,c,d,e", "a,b,c,d,e"));
+
+        var cover = LuxembourgPartitionCover.TryCreate(chain, [left, right], root, out var refusal);
+
+        Assert.IsNull(cover, "a root count compared with leaves from another run would not be one observation");
         Assert.AreEqual(LuxembourgPartitionCoverRefusal.LeafRunIdentityDiffers, refusal);
     }
 

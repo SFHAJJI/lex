@@ -919,6 +919,7 @@
             "requested_language": "fra",
             "requested_mode": null,
             "requested_query": "assembl\u00E9e g\u00E9n\u00E9rale",
+            "rights_rule": "a state is searched only when its text is one evidence_bundle would quote: every source acquired and admitted by its rights; the text of any other state is not matched, so no hit and no count says which of its articles hold a word, and nothing about that text is stated here",
             "searchable_languages": [
               "fra"
             ],
@@ -1524,6 +1525,7 @@
             "expression_count": 1,
             "expressions": [
               {
+                "annexes_not_served": [],
                 "article_count": 99,
                 "language": "eng",
                 "members": [
@@ -1572,13 +1574,36 @@
               {
                 "item": "other_languages",
                 "reason": "an expression in a language the index holds no wording in is not listed; French expressions are not acquired (Decision 89)"
+              },
+              {
+                "item": "annexes",
+                "reason": "no annex text is held: annexes are not indexed as articles, so no annex is searched, quoted or exported; annexes_not_served lists the annexes the corpus classified against the publisher PDF on the members an expression was read from, with the official source to read them, and an empty list says only that the corpus classified none there, not that the act has none"
               }
             ],
             "publisher": "eu-eurlex",
             "publisher_work_id": "http://publications.europa.eu/resource/cellar/3e485e15-11bd-11e6-ba9a-01aa75ed71a1",
             "requested_identifier": "32016R0679",
             "requested_language": null,
-            "scope": "the EU work as the mounted EU index holds it: its expressions, the one wording held of each with the Formex act date, the article count and the corpus members the articles were read from; a record of this corpus and not of what the publisher holds, and a missing expression or wording here is neither absent from the publisher\u0027s record nor absent from law; with a language, only that language\u0027s expressions are listed and available_languages still lists every language the work has"
+            "scope": "the EU work as the mounted EU index holds it: its expressions, the one wording held of each with the Formex act date, the article count and the corpus members the articles were read from; a record of this corpus and not of what the publisher holds, and a missing expression or wording here is neither absent from the publisher\u0027s record nor absent from law; with a language, only that language\u0027s expressions are listed and available_languages still lists every language the work has",
+            "wording_timeline": {
+              "consolidations_held": false,
+              "date_semantics": "an EU wording date is the date of a wording of the act: for the original wording, the date the publisher\u0027s Formex package gives the act; for a consolidated version, the publisher\u0027s consolidation date (cdm:act_consolidated_date) of that version; it is not an entry-into-force, application or publication date, and an EU date is never merged with a Luxembourg applicability date",
+              "languages": [
+                {
+                  "language": "eng",
+                  "unplaced_versions": 0,
+                  "wordings": [
+                    {
+                      "basis": "single_work",
+                      "text_held": true,
+                      "wording_date": "2016-04-27",
+                      "works": 1
+                    }
+                  ]
+                }
+              ],
+              "seed_celex": "32016R0679"
+            }
           }
         },
         "schema": "lex-v3-envelope/1",

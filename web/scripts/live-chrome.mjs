@@ -1,20 +1,29 @@
 // The live pages' interface copy, in one table, so every language the interface is offered in is
 // one reviewed table beside this one (Decision 41; the launch contract's chrome line).
 //
-// English is the source. French is drafted beside it for review and ships only when reviewed:
-// until then `liveChrome` answers only for English, and French, German and Luxembourgish answer
-// `localization_unavailable` (`live-locale-page.jsx`). The table holds each page's title, eyebrow,
-// heading and introduction, the forms' labels and buttons, each screen's idle sentence, and the
-// sentences the search, dossier, reading, history, compare, radar and export screens say about an
-// answer (Trust and Coverage lays its answer out with the shared `Coverage` component, whose copy is
-// its own). A sentence with
+// English is the source. French is the reviewed table beside it (`live-chrome-fr.mjs`, reviewed by
+// Claude (AI reviewer), under the owner's delegation of 2026-10-02; its receipt is `CHROME_REVIEWS`
+// in `localization.mjs`). German and Luxembourgish have no reviewed table, so `liveChrome` refuses
+// them and they answer `localization_unavailable` (`live-locale-page.jsx`). The table holds each
+// page's title, eyebrow, heading and introduction, the forms' labels and buttons, each screen's idle
+// sentence, and the sentences the search, dossier, reading, history, compare, radar and export
+// screens say about an answer (Trust and Coverage lays its answer out with the shared `Coverage`
+// component, whose copy is its own), down to the separators between a list's items. A sentence with
 // values in it is a template with `{name}` placeholders (`fillParts`), so a translation can put them
 // where its grammar needs them; a sentence that counts is `{ one, other }`, chosen by the language's
 // plural rule (`countedEntry`). The phrases the platform itself sends (a matching rule, a scope, a
-// reason something is not held) are the platform's English and are shown as sent.
+// reason something is not held) are the platform's English and are shown as sent, marked English on
+// a page in another language (`ENGLISH_LANG`, `englishRun`).
+//
+// The sentences the screens say for a refusal stay in each screen's own module, in English, where the
+// checkpoint list collects them (`refusal-sentences.mjs`); a reviewed language says them through
+// `REFUSAL_TRANSLATIONS`, keyed by that English (`refusalSentence`, `refusalTemplate`,
+// `refusalHint`), and a sentence with no reviewed translation throws rather than being said in
+// English in its place.
 
 import { COVERAGE_COPY } from './coverage.mjs';
 import { REFUSAL_CARD_COPY } from './refusal-card.mjs';
+import { LIVE_CHROME_FR, REFUSALS_FR } from './live-chrome-fr.mjs';
 
 const EN = Object.freeze({
   coverage: Object.freeze({
@@ -28,8 +37,8 @@ const EN = Object.freeze({
     title: "Search",
     eyebrow: "Search",
     heading: "Search the held text",
-    intro: "Finds the articles whose text contains the phrase exactly as typed, or every word of it, in the text this server holds. The phrase goes to this server in the request and nowhere else, and this page keeps nothing.",
-    idle: "Type a phrase to search the article text this server holds.",
+    intro: "Finds the articles whose text contains the phrase exactly as typed, or every word of it, in the text this server holds and may search: text its rights withhold is not searched. The phrase goes to this server in the request and nowhere else, and this page keeps nothing.",
+    idle: "Type a phrase to search the article text this server holds and may search.",
     population: Object.freeze({
       one: "“{query}” in {language}: {strict} with the exact phrase, {relaxed} with every word, in {works} work.",
       other: "“{query}” in {language}: {strict} with the exact phrase, {relaxed} with every word, in {works} works.",
@@ -42,11 +51,12 @@ const EN = Object.freeze({
     noTitlesHeld: "This index holds no work titles, so the phrase was matched against article text only.",
     ambiguousHeading: "Works with several versions on {date}",
     ambiguousNote: "These works have more than one version that applies on that date, so none is chosen and none contributes a hit.",
+    ambiguousWork: "{work}: {candidates}",
     hit: "{article} in {work}, version of {date}",
-    noHit: "No article of the text this server holds contains “{query}”.",
+    noHit: "No article of the text this server holds and may search contains “{query}”.",
     noText: "This index holds no searchable text in {language}; it holds text in {languages}.",
     nextPage: "Next page",
-    euWording: "Every hit is in the one wording of {celex} this server holds in {language}, dated {date} and pinned by its digest: {permalink}",
+    euWording: "Every hit is in the original wording of {celex} this server holds in {language}, dated {date} and pinned by its digest: {permalink}",
     euHit: "{heading} of {celex}, wording of {date}",
     notHeldHeading: "What this search does not cover",
   }),
@@ -54,10 +64,11 @@ const EN = Object.freeze({
     title: "Dossier",
     eyebrow: "Dossier",
     heading: "A work's dossier",
-    intro: "What this server holds for one work: a Luxembourg work's titles and publisher-dated states, or an EU work's expressions and the one wording held of each, and what the dossier does not hold. The identifier goes to this server in the request and nowhere else, and this page keeps nothing.",
+    intro: "What this server holds for one work: a Luxembourg work's titles and publisher-dated states, or an EU work's expressions and the original wording of each, and what the dossier does not hold. The identifier goes to this server in the request and nowhere else, and this page keeps nothing.",
     idle: "Type a work identifier to read what this server holds for it.",
     noTitle: "This index holds no title for this work.",
     shortTitle: "{title} (short title)",
+    titleGroup: "{language}: {titles}",
     heldIn: "{iri}, held in {languages}.",
     states: Object.freeze({
       one: "{count} state, from {from} to {to}.",
@@ -71,8 +82,8 @@ const EN = Object.freeze({
     articlesNotAdmitted: "Articles not admitted",
     notHeldHeading: "What this dossier does not hold",
     euExpressions: Object.freeze({
-      one: "{count} expression held, in its one original wording.",
-      other: "{count} expressions held, each in its one original wording.",
+      one: "{count} expression held, shown with its original wording.",
+      other: "{count} expressions held, each shown with its original wording.",
     }),
     wordingDate: "Wording date",
   }),
@@ -80,8 +91,8 @@ const EN = Object.freeze({
     title: "Reading",
     eyebrow: "Reading",
     heading: "The text on a date",
-    intro: "The text of one Luxembourg work as it stood on one date, article by article, as the publisher wrote it, with what a quotation of it needs. The identifier and the date go to this server in the request and nowhere else, and this page keeps nothing.",
-    idle: "Type a work identifier and a date to read the text that applied on it.",
+    intro: "The text of one Luxembourg work as it stood on one date, or of one EU work in the wording that answers that date (its original wording or a later consolidated one), article by article, as the publisher wrote it, with what a quotation of it needs. The identifier and the date go to this server in the request and nowhere else, and this page keeps nothing.",
+    idle: "Type a work identifier and a date to read its text on that date.",
     rights: "Text served under {rights}. Read on {date}.",
     rightsIn: "Text served under {rights}. Read on {date} in {language}.",
     stateHeading: "{work}, {language}, the state applying from {from}",
@@ -94,6 +105,23 @@ const EN = Object.freeze({
     evidence: "Text digest {text}, body digest {body}, official source {source}, {permalink}",
     withoutText: "Held without text: {articles}.",
     notHeldHeading: "What this reading does not hold",
+    europeWordingHeading: "{celex}, {language}, the original wording of {date} (the act's date in the publisher's Formex package; no later wording is held)",
+    europeOriginalHeading: "{celex}, {language}, the original wording of {date} (the act's date in the publisher's Formex package)",
+    europeConsolidatedHeading: "{celex}, {language}, the consolidated wording of {date} (the publisher's consolidation date)",
+    europeHoldsUntil: "This wording answers the dates from {date} to the day before {next}, the date of the next wording.",
+    europeSameDateWorks: Object.freeze({
+      one: "{count} other publisher work carries this date: {held} with this same text held here, {notHeld} with no text held here.",
+      other: "{count} other publisher works carry this date: {held} with this same text held here, {notHeld} with no text held here.",
+    }),
+    europeUnplaced: Object.freeze({
+      one: "{count} wording of this act has no usable publisher date and is not placed in time: {held} with this same text held here, {notHeld} with no text held here.",
+      other: "{count} wordings of this act have no usable publisher date and are not placed in time: {held} with this same text held here, {notHeld} with no text held here.",
+    }),
+    europeLatest: "This is the latest wording held: it answers every later date, and an amendment the publisher has not yet consolidated is not in it.",
+    europeCounts: Object.freeze({
+      one: "{count} article quoted, {withoutText} held without text.",
+      other: "{count} articles quoted, {withoutText} held without text.",
+    }),
   }),
   history: Object.freeze({
     title: "Provision history",
@@ -186,7 +214,7 @@ const EN = Object.freeze({
     title: "Export composer",
     eyebrow: "Export composer",
     heading: "Take articles away, with their citations",
-    intro: "Read one Luxembourg work on one date, pin the articles you need, and save them as JSON, CSV or PDF. Each exported article carries its citation, its text digest, its official source and the rights it was served under, and every export carries the watermark. The identifier and the date go to this server in the request and nowhere else; the file is made in this page, and this page keeps nothing.",
+    intro: "Read one Luxembourg work on one date, or one EU work in the wording that answers that date, pin the articles you need, and save them as JSON, CSV or PDF. Each exported article carries its citation, its text digest and its official source, with the rights it was served under or, for EU text, the acknowledgement it was served with and the authenticity statement; every export carries the watermark and says what it excludes, with the reason. The identifier and the date go to this server in the request and nowhere else; the file is made in this page, and this page keeps nothing.",
     idle: "Type a work identifier and a date, then pin the articles to take away.",
     readOn: "Read on {date}. Pin the articles to export.",
     readOnIn: "Read on {date} in {language}. Pin the articles to export.",
@@ -203,6 +231,10 @@ const EN = Object.freeze({
     snapshot: "Read on {date}, from the snapshot observed at {observedAt}. Corpus {corpus}, index {index}, registry {registry}.",
     item: "{article} ({language}, applying from {from}): {citation}, text digest {digest}, official source {source}",
     excluded: "{article} ({language}, applying from {from}): excluded, {reason}, {citation}",
+    // An EU export's: its text is served with Decision 95's acknowledgement, and each article is dated as its wording is.
+    europeRights: "Text served with the acknowledgement {acknowledgement}, which every exported article carries, and the authenticity statement below.",
+    europeItem: "{article} ({language}, wording of {date}): {citation}, text digest {digest}, official source {source}",
+    europeExcluded: "{article} ({language}, wording of {date}): excluded, {reason}, {citation}",
     save: Object.freeze({ json: "Save as JSON", csv: "Save as CSV", pdf: "Save as PDF" }),
     formatRefused: "{format} is not offered for this export: {reason}.",
     composeFailed: "This export cannot be composed: {reason}.",
@@ -255,7 +287,7 @@ const EN = Object.freeze({
     negative: "Hypothesis: {hypothesis}. Dataset: {dataset}. Result: {result}. Decision: {decision}. What would reverse it: {reverse}.",
   }),
   // The refusal card's words, from `refusal-card.mjs`, their one English source (the string renderer
-  // says them too); the French is drafted beside them.
+  // says them too); the French table holds their French.
   refusalCard: REFUSAL_CARD_COPY,
   // Trust and Coverage's answer, from `coverage.mjs`, likewise the one English source of its words.
   coverageAnswer: COVERAGE_COPY,
@@ -274,6 +306,14 @@ const EN = Object.freeze({
     permalink: "Permalink",
     noneHeld: "none held",
     notHeldRow: "{item}: {reason}",
+    // Between the items of a list said in one line: its spaces are its content (French sets a no-break
+    // space before the semicolon).
+    listSeparator: "; ",
+    // The annexes of one EU wording a corpus disposition holds, never served as text (`europe-annexes.mjs`).
+    europeAnnexes: Object.freeze({
+      one: "{count} annex of the {language} wording is not served as text, and is never searched, quoted or exported: {reason}. Official source {source}.",
+      other: "{count} annexes of the {language} wording are not served as text, and are never searched, quoted or exported: {reason}. Official source {source}.",
+    }),
   }),
   form: Object.freeze({
     workIdentifier: "Work identifier",
@@ -299,7 +339,14 @@ const EN = Object.freeze({
   }),
 });
 
-export const LIVE_CHROME = Object.freeze({ en: EN });
+export const LIVE_CHROME = Object.freeze({ en: EN, fr: LIVE_CHROME_FR });
+
+/**
+ * What each reviewed language says for the refusal sentences the screens hold in English, keyed by that
+ * English: the sentences by code, each screen's two sentences for a refusal named only by its code, and
+ * the hints a card that cannot be shown still carries (`REFUSALS_FR`).
+ */
+export const REFUSAL_TRANSLATIONS = Object.freeze({ fr: REFUSALS_FR });
 
 /**
  * The interface language this bundle was built for: English, unless the live build compiled it for
@@ -307,6 +354,13 @@ export const LIVE_CHROME = Object.freeze({ en: EN });
  * language: a page and the script that hydrates it are built together, so they say the same words.
  */
 export const CHROME_LOCALE = typeof __LEX_CHROME_LOCALE__ === 'string' ? __LEX_CHROME_LOCALE__ : 'en';
+
+/**
+ * The `lang` that English text carries on this bundle's pages: none on an English page, whose own
+ * language it is, and `en` on a page in any other, so a screen reader reads the platform's English
+ * (its reasons, rules, scopes and statements) as English rather than in the page's voice.
+ */
+export const ENGLISH_LANG = CHROME_LOCALE === 'en' ? undefined : 'en';
 
 /** Where a live page's own file is served for this bundle's language: `/` for English, `/fr/` for French. */
 export function livePath(file) {
@@ -318,6 +372,64 @@ export function liveChrome(locale = CHROME_LOCALE) {
   const table = LIVE_CHROME[locale];
   if (table === undefined) throw new Error(`no reviewed interface copy in ${JSON.stringify(locale)}: it answers localization_unavailable`);
   return table;
+}
+
+/** Every entry of a table as `[path, text]`, in the table's order. */
+export function entriesOf(table, path = []) {
+  return Object.entries(table).flatMap(([key, value]) => (typeof value === 'string' ? [[[...path, key].join('.'), value]] : entriesOf(value, [...path, key])));
+}
+
+function reviewedWording(locale, path, english) {
+  let node = Object.hasOwn(REFUSAL_TRANSLATIONS, locale) ? REFUSAL_TRANSLATIONS[locale] : undefined;
+  for (const key of path) node = node !== null && typeof node === 'object' && Object.hasOwn(node, key) ? node[key] : undefined;
+  if (typeof node !== 'string') {
+    throw new Error(`no reviewed ${JSON.stringify(locale)} wording of ${JSON.stringify(english)}: a reviewed language never says the English in its place`);
+  }
+  return node;
+}
+
+/** A refusal sentence a screen holds in English, as this bundle's language says it. */
+export function refusalSentence(english, locale = CHROME_LOCALE) {
+  return locale === 'en' ? english : reviewedWording(locale, ['sentences', english], english);
+}
+
+/**
+ * One of the two templates a screen (`search`, `reading`, ...) says a refusal with when it names it only
+ * by its code (`unexpected`, `unshown`), as this bundle's language says it.
+ */
+export function refusalTemplate(screen, kind, english, locale = CHROME_LOCALE) {
+  return locale === 'en' ? english : reviewedWording(locale, ['templates', screen, kind], english);
+}
+
+/** A hint a refusal whose card cannot be shown still carries, as a template in this bundle's language. */
+export function refusalHint(english, locale = CHROME_LOCALE) {
+  return locale === 'en' ? english : reviewedWording(locale, ['hints', english], english);
+}
+
+/**
+ * A run of English inside what a page in another language says: the reason a refusal's card cannot
+ * be shown, or a message this interface has no reviewed wording for there (a transport failure, an
+ * answer it cannot read, a request it will not send). On an English page it is plain text; elsewhere
+ * it is set apart, so the page marks it `lang="en"` and nothing English passes as the page's language.
+ */
+export function englishRun(text) {
+  return ENGLISH_LANG === undefined ? text : Object.freeze({ lang: ENGLISH_LANG, text });
+}
+
+/**
+ * The sentence a state carries, from its runs (text, `englishRun`s, or `fillParts` made of both):
+ * `sentence`, its whole text, and, when a run is English on a page in another language, `runs`, for
+ * the page to lay out with that run marked. On an English page a state carries its sentence alone.
+ */
+export function statement(...runs) {
+  const all = runs.flat();
+  const sentence = all.map((run) => (typeof run === 'string' ? run : run.text)).join('');
+  return all.every((run) => typeof run === 'string') ? { sentence } : { sentence, runs: Object.freeze(all) };
+}
+
+/** A state's sentence that has no reviewed wording in this bundle's language: said in English, and marked so. */
+export function englishStatement(text) {
+  return statement(englishRun(text));
 }
 
 /**

@@ -17,6 +17,8 @@ public sealed class V3JourneyMountTests
 {
     private const string WriteVariable = "V3_WRITE_JOURNEY_MOUNT";
     private const string LicenceBlockedVariable = "V3_WRITE_LICENCE_BLOCKED_MOUNT";
+    private const string TwoStateVariable = "V3_WRITE_TWO_STATE_JOURNEY_MOUNT";
+    private const string LaterDate = "2025-01-01";
     private const string NonAdmittingLicence = "non_admitting_licence_scl";
     private const int WindowLength = 40;
     private const int WindowStride = 20;
@@ -115,6 +117,53 @@ public sealed class V3JourneyMountTests
             rights_disposition = NonAdmittingLicence,
             passage_windows = new { length = WindowLength, stride = WindowStride },
             withheld_passages = articles.SelectMany(static article => Windows(article.Text)).Distinct(StringComparer.Ordinal).ToArray(),
+        }, new JsonSerializerOptions { WriteIndented = true });
+        await File.WriteAllTextAsync(Path.Combine(target, "journey-mount.json"), manifest + "\n");
+    }
+
+    /// <summary>
+    /// Writes the mount journeys J3 (a comparison across two dates) and J8 (what changed in a period) walk with a real
+    /// change, when <c>V3_WRITE_TWO_STATE_JOURNEY_MOUNT</c> names a directory: the fixture mount with a later state of
+    /// its work, dated 2025-01-01, in which one article's text is amended (review of #915: on the one-state fixture the
+    /// compare and radar steps show no change). Its <c>journey-mount.json</c> names both dates and the amended article.
+    /// </summary>
+    [TestMethod]
+    public async Task TheTwoStateJourneyMountHoldsALaterStateWithOneArticleAmended()
+    {
+        var target = Environment.GetEnvironmentVariable(TwoStateVariable);
+        if (string.IsNullOrWhiteSpace(target))
+        {
+            Assert.Inconclusive($"{TwoStateVariable} names no directory, so no two-state journey mount is written.");
+        }
+
+        var fixture = await MountedFixture.CreateAsync();
+        await using var cleanup = fixture;
+        var own = fixture.ArticlesOfOwnState();
+        Assert.IsNotEmpty(own);
+        var amended = own[0];
+        var later = await fixture.AddStateAsync(LaterDate, "later");
+        await fixture.RewriteArticleTextAsync(later.ExpressionIri, amended.PublisherId, amended.Text + " amended");
+        Directory.CreateDirectory(target);
+        foreach (var name in new[] { V3CorpusMount.IndexFileName, V3CorpusMount.CapabilityManifestFileName, V3CorpusMount.CorpusFileName })
+        {
+            File.Copy(Path.Combine(fixture.Directory, name), Path.Combine(target, name), overwrite: true);
+        }
+
+        using (var mount = await V3CorpusMount.OpenAsync(target, CancellationToken.None))
+        {
+            Assert.IsNotNull(mount, "the two-state directory mounts through the API's own verifier.");
+        }
+
+        var manifest = JsonSerializer.Serialize(new
+        {
+            schema = "lex-v3-journey-mount/1",
+            note = "the test fixture's Luxembourg mount (THE MOUNT IS A FIXTURE) with a later state of its work, one article amended, written for the journeys that compare two states",
+            corpus_sha256 = fixture.CorpusSha256,
+            index_sha256 = Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(File.ReadAllBytes(Path.Combine(target, V3CorpusMount.IndexFileName)))),
+            work_key = fixture.WorkKey,
+            first_date = fixture.ApplicabilityDate,
+            later_date = LaterDate,
+            amended_article = amended.PublisherId,
         }, new JsonSerializerOptions { WriteIndented = true });
         await File.WriteAllTextAsync(Path.Combine(target, "journey-mount.json"), manifest + "\n");
     }

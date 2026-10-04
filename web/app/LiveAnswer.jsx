@@ -10,13 +10,85 @@
 // `Say` lays out one sentence of the interface copy table (`live-chrome.mjs`): the template's text with
 // its values in their places, where a value may be an element (a quotation in its own language, an
 // identifier set as code).
+//
+// English on a page in another language is marked English, so a screen reader reads it as English:
+// the platform's own phrases (`inEnglish`, `ENGLISH_LANG`) and the runs of a state's sentence that
+// have no reviewed wording in the page's language (`Said`). On an English page none of this adds a
+// tag or an attribute, so the English pages are exactly what they were.
 
 import { Fragment } from 'react';
 
-import { fillParts } from '../scripts/live-chrome.mjs';
+import { ENGLISH_LANG, countedEntry, fillParts, liveChrome } from '../scripts/live-chrome.mjs';
 
 export function Say({ template, values }) {
   return fillParts(template, values).map((part, index) => (typeof part === 'string' ? part : <Fragment key={index}>{part}</Fragment>));
+}
+
+/**
+ * A phrase the platform sends in English (a reason, a rule, a scope, a statement), as a value of a sentence or a
+ * child of an element: the text itself on an English page, and the text marked `lang="en"` on a page in another.
+ */
+export function inEnglish(text) {
+  return ENGLISH_LANG === undefined ? text : <span lang={ENGLISH_LANG}>{text}</span>;
+}
+
+/**
+ * The annexes an EU wording or expression lists as not served (`scripts/europe-annexes.mjs`), one line per disposition: how
+ * many annexes of the wording in `language` are not served as text and never searched, quoted or exported, the platform's
+ * reason (in English) and the official source, printed, not linked.
+ */
+export function EuropeAnnexes({ rows, language }) {
+  if (rows.length === 0) return null;
+  const common = liveChrome().common;
+  return rows.map((row) => (
+    <p key={row.disposition} data-annexes-not-served={row.count} data-annex-disposition={row.disposition}>
+      <Say
+        template={countedEntry(common.europeAnnexes, row.count)}
+        values={{
+          count: row.count,
+          language: common.languageNames[language] ?? language,
+          reason: inEnglish(row.reason),
+          source: <code>{row.officialSource}</code>,
+        }}
+      />
+    </p>
+  ));
+}
+
+/** A statement (`statement` in `live-chrome.mjs`) laid out: its sentence, or its runs with each English run marked. */
+export function Said({ statement }) {
+  if (statement.runs === undefined) return statement.sentence;
+  return statement.runs.map((run, index) => (typeof run === 'string'
+    ? <Fragment key={index}>{run}</Fragment>
+    : <span key={index} lang={run.lang}>{run.text}</span>));
+}
+
+/** The sentence a state carries, as the screen's status. */
+export function StatusSentence({ outcome }) {
+  return (
+    <p role="status">
+      <Said statement={outcome} />
+    </p>
+  );
+}
+
+/**
+ * The refusal card's words for a refusal's publisher: an EU refusal's declared nulls, offered candidates and their
+ * note speak of wordings and their dates, never of states or of what applies (the review of #903; the French review's
+ * item 3).
+ */
+export function refusalCardCopyFor(context) {
+  const copy = liveChrome().refusalCard;
+  return context?.publisher === 'eu-eurlex'
+    ? {
+      ...copy,
+      notes: { ...copy.notes, ...copy.europeNotes },
+      nullSentences: copy.europeNullSentences,
+      candidate: copy.europeCandidate,
+      candidateWithdrawalNotStated: copy.europeCandidateWithdrawalNotStated,
+      published: copy.europePublished,
+    }
+    : copy;
 }
 
 export function LiveAnswer({ children }) {

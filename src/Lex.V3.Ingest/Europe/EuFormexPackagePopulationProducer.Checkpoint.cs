@@ -10,7 +10,8 @@ namespace Lex.V3.Ingest.Europe;
 
 public sealed partial class EuFormexPackagePopulationProducer
 {
-    private const string PopulationCheckpointSchema = "lex-eu-formex-population-checkpoint/1";
+    private const string PopulationCheckpointSchema = "lex-eu-formex-population-checkpoint/2";
+    private const string PriorPopulationCheckpointSchema = "lex-eu-formex-population-checkpoint/1";
 
     /// <summary>Rebuild all Formex outcomes for the same checked run from retained acquisition checkpoints.</summary>
     public static async Task<EuFormexPackagePopulationResult> ReopenAsync(ICustodyStore store, SourceArtifactRef checkpoint,
@@ -29,8 +30,8 @@ public sealed partial class EuFormexPackagePopulationProducer
             var document = ContractJson.Deserialize<PopulationCheckpoint>(new UTF8Encoding(false, true).GetString(bytes.Span));
             if (run.Refusal is not null || run.Completion != EuQueryExecutionCompletion.AllFamiliesProven || run.CorrigendumTripwires is null ||
                 run.CorrigendumTripwires.ProductionsByFamilyKey.Values.Any(static value => value.Expressions is not { Delivered: true, Derivation: not null }) ||
-                document is null || document.Schema != PopulationCheckpointSchema || !bytes.Span.SequenceEqual(EncodePopulation(document)) ||
-                document.InputSha256 != PopulationInputDigest(run) || document.WorkCelex != workCelex ||
+                document is null || (document.Schema != PopulationCheckpointSchema && document.Schema != PriorPopulationCheckpointSchema) || !bytes.Span.SequenceEqual(EncodePopulation(document)) ||
+                document.InputSha256 != PopulationInputDigest(run, document.Schema == PriorPopulationCheckpointSchema) || document.WorkCelex != workCelex ||
                 document.ManifestationRenderer != manifestationRenderer.Reference || document.DocumentRenderer != documentRenderer.Reference ||
                 document.Enumerations is null || document.Packages is null ||
                 document.Enumerations.Any(static value => value is null || value.Checkpoint is null || value.Run is null || value.Profile is null) ||
@@ -69,13 +70,17 @@ public sealed partial class EuFormexPackagePopulationProducer
         return new SourceArtifactRef(NewUrn(), receipt.Reference.ContentSha256);
     }
 
-    private static string PopulationInputDigest(EuQueryExecutionResult run) => HashPopulation(new
+    private static string PopulationInputDigest(EuQueryExecutionResult run, bool priorSchema = false)
     {
-        run.ScopeManifestCanonicalSha256, run.CorpusRecordSetRef, Corpus = run.CorpusRecordSet?.Set,
-        Families = run.CorrigendumTripwires!.ProductionsByFamilyKey.OrderBy(static pair => pair.Key, StringComparer.Ordinal)
-            .Select(static pair => new { Family = pair.Key, Expressions = pair.Value.Expressions!.Derivation!.Expressions
-                .Select(static expression => expression.CanonicalContentSha256).ToArray() }).ToArray(),
-    });
+        var prior = new
+        {
+            run.ScopeManifestCanonicalSha256, run.CorpusRecordSetRef, Corpus = run.CorpusRecordSet?.Set,
+            Families = run.CorrigendumTripwires!.ProductionsByFamilyKey.OrderBy(static pair => pair.Key, StringComparer.Ordinal)
+                .Select(static pair => new { Family = pair.Key, Expressions = pair.Value.Expressions!.Derivation!.Expressions
+                    .Select(static expression => expression.CanonicalContentSha256).ToArray() }).ToArray(),
+        };
+        return priorSchema ? HashPopulation(prior) : HashPopulation(new { Prior = prior, run.ObservedWorkFacts });
+    }
     private static string PopulationResultDigest(EuFormexPackagePopulationResult result) => HashPopulation(new
     {
         result.EligibleExpressionCount, result.NotEnumeratedExpressionCount, result.AcquiredExpressionCount,
@@ -105,14 +110,23 @@ public sealed partial class EuFormexPackagePopulationProducer
         private int _enumerationIndex;
         private int _packageIndex;
         internal bool IsReplay => document is not null;
+        internal bool OriginalWorksOnly => document?.Schema == PriorPopulationCheckpointSchema;
         internal List<EnumerationCheckpoint> Enumerations { get; } = [];
         internal List<PackageCheckpoint> Packages { get; } = [];
-        internal void CaptureEnumeration(string family, EuFormexManifestationEnumerationResult enumeration) =>
-            Enumerations.Add(new EnumerationCheckpoint(family, enumeration.Expression.CanonicalContentSha256,
+        internal EnumerationCheckpoint CaptureEnumeration(string family, EuFormexManifestationEnumerationResult enumeration)
+        {
+            var captured = new EnumerationCheckpoint(family, enumeration.Expression.CanonicalContentSha256,
                 enumeration.CheckpointRef ?? throw new CustodyIntegrityException("A delivered enumeration lost its checkpoint."),
-                enumeration.Proof!.AcquisitionRunRef, enumeration.Proof.InterpretationProfileRef));
-        internal void CapturePackage(EuFormexPackageAcquisitionResult acquisition) =>
-            Packages.Add(new PackageCheckpoint(acquisition.Outcome.Expression.CanonicalContentSha256, acquisition.CheckpointRef));
+                enumeration.Proof!.AcquisitionRunRef, enumeration.Proof.InterpretationProfileRef);
+            Enumerations.Add(captured);
+            return captured;
+        }
+        internal PackageCheckpoint CapturePackage(EuFormexPackageAcquisitionResult acquisition)
+        {
+            var captured = new PackageCheckpoint(acquisition.Outcome.Expression.CanonicalContentSha256, acquisition.CheckpointRef);
+            Packages.Add(captured);
+            return captured;
+        }
         internal async Task<EuFormexManifestationEnumerationResult> EnumerateAsync(ICustodyStore store, string family,
             LanguageScopedExpression expression, CancellationToken cancellationToken)
         {
@@ -125,7 +139,7 @@ public sealed partial class EuFormexPackagePopulationProducer
                 item.Run, item.Profile, cancellationToken).ConfigureAwait(false);
         }
         internal async Task<EuFormexPackageAcquisitionResult> AcquireAsync(ICustodyStore store,
-            EuFormexManifestationEnumerationResult enumeration, EuQueryExecutionResult run, string celex,
+            EuFormexManifestationEnumerationResult enumeration, EuQueryExecutionResult run, string? celex,
             MachineQueryRendererSource renderer, CancellationToken cancellationToken)
         {
             if (document is null || _packageIndex >= document.Packages.Length)

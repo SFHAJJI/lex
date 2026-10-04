@@ -9,10 +9,13 @@
 // - what the platform sends: no EU answer in either census carries a Luxembourg state's date fields,
 //   and no Luxembourg answer an EU wording's;
 // - what the interface table says: the entries the EU views use carry none of the Luxembourg date
-//   words, in English or in the French draft, and no other entry carries the EU ones;
+//   words, in English or in the reviewed French, and no other entry carries the EU ones; nor does an
+//   EU refusal sentence, in either language;
 // - what each screen says, and what a screen reader hears, for each census answer: rendered through
 //   its screen, with the answer's own values taken out, the text and the human-read attributes of a
-//   Luxembourg answer use no EU date words, and an EU answer's no Luxembourg ones.
+//   Luxembourg answer use no EU date words, and an EU answer's no Luxembourg ones; and the same of the
+//   export composer with every article pinned and the export composed, for the census's Luxembourg
+//   bundle and the hand-built EU one the web tests share (`scripts/europe-bundle-sample.mjs`).
 //
 // The platform's own sentences are data here, as in the chrome scan: an EU answer says, in its own
 // words, that its date is never merged with a Luxembourg applicability date, and that sentence
@@ -29,16 +32,18 @@ import {
   CoverageAnswerView,
   DossierAnswerView,
   ExportAnswerView,
+  ExportPanel,
   HistoryAnswerView,
   RadarAnswerView,
   ReadingAnswerView,
   SearchAnswerView,
 } from "../.react-build/app.mjs";
-import { LIVE_CHROME } from "../scripts/live-chrome.mjs";
-import { LIVE_CHROME_FR_DRAFT, entriesOf } from "../scripts/live-chrome-fr-draft.mjs";
+import { europeEnvelope } from "../scripts/europe-bundle-sample.mjs";
+import { LIVE_CHROME, REFUSAL_TRANSLATIONS, entriesOf } from "../scripts/live-chrome.mjs";
+import { exportState, pinKey } from "../scripts/live-export.mjs";
 import { searchOutcome } from "../scripts/live-search.mjs";
 import { dossierOutcome } from "../scripts/live-dossier.mjs";
-import { readingOutcome } from "../scripts/live-reading.mjs";
+import { LIVE_READING_EUROPE_REFUSAL_SENTENCES, readingOutcome } from "../scripts/live-reading.mjs";
 import { historyOutcome } from "../scripts/live-history.mjs";
 import { compareOutcome } from "../scripts/live-compare.mjs";
 import { radarOutcome } from "../scripts/live-radar.mjs";
@@ -47,13 +52,13 @@ import { coverageOutcome } from "../scripts/live-coverage.mjs";
 const answers = JSON.parse(await readFile(new URL("../../schemas/v3-platform/answer-samples.json", import.meta.url), "utf8"));
 const census = JSON.parse(await readFile(new URL("../../schemas/v3-platform/envelope-samples.json", import.meta.url), "utf8"));
 
-/** The Luxembourg date words: a state's applicability, its version, in English and in the French draft. */
+/** The Luxembourg date words: a state's applicability, its version, in English and in French. */
 const LUXEMBOURG_DATE_WORDS = /\b(?:appl(?:y|ies|ied|ying|icability)|versions?|states?)\b|s[’']appliqu|applicab/i;
 
 /**
- * The EU date words: the one wording held and its date, in English and in the French draft. "Wording"
- * and "libellé" alone are not among them: a Luxembourg article's wording changes from state to state
- * ("wording changed", "libellé modifié"); only a wording that is dated is the EU's.
+ * The EU date words: a wording and its date, in English and in French. "Wording" and "libellé" alone
+ * are not among them: a Luxembourg article's wording changes from state to state ("wording changed",
+ * "libellé modifié"); only a wording that is dated is the EU's.
  */
 const EUROPE_DATE_WORDS = /\bwording (?:of|date)\b|\bdated (?:\{|\d{4}-)|libellé du (?:\{|\d{4}-)|date du libellé|daté du (?:\{|\d{4}-)/i;
 
@@ -62,8 +67,22 @@ const LUXEMBOURG_DATE_FIELDS = new Set(["applicability_date", "next_applicabilit
 // Not `wording_sha256` alone: a Luxembourg article history names each article wording's digest.
 const EUROPE_DATE_FIELDS = new Set(["wording_date", "wording_dates", "pinned_wording"]);
 
-/** The interface entries the EU views say, which name the EU date and only it. */
-const EUROPE_ENTRIES = new Set(["search.euWording", "search.euHit", "search.notHeldHeading", "dossier.euExpressions.one", "dossier.euExpressions.other", "dossier.wordingDate"]);
+/**
+ * The interface entries the EU views say, which name the EU date and only it: the views' own, and the
+ * EU-only entries the review of the French found outside the first set (the reading's counts, the
+ * refusal card's declared nulls and its offered wordings), and the EU export's.
+ */
+const EUROPE_ENTRIES = new Set([
+  "search.euWording", "search.euHit", "search.notHeldHeading", "dossier.euExpressions.one", "dossier.euExpressions.other",
+  "dossier.wordingDate", "reading.europeWordingHeading", "reading.europeOriginalHeading", "reading.europeConsolidatedHeading",
+  "reading.europeHoldsUntil", "reading.europeLatest", "reading.europeCounts.one", "reading.europeCounts.other",
+  "export.europeRights", "export.europeItem", "export.europeExcluded",
+  "refusalCard.europeNullSentences.nearest_earlier", "refusalCard.europeNullSentences.nearest_later",
+  "refusalCard.europeCandidate", "refusalCard.europeCandidateWithdrawalNotStated", "refusalCard.europePublished",
+  "refusalCard.europeNotes.ambiguous_version",
+  "reading.europeSameDateWorks.one", "reading.europeSameDateWorks.other", "reading.europeUnplaced.one", "reading.europeUnplaced.other",
+  "common.europeAnnexes.one", "common.europeAnnexes.other",
+]);
 
 function fieldsOf(node, found = new Set()) {
   if (Array.isArray(node)) node.forEach((item) => fieldsOf(item, found));
@@ -93,8 +112,8 @@ test("no EU answer carries a Luxembourg state's date, and no Luxembourg answer a
   assert.ok(seen["eu-eurlex"] >= 6 && seen["lu-legilux"] >= 10, `both publishers' answers were read: ${JSON.stringify(seen)}`);
 });
 
-test("the interface's EU entries say no Luxembourg date word, and no other entry says an EU one, in English and in the French draft", () => {
-  for (const [language, table] of [["en", LIVE_CHROME.en], ["fr", LIVE_CHROME_FR_DRAFT]]) {
+test("the interface's EU entries say no Luxembourg date word, and no other entry says an EU one, in English and in French", () => {
+  for (const [language, table] of [["en", LIVE_CHROME.en], ["fr", LIVE_CHROME.fr]]) {
     const entries = entriesOf(table);
     const europe = entries.filter(([path]) => EUROPE_ENTRIES.has(path));
     assert.equal(europe.length, EUROPE_ENTRIES.size, `${language}: every EU entry is in the table`);
@@ -105,6 +124,13 @@ test("the interface's EU entries say no Luxembourg date word, and no other entry
     // other entry speaks of one publisher's dates and must not borrow the EU's.
     for (const [path, text] of entries.filter(([path]) => !EUROPE_ENTRIES.has(path) && !path.endsWith(".intro"))) {
       assert.doesNotMatch(text, EUROPE_DATE_WORDS, `${language} ${path} says an EU date word`);
+    }
+  }
+  // The refusal sentences an EU refusal says, as the English and French pages say them.
+  for (const [code, english] of Object.entries(LIVE_READING_EUROPE_REFUSAL_SENTENCES)) {
+    for (const said of [english, REFUSAL_TRANSLATIONS.fr.sentences[english]]) {
+      assert.equal(typeof said, "string", `${code}: said in both languages`);
+      assert.doesNotMatch(said, LUXEMBOURG_DATE_WORDS, `the EU refusal sentence for ${code} says a Luxembourg date word: ${said}`);
     }
   }
 });
@@ -178,6 +204,29 @@ test("each screen says and speaks only its publisher's date words, for every cen
   assert.ok(spokenBy["lu-legilux"].some((said) => said.startsWith("dossier:") && /Applies from/.test(said)), "a Luxembourg dossier's date is when a state applies from");
 });
 
+test("the export composer says and speaks only its publisher's date words, with every article pinned and the export composed", () => {
+  // The census holds no EU bundle yet: the EU reading is the hand-built bundle the web tests share.
+  const luxembourg = census.envelopes.find((entry) => entry.operation === "evidence_bundle" && entry.envelope.result).envelope;
+  for (const envelope of [europeEnvelope(), luxembourg]) {
+    const outcome = readingOutcome({ state: "success", envelope });
+    assert.equal(outcome.state, "success", outcome.sentence);
+    const { view } = outcome;
+    const europe = view.publisher === "eu-eurlex";
+    const held = europe ? view.wordings.map((wording) => [wording.wordingSha256, wording]) : view.states.map((state) => [state.stateSha256, state]);
+    const pins = new Set(held.flatMap(([digest, holder]) => [...holder.articles, ...holder.articlesWithoutText].map((article) => pinKey(digest, article.publisherId))));
+    const panel = exportState(outcome, pins);
+    assert.equal(panel.state, "composed", panel.sentence);
+    const markup = renderToStaticMarkup(h(ExportAnswerView, { outcome, pins, onPin: () => {} })) + renderToStaticMarkup(h(ExportPanel, { outcome, pins, onSave: () => {} }));
+    // The export's own values are data too: the watermark, and what it names an exclusion by.
+    const said = interfaceText(markup, [envelope, panel.model]);
+    const [forbidden, kind, own] = europe
+      ? [LUXEMBOURG_DATE_WORDS, "a Luxembourg date word", /wording of/]
+      : [EUROPE_DATE_WORDS, "an EU date word", /applying from/];
+    assert.doesNotMatch(said, forbidden, `the ${view.publisher} export says ${kind}: ${said.match(forbidden)?.[0]}`);
+    assert.match(said, own, `the ${view.publisher} export dates its articles in its own words`);
+  }
+});
+
 test("the speech test fails a screen that borrows the other publisher's date words", () => {
   // The two checks, each fed what they exist to catch, so a pattern that matches nothing cannot pass.
   assert.match("Article 26 of 32016R0679, version of 2016-04-27", LUXEMBOURG_DATE_WORDS);
@@ -192,7 +241,7 @@ test("the speech test fails a screen that borrows the other publisher's date wor
   // And not what each publisher rightly says: a Luxembourg wording that changed is not an EU date.
   assert.doesNotMatch("wording changed", EUROPE_DATE_WORDS);
   assert.doesNotMatch("publisher-dated states", EUROPE_DATE_WORDS);
-  assert.doesNotMatch("1 expression held, in its one original wording.", LUXEMBOURG_DATE_WORDS);
+  assert.doesNotMatch("1 expression held, shown with its original wording.", LUXEMBOURG_DATE_WORDS);
 
   const envelope = census.envelopes.find((entry) => entry.operation === "search" && entry.scenario.startsWith("one EU work by its CELEX")).envelope;
   const outcome = searchOutcome({ state: "success", envelope });

@@ -84,9 +84,11 @@ public sealed class LexV3ToolProgramTests
     }
 
     [TestMethod]
-    public void TheWholeLuxembourgPopulationArgumentsAreAcceptedBeforeAnInvalidEuSeedRefuses()
+    [DataRow("all")]
+    [DataRow("legislative")]
+    public void LuxembourgPopulationArgumentsAreAcceptedBeforeAnInvalidEuSeedRefuses(string population)
     {
-        var run = Run("build", "--celex", "NOTASEED", "--lu-population", "all", "--wire-ceiling", "5");
+        var run = Run("build", "--celex", "NOTASEED", "--lu-population", population, "--wire-ceiling", "5");
         Assert.AreEqual(3, run.ExitCode, run.Transcript);
         StringAssert.Contains(run.StandardError, "(spent 0 of 5)", run.Transcript);
     }
@@ -94,6 +96,7 @@ public sealed class LexV3ToolProgramTests
     [TestMethod]
     [DataRow("other", false)]
     [DataRow("all", true)]
+    [DataRow("legislative", true)]
     public void AnInvalidOrMixedPopulationSelectionIsRejectedBeforeTraffic(string population, bool mixed)
     {
         var arguments = new List<string> { "build", "--celex", "NOTASEED", "--lu-population", population, "--wire-ceiling", "5" };
@@ -101,6 +104,33 @@ public sealed class LexV3ToolProgramTests
         var run = Run(arguments.ToArray());
         Assert.AreEqual(2, run.ExitCode, run.Transcript);
         Assert.DoesNotContain("renderer sources held", run.StandardOutput, run.Transcript);
+    }
+
+    [TestMethod]
+    [DataRow("missing")]
+    [DataRow("empty")]
+    [DataRow("not_a_journal")]
+    public void AResumeJournalThatDoesNotReadExitsTwoBeforeAnyWork(string journal)
+    {
+        var path = Path.Combine(Path.GetTempPath(), "lex-v3-journal-" + Guid.NewGuid().ToString("N") + ".jsonl");
+        if (journal != "missing")
+        {
+            File.WriteAllText(path, journal == "empty" ? string.Empty : "{\"seq\":0}\n");
+        }
+
+        try
+        {
+            var run = Run("build", "--celex", "NOTASEED", "--lu-name", "act", "--lu-start", ValidStart, "--lu-end", ValidEnd,
+                "--wire-ceiling", "5", "--resume-from", path);
+            Assert.AreEqual(2, run.ExitCode, run.Transcript);
+            StringAssert.Contains(run.StandardError, "--resume-from refused before any request", run.Transcript);
+            Assert.DoesNotContain("renderer sources", run.StandardOutput, run.Transcript);
+            Assert.DoesNotContain("Unhandled exception", run.StandardError, run.Transcript);
+        }
+        finally
+        {
+            File.Delete(path);
+        }
     }
 
     [TestMethod]

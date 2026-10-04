@@ -358,14 +358,24 @@ public sealed class LuxembourgDocumentGetAttemptResult
         bool retryAllowanceSpent,
         LuxembourgDocumentGetAttemptRefusal? refusal,
         string? deniedRobotsPath,
-        string? detail)
+        string? detail,
+        SourceArtifactRef? robotsRoute = null)
     {
         Evidence = evidence;
         RetryAllowanceSpent = retryAllowanceSpent;
         Refusal = refusal;
         DeniedRobotsPath = deniedRobotsPath;
         Detail = detail;
+        RobotsRoute = robotsRoute;
     }
+
+    /// <summary>
+    /// The retained robots route of the run whose admitted policy evaluated this GET's URL: present when the GET went
+    /// through a document phase's shared session, which retains its robots fetch before its first document. Its body
+    /// re-derives this GET's robots verdict offline (<see cref="LuxembourgDocumentFetchRouteReader"/>). Null for a GET
+    /// sent on a session of its own, whose robots fetch is not retained.
+    /// </summary>
+    public SourceArtifactRef? RobotsRoute { get; }
 
     /// <summary>The real, retained route evidence for this one GET. Present iff this is <see cref="Executed"/>.</summary>
     public RoutedHttpEvidence? Evidence { get; }
@@ -391,13 +401,14 @@ public sealed class LuxembourgDocumentGetAttemptResult
 
     public static LuxembourgDocumentGetAttemptResult Executed(
         RoutedHttpEvidence evidence,
-        bool retryAllowanceSpent)
+        bool retryAllowanceSpent,
+        SourceArtifactRef? robotsRoute = null)
     {
         ArgumentNullException.ThrowIfNull(evidence);
-        return new(evidence, retryAllowanceSpent, null, null, null);
+        return new(evidence, retryAllowanceSpent, null, null, null, robotsRoute);
     }
 
-    public static LuxembourgDocumentGetAttemptResult RobotsRefused(string deniedPath)
+    public static LuxembourgDocumentGetAttemptResult RobotsRefused(string deniedPath, SourceArtifactRef? robotsRoute = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(deniedPath);
         return new(
@@ -405,7 +416,8 @@ public sealed class LuxembourgDocumentGetAttemptResult
             false,
             LuxembourgDocumentGetAttemptRefusal.RobotsDisallowed,
             deniedPath,
-            $"legilux.public.lu robots.txt disallows '{deniedPath}' for the Lex product token.");
+            $"legilux.public.lu robots.txt disallows '{deniedPath}' for the Lex product token.",
+            robotsRoute);
     }
 
     public static LuxembourgDocumentGetAttemptResult Refused(
@@ -422,7 +434,24 @@ public sealed class LuxembourgDocumentGetAttemptResult
     }
 }
 
-public sealed class LuxembourgRepeatedEnumerationExecutor
+/// <summary>
+/// Where an unfinished adaptive cover continues: the chain as it stood when the interrupted run last delivered a leaf,
+/// that run's delivered leaves (a prefix of the chain's leaves) restored and proven again by the caller, with their
+/// enumeration checkpoints, and the interpretation profile reference they were proven under.
+/// </summary>
+internal sealed record LuxembourgCoverResumePoint(LuxembourgPartitionChain Chain,
+    IReadOnlyList<RepeatedEnumerationDeliveryReceipt> Receipts, IReadOnlyList<SourceArtifactRef> Checkpoints,
+    SourceArtifactRef InterpretationProfileRef);
+
+/// <summary>
+/// One leaf an adaptive cover has just proven and retained: the chain's split history at that moment, the leaf's index
+/// and range, its enumeration checkpoint, and the run and interpretation profile it was proven under. What a journal
+/// records so a resume can continue the cover after it.
+/// </summary>
+internal sealed record LuxembourgCoverLeafDelivered(IReadOnlyList<LuxembourgPartitionSplitStep> Splits, int Index,
+    LuxembourgQueryPartitionRange Leaf, SourceArtifactRef Checkpoint, SourceArtifactRef Run, SourceArtifactRef InterpretationProfileRef);
+
+public sealed partial class LuxembourgRepeatedEnumerationExecutor
 {
     private readonly ICustodyStore _custodyStore;
     private readonly TimeProvider _timeProvider;
@@ -455,6 +484,7 @@ public sealed class LuxembourgRepeatedEnumerationExecutor
         _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
         _testHandlerOverride = testHandlerOverride;
         _reopenGlue = new RepeatedEnumerationDeliveryReopenGlue(_custodyStore);
+        _gatewayTimeouts = new LuxembourgGatewayTimeouts(_timeProvider);
     }
 
     /// <summary>One partition, one session, two passes.</summary>
@@ -515,13 +545,13 @@ public sealed class LuxembourgRepeatedEnumerationExecutor
     /// <summary>
     /// The body of one partition's run against a session that is already bootstrapped and owned by
     /// the caller: <see cref="RunPartitionAsync"/> for a single partition, <see cref="RunCoverAsync"/>
-    /// for every leaf of one chain sharing one session. Splitting this out (rather than having
-    /// <see cref="RunCoverAsync"/> call <see cref="RunPartitionAsync"/> per leaf) is what makes the
-    /// cover's one-run requirement hold by construction: <see cref="RoutedHttpAcquisitionSession"/>
+    /// for the leaves of one chain sharing a session. Splitting this out (rather than having
+    /// <see cref="RunCoverAsync"/> call <see cref="RunPartitionAsync"/> per leaf) keeps the leaves of a
+    /// cover in as few runs as the robots policy allows: <see cref="RoutedHttpAcquisitionSession"/>
     /// mints one <c>RunIdentity</c> at construction and stamps it on every evidence document it
-    /// writes, so starting a fresh session per leaf would give every leaf a different
-    /// <c>RunIdentity</c> and <see cref="LuxembourgPartitionCover.TryCreate"/> would refuse
-    /// <c>leaf_run_identity_differs</c> on every multi-leaf cover. The product-request count is
+    /// writes, a leaf's two passes must share one run, and <see cref="LuxembourgPartitionCover.TryCreate"/>
+    /// accepts several runs only as contiguous blocks of leaves (a cover longer than one robots
+    /// generation is replaced between leaves, never within one). The product-request count is
     /// local to this call, so each leaf reports its own send count, not a running total across
     /// leaves that happen to share a session.
     /// </summary>
@@ -755,78 +785,8 @@ public sealed class LuxembourgRepeatedEnumerationExecutor
         var session = start.Session;
         try
         {
-            var item = session.OpenPlanItem(boundRequest);
-            var maximumAttempts = session.SourceProfile.MaximumAttempts;
-            var attemptCount = 0;
-            RoutedHttpAcquisitionSession.AttemptResult attempt;
-            while (true)
-            {
-                // EVERY ATTEMPT, NOT ONLY THE FIRST. This door re-attempts a COMPLETED response at a
-                // retryable status - the one place this driver deliberately differs from the EU one,
-                // documented below - so the retry loop is exactly where a body-fetch ceiling would
-                // otherwise be lost. That the first request was charged says nothing about the sixth.
-                if (!wireBudget.TryReserveAttempt())
-                {
-                    return LuxembourgDocumentGetAttemptResult.Refused(
-                        LuxembourgDocumentGetAttemptRefusal.WireBudgetExhausted,
-                        $"the ceiling was reached after {attemptCount} attempt(s).");
-                }
-
-                attempt = await item.ExecuteNextAttemptAsync(cancellationToken).ConfigureAwait(false);
-                attemptCount++;
-
-                // NO REDIRECT-HOP CEILING MAPPING HERE, AND THE ASYMMETRY WITH THE EU DOCUMENT
-                // FETCH IS DELIBERATE. That door maps the session's own RedirectTargetNotSentWire-
-                // BudgetExhausted outcome because the EU document profile admits a same-origin 303
-                // chain. This publisher's document profile expects no redirect on this route at
-                // all: a 303 here ends the route as SourceProfileStale before any successor could
-                // be considered, so the session's hop gate is unreachable from this door. A mapping
-                // for a case that cannot occur was drafted, measured against the profile, and
-                // removed rather than left to claim a path that does not exist.
-                if (attempt.Kind == OfficialHttpAcquisitionOutcomeKind.ExecutedObservation)
-                {
-                    // The one place this driver deliberately differs from the EU one: a completed
-                    // response at a retryable status is re-attempted rather than returned at once.
-                    // The session's own PlanItem.IsRetryable already admits exactly these six
-                    // statuses, so without this loop the profile's retry allowance was declared and
-                    // never spent, and a single 503 would still have been reported downstream as
-                    // "retry exhausted". Now that name is earned or not claimed.
-                    if (attemptCount >= maximumAttempts || !IsRetryableStatus(attempt))
-                    {
-                        break;
-                    }
-
-                    continue;
-                }
-
-                var retryable = attempt.PreHeaderFailureClass is
-                    HttpPreHeaderFailureClass.HeaderDeadline or
-                    HttpPreHeaderFailureClass.TransportBeforeHeaders;
-                if (!retryable || attemptCount >= maximumAttempts)
-                {
-                    return LuxembourgDocumentGetAttemptResult.Refused(
-                        LuxembourgDocumentGetAttemptRefusal.ObservationNotExecuted,
-                        $"{attempt.OperationalReason}/{attempt.PreHeaderFailureClass}");
-                }
-            }
-
-            var evidence = attempt.Evidence!;
-
-            // Decision 78 retention: a run holds what it depends on. The evidence document is
-            // written and reopened by digest exactly as every other channel already does, so a
-            // document GET's own evidence is retained custody too, never left to live only in this
-            // process's memory.
-            var evidenceBytes = evidence.CopyCanonicalBytes();
-            var evidenceReceipt = await _custodyStore.CreateAsync(
-                    evidenceBytes, CustodyClass.NightlyFloor90d, cancellationToken)
-                .ConfigureAwait(false);
-            var reopenedEvidenceBytes = await CustodyRestore.ReadByDigestCheckedAsync(
-                    _custodyStore, evidenceReceipt.Reference.ContentSha256, cancellationToken)
-                .ConfigureAwait(false);
-            var reopenedEvidence = RoutedHttpEvidence.ParseAndVerify(reopenedEvidenceBytes.Span);
-
-            return LuxembourgDocumentGetAttemptResult.Executed(
-                reopenedEvidence, attemptCount >= maximumAttempts && IsRetryableStatus(attempt));
+            return await RunOpenedDocumentAsync(session, session.OpenPlanItem(boundRequest), wireBudget, robotsRoute: null,
+                cancellationToken).ConfigureAwait(false);
         }
         catch (Exception exception) when (exception is CustodyIntegrityException or CustodyRequiredException)
         {
@@ -851,13 +811,14 @@ public sealed class LuxembourgRepeatedEnumerationExecutor
         evidence.Hops[^1].Status is 408 or 429 or 500 or 502 or 503 or 504;
 
     /// <summary>
-    /// Every leaf of one chain in ONE session, so the cover's one-run requirement holds by
-    /// construction rather than by a check across results.
+    /// Every leaf of one chain on as few sessions as the robots policy allows: one session per robots
+    /// generation, replaced between leaves (see <see cref="RunCoverCoreAsync"/>), so each leaf's two
+    /// passes share one run and the runs form contiguous blocks of leaves.
     /// </summary>
     /// <param name="wireBudget">
-    /// The ceiling for the WHOLE cover, not one per leaf. Every leaf of a chain runs inside the one
-    /// session this method opens, so a per-leaf budget would bound each leaf and leave the cover -
-    /// whose leaf count is the caller's chain, not a constant - unbounded.
+    /// The ceiling for the WHOLE cover, not one per leaf, each session's robots fetch included: a
+    /// per-leaf budget would bound each leaf and leave the cover - whose leaf count is the caller's
+    /// chain, not a constant - unbounded.
     /// </param>
     public async Task<IReadOnlyList<LuxembourgEnumerationRunResult>> RunCoverAsync(
         LuxembourgPartitionRunRequest rootRequest,
@@ -871,8 +832,9 @@ public sealed class LuxembourgRepeatedEnumerationExecutor
     /// <summary>
     /// Splits selections above the requested leaf size, at the publisher ceiling, or after a
     /// retained initial COUNT capacity failure until every leaf can be enumerated
-    /// twice. All attempts, including saturated ancestors and empty leaves, use one wire budget
-    /// and one acquisition session. This returns evidence; the caller must still prove the cover.
+    /// twice. All attempts, including saturated ancestors and empty leaves, use one wire budget,
+    /// on one acquisition session per robots generation (see RunCoverCoreAsync). This returns
+    /// evidence; the caller must still prove the cover.
     /// </summary>
     public Task<(LuxembourgPartitionChain Chain, IReadOnlyList<LuxembourgEnumerationRunResult> Results,
         int ProductRequestCount)> RunAdaptiveCoverAsync(
@@ -896,75 +858,119 @@ public sealed class LuxembourgRepeatedEnumerationExecutor
         WireRequestBudget wireBudget,
         bool adaptive,
         CancellationToken cancellationToken,
-        long maximumLeafRows = long.MaxValue)
+        long maximumLeafRows = long.MaxValue,
+        LuxembourgCoverResumePoint? resumeFrom = null,
+        Func<LuxembourgCoverLeafDelivered, Task>? onLeafDelivered = null)
     {
         ArgumentNullException.ThrowIfNull(rootRequest);
         ArgumentNullException.ThrowIfNull(chain);
         ArgumentNullException.ThrowIfNull(sourceWitness);
         ArgumentNullException.ThrowIfNull(wireBudget);
 
-        // THE COVER'S ROBOTS FETCH, RESERVED BEFORE THE SESSION THAT SENDS IT. One session serves
-        // every leaf, so this is charged once here rather than once per leaf - charging it per leaf
-        // would report N robots fetches for one, which is the mirror image of the defect
-        // WireRequestBudget's own remarks record for a budget reused across sessions.
-        //
-        // Reported once per intended leaf, for the same reason the bootstrap refusal below is:
-        // results.Count == chain.Leaves.Count has to hold on every path, including this one.
-        if (!wireBudget.TryReserveAttempt())
+        // ONE SESSION PER ROBOTS GENERATION. A session's robots permission lasts 24 hours from its robots
+        // fetch, and the largest Luxembourg family's cover runs nearly that long on one session. So the
+        // session is replaced between leaves once less than half of that age remains: a leaf never spans
+        // two sessions (its two passes must share one run), and the runs form contiguous blocks of leaves,
+        // which LuxembourgPartitionCover.TryCreate accepts. Each new session fetches and evaluates robots
+        // for itself (Decision 83), and a robots refusal at a replacement refuses every remaining leaf
+        // without sending anything (Decision 67). A leaf whose session expired while it ran is restarted,
+        // whole, once, on a fresh session.
+        // Minted once per cover: see RunPartitionOnSessionAsync's sharedProfileRef doc comment for why
+        // every leaf must reference this exact ref rather than each minting its own equal-content one.
+        // CreateDeliveryProfile depends only on the invariant plan, its resource id and the set id, none
+        // of which the per-leaf Partition override touches, so deriving it once from rootRequest is exact.
+        var sharedProfile = rootRequest.InvariantPlan.CreateDeliveryProfile(
+            rootRequest.InvariantPlanResourceId, rootRequest.SetId);
+        var sharedProfileRef = RepeatedEnumerationInterpretationProfileIdentity.Create(NewUrn(), sharedProfile);
+
+        var results = new List<LuxembourgEnumerationRunResult>(chain.Leaves.Count);
+        if (resumeFrom is not null)
         {
-            return (chain, chain.Leaves
-                .Select(static _ => LuxembourgEnumerationRunResult.Refused(
-                    new LuxembourgEnumerationRefusalDetail(
-                        LuxembourgEnumerationRefusal.WireBudgetExhausted,
-                        null, null, null, null, null, null, [], null),
-                    productRequestCount: 0))
-                .ToArray(), 0);
+            // The leaves an interrupted run delivered, restored and proven again by the caller: the cover goes on from the
+            // first leaf after them, under the profile reference they were proven under (one reference per cover), on a
+            // session of this run. Nothing is sent for them.
+            RepeatedEnumerationInterpretationProfileIdentity.Validate(resumeFrom.InterpretationProfileRef, sharedProfile);
+            if (resumeFrom.Chain != chain || resumeFrom.Receipts.Count != resumeFrom.Checkpoints.Count ||
+                resumeFrom.Receipts.Count > chain.Leaves.Count)
+                throw new ArgumentException("The resume point does not describe this cover's delivered leaves.", nameof(resumeFrom));
+            sharedProfileRef = resumeFrom.InterpretationProfileRef;
+            for (var restored = 0; restored < resumeFrom.Receipts.Count; restored++)
+            {
+                results.Add(LuxembourgEnumerationRunResult.DeliveredWithCheckpoint(resumeFrom.Receipts[restored], 0,
+                    resumeFrom.Checkpoints[restored]));
+            }
         }
 
-        // One session for every leaf (see RunPartitionOnSessionAsync's doc comment for why): the
-        // bootstrap itself is not per leaf, so a bootstrap refusal here is reported once per
-        // intended leaf rather than as a single result, keeping results.Count == chain.Leaves.Count
-        // true on every path, not only the delivered one.
-        var start = _testHandlerOverride is null
-            ? await RoutedHttpAcquisitionSession.StartAsync(sourceWitness, _custodyStore, wireBudget, cancellationToken)
-                .ConfigureAwait(false)
-            : await StartWithTestHandlerAsync(sourceWitness, wireBudget, cancellationToken).ConfigureAwait(false);
-        if (start.Kind != OfficialHttpAcquisitionOutcomeKind.ExecutedObservation || start.Session is null)
-        {
-            return (chain, chain.Leaves
-                .Select(static _ => LuxembourgEnumerationRunResult.Refused(
-                    new LuxembourgEnumerationRefusalDetail(
-                        LuxembourgEnumerationRefusal.RobotsBootstrapRefused,
-                        null, null, null, null, null, null, [], null),
-                    productRequestCount: 0))
-                .ToArray(), 0);
-        }
-
-        var runner = start.Session;
+        var productRequests = 0;
+        var splitNumber = 0;
+        var splitPrefix = "split-" + Guid.NewGuid().ToString("N");
+        string? restartedLeaf = null;
+        RoutedHttpAcquisitionSession? runner = null;
         try
         {
-            // Minted once, outside the loop: see RunPartitionOnSessionAsync's sharedProfileRef doc
-            // comment for why every leaf must reference this exact ref rather than each minting its
-            // own equal-content one. CreateDeliveryProfile depends only on the invariant plan, its
-            // resource id and the set id, none of which the per-leaf Partition override touches, so
-            // deriving it once from rootRequest is exact, not an approximation.
-            var sharedProfile = rootRequest.InvariantPlan.CreateDeliveryProfile(
-                rootRequest.InvariantPlanResourceId, rootRequest.SetId);
-            var sharedProfileRef = RepeatedEnumerationInterpretationProfileIdentity.Create(NewUrn(), sharedProfile);
-
-            var results = new List<LuxembourgEnumerationRunResult>(chain.Leaves.Count);
-            var productRequests = 0;
-            var splitNumber = 0;
-            var splitPrefix = "split-" + Guid.NewGuid().ToString("N");
-            for (var index = 0; index < chain.Leaves.Count;)
+            for (var index = results.Count; index < chain.Leaves.Count;)
             {
                 cancellationToken.ThrowIfCancellationRequested();
+                if (runner is null || runner.RobotsPolicyRemaining < runner.SourceProfile.MaximumRobotsPolicyAge / 2)
+                {
+                    runner?.Dispose();
+                    runner = null;
+
+                    // THE SESSION'S ROBOTS FETCH, RESERVED BEFORE THE SESSION THAT SENDS IT, once per
+                    // session rather than once per leaf - charging it per leaf would report N robots
+                    // fetches for one, the mirror image of the defect WireRequestBudget's own remarks
+                    // record for a budget reused across sessions.
+                    //
+                    // A refusal here, and a bootstrap refusal below, is reported once for every leaf not yet
+                    // run: results.Count == chain.Leaves.Count has to hold on every path.
+                    if (!wireBudget.TryReserveAttempt())
+                    {
+                        results.AddRange(chain.Leaves.Skip(index)
+                            .Select(static _ => LuxembourgEnumerationRunResult.Refused(
+                                new LuxembourgEnumerationRefusalDetail(
+                                    LuxembourgEnumerationRefusal.WireBudgetExhausted,
+                                    null, null, null, null, null, null, [], null),
+                                productRequestCount: 0)));
+                        break;
+                    }
+
+                    var start = _testHandlerOverride is null
+                        ? await RoutedHttpAcquisitionSession.StartAsync(sourceWitness, _custodyStore, wireBudget, cancellationToken)
+                            .ConfigureAwait(false)
+                        : await StartWithTestHandlerAsync(sourceWitness, wireBudget, cancellationToken).ConfigureAwait(false);
+                    if (start.Kind != OfficialHttpAcquisitionOutcomeKind.ExecutedObservation || start.Session is null)
+                    {
+                        results.AddRange(chain.Leaves.Skip(index)
+                            .Select(static _ => LuxembourgEnumerationRunResult.Refused(
+                                new LuxembourgEnumerationRefusalDetail(
+                                    LuxembourgEnumerationRefusal.RobotsBootstrapRefused,
+                                    null, null, null, null, null, null, [], null),
+                                productRequestCount: 0)));
+                        break;
+                    }
+
+                    runner = start.Session;
+                }
+
                 var leaf = chain.Leaves[index];
                 var leafRequest = rootRequest with { Partition = leaf };
                 var result = await RunPartitionOnSessionAsync(
                         leafRequest, runner, sharedProfileRef, wireBudget, cancellationToken, maximumLeafRows)
                     .ConfigureAwait(false);
                 productRequests = checked(productRequests + result.ProductRequestCount);
+
+                // The session's robots generation expired while this leaf ran: the send gate refused before
+                // anything went out, and the leaf's partial passes stay retained and unused. It is restarted,
+                // whole, on a fresh session, once; a second expiry falls through to the refusal below.
+                if (result.Refusal?.Code == LuxembourgEnumerationRefusal.ObservationNotExecuted &&
+                    runner.RobotsPolicyRemaining == TimeSpan.Zero && restartedLeaf != leaf.PartitionId)
+                {
+                    restartedLeaf = leaf.PartitionId;
+                    runner.Dispose();
+                    runner = null;
+                    continue;
+                }
+
                 if (adaptive && result.Refusal?.Code == LuxembourgEnumerationRefusal.PartitionRequired &&
                     LuxembourgPartitionBoundary.Between(leaf) is { } boundary)
                 {
@@ -981,6 +987,12 @@ public sealed class LuxembourgRepeatedEnumerationExecutor
 
                 results.Add(result);
                 index++;
+                if (onLeafDelivered is not null && result.Receipt is { } delivered && result.CheckpointRef is { } leafCheckpoint)
+                {
+                    await onLeafDelivered(new LuxembourgCoverLeafDelivered(chain.SplitHistory, index - 1, leaf, leafCheckpoint,
+                        delivered.Delivery.RunIdentity, delivered.Delivery.InterpretationProfileRef)).ConfigureAwait(false);
+                }
+
                 if (adaptive && result.Refusal is { } failedLeaf)
                 {
                     // A cover requires every leaf. Keep the ordered result shape without sending
@@ -1002,7 +1014,7 @@ public sealed class LuxembourgRepeatedEnumerationExecutor
         }
         finally
         {
-            runner.Dispose();
+            runner?.Dispose();
         }
     }
 
@@ -1030,6 +1042,45 @@ public sealed class LuxembourgRepeatedEnumerationExecutor
         catch (System.Text.Json.JsonException) { return false; }
     }
 
+    // Declared here, after RunCoverCoreAsync, not with the other fields: the construction-surface pins name that method's
+    // compiler-generated lambdas by its member ordinal, which a field declared before it would move.
+    // One per executor, so one per acquisition run: the Legilux gateway read-timeout policy and breaker.
+    private readonly LuxembourgGatewayTimeouts _gatewayTimeouts;
+
+    /// <summary>
+    /// <see cref="RunAdaptiveCoverAsync(LuxembourgPartitionRunRequest, BoundMachineRequest, WireRequestBudget, CancellationToken, long)"/>,
+    /// continuing an interrupted run's cover from <paramref name="resumeFrom"/> when there is one, and telling
+    /// <paramref name="onLeafDelivered"/> about each leaf this run proves and retains, once its checkpoint is held.
+    /// Declared here, after RunCoverCoreAsync in member order, for the construction-surface pins.
+    /// </summary>
+    internal Task<(LuxembourgPartitionChain Chain, IReadOnlyList<LuxembourgEnumerationRunResult> Results,
+        int ProductRequestCount)> RunAdaptiveCoverAsync(
+        LuxembourgPartitionRunRequest rootRequest,
+        BoundMachineRequest sourceWitness,
+        WireRequestBudget wireBudget,
+        CancellationToken cancellationToken,
+        long maximumLeafRows,
+        LuxembourgCoverResumePoint? resumeFrom,
+        Func<LuxembourgCoverLeafDelivered, Task>? onLeafDelivered)
+    {
+        ArgumentNullException.ThrowIfNull(rootRequest);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(maximumLeafRows);
+        return RunCoverCoreAsync(rootRequest, resumeFrom?.Chain ?? LuxembourgPartitionChain.Root(rootRequest.Partition),
+            sourceWitness, wireBudget, adaptive: true, cancellationToken, maximumLeafRows, resumeFrom, onLeafDelivered);
+    }
+
+    // A refusal whose retained body is the Legilux gateway's exact read-timeout envelope, after the glue spent the sends
+    // the policy allows (or allowed none, for a first-pass COUNT).
+    private async Task<bool> IsGatewayTimeoutAsync(LuxembourgEnumerationRefusalDetail refusal, CancellationToken cancellationToken)
+    {
+        if (refusal.Code != LuxembourgEnumerationRefusal.StatusNotAdmitted ||
+            refusal.TerminalStatus != 500 || refusal.ResponseBodySha256 is not { } digest)
+            return false;
+        var bytes = await CustodyRestore.ReadByDigestCheckedAsync(_custodyStore, digest, cancellationToken)
+            .ConfigureAwait(false);
+        return LuxembourgGatewayTimeouts.IsEnvelope(bytes.Span);
+    }
+
     private sealed record PassOutcome(LuxembourgDeliveryPass? Pass, LuxembourgEnumerationRefusalDetail? Refusal);
 
     private async Task<PassOutcome> RunPassAsync(
@@ -1045,19 +1096,31 @@ public sealed class LuxembourgRepeatedEnumerationExecutor
         CancellationToken cancellationToken,
         long maximumLeafRows)
     {
+        // An open gateway breaker sends nothing more in this run: the publisher answered nothing but read timeouts since
+        // its last admitted page, and the run ends with a typed refusal to be resumed once it recovers.
+        if (_gatewayTimeouts.IsOpen)
+        {
+            return new PassOutcome(null, new LuxembourgEnumerationRefusalDetail(
+                LuxembourgEnumerationRefusal.ObservationNotExecuted, null, null, null, null, null, null, [],
+                $"not attempted: {_gatewayTimeouts.Consecutive} consecutive Legilux gateway read timeouts since the last "
+                + "admitted page; resume after the publisher recovers"));
+        }
+
         var countBound = request.InvariantPlan.BindCount(
             request.InvariantPlanResourceId, NewUrn(), NewUrn(), request.SetId, pass, request.Partition,
             request.RendererSource);
         var countIdentity = RepeatedEnumerationObservationIdentity.NewObservation();
+        // A first-pass COUNT is never retried on a gateway read timeout (it splits below, which is cheaper than repeating
+        // a 45-second query); a second-pass COUNT is, because losing it would discard the completed first pass.
         var countOutcome = ToObserveOutcome(await _reopenGlue.ObserveAsync(
                 session, countBound.Request, profile, executorWrittenMembership, currentCount, setCount,
-                cancellationToken, wireBudget)
+                cancellationToken, wireBudget, _gatewayTimeouts, retryGatewayTimeout: pass == LuxembourgQueryPass.Pass2)
             .ConfigureAwait(false));
         if (countOutcome.Refusal is not null)
         {
             // A retained, explicit query-capacity failure is a reason to subdivide, never
             // evidence of any rows. Other HTTP errors and challenges remain hard refusals.
-            if (pass == LuxembourgQueryPass.Pass1 &&
+            if (pass == LuxembourgQueryPass.Pass1 && !_gatewayTimeouts.IsOpen &&
                 await IsCountCapacityFailureAsync(countOutcome.Refusal, cancellationToken).ConfigureAwait(false))
             {
                 var failure = countOutcome.Refusal;
@@ -1067,6 +1130,24 @@ public sealed class LuxembourgRepeatedEnumerationExecutor
                     failure.ObservedMediaType, null, failure.UnenforcedDigests,
                     "retained initial COUNT reports publisher query capacity failure; smaller proven leaves required"));
             }
+
+            // A COUNT that answered the gateway's read timeout on every allowed send: on the second pass the completed
+            // first pass stays retained and unused and smaller leaves prove the range instead (nothing here asserts the
+            // range's size); with the breaker open, on either pass, the run stops.
+            if ((pass == LuxembourgQueryPass.Pass2 || _gatewayTimeouts.IsOpen) &&
+                await IsGatewayTimeoutAsync(countOutcome.Refusal, cancellationToken).ConfigureAwait(false))
+            {
+                var failure = countOutcome.Refusal;
+                var stop = _gatewayTimeouts.IsOpen;
+                return new PassOutcome(null, new LuxembourgEnumerationRefusalDetail(
+                    stop ? LuxembourgEnumerationRefusal.StatusNotAdmitted : LuxembourgEnumerationRefusal.PartitionRequired,
+                    failure.RequestOrdinal, failure.AttemptOrdinalReached, failure.TerminalStatus, failure.ResponseBodySha256,
+                    failure.ObservedMediaType, null, failure.UnenforcedDigests,
+                    (pass == LuxembourgQueryPass.Pass1 ? "first-pass COUNT: " : "second-pass COUNT: ") + (stop
+                        ? $"Legilux gateway read timeout, {_gatewayTimeouts.Consecutive} consecutive since the last admitted page, so this run stops; resume after the publisher recovers"
+                        : "retained Legilux gateway read timeout on every allowed send of one plan item; the completed first pass stays retained and unused; smaller proven leaves required")));
+            }
+
             return new PassOutcome(null, countOutcome.Refusal);
         }
 
@@ -1148,12 +1229,30 @@ public sealed class LuxembourgRepeatedEnumerationExecutor
                 cursor, selected, countObservation.HttpEvidenceRef, request.RendererSource);
             var pageOutcome = ToObserveOutcome(await _reopenGlue.ObserveAsync(
                     session, pageBound.Request, profile, executorWrittenMembership, currentCount, setCount,
-                    cancellationToken, wireBudget)
+                    cancellationToken, wireBudget, _gatewayTimeouts, retryGatewayTimeout: true)
                 .ConfigureAwait(false));
             if (pageOutcome.Refusal is not null)
             {
+                // A page that answered the gateway's read timeout on every allowed send: this leaf's partial passes stay
+                // retained and unused and smaller leaves prove the range instead; with the breaker open, the run stops.
+                if (await IsGatewayTimeoutAsync(pageOutcome.Refusal, cancellationToken).ConfigureAwait(false))
+                {
+                    var failure = pageOutcome.Refusal;
+                    var stop = _gatewayTimeouts.IsOpen;
+                    var where = $"pass {(pass == LuxembourgQueryPass.Pass1 ? 1 : 2)} page {deliveryPass.Pages.Count + 1}: ";
+                    return new PassOutcome(null, new LuxembourgEnumerationRefusalDetail(
+                        stop ? LuxembourgEnumerationRefusal.StatusNotAdmitted : LuxembourgEnumerationRefusal.PartitionRequired,
+                        failure.RequestOrdinal, failure.AttemptOrdinalReached, failure.TerminalStatus, failure.ResponseBodySha256,
+                        failure.ObservedMediaType, null, failure.UnenforcedDigests,
+                        where + (stop
+                            ? $"Legilux gateway read timeout, {_gatewayTimeouts.Consecutive} consecutive since the last admitted page, so this run stops; resume after the publisher recovers"
+                            : "retained Legilux gateway read timeout on every allowed send of one plan item; this leaf's partial passes stay retained and unused; smaller proven leaves required")));
+                }
+
                 return new PassOutcome(null, pageOutcome.Refusal);
             }
+
+            _gatewayTimeouts.RecordPageAdmitted();
 
             var transport = pageOutcome.Transport!;
             IReadOnlyList<LuxembourgQueryCursor> rows;

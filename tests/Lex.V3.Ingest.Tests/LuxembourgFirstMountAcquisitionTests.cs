@@ -309,7 +309,7 @@ public sealed partial class LuxembourgFirstMountAcquisitionTests
         string? omitRequiredPredicate = null,
         bool includeSecondWork = false,
         bool includeBlankNode = false,
-        bool saturatedRoot = false) : HttpMessageHandler
+        bool saturatedRoot = false, bool refuseRelations = false) : HttpMessageHandler
     {
         // The page query binds VALUES (?has_cursor ?last_key_1 ...) { (1 "last key" ...) } on a
         // continuation and (0 "" ...) on a first page (LuxembourgQueryPlan, has_cursor:uint).
@@ -375,6 +375,8 @@ public sealed partial class LuxembourgFirstMountAcquisitionTests
                 ? WebUtility.UrlDecode(raw["query=".Length..])
                 : raw;
             var family = Classify(body);
+            if (refuseRelations && family == "G") return new HttpResponseMessage(HttpStatusCode.BadRequest)
+                { RequestMessage = request, Content = new StringContent("fixture relation refusal") };
             lock (_families)
             {
                 _families.Add(family);

@@ -161,6 +161,42 @@ public sealed class V3CorpusSearchMountTests
     }
 
     [TestMethod]
+    public async Task TextItsRightsDidNotAdmitIsNotMatchedSoNoHitSaysWhichArticlesHoldAWord()
+    {
+        // The same text on two mounts: one admitted, one whose member's rights did not agree (the licence-blocked mount).
+        var admitted = await MountedFixture.CreateAsync();
+        await using var cleanupAdmitted = admitted;
+        await WriteTextsAsync(admitted);
+        var withheld = await MountedFixture.CreateAsync();
+        await using var cleanupWithheld = withheld;
+        await WriteTextsAsync(withheld);
+        await withheld.SetMemberRightsDispositionAsync("non_admitting_licence_scl");
+        using var admittedMount = await V3CorpusMount.OpenAsync(admitted.Directory, CancellationToken.None);
+        using var withheldMount = await V3CorpusMount.OpenAsync(withheld.Directory, CancellationToken.None);
+        Assert.IsNotNull(admittedMount);
+        Assert.IsNotNull(withheldMount);
+
+        var found = (await SearchAsync(admittedMount, Phrase)).Result!.Value;
+        Assert.AreEqual(2, found.GetProperty("hits").GetArrayLength(), "the admitted text is matched");
+
+        var envelope = await SearchAsync(withheldMount, Phrase);
+        Assert.AreEqual(V3Verdicts.Answer, envelope.Verdict, "no hit is an answer, not a refusal");
+        var body = envelope.Result!.Value;
+        Assert.AreEqual(0, body.GetProperty("hits").GetArrayLength(), "withheld text is not matched");
+        Assert.AreEqual(V3CorpusMount.SearchRightsRule, body.GetProperty("rights_rule").GetString());
+        // Nor counted: the population says nothing about the text it did not match.
+        var population = body.GetProperty("population");
+        Assert.AreEqual(0, population.GetProperty("strict_hits").GetInt32());
+        Assert.AreEqual(0, population.GetProperty("relaxed_hits").GetInt32());
+        Assert.AreEqual(2, found.GetProperty("population").GetProperty("strict_hits").GetInt32()
+            + found.GetProperty("population").GetProperty("relaxed_hits").GetInt32(), "the admitted mount counts the same text");
+        foreach (var mode in new[] { "strict", "relaxed" })
+        {
+            Assert.AreEqual(0, (await SearchAsync(withheldMount, Phrase, mode: mode)).Result!.Value.GetProperty("hits").GetArrayLength(), mode);
+        }
+    }
+
+    [TestMethod]
     public async Task MatchingIsByteExactAndNoHitIsAnAnswer()
     {
         var fixture = await MountedFixture.CreateAsync();

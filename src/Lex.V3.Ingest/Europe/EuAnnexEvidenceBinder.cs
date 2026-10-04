@@ -123,7 +123,7 @@ public sealed class EuAnnexEvidenceBinding
         SourceObjectRef expression,
         SourceObjectRef formexManifestation,
         SourceObjectRef formexBody,
-        string workCelex,
+        string? workCelex,
         string language,
         SourceObjectRef pdfManifestation,
         EuFormexAnnexInventory formexInventory,
@@ -157,7 +157,8 @@ public sealed class EuAnnexEvidenceBinding
     public SourceObjectRef Expression { get; }
     public SourceObjectRef FormexManifestation { get; }
     public SourceObjectRef FormexBody { get; }
-    public string WorkCelex { get; }
+    /// <summary>The work's observed CELEX, absent when only its proven Cellar identity is held.</summary>
+    public string? WorkCelex { get; }
     public string Language { get; }
     public CorpusRecord WorkSource { get; }
     public SourceObjectRef PdfManifestation { get; }
@@ -176,14 +177,14 @@ public sealed class EuAnnexEvidenceBinding
     private static string IdentityOf(EuAnnexEvidenceBinding binding)
     {
         using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
-        Append(hash, "lex-v3-eu-annex-evidence-binding/1");
+        Append(hash, binding.WorkCelex is null ? "lex-v3-eu-annex-evidence-binding/2" : "lex-v3-eu-annex-evidence-binding/1");
         Append(hash, binding.WorkSource.ObjectRef.CanonicalKeySha256);
         Append(hash, binding.Work.CanonicalKeySha256);
         Append(hash, binding.Expression.CanonicalKeySha256);
         Append(hash, binding.FormexManifestation.CanonicalKeySha256);
         Append(hash, binding.FormexBody.CanonicalKeySha256);
         Append(hash, binding.PdfManifestation.CanonicalKeySha256);
-        Append(hash, binding.WorkCelex);
+        Append(hash, binding.WorkCelex ?? "");
         Append(hash, binding.Language);
         Append(hash, binding.FormexInventoryIdentitySha256);
         Append(hash, DurableBlobWriteReceiptDigest.Of(binding.FormexSourceReceipt));
@@ -368,7 +369,7 @@ public sealed class EuAnnexEvidenceBinder
     public async Task<EuAnnexEvidenceBindingResult> BindTransportAsync(
         EuWemiIdentityBoundary identityBoundary,
         EuFormexAnnexTransportBinding transport,
-        string workCelex,
+        string? workCelex,
         string language,
         SourceObjectRef expectedPdfManifestation,
         VerifiedCorpusRecordSet corpusRecordSet,
@@ -381,7 +382,7 @@ public sealed class EuAnnexEvidenceBinder
     {
         ArgumentNullException.ThrowIfNull(identityBoundary);
         ArgumentNullException.ThrowIfNull(transport);
-        ArgumentException.ThrowIfNullOrWhiteSpace(workCelex);
+        if (workCelex is not null) ArgumentException.ThrowIfNullOrWhiteSpace(workCelex);
         ArgumentException.ThrowIfNullOrWhiteSpace(language);
         ArgumentNullException.ThrowIfNull(expectedPdfManifestation);
         ArgumentNullException.ThrowIfNull(corpusRecordSet);

@@ -169,6 +169,10 @@ public enum LuxembourgFirstMountAcquisitionRefusal
     /// <summary>The adapter run over the act's families refused, or left no held body to derive from.</summary>
     [JsonStringEnumMemberName("run_refused")]
     RunRefused = 3,
+
+    /// <summary>The complete acquisition catalog or one of its retained inputs is unavailable.</summary>
+    [JsonStringEnumMemberName("acquisition_checkpoint_not_retained")]
+    AcquisitionCheckpointNotRetained = 4,
 }
 
 /// <summary>
@@ -206,9 +210,38 @@ public sealed class LuxembourgFirstMountAcquisitionResult
 
     public SourceArtifactRef? VocabularyCheckpointRef { get; private init; }
 
+    /// <summary>Original vocabulary/query acquisition and renderer bindings for offline derivation.</summary>
+    public SourceArtifactRef? CheckpointRef { get; private init; }
+
+    public SourceArtifactRef? PopulationScopeManifestRef { get; private init; }
+
+    /// <summary>
+    /// What the catalog of a resumed acquisition says about the resumption: the journal it resumed and its resume
+    /// record, the interrupted run's window and spend, and the units replayed and acquired live per phase. Null for an
+    /// acquisition that did not resume, whose catalog is unchanged.
+    /// </summary>
+    public AcquisitionResumption? Resumption { get; private init; }
+
     internal LuxembourgFirstMountAcquisitionResult WithVocabularyCheckpoint(SourceArtifactRef reference) =>
         new(Run, Profile, VocabularyEvidenceRef, AknInventory, AknLegalContent, Refusal, Detail)
-            { VocabularyCheckpointRef = reference };
+        {
+            VocabularyCheckpointRef = reference, CheckpointRef = CheckpointRef, PopulationScopeManifestRef = PopulationScopeManifestRef,
+            Resumption = Resumption,
+        };
+
+    internal LuxembourgFirstMountAcquisitionResult WithCheckpoint(SourceArtifactRef reference, AcquisitionResumption? resumption = null) =>
+        new(Run, Profile, VocabularyEvidenceRef, AknInventory, AknLegalContent, Refusal, Detail)
+        {
+            VocabularyCheckpointRef = VocabularyCheckpointRef, CheckpointRef = reference, PopulationScopeManifestRef = PopulationScopeManifestRef,
+            Resumption = resumption ?? Resumption,
+        };
+
+    internal LuxembourgFirstMountAcquisitionResult WithPopulationScopeManifest(SourceArtifactRef reference) =>
+        new(Run, Profile, VocabularyEvidenceRef, AknInventory, AknLegalContent, Refusal, Detail)
+        {
+            VocabularyCheckpointRef = VocabularyCheckpointRef, CheckpointRef = CheckpointRef, PopulationScopeManifestRef = reference,
+            Resumption = Resumption,
+        };
 
     public LuxembourgAknArticleInventoryPopulation? AknInventory { get; }
 
@@ -292,9 +325,22 @@ public sealed partial class LuxembourgFirstMountAcquisition
     private readonly ICustodyStore _custodyStore;
     private readonly TimeProvider _timeProvider;
     private readonly System.Net.Http.HttpMessageHandler? _testHandlerOverride;
+    private readonly IAcquisitionJournal? _journal;
+    private readonly AcquisitionResume? _resume;
 
     public LuxembourgFirstMountAcquisition(ICustodyStore custodyStore, TimeProvider timeProvider)
         : this(custodyStore, timeProvider, testHandlerOverride: null)
+    {
+    }
+
+    /// <summary>
+    /// An acquisition that journals each unit once custody holds it and, given an interrupted run's verified journal,
+    /// resumes that run: each unit the journal names is admitted again through its own checked reader, and only the
+    /// rest is acquired.
+    /// </summary>
+    public LuxembourgFirstMountAcquisition(ICustodyStore custodyStore, TimeProvider timeProvider,
+        IAcquisitionJournal? journal, AcquisitionResume? resume)
+        : this(custodyStore, timeProvider, null, journal, resume)
     {
     }
 
@@ -302,133 +348,178 @@ public sealed partial class LuxembourgFirstMountAcquisition
     internal LuxembourgFirstMountAcquisition(
         ICustodyStore custodyStore,
         TimeProvider timeProvider,
-        System.Net.Http.HttpMessageHandler? testHandlerOverride)
+        System.Net.Http.HttpMessageHandler? testHandlerOverride,
+        IAcquisitionJournal? journal = null,
+        AcquisitionResume? resume = null)
     {
         _custodyStore = custodyStore ?? throw new ArgumentNullException(nameof(custodyStore));
         _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
         _testHandlerOverride = testHandlerOverride;
+        _journal = journal;
+        _resume = resume;
     }
 
-    public async Task<LuxembourgFirstMountAcquisitionResult> RunAsync(
+    public Task<LuxembourgFirstMountAcquisitionResult> RunAsync(
         LuxembourgActRange act,
         LuxembourgRendererSources rendererSources,
         WireRequestBudget wireBudget,
+        CancellationToken cancellationToken) =>
+        RunScopeAsync(LuxembourgPopulationScope.FromRange(act), act, rendererSources, wireBudget, cancellationToken);
+
+    public Task<LuxembourgFirstMountAcquisitionResult> RunPopulationAsync(
+        LuxembourgPopulationScope scope,
+        LuxembourgRendererSources rendererSources,
+        WireRequestBudget wireBudget,
+        CancellationToken cancellationToken) =>
+        RunScopeAsync(scope, null, rendererSources, wireBudget, cancellationToken);
+
+    private async Task<LuxembourgFirstMountAcquisitionResult> RunScopeAsync(
+        LuxembourgPopulationScope scope, LuxembourgActRange? legacyAct,
+        LuxembourgRendererSources rendererSources, WireRequestBudget wireBudget,
         CancellationToken cancellationToken)
     {
-        ArgumentNullException.ThrowIfNull(act);
+        ArgumentNullException.ThrowIfNull(scope);
         ArgumentNullException.ThrowIfNull(rendererSources);
         ArgumentNullException.ThrowIfNull(wireBudget);
 
-        var scopeRef = await HoldAsync(JsonSerializer.SerializeToUtf8Bytes(new
-        {
-            schema = "lex-lu-first-mount-scope/1",
-            act = new { act.Name, start = act.StartInclusive, end = act.EndExclusive },
-            vocabulary = "P/T/C whole key space; O Creative Commons BY 4.0 range",
-            documents = "the manifest's selected body of each admitted object, and every accepted Gazette listing of each as-published act",
-        }, EvidenceJson), cancellationToken).ConfigureAwait(false);
-        var plan = LuxembourgQueryPlan.CreateDefaultGraph(scopeRef);
+        var scopeBytes = legacyAct is { } act
+            ? JsonSerializer.SerializeToUtf8Bytes(new
+            {
+                schema = "lex-lu-first-mount-scope/1",
+                act = new { act.Name, start = act.StartInclusive, end = act.EndExclusive },
+                vocabulary = "P/T/C whole key space; O Creative Commons BY 4.0 range",
+                documents = "the manifest's selected body of each admitted object, and every accepted Gazette listing of each as-published act",
+            }, EvidenceJson)
+            : scope.DeclarationBytes();
+        var scopeRef = await HoldAsync(scopeBytes, cancellationToken).ConfigureAwait(false);
         var planId = NewUrn();
+        // A journaled run records the scope reference and plan identity its families and fetches are bound to; a resumed
+        // run takes its interrupted run's, when that run declared these same bytes, so its journaled units bind again.
+        var progress = _journal is null && _resume is null ? null : new LuxembourgAcquisitionProgress(_journal, _resume);
+        (scopeRef, planId) = await ResumeScopeAsync(scopeRef, planId, progress, cancellationToken).ConfigureAwait(false);
+        var plan = LuxembourgQueryPlan.CreateDefaultGraph(scopeRef);
         var executor = new LuxembourgRepeatedEnumerationExecutor(_custodyStore, _timeProvider, _testHandlerOverride);
 
-        // ---- Vocabulary: four partitions, each proven, reopened and classified. ----
-        var measured = new List<VocabularyMeasurement>();
-        var vocabularyCheckpoints = new List<VocabularyFamilyCheckpoint>();
-        var observed = new List<ObservedVocabulary>();
-        foreach (var family in VocabularyFamilies)
+        // ---- Vocabulary: four partitions, each proven, reopened and classified; or, resuming, the interrupted run's
+        // checkpoint for this plan, reopened through all four enumeration proofs and the source-profile gate. ----
+        VerifiedLuxembourgSourceProfile profile;
+        SourceArtifactRef vocabularyEvidenceRef;
+        SourceArtifactRef vocabularyCheckpoint;
+        if (await ResumeVocabularyAsync(plan, planId, rendererSources.Query, cancellationToken).ConfigureAwait(false)
+            is { } resumedVocabulary)
         {
-            var range = family == "O"
-                ? Range("vocabulary-o", CreativeCommonsRangeStart, CreativeCommonsRangeEnd)
-                : Range("vocabulary-" + family.ToLowerInvariant(), string.Empty, EndOfKeySpace);
-            var request = new LuxembourgPartitionRunRequest(plan, planId, family, range, rendererSources.Query);
-            var witness = plan.BindCount(planId, NewUrn(), NewUrn(), family, LuxembourgQueryPass.Pass1, range, rendererSources.Query);
-            var outcome = await executor.RunPartitionAsync(request, witness.Request, wireBudget, cancellationToken)
-                .ConfigureAwait(false);
-            measured.Add(new VocabularyMeasurement(family, outcome.ProductRequestCount));
-            if (outcome.Receipt is not { } receipt)
+            (profile, vocabularyEvidenceRef, vocabularyCheckpoint) = resumedVocabulary;
+            progress?.Tally(AcquisitionJournal.LuxembourgVocabularyPhase, replayed: true);
+        }
+        else
+        {
+            var measured = new List<VocabularyMeasurement>();
+            var vocabularyCheckpoints = new List<VocabularyFamilyCheckpoint>();
+            var observed = new List<ObservedVocabulary>();
+            foreach (var family in VocabularyFamilies)
             {
-                // The executor's refusal carries the count it learned and the requests the class
-                // needs, precisely so a run that was too small still says how big the class is; the
-                // detail keeps all of it, since the next run is sized from this one.
-                return LuxembourgFirstMountAcquisitionResult.Refused(
-                    LuxembourgFirstMountAcquisitionRefusal.VocabularyRefused,
-                    $"vocabulary family {family}: {Describe(outcome.Refusal)}");
+                var range = family == "O"
+                    ? Range("vocabulary-o", CreativeCommonsRangeStart, CreativeCommonsRangeEnd)
+                    : Range("vocabulary-" + family.ToLowerInvariant(), string.Empty, EndOfKeySpace);
+                var request = new LuxembourgPartitionRunRequest(plan, planId, family, range, rendererSources.Query);
+                var witness = plan.BindCount(planId, NewUrn(), NewUrn(), family, LuxembourgQueryPass.Pass1, range, rendererSources.Query);
+                var outcome = await executor.RunPartitionAsync(request, witness.Request, wireBudget, cancellationToken)
+                    .ConfigureAwait(false);
+                measured.Add(new VocabularyMeasurement(family, outcome.ProductRequestCount));
+                if (outcome.Receipt is not { } receipt)
+                {
+                    // The executor's refusal carries the count it learned and the requests the class
+                    // needs, precisely so a run that was too small still says how big the class is; the
+                    // detail keeps all of it, since the next run is sized from this one.
+                    return LuxembourgFirstMountAcquisitionResult.Refused(
+                        LuxembourgFirstMountAcquisitionRefusal.VocabularyRefused,
+                        $"vocabulary family {family}: {Describe(outcome.Refusal)}");
+                }
+
+                try
+                {
+                    observed.AddRange(await ReopenVocabularyRowsAsync(_custodyStore, plan, planId, family,
+                        rendererSources.Query, receipt, cancellationToken).ConfigureAwait(false));
+                    vocabularyCheckpoints.Add(new VocabularyFamilyCheckpoint(family,
+                        outcome.CheckpointRef ?? throw new CustodyIntegrityException("Vocabulary enumeration has no checkpoint."),
+                        receipt.Delivery.RunIdentity, receipt.Delivery.InterpretationProfileRef, outcome.ProductRequestCount));
+                }
+                catch (Exception exception) when (exception is CustodyRequiredException or CustodyIntegrityException)
+                {
+                    return LuxembourgFirstMountAcquisitionResult.Refused(
+                        LuxembourgFirstMountAcquisitionRefusal.VocabularyRefused, $"vocabulary family {family}: {exception.Message}");
+                }
             }
 
+            var vocabulary = observed
+                .Where(static value => value.Kind is not null)
+                .Select(static value => new LuxembourgIriVocabularyValue(value.Kind!.Value, value.Iri))
+                .Distinct()
+                .ToArray();
+            var missing = VerifiedLuxembourgSourceProfile.RequiredIriVocabulary.Except(vocabulary).ToArray();
+            var (vocabularyReceipt, vocabularyFailure) = await CustodyHold.TryHoldAsync(
+                    _custodyStore,
+                    VocabularyObservationBytes(measured, observed, missing),
+                    cancellationToken)
+                .ConfigureAwait(false);
+            if (vocabularyReceipt is null)
+            {
+                return LuxembourgFirstMountAcquisitionResult.Refused(
+                    LuxembourgFirstMountAcquisitionRefusal.VocabularyRefused,
+                    $"custody refused to hold the vocabulary observation: {vocabularyFailure}");
+            }
+
+            vocabularyEvidenceRef = new SourceArtifactRef(NewUrn(), vocabularyReceipt.Reference.ContentSha256);
+            var snapshot = new LuxembourgVocabularySnapshot(vocabularyEvidenceRef, vocabularyEvidenceRef, vocabulary, []);
+            var opened = VerifiedLuxembourgSourceProfile.TryOpen(snapshot, out var profileFailure);
+            if (opened is null)
+            {
+                return LuxembourgFirstMountAcquisitionResult.Refused(
+                    LuxembourgFirstMountAcquisitionRefusal.ProfileRefused,
+                    $"{profileFailure?.Code}: {profileFailure?.Subject}; {missing.Length} required value(s) not observed",
+                    vocabularyEvidenceRef: vocabularyEvidenceRef);
+            }
+
+            profile = opened;
             try
             {
-                observed.AddRange(await ReopenVocabularyRowsAsync(_custodyStore, plan, planId, family,
-                    rendererSources.Query, receipt, cancellationToken).ConfigureAwait(false));
-                vocabularyCheckpoints.Add(new VocabularyFamilyCheckpoint(family,
-                    outcome.CheckpointRef ?? throw new CustodyIntegrityException("Vocabulary enumeration has no checkpoint."),
-                    receipt.Delivery.RunIdentity, receipt.Delivery.InterpretationProfileRef, outcome.ProductRequestCount));
+                vocabularyCheckpoint = await RetainVocabularyCheckpointAsync(plan, planId, rendererSources.Query,
+                    vocabularyEvidenceRef, vocabularyCheckpoints, cancellationToken).ConfigureAwait(false);
             }
             catch (Exception exception) when (exception is CustodyRequiredException or CustodyIntegrityException)
             {
-                return LuxembourgFirstMountAcquisitionResult.Refused(
-                    LuxembourgFirstMountAcquisitionRefusal.VocabularyRefused, $"vocabulary family {family}: {exception.Message}");
+                return LuxembourgFirstMountAcquisitionResult.Refused(LuxembourgFirstMountAcquisitionRefusal.VocabularyRefused,
+                    "vocabulary checkpoint not retained: " + exception.Message, vocabularyEvidenceRef: vocabularyEvidenceRef);
             }
+
+            progress?.Tally(AcquisitionJournal.LuxembourgVocabularyPhase, replayed: false);
         }
 
-        var vocabulary = observed
-            .Where(static value => value.Kind is not null)
-            .Select(static value => new LuxembourgIriVocabularyValue(value.Kind!.Value, value.Iri))
-            .Distinct()
-            .ToArray();
-        var missing = VerifiedLuxembourgSourceProfile.RequiredIriVocabulary.Except(vocabulary).ToArray();
-        var (vocabularyReceipt, vocabularyFailure) = await CustodyHold.TryHoldAsync(
-                _custodyStore,
-                VocabularyObservationBytes(measured, observed, missing),
-                cancellationToken)
-            .ConfigureAwait(false);
-        if (vocabularyReceipt is null)
+        await JournalVocabularyAsync(vocabularyCheckpoint, vocabularyEvidenceRef).ConfigureAwait(false);
+
+        // Each explicit range gets its own S/A/G group. Adaptive splitting proves the
+        // selected ranges independently; the gaps between ranges are never filled in.
+        var families = new List<(LuxembourgPartitionRunRequest, BoundMachineRequest, LuxembourgPartitionChain?)>();
+        var scopeMembers = new List<LuxembourgScopePartitionFamilies>();
+        foreach (var selected in scope.Ranges)
         {
-            return LuxembourgFirstMountAcquisitionResult.Refused(
-                LuxembourgFirstMountAcquisitionRefusal.VocabularyRefused,
-                $"custody refused to hold the vocabulary observation: {vocabularyFailure}");
+            foreach (var family in LuxembourgActRange.Families)
+            {
+                var range = selected.FamilyRange(family);
+                var request = new LuxembourgPartitionRunRequest(plan, planId, family, range, rendererSources.Query);
+                var witness = plan.BindCount(planId, NewUrn(), NewUrn(), family, LuxembourgQueryPass.Pass1, range, rendererSources.Query);
+                families.Add((request, witness.Request, null));
+            }
+            scopeMembers.Add(new(selected.Name + "-s", selected.Name + "-a", selected.Name + "-g"));
         }
 
-        var vocabularyEvidenceRef = new SourceArtifactRef(NewUrn(), vocabularyReceipt.Reference.ContentSha256);
-        var snapshot = new LuxembourgVocabularySnapshot(vocabularyEvidenceRef, vocabularyEvidenceRef, vocabulary, []);
-        var profile = VerifiedLuxembourgSourceProfile.TryOpen(snapshot, out var profileFailure);
-        if (profile is null)
-        {
-            return LuxembourgFirstMountAcquisitionResult.Refused(
-                LuxembourgFirstMountAcquisitionRefusal.ProfileRefused,
-                $"{profileFailure?.Code}: {profileFailure?.Subject}; {missing.Length} required value(s) not observed",
-                vocabularyEvidenceRef: vocabularyEvidenceRef);
-        }
-
-        SourceArtifactRef vocabularyCheckpoint;
-        try
-        {
-            vocabularyCheckpoint = await RetainVocabularyCheckpointAsync(plan, planId, rendererSources.Query,
-                vocabularyEvidenceRef, vocabularyCheckpoints, cancellationToken).ConfigureAwait(false);
-        }
-        catch (Exception exception) when (exception is CustodyRequiredException or CustodyIntegrityException)
-        {
-            return LuxembourgFirstMountAcquisitionResult.Refused(LuxembourgFirstMountAcquisitionRefusal.VocabularyRefused,
-                "vocabulary checkpoint not retained: " + exception.Message, vocabularyEvidenceRef: vocabularyEvidenceRef);
-        }
-
-        // ---- The act: S, A and G over its range, through the adapter and its Gazette loop. ----
-        var families = new List<(LuxembourgPartitionRunRequest, BoundMachineRequest, LuxembourgPartitionChain?)>(LuxembourgActRange.Families.Count);
-        foreach (var family in LuxembourgActRange.Families)
-        {
-            var range = act.FamilyRange(family);
-            var request = new LuxembourgPartitionRunRequest(plan, planId, family, range, rendererSources.Query);
-            var witness = plan.BindCount(planId, NewUrn(), NewUrn(), family, LuxembourgQueryPass.Pass1, range, rendererSources.Query);
-            families.Add((request, witness.Request, null));
-        }
-
-        var adapter = new LuxembourgQueryExecutionAdapter(_custodyStore, executor, profile);
-        var run = act == LuxembourgActRange.WholePopulation
-            ? await adapter.RunAdaptiveScopedAsync(families,
-                [new LuxembourgScopePartitionFamilies(act.Name + "-s", act.Name + "-a", act.Name + "-g")],
+        var adapter = new LuxembourgQueryExecutionAdapter(_custodyStore, executor, profile) { Progress = progress };
+        var run = legacyAct is null || legacyAct == LuxembourgActRange.WholePopulation
+            ? await adapter.RunAdaptiveScopedAsync(families, scopeMembers,
                 rendererSources.DocumentFetch, wireBudget, cancellationToken).ConfigureAwait(false)
             : await adapter.RunAsync(
-                families, act.Name + "-g", act.Name + "-s", act.Name + "-a",
-                rendererSources.DocumentFetch, wireBudget, cancellationToken)
-            .ConfigureAwait(false);
+                families, legacyAct.Name + "-g", legacyAct.Name + "-s", legacyAct.Name + "-a",
+                rendererSources.DocumentFetch, wireBudget, cancellationToken).ConfigureAwait(false);
         if (run.Refusal is { } runRefusal)
         {
             return LuxembourgFirstMountAcquisitionResult.Refused(
@@ -445,12 +536,43 @@ public sealed partial class LuxembourgFirstMountAcquisition
                 run, profile, vocabularyEvidenceRef).WithVocabularyCheckpoint(vocabularyCheckpoint);
         }
 
+        var unproven = run.FamilyOutcomes.FirstOrDefault(static family => family.Kind is not
+            (LuxembourgFamilyEnumerationOutcomeKind.Proven or LuxembourgFamilyEnumerationOutcomeKind.CoverProven));
+        if (unproven is not null)
+            return LuxembourgFirstMountAcquisitionResult.Refused(LuxembourgFirstMountAcquisitionRefusal.RunRefused,
+                $"Complete offline acquisition requires proven family {unproven.FamilyKey}; observed {unproven.Kind}.",
+                run, profile, vocabularyEvidenceRef).WithVocabularyCheckpoint(vocabularyCheckpoint);
+
         var inventory = await new LuxembourgAknArticleInventoryProducer(_custodyStore)
             .RunAsync(heldBodies, cancellationToken).ConfigureAwait(false);
         var legalContent = await new LuxembourgAknLegalContentProfileProducer(_custodyStore)
             .RunAsync(inventory, cancellationToken).ConfigureAwait(false);
-        return LuxembourgFirstMountAcquisitionResult.Success(run, profile, vocabularyEvidenceRef, inventory, legalContent)
+        var delivered = LuxembourgFirstMountAcquisitionResult.Success(run, profile, vocabularyEvidenceRef, inventory, legalContent)
             .WithVocabularyCheckpoint(vocabularyCheckpoint);
+        try
+        {
+            if (legacyAct is null)
+            {
+                var manifestBytes = scope.ManifestBytes(profile, scopeRef, vocabularyEvidenceRef);
+                await HoldAcquisitionBytesAsync(manifestBytes, cancellationToken).ConfigureAwait(false);
+                delivered = delivered.WithPopulationScopeManifest(new SourceArtifactRef(NewUrn(), CustodyDigest.Of(manifestBytes)));
+            }
+            // A resumed run's catalog says so: the record of the journal it resumed, the interrupted run's window and
+            // spend, and what each phase replayed and acquired live. It was not observed in one window.
+            var resumption = _resume is null || progress is null ? null : _resume.Summarize(progress.Phases(
+                    AcquisitionJournal.LuxembourgScopePhase, AcquisitionJournal.LuxembourgVocabularyPhase,
+                    AcquisitionJournal.LuxembourgQueryFamilyPhase, AcquisitionJournal.LuxembourgCoverLeafPhase,
+                    AcquisitionJournal.LuxembourgDocumentPhase, AcquisitionJournal.LuxembourgGazettePhase),
+                wireBudget.Spent, _timeProvider.GetUtcNow());
+            var checkpoint = await RetainAcquisitionCheckpointAsync(scope, legacyAct is not null, scopeRef, rendererSources, delivered,
+                resumption, cancellationToken).ConfigureAwait(false);
+            return delivered.WithCheckpoint(checkpoint, resumption);
+        }
+        catch (Exception exception) when (exception is CustodyRequiredException or CustodyIntegrityException)
+        {
+            return LuxembourgFirstMountAcquisitionResult.Refused(LuxembourgFirstMountAcquisitionRefusal.AcquisitionCheckpointNotRetained,
+                exception.Message, run, profile, vocabularyEvidenceRef).WithVocabularyCheckpoint(vocabularyCheckpoint);
+        }
     }
 
     /// <summary>

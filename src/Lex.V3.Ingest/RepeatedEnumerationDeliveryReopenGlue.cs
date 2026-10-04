@@ -3,6 +3,8 @@ using Lex.V3.Contracts;
 using Lex.V3.Contracts.Custody;
 using Lex.V3.Contracts.Source.Core;
 using Lex.V3.Contracts.Source.Http;
+using Lex.V3.Contracts.Source.Luxembourg;
+using Lex.V3.Ingest.Luxembourg;
 
 namespace Lex.V3.Ingest;
 
@@ -122,12 +124,14 @@ public sealed class RepeatedEnumerationDeliveryReopenGlue
         Func<int> currentCount,
         Action<int> setCount,
         CancellationToken cancellationToken,
-        WireRequestBudget budget)
+        WireRequestBudget budget,
+        LuxembourgGatewayTimeouts? gatewayTimeouts = null,
+        bool retryGatewayTimeout = false)
     {
         ArgumentNullException.ThrowIfNull(profile);
         return ObserveAsync(
             session, request, profile.ExpectedMediaType, executorWrittenMembership, currentCount, setCount,
-            cancellationToken, budget);
+            cancellationToken, budget, gatewayTimeouts, retryGatewayTimeout);
     }
 
     /// <summary>
@@ -150,7 +154,9 @@ public sealed class RepeatedEnumerationDeliveryReopenGlue
         Func<int> currentCount,
         Action<int> setCount,
         CancellationToken cancellationToken,
-        WireRequestBudget budget)
+        WireRequestBudget budget,
+        LuxembourgGatewayTimeouts? gatewayTimeouts = null,
+        bool retryGatewayTimeout = false)
     {
         ArgumentNullException.ThrowIfNull(session);
         ArgumentNullException.ThrowIfNull(request);
@@ -164,6 +170,7 @@ public sealed class RepeatedEnumerationDeliveryReopenGlue
         var maximumAttempts = session.SourceProfile.MaximumAttempts;
         var attemptOrdinal = 0;
         RoutedHttpAcquisitionSession.AttemptResult attempt;
+        RoutedHttpEvidence? reopenedEvidence = null;
         while (true)
         {
             // BEFORE THE ATTEMPT, NOT AFTER IT. This is the only position that lands between the
@@ -196,23 +203,36 @@ public sealed class RepeatedEnumerationDeliveryReopenGlue
             setCount(currentCount() + 1);
             if (attempt.Kind == OfficialHttpAcquisitionOutcomeKind.ExecutedObservation)
             {
-                if (await IsRetainedEuropeTransientFailureAsync(attempt, cancellationToken).ConfigureAwait(false))
+                // Retain every executed route before status or media rejection so a refusal
+                // still binds its request to its response. Retry uses the same bounded plan item.
+                var evidenceBytes = attempt.Evidence!.CopyCanonicalBytes();
+                var evidenceReceipt = await _custodyStore.CreateAsync(
+                    evidenceBytes, CustodyClass.NightlyFloor90d, cancellationToken).ConfigureAwait(false);
+                var evidenceDigest = evidenceReceipt.Reference.ContentSha256;
+                var retained = await CustodyRestore.ReadByDigestCheckedAsync(
+                    _custodyStore, evidenceDigest, cancellationToken).ConfigureAwait(false);
+                if (!retained.Span.SequenceEqual(evidenceBytes))
+                    throw new CustodyIntegrityException("The retained route differs from its attempted evidence.");
+                reopenedEvidence = RoutedHttpEvidence.ParseAndVerify(retained.Span);
+                executorWrittenMembership[evidenceDigest] = CustodyMembershipClassifier.Classify(evidenceReceipt);
+                if (await IsRetainedEuropeTransientFailureAsync(attempt, cancellationToken).ConfigureAwait(false)
+                    && attemptOrdinal < maximumAttempts) continue;
+
+                // The Legilux gateway's read timeout (LuxembourgGatewayTimeouts): counted for the run's breaker
+                // whenever a Luxembourg caller passes its tracker, and retried as the same plan item only where that
+                // caller allows it, after the profile's maximum retry delay; the session then adds its own backoff.
+                if (gatewayTimeouts is not null &&
+                    await IsRetainedLuxembourgGatewayTimeoutAsync(attempt, cancellationToken).ConfigureAwait(false))
                 {
-                    // Preserve the rejected attempt's complete route before consuming the same
-                    // plan item's already-declared 500/503 retry allowance. The session applies its
-                    // backoff; the next loop iteration reserves the shared wire budget again.
-                    var failedBytes = attempt.Evidence!.CopyCanonicalBytes();
-                    var failedReceipt = await _custodyStore.CreateAsync(
-                        failedBytes, CustodyClass.NightlyFloor90d, cancellationToken).ConfigureAwait(false);
-                    var failedDigest = failedReceipt.Reference.ContentSha256;
-                    var failedRetained = await CustodyRestore.ReadByDigestCheckedAsync(
-                        _custodyStore, failedDigest, cancellationToken).ConfigureAwait(false);
-                    if (!failedRetained.Span.SequenceEqual(failedBytes))
-                        throw new CustodyIntegrityException("The retained transient-failure route differs from its attempted evidence.");
-                    _ = RoutedHttpEvidence.ParseAndVerify(failedRetained.Span);
-                    executorWrittenMembership[failedDigest] = CustodyMembershipClassifier.Classify(failedReceipt);
-                    if (attemptOrdinal < maximumAttempts) continue;
+                    gatewayTimeouts.RecordTimeout();
+                    if (retryGatewayTimeout && attemptOrdinal < maximumAttempts && gatewayTimeouts.MayRetry(attemptOrdinal))
+                    {
+                        await gatewayTimeouts.CoolDownAsync(session.SourceProfile.MaximumRetryDelay, cancellationToken)
+                            .ConfigureAwait(false);
+                        continue;
+                    }
                 }
+
                 break;
             }
 
@@ -275,27 +295,13 @@ public sealed class RepeatedEnumerationDeliveryReopenGlue
                 _custodyStore, terminal.Sha256, cancellationToken)
             .ConfigureAwait(false);
 
-        // Write the evidence document, then take the digest FROM THE STORE'S OWN RECEIPT rather
-        // than from a value this run computed itself, and reopen exactly that digest before
-        // trusting it.
-        var evidenceBytes = evidence.CopyCanonicalBytes();
-        var evidenceReceipt = await _custodyStore.CreateAsync(
-                evidenceBytes, CustodyClass.NightlyFloor90d, cancellationToken)
-            .ConfigureAwait(false);
-        var evidenceDigest = evidenceReceipt.Reference.ContentSha256;
-        var reopenedEvidenceBytes = await CustodyRestore.ReadByDigestCheckedAsync(
-                _custodyStore, evidenceDigest, cancellationToken)
-            .ConfigureAwait(false);
-        var reopenedEvidence = RoutedHttpEvidence.ParseAndVerify(reopenedEvidenceBytes.Span);
-        executorWrittenMembership[evidenceDigest] = CustodyMembershipClassifier.Classify(evidenceReceipt);
-
         var transport = new RepeatedEnumerationObservedTransport(
-            logicalRequest, reopenedEvidence, writeReceipt, payload);
+            logicalRequest, reopenedEvidence!, writeReceipt, payload);
         return new ObservationAttemptOutcome(transport, item.RequestOrdinal, null);
     }
 
     // Retry only the observed Publications Office failures: a complete 500 with the Virtuoso
-    // serialization-deadlock signature, or a complete 503 with the exact retained maintenance page.
+    // serialization-deadlock signature, or a complete 502/503 with exact retained gateway/maintenance bytes.
     // Different maintenance bytes remain refused until reviewed; no arbitrary 5xx/challenge retry.
     // The maintenance digest pins the complete 2,005-byte response from the 2026-10-01 run.
     private async Task<bool> IsRetainedEuropeTransientFailureAsync(
@@ -303,13 +309,15 @@ public sealed class RepeatedEnumerationDeliveryReopenGlue
     {
         if (attempt.Evidence is not { Outcome: CompleteHttpRouteOutcome } evidence) return false;
         var terminal = evidence.Hops[^1];
-        if (terminal.Status is not (500 or 503) ||
+        if (terminal.Status is not (500 or 502 or 503) ||
             terminal.RequestUri != "https://publications.europa.eu/webapi/rdf/sparql") return false;
         if (terminal.Status == 503 && terminal.Sha256 !=
             "e7fab335ce5367cfe359f9f7e0ad6ce1838bec9189a216bc3faf437ce169d404") return false;
+        if (terminal.Status == 502 && terminal.Sha256 !=
+            "880c929020d4b79bf1995656d21d9a6859aab3a9460f941eb0b1a6e5502ee4cc") return false;
         var payload = await CustodyRestore.ReadByDigestCheckedAsync(
             _custodyStore, terminal.Sha256, cancellationToken).ConfigureAwait(false);
-        if (terminal.Status == 503) return true; // Full body digest was just independently checked.
+        if (terminal.Status is 502 or 503) return true; // Full body digest was just independently checked.
         var newline = payload.Span.IndexOf((byte)'\n');
         var length = newline < 0 ? payload.Length : newline;
         if (length > 256) return false;
@@ -318,6 +326,20 @@ public sealed class RepeatedEnumerationDeliveryReopenGlue
         catch (DecoderFallbackException) { return false; }
         return firstLine.StartsWith("Virtuoso 40001 Error ", StringComparison.Ordinal)
             && firstLine.Contains("Transaction deadlock", StringComparison.Ordinal);
+    }
+
+    // The Legilux gateway's read-timeout envelope: a complete 500 from the Legilux SPARQL endpoint whose retained body
+    // is exactly the template LuxembourgGatewayTimeouts.IsEnvelope matches. Read from custody here, outside the session
+    // (Decision 71), like the Publications Office check above.
+    private async Task<bool> IsRetainedLuxembourgGatewayTimeoutAsync(
+        RoutedHttpAcquisitionSession.AttemptResult attempt, CancellationToken cancellationToken)
+    {
+        if (attempt.Evidence is not { Outcome: CompleteHttpRouteOutcome } evidence) return false;
+        var terminal = evidence.Hops[^1];
+        if (terminal.Status != 500 || terminal.RequestUri != LuxembourgQueryPlan.PublisherEndpoint) return false;
+        var payload = await CustodyRestore.ReadByDigestCheckedAsync(
+            _custodyStore, terminal.Sha256, cancellationToken).ConfigureAwait(false);
+        return LuxembourgGatewayTimeouts.IsEnvelope(payload.Span);
     }
 
     /// <summary>

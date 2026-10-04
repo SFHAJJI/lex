@@ -14,7 +14,7 @@ namespace Lex.V3.Ingest.Tests;
 /// </summary>
 [TestClass]
 [DoNotParallelize]
-public sealed class V3FirstMountBuildTests
+public sealed partial class V3FirstMountBuildTests
 {
     [TestMethod]
     public async Task TheTwoAcquisitionsBuildTheFiveMountFilesAndTheApiMountOpensThem()

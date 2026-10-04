@@ -7,7 +7,10 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  ADVICE_QUESTION,
+  ASK_PRIMARY_TEXT_ROUTES,
   DOSSIER_IDENTIFIER,
+  EARLY_READING_DATE,
   EU_DOSSIER_ON_FIXTURE,
   EU_DOSSIER_STEP,
   EU_SEARCH_IDENTIFIER,
@@ -16,16 +19,40 @@ import {
   EU_SEARCH_STEP,
   HISTORY_ANCHOR,
   JOURNEY_STEPS,
+  MCP_PROTOCOL_VERSION,
+  NO_HIT_SEARCH_STEP,
   READING_DATE,
   SEARCH_PHRASE,
+  UNKNOWN_LAW,
+  askCardFailures,
+  envelopeIdentityFailures,
   expectedFromEnvelope,
   fixtureMountExpectations,
   journeyVerdict,
   pinnedCitation,
+  pageRequestBodies,
   realMountSteps,
+  realMountExpectations,
+  realMountRuns,
+  expectedForAnswer,
+  PRE_HISTORY_READING_STEP,
+  PRE_HISTORY_DATE,
+  NO_EARLIER_STATE,
+  REAL_MOUNT_EVENTS_VERIFIED,
+  ABSENCE_NOTE,
+  UNKNOWN_LAW_STEP,
+  eventsFailures,
+  apiJourneyRuns,
+  specificationJourneyExpectations,
+  twoStateExpectations,
+  europeAnnexExpectations,
+  withoutRequestFields,
+  EU_READING_DATE,
+  EU_READING_STEP,
   watchFiles,
 } from "../scripts/journey.mjs";
 import { cspValue } from "../scripts/csp.mjs";
+import { EXPORT_WATERMARK } from "../scripts/export-build.mjs";
 
 const ORIGIN = "http://127.0.0.1:5000";
 const CORPUS = "a".repeat(64);
@@ -226,6 +253,7 @@ test("a radar run types two dates and is held to exactly those in the body", () 
 
 test("an export run reads, pins, and is held to the composed export and to its one request", () => {
   assert.deepEqual(JOURNEY_STEPS.export.typed, [DOSSIER_IDENTIFIER, READING_DATE]);
+  assert.equal(JOURNEY_STEPS.export.then.count, 3, "journey J4: an answer across several provisions, three pinned for one export");
   assert.deepEqual(JOURNEY_STEPS.export.body, JOURNEY_STEPS.reading.body, "the export asks the reading, and nothing else");
   const observed = goodSearch();
   observed.requests = [
@@ -282,6 +310,36 @@ test("a file written and deleted while the run is watched fails it, though both 
     assert.ok(failures.some((failure) => failure.startsWith("the API process touched files while serving the run") && failure.includes("request.log")), failures.join("; "));
   } finally {
     await rm(home, { recursive: true, force: true });
+  }
+});
+
+test("a file watch that failed fails the run with its reason, never as a file the API touched", () => {
+  const observed = goodSearch();
+  const expected = { origin: ORIGIN, step: JOURNEY_STEPS.search, state: "success" };
+  const message = "ENOENT: no such file or directory, scandir '/tmp/lex-journey-api-x/runtimes/linux-musl-arm64'";
+  const failures = journeyVerdict({ ...observed, api: { output: "", changedFiles: [], fileEvents: [["error", message]] } }, expected);
+  assert.deepEqual(failures, [`the file watch failed, so the run cannot say the API touched no file: ${message}`],
+    "a failed watch is said as a failed watch, not as a file the API touched");
+});
+
+test("a watch that fails is recorded as an event, not thrown, and its stop is one promise however often it is asked (review of #921)", async () => {
+  // The watch the journeys hold is replaced by one this test fails at will: the base's push run of 67bae40e died of
+  // the error this emits, unhandled, when a recursive watch on Linux walked a directory being removed.
+  const fs = await import("node:fs");
+  const { syncBuiltinESMExports } = await import("node:module");
+  const { EventEmitter } = await import("node:events");
+  const original = fs.default.watch;
+  const failing = Object.assign(new EventEmitter(), { close() {} });
+  fs.default.watch = () => failing;
+  syncBuiltinESMExports();
+  try {
+    const watched = watchFiles("a directory the stub never reads");
+    failing.emit("error", new Error("ENOENT: no such file or directory, scandir"));
+    assert.equal(watched.stop(), watched.stop(), "the run and the API's close get one stop, not two");
+    assert.deepEqual(await watched.stop(), [["error", "ENOENT: no such file or directory, scandir"]]);
+  } finally {
+    fs.default.watch = original;
+    syncBuiltinESMExports();
   }
 });
 
@@ -362,6 +420,21 @@ test("every quotation carries its digests, its official source and a citation pi
     .includes("the quote of art_15 does not show its text digest, body digest and official source"), "one digest is not two");
   assert.ok(failing([quoted("art_15", [digest, "b".repeat(64), `${state}#art_15`])])
     .includes("the quote of art_15 does not show its text digest, body digest and official source"), "no official source");
+});
+
+test("an EU quotation is pinned by its EU wording permalink, its provision escaped as the platform escapes it (review of #903)", () => {
+  const digest = "c".repeat(64);
+  const wording = `/eu-eurlex/32016R0679/eng/2016-04-27--${digest}`;
+  const source = "http://publications.europa.eu/resource/cellar/3e485e15-11bd-11e6-ba9a-01aa75ed71a1.0006.02/DOC_1";
+  const quoted = (article, codes) => ({ article, codes });
+  const expected = { origin: ORIGIN, step: JOURNEY_STEPS.search, state: "success" };
+  const verdict = (quotes) => journeyVerdict({ ...goodSearch(), quotes }, expected);
+  assert.deepEqual(verdict([quoted("001", [digest, "d".repeat(64), source, `${wording}#001`])]), [], "an EU quote with its own provision permalink passes");
+  assert.deepEqual(verdict([quoted("art 1", [digest, "d".repeat(64), source, `${wording}#art%201`])]), [], "a provision id is compared unescaped");
+  assert.ok(verdict([quoted("002", [digest, "d".repeat(64), source, `${wording}#001`])])
+    .includes("the quote of 002 carries no citation that pins it"), "another provision's permalink does not pin this one");
+  assert.ok(verdict([quoted("001", [digest, "d".repeat(64), source, wording])])
+    .includes("the quote of 001 carries no citation that pins it"), "the wording permalink alone pins no provision");
 });
 
 test("nothing on the page means anything by colour alone: painted elements say what they are", () => {
@@ -461,11 +534,20 @@ test("the EU search step names the GDPR by its CELEX, chooses English and is hel
   assert.ok(!Object.values(JOURNEY_STEPS).includes(EU_SEARCH_STEP), "not one of the eight steps every mount runs: it needs an EU index");
 
   const report = { corpus: { Sha256: "a".repeat(64) }, luxembourgIndex: { Sha256: "b".repeat(64) } };
-  assert.deepEqual(realMountSteps(report).map(([name]) => name), Object.keys(JOURNEY_STEPS), "a real mount without an EU index runs the eight");
+  const specification = ["J1, a date before the history", "J2, a question no article carries", "J5, a law not held"];
+  assert.deepEqual(realMountSteps(report).map(([name]) => name), [...Object.keys(JOURNEY_STEPS), ...specification],
+    "a real mount without an EU index runs the eight, then J2 and J5");
   const withEurope = realMountSteps({ ...report, europeIndex: { Sha256: "c".repeat(64) } });
-  assert.deepEqual(withEurope.map(([name]) => name), [...Object.keys(JOURNEY_STEPS), "eu search", "eu dossier"], "and one with an EU index runs the EU search and dossier too");
-  assert.equal(withEurope.at(-2)[1], EU_SEARCH_STEP);
-  assert.equal(withEurope.at(-1)[1], EU_DOSSIER_STEP);
+  assert.deepEqual(withEurope.map(([name]) => name), [...Object.keys(JOURNEY_STEPS), ...specification, "eu search", "eu dossier", "eu reading"],
+    "and one with an EU index runs the EU search, dossier and reading too");
+  assert.equal(withEurope.at(-3)[1], EU_SEARCH_STEP);
+  assert.equal(withEurope.at(-2)[1], EU_DOSSIER_STEP);
+  assert.equal(withEurope.at(-1)[1], EU_READING_STEP);
+  // The EU reading: the same work on its wording date (the GDPR's Formex act date), on the reading page.
+  assert.deepEqual(EU_READING_STEP.body, { operation_id: "evidence_bundle", parameters: { identifier: "32016R0679", date: EU_READING_DATE } });
+  assert.equal(EU_READING_DATE, "2016-04-27");
+  assert.equal(EU_READING_STEP.path, JOURNEY_STEPS.reading.path, "the same reading page");
+  assert.ok(EU_READING_STEP.cites, "every EU article permalink the page prints is verified");
   assert.deepEqual(EU_DOSSIER_STEP.body, { operation_id: "dossier", parameters: { identifier: "32016R0679" } }, "the same work, any held language");
   assert.equal(EU_DOSSIER_STEP.path, JOURNEY_STEPS.dossier.path, "the same dossier page");
   assert.deepEqual(EU_DOSSIER_ON_FIXTURE, { ...EU_SEARCH_ON_FIXTURE, step: EU_DOSSIER_STEP });
@@ -522,4 +604,354 @@ test("a keyboard run that chooses an option counts the select among the fields T
   assert.deepEqual(journeyVerdict(observed, expected), []);
   assert.ok(journeyVerdict({ ...observed, keyboard: { ...observed.keyboard, placed: 2 } }, expected).includes("Tab reached 2 of the form's 3 fields"),
     "a select never reached fails as a field never reached");
+});
+
+test("the specification's journeys the eight steps do not walk are held to their own outcome: J1's refusal, J2's no hit, J5's law not held", () => {
+  const expectations = specificationJourneyExpectations();
+  assert.deepEqual(expectations.map(([name]) => name.slice(0, 2)), ["J1", "J2", "J5"]);
+  for (const [name, expected] of expectations) {
+    assert.equal(expected.step.body.operation_id, expected.step.operation, name);
+    assert.ok(expected.texts.length > 0, `${name} names the texts it must show`);
+  }
+  const byJourney = Object.fromEntries(expectations.map(([name, expected]) => [name.slice(0, 2), expected]));
+  assert.deepEqual(byJourney.J1.step.body.parameters, { identifier: DOSSIER_IDENTIFIER, date: EARLY_READING_DATE });
+  assert.ok(EARLY_READING_DATE < READING_DATE, "J1 asks a date before the fixture's one state");
+  assert.equal(byJourney.J1.refusalCode, "no_version_for_date");
+  assert.equal(byJourney.J2.state, "success");
+  assert.equal(byJourney.J2.nothingToCite, true, "a search with no hit cites nothing, and says so");
+  assert.equal(byJourney.J5.refusalCode, "identifier_unknown");
+  assert.deepEqual(byJourney.J5.step.body.parameters, { identifier: UNKNOWN_LAW });
+
+  // J2's page with no hit is excused from citing only because it says it holds nothing, and it must say that
+  // the absence is not evidence that the law does not exist.
+  const observed = goodSearch();
+  observed.requests = [
+    { url: `${ORIGIN}/search.html`, method: "GET", headers: {} },
+    { url: `${ORIGIN}/api/v3/search`, method: "POST", headers: {}, headersSent: true, postData: JSON.stringify(NO_HIT_SEARCH_STEP.body) },
+  ];
+  observed.text = byJourney.J2.texts.join(" ");
+  observed.citations = [];
+  observed.emptyAnswer = true;
+  const expected = { origin: ORIGIN, ...byJourney.J2 };
+  assert.deepEqual(journeyVerdict(observed, expected), []);
+  assert.ok(journeyVerdict({ ...observed, emptyAnswer: false }, expected).includes("the page printed no citation"), "a page that does not say it holds nothing must cite");
+  assert.ok(journeyVerdict({ ...observed, text: byJourney.J2.texts[0] }, expected).some((failure) => /It is not evidence/.test(failure)), "the absence note is required");
+});
+
+test("journey J7: REST and MCP answer one envelope, apart from the request's own reference and the moment it was answered", () => {
+  const envelope = (refFill, at, verdict = "answer") => ({
+    verdict,
+    request_ref: refFill.repeat(64),
+    context: { publisher: "lu-legilux", freshness: { observed_at: at, built_at: "2026-10-01T00:00:00Z" } },
+    result: { value: { hits: [] } },
+  });
+  const rest = { status: 200, json: envelope("a", "2026-10-03T02:00:00Z") };
+  const tool = (structured, text = JSON.stringify(structured)) => ({
+    status: 200,
+    protocolVersion: MCP_PROTOCOL_VERSION,
+    json: { jsonrpc: "2.0", id: "search", result: { isError: false, structuredContent: structured, content: [{ type: "text", text }] } },
+  });
+  assert.deepEqual(envelopeIdentityFailures(rest, tool(envelope("b", "2026-10-03T02:00:01Z"))), [], "the request reference and the observation time may differ");
+  assert.deepEqual(withoutRequestFields(rest.json).context.freshness, { built_at: "2026-10-01T00:00:00Z" }, "only the observation time is set aside");
+
+  const refused = envelope("b", "2026-10-03T02:00:01Z", "refuse");
+  assert.ok(envelopeIdentityFailures(rest, tool(refused)).some((failure) => /different envelopes, first at \.verdict/.test(failure)), "a different verdict is named");
+  const built = envelope("b", "2026-10-03T02:00:01Z");
+  built.context.freshness.built_at = "2026-10-02T00:00:00Z";
+  assert.ok(envelopeIdentityFailures(rest, tool(built)).some((failure) => /context\.freshness\.built_at/.test(failure)), "any other field of freshness must agree");
+  assert.ok(envelopeIdentityFailures(rest, tool(envelope("a", "x"), "{}")).some((failure) => /text and its structured content differ/.test(failure)), "the text is the structured content");
+  assert.ok(envelopeIdentityFailures(rest, { ...tool(envelope("a", "x")), protocolVersion: null }).some((failure) => /protocol none/.test(failure)), "the protocol revision is stated");
+  assert.ok(envelopeIdentityFailures(rest, { status: 200, protocolVersion: MCP_PROTOCOL_VERSION, json: { jsonrpc: "2.0", id: 1, error: { code: -32602 } } }).some((failure) => /no tool result/.test(failure)), "a JSON-RPC error fails");
+  const flagged = tool(envelope("a", "x"));
+  flagged.json.result.isError = true;
+  assert.ok(envelopeIdentityFailures(rest, flagged).some((failure) => /isError true/.test(failure)), "a tool error fails");
+  assert.ok(envelopeIdentityFailures({ ...rest, status: 500 }, tool(envelope("a", "x"))).some((failure) => /REST answered HTTP 500/.test(failure)));
+});
+
+test("journey J7 asks every request the journeys' pages make, each once", () => {
+  const bodies = pageRequestBodies();
+  const keys = bodies.map((body) => JSON.stringify(body));
+  assert.equal(new Set(keys).size, keys.length, "each request once");
+  for (const step of [...Object.values(JOURNEY_STEPS), ...specificationJourneyExpectations().map(([, expected]) => expected.step)]) {
+    assert.ok(keys.includes(JSON.stringify(step.body ?? { operation_id: "coverage", parameters: {} })), `${step.path} ${step.operation}`);
+  }
+});
+
+test("journey J6: ask answers the contained assistant's card, never a conclusion, and hands the reader to the primary text", () => {
+  const card = () => ({
+    verdict: "point",
+    result: {
+      value: {
+        presentation_result: "assistant_v3_unavailable",
+        containment: { decisions: ["51", "91"], model_gloss: "disabled" },
+        question_read: false,
+        deterministic_actions: ["resolve", "search", "as_of", "evidence_bundle"].map((operation) => ({ operation_id: operation, route: `/api/v3/${operation}` })),
+      },
+    },
+  });
+  assert.deepEqual(askCardFailures(card()), []);
+  assert.deepEqual(ASK_PRIMARY_TEXT_ROUTES, ["resolve", "as_of", "evidence_bundle"]);
+  const answered = card();
+  answered.verdict = "answer";
+  assert.ok(askCardFailures(answered).some((failure) => /verdict answer, not point/.test(failure)), "an answer is a conclusion");
+  const read = card();
+  read.result.value.question_read = true;
+  assert.ok(askCardFailures(read).some((failure) => /not read/.test(failure)));
+  const glossed = card();
+  glossed.result.value.containment.model_gloss = "enabled";
+  assert.ok(askCardFailures(glossed).some((failure) => /model gloss is enabled/.test(failure)));
+  const narrow = card();
+  narrow.result.value.deterministic_actions = narrow.result.value.deterministic_actions.filter((action) => action.operation_id !== "evidence_bundle");
+  assert.ok(askCardFailures(narrow).some((failure) => /evidence_bundle/.test(failure)), "the card must hand the reader to the quoted text");
+  const misrouted = card();
+  misrouted.result.value.deterministic_actions[0].route = "/api/v3/ask";
+  assert.ok(askCardFailures(misrouted).some((failure) => /names the route \/api\/v3\/ask/.test(failure)));
+  const echoed = card();
+  echoed.result.value.note = `you asked: ${ADVICE_QUESTION}`;
+  assert.ok(askCardFailures(echoed).some((failure) => /question's words/.test(failure)), "nothing of the question is in the card");
+});
+
+
+test("on the two-state mount journey J3 compares two different states and journey J8's radar shows the change", () => {
+  const mount = { work_key: "lu-legilux/loi-1991-08-10-n3", first_date: READING_DATE, later_date: "2025-01-01", amended_article: "art_7" };
+  const [[j3, compare], [j8, radar]] = twoStateExpectations(mount);
+  assert.match(j3, /^J3/);
+  assert.match(j8, /^J8/);
+  assert.equal(compare.step.operation, "diff");
+  assert.deepEqual(compare.step.typed, [DOSSIER_IDENTIFIER, READING_DATE, "2025-01-01"]);
+  assert.deepEqual(compare.step.body.parameters, { identifier: DOSSIER_IDENTIFIER, date_from: READING_DATE, date_to: "2025-01-01" });
+  assert.ok(compare.texts.includes("art_7: changed"), "the amended article is named as changed");
+  assert.ok(compare.texts.includes("1 changed, 0 added, 0 removed"));
+  assert.equal(radar.step.operation, "changes_in_period");
+  assert.deepEqual(radar.step.body.parameters, { date_from: READING_DATE, date_to: "2025-01-01" });
+  assert.ok(radar.texts.includes(`wording changed from the state of ${READING_DATE}`), "the later state is compared with the one it replaced");
+  assert.equal(JOURNEY_STEPS.compare.typed[1], JOURNEY_STEPS.compare.typed[2], "the one-state fixture's compare asks one date twice, the reason this mount exists");
+});
+
+test("on the EU annex control mount the reading and dossier pages say the annex is not served as text, and never show it", () => {
+  const mount = { eu_annex: { celex: "32016R0679", wording_date: "2026-08-26", annexes: 1, absent_texts: ["Hambali", "ANNEXSENTINELZQXV"] } };
+  const [[readName, read], [dossierName, dossier]] = europeAnnexExpectations(mount);
+  assert.match(readName, /read on its wording date/);
+  assert.match(dossierName, /dossier/);
+  assert.equal(read.step.operation, "evidence_bundle");
+  assert.deepEqual(read.step.typed, ["32016R0679", "2026-08-26"]);
+  assert.deepEqual(read.step.body.parameters, { identifier: "32016R0679", date: "2026-08-26" });
+  assert.equal(dossier.step.operation, "dossier");
+  assert.deepEqual(dossier.step.body.parameters, { identifier: "32016R0679" });
+  for (const expected of [read, dossier]) {
+    assert.equal(expected.state, "success");
+    assert.deepEqual(expected.texts, ["1 annex of the English wording is not served as text, and is never searched, quoted or exported"]);
+    assert.deepEqual(expected.absentTexts, ["Hambali", "ANNEXSENTINELZQXV"], "the annex's text and title appear nowhere on either page");
+  }
+  assert.throws(() => europeAnnexExpectations({ eu_annex: { ...mount.eu_annex, absent_texts: [] } }), /no annex text to look for/);
+});
+
+test("on the EU annex control mount the export composer pins both articles and shows the EU export, its annex excluded and never its text", () => {
+  const mount = { eu_annex: { celex: "32016R0679", wording_date: "2026-08-26", annexes: 1, absent_texts: ["Hambali", "ANNEXSENTINELZQXV"] } };
+  const [, , [name, exporting]] = europeAnnexExpectations(mount);
+  assert.match(name, /exported/);
+  assert.equal(exporting.step.path, "/export.html");
+  assert.deepEqual(exporting.step.typed, ["32016R0679", "2026-08-26"]);
+  assert.deepEqual(exporting.step.body, { operation_id: "evidence_bundle", parameters: { identifier: "32016R0679", date: "2026-08-26" } }, "the export asks the reading, and nothing else");
+  assert.deepEqual(exporting.step.then, { click: "input[data-pin]", count: 2, until: "[data-export-state=composed] [data-export-annexes]" }, "both articles pinned, and the export must list the annex");
+  assert.deepEqual(exporting.texts, [
+    "1 annex of the English wording is not served as text, and is never searched, quoted or exported",
+    "2 articles pinned: 2 exported with text, 0 excluded.",
+    EXPORT_WATERMARK,
+    "© European Union, https://eur-lex.europa.eu",
+    "Save as PDF",
+  ]);
+  assert.deepEqual(exporting.absentTexts, ["Hambali", "ANNEXSENTINELZQXV"], "the annex's text and title appear nowhere on the page");
+
+  // Held to it: the composed export passes; the annex's text in the JSON the page shows, no annex listed, or no PDF fails.
+  const observed = goodSearch();
+  observed.requests = [
+    { url: `${ORIGIN}/export.html`, method: "GET", headers: {} },
+    { url: `${ORIGIN}/api/v3/evidence_bundle`, method: "POST", headers: {}, headersSent: true, postData: JSON.stringify(exporting.step.body) },
+  ];
+  observed.location = `${ORIGIN}/export.html`;
+  observed.text = exporting.texts.join("\n");
+  observed.html = '<details><summary>The JSON as it will be saved</summary><pre>{"annexes_not_served": [{"annexes": 1}]}</pre></details>';
+  observed.then = "reached";
+  const expected = { origin: ORIGIN, ...exporting };
+  assert.deepEqual(journeyVerdict(observed, expected), []);
+  assert.ok(journeyVerdict({ ...observed, html: '<pre>{"text": "Hambali"}</pre>' }, expected).includes('the page\'s markup carries withheld text "Hambali"'), "the annex's text in the JSON shown");
+  assert.ok(journeyVerdict({ ...observed, then: "clicked" }, expected).some((failure) => /never showed \[data-export-state=composed\] \[data-export-annexes\]/.test(failure)), "no annex listed");
+  assert.ok(journeyVerdict({ ...observed, text: observed.text.replace("Save as PDF", "") }, expected).includes('the page does not show "Save as PDF"'), "no PDF offered");
+});
+
+test("on a real mount J5 must refuse identifier_unknown with the absence note whatever the API answers, and J2 says the note only when nothing was found", () => {
+  const steps = Object.fromEntries(realMountSteps({ corpus: {}, luxembourgIndex: {} }).map(([name, step]) => [name.slice(0, 2), step]));
+  const j5 = realMountExpectations(steps.J5);
+  assert.equal(steps.J5, UNKNOWN_LAW_STEP);
+  for (const envelope of [{ verdict: "refuse", refusal: { code: "identifier_unknown" } }, { verdict: "answer", result: { value: {} } }]) {
+    assert.deepEqual(j5.refine(envelope), { state: "refusal", refusalCode: "identifier_unknown", texts: [ABSENCE_NOTE] },
+      "an answer to a law the corpus does not hold would be the defect, so the page is held to the refusal regardless");
+  }
+  const j2 = realMountExpectations(steps.J2);
+  assert.equal(steps.J2, NO_HIT_SEARCH_STEP);
+  assert.deepEqual(j2.refine({ verdict: "answer", result: { value: { hits: [] } } }), { texts: [ABSENCE_NOTE] });
+  assert.deepEqual(j2.refine({ verdict: "answer", result: { value: { hits: [{ id: 1 }] } } }), {},
+    "a population that does carry the words answers hits, held like any search");
+  assert.deepEqual(realMountExpectations(JOURNEY_STEPS.search), {}, "the eight steps are held to the API's outcome alone");
+
+  // J1 on a real mount: the fixture's work on a date before any state a population could hold.
+  assert.equal(steps.J1, PRE_HISTORY_READING_STEP);
+  assert.deepEqual(PRE_HISTORY_READING_STEP.body.parameters, { identifier: DOSSIER_IDENTIFIER, date: PRE_HISTORY_DATE });
+  assert.deepEqual(PRE_HISTORY_READING_STEP.typed, [DOSSIER_IDENTIFIER, PRE_HISTORY_DATE]);
+  assert.equal(PRE_HISTORY_READING_STEP.path, "/reading.html");
+  assert.deepEqual(realMountExpectations(steps.J1).refine({ verdict: "answer", result: { value: {} } }),
+    { state: "refusal", refusalCode: "no_version_for_date", texts: [NO_EARLIER_STATE] }, "another date's text would be the defect");
+});
+
+test("a page's expectation is the API's outcome, then the step's own refinement of it, which wins", () => {
+  const answered = { verdict: "answer", result: { value: { hits: [] } } };
+  assert.deepEqual(expectedForAnswer({ step: NO_HIT_SEARCH_STEP }, answered), { step: NO_HIT_SEARCH_STEP, state: "success", nothingToCite: true });
+  const j5 = { step: UNKNOWN_LAW_STEP, ...realMountExpectations(UNKNOWN_LAW_STEP) };
+  const held = expectedForAnswer(j5, { verdict: "answer", result: { value: {} } });
+  assert.equal(held.state, "refusal", "a law the corpus does not hold must be refused even when the API answers it");
+  assert.equal(held.refusalCode, "identifier_unknown");
+  assert.deepEqual(held.texts, [ABSENCE_NOTE]);
+  const j2 = { step: NO_HIT_SEARCH_STEP, ...realMountExpectations(NO_HIT_SEARCH_STEP) };
+  assert.deepEqual(expectedForAnswer(j2, answered).texts, [ABSENCE_NOTE], "the refinement sees the envelope the outcome came from");
+  assert.equal(expectedForAnswer(j2, { verdict: "answer", result: { value: { hits: [{}] } } }).texts, undefined);
+});
+
+test("the real-mount runs give each step its expectations, then the API journeys against the same server, J8 bounded", async () => {
+  const { mkdtemp, writeFile, rm } = await import("node:fs/promises");
+  const { tmpdir } = await import("node:os");
+  const { join } = await import("node:path");
+  const mount = await mkdtemp(join(tmpdir(), "lex-real-mount-"));
+  try {
+    await writeFile(join(mount, "build-report.json"), JSON.stringify({ corpus: { Sha256: "a".repeat(64) }, luxembourgIndex: { Sha256: "b".repeat(64) } }));
+    const asked = [];
+    const startServer = async () => ({ origin: "http://127.0.0.1:1", close: async () => {} });
+    const runs = await realMountRuns("api", mount, { servedByApi: true, keyboard: false, startServer }, "browser", "live", {
+      runStep: async (apiOutput, givenMount, expected) => {
+        asked.push(expected);
+        return { observed: { answerState: "success" }, failures: [] };
+      },
+      apiRuns: async (apiOutput, givenMount, options) => {
+        assert.equal(options.startServer, startServer, "the API journeys ask the same kind of server the pages do");
+        assert.equal(options.eventsToVerify, REAL_MOUNT_EVENTS_VERIFIED);
+        return [["J6, a question", []], ["J8, the event log", ["a failure"]]];
+      },
+    });
+    assert.equal(asked.length, Object.keys(JOURNEY_STEPS).length + 3);
+    assert.ok(asked.every((expected) => expected.fromApi === true && expected.servedByApi === true));
+    assert.equal(asked.find((expected) => expected.step === JOURNEY_STEPS.coverage).corpusSha256, "a".repeat(64));
+    for (const step of [PRE_HISTORY_READING_STEP, NO_HIT_SEARCH_STEP, UNKNOWN_LAW_STEP]) {
+      assert.equal(typeof asked.find((expected) => expected.step === step)?.refine, "function", "each specification journey carries its refinement");
+    }
+    assert.deepEqual(runs.slice(-2).map(([label, { failures }]) => [label, failures]),
+      [["J6, a question, with the real mount", []], ["J8, the event log, with the real mount", ["a failure"]]]);
+    assert.equal(runs.at(-1)[1].observed.answerState, "api");
+  } finally {
+    await rm(mount, { recursive: true, force: true });
+  }
+});
+
+/**
+ * A stand-in API answering events, verify and answer_drift as a genesis log of `count` events does, counting verify
+ * requests. It pages as the real `events` does: at most `limit` events after the cursor, `has_more`, and `next_after`
+ * naming the last event served (the log's last when there is no more); a cursor past the last event is refused.
+ * `overlap` makes the second page repeat the first page's last event, as a broken log would.
+ */
+async function eventLogServer(count, { limit = 200, overlap = false } = {}) {
+  const { createServer } = await import("node:http");
+  const logId = "e".repeat(64);
+  const events = Array.from({ length: count }, (_, index) => ({ seq: index + 1, permalink: `/lu-legilux/w${index}/2024-02-01--${"f".repeat(64)}` }));
+  const page = (after) => {
+    const rest = events.filter((event) => event.seq > (overlap && after > 0 ? after - 1 : after));
+    const served = rest.slice(0, limit);
+    const hasMore = rest.length > limit;
+    return { events: served, has_more: hasMore, next_after: `${logId}:${hasMore ? served.at(-1).seq : count}` };
+  };
+  let verified = 0;
+  const server = createServer((request, response) => {
+    let text = "";
+    request.on("data", (chunk) => { text += chunk; });
+    request.on("end", () => {
+      const { operation_id: operation, parameters = {} } = JSON.parse(text || "{}");
+      let body;
+      if (operation === "events" && parameters.after === `${"0".repeat(64)}:1`) body = { verdict: "refuse", refusal: { code: "snapshot_unknown" } };
+      else if (operation === "events") {
+        const after = parameters.after === undefined ? 0 : Number(parameters.after.split(":")[1]);
+        if (after > count) {
+          response.writeHead(400, { "content-type": "application/json" });
+          response.end(JSON.stringify({ verdict: "refuse", refusal: { code: "request_schema_invalid" } }));
+          return;
+        }
+        body = { verdict: "answer", result: { value: page(after) } };
+      }
+      else if (operation === "verify") {
+        verified += 1;
+        body = { verdict: "answer", result: { value: { verdict: "digest_matches" } } };
+      } else if (operation === "answer_drift") body = { verdict: "answer", result: { value: { invalidated_answers: [], asserts_no_drift_in_law: false } } };
+      else body = { verdict: "refuse", refusal: { code: "operation_unknown" } };
+      response.writeHead(200, { "content-type": "application/json" });
+      response.end(JSON.stringify(body));
+    });
+  });
+  await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+  return {
+    origin: `http://127.0.0.1:${server.address().port}`,
+    verified: () => verified,
+    close: () => new Promise((resolve) => server.close(resolve)),
+  };
+}
+
+test("journey J8 on a real mount follows the log's own cursor, verifies a bounded number of permalinks, and an empty log cannot show the journey", async () => {
+  // A population log answers a page at a time: the journey reads on from next_after and checks the next page starts
+  // where the first ended.
+  const population = await eventLogServer(65, { limit: 30 });
+  try {
+    assert.deepEqual(await eventsFailures(population.origin, { verifyAtMost: REAL_MOUNT_EVENTS_VERIFIED }), []);
+    assert.equal(population.verified(), REAL_MOUNT_EVENTS_VERIFIED, "a population log holds thousands of events; the journey verifies the first few");
+  } finally {
+    await population.close();
+  }
+  const broken = await eventLogServer(65, { limit: 30, overlap: true });
+  try {
+    const failures = await eventsFailures(broken.origin, { verifyAtMost: 1 });
+    assert.ok(failures.some((failure) => /does not start where the first ended/.test(failure)), failures.join("; "));
+  } finally {
+    await broken.close();
+  }
+  const fixture = await eventLogServer(5);
+  try {
+    assert.deepEqual(await eventsFailures(fixture.origin), []);
+    assert.equal(fixture.verified(), 5, "the fixture mount's log is one page, verified whole, as before");
+  } finally {
+    await fixture.close();
+  }
+  const empty = await eventLogServer(0);
+  try {
+    const failures = await eventsFailures(empty.origin, { verifyAtMost: REAL_MOUNT_EVENTS_VERIFIED });
+    assert.ok(failures.some((failure) => /holds no event to poll.*cannot show journey J8/.test(failure)), failures.join("; "));
+  } finally {
+    await empty.close();
+  }
+});
+
+test("the API journeys run against the server the caller starts (the release image, a deployed revision) and close it", async () => {
+  const server = await eventLogServer(3);
+  let started = 0;
+  let closed = 0;
+  try {
+    const results = await apiJourneyRuns(null, null, {
+      startServer: async () => {
+        started += 1;
+        return { origin: server.origin, close: async () => { closed += 1; } };
+      },
+      eventsToVerify: 2,
+    });
+    assert.equal(started, 1);
+    assert.equal(closed, 1);
+    assert.deepEqual(results.map(([name]) => name.slice(0, 2)).filter((name, index, all) => all.indexOf(name) === index), ["J6", "J7", "J8"]);
+    assert.deepEqual(results.at(-1)[1], [], "J8 against the stand-in log passes");
+    assert.equal(server.verified(), 2, "and verified the two permalinks it was allowed");
+  } finally {
+    await server.close();
+  }
 });

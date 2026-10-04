@@ -220,7 +220,7 @@ public sealed class LuxembourgQueryExecutionAdapterConstructionSurfaceTests
     }
 
     [TestMethod]
-    public void QueryExecutionRefusalIsATwentyOneMemberEnumIncludingNone()
+    public void QueryExecutionRefusalIsATwentyFourMemberEnumIncludingNone()
     {
         // D1-06c-LU-2 added four: DocumentFetchSessionNotStarted, DocumentBodyNotRetained,
         // AcquisitionOutcomeNotRepresentable and RecordSetNotHeld, one per whole-run failure the
@@ -246,6 +246,9 @@ public sealed class LuxembourgQueryExecutionAdapterConstructionSurfaceTests
                 "base-constructor protected instance System.Enum::.ctor() -> System.Enum",
                 "base-constructor protected instance System.ValueType::.ctor() -> System.ValueType",
                 "field public static " + N
+                + "LuxembourgQueryExecutionRefusal::AcquisitionCheckpointNotRetained -> " + N
+                + "LuxembourgQueryExecutionRefusal",
+                "field public static " + N
                 + "LuxembourgQueryExecutionRefusal::AcquisitionOutcomeNotRepresentable -> "
                 + N + "LuxembourgQueryExecutionRefusal",
                 "field public static " + N
@@ -261,10 +264,16 @@ public sealed class LuxembourgQueryExecutionAdapterConstructionSurfaceTests
                 + "LuxembourgQueryExecutionRefusal::DocumentBodyNotRetained -> " + N
                 + "LuxembourgQueryExecutionRefusal",
                 "field public static " + N
+                + "LuxembourgQueryExecutionRefusal::DocumentCheckpointNotRetained -> " + N
+                + "LuxembourgQueryExecutionRefusal",
+                "field public static " + N
                 + "LuxembourgQueryExecutionRefusal::DocumentFetchSessionNotStarted -> " + N
                 + "LuxembourgQueryExecutionRefusal",
                 "field public static " + N
                 + "LuxembourgQueryExecutionRefusal::GazetteBodyNotProduced -> " + N
+                + "LuxembourgQueryExecutionRefusal",
+                "field public static " + N
+                + "LuxembourgQueryExecutionRefusal::GazetteCheckpointNotRetained -> " + N
                 + "LuxembourgQueryExecutionRefusal",
                 "field public static " + N
                 + "LuxembourgQueryExecutionRefusal::HeldBodyDerivationPopulationNotCompleted -> "
@@ -524,8 +533,12 @@ public sealed class LuxembourgQueryExecutionAdapterConstructionSurfaceTests
                     + "System.Collections.Generic.IReadOnlyDictionary<System.Int32, "
                     + "System.Collections.Generic.IReadOnlyList<System.String>>?, "
                     + "Lex.V3.Contracts.Source.Luxembourg.LuxembourgNeverConsolidatedBodyLedger?, "
-                    + "Lex.V3.Ingest.Luxembourg.LuxembourgQueryExecutionRefusalDetail?) -> "
+                    + "Lex.V3.Ingest.Luxembourg.LuxembourgQueryExecutionRefusalDetail?, "
+                    + "Lex.V3.Contracts.Source.Core.SourceArtifactRef?, Lex.V3.Contracts.Source.Core.SourceArtifactRef?) -> "
                     + "Lex.V3.Ingest.Luxembourg.LuxembourgQueryExecutionResult",
+                "method internal instance Lex.V3.Ingest.Luxembourg.LuxembourgQueryExecutionResult::WithAcquisitionCheckpoint(Lex.V3.Contracts.Source.Core.SourceArtifactRef) -> Lex.V3.Ingest.Luxembourg.LuxembourgQueryExecutionResult",
+                "method internal instance Lex.V3.Ingest.Luxembourg.LuxembourgQueryExecutionResult::WithDocumentCheckpoint(Lex.V3.Contracts.Source.Core.SourceArtifactRef) -> Lex.V3.Ingest.Luxembourg.LuxembourgQueryExecutionResult",
+                "method internal instance Lex.V3.Ingest.Luxembourg.LuxembourgQueryExecutionResult::WithGazetteCheckpoint(Lex.V3.Contracts.Source.Core.SourceArtifactRef) -> Lex.V3.Ingest.Luxembourg.LuxembourgQueryExecutionResult",
                 "method public static "
                     + "Lex.V3.Ingest.Luxembourg.LuxembourgQueryExecutionResult::Delivered(Lex.V3.Co"
                     + "ntracts.Source.Core.SourceProfileTopology, "
@@ -632,6 +645,7 @@ public sealed class LuxembourgQueryExecutionAdapterConstructionSurfaceTests
                     + "System.Boolean) -> "
                     + "System.Threading.Tasks.Task<Lex.V3.Ingest.Luxembourg.LuxembourgQueryExecutio"
                     + "nResult>",
+                "method internal static Lex.V3.Ingest.Luxembourg.LuxembourgQueryExecutionAdapter::ReopenAcquisitionAsync(Lex.V3.Contracts.Custody.ICustodyStore, Lex.V3.Contracts.Source.Core.SourceArtifactRef, Lex.V3.Contracts.Source.Luxembourg.VerifiedLuxembourgSourceProfile, System.Collections.Generic.IReadOnlyList<Lex.V3.Contracts.Source.Luxembourg.LuxembourgQueryPartitionRange>, System.Threading.CancellationToken, Lex.V3.Ingest.Luxembourg.LuxembourgRendererSources?, Lex.V3.Contracts.Source.Core.SourceArtifactRef?) -> System.Threading.Tasks.Task<Lex.V3.Ingest.Luxembourg.LuxembourgQueryExecutionResult>",
                 "method private instance "
                     + "Lex.V3.Ingest.Luxembourg.LuxembourgQueryExecutionAdapter::RunCoreAsync(Syste"
                     + "m.Collections.Generic.IReadOnlyList<System.ValueTuple<Lex.V3.Ingest.Luxembou"
@@ -646,7 +660,7 @@ public sealed class LuxembourgQueryExecutionAdapterConstructionSurfaceTests
                     + "Lex.V3.Ingest.WireRequestBudget, System.Threading.CancellationToken, "
                     + "System.Collections.Generic.IReadOnlyList<Lex.V3.Ingest.Luxembourg.Luxembourg"
                     + "ConsolidationByActResult>?, "
-                    + "System.Boolean) -> "
+                    + "System.Boolean, Lex.V3.Ingest.Luxembourg.LuxembourgQueryExecutionAdapter+QueryReplay?) -> "
                     + "System.Threading.Tasks.Task<Lex.V3.Ingest.Luxembourg.LuxembourgQueryExecutio"
                     + "nResult>",
                 "method public instance "
@@ -713,6 +727,9 @@ public sealed class LuxembourgQueryExecutionAdapterConstructionSurfaceTests
                 "constructor public instance " + N + "LuxembourgQueryExecutionAdapter::.ctor("
                 + Custody + "ICustodyStore, " + N + "LuxembourgRepeatedEnumerationExecutor, "
                 + Contracts + "VerifiedLuxembourgSourceProfile) -> " + N + "LuxembourgQueryExecutionAdapter",
+                // The per-leaf journal callback holds the adapter whose journal it writes: a holder, not a door.
+                "field private instance " + N + "LuxembourgQueryExecutionAdapter+CoverLeafJournal::_adapter -> "
+                + N + "LuxembourgQueryExecutionAdapter",
             },
             ConstructionSurface.Of(typeof(LuxembourgQueryExecutionAdapter)).ToArray());
     }

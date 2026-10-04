@@ -15,8 +15,8 @@ import { Fragment, useEffect, useRef, useState } from 'react';
 
 import { RefusalCard } from './RefusalCard.jsx';
 import { LIVE_RADAR_IDLE, RADAR_LANGUAGES, createRadarSession } from '../scripts/live-radar.mjs';
-import { fillCounted, liveChrome } from '../scripts/live-chrome.mjs';
-import { LiveAnswer, Say } from './LiveAnswer.jsx';
+import { ENGLISH_LANG, fillCounted, liveChrome } from '../scripts/live-chrome.mjs';
+import { LiveAnswer, Say, StatusSentence, refusalCardCopyFor } from './LiveAnswer.jsx';
 
 /** The forms' labels and buttons, and this screen's sentences, from the interface copy table. */
 const FORM = liveChrome().form;
@@ -88,7 +88,7 @@ export function RadarView({ view }) {
           }}
         />
       </p>
-      <p data-caveat="">{asSentence(view.caveat)}</p>
+      <p data-caveat="" lang={ENGLISH_LANG}>{asSentence(view.caveat)}</p>
       {view.rows.length === 0 ? (
         <p data-no-row="">
           {population.windowOverlapsWhatIsHeld
@@ -133,14 +133,14 @@ export function RadarAnswerView({ outcome }) {
   if (outcome.state === 'refusal' && outcome.card) {
     return (
       <section data-answer-state="refusal">
-        <RefusalCard code={outcome.code} sentence={outcome.sentence} payload={outcome.payload} copy={liveChrome().refusalCard} />
+        <RefusalCard code={outcome.code} sentence={outcome.sentence} payload={outcome.payload} copy={refusalCardCopyFor(outcome.context)} />
       </section>
     );
   }
 
   return (
     <section data-answer-state={outcome.state}>
-      <p role="status">{outcome.sentence}</p>
+      <StatusSentence outcome={outcome} />
     </section>
   );
 }

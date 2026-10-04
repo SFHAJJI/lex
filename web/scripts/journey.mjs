@@ -9,11 +9,12 @@
 // with no second request;
 // with a mount, the page must end in the answer, and the one request must carry exactly what was
 // typed and nothing else. Without a mount, each must end in the refusal card for
-// `no_corpus_mounted`. Two EU steps ask for the GDPR by its CELEX: the search page with English chosen
-// in the form's language select (`EU_SEARCH_STEP`), and the dossier page (`EU_DOSSIER_STEP`). They
-// need an EU index, so on the fixture mount (Luxembourg only) each must end in the refusal card
-// `no_corpus_mounted` naming the EU index, and on a real mount whose build report names an EU index
-// each must end in the API's answer, every EU citation pinned and verified. In every run, what the
+// `no_corpus_mounted`. Three EU steps ask for the GDPR by its CELEX: the search page with English chosen
+// in the form's language select (`EU_SEARCH_STEP`), the dossier page (`EU_DOSSIER_STEP`), and the
+// reading page on the GDPR's wording date (`EU_READING_STEP`). They need an EU index, so on the fixture
+// mount (Luxembourg only) the search and dossier steps must end in the refusal card `no_corpus_mounted`
+// naming the EU index, and on a real mount whose build report names an EU index each of the three must
+// end in the API's answer, every EU citation pinned and verified. In every run, what the
 // browser did is measured, not assumed: exactly one request to the API (`POST /api/v3/{operation}`,
 // no query string, no referrer, no cookie), every other request a same-origin asset, the page still
 // at its own address with no history entry added and no history state written, no cookie set,
@@ -80,6 +81,7 @@ import { createLiveServer } from "./serve-live.mjs";
 import { Session, findBrowser, launchBrowser } from "./browser-evidence.mjs";
 import { cspValue } from "./csp.mjs";
 import { EXPORT_WATERMARK } from "./export-build.mjs";
+import { EUROPE_TEXT_ACKNOWLEDGEMENT } from "./reading-answer.mjs";
 
 export const ANSWER_DEADLINE_MS = 30_000;
 
@@ -188,8 +190,9 @@ export const JOURNEY_STEPS = Object.freeze({
     cites: true,
     operation: "evidence_bundle",
     typed: Object.freeze([DOSSIER_IDENTIFIER, READING_DATE]),
-    // Once the reading has answered: pin the first article, and the export must be composed.
-    then: Object.freeze({ click: "input[data-pin]", until: "[data-export-state=composed]" }),
+    // Once the reading has answered: pin the first three articles (journey J4, an answer across several
+    // provisions), and the export must be composed.
+    then: Object.freeze({ click: "input[data-pin]", count: 3, until: "[data-export-state=composed]" }),
     body: Object.freeze({
       operation_id: "evidence_bundle",
       parameters: Object.freeze({ identifier: DOSSIER_IDENTIFIER, date: READING_DATE }),
@@ -237,6 +240,25 @@ export const EU_DOSSIER_STEP = Object.freeze({
   operation: "dossier",
   typed: EU_SEARCH_IDENTIFIER,
   body: Object.freeze({ operation_id: "dossier", parameters: Object.freeze({ identifier: EU_SEARCH_IDENTIFIER }) }),
+});
+
+/** The date the EU reading asks: the GDPR's Formex act date, the date of the one wording an EU index holds of it. */
+export const EU_READING_DATE = "2016-04-27";
+
+/**
+ * The EU reading step: the reading page asked for the same EU work by its CELEX on its wording date, in any
+ * held language. Where an EU index holds it, the original wording is quoted with Decision 95's
+ * acknowledgement, and every article permalink the page prints is verified.
+ */
+export const EU_READING_STEP = Object.freeze({
+  path: "/reading.html",
+  cites: true,
+  operation: "evidence_bundle",
+  typed: Object.freeze([EU_SEARCH_IDENTIFIER, EU_READING_DATE]),
+  body: Object.freeze({
+    operation_id: "evidence_bundle",
+    parameters: Object.freeze({ identifier: EU_SEARCH_IDENTIFIER, date: EU_READING_DATE }),
+  }),
 });
 
 /**
@@ -339,7 +361,9 @@ export function journeyVerdict(observed, expected) {
     // body digests, its official source, and a permalink that pins its very article (review of #805:
     // the export composer quoted 49 articles and cited only their state).
     for (const quote of observed.quotes) {
-      if (!quote.codes.some((code) => code.match(PINNED_PERMALINK)?.[2] === quote.article)) {
+      // Either publisher's grammar: a Luxembourg state permalink or an EU wording permalink (review of #903: the
+      // Luxembourg-only rule failed every EU quote).
+      if (!quote.codes.some((code) => pinnedCitation(code)?.anchor === quote.article)) {
         failures.push(`the quote of ${quote.article} carries no citation that pins it`);
       }
       const digests = quote.codes.filter((code) => /^[0-9a-f]{64}$/.test(code)).length;
@@ -359,7 +383,10 @@ export function journeyVerdict(observed, expected) {
     if (observed.api.output.includes("127.0.0.1")) failures.push("the API process recorded an address");
     if (observed.api.output.trim() !== "") failures.push(`the API process wrote output during the run: ${observed.api.output.trim().slice(0, 200)}`);
     if (observed.api.changedFiles.length > 0) failures.push(`the API process wrote files: ${observed.api.changedFiles.join(", ")}`);
-    const touched = [...new Set((observed.api.fileEvents ?? []).map(([, path]) => path))];
+    const fileEvents = observed.api.fileEvents ?? [];
+    const watchErrors = fileEvents.filter(([event]) => event === "error").map(([, message]) => message);
+    if (watchErrors.length > 0) failures.push(`the file watch failed, so the run cannot say the API touched no file: ${watchErrors.join("; ")}`);
+    const touched = [...new Set(fileEvents.filter(([event]) => event !== "error").map(([, path]) => path))];
     if (touched.length > 0) failures.push(`the API process touched files while serving the run: ${touched.join(", ")}`);
   }
   if (expected.servedByApi) {
@@ -456,16 +483,27 @@ async function freePort() {
  * Every change the file system reports under a directory from now until `stop()`, as `[event, path]`.
  * Two listings, one before and one after, cannot see a file written and deleted between them (review
  * of #801); a watch held for the whole interval does.
+ *
+ * A watch that fails is reported as an `["error", message]` event, which the verdict says, instead of an
+ * unhandled error that ends the whole process: on Linux a recursive watch walks the directories under it,
+ * and one removed while it walks fails it (`ENOENT ... scandir`, the base's push run of 67bae40e, where the
+ * API's directory was removed while its watch was still open). `stop()` may be called more than once, and
+ * answers the same events each time.
  */
 export function watchFiles(root) {
   const events = [];
   const watcher = watch(root, { recursive: true }, (event, name) => { events.push([event, String(name ?? "")]); });
+  watcher.on("error", (error) => { events.push(["error", String(error?.message ?? error)]); });
+  let stopped = null;
   return {
-    async stop() {
-      // The system reports a change after it happens; a short wait lets the last ones arrive.
-      await new Promise((resolve) => setTimeout(resolve, 250));
-      watcher.close();
-      return events;
+    stop() {
+      stopped ??= (async () => {
+        // The system reports a change after it happens; a short wait lets the last ones arrive.
+        await new Promise((resolve) => setTimeout(resolve, 250));
+        watcher.close();
+        return events;
+      })();
+      return stopped;
     },
   };
 }
@@ -482,7 +520,7 @@ async function listFiles(root) {
   return files;
 }
 
-async function startApi(apiOutput, mount, webRoot = null) {
+export async function startApi(apiOutput, mount, webRoot = null) {
   const home = await mkdtemp(join(tmpdir(), "lex-journey-api-"));
   await cp(apiOutput, home, { recursive: true });
   await rm(join(home, "v3-corpus"), { recursive: true, force: true });
@@ -511,14 +549,18 @@ async function startApi(apiOutput, mount, webRoot = null) {
       });
       if (answer.status === 200) {
         const filesAtStart = await listFiles(home);
+        const fileWatch = watchFiles(home);
         return {
-          origin, child, stderr: () => stderr, output: () => output, outputAtStart: output.length, fileWatch: watchFiles(home),
+          origin, child, stderr: () => stderr, output: () => output, outputAtStart: output.length, fileWatch,
           /** The files under the API's directory that were added or changed since it first answered. */
           async changedFiles() {
             const filesAtEnd = await listFiles(home);
             return [...filesAtEnd].filter(([path, facts]) => filesAtStart.get(path) !== facts).map(([path]) => path);
           },
           async close() {
+            // The watch ends before its directory is removed, whether or not the run stopped it (a run that
+            // threw, or the API journeys, which watch nothing): removing a watched directory can fail its watch.
+            await fileWatch.stop();
             child.kill();
             await new Promise((resolve) => setTimeout(resolve, 500));
             await rm(home, { recursive: true, force: true }).catch(() => {});
@@ -771,9 +813,16 @@ async function observe(browser, pageOrigin, step, { keyboard = false } = {}) {
     // reach its state before the deadline.
     let then;
     if (step.then !== undefined && answerState === "success") {
-      then = keyboard
-        ? await keyboardPin(session, sessionId, evaluate, keys.stops)
-        : await evaluate(`(() => { const node = document.querySelector(${JSON.stringify(step.then.click)}); if (node === null) return "absent"; node.click(); return "clicked"; })()`);
+      // `count` matches are clicked, the first first (journey J4 pins several provisions); one when it is not given.
+      const count = step.then.count ?? 1;
+      if (keyboard) {
+        for (let pinned = 0; pinned < count; pinned += 1) {
+          then = await keyboardPin(session, sessionId, evaluate, keys.stops);
+          if (then !== "clicked") break;
+        }
+      } else {
+        then = await evaluate(`(() => { const nodes = [...document.querySelectorAll(${JSON.stringify(step.then.click)})].slice(0, ${count}); if (nodes.length < ${count}) return "absent"; for (const node of nodes) node.click(); return "clicked"; })()`);
+      }
       while (then === "clicked" && Date.now() < deadline) {
         if (await evaluate(`document.querySelector(${JSON.stringify(step.then.until)}) !== null`)) then = "reached";
         else await new Promise((resolve) => setTimeout(resolve, 100));
@@ -840,6 +889,15 @@ export function expectedFromEnvelope(envelope) {
   throw new Error(`the API answered neither an answer nor a typed refusal: ${JSON.stringify(envelope).slice(0, 200)}`);
 }
 
+/**
+ * What a page is held to once the API has answered its request (`fromApi`): the API's outcome, then the step's own
+ * refinement of it, given what the API answered (`realMountExpectations`), which may hold the page to more.
+ */
+export function expectedForAnswer(expected, envelope) {
+  const derived = { ...expected, ...expectedFromEnvelope(envelope) };
+  return derived.refine ? { ...derived, ...derived.refine(envelope) } : derived;
+}
+
 /** The request a step's page asks: its body, or coverage's, which the page asks as it loads. */
 const COVERAGE_BODY = Object.freeze({ operation_id: "coverage", parameters: Object.freeze({}) });
 
@@ -876,7 +934,7 @@ export async function run(apiOutput, mount, expected, browser, liveRoot) {
     // Asked before the browser, of the same server, with the page's own request.
     const body = expected.step.body ?? COVERAGE_BODY;
     const answer = await fetch(`${api.origin}/api/v3/${body.operation_id}`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
-    expected = { ...expected, ...expectedFromEnvelope(await answer.json()) };
+    expected = expectedForAnswer(expected, await answer.json());
   }
   const live = expected.servedByApi ? null : createLiveServer({ root: liveRoot, apiOrigin: api.origin });
   const pageOrigin = live === null ? api.origin : await listen(live);
@@ -897,21 +955,61 @@ export async function run(apiOutput, mount, expected, browser, liveRoot) {
 /**
  * The steps against a real mount (`--real-mount`): each page is held to what the API answers its
  * request, and to every invariant a run checks. The coverage page must name the mounted corpus and
- * Luxembourg index by the digests the mount's build report records. When the build report names an
- * EU index, the EU search step runs too: the GDPR searched by its CELEX, every EU citation pinned and
- * verified (`realMountSteps`).
+ * Luxembourg index by the digests the mount's build report records. Journeys J1 (a date before the work's
+ * history: on a real mount, a date before any held Luxembourg state), J2 (a question no article carries) and
+ * J5 (a law the corpus does not hold) run as on the fixture mount. When the build report names an EU index,
+ * the EU steps run too: the GDPR searched by its CELEX, its dossier and its reading, every EU citation
+ * pinned and verified (`realMountSteps`).
  */
 export function realMountSteps(report) {
-  const steps = Object.entries(JOURNEY_STEPS).map(([name, step]) => [name, step]);
-  return report.europeIndex ? [...steps, ["eu search", EU_SEARCH_STEP], ["eu dossier", EU_DOSSIER_STEP]] : steps;
+  const steps = [
+    ...Object.entries(JOURNEY_STEPS),
+    ["J1, a date before the history", PRE_HISTORY_READING_STEP],
+    ["J2, a question no article carries", NO_HIT_SEARCH_STEP],
+    ["J5, a law not held", UNKNOWN_LAW_STEP],
+  ];
+  return report.europeIndex
+    ? [...steps, ["eu search", EU_SEARCH_STEP], ["eu dossier", EU_DOSSIER_STEP], ["eu reading", EU_READING_STEP]]
+    : steps;
 }
 
-export async function realMountRuns(apiOutput, mount, options, browser, liveRoot) {
+/**
+ * What a real mount's page is held to beyond the API's outcome, for the specification's journeys:
+ * - J1: the date precedes every held state, so the reading must refuse `no_version_for_date`, saying no earlier
+ *   state is held, whatever the API answered (another date's text would be the defect);
+ * - J5: the law is not held, so the dossier must refuse `identifier_unknown` with the absence note, whatever the
+ *   API answered (an answer would be the defect);
+ * - J2: when the API finds no hit, the page must say that this is not evidence that the law does not exist; a
+ *   population that does carry the words answers hits, held like any search.
+ */
+export function realMountExpectations(step) {
+  if (step === PRE_HISTORY_READING_STEP) return { refine: () => ({ state: "refusal", refusalCode: "no_version_for_date", texts: [NO_EARLIER_STATE] }) };
+  if (step === UNKNOWN_LAW_STEP) return { refine: () => ({ state: "refusal", refusalCode: "identifier_unknown", texts: [ABSENCE_NOTE] }) };
+  if (step === NO_HIT_SEARCH_STEP) return { refine: (envelope) => (expectedFromEnvelope(envelope).nothingToCite ? { texts: [ABSENCE_NOTE] } : {}) };
+  return {};
+}
+
+/** How many of the event log's events journey J8 verifies by permalink on a real mount: a population log holds thousands. */
+export const REAL_MOUNT_EVENTS_VERIFIED = 25;
+
+/** What a journey answered at the API alone stands as, among the browser runs: no page, no request, no citation. */
+const API_ONLY_OBSERVED = Object.freeze({ answerState: "api", requests: [], console: [], hydrated: null, verifications: [], paint: null });
+
+/**
+ * The real mount's journeys: each step through the browser (`realMountSteps`), then journeys J6, J7 and J8 at the
+ * API of the same kind of server (`apiJourneyRuns`), J8 verifying the first `REAL_MOUNT_EVENTS_VERIFIED` events'
+ * permalinks. Returns `[label, { observed, failures }]` pairs; an API journey's `observed` is `API_ONLY_OBSERVED`.
+ * `runStep` and `apiRuns` stand for `run` and `apiJourneyRuns`, so a test can see what each is asked.
+ */
+export async function realMountRuns(apiOutput, mount, options, browser, liveRoot, { runStep = run, apiRuns = apiJourneyRuns } = {}) {
   const report = JSON.parse(await readFile(join(mount, "build-report.json"), "utf8"));
   const runs = [];
   for (const [name, step] of realMountSteps(report)) {
     const digests = name === "coverage" ? { corpusSha256: report.corpus.Sha256, indexSha256: report.luxembourgIndex.Sha256 } : {};
-    runs.push([`${name}, with the real mount`, await run(apiOutput, mount, { ...options, step, fromApi: true, ...digests }, browser, liveRoot)]);
+    runs.push([`${name}, with the real mount`, await runStep(apiOutput, mount, { ...options, step, fromApi: true, ...digests, ...realMountExpectations(step) }, browser, liveRoot)]);
+  }
+  for (const [label, failures] of await apiRuns(apiOutput, mount, { startServer: options.startServer, eventsToVerify: REAL_MOUNT_EVENTS_VERIFIED })) {
+    runs.push([`${label}, with the real mount`, { observed: API_ONLY_OBSERVED, failures }]);
   }
   return runs;
 }
@@ -950,7 +1048,332 @@ export function fixtureMountExpectations(journeyMount) {
     ["history", { step: history, state: "success", texts: [`${HISTORY_ANCHOR} in loi-1991-08-10-n3`, "Carried by 1 held state, from 2024-02-01", "first held wording"] }],
     ["compare", { step: compare, state: "success", texts: [`loi-1991-08-10-n3: ${READING_DATE} against ${READING_DATE}.`, "The same version applied on both dates."] }],
     ["radar", { step: radar, state: "success", texts: [`${READING_DATE} to ${READING_DATE}: 1 state of 1 work, of 1 held.`, "not compared: the first state this index holds"] }],
-    ["export", { step: exporting, state: "success", texts: ["1 article pinned: 1 exported with text, 0 excluded.", EXPORT_WATERMARK, "Text served under agreed_same_run_cc_by."] }],
+    ["export", { step: exporting, state: "success", texts: ["3 articles pinned: 3 exported with text, 0 excluded.", EXPORT_WATERMARK, "Text served under agreed_same_run_cc_by."] }],
+  ];
+}
+
+/** Journey J1's refusal: a reading asked for a date before the work's first held state. */
+export const EARLY_READING_DATE = "2019-03-15";
+export const EARLY_READING_STEP = Object.freeze({
+  path: "/reading.html",
+  cites: true,
+  operation: "evidence_bundle",
+  typed: Object.freeze([DOSSIER_IDENTIFIER, EARLY_READING_DATE]),
+  body: Object.freeze({
+    operation_id: "evidence_bundle",
+    parameters: Object.freeze({ identifier: DOSSIER_IDENTIFIER, date: EARLY_READING_DATE }),
+  }),
+});
+
+/** What a page says beside an absence it reports (J2's no hit, J5's law not held): absence in this build is not absence in law. */
+export const ABSENCE_NOTE = "It is not evidence that the instrument or the law does not exist.";
+
+/** What J1's refusal says: no state is held before the requested date. */
+export const NO_EARLIER_STATE = "No earlier state is held: the requested date precedes this history.";
+
+/**
+ * Journey J1 on a real mount: the same work asked on a date before any Luxembourg state a population holds (the
+ * fixture's date sits before its one state, but a population's history of the work may begin earlier).
+ */
+export const PRE_HISTORY_DATE = "1900-01-01";
+export const PRE_HISTORY_READING_STEP = Object.freeze({
+  ...EARLY_READING_STEP,
+  typed: Object.freeze([DOSSIER_IDENTIFIER, PRE_HISTORY_DATE]),
+  body: Object.freeze({
+    operation_id: "evidence_bundle",
+    parameters: Object.freeze({ identifier: DOSSIER_IDENTIFIER, date: PRE_HISTORY_DATE }),
+  }),
+});
+
+/** Journey J2: a citizen's question searched as typed, which no held article carries. */
+export const NO_HIT_PHRASE = "combien de jours de congé j'ai le droit quand mon père est décédé";
+export const NO_HIT_SEARCH_STEP = Object.freeze({
+  path: "/search.html",
+  cites: true,
+  operation: "search",
+  typed: NO_HIT_PHRASE,
+  body: Object.freeze({ operation_id: "search", parameters: Object.freeze({ query: NO_HIT_PHRASE, language: "fra" }) }),
+});
+
+/** Journey J5: a law the corpus does not hold, asked for by its name. */
+export const UNKNOWN_LAW = "Circulaire CSSF 20/747";
+export const UNKNOWN_LAW_STEP = Object.freeze({
+  path: "/dossier.html",
+  cites: true,
+  operation: "dossier",
+  typed: UNKNOWN_LAW,
+  body: Object.freeze({ operation_id: "dossier", parameters: Object.freeze({ identifier: UNKNOWN_LAW }) }),
+});
+
+/**
+ * What the specification's journeys the eight steps do not walk must show on the fixture mount
+ * (the review pack's `05-user-journeys.md`; J3, J4 and J8's radar are the compare, export and radar steps):
+ * - J1, a date before the work's history: the reading refuses `no_version_for_date`, saying no earlier state
+ *   is held and where the history begins, never another date's text;
+ * - J2, a question no held article carries: the search answers with no hit, says what was matched, and that
+ *   this is not evidence that the law does not exist;
+ * - J5, a law the corpus does not hold: the dossier refuses `identifier_unknown`, with the population this
+ *   build searched and the same absence note.
+ */
+export function specificationJourneyExpectations() {
+  const absence = ABSENCE_NOTE;
+  return [
+    ["J1, a date before the history", { step: EARLY_READING_STEP, state: "refusal", refusalCode: "no_version_for_date", texts: [NO_EARLIER_STATE, "2024-02-01"] }],
+    ["J2, a question no article carries", { step: NO_HIT_SEARCH_STEP, state: "success", nothingToCite: true, texts: ["0 with the exact phrase, 0 with every word, in 0 works.", absence] }],
+    ["J5, a law not held", { step: UNKNOWN_LAW_STEP, state: "refusal", refusalCode: "identifier_unknown", texts: ["This build's Luxembourg index holds 1 Luxembourg work, with states dated from 2024-02-01 to 2024-02-01.", absence] }],
+  ];
+}
+
+/** The MCP protocol revision the API states on every MCP answer (`V3McpJsonRpc.ProtocolVersion`). */
+export const MCP_PROTOCOL_VERSION = "2025-06-18";
+
+/**
+ * An envelope without the two fields that name the request and the moment it was answered, which differ for
+ * any two requests (`request_ref`, a digest of the server's trace id; `context.freshness.observed_at`, its
+ * clock): what REST and MCP must answer identically.
+ */
+export function withoutRequestFields(envelope) {
+  const copy = structuredClone(envelope ?? null);
+  if (copy !== null && typeof copy === "object") {
+    delete copy.request_ref;
+    if (copy.context?.freshness !== undefined) delete copy.context.freshness.observed_at;
+  }
+  return copy;
+}
+
+/** The first path at which two JSON values differ, for a failure that says where. */
+function firstDifference(left, right, path = "") {
+  if (Object.is(left, right)) return null;
+  if (typeof left !== "object" || typeof right !== "object" || left === null || right === null || Array.isArray(left) !== Array.isArray(right)) {
+    return path || "(the root)";
+  }
+  for (const key of new Set([...Object.keys(left), ...Object.keys(right)])) {
+    const found = firstDifference(left[key], right[key], `${path}${Array.isArray(left) ? `[${key}]` : `.${key}`}`);
+    if (found !== null) return found;
+  }
+  return null;
+}
+
+/**
+ * Journey J7, the developer consuming the MCP server: one request answered through REST
+ * (`{status, json}`) and as an MCP tool call of the same process (`{status, protocolVersion, json}`), as
+ * failures. The tool result's structured content and its text are the REST envelope, apart from the two
+ * request fields; the answer states the protocol revision; neither path is an error.
+ */
+export function envelopeIdentityFailures(rest, mcp) {
+  const failures = [];
+  if (rest.status !== 200) failures.push(`REST answered HTTP ${rest.status}`);
+  if (mcp.status !== 200) failures.push(`MCP answered HTTP ${mcp.status}`);
+  if (mcp.protocolVersion !== MCP_PROTOCOL_VERSION) failures.push(`MCP answered protocol ${mcp.protocolVersion ?? "none"}, not ${MCP_PROTOCOL_VERSION}`);
+  const result = mcp.json?.result;
+  if (mcp.json?.error !== undefined || result === undefined) {
+    failures.push(`MCP answered no tool result: ${JSON.stringify(mcp.json?.error ?? mcp.json).slice(0, 200)}`);
+    return failures;
+  }
+  if (result.isError !== false) failures.push(`the tool result says isError ${result.isError}`);
+  let text;
+  try {
+    text = JSON.parse(result.content?.[0]?.text ?? "");
+  } catch {
+    failures.push("the tool result's text is not the envelope as JSON");
+  }
+  if (text !== undefined && firstDifference(text, result.structuredContent) !== null) {
+    failures.push(`the tool result's text and its structured content differ at ${firstDifference(text, result.structuredContent)}`);
+  }
+  const difference = firstDifference(withoutRequestFields(result.structuredContent), withoutRequestFields(rest.json));
+  if (difference !== null) failures.push(`MCP and REST answered different envelopes, first at ${difference}`);
+  return failures;
+}
+
+/** Every request the pages of the journeys make: the eight steps', J1's, J2's and J5's, each once. */
+export function pageRequestBodies() {
+  const bodies = [...Object.values(JOURNEY_STEPS), EARLY_READING_STEP, NO_HIT_SEARCH_STEP, UNKNOWN_LAW_STEP].map((step) => step.body ?? COVERAGE_BODY);
+  return [...new Map(bodies.map((body) => [JSON.stringify(body), body])).values()];
+}
+
+async function postJson(url, body) {
+  const answer = await fetch(url, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+  const text = await answer.text();
+  let json = null;
+  try {
+    json = JSON.parse(text);
+  } catch {
+    // Not JSON: the failure names the status.
+  }
+  return { status: answer.status, protocolVersion: answer.headers.get("mcp-protocol-version"), json };
+}
+
+/**
+ * Journey J8, monitoring, at the API: the event log polled as a client polls it, as failures. The same
+ * request answers the same events (the log is append-only); the first page is numbered without a gap; from its own
+ * `next_after` a log that said it has more answers the next events, starting where the first page ended and repeating
+ * none, and one that said it has no more answers nothing more;
+ * a cursor from another log is refused `snapshot_unknown`, never read as this log's; every event's permalink
+ * verifies (the first `verifyAtMost` of the first page, on a real mount whose log holds thousands); and
+ * `answer_drift` on a genesis log names no invalidated answer and asserts no absence of drift.
+ */
+export async function eventsFailures(origin, { verifyAtMost = Number.POSITIVE_INFINITY } = {}) {
+  const failures = [];
+  const ask = (operation, parameters) => postJson(`${origin}/api/v3/${operation}`, { operation_id: operation, parameters });
+  const first = await ask("events", {});
+  const value = first.json?.result?.value;
+  if (first.json?.verdict !== "answer" || !Array.isArray(value?.events)) {
+    failures.push(`events answered no event list: ${JSON.stringify(first.json).slice(0, 200)}`);
+    return failures;
+  }
+  if (value.events.length === 0) failures.push("the mount's log holds no event to poll (a mount that holds no Luxembourg state cannot show journey J8)");
+  const again = await ask("events", {});
+  const repeated = firstDifference(withoutRequestFields(first.json), withoutRequestFields(again.json));
+  if (repeated !== null) failures.push(`the same events request answered differently, first at ${repeated}`);
+  const numbered = value.events.map((event) => event.seq);
+  if (numbered.some((seq, index) => index > 0 && seq !== numbered[index - 1] + 1)) failures.push(`the first page's events are not numbered without a gap: ${numbered.slice(0, 10).join(",")}`);
+  if (value.has_more === true) {
+    const last = numbered.at(-1);
+    if (!String(value.next_after).endsWith(`:${last}`)) failures.push(`next_after ${value.next_after} does not name the last event served (${last})`);
+    const next = await ask("events", { after: value.next_after });
+    const following = next.json?.result?.value?.events;
+    if (!Array.isArray(following) || following.length === 0) failures.push(`from next_after a log that has more answered nothing: ${JSON.stringify(next.json).slice(0, 200)}`);
+    else if (following[0].seq !== last + 1 || following.some((event) => event.seq <= last)) {
+      failures.push(`the next page does not start where the first ended: ${following[0].seq} after ${last}`);
+    }
+  } else if (value.has_more === false) {
+    const after = await ask("events", { after: value.next_after });
+    const rest = after.json?.result?.value;
+    if (!Array.isArray(rest?.events) || rest.events.length !== 0 || rest.has_more !== false) {
+      failures.push(`from its own next_after the log answered more: ${JSON.stringify(after.json).slice(0, 200)}`);
+    }
+  }
+  const foreign = await ask("events", { after: `${"0".repeat(64)}:1` });
+  if (foreign.json?.refusal?.code !== "snapshot_unknown") failures.push(`a cursor from another log answered ${foreign.json?.refusal?.code ?? foreign.json?.verdict}, not snapshot_unknown`);
+  for (const event of value.events.slice(0, verifyAtMost)) {
+    const checked = await ask("verify", { identifier: event.permalink });
+    if (checked.json?.result?.value?.verdict !== "digest_matches") failures.push(`event ${event.seq}'s permalink ${event.permalink} does not verify`);
+  }
+  const drift = await ask("answer_drift", {});
+  const driftValue = drift.json?.result?.value;
+  if (!Array.isArray(driftValue?.invalidated_answers) || driftValue.invalidated_answers.length !== 0) {
+    failures.push(`answer_drift on a genesis log named invalidated answers: ${JSON.stringify(drift.json).slice(0, 200)}`);
+  }
+  if (driftValue?.asserts_no_drift_in_law !== false) failures.push("answer_drift asserts no drift in the law, which no log can show");
+  return failures;
+}
+
+/** Journey J6: a question that must be refused as legal advice, put to `ask` in the reader's own words. */
+export const ADVICE_QUESTION = "Mon employeur peut-il me refuser un congé parental si je travaille à temps partiel ?";
+
+/** The operations the contained assistant must hand a reader to instead: the primary text, read deterministically. */
+export const ASK_PRIMARY_TEXT_ROUTES = Object.freeze(["resolve", "as_of", "evidence_bundle"]);
+
+/**
+ * Journey J6 at the API, as failures: `ask` answers the contained assistant's card (Decision 91), never a legal
+ * conclusion. The verdict is `point`, the presentation `assistant_v3_unavailable`, the question is not read, the
+ * model gloss is disabled, and the card hands the reader to the deterministic operations that deliver the
+ * primary text, each on its own served route; nothing of the question is in the card.
+ */
+export function askCardFailures(envelope) {
+  const failures = [];
+  if (envelope?.verdict !== "point") failures.push(`ask answered the verdict ${envelope?.verdict}, not point`);
+  const value = envelope?.result?.value;
+  if (value?.presentation_result !== "assistant_v3_unavailable") failures.push(`ask presented ${value?.presentation_result}, not assistant_v3_unavailable`);
+  if (value?.question_read !== false) failures.push("the ask card does not say the question was not read");
+  if (value?.containment?.model_gloss !== "disabled") failures.push(`the model gloss is ${value?.containment?.model_gloss}, not disabled`);
+  const actions = Array.isArray(value?.deterministic_actions) ? value.deterministic_actions : [];
+  for (const operation of ASK_PRIMARY_TEXT_ROUTES) {
+    if (!actions.some((action) => action.operation_id === operation)) failures.push(`the ask card does not hand the reader to ${operation}`);
+  }
+  for (const action of actions) {
+    if (action.route !== `/api/v3/${action.operation_id}`) failures.push(`the action ${action.operation_id} names the route ${action.route}`);
+  }
+  if (JSON.stringify(value ?? null).includes(ADVICE_QUESTION)) failures.push("the ask card carries the question's words");
+  return failures;
+}
+
+/**
+ * Journeys J6, J7 and J8 at the API, against one API process over the mount, or the server `startServer` starts
+ * (the release image, a deployed revision): `ask` answered as the contained assistant's card; each page request,
+ * and ask, events and answer drift, through REST and MCP; then the event log polled, verifying at most
+ * `eventsToVerify` permalinks. Returns `[name, failures]` pairs.
+ */
+export async function apiJourneyRuns(apiOutput, mount, { startServer = null, eventsToVerify = Number.POSITIVE_INFINITY } = {}) {
+  const api = startServer ? await startServer() : await startApi(apiOutput, mount);
+  try {
+    const results = [];
+    const ask = { operation_id: "ask", parameters: { question: ADVICE_QUESTION } };
+    results.push(["J6, a question that must be refused as legal advice", askCardFailures((await postJson(`${api.origin}/api/v3/ask`, ask)).json)]);
+    for (const body of [...pageRequestBodies(), ask, { operation_id: "events", parameters: {} }, { operation_id: "answer_drift", parameters: {} }]) {
+      const rest = await postJson(`${api.origin}/api/v3/${body.operation_id}`, body);
+      const mcp = await postJson(`${api.origin}/mcp`, {
+        jsonrpc: "2.0", id: body.operation_id, method: "tools/call", params: { name: body.operation_id, arguments: body.parameters },
+      });
+      results.push([`J7, ${body.operation_id} ${JSON.stringify(body.parameters)} through REST and MCP`, envelopeIdentityFailures(rest, mcp)]);
+    }
+    results.push(["J8, the event log polled and answer drift", await eventsFailures(api.origin, { verifyAtMost: eventsToVerify })]);
+    return results;
+  } finally {
+    await api.close();
+  }
+}
+
+/**
+ * The two-state mount (`journey-mount.json` names `later_date`): the fixture's work with a later state in which
+ * one article is amended. Journey J3 compares the two states and journey J8's radar lists the later state compared
+ * with the one it replaced, each showing that change (review of #915: the one-state fixture shows neither).
+ */
+export function twoStateExpectations(journeyMount) {
+  const { first_date: first, later_date: later, amended_article: amended } = journeyMount;
+  const compare = Object.freeze({
+    ...JOURNEY_STEPS.compare,
+    typed: Object.freeze([DOSSIER_IDENTIFIER, first, later]),
+    body: Object.freeze({ operation_id: "diff", parameters: Object.freeze({ identifier: DOSSIER_IDENTIFIER, date_from: first, date_to: later }) }),
+  });
+  const radar = Object.freeze({
+    ...JOURNEY_STEPS.radar,
+    typed: Object.freeze([first, later]),
+    body: Object.freeze({ operation_id: "changes_in_period", parameters: Object.freeze({ date_from: first, date_to: later }) }),
+  });
+  const counts = "1 changed, 0 added, 0 removed";
+  return [
+    ["J3, two states compared", { step: compare, state: "success", texts: [`${journeyMount.work_key.split("/").pop()}: ${first} against ${later}.`, counts, `${amended}: changed`] }],
+    ["J8, the period's change on the radar", { step: radar, state: "success", texts: [`wording changed from the state of ${first}`, `: ${counts}`] }],
+  ];
+}
+
+/**
+ * The EU annex control mount (`journey-mount.json` names `eu_annex`): the reading, dossier and export composer pages for
+ * the act whose annex the publisher's PDF holds only as images. Each page must say that the annex is not served as
+ * text, and neither the annex's text nor its title may appear anywhere on the page, in its text or its markup (the JSON
+ * the export shows included): the launch contract's annex line, walked in a browser. The export composer pins both
+ * articles of the control case's wording, and must show the composed EU export with the annex listed as excluded, the
+ * watermark, Decision 95's acknowledgement and the PDF offered.
+ */
+export function europeAnnexExpectations(journeyMount) {
+  const { celex, wording_date: date, annexes, absent_texts: absentTexts } = journeyMount.eu_annex;
+  if (!Array.isArray(absentTexts) || absentTexts.length === 0) throw new Error("the EU annex mount names no annex text to look for");
+  const reading = Object.freeze({
+    ...EU_READING_STEP,
+    typed: Object.freeze([celex, date]),
+    body: Object.freeze({ operation_id: "evidence_bundle", parameters: Object.freeze({ identifier: celex, date }) }),
+  });
+  const dossier = Object.freeze({
+    ...EU_DOSSIER_STEP,
+    typed: celex,
+    body: Object.freeze({ operation_id: "dossier", parameters: Object.freeze({ identifier: celex }) }),
+  });
+  const exporting = Object.freeze({
+    ...JOURNEY_STEPS.export,
+    typed: Object.freeze([celex, date]),
+    // The control case's wording quotes two articles: both are pinned, and the export must be composed with its annex.
+    then: Object.freeze({ click: "input[data-pin]", count: 2, until: "[data-export-state=composed] [data-export-annexes]" }),
+    body: Object.freeze({ operation_id: "evidence_bundle", parameters: Object.freeze({ identifier: celex, date }) }),
+  });
+  const line = annexes === 1
+    ? "1 annex of the English wording is not served as text, and is never searched, quoted or exported"
+    : `${annexes} annexes of the English wording are not served as text, and are never searched, quoted or exported`;
+  const exported = [line, "2 articles pinned: 2 exported with text, 0 excluded.", EXPORT_WATERMARK, EUROPE_TEXT_ACKNOWLEDGEMENT, "Save as PDF"];
+  return [
+    ["the annex control case read on its wording date", { step: reading, state: "success", texts: [line], absentTexts }],
+    ["the annex control case's dossier", { step: dossier, state: "success", texts: [line], absentTexts }],
+    ["the annex control case exported", { step: exporting, state: "success", texts: exported, absentTexts }],
   ];
 }
 
@@ -989,8 +1412,12 @@ async function main(argv) {
   if (!(await readdir(apiOutput)).includes("Lex.V3.Api.dll")) throw new Error(`${apiOutput} holds no Lex.V3.Api.dll`);
   const realMount = argv.includes("--real-mount");
   const journeyMount = realMount ? null : JSON.parse(await readFile(join(mount, "journey-mount.json"), "utf8"));
-  // A fixture mount that names a rights disposition is the licence-blocked mount.
+  // A fixture mount that names a rights disposition is the licence-blocked mount; one that names a later date is the
+  // two-state mount.
   const licenceBlocked = journeyMount?.rights_disposition !== undefined;
+  const twoState = journeyMount?.later_date !== undefined;
+  // One that names an EU annex is the image-only annex control mount.
+  const europeAnnex = journeyMount?.eu_annex !== undefined;
   // `--live-root` serves a directory built elsewhere instead of building one: how a deliberately
   // broken page is shown to fail the journey.
   const liveRoot = argv.includes("--live-root") ? argument("--live-root") : await buildLive();
@@ -1000,17 +1427,37 @@ async function main(argv) {
   const results = [];
   if (realMount) results.push(...await realMountRuns(apiOutput, mount, { servedByApi, keyboard }, browser, liveRoot));
   else if (licenceBlocked) results.push(...await licenceBlockedRuns(apiOutput, mount, { servedByApi, keyboard }, browser, liveRoot));
-  else {
+  else if (twoState) {
+    for (const [name, expected] of twoStateExpectations(journeyMount)) {
+      results.push([`${name}, with the two-state mount`, await run(apiOutput, mount, { servedByApi, keyboard, ...expected }, browser, liveRoot)]);
+    }
+  } else if (europeAnnex) {
+    for (const [name, expected] of europeAnnexExpectations(journeyMount)) {
+      results.push([`${name}, with the EU annex control mount`, await run(apiOutput, mount, { servedByApi, keyboard, ...expected }, browser, liveRoot)]);
+    }
+  } else {
     // Each step with the fixture mount, then with no mount, where every page shows the refusal card.
     for (const [name, expected] of fixtureMountExpectations(journeyMount)) {
       results.push([`${name}, with the fixture mount`, await run(apiOutput, mount, { servedByApi, keyboard, ...expected }, browser, liveRoot)]);
       results.push([`${name}, with no mount`, await run(apiOutput, null, { servedByApi, keyboard, step: expected.step, state: "refusal", refusalCode: "no_corpus_mounted" }, browser, liveRoot)]);
     }
+    // The specification's journeys the eight steps do not walk (J1's refusal, J2, J5).
+    for (const [name, expected] of specificationJourneyExpectations()) {
+      results.push([`${name}, with the fixture mount`, await run(apiOutput, mount, { servedByApi, keyboard, ...expected }, browser, liveRoot)]);
+    }
     // The EU steps: the fixture mount holds no EU index, so the EU work is refused for the EU corpus.
     results.push(["eu search, with the fixture mount", await run(apiOutput, mount, { servedByApi, keyboard, ...EU_SEARCH_ON_FIXTURE }, browser, liveRoot)]);
     results.push(["eu dossier, with the fixture mount", await run(apiOutput, mount, { servedByApi, keyboard, ...EU_DOSSIER_ON_FIXTURE }, browser, liveRoot)]);
   }
+  // Journeys J6, J7 and J8 at the API (no page asks the contained assistant or MCP, or polls events), on the
+  // fixture mount.
+  const apiResults = realMount || licenceBlocked || twoState || europeAnnex ? [] : await apiJourneyRuns(apiOutput, mount);
   let failed = false;
+  for (const [label, failures] of apiResults) {
+    console.log(`${label}: ${failures.length === 0 ? "PASS" : "FAIL"}`);
+    for (const failure of failures) console.log(`  - ${failure}`);
+    failed ||= failures.length > 0;
+  }
   for (const [label, { observed, failures }] of results) {
     const toApi = observed.requests.filter((request) => new URL(request.url).pathname.startsWith("/api/")).length;
     console.log(`${label}: ${observed.answerState}; ${observed.requests.length} requests (${toApi} to the API); ` +

@@ -62,6 +62,34 @@ public sealed partial class EuFormexPackagePopulationProducerTests
     }
 
     [TestMethod]
+    public async Task HistoricalPopulationCheckpointReplaysOriginalBodyAndAnnexOutcomes()
+    {
+        var capture = await PopulationAnnexCapture.Value;
+        var run = capture.Run;
+        var root = await PackageRootAsync(capture.Store, capture.Result.CheckpointRef!);
+        root["schema"] = "lex-eu-formex-population-checkpoint/1";
+        var oldPayload = new
+        {
+            run.ScopeManifestCanonicalSha256, run.CorpusRecordSetRef, Corpus = run.CorpusRecordSet?.Set,
+            Families = run.CorrigendumTripwires!.ProductionsByFamilyKey.OrderBy(pair => pair.Key, StringComparer.Ordinal)
+                .Select(pair => new { Family = pair.Key, Expressions = pair.Value.Expressions!.Derivation!.Expressions
+                    .Select(expression => expression.CanonicalContentSha256).ToArray() }).ToArray(),
+        };
+        root["input_sha256"] = Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(
+            Encoding.UTF8.GetBytes(Lex.V3.Contracts.ContractJson.Serialize(oldPayload))));
+        var bytes = Encoding.UTF8.GetBytes(root.ToJsonString(new System.Text.Json.JsonSerializerOptions { WriteIndented = false }));
+        var held = await capture.Store.CreateAsync(bytes, CustodyClass.NightlyFloor90d, CancellationToken.None);
+        var checkpoint = new SourceArtifactRef(capture.Result.CheckpointRef!.ResourceId, held.Reference.ContentSha256);
+        var replay = await EuFormexPackagePopulationProducer.ReopenAsync(capture.Store, checkpoint, run,
+            capture.ManifestationRenderer, capture.DocumentRenderer, capture.Celex, CancellationToken.None);
+        Assert.IsTrue(replay.Delivered, replay.Detail);
+        Assert.AreEqual(capture.Result.CreateOutcomeDiagnosticsJson(), replay.CreateOutcomeDiagnosticsJson());
+        CollectionAssert.AreEqual(capture.Result.AnnexClassifications.Select(value => value.IdentitySha256).ToArray(),
+            replay.AnnexClassifications.Select(value => value.IdentitySha256).ToArray());
+        Assert.AreEqual(0, replay.ProductRequestCount);
+    }
+
+    [TestMethod]
     [DataRow("root")]
     [DataRow("enumeration")]
     [DataRow("package")]
@@ -157,8 +185,8 @@ public sealed partial class EuFormexPackagePopulationProducerTests
     }
 
     [TestMethod]
-    [DataRow("lex-eu-formex-population-checkpoint/1")]
-    [DataRow("lex-eu-formex-package-checkpoint/1")]
+    [DataRow("lex-eu-formex-population-checkpoint/2")]
+    [DataRow("lex-eu-formex-package-checkpoint/2")]
     public async Task PopulationCannotDeliverWithoutItsCompleteCheckpointClosure(string failSchema)
     {
         var capture = await CapturePopulationAsync(1, failSchema);

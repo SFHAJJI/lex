@@ -17,6 +17,16 @@
 // the PDF refused with the characters named (`pdfRefusal`), never replaced silently. The text digests
 // are of the text as served, which the JSON export carries whole. The PDF is not tagged, so the
 // statute language of each text is not marked in it.
+//
+// An EU export (`lex-v3-export-eu/1`) is set from its own layout (`europeLayout`): the first page says
+// Decision 95's acknowledgement and authenticity statement, the platform's rights rule and what a
+// wording date is; each item is headed by its wording's kind and date, never an applicability date,
+// and carries its wording's permalink and its acknowledgement; the exclusions are the articles held
+// without text and the annexes not served as text, each annex row with its count, reason and official
+// source, never a text; and every page carries the acknowledgement at its foot, above its number. Its
+// refusal is read off that layout, so the page never offers a PDF its layout then refuses.
+
+import { EUROPE_EXPORT_SCHEMA } from './export-build.mjs';
 
 const PAGE_WIDTH = 595.28;
 const PAGE_HEIGHT = 841.89;
@@ -106,8 +116,23 @@ function textsOf(model) {
  * it can.
  */
 export function pdfRefusal(model) {
-  const unsettable = new Set(textsOf(model).flatMap((text) => encode(text).unsettable ?? []));
+  const unsettable = model.schema === EUROPE_EXPORT_SCHEMA
+    ? europeUnsettable(model)
+    : new Set(textsOf(model).flatMap((text) => encode(text).unsettable ?? []));
   return unsettable.size === 0 ? null : `its text holds characters the standard PDF fonts cannot set (${[...unsettable].join(', ')})`;
+}
+
+/**
+ * The characters an EU export's PDF cannot set: what its layout sets, and what each page's head and
+ * foot set besides (the watermark, the page's line and the acknowledgement).
+ */
+function europeUnsettable(model) {
+  const unsettable = new Set();
+  europeLayout(model, unsettable);
+  for (const text of [model.watermark, pageLine(model, 1, 1), model.acknowledgement]) {
+    for (const code of encode(text).unsettable ?? []) unsettable.add(code);
+  }
+  return unsettable;
 }
 
 /** The width a line takes on the page: its trailing spaces take none. */
@@ -157,8 +182,13 @@ function wrap(bytes, font, size, width) {
   return lines;
 }
 
-/** The layout: a list of lines (`{font, size, leading, bytes, indent}`) and gaps (`{gap}`). */
-function layout(model) {
+/**
+ * A layout as it is written: a list of lines (`{font, size, leading, bytes, indent}`) and gaps
+ * (`{gap}`), which `add` and `gap` append and `done` closes with the substitution note when one is
+ * due. A character the standard fonts cannot set throws; given `unsettable`, a Set, it is gathered
+ * there instead and its paragraph left out, which is how an EU export's refusal is read off its layout.
+ */
+function layoutWriter(unsettable = null) {
   const blocks = [];
   let substituted = false;
   // A text's line breaks are its paragraphs; each is encoded and wrapped on its own.
@@ -166,17 +196,40 @@ function layout(model) {
   const add = (text, { font = 'sans', size = 10, leading = size * 1.3, indent = 0, label = '', keep = 0 } = {}) => {
     for (const paragraph of `${label}${text}`.replace(/\r\n?/g, '\n').split('\n')) {
       const encoded = encode(paragraph);
-      if (encoded.unsettable) throw new Error(`the PDF cannot set ${encoded.unsettable.join(', ')}`);
+      if (encoded.unsettable && unsettable === null) throw new Error(`the PDF cannot set ${encoded.unsettable.join(', ')}`);
+      if (encoded.unsettable) {
+        for (const code of encoded.unsettable) unsettable.add(code);
+        continue;
+      }
       substituted ||= encoded.substituted;
       for (const bytes of wrap(encoded.bytes, font, size, PDF_TEXT_WIDTH - indent)) blocks.push({ font, size, leading, bytes, indent, keep });
     }
   };
-  const sentence = (text) => {
-    const capitalised = `${text.charAt(0).toUpperCase()}${text.slice(1)}`;
-    return /[.!?]$/.test(capitalised) ? capitalised : `${capitalised}.`;
-  };
   const gap = (height) => blocks.push({ gap: height });
+  const done = () => {
+    if (substituted) {
+      gap(12);
+      add(PDF_SUBSTITUTION_NOTE, { size: 9 });
+    }
+    return blocks;
+  };
+  return { add, gap, done };
+}
 
+/** A phrase of the platform's as a sentence: capitalised, and closed with a full stop when it has none. */
+function sentence(text) {
+  const capitalised = `${text.charAt(0).toUpperCase()}${text.slice(1)}`;
+  return /[.!?]$/.test(capitalised) ? capitalised : `${capitalised}.`;
+}
+
+/** The line at the foot of a page: its number, and what was asked. */
+function pageLine(model, number, count) {
+  return `Page ${number} of ${count}. ${model.identifier}, read on ${model.date}.`;
+}
+
+/** The layout of a Luxembourg export (`lex-v3-export/1`). */
+function layout(model) {
+  const { add, gap, done } = layoutWriter();
   const total = model.items.length + model.excluded.length;
   add('Lex V3 export', { size: 16, leading: 22 });
   add(`Asked: ${model.identifier}, read on ${model.date}. The answering snapshot was observed at ${model.observedAt}.`);
@@ -214,11 +267,61 @@ function layout(model) {
       add(entry.statePermalink, { font: 'mono', size: 8, label: 'state    ' });
     }
   }
-  if (substituted) {
+  return done();
+}
+
+/**
+ * The layout of an EU export (`lex-v3-export-eu/1`). Each item and exclusion is dated as its wording
+ * is: the original or the consolidated wording of its date, never a date it applies from. With
+ * `unsettable`, the characters the fonts cannot set are gathered there (`layoutWriter`).
+ */
+function europeLayout(model, unsettable = null) {
+  const { add, gap, done } = layoutWriter(unsettable);
+  const wordingOf = (entry) => `${entry.wordingKind === 'consolidated_version' ? 'consolidated' : 'original'} wording of ${entry.wordingDate}`;
+
+  const total = model.items.length + model.excluded.length;
+  add('Lex V3 export', { size: 16, leading: 22 });
+  add(`Asked: ${model.identifier}, read on ${model.date}. The answering snapshot was observed at ${model.observedAt}.`);
+  add(model.acknowledgement);
+  add(model.authenticity);
+  add(sentence(model.rightsRule));
+  add(sentence(model.wordingDateSemantics));
+  add(`${total} ${total === 1 ? 'article' : 'articles'} pinned: ${model.items.length} exported with text, ${model.excluded.length} excluded.`);
+  gap(4);
+  add('Verified by', { size: 9 });
+  add(model.verifiedBy.corpusSha256, { font: 'mono', size: 8, label: 'corpus   ' });
+  add(model.verifiedBy.indexSha256, { font: 'mono', size: 8, label: 'index    ' });
+  add(model.verifiedBy.registrySha256, { font: 'mono', size: 8, label: 'registry ' });
+
+  for (const item of model.items) {
     gap(12);
-    add(PDF_SUBSTITUTION_NOTE, { size: 9 });
+    add(`${item.publisherId}${item.heading === '' ? '' : ` ${item.heading}`} (${item.language}, ${wordingOf(item)})`, { size: 12, leading: 16, keep: 120 });
+    add(item.citation, { font: 'mono', size: 8, label: 'citation        ' });
+    add(item.wordingPermalink, { font: 'mono', size: 8, label: 'wording         ' });
+    add(item.textSha256, { font: 'mono', size: 8, label: 'text sha-256    ' });
+    add(item.bodySha256, { font: 'mono', size: 8, label: 'body sha-256    ' });
+    add(item.officialSource, { font: 'mono', size: 8, label: 'official source ' });
+    add(`Acknowledgement: ${item.acknowledgement}`, { size: 9 });
+    add(`Authenticity: ${item.authenticity}`, { size: 9 });
+    gap(3);
+    add(item.text);
   }
-  return blocks;
+
+  if (model.excluded.length > 0 || model.annexesNotServed.length > 0) {
+    gap(12);
+    add('Excluded', { size: 12, leading: 16, keep: 40 });
+    for (const entry of model.excluded) {
+      add(`${entry.publisherId} (${entry.language}, ${wordingOf(entry)}): excluded, ${entry.reason}.`);
+      add(entry.citation, { font: 'mono', size: 8, label: 'citation ' });
+      add(entry.wordingPermalink, { font: 'mono', size: 8, label: 'wording  ' });
+    }
+    // An annex is counted, with the platform's reason and where to read it officially; its text is never held.
+    for (const row of model.annexesNotServed) {
+      add(`${row.count} ${row.count === 1 ? 'annex' : 'annexes'} (${row.language}, ${wordingOf(row)}): excluded, ${row.disposition}, served as ${row.servedAs}. ${sentence(row.reason)}`);
+      add(row.officialSource, { font: 'mono', size: 8, label: 'official source ' });
+    }
+  }
+  return done();
 }
 
 /** The layout cut into pages: the body between the margins, gaps dropped at the head of a page. */
@@ -273,7 +376,8 @@ function ascii(text) {
 export function exportPdf(model) {
   const refusal = pdfRefusal(model);
   if (refusal !== null) throw new Error(`this export cannot be set as a PDF: ${refusal}`);
-  const pages = paginate(layout(model));
+  const europe = model.schema === EUROPE_EXPORT_SCHEMA;
+  const pages = paginate(europe ? europeLayout(model) : layout(model));
   const watermark = wrap(ascii(model.watermark), 'sans', 8, PDF_TEXT_WIDTH);
 
   const objects = [];
@@ -287,8 +391,10 @@ export function exportPdf(model) {
   const pageRefs = [];
   pages.forEach((lines, index) => {
     const head = watermark.map((bytes, row) => show({ font: 'sans', size: 8, x: MARGIN_X, y: PAGE_HEIGHT - 36 - row * 10, bytes }));
-    const foot = show({ font: 'sans', size: 8, x: MARGIN_X, y: 32, bytes: ascii(`Page ${index + 1} of ${pages.length}. ${model.identifier}, read on ${model.date}.`) });
-    const content = [...head, ...lines.map(show), foot].join('\n');
+    const foot = [show({ font: 'sans', size: 8, x: MARGIN_X, y: 32, bytes: ascii(pageLine(model, index + 1, pages.length)) })];
+    // Every page of EU text carries Decision 95's acknowledgement, above the page's number.
+    if (europe) foot.unshift(show({ font: 'sans', size: 8, x: MARGIN_X, y: 44, bytes: ascii(model.acknowledgement) }));
+    const content = [...head, ...lines.map(show), ...foot].join('\n');
     const stream = objects.push(`<< /Length ${content.length} >>\nstream\n${content}\nendstream`);
     pageRefs.push(objects.push(`<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${PAGE_WIDTH} ${PAGE_HEIGHT}] /Resources << /Font << /F1 ${helvetica} 0 R /F2 ${courier} 0 R >> >> /Contents ${stream} 0 R >>`));
   });

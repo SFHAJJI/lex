@@ -24,7 +24,7 @@
 import { useEffect, useRef, useState } from 'react';
 
 import { RefusalCard } from './RefusalCard.jsx';
-import { LiveAnswer, Say } from './LiveAnswer.jsx';
+import { LiveAnswer, Say, StatusSentence, inEnglish, refusalCardCopyFor } from './LiveAnswer.jsx';
 import { quotationLanguageTag } from '../scripts/live-reading.mjs';
 import {
   LIVE_SEARCH_IDLE,
@@ -32,7 +32,7 @@ import {
   SEARCH_QUERY_MAX,
   createSearchSession,
 } from '../scripts/live-search.mjs';
-import { countedEntry, liveChrome } from '../scripts/live-chrome.mjs';
+import { ENGLISH_LANG, countedEntry, liveChrome } from '../scripts/live-chrome.mjs';
 
 /** The forms' labels and buttons, and this screen's sentences, from the interface copy table. */
 const FORM = liveChrome().form;
@@ -91,13 +91,18 @@ function AmbiguousWorks({ works, date }) {
       <ul>
         {works.map((work) => (
           <li key={work.workKey}>
-            {work.workKey}:{' '}
-            {work.candidates.map((candidate, index) => (
-              <span key={candidate}>
-                {index > 0 ? ', ' : ''}
-                <code>{candidate}</code>
-              </span>
-            ))}
+            <Say
+              template={COPY.ambiguousWork}
+              values={{
+                work: work.workKey,
+                candidates: work.candidates.map((candidate, index) => (
+                  <span key={candidate}>
+                    {index > 0 ? ', ' : ''}
+                    <code>{candidate}</code>
+                  </span>
+                )),
+              }}
+            />
           </li>
         ))}
       </ul>
@@ -132,7 +137,7 @@ function EuropeWording({ view }) {
           values={{ celex: wording.celex, language: view.language, date: wording.wordingDate, permalink: <code>{wording.permalink}</code> }}
         />
       </p>
-      <p data-date-semantics="">{asSentence(view.dateSemantics)}</p>
+      <p data-date-semantics="" lang={ENGLISH_LANG}>{asSentence(view.dateSemantics)}</p>
     </>
   );
 }
@@ -145,7 +150,7 @@ function NotCovered({ rows }) {
       <h2>{COPY.notHeldHeading}</h2>
       <ul>
         {rows.map((row) => (
-          <li key={row.item}><Say template={liveChrome().common.notHeldRow} values={{ item: row.item, reason: row.reason }} /></li>
+          <li key={row.item}><Say template={liveChrome().common.notHeldRow} values={{ item: row.item, reason: inEnglish(row.reason) }} /></li>
         ))}
       </ul>
     </section>
@@ -184,16 +189,20 @@ export function SearchResultsView({ view, onNextPage }) {
       <SearchWorkResolution resolution={view.workResolution} />
       {europe ? <EuropeWording view={view} /> : <AmbiguousWorks works={view.ambiguousWorks} date={view.date} />}
       {view.hits.length === 0 ? (
-        view.searchableTextHeld ? (
-          <p data-no-hit=""><Say template={COPY.noHit} values={{ query: view.query }} /> {asSentence(view.matching)}</p>
-        ) : (
-          <p data-no-hit="">
-            <Say template={COPY.noText} values={{ language: view.language, languages: view.searchableLanguages.join(', ') }} />
-          </p>
-        )
+        <>
+          {view.searchableTextHeld ? (
+            <p data-no-hit=""><Say template={COPY.noHit} values={{ query: view.query }} /> {inEnglish(asSentence(view.matching))}</p>
+          ) : (
+            <p data-no-hit="">
+              <Say template={COPY.noText} values={{ language: view.language, languages: view.searchableLanguages.join(', ') }} />
+            </p>
+          )}
+          {/* A search with no hit is not evidence that the law does not exist, said as the refusal card says it (journey J2). */}
+          <p data-absence-note="">{liveChrome().refusalCard.absenceNote}</p>
+        </>
       ) : (
         <>
-          <p>{asSentence(view.pageIs)} {asSentence(view.hitUnit)}</p>
+          <p lang={ENGLISH_LANG}>{asSentence(view.pageIs)} {asSentence(view.hitUnit)}</p>
           <ol className="hits">
             {view.hits.map((hit) => (europe
               ? <EuropeHit key={hit.articleIdentitySha256} hit={hit} />
@@ -225,14 +234,14 @@ export function SearchAnswerView({ outcome, onNextPage }) {
   if (outcome.state === 'refusal' && outcome.card) {
     return (
       <section data-answer-state="refusal">
-        <RefusalCard code={outcome.code} sentence={outcome.sentence} payload={outcome.payload} copy={liveChrome().refusalCard} />
+        <RefusalCard code={outcome.code} sentence={outcome.sentence} payload={outcome.payload} copy={refusalCardCopyFor(outcome.context)} />
       </section>
     );
   }
 
   return (
     <section data-answer-state={outcome.state}>
-      <p role="status">{outcome.sentence}</p>
+      <StatusSentence outcome={outcome} />
     </section>
   );
 }

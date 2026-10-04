@@ -276,7 +276,7 @@ public sealed class V3CorpusTimelineMountTests
     }
 
     [TestMethod]
-    public async Task EuIdentifiersAndEuOnlyMountsRefuseTheModeWithEuContext()
+    public async Task EuIdentifiersAreRefusedTheModeWithNoEuIndexAndAnsweredWithEuContextByTheEuTimeView()
     {
         var luxembourg = await MountedFixture.CreateAsync();
         await using var cleanupLuxembourg = luxembourg;
@@ -326,8 +326,8 @@ public sealed class V3CorpusTimelineMountTests
             }
 
             var euOnEuropeOnly = await TimelineAsync(europeMount, "32016R0679");
-            Assert.AreEqual("retrieval_mode_unavailable", euOnEuropeOnly.Refusal!.Code);
-            Assert.AreEqual("r6_timeline", euOnEuropeOnly.Refusal.HelpfulPayload.GetProperty("requested_mode").GetString());
+            Assert.AreEqual(V3Verdicts.Answer, euOnEuropeOnly.Verdict, euOnEuropeOnly.Refusal?.Code);
+            Assert.AreEqual("timeline", euOnEuropeOnly.Result!.ObjectType);
             Assert.AreEqual(PublisherId.EuEurLex, euOnEuropeOnly.Context.Publisher);
         }
 
@@ -338,9 +338,13 @@ public sealed class V3CorpusTimelineMountTests
         Assert.AreEqual(V3Verdicts.Answer, luxembourgOnCombined.Verdict);
         Assert.AreEqual(PublisherId.LuLegilux, luxembourgOnCombined.Context.Publisher);
         Assert.AreEqual(TimelineSemantics.PublisherApplicability, luxembourgOnCombined.Context.TimelineSemantics);
+        // This combined fixture's EU index (the complete profile envelope's, with one collision article added) holds a census
+        // that does not list 32016R0679 and no wording of it, so the act is unknown there, with EU context, as dossier answers
+        // it: the time view answers EU acts, so the mode refusal no longer describes an act the EU index does not hold
+        // (review of #913).
         var euOnCombined = await TimelineAsync(combined, "32016R0679");
         Assert.AreEqual(V3Verdicts.Refuse, euOnCombined.Verdict);
-        Assert.AreEqual("retrieval_mode_unavailable", euOnCombined.Refusal!.Code);
+        Assert.AreEqual("identifier_unknown", euOnCombined.Refusal!.Code);
         Assert.AreEqual(PublisherId.EuEurLex, euOnCombined.Context.Publisher);
         Assert.AreEqual(TimelineSemantics.OfficialConsolidationState, euOnCombined.Context.TimelineSemantics);
     }

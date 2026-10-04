@@ -779,6 +779,12 @@ const DATED_KEYS = new Map([
   ['no_version_for_date', new Set(['history_begins', 'nearest_earlier', 'nearest_later'])],
 ]);
 
+/** The same declared nulls for an EU refusal, in the EU's words: its dates are a wording's, never a state's (review of #903). */
+const EUROPE_NULL_SENTENCE = new Map([
+  ['nearest_earlier', 'No earlier wording is held: the requested date precedes this history.'],
+  ['nearest_later', 'No later wording is held: the requested date follows every wording held.'],
+]);
+
 const NULL_SENTENCE = new Map([
   ['nearest_earlier', 'No earlier state is held: the requested date precedes this history.'],
   ['nearest_later', 'No later state is held: the requested date follows every state held.'],
@@ -789,6 +795,20 @@ const CANDIDATE = 'applicable from {validFrom}, hash {hash}, {published}';
 const CANDIDATE_WITHDRAWAL_NOT_STATED = 'applicable from {validFrom}, hash {hash}, {published}, withdrawal not stated by the platform';
 const PUBLISHED = 'published {date}';
 const PUBLICATION_NOT_STATED = 'publication date not stated by the platform';
+
+/**
+ * How an offered EU wording is described: by its date as a wording's, never as an applicability date
+ * (the French review's item 3). Said by the live pages only, for a refusal whose envelope names the EU
+ * publisher; an EU `ambiguous_version` today offers expression ids, which the card does not accept, so
+ * these words wait for EU candidates that are reading URLs. `published` has its own entry because a
+ * language may agree it with "wording" where it agrees the state's with "state".
+ */
+const EUROPE_CANDIDATE = 'wording of {validFrom}, hash {hash}, {published}';
+const EUROPE_CANDIDATE_WITHDRAWAL_NOT_STATED = 'wording of {validFrom}, hash {hash}, {published}, withdrawal not stated by the platform';
+/** The note such a card carries, in the same words: what the publisher does not rank is a wording, not a state. */
+const EUROPE_NOTE = Object.freeze({
+  ambiguous_version: 'The publisher ranks neither wording. There is no default and no remembered choice.',
+});
 
 /**
  * Every word the card itself says, in English, from the constants above: one source for the string
@@ -804,10 +824,15 @@ export const REFUSAL_CARD_COPY = Object.freeze({
   routes: Object.freeze(Object.fromEntries(WHAT_WOULD_ANSWER_LABEL)),
   notes: MANDATED_NOTE,
   nullSentences: Object.freeze(Object.fromEntries(NULL_SENTENCE)),
+  europeNullSentences: Object.freeze(Object.fromEntries(EUROPE_NULL_SENTENCE)),
   candidate: CANDIDATE,
   candidateWithdrawalNotStated: CANDIDATE_WITHDRAWAL_NOT_STATED,
   published: PUBLISHED,
   publicationNotStated: PUBLICATION_NOT_STATED,
+  europeCandidate: EUROPE_CANDIDATE,
+  europeCandidateWithdrawalNotStated: EUROPE_CANDIDATE_WITHDRAWAL_NOT_STATED,
+  europePublished: PUBLISHED,
+  europeNotes: EUROPE_NOTE,
 });
 
 function requirePayload(code, payload) {

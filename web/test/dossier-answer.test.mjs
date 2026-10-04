@@ -156,11 +156,24 @@ test("the captured EU dossier reads: the work by its CELEX, its one expression a
   assert.deepEqual(expression.wordingDates, ["2016-04-27"]);
   assert.equal(expression.wording.permalink, `/eu-eurlex/32016R0679/eng/2016-04-27--${expression.wording.wordingSha256}`);
   assert.equal(expression.coordinate, expression.expressionIri, "the expression is an identifier EU resolve answers");
+  assert.deepEqual(expression.annexesNotServed, [], "the GDPR's package holds no annex, so none is listed");
   assert.ok(view.notHeld.some((row) => row.item === "force_dates"), "the dossier says the wording date is no force date");
   assert.match(view.dateSemantics, /never merged with a Luxembourg applicability date/);
   assert.deepEqual(readDossierAnswer(answer), view, "readDossierAnswer sends an EU answer to the EU reader");
   const luxembourg = await capturedAnswer();
   assert.deepEqual(readDossierAnswer(luxembourg), readDossier(luxembourg), "and a Luxembourg answer to the Luxembourg reader");
+});
+
+/** One annex row as the platform lists it beside an EU wording or expression, with `change` applied. */
+const annexRow = (change = {}) => ({
+  disposition: "annex_text_not_available",
+  annexes: 1,
+  annex_identities_sha256: ["a".repeat(64)],
+  served_as: "text_not_available",
+  official_identity: "http://publications.europa.eu/resource/cellar/3e485e15-11bd-11e6-ba9a-01aa75ed71a1.0006",
+  official_source: "https://publications.europa.eu/resource/cellar/3e485e15-11bd-11e6-ba9a-01aa75ed71a1.0006.02",
+  reason: "every page of the publisher PDF the annex maps to is an image with no text layer: the annex is image-only, so there is no text of it to serve",
+  ...change,
 });
 
 test("each rule an EU dossier states about itself is refused when broken, with that rule's reason", async () => {
@@ -191,6 +204,12 @@ test("each rule an EU dossier states about itself is refused when broken, with t
     ["the digest rule dropped", (a) => { delete a.digest_rule; }, /does not carry digest_rule/],
     ["a member's digest unfilled", (a) => { a.expressions[0].members[0].object_ref_sha256 = PLACEHOLDER; }, /object_ref_sha256 is not a SHA-256 digest/],
     ["another publisher's answer", (a) => { a.publisher = "lu-legilux"; }, /EU \(eu-eurlex\) dossier only/],
+    ["the annex list dropped", (a) => { delete a.expressions[0].annexes_not_served; }, /has no annexes_not_served/],
+    ["an annex served as text", (a) => { a.expressions[0].annexes_not_served = [annexRow({ served_as: "text" })]; }, /an annex's text is never served/],
+    ["an annex disposition outside the corpus's", (a) => { a.expressions[0].annexes_not_served = [annexRow({ disposition: "annex_quoted" })]; }, /not an annex disposition/],
+    ["one annex disposition listed twice", (a) => { a.expressions[0].annexes_not_served = [annexRow(), annexRow()]; }, /repeats the disposition/],
+    ["an annex count its digests are not", (a) => { a.expressions[0].annexes_not_served = [annexRow({ annexes: 2 })]; }, /does not name exactly that many annex digests/],
+    ["an annex with no official source", (a) => { a.expressions[0].annexes_not_served = [annexRow({ official_source: "" })]; }, /official_source is not text/],
   ];
   assert.equal(readEuropeDossier(mutate(answer, (a) => { a.expressions.push(second(a)); a.expression_count = 2; })).expressionCount, 2, "two expressions of the work read");
   for (const [what, change, reason] of cases) {

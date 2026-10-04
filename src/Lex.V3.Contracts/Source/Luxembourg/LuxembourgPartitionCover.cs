@@ -193,6 +193,10 @@ public sealed class LuxembourgPartitionCover
 
     public LuxembourgPartitionCoverBasis Basis { get; }
 
+    /// <summary>
+    /// The run of the first leaf. A cover longer than one robots generation spans several runs, each a contiguous block
+    /// of leaves (see <see cref="TryCreate"/>); each leaf's own run is on its receipt.
+    /// </summary>
     public SourceArtifactRef RunIdentity { get; }
 
     public SourceArtifactRef InterpretationProfileRef { get; }
@@ -207,9 +211,13 @@ public sealed class LuxembourgPartitionCover
     /// (<see cref="EnumerationDeliveryOutcome.EqualSelections"/>), and the leaf was not itself
     /// saturated (<see cref="RepeatedEnumerationThresholdAssessment.BelowMaximum"/> - a saturated
     /// leaf is not a leaf, it is a node that still needs splitting). Then, across every leaf: one
-    /// run identity, one interpretation profile. Finally, when a root receipt is supplied, its
-    /// partition key must name the chain's root and its delivered row count must equal the sum of
-    /// the leaves'.
+    /// interpretation profile (and so one source profile), and runs that form contiguous blocks of leaves
+    /// (a run that reappears after another refuses <c>leaf_run_identity_differs</c>). A cover is one
+    /// run unless it outlasted a robots generation: each leaf's two passes are always one run, and a
+    /// session replaced between leaves starts a new block. Finally, when a root receipt is supplied,
+    /// the cover must be one run, the root's partition key must name the chain's root and its
+    /// delivered row count must equal the sum of the leaves': a root count and leaves compared across
+    /// runs would not be one observation.
     /// </summary>
     public static LuxembourgPartitionCover? TryCreate(
         LuxembourgPartitionChain chain,
@@ -228,6 +236,8 @@ public sealed class LuxembourgPartitionCover
         }
 
         SourceArtifactRef? runIdentity = null;
+        SourceArtifactRef? currentRun = null;
+        var runs = new List<SourceArtifactRef>();
         SourceArtifactRef? profileRef = null;
         CustodyMembership? floor = null;
         long sum = 0;
@@ -256,14 +266,18 @@ public sealed class LuxembourgPartitionCover
                 return null;
             }
 
-            if (runIdentity is null)
+            runIdentity ??= delivery.RunIdentity;
+            if (currentRun != delivery.RunIdentity)
             {
-                runIdentity = delivery.RunIdentity;
-            }
-            else if (runIdentity != delivery.RunIdentity)
-            {
-                refusal = LuxembourgPartitionCoverRefusal.LeafRunIdentityDiffers;
-                return null;
+                // A new block of leaves: a run never seen before, and none at all beside a root count.
+                if (runs.Contains(delivery.RunIdentity) || (rootReceipt is not null && runs.Count > 0))
+                {
+                    refusal = LuxembourgPartitionCoverRefusal.LeafRunIdentityDiffers;
+                    return null;
+                }
+
+                runs.Add(delivery.RunIdentity);
+                currentRun = delivery.RunIdentity;
             }
 
             if (profileRef is null)
@@ -275,6 +289,9 @@ public sealed class LuxembourgPartitionCover
                 refusal = LuxembourgPartitionCoverRefusal.LeafProfileDiffers;
                 return null;
             }
+
+            // One source profile across runs needs no check of its own: each interpretation dialect derives exactly one
+            // (EnumerationDeliveryComparison.RequireSameSourceProfile), and the leaves share one interpretation profile.
 
             sum = checked(sum + delivery.DeliveredRowCountA);
             // One rule, one place. This used to be a second copy of the receipt's own switch, which

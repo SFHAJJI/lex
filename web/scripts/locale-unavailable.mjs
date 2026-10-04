@@ -19,10 +19,12 @@ import { CHROME_LOCALES, LOCALIZATION_UNAVAILABLE } from './localization.mjs';
 /**
  * Locales whose chrome copy has actually been reviewed.
  *
- * One entry, and it is honest. Nothing in this build has been through legal-language review in
- * any other language, so listing more would be the claim this page exists to avoid making.
+ * English is the source. French is reviewed: by an AI reviewer, Claude, under the owner's
+ * delegation of 2026-10-02, and its receipt (`CHROME_REVIEWS` in `localization.mjs`) says exactly
+ * that. German and Luxembourgish have been through no review, so listing them would be the claim
+ * this page exists to avoid making.
  */
-export const REVIEWED_CHROME_LOCALES = Object.freeze(['en']);
+export const REVIEWED_CHROME_LOCALES = Object.freeze(['en', 'fr']);
 
 const LOCALE_NAME = Object.freeze({
   fr: 'French',

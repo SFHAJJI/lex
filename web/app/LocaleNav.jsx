@@ -2,9 +2,10 @@
 //
 // The launch contract's line is "Chrome in FR and EN; DE and LB answer localization_unavailable".
 // Each language is named in itself and tagged with its own `lang`, so a screen reader says
-// "Deutsch" as German rather than as an English word. Only English chrome is reviewed today
-// (`REVIEWED_CHROME_LOCALES`); every other language leads to the page that says so, in English and
-// labelled English (`live-locale-page.jsx`), never to English copy under another language's tag.
+// "Deutsch" as German rather than as an English word. English and French chrome are reviewed
+// (`REVIEWED_CHROME_LOCALES`) and each leads to its own pages; German and Luxembourgish lead to the
+// page that says they are not, in English and labelled English (`live-locale-page.jsx`), never to
+// English copy under another language's tag.
 
 import { REVIEWED_CHROME_LOCALES } from '../scripts/locale-unavailable.mjs';
 import { liveChrome } from '../scripts/live-chrome.mjs';

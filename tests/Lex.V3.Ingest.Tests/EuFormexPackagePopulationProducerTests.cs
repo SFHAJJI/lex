@@ -48,7 +48,7 @@ public sealed partial class EuFormexPackagePopulationProducerTests
     {
         using var json = JsonDocument.Parse(result.CreateOutcomeDiagnosticsJson());
         var root = json.RootElement;
-        Assert.AreEqual("lex-v3-eu-formex-outcome-diagnostic/1", root.GetProperty("schema").GetString());
+        Assert.AreEqual("lex-v3-eu-formex-outcome-diagnostic/2", root.GetProperty("schema").GetString());
         Assert.IsTrue(root.GetProperty("delivered").GetBoolean());
         Assert.AreEqual(result.Reconciliation!.ExpressionCount, root.GetProperty("expression_count").GetInt32());
         Assert.AreEqual(result.Enumerations.Count, root.GetProperty("enumerated_count").GetInt32());
@@ -602,17 +602,21 @@ public sealed partial class EuFormexPackagePopulationProducerTests
     private static string Key(LanguageScopedExpression expression) =>
         expression.Identity.PublisherExpressionId[(expression.Identity.PublisherExpressionId.LastIndexOf("/cellar/", StringComparison.Ordinal) + "/cellar/".Length)..];
 
-    /// <summary>One English eligible expression through the whole producer, with the package route answered by <paramref name="packageResponse"/> (null for the default 303 and GDPR bytes).</summary>
+    /// <summary>
+    /// One English eligible expression through the whole producer, with the package route answered by <paramref name="packageResponse"/> (null for the default 303 and GDPR bytes),
+    /// over Appendix A's first seed or the seed <paramref name="seedCelex"/> names.
+    /// </summary>
     private static async Task<(EuFormexPackagePopulationResult Result, FormexEnumerationHandler Handler, LanguageScopedExpression English, EuAcquisitionTestFixture.EuInMemoryCustodyStore Store)> AcquireEnglishAsync(
         Func<HttpRequestMessage, HttpResponseMessage?> packageResponse,
         byte[]? heldXhtml = null,
         string[]? englishTypes = null,
-        bool bindCelexFromExpression = false)
+        bool bindCelexFromExpression = false,
+        string? seedCelex = null)
     {
         // One store for the run and the acquisition, as in production: the annex chain reads the
         // held work body the run retained.
         var store = new EuAcquisitionTestFixture.EuInMemoryCustodyStore();
-        var (run, english, french) = await RunWithTwoExpressionsAsync(heldXhtml, store);
+        var (run, english, french) = await RunWithTwoExpressionsAsync(heldXhtml, store, seedCelex: seedCelex);
         var handler = new FormexEnumerationHandler(new Dictionary<string, string[]>(StringComparer.Ordinal)
         {
             [english.Identity.PublisherExpressionId] = englishTypes ?? ["fmx4"],
@@ -623,7 +627,7 @@ public sealed partial class EuFormexPackagePopulationProducerTests
                 run, RendererSource(), RendererSource(), EuAcquisitionTestFixture.SourceWitness(),
                 EuAcquisitionTestFixture.TestWireBudget(), CancellationToken.None)
             : await Producer(store, handler).RunAsync(
-                run, RendererSource(), RendererSource(), WorkCelex, EuAcquisitionTestFixture.SourceWitness(),
+                run, RendererSource(), RendererSource(), EuAxiomWiringHarness.Seed(seedCelex).Celex, EuAcquisitionTestFixture.SourceWitness(),
                 EuAcquisitionTestFixture.TestWireBudget(), CancellationToken.None);
         Assert.IsTrue(result.Delivered, $"{result.Refusal}: {result.Detail}");
         return (result, handler, english, store);
@@ -706,21 +710,36 @@ public sealed partial class EuFormexPackagePopulationProducerTests
         Assert.IsFalse(result.Enumerations[0].Delivered);
         Assert.AreEqual(EuFormexManifestationEnumerationRefusal.EnumerationRefused, result.Enumerations[0].Refusal);
         StringAssert.Contains(result.Enumerations[0].Detail, "WireBudgetExhausted");
+        StringAssert.Contains(result.Detail, "WireBudgetExhausted");
+        using var diagnostics = JsonDocument.Parse(result.CreateOutcomeDiagnosticsJson());
+        var root = diagnostics.RootElement;
+        Assert.AreEqual(JsonValueKind.Null, root.GetProperty("expression_count").ValueKind);
+        Assert.AreEqual(0, root.GetProperty("successful_enumeration_count").GetInt32());
+        var failures = root.GetProperty("failed_enumerations").EnumerateArray().ToArray();
+        Assert.AreEqual(result.Enumerations.Count, failures.Length);
+        for (var index = 0; index < failures.Length; index++)
+        {
+            var source = result.Enumerations[index];
+            Assert.AreEqual(source.ExpressionIdentity.PublisherWorkId, failures[index].GetProperty("work").GetString());
+            Assert.AreEqual(source.ExpressionIdentity.PublisherExpressionId, failures[index].GetProperty("expression").GetString());
+            Assert.AreEqual(source.Expression.OfficialLanguage, failures[index].GetProperty("language").GetString());
+            Assert.AreEqual(source.Detail, failures[index].GetProperty("detail").GetString());
+            Assert.AreEqual(source.ProductRequestCount, failures[index].GetProperty("product_request_count").GetInt32());
+        }
         Assert.AreEqual(0, handler.Enumerations.Count, "the ceiling held before the first product request.");
     }
 
     // ---- Shared plumbing. ----
 
     /// <summary>
-    /// The adapter run over Appendix A's first seed with two expressions that are exact numeric
-    /// children of the work (the shape the manifestation enumeration binds): one English, one French.
+    /// The adapter run over Appendix A's first seed (or the seed <paramref name="seedCelex"/> names) with two expressions that
+    /// are exact numeric children of the work (the shape the manifestation enumeration binds): one English, one French.
     /// </summary>
     private static async Task<(EuQueryExecutionResult Run, LanguageScopedExpression English, LanguageScopedExpression French)>
         RunWithTwoExpressionsAsync(byte[]? heldXhtml = null, EuAcquisitionTestFixture.EuInMemoryCustodyStore? store = null,
-            string additionalLanguage = FrenchAuthority)
+            string additionalLanguage = FrenchAuthority, string? seedCelex = null)
     {
-        var root = EuPackRootCanonicalForm.TryCanonicalize(EuAppendixASeedMap.SeedsInCelexOrder[0].WorkRoot, out _)
-            ?? throw new AssertFailedException("Appendix A's own seed root failed to canonicalize.");
+        var root = EuAxiomWiringHarness.SeedRoot(seedCelex);
         var englishIri = root + ".0001";
         var frenchIri = root + ".0002";
         var run = await EuAxiomWiringHarness.RunAsync(
@@ -730,6 +749,7 @@ public sealed partial class EuFormexPackagePopulationProducerTests
                 ? null
                 : request => EuAcquisitionTestFixture.BinaryResponse(
                     request, HttpStatusCode.OK, heldXhtml, "application/xhtml+xml;charset=UTF-8"),
+            seedCelex: seedCelex,
             expressionIri: englishIri,
             additionalExpressionIri: frenchIri,
             additionalExpressionLanguageAuthority: additionalLanguage);

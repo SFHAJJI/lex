@@ -16,8 +16,8 @@ import { useEffect, useRef, useState } from 'react';
 
 import { RefusalCard } from './RefusalCard.jsx';
 import { COMPARE_LANGUAGES, LIVE_COMPARE_IDLE, createCompareSession } from '../scripts/live-compare.mjs';
-import { countedEntry, liveChrome } from '../scripts/live-chrome.mjs';
-import { LiveAnswer, Say } from './LiveAnswer.jsx';
+import { ENGLISH_LANG, countedEntry, liveChrome } from '../scripts/live-chrome.mjs';
+import { LiveAnswer, Say, StatusSentence, inEnglish, refusalCardCopyFor } from './LiveAnswer.jsx';
 
 /** The forms' labels and buttons, and this screen's sentences, from the interface copy table. */
 const FORM = liveChrome().form;
@@ -69,7 +69,7 @@ function Comparison({ comparison }) {
       <h2>{comparison.language}</h2>
       <Side label={COPY.sideFrom} side={comparison.from} />
       <Side label={COPY.sideTo} side={comparison.to} />
-      <p>{asSentence(comparison.note)}</p>
+      <p lang={ENGLISH_LANG}>{asSentence(comparison.note)}</p>
       {comparison.sameState ? null : (
         <>
           <p data-counts="">
@@ -113,13 +113,13 @@ export function CompareView({ view }) {
         <ul data-not-compared={view.languagesNotCompared.length}>
           {view.languagesNotCompared.map((entry) => (
             <li key={entry.language}>
-              <Say template={COPY.notCompared} values={{ language: entry.language, reason: entry.reason, bound: COPY.bound[entry.bound] }} />
+              <Say template={COPY.notCompared} values={{ language: entry.language, reason: inEnglish(entry.reason), bound: COPY.bound[entry.bound] }} />
             </li>
           ))}
         </ul>
       ) : null}
-      <p>{asSentence(view.wordingRule)}</p>
-      <p>{asSentence(view.validityConflictRule)}</p>
+      <p lang={ENGLISH_LANG}>{asSentence(view.wordingRule)}</p>
+      <p lang={ENGLISH_LANG}>{asSentence(view.validityConflictRule)}</p>
     </>
   );
 }
@@ -137,14 +137,14 @@ export function CompareAnswerView({ outcome }) {
   if (outcome.state === 'refusal' && outcome.card) {
     return (
       <section data-answer-state="refusal">
-        <RefusalCard code={outcome.code} sentence={outcome.sentence} payload={outcome.payload} copy={liveChrome().refusalCard} />
+        <RefusalCard code={outcome.code} sentence={outcome.sentence} payload={outcome.payload} copy={refusalCardCopyFor(outcome.context)} />
       </section>
     );
   }
 
   return (
     <section data-answer-state={outcome.state}>
-      <p role="status">{outcome.sentence}</p>
+      <StatusSentence outcome={outcome} />
     </section>
   );
 }

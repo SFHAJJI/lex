@@ -71,7 +71,7 @@ test('localization_unavailable is not slipped into the closed refusal registry',
   assert.equal(REFUSAL_CODES.length, 20);
 });
 
-test('a source master is served as a source master, never as a human review', () => {
+test('a source master is served as a source master, never as a review', () => {
   // The first version stored specification citations in a field called `reviewed_by` while
   // claiming a named human had reviewed them. That was a claim to evidence this module did
   // not possess, which is the failure it exists to prevent, aimed at itself.
@@ -84,8 +84,10 @@ test('a source master is served as a source master, never as a human review', ()
   }
 });
 
-test('a human review needs a reviewer and a date that is a date', () => {
+test('a review needs a reviewer and a date that is a date, and is served as a review', () => {
   assert.ok(isReviewed({ text: 'x', reviewed_by: 'A Reviewer', reviewed_on: '2026-08-27' }));
+  // The kind does not say who reviewed; the receipt does (the French interface's names an AI reviewer).
+  assert.deepEqual(provenanceOf({ text: 'x', reviewed_by: 'A Reviewer', reviewed_on: '2026-08-27' }), { kind: 'review', reviewed_by: 'A Reviewer', reviewed_on: '2026-08-27' });
   for (const entry of [
     { text: 'x', reviewed_by: 'A Reviewer', reviewed_on: '2026-99-99' },
     { text: 'x', reviewed_by: 'A Reviewer', reviewed_on: '2025-02-29' },
@@ -375,8 +377,8 @@ test('evidence for one resource says nothing about another', () => {
 
 test('provenance evidence must be the entry own, not its prototype', () => {
   // An entry whose prototype supplies reviewed_by and reviewed_on would otherwise become
-  // claimed human-review evidence, which is the closed-vocabulary defect aimed at the field
-  // that says a person looked at this.
+  // claimed review evidence, which is the closed-vocabulary defect aimed at the field that
+  // names who looked at this.
   // One inherited field at a time, so each own-property check is held by a case of its own.
   // With both inherited, either check alone would stand in for the other and either could be
   // deleted with nothing going red.

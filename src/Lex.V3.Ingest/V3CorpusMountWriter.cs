@@ -85,7 +85,7 @@ public static class V3CorpusMountWriter
         V3FirstMountBuildResult build,
         string directory,
         V3GenerationSource? generations,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken, DateTimeOffset? derivationInputUtc = null)
     {
         ArgumentNullException.ThrowIfNull(build);
         ArgumentException.ThrowIfNullOrWhiteSpace(directory);
@@ -127,7 +127,7 @@ public static class V3CorpusMountWriter
                     .ConfigureAwait(false);
                 kept = [];
             }
-            var report = RenderReport(build, written, kept);
+            var report = RenderReport(build, written, kept, derivationInputUtc);
             await File.WriteAllBytesAsync(reportTemporary, report, cancellationToken).ConfigureAwait(false);
             File.Move(reportTemporary, reportPath, overwrite: true);
             return new V3CorpusMountWrite(target, written, reportPath, Sha256(report));
@@ -258,11 +258,13 @@ public static class V3CorpusMountWriter
     private static byte[] RenderReport(
         V3FirstMountBuildResult build,
         IReadOnlyList<V3CorpusMountWrittenFile> written,
-        IReadOnlyList<V3RetainedGeneration> generations) =>
-        JsonSerializer.SerializeToUtf8Bytes(new
+        IReadOnlyList<V3RetainedGeneration> generations, DateTimeOffset? derivationInputUtc)
+    {
+        var report = new
         {
             schema = "lex-v3-first-mount-report/1",
-            writtenUtc = DateTimeOffset.UtcNow,
+            writtenUtc = derivationInputUtc is null ? DateTimeOffset.UtcNow : (DateTimeOffset?)null,
+            derivationInputUtc,
             corpus = Reference(build.Corpus!.ArtifactRef),
             luxembourgIndex = Reference(build.LuxembourgIndex!.IndexRef),
             luxembourgCapabilityManifest = Reference(build.LuxembourgIndex.CapabilityManifestRef),
@@ -272,7 +274,66 @@ public static class V3CorpusMountWriter
             builtTwiceAndEqual = true,
             files = written,
             generations = generations.Select(static kept => new { indexSha256 = kept.IndexSha256, observation = kept.Observation, builtAt = kept.BuiltAt, reasons = kept.Reasons }).ToArray(),
-        }, new JsonSerializerOptions { WriteIndented = true });
+        };
+        var options = new JsonSerializerOptions { WriteIndented = true };
+        var resumption = Resumption(build.EuropeResumption, build.LuxembourgResumption);
+        if (resumption is null)
+        {
+            return JsonSerializer.SerializeToUtf8Bytes(report, options);
+        }
+
+        var node = JsonSerializer.SerializeToNode(report, options)!.AsObject();
+        node["resumption"] = JsonSerializer.SerializeToNode(resumption, options);
+        return JsonSerializer.SerializeToUtf8Bytes(node, options);
+    }
+
+    /// <summary>
+    /// What a mount whose population was acquired across an interruption says about it, half by half; null when neither
+    /// half was resumed, and the report is then exactly the uninterrupted one.
+    /// </summary>
+    /// <remarks>
+    /// Each half names its own resumption: the journal it resumed from, the earlier runs that observed its replayed units
+    /// and their window and spend bounds, and when the resumed run began observing. The two halves can come from different
+    /// journals (a resumed EU population reused by a resumed Luxembourg run), or one half from none (a population a
+    /// resumed run reused as it stood), so no window is stated for the mount as a whole. Every value comes from the
+    /// catalogs, so an offline derivation writes these bytes exactly as the acquiring build did.
+    /// </remarks>
+    internal static object? Resumption(AcquisitionResumption? europe, AcquisitionResumption? luxembourg) =>
+        europe is null && luxembourg is null ? null : new
+        {
+            statement = "This population was not observed in one window. A half that names a resumption was acquired by a run "
+                + "resumed from a progress journal: its units counted as replayed were observed by the earlier runs it names "
+                + "(earlierRuns.runs of them), between earlierRuns.startedAt and earlierRuns.lastJournaledAt, and admitted "
+                + "again through their own checked readers; its units counted as live were observed by the resumed run after "
+                + "resumedAt. Those earlier runs spent at least earlierRuns.wireSpentAtLeast requests and at most "
+                + "earlierRuns.wireCeiling. A half that names no resumption was observed by the run that acquired it, as its "
+                + "catalog states.",
+            europe = ResumedHalf(europe),
+            luxembourg = ResumedHalf(luxembourg),
+        };
+
+    /// <summary>One resumed half as its catalog states it: the journal and earlier runs it resumed from, replayed and live units per phase, and the resumed run's spend and time when the catalog was retained.</summary>
+    private static object? ResumedHalf(AcquisitionResumption? resumption) => resumption is null ? null : new
+    {
+        resumedFrom = new
+        {
+            journalSha256 = resumption.JournalSha256,
+            lastSeq = resumption.LastSeq,
+            record = Reference(resumption.Record),
+        },
+        earlierRuns = new
+        {
+            runs = resumption.PreviousRuns,
+            startedAt = resumption.PreviousStartedAt,
+            lastJournaledAt = resumption.PreviousLastJournaledAt,
+            wireSpentAtLeast = resumption.PreviousWireSpentAtLeast,
+            wireCeiling = resumption.PreviousWireCeiling,
+        },
+        resumedAt = resumption.ResumedAt,
+        phases = resumption.Phases.Select(static phase => new { phase = phase.Phase, replayed = phase.Replayed, live = phase.Live }).ToArray(),
+        wireSpentThroughCatalog = resumption.WireSpent,
+        catalogedAt = resumption.CatalogedAt,
+    };
 
     public static Task<V3CorpusMountVerification> VerifyAsync(string directory, CancellationToken cancellationToken) =>
         VerifyAsync(directory, asGeneration: false, cancellationToken);
