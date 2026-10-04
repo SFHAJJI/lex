@@ -21,7 +21,7 @@ Reversible driver decision, for the Luxembourg legislative population run.
 **The cover proof.**
 - `LuxembourgPartitionCover.TryCreate` now accepts several runs when they form contiguous blocks of leaves: a run that reappears after another refuses `leaf_run_identity_differs`.
 - A cover with a root count stays one run.
-- One interpretation profile is still required, and so one source profile, now also checked.
+- One interpretation profile is still required, which implies one source profile (each dialect derives exactly one).
 - `RunIdentity` is the first leaf's run.
 
 **The checkpoint.**
@@ -33,7 +33,7 @@ Reversible driver decision, for the Luxembourg legislative population run.
 - the profile and its digest;
 - the send gate's rule, now shared with `RobotsPolicyRemaining`;
 - the construction-surface pins: the cover's two refusal lambdas keep their ordinals, now applied to the leaves not yet run;
-- the census: the `/2` schema name lives on its nested record, not as a second constant on the static checkpoint class.
+- the census pins: the checkpoint class stays declined as a record-version holder, its reason now naming both schema identifiers.
 
 **Next:** journal each delivered leaf (`lu-cover-leaf`), so a resume continues an unfinished cover rather than starting the family again (design in the driver's notes).
 

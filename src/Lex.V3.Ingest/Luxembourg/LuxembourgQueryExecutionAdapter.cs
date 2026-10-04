@@ -3501,7 +3501,7 @@ public sealed partial class LuxembourgQueryExecutionAdapter
 
     /// <summary>
     /// D1-04c item 1: drives <see cref="LuxembourgRepeatedEnumerationExecutor.RunCoverAsync"/> over
-    /// <paramref name="chain"/> (one session for every leaf, per that method's own contract), then
+    /// <paramref name="chain"/> (one session per robots generation, each leaf on one, per that method's own contract), then
     /// reconciles the leaves through <see cref="LuxembourgPartitionCover.TryCreate"/> and mints each
     /// leaf's own <see cref="AbsenceFamilyEnumerationProof"/> by its own leaf partition id -- never the
     /// root family key, which <see cref="AbsenceFamilyEnumerationProof.TryCreate"/> would refuse

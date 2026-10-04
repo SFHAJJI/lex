@@ -211,7 +211,7 @@ public sealed class LuxembourgPartitionCover
     /// (<see cref="EnumerationDeliveryOutcome.EqualSelections"/>), and the leaf was not itself
     /// saturated (<see cref="RepeatedEnumerationThresholdAssessment.BelowMaximum"/> - a saturated
     /// leaf is not a leaf, it is a node that still needs splitting). Then, across every leaf: one
-    /// interpretation profile, one source profile, and runs that form contiguous blocks of leaves
+    /// interpretation profile (and so one source profile), and runs that form contiguous blocks of leaves
     /// (a run that reappears after another refuses <c>leaf_run_identity_differs</c>). A cover is one
     /// run unless it outlasted a robots generation: each leaf's two passes are always one run, and a
     /// session replaced between leaves starts a new block. Finally, when a root receipt is supplied,
@@ -239,7 +239,6 @@ public sealed class LuxembourgPartitionCover
         SourceArtifactRef? currentRun = null;
         var runs = new List<SourceArtifactRef>();
         SourceArtifactRef? profileRef = null;
-        SourceArtifactRef? sourceProfileRef = null;
         CustodyMembership? floor = null;
         long sum = 0;
 
@@ -291,17 +290,8 @@ public sealed class LuxembourgPartitionCover
                 return null;
             }
 
-            // One run implied one source profile, and so does one interpretation profile (each dialect derives exactly
-            // one; EnumerationDeliveryComparison.RequireSameSourceProfile). Checked anyway, now that leaves span runs.
-            if (sourceProfileRef is null)
-            {
-                sourceProfileRef = delivery.SourceProfileRef;
-            }
-            else if (sourceProfileRef != delivery.SourceProfileRef)
-            {
-                refusal = LuxembourgPartitionCoverRefusal.LeafProfileDiffers;
-                return null;
-            }
+            // One source profile across runs needs no check of its own: each interpretation dialect derives exactly one
+            // (EnumerationDeliveryComparison.RequireSameSourceProfile), and the leaves share one interpretation profile.
 
             sum = checked(sum + delivery.DeliveredRowCountA);
             // One rule, one place. This used to be a second copy of the receipt's own switch, which

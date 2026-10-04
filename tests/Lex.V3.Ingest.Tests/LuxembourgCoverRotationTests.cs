@@ -3,6 +3,7 @@ using System.Net.Http;
 using System.Text;
 using Lex.V3.Contracts;
 using Lex.V3.Contracts.Custody;
+using Lex.V3.Contracts.Source.Core;
 using Lex.V3.Contracts.Source.Luxembourg;
 using Lex.V3.Ingest.Luxembourg;
 
@@ -150,6 +151,81 @@ public sealed partial class LuxembourgRepeatedEnumerationExecutorTests
         Assert.AreEqual(result.Chain.Leaves.Count, result.Results.Count);
         Assert.AreEqual(5, handler.ProductRequests, "nothing was sent under the refused policy (Decision 67)");
     }
+
+    [TestMethod]
+    public async Task ARunBlockCheckpointThatDoesNotDescribeItsBlocksIsRefused()
+    {
+        var clock = new RotationClock();
+        using var handler = new RotationHandler((ordinal, request) =>
+        {
+            if (ordinal == 5) clock.Advance(TimeSpan.FromHours(13));
+            return LeafScript(ordinal, request);
+        });
+        var (request, witness) = BuildRequest();
+        var store = new RoutedHttpAcquisitionSessionAuditTests.RecordingCustodyStore { RefuseFallback = true };
+        var result = await new LuxembourgRepeatedEnumerationExecutor(store, clock, handler)
+            .RunAdaptiveCoverAsync(request, witness, WireRequestBudget.OfWireRequests(30), CancellationToken.None);
+        var cover = LuxembourgPartitionCover.TryCreate(result.Chain, result.Results.Select(static leaf => leaf.Receipt!).ToArray(),
+            null, out var refusal) ?? throw new AssertFailedException(refusal.ToString());
+        var written = await LuxembourgPartitionCoverCheckpoint.WriteAsync(store, cover, result.Results, CancellationToken.None);
+        var original = ContractJson.Deserialize<RunBlockCheckpoint>(Encoding.UTF8.GetString(
+            (await CustodyRestore.ReadByDigestCheckedAsync(store, written.Sha256, CancellationToken.None)).Span));
+        var (first, second) = (original.Segments[0].Run, original.Segments[1].Run);
+
+        async Task<SourceArtifactRef> HoldAsync(RunBlockCheckpoint document)
+        {
+            var receipt = await store.CreateAsync(Encoding.UTF8.GetBytes(ContractJson.Serialize(document)), CustodyClass.NightlyFloor90d,
+                CancellationToken.None);
+            return new SourceArtifactRef($"urn:uuid:{Guid.NewGuid():D}", receipt.Reference.ContentSha256);
+        }
+
+        Task<LuxembourgPartitionCover> RestoreAsync(SourceArtifactRef checkpoint) => LuxembourgPartitionCoverCheckpoint.RestoreAsync(
+            store, checkpoint, result.Chain.RootRange, first, cover.InterpretationProfileRef, CancellationToken.None);
+
+        // The control: the same blocks written again through this record restore, so each refusal below is its own clause's.
+        Assert.AreEqual(2, (await RestoreAsync(await HoldAsync(original with { Segments = [.. original.Segments] }))).LeafReceipts.Count);
+        foreach (var (name, blocks) in new (string, RunBlock[])[]
+        {
+            ("one block for runs that differ", [new RunBlock(first, 2)]),
+            ("a run in two blocks", [new RunBlock(first, 1), new RunBlock(first, 1)]),
+            ("blocks that do not add up to the leaves", [new RunBlock(first, 1), new RunBlock(second, 2)]),
+            ("an empty block", [new RunBlock(first, 2), new RunBlock(second, 0)]),
+        })
+        {
+            await Assert.ThrowsExactlyAsync<CustodyIntegrityException>(() => RestoreAsync(HoldAsync(original with { Segments = blocks }).Result), name);
+        }
+    }
+
+    [TestMethod]
+    public async Task ABudgetSpentBeforeAReplacementSessionRefusesTheRemainingLeavesWithoutARobotsFetch()
+    {
+        var clock = new RotationClock();
+        using var handler = new RotationHandler((ordinal, request) =>
+        {
+            if (ordinal == 5) clock.Advance(TimeSpan.FromHours(13));
+            return LeafScript(ordinal, request);
+        });
+        var (request, witness) = BuildRequest();
+        var store = new RoutedHttpAcquisitionSessionAuditTests.RecordingCustodyStore { RefuseFallback = true };
+        // One robots fetch, the root's COUNT and the left leaf's four requests: nothing is left for a second session.
+        var budget = WireRequestBudget.OfWireRequests(6);
+        var result = await new LuxembourgRepeatedEnumerationExecutor(store, clock, handler)
+            .RunAdaptiveCoverAsync(request, witness, budget, CancellationToken.None);
+
+        Assert.IsNotNull(result.Results[0].Receipt, "the left leaf was proved on the first session");
+        Assert.AreEqual(LuxembourgEnumerationRefusal.WireBudgetExhausted, result.Results[1].Refusal?.Code);
+        Assert.AreEqual(result.Chain.Leaves.Count, result.Results.Count);
+        Assert.AreEqual(1, handler.RobotsFetches, "the replacement's robots fetch was never sent");
+        Assert.AreEqual(5, handler.ProductRequests);
+        Assert.AreEqual(6, budget.Spent);
+    }
+
+    /// <summary>The <c>/2</c> cover checkpoint's shape, to write a tampered one through the same serializer.</summary>
+    private sealed record RunBlockCheckpoint(string Schema, LuxembourgQueryPartitionRange Root,
+        IReadOnlyList<LuxembourgPartitionSplitStep> Splits, IReadOnlyList<SourceArtifactRef> Leaves,
+        IReadOnlyList<RunBlock> Segments, SourceArtifactRef Profile);
+
+    private sealed record RunBlock(SourceArtifactRef Run, int LeafCount);
 
     // The cover's product requests by ordinal: the root's COUNT answers a capacity failure (so it splits), then each leaf
     // answers COUNT 0, an empty page, COUNT 0 and an empty page.

@@ -873,8 +873,9 @@ public sealed class LuxembourgRepeatedEnumerationExecutor
     /// <summary>
     /// Splits selections above the requested leaf size, at the publisher ceiling, or after a
     /// retained initial COUNT capacity failure until every leaf can be enumerated
-    /// twice. All attempts, including saturated ancestors and empty leaves, use one wire budget
-    /// and one acquisition session. This returns evidence; the caller must still prove the cover.
+    /// twice. All attempts, including saturated ancestors and empty leaves, use one wire budget,
+    /// on one acquisition session per robots generation (see RunCoverCoreAsync). This returns
+    /// evidence; the caller must still prove the cover.
     /// </summary>
     public Task<(LuxembourgPartitionChain Chain, IReadOnlyList<LuxembourgEnumerationRunResult> Results,
         int ProductRequestCount)> RunAdaptiveCoverAsync(

@@ -46,8 +46,10 @@ public sealed class CensusPartitionTests
     [
         "Lex.V3.Ingest.V3OfflineMount: one private schema identifier for retained mount inputs; "
             + "the offline orchestrator is not a selectable vocabulary. Catalog framing, custody reopening and independent-process mount comparison are tested.",
-        "Lex.V3.Ingest.Luxembourg.LuxembourgPartitionCoverCheckpoint: one private schema identifier; "
-            + "not a selectable vocabulary. Split-history reopening and unknown-schema refusal are tested.",
+        "Lex.V3.Ingest.Luxembourg.LuxembourgPartitionCoverCheckpoint: two private schema identifiers, /1 on the class for a "
+            + "single-run cover and /2 on its nested run-block record for a cover over several runs; they name record versions, "
+            + "not a selectable vocabulary. Split-history reopening, both versions' restores, run-block tampering and "
+            + "unknown-schema refusal are tested.",
         "Lex.V3.Ingest.Luxembourg.LuxembourgEnumerationCheckpoint: one private schema identifier; "
             + "not a selectable vocabulary. Closed-template reopening and unknown-schema refusal are tested.",
         "Lex.V3.Ingest.Europe.EuEnumerationCheckpoint: one private schema identifier; "
