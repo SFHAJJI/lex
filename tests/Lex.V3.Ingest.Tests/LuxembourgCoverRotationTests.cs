@@ -282,7 +282,7 @@ public sealed partial class LuxembourgRepeatedEnumerationExecutorTests
         // A resume point under another profile reference is refused before anything is sent.
         await Assert.ThrowsExactlyAsync<ArgumentException>(() => new LuxembourgRepeatedEnumerationExecutor(store, new RotationClock(), handler)
             .RunAdaptiveCoverAsync(request, witness, WireRequestBudget.OfWireRequests(30), CancellationToken.None, long.MaxValue,
-                point with { InterpretationProfileRef = left.InterpretationProfileRef with { Sha256 = new string('0', 64) } }, null));
+                point with { InterpretationProfileRef = new SourceArtifactRef(left.InterpretationProfileRef.ResourceId, new string('0', 64)) }, null));
         Assert.AreEqual(4, handler.ProductRequests);
     }
 
