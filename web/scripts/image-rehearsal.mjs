@@ -590,7 +590,8 @@ export async function rehearse({ mount, keep = false, probe = true, reproduce = 
       version, source, manifestDigest: image.manifestDigest, corpusSha256: report.corpus?.Sha256 ?? null, signer: by,
       assets: [[ASSETS.image, await readFile(archive)], [ASSETS.imageSignature, imageSignatureAsset(signed)], [ASSETS.card, servedCard], [ASSETS.mountReport, mountBytes]],
     });
-    const readBack = await releaseFailures(published.directory, { publicKeyPem: by.publicKeyPem, identity: by.identity });
+    // A release signer's release is read back as that signer's; a rehearsal names no release signer to hold it to.
+    const readBack = await releaseFailures(published.directory, { publicKeyPem: by.publicKeyPem, identity: by.rehearsal ? null : by.identity });
     result.release = { version, manifestSha256: published.manifestSha256, assets: (await readdir(published.directory)).sort(), readBackFailures: readBack };
     if (readBack.length > 0) throw new Error(`the release does not read back:\n- ${readBack.join("\n- ")}`);
     return result;
