@@ -42,8 +42,8 @@ The pinned `RunCoverCoreAsync` signature gains the resume point and the leaf cal
   forged to name it, restores no leaf.
 - The rebuild test also reopens the resumed catalog on its own, and resumes the resumed run a third time from its
   journal: the leaves are found there and nothing is sent.
-- Partial restore (k of n leaves, then live) is tested at the executor; the fixture's population covers are one leaf
-  each.
+- Partial restore (k of n leaves, then live) is tested at the executor, from a hand-built resume point, not through the
+  adapter.
 
 CI compiles and runs these: local memory is reserved for the EU population run.
 
