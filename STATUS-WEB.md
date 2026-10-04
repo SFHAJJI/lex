@@ -134,7 +134,19 @@ below:
         date.
       - Deriving Luxembourg documents and states from custody is held only by the act-range rows of
         `V3OfflineMountTests` (#899) until the population custody exists.
-  - Waits: the populations' custody for the real run, and the owner's production signing identity.
+  - **The production signing entry point (2026-10-04).**
+    - **The command.** `--signing-key <PEM file, or - for standard input> --signer <identity>` signs the image and the
+      release with the owner's ECDSA P-256 key instead of a rehearsal key.
+    - **The key.** It stays in the owner's key vault and can be piped in, so it touches no disk. It is read once and
+      held only in that process. It is never written, logged or kept, and no error repeats it.
+    - **The release.** It is published as a release (`lex-v3-release/1`, version `v3-...`) that names its signer.
+      Reading back checks that the schema, the version, the manifest and both signatures say the same kind and signer.
+    - **The deploy kit.** `deploy-probe.mjs --signer <identity>` refuses a rehearsal or another signer's release.
+      `deploy.ps1 -Apply` now requires `-SignerIdentity`, so a deployment applies only a release-signer release; a
+      plan run may still read a rehearsal.
+    - **In CI.** CI's custody rehearsal signs through this path with a key made in the job, under an identity saying
+      so, and checks that its report holds no private key.
+  - Waits: the populations' custody for the real run, and the owner's signing key in their key vault.
 - **Zero-traffic deploy, probes, promotion, a second revision, rollback, V2 retired:** wait for Azure.
 - **Owner sign-off:** the owner's.
 
@@ -1182,20 +1194,23 @@ Nothing here logs in, deploys or signs with a production identity; those stay wi
      - the managed environment;
      - the registry;
      - a user-assigned identity with AcrPull on it;
-     - the production signing identity, and a release signed by it in the rehearsal's release format.
+     - the production signing key (ECDSA P-256, in your key vault), the identity it signs as, and its public key in
+       PEM. The release is built with `--signing-key - --signer <identity>` on the release command, the key piped
+       from `az keyvault secret show ... --query value -o tsv`.
   2. `az login` in your own session, then `pwsh -File deploy/validate.ps1` (it needs the Bicep CLI;
      no Azure is touched).
   3. Plan: `pwsh -File deploy/deploy.ps1 -Subscription <id> -ResourceGroup <rg> -EnvironmentId <id>
      -Registry <name>.azurecr.io -IdentityResourceId <id> -SigningPublicKey <identity's public key,
-     PEM> -Release <release directory>`, then either `-LiveRevision <the revision serving now>`, or on
-     a first deployment `-ProbeSourceCidr <your address>/32`.
+     PEM> -SignerIdentity <the identity it signs as> -Release <release directory>`, then either `-LiveRevision <the
+     revision serving now>`, or on a first deployment `-ProbeSourceCidr <your address>/32`. `-Apply` requires
+     `-SignerIdentity`, so only a release signed by the release signer is deployed.
   4. The same command with `-Apply` deploys the candidate and probes it. On "answers as the release
      holds", promote with the command it prints. On a failed probe the candidate is already
      deactivated.
   5. Remove a revision at any time with `pwsh -File deploy/deploy.ps1 -Subscription <id>
      -ResourceGroup <rg> -Remove -Revision <name>`.
 - **Not covered:**
-  - the production signing identity and its release format (the owner's);
+  - the production signing key itself (the owner's, in their key vault);
   - a custom domain, DNS and monitoring;
   - an Azure-side check of the template, since `what-if` needs the owner's session.
 
@@ -2429,9 +2444,9 @@ each consolidated version, with the publisher's consolidation date or a typed re
 
 The French interface ships (branch `writer/french-chrome`, on the EU time view's PR #909; the launch
 contract's line "Chrome in FR and EN; DE and LB answer `localization_unavailable`").
-- **The review.** The French was reviewed by Claude (AI reviewer), under the owner's delegation of
-  2026-10-02 (the owner delegated every decision of the review to the driver). It is an AI
-  legal-language review with its evidence, not a review by a person. Its record, every changed entry
+- **The review.** The French was reviewed by the AI reviewer under the owner's delegation of 2026-10-02
+  (the receipt is dated 2026-10-03), and accepted by the owner on 2026-10-04, who reviewed it in person
+  (`C:\lex-v3\lanes\STANDING-ORDERS.md` section 8: "i did review it and its ok"). Its record, every changed entry
   with its reason and source, is `C:\lex-v3\lanes\fr-review\review.md`: 129 of 370 entries changed
   (61 in wording, 68 in typography). The receipt is `CHROME_REVIEWS.fr` in `localization.mjs`:
   `reviewed_by` "Claude (AI reviewer), under the owner's delegation of 2026-10-02", `reviewed_on`
@@ -2942,7 +2957,7 @@ The plan, in order (its items 1 to 3 are the data lane's, in STATUS-DATA.md):
    the accessibility and scope line held on the live screens; PR #813: a reviewed language builds
    its own pages; PR #815: the eight screens against the real bounded mount; PR #834: the
    licence-blocked journey. The French interface ships (branch `writer/french-chrome`): reviewed by
-   Claude (AI reviewer) under the owner's delegation of 2026-10-02, the reviewed table in
+   the AI reviewer under the owner's delegation of 2026-10-02 and accepted by the owner on 2026-10-04, the reviewed table in
    `LIVE_CHROME` and `fr` in `REVIEWED_CHROME_LOCALES`, which builds `/fr/*.html` (Decision 41); the
    owner may revise any entry. Hosting (ruling 3): `Lex.V3.Api`
    serves the live pages on the API's origin with `frame-ancestors`, HSTS and `Referrer-Policy`,
