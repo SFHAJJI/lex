@@ -782,6 +782,12 @@ public sealed partial class LuxembourgRepeatedEnumerationExecutor
         }
     }
 
+    /// <summary>
+    /// Whether a completed attempt's own terminal status is one the session itself would admit
+    /// another attempt for. Read from the evidence, never re-derived from a separate list: the six
+    /// values are exactly <c>RoutedHttpAcquisitionSession.PlanItem.IsRetryable</c>'s own final
+    /// clause and exactly the six <c>OfficialMachineQueryRetryCondition</c> HTTP members.
+    /// </summary>
     private static bool IsRetryableStatus(RoutedHttpAcquisitionSession.AttemptResult attempt) =>
         attempt.Evidence is { } evidence &&
         evidence.Hops.Count > 0 &&

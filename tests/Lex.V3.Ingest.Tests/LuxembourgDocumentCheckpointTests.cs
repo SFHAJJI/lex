@@ -152,6 +152,46 @@ public sealed partial class LuxembourgDocumentGetTests
         Assert.AreEqual(sends, capture.Handler.SendCount);
     }
 
+    [TestMethod]
+    [DataRow(0)]
+    [DataRow(3)]
+    public async Task AVersionOneDocumentCheckpointStillReplaysUnderItsOwnRules(int shape)
+    {
+        // A one-document phase of the shared session is also exactly what a session per GET produced before (its one GET is
+        // the run's first product request): the same record under /1, without the robots route, is a /1 checkpoint.
+        var capture = await CaptureDocumentsAsync(shape);
+        var original = (await capture.Store.ReadByDigestAsync(capture.Checkpoint.Sha256, CancellationToken.None)).ToArray();
+        var root = await DocumentRootAsync(capture);
+        Assert.AreEqual("lex-lu-selected-documents-checkpoint/2", root["schema"]!.GetValue<string>());
+        Assert.IsNotNull(root["fetches"]![0]!["robots"], "every /2 fetch names its robots route");
+        CollectionAssert.AreEqual(original, Encoding.UTF8.GetBytes(root.ToJsonString()), "the edits below write canonical bytes");
+
+        async Task<SourceArtifactRef> HoldAsync(JsonNode document)
+        {
+            var bytes = Encoding.UTF8.GetBytes(document.ToJsonString());
+            var receipt = await capture.Store.CreateAsync(bytes, CustodyClass.NightlyFloor90d, CancellationToken.None);
+            return new SourceArtifactRef(capture.Checkpoint.ResourceId, receipt.Reference.ContentSha256);
+        }
+
+        var versionOne = root.DeepClone();
+        versionOne["schema"] = "lex-lu-selected-documents-checkpoint/1";
+        foreach (var fetch in versionOne["fetches"]!.AsArray()) fetch!.AsObject().Remove("robots");
+        var result = await ReopenDocumentsAsync(capture.Store, capture with { Checkpoint = await HoldAsync(versionOne) });
+        Assert.IsNull(result.Refusal, result.Refusal?.Detail);
+        Assert.AreEqual(shape == 0 ? 1 : 0, result.HeldEvidenceByOrdinal!.Count);
+        if (shape == 3) Assert.IsNotNull(result.Outcomes![0].Refusal, "the /1 robots refusal replays as a refusal");
+
+        // Each version's own rule: a /1 fetch naming a robots route, or a /2 fetch without one, does not read.
+        var mixedOne = root.DeepClone();
+        mixedOne["schema"] = "lex-lu-selected-documents-checkpoint/1";
+        var mixedOneRef = await HoldAsync(mixedOne);
+        await Assert.ThrowsExactlyAsync<CustodyIntegrityException>(() => ReopenDocumentsAsync(capture.Store, capture with { Checkpoint = mixedOneRef }));
+        var mixedTwo = root.DeepClone();
+        foreach (var fetch in mixedTwo["fetches"]!.AsArray()) fetch!.AsObject().Remove("robots");
+        var mixedTwoRef = await HoldAsync(mixedTwo);
+        await Assert.ThrowsExactlyAsync<CustodyIntegrityException>(() => ReopenDocumentsAsync(capture.Store, capture with { Checkpoint = mixedTwoRef }));
+    }
+
     private sealed record DocumentCapture(EuAcquisitionTestFixture.EuInMemoryCustodyStore Store,
         SourceArtifactRef Checkpoint, ScopeManifest Manifest,
         IReadOnlyDictionary<SourceObjectRef, LuxembourgDocumentFetchAddress> Addresses,

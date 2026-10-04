@@ -33,7 +33,7 @@ Reversible driver decision, for the Luxembourg legislative population run.
 - the source profile and its digest;
 - the route schema (`lex-license-http-evidence/4`);
 - the acquisition catalog, the corpus and the indexes;
-- the single-GET door `RunDocumentGetAsync`, used elsewhere.
+- the single-GET door `RunDocumentGetAsync`, which no production path calls any more; its tests keep it, and its retained routes still reopen through `ReopenAsync`.
 
 **Census:** the producers of `LuxembourgDocumentGetAttemptResult` gain the batch, the shared attempt loop and the new reader doors, and the pin is updated.
 
@@ -42,6 +42,9 @@ Reversible driver decision, for the Luxembourg legislative population run.
 - **A disallowed document.** A document the shared policy disallows is refused with nothing sent, and its refusal reopens. An allowed document does not reopen as a refusal.
 - **Hourly replacement.** An hour between documents gives each its own session and robots route, and a GET does not reopen under another run's policy.
 - **Existing suites.** The Gazette checkpoint and resume tests now run through the shared session and the `/2` checkpoints.
+- **The guard.** A session opens no URL its admitted policy disallows, by either door, and allocates no ordinal for it.
+- **`/1` checkpoints.** A `/1` document checkpoint (an executed GET and a robots refusal) and a `/1` Gazette checkpoint still replay. A `/1` fetch naming a robots route, or a `/2` fetch without one, does not read.
+- **Untested, as defence in depth that a real run cannot reach:** the reader's 24-hour freshness check and its exact-path re-derivation (the session refuses such a GET first), and the batch's in-session UnsafeToInterpret branch.
 
 ## A Luxembourg partition cover longer than one robots generation (Claude, 2026-10-04)
 

@@ -226,12 +226,6 @@ public sealed partial class LuxembourgRepeatedEnumerationExecutor
         }
     }
 
-    /// <summary>
-    /// Whether a completed attempt's own terminal status is one the session itself would admit
-    /// another attempt for. Read from the evidence, never re-derived from a separate list: the six
-    /// values are exactly <c>RoutedHttpAcquisitionSession.PlanItem.IsRetryable</c>'s own final
-    /// clause and exactly the six <c>OfficialMachineQueryRetryCondition</c> HTTP members.
-    /// </summary>
     // A robots route written to custody and reopened by digest before anything relies on it (Decision 78).
     private async Task<SourceArtifactRef> HoldRobotsRouteAsync(RoutedHttpEvidence route, CancellationToken cancellationToken)
     {

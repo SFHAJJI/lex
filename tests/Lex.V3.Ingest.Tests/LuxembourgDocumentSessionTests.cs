@@ -140,6 +140,32 @@ public sealed partial class LuxembourgDocumentGetTests
             "the first session's policy did not admit the second session's GET");
     }
 
+    [TestMethod]
+    public async Task ASessionOpensNoUrlItsAdmittedPolicyDisallowsAndAllocatesNoOrdinalForIt()
+    {
+        var store = new EuAcquisitionTestFixture.EuInMemoryCustodyStore();
+        var handler = new RobotsThenDocumentHandler(static (request, _) => XmlBody(request))
+        {
+            RobotsText = "User-agent: *\nDisallow: /filestore/eli/etat/leg/loi/2017/03/14/a440/\n",
+        };
+        var start = await RoutedHttpAcquisitionSession.StartWithTestTransportAsync(Bind(ActAddress("a439")), store, handler,
+            new LuxembourgAcquisitionTestFixture.FixedTimeProvider(), LuxembourgAcquisitionTestFixture.TestWireBudget(), CancellationToken.None);
+        using var session = start.Session ?? throw new AssertFailedException("The session did not start.");
+
+        // Decision 83 at the door every caller shares: a URL other than the witness that the admitted policy disallows is
+        // never opened, by either door.
+        var disallowed = ActAddress("a440");
+        Assert.ThrowsExactly<InvalidOperationException>(() => session.OpenPlanItem(Bind(disallowed)));
+        var (item, verdict, path) = session.OpenPlanItemAdmittedByRobots(Bind(disallowed));
+        Assert.IsNull(item);
+        Assert.AreEqual(RobotsPolicyEvaluationResult.Denied, verdict);
+        Assert.AreEqual(disallowed.FetchUri.PathAndQuery, path);
+
+        // Neither refusal took a request ordinal: the next URL the policy allows is the run's first product request.
+        Assert.AreEqual(1UL, session.OpenPlanItem(Bind(ActAddress("a441"))).RequestOrdinal);
+        Assert.AreEqual(1, handler.SendCount, "only the robots fetch was sent");
+    }
+
     /// <summary>Two seconds per reading, like the fixture clocks, and a jump on request.</summary>
     private sealed class JumpingClock : TimeProvider
     {
