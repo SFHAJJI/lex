@@ -925,7 +925,10 @@ export async function run(apiOutput, mount, expected, browser, liveRoot) {
     // Asked before the browser, of the same server, with the page's own request.
     const body = expected.step.body ?? COVERAGE_BODY;
     const answer = await fetch(`${api.origin}/api/v3/${body.operation_id}`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
-    expected = { ...expected, ...expectedFromEnvelope(await answer.json()) };
+    const envelope = await answer.json();
+    expected = { ...expected, ...expectedFromEnvelope(envelope) };
+    // A step may hold the page to more than the API's outcome, given what the API answered (`realMountExpectations`).
+    if (expected.refine) expected = { ...expected, ...expected.refine(envelope) };
   }
   const live = expected.servedByApi ? null : createLiveServer({ root: liveRoot, apiOrigin: api.origin });
   const pageOrigin = live === null ? api.origin : await listen(live);
@@ -946,23 +949,55 @@ export async function run(apiOutput, mount, expected, browser, liveRoot) {
 /**
  * The steps against a real mount (`--real-mount`): each page is held to what the API answers its
  * request, and to every invariant a run checks. The coverage page must name the mounted corpus and
- * Luxembourg index by the digests the mount's build report records. When the build report names an
- * EU index, the EU search step runs too: the GDPR searched by its CELEX, every EU citation pinned and
- * verified (`realMountSteps`).
+ * Luxembourg index by the digests the mount's build report records. Journeys J2 (a question no article
+ * carries) and J5 (a law the corpus does not hold) run as on the fixture mount. When the build report
+ * names an EU index, the EU steps run too: the GDPR searched by its CELEX, its dossier and its reading,
+ * every EU citation pinned and verified (`realMountSteps`).
  */
 export function realMountSteps(report) {
-  const steps = Object.entries(JOURNEY_STEPS).map(([name, step]) => [name, step]);
+  const steps = [
+    ...Object.entries(JOURNEY_STEPS),
+    ["J2, a question no article carries", NO_HIT_SEARCH_STEP],
+    ["J5, a law not held", UNKNOWN_LAW_STEP],
+  ];
   return report.europeIndex
     ? [...steps, ["eu search", EU_SEARCH_STEP], ["eu dossier", EU_DOSSIER_STEP], ["eu reading", EU_READING_STEP]]
     : steps;
 }
 
+/**
+ * What a real mount's page is held to beyond the API's outcome, for the specification's journeys:
+ * - J5: the law is not held, so the dossier must refuse `identifier_unknown` with the absence note, whatever the
+ *   API answered (an answer would be the defect);
+ * - J2: when the API finds no hit, the page must say that this is not evidence that the law does not exist; a
+ *   population that does carry the words answers hits, held like any search.
+ */
+export function realMountExpectations(step) {
+  if (step === UNKNOWN_LAW_STEP) return { refine: () => ({ state: "refusal", refusalCode: "identifier_unknown", texts: [ABSENCE_NOTE] }) };
+  if (step === NO_HIT_SEARCH_STEP) return { refine: (envelope) => (expectedFromEnvelope(envelope).nothingToCite ? { texts: [ABSENCE_NOTE] } : {}) };
+  return {};
+}
+
+/** How many of the event log's events journey J8 verifies by permalink on a real mount: a population log holds thousands. */
+export const REAL_MOUNT_EVENTS_VERIFIED = 25;
+
+/** What a journey answered at the API alone stands as, among the browser runs: no page, no request, no citation. */
+const API_ONLY_OBSERVED = Object.freeze({ answerState: "api", requests: [], console: [], hydrated: null, verifications: [], paint: null });
+
+/**
+ * The real mount's journeys: each step through the browser (`realMountSteps`), then journeys J6, J7 and J8 at the
+ * API of the same kind of server (`apiJourneyRuns`), J8 verifying the first `REAL_MOUNT_EVENTS_VERIFIED` events'
+ * permalinks. Returns `[label, { observed, failures }]` pairs; an API journey's `observed` is `API_ONLY_OBSERVED`.
+ */
 export async function realMountRuns(apiOutput, mount, options, browser, liveRoot) {
   const report = JSON.parse(await readFile(join(mount, "build-report.json"), "utf8"));
   const runs = [];
   for (const [name, step] of realMountSteps(report)) {
     const digests = name === "coverage" ? { corpusSha256: report.corpus.Sha256, indexSha256: report.luxembourgIndex.Sha256 } : {};
-    runs.push([`${name}, with the real mount`, await run(apiOutput, mount, { ...options, step, fromApi: true, ...digests }, browser, liveRoot)]);
+    runs.push([`${name}, with the real mount`, await run(apiOutput, mount, { ...options, step, fromApi: true, ...digests, ...realMountExpectations(step) }, browser, liveRoot)]);
+  }
+  for (const [label, failures] of await apiJourneyRuns(apiOutput, mount, { startServer: options.startServer, eventsToVerify: REAL_MOUNT_EVENTS_VERIFIED })) {
+    runs.push([`${label}, with the real mount`, { observed: API_ONLY_OBSERVED, failures }]);
   }
   return runs;
 }
@@ -1018,6 +1053,9 @@ export const EARLY_READING_STEP = Object.freeze({
   }),
 });
 
+/** What a page says beside an absence it reports (J2's no hit, J5's law not held): absence in this build is not absence in law. */
+export const ABSENCE_NOTE = "It is not evidence that the instrument or the law does not exist.";
+
 /** Journey J2: a citizen's question searched as typed, which no held article carries. */
 export const NO_HIT_PHRASE = "combien de jours de congé j'ai le droit quand mon père est décédé";
 export const NO_HIT_SEARCH_STEP = Object.freeze({
@@ -1049,7 +1087,7 @@ export const UNKNOWN_LAW_STEP = Object.freeze({
  *   build searched and the same absence note.
  */
 export function specificationJourneyExpectations() {
-  const absence = "It is not evidence that the instrument or the law does not exist.";
+  const absence = ABSENCE_NOTE;
   return [
     ["J1, a date before the history", { step: EARLY_READING_STEP, state: "refusal", refusalCode: "no_version_for_date", texts: ["No earlier state is held: the requested date precedes this history.", "2024-02-01"] }],
     ["J2, a question no article carries", { step: NO_HIT_SEARCH_STEP, state: "success", nothingToCite: true, texts: ["0 with the exact phrase, 0 with every word, in 0 works.", absence] }],
@@ -1140,9 +1178,10 @@ async function postJson(url, body) {
  * Journey J8, monitoring, at the API: the event log polled as a client polls it, as failures. The same
  * request answers the same events (the log is append-only); from its own `next_after` it answers nothing more;
  * a cursor from another log is refused `snapshot_unknown`, never read as this log's; every event's permalink
- * verifies; and `answer_drift` on a genesis log names no invalidated answer and asserts no absence of drift.
+ * verifies (the first `verifyAtMost` of the first page, on a real mount whose log holds thousands); and
+ * `answer_drift` on a genesis log names no invalidated answer and asserts no absence of drift.
  */
-export async function eventsFailures(origin) {
+export async function eventsFailures(origin, { verifyAtMost = Number.POSITIVE_INFINITY } = {}) {
   const failures = [];
   const ask = (operation, parameters) => postJson(`${origin}/api/v3/${operation}`, { operation_id: operation, parameters });
   const first = await ask("events", {});
@@ -1151,7 +1190,7 @@ export async function eventsFailures(origin) {
     failures.push(`events answered no event list: ${JSON.stringify(first.json).slice(0, 200)}`);
     return failures;
   }
-  if (value.events.length === 0) failures.push("the fixture mount's log holds no event to poll");
+  if (value.events.length === 0) failures.push("the mount's log holds no event to poll (a mount that holds no Luxembourg state cannot show journey J8)");
   const again = await ask("events", {});
   const repeated = firstDifference(withoutRequestFields(first.json), withoutRequestFields(again.json));
   if (repeated !== null) failures.push(`the same events request answered differently, first at ${repeated}`);
@@ -1164,7 +1203,7 @@ export async function eventsFailures(origin) {
   }
   const foreign = await ask("events", { after: `${"0".repeat(64)}:1` });
   if (foreign.json?.refusal?.code !== "snapshot_unknown") failures.push(`a cursor from another log answered ${foreign.json?.refusal?.code ?? foreign.json?.verdict}, not snapshot_unknown`);
-  for (const event of value.events) {
+  for (const event of value.events.slice(0, verifyAtMost)) {
     const checked = await ask("verify", { identifier: event.permalink });
     if (checked.json?.result?.value?.verdict !== "digest_matches") failures.push(`event ${event.seq}'s permalink ${event.permalink} does not verify`);
   }
@@ -1208,12 +1247,13 @@ export function askCardFailures(envelope) {
 }
 
 /**
- * Journeys J6, J7 and J8 at the API, against one API process over the mount: `ask` answered as the contained
- * assistant's card; each page request, and ask, events and answer drift, through REST and MCP; then the event log
- * polled. Returns `[name, failures]` pairs.
+ * Journeys J6, J7 and J8 at the API, against one API process over the mount, or the server `startServer` starts
+ * (the release image, a deployed revision): `ask` answered as the contained assistant's card; each page request,
+ * and ask, events and answer drift, through REST and MCP; then the event log polled, verifying at most
+ * `eventsToVerify` permalinks. Returns `[name, failures]` pairs.
  */
-export async function apiJourneyRuns(apiOutput, mount) {
-  const api = await startApi(apiOutput, mount);
+export async function apiJourneyRuns(apiOutput, mount, { startServer = null, eventsToVerify = Number.POSITIVE_INFINITY } = {}) {
+  const api = startServer ? await startServer() : await startApi(apiOutput, mount);
   try {
     const results = [];
     const ask = { operation_id: "ask", parameters: { question: ADVICE_QUESTION } };
@@ -1225,7 +1265,7 @@ export async function apiJourneyRuns(apiOutput, mount) {
       });
       results.push([`J7, ${body.operation_id} ${JSON.stringify(body.parameters)} through REST and MCP`, envelopeIdentityFailures(rest, mcp)]);
     }
-    results.push(["J8, the event log polled and answer drift", await eventsFailures(api.origin)]);
+    results.push(["J8, the event log polled and answer drift", await eventsFailures(api.origin, { verifyAtMost: eventsToVerify })]);
     return results;
   } finally {
     await api.close();

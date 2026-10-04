@@ -32,6 +32,12 @@ import {
   pinnedCitation,
   pageRequestBodies,
   realMountSteps,
+  realMountExpectations,
+  REAL_MOUNT_EVENTS_VERIFIED,
+  ABSENCE_NOTE,
+  UNKNOWN_LAW_STEP,
+  eventsFailures,
+  apiJourneyRuns,
   specificationJourneyExpectations,
   twoStateExpectations,
   europeAnnexExpectations,
@@ -523,9 +529,11 @@ test("the EU search step names the GDPR by its CELEX, chooses English and is hel
   assert.ok(!Object.values(JOURNEY_STEPS).includes(EU_SEARCH_STEP), "not one of the eight steps every mount runs: it needs an EU index");
 
   const report = { corpus: { Sha256: "a".repeat(64) }, luxembourgIndex: { Sha256: "b".repeat(64) } };
-  assert.deepEqual(realMountSteps(report).map(([name]) => name), Object.keys(JOURNEY_STEPS), "a real mount without an EU index runs the eight");
+  const specification = ["J2, a question no article carries", "J5, a law not held"];
+  assert.deepEqual(realMountSteps(report).map(([name]) => name), [...Object.keys(JOURNEY_STEPS), ...specification],
+    "a real mount without an EU index runs the eight, then J2 and J5");
   const withEurope = realMountSteps({ ...report, europeIndex: { Sha256: "c".repeat(64) } });
-  assert.deepEqual(withEurope.map(([name]) => name), [...Object.keys(JOURNEY_STEPS), "eu search", "eu dossier", "eu reading"],
+  assert.deepEqual(withEurope.map(([name]) => name), [...Object.keys(JOURNEY_STEPS), ...specification, "eu search", "eu dossier", "eu reading"],
     "and one with an EU index runs the EU search, dossier and reading too");
   assert.equal(withEurope.at(-3)[1], EU_SEARCH_STEP);
   assert.equal(withEurope.at(-2)[1], EU_DOSSIER_STEP);
@@ -765,4 +773,93 @@ test("on the EU annex control mount the export composer pins both articles and s
   assert.ok(journeyVerdict({ ...observed, html: '<pre>{"text": "Hambali"}</pre>' }, expected).includes('the page\'s markup carries withheld text "Hambali"'), "the annex's text in the JSON shown");
   assert.ok(journeyVerdict({ ...observed, then: "clicked" }, expected).some((failure) => /never showed \[data-export-state=composed\] \[data-export-annexes\]/.test(failure)), "no annex listed");
   assert.ok(journeyVerdict({ ...observed, text: observed.text.replace("Save as PDF", "") }, expected).includes('the page does not show "Save as PDF"'), "no PDF offered");
+});
+
+test("on a real mount J5 must refuse identifier_unknown with the absence note whatever the API answers, and J2 says the note only when nothing was found", () => {
+  const steps = Object.fromEntries(realMountSteps({ corpus: {}, luxembourgIndex: {} }).map(([name, step]) => [name.slice(0, 2), step]));
+  const j5 = realMountExpectations(steps.J5);
+  assert.equal(steps.J5, UNKNOWN_LAW_STEP);
+  for (const envelope of [{ verdict: "refuse", refusal: { code: "identifier_unknown" } }, { verdict: "answer", result: { value: {} } }]) {
+    assert.deepEqual(j5.refine(envelope), { state: "refusal", refusalCode: "identifier_unknown", texts: [ABSENCE_NOTE] },
+      "an answer to a law the corpus does not hold would be the defect, so the page is held to the refusal regardless");
+  }
+  const j2 = realMountExpectations(steps.J2);
+  assert.equal(steps.J2, NO_HIT_SEARCH_STEP);
+  assert.deepEqual(j2.refine({ verdict: "answer", result: { value: { hits: [] } } }), { texts: [ABSENCE_NOTE] });
+  assert.deepEqual(j2.refine({ verdict: "answer", result: { value: { hits: [{ id: 1 }] } } }), {},
+    "a population that does carry the words answers hits, held like any search");
+  assert.deepEqual(realMountExpectations(JOURNEY_STEPS.search), {}, "the eight steps are held to the API's outcome alone");
+});
+
+/** A stand-in API answering events, verify and answer_drift as a genesis log of `count` events does, counting verify requests. */
+async function eventLogServer(count) {
+  const { createServer } = await import("node:http");
+  const logId = "e".repeat(64);
+  const events = Array.from({ length: count }, (_, index) => ({ seq: index + 1, permalink: `/lu-legilux/w${index}/2024-02-01--${"f".repeat(64)}` }));
+  let verified = 0;
+  const server = createServer((request, response) => {
+    let text = "";
+    request.on("data", (chunk) => { text += chunk; });
+    request.on("end", () => {
+      const { operation_id: operation, parameters = {} } = JSON.parse(text || "{}");
+      let body;
+      if (operation === "events" && parameters.after === `${"0".repeat(64)}:1`) body = { verdict: "refuse", refusal: { code: "snapshot_unknown" } };
+      else if (operation === "events" && parameters.after === `${logId}:${count + 1}`) body = { verdict: "answer", result: { value: { events: [], has_more: false, next_after: `${logId}:${count + 1}` } } };
+      else if (operation === "events") body = { verdict: "answer", result: { value: { events, has_more: false, next_after: `${logId}:${count + 1}` } } };
+      else if (operation === "verify") {
+        verified += 1;
+        body = { verdict: "answer", result: { value: { verdict: "digest_matches" } } };
+      } else if (operation === "answer_drift") body = { verdict: "answer", result: { value: { invalidated_answers: [], asserts_no_drift_in_law: false } } };
+      else body = { verdict: "refuse", refusal: { code: "operation_unknown" } };
+      response.writeHead(200, { "content-type": "application/json" });
+      response.end(JSON.stringify(body));
+    });
+  });
+  await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+  return {
+    origin: `http://127.0.0.1:${server.address().port}`,
+    verified: () => verified,
+    close: () => new Promise((resolve) => server.close(resolve)),
+  };
+}
+
+test("journey J8 on a real mount verifies a bounded number of the log's permalinks, and an empty log cannot show the journey", async () => {
+  const population = await eventLogServer(REAL_MOUNT_EVENTS_VERIFIED + 40);
+  try {
+    assert.deepEqual(await eventsFailures(population.origin, { verifyAtMost: REAL_MOUNT_EVENTS_VERIFIED }), []);
+    assert.equal(population.verified(), REAL_MOUNT_EVENTS_VERIFIED, "a population log holds thousands of events; the journey verifies the first few");
+    assert.deepEqual(await eventsFailures(population.origin), []);
+    assert.equal(population.verified(), REAL_MOUNT_EVENTS_VERIFIED + REAL_MOUNT_EVENTS_VERIFIED + 40, "the fixture mount's log is verified whole, as before");
+  } finally {
+    await population.close();
+  }
+  const empty = await eventLogServer(0);
+  try {
+    const failures = await eventsFailures(empty.origin, { verifyAtMost: REAL_MOUNT_EVENTS_VERIFIED });
+    assert.ok(failures.some((failure) => /holds no event to poll.*cannot show journey J8/.test(failure)), failures.join("; "));
+  } finally {
+    await empty.close();
+  }
+});
+
+test("the API journeys run against the server the caller starts (the release image, a deployed revision) and close it", async () => {
+  const server = await eventLogServer(3);
+  let started = 0;
+  let closed = 0;
+  try {
+    const results = await apiJourneyRuns(null, null, {
+      startServer: async () => {
+        started += 1;
+        return { origin: server.origin, close: async () => { closed += 1; } };
+      },
+      eventsToVerify: 2,
+    });
+    assert.equal(started, 1);
+    assert.equal(closed, 1);
+    assert.deepEqual(results.map(([name]) => name.slice(0, 2)).filter((name, index, all) => all.indexOf(name) === index), ["J6", "J7", "J8"]);
+    assert.deepEqual(results.at(-1)[1], [], "J8 against the stand-in log passes");
+    assert.equal(server.verified(), 2, "and verified the two permalinks it was allowed");
+  } finally {
+    await server.close();
+  }
 });
