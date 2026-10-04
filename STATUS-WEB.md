@@ -1,6 +1,6 @@
 # Lex V3 status: the web lane
 
-Updated 2026-10-03. The web lane's progress, split out of STATUS.md (which keeps the heads, the owner's open
+Updated 2026-10-04. The web lane's progress, split out of STATUS.md (which keeps the heads, the owner's open
 items and the pointers) by the standing order of 2026-10-01 13:50 UTC. Every pull request of the web lane
 updates this file, not STATUS.md.
 
@@ -53,7 +53,10 @@ below:
   - CI: #899's two-process tests, and the release command's `derive-twice.test.mjs` (#911).
   - The image: two builds give one manifest (#826; the bounded mount's rehearsal). That is image reproducibility,
     over an already-derived mount.
-  - Waits: the complete populations' two derives. EU run 9 derives twice and compares when its acquisition ends.
+  - CI (2026-10-04): the release command's custody path derives twice with this commit's own tool, over fixture custody,
+    and both processes reproduce the live build's files (below, Release path).
+  - Waits: the complete populations' two derives. The EU population run derives twice and compares when its
+    acquisition ends.
 
 **Surface at launch**
 - **All 27 operations served or refusing with a typed reason the manifest states:** Luxembourg, and EU (#913).
@@ -95,8 +98,9 @@ below:
   - Waits: the deployment. The Azure subscription is disabled.
 
 **Data at launch**
-- **The complete EU population, English and French:** EU run 9, acquiring since 2026-10-02 22:17 UTC.
-- **The Luxembourg population:** follows run 9, one run after the other (`claude-lu-population-run.ps1`).
+- **The complete EU population, English and French:** EU run 14, acquiring since 2026-10-04 08:55 UTC on the resumable
+  tool (#924). Runs 9 to 13 stopped before the end, and their custody is kept (STATUS-DATA.md).
+- **The Luxembourg population:** follows the EU run, one run after the other (`claude-lu-population-run.ps1`).
 - **Robots read per URL; the rights receipt fetched once per build on the Publications Office route; no request to
   eur-lex.europa.eu; transport bytes retained before decode:** by construction in the acquisition (STATUS-DATA.md).
 
@@ -106,9 +110,21 @@ below:
     job, on push, and passed on the bounded mount (#862).
   - With its probes, a rehearsal on the bounded mount now fails journey J8 (its log holds no event; #926). Its
     rehearsal of record is #862's.
-  - **Gap.** The release command's custody path (`--custody`, #911: derive twice from custody, compare every digest,
-    then build, sign and publish) has run only against a stand-in derive tool, in `derive-twice.test.mjs`.
-  - Waits: the populations' custody for its real run, and the owner's production signing identity.
+  - The custody path (`--custody`, #911: derive twice from custody, compare every digest, then build, sign and publish)
+    now runs end to end in the same job, with this commit's own derive tool (2026-10-04):
+    - **The custody.** `V3_WRITE_RELEASE_CUSTODY` writes the fixture acquisition of both publishers, in the shapes the
+      populations take: the EU original and consolidated wordings, and the Luxembourg legislative population scope. It
+      is held brotli-encoded, with its derive checkpoint and the file digests of the mount the live build writes from
+      the same acquisitions.
+    - **The tool.** It is laid out as the CI runtime artifact is, so the release command binds it to the checkout.
+    - **The derivation.** Two `Lex.V3.Tool derive` processes must agree file for file. Their files must equal the live
+      build's, and nothing may reach the proxy-variable trap.
+    - **The image.** The image is then built twice and must be identical. It is verified, rehearsal-signed, published
+      and read back.
+    - **The card over that mount.** Locally, on 2026-10-04, its gates passed: the three EU `as_of` arms (6 cases each,
+      shuffles caught), the refusal set and the retrieval set (26 cases). The two Luxembourg temporal arms are not
+      measured, because the fixture's population scope holds no Luxembourg state.
+  - Waits: the populations' custody for the real run, and the owner's production signing identity.
 - **Zero-traffic deploy, probes, promotion, a second revision, rollback, V2 retired:** wait for Azure.
 - **Owner sign-off:** the owner's.
 
@@ -125,8 +141,8 @@ below:
 **Gaps this table found (the review of #922):**
 1. Done (2026-10-04): a population-mount mode for J2, J5, J6, J7 and J8's events. It runs when the population mount
    exists.
-2. Next: the release command's custody path, end to end with the real derive tool, once the populations' custody
-   exists.
+2. Done in CI (2026-10-04) over fixture custody: the release command's custody path, end to end with this commit's own
+   derive tool. The run on the populations' custody waits for that custody.
 
 ## Served today
 
