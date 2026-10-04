@@ -9,7 +9,7 @@ namespace Lex.V3.Contracts.Platform;
 /// capability manifest states": the EU index builder states this table in every EU capability manifest it writes, beside
 /// <see cref="V3UnservedOperations"/>, the API's <c>coverage</c> answer reports the mounted EU manifest's statement, and the
 /// API's tests hold each row to the refusal an EU identifier receives. An operation the EU time view serves for an EU act
-/// (<c>as_of</c>, <c>timeline</c>, <c>evidence_bundle</c>, <c>verify</c> of a pinned EU permalink, <c>dossier</c>,
+/// (<c>as_of</c>, <c>timeline</c>, <c>evidence_bundle</c>, <c>diff</c>, <c>verify</c> of a pinned EU permalink, <c>dossier</c>,
 /// <c>search</c> in one EU work, <c>resolve</c>) never appears here.
 /// </summary>
 public static class V3EuropeRefusedOperations
@@ -53,11 +53,6 @@ public static class V3EuropeRefusedOperations
             V3UnservedOperation.RetrievalModeUnavailable,
             "the Publications Office's typed facts about an EU work (resource type, author, form and dates), verbatim, as an index " +
             "field; the census retains a few of them per discovered work, and this build does not serve them as a classification"),
-        new V3UnservedOperation(
-            "diff",
-            V3UnservedOperation.RetrievalModeUnavailable,
-            "two dated wordings of an EU act compared article by article; each wording is held and served with its digests (as_of, " +
-            "evidence_bundle), and this build does not derive the comparison"),
         new V3UnservedOperation(
             "in_force_on",
             V3UnservedOperation.RetrievalModeUnavailable,

@@ -28,7 +28,6 @@ public sealed partial class V3FirstMountBuildTests
         ["citation"] = new { identifier = GdprSeed, date = "2025-03-01", language = "eng" },
         ["cited_by"] = new { identifier = GdprSeed },
         ["classification"] = new { identifier = GdprSeed, language = "eng" },
-        ["diff"] = new { identifier = GdprSeed, date_from = "2018-05-25", date_to = "2025-03-01", language = "eng" },
         ["in_force_on"] = new { identifier = GdprSeed, date = "2025-03-01", language = "eng" },
         ["manifestation"] = new { identifier = GdprSeed, language = "eng" },
         ["provenance"] = new { identifier = GdprSeed, date = "2025-03-01", language = "eng" },
@@ -80,6 +79,7 @@ public sealed partial class V3FirstMountBuildTests
                 ("as_of", new { identifier = GdprSeed, date = "2025-03-01", language = "eng" }),
                 ("timeline", new { identifier = GdprSeed, language = "eng" }),
                 ("evidence_bundle", new { identifier = GdprSeed, date = "2025-03-01", language = "eng" }),
+                ("diff", new { identifier = GdprSeed, date_from = "2018-05-25", date_to = "2025-03-01", language = "eng" }),
                 ("verify", new { identifier = permalink }),
                 ("dossier", new { identifier = GdprSeed }),
                 ("search", new { query = "personal data", language = "eng", identifier = GdprSeed }),
@@ -192,7 +192,7 @@ public sealed partial class V3FirstMountBuildTests
             var indexSha256 = Convert.ToHexStringLower(SHA256.HashData(await File.ReadAllBytesAsync(Path.Combine(directory, V3CorpusMount.EuropeIndexFileName))));
             var mounted = V3IndexCapabilityManifestArtifact.ParseAndVerify(
                 new SourceArtifactRef(LexCorpus6Builder.ResourceIdOf(digest), digest), bytes, PublisherId.EuEurLex, indexSha256);
-            Assert.HasCount(16, mounted.NotServed, "a current build states the 3 unserved operations and the 13 EU refusals");
+            Assert.HasCount(15, mounted.NotServed, "a current build states the 3 unserved operations and the 12 EU refusals");
             Assert.IsTrue(V3IndexCapabilityManifest.TryCreate(
                 PublisherId.EuEurLex, indexSha256, mounted.Cells, V3UnservedOperations.Rows, out var earlier, out var refusal), refusal.ToString());
             using (var stream = File.Create(path))
@@ -206,7 +206,7 @@ public sealed partial class V3FirstMountBuildTests
             Assert.AreEqual(0, operations.GetProperty("refused_for_eu").GetArrayLength(),
                 "coverage reports what the mounted manifest states, not the platform's table");
             // The API refuses as it does on any mount; only the statement is missing.
-            var refused = await EnvelopeAsync(mount, "/api/v3/diff", "diff", EuropeRefusedRequests["diff"]);
+            var refused = await EnvelopeAsync(mount, "/api/v3/in_force_on", "in_force_on", EuropeRefusedRequests["in_force_on"]);
             Assert.AreEqual("retrieval_mode_unavailable", refused.Refusal?.Code);
         }
         finally

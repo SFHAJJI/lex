@@ -3034,6 +3034,18 @@ internal sealed partial class V3CorpusMount : IDisposable
             }
         }
 
+        // An EU act whose census the EU index holds is compared by the EU time view (V3CorpusMount.EuropeDiff.cs), as as_of
+        // answers it; an EU identifier it does not hold is unknown there.
+        if (LocateEuropeSeedForTime(request, identifier, observedAt, out var europeSeed) is { } refusedEurope)
+        {
+            return refusedEurope;
+        }
+
+        if (europeSeed is not null)
+        {
+            return DiffEurope(request, identifier, europeSeed, dateFrom, dateTo, requestedLanguage, observedAt);
+        }
+
         if (RefuseUnlessWorkStates(request, identifier, observedAt, "r6_diff", requestedLanguage,
                 out var states, out var availableLanguages) is { } refused)
         {
