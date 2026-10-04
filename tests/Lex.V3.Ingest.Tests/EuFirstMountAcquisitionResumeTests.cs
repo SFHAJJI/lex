@@ -99,6 +99,9 @@ public sealed partial class EuFirstMountAcquisitionTests
             var resumption = europe.Resumption ?? throw new AssertFailedException("A resumed population says so in its catalog.");
             Assert.AreEqual(resume.JournalSha256, resumption.JournalSha256);
             Assert.AreEqual(resume.LastSeq, resumption.LastSeq);
+            Assert.AreEqual(1, resumption.PreviousRuns);
+            Assert.AreEqual(resume.StartedAt, resumption.PreviousStartedAt);
+            Assert.AreEqual(resume.LastJournaledAt, resumption.PreviousLastJournaledAt);
             CollectionAssert.AreEqual(
                 new[]
                 {
@@ -145,7 +148,7 @@ public sealed partial class EuFirstMountAcquisitionTests
             var report = await File.ReadAllTextAsync(Path.Combine(expected, "build-report.json"));
             StringAssert.Contains(report, "\"resumedFrom\"");
             StringAssert.Contains(report, resume.JournalSha256);
-            StringAssert.Contains(report, "It was not observed in one window.");
+            StringAssert.Contains(report, "This population was not observed in one window.");
 
             var first = Path.Combine(root, "derive-a");
             var second = Path.Combine(root, "derive-b");

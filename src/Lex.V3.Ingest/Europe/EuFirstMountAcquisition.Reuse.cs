@@ -12,10 +12,17 @@ public sealed partial class EuFirstMountAcquisition
     /// before the first publisher request.
     /// </summary>
     /// <remarks>
+    /// <para>
     /// A population acquired across an interruption keeps saying so: the renewed catalog carries the
-    /// reused catalog's resumption forward. A resumed build that reuses a population without one (the
-    /// catalog its interrupted run journaled, or a retained catalog it names) records its own, so a
-    /// mount it builds never reads as observed in one window.
+    /// reused catalog's resumption forward, and with it the windows of the runs that observed it.
+    /// </para>
+    /// <para>
+    /// A resumed build records a resumption of its own for the EU half only when the interrupted run
+    /// acquired that population itself and journaled its catalog: the population was then observed in the
+    /// interrupted run's window, not in this build's. When the interrupted run only renewed a retained
+    /// population this build also names, the EU half was observed by the run that acquired it, as that
+    /// catalog states, and the interruption belongs to the other half's resumption alone.
+    /// </para>
     /// </remarks>
     public async Task<EuFirstMountAcquisitionResult> ReuseAsync(SourceArtifactRef checkpoint,
         IReadOnlyList<string> expectedSeeds, ReadOnlyMemory<byte> currentDocumentFetchSource,
@@ -42,12 +49,11 @@ public sealed partial class EuFirstMountAcquisition
                 $"{rights.Refusal}: {rights.Detail}", original.Run, original.Formex);
         try
         {
-            var journaled = _replay?.Catalog == checkpoint;
-            var resumption = original.Resumption ?? _resume?.Summarize(
-                journaled
-                    ? new[] { new AcquisitionResumedPhase(AcquisitionJournal.EuropeCatalogPhase, 1, 0) }
-                    : Array.Empty<AcquisitionResumedPhase>(),
-                wireBudget.Spent, _timeProvider.GetUtcNow());
+            var observedByInterruptedRun = _replay is not null && _replay.Catalog == checkpoint && _replay.CatalogAcquiredByInterruptedRun;
+            var resumption = original.Resumption ?? (observedByInterruptedRun
+                ? _resume!.Summarize([new AcquisitionResumedPhase(AcquisitionJournal.EuropeCatalogPhase, 1, 0)],
+                    wireBudget.Spent, _timeProvider.GetUtcNow())
+                : null);
             var renewed = await RetainAcquisitionAsync(seeds, sources, original.Run!, original.Formex!, rights,
                 resumption, cancellationToken).ConfigureAwait(false);
             if (_journal is not null)

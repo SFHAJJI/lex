@@ -69,7 +69,8 @@ public sealed partial class EuFirstMountAcquisition
 
                 resume.Settle(AcquisitionJournal.EuropeFormexEnumerationPhase);
                 resume.Settle(AcquisitionJournal.EuropeFormexPackagePhase);
-                _replay = new ResumeReplay(null, new EuFormexPopulationProgress(_journal), journaled);
+                _replay = new ResumeReplay(null, new EuFormexPopulationProgress(_journal), journaled,
+                    catalogAcquiredByInterruptedRun: retainedCheckpoint is null);
                 return journaled;
             }
 
@@ -90,7 +91,7 @@ public sealed partial class EuFirstMountAcquisition
             // unit without the adapter run it belongs to.
             resume.RequireTaken(AcquisitionJournal.EuropeAdapterPhase, AcquisitionJournal.EuropeFormexEnumerationPhase,
                 AcquisitionJournal.EuropeFormexPackagePhase);
-            _replay = new ResumeReplay(run, progress, null);
+            _replay = new ResumeReplay(run, progress, null, catalogAcquiredByInterruptedRun: false);
             return null;
         }
         catch (Exception exception) when (exception is ArgumentException or JsonException or DecoderFallbackException)
@@ -101,14 +102,18 @@ public sealed partial class EuFirstMountAcquisition
 
     /// <summary>
     /// What a resumed acquisition reopened before its first request: the journaled adapter run, the Formex units the
-    /// population walk takes, and the journaled catalog when the interrupted run got that far.
+    /// population walk takes, and the journaled catalog when the interrupted run got that far, with whether the
+    /// interrupted run acquired that population itself or only renewed a retained one this invocation also names.
     /// </summary>
-    private sealed class ResumeReplay(EuQueryExecutionResult? run, EuFormexPopulationProgress formex, SourceArtifactRef? catalog)
+    private sealed class ResumeReplay(EuQueryExecutionResult? run, EuFormexPopulationProgress formex, SourceArtifactRef? catalog,
+        bool catalogAcquiredByInterruptedRun)
     {
         internal EuQueryExecutionResult? Run { get; } = run;
 
         internal EuFormexPopulationProgress Formex { get; } = formex;
 
         internal SourceArtifactRef? Catalog { get; } = catalog;
+
+        internal bool CatalogAcquiredByInterruptedRun { get; } = catalogAcquiredByInterruptedRun;
     }
 }

@@ -64,16 +64,24 @@ public sealed record AcquisitionJournalRenderer(string File, SourceArtifactRef R
 public sealed record AcquisitionJournalContinuation(string JournalSha256, long LastSeq, SourceArtifactRef Record);
 
 /// <summary>
-/// What a catalog retained by a resumed run says about the resumption: the resume record and the interrupted run's
-/// window and spend it states, then, for the half the catalog describes, how many units of each phase were replayed
+/// What a catalog retained by a resumed run says about the resumption: the resume record and the window and spend of
+/// the earlier runs it states, then, for the half the catalog describes, how many units of each phase were replayed
 /// from the interrupted run's journal and how many were acquired live, with this run's wire spend and time when the
-/// catalog was retained. The report of a mount built from such a catalog says all of it.
+/// catalog was retained. The report of a mount built from such a catalog says all of it, half by half.
 /// </summary>
 /// <remarks>
-/// A resumed population was observed in two windows, and nothing here may suggest one. The replayed units were observed
-/// by the interrupted run, between <see cref="PreviousStartedAt"/> and <see cref="PreviousLastJournaledAt"/>; the live
-/// ones by this run, after <see cref="ResumedAt"/>. The interrupted run's spend is known only as a range: at least what
-/// its last journaled line recorded, at most its ceiling.
+/// <para>
+/// A resumed population was observed in more than one window, and nothing here may suggest one. The replayed units were
+/// observed by the earlier runs, between <see cref="PreviousStartedAt"/> and <see cref="PreviousLastJournaledAt"/>; the
+/// live ones by this run, after <see cref="ResumedAt"/>. The earlier runs' spend is known only as a range: at least what
+/// their last journaled lines recorded, at most their ceilings.
+/// </para>
+/// <para>
+/// THE EARLIER RUNS ARE EVERY RUN OF THE CHAIN. A run interrupted while it was itself resuming re-journals the units it
+/// replayed under its own lines, so its journal alone would date them to its own window. Its resume record states the
+/// runs before it, and a resume of its journal folds them in: <see cref="PreviousRuns"/> counts them, the window starts
+/// at the first one's start and ends at the interrupted run's last line, and the spend bounds are their sums.
+/// </para>
 /// </remarks>
 public sealed record AcquisitionResumption(
     SourceArtifactRef Record,
@@ -83,6 +91,7 @@ public sealed record AcquisitionResumption(
     DateTimeOffset PreviousLastJournaledAt,
     int PreviousWireSpentAtLeast,
     int PreviousWireCeiling,
+    int PreviousRuns,
     DateTimeOffset ResumedAt,
     AcquisitionResumedPhase[] Phases,
     int WireSpent,
@@ -330,6 +339,13 @@ public sealed class AcquisitionJournal : IAcquisitionJournal, IAsyncDisposable
 /// recorded, at most the ceiling its header names. The requests it made after its last line, the unit in flight among
 /// them, lie between those bounds; neither run's report counts them exactly.
 /// </para>
+/// <para>
+/// A journal written by a run that was itself resuming names the resume record of the run before it. That record is read
+/// back and must describe the journal the header names, under the same source and arguments; the runs it states join
+/// this one's in the window and spend the resumed run reports (<see cref="AcquisitionResumption"/>). Only this journal's
+/// units are replayed: a unit an earlier journal named that the interrupted resume never reached again is acquired
+/// again, and its earlier objects stay in custody, unreferenced.
+/// </para>
 /// </remarks>
 public sealed class AcquisitionResume
 {
@@ -338,6 +354,7 @@ public sealed class AcquisitionResume
     private readonly byte[] _journal;
     private readonly Dictionary<(string Phase, string Key), Entry> _entries = new();
     private readonly HashSet<string> _held = new(StringComparer.Ordinal);
+    private EarlierRuns? _earlier;
 
     /// <summary>Reads and verifies <paramref name="journal"/>'s lines. Throws <see cref="CustodyIntegrityException"/> on any fault.</summary>
     public AcquisitionResume(ReadOnlyMemory<byte> journal)
@@ -454,18 +471,22 @@ public sealed class AcquisitionResume
 
     /// <summary>
     /// Holds the journal's exact bytes and the <c>lex-v3-acquisition-resume/1</c> record that names them, the window and
-    /// spend the interrupted run states, and the time this run resumed.
+    /// spend of the earlier runs (the interrupted run, and the runs before it when it was itself resuming), and the time
+    /// this run resumed.
     /// </summary>
     public async Task<SourceArtifactRef> RetainAsync(ICustodyStore store, TimeProvider timeProvider, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(store);
         ArgumentNullException.ThrowIfNull(timeProvider);
+        var earlier = await EarlierRunsAsync(store, cancellationToken).ConfigureAwait(false);
         var (journalReceipt, journalFailure) = await CustodyHold.TryHoldAsync(store, _journal, cancellationToken).ConfigureAwait(false);
         if (journalReceipt is null) throw new CustodyRequiredException("The interrupted run's journal cannot be held: " + journalFailure);
         if (journalReceipt.Reference.ContentSha256 != JournalSha256 || journalReceipt.Reference.ByteLength != _journal.Length)
             throw new CustodyIntegrityException("The interrupted run's journal receipt names different bytes.");
         var record = new ResumeRecord(RecordSchema, JournalSha256, _journal.Length, LastSeq, Header.Source, Header.Arguments,
-            StartedAt, LastJournaledAt, LastWireSpent, Header.WireCeiling, Header.ResumedFrom, timeProvider.GetUtcNow());
+            earlier.StartedAt, earlier.LastJournaledAt, earlier.WireSpentAtLeast, earlier.WireCeiling, earlier.Runs,
+            Header.ResumedFrom, timeProvider.GetUtcNow());
+        _earlier = earlier;
         var bytes = Encoding.UTF8.GetBytes(ContractJson.Serialize(record));
         var (receipt, failure) = await CustodyHold.TryHoldAsync(store, bytes, cancellationToken).ConfigureAwait(false);
         if (receipt is null) throw new CustodyRequiredException("The resume record cannot be held: " + failure);
@@ -546,10 +567,13 @@ public sealed class AcquisitionResume
     }
 
     /// <summary>What a catalog this resumed run retains says about the resumption, for the half it describes.</summary>
-    internal AcquisitionResumption Summarize(AcquisitionResumedPhase[] phases, int wireSpent, DateTimeOffset catalogedAt) =>
-        new(Record ?? throw new InvalidOperationException("A resumed run holds its resume record before its first request."),
-            JournalSha256, LastSeq, StartedAt, LastJournaledAt, LastWireSpent, Header.WireCeiling, ResumedAt,
-            phases, wireSpent, catalogedAt);
+    internal AcquisitionResumption Summarize(AcquisitionResumedPhase[] phases, int wireSpent, DateTimeOffset catalogedAt)
+    {
+        var record = Record ?? throw new InvalidOperationException("A resumed run holds its resume record before its first request.");
+        var earlier = _earlier!;
+        return new(record, JournalSha256, LastSeq, earlier.StartedAt, earlier.LastJournaledAt, earlier.WireSpentAtLeast,
+            earlier.WireCeiling, earlier.Runs, ResumedAt, phases, wireSpent, catalogedAt);
+    }
 
     /// <summary>
     /// Holds a catalog's resumption to the resume record it names: the record must be canonical, state the same journal,
@@ -562,7 +586,44 @@ public sealed class AcquisitionResume
         if (resumption.Record is null || resumption.Phases is null || resumption.WireSpent < 0 ||
             resumption.Phases.Any(static phase => phase is null || string.IsNullOrEmpty(phase.Phase) || phase.Replayed < 0 || phase.Live < 0))
             throw new CustodyIntegrityException("A catalog's resumption is not complete.");
-        var bytes = await CustodyRestore.ReadByDigestCheckedAsync(store, resumption.Record.Sha256, cancellationToken).ConfigureAwait(false);
+        var record = await ReadRecordAsync(store, resumption.Record.Sha256, cancellationToken).ConfigureAwait(false);
+        if (record.Journal != resumption.JournalSha256 || record.LastSeq != resumption.LastSeq ||
+            record.PreviousStartedAt != resumption.PreviousStartedAt || record.PreviousLastJournaledAt != resumption.PreviousLastJournaledAt ||
+            record.PreviousWireSpentAtLeast != resumption.PreviousWireSpentAtLeast || record.PreviousWireCeiling != resumption.PreviousWireCeiling ||
+            record.PreviousRuns != resumption.PreviousRuns || record.ResumedAt != resumption.ResumedAt)
+            throw new CustodyIntegrityException("A catalog's resumption is not what the resume record it names states.");
+    }
+
+    /// <summary>
+    /// The runs whose units this resume replays: the interrupted run alone, or, when its journal names the journal it was
+    /// itself resuming, every run before it as the resume record it names states them. That record must read back
+    /// canonical, name the journal and line the header names under the same source and arguments, and the journal it
+    /// names must be held.
+    /// </summary>
+    private async Task<EarlierRuns> EarlierRunsAsync(ICustodyStore store, CancellationToken cancellationToken)
+    {
+        var resumedFrom = Header.ResumedFrom;
+        if (resumedFrom is null)
+            return new EarlierRuns(StartedAt, LastJournaledAt, LastWireSpent, Header.WireCeiling, 1);
+        if (resumedFrom.Record is null || !CustodyDigest.IsLowercaseSha256(resumedFrom.JournalSha256))
+            throw new CustodyIntegrityException("The journal names the journal it resumed without its resume record.");
+        var record = await ReadRecordAsync(store, resumedFrom.Record.Sha256, cancellationToken).ConfigureAwait(false);
+        if (record.Journal != resumedFrom.JournalSha256 || record.LastSeq != resumedFrom.LastSeq ||
+            !string.Equals(record.Source, Header.Source, StringComparison.Ordinal) ||
+            !string.Equals(record.Arguments, Header.Arguments, StringComparison.Ordinal) || record.PreviousRuns < 1)
+            throw new CustodyIntegrityException("The resume record the journal names describes another journal or acquisition.");
+        return new EarlierRuns(
+            record.PreviousStartedAt < StartedAt ? record.PreviousStartedAt : StartedAt,
+            LastJournaledAt,
+            checked(record.PreviousWireSpentAtLeast + LastWireSpent),
+            checked(record.PreviousWireCeiling + Header.WireCeiling),
+            checked(record.PreviousRuns + 1));
+    }
+
+    /// <summary>A <c>lex-v3-acquisition-resume/1</c> record read back in its canonical form, with the journal it names held at the length it states.</summary>
+    private static async Task<ResumeRecord> ReadRecordAsync(ICustodyStore store, string sha256, CancellationToken cancellationToken)
+    {
+        var bytes = await CustodyRestore.ReadByDigestCheckedAsync(store, sha256, cancellationToken).ConfigureAwait(false);
         ResumeRecord record;
         try
         {
@@ -575,14 +636,10 @@ public sealed class AcquisitionResume
             throw new CustodyIntegrityException("The resume record does not read.", exception);
         }
 
-        if (record.Journal != resumption.JournalSha256 || record.LastSeq != resumption.LastSeq ||
-            record.PreviousStartedAt != resumption.PreviousStartedAt || record.PreviousLastJournaledAt != resumption.PreviousLastJournaledAt ||
-            record.PreviousWireSpentAtLeast != resumption.PreviousWireSpentAtLeast || record.PreviousWireCeiling != resumption.PreviousWireCeiling ||
-            record.ResumedAt != resumption.ResumedAt)
-            throw new CustodyIntegrityException("A catalog's resumption is not what the resume record it names states.");
         var journal = await CustodyRestore.ReadByDigestCheckedAsync(store, record.Journal, cancellationToken).ConfigureAwait(false);
         if (journal.Length != record.JournalLength)
             throw new CustodyIntegrityException("The resumed journal is held at another length than its record states.");
+        return record;
     }
 
     private static AcquisitionJournalHeader ReadHeader(AcquisitionJournal.Line line)
@@ -610,8 +667,16 @@ public sealed class AcquisitionResume
 
     private sealed record Entry(long Seq, JsonElement Payload);
 
+    /// <summary>The earlier runs a resume replays from: the first one's start, the interrupted run's last line, the summed spend bounds and how many runs.</summary>
+    private sealed record EarlierRuns(DateTimeOffset StartedAt, DateTimeOffset LastJournaledAt, int WireSpentAtLeast,
+        int WireCeiling, int Runs);
+
+    /// <summary>
+    /// The resume record. Its <c>Previous*</c> values describe every earlier run of the chain (<see cref="EarlierRuns"/>),
+    /// not only the journal it names, which <c>Journal</c>, <c>LastSeq</c> and <c>PreviousResumedFrom</c> identify.
+    /// </summary>
     private sealed record ResumeRecord(string Schema, string Journal, long JournalLength, long LastSeq, string Source,
         string Arguments, DateTimeOffset PreviousStartedAt, DateTimeOffset PreviousLastJournaledAt,
-        int PreviousWireSpentAtLeast, int PreviousWireCeiling, AcquisitionJournalContinuation? PreviousResumedFrom,
+        int PreviousWireSpentAtLeast, int PreviousWireCeiling, int PreviousRuns, AcquisitionJournalContinuation? PreviousResumedFrom,
         DateTimeOffset ResumedAt);
 }
