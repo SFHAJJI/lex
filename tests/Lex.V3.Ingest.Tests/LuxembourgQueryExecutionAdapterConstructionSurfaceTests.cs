@@ -727,6 +727,9 @@ public sealed class LuxembourgQueryExecutionAdapterConstructionSurfaceTests
                 "constructor public instance " + N + "LuxembourgQueryExecutionAdapter::.ctor("
                 + Custody + "ICustodyStore, " + N + "LuxembourgRepeatedEnumerationExecutor, "
                 + Contracts + "VerifiedLuxembourgSourceProfile) -> " + N + "LuxembourgQueryExecutionAdapter",
+                // The per-leaf journal callback holds the adapter whose journal it writes: a holder, not a door.
+                "field private instance " + N + "LuxembourgQueryExecutionAdapter+CoverLeafJournal::_adapter -> "
+                + N + "LuxembourgQueryExecutionAdapter",
             },
             ConstructionSurface.Of(typeof(LuxembourgQueryExecutionAdapter)).ToArray());
     }

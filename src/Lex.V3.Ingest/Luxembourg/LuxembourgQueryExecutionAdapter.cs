@@ -1599,8 +1599,13 @@ public sealed partial class LuxembourgQueryExecutionAdapter
 
             if (adaptive)
             {
-                var execution = await _executor.RunAdaptiveCoverAsync(
-                    partitionRequest, sourceWitness, wireBudget, cancellationToken, maximumLeafRows: 100_000).ConfigureAwait(false);
+                // A cover an interrupted run had begun goes on after the leaves it delivered, restored through their own
+                // checkpoints; each leaf this run delivers is journaled as it is retained.
+                var resumePoint = await TryResumeCoverLeavesAsync(partitionRequest, cancellationToken).ConfigureAwait(false);
+                var execution = await _executor.RunAdaptiveCoverAsync(partitionRequest, sourceWitness, wireBudget,
+                    cancellationToken, 100_000, resumePoint,
+                    Progress?.Journal is null ? null : new CoverLeafJournal(this, partitionRequest, cancellationToken).AppendAsync)
+                    .ConfigureAwait(false);
                 var reconciled = await ReconcileCoverAsync(partitionRequest, execution.Chain, execution.Results,
                     cancellationToken).ConfigureAwait(false);
                 if (reconciled.Legs is { } adaptiveLegs)

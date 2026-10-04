@@ -147,7 +147,7 @@ public static class LuxembourgPartitionCoverCheckpoint
         }
     }
 
-    private static async Task ValidateRangeAsync(ICustodyStore store, RepeatedEnumerationDeliveryReceipt receipt,
+    internal static async Task ValidateRangeAsync(ICustodyStore store, RepeatedEnumerationDeliveryReceipt receipt,
         LuxembourgQueryPartitionRange leaf, CancellationToken cancellationToken)
     {
         if (receipt.Delivery.PartitionKey != leaf.PartitionId)

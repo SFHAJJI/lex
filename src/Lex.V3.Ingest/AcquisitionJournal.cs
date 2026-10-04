@@ -145,6 +145,13 @@ public sealed class AcquisitionJournal : IAcquisitionJournal, IAsyncDisposable
     /// <summary>One proven Luxembourg query family (a partition or a reconciled cover), keyed by its partition id.</summary>
     internal const string LuxembourgQueryFamilyPhase = "lu-query-family";
 
+    /// <summary>
+    /// One leaf an adaptive cover delivered before its family was proven, keyed <c>family#index</c>: the chain's split
+    /// history then, the leaf, its enumeration checkpoint, and the run and profile it was proven under. A resume continues
+    /// the cover after the verified prefix of these rather than enumerating the family again from its first leaf.
+    /// </summary>
+    internal const string LuxembourgCoverLeafPhase = "lu-cover-leaf";
+
     /// <summary>One selected-document GET, keyed by its manifest ordinal and address digest.</summary>
     internal const string LuxembourgDocumentPhase = "lu-document";
 
@@ -288,7 +295,7 @@ public sealed class AcquisitionJournal : IAcquisitionJournal, IAsyncDisposable
     /// <summary>The unit phases this build writes and resumes. A journal naming any other phase does not resume here.</summary>
     internal static bool IsUnitPhase(string phase) => phase is EuropeAdapterPhase or EuropeFormexEnumerationPhase
         or EuropeFormexPackagePhase or EuropeCatalogPhase or LuxembourgScopePhase or LuxembourgVocabularyPhase
-        or LuxembourgQueryFamilyPhase or LuxembourgDocumentPhase or LuxembourgGazettePhase;
+        or LuxembourgQueryFamilyPhase or LuxembourgCoverLeafPhase or LuxembourgDocumentPhase or LuxembourgGazettePhase;
 
     /// <summary>
     /// One line, read only when it is exactly the canonical form this journal writes: strict UTF-8, the contract
