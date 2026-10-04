@@ -2,6 +2,8 @@ using System.Security.Cryptography;
 using System.Text.Json;
 using Lex.V3.Artifacts;
 using Lex.V3.Contracts;
+using Lex.V3.Contracts.Custody;
+using Lex.V3.Ingest.Europe;
 using Lex.V3.Ingest.Luxembourg;
 
 namespace Lex.V3.Ingest.Tests;
@@ -31,14 +33,7 @@ public sealed partial class V3FirstMountBuildTests
         var custody = Path.Combine(target, "custody");
         Assert.IsFalse(Directory.Exists(custody), $"{custody} already exists; the release custody is written once, into a new directory.");
         var store = FileSystemCustodyStore.WithBrotliCompression(custody);
-        var europe = await EuFirstMountAcquisitionTests.AcquireConsolidatedAsync(store, missingStateCelex: false);
-        using var luxembourgHandler = new LuxembourgFirstMountAcquisitionTests.LuxembourgFamilyHandler(LuxembourgFirstMountAcquisitionTests.PdfBytes());
-        var luxembourg = await new LuxembourgFirstMountAcquisition(store, new LuxembourgAcquisitionTestFixture.FixedTimeProvider(), luxembourgHandler)
-            .RunPopulationAsync(LuxembourgPopulationScope.Legislative,
-                await LuxembourgRendererSources.FromCheckoutAsync(store, CheckoutRoot(), CancellationToken.None),
-                LuxembourgAcquisitionTestFixture.TestWireBudget(), CancellationToken.None);
-        Assert.IsTrue(europe.Delivered, europe.Detail);
-        Assert.IsTrue(luxembourg.Delivered, luxembourg.Detail);
+        var (europe, luxembourg) = await AcquireReleaseCustodyAsync(store);
 
         var time = DateTimeOffset.FromUnixTimeSeconds(DateTimeOffset.UtcNow.ToUnixTimeSeconds() + 1);
         var checkpoint = await V3OfflineMount.CapturePopulationAsync(store, europe, luxembourg,
@@ -73,5 +68,24 @@ public sealed partial class V3FirstMountBuildTests
         {
             if (Directory.Exists(live)) Directory.Delete(live, recursive: true);
         }
+    }
+
+    /// <summary>
+    /// The release custody's two acquisitions, through the fixtures' scripted transports: nothing here reaches a
+    /// publisher. The variable above gates where the custody is written, not traffic, so the scripted runs keep the
+    /// offline helper's ceiling here, outside the gated method (<see cref="LiveHarnessWireCeilingGuardTests"/>).
+    /// </summary>
+    private static async Task<(EuFirstMountAcquisitionResult Europe, LuxembourgFirstMountAcquisitionResult Luxembourg)>
+        AcquireReleaseCustodyAsync(ICustodyStore store)
+    {
+        var europe = await EuFirstMountAcquisitionTests.AcquireConsolidatedAsync(store, missingStateCelex: false);
+        using var luxembourgHandler = new LuxembourgFirstMountAcquisitionTests.LuxembourgFamilyHandler(LuxembourgFirstMountAcquisitionTests.PdfBytes());
+        var luxembourg = await new LuxembourgFirstMountAcquisition(store, new LuxembourgAcquisitionTestFixture.FixedTimeProvider(), luxembourgHandler)
+            .RunPopulationAsync(LuxembourgPopulationScope.Legislative,
+                await LuxembourgRendererSources.FromCheckoutAsync(store, CheckoutRoot(), CancellationToken.None),
+                LuxembourgAcquisitionTestFixture.TestWireBudget(), CancellationToken.None);
+        Assert.IsTrue(europe.Delivered, europe.Detail);
+        Assert.IsTrue(luxembourg.Delivered, luxembourg.Detail);
+        return (europe, luxembourg);
     }
 }
