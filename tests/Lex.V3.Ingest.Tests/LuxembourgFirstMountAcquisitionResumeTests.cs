@@ -1,6 +1,9 @@
 using System.Globalization;
 using System.Net.Http;
+using System.Text.Json.Nodes;
 using Lex.V3.Contracts;
+using Lex.V3.Contracts.Custody;
+using Lex.V3.Contracts.Source.Core;
 using Lex.V3.Contracts.Source.Corpus;
 using Lex.V3.Ingest.Luxembourg;
 
@@ -203,6 +206,7 @@ public sealed partial class LuxembourgFirstMountAcquisitionTests
 
         // A complete run's journal, as a kill after its last unit would leave it, without two families' records: only
         // their delivered leaves say where their covers are.
+        var removed = new[] { "legislative-loi-s", "legislative-loi-a" };
         byte[] journal;
         int leafLines;
         using (var stream = new MemoryStream())
@@ -215,7 +219,6 @@ public sealed partial class LuxembourgFirstMountAcquisitionTests
                 Assert.IsTrue(captured.Delivered, captured.Detail);
             }
 
-            var removed = new[] { "legislative-loi-s", "legislative-loi-a" };
             leafLines = 0;
             journal = await EuFirstMountAcquisitionTests.RejournalAsync(stream.ToArray(), header, units =>
             {
@@ -254,6 +257,133 @@ public sealed partial class LuxembourgFirstMountAcquisitionTests
         Assert.AreEqual(0, phases[AcquisitionJournal.LuxembourgCoverLeafPhase].Live);
         Assert.AreEqual(7, phases[AcquisitionJournal.LuxembourgQueryFamilyPhase].Replayed);
         Assert.AreEqual(leafLines, new AcquisitionResume(continuedJournal).Count(AcquisitionJournal.LuxembourgCoverLeafPhase));
+
+        // Its catalog reopens on its own: the covers rebuilt from restored leaves verify as a full replay verifies them.
+        var reopened = await LuxembourgFirstMountAcquisition.ReopenPopulationAsync(store, resumed.CheckpointRef!,
+            LuxembourgPopulationScope.Legislative, CancellationToken.None);
+        Assert.IsTrue(reopened.Delivered, reopened.Detail);
+        Assert.AreEqual(resumed.Run!.CorpusRecordSetRef, reopened.Run!.CorpusRecordSetRef);
+
+        // A resume of the resumed run, again without the two families' records, finds their leaves in that run's journal.
+        var chained = await EuFirstMountAcquisitionTests.RejournalAsync(continuedJournal, header with { ResumedFrom = resume.Continuation },
+            units => units.RemoveAll(unit => unit.Phase == AcquisitionJournal.LuxembourgQueryFamilyPhase && removed.Contains(unit.Key)));
+        using var thirdHandler = new LuxembourgFamilyHandler(PdfBytes(), includeSecondWork: true);
+        var (third, _) = await ResumeLegislativeAsync(store, renderers, arguments, header, chained, thirdHandler);
+        Assert.IsTrue(third.Delivered, $"{third.Refusal}: {third.Detail}");
+        Assert.IsEmpty(thirdHandler.FamiliesSeen, "the third run restored every family too, two of them from their leaves again");
+        Assert.AreEqual(leafLines, third.Resumption!.Phases.Single(static phase => phase.Phase == AcquisitionJournal.LuxembourgCoverLeafPhase).Replayed);
+    }
+
+    [TestMethod]
+    public async Task ALeafLineThatDoesNotBindEndsThePrefixAndItsFamilyIsEnumeratedAgain()
+    {
+        var store = new EuAcquisitionTestFixture.EuInMemoryCustodyStore();
+        var renderers = await LuxembourgRendererSources.FromCheckoutAsync(store, CheckoutRoot(), CancellationToken.None);
+        var (arguments, header, complete) = await CompleteLegislativeJournalAsync(store, renderers);
+
+        // Without the loi range's census and assertion records, and with their first leaves' checkpoints exchanged: each
+        // still reads back, and neither restores under its own line's run and profile. Each prefix ends at its first
+        // leaf, and no later line of those families is used.
+        var removed = new[] { "legislative-loi-s", "legislative-loi-a" };
+        var journal = await EuFirstMountAcquisitionTests.RejournalAsync(complete, header, units =>
+        {
+            units.RemoveAll(unit => unit.Phase == AcquisitionJournal.LuxembourgQueryFamilyPhase && removed.Contains(unit.Key));
+            var census = units.Single(static unit => unit.Phase == AcquisitionJournal.LuxembourgCoverLeafPhase && unit.Key == "legislative-loi-s#0");
+            var assertions = units.Single(static unit => unit.Phase == AcquisitionJournal.LuxembourgCoverLeafPhase && unit.Key == "legislative-loi-a#0");
+            var checkpoint = census.Payload["checkpoint"]!.DeepClone();
+            census.Payload["checkpoint"] = assertions.Payload["checkpoint"]!.DeepClone();
+            assertions.Payload["checkpoint"] = checkpoint;
+        });
+
+        using var handler = new LuxembourgFamilyHandler(PdfBytes(), includeSecondWork: true);
+        var (resumed, continuedJournal) = await ResumeLegislativeAsync(store, renderers, arguments, header, journal, handler);
+        Assert.IsTrue(resumed.Delivered, $"{resumed.Refusal}: {resumed.Detail}");
+        CollectionAssert.AreEquivalent(new[] { "S", "A" }, handler.FamiliesSeen.Distinct().ToArray(),
+            "only the two families went back to the publisher");
+        var phases = resumed.Resumption!.Phases.ToDictionary(static phase => phase.Phase, StringComparer.Ordinal);
+        Assert.AreEqual(0, phases[AcquisitionJournal.LuxembourgCoverLeafPhase].Replayed, "no leaf of either family was restored");
+        Assert.AreEqual(7, phases[AcquisitionJournal.LuxembourgQueryFamilyPhase].Replayed);
+        var live = phases[AcquisitionJournal.LuxembourgCoverLeafPhase].Live;
+        Assert.IsGreaterThanOrEqualTo(2, live, "both covers were delivered again, leaf by leaf");
+        Assert.AreEqual(live, new AcquisitionResume(continuedJournal).Count(AcquisitionJournal.LuxembourgCoverLeafPhase));
+    }
+
+    [TestMethod]
+    public async Task ALeafWhoseHeldQueriesAnotherRendererRenderedEndsThePrefix()
+    {
+        var store = new EuAcquisitionTestFixture.EuInMemoryCustodyStore();
+        var renderers = await LuxembourgRendererSources.FromCheckoutAsync(store, CheckoutRoot(), CancellationToken.None);
+        var (arguments, header, complete) = await CompleteLegislativeJournalAsync(store, renderers);
+
+        // A second query renderer (the same source with one more line, held in custody), and a resume under it. The loi
+        // range's census and assertion records are gone, and their leaf lines name the second renderer: every field of
+        // each line now agrees with the resumed request, and its checkpoint restores, bounds and proves its leaf. Only
+        // the count queries it holds, which the first renderer rendered, do not.
+        var bytes = renderers.Query.CopyBytes().ToArray().Concat("\n// a second renderer\n"u8.ToArray()).ToArray();
+        var held = await store.CreateAsync(bytes, CustodyClass.NightlyFloor90d, CancellationToken.None);
+        var second = new LuxembourgRendererSources(MachineQueryRendererSource.Open(
+            new SourceArtifactRef("urn:uuid:" + Guid.NewGuid().ToString("D"), held.Reference.ContentSha256), bytes), renderers.DocumentFetch);
+        var removed = new[] { "legislative-loi-s", "legislative-loi-a" };
+        var forged = 0;
+        var journal = await EuFirstMountAcquisitionTests.RejournalAsync(complete, header, units =>
+        {
+            units.RemoveAll(unit => unit.Phase == AcquisitionJournal.LuxembourgQueryFamilyPhase && removed.Contains(unit.Key));
+            foreach (var unit in units.Where(unit => unit.Phase == AcquisitionJournal.LuxembourgCoverLeafPhase &&
+                removed.Any(family => unit.Key.StartsWith(family + "#", StringComparison.Ordinal))))
+            {
+                unit.Payload["renderer"] = JsonNode.Parse(ContractJson.Serialize(second.Query.Reference));
+                forged++;
+            }
+        });
+
+        Assert.IsGreaterThanOrEqualTo(2, forged);
+        using var handler = new LuxembourgFamilyHandler(PdfBytes(), includeSecondWork: true);
+        var (resumed, _) = await ResumeLegislativeAsync(store, second, arguments, header with { Renderers = LuxembourgRendererRoles(second) },
+            journal, handler);
+        Assert.IsTrue(resumed.Delivered, $"{resumed.Refusal}: {resumed.Detail}");
+        var phases = resumed.Resumption!.Phases.ToDictionary(static phase => phase.Phase, StringComparer.Ordinal);
+        Assert.AreEqual(0, phases[AcquisitionJournal.LuxembourgCoverLeafPhase].Replayed,
+            "a leaf whose held count queries this request's renderer does not render is not restored");
+    }
+
+    /// <summary>A complete legislative population run's journal (both works), as a kill after its last unit would leave it.</summary>
+    private static async Task<(string Arguments, AcquisitionJournalHeader Header, byte[] Journal)> CompleteLegislativeJournalAsync(
+        ICustodyStore store, LuxembourgRendererSources renderers)
+    {
+        var arguments = AcquisitionJournal.DigestArguments([], null, LuxembourgPopulationScope.Legislative, "raw", null);
+        var budget = LuxembourgAcquisitionTestFixture.TestWireBudget();
+        var header = new AcquisitionJournalHeader(AcquisitionJournal.CurrentSource(), arguments, budget.Limit,
+            LuxembourgRendererRoles(renderers), null);
+        using var stream = new MemoryStream();
+        using var complete = new LuxembourgFamilyHandler(PdfBytes(), includeSecondWork: true);
+        await using (var writer = new AcquisitionJournal(stream, header, budget, new LuxembourgAcquisitionTestFixture.FixedTimeProvider()))
+        {
+            var captured = await new LuxembourgFirstMountAcquisition(store, new LuxembourgAcquisitionTestFixture.FixedTimeProvider(),
+                complete, writer).RunPopulationAsync(LuxembourgPopulationScope.Legislative, renderers, budget, CancellationToken.None);
+            Assert.IsTrue(captured.Delivered, captured.Detail);
+        }
+
+        return (arguments, header, stream.ToArray());
+    }
+
+    /// <summary>Resumes a legislative population run from <paramref name="journal"/> through <paramref name="handler"/>.</summary>
+    private static async Task<(LuxembourgFirstMountAcquisitionResult Result, byte[] Journal)> ResumeLegislativeAsync(ICustodyStore store,
+        LuxembourgRendererSources renderers, string arguments, AcquisitionJournalHeader header, byte[] journal, LuxembourgFamilyHandler handler)
+    {
+        var time = new LuxembourgAcquisitionTestFixture.FixedTimeProvider();
+        var resume = await AcquisitionResume.OpenAsync(store, journal, AcquisitionJournal.CurrentSource(), arguments, time,
+            CancellationToken.None);
+        using var stream = new MemoryStream();
+        LuxembourgFirstMountAcquisitionResult resumed;
+        await using (var continued = new AcquisitionJournal(stream, header with { ResumedFrom = resume.Continuation },
+            LuxembourgAcquisitionTestFixture.TestWireBudget(), time))
+        {
+            resumed = await new LuxembourgFirstMountAcquisition(store, time, handler, continued, resume)
+                .RunPopulationAsync(LuxembourgPopulationScope.Legislative, renderers, LuxembourgAcquisitionTestFixture.TestWireBudget(),
+                    CancellationToken.None);
+        }
+
+        return (resumed, stream.ToArray());
     }
 
     private static AcquisitionJournalRenderer[] LuxembourgRendererRoles(LuxembourgRendererSources renderers) =>

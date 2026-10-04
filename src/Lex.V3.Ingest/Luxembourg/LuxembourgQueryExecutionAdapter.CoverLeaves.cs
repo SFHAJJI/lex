@@ -25,8 +25,9 @@ public sealed partial class LuxembourgQueryExecutionAdapter
     /// The leaves of this family's cover an interrupted run delivered and journaled, restored in index order as far as
     /// each still binds and proves: its record names this family's set, range, plan and renderer and its own index; its
     /// split history, replayed from the root, places it at that index with the leaves accepted before it still first; its
-    /// enumeration checkpoint restores under its run and the cover's one profile, its query bounds are its leaf's, and it
-    /// proves that leaf. The first that does not ends the prefix, and the cover goes on from there; null when none binds,
+    /// enumeration checkpoint restores under its run and the cover's one profile, its query bounds are its leaf's, it
+    /// proves that leaf, and its held count queries are this request's plan, set and renderer for that leaf. The first
+    /// that does not ends the prefix, and the cover goes on from there; null when none binds,
     /// and the family is enumerated from its first leaf. The accepted leaves are journaled again in this run's journal,
     /// so a resume of this run finds them too. Nothing here is admitted on the journal's word.
     /// </summary>
@@ -65,7 +66,13 @@ public sealed partial class LuxembourgQueryExecutionAdapter
                     record.Profile, cancellationToken).ConfigureAwait(false);
                 await LuxembourgPartitionCoverCheckpoint.ValidateRangeAsync(_custodyStore, receipt, record.Leaf, cancellationToken)
                     .ConfigureAwait(false);
-                if (receipt.TryProveFamilyEnumeration(record.Leaf.PartitionId, out _) is null) break;
+                if (receipt.TryProveFamilyEnumeration(record.Leaf.PartitionId, out _) is not { } proof) break;
+
+                // The checkpoint's own query, not the journal line's word: its profile is this request's plan and set,
+                // and its held count bodies are what this request's plan and renderer render for the leaf (the family
+                // resume's check). A mismatch ends the prefix here, before anything is journaled again.
+                await VerifyQueryTemplateAsync(_custodyStore, new FamilyRowsLeg(proof, receipt, request with { Partition = record.Leaf }),
+                    cancellationToken).ConfigureAwait(false);
                 accepted.Add(record);
                 receipts.Add(receipt);
                 chain = candidate;

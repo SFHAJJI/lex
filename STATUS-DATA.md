@@ -17,14 +17,17 @@ Reversible driver decision, for the Luxembourg legislative population run.
   - its record names this family and its index;
   - its split history, replayed from the root, places it there, with the leaves accepted before it still first;
   - its checkpoint restores under its run and the cover's one profile;
-  - its query bounds are its leaf's, and it proves that leaf.
+  - its query bounds are its leaf's, and it proves that leaf;
+  - its held count queries are what this request's plan, set and renderer render for that leaf (the family resume's
+    check, review of #929), so a line naming this run's renderer over another renderer's checkpoint is not admitted.
 - **The prefix.** The first leaf that fails ends the prefix, and the cover goes on from there on a session of the resumed run. The accepted leaves are journaled again, so a resume of a resumed run finds them. Nothing is admitted on the journal's word.
 - **Across runs.** The cover then spans the interrupted run's leaves and the resumed run's, as contiguous blocks (#927), under the interrupted run's interpretation profile reference, checked against the plan's profile.
 - **A family record that does not restore** is rebuilt from its delivered leaves when they restore. The resumption summary counts replayed and live leaves under `lu-cover-leaf`.
 
 **Unchanged:**
-- the family journal line and the catalogs (a family's run is still its first leaf's);
-- a run that is not resumed, except that it writes the leaf lines;
+- the family journal line and each family's catalog entry (a family's run is still its first leaf's);
+- a run that is not resumed, except that it writes the leaf lines; its catalog is unchanged. A resumed run's catalog
+  gains the `lu-cover-leaf` phase in its resumption block;
 - the census: the cover's callback is a method group on a small helper, not a new lambda in the adapter's pinned method.
 
 The pinned `RunCoverCoreAsync` signature gains the resume point and the leaf callback.
@@ -33,6 +36,14 @@ The pinned `RunCoverCoreAsync` signature gains the resume point and the leaf cal
 - `AResumedCoverSendsNothingForItsDeliveredLeavesAndProvesAcrossBothRuns`: a cover stopped at its second leaf resumes from the reported leaf with only that leaf's four requests sent, and the cover reconciles over both runs. A resume point under another profile is refused before anything is sent.
 - `AFamilyWhoseRecordDoesNotRestoreIsRebuiltFromItsDeliveredLeaves`: two families without their records are rebuilt from their leaves with no request, and the leaves are journaled again.
 - The existing "enumerated again" test now strips those families' leaf lines too.
+- `ALeafLineThatDoesNotBindEndsThePrefixAndItsFamilyIsEnumeratedAgain`: two families' first leaf checkpoints exchanged;
+  both prefixes end at zero, only those families go back to the publisher, and their leaves are journaled live.
+- `ALeafWhoseHeldQueriesAnotherRendererRenderedEndsThePrefix`: a resume under a second query renderer, with leaf lines
+  forged to name it, restores no leaf.
+- The rebuild test also reopens the resumed catalog on its own, and resumes the resumed run a third time from its
+  journal: the leaves are found there and nothing is sent.
+- Partial restore (k of n leaves, then live) is tested at the executor; the fixture's population covers are one leaf
+  each.
 
 CI compiles and runs these: local memory is reserved for the EU population run.
 
