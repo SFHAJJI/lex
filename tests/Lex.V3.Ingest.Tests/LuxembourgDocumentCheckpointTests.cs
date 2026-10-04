@@ -126,7 +126,7 @@ public sealed partial class LuxembourgDocumentGetTests
     [TestMethod]
     public async Task SelectedDocumentsCheckpointHoldFailureIsTyped()
     {
-        var store = new EuAcquisitionTestFixture.EuInMemoryCustodyStore(failSchema: "lex-lu-selected-documents-checkpoint/1");
+        var store = new EuAcquisitionTestFixture.EuInMemoryCustodyStore(failSchema: "lex-lu-selected-documents-checkpoint/2");
         var address = Address();
         var handler = new RobotsThenDocumentHandler((request, _) => BinaryResponse(request, HttpStatusCode.OK, "<akomaNtoso/>"u8.ToArray()));
         var adapter = new LuxembourgQueryExecutionAdapter(store,

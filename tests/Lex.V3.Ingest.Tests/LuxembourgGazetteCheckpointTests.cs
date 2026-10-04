@@ -123,7 +123,7 @@ public sealed partial class LuxembourgGazetteAcquisitionTests
     [TestMethod]
     public async Task GazetteCheckpointHoldFailureIsTyped()
     {
-        var store = new EuAcquisitionTestFixture.EuInMemoryCustodyStore(failSchema: "lex-lu-gazette-checkpoint/1");
+        var store = new EuAcquisitionTestFixture.EuInMemoryCustodyStore(failSchema: "lex-lu-gazette-checkpoint/2");
         await CaptureGazetteAsync(0, store, expectHoldFailure: true);
     }
 

@@ -2,6 +2,47 @@
 
 Updated 2026-10-04.
 
+## One session per Luxembourg document phase, replaced hourly (Claude, 2026-10-04)
+
+Reversible driver decision, for the Luxembourg legislative population run.
+
+**The problem.** Each Luxembourg document and Gazette GET opened a session of its own, so each made its own robots.txt fetch. The population's documents are about 41,600 GETs, so that is about 41,600 robots fetches. At the host's 1.5-second pacing that is about 17 hours of the run's ~81. Each robots fetch is also a run-level failure point: a failed bootstrap is never retried, and it stops the phase.
+
+**The change:**
+- **One session per phase.** A document phase (the selected documents, then the Gazette listings) sends its GETs through one session at a time (`DocumentGetBatch`), replaced every hour. One robots fetch serves up to an hour of documents, and the policy any GET relied on is never more than an hour old, far inside the session's own 24-hour gate.
+- **Every URL is still evaluated literally (Decision 83).**
+  - The bootstrap evaluates the first document's own URL.
+  - Every later document is evaluated by the session (`OpenPlanItemAdmittedByRobots`), against the robots bytes its own bootstrap fetched and held, before any request ordinal is allocated.
+  - A disallowed path is that document's own refusal, and nothing is sent for it. A policy that cannot be interpreted for it is a run-level refusal, as at a bootstrap.
+  - `OpenPlanItem` itself now refuses any URL other than the session's witness that the admitted policy does not allow, so no door can skip the evaluation.
+- **The robots fetch is retained.**
+  - Before a session's first document, its robots route is written to custody and reopened by digest. Every result of that session names it.
+  - A per-document session never retained its robots fetch, and its readback "does not establish a fresh robots verdict".
+- **Checkpoints.**
+  - The document and Gazette checkpoints become `lex-lu-selected-documents-checkpoint/2` and `lex-lu-gazette-checkpoint/2`, and each fetch names its robots route. `/1` checkpoints are still read under their own rules.
+  - A fetch record's bytes are unchanged when it names none: the new member is omitted when null.
+- **Replay and resume.**
+  - `LuxembourgDocumentFetchRouteReader.ReopenAdmittedAsync` reopens a shared session's GET: any product request of its run, not only the first.
+  - It re-derives the verdict offline. The robots route must reopen as the profile's robots route, reproducing its bytes from the held receipts and bodies, and belong to the same run. Its policy must allow the document's exact path, and it must have been younger than 24 hours when the GET started.
+  - `ReopenRobotsRefusalAsync` re-derives a refusal the same way.
+  - A resumed run journals and holds each GET's robots route with it.
+
+**Saved:** about 41,600 robots fetches become about one per phase-hour (about 20). The document and Gazette phases shrink from about 35 hours to about 17.5, and the run from about 81 hours to about 64. There are as many fewer custody objects, and as many fewer points of failure.
+
+**Unchanged:**
+- the source profile and its digest;
+- the route schema (`lex-license-http-evidence/4`);
+- the acquisition catalog, the corpus and the indexes;
+- the single-GET door `RunDocumentGetAsync`, used elsewhere.
+
+**Census:** the producers of `LuxembourgDocumentGetAttemptResult` gain the batch, the shared attempt loop and the new reader doors, and the pin is updated.
+
+**Tests** (`LuxembourgDocumentSessionTests` and the existing suites):
+- **One session for three documents.** One robots fetch, request ordinals 1-3 in one run, and each GET reopens under the retained verdict. The per-document door refuses a later product request.
+- **A disallowed document.** A document the shared policy disallows is refused with nothing sent, and its refusal reopens. An allowed document does not reopen as a refusal.
+- **Hourly replacement.** An hour between documents gives each its own session and robots route, and a GET does not reopen under another run's policy.
+- **Existing suites.** The Gazette checkpoint and resume tests now run through the shared session and the `/2` checkpoints.
+
 ## A Luxembourg partition cover longer than one robots generation (Claude, 2026-10-04)
 
 Reversible driver decision, for the Luxembourg legislative population run.
