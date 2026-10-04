@@ -175,6 +175,9 @@ public sealed partial class LuxembourgRepeatedEnumerationExecutorTests
     [TestMethod]
     [DataRow(500, "{\"meta\":\"error\",\"id\":\"55D19366-71EC-4828-8502-6262C0C13C61\",\"title\":\"Read timed out\",\"code\":\"error.unknown\",\"data\":null}")]
     [DataRow(500, "{\"meta\":\"error\",\"title\":\"Read timed out\",\"code\":\"error.unknown\"}")]
+    // The id's shape at the full 120 bytes: a dash moved off position 8, and a lowercase letter that is not hex.
+    [DataRow(500, "{\"meta\":\"error\",\"id\":\"55d1936-671ec-4828-8502-6262c0c13c61\",\"title\":\"Read timed out\",\"code\":\"error.unknown\",\"data\":null}")]
+    [DataRow(500, "{\"meta\":\"error\",\"id\":\"55d19366-71ec-4828-8502-6262c0c13c6g\",\"title\":\"Read timed out\",\"code\":\"error.unknown\",\"data\":null}")]
     [DataRow(500, "{\"meta\":\"error\",\"id\":\"55d19366-71ec-4828-8502-6262c0c13c6\",\"title\":\"Read timed out\",\"code\":\"error.unknown\",\"data\":null}")]
     [DataRow(500, "{\"meta\": \"error\",\"id\":\"55d19366-71ec-4828-8502-6262c0c13c61\",\"title\":\"Read timed out\",\"code\":\"error.unknown\",\"data\":null}")]
     [DataRow(500, RetainedGatewayTimeout + "\n")]
@@ -204,6 +207,79 @@ public sealed partial class LuxembourgRepeatedEnumerationExecutorTests
         Assert.AreEqual(status, result.Refusal!.TerminalStatus);
         Assert.AreEqual(3, handler.SendCount, "robots, the COUNT and one send of the page");
         Assert.AreEqual(0, clock.CoolDowns);
+    }
+
+    [TestMethod]
+    public async Task AnAdmittedPageResetsTheBreakerSoScatteredTimeoutsNeverStopTheRun()
+    {
+        // Each partition's six requests answer the envelope twice before their real answer at both pages and the
+        // second-pass COUNT: six envelopes per partition, never more than four since an admitted page. Two partitions on
+        // one executor (one run) see twelve envelopes, so a breaker that counted them all would have stopped the second.
+        var script = new List<Func<HttpRequestMessage, HttpResponseMessage>>();
+        for (var partition = 0; partition < 2; partition++)
+        {
+            for (var position = 1; position <= 6; position++)
+            {
+                if (position is 2 or 4 or 5)
+                {
+                    script.Add(static req => EnvelopeResponse(req, Envelope()));
+                    script.Add(static req => EnvelopeResponse(req, Envelope()));
+                }
+
+                var body = position switch
+                {
+                    1 or 4 => LuxembourgAcquisitionTestFixture.CountJson(1),
+                    2 or 5 => LuxembourgAcquisitionTestFixture.RowsJson("b"),
+                    _ => LuxembourgAcquisitionTestFixture.EmptyRowsJson(),
+                };
+                script.Add(req => JsonResponse(req, body));
+            }
+        }
+
+        var store = new RoutedHttpAcquisitionSessionAuditTests.RecordingCustodyStore { RefuseFallback = true };
+        // Robots by path: each partition's session fetches its own.
+        var products = 0;
+        var handler = new LuxembourgAcquisitionTestFixture.SequencedHandler((_, req) => req.RequestUri!.AbsolutePath == "/robots.txt"
+            ? EnvelopeResponse(req, "User-agent: *\nAllow: /\n", HttpStatusCode.OK, "text/plain")
+            : script[Interlocked.Increment(ref products) - 1](req));
+        var clock = new GatewayClock();
+        var executor = new LuxembourgRepeatedEnumerationExecutor(store, clock, handler);
+        foreach (var _ in Enumerable.Range(0, 2))
+        {
+            var (request, witness) = BuildRequest();
+            var result = await executor.RunPartitionAsync(request, witness, WireRequestBudget.OfWireRequests(30), CancellationToken.None);
+            Assert.IsNotNull(result.Receipt, result.Refusal?.CoreRefusalDetail ?? result.Refusal?.Code.ToString());
+        }
+
+        Assert.AreEqual(script.Count, products, "every scripted request was sent, retries included");
+        Assert.AreEqual(12, clock.CoolDowns);
+    }
+
+    [TestMethod]
+    public async Task TheEighthTimeoutSinceTheLastAdmittedPageIsNotRetriedAndStopsTheRun()
+    {
+        // Six first-pass COUNTs answer the envelope (each splits the leftmost leaf); the seventh leaf's COUNT succeeds,
+        // which does not reset the breaker; its page answers the envelope (the seventh), is retried once and answers it
+        // again (the eighth). The breaker is now open: no third send, and the run stops.
+        var script = new List<Func<HttpRequestMessage, HttpResponseMessage>>();
+        for (var split = 0; split < 6; split++) script.Add(static req => EnvelopeResponse(req, Envelope()));
+        script.Add(static req => JsonResponse(req, LuxembourgAcquisitionTestFixture.CountJson(1)));
+        script.Add(static req => EnvelopeResponse(req, Envelope()));
+        script.Add(static req => EnvelopeResponse(req, Envelope()));
+        var (request, witness) = BuildRequest();
+        var store = new RoutedHttpAcquisitionSessionAuditTests.RecordingCustodyStore { RefuseFallback = true };
+        var handler = Scripted(script);
+        var clock = new GatewayClock();
+        var result = await new LuxembourgRepeatedEnumerationExecutor(store, clock, handler)
+            .RunAdaptiveCoverAsync(request, witness, WireRequestBudget.OfWireRequests(50), CancellationToken.None);
+
+        Assert.AreEqual(1 + script.Count, handler.SendCount, "robots and the nine scripted requests: the page was sent twice, not three times");
+        Assert.AreEqual(1, clock.CoolDowns, "one retry, then the breaker vetoed the next");
+        var stopped = result.Results.First(static leaf => leaf.Refusal is not null).Refusal!;
+        Assert.AreEqual(LuxembourgEnumerationRefusal.StatusNotAdmitted, stopped.Code, stopped.CoreRefusalDetail);
+        StringAssert.Contains(stopped.CoreRefusalDetail, "this run stops");
+        Assert.AreEqual(1, result.Results.Count(static leaf => leaf.Refusal?.Code == LuxembourgEnumerationRefusal.StatusNotAdmitted),
+            "the leaves after it were not attempted");
     }
 
     private static string Envelope() =>
