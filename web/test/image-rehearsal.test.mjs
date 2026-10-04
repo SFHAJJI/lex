@@ -6,7 +6,9 @@
 // check exists to catch.
 
 import assert from "node:assert/strict";
-import { createHash } from "node:crypto";
+import { createHash, generateKeyPairSync } from "node:crypto";
+import { spawnSync } from "node:child_process";
+import { fileURLToPath } from "node:url";
 import { createServer } from "node:http";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -14,7 +16,7 @@ import { join } from "node:path";
 import test from "node:test";
 import { gzipSync } from "node:zlib";
 
-import { REHEARSAL_IDENTITY, V2_ROUTES, imageFailures, mountReport, readOciImage, readTar, rehearsalSignatureFailures, servedPaths, signRehearsal, v2Failures, v2RouteFailures } from "../scripts/image-rehearsal.mjs";
+import { REHEARSAL_IDENTITY, V2_ROUTES, imageFailures, imageSignatureFailures, mountReport, readOciImage, readTar, rehearsalSignatureFailures, releaseSigner, servedPaths, signImage, signRehearsal, v2Failures, v2RouteFailures } from "../scripts/image-rehearsal.mjs";
 
 const sha256 = (bytes) => createHash("sha256").update(bytes).digest("hex");
 
@@ -222,4 +224,43 @@ test("V2's routes must each answer 404 from the running image, or V3's own file 
   } finally {
     await new Promise((resolve) => server.close(resolve));
   }
+});
+
+test("the release signer takes only an ECDSA P-256 private key and an identity that is not the rehearsal's, and repeats none of the key", () => {
+  const pem = (type, options) => generateKeyPairSync(type, options).privateKey.export({ type: "pkcs8", format: "pem" });
+  const owners = pem("ec", { namedCurve: "P-256" });
+  const signer = releaseSigner({ privateKeyPem: owners, identity: "lex-v3 release signer" });
+  assert.equal(signer.rehearsal, false);
+  assert.equal(signer.identity, "lex-v3 release signer");
+  assert.match(signer.publicKeyPem, /^-----BEGIN PUBLIC KEY-----/);
+  assert.throws(() => releaseSigner({ privateKeyPem: pem("rsa", { modulusLength: 2048 }), identity: "x" }), /not an ECDSA P-256 key/);
+  assert.throws(() => releaseSigner({ privateKeyPem: pem("ec", { namedCurve: "P-384" }), identity: "x" }), /not an ECDSA P-256 key/);
+  const publicOnly = generateKeyPairSync("ec", { namedCurve: "P-256" }).publicKey.export({ type: "spki", format: "pem" });
+  assert.throws(() => releaseSigner({ privateKeyPem: publicOnly, identity: "x" }), /not a private key in PEM/);
+  const garbled = "-----BEGIN PRIVATE KEY-----\nSECRETSECRETSECRET\n-----END PRIVATE KEY-----\n";
+  assert.throws(() => releaseSigner({ privateKeyPem: garbled, identity: "x" }), (error) => /not a private key in PEM/.test(error.message) && !error.message.includes("SECRET"));
+  for (const identity of [REHEARSAL_IDENTITY, "", " ", " padded", undefined]) {
+    assert.throws(() => releaseSigner({ privateKeyPem: owners, identity }), /names its identity, and it is not the rehearsal's/, JSON.stringify(identity));
+  }
+
+  // Its image signature holds as that signer's, and never as the rehearsal's or another signer's.
+  const manifestDigest = `sha256:${"a".repeat(64)}`;
+  const signed = signImage({ manifestDigest, reference: "lex-v3:release", signer });
+  assert.deepEqual(imageSignatureFailures({ ...signed, manifestDigest, signer }), []);
+  assert.deepEqual(rehearsalSignatureFailures({ ...signed, manifestDigest }), ["the signature does not say it is the rehearsal's"]);
+  assert.deepEqual(imageSignatureFailures({ ...signed, manifestDigest, signer: { identity: "another", rehearsal: false } }), ["the signature does not say it is another's"]);
+});
+
+test("the command takes the signing key and the signer together, and says nothing of a key it cannot use", () => {
+  const script = fileURLToPath(new URL("../scripts/image-rehearsal.mjs", import.meta.url));
+  const alone = spawnSync(process.execPath, [script, "--mount", "nowhere", "--signing-key", "-"], { input: "", encoding: "utf8" });
+  assert.equal(alone.status, 2);
+  assert.match(alone.stderr, /--signing-key and --signer go together/);
+  const unnamed = spawnSync(process.execPath, [script, "--mount", "nowhere", "--signer", "lex-v3 release signer"], { input: "", encoding: "utf8" });
+  assert.equal(unnamed.status, 2);
+  const garbled = spawnSync(process.execPath, [script, "--mount", "nowhere", "--signing-key", "-", "--signer", "lex-v3 release signer"],
+    { input: "-----BEGIN PRIVATE KEY-----\nSECRETSECRETSECRET\n-----END PRIVATE KEY-----\n", encoding: "utf8" });
+  assert.equal(garbled.status, 2);
+  assert.match(garbled.stderr, /the release signer cannot be used: the signing key is not a private key in PEM/);
+  assert.ok(!`${garbled.stdout}${garbled.stderr}`.includes("SECRET"), "no output repeats the key");
 });

@@ -79,7 +79,11 @@ test("the script deploys only a release that verifies, and only by the image's d
   assert.match(script, /"image=\$image"/);
   // The browser probes run unless -SkipBrowserProbe says they do not, and a skip is stated.
   assert.match(code, /\$browserProbe = if \(\$SkipBrowserProbe\) \{ @\(\) \} else \{ @\('--browser'\) \}/);
-  assert.match(code, /deploy-probe\.mjs'\) --origin \$origin --release \$releasePath --public-key \$keyPath @browserProbe/);
+  assert.match(code, /deploy-probe\.mjs'\) --origin \$origin --release \$releasePath --public-key \$keyPath @signerProbe @browserProbe/);
+  // A deployment applies only a release the release signer signed: -Apply requires -SignerIdentity, which both read-backs
+  // carry, so a rehearsal release is read in a plan run only.
+  assert.match(script, /if \(\$Apply -and \[string\]::IsNullOrWhiteSpace\(\$SignerIdentity\)\) \{\s*throw "-Apply deploys a release signed by the release signer/);
+  assert.match(code, /deploy-probe\.mjs'\) --release \$releasePath --public-key \$keyPath @signerProbe\n/);
   assert.match(code, /the browser probes are skipped \(-SkipBrowserProbe\)/);
   // Rollback and forward again are printed for the owner with promotion, never run.
   assert.match(code, /Write-Host "  > az containerapp ingress traffic set -g \$ResourceGroup -n \$AppName --revision-weight \$LiveRevision=100"/);

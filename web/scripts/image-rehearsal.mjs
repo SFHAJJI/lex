@@ -18,6 +18,13 @@
 // The signature is the rehearsal's own: an ECDSA P-256 key made for the run and never kept, over a
 // signing payload in the shape container signatures use, naming the manifest digest and saying it is a
 // rehearsal. Verifying it checks the signature, the digest and that rehearsal label.
+// With the owner's signing key (`--signing-key <PEM file, or - to read it from standard input> --signer
+// <identity>`, the release signer), the image and the release are signed by that key instead, naming that
+// identity and not the rehearsal's, and the release is published as a release (`lex-v3-release/1`, version
+// `v3-...`), not a rehearsal. The key is ECDSA P-256; it is read once, held only in this process, and never
+// written, logged or kept; no error repeats it. Reading the key from standard input
+// (`az keyvault secret show ... --query value -o tsv | node scripts/image-rehearsal.mjs ... --signing-key -`)
+// puts it on no disk at all.
 // The evaluation card is the machine gates run over the mount the image carries (ruling 2), derived from the
 // mount by `V3MountedGatesTests` (`--platform-card` takes the platform's fixture card instead).
 // Last, the release assets are published into a versioned directory (the image, its signature, the
@@ -32,8 +39,8 @@
 // which the report records.
 
 import { spawnSync } from "node:child_process";
-import { createHash, createPublicKey, generateKeyPairSync, sign, verify } from "node:crypto";
-import { existsSync } from "node:fs";
+import { createHash, createPrivateKey, createPublicKey, generateKeyPairSync, sign, verify } from "node:crypto";
+import { existsSync, readFileSync } from "node:fs";
 import { mkdtemp, readFile, readdir, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join, relative, resolve, sep } from "node:path";
@@ -256,29 +263,67 @@ export function rehearsalKey() {
   return { privateKey, publicKeyPem: publicKey.export({ type: "spki", format: "pem" }).toString() };
 }
 
+/** The rehearsal's signer: its identity, said as the rehearsal's, with a key made for the run. */
+export function rehearsalSigner(key = rehearsalKey()) {
+  return Object.freeze({ identity: REHEARSAL_IDENTITY, rehearsal: true, privateKey: key.privateKey, publicKeyPem: key.publicKeyPem });
+}
+
 /**
- * A rehearsal signature over the image's manifest digest: a key made for the run, a signing payload in
- * the shape container signatures use, and the payload signed with ECDSA P-256 over SHA-256.
+ * The release's signer from the owner's signing key: an ECDSA P-256 private key in PEM (the owner's, kept in their key
+ * vault and handed to this process only for the run), under the identity the owner names for it. The public key is
+ * derived from the private one, so the release names the key it was signed with. The key is never written, logged or
+ * kept, and no error repeats any of it. Throws on anything but a P-256 private key, or on an identity that is empty or
+ * the rehearsal's.
  */
-export function signRehearsal({ manifestDigest, reference, key = rehearsalKey() }) {
-  const { privateKey, publicKeyPem } = key;
+export function releaseSigner({ privateKeyPem, identity }) {
+  if (typeof identity !== "string" || identity.trim().length === 0 || identity !== identity.trim() || identity === REHEARSAL_IDENTITY) {
+    throw new Error("the release signer names its identity, and it is not the rehearsal's");
+  }
+  let privateKey;
+  try {
+    privateKey = createPrivateKey(privateKeyPem);
+  } catch {
+    throw new Error("the signing key is not a private key in PEM");
+  }
+  if (privateKey.asymmetricKeyType !== "ec" || privateKey.asymmetricKeyDetails?.namedCurve !== "prime256v1") {
+    throw new Error("the signing key is not an ECDSA P-256 key, which the release's signatures use");
+  }
+  const publicKeyPem = createPublicKey(privateKey).export({ type: "spki", format: "pem" }).toString();
+  return Object.freeze({ identity, rehearsal: false, privateKey, publicKeyPem });
+}
+
+/**
+ * An image signature over its manifest digest by `signer` (`rehearsalSigner` or `releaseSigner`): a signing payload in
+ * the shape container signatures use, naming the signer and whether it is the rehearsal's, signed with ECDSA P-256
+ * over SHA-256.
+ */
+export function signImage({ manifestDigest, reference, signer }) {
   const payload = Buffer.from(JSON.stringify({
     critical: {
       identity: { "docker-reference": reference },
       image: { "docker-manifest-digest": manifestDigest },
       type: "cosign container image signature",
     },
-    optional: { signer: REHEARSAL_IDENTITY, rehearsal: true },
+    optional: { signer: signer.identity, rehearsal: signer.rehearsal },
   }), "utf8");
   return {
     payload,
-    signature: sign("sha256", payload, privateKey).toString("base64"),
-    publicKeyPem,
+    signature: sign("sha256", payload, signer.privateKey).toString("base64"),
+    publicKeyPem: signer.publicKeyPem,
   };
 }
 
-/** Whether a rehearsal signature holds for this manifest digest: the signature, the digest and the label. */
-export function rehearsalSignatureFailures({ payload, signature, publicKeyPem, manifestDigest }) {
+/** A rehearsal signature over the image's manifest digest, with a key made for the run unless one is given. */
+export function signRehearsal({ manifestDigest, reference, key = rehearsalKey() }) {
+  return signImage({ manifestDigest, reference, signer: rehearsalSigner(key) });
+}
+
+/**
+ * Whether an image signature holds for this manifest digest: the signature under `publicKeyPem`, the digest, and the
+ * signer it names, which must be `signer` (`{ identity, rehearsal }`): a rehearsal's signature never passes for a
+ * release's, nor one release signer's for another's.
+ */
+export function imageSignatureFailures({ payload, signature, publicKeyPem, manifestDigest, signer }) {
   const failures = [];
   if (!verify("sha256", payload, createPublicKey(publicKeyPem), Buffer.from(signature, "base64"))) failures.push("the signature does not verify over its payload with this key");
   let parsed = null;
@@ -286,9 +331,16 @@ export function rehearsalSignatureFailures({ payload, signature, publicKeyPem, m
   if (parsed !== null) {
     if (parsed.critical?.image?.["docker-manifest-digest"] !== manifestDigest) failures.push(`the signature names ${parsed.critical?.image?.["docker-manifest-digest"]}, not this image's manifest ${manifestDigest}`);
     if (parsed.critical?.type !== "cosign container image signature") failures.push("the signing payload is not a container image signature");
-    if (parsed.optional?.rehearsal !== true || parsed.optional?.signer !== REHEARSAL_IDENTITY) failures.push("the signature does not say it is the rehearsal's");
+    if (parsed.optional?.rehearsal !== signer.rehearsal || parsed.optional?.signer !== signer.identity) {
+      failures.push(signer.rehearsal ? "the signature does not say it is the rehearsal's" : `the signature does not say it is ${signer.identity}'s`);
+    }
   }
   return failures;
+}
+
+/** Whether a rehearsal signature holds for this manifest digest: the signature, the digest and the label. */
+export function rehearsalSignatureFailures({ payload, signature, publicKeyPem, manifestDigest }) {
+  return imageSignatureFailures({ payload, signature, publicKeyPem, manifestDigest, signer: { identity: REHEARSAL_IDENTITY, rehearsal: true } });
 }
 
 /** Runs a command, failing with its output if it fails. */
@@ -419,7 +471,7 @@ async function mountedCard({ mountPath, into, log }) {
 }
 
 /** The rehearsal, end to end. Returns its report; throws on the first step that fails. */
-export async function rehearse({ mount, keep = false, probe = true, reproduce = true, platformCard = false, log = () => {} }) {
+export async function rehearse({ mount, keep = false, probe = true, reproduce = true, platformCard = false, signer = null, log = () => {} }) {
   const mountPath = resolve(mount);
   const { kind: mountKind, report, bytes: mountBytes } = await mountReport(mountPath);
   const work = await mkdtemp(join(tmpdir(), "lex-image-rehearsal-"));
@@ -472,12 +524,14 @@ export async function rehearse({ mount, keep = false, probe = true, reproduce = 
     result.v2Absent = { entriesScanned: image.layers.reduce((count, layer) => count + readTar(layerTar(layer)).length, 0), failures: v2 };
     if (v2.length > 0) throw new Error(`V2 is in the image:\n- ${v2.join("\n- ")}`);
 
-    log("signing with the rehearsal identity and verifying");
-    const key = rehearsalKey();
-    const signed = signRehearsal({ manifestDigest: image.manifestDigest, reference: "lex-v3-rehearsal:rehearsal", key });
-    const signatureFailures = rehearsalSignatureFailures({ ...signed, manifestDigest: image.manifestDigest });
-    Object.assign(result, { signer: REHEARSAL_IDENTITY, signatureVerified: signatureFailures.length === 0, publicKeyPem: signed.publicKeyPem });
-    if (signatureFailures.length > 0) throw new Error(`the rehearsal signature does not hold:\n- ${signatureFailures.join("\n- ")}`);
+    // The release's signer when the owner hands over the signing key (`signer`, from `releaseSigner`), else the
+    // rehearsal's, with a key made for this run.
+    const by = signer ?? rehearsalSigner();
+    log(by.rehearsal ? "signing with the rehearsal identity and verifying" : `signing with the release signer ${by.identity} and verifying`);
+    const signed = signImage({ manifestDigest: image.manifestDigest, reference: by.rehearsal ? "lex-v3-rehearsal:rehearsal" : "lex-v3:release", signer: by });
+    const signatureFailures = imageSignatureFailures({ ...signed, manifestDigest: image.manifestDigest, signer: by });
+    Object.assign(result, { signer: by.identity, rehearsal: by.rehearsal, signatureVerified: signatureFailures.length === 0, publicKeyPem: signed.publicKeyPem });
+    if (signatureFailures.length > 0) throw new Error(`the image signature does not hold:\n- ${signatureFailures.join("\n- ")}`);
 
     if (reproduce) {
       // Reproducible: a second build, from scratch in its own directory, must give the same image.
@@ -531,12 +585,12 @@ export async function rehearse({ mount, keep = false, probe = true, reproduce = 
 
     log("publishing the release assets, reading them back and verifying them");
     const { ASSETS, imageSignatureAsset, publishRelease, releaseFailures, releaseVersion } = await import("./release-assets.mjs");
-    const version = releaseVersion(source);
+    const version = releaseVersion(source, { rehearsal: by.rehearsal });
     const published = await publishRelease(join(work, "release"), {
-      version, source, manifestDigest: image.manifestDigest, corpusSha256: report.corpus?.Sha256 ?? null, key,
+      version, source, manifestDigest: image.manifestDigest, corpusSha256: report.corpus?.Sha256 ?? null, signer: by,
       assets: [[ASSETS.image, await readFile(archive)], [ASSETS.imageSignature, imageSignatureAsset(signed)], [ASSETS.card, servedCard], [ASSETS.mountReport, mountBytes]],
     });
-    const readBack = await releaseFailures(published.directory, { publicKeyPem: key.publicKeyPem });
+    const readBack = await releaseFailures(published.directory, { publicKeyPem: by.publicKeyPem, identity: by.identity });
     result.release = { version, manifestSha256: published.manifestSha256, assets: (await readdir(published.directory)).sort(), readBackFailures: readBack };
     if (readBack.length > 0) throw new Error(`the release does not read back:\n- ${readBack.join("\n- ")}`);
     return result;
@@ -605,6 +659,21 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
   const argv = process.argv.slice(2);
   const value = (name) => { const at = argv.indexOf(name); return at < 0 || at + 1 >= argv.length ? null : argv[at + 1]; };
   const options = { keep: argv.includes("--keep"), probe: !argv.includes("--no-probe"), reproduce: !argv.includes("--no-reproduce"), platformCard: argv.includes("--platform-card"), log: (line) => console.error(`- ${line}`) };
+  // The release signer: the owner's key and the identity it signs as, both or neither.
+  const signingKey = value("--signing-key");
+  const signerIdentity = value("--signer");
+  if ((signingKey === null) !== (signerIdentity === null)) {
+    console.error("--signing-key and --signer go together: the owner's signing key and the identity it signs as");
+    process.exit(2);
+  }
+  if (signingKey !== null) {
+    try {
+      options.signer = releaseSigner({ privateKeyPem: readFileSync(signingKey === "-" ? 0 : signingKey), identity: signerIdentity });
+    } catch (error) {
+      console.error(`the release signer cannot be used: ${error.message}`);
+      process.exit(2);
+    }
+  }
   const custody = value("--custody");
   const run = custody !== null
     ? (value("--checkpoint") && value("--tool")
@@ -612,7 +681,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
       : null)
     : value("--mount") !== null ? rehearse({ mount: value("--mount"), ...options }) : null;
   if (run === null) {
-    console.error("usage: node scripts/image-rehearsal.mjs (--mount <v3-corpus directory or journey fixture mount> | --custody <custody directory> --checkpoint <mount-inputs.json> --tool <this commit's CI runtime artifact runtime/Lex.V3.Tool.dll> [--custody-encoding raw|brotli] [--allow-unbound-tool]) [--keep] [--no-reproduce] [--no-probe] [--platform-card]");
+    console.error("usage: node scripts/image-rehearsal.mjs (--mount <v3-corpus directory or journey fixture mount> | --custody <custody directory> --checkpoint <mount-inputs.json> --tool <this commit's CI runtime artifact runtime/Lex.V3.Tool.dll> [--custody-encoding raw|brotli] [--allow-unbound-tool]) [--signing-key <PEM file, or - for standard input> --signer <identity>] [--keep] [--no-reproduce] [--no-probe] [--platform-card]");
     process.exit(2);
   }
   run.then(
