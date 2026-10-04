@@ -17,6 +17,8 @@ Working rules:
   repair round, then merge on green CI.
 - Update your lane's status file (`STATUS-WEB.md` or `STATUS-DATA.md`) in the same pull request;
   `STATUS.md` changes only for the heads and the owner's items.
+- Keep `OWNER-BRIEF.md` current: the owner's one-page view, at most 40 lines of plain words and no
+  hashes, updated in the first pull request of each day and whenever a run starts, ends or stops.
 - Owner decisions are money, legal or public claims, credentials and going live (the owner's standing
   order of 2026-09-30), plus the per-run publisher-traffic authorisations STATUS.md lists. They are
   asked in the pull request or at the weekly checkpoint, never assumed. Everything else the driver
