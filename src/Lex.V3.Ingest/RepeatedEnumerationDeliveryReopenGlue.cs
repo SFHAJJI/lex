@@ -3,6 +3,8 @@ using Lex.V3.Contracts;
 using Lex.V3.Contracts.Custody;
 using Lex.V3.Contracts.Source.Core;
 using Lex.V3.Contracts.Source.Http;
+using Lex.V3.Contracts.Source.Luxembourg;
+using Lex.V3.Ingest.Luxembourg;
 
 namespace Lex.V3.Ingest;
 
@@ -122,12 +124,14 @@ public sealed class RepeatedEnumerationDeliveryReopenGlue
         Func<int> currentCount,
         Action<int> setCount,
         CancellationToken cancellationToken,
-        WireRequestBudget budget)
+        WireRequestBudget budget,
+        LuxembourgGatewayTimeouts? gatewayTimeouts = null,
+        bool retryGatewayTimeout = false)
     {
         ArgumentNullException.ThrowIfNull(profile);
         return ObserveAsync(
             session, request, profile.ExpectedMediaType, executorWrittenMembership, currentCount, setCount,
-            cancellationToken, budget);
+            cancellationToken, budget, gatewayTimeouts, retryGatewayTimeout);
     }
 
     /// <summary>
@@ -150,7 +154,9 @@ public sealed class RepeatedEnumerationDeliveryReopenGlue
         Func<int> currentCount,
         Action<int> setCount,
         CancellationToken cancellationToken,
-        WireRequestBudget budget)
+        WireRequestBudget budget,
+        LuxembourgGatewayTimeouts? gatewayTimeouts = null,
+        bool retryGatewayTimeout = false)
     {
         ArgumentNullException.ThrowIfNull(session);
         ArgumentNullException.ThrowIfNull(request);
@@ -211,6 +217,22 @@ public sealed class RepeatedEnumerationDeliveryReopenGlue
                 executorWrittenMembership[evidenceDigest] = CustodyMembershipClassifier.Classify(evidenceReceipt);
                 if (await IsRetainedEuropeTransientFailureAsync(attempt, cancellationToken).ConfigureAwait(false)
                     && attemptOrdinal < maximumAttempts) continue;
+
+                // The Legilux gateway's read timeout (LuxembourgGatewayTimeouts): counted for the run's breaker
+                // whenever a Luxembourg caller passes its tracker, and retried as the same plan item only where that
+                // caller allows it, after the profile's maximum retry delay; the session then adds its own backoff.
+                if (gatewayTimeouts is not null &&
+                    await IsRetainedLuxembourgGatewayTimeoutAsync(attempt, cancellationToken).ConfigureAwait(false))
+                {
+                    gatewayTimeouts.RecordTimeout();
+                    if (retryGatewayTimeout && attemptOrdinal < maximumAttempts && gatewayTimeouts.MayRetry(attemptOrdinal))
+                    {
+                        await gatewayTimeouts.CoolDownAsync(session.SourceProfile.MaximumRetryDelay, cancellationToken)
+                            .ConfigureAwait(false);
+                        continue;
+                    }
+                }
+
                 break;
             }
 
@@ -304,6 +326,20 @@ public sealed class RepeatedEnumerationDeliveryReopenGlue
         catch (DecoderFallbackException) { return false; }
         return firstLine.StartsWith("Virtuoso 40001 Error ", StringComparison.Ordinal)
             && firstLine.Contains("Transaction deadlock", StringComparison.Ordinal);
+    }
+
+    // The Legilux gateway's read-timeout envelope: a complete 500 from the Legilux SPARQL endpoint whose retained body
+    // is exactly the template LuxembourgGatewayTimeouts.IsEnvelope matches. Read from custody here, outside the session
+    // (Decision 71), like the Publications Office check above.
+    private async Task<bool> IsRetainedLuxembourgGatewayTimeoutAsync(
+        RoutedHttpAcquisitionSession.AttemptResult attempt, CancellationToken cancellationToken)
+    {
+        if (attempt.Evidence is not { Outcome: CompleteHttpRouteOutcome } evidence) return false;
+        var terminal = evidence.Hops[^1];
+        if (terminal.Status != 500 || terminal.RequestUri != LuxembourgQueryPlan.PublisherEndpoint) return false;
+        var payload = await CustodyRestore.ReadByDigestCheckedAsync(
+            _custodyStore, terminal.Sha256, cancellationToken).ConfigureAwait(false);
+        return LuxembourgGatewayTimeouts.IsEnvelope(payload.Span);
     }
 
     /// <summary>
