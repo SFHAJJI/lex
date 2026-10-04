@@ -22,6 +22,20 @@ Updated 2026-10-04.
 - **The fragility.** One transient network failure still stops the whole EU population, and a robots bootstrap is
   never retried. The acquisition code is frozen until the combined mount exists, so this is changed only if it stops
   the run again (the ruling's exception for a defect that stops a run).
+- **It stopped the run again.** Run 15 ended at 15:26 UTC with exit 3, after 51 minutes, the same way: another
+  expression of the same family failed with `NetworkFailure/TransportBeforeHeaders`, and 12 robots bootstraps were
+  refused, in 252 requests.
+- **The smallest change that keeps the build.** A tool fix would need a new build, and a journal resumes only in the
+  build that wrote it. So the change is a supervisor around the unchanged runner, `C:\lex-v3\lanes\claude-eu-supervise.ps1`
+  (no runner or tool change):
+  - after a run ends on a publisher refusal (exit 3) or a resource stop (exit -1), it waits 30, then 60, then 120
+    minutes, then resumes from the journal into a fresh root with the same build, up to 8 times;
+  - when the EU run completes with both derives, it starts the Luxembourg runner and the canary waiter;
+  - any other ending stands it down, with a note in the driver's ledger.
+- **Run 16.** It resumed run 15 at 16:12 UTC. At 16:42 its journal held 576 units (the adapter, 292 Formex
+  enumerations, 282 packages), and it was fetching.
+- **After the populations.** The tool fix (retrying a transport failure and a robots bootstrap within the run) is
+  for after the populations, under a new build.
 
 ## An interrupted Luxembourg cover resumes after its delivered leaves (Claude, 2026-10-04)
 

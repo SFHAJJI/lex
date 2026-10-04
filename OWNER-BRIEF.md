@@ -1,6 +1,6 @@
 # Lex V3: the owner's brief
 
-Updated 2026-10-04 at 14:45 UTC by the driver. The driver updates this file in the first pull request of each
+Updated 2026-10-04 at 16:45 UTC by the driver. The driver updates this file in the first pull request of each
 day and whenever a run starts, ends or stops. At most 40 lines, plain words, no hashes. The detail stays in
 STATUS-WEB.md and STATUS-DATA.md; the acceptance list is LAUNCH-CONTRACT.md.
 
@@ -13,11 +13,12 @@ in English: search, dossier, reading, provision history, compare, radar, trust a
 
 ## What is running
 
-- EU population run 14 stopped on 4 October at 14:20 UTC, after 5 hours: the network to the EU publisher
-  failed, and one failed request stops the whole run. It resumed at 14:34 UTC as run 15, with the same tool,
-  keeping everything already fetched, and should end about 5 October 10:00 UTC.
-- The Luxembourg run is armed again: it starts by itself when the EU run ends and takes about 64 hours, so it
-  should end about 8 October. A waiter then builds a small chained canary for the replay gates.
+- The EU population run stopped twice on 4 October (14:20 and 15:26 UTC): the network to the EU publisher
+  failed, and one failed request stops the whole run. A supervisor now resumes it after each such stop, waiting
+  30 to 120 minutes, with the same tool and nothing fetched lost. Run 16 has fetched since 16:12 UTC; with no
+  more stops it ends about midday on 5 October.
+- The supervisor starts the Luxembourg run when the EU run ends; it takes about 64 hours, so it should end
+  about 8 October. A waiter then builds a small chained canary for the replay gates.
 - Then the combined mount is derived twice, its journeys, gates and release rehearsal run, and the first real
   mount is served on this machine between 8 and 10 October. The acquisition code does not change until then.
 
@@ -36,5 +37,4 @@ Target 7 November 2026. It holds if both runs finish by 10 October and Azure is 
 ## Done this week
 
 EU text with its rights notice, the EU time view, exports and the annex control, the French interface (accepted
-by the owner on 4 October), browser journeys on every pull request, the release path from custody in CI, and
-the resume of an interrupted run from its journal, which saved run 14's five hours today.
+4 October), browser journeys on every pull request, the release path from custody in CI, and resume from a journal.
