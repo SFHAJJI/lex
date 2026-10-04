@@ -358,14 +358,24 @@ public sealed class LuxembourgDocumentGetAttemptResult
         bool retryAllowanceSpent,
         LuxembourgDocumentGetAttemptRefusal? refusal,
         string? deniedRobotsPath,
-        string? detail)
+        string? detail,
+        SourceArtifactRef? robotsRoute = null)
     {
         Evidence = evidence;
         RetryAllowanceSpent = retryAllowanceSpent;
         Refusal = refusal;
         DeniedRobotsPath = deniedRobotsPath;
         Detail = detail;
+        RobotsRoute = robotsRoute;
     }
+
+    /// <summary>
+    /// The retained robots route of the run whose admitted policy evaluated this GET's URL: present when the GET went
+    /// through a document phase's shared session, which retains its robots fetch before its first document. Its body
+    /// re-derives this GET's robots verdict offline (<see cref="LuxembourgDocumentFetchRouteReader"/>). Null for a GET
+    /// sent on a session of its own, whose robots fetch is not retained.
+    /// </summary>
+    public SourceArtifactRef? RobotsRoute { get; }
 
     /// <summary>The real, retained route evidence for this one GET. Present iff this is <see cref="Executed"/>.</summary>
     public RoutedHttpEvidence? Evidence { get; }
@@ -391,13 +401,14 @@ public sealed class LuxembourgDocumentGetAttemptResult
 
     public static LuxembourgDocumentGetAttemptResult Executed(
         RoutedHttpEvidence evidence,
-        bool retryAllowanceSpent)
+        bool retryAllowanceSpent,
+        SourceArtifactRef? robotsRoute = null)
     {
         ArgumentNullException.ThrowIfNull(evidence);
-        return new(evidence, retryAllowanceSpent, null, null, null);
+        return new(evidence, retryAllowanceSpent, null, null, null, robotsRoute);
     }
 
-    public static LuxembourgDocumentGetAttemptResult RobotsRefused(string deniedPath)
+    public static LuxembourgDocumentGetAttemptResult RobotsRefused(string deniedPath, SourceArtifactRef? robotsRoute = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(deniedPath);
         return new(
@@ -405,7 +416,8 @@ public sealed class LuxembourgDocumentGetAttemptResult
             false,
             LuxembourgDocumentGetAttemptRefusal.RobotsDisallowed,
             deniedPath,
-            $"legilux.public.lu robots.txt disallows '{deniedPath}' for the Lex product token.");
+            $"legilux.public.lu robots.txt disallows '{deniedPath}' for the Lex product token.",
+            robotsRoute);
     }
 
     public static LuxembourgDocumentGetAttemptResult Refused(
@@ -422,7 +434,7 @@ public sealed class LuxembourgDocumentGetAttemptResult
     }
 }
 
-public sealed class LuxembourgRepeatedEnumerationExecutor
+public sealed partial class LuxembourgRepeatedEnumerationExecutor
 {
     private readonly ICustodyStore _custodyStore;
     private readonly TimeProvider _timeProvider;
@@ -756,78 +768,8 @@ public sealed class LuxembourgRepeatedEnumerationExecutor
         var session = start.Session;
         try
         {
-            var item = session.OpenPlanItem(boundRequest);
-            var maximumAttempts = session.SourceProfile.MaximumAttempts;
-            var attemptCount = 0;
-            RoutedHttpAcquisitionSession.AttemptResult attempt;
-            while (true)
-            {
-                // EVERY ATTEMPT, NOT ONLY THE FIRST. This door re-attempts a COMPLETED response at a
-                // retryable status - the one place this driver deliberately differs from the EU one,
-                // documented below - so the retry loop is exactly where a body-fetch ceiling would
-                // otherwise be lost. That the first request was charged says nothing about the sixth.
-                if (!wireBudget.TryReserveAttempt())
-                {
-                    return LuxembourgDocumentGetAttemptResult.Refused(
-                        LuxembourgDocumentGetAttemptRefusal.WireBudgetExhausted,
-                        $"the ceiling was reached after {attemptCount} attempt(s).");
-                }
-
-                attempt = await item.ExecuteNextAttemptAsync(cancellationToken).ConfigureAwait(false);
-                attemptCount++;
-
-                // NO REDIRECT-HOP CEILING MAPPING HERE, AND THE ASYMMETRY WITH THE EU DOCUMENT
-                // FETCH IS DELIBERATE. That door maps the session's own RedirectTargetNotSentWire-
-                // BudgetExhausted outcome because the EU document profile admits a same-origin 303
-                // chain. This publisher's document profile expects no redirect on this route at
-                // all: a 303 here ends the route as SourceProfileStale before any successor could
-                // be considered, so the session's hop gate is unreachable from this door. A mapping
-                // for a case that cannot occur was drafted, measured against the profile, and
-                // removed rather than left to claim a path that does not exist.
-                if (attempt.Kind == OfficialHttpAcquisitionOutcomeKind.ExecutedObservation)
-                {
-                    // The one place this driver deliberately differs from the EU one: a completed
-                    // response at a retryable status is re-attempted rather than returned at once.
-                    // The session's own PlanItem.IsRetryable already admits exactly these six
-                    // statuses, so without this loop the profile's retry allowance was declared and
-                    // never spent, and a single 503 would still have been reported downstream as
-                    // "retry exhausted". Now that name is earned or not claimed.
-                    if (attemptCount >= maximumAttempts || !IsRetryableStatus(attempt))
-                    {
-                        break;
-                    }
-
-                    continue;
-                }
-
-                var retryable = attempt.PreHeaderFailureClass is
-                    HttpPreHeaderFailureClass.HeaderDeadline or
-                    HttpPreHeaderFailureClass.TransportBeforeHeaders;
-                if (!retryable || attemptCount >= maximumAttempts)
-                {
-                    return LuxembourgDocumentGetAttemptResult.Refused(
-                        LuxembourgDocumentGetAttemptRefusal.ObservationNotExecuted,
-                        $"{attempt.OperationalReason}/{attempt.PreHeaderFailureClass}");
-                }
-            }
-
-            var evidence = attempt.Evidence!;
-
-            // Decision 78 retention: a run holds what it depends on. The evidence document is
-            // written and reopened by digest exactly as every other channel already does, so a
-            // document GET's own evidence is retained custody too, never left to live only in this
-            // process's memory.
-            var evidenceBytes = evidence.CopyCanonicalBytes();
-            var evidenceReceipt = await _custodyStore.CreateAsync(
-                    evidenceBytes, CustodyClass.NightlyFloor90d, cancellationToken)
-                .ConfigureAwait(false);
-            var reopenedEvidenceBytes = await CustodyRestore.ReadByDigestCheckedAsync(
-                    _custodyStore, evidenceReceipt.Reference.ContentSha256, cancellationToken)
-                .ConfigureAwait(false);
-            var reopenedEvidence = RoutedHttpEvidence.ParseAndVerify(reopenedEvidenceBytes.Span);
-
-            return LuxembourgDocumentGetAttemptResult.Executed(
-                reopenedEvidence, attemptCount >= maximumAttempts && IsRetryableStatus(attempt));
+            return await RunOpenedDocumentAsync(session, session.OpenPlanItem(boundRequest), wireBudget, robotsRoute: null,
+                cancellationToken).ConfigureAwait(false);
         }
         catch (Exception exception) when (exception is CustodyIntegrityException or CustodyRequiredException)
         {

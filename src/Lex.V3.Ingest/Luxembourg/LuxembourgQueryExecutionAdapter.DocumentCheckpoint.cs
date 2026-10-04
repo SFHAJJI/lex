@@ -12,7 +12,10 @@ namespace Lex.V3.Ingest.Luxembourg;
 
 public sealed partial class LuxembourgQueryExecutionAdapter
 {
-    private const string DocumentCheckpointSchema = "lex-lu-selected-documents-checkpoint/1";
+    // /2: every GET was evaluated by a phase's shared session and names the retained robots route that evaluated it.
+    // /1: a session per GET, no robots route retained; still read, with its own rules.
+    private const string DocumentCheckpointSchema = "lex-lu-selected-documents-checkpoint/2";
+    private const string PriorDocumentCheckpointSchema = "lex-lu-selected-documents-checkpoint/1";
 
     internal async Task<DocumentAcquisitionData> RunDocumentAcquisitionAsync(ScopeManifest manifest,
         IReadOnlyDictionary<SourceObjectRef, LuxembourgDocumentFetchAddress> addresses,
@@ -27,7 +30,7 @@ public sealed partial class LuxembourgQueryExecutionAdapter
         var snapshot = addresses.ToDictionary();
         // A journaled run journals each GET under this selection's input digest, and a resumed one replays only the GETs
         // its interrupted run journaled for the same selection.
-        var capture = Progress is null ? new DocumentReplay(null)
+        using var capture = Progress is null ? new DocumentReplay(null)
             : new DocumentReplay(null, Progress, AcquisitionJournal.LuxembourgDocumentPhase, DocumentInputDigest(manifest, snapshot));
         var result = await RunDocumentAcquisitionCoreAsync(manifest, snapshot, renderer, budget, cancellationToken, capture).ConfigureAwait(false);
         if (result.Refusal is not null) return (result, null);
@@ -50,7 +53,11 @@ public sealed partial class LuxembourgQueryExecutionAdapter
     }
 
     /// <summary>Repeats selected-row acquisition logic from the original requests and retained routes.</summary>
-    /// <remarks>Current body holds still run. Captured robots refusals stay refusals; no fresh robots verdict is asserted.</remarks>
+    /// <remarks>
+    /// Current body holds still run. Captured robots refusals stay refusals, and no fresh robots verdict is fetched: a /2
+    /// checkpoint re-derives each GET's original verdict from the retained robots route that evaluated it, and a /1
+    /// checkpoint, whose robots fetches were not retained, asserts none.
+    /// </remarks>
     internal static async Task<DocumentAcquisitionData> ReopenDocumentAcquisitionAsync(ICustodyStore store,
         SourceArtifactRef checkpoint, VerifiedLuxembourgSourceProfile profile, ScopeManifest manifest,
         IReadOnlyDictionary<SourceObjectRef, LuxembourgDocumentFetchAddress> addresses,
@@ -68,11 +75,12 @@ public sealed partial class LuxembourgQueryExecutionAdapter
         try
         {
             var document = ContractJson.Deserialize<DocumentCheckpoint>(new UTF8Encoding(false, true).GetString(bytes.Span));
-            if (document.Schema != DocumentCheckpointSchema || !bytes.Span.SequenceEqual(EncodeDocument(document)) ||
+            if (document.Schema is not (DocumentCheckpointSchema or PriorDocumentCheckpointSchema) ||
+                !bytes.Span.SequenceEqual(EncodeDocument(document)) ||
                 document.InputSha256 != DocumentInputDigest(manifest, snapshot) || document.Renderer != renderer.Reference ||
                 document.Fetches is null || document.Fetches.Any(static fetch => fetch is null || fetch.Ordinal < 0))
                 throw new CustodyIntegrityException("Document checkpoint framing or selected inputs disagree.");
-            var replay = new DocumentReplay(document);
+            using var replay = new DocumentReplay(document);
             var budget = WireRequestBudget.OfWireRequests(2);
             var adapter = new LuxembourgQueryExecutionAdapter(store,
                 new LuxembourgRepeatedEnumerationExecutor(store, TimeProvider.System), profile);
@@ -112,9 +120,15 @@ public sealed partial class LuxembourgQueryExecutionAdapter
     private static byte[] EncodeDocument(DocumentCheckpoint value) => Encoding.UTF8.GetBytes(ContractJson.Serialize(value));
     private sealed record DocumentCheckpoint(string Schema, string InputSha256, SourceArtifactRef Renderer,
         DocumentFetch[] Fetches, string ResultSha256);
+    /// <param name="Robots">
+    /// The retained robots route of the shared session that evaluated this GET's URL (a /2 checkpoint, every fetch);
+    /// absent from a /1 fetch's bytes, which are therefore unchanged.
+    /// </param>
     private sealed record DocumentFetch(int Ordinal, SourceArtifactRef Address, string PlanId, string InputId,
         SourceArtifactRef? Route, SourceArtifactRef? Run, string? RequestSha256,
-        LuxembourgDocumentGetAttemptRefusal? Refusal, string? DeniedRobotsPath, string? Detail);
+        LuxembourgDocumentGetAttemptRefusal? Refusal, string? DeniedRobotsPath, string? Detail,
+        [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+        SourceArtifactRef? Robots = null);
 
     /// <summary>
     /// One phase's GETs: captured live (no checkpoint), or replayed in order from a retained checkpoint. A live phase of
@@ -123,10 +137,23 @@ public sealed partial class LuxembourgQueryExecutionAdapter
     /// selection, row and address, admitted through the retained-route reader a full replay uses.
     /// </summary>
     private sealed class DocumentReplay(DocumentCheckpoint? document, LuxembourgAcquisitionProgress? progress = null,
-        string phase = "", string inputSha256 = "")
+        string phase = "", string inputSha256 = "") : IDisposable
     {
         private readonly HashSet<string> _journaled = new(StringComparer.Ordinal);
+        private LuxembourgRepeatedEnumerationExecutor.DocumentGetBatch? _batch;
         private int _index;
+
+        public void Dispose() => _batch?.Dispose();
+
+        // An executed fetch reopened through the reader its record calls for: a shared session's GET with the robots
+        // route that evaluated it, a GET on a session of its own as before.
+        private static Task<LuxembourgDocumentGetAttemptResult> ReopenExecutedAsync(ICustodyStore store, DocumentFetch fetch,
+            LuxembourgDocumentFetchAddress address, BoundMachineRequest request, CancellationToken cancellationToken) =>
+            fetch.Robots is { } robots
+                ? LuxembourgDocumentFetchRouteReader.ReopenAdmittedAsync(store, fetch.Route!, fetch.Run!, fetch.RequestSha256!,
+                    address, request, robots, cancellationToken)
+                : LuxembourgDocumentFetchRouteReader.ReopenAsync(store, fetch.Route!, fetch.Run!, fetch.RequestSha256!,
+                    address, request, cancellationToken);
         internal List<DocumentFetch> Fetches { get; } = [];
         internal async Task<LuxembourgDocumentGetAttemptResult> FetchAsync(ICustodyStore store,
             LuxembourgRepeatedEnumerationExecutor executor, int ordinal, LuxembourgDocumentFetchAddress address,
@@ -137,8 +164,8 @@ public sealed partial class LuxembourgQueryExecutionAdapter
                 try
                 {
                     var journaledRequest = new LuxembourgDocumentFetchPlan(address).Bind(journaled.PlanId, journaled.InputId, renderer);
-                    var reopened = await LuxembourgDocumentFetchRouteReader.ReopenAsync(store, journaled.Route!, journaled.Run!,
-                        journaled.RequestSha256!, address, journaledRequest.Request, cancellationToken).ConfigureAwait(false);
+                    var reopened = await ReopenExecutedAsync(store, journaled, address, journaledRequest.Request, cancellationToken)
+                        .ConfigureAwait(false);
                     Fetches.Add(journaled);
                     progress?.Tally(phase, replayed: true);
                     await JournalAsync(journaled).ConfigureAwait(false);
@@ -155,13 +182,14 @@ public sealed partial class LuxembourgQueryExecutionAdapter
             {
                 var bound = new LuxembourgDocumentFetchPlan(address).Bind(
                     $"urn:uuid:{Guid.NewGuid():D}", $"urn:uuid:{Guid.NewGuid():D}", renderer);
-                var attempt = await executor.RunDocumentGetAsync(bound.Request, budget, cancellationToken).ConfigureAwait(false);
+                var attempt = await (_batch ??= executor.OpenDocumentGetBatch()).RunAsync(bound.Request, budget, cancellationToken)
+                    .ConfigureAwait(false);
                 var route = attempt.Evidence;
                 var captured = new DocumentFetch(ordinal, address.ArtifactRef, bound.MachinePlanRef.ResourceId,
                     bound.InputArtifact.ArtifactRef.ResourceId,
                     route is null ? null : new SourceArtifactRef($"urn:uuid:{Guid.NewGuid():D}", CustodyDigest.Of(route.CopyCanonicalBytes())),
                     route?.RunIdentity, route?.Hops[0].LogicalRequestSha256,
-                    attempt.Refusal, attempt.DeniedRobotsPath, attempt.Detail);
+                    attempt.Refusal, attempt.DeniedRobotsPath, attempt.Detail, attempt.RobotsRoute);
                 Fetches.Add(captured);
                 progress?.Tally(phase, replayed: false);
                 await JournalAsync(captured).ConfigureAwait(false);
@@ -173,22 +201,27 @@ public sealed partial class LuxembourgQueryExecutionAdapter
             if (fetch.Ordinal != ordinal || fetch.Address != address.ArtifactRef)
                 throw new CustodyIntegrityException("Retained fetch differs from the selected object or file identity.");
             var original = new LuxembourgDocumentFetchPlan(address).Bind(fetch.PlanId, fetch.InputId, renderer);
+            // A /2 checkpoint names the robots route behind every fetch; a /1 checkpoint names none.
+            if ((document.Schema == DocumentCheckpointSchema) != (fetch.Robots is not null))
+                throw new CustodyIntegrityException("Retained fetch does not carry the robots evidence its checkpoint version requires.");
             if (fetch.Route is null)
             {
                 if (fetch.Run is not null || fetch.RequestSha256 is not null ||
                     fetch.Refusal != LuxembourgDocumentGetAttemptRefusal.RobotsDisallowed ||
-                    fetch.DeniedRobotsPath != address.FetchUri.AbsolutePath)
+                    fetch.DeniedRobotsPath != address.FetchUri.PathAndQuery)
                     throw new CustodyIntegrityException("Successful document phase has an inconsistent unexecuted refusal.");
-                var refused = LuxembourgDocumentGetAttemptResult.RobotsRefused(fetch.DeniedRobotsPath);
-                if (refused.Detail != fetch.Detail)
+                var refused = fetch.Robots is { } robots
+                    ? await LuxembourgDocumentFetchRouteReader.ReopenRobotsRefusalAsync(store, robots, address, original.Request, cancellationToken)
+                        .ConfigureAwait(false)
+                    : LuxembourgDocumentGetAttemptResult.RobotsRefused(fetch.DeniedRobotsPath);
+                if (refused.Detail != fetch.Detail || refused.DeniedRobotsPath != fetch.DeniedRobotsPath)
                     throw new CustodyIntegrityException("Retained robots refusal detail disagrees with its selected path.");
                 return refused;
             }
             if (fetch.Run is null || fetch.RequestSha256 is null || fetch.Refusal is not null ||
                 fetch.DeniedRobotsPath is not null || fetch.Detail is not null)
                 throw new CustodyIntegrityException("Executed document has inconsistent retained evidence.");
-            return await LuxembourgDocumentFetchRouteReader.ReopenAsync(store, fetch.Route, fetch.Run,
-                fetch.RequestSha256, address, original.Request, cancellationToken).ConfigureAwait(false);
+            return await ReopenExecutedAsync(store, fetch, address, original.Request, cancellationToken).ConfigureAwait(false);
         }
         internal void RequireEnd()
         {
@@ -231,7 +264,7 @@ public sealed partial class LuxembourgQueryExecutionAdapter
             var key = FetchKey(fetch.Ordinal, fetch.Address);
             if (!_journaled.Add(key)) return;
             await journal.AppendAsync(phase, key, AcquisitionJournal.Payload(new JournaledFetch(inputSha256, fetch)),
-                [fetch.Route.Sha256]).ConfigureAwait(false);
+                fetch.Robots is { } robots ? [fetch.Route.Sha256, robots.Sha256] : [fetch.Route.Sha256]).ConfigureAwait(false);
         }
     }
 }

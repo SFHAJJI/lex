@@ -223,6 +223,30 @@ internal sealed class RoutedHttpAcquisitionSession : IDisposable
         return session.BootstrapRobotsAsync(cancellationToken);
     }
 
+    /// <summary>
+    /// Opens a plan item for a URL other than this run's source witness only when this run's own admitted robots policy
+    /// allows that exact URL (Decision 83): the verdict is computed here, from the bytes this run's bootstrap fetched and
+    /// held, before any request ordinal is allocated. A Luxembourg document phase sends many documents through one run
+    /// this way, so one robots fetch serves them all and every one is still evaluated literally.
+    /// </summary>
+    /// <returns>
+    /// The opened item and <see cref="RobotsPolicyEvaluationResult.Allowed"/>; or no item, with
+    /// <see cref="RobotsPolicyEvaluationResult.Denied"/> (the publisher's own refusal of that path) or
+    /// <see cref="RobotsPolicyEvaluationResult.UnsafeToInterpret"/>, and the path evaluated.
+    /// </returns>
+    internal (IPlanItem? Item, RobotsPolicyEvaluationResult Verdict, string EvaluatedPath) OpenPlanItemAdmittedByRobots(
+        BoundMachineRequest request)
+    {
+        ThrowIfDisposed();
+        ArgumentNullException.ThrowIfNull(request);
+        var identity = MachineQueryBinder.OpenIdentity(request);
+        var path = Uri.TryCreate(identity.RequestedUri, UriKind.Absolute, out var parsed) ? parsed.PathAndQuery : identity.RequestedUri;
+        var verdict = EvaluateAdmittedRobots(identity.RequestedUri);
+        return verdict == RobotsPolicyEvaluationResult.Allowed
+            ? (OpenPlanItem(request), verdict, path)
+            : (null, verdict, path);
+    }
+
     internal IPlanItem OpenPlanItem(BoundMachineRequest request)
     {
         ThrowIfDisposed();
@@ -234,6 +258,15 @@ internal sealed class RoutedHttpAcquisitionSession : IDisposable
             throw new ArgumentException(
                 "An acquisition run cannot cross its source profile or robots generation.",
                 nameof(request));
+        }
+
+        // Decision 83: the bootstrap evaluated the source witness's own URL; any other URL this run opens must be allowed
+        // by the same admitted policy, evaluated literally, or nothing is opened for it.
+        if (!string.Equals(identity.RequestedUri, _sourceWitnessIdentity.RequestedUri, StringComparison.Ordinal) &&
+            EvaluateAdmittedRobots(identity.RequestedUri) != RobotsPolicyEvaluationResult.Allowed)
+        {
+            throw new InvalidOperationException(
+                "This run's robots policy does not allow the requested URL; nothing is opened for it.");
         }
 
         ulong ordinal;

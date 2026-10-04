@@ -12,7 +12,9 @@ namespace Lex.V3.Ingest.Luxembourg;
 
 public sealed partial class LuxembourgQueryExecutionAdapter
 {
-    private const string GazetteCheckpointSchema = "lex-lu-gazette-checkpoint/1";
+    // /2: the listing GETs went through the phase's shared session and name its robots route; /1 is still read.
+    private const string GazetteCheckpointSchema = "lex-lu-gazette-checkpoint/2";
+    private const string PriorGazetteCheckpointSchema = "lex-lu-gazette-checkpoint/1";
 
     internal async Task<GazetteAcquisitionData> RunGazetteAcquisitionAsync(LuxembourgProfileResolution.Resolved resolved,
         ScopeManifest manifest, IReadOnlyDictionary<SourceObjectRef, LuxembourgDocumentFetchAddress> addresses,
@@ -33,7 +35,7 @@ public sealed partial class LuxembourgQueryExecutionAdapter
         var heldSnapshot = held.ToDictionary();
         // The Gazette selection's input digest names the document phase's held routes, so a resume replays Gazette GETs
         // only after a document phase that held the same routes.
-        var capture = Progress is null ? new DocumentReplay(null)
+        using var capture = Progress is null ? new DocumentReplay(null)
             : new DocumentReplay(null, Progress, AcquisitionJournal.LuxembourgGazettePhase,
                 GazetteInputDigest(resolved, manifest, addressSnapshot, heldSnapshot));
         var result = await RunGazetteAcquisitionCoreAsync(resolved, manifest, addressSnapshot, heldSnapshot,
@@ -80,11 +82,14 @@ public sealed partial class LuxembourgQueryExecutionAdapter
         try
         {
             var document = ContractJson.Deserialize<GazetteCheckpoint>(new UTF8Encoding(false, true).GetString(bytes.Span));
-            if (document.Schema != GazetteCheckpointSchema || !bytes.Span.SequenceEqual(EncodeGazette(document)) ||
+            if (document.Schema is not (GazetteCheckpointSchema or PriorGazetteCheckpointSchema) ||
+                !bytes.Span.SequenceEqual(EncodeGazette(document)) ||
                 document.Renderer != renderer.Reference || document.InputSha256 != GazetteInputDigest(resolved, manifest, addressSnapshot, heldSnapshot) ||
                 document.Fetches is null || document.Fetches.Any(static fetch => fetch is null || fetch.Ordinal < 0))
                 throw new CustodyIntegrityException("Gazette checkpoint framing or independently selected inputs disagree.");
-            var replay = new DocumentReplay(new DocumentCheckpoint(DocumentCheckpointSchema,
+            // The document rules of the same version: a /1 Gazette checkpoint's fetches name no robots route.
+            using var replay = new DocumentReplay(new DocumentCheckpoint(
+                document.Schema == GazetteCheckpointSchema ? DocumentCheckpointSchema : PriorDocumentCheckpointSchema,
                 document.InputSha256, document.Renderer, document.Fetches, document.ResultSha256));
             var budget = WireRequestBudget.OfWireRequests(2);
             var adapter = new LuxembourgQueryExecutionAdapter(store,
