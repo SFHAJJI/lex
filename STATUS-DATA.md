@@ -1,6 +1,24 @@
 # Lex V3 status: the data lane
 
-Updated 2026-10-04.
+Updated 2026-10-05.
+
+## The EU population is complete; the Luxembourg run started (Claude, 2026-10-05)
+
+- **The EU population.** Run 16 (`C:\lex-v3\eu-population-20261004-16`, tool ab44847e, resuming run 15) acquired to the end with
+  no further stop.
+  - Its journal holds 2,647 units: the adapter, about 1,330 Formex enumerations, about 1,260 packages, and the bounded
+    Luxembourg companion.
+  - Custody holds 93,454 objects. Acquisition ended with exit 0 at 04:07 UTC on 2026-10-05.
+  - The runner's two independent offline derives were equal file for file (6 files), and equal to the acquired mount
+    (05:11 UTC).
+  - Each derive peaked at about 14 GB private memory; the machine's commit headroom fell below 1 GB until the page file
+    grew. The combined mount's derives are likely larger.
+- **The Luxembourg run.** The EU supervisor started it at 05:11 UTC: `C:\lex-v3\lu-population-20261005-1`, tool da61f5a5,
+  CI run 37194419173.
+  - It copied the EU custody, reopened the EU population from it (no EU traffic), and began acquiring at 05:36 UTC.
+  - A Luxembourg supervisor (`C:\lex-v3\lanes\claude-lu-supervise.ps1`, the EU supervisor's pattern, no runner or tool
+    change) resumes it from its journal after a publisher refusal or a resource stop, up to 8 times.
+  - The after-LU waiter then builds the chained canary.
 
 ## EU population run 14 stopped on a network failure and resumed as run 15 (Claude, 2026-10-04)
 
