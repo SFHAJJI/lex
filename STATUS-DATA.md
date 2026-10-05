@@ -2,6 +2,38 @@
 
 Updated 2026-10-05.
 
+## The Luxembourg assertion pages' language-tagged titles: a defect that stopped the run (Claude, 2026-10-05)
+
+- **The stops.** Luxembourg run 2 resumed run 1 and proved seven of the nine families (code-s, code-a, code-g, loi-s,
+  loi-g, rgd-s, rgd-g). It was refused at 16:03 UTC because `legislative-loi-a` and `legislative-rgd-a` could not be
+  proven. Both ended `CoverRefused` with `page_decode_failed_on_our_side`, and run 1 had refused them the same way,
+  behind its code-a failure.
+- **The cause.** A retained page of each family was read from custody.
+  - 12 of 997 and 8 of 997 rows had no `datatype_iri` and no `key_5`. Every one of them, and only those, was a
+    language-tagged literal (`jolux:title`, `xml:lang` "fr").
+  - Legilux's engine does not answer `DATATYPE()` with `rdf:langString` for such a literal, as SPARQL 1.1 specifies.
+    The behaviour is documented for Cellar (`EuPageDecodeClassificationTests`' retained page, which
+    `LuxembourgDraftGraphDiscoveryPlan` cites); these two pages are its first measurement on Legilux.
+  - So the assertion-rows template's `STR(DATATYPE(?object))` errored and left the column and the key unbound.
+  - The strict page decoder demands all six keys. It refused the page, deterministically, so no resume could pass it.
+- **The fix.** It is one line, the smallest change (STANDING-ORDERS.md section 8, item 2's exception, recorded there):
+  `BIND(IF(isLiteral(?object), COALESCE(STR(DATATYPE(?object)), ""), "") AS ?datatype_iri)`.
+  - The column is made total, not only the key, because it is a canonical-key component that the delivery proof requires
+    bound and that the decoder refuses unbound.
+  - Nothing is lost: `language_tag` is non-empty for exactly those literals, and `LuxembourgLiteralCanonicalizer` reads
+    an empty datatype with a language tag as `rdf:langString`.
+  - `LuxembourgAssertionRowsTemplateTests` holds the template and the reading. It fails with the old line.
+  - 1,235 of 1,248 Luxembourg, census and surface tests pass with the change; the other 13 are canaries and writers,
+    skipped by default.
+  - Two pins name the plan's bytes and were re-pinned (CI of #937). The plan's canonical bytes went from 79,812 to
+    79,844: two copies of the 16 escaped bytes, in the page template and its count template. The plan digest and the
+    retained count policy's digest changed with them.
+  - The restart reads most of loi-a and rgd-a for the first time, and another row shape could still stop it. The one
+    the review named is a title longer than the 2,047-byte cursor-key limit. Across the 1,714 Luxembourg pages already
+    held (1.34 million rows), the longest title key is 326 bytes.
+- **What follows.** A new build cannot resume the old journal. The Luxembourg supervisor was stopped before its pointless
+  resume, and the Luxembourg run restarts on the merged build, reusing the EU population's custody (no EU traffic).
+
 ## The EU population is complete; the Luxembourg run started (Claude, 2026-10-05)
 
 - **The EU population.** Run 16 (`C:\lex-v3\eu-population-20261004-16`, tool ab44847e, resuming run 15) acquired to the end with

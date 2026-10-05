@@ -1,6 +1,6 @@
 # Lex V3: the owner's brief
 
-Updated 2026-10-05 at 11:20 UTC by the driver. The driver updates this file in the first pull request of each
+Updated 2026-10-05 at 16:50 UTC by the driver. The driver updates this file in the first pull request of each
 day and whenever a run starts, ends or stops. At most 40 lines, plain words, no hashes. The detail stays in
 STATUS-WEB.md and STATUS-DATA.md; the acceptance list is LAUNCH-CONTRACT.md.
 
@@ -15,10 +15,10 @@ in English: search, dossier, reading, provision history, compare, radar, trust a
 
 - The EU population is complete: fetched by 5 October 04:07 UTC (two network stops on 4 October were resumed
   by a supervisor, nothing lost), then derived twice with identical results at 05:11 UTC.
-- The Luxembourg run started on 5 October at 05:36 UTC, reusing the EU population with no EU traffic. At 10:47
-  UTC a Legilux server failed to respond and the run stopped; its supervisor resumed it at 11:17 UTC, keeping the
-  work done. It takes about 64 hours of fetching, so it should end about 8 October; a waiter then builds a small
-  chained canary for the replay gates.
+- The Luxembourg run is stopped. 7 of its 9 families were proven, but two could never be: some old titles carry
+  a language tag the publisher's engine does not type, and our reader refused those pages. A one-line fix (the
+  frozen code's allowed exception) is under review. The run then restarts on it for about 64 hours, so it should
+  end about 9 October; a waiter then builds a small chained canary for the replay gates.
 - Then the combined mount is derived twice, its journeys, gates and release rehearsal run, and the first real
   mount is served on this machine between 8 and 10 October. The acquisition code does not change until then.
 

@@ -436,8 +436,10 @@ public sealed class RoutedHttpRequestPolicyAuditTests
     /// the narrow replacement keeps that assertion while allowing the evidence-bearing runtime
     /// artifact to identify the actual runtime patch on each host.
     /// </summary>
+    /// Transcribed again on 2026-10-05 when the Luxembourg plan's assertion-rows datatype term was made total (the plan
+    /// the policy names changed; LuxembourgQueryPlanTests pins those bytes).
     private const string PinnedNormalizedLuxembourgCountPolicySha256 =
-        "098fbee9972a893e9f402d7c3df5dbd90dcaa38941b74525224fb5dbb8079d02";
+        "0cf3e57bce0f6b8494b944b09a229d6c42724bd190f145a643e90592c5d0d379";
 
     [TestMethod]
     public async Task LuxembourgCountSendsAgainstAFreshRealStoreHoldingNothing()
