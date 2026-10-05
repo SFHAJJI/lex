@@ -14,7 +14,8 @@ script is the kit for it. It never logs in, never reads, prints or stores a secr
 Without -Apply it only plans: it verifies the release and prints every command it would run, and changes nothing.
 With -Apply, in order:
 1. the release is read back under the signing identity's public key (`web/scripts/deploy-probe.mjs`, without
-   --origin); nothing is deployed from a release that does not verify;
+   --origin), and as signed by the release signer -SignerIdentity names, never a rehearsal; nothing is deployed from a
+   release that does not verify. -Apply requires -SignerIdentity; a plan run without it may read a rehearsal release;
 2. the release image is copied into the registry out of the release by its manifest digest (`oras cp`); the app is
    deployed by that digest, never by a tag;
 3. `deploy/main.bicep` is deployed: the image by digest as a new revision with the `candidate` label and no traffic
@@ -30,7 +31,7 @@ Promotion (moving traffic to the candidate) is printed for the owner and never r
 .EXAMPLE
 pwsh -File deploy/deploy.ps1 -Subscription <id> -ResourceGroup rg-lex-v3 -EnvironmentId <managed environment id> `
   -Registry crlex.azurecr.io -IdentityResourceId <user-assigned identity id> -SigningPublicKey release-signing.pem `
-  -Release C:\releases\v3-... -LiveRevision ca-lex-v3--v3-previous -Apply
+  -SignerIdentity <the release signer's identity> -Release C:\releases\v3-... -LiveRevision ca-lex-v3--v3-previous -Apply
 #>
 [CmdletBinding(DefaultParameterSetName = 'Deploy')]
 param(
@@ -43,6 +44,7 @@ param(
     [Parameter(ParameterSetName = 'Deploy')] [string] $Repository = 'lex-v3',
     [Parameter(Mandatory, ParameterSetName = 'Deploy')] [string] $IdentityResourceId,
     [Parameter(Mandatory, ParameterSetName = 'Deploy')] [string] $SigningPublicKey,
+    [Parameter(ParameterSetName = 'Deploy')] [string] $SignerIdentity = '',
     [Parameter(Mandatory, ParameterSetName = 'Deploy')] [string] $Release,
     [Parameter(ParameterSetName = 'Deploy')] [string] $LiveRevision = '',
     [Parameter(ParameterSetName = 'Deploy')] [string] $ProbeSourceCidr = '',
@@ -83,12 +85,16 @@ if (-not [string]::IsNullOrEmpty($ProbeSourceCidr) -and -not [string]::IsNullOrE
 if ([string]::IsNullOrEmpty($LiveRevision) -and [string]::IsNullOrEmpty($ProbeSourceCidr)) {
     throw "A first deployment (no -LiveRevision) needs -ProbeSourceCidr, so that only the owner's probe reaches the candidate until promotion."
 }
+if ($Apply -and [string]::IsNullOrWhiteSpace($SignerIdentity)) {
+    throw "-Apply deploys a release signed by the release signer: name its identity with -SignerIdentity. A rehearsal release is for plan runs only."
+}
+$signerProbe = if ([string]::IsNullOrWhiteSpace($SignerIdentity)) { @() } else { @('--signer', $SignerIdentity) }
 
 # 1. The release, read back under the signing identity's key, before anything touches Azure.
 Step "verify the release under the signing identity's public key"
 $releasePath = (Resolve-Path $Release).Path
 $keyPath = (Resolve-Path $SigningPublicKey).Path
-& node (Join-Path $checkout 'web/scripts/deploy-probe.mjs') --release $releasePath --public-key $keyPath
+& node (Join-Path $checkout 'web/scripts/deploy-probe.mjs') --release $releasePath --public-key $keyPath @signerProbe
 if ($LASTEXITCODE -ne 0) { throw "The release does not verify under the signing identity's key; nothing is deployed." }
 
 $manifest = Get-Content (Join-Path $releasePath 'release-manifest.json') -Raw | ConvertFrom-Json
@@ -145,7 +151,7 @@ Run "az deployment group create -g $ResourceGroup -f deploy/main.bicep -p $($par
 Step "probe the candidate"
 $browserProbe = if ($SkipBrowserProbe) { @() } else { @('--browser') }
 if (-not $Apply) {
-    Write-Host "  > node web/scripts/deploy-probe.mjs --origin https://$AppName---candidate.<environment default domain> --release $releasePath --public-key $keyPath $($browserProbe -join ' ')"
+    Write-Host "  > node web/scripts/deploy-probe.mjs --origin https://$AppName---candidate.<environment default domain> --release $releasePath --public-key $keyPath $($signerProbe -join ' ') $($browserProbe -join ' ')"
     if ($SkipBrowserProbe) { Write-Host "  (the browser probes are skipped: -SkipBrowserProbe)" }
     Write-Host "== planned only: run again with -Apply to deploy (the owner's decision)"
     exit 0
@@ -154,7 +160,7 @@ $domain = az containerapp env show --ids $EnvironmentId --query properties.defau
 $candidate = az containerapp show -g $ResourceGroup -n $AppName --query properties.latestRevisionName -o tsv
 $origin = "https://$AppName---candidate.$domain"
 if ($SkipBrowserProbe) { Write-Host "  the browser probes are skipped (-SkipBrowserProbe): only the HTTP probes run" }
-& node (Join-Path $checkout 'web/scripts/deploy-probe.mjs') --origin $origin --release $releasePath --public-key $keyPath @browserProbe
+& node (Join-Path $checkout 'web/scripts/deploy-probe.mjs') --origin $origin --release $releasePath --public-key $keyPath @signerProbe @browserProbe
 if ($LASTEXITCODE -ne 0) {
     # 5. The removal step: the candidate never carried traffic (or only the owner's probe), and is deactivated.
     Step "the probe failed: deactivate the candidate $candidate"
