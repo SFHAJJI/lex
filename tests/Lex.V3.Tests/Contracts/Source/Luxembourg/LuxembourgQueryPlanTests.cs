@@ -344,9 +344,11 @@ public sealed class LuxembourgQueryPlanTests
         {
             var plan = Plan();
             var first = LuxembourgQueryPlanIdentity.GetCanonicalBytes(plan);
-            Assert.AreEqual(79_812, first.Length);
+            // 79,812 before the assertion-rows datatype term was made total (2026-10-05): two copies of the 16 escaped
+            // bytes `COALESCE(` and `, \"\")`, one in the page template and one in its count template.
+            Assert.AreEqual(79_844, first.Length);
             Assert.AreEqual(
-                "ce790dda3ee78f677975b30df76a8812c09462b3b68d5dd2eec6ae19d7e1c383",
+                "0f2432d2f2cc0cf9ea6c49e408d3cbaa20ca9c39ff7919391083ff26ff3a64db",
                 Sha256(first));
             Assert.IsFalse(first.Contains((byte)'\r'));
             CultureInfo.CurrentCulture = CultureInfo.GetCultureInfo("ar-SA");
