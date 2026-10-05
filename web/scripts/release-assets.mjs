@@ -10,7 +10,10 @@
 // - `release-manifest.json`: the version, the source commit, the image's manifest digest, the corpus
 //   digest, and each asset by name, size and SHA-256;
 // - `release-manifest.sig.json`: a signature over the release manifest's bytes.
-// Both signatures are the rehearsal identity's, one key for the run. Reading back trusts nothing the
+// Both signatures are one signer's: the rehearsal identity's, with a key made for the run, or the release
+// signer's, with the owner's key (`releaseSigner` in `image-rehearsal.mjs`). A rehearsal is published as
+// `lex-v3-release-rehearsal/1` under a `v3-rehearsal-...` version, and a release as `lex-v3-release/1` under
+// a `v3-...` version, and each says which it is and who signed it. Reading back trusts nothing the
 // directory says about itself: the key is the caller's; the directory, the version and the source the
 // manifest signs must name each other; every asset is hashed again; the image is read blob by blob and
 // its signature checked against the digest the archive gives; and the card must be the very card the
@@ -22,12 +25,14 @@ import { createHash, createPublicKey, sign, verify } from "node:crypto";
 import { existsSync } from "node:fs";
 import { mkdir, readFile, readdir, writeFile } from "node:fs/promises";
 import { basename, join } from "node:path";
-import { REHEARSAL_IDENTITY, layerTar, readLayout, readOciImage, readTar, rehearsalSignatureFailures } from "./image-rehearsal.mjs";
+import { REHEARSAL_IDENTITY, imageSignatureFailures, layerTar, readLayout, readOciImage, readTar, rehearsalSigner } from "./image-rehearsal.mjs";
 import { CARD_ROUTE, readEvaluationCard } from "./evaluation-card.mjs";
 
 const sha256 = (bytes) => createHash("sha256").update(bytes).digest("hex");
 
 export const RELEASE_SCHEMA = "lex-v3-release-rehearsal/1";
+/** The schema of a release signed by the release signer, the owner's key. */
+export const SIGNED_RELEASE_SCHEMA = "lex-v3-release/1";
 export const RELEASE_MANIFEST = "release-manifest.json";
 export const RELEASE_SIGNATURE = "release-manifest.sig.json";
 export const ASSETS = Object.freeze({
@@ -37,10 +42,13 @@ export const ASSETS = Object.freeze({
   mountReport: "mount-report.json",
 });
 
-/** A release version from the source: the source date and the commit, so a version names its sources. */
-export function releaseVersion({ epoch, commit }) {
+/**
+ * A release version from the source: the source date and the commit, so a version names its sources, under
+ * `v3-rehearsal-` for a rehearsal and `v3-` for a release the release signer signs.
+ */
+export function releaseVersion({ epoch, commit }, { rehearsal = true } = {}) {
   const date = new Date(epoch * 1000).toISOString().replace(/[-:]/g, "").replace(/\.\d{3}Z$/, "Z");
-  return `v3-rehearsal-${date}-${(commit ?? "nocommit").slice(0, 12)}`;
+  return `${rehearsal ? "v3-rehearsal-" : "v3-"}${date}-${(commit ?? "nocommit").slice(0, 12)}`;
 }
 
 /** An image signature as the release holds it: the payload's bytes in base64 beside the signature. */
@@ -50,10 +58,11 @@ export function imageSignatureAsset({ payload, signature, publicKeyPem }) {
 
 /**
  * Publishes a release into `root/<version>/`: each asset, the release manifest naming them, and its
- * signature by `key` (`{ privateKey, publicKeyPem }`). Refuses a version already published.
- * Answers `{ directory, manifestSha256 }`.
+ * signature by `signer` (`rehearsalSigner` or `releaseSigner`; a bare `key`, `{ privateKey, publicKeyPem }`,
+ * is the rehearsal's). Refuses a version already published. Answers `{ directory, manifestSha256 }`.
  */
-export async function publishRelease(root, { version, source, manifestDigest, corpusSha256, assets, key }) {
+export async function publishRelease(root, { version, source, manifestDigest, corpusSha256, assets, key, signer = key ? rehearsalSigner(key) : null }) {
+  if (signer === null) throw new Error("a release is published with its signer");
   const directory = join(root, version);
   if (existsSync(directory)) throw new Error(`release ${version} is already published, and a published version is never overwritten`);
   await mkdir(directory, { recursive: true });
@@ -63,10 +72,10 @@ export async function publishRelease(root, { version, source, manifestDigest, co
     listed.push({ name, size: bytes.length, sha256: sha256(bytes) });
   }
   const manifest = Buffer.from(`${JSON.stringify({
-    schema: RELEASE_SCHEMA,
+    schema: signer.rehearsal ? RELEASE_SCHEMA : SIGNED_RELEASE_SCHEMA,
     version,
-    rehearsal: true,
-    signer: REHEARSAL_IDENTITY,
+    rehearsal: signer.rehearsal,
+    signer: signer.identity,
     source,
     image: { manifest_digest: manifestDigest },
     corpus: { sha256: corpusSha256 },
@@ -74,22 +83,24 @@ export async function publishRelease(root, { version, source, manifestDigest, co
   }, null, 2)}\n`, "utf8");
   await writeFile(join(directory, RELEASE_MANIFEST), manifest);
   await writeFile(join(directory, RELEASE_SIGNATURE), `${JSON.stringify({
-    signature: sign("sha256", manifest, key.privateKey).toString("base64"),
-    public_key_pem: key.publicKeyPem,
-    signer: REHEARSAL_IDENTITY,
-    rehearsal: true,
+    signature: sign("sha256", manifest, signer.privateKey).toString("base64"),
+    public_key_pem: signer.publicKeyPem,
+    signer: signer.identity,
+    rehearsal: signer.rehearsal,
   }, null, 2)}\n`);
   return { directory, manifestSha256: sha256(manifest) };
 }
 
 /**
  * A published release read back from disk and verified, as failures (empty when it holds), against
- * the key the caller expects (`publicKeyPem`): the manifest's signature; every asset listed, present,
- * of its size and hash, and nothing unlisted; the image read blob by blob and named by the manifest's
- * digest; the image's signature over that digest by the same key; and the card readable by the page's
- * rules.
+ * the key the caller expects (`publicKeyPem`) and, when the caller names one, the release signer's identity
+ * (`identity`; a rehearsal never passes for it): the manifest's signature; the release's kind (a rehearsal,
+ * or a release by the release signer), said alike by its schema, version, manifest and both signatures;
+ * every asset listed, present, of its size and hash, and nothing unlisted; the image read blob by blob and
+ * named by the manifest's digest; the image's signature over that digest by the same key and signer; and
+ * the card readable by the page's rules.
  */
-export async function releaseFailures(directory, { publicKeyPem }) {
+export async function releaseFailures(directory, { publicKeyPem, identity = null }) {
   const failures = [];
   const expectedKey = createPublicKey(publicKeyPem).export({ type: "spki", format: "der" });
   const sameKey = (pem) => { try { return createPublicKey(pem).export({ type: "spki", format: "der" }).equals(expectedKey); } catch { return false; } };
@@ -99,9 +110,15 @@ export async function releaseFailures(directory, { publicKeyPem }) {
   if (!sameKey(signed.public_key_pem)) failures.push("the release manifest is signed with another key than the release's");
   if (!verify("sha256", manifestBytes, createPublicKey(publicKeyPem), Buffer.from(signed.signature ?? "", "base64"))) failures.push("the release manifest's signature does not verify with the release's key");
   const manifest = JSON.parse(manifestBytes.toString("utf8"));
-  if (manifest.schema !== RELEASE_SCHEMA) failures.push(`the release manifest is not ${RELEASE_SCHEMA}`);
-  if (manifest.rehearsal !== true || manifest.signer !== REHEARSAL_IDENTITY || signed.signer !== REHEARSAL_IDENTITY) failures.push("the release does not say it is the rehearsal's");
-  const named = manifest.source && Number.isInteger(manifest.source.epoch) ? releaseVersion(manifest.source) : null;
+  // The kind is read once, from the manifest the key signs, and every other place must say the same.
+  const rehearsal = manifest.rehearsal === true;
+  if (typeof manifest.rehearsal !== "boolean") failures.push("the release manifest does not say whether it is a rehearsal");
+  if (manifest.schema !== (rehearsal ? RELEASE_SCHEMA : SIGNED_RELEASE_SCHEMA)) failures.push(`the release manifest is not ${rehearsal ? RELEASE_SCHEMA : SIGNED_RELEASE_SCHEMA}`);
+  if (signed.rehearsal !== manifest.rehearsal || signed.signer !== manifest.signer) failures.push("the release manifest's signature does not name the signer and kind the manifest says");
+  if (rehearsal && manifest.signer !== REHEARSAL_IDENTITY) failures.push("the release does not say it is the rehearsal's");
+  if (!rehearsal && (typeof manifest.signer !== "string" || manifest.signer.length === 0 || manifest.signer === REHEARSAL_IDENTITY)) failures.push("the release names no release signer");
+  if (identity !== null && (rehearsal || manifest.signer !== identity)) failures.push(`the release is ${rehearsal ? "a rehearsal" : `signed as ${manifest.signer}`}, not by the release signer ${identity}`);
+  const named = manifest.source && Number.isInteger(manifest.source.epoch) ? releaseVersion(manifest.source, { rehearsal }) : null;
   if (manifest.version !== named) failures.push(`the manifest's version ${manifest.version} is not the one its source names, ${named}`);
   if (basename(directory) !== manifest.version) failures.push(`the release is published as ${basename(directory)}, not as its version ${manifest.version}`);
 
@@ -140,7 +157,8 @@ export async function releaseFailures(directory, { publicKeyPem }) {
   if (imageSignature && manifestDigest) {
     const parsed = JSON.parse(imageSignature.toString("utf8"));
     if (!sameKey(parsed.public_key_pem)) failures.push("the image is signed with another key than the release's");
-    for (const failure of rehearsalSignatureFailures({ payload: Buffer.from(parsed.payload ?? "", "base64"), signature: parsed.signature ?? "", publicKeyPem, manifestDigest })) {
+    const signer = { identity: manifest.signer, rehearsal };
+    for (const failure of imageSignatureFailures({ payload: Buffer.from(parsed.payload ?? "", "base64"), signature: parsed.signature ?? "", publicKeyPem, manifestDigest, signer })) {
       failures.push(`the image signature: ${failure}`);
     }
   }

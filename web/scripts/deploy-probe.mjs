@@ -134,10 +134,11 @@ export async function browserFailures(origin, releaseDirectory, { browser, runs 
 
 /**
  * The probe of a revision deployed from the release at `releaseDirectory`: the release read back under the signing
- * identity's key (`publicKeyPem`), then the revision held to what the release holds. Failures, empty when both hold.
+ * identity's key (`publicKeyPem`), and as signed by the release signer `identity` when one is named, then the revision
+ * held to what the release holds. Failures, empty when both hold.
  */
-export async function deployedReleaseFailures(origin, releaseDirectory, { publicKeyPem }) {
-  const release = await releaseFailures(releaseDirectory, { publicKeyPem });
+export async function deployedReleaseFailures(origin, releaseDirectory, { publicKeyPem, identity = null }) {
+  const release = await releaseFailures(releaseDirectory, { publicKeyPem, identity });
   if (release.length > 0) return release.map((failure) => `the release does not read back: ${failure}`);
   const manifest = JSON.parse(await readFile(join(releaseDirectory, RELEASE_MANIFEST), "utf8"));
   return revisionFailures(origin, {
@@ -156,21 +157,25 @@ if (invokedDirectly(import.meta.url, process.argv[1])) {
   const origin = value("--origin");
   const release = value("--release");
   const publicKey = value("--public-key");
+  const identity = value("--signer");
   const withBrowser = argv.includes("--browser");
-  if (release === null || publicKey === null || (origin !== null && !/^https?:\/\//.test(origin))) {
-    console.error("usage: node scripts/deploy-probe.mjs --release <release directory> --public-key <signing identity's public key, PEM> [--origin <the candidate revision's URL> [--browser]]");
+  if (release === null || publicKey === null || (origin !== null && !/^https?:\/\//.test(origin)) || (argv.includes("--signer") && !identity)) {
+    console.error("usage: node scripts/deploy-probe.mjs --release <release directory> --public-key <signing identity's public key, PEM> [--signer <the release signer's identity>] [--origin <the candidate revision's URL> [--browser]]");
+    console.error("       with --signer, the release must be signed by that release signer, never a rehearsal");
     console.error("       without --origin, only the release is read back (deploy.ps1 does this before it touches Azure)");
     process.exit(2);
   }
   const publicKeyPem = await readFile(publicKey, "utf8");
   if (origin === null) {
-    const failures = (await releaseFailures(release, { publicKeyPem })).map((failure) => `the release does not read back: ${failure}`);
+    const failures = (await releaseFailures(release, { publicKeyPem, identity })).map((failure) => `the release does not read back: ${failure}`);
     for (const failure of failures) console.error(`- ${failure}`);
-    console.log(failures.length === 0 ? `the release at ${release} reads back under the signing identity's key` : `${failures.length} release failure(s)`);
+    const manifest = failures.length === 0 ? JSON.parse(await readFile(join(release, RELEASE_MANIFEST), "utf8")) : null;
+    console.log(manifest === null ? `${failures.length} release failure(s)`
+      : `the release at ${release} reads back under the signing identity's key, ${manifest.rehearsal ? "as a rehearsal" : `as a release signed as ${manifest.signer}`}`);
     process.exit(failures.length === 0 ? 0 : 1);
   }
   const target = origin.replace(/\/+$/, "");
-  const failures = await deployedReleaseFailures(target, release, { publicKeyPem });
+  const failures = await deployedReleaseFailures(target, release, { publicKeyPem, identity });
   if (failures.length === 0 && withBrowser) {
     failures.push(...await browserFailures(target, release, { browser: await findBrowser() }));
     console.log(REMOTE_PRIVACY_NOTE);

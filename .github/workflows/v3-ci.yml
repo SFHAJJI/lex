@@ -604,10 +604,13 @@ jobs:
           V3_WRITE_RELEASE_CUSTODY="$RUNNER_TEMP/release-custody" dotnet test tests/Lex.V3.Ingest.Tests/Lex.V3.Ingest.Tests.csproj --configuration Release --filter "FullyQualifiedName~TheReleaseCustodyIsTheFixtureAcquisitionWrittenWhereTheRehearsalAsks" -v q
           test -s "$RUNNER_TEMP/release-custody/mount-inputs.json"
           test -s "$RUNNER_TEMP/release-custody/expected-mount.json"
-      - name: Rehearse the release from custody with this commit's derive tool
+      - name: Rehearse the release from custody with this commit's derive tool, signed as a release
         shell: bash
         run: |
           set -euo pipefail
+          # Signed by the release signer's path (--signing-key, --signer), with an ECDSA P-256 key made in this job and
+          # piped in, never written: the identity says it is CI's, not the owner's. The release is removed with the work.
+          ci_signer="lex-v3 CI release signer (a key made for this job, not the owner's)"
           # The derive tool laid out as the CI runtime artifact is (runtime/ beside source-head.txt), so the release
           # command binds it to this checkout. The test step above built it; the stamp is written only once the dll's
           # own informational version names this commit (the SDK's +<commit> suffix), so the binding is checked, not
@@ -617,8 +620,8 @@ jobs:
           mkdir -p "$tool/runtime"
           cp -a src/Lex.V3.Tool/bin/Release/net10.0/. "$tool/runtime/"
           printf '%s\n' "$CANDIDATE_SHA" > "$tool/source-head.txt"
-          node web/scripts/image-rehearsal.mjs --custody "$RUNNER_TEMP/release-custody/custody" --checkpoint "$RUNNER_TEMP/release-custody/mount-inputs.json" --tool "$tool/runtime/Lex.V3.Tool.dll" --no-probe > "$RUNNER_TEMP/custody-rehearsal.json"
-          jq -e --arg head "$CANDIDATE_SHA" --slurpfile expected "$RUNNER_TEMP/release-custody/expected-mount.json" '
+          openssl genpkey -algorithm EC -pkeyopt ec_paramgen_curve:P-256 | node web/scripts/image-rehearsal.mjs --custody "$RUNNER_TEMP/release-custody/custody" --checkpoint "$RUNNER_TEMP/release-custody/mount-inputs.json" --tool "$tool/runtime/Lex.V3.Tool.dll" --no-probe --signing-key - --signer "$ci_signer" > "$RUNNER_TEMP/custody-rehearsal.json"
+          jq -e --arg head "$CANDIDATE_SHA" --arg signer "$ci_signer" --slurpfile expected "$RUNNER_TEMP/release-custody/expected-mount.json" '
             .derivation.tool.bound == true
             and .derivation.tool.sourceHead == $head
             and .derivation.independentProcesses == 2
@@ -631,6 +634,9 @@ jobs:
             and (.v2Absent.failures | length) == 0
             and .signatureVerified == true
             and .card.over == "the machine gates over this mount"
+            and .rehearsal == false and .signer == $signer
+            and (.release.version | startswith("v3-") and (startswith("v3-rehearsal-") | not))
+            and (tostring | contains("PRIVATE KEY") | not)
             and ([.card.sets[] | select(.arm | startswith("EU as_of")) | select(.cases > 0 and all(.gates[]; endswith(": pass")))] | length) == 3
             and ([.card.sets[] | select(.set == "refusal" or .set == "retrieval") | select(.cases > 0 and all(.gates[]; endswith(": pass")))] | length) == 2
             and (.release.readBackFailures | length) == 0
