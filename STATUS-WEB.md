@@ -122,8 +122,8 @@ below:
       before it is laid out as the CI runtime artifact is, and the release command binds it to the checkout.
     - **The derivation.** Two `Lex.V3.Tool derive` processes must agree file for file. Their files must equal the live
       build's, and nothing may reach the proxy-variable trap.
-    - **The image.** The image is then built twice and must be identical. It is verified, rehearsal-signed, published
-      and read back.
+    - **The image.** The image is then built twice and must be identical. It is verified, signed through the release
+      signer's path with a key made in the job, published and read back.
     - **The card over that mount.** CI requires the three EU `as_of` arms, the refusal set and the retrieval set to
       have cases and pass every gate (review of #930: a card of `not_measured` arms passed before). On 2026-10-04 they
       did, in CI and locally: the EU arms 6 cases each with their shuffles caught, the refusal set 9 cases, the retrieval

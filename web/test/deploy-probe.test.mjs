@@ -145,6 +145,12 @@ test("a revision is probed only against a release that reads back under the sign
     assert.equal(await run("--release", directory, "--public-key", other), 1, "under another key it does not, and the command says so by its exit");
     assert.equal(await run("--release", directory, "--public-key", good, "--origin", served.origin), 0, "the revision answers as the release holds");
     assert.equal(await run(), 2, "usage");
+    // The release here is a rehearsal: named a release signer, it is refused, read back alone or before a probe (review of
+    // #931: the command's --signer was untested as a process).
+    assert.equal(await run("--release", directory, "--public-key", good, "--signer", "lex-v3 release signer"), 1,
+      "a rehearsal never passes for the release signer");
+    assert.equal(await run("--release", directory, "--public-key", good, "--signer", "lex-v3 release signer", "--origin", served.origin), 1,
+      "nor is a revision probed against it as the release signer's");
   } finally {
     await served.close();
     await rm(root, { recursive: true, force: true });
