@@ -1,6 +1,6 @@
 # Lex V3 status: the web lane
 
-Updated 2026-10-04. The web lane's progress, split out of STATUS.md (which keeps the heads, the owner's open
+Updated 2026-10-05. The web lane's progress, split out of STATUS.md (which keeps the heads, the owner's open
 items and the pointers) by the standing order of 2026-10-01 13:50 UTC. Every pull request of the web lane
 updates this file, not STATUS.md.
 
@@ -98,9 +98,11 @@ below:
   - Waits: the deployment. The Azure subscription is disabled.
 
 **Data at launch**
-- **The complete EU population, English and French:** EU run 14, acquiring since 2026-10-04 08:55 UTC on the resumable
+- **The complete EU population, English and French:** complete on 2026-10-05: acquired by EU runs 14 to 16 (two network
+  stops resumed from the journal), derived twice with identical files (STATUS-DATA.md). Previously: EU run 14, from 2026-10-04 08:55 UTC on the resumable
   tool (#924). Runs 9 to 13 stopped before the end, and their custody is kept (STATUS-DATA.md).
-- **The Luxembourg population:** follows the EU run, one run after the other (`claude-lu-population-run.ps1`).
+- **The Luxembourg population:** acquiring since 2026-10-05 05:36 UTC, reusing the EU population (`claude-lu-population-run.ps1`,
+  under a supervisor that resumes it after a publisher stop).
 - **Robots read per URL; the rights receipt fetched once per build on the Publications Office route; no request to
   eur-lex.europa.eu; transport bytes retained before decode:** by construction in the acquisition (STATUS-DATA.md).
 
@@ -3000,6 +3002,12 @@ Each is the driver's call under ruling 7 and can be reversed by a later pull req
   Claude subagent with a fresh context, read-only, reporting only material and reproduced findings
   (`C:\lex-v3\lanes\claude-review-instructions.md`); one repair round, then merge on green CI. The
   owner's open questions are decided by the driver under that delegation and recorded here.
+- Documentation-only pull requests while a population run is active (2026-10-04). Such a pull request changes
+  `OWNER-BRIEF.md` and the status files only: no code, CI or tests. It merges on green CI without the subagent
+  review, and the next reviewed pull request reviews it. Code pull requests still wait for their review.
+  - The reason: on 2026-10-04 a review subagent twice drove the machine's commit headroom to 0.4-0.5 GB, the EU
+    runner's stop line.
+  - The owner's ruling wants the brief current whenever a run starts, ends or stops.
 - EU annexes (2026-10-03): dossier and evidence_bundle list the annexes the corpus classified under
   `annexes_not_served`. Every one is served as `text_not_available`, whatever its disposition, and linked to its
   expression's official source. No annex text is served even where the publisher's PDF has a text layer; that
