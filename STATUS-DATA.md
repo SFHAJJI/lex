@@ -19,6 +19,16 @@ Updated 2026-10-05.
   - A Luxembourg supervisor (`C:\lex-v3\lanes\claude-lu-supervise.ps1`, the EU supervisor's pattern, no runner or tool
     change) resumes it from its journal after a publisher refusal or a resource stop, up to 8 times.
   - The after-LU waiter then builds the chained canary.
+- **Luxembourg run 1 stopped; run 2 resumed it.** Run 1 ended at 10:47 UTC with exit 3 after 5 hours 11 minutes and 944
+  requests.
+  - `legislative-code-a` was not proven: a cover leaf's request got HTTP 500 from Legilux, with the gateway body
+    `"<host>:8890 failed to respond"` (`code: error.unknown`), a backend outage.
+  - The #925 retry covers only the 200-status "Read timed out" envelope, so this 500 refused the leaf, its family and
+    the run.
+  - The Luxembourg supervisor resumed it at 11:17 UTC as `C:\lex-v3\lu-population-20261005-2`, with the same build. 3
+    query families and 26 cover leaves were already journaled.
+  - Treating "failed to respond" like the read-timeout envelope needs a new build, which cannot resume this journal. It
+    is decided by how often the stop recurs.
 
 ## EU population run 14 stopped on a network failure and resumed as run 15 (Claude, 2026-10-04)
 
