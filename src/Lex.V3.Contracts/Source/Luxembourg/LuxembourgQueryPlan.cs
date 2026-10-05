@@ -1181,8 +1181,9 @@ public sealed record LuxembourgQueryPlan
         var rootValues = Values("scheme_root", schemeRoots.Select(LuxembourgQueryText.SparqlString));
         // datatype_iri is COALESCEd to "" because Legilux's engine does not answer DATATYPE() with rdf:langString for a
         // language-tagged literal as SPARQL 1.1 specifies: the BIND errors and leaves datatype_iri, and key_5 with it,
-        // unbound (measured in LuxembourgDraftGraphDiscoveryPlan's retained page, and again in the 2026-10-05 Luxembourg
-        // population run: 12 of 997 and 8 of 997 rows of two assertion pages, every one a language-tagged jolux:title).
+        // unbound. The behaviour is documented for Cellar (EuPageDecodeClassificationTests' retained page, which
+        // LuxembourgDraftGraphDiscoveryPlan cites); on Legilux it was first measured in the 2026-10-05 Luxembourg population
+        // run: 12 of 997 and 8 of 997 rows of two assertion pages, every one a language-tagged jolux:title.
         // Here the column is part of the canonical key the delivery proof requires bound, and the decoder refuses an
         // unbound one, so the column itself is made total, not only the key. Nothing is lost: language_tag is non-empty
         // for precisely those literals, and LuxembourgLiteralCanonicalizer reads an empty datatype with a language tag as
