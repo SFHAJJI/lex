@@ -1,6 +1,6 @@
 # Lex V3 status: the data lane
 
-Updated 2026-10-06.
+Updated 2026-10-06 (21:30 UTC).
 
 ## A Luxembourg title longer than a cursor key: a second defect that stops the run (Claude, 2026-10-06)
 
@@ -21,10 +21,22 @@ Updated 2026-10-06.
   - `LuxembourgAssertionRowsTemplateTests` holds the page and count templates' key and the cursor refusing 2,678 bytes.
   - The plan's canonical bytes went from 79,844 to 79,860 (two copies of `SHA256(` and `)`). The plan digest and the
     retained count policy's digest were re-pinned from CI.
-- **What follows.** Run 10 keeps running to the end of its query families. It reads the rgd families, including
-  `legislative-rgd-a`, the other family #937 unblocked, so one scan of every page it holds can find any other refusable
-  shape before the restart. Its supervisor and after-LU waiter were stopped, because a resume in the same build fails
-  the same way. The keep-awake helper holds on the runner. The Luxembourg run then restarts fresh on the merged build.
+- **The scan.** Run 10's custody held 1,703 pages (1,304,182 rows, 1,213 of them assertion pages). The 2,678-byte key
+  was the only refusable shape: no missing or unbound key or column, no term that is not one string, no unknown
+  `object_kind`, and no other key part over 124 bytes. A cover stops at its first refused leaf, so the loi-a subjects
+  after `.../loi/2005/06/21/n2` were never read; the restart reads them first.
+- **The engine's digest, measured.** #940's review named one residual risk: Legilux's `SHA256()` had not been run live on
+  a literal over 2 KB. One query asked for it on that title. The engine bound a 64-character lowercase hex digest, equal
+  to the double-UTF-8 digest that `LuxembourgDraftGraphProducer` documents.
+- **The restart (driver decision, reversible).** #940 merged (`ee725b66`; its push CI 37530912003 is green, and its
+  runtime artifact expires 2026-10-09 21:16 UTC). Run 10 was stopped at 21:18 UTC, with its custody kept, before it
+  read rgd-a. Letting it finish rgd-a first would have delayed the restart by 8 to 10 hours. The fresh run reaches rgd-a
+  about 15 hours in, and run 10's 1.3 million rows held one defect.
+  - Luxembourg run 11 (`C:\lex-v3\lu-population-20261006-11`) started at 21:18 UTC on the #940 build. It reuses the EU
+    population's custody (no EU traffic) and has a wire ceiling of 300,000.
+  - The Luxembourg supervisor resumes it after a publisher or resource stop (`-Next 12`). The after-LU waiter then builds
+    the chained canary. The keep-awake helper holds while the runner and the supervisor live.
+  - With no stop it takes about 64 hours, so it should end about 2026-10-09 13:00 UTC.
 
 ## The Luxembourg assertion pages' language-tagged titles: a defect that stopped the run (Claude, 2026-10-05)
 
