@@ -345,8 +345,9 @@ public sealed class LuxembourgQueryPlanTests
             var plan = Plan();
             var first = LuxembourgQueryPlanIdentity.GetCanonicalBytes(plan);
             // 79,812 before the assertion-rows datatype term was made total (2026-10-05): two copies of the 16 escaped
-            // bytes `COALESCE(` and `, \"\")`, one in the page template and one in its count template.
-            Assert.AreEqual(79_844, first.Length);
+            // bytes `COALESCE(` and `, \"\")`, one in the page template and one in its count template. 79,844 before key_4
+            // became a digest of the object (2026-10-06): two copies of the 8 bytes `SHA256(` and `)`.
+            Assert.AreEqual(79_860, first.Length);
             Assert.AreEqual(
                 "0f2432d2f2cc0cf9ea6c49e408d3cbaa20ca9c39ff7919391083ff26ff3a64db",
                 Sha256(first));

@@ -1188,6 +1188,13 @@ public sealed record LuxembourgQueryPlan
         // unbound one, so the column itself is made total, not only the key. Nothing is lost: language_tag is non-empty
         // for precisely those literals, and LuxembourgLiteralCanonicalizer reads an empty datatype with a language tag as
         // rdf:langString. A literal the engine does type keeps its datatype unchanged.
+        // key_4 is SHA256(STR(?object)), not the object's string, because a cursor key part is at most 2,047 UTF-8 bytes
+        // (LuxembourgQueryText.MaximumKeyPartByteLength) and a literal is not: the same run's legislative-loi-a page held a
+        // jolux:title of 2,678 bytes, refused DeliveredKeyNotRepresentable, so the family could never be proven. The key only
+        // orders rows within one subject, predicate and object kind and resumes the cursor; nothing reads the object from it
+        // (the row's own object column carries the term) and scope ranges split on whole subjects (key_1). The 64-character
+        // digest is LuxembourgDraftGraphDiscoveryPlan's measured key_4 pattern; that this engine hashes non-ASCII text double
+        // UTF-8 encoded does not matter here, because the key is never recomputed, only returned to the engine.
         return new[]
         {
             Template("assertion-rows", graph, $"""
@@ -1198,7 +1205,7 @@ public sealed record LuxembourgQueryPlan
                 BIND(IF(isLiteral(?object), LANG(?object), "") AS ?language_tag)
                 BIND(IF(isIRI(?subject), STR(?subject), "") AS ?key_1)
                 BIND(STR(?predicate) AS ?key_2) BIND(?object_kind AS ?key_3)
-                BIND(IF(isIRI(?object) || isLiteral(?object), STR(?object), "") AS ?key_4)
+                BIND(IF(isIRI(?object) || isLiteral(?object), SHA256(STR(?object)), "") AS ?key_4)
                 BIND(?datatype_iri AS ?key_5) BIND(?language_tag AS ?key_6)
                 """, "?subject ?predicate ?object ?object_kind ?datatype_iri ?language_tag",
                 countProjection: "?subject ?predicate ?object"),
