@@ -101,8 +101,9 @@ below:
 - **The complete EU population, English and French:** complete on 2026-10-05: acquired by EU runs 14 to 16 (two network
   stops resumed from the journal), derived twice with identical files (STATUS-DATA.md). Previously: EU run 14, from 2026-10-04 08:55 UTC on the resumable
   tool (#924). Runs 9 to 13 stopped before the end, and their custody is kept (STATUS-DATA.md).
-- **The Luxembourg population:** acquiring since 2026-10-05 05:36 UTC, reusing the EU population (`claude-lu-population-run.ps1`,
-  under a supervisor that resumes it after a publisher stop).
+- **The Luxembourg population:** run 11 acquiring since 2026-10-06 21:18 UTC on the build with #937's and #940's fixes. It
+  reuses the EU population (`claude-lu-population-run.ps1`), under a supervisor that resumes it after a publisher stop.
+  Runs 1, 2 and 10 were refused by the two defects those PRs fix (STATUS-DATA.md).
 - **Robots read per URL; the rights receipt fetched once per build on the Publications Office route; no request to
   eur-lex.europa.eu; transport bytes retained before decode:** by construction in the acquisition (STATUS-DATA.md).
 
