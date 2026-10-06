@@ -1,6 +1,30 @@
 # Lex V3 status: the data lane
 
-Updated 2026-10-05.
+Updated 2026-10-06.
+
+## A Luxembourg title longer than a cursor key: a second defect that stops the run (Claude, 2026-10-06)
+
+- **The stop.** Luxembourg run 10 (`C:\lex-v3\lu-population-20261005-10`, the build with #937's fix) proved code-s,
+  code-a, code-g, loi-s and loi-g. The family #937 unblocked, `legislative-loi-a`, was refused at about 19:04 UTC on
+  2026-10-06: `DeliveredKeyNotRepresentable`.
+- **The cause.** The refused page, read from custody, has a row for `.../eli/etat/leg/loi/2005/06/21/n2/jo/fr` whose `key_4`,
+  the object's string, is a `jolux:title` of 2,678 UTF-8 bytes. A cursor key part is at most 2,047 bytes
+  (`LuxembourgQueryText.MaximumKeyPartByteLength`), so the page cannot be resumed from, on any run. This is the residual
+  risk #937's review named. The 1,714 pages held before had no title key over 326 bytes.
+- **The fix.** It is one line (STANDING-ORDERS.md section 8, item 2's exception, recorded there):
+  `BIND(IF(isIRI(?object) || isLiteral(?object), SHA256(STR(?object)), "") AS ?key_4)`.
+  - The key orders rows within one subject, predicate and object kind and resumes the cursor. Nothing reads the object
+    from it: the row's `object` column carries the term. Scoped ranges split on whole subjects (`key_1`).
+  - The 64-character digest is `LuxembourgDraftGraphDiscoveryPlan`'s measured `key_4` pattern on the same engine. That
+    engine hashes non-ASCII text double UTF-8 encoded; that is harmless here, because the key is only returned to the
+    engine, never recomputed.
+  - `LuxembourgAssertionRowsTemplateTests` holds the page and count templates' key and the cursor refusing 2,678 bytes.
+  - The plan's canonical bytes went from 79,844 to 79,860 (two copies of `SHA256(` and `)`). The plan digest and the
+    retained count policy's digest were re-pinned from CI.
+- **What follows.** Run 10 keeps running to the end of its query families. It reads the rgd families, including
+  `legislative-rgd-a`, the other family #937 unblocked, so one scan of every page it holds can find any other refusable
+  shape before the restart. Its supervisor and after-LU waiter were stopped, because a resume in the same build fails
+  the same way. The keep-awake helper holds on the runner. The Luxembourg run then restarts fresh on the merged build.
 
 ## The Luxembourg assertion pages' language-tagged titles: a defect that stopped the run (Claude, 2026-10-05)
 

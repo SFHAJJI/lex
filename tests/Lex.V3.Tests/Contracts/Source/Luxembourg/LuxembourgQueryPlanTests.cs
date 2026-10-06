@@ -345,10 +345,11 @@ public sealed class LuxembourgQueryPlanTests
             var plan = Plan();
             var first = LuxembourgQueryPlanIdentity.GetCanonicalBytes(plan);
             // 79,812 before the assertion-rows datatype term was made total (2026-10-05): two copies of the 16 escaped
-            // bytes `COALESCE(` and `, \"\")`, one in the page template and one in its count template.
-            Assert.AreEqual(79_844, first.Length);
+            // bytes `COALESCE(` and `, \"\")`, one in the page template and one in its count template. 79,844 before key_4
+            // became a digest of the object (2026-10-06): two copies of the 8 bytes `SHA256(` and `)`.
+            Assert.AreEqual(79_860, first.Length);
             Assert.AreEqual(
-                "0f2432d2f2cc0cf9ea6c49e408d3cbaa20ca9c39ff7919391083ff26ff3a64db",
+                "7e858ccc827c1e3f28bac927cc27045583a07363edcabc6f17f1a6fc010c51a1",
                 Sha256(first));
             Assert.IsFalse(first.Contains((byte)'\r'));
             CultureInfo.CurrentCulture = CultureInfo.GetCultureInfo("ar-SA");
@@ -403,9 +404,10 @@ public sealed class LuxembourgQueryPlanTests
         Assert.IsFalse(templates["assertion-rows"].Utf8QueryTemplate.Contains(
             "FILTER(isIRI(?subject)",
             StringComparison.Ordinal));
+        // The object key is a digest of the object's string (2026-10-06): a literal can exceed a cursor key part.
         StringAssert.Contains(
             templates["assertion-rows"].Utf8QueryTemplate,
-            "IF(isIRI(?object) || isLiteral(?object), STR(?object), \"\") AS ?key_4");
+            "IF(isIRI(?object) || isLiteral(?object), SHA256(STR(?object)), \"\") AS ?key_4");
         StringAssert.Contains(
             templates["assertion-rows"].Utf8QueryTemplate,
             "BIND(?datatype_iri AS ?key_5) BIND(?language_tag AS ?key_6)");
