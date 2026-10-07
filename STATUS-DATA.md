@@ -1,6 +1,6 @@
 # Lex V3 status: the data lane
 
-Updated 2026-10-06 (21:30 UTC).
+Updated 2026-10-07.
 
 ## A Luxembourg title longer than a cursor key: a second defect that stops the run (Claude, 2026-10-06)
 
@@ -37,6 +37,9 @@ Updated 2026-10-06 (21:30 UTC).
   - The Luxembourg supervisor resumes it after a publisher or resource stop (`-Next 12`). The after-LU waiter then builds
     the chained canary. The keep-awake helper holds while the runner and the supervisor live.
   - With no stop it takes about 64 hours, so it should end about 2026-10-09 13:00 UTC.
+  - At 12:40 UTC on 2026-10-07 run 11 delivered `legislative-loi-a` leaf 23. Its subject range runs from `.../loi/20/` to
+    `.../loi/201`, so it holds `.../loi/2005/06/21/n2`, the leaf run 10 was refused on. #940's key holds on the live
+    publisher. Commit headroom on the machine was about 0.9 GB at the time; the runner's guard watches it.
 
 ## The Luxembourg assertion pages' language-tagged titles: a defect that stopped the run (Claude, 2026-10-05)
 
