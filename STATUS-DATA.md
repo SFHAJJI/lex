@@ -87,8 +87,11 @@ Updated 2026-10-09.
 - **No cross-build resume (driver decision).** The tool and the runner both hold that a journal resumes only in the build
   that wrote it. Loosening that would change the frozen resume path beyond the smallest fix, so the Luxembourg run
   restarts fresh on the merged build.
-- **What follows.** The Luxembourg run restarts fresh on the merged build, under the supervisor, with the after-LU waiter
-  and the keep-awake helper. It takes about three days with the machine awake. Its two offline derives cover the EU
+- **What follows.** Luxembourg run 14 (`C:\lex-v3\lu-population-20261009-14`) started fresh at 14:35 UTC on 2026-10-09 on
+  the #943 build: tool `5ac13b3c` from push CI 37943609391, whose runtime artifact expires 2026-10-12 14:34 UTC (the
+  runner keeps its copy, and a supervised resume falls back to it). It reuses the EU population's custody (no EU
+  traffic), under the supervisor (`-Next 15`), with the after-LU waiter and the keep-awake helper. It takes about
+  three days with the machine awake. Its two offline derives cover the EU
   and Luxembourg populations together; the EU derive alone peaked at about 14 GB private, so they may need the
   machine's memory more than the acquisition does. They are offline and can be re-run without publisher traffic.
 

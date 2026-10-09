@@ -103,7 +103,7 @@ below:
   tool (#924). Runs 9 to 13 stopped before the end, and their custody is kept (STATUS-DATA.md).
 - **The Luxembourg population:** run 11 proved all nine families for the first time and stopped at the census join on
   2026-10-09 (publisher drift during the run). #943 fixes that and two later defects that replays of its journal on the
-  real custody found; a fourth replay reached the document phase. The run restarts fresh on the merged build, under a
+  real custody found; a fourth replay reached the document phase. Run 14 restarted fresh on 2026-10-09 at 14:35 UTC on the #943 build, under a
   supervisor, reusing the EU population (`claude-lu-population-run.ps1`). Runs 1, 2, 10 and 11 to 13: STATUS-DATA.md.
 - **Robots read per URL; the rights receipt fetched once per build on the Publications Office route; no request to
   eur-lex.europa.eu; transport bytes retained before decode:** by construction in the acquisition (STATUS-DATA.md).
