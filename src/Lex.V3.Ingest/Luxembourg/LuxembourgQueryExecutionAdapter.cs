@@ -645,8 +645,8 @@ public enum LuxembourgQueryExecutionRefusal
 /// excluded an "assertion-rows" family row from its subject's own derived
 /// <see cref="LuxembourgResourceObservation.Assertions"/> list, or a "relation-assertions" family row
 /// from its subject's relations. The first two causes are the query plan's own documented boundary;
-/// the last two are publisher drift between the census and the families enumerated after it. None is
-/// a delivery-integrity problem -- but without recording which rows were excluded and why, a subject
+/// the next two are publisher drift between the census and the families enumerated after it, and the
+/// last is a publisher identity no observation can carry. None is a delivery-integrity problem -- but without recording which rows were excluded and why, a subject
 /// whose every row was excluded this way is indistinguishable in the output from a subject with
 /// genuinely zero rows in the assertion family at all.
 /// </summary>
@@ -684,13 +684,25 @@ public enum LuxembourgResourceObservationExclusionCause
     /// </summary>
     [JsonStringEnumMemberName("relation_subject_not_in_census")]
     RelationSubjectNotInCensus = 4,
+
+    /// <summary>
+    /// The subject cannot be a publisher identity: the publisher minted its IRI outside the exact
+    /// ASCII HTTP(S) URI every <see cref="SourceObjectRef"/> requires (the 2026-10-09 population run
+    /// measured one census key, a Code du travail article carrying an unescaped "à"). No observation
+    /// can carry it, so its census row and every assertion and relation row for it are excluded and
+    /// counted here, instead of the run failing when the observation is minted.
+    /// </summary>
+    [JsonStringEnumMemberName("subject_not_a_publisher_uri")]
+    SubjectNotAPublisherUri = 5,
 }
 
 /// <summary>
 /// One subject's own count of "assertion-rows" family rows excluded from its derived
 /// <see cref="LuxembourgResourceObservation.Assertions"/> list for one <see cref="Cause"/> (for
 /// <see cref="LuxembourgResourceObservationExclusionCause.RelationSubjectNotInCensus"/>,
-/// "relation-assertions" family rows). Never
+/// "relation-assertions" family rows; for
+/// <see cref="LuxembourgResourceObservationExclusionCause.SubjectNotAPublisherUri"/>, the subject's
+/// census rows and every assertion and relation row for it). Never
 /// minted for zero rows: an entry's presence already means at least one row was excluded, so
 /// <see cref="RowCount"/> is always at least one.
 /// </summary>
@@ -3959,9 +3971,13 @@ public sealed partial class LuxembourgQueryExecutionAdapter
         var relationPredicates = new HashSet<string>(relationPredicateVocabulary, StringComparer.Ordinal);
 
         // The census: every resource identity the "subjects" family actually delivered this run,
-        // preserving delivery order for the observations this method emits below.
+        // preserving delivery order for the observations this method emits below. A key no
+        // observation can carry (SubjectNotAPublisherUri) is excluded and counted, and so are the
+        // rows that name it below.
+        var exclusionCounts = new Dictionary<(string Subject, LuxembourgResourceObservationExclusionCause Cause), int>();
         var censusKeys = new HashSet<string>(StringComparer.Ordinal);
         var censusOrder = new List<string>();
+        var unrepresentableKeys = new HashSet<string>(StringComparer.Ordinal);
         await foreach (var row in censusRows.WithCancellation(cancellationToken).ConfigureAwait(false))
         {
             var key = row.Terms[censusKeyIndex].Value;
@@ -3969,6 +3985,13 @@ public sealed partial class LuxembourgQueryExecutionAdapter
             {
                 return ResourceObservationBuildResult.TermUnbound(
                     "the census family's resource-identity term");
+            }
+
+            if (!LuxembourgTranspositionProducer.IsPublisherUri(key))
+            {
+                unrepresentableKeys.Add(key);
+                RecordExclusion(exclusionCounts, key, LuxembourgResourceObservationExclusionCause.SubjectNotAPublisherUri);
+                continue;
             }
 
             if (censusKeys.Add(key))
@@ -3980,7 +4003,6 @@ public sealed partial class LuxembourgQueryExecutionAdapter
         var observationRef = _sourceProfile.Snapshot.ObservationRef;
         var assertionsBySubject = new Dictionary<string, List<LuxembourgObservedAssertion>>(StringComparer.Ordinal);
         var relationsBySubject = new Dictionary<string, List<LuxembourgObservedRelation>>(StringComparer.Ordinal);
-        var exclusionCounts = new Dictionary<(string Subject, LuxembourgResourceObservationExclusionCause Cause), int>();
         await foreach (var row in assertionRows.WithCancellation(cancellationToken).ConfigureAwait(false))
         {
             var subject = row.Terms[subjectIndex].Value;
@@ -3992,8 +4014,13 @@ public sealed partial class LuxembourgQueryExecutionAdapter
 
             if (!censusKeys.TryGetValue(subject, out var canonicalSubject))
             {
-                // Publisher drift: added after the census read its range (see the summary above).
-                RecordExclusion(exclusionCounts, subject, LuxembourgResourceObservationExclusionCause.SubjectNotInCensus);
+                // Publisher drift: added after the census read its range (see the summary above); or a
+                // census key no observation can carry, excluded with its census row above.
+                RecordExclusion(
+                    exclusionCounts, subject,
+                    unrepresentableKeys.Contains(subject)
+                        ? LuxembourgResourceObservationExclusionCause.SubjectNotAPublisherUri
+                        : LuxembourgResourceObservationExclusionCause.SubjectNotInCensus);
                 continue;
             }
 
@@ -4100,10 +4127,13 @@ public sealed partial class LuxembourgQueryExecutionAdapter
 
                 if (hasResourceCensus && !censusKeys.Contains(subjectTerm.Value))
                 {
-                    // The same publisher drift as an assertion row's subject above.
+                    // The same publisher drift, or the same unrepresentable key, as an assertion row's
+                    // subject above.
                     RecordExclusion(
                         exclusionCounts, subjectTerm.Value,
-                        LuxembourgResourceObservationExclusionCause.RelationSubjectNotInCensus);
+                        unrepresentableKeys.Contains(subjectTerm.Value)
+                            ? LuxembourgResourceObservationExclusionCause.SubjectNotAPublisherUri
+                            : LuxembourgResourceObservationExclusionCause.RelationSubjectNotInCensus);
                     continue;
                 }
 
@@ -4111,6 +4141,16 @@ public sealed partial class LuxembourgQueryExecutionAdapter
                 {
                     return ResourceObservationBuildResult.RelationPredicateNotAdmitted(
                         subjectTerm.Value, predicateTerm.Value);
+                }
+
+                // Without a census, the relation subjects are the observation identities, so a subject no
+                // observation can carry is excluded here instead.
+                if (!hasResourceCensus && !LuxembourgTranspositionProducer.IsPublisherUri(subjectTerm.Value))
+                {
+                    RecordExclusion(
+                        exclusionCounts, subjectTerm.Value,
+                        LuxembourgResourceObservationExclusionCause.SubjectNotAPublisherUri);
+                    continue;
                 }
 
                 if (!hasResourceCensus && censusKeys.Add(subjectTerm.Value))

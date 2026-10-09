@@ -1726,6 +1726,40 @@ public sealed partial class LuxembourgQueryExecutionAdapterTests
     }
 
     [TestMethod]
+    public async Task ACensusKeyNoObservationCanCarryIsExcludedWithItsRowsInsteadOfFailingTheRun()
+    {
+        // The 2026-10-09 population run's census held one key the publisher minted with an unescaped
+        // "a grave": every SourceObjectRef requires an exact ASCII HTTP(S) URI, so minting its
+        // observation threw and failed the run. The key and the rows that name it are excluded and
+        // counted; every other census subject is observed as before.
+        const string censusSubject = "http://data.legilux.public.lu/eli/etat/leg/loi/2026/01/01/s-only";
+        const string accentedSubject =
+            "http://data.legilux.public.lu/eli/etat/leg/code/travail/art._l._542-4_\u00e0_l._542-6./20201101";
+        var (profile, _, enumerationRef) = BuildProfile();
+        var store = new InMemoryCustodyStore();
+        var assertionPage = AssertionRowsJson(
+            (accentedSubject, CitesPredicate, censusSubject, "iri", "", ""),
+            (censusSubject, CitesPredicate, censusSubject, "iri", "", ""));
+        var handler = TwoFamilyDeliveringHandler([accentedSubject, censusSubject], 2, assertionPage);
+        var adapter = new LuxembourgQueryExecutionAdapter(store, NewExecutor(store, handler), profile);
+        var (resourceRequest, resourceWitness) = BuildPartitionRequest(ResourceSetId, ResourceFamilyKey);
+        var (assertionRequest, assertionWitness) = BuildPartitionRequest(AssertionSetId, AssertionFamilyKey);
+
+        var result = await adapter.RunAsync(
+            [(resourceRequest, resourceWitness, null), (assertionRequest, assertionWitness, null)],
+            null, ResourceFamilyKey, AssertionFamilyKey,
+            new PermissiveEvidenceResolver(enumerationRef), DocumentFetchRendererSource(), LuxembourgAcquisitionTestFixture.TestWireBudget(), CancellationToken.None);
+
+        Assert.IsNull(result.Refusal, result.Refusal?.Detail);
+        Assert.IsNotNull(result.ScopeManifestReceipt);
+        CollectionAssert.AreEqual(new[] { censusSubject }, result.ResourceObservationSubjects.ToArray());
+        var excluded = result.ResourceObservationExclusions
+            .Single(static exclusion => exclusion.Cause == LuxembourgResourceObservationExclusionCause.SubjectNotAPublisherUri);
+        Assert.AreEqual(accentedSubject, excluded.Subject);
+        Assert.AreEqual(2, excluded.RowCount, "its census row and its assertion row");
+    }
+
+    [TestMethod]
     public async Task AnAssertionRowWithAnUnrecognisedObjectKindRefusesInsteadOfThrowing()
     {
         // The design objection's other required fix: an object_kind value outside the query plan's

@@ -216,16 +216,7 @@ public static class LuxembourgTranspositionProducer
     internal static string RequirePublisherUri(string value, string parameterName)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(value, parameterName);
-        if (value.Length > 4_096 ||
-            value.Any(static character => character is < '!' or > '~') ||
-            HasInvalidPercentEscape(value) ||
-            !(value.StartsWith("http://", StringComparison.Ordinal) ||
-              value.StartsWith("https://", StringComparison.Ordinal)) ||
-            !Uri.TryCreate(value, UriKind.Absolute, out var parsed) ||
-            string.IsNullOrEmpty(parsed.Host) ||
-            !string.IsNullOrEmpty(parsed.UserInfo) ||
-            !string.IsNullOrEmpty(parsed.Query) ||
-            !string.IsNullOrEmpty(parsed.Fragment))
+        if (!IsPublisherUri(value))
         {
             throw new ArgumentException(
                 "Publisher identities must be exact absolute HTTP(S) URIs without userinfo, query, or fragment.",
@@ -233,6 +224,24 @@ public static class LuxembourgTranspositionProducer
         }
         return value;
     }
+
+    /// <summary>
+    /// The rule <c>SourceCoreValidation.RequirePublisherUri</c> applies to every <c>SourceObjectRef</c>, as a
+    /// predicate: an identity the publisher minted outside it (a census key carrying an unescaped "à", measured in
+    /// the 2026-10-09 population run) can be excluded before it is minted, instead of throwing there.
+    /// </summary>
+    internal static bool IsPublisherUri(string? value) =>
+        !string.IsNullOrWhiteSpace(value) &&
+        value.Length <= 4_096 &&
+        !value.Any(static character => character is < '!' or > '~') &&
+        !HasInvalidPercentEscape(value) &&
+        (value.StartsWith("http://", StringComparison.Ordinal) ||
+         value.StartsWith("https://", StringComparison.Ordinal)) &&
+        Uri.TryCreate(value, UriKind.Absolute, out var parsed) &&
+        !string.IsNullOrEmpty(parsed.Host) &&
+        string.IsNullOrEmpty(parsed.UserInfo) &&
+        string.IsNullOrEmpty(parsed.Query) &&
+        string.IsNullOrEmpty(parsed.Fragment);
 
     private static bool HasInvalidPercentEscape(string value)
     {

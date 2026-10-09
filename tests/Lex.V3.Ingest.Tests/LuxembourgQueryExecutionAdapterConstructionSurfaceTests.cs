@@ -322,10 +322,11 @@ public sealed class LuxembourgQueryExecutionAdapterConstructionSurfaceTests
 
     /// <summary>
     /// D1-04b's reviewer fold-in: a plain enum, no construction surface beyond the two base-class constructors every
-    /// enum carries. Four members since 2026-10-09: the two subject-not-in-census causes record publisher drift.
+    /// enum carries. Five members since 2026-10-09: the two subject-not-in-census causes record publisher drift, and
+    /// the last a census key no observation can carry.
     /// </summary>
     [TestMethod]
-    public void ResourceObservationExclusionCauseIsAPlainFourMemberEnum()
+    public void ResourceObservationExclusionCauseIsAPlainFiveMemberEnum()
     {
         CollectionAssert.AreEqual(
             new[]
@@ -337,6 +338,8 @@ public sealed class LuxembourgQueryExecutionAdapterConstructionSurfaceTests
                 "field public static " + N + "LuxembourgResourceObservationExclusionCause::PredicateNotAdmitted -> "
                 + N + "LuxembourgResourceObservationExclusionCause",
                 "field public static " + N + "LuxembourgResourceObservationExclusionCause::RelationSubjectNotInCensus -> "
+                + N + "LuxembourgResourceObservationExclusionCause",
+                "field public static " + N + "LuxembourgResourceObservationExclusionCause::SubjectNotAPublisherUri -> "
                 + N + "LuxembourgResourceObservationExclusionCause",
                 "field public static " + N + "LuxembourgResourceObservationExclusionCause::SubjectNotInCensus -> "
                 + N + "LuxembourgResourceObservationExclusionCause",
