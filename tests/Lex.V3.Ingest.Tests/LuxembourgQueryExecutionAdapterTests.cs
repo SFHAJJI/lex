@@ -612,13 +612,13 @@ public sealed partial class LuxembourgQueryExecutionAdapterTests
     [TestMethod]
     [DataRow("predicate_drift", LuxembourgQueryExecutionRefusal.RelationRowPredicateNotAdmitted,
         "futureRelation")]
-    [DataRow("subject_outside_census", LuxembourgQueryExecutionRefusal.RelationRowSubjectNotInCensus,
-        "outside-census")]
+    [DataRow("subject_outside_census", LuxembourgQueryExecutionRefusal.None,
+        "excluded and counted, not refused")]
     [DataRow("literal_object", LuxembourgQueryExecutionRefusal.RelationRowTermNotIri,
         "does not carry IRI terms")]
     [DataRow("unbound_object", LuxembourgQueryExecutionRefusal.None,
         "DeliveryProofRefused")]
-    public async Task AMalformedOrOutOfScopeRelationRowFailsClosedBeforeAuthorityIsEmitted(
+    public async Task AMalformedOrOutOfScopeRelationRowNeverReachesAuthority(
         string shape,
         LuxembourgQueryExecutionRefusal expectedRefusal,
         string expectedDetail)
@@ -683,6 +683,22 @@ public sealed partial class LuxembourgQueryExecutionAdapterTests
             new PermissiveEvidenceResolver(enumerationRef), DocumentFetchRendererSource(),
             LuxembourgAcquisitionTestFixture.TestWireBudget(),
             CancellationToken.None);
+
+        if (shape == "subject_outside_census")
+        {
+            // Not a refusal since 2026-10-09: a relation row whose subject the census never named is publisher drift,
+            // a resource added after the census read its range. It is excluded and counted, and no authority is
+            // emitted for it; the run continues on the census it proved.
+            Assert.IsNull(result.Refusal, result.Refusal?.Detail);
+            Assert.IsEmpty(result.ResolvedRelations);
+            Assert.IsEmpty(result.LocalInboundRelations);
+            var exclusion = result.ResourceObservationExclusions.Single(static exclusion =>
+                exclusion.Cause == LuxembourgResourceObservationExclusionCause.RelationSubjectNotInCensus);
+            Assert.AreEqual(outsideSubject, exclusion.Subject);
+            Assert.AreEqual(1, exclusion.RowCount);
+            CollectionAssert.AreEqual(new[] { subjectUri }, result.ResourceObservationSubjects.ToArray());
+            return;
+        }
 
         if (expectedRefusal == LuxembourgQueryExecutionRefusal.None)
         {
@@ -1673,13 +1689,16 @@ public sealed partial class LuxembourgQueryExecutionAdapterTests
     }
 
     [TestMethod]
-    public async Task AnAssertionRowNamingASubjectAbsentFromTheCensusRefusesNamingThatExactSubject()
+    public async Task AnAssertionRowNamingASubjectAbsentFromTheCensusIsExcludedAndCountedNotAdmitted()
     {
-        // THE discriminating test the review objection asked for: S and A are built from genuinely
-        // DIFFERENT literals, not the same string reused. The census delivers exactly one subject
-        // ("s-only"); the assertion-rows family delivers one row for a completely different subject
-        // ("a-rogue") that the census never named at all -- two independent enumerations over the
-        // same triple store disagreeing about which subjects exist.
+        // S and A are built from genuinely DIFFERENT literals, not the same string reused. The census
+        // delivers exactly one subject ("s-only"); the assertion-rows family delivers one row for a
+        // completely different subject ("a-rogue") that the census never named at all. Over a live
+        // store that is publisher drift: the families are enumerated hours apart, and the first
+        // complete Luxembourg population run (2026-10-09) measured 28 such subjects among 207,016,
+        // every one a resource added after the census read its range. Until then this refused the
+        // whole run. The census is the run's population: the rogue row is excluded and counted, never
+        // admitted under an identity the census did not prove, and the census subject is observed.
         const string censusSubject = "http://data.legilux.public.lu/eli/etat/leg/loi/2026/01/01/s-only";
         const string rogueSubject = "http://data.legilux.public.lu/eli/etat/leg/loi/2026/01/01/a-rogue";
         var (profile, _, enumerationRef) = BuildProfile();
@@ -1696,14 +1715,14 @@ public sealed partial class LuxembourgQueryExecutionAdapterTests
             null, ResourceFamilyKey, AssertionFamilyKey,
             new PermissiveEvidenceResolver(enumerationRef), DocumentFetchRendererSource(), LuxembourgAcquisitionTestFixture.TestWireBudget(), CancellationToken.None);
 
-        Assert.IsNull(result.ScopeManifestReceipt);
-        Assert.IsNotNull(result.Refusal);
-        Assert.AreEqual(
-            LuxembourgQueryExecutionRefusal.ObservationSubjectNotInDeliveredCensus, result.Refusal.Code);
-        StringAssert.Contains(result.Refusal.Detail, rogueSubject);
-        Assert.IsFalse(
-            result.Refusal.Detail!.Contains(censusSubject, StringComparison.Ordinal),
-            "the refusal must name the rogue subject, not the census's own subject");
+        Assert.IsNull(result.Refusal, result.Refusal?.Detail);
+        Assert.IsNotNull(result.ScopeManifestReceipt);
+        CollectionAssert.AreEqual(new[] { censusSubject }, result.ResourceObservationSubjects.ToArray(),
+            "only the census subject is observed");
+        var exclusion = result.ResourceObservationExclusions.Single();
+        Assert.AreEqual(rogueSubject, exclusion.Subject);
+        Assert.AreEqual(LuxembourgResourceObservationExclusionCause.SubjectNotInCensus, exclusion.Cause);
+        Assert.AreEqual(1, exclusion.RowCount);
     }
 
     [TestMethod]

@@ -439,12 +439,18 @@ public enum LuxembourgQueryExecutionRefusal
     ResourceObservationRowsNotVerified = 4,
 
     /// <summary>
-    /// D1-04b's ruling on the two families: the "assertion-rows" family (set "A") is bound to the
-    /// "subjects" census family (set "S") by IDENTITY-SET EQUALITY, never a count. This refuses when
-    /// a subject appearing in A's own decoded rows is not a member of S's own delivered key set --
-    /// two independent enumerations over the same triple store disagreeing about which subjects
-    /// exist is a genuine data-integrity problem this adapter reports rather than silently drops.
-    /// See <see cref="LuxembourgQueryExecutionRefusalDetail.Detail"/> for the exact subject.
+    /// D1-04b's ruling on the two families bound the "assertion-rows" family (set "A") to the
+    /// "subjects" census family (set "S") by identity-set membership and refused here when a subject
+    /// in A's own decoded rows was not a member of S's own delivered key set.
+    /// <para>
+    /// No longer produced (2026-10-09). The families are enumerated hours apart over a live store,
+    /// and the first complete Luxembourg population run measured what that refusal meant in
+    /// practice: 28 of 207,016 assertion subjects outside the census, every one a resource the
+    /// publisher added after the census read its range. <c>BuildResourceObservations</c> now
+    /// excludes and counts those rows
+    /// (<see cref="LuxembourgResourceObservationExclusionCause.SubjectNotInCensus"/>). The wire name
+    /// stays reserved so a retained refusal still reads.
+    /// </para>
     /// </summary>
     [JsonStringEnumMemberName("observation_subject_not_in_delivered_census")]
     ObservationSubjectNotInDeliveredCensus = 5,
@@ -547,7 +553,12 @@ public enum LuxembourgQueryExecutionRefusal
     [JsonStringEnumMemberName("relation_row_predicate_not_admitted")]
     RelationRowPredicateNotAdmitted = 13,
 
-    /// <summary>A relation row subject was not a member of this run's delivered resource census.</summary>
+    /// <summary>
+    /// A relation row subject was not a member of this run's delivered resource census. No longer
+    /// produced (2026-10-09), for the reason <see cref="ObservationSubjectNotInDeliveredCensus"/>
+    /// gives: such rows are excluded and counted
+    /// (<see cref="LuxembourgResourceObservationExclusionCause.RelationSubjectNotInCensus"/>).
+    /// </summary>
     [JsonStringEnumMemberName("relation_row_subject_not_in_census")]
     RelationRowSubjectNotInCensus = 14,
 
@@ -632,10 +643,12 @@ public enum LuxembourgQueryExecutionRefusal
 /// <summary>
 /// D1-04b's reviewer fold-in: why <see cref="LuxembourgQueryExecutionAdapter.BuildResourceObservations"/>
 /// excluded an "assertion-rows" family row from its subject's own derived
-/// <see cref="LuxembourgResourceObservation.Assertions"/> list. Both causes are the query plan's own
-/// documented boundary, not a delivery-integrity problem -- but without recording which rows were
-/// excluded and why, a subject whose every row was excluded this way is indistinguishable in the
-/// output from a subject with genuinely zero rows in the assertion family at all.
+/// <see cref="LuxembourgResourceObservation.Assertions"/> list, or a "relation-assertions" family row
+/// from its subject's relations. The first two causes are the query plan's own documented boundary;
+/// the last two are publisher drift between the census and the families enumerated after it. None is
+/// a delivery-integrity problem -- but without recording which rows were excluded and why, a subject
+/// whose every row was excluded this way is indistinguishable in the output from a subject with
+/// genuinely zero rows in the assertion family at all.
 /// </summary>
 public enum LuxembourgResourceObservationExclusionCause
 {
@@ -655,11 +668,29 @@ public enum LuxembourgResourceObservationExclusionCause
     /// </summary>
     [JsonStringEnumMemberName("blank_node_object")]
     BlankNodeObject = 2,
+
+    /// <summary>
+    /// The row's subject is not a member of the census family's own delivered key set: the publisher
+    /// added the resource after the census read its range (the families are enumerated hours apart
+    /// over a live store). The census is the run's population, so the row is not admitted under an
+    /// identity the census did not prove; the next run's census names the resource.
+    /// </summary>
+    [JsonStringEnumMemberName("subject_not_in_census")]
+    SubjectNotInCensus = 3,
+
+    /// <summary>
+    /// A "relation-assertions" family row whose subject is not a member of the census family's own
+    /// delivered key set, for the reason <see cref="SubjectNotInCensus"/> gives.
+    /// </summary>
+    [JsonStringEnumMemberName("relation_subject_not_in_census")]
+    RelationSubjectNotInCensus = 4,
 }
 
 /// <summary>
 /// One subject's own count of "assertion-rows" family rows excluded from its derived
-/// <see cref="LuxembourgResourceObservation.Assertions"/> list for one <see cref="Cause"/>. Never
+/// <see cref="LuxembourgResourceObservation.Assertions"/> list for one <see cref="Cause"/> (for
+/// <see cref="LuxembourgResourceObservationExclusionCause.RelationSubjectNotInCensus"/>,
+/// "relation-assertions" family rows). Never
 /// minted for zero rows: an entry's presence already means at least one row was excluded, so
 /// <see cref="RowCount"/> is always at least one.
 /// </summary>
@@ -1248,10 +1279,10 @@ public sealed class LuxembourgQueryExecutionResult
 /// family (set "A") projects <c>subject, predicate, object, object_kind, datatype_iri,
 /// language_tag</c> and is the actual content. <c>RunAsync</c> now designates and proves both
 /// families in the same run (<paramref name="resourceObservationFamilyKey"/> for S,
-/// <paramref name="resourceAssertionsFamilyKey"/> for A) and binds them by IDENTITY-SET EQUALITY,
-/// never a count: every subject A's own decoded rows name must be a member of S's own delivered key
-/// set, refused as <see cref="LuxembourgQueryExecutionRefusal.ObservationSubjectNotInDeliveredCensus"/>
-/// otherwise, and every key S actually delivered yields exactly one derived observation -- carrying
+/// <paramref name="resourceAssertionsFamilyKey"/> for A) and binds them by IDENTITY-SET MEMBERSHIP,
+/// never a count: a row of A whose subject is not a member of S's own delivered key set is excluded
+/// and counted as <see cref="LuxembourgResourceObservationExclusionCause.SubjectNotInCensus"/> (the
+/// publisher added it after the census), and every key S actually delivered yields exactly one derived observation -- carrying
 /// A's real assertions when A has rows for that subject, or honestly empty assertions when it does
 /// not (a real "this resource has no assertions this run observed", which the merged
 /// <c>LuxembourgScopeResolver</c> is left free to keep typing however it already does; that is a
@@ -1369,10 +1400,9 @@ public sealed partial class LuxembourgQueryExecutionAdapter
     /// <paramref name="resourceObservationFamilyKey"/> names. Must be null exactly when
     /// <paramref name="resourceObservationFamilyKey"/> is null. Proven and reopened the same way as
     /// the census family (same two refusal codes on the same two failure shapes); once both families'
-    /// rows are in hand, every subject A's own rows name must be a member of S's own delivered key
-    /// set or <c>RunAsync</c> refuses with
-    /// <see cref="LuxembourgQueryExecutionRefusal.ObservationSubjectNotInDeliveredCensus"/> -- an
-    /// identity-set membership test over both families' own decoded rows, never a count.
+    /// rows are in hand, a row of A whose subject is not a member of S's own delivered key set is
+    /// excluded and counted as <see cref="LuxembourgResourceObservationExclusionCause.SubjectNotInCensus"/>
+    /// -- an identity-set membership test over both families' own decoded rows, never a count.
     /// </param>
     /// <remarks>
     /// SECOND SUMMARY ELEMENT IN ONE DOC COMMENT, now a remark. Nothing warned, because
@@ -1765,8 +1795,7 @@ public sealed partial class LuxembourgQueryExecutionAdapter
                     _sourceProfile.RelationRules.Select(static rule => rule.PredicateIri).ToArray());
                 if (buildResult.Kind != ResourceObservationBuildOutcomeKind.Built)
                 {
-                    var (refusalCode, refusalDetail) = MapResourceObservationBuildFailure(
-                        buildResult, resourceObservationFamilyKey, resourceAssertionsFamilyKey);
+                    var (refusalCode, refusalDetail) = MapResourceObservationBuildFailure(buildResult);
                     return LuxembourgQueryExecutionResult.Refused(
                         topology,
                         outcomes,
@@ -1861,8 +1890,7 @@ public sealed partial class LuxembourgQueryExecutionAdapter
             }
             if (buildResult.Kind != ResourceObservationBuildOutcomeKind.Built)
             {
-                var (refusalCode, refusalDetail) = MapResourceObservationBuildFailure(
-                    buildResult, resourceObservationFamilyKey, resourceAssertionsFamilyKey);
+                var (refusalCode, refusalDetail) = MapResourceObservationBuildFailure(buildResult);
                 return LuxembourgQueryExecutionResult.Refused(
                     topology,
                     outcomes,
@@ -3772,14 +3800,10 @@ public sealed partial class LuxembourgQueryExecutionAdapter
     }
 
     private static (LuxembourgQueryExecutionRefusal Code, string? Detail) MapResourceObservationBuildFailure(
-        ResourceObservationBuildResult buildResult,
-        string? resourceObservationFamilyKey,
-        string? resourceAssertionsFamilyKey)
+        ResourceObservationBuildResult buildResult)
     {
         var refusalCode = buildResult.Kind switch
         {
-            ResourceObservationBuildOutcomeKind.SubjectNotInCensus =>
-                LuxembourgQueryExecutionRefusal.ObservationSubjectNotInDeliveredCensus,
             ResourceObservationBuildOutcomeKind.ObjectKindNotRecognised =>
                 LuxembourgQueryExecutionRefusal.AssertionRowObjectKindNotRecognised,
             ResourceObservationBuildOutcomeKind.TermUnbound =>
@@ -3790,18 +3814,11 @@ public sealed partial class LuxembourgQueryExecutionAdapter
                 LuxembourgQueryExecutionRefusal.RelationRowTermNotIri,
             ResourceObservationBuildOutcomeKind.RelationPredicateNotAdmitted =>
                 LuxembourgQueryExecutionRefusal.RelationRowPredicateNotAdmitted,
-            ResourceObservationBuildOutcomeKind.RelationSubjectNotInCensus =>
-                LuxembourgQueryExecutionRefusal.RelationRowSubjectNotInCensus,
             _ => throw new InvalidOperationException(
                 $"Unreachable: BuildResourceObservations returned an unhandled outcome kind " +
                 $"'{buildResult.Kind}'."),
         };
-        var detail = buildResult.Kind == ResourceObservationBuildOutcomeKind.SubjectNotInCensus
-            ? $"the subject '{buildResult.Detail}' has a row in the assertion family " +
-              $"'{resourceAssertionsFamilyKey}' but is not a member of the census family " +
-              $"'{resourceObservationFamilyKey}'s own delivered key set."
-            : buildResult.Detail;
-        return (refusalCode, detail);
+        return (refusalCode, buildResult.Detail);
     }
 
     /// <summary>
@@ -3819,15 +3836,17 @@ public sealed partial class LuxembourgQueryExecutionAdapter
     /// <para>
     /// The binding between the two families is IDENTITY-SET membership, never a count: every subject
     /// named by any row in <paramref name="assertionRows"/> (checked here on the RAW, unfiltered
-    /// subject -- before the predicate/object-kind admission below ever runs, so a subject whose only
-    /// A rows get filtered out below still had to pass this membership check) must be a member of the
-    /// key set <paramref name="censusRows"/> actually delivered. The first subject that fails this
-    /// check is returned as <see cref="ResourceObservationBuildResult.SubjectNotInCensus"/> and no
-    /// observations are built at all; the caller turns that into
-    /// <see cref="LuxembourgQueryExecutionRefusal.ObservationSubjectNotInDeliveredCensus"/>.
-    /// This is a genuine set comparison over both families' own decoded rows, not a row-count
-    /// comparison in disguise: two families that deliver the same COUNT of distinct subjects but
-    /// disagree on which subjects they are still refuses here.
+    /// subject -- before the predicate/object-kind admission below ever runs) is looked up in the key
+    /// set <paramref name="censusRows"/> actually delivered. A row whose subject is not a member is
+    /// excluded and counted as <see cref="LuxembourgResourceObservationExclusionCause.SubjectNotInCensus"/>:
+    /// the families are enumerated hours apart over a live store, so a resource the publisher added
+    /// after the census read its range has rows here and no census key. The census is the run's
+    /// population; such a row is never admitted under an identity the census did not prove. This is a
+    /// genuine set comparison over both families' own decoded rows, not a row-count comparison in
+    /// disguise. Until 2026-10-09 it refused the whole run instead
+    /// (<see cref="LuxembourgQueryExecutionRefusal.ObservationSubjectNotInDeliveredCensus"/>); the
+    /// first complete Luxembourg population run measured 28 such subjects among 207,016, every one a
+    /// new act, consolidation or manifestation.
     /// </para>
     /// <para>
     /// Set A's own predicate filter (<c>LuxembourgQueryPlan.BuildTemplates</c>' <c>predicateValues</c>
@@ -3973,7 +3992,9 @@ public sealed partial class LuxembourgQueryExecutionAdapter
 
             if (!censusKeys.TryGetValue(subject, out var canonicalSubject))
             {
-                return ResourceObservationBuildResult.SubjectNotInCensus(subject);
+                // Publisher drift: added after the census read its range (see the summary above).
+                RecordExclusion(exclusionCounts, subject, LuxembourgResourceObservationExclusionCause.SubjectNotInCensus);
+                continue;
             }
 
             subject = canonicalSubject;
@@ -4079,8 +4100,11 @@ public sealed partial class LuxembourgQueryExecutionAdapter
 
                 if (hasResourceCensus && !censusKeys.Contains(subjectTerm.Value))
                 {
-                    return ResourceObservationBuildResult.RelationSubjectNotInCensus(
-                        subjectTerm.Value);
+                    // The same publisher drift as an assertion row's subject above.
+                    RecordExclusion(
+                        exclusionCounts, subjectTerm.Value,
+                        LuxembourgResourceObservationExclusionCause.RelationSubjectNotInCensus);
+                    continue;
                 }
 
                 if (!relationPredicates.Contains(predicateTerm.Value))
@@ -4290,13 +4314,11 @@ public sealed partial class LuxembourgQueryExecutionAdapter
     private enum ResourceObservationBuildOutcomeKind
     {
         Built = 1,
-        SubjectNotInCensus = 2,
         ObjectKindNotRecognised = 3,
         TermUnbound = 4,
         RelationTermUnbound = 5,
         RelationTermNotIri = 6,
         RelationPredicateNotAdmitted = 7,
-        RelationSubjectNotInCensus = 8,
     }
 
     /// <summary>
@@ -4330,9 +4352,7 @@ public sealed partial class LuxembourgQueryExecutionAdapter
 
         /// <summary>
         /// Present if and only if <see cref="Kind"/> is not <see cref="ResourceObservationBuildOutcomeKind.Built"/>:
-        /// the failing subject alone for <see cref="ResourceObservationBuildOutcomeKind.SubjectNotInCensus"/>
-        /// (the caller wraps it with the family keys it alone knows), or a complete, ready-to-surface
-        /// message for the other two kinds.
+        /// a complete, ready-to-surface message.
         /// </summary>
         public string? Detail { get; }
 
@@ -4340,9 +4360,6 @@ public sealed partial class LuxembourgQueryExecutionAdapter
             IReadOnlyList<LuxembourgResourceObservation> observations,
             IReadOnlyList<LuxembourgResourceObservationExclusionAccounting> exclusions) =>
             new(ResourceObservationBuildOutcomeKind.Built, observations, exclusions, null);
-
-        public static ResourceObservationBuildResult SubjectNotInCensus(string subject) =>
-            new(ResourceObservationBuildOutcomeKind.SubjectNotInCensus, null, null, subject);
 
         public static ResourceObservationBuildResult ObjectKindNotRecognised(string subject, string objectKind) =>
             new(
@@ -4375,11 +4392,6 @@ public sealed partial class LuxembourgQueryExecutionAdapter
                 $"the relation-assertions row for '{subject}' names predicate '{predicate}', " +
                 "which is outside the closed relation plan.");
 
-        public static ResourceObservationBuildResult RelationSubjectNotInCensus(string subject) =>
-            new(
-                ResourceObservationBuildOutcomeKind.RelationSubjectNotInCensus, null, null,
-                $"the relation-assertions row subject '{subject}' is not a member of this run's " +
-                "delivered resource census.");
     }
 
     private static int RequireProjectionIndex(RepeatedEnumerationInterpretationProfile profile, string variable)

@@ -320,9 +320,12 @@ public sealed class LuxembourgQueryExecutionAdapterConstructionSurfaceTests
             ConstructionSurface.Of(typeof(LuxembourgQueryExecutionRefusal)).ToArray());
     }
 
-    /// <summary>D1-04b's reviewer fold-in: a plain two-member enum, no construction surface beyond the two base-class constructors every enum carries.</summary>
+    /// <summary>
+    /// D1-04b's reviewer fold-in: a plain enum, no construction surface beyond the two base-class constructors every
+    /// enum carries. Four members since 2026-10-09: the two subject-not-in-census causes record publisher drift.
+    /// </summary>
     [TestMethod]
-    public void ResourceObservationExclusionCauseIsAPlainTwoMemberEnum()
+    public void ResourceObservationExclusionCauseIsAPlainFourMemberEnum()
     {
         CollectionAssert.AreEqual(
             new[]
@@ -332,6 +335,10 @@ public sealed class LuxembourgQueryExecutionAdapterConstructionSurfaceTests
                 "field public static " + N + "LuxembourgResourceObservationExclusionCause::BlankNodeObject -> "
                 + N + "LuxembourgResourceObservationExclusionCause",
                 "field public static " + N + "LuxembourgResourceObservationExclusionCause::PredicateNotAdmitted -> "
+                + N + "LuxembourgResourceObservationExclusionCause",
+                "field public static " + N + "LuxembourgResourceObservationExclusionCause::RelationSubjectNotInCensus -> "
+                + N + "LuxembourgResourceObservationExclusionCause",
+                "field public static " + N + "LuxembourgResourceObservationExclusionCause::SubjectNotInCensus -> "
                 + N + "LuxembourgResourceObservationExclusionCause",
             },
             ConstructionSurface.Of(typeof(LuxembourgResourceObservationExclusionCause)).ToArray());
