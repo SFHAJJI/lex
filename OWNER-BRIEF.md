@@ -19,8 +19,8 @@ bounded mount, the GDPR in English: search, dossier, reading, provision history,
   new consolidated versions, after our list of laws was taken, and the check treated them as an error.
 - Before restarting, the driver replayed that run on this machine with the fix. The replays found two more problems
   the run would have hit later: one Code du travail article whose address has an accented letter, and a checksum
-  step that tried to hold the whole population in one piece of text. All three are fixed: late or unusable items
-  are counted and left for the next run, and the checksum now reads the data as it streams.
+  step that tried to hold the whole population in one piece of text. All three are fixed: items added late wait for
+  the next run, that one article is left out and recorded, and the checksum now reads the data as it streams.
 - A replay with all three fixes then ran through to the first document downloads, where it stopped as planned.
 - No Luxembourg run is active now. It restarts fresh once the fix merges, this evening, and needs about three days
   with the machine awake: it should end about 12 to 13 October. Please keep the laptop on its charger; on 7 October

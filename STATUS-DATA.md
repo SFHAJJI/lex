@@ -48,8 +48,12 @@ Updated 2026-10-09.
     strings and minted into no identity.
   - The second fix: such a census key, and the assertion and relation rows that name it, are excluded and counted
     (`subject_not_a_publisher_uri`); the relation-only path gets the same guard. The Ingest copy of the publisher-URI
-    rule gains a predicate form, so there is still one rule. 155 of 156 tests in the affected classes and the
-    transposition classes pass locally; one is a canary, skipped by default.
+    rule gains a predicate form, so there is still one rule, pinned to the Contracts rule by a test.
+  - The review of #943 found the key must also pass the scope resolver's exact resource-IRI rule, which refuses the
+    whole run otherwise: a backslash passes the publisher-URI rule and fails that one. The exclusion now applies both,
+    through `VerifiedLuxembourgSourceProfile.AdmitsObservationIdentity`, the resolver's own rule. It judges only
+    subjects under `http://data.legilux.public.lu/`; a subject outside that prefix is a fault of the enumeration, and
+    the resolver still refuses the run for it, as before.
 - **A third replay found a scale limit.** With both fixes the replay passed the join and the observation build,
   retained all 1,017 rights batches and the 670 MB selection manifest, and then threw `OutOfMemoryException` with the
   process at 4.4 GB private (the commit charge was not exhausted). A replay that printed stack traces and sampled
@@ -59,8 +63,9 @@ Updated 2026-10-09.
   - The query result's digest (`AcquisitionCheckpoint`), which carries every typed assertion, uses the same helper and
     would have failed the same way after the document phase, about 30 hours into a fresh run.
   - The third fix: `ContractJson.Sha256` hashes exactly the UTF-8 bytes whose string `ContractJson.Serialize` returns,
-    while the serializer writes them, and the checkpoint helper uses it. Every digest is unchanged: a unit test pins the
-    streamed digest to the string's for non-ASCII text, nested objects and a document long enough to flush many times.
+    while the serializer writes them, and the checkpoint helper uses it, for the document, gazette and query-result
+    digests. Every digest is unchanged: a unit test pins the streamed digest to the string's for non-ASCII text, nested
+    objects and a document long enough to flush many times.
   - The scope manifest and the corpus record set already stream in 4 MiB chunks, and the other checkpoint documents on
     the path carry references, not the population.
 - **The fourth replay reached the document phase.** With all three fixes, replay 4 (`C:\lex-v3\lu-census-drift-replay-4`)
@@ -68,6 +73,17 @@ Updated 2026-10-09.
   digest, and entered the document phase. Its 12-request ceiling stopped it there as intended:
   `DocumentFetchSessionNotStarted ... WireBudgetExhausted` (exit 3). The process peaked at 4.4 GB private. A replay
   cannot reach the document phase at scale or what follows it; the fresh run is the first to exercise them.
+- **What the exclusions do not yet show.** They are carried in the acquisition result and its retained digest, but not
+  printed and not written as records. The driver measures them from custody after the run and records them here.
+  Carrying them into the mount's coverage view is a follow-up after the combined mount; until then the one excluded
+  article is the launch contract's "every discovered body with one typed outcome" gap, recorded here.
+- **Tests at the final head.** Lex.V3.Ingest.Tests: 203 of 206 in the adapter, census, construction-surface,
+  scope-resolution, source-profile, transposition, document-checkpoint and publisher-identity classes (3 live canaries
+  skipped). Lex.V3.Tests: 837 of 837 in the Luxembourg, scope, census and `ContractJson` classes. CI runs the full
+  solution.
+- **Publisher traffic of the replays.** Each replay ran `Lex.V3.Tool`, built locally from this branch, and spent its
+  12-request ceiling (48 requests in all): the EU rights notice on the Publications Office route, robots and a few
+  Legilux document attempts.
 - **No cross-build resume (driver decision).** The tool and the runner both hold that a journal resumes only in the build
   that wrote it. Loosening that would change the frozen resume path beyond the smallest fix, so the Luxembourg run
   restarts fresh on the merged build.
@@ -97,11 +113,13 @@ Updated 2026-10-09.
     retained count policy's digest were re-pinned from CI.
 - **The scan.** Run 10's custody held 1,703 pages (1,304,182 rows, 1,213 of them assertion pages). The 2,678-byte key
   was the only refusable shape: no missing or unbound key or column, no term that is not one string, no unknown
-  `object_kind`, and no other key part over 124 bytes. A cover stops at its first refused leaf, so the loi-a subjects
+  `object_kind`, and no key part other than `key_4` over 124 bytes. A cover stops at its first refused leaf, so the loi-a subjects
   after `.../loi/2005/06/21/n2` were never read; the restart reads them first.
 - **The engine's digest, measured.** #940's review named one residual risk: Legilux's `SHA256()` had not been run live on
-  a literal over 2 KB. One query asked for it on that title. The engine bound a 64-character lowercase hex digest, equal
-  to the double-UTF-8 digest that `LuxembourgDraftGraphProducer` documents.
+  a literal over 2 KB. One query asked for it on that title, sent by the driver as a single HTTPS POST with curl,
+  outside `Lex.V3.Tool`. STANDING-ORDERS.md section 2 authorises publisher traffic through the product's acquisition code
+  and `Lex.V3.Tool`, so it is recorded here and not repeated. The engine bound a 64-character lowercase hex digest,
+  equal to the double-UTF-8 digest that `LuxembourgDraftGraphProducer` documents.
 - **The restart (driver decision, reversible).** #940 merged (`ee725b66`; its push CI 37530912003 is green, and its
   runtime artifact expires 2026-10-09 21:16 UTC). Run 10 was stopped at 21:18 UTC, with its custody kept, before it
   read rgd-a. Letting it finish rgd-a first would have delayed the restart by 8 to 10 hours. The fresh run reaches rgd-a
@@ -142,8 +160,8 @@ Updated 2026-10-09.
     79,844: two copies of the 16 escaped bytes, in the page template and its count template. The plan digest and the
     retained count policy's digest changed with them.
   - The restart reads most of loi-a and rgd-a for the first time, and another row shape could still stop it. The one
-    the review named is a title longer than the 2,047-byte cursor-key limit. Across the 1,714 Luxembourg pages already
-    held (1.34 million rows), the longest title key is 326 bytes.
+    the review named is a title longer than the 2,047-byte cursor-key limit. Across the 1,714 Luxembourg pages runs 1
+    and 2 held (1.34 million rows), the longest title key is 326 bytes.
 - **What follows.** A new build cannot resume the old journal. The Luxembourg supervisor was stopped before its pointless
   resume, and the Luxembourg run restarts on the merged build, reusing the EU population's custody (no EU traffic).
 

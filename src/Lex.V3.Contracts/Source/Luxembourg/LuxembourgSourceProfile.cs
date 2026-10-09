@@ -260,6 +260,19 @@ public sealed class VerifiedLuxembourgSourceProfile
         return LuxembourgScopeResolver.Resolve(this, observations.Observations);
     }
 
+    /// <summary>The prefix every Luxembourg observation identity has; <see cref="AdmitsObservationIdentity"/> requires it.</summary>
+    public const string PublisherResourceIriPrefix = "http://data.legilux.public.lu/";
+
+    /// <summary>
+    /// Whether <see cref="Resolve"/> admits <paramref name="publisherIri"/> as an observation's own identity, by the
+    /// resolver's exact rule. The resolver refuses the whole run for an observation whose identity it does not admit, so
+    /// an acquisition excludes such a subject under <see cref="PublisherResourceIriPrefix"/> before minting its
+    /// observation. The publisher-URI rule every <c>SourceObjectRef</c> applies is not enough on its own: a backslash
+    /// passes it and fails this one.
+    /// </summary>
+    public static bool AdmitsObservationIdentity(string publisherIri) =>
+        publisherIri is not null && LuxembourgScopeResolver.IsLuxembourgResourceIri(publisherIri);
+
     public VerifiedScopeManifest ReduceScope(
         LuxembourgProfileResolution.Resolved resolution,
         IScopeReductionEvidenceResolver evidenceResolver) =>

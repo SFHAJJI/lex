@@ -686,11 +686,17 @@ public enum LuxembourgResourceObservationExclusionCause
     RelationSubjectNotInCensus = 4,
 
     /// <summary>
-    /// The subject cannot be a publisher identity: the publisher minted its IRI outside the exact
+    /// The subject cannot be an observation's identity: the publisher minted its IRI outside the exact
     /// ASCII HTTP(S) URI every <see cref="SourceObjectRef"/> requires (the 2026-10-09 population run
-    /// measured one census key, a Code du travail article carrying an unescaped "à"). No observation
-    /// can carry it, so its census row and every assertion and relation row for it are excluded and
-    /// counted here, instead of the run failing when the observation is minted.
+    /// measured one census key, a Code du travail article carrying an unescaped "à"), or outside the
+    /// exact resource IRI the scope resolver admits
+    /// (<see cref="VerifiedLuxembourgSourceProfile.AdmitsObservationIdentity"/>; a backslash passes the
+    /// first rule and fails this one). No observation can carry it, so its census row and every
+    /// assertion and relation row for it are excluded and counted here, instead of the run failing
+    /// when the observation is minted or resolved. Only a subject under the publisher's own prefix
+    /// (<see cref="VerifiedLuxembourgSourceProfile.PublisherResourceIriPrefix"/>) is one publisher value
+    /// excluded this way: a subject outside it is a fact about the enumeration, and the scope resolver
+    /// still refuses the whole run for it (InvalidPublisherIri).
     /// </summary>
     [JsonStringEnumMemberName("subject_not_a_publisher_uri")]
     SubjectNotAPublisherUri = 5,
@@ -1294,7 +1300,8 @@ public sealed class LuxembourgQueryExecutionResult
 /// <paramref name="resourceAssertionsFamilyKey"/> for A) and binds them by IDENTITY-SET MEMBERSHIP,
 /// never a count: a row of A whose subject is not a member of S's own delivered key set is excluded
 /// and counted as <see cref="LuxembourgResourceObservationExclusionCause.SubjectNotInCensus"/> (the
-/// publisher added it after the census), and every key S actually delivered yields exactly one derived observation -- carrying
+/// publisher added it after the census), and every key S actually delivered yields exactly one derived observation, unless
+/// no observation can carry it (<see cref="LuxembourgResourceObservationExclusionCause.SubjectNotAPublisherUri"/>) -- carrying
 /// A's real assertions when A has rows for that subject, or honestly empty assertions when it does
 /// not (a real "this resource has no assertions this run observed", which the merged
 /// <c>LuxembourgScopeResolver</c> is left free to keep typing however it already does; that is a
@@ -3837,7 +3844,9 @@ public sealed partial class LuxembourgQueryExecutionAdapter
     /// D1-04b's real derivation, per the reviewer's ruling
     /// (lex-event-20260904T023842960Z-3b559fba1e3c46dba3ef496e401d96f3): one
     /// <see cref="LuxembourgResourceObservation"/> per key <paramref name="censusRows"/> (the
-    /// "subjects" family, set "S") actually delivered, carrying whichever real
+    /// "subjects" family, set "S") actually delivered, except a key no observation can carry
+    /// (excluded and counted as <see cref="LuxembourgResourceObservationExclusionCause.SubjectNotAPublisherUri"/>),
+    /// carrying whichever real
     /// <see cref="LuxembourgObservedAssertion"/> values <paramref name="assertionRows"/> (the
     /// "assertion-rows" family, set "A") delivered for that same subject -- or honestly empty
     /// assertions when A has none for it.
@@ -3987,7 +3996,7 @@ public sealed partial class LuxembourgQueryExecutionAdapter
                     "the census family's resource-identity term");
             }
 
-            if (!LuxembourgTranspositionProducer.IsPublisherUri(key))
+            if (!IsObservationIdentity(key))
             {
                 unrepresentableKeys.Add(key);
                 RecordExclusion(exclusionCounts, key, LuxembourgResourceObservationExclusionCause.SubjectNotAPublisherUri);
@@ -4145,7 +4154,7 @@ public sealed partial class LuxembourgQueryExecutionAdapter
 
                 // Without a census, the relation subjects are the observation identities, so a subject no
                 // observation can carry is excluded here instead.
-                if (!hasResourceCensus && !LuxembourgTranspositionProducer.IsPublisherUri(subjectTerm.Value))
+                if (!hasResourceCensus && !IsObservationIdentity(subjectTerm.Value))
                 {
                     RecordExclusion(
                         exclusionCounts, subjectTerm.Value,
@@ -4340,6 +4349,15 @@ public sealed partial class LuxembourgQueryExecutionAdapter
 
     internal const string RuledNonAdmittingLicenceScl =
         "http://data.legilux.public.lu/resource/authority/license/licenceSCL";
+
+    // Both rules an observation's identity meets later: the publisher-URI rule SourceObjectRef applies when it is
+    // minted, and the scope resolver's exact resource-IRI rule, which refuses the whole run when it fails. Only a
+    // subject under the publisher's own prefix is judged here; one outside it is an enumeration fault the resolver
+    // still refuses the run for, as the resolver itself distinguishes a value from a row outside the closure.
+    private static bool IsObservationIdentity(string subject) =>
+        !subject.StartsWith(VerifiedLuxembourgSourceProfile.PublisherResourceIriPrefix, StringComparison.Ordinal) ||
+        (LuxembourgTranspositionProducer.IsPublisherUri(subject) &&
+         VerifiedLuxembourgSourceProfile.AdmitsObservationIdentity(subject));
 
     private static void RecordExclusion(
         Dictionary<(string Subject, LuxembourgResourceObservationExclusionCause Cause), int> exclusionCounts,

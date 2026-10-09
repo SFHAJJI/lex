@@ -1760,6 +1760,39 @@ public sealed partial class LuxembourgQueryExecutionAdapterTests
     }
 
     [TestMethod]
+    public async Task ACensusKeyTheScopeResolverWouldRefuseIsExcludedLikeOneNoPublisherIdentityCanCarry()
+    {
+        // The #943 review: a backslash is printable ASCII and passes the publisher-URI rule every
+        // SourceObjectRef applies, but the scope resolver's exact resource-IRI rule refuses it, and an
+        // observation the resolver refuses fails the whole run. The census key is excluded by the
+        // resolver's own rule, with the same cause, and the run continues on the rest of the census.
+        const string censusSubject = "http://data.legilux.public.lu/eli/etat/leg/loi/2026/01/01/s-only";
+        const string backslashSubject = "http://data.legilux.public.lu/eli/etat/leg/code/travail/art.\\1/20201101";
+        Assert.IsTrue(LuxembourgTranspositionProducer.IsPublisherUri(backslashSubject), "the publisher-URI rule alone admits it");
+        Assert.IsFalse(VerifiedLuxembourgSourceProfile.AdmitsObservationIdentity(backslashSubject));
+        var (profile, _, enumerationRef) = BuildProfile();
+        var store = new InMemoryCustodyStore();
+        var assertionPage = AssertionRowsJson((censusSubject, CitesPredicate, censusSubject, "iri", "", ""));
+        var handler = TwoFamilyDeliveringHandler([backslashSubject, censusSubject], 1, assertionPage);
+        var adapter = new LuxembourgQueryExecutionAdapter(store, NewExecutor(store, handler), profile);
+        var (resourceRequest, resourceWitness) = BuildPartitionRequest(ResourceSetId, ResourceFamilyKey);
+        var (assertionRequest, assertionWitness) = BuildPartitionRequest(AssertionSetId, AssertionFamilyKey);
+
+        var result = await adapter.RunAsync(
+            [(resourceRequest, resourceWitness, null), (assertionRequest, assertionWitness, null)],
+            null, ResourceFamilyKey, AssertionFamilyKey,
+            new PermissiveEvidenceResolver(enumerationRef), DocumentFetchRendererSource(), LuxembourgAcquisitionTestFixture.TestWireBudget(), CancellationToken.None);
+
+        Assert.IsNull(result.Refusal, result.Refusal?.Detail);
+        Assert.IsNotNull(result.ScopeManifestReceipt);
+        CollectionAssert.AreEqual(new[] { censusSubject }, result.ResourceObservationSubjects.ToArray());
+        var excluded = result.ResourceObservationExclusions
+            .Single(static exclusion => exclusion.Cause == LuxembourgResourceObservationExclusionCause.SubjectNotAPublisherUri);
+        Assert.AreEqual(backslashSubject, excluded.Subject);
+        Assert.AreEqual(1, excluded.RowCount, "its census row");
+    }
+
+    [TestMethod]
     public async Task AnAssertionRowWithAnUnrecognisedObjectKindRefusesInsteadOfThrowing()
     {
         // The design objection's other required fix: an object_kind value outside the query plan's
