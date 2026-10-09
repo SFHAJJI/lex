@@ -13,16 +13,18 @@ A feature pull request edits its lane file, not this one; this file changes for 
 
 ## Heads
 
-- `v3/integration`: `40a9434f` (2026-10-03, PR #916 merged). The required checks are strict: `dotnet` (the
-  whole solution, about 12 min on the runner), `web` (1,040 web tests), `canon-windows` and `journeys`. `journeys`
+- `v3/integration`: `a19f8b75` (2026-10-09, PR #944 merged). The required checks are strict: `dotnet` (the
+  whole solution, about 14 min on the runner), `web`, `canon-windows` and `journeys`. `journeys`
   walks J1 to J8 in Chrome over three fixture mounts (the fixture, licence-blocked and two-state mounts), by pointer
   and by keyboard on the pages the API serves.
 - Driver: Claude Opus 5.5, the sole driver since 2026-10-02. The owner's order: no Codex, no other Claude session,
   full authorisation, and the owner is never asked. Each pull request is reviewed by an independent Claude subagent
   (STATUS-WEB.md, driver decisions). The data lane's file (`STATUS-DATA.md`) is kept by this driver too.
-- Populations: EU run 14 (`C:\lex-v3\eu-population-20261004-14`) has been acquiring since 2026-10-04 08:55 UTC, on
-  the resumable tool (#924). Runs 9 to 13 stopped before the end, and their custody is kept. The Luxembourg population
-  follows it, sequentially (STATUS-DATA.md).
+- Populations: the EU population is complete. EU run 16 (`C:\lex-v3\eu-population-20261004-16`) acquired it by
+  2026-10-05 04:07 UTC, and its two offline derives were identical. The Luxembourg population: run 14
+  (`C:\lex-v3\lu-population-20261009-14`) has been acquiring since 2026-10-09 14:35 UTC on the build with #937, #940
+  and #943, and should end about 12 October. Runs 1 to 13 stopped on three defects those pull requests fix, and
+  replays of run 13's journal found two more before the restart (#943); all their custody is kept (STATUS-DATA.md).
 - Plan: `C:\lex-v3\V3-FINISH-PLAN-2026-09-27.md` (owner's copy). Decision 94 (one driver, one queue,
   one review per pull request) merged in lex-governance on 2026-09-27. Launch target 2026-11-07.
 
