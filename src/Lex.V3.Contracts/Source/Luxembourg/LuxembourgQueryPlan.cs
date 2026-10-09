@@ -1179,17 +1179,33 @@ public sealed record LuxembourgQueryPlan
         var predicateValues = Values("predicate", allPredicates.Select(static value => $"<{value}>"));
         var relationValues = Values("predicate", relations.Select(static value => $"<{value}>"));
         var rootValues = Values("scheme_root", schemeRoots.Select(LuxembourgQueryText.SparqlString));
+        // datatype_iri is COALESCEd to "" because Legilux's engine does not answer DATATYPE() with rdf:langString for a
+        // language-tagged literal as SPARQL 1.1 specifies: the BIND errors and leaves datatype_iri, and key_5 with it,
+        // unbound. The behaviour is documented for Cellar (EuPageDecodeClassificationTests' retained page, which
+        // LuxembourgDraftGraphDiscoveryPlan cites); on Legilux it was first measured in the 2026-10-05 Luxembourg population
+        // run: 12 of 997 and 8 of 997 rows of two assertion pages, every one a language-tagged jolux:title.
+        // Here the column is part of the canonical key the delivery proof requires bound, and the decoder refuses an
+        // unbound one, so the column itself is made total, not only the key. Nothing is lost: language_tag is non-empty
+        // for precisely those literals, and LuxembourgLiteralCanonicalizer reads an empty datatype with a language tag as
+        // rdf:langString. A literal the engine does type keeps its datatype unchanged.
+        // key_4 is SHA256(STR(?object)), not the object's string, because a cursor key part is at most 2,047 UTF-8 bytes
+        // (LuxembourgQueryText.MaximumKeyPartByteLength) and a literal is not: the same run's legislative-loi-a page held a
+        // jolux:title of 2,678 bytes, refused DeliveredKeyNotRepresentable, so the family could never be proven. The key only
+        // orders rows within one subject, predicate and object kind and resumes the cursor; nothing reads the object from it
+        // (the row's own object column carries the term) and scope ranges split on whole subjects (key_1). The 64-character
+        // digest is LuxembourgDraftGraphDiscoveryPlan's measured key_4 pattern; that this engine hashes non-ASCII text double
+        // UTF-8 encoded does not matter here, because the key is never recomputed, only returned to the engine.
         return new[]
         {
             Template("assertion-rows", graph, $"""
                 {predicateValues}
                 ?subject ?predicate ?object .
                 BIND(IF(isIRI(?object), "{AssertionObjectKindIri}", IF(isLiteral(?object), "{AssertionObjectKindLiteral}", "{AssertionObjectKindUnsupportedBlankNode}")) AS ?object_kind)
-                BIND(IF(isLiteral(?object), STR(DATATYPE(?object)), "") AS ?datatype_iri)
+                BIND(IF(isLiteral(?object), COALESCE(STR(DATATYPE(?object)), ""), "") AS ?datatype_iri)
                 BIND(IF(isLiteral(?object), LANG(?object), "") AS ?language_tag)
                 BIND(IF(isIRI(?subject), STR(?subject), "") AS ?key_1)
                 BIND(STR(?predicate) AS ?key_2) BIND(?object_kind AS ?key_3)
-                BIND(IF(isIRI(?object) || isLiteral(?object), STR(?object), "") AS ?key_4)
+                BIND(IF(isIRI(?object) || isLiteral(?object), SHA256(STR(?object)), "") AS ?key_4)
                 BIND(?datatype_iri AS ?key_5) BIND(?language_tag AS ?key_6)
                 """, "?subject ?predicate ?object ?object_kind ?datatype_iri ?language_tag",
                 countProjection: "?subject ?predicate ?object"),

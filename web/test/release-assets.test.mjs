@@ -5,16 +5,16 @@
 // the live pages carry.
 
 import assert from "node:assert/strict";
-import { createHash } from "node:crypto";
+import { createHash, generateKeyPairSync } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { mkdtemp, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 
-import { rehearsalKey, signRehearsal } from "../scripts/image-rehearsal.mjs";
+import { rehearsalKey, rehearsalSigner, releaseSigner, signImage, signRehearsal } from "../scripts/image-rehearsal.mjs";
 import { writeLayout, writeTar } from "../scripts/image-reproducible.mjs";
-import { ASSETS, RELEASE_MANIFEST, RELEASE_SIGNATURE, imageSignatureAsset, publishRelease, releaseFailures, releaseVersion } from "../scripts/release-assets.mjs";
+import { ASSETS, RELEASE_MANIFEST, RELEASE_SIGNATURE, SIGNED_RELEASE_SCHEMA, imageSignatureAsset, publishRelease, releaseFailures, releaseVersion } from "../scripts/release-assets.mjs";
 
 const sha256 = (bytes) => createHash("sha256").update(bytes).digest("hex");
 const CARD = readFileSync(new URL("../../schemas/v3-platform/evaluation-card.json", import.meta.url));
@@ -151,5 +151,84 @@ test("the directory, the version and the source the manifest signs must name eac
     assert.deepEqual(await releaseFailures(elsewhere, { publicKeyPem: moved.key.publicKeyPem }), [`the release is published as v3-rehearsal-20260101T000000Z-000000000000, not as its version ${releaseVersion(SOURCE)}`]);
   } finally {
     for (const one of [otherCommit, moved]) await rm(one.root, { recursive: true, force: true });
+  }
+});
+
+/** The identity a test's release signer signs as, and an owner's key for it: ECDSA P-256 in PEM, made for the test. */
+const RELEASE_IDENTITY = "lex-v3 release signer (a test key)";
+const ownerKeyPem = () => generateKeyPairSync("ec", { namedCurve: "P-256" }).privateKey.export({ type: "pkcs8", format: "pem" });
+
+/** Publishes a release signed by `signer` into a fresh directory; `change` may alter what is published. */
+async function publishedBy(signer, change = (release) => release, image = imageArchive()) {
+  const root = await mkdtemp(join(tmpdir(), "lex-release-"));
+  const { archive, manifestDigest } = image;
+  const signed = signImage({ manifestDigest, reference: "lex-v3:release", signer });
+  const release = change({
+    version: releaseVersion(SOURCE, { rehearsal: signer.rehearsal }), source: SOURCE, manifestDigest, corpusSha256: "c".repeat(64), signer,
+    assets: [[ASSETS.image, archive], [ASSETS.imageSignature, imageSignatureAsset(signed)], [ASSETS.card, CARD], [ASSETS.mountReport, Buffer.from("{\"files\":[]}")]],
+  });
+  const { directory } = await publishRelease(root, release);
+  return { root, directory, release };
+}
+
+test("a release signed with the owner's key is published as a release, and reads back as that signer's", async () => {
+  const signer = releaseSigner({ privateKeyPem: ownerKeyPem(), identity: RELEASE_IDENTITY });
+  const { root, directory } = await publishedBy(signer);
+  try {
+    assert.equal(releaseVersion(SOURCE, { rehearsal: false }), "v3-20260930T202240Z-23af798d9c78");
+    assert.ok(directory.endsWith("v3-20260930T202240Z-23af798d9c78"), "a release's version is v3-..., never v3-rehearsal-...");
+    assert.deepEqual(await releaseFailures(directory, { publicKeyPem: signer.publicKeyPem }), []);
+    assert.deepEqual(await releaseFailures(directory, { publicKeyPem: signer.publicKeyPem, identity: RELEASE_IDENTITY }), []);
+    const manifest = JSON.parse(await readFile(join(directory, RELEASE_MANIFEST), "utf8"));
+    assert.equal(manifest.schema, SIGNED_RELEASE_SCHEMA);
+    assert.equal(manifest.rehearsal, false);
+    assert.equal(manifest.signer, RELEASE_IDENTITY);
+    const signature = JSON.parse(await readFile(join(directory, RELEASE_SIGNATURE), "utf8"));
+    assert.equal(signature.signer, RELEASE_IDENTITY);
+    assert.equal(signature.rehearsal, false);
+    assert.ok(!JSON.stringify(signature).includes("PRIVATE"), "the release holds the public key only");
+    assert.deepEqual(await releaseFailures(directory, { publicKeyPem: signer.publicKeyPem, identity: "another signer" }),
+      [`the release is signed as ${RELEASE_IDENTITY}, not by the release signer another signer`]);
+    const otherKey = releaseSigner({ privateKeyPem: ownerKeyPem(), identity: RELEASE_IDENTITY });
+    const failures = await releaseFailures(directory, { publicKeyPem: otherKey.publicKeyPem, identity: RELEASE_IDENTITY });
+    assert.ok(failures.includes("the release manifest's signature does not verify with the release's key"), failures.join("\n"));
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("a rehearsal never passes for the release signer, whole or as the image's signature inside a release", async () => {
+  const rehearsal = await published();
+  const signer = releaseSigner({ privateKeyPem: ownerKeyPem(), identity: RELEASE_IDENTITY });
+  // The release's own key, said as the rehearsal's on the image: one signer's release, another's label on its image.
+  const asRehearsal = rehearsalSigner({ privateKey: signer.privateKey, publicKeyPem: signer.publicKeyPem });
+  const mixed = await publishedBy(signer, (release) => ({
+    ...release,
+    assets: release.assets.map(([name, bytes]) => [name, name === ASSETS.imageSignature
+      ? imageSignatureAsset(signImage({ manifestDigest: release.manifestDigest, reference: "lex-v3:release", signer: asRehearsal }))
+      : bytes]),
+  }));
+  try {
+    assert.deepEqual(await releaseFailures(rehearsal.directory, { publicKeyPem: rehearsal.key.publicKeyPem, identity: RELEASE_IDENTITY }),
+      [`the release is a rehearsal, not by the release signer ${RELEASE_IDENTITY}`]);
+    assert.deepEqual(await releaseFailures(mixed.directory, { publicKeyPem: signer.publicKeyPem, identity: RELEASE_IDENTITY }),
+      [`the image signature: the signature does not say it is ${RELEASE_IDENTITY}'s`]);
+  } finally {
+    for (const one of [rehearsal, mixed]) await rm(one.root, { recursive: true, force: true });
+  }
+});
+
+test("the manifest's kind is said alike by its schema and its signature", async () => {
+  const signer = releaseSigner({ privateKeyPem: ownerKeyPem(), identity: RELEASE_IDENTITY });
+  const { root, directory } = await publishedBy(signer);
+  try {
+    // The signature file's own claim edited: it no longer names the signer and kind the signed manifest says.
+    const path = join(directory, RELEASE_SIGNATURE);
+    const signature = JSON.parse(await readFile(path, "utf8"));
+    await writeFile(path, `${JSON.stringify({ ...signature, rehearsal: true }, null, 2)}\n`);
+    assert.deepEqual(await releaseFailures(directory, { publicKeyPem: signer.publicKeyPem }),
+      ["the release manifest's signature does not name the signer and kind the manifest says"]);
+  } finally {
+    await rm(root, { recursive: true, force: true });
   }
 });

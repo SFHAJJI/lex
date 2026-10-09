@@ -2060,8 +2060,8 @@ internal static class LuxembourgScopeResolver
         hash.AppendData(bytes);
     }
 
-    private static bool IsLuxembourgResourceIri(string value) =>
-        value.StartsWith("http://data.legilux.public.lu/", StringComparison.Ordinal) &&
+    internal static bool IsLuxembourgResourceIri(string value) =>
+        value.StartsWith(VerifiedLuxembourgSourceProfile.PublisherResourceIriPrefix, StringComparison.Ordinal) &&
         LuxembourgSourceValidation.IsExactResourceIri(value);
 
     private static bool TryExactIri(string value)

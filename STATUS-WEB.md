@@ -1,6 +1,6 @@
 # Lex V3 status: the web lane
 
-Updated 2026-10-04. The web lane's progress, split out of STATUS.md (which keeps the heads, the owner's open
+Updated 2026-10-05. The web lane's progress, split out of STATUS.md (which keeps the heads, the owner's open
 items and the pointers) by the standing order of 2026-10-01 13:50 UTC. Every pull request of the web lane
 updates this file, not STATUS.md.
 
@@ -98,9 +98,13 @@ below:
   - Waits: the deployment. The Azure subscription is disabled.
 
 **Data at launch**
-- **The complete EU population, English and French:** EU run 14, acquiring since 2026-10-04 08:55 UTC on the resumable
+- **The complete EU population, English and French:** complete on 2026-10-05: acquired by EU runs 14 to 16 (two network
+  stops resumed from the journal), derived twice with identical files (STATUS-DATA.md). Previously: EU run 14, from 2026-10-04 08:55 UTC on the resumable
   tool (#924). Runs 9 to 13 stopped before the end, and their custody is kept (STATUS-DATA.md).
-- **The Luxembourg population:** follows the EU run, one run after the other (`claude-lu-population-run.ps1`).
+- **The Luxembourg population:** run 11 proved all nine families for the first time and stopped at the census join on
+  2026-10-09 (publisher drift during the run). #943 fixes that and two later defects that replays of its journal on the
+  real custody found; a fourth replay reached the document phase. The run restarts fresh on the merged build, under a
+  supervisor, reusing the EU population (`claude-lu-population-run.ps1`). Runs 1, 2, 10 and 11 to 13: STATUS-DATA.md.
 - **Robots read per URL; the rights receipt fetched once per build on the Publications Office route; no request to
   eur-lex.europa.eu; transport bytes retained before decode:** by construction in the acquisition (STATUS-DATA.md).
 
@@ -120,8 +124,8 @@ below:
       before it is laid out as the CI runtime artifact is, and the release command binds it to the checkout.
     - **The derivation.** Two `Lex.V3.Tool derive` processes must agree file for file. Their files must equal the live
       build's, and nothing may reach the proxy-variable trap.
-    - **The image.** The image is then built twice and must be identical. It is verified, rehearsal-signed, published
-      and read back.
+    - **The image.** The image is then built twice and must be identical. It is verified, signed through the release
+      signer's path with a key made in the job, published and read back.
     - **The card over that mount.** CI requires the three EU `as_of` arms, the refusal set and the retrieval set to
       have cases and pass every gate (review of #930: a card of `not_measured` arms passed before). On 2026-10-04 they
       did, in CI and locally: the EU arms 6 cases each with their shuffles caught, the refusal set 9 cases, the retrieval
@@ -134,7 +138,19 @@ below:
         date.
       - Deriving Luxembourg documents and states from custody is held only by the act-range rows of
         `V3OfflineMountTests` (#899) until the population custody exists.
-  - Waits: the populations' custody for the real run, and the owner's production signing identity.
+  - **The production signing entry point (2026-10-04).**
+    - **The command.** `--signing-key <PEM file, or - for standard input> --signer <identity>` signs the image and the
+      release with the owner's ECDSA P-256 key instead of a rehearsal key.
+    - **The key.** It stays in the owner's key vault and can be piped in, so it touches no disk. It is read once and
+      held only in that process. It is never written, logged or kept, and no error repeats it.
+    - **The release.** It is published as a release (`lex-v3-release/1`, version `v3-...`) that names its signer.
+      Reading back checks that the schema, the version, the manifest and both signatures say the same kind and signer.
+    - **The deploy kit.** `deploy-probe.mjs --signer <identity>` refuses a rehearsal or another signer's release.
+      `deploy.ps1 -Apply` now requires `-SignerIdentity`, so a deployment applies only a release-signer release; a
+      plan run may still read a rehearsal.
+    - **In CI.** CI's custody rehearsal signs through this path with a key made in the job, under an identity saying
+      so, and checks that its report holds no private key.
+  - Waits: the populations' custody for the real run, and the owner's signing key in their key vault.
 - **Zero-traffic deploy, probes, promotion, a second revision, rollback, V2 retired:** wait for Azure.
 - **Owner sign-off:** the owner's.
 
@@ -1182,20 +1198,23 @@ Nothing here logs in, deploys or signs with a production identity; those stay wi
      - the managed environment;
      - the registry;
      - a user-assigned identity with AcrPull on it;
-     - the production signing identity, and a release signed by it in the rehearsal's release format.
+     - the production signing key (ECDSA P-256, in your key vault), the identity it signs as, and its public key in
+       PEM. The release is built with `--signing-key - --signer <identity>` on the release command, the key piped
+       from `az keyvault secret show ... --query value -o tsv`.
   2. `az login` in your own session, then `pwsh -File deploy/validate.ps1` (it needs the Bicep CLI;
      no Azure is touched).
   3. Plan: `pwsh -File deploy/deploy.ps1 -Subscription <id> -ResourceGroup <rg> -EnvironmentId <id>
      -Registry <name>.azurecr.io -IdentityResourceId <id> -SigningPublicKey <identity's public key,
-     PEM> -Release <release directory>`, then either `-LiveRevision <the revision serving now>`, or on
-     a first deployment `-ProbeSourceCidr <your address>/32`.
+     PEM> -SignerIdentity <the identity it signs as> -Release <release directory>`, then either `-LiveRevision <the
+     revision serving now>`, or on a first deployment `-ProbeSourceCidr <your address>/32`. `-Apply` requires
+     `-SignerIdentity`, so only a release signed by the release signer is deployed.
   4. The same command with `-Apply` deploys the candidate and probes it. On "answers as the release
      holds", promote with the command it prints. On a failed probe the candidate is already
      deactivated.
   5. Remove a revision at any time with `pwsh -File deploy/deploy.ps1 -Subscription <id>
      -ResourceGroup <rg> -Remove -Revision <name>`.
 - **Not covered:**
-  - the production signing identity and its release format (the owner's);
+  - the production signing key itself (the owner's, in their key vault);
   - a custom domain, DNS and monitoring;
   - an Azure-side check of the template, since `what-if` needs the owner's session.
 
@@ -2429,9 +2448,9 @@ each consolidated version, with the publisher's consolidation date or a typed re
 
 The French interface ships (branch `writer/french-chrome`, on the EU time view's PR #909; the launch
 contract's line "Chrome in FR and EN; DE and LB answer `localization_unavailable`").
-- **The review.** The French was reviewed by Claude (AI reviewer), under the owner's delegation of
-  2026-10-02 (the owner delegated every decision of the review to the driver). It is an AI
-  legal-language review with its evidence, not a review by a person. Its record, every changed entry
+- **The review.** The French was reviewed by the AI reviewer under the owner's delegation of 2026-10-02
+  (the receipt is dated 2026-10-03), and accepted by the owner on 2026-10-04, who reviewed it in person
+  (`C:\lex-v3\lanes\STANDING-ORDERS.md` section 8: "i did review it and its ok"). Its record, every changed entry
   with its reason and source, is `C:\lex-v3\lanes\fr-review\review.md`: 129 of 370 entries changed
   (61 in wording, 68 in typography). The receipt is `CHROME_REVIEWS.fr` in `localization.mjs`:
   `reviewed_by` "Claude (AI reviewer), under the owner's delegation of 2026-10-02", `reviewed_on`
@@ -2942,7 +2961,7 @@ The plan, in order (its items 1 to 3 are the data lane's, in STATUS-DATA.md):
    the accessibility and scope line held on the live screens; PR #813: a reviewed language builds
    its own pages; PR #815: the eight screens against the real bounded mount; PR #834: the
    licence-blocked journey. The French interface ships (branch `writer/french-chrome`): reviewed by
-   Claude (AI reviewer) under the owner's delegation of 2026-10-02, the reviewed table in
+   the AI reviewer under the owner's delegation of 2026-10-02 and accepted by the owner on 2026-10-04, the reviewed table in
    `LIVE_CHROME` and `fr` in `REVIEWED_CHROME_LOCALES`, which builds `/fr/*.html` (Decision 41); the
    owner may revise any entry. Hosting (ruling 3): `Lex.V3.Api`
    serves the live pages on the API's origin with `frame-ancestors`, HSTS and `Referrer-Policy`,
@@ -2985,6 +3004,12 @@ Each is the driver's call under ruling 7 and can be reversed by a later pull req
   Claude subagent with a fresh context, read-only, reporting only material and reproduced findings
   (`C:\lex-v3\lanes\claude-review-instructions.md`); one repair round, then merge on green CI. The
   owner's open questions are decided by the driver under that delegation and recorded here.
+- Documentation-only pull requests while a population run is active (2026-10-04). Such a pull request changes
+  `OWNER-BRIEF.md` and the status files only: no code, CI or tests. It merges on green CI without the subagent
+  review, and the next reviewed pull request reviews it. Code pull requests still wait for their review.
+  - The reason: on 2026-10-04 a review subagent twice drove the machine's commit headroom to 0.4-0.5 GB, the EU
+    runner's stop line.
+  - The owner's ruling wants the brief current whenever a run starts, ends or stops.
 - EU annexes (2026-10-03): dossier and evidence_bundle list the annexes the corpus classified under
   `annexes_not_served`. Every one is served as `text_not_available`, whatever its disposition, and linked to its
   expression's official source. No annex text is served even where the publisher's PDF has a text layer; that
