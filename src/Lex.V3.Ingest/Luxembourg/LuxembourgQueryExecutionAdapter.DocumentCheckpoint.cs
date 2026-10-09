@@ -116,7 +116,10 @@ public sealed partial class LuxembourgQueryExecutionAdapter
             Ordinal = pair.Key, RouteSha256 = CustodyDigest.Of(pair.Value.CopyCanonicalBytes()),
         }).ToArray(),
     });
-    private static string HashDocument<T>(T value) => CustodyDigest.Of(Encoding.UTF8.GetBytes(ContractJson.Serialize(value)));
+    // Streamed, never one string: the document phase's input is the complete scope manifest, and the query result's
+    // digest (AcquisitionCheckpoint) carries every typed assertion. At the Luxembourg population's scale either is longer
+    // than the largest string the runtime can hold; the digest is the same one the string's UTF-8 bytes had.
+    private static string HashDocument<T>(T value) => ContractJson.Sha256(value);
     private static byte[] EncodeDocument(DocumentCheckpoint value) => Encoding.UTF8.GetBytes(ContractJson.Serialize(value));
     private sealed record DocumentCheckpoint(string Schema, string InputSha256, SourceArtifactRef Renderer,
         DocumentFetch[] Fetches, string ResultSha256);

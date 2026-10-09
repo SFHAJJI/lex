@@ -1,6 +1,96 @@
 # Lex V3 status: the data lane
 
-Updated 2026-10-07.
+Updated 2026-10-09.
+
+## Publisher drift between the census and the later families: a third defect that stops the run (Claude, 2026-10-09)
+
+- **The stop.** Luxembourg run 11 (`C:\lex-v3\lu-population-20261006-11`, the #940 build) proved all nine families for
+  the first time: code-s, code-a, code-g, loi-s, loi-a, loi-g, rgd-s, rgd-a and rgd-g. At 02:00 UTC on 2026-10-09 it was
+  refused at the census join: `RunRefused: ObservationSubjectNotInDeliveredCensus`, naming
+  `.../eli/etat/leg/loi/1985/07/25/n1/jo/fr/docx`.
+  - The supervisor's resumes 12 and 13 replayed the journal, spending 4 requests each, and were refused the same way.
+    The supervisor was stopped before its third resume. The custody of runs 11, 12 and 13 is kept.
+  - On 7 October the laptop ran on battery: it entered standby at 20:56 UTC, slept on critical battery at 20:59 UTC, and
+    woke at 05:08 UTC on 8 October. The run paused for 8 hours and continued by itself.
+- **The cause.** An offline scan of run 11's custody compared the two sets.
+  - It held 4,257 assertion pages with 207,016 assertion subjects in the legislative ranges, and 260,132 census-like keys.
+  - 28 assertion subjects are outside the census (3 loi, 25 rgd), and 1 of 22,112 relation subjects.
+  - Every one of them is a resource the publisher added after the census read its range:
+    - `rgd/2026/07/24/a488` and its manifestations;
+    - the consolidations `consolide/20261011` of `rgd/2004/03/05/n15`, `rgd/2010/05/12/n6` and `rgd/2011/02/27/n10`,
+      with their manifestations;
+    - the docx, html and xml manifestations of `loi/1985/07/25/n1`, whose census held only the pdf.
+  - Their pages were written between 08:06 UTC on 7 October and 01:45 UTC on 9 October, after loi-s (03:04 UTC,
+    7 October) and rgd-s (19:38 UTC, 7 October) had read the census.
+  - The families are enumerated hours apart over a live store. The join already accepted the reverse case, a census
+    subject with no assertions, but refused this one.
+- **The fix.** It is one rule in `BuildResourceObservations` (STANDING-ORDERS.md section 8, item 2's exception, recorded
+  there).
+  - An assertion row whose subject the census did not deliver is excluded and counted (`subject_not_in_census`), and so
+    is a relation row (`relation_subject_not_in_census`). The census is the run's population: such a row is never
+    admitted under an identity the census did not prove, and the next run's census names the resource.
+  - The refusal codes `observation_subject_not_in_delivered_census` and `relation_row_subject_not_in_census` stay as
+    reserved wire names, so a retained refusal still reads. The two private outcome kinds that produced them are removed.
+  - The census-join test and the relation-row case now assert the exclusion: no refusal, a scope manifest, observations
+    for the census subjects only, and one counted row. Three inventory pins name the new members. 101 of 101 tests in the
+    five affected classes pass locally.
+- **A replay on the real custody found a second defect behind the first.** Before spending two days on a fresh run, the
+  driver replayed run 13's journal locally with the fix: a build of the branch stamped with run 13's source so the
+  journal was admitted, in a scratch root of hard links (`C:\lex-v3\lu-census-drift-replay-1`), with a wire ceiling of
+  12. Run 13's file list, sizes and journal digest were unchanged afterwards. Such a build is a local experiment only and is never
+  retained as evidence.
+  - The replay passed the census join and then failed minting an observation (exit 1): `Publisher identities must be
+    exact absolute HTTP(S) URIs without userinfo, query, or fragment`.
+  - One census key carries an unescaped "à": the Code du travail article
+    `.../eli/etat/leg/code/travail/art._l._542-4_à_l._542-6./20201101`. Every `SourceObjectRef` requires an exact
+    ASCII HTTP(S) URI. A scan of every IRI in run 11's custody against that rule found this key and its 5 assertion
+    rows, and 15 relation targets naming `.../eli/état/...` (a publisher misspelling). Objects are carried as
+    strings and minted into no identity.
+  - The second fix: such a census key, and the assertion and relation rows that name it, are excluded and counted
+    (`subject_not_a_publisher_uri`); the relation-only path gets the same guard. The Ingest copy of the publisher-URI
+    rule gains a predicate form, so there is still one rule, pinned to the Contracts rule by a test.
+  - The review of #943 found the key must also pass the scope resolver's exact resource-IRI rule, which refuses the
+    whole run otherwise: a backslash passes the publisher-URI rule and fails that one. The exclusion now applies both,
+    through `VerifiedLuxembourgSourceProfile.AdmitsObservationIdentity`, the resolver's own rule. It judges only
+    subjects under `http://data.legilux.public.lu/`; a subject outside that prefix is a fault of the enumeration, and
+    the resolver still refuses the run for it, as before.
+- **A third replay found a scale limit.** With both fixes the replay passed the join and the observation build,
+  retained all 1,017 rights batches and the 670 MB selection manifest, and then threw `OutOfMemoryException` with the
+  process at 4.4 GB private (the commit charge was not exhausted). A replay that printed stack traces and sampled
+  memory every 15 seconds pinned it.
+  - `DocumentInputDigest` (the document phase's checkpoint input) serialized the complete scope manifest into one .NET
+    string to hash it. At the Luxembourg population's scale that is longer than the largest string the runtime can hold.
+  - The query result's digest (`AcquisitionCheckpoint`), which carries every typed assertion, uses the same helper and
+    would have failed the same way after the document phase, about 30 hours into a fresh run.
+  - The third fix: `ContractJson.Sha256` hashes exactly the UTF-8 bytes whose string `ContractJson.Serialize` returns,
+    while the serializer writes them, and the checkpoint helper uses it, for the document, gazette and query-result
+    digests. Every digest is unchanged: a unit test pins the streamed digest to the string's for non-ASCII text, nested
+    objects and a document long enough to flush many times.
+  - The scope manifest and the corpus record set already stream in 4 MiB chunks, and the other checkpoint documents on
+    the path carry references, not the population.
+- **The fourth replay reached the document phase.** With all three fixes, replay 4 (`C:\lex-v3\lu-census-drift-replay-4`)
+  passed the join, the observations, the typed facts, scope resolution, the selection manifest and the streamed
+  digest, and entered the document phase. Its 12-request ceiling stopped it there as intended:
+  `DocumentFetchSessionNotStarted ... WireBudgetExhausted` (exit 3). The process peaked at 4.4 GB private. A replay
+  cannot reach the document phase at scale or what follows it; the fresh run is the first to exercise them.
+- **What the exclusions do not yet show.** They are carried in the acquisition result and its retained digest, but not
+  printed and not written as records. The driver measures them from custody after the run and records them here.
+  Carrying them into the mount's coverage view is a follow-up after the combined mount; until then the one excluded
+  article is the launch contract's "every discovered body with one typed outcome" gap, recorded here.
+- **Tests at the final head.** Lex.V3.Ingest.Tests: 203 of 206 in the adapter, census, construction-surface,
+  scope-resolution, source-profile, transposition, document-checkpoint and publisher-identity classes (3 live canaries
+  skipped). Lex.V3.Tests: 837 of 837 in the Luxembourg, scope, census and `ContractJson` classes. CI runs the full
+  solution.
+- **Publisher traffic of the replays.** Each replay ran `Lex.V3.Tool`, built locally from this branch, and spent its
+  12-request ceiling (48 requests in all): the EU rights notice on the Publications Office route, robots and a few
+  Legilux document attempts.
+- **No cross-build resume (driver decision).** The tool and the runner both hold that a journal resumes only in the build
+  that wrote it. Loosening that would change the frozen resume path beyond the smallest fix, so the Luxembourg run
+  restarts fresh on the merged build.
+- **What follows.** The Luxembourg run restarts fresh on the merged build, under the supervisor, with the after-LU waiter
+  and the keep-awake helper. It takes about three days with the machine awake. Its two offline derives cover the EU
+  and Luxembourg populations together; the EU derive alone peaked at about 14 GB private, so they may need the
+  machine's memory more than the acquisition does. They are offline and can be re-run without publisher traffic.
 
 ## A Luxembourg title longer than a cursor key: a second defect that stops the run (Claude, 2026-10-06)
 
@@ -23,11 +113,13 @@ Updated 2026-10-07.
     retained count policy's digest were re-pinned from CI.
 - **The scan.** Run 10's custody held 1,703 pages (1,304,182 rows, 1,213 of them assertion pages). The 2,678-byte key
   was the only refusable shape: no missing or unbound key or column, no term that is not one string, no unknown
-  `object_kind`, and no other key part over 124 bytes. A cover stops at its first refused leaf, so the loi-a subjects
+  `object_kind`, and no key part other than `key_4` over 124 bytes. A cover stops at its first refused leaf, so the loi-a subjects
   after `.../loi/2005/06/21/n2` were never read; the restart reads them first.
 - **The engine's digest, measured.** #940's review named one residual risk: Legilux's `SHA256()` had not been run live on
-  a literal over 2 KB. One query asked for it on that title. The engine bound a 64-character lowercase hex digest, equal
-  to the double-UTF-8 digest that `LuxembourgDraftGraphProducer` documents.
+  a literal over 2 KB. One query asked for it on that title, sent by the driver as a single HTTPS POST with curl,
+  outside `Lex.V3.Tool`. STANDING-ORDERS.md section 2 authorises publisher traffic through the product's acquisition code
+  and `Lex.V3.Tool`, so it is recorded here and not repeated. The engine bound a 64-character lowercase hex digest,
+  equal to the double-UTF-8 digest that `LuxembourgDraftGraphProducer` documents.
 - **The restart (driver decision, reversible).** #940 merged (`ee725b66`; its push CI 37530912003 is green, and its
   runtime artifact expires 2026-10-09 21:16 UTC). Run 10 was stopped at 21:18 UTC, with its custody kept, before it
   read rgd-a. Letting it finish rgd-a first would have delayed the restart by 8 to 10 hours. The fresh run reaches rgd-a
@@ -68,8 +160,8 @@ Updated 2026-10-07.
     79,844: two copies of the 16 escaped bytes, in the page template and its count template. The plan digest and the
     retained count policy's digest changed with them.
   - The restart reads most of loi-a and rgd-a for the first time, and another row shape could still stop it. The one
-    the review named is a title longer than the 2,047-byte cursor-key limit. Across the 1,714 Luxembourg pages already
-    held (1.34 million rows), the longest title key is 326 bytes.
+    the review named is a title longer than the 2,047-byte cursor-key limit. Across the 1,714 Luxembourg pages runs 1
+    and 2 held (1.34 million rows), the longest title key is 326 bytes.
 - **What follows.** A new build cannot resume the old journal. The Luxembourg supervisor was stopped before its pointless
   resume, and the Luxembourg run restarts on the merged build, reusing the EU population's custody (no EU traffic).
 

@@ -322,9 +322,8 @@ public sealed class ClosedVocabularyCensusTests
                 "Lex.V3.Ingest.Luxembourg.LuxembourgPublisherPdfTextLayerProductionRefusal: None, "
                     + "LayoutEvidenceUnavailable, TextArtifactCustodyUnavailable",
                 "Lex.V3.Ingest.Luxembourg.LuxembourgQueryExecutionAdapter+ResourceObservationBuildO"
-                    + "utcomeKind: Built, SubjectNotInCensus, ObjectKindNotRecognised, TermUnbound, "
-                    + "RelationTermUnbound, RelationTermNotIri, RelationPredicateNotAdmitted, "
-                    + "RelationSubjectNotInCensus",
+                    + "utcomeKind: Built, ObjectKindNotRecognised, TermUnbound, "
+                    + "RelationTermUnbound, RelationTermNotIri, RelationPredicateNotAdmitted",
                 "Lex.V3.Ingest.Luxembourg.LuxembourgQueryExecutionCompletion: AllFamiliesProven, "
                     + "PartialFamilyRefused",
                 "Lex.V3.Ingest.Luxembourg.LuxembourgQueryExecutionRefusal: None, "
@@ -342,7 +341,8 @@ public sealed class ClosedVocabularyCensusTests
                 "Lex.V3.Ingest.Luxembourg.LuxembourgRelationFamilyAcquisitionState: "
                     + "AcquiredComplete, Unacquired, Incomplete, Uncertain",
                 "Lex.V3.Ingest.Luxembourg.LuxembourgResourceObservationExclusionCause: "
-                    + "PredicateNotAdmitted, BlankNodeObject",
+                    + "PredicateNotAdmitted, BlankNodeObject, SubjectNotInCensus, RelationSubjectNotInCensus, "
+                    + "SubjectNotAPublisherUri",
                 "Lex.V3.Ingest.Luxembourg.LuxembourgTranspositionIdentityProductionRefusal: None, "
                     + "EnumerationRefused, EnumerationProofRefused, VerifiedRowsRefused, "
                     + "RowNotAdmitted, AmbiguousIdentity, BatchPopulationRefused, "
