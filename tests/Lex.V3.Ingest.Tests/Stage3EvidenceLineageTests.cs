@@ -103,6 +103,22 @@ public sealed class Stage3EvidenceLineageTests
         Assert.AreEqual(Stage3EvidenceLineageRefusal.LuxembourgRunIdentityMismatch, refusal);
     }
 
+    [TestMethod]
+    public async Task LuxembourgObservedIdentitySetCannotBeSubstituted()
+    {
+        var original = await CompleteEnvelopeAsync();
+        var stranger = new SourceArtifactRef(
+            "urn:uuid:99999999-9999-4999-8999-999999999999",
+            new string('9', 64));
+        var envelope = Rebuild(
+            original.Europe,
+            CopyLuxembourg(original.Luxembourg, observedObjectIdentitySetRef: stranger));
+
+        Assert.IsNull(
+            Stage3EvidenceLineage.TryBind(envelope, out _, out _),
+            "the retained observed-identity set must bind to this run rather than merely be present");
+    }
+
     private static async Task<Stage3EvidenceEnvelope> CompleteEnvelopeAsync()
     {
         var europe = await EuAxiomWiringHarness.RunAsync(
@@ -199,7 +215,8 @@ public sealed class Stage3EvidenceLineageTests
         LuxembourgQueryExecutionResult source,
         SourceArtifactRef? corpusRecordSetRef = null,
         string? manifestCanonicalSha256 = null,
-        DurableBlobWriteReceipt? scopeManifestReceipt = null) =>
+        DurableBlobWriteReceipt? scopeManifestReceipt = null,
+        SourceArtifactRef? observedObjectIdentitySetRef = null) =>
         LuxembourgQueryExecutionResult.Delivered(
             source.Topology,
             source.FamilyOutcomes,
@@ -215,7 +232,7 @@ public sealed class Stage3EvidenceLineageTests
             corpusRecordSetRef ?? source.CorpusRecordSetRef!,
             source.CorpusRecordSetReceipt!,
             source.CorpusRecordSet!,
-            source.ObservedObjectIdentitySetRef!,
+            observedObjectIdentitySetRef ?? source.ObservedObjectIdentitySetRef!,
             source.ObservedObjectIdentitySetReceipt!,
             source.GazetteBodySetsByOrdinal!,
             source.GazetteListingFetchRefusalsByOrdinal!,
