@@ -1,0 +1,49 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://lex.soufien.lu/schemas/v3-facts/relation-fact.schema.json",
+  "title": "lex-v3/facts/1 relation fact",
+  "description": "The closed tagged union of relation facts. A variant is identified by its explicit fact_kind and never by its shape: shape matching is exactly how a derived edge ends up read as a publisher assertion, because two variants that happen to share members are read as whichever the matcher tried first. Each variant restates none of its members; it composes the shared body and adds only its tag, so a member added to the graph cannot be added to one copy and forgotten in the other. oneOf rather than anyOf, so a document matching two variants is a failure rather than a coin toss.",
+  "type": "object",
+  "required": ["fact_kind"],
+  "properties": {
+    "fact_kind": {
+      "description": "The closed variant tag. An unrecognised value fails rather than defaulting to a known variant.",
+      "enum": ["publisher_relation", "derived_inverse_relation", "local_inbound_view"]
+    }
+  },
+  "oneOf": [
+    {
+      "title": "publisher relation",
+      "allOf": [
+        { "$ref": "https://lex.soufien.lu/schemas/v3-facts/facts-common.schema.json#/$defs/publisher_relation_body" },
+        {
+          "properties": { "fact_kind": { "const": "publisher_relation" } },
+          "required": ["fact_kind"]
+        }
+      ],
+      "unevaluatedProperties": false
+    },
+    {
+      "title": "derived inverse relation",
+      "allOf": [
+        { "$ref": "https://lex.soufien.lu/schemas/v3-facts/facts-common.schema.json#/$defs/derived_inverse_relation_body" },
+        {
+          "properties": { "fact_kind": { "const": "derived_inverse_relation" } },
+          "required": ["fact_kind"]
+        }
+      ],
+      "unevaluatedProperties": false
+    },
+    {
+      "title": "local inbound view",
+      "allOf": [
+        { "$ref": "https://lex.soufien.lu/schemas/v3-facts/facts-common.schema.json#/$defs/local_inbound_view_body" },
+        {
+          "properties": { "fact_kind": { "const": "local_inbound_view" } },
+          "required": ["fact_kind"]
+        }
+      ],
+      "unevaluatedProperties": false
+    }
+  ]
+}

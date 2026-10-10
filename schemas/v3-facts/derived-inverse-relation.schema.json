@@ -1,0 +1,10 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://lex.soufien.lu/schemas/v3-facts/derived-inverse-relation.schema.json",
+  "title": "lex-v3/facts/1 derived inverse relation",
+  "description": "An inverse the ontology authorises, in its untagged form. A separate schema from publisher-relation, so no consumer can mistake a computed edge for an official statement by reading a flag it forgot to check.",
+  "allOf": [
+    { "$ref": "https://lex.soufien.lu/schemas/v3-facts/facts-common.schema.json#/$defs/derived_inverse_relation_body" }
+  ],
+  "unevaluatedProperties": false
+}

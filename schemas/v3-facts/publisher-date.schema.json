@@ -1,0 +1,10 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://lex.soufien.lu/schemas/v3-facts/publisher-date.schema.json",
+  "title": "lex-v3/facts/1 publisher date",
+  "description": "A date exactly as the publisher expressed it, as a value. A date only becomes a fact once bound to a subject and an observation, which is publisher-date-fact.schema.json.",
+  "allOf": [
+    { "$ref": "https://lex.soufien.lu/schemas/v3-facts/facts-common.schema.json#/$defs/publisher_date_body" }
+  ],
+  "unevaluatedProperties": false
+}

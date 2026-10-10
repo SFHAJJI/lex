@@ -1,0 +1,10 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://lex.soufien.lu/schemas/v3-facts/publisher-date-fact.schema.json",
+  "title": "lex-v3/facts/1 publisher date fact",
+  "description": "A publisher date bound to the object it was stated about and to the observation that carried it. A date with no subject and no occurrence cannot be checked against its source, and an unverifiable date is exactly what this product does not publish.",
+  "allOf": [
+    { "$ref": "https://lex.soufien.lu/schemas/v3-facts/facts-common.schema.json#/$defs/publisher_date_fact_body" }
+  ],
+  "unevaluatedProperties": false
+}

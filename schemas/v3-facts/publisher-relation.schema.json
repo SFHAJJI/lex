@@ -1,0 +1,10 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://lex.soufien.lu/schemas/v3-facts/publisher-relation.schema.json",
+  "title": "lex-v3/facts/1 publisher relation",
+  "description": "A relation the publisher asserted, in its untagged form. This is the shape used wherever an assertion is nested inside another fact, for example as the single origin of a derived inverse or as a member of a locally computed inbound view. The tagged form belongs to relation-fact.schema.json, which is the only place a variant may be identified from the wire.",
+  "allOf": [
+    { "$ref": "https://lex.soufien.lu/schemas/v3-facts/facts-common.schema.json#/$defs/publisher_relation_body" }
+  ],
+  "unevaluatedProperties": false
+}

@@ -1,0 +1,246 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://lex.soufien.lu/schemas/v3-facts/facts-common.schema.json",
+  "title": "lex-v3/facts/1 shared definitions",
+  "description": "Shared bodies and value definitions for the lex-v3/facts/1 graph. The bodies deliberately declare no additionalProperties or unevaluatedProperties of their own: each concrete schema closes itself with unevaluatedProperties, which is what lets the closed union add its variant tag without either schema having to restate the member list. Restating it is how a member gets added to one copy and forgotten in the other.",
+  "$defs": {
+    "official_identity": {
+      "description": "An official identifier as the publisher expressed it, never normalised away.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["scheme", "value"],
+      "properties": {
+        "scheme": {
+          "description": "The identifier system, for example an ELI or CELEX namespace.",
+          "type": "string",
+          "minLength": 1
+        },
+        "value": {
+          "description": "The identifier exactly as published, preserving case and punctuation.",
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "fact_occurrence": {
+      "description": "Where a fact came from and which occurrence of it this is. The observation id is the only custody coordinate a fact carries: no digest, no byte count, no locator, no container, no URL. Those belong to the observation record, which owns them once, because two coordinates for one set of bytes eventually disagree and the disagreement is invisible. The ordinal is what keeps two byte-identical publisher rows distinct, so no set, dictionary or digest can collapse a repeated statement into one.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source_observation_id", "ordinal"],
+      "properties": {
+        "source_observation_id": {
+          "description": "Stable identity of the observation that carried this fact.",
+          "type": "string",
+          "minLength": 1
+        },
+        "ordinal": {
+          "description": "Zero-based position of this fact within that observation.",
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "qualified_axiom": {
+      "description": "One qualifier attached to a publisher assertion, retained verbatim. Carried in an ordered array rather than an object because duplicate predicate URIs are legitimate and collapsing them would discard a publisher statement.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "predicate_uri",
+        "raw_lexical_value",
+        "datatype",
+        "remote_axiom_uri",
+        "occurrence_ordinal"
+      ],
+      "properties": {
+        "predicate_uri": { "type": "string", "minLength": 1 },
+        "raw_lexical_value": {
+          "description": "The value exactly as published, before any parsing.",
+          "type": "string"
+        },
+        "datatype": { "type": ["string", "null"] },
+        "remote_axiom_uri": {
+          "description": "The publisher's own axiom URI when present. Provenance only, never the local identity: two publishers may reuse a URI, and a missing one must not prevent the qualifier existing.",
+          "type": ["string", "null"]
+        },
+        "occurrence_ordinal": {
+          "description": "Zero-based position within the assertion, as published. Present so two byte-identical qualifiers remain two qualifiers.",
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "relation_target": {
+      "description": "A target with official identity but no held body is a first-class legal object, not an absence. Discarding the edge would lose a publisher assertion; inventing an identifier would fabricate one.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["identity", "is_held", "unheld_reason"],
+      "properties": {
+        "identity": { "$ref": "#/$defs/official_identity" },
+        "is_held": { "type": "boolean" },
+        "unheld_reason": {
+          "description": "Closed vocabulary. An unrecognised value is drift, not a new member, so a publisher vocabulary change fails rather than deserialising silently.",
+          "enum": ["outside_body_scope", "not_yet_held", "ecli_missing", null]
+        }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "is_held": { "const": false } }, "required": ["is_held"] },
+          "then": { "properties": { "unheld_reason": { "type": "string" } } }
+        },
+        {
+          "if": { "properties": { "is_held": { "const": true } }, "required": ["is_held"] },
+          "then": { "properties": { "unheld_reason": { "type": "null" } } }
+        }
+      ]
+    },
+    "publisher_date_body": {
+      "description": "A date exactly as the publisher expressed it, with every component that could carry meaning. Nothing here is inferred: semantic_role comes from the source predicate or an explicit qualifier, never from the order dates appear in.",
+      "type": "object",
+      "required": [
+        "raw_lexical_value",
+        "datatype",
+        "precision",
+        "source_predicate_uri",
+        "remote_axiom_uri",
+        "raw_qualifier",
+        "parsed_authority_identity",
+        "publisher_comment",
+        "semantic_role",
+        "open_sentinel"
+      ],
+      "properties": {
+        "raw_lexical_value": {
+          "description": "The value as published, before parsing. Retained even when it does not parse, because an unparseable publisher date is a fact about the publisher, not an error to discard.",
+          "type": "string",
+          "minLength": 1
+        },
+        "datatype": { "type": ["string", "null"] },
+        "precision": {
+          "description": "Declared or evident precision. Closed, because an unrecognised precision read as a known one would let a year become a January the first. Mixed precision across a work is normal and must survive.",
+          "enum": ["year", "month", "day", "instant", null]
+        },
+        "source_predicate_uri": { "type": "string", "minLength": 1 },
+        "remote_axiom_uri": {
+          "description": "Publisher axiom URI. Provenance only.",
+          "type": ["string", "null"]
+        },
+        "raw_qualifier": {
+          "description": "The qualifier microsyntax exactly as published, unparsed, so a parser change cannot retroactively alter what the publisher said.",
+          "type": ["string", "null"]
+        },
+        "parsed_authority_identity": {
+          "description": "The authority resolved from the qualifier, when it resolved. Null means unresolved, which is a fact about our knowledge and never a reason to discard the date.",
+          "type": ["string", "null"]
+        },
+        "publisher_comment": { "type": ["string", "null"] },
+        "semantic_role": {
+          "description": "The role the publisher assigned. Null when the publisher did not say. Never inferred from position: a deadline is not an application date because it appeared second.",
+          "type": ["string", "null"]
+        },
+        "open_sentinel": {
+          "description": "Whether the publisher marked this open-ended using its own sentinel, rather than us substituting a far-future date.",
+          "enum": ["bounded", "open_ended"]
+        }
+      }
+    },
+    "publisher_date_fact_body": {
+      "description": "A publisher date bound to the object it was stated about and to the observation that carried it. The date value alone is not a fact: without a subject and an occurrence it cannot be checked against the source.",
+      "type": "object",
+      "required": ["subject", "date", "occurrence"],
+      "properties": {
+        "subject": { "$ref": "#/$defs/official_identity" },
+        "date": { "$ref": "https://lex.soufien.lu/schemas/v3-facts/publisher-date.schema.json" },
+        "occurrence": { "$ref": "#/$defs/fact_occurrence" }
+      }
+    },
+    "publisher_relation_body": {
+      "description": "A relation the publisher asserted, in the direction the publisher asserted it. Distinct by schema from a derived inverse so no projection can present a computed edge as an official statement.",
+      "type": "object",
+      "required": ["source", "target", "predicate_uri", "axioms", "occurrence"],
+      "properties": {
+        "source": { "$ref": "#/$defs/official_identity" },
+        "target": { "$ref": "#/$defs/relation_target" },
+        "predicate_uri": {
+          "description": "The exact predicate URI as published. Never a normalised label, because two publishers may use different URIs for a similar idea and the difference is legally meaningful.",
+          "type": "string",
+          "minLength": 1
+        },
+        "axioms": {
+          "description": "Every qualifier the publisher attached, in the published order. Order is retained because it is itself an observation, and duplicates are retained because a repeated predicate is a repeated statement.",
+          "type": "array",
+          "items": { "$ref": "#/$defs/qualified_axiom" }
+        },
+        "occurrence": { "$ref": "#/$defs/fact_occurrence" }
+      }
+    },
+    "derived_inverse_relation_body": {
+      "description": "An inverse the ontology authorises, derived locally from exactly one publisher assertion. A separate schema from publisher-relation, so no consumer can mistake a computed edge for an official statement by reading a flag it forgot to check. The predicate URI is deliberately not constrained to differ from the forward assertion's: a symmetric property authorises a transpose carrying the same URI, and refusing it would drop a correct edge.",
+      "type": "object",
+      "required": [
+        "source",
+        "target",
+        "predicate_uri",
+        "derived_from",
+        "authorising_ontology_uri"
+      ],
+      "properties": {
+        "source": {
+          "description": "The derived source, which is the originating assertion's target.",
+          "$ref": "#/$defs/official_identity"
+        },
+        "target": {
+          "description": "The derived target, which is the originating assertion's source.",
+          "$ref": "#/$defs/relation_target"
+        },
+        "predicate_uri": {
+          "description": "The inverse predicate URI the ontology authorises.",
+          "type": "string",
+          "minLength": 1
+        },
+        "derived_from": {
+          "description": "The single publisher assertion this transpose came from. Exactly one, never an array: a derivation traceable to two statements is not a transpose, and one traceable to none is an invention.",
+          "$ref": "https://lex.soufien.lu/schemas/v3-facts/publisher-relation.schema.json"
+        },
+        "authorising_ontology_uri": {
+          "description": "The ontology statement that authorises this inverse. Without it the edge is a local guess rather than a derivation, so it is required.",
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "local_inbound_view_body": {
+      "description": "A generic locally computed inbound view: what points at this object, assembled by Lex rather than authorised by an ontology. Weaker than a derived inverse and typed separately so the difference survives every projection.",
+      "type": "object",
+      "required": ["subject", "inbound"],
+      "properties": {
+        "subject": { "$ref": "#/$defs/official_identity" },
+        "inbound": {
+          "description": "The publisher assertions that name the subject as target, each retained as the official statement it is.",
+          "type": "array",
+          "items": { "$ref": "https://lex.soufien.lu/schemas/v3-facts/publisher-relation.schema.json" }
+        }
+      }
+    },
+    "vocabulary_drift_body": {
+      "description": "A term the current source manifest does not classify. This is a result that reaches run accounting, not an exception path: an unrecognised predicate must be visible rather than silently absent, and nothing downstream may default it to a known member. A dead predicate that matches nothing is how a scope file can look healthy while covering less than it claims.",
+      "type": "object",
+      "required": ["term_uri", "encountered_in", "occurrence"],
+      "properties": {
+        "term_uri": {
+          "description": "The unrecognised term exactly as published, so the publisher's own spelling survives for comparison against a later manifest.",
+          "type": "string",
+          "minLength": 1
+        },
+        "encountered_in": {
+          "description": "The predicate or field position the term appeared in, so drift can be attributed to a place rather than only to a run.",
+          "type": "string",
+          "minLength": 1
+        },
+        "occurrence": {
+          "description": "The observation and position that carried it. Drift without its observation cannot be attributed to a run, which would make it unactionable.",
+          "$ref": "#/$defs/fact_occurrence"
+        }
+      }
+    }
+  }
+}

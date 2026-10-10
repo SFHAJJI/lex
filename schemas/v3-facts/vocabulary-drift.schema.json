@@ -1,0 +1,10 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://lex.soufien.lu/schemas/v3-facts/vocabulary-drift.schema.json",
+  "title": "lex-v3/facts/1 vocabulary drift",
+  "description": "A term the current source manifest does not classify, carried as a result rather than raised as an error. An error would abort a run over one unrecognised term and lose every good fact beside it; an extra vocabulary member would let the unrecognised term be treated as known.",
+  "allOf": [
+    { "$ref": "https://lex.soufien.lu/schemas/v3-facts/facts-common.schema.json#/$defs/vocabulary_drift_body" }
+  ],
+  "unevaluatedProperties": false
+}

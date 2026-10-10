@@ -1,0 +1,10 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://lex.soufien.lu/schemas/v3-facts/local-inbound-view.schema.json",
+  "title": "lex-v3/facts/1 local inbound view",
+  "description": "A locally computed inbound view, in its untagged form. Nothing in it is authorised by an ontology, which is why it is a third type rather than a weaker derived inverse: a single type with a strength flag would let the weakest case be presented as the strongest.",
+  "allOf": [
+    { "$ref": "https://lex.soufien.lu/schemas/v3-facts/facts-common.schema.json#/$defs/local_inbound_view_body" }
+  ],
+  "unevaluatedProperties": false
+}
