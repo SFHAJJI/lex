@@ -323,7 +323,7 @@ public class GoldenTests : IClassFixture<GoldenTests.Site>
             response.Headers.GetValues("Strict-Transport-Security").Single());
         Assert.Equal("nosniff", response.Headers.GetValues("X-Content-Type-Options").Single());
         Assert.Equal("DENY", response.Headers.GetValues("X-Frame-Options").Single());
-        Assert.Equal("same-origin", response.Headers.GetValues("Referrer-Policy").Single());
+        Assert.Equal("no-referrer", response.Headers.GetValues("Referrer-Policy").Single());
         Assert.Equal("camera=(), geolocation=(), microphone=(), payment=(), usb=()",
             response.Headers.GetValues("Permissions-Policy").Single());
     }
