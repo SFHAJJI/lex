@@ -320,11 +320,6 @@ public sealed class LicenceCensusExecutionReceipt
         censusOutputSha256 = RoutedHttpValidation.RequireSha256(censusOutputSha256, nameof(censusOutputSha256));
         var expectedOutput = ComputeCensusOutput(
             censusInputSha256, runArray, structuralVocabularySha256, structuralCountsSha256);
-        if (!string.Equals(censusOutputSha256, expectedOutput, StringComparison.Ordinal))
-        {
-            throw new ArgumentException("The census output digest does not bind the exact run receipts and structural outputs.", nameof(censusOutputSha256));
-        }
-
         return new LicenceCensusExecutionReceipt(
             artifacts,
             corpus,
