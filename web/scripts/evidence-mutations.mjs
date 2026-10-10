@@ -151,7 +151,118 @@ const MUTATIONS = [
       );
     },
   },
+  {
+    // The strongest anti-colour-alone check in the build, and until now the only evidence that it
+    // worked was that it had never complained. An element whose meaning is carried only by paint
+    // disappears entirely under forced colours.
+    name: "an element carrying its meaning only as paint, invisible under forced colours",
+    expect: /element\(s\) carry meaning only as paint, which forced colours removes/i,
+    async apply(root) {
+      await injectBeforeBodyEnd(root, "trust-surface.html", '<span class="probe-paint"></span>');
+      await appendCss(
+        root,
+        ".probe-paint { display: inline-block; width: 48px; height: 48px;" +
+          " background-image: linear-gradient(45deg, #2b2b2b 25%, transparent 25%); }",
+      );
+    },
+  },
+  {
+    // The policy is compared byte for byte against the declared object precisely so that a
+    // permissive addition cannot pass as a policy. unsafe-inline in script-src is the whole
+    // failure mode: it is still a Content-Security-Policy, and it is no longer a restriction.
+    name: "a served policy that quietly admits unsafe-inline",
+    expect: /served policy does not match the declared one/i,
+    async apply(root) {
+      const file = join(root, "trust-surface.html");
+      const html = await readFile(file, "utf8");
+      const widened = html.replace(
+        "script-src &#39;self&#39;;",
+        "script-src &#39;self&#39; &#39;unsafe-inline&#39;;",
+      );
+      if (widened === html) {
+        throw new Error("the CSP meta did not match the shape this mutation edits");
+      }
+      await writeFile(file, widened, "utf8");
+    },
+  },
+  {
+    // Keyboard reachability without a visible indicator is not keyboard access: the focus is
+    // somewhere and the person cannot see where.
+    name: "the focus indicator removed, so keyboard focus lands invisibly",
+    expect: /focus stop\(s\) with no visible focus indicator/i,
+    async apply(root) {
+      await appendCss(
+        root,
+        ":focus, :focus-visible { outline: none !important; box-shadow: none !important; }",
+      );
+    },
+  },
+  {
+    // The count and the walk are deliberately different measurements. A link with tabindex="-1"
+    // still matches a[href], so it stays focusable by the DOM and drops out of the Tab order,
+    // which is exactly the gap the two-measurement design exists to expose.
+    name: "a link removed from the tab order while still counted as focusable",
+    expect: /\d+ focusable elements but \d+ reachable by Tab/i,
+    async apply(root) {
+      const file = join(root, "trust-surface.html");
+      const html = await readFile(file, "utf8");
+      const index = html.indexOf("<a href=");
+      if (index < 0) {
+        throw new Error("no anchor to remove from the tab order");
+      }
+      await writeFile(
+        file,
+        `${html.slice(0, index)}<a tabindex="-1" href=${html.slice(index + "<a href=".length)}`,
+        "utf8",
+      );
+    },
+  },
+  {
+    // A control the accessibility tree cannot name is a control a screen reader cannot offer.
+    // Sized well above the target floor on purpose, so the failure that fires is the naming one
+    // and not the target-size gate standing in for it.
+    name: "an interactive control with no accessible name",
+    expect: /interactive node\(s\) with no accessible name/i,
+    async apply(root) {
+      await injectBeforeBodyEnd(root, "trust-surface.html", '<button class="probe-unnamed"></button>');
+      await appendCss(root, ".probe-unnamed { width: 44px; height: 44px; }");
+    },
+  },
+  {
+    // Two main landmarks is not a richer page, it is a page where "skip to the main content" has
+    // no answer.
+    name: "a second main landmark, so the primary region is ambiguous",
+    expect: /expected exactly one main landmark, found 2/i,
+    async apply(root) {
+      await injectBeforeBodyEnd(root, "trust-surface.html", "<main><p>probe</p></main>");
+    },
+  },
 ];
+
+/**
+ * Append a rule to the served stylesheet.
+ */
+async function appendCss(root, rule) {
+  const file = join(root, "styles.css");
+  const css = await readFile(file, "utf8");
+  await writeFile(file, `${css}\n${rule}\n`, "utf8");
+}
+
+/**
+ * Insert markup immediately before the closing body tag of one served page.
+ *
+ * Fails loudly rather than silently doing nothing: a mutation that edits no bytes would be
+ * reported as caught by a harness that never saw it, which is the failure this whole file exists
+ * to prevent.
+ */
+async function injectBeforeBodyEnd(root, page, markup) {
+  const file = join(root, page);
+  const html = await readFile(file, "utf8");
+  if (!html.includes("</body>")) {
+    throw new Error(`${page} has no closing body tag to inject before`);
+  }
+  await writeFile(file, html.replace("</body>", `${markup}</body>`), "utf8");
+}
 
 function run(root) {
   return new Promise((resolveRun) => {
