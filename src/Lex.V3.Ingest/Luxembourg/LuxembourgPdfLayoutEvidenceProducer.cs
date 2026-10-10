@@ -481,7 +481,7 @@ public sealed class LuxembourgPdfLayoutEvidenceProducer
                     letter.FontSize,
                     letter.FontName ?? string.Empty,
                     (int)letter.TextOrientation,
-                    (int)letter.RenderingMode);
+                    0);
                 valid &= Valid(glyph);
                 writer.WriteGlyph(glyph);
             }
