@@ -22,6 +22,7 @@ import { shorten } from "./pickers";
 import { ResultsSkeleton } from "./Skeleton";
 import { fusePublisherHits } from "./searchFusion";
 import { intervalLabel } from "./temporal";
+import { recordClockLabel, recordClockOf, type RecordClock } from "./recordClock";
 import { searchSubmission, type SearchSubmission } from "./searchSubmission";
 import { groupSearchResults } from "./searchResults";
 
@@ -64,6 +65,12 @@ export interface SearchProps {
 type HitMeta = {
   validFrom?: string; validTo?: string; hierarchy?: string; language?: string;
   jurisdiction?: string;
+  /**
+   * Trust rule 3. Taken from the same parsed hit as `validFrom` beside it, because a hit row
+   * that dates a wording without saying when that wording was published is the failure this
+   * product exists to remove: most Luxembourg states were published after the date they claim.
+   */
+  record?: RecordClock;
   timelineSemantics?: string;
   domains?: string[]; consolidationStatus?: string; matchReasons?: string[];
   publisherMetadata?: PublisherMetadata;
@@ -272,6 +279,7 @@ export default function Search(p: SearchProps) {
               jurisdiction: h._jurisdiction ?? jurisdictionForPublisher(work.split(":")[0]),
               timelineSemantics: h._timelineSemantics,
               validFrom: h.valid_from, validTo: h.valid_to, hierarchy: h.hierarchy,
+              record: recordClockOf(h),
               language: h.language, domains: Array.isArray(h.domains) ? h.domains : [],
               consolidationStatus: h.consolidation_status,
               matchReasons: Array.isArray(h.match_reasons) ? h.match_reasons : [],
@@ -593,7 +601,12 @@ export default function Search(p: SearchProps) {
 
 function Validity({ hit }: { hit: HitMeta & { work: string } }) {
   if (!hit.validFrom) return null;
-  return <span>{intervalLabel(hit.work, hit.validFrom, hit.validTo, hit.timelineSemantics)}</span>;
+  // Both clocks, never one. The interval is the publisher's legal claim about this wording; the
+  // line beside it is when that claim was published and when Lex first held it.
+  return <>
+    <span>{intervalLabel(hit.work, hit.validFrom, hit.validTo, hit.timelineSemantics)}</span>
+    <span className="rec" data-testid="hit-record-clock">{recordClockLabel(hit.record)}</span>
+  </>;
 }
 
 function HitContext({ hit }: { hit: HitMeta }) {

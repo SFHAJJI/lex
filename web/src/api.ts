@@ -562,7 +562,12 @@ export interface UiEffect {
            evidence?: EvidenceContext[] };
   history?: { subject: Subject; anchor: string; distinct_texts: number; states: { valid_from: string; valid_to?: string; sha?: string; permalink?: string }[]; evidence?: EvidenceContext[] };
   timeline?: { subject: Subject; rows: { lex_id?: string; valid_from: string; valid_to?: string;
-                title?: string; language?: string; permalink?: string; record_sha256?: string }[];
+                title?: string; language?: string; permalink?: string; record_sha256?: string;
+                // Trust rule 3, under the producer's own field names. Declared because a dated
+                // row without them cannot satisfy the rule, and OPTIONAL because the assistant's
+                // timeline mapper does not copy them out of the tool result today: the tool
+                // carries both on every version, and this effect drops them on the way here.
+                publication_date?: string; observed_from?: string }[];
                 total_count: number; truncated: boolean;
                 evidence?: EvidenceContext[] };
   ranking?: { from_date: string; to_date: string; order: string;
@@ -578,6 +583,10 @@ export interface UiEffect {
                population_scope_filters_applied?: boolean; known_exclusions?: string[]; rows: {
     work: string; title?: string; kind?: string; valid_from: string; permalink?: string;
     jurisdiction?: string; hierarchy?: string; timeline_semantics?: string;
+    // Trust rule 3. Carried from the parsed `works` row on the deterministic path, absent on
+    // the assistant path whose mapper does not copy them, which the view discloses as absent
+    // rather than filling in from the legal date beside it.
+    publication_date?: string; observed_from?: string;
   }[] };
   cited_by?: { cited_work: string; citing_articles: number; status?: string; evidence?: EvidenceContext[];
                rows: { work: string; title?: string; valid_from: string; anchor: string; num?: string;

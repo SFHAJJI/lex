@@ -1,4 +1,5 @@
 import type { UiEffect } from "./api";
+import { recordClockOf } from "./recordClock.ts";
 import type { State } from "./state";
 
 export const STARTER_PROMPTS = [
@@ -19,6 +20,11 @@ export function assistantProvisionLoad(ui?: UiEffect) {
     items: provision.provisions,
     from: provision.valid_from,
     to: provision.valid_to,
+    // Trust rule 3, from the effect the assistant produced and from nowhere else. The mapper
+    // that builds a provision effect copies `valid_from` and `valid_to` out of the tool result
+    // and leaves `publication_date` and `observed_from` behind, so this is empty today and the
+    // reader is told so rather than being shown a legal date standing in for a record clock.
+    record: recordClockOf(provision),
   };
 }
 

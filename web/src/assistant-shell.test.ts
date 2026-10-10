@@ -23,6 +23,11 @@ test("navigating from an assistant reply never retains stale publisher text", ()
     items: full.provision.provisions,
     from: "2021-01-01",
     to: "2021-12-31",
+    // Trust rule 3 travels with the reading load. Empty here because the assistant's provision
+    // mapper copies the legal dates out of the tool result and leaves publication_date and
+    // observed_from behind, and an empty record clock is disclosed as absent rather than being
+    // filled in from valid_from beside it. See recordClock.test.ts.
+    record: { publicationDate: undefined, observedFrom: undefined },
   });
   assert.equal(assistantProvisionLoad({ provision: {
     ...full.provision, text_truncated: true,

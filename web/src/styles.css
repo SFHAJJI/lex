@@ -69,6 +69,13 @@
 .cnt button.tag { min-height: 30px; }
 .tag.warn { color: var(--warn); border-color: var(--warn); }
 .tag.mono, .mono { font-family: var(--mono); }
+/* The record clock. Set apart from the legal interval it sits beside, and dotted rather than
+   solid, because the two are different kinds of claim: one is when the publisher says the law
+   applied, the other is when the publisher published it and when Lex first held it. Quieter
+   than the legal clock and never behind a hover, because trust rule 3 lists both clocks under
+   what is always visible. */
+.rec { color: var(--muted); font-size: 12px; border-bottom: 1px dotted var(--line); }
+.tag.rec { border-bottom-style: dotted; }
 
 .art { border-top: 1px solid var(--line); padding: 12px 0; }
 .art h4 { margin: 0 0 5px; font-family: var(--serif); font-size: 16px; }

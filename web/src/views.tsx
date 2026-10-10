@@ -19,6 +19,10 @@ import { remarkLegalText } from "./legalText.ts";
 import {
   futureStateLabel, intervalLabel, usesPublisherVersionDates,
 } from "./temporal";
+import {
+  railClockLabel, recordClockLabel, recordClockOf,
+  type DatedRecordClock, type RecordClock,
+} from "./recordClock";
 import { extractionDisclosure } from "./extractionProfile";
 import { HISTORICAL_DENSITY, historicalDensityApplies } from "./notices";
 import { gapBadgeStatus, LIMITATION_EXPLANATION, limitationsFromEffect,
@@ -37,9 +41,16 @@ const ms = (d: string) => Date.parse(`${d}T00:00:00Z`);
  * opened an article — so re-dating dropped you at the top of a document you were reading the
  * middle of. It is the one control a point-in-time reader uses constantly, so it stays put.
  */
-export function Provision({ items, toc, validFrom, validTo, work, title, language, anchor, profile, source, timelineSemantics, onPick, onClear, onCite }: {
+export function Provision({ items, toc, validFrom, validTo, work, title, language, anchor, profile, source, timelineSemantics, record, onPick, onClear, onCite }: {
   items: ProvisionItem[]; toc: ProvisionItem[]; validFrom: string; validTo?: string;
   work: string; title: string; language?: string; anchor?: string; profile?: string; source?: string; timelineSemantics?: string;
+  /**
+   * Trust rule 3: the state banner carries BOTH clocks. The interval beside it is the legal
+   * claim; this is when the publisher published that wording and when Lex first held it. The
+   * two disagree for most of the Luxembourg corpus, and a reader who cannot see the second one
+   * has no way to tell that the text in front of them post-dates the period it governs.
+   */
+  record?: RecordClock;
   // `auto` marks an article the reader did not ask for. The rail uses it to decide whether to
   // stay on the law's versions or narrow to this article's texts.
   onPick: (anchor: string, auto?: boolean) => void; onClear: () => void; onCite?: (work: string) => void;
@@ -77,6 +88,9 @@ export function Provision({ items, toc, validFrom, validTo, work, title, languag
     <div className="text">
       <div className="cnt">
         <span className="tag">{intervalLabel(work, validFrom, validTo, timelineSemantics)}</span>
+        <span className="tag rec" data-testid="reading-record-clock">
+          {recordClockLabel(record)}
+        </span>
         {anchor ? (
           <button className="tag act" onClick={onClear}>article {anchor} ✕</button>
         ) : (
@@ -195,8 +209,17 @@ export function Provision({ items, toc, validFrom, validTo, work, title, languag
  * navigate to, because the history is the navigation. Scope follows the reader: with an
  * article open it shows that article's distinct texts, otherwise the law's own versions.
  */
-export function VersionRail({ dates, current, compareTo, scope, today, work, timelineSemantics, onPick, onCompare, onClear }: {
+export function VersionRail({ dates, current, compareTo, scope, today, work, timelineSemantics, clocks, onPick, onCompare, onClear }: {
   dates: string[]; current?: string; compareTo?: string; scope: string; today: string; work: string; timelineSemantics?: string;
+  /**
+   * The record clock of each dated tick, keyed by the legal date the tick stands for.
+   *
+   * Absent, rather than empty, when the response behind these dates carried no record clock at
+   * all: `article_history` publishes `valid_from`, `text_sha256` and `in_version` and neither
+   * `publication_date` nor `observed_from`, so a rail narrowed to one article's texts has no
+   * record clock to state and says so instead of borrowing the law's.
+   */
+  clocks?: Map<string, DatedRecordClock>;
   onPick: (d: string) => void; onCompare: (d: string) => void; onClear: () => void;
 }) {
   const box = useRef<HTMLDivElement>(null);
@@ -253,6 +276,14 @@ export function VersionRail({ dates, current, compareTo, scope, today, work, tim
     <div className="railbox">
       <div className="railhead">
         <span className="tag">{dates.length} {scope}</span>
+        {/* Trust rule 3 on the rail. The ticks are the legal clock; this is the record clock of
+            the one the reader is on, in words rather than in a tooltip, because section 14 lists
+            both clocks under "always visible" rather than under "available on hover". */}
+        {current ? (
+          <span className="tag rec" data-testid="rail-record-clock">
+            {railClockLabel(clocks?.get(current))}
+          </span>
+        ) : null}
         {median > 0 ? <span className="tag">every {median} days (median)</span> : null}
         {ahead > 0 ? <span className="tag warn">{futureStateLabel(work, ahead, timelineSemantics)}</span> : null}
         {/* Keyed off compareTo, not off finding it on the rail: a compared date need not be one
@@ -296,16 +327,22 @@ export function VersionRail({ dates, current, compareTo, scope, today, work, tim
         <div className="railtrack" style={{ width }}>
           <div className="axis" />
           {j >= 0 ? <div className="band" style={{ left: a, width: Math.max(2, b - a) }} /> : null}
-          {dates.map((d, k) => (
+          {dates.map((d, k) => {
+            // Every tick is a dated object, so every tick carries its own record clock into the
+            // accessible name. Section 3 spells the announcement out: "state applicable from X
+            // to Y, published Z". The visible line above says it for the tick in focus.
+            const clock = railClockLabel(clocks?.get(d));
+            return (
             <button key={d}
                     className={`tick${k === i ? " on" : ""}${k === j ? " cmp" : ""}${d > today ? " future" : ""}`}
                     style={{ left: xs[k] }} title={`${d}${d > today
                       ? `, ${usesPublisherVersionDates(work, timelineSemantics) ? "publisher version dated after today" : "not yet in force"}`
-                      : ""}`}
+                      : ""}. ${clock}`}
                     tabIndex={labels.has(k) || k === i ? 0 : -1}
-                    aria-label={`${d}${k === i ? " (showing)" : ""}`}
+                    aria-label={`${d}${k === i ? " (showing)" : ""}. ${clock}`}
                     onClick={(e) => pick(d, e.shiftKey)} />
-          ))}
+            );
+          })}
           {[...labels].map((k) => (
             <span key={k} className={`rlbl${k === i ? " on" : ""}`} style={{ left: xs[k] }}>{dates[k]}</span>
           ))}
@@ -337,6 +374,13 @@ export function Timeline({ view, onOpen }: {
             ) : (
               <span>{row.valid_from}{row.valid_to ? ` to ${row.valid_to}` : " onward"}</span>
             )}
+            {/* Trust rule 3. Read from the row rather than from anything derived, so this line
+                says what the response said and nothing else. The assistant's own timeline
+                mapper does not copy the two fields out of the tool result today, so these rows
+                disclose that rather than implying the corpus holds no publication date. */}
+            <span className="rec" data-testid="timeline-record-clock">
+              {recordClockLabel(recordClockOf(row))}
+            </span>
             {row.language ? <span className="sub">{row.language.toUpperCase()}</span> : null}
           </li>
         ))}
@@ -627,6 +671,8 @@ export function InForce({ date, total, rows, populationWorks, populationBasis,
   populationScopeFiltersApplied?: boolean; knownExclusions?: string[];
   rows: { work: string; title?: string; kind?: string; valid_from: string;
           jurisdiction?: string; hierarchy?: string; timeline_semantics?: string;
+          /** Trust rule 3, carried on the row under the producer's own field names. */
+          publication_date?: string; observed_from?: string;
           /** The publisher exposes several identified versions for this work on this date. */
           ambiguous?: boolean }[];
   page: number; hasMore: boolean;
@@ -672,6 +718,13 @@ export function InForce({ date, total, rows, populationWorks, populationBasis,
                   {r.ambiguous
                     ? `choose a version for ${r.valid_from}`
                     : usesPublisherVersionDates(r.work, r.timeline_semantics) ? `publisher version ${r.valid_from}` : `in force since ${r.valid_from}`}
+                </span>
+                {/* Trust rule 3: the legal claim above, the record clock beside it. An
+                    ambiguity unit carries neither field, because the producer publishes the
+                    record clock on each of its candidate versions and not on the ambiguity
+                    itself, so the row states that rather than borrowing one candidate's. */}
+                <span className="rec" data-testid="in-force-record-clock">
+                  {recordClockLabel(recordClockOf(r))}
                 </span>
               </span>
             </button>

@@ -18,6 +18,8 @@ import Coach, { COACH_KEY } from "./Coach";
 import { CompareSkeleton, LawSkeleton, ReportSkeleton } from "./Skeleton";
 import { jurisdictionForPublisher, jurisdictionLabel } from "./facets";
 import { latestStateLabel, temporalStatusLabel } from "./temporal";
+import { recordClockOf, recordClocksByDate, type DatedRecordClock,
+  type RecordClock } from "./recordClock";
 import { AMBIGUOUS_ONLY_SENTENCE, governedStripRows, INCOMPLETE_RESPONSE_SENTENCE,
   LIMITATION_EXPLANATION, MIXED_ZERO_SENTENCES, NO_CORPUS_SENTENCE,
   projectGovernedEmptiness } from "./limitations";
@@ -220,10 +222,21 @@ export default function App() {
   const [assistantPresentationId, setAssistantPresentationId] = useState<string>();
   const pendingPresentations = useRef(new Set<string>());
   const measuredPresentations = useRef(new Set<string>());
-  const [loaded, setLoaded] = useState<{ items: ProvisionItem[]; from: string; to?: string; profile?: string; source?: string }>();
+  const [loaded, setLoaded] = useState<{ items: ProvisionItem[]; from: string; to?: string; profile?: string; source?: string; record?: RecordClock }>();
   const [toc, setToc] = useState<ProvisionItem[]>([]);
   const [title, setTitle] = useState<string>();
   const [versions, setVersions] = useState<string[]>([]);
+  /**
+   * The record clock of each version date, WITH the work it was read for.
+   *
+   * The work travels with the map rather than beside it because the rail's dates arrive from
+   * more than one place: the timeline effect fills them, and an assistant timeline seeds them
+   * too. A bare date-keyed map would let one work's publication date land on another work's
+   * tick whenever the two share a legal date, which is exactly the fabricated record clock this
+   * whole change exists to prevent. Read only when the work still matches.
+   */
+  const [railClocks, setRailClocks] =
+    useState<{ work: string; byDate: Map<string, DatedRecordClock> }>();
   const [langs, setLangs] = useState<string[]>([]);
   // The language actually served, read back from the document rather than assumed. The switcher
   // first highlighted langs[0], which is alphabetical, so the Constitution showed French articles
@@ -318,7 +331,7 @@ export default function App() {
     // The index identity belongs to the response that produced the view. Opening a law after a
     // search would otherwise leave the search's strip above a law it never described.
     setStrip([]);
-    if (!s.work) { setVersions([]); setLangs([]); setServedLang(undefined); setTimelineSemantics(undefined); setHeld(undefined); return; }
+    if (!s.work) { setVersions([]); setRailClocks(undefined); setLangs([]); setServedLang(undefined); setTimelineSemantics(undefined); setHeld(undefined); return; }
     // Never carry one publisher's time semantics across a work switch while the next timeline
     // is loading. The work-id fallback remains correct for currently mounted legacy artifacts.
     setTimelineSemantics(undefined);
@@ -348,6 +361,12 @@ export default function App() {
         setTimelineSemantics(one?.envelope?.timeline_semantics);
         const dates = [...new Set(vs.map((v) => String(v.valid_from)))] as string[];
         setVersions(dates.sort());
+        // TRUST RULE 3 ON THE RAIL. The rail collapses versions to distinct legal dates, so the
+        // record clock is collapsed the same way and by the same rule: two states on one date
+        // whose clocks disagree keep neither, because choosing one would assert a resolution
+        // the publisher did not make. Read off the same rows the dates came from, in the same
+        // pass, so a tick and its clock can never describe different responses.
+        setRailClocks({ work: s.work!, byDate: recordClocksByDate(vs) });
         // Which languages this work exists in. The Constitution is published in French, German
         // and Luxembourgish, and its stored title is German for all three, so a reader looking
         // at the French text sees a German heading above it and reasonably concludes the page is
@@ -357,7 +376,7 @@ export default function App() {
                   official: vs[vs.length - 1]?.source_uri,
                   kind: vs[vs.length - 1]?.document_type });
       })
-      .catch(() => { if (live()) { setVersions([]); setLangs([]); setTimelineSemantics(undefined); setHeld(undefined); } });
+      .catch(() => { if (live()) { setVersions([]); setRailClocks(undefined); setLangs([]); setTimelineSemantics(undefined); setHeld(undefined); } });
   }, [s.work]);
 
   // The outline belongs to (law, date) — never to the focused article. It used to be fetched
@@ -459,7 +478,11 @@ export default function App() {
         // either half alone: one of them is lying and the reader cannot tell which.
         setLoaded(doc?.valid_from
           ? { items, from: doc.valid_from, to: doc?.valid_to,
-              profile: doc?.extraction_profile, source: doc?.source_uri }
+              profile: doc?.extraction_profile, source: doc?.source_uri,
+              // Trust rule 3: the state banner's second clock, read off the same resolved
+              // document as its interval, in the same statement, so the two can never come
+              // from different answers.
+              record: recordClockOf(doc) }
           : undefined);
         if (items.length === 0)
           setUi({ gap: { status: one?.envelope?.status ?? "no_result", explanation: "No text is held for this law on that date.", available: [] } });
@@ -616,6 +639,10 @@ export default function App() {
             : `${e?.envelope?.publisher}:${w.work}`,
           title: w.title, kind: w.document_type,
           valid_from: w.valid_from, permalink: w.permalink,
+          // Trust rule 3, off the same admitted row as `valid_from` above it. Every work in
+          // this list is a `DocJson`, so both fields are on the wire; the row carries them
+          // verbatim and the view decides how an absent one is disclosed.
+          publication_date: w.publication_date, observed_from: w.observed_from,
           jurisdiction: e?.envelope?.jurisdiction,
           hierarchy: w.hierarchy,
           timeline_semantics: e?.envelope?.timeline_semantics,
@@ -631,6 +658,10 @@ export default function App() {
             : String(unit.work ?? ""),
           title: unit.title, kind: unit.document_type,
           valid_from: unit.valid_from ?? s.asOf!, permalink: unit.permalink,
+          // No record clock is copied here on purpose. An ambiguity unit carries `work`,
+          // `valid_from` and its `choices`; the publication date and observation instant live
+          // on each candidate inside `choices`, and lifting one of them onto the ambiguity row
+          // would answer the question the interstitial exists to leave open.
           jurisdiction: unit.jurisdiction, hierarchy: unit.hierarchy,
           ambiguous: true,
         }));
@@ -1039,6 +1070,7 @@ export default function App() {
       {space === "law" && s.work ? (
         <VersionRail dates={railDates} current={at} compareTo={s.mode === "compare" ? s.to : undefined}
                      scope={railScope} today={today} work={s.work} timelineSemantics={timelineSemantics}
+                     clocks={!narrowed && railClocks?.work === s.work ? railClocks.byDate : undefined}
                      onPick={(d) => { clearAssistantView(); go({ date: d, to: undefined, mode: "read" }); }}
                      onCompare={(d) => {
                        // Shift-click makes the pair, so comparing never means retyping a date
@@ -1101,7 +1133,7 @@ export default function App() {
                                        work={s.work} title={title ?? s.work} language={servedLang}
                                        anchor={s.anchor} profile={loaded.profile}
                                        timelineSemantics={timelineSemantics}
-                                       source={loaded.source}
+                                       source={loaded.source} record={loaded.record}
                                        onCite={(w) => { clearAssistantView(); go({ work: w, date: undefined, anchor: undefined, to: undefined, mode: "read", space: "law" }); }}
                                        onPick={(a, auto) => { chosenAnchor.current = !auto; go({ anchor: a }); }}
                                        onClear={() => go({ anchor: undefined })} /> :
