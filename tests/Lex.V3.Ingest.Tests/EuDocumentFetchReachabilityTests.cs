@@ -515,6 +515,110 @@ public sealed class EuDocumentFetchReachabilityTests
     }
 
     /// <summary>
+    /// S1-A10, Decision 83: a same-origin redirect onto a path the publisher's own robots file
+    /// disallows is refused, and the bytes are never fetched.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// THE GAP THIS CLOSES. Robots was evaluated once, at session start, against the URL the
+    /// session started from. A redirect target is a URL Lex then actually requests, and Decision 83
+    /// evaluates "every URL Lex actually requests, and only those", so the target was going
+    /// unevaluated: a route could be redirected onto a disallowed path and fetch it, having asked
+    /// the publisher only about a different path. That is the transfer prohibition read backwards --
+    /// the start position's permission being carried onto a path the publisher did not permit.
+    /// </para>
+    /// <para>
+    /// The target here is disallowed by the REAL retained robots fixture (<c>Disallow: /c/portal/</c>
+    /// under <c>User-agent: *</c>), not by a stand-in written to make this pass, so the refusal is
+    /// the publisher's own answer about its own path.
+    /// </para>
+    /// </remarks>
+    [TestMethod]
+    public async Task ASameOriginRedirectOntoADisallowedPathIsRefusedAndNeverFetched()
+    {
+        var bound = BindDocumentFetchRequest(GdprCelex, EuManifestationMediaType.XhtmlXml, out _);
+        const string disallowedTarget = "https://publications.europa.eu/c/portal/logout";
+        using var session = Session(
+            bound,
+            DocumentFetchHandler((ordinal, outbound) => ordinal switch
+            {
+                2 => DeclaredBinaryResponse(outbound, HttpStatusCode.SeeOther, [], location: disallowedTarget),
+                _ => throw new AssertFailedException(
+                    "The disallowed redirect target must never be requested."),
+            }),
+            new RoutedHttpAcquisitionSessionTests.MultiObjectCustodyStore(),
+            new RoutedHttpAcquisitionSessionTests.ShortDelayTimeProvider(),
+            usesPinnedHandler: false);
+
+        var started = await BootstrapAsync(session);
+        Assert.AreEqual(OfficialHttpAcquisitionOutcomeKind.ExecutedObservation, started.Kind);
+
+        var item = session.OpenPlanItem(bound);
+        var result = await item.ExecuteNextAttemptAsync(CancellationToken.None);
+        Assert.AreEqual(OfficialHttpAcquisitionOutcomeKind.ExecutedObservation, result.Kind);
+
+        var evidence = Evidence(result);
+        var outcome = Assert.IsInstanceOfType<IncompleteHttpRouteOutcome>(evidence.Outcome);
+        Assert.AreEqual(HttpRouteIncompleteReason.RedirectTargetRobotsDenied, outcome.Reason);
+
+        // One hop only. The handler above would throw if the target were requested, and this says
+        // the same thing from the evidence rather than from a test double's own bookkeeping.
+        Assert.AreEqual(1, evidence.Hops.Count);
+        Assert.AreEqual(303, evidence.Hops[0].Status);
+    }
+
+    /// <summary>
+    /// The other half, and the one that stops the check above being an over-refusal: a same-origin
+    /// redirect onto a path the publisher PERMITS is still followed.
+    /// </summary>
+    /// <remarks>
+    /// A guard that refused every redirect would pass the disallowed case above while breaking the
+    /// route, and the 82-seed population would have found that only after an hour of traffic. The
+    /// target here is an ordinary resource path the real fixture's <c>Allow: /</c> covers.
+    /// </remarks>
+    [TestMethod]
+    public async Task ASameOriginRedirectOntoAPermittedPathIsStillFollowed()
+    {
+        var bound = BindDocumentFetchRequest(GdprCelex, EuManifestationMediaType.XhtmlXml, out _);
+        const string permittedTarget =
+            "https://publications.europa.eu/resource/cellar/permitted-successor";
+        var requestedTarget = false;
+        using var session = Session(
+            bound,
+            DocumentFetchHandler((ordinal, outbound) => ordinal switch
+            {
+                2 => DeclaredBinaryResponse(outbound, HttpStatusCode.SeeOther, [], location: permittedTarget),
+                3 => Record(outbound),
+                _ => throw new AssertFailedException("Only one redirect is scripted here."),
+            }),
+            new RoutedHttpAcquisitionSessionTests.MultiObjectCustodyStore(),
+            new RoutedHttpAcquisitionSessionTests.ShortDelayTimeProvider(),
+            usesPinnedHandler: false);
+
+        var started = await BootstrapAsync(session);
+        Assert.AreEqual(OfficialHttpAcquisitionOutcomeKind.ExecutedObservation, started.Kind);
+
+        var item = session.OpenPlanItem(bound);
+        var result = await item.ExecuteNextAttemptAsync(CancellationToken.None);
+        Assert.AreEqual(OfficialHttpAcquisitionOutcomeKind.ExecutedObservation, result.Kind);
+
+        var evidence = Evidence(result);
+        Assert.IsTrue(requestedTarget, "a permitted redirect target must actually be requested.");
+        Assert.AreEqual(2, evidence.Hops.Count, "the permitted redirect must produce a second hop.");
+        Assert.IsNotInstanceOfType<IncompleteHttpRouteOutcome>(
+            evidence.Outcome,
+            "a permitted redirect target must not be refused as though the publisher had denied it.");
+
+        HttpResponseMessage Record(HttpRequestMessage outbound)
+        {
+            requestedTarget = true;
+            return DeclaredBinaryResponse(
+                outbound, HttpStatusCode.OK, "<akomaNtoso/>"u8.ToArray(),
+                contentType: "application/xhtml+xml");
+        }
+    }
+
+    /// <summary>
     /// Item 1: the switch gains exactly one new member and admits the real resource-fetch shape;
     /// every other input still throws exactly as before.
     /// </summary>

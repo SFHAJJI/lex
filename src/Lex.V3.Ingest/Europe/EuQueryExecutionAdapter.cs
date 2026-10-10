@@ -1801,6 +1801,17 @@ public sealed class EuQueryExecutionAdapter
         }
 
         if (evidence.Outcome is IncompleteHttpRouteOutcome
+            { Reason: HttpRouteIncompleteReason.RedirectTargetRobotsDenied })
+        {
+            // The SAME per-object cause the bootstrap refusal already maps to: the publisher said
+            // no for this object. Which URL it said no about -- the start position or the redirect
+            // target -- is a route-level fact and stays on the route evidence as
+            // RedirectTargetRobotsDenied, rather than being duplicated into this vocabulary.
+            mapped = CorpusAcquisitionRefusalReason.RobotsDisallowed;
+            return true;
+        }
+
+        if (evidence.Outcome is IncompleteHttpRouteOutcome
             { Reason: HttpRouteIncompleteReason.RedirectTargetOriginNotAdmitted })
         {
             mapped = CorpusAcquisitionRefusalReason.RedirectTargetOriginNotAdmitted;
