@@ -537,6 +537,53 @@ switch (args0[0])
             }));
         return 0;
     }
+    case "licence-census":
+    {
+        if ((args0.Length > 1 ? args0[1] : "") != "observe-lu")
+            throw new ArgumentException(
+                "usage: lex licence-census observe-lu --private-root DIR --run-id ID --code-commit FULL_SHA [--page-size N] [--maximum-rows N] [--pause-ms N] [--now ISO]");
+        var privateRoot = Get("--private-root")
+            ?? throw new ArgumentException("--private-root required");
+        var runIdentity = Get("--run-id")
+            ?? throw new ArgumentException("--run-id required");
+        var codeCommit = Lex.Temporal.CodeIdentity.RequireFullCommit(
+            Get("--code-commit"), "--code-commit");
+        var pageSize = int.TryParse(Get("--page-size"), out var parsedPageSize)
+            ? parsedPageSize : 5_000;
+        var maximumRows = int.TryParse(
+            Get("--maximum-rows"), out var parsedMaximumRows)
+            ? parsedMaximumRows : 50_000;
+        var pauseMilliseconds = int.TryParse(
+            Get("--pause-ms"), out var parsedPauseMilliseconds)
+            ? parsedPauseMilliseconds : 1_500;
+        using var handler = new HttpClientHandler { AllowAutoRedirect = false };
+        using var http = new HttpClient(handler)
+        {
+            Timeout = TimeSpan.FromMinutes(5),
+        };
+        var receipt = await LicenceCensus.AcquireLuObservationsAsync(
+            privateRoot,
+            runIdentity,
+            codeCommit,
+            now,
+            http,
+            new LicenceCensusAcquisitionOptions(
+                pageSize,
+                maximumRows,
+                TimeSpan.FromMilliseconds(pauseMilliseconds)),
+            CancellationToken.None);
+        Console.WriteLine(System.Text.Json.JsonSerializer.Serialize(new
+        {
+            schema = "lex-private-lu-observation-command-result/1",
+            run_identity = receipt.RunIdentity,
+            manifest_sha256 = receipt.ManifestSha256,
+            coordinate_count = receipt.CoordinateCount,
+            observation_count = receipt.ObservationCount,
+            started_at = receipt.StartedAt,
+            ended_at = receipt.EndedAt,
+        }));
+        return 0;
+    }
     case "ingest":
     {
         var publisher = Get("--publisher") ?? "lu-legilux";
@@ -947,6 +994,7 @@ static void Usage() => Console.Error.WriteLine("""
       lex embedding-smoke --model-dir PATH [--text TEXT] [--batch-size N]
       lex benchmark --index FILE.db --model-dir DIR --out REPORT.json [--case-results-out CASES.jsonl]
       lex scope-preview [--publisher ID] [--scope FILE] [--previous-scope FILE] [--wave 1..4]
+      lex licence-census observe-lu --private-root DIR --run-id ID --code-commit FULL_SHA [--page-size N] [--maximum-rows N] [--pause-ms N] [--now ISO]
       lex ingest --publisher ID --corpus PATH --code-commit FULL_SHA --run-id SOURCE_RUN_ID [--scope FILE] [--wave 1..4] [--now ISO]
                  [--fresh [--historical-withdrawal-audit FILE]]
       lex index  --corpus PATH [--articles PATH --articles-commit FULL_SHA] --out FILE.db [--keyfile KEY.pem] [--now ISO]
