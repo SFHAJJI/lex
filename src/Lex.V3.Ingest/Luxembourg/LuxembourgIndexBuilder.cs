@@ -1314,9 +1314,7 @@ public sealed class LuxembourgIndexReader : IDisposable
                     DateTimeStyles.None, out _) ||
                 !string.Equals(
                     LuxembourgIndexBuilder.WorkKeyOf(state.PublisherWorkIri), state.WorkKey,
-                    StringComparison.Ordinal) ||
-                !state.PublisherLegalResourceIri.StartsWith(
-                    state.PublisherWorkIri + "/", StringComparison.Ordinal))
+                    StringComparison.Ordinal))
             {
                 throw new InvalidDataException("A Luxembourg expression state is not canonical.");
             }
