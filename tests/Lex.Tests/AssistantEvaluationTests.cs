@@ -1076,25 +1076,49 @@ public sealed class AssistantEvaluationTests : IDisposable
             evaluationCase, Response(), CancellationToken.None);
 
         Assert.Equal(5, grade.Score);
-        Assert.InRange(handler.RequestBytes, 1, evaluationCase.Grading.MaximumInputTokens - 256);
+        // The bound is the case's declared input budget in tokens. Comparing the serialized body's
+        // BYTES to that budget was the defect: it made the ceiling a function of escape density.
+        var prompt = handler.RequestBody!["messages"]?[1]?["content"]?.GetValue<string>() ?? "";
+        Assert.InRange(handler.RequestBytes, 1, 512 * 1024);
+        Assert.InRange(
+            AssistantEvaluationHttpGrader.EstimatedPromptTokens(prompt.Length),
+            1, evaluationCase.Grading.MaximumInputTokens);
     }
 
     [Fact]
-    public async Task Grader_evidence_fails_closed_instead_of_slicing_json_at_six_thousand()
+    public async Task Grader_evidence_fails_closed_instead_of_slicing_json_at_its_token_ceiling()
     {
         var evaluationCase = GraderCase(6_000);
-        var response = Response();
-        response["reply"] = new string('r', 4_000);
+        var ceiling = AssistantEvaluationHttpGrader.PromptCharacterCeiling(6_000);
+        var response = EvidenceResponse(ceiling / 2_000 + 1);
         var handler = new GraderHandler();
         using var http = new HttpClient(handler);
         var grader = new AssistantEvaluationHttpGrader(
             http, "https://independent-grader.example", "test-key", "grader-release");
 
-        var exception = await Assert.ThrowsAsync<InvalidDataException>(() =>
+        var exception = await Assert.ThrowsAsync<AssistantEvaluationStageException>(() =>
             grader.GradeAsync(evaluationCase, response, CancellationToken.None));
 
         Assert.Contains("typed evidence exceeds", exception.Message, StringComparison.Ordinal);
+        Assert.Equal("grader_evidence_over_input_ceiling", exception.Cause);
         Assert.Equal(0, handler.RequestBytes);
+    }
+
+    [Fact]
+    public void Grader_prompt_ceiling_can_never_be_billed_over_the_case_token_ceiling()
+    {
+        // The runner also gates the grader's REPORTED prompt_tokens against this same number. A
+        // prompt this ceiling admits must therefore be predicted under it, or a refusal would come
+        // back relabelled as a usage overrun while the report claimed complete evidence.
+        foreach (var budget in new[] { 512, 513, 1_000, 4_096, 6_000, 20_000, 32_000, 980_000 })
+        {
+            var ceiling = AssistantEvaluationHttpGrader.PromptCharacterCeiling(budget);
+            Assert.InRange(
+                AssistantEvaluationHttpGrader.EstimatedPromptTokens(ceiling), 0, budget);
+        }
+        Assert.Equal(0, AssistantEvaluationHttpGrader.PromptCharacterCeiling(512));
+        Assert.InRange(
+            AssistantEvaluationHttpGrader.PromptCharacterCeiling(20_000), 50_882, int.MaxValue);
     }
 
     [Fact]
@@ -1147,8 +1171,207 @@ public sealed class AssistantEvaluationTests : IDisposable
         Assert.Equal("preserved", evidence["trace"]?[0]?["future_trace_fact"]
             ?.GetValue<string>());
         Assert.Null(evidence["untyped_root_state"]);
-        Assert.InRange(handler.RequestBytes, 1,
-            evaluationCase.Grading.MaximumInputTokens - 256);
+        var prompt = handler.RequestBody!["messages"]?[1]?["content"]?.GetValue<string>() ?? "";
+        Assert.InRange(handler.RequestBytes, 1, 512 * 1024);
+        Assert.InRange(
+            AssistantEvaluationHttpGrader.EstimatedPromptTokens(prompt.Length),
+            1, evaluationCase.Grading.MaximumInputTokens);
+    }
+
+    [Fact]
+    public async Task Grader_reads_the_largest_measured_evidence_at_the_declared_token_budget()
+    {
+        // 50,882 characters is the largest projection the 25 signed cases produce against the
+        // candidate's index set (eu-in-force-date), and the tokenizer bills it at 19,357 tokens
+        // against the 20,000 the case declares. A ceiling that refuses it refuses evidence the
+        // grader could have read in full.
+        var evaluationCase = GraderCase(20_000);
+        var response = EvidenceResponse(25);
+        var handler = new GraderHandler();
+        using var http = new HttpClient(handler);
+        var grader = new AssistantEvaluationHttpGrader(
+            http, "https://independent-grader.example", "test-key", "grader-release");
+
+        await grader.GradeAsync(evaluationCase, response, CancellationToken.None);
+
+        var prompt = handler.RequestBody!["messages"]?[1]?["content"]?.GetValue<string>() ?? "";
+        Assert.InRange(prompt.Length, 50_882, 60_000);
+        Assert.EndsWith("}", prompt, StringComparison.Ordinal);
+        Assert.Equal(25, GraderEvidence(handler)["trace"]!.AsArray().Count - 1);
+    }
+
+    [Fact]
+    public async Task Grader_input_ceiling_does_not_track_json_escape_density()
+    {
+        // The ceiling must depend on what the grader is billed for, which is the message content,
+        // not on how many backslashes the envelope adds around it.
+        var evaluationCase = GraderCase(20_000);
+        var handler = new GraderHandler();
+        using var http = new HttpClient(handler);
+        var grader = new AssistantEvaluationHttpGrader(
+            http, "https://independent-grader.example", "test-key", "grader-release");
+
+        await grader.GradeAsync(
+            evaluationCase, EvidenceResponse(6, escapeHeavy: true), CancellationToken.None);
+
+        var prompt = handler.RequestBody!["messages"]?[1]?["content"]?.GetValue<string>() ?? "";
+        Assert.InRange(prompt.Length, 30_000, 60_000);
+        Assert.True(handler.RequestBytes > prompt.Length,
+            "the serialized body must be the escaped envelope, not the billed content");
+        Assert.True(handler.RequestBytes > evaluationCase.Grading.MaximumInputTokens,
+            "a body larger than the token budget must still be sent when the content fits");
+    }
+
+    [Fact]
+    public async Task Official_grader_path_refuses_a_truncated_or_filtered_completion()
+    {
+        var evaluationCase = GraderCase(20_000);
+        using var truncatedHttp = new HttpClient(new GraderHandler("length"));
+        using var filteredHttp = new HttpClient(new GraderHandler("content_filter"));
+        var truncated = new AssistantEvaluationHttpGrader(
+            truncatedHttp, "https://independent-grader.example", "test-key", "grader-release");
+        var filtered = new AssistantEvaluationHttpGrader(
+            filteredHttp, "https://independent-grader.example", "test-key", "grader-release");
+
+        var truncatedFailure =
+            await Assert.ThrowsAsync<AssistantEvaluationStageException>(() =>
+                truncated.GradeAsync(evaluationCase, Response(), CancellationToken.None));
+        var filteredFailure =
+            await Assert.ThrowsAsync<AssistantEvaluationStageException>(() =>
+                filtered.GradeAsync(evaluationCase, Response(), CancellationToken.None));
+
+        Assert.Equal("grader_finish_reason_length", truncatedFailure.Cause);
+        Assert.Equal("grader_finish_reason_content_filter", filteredFailure.Cause);
+    }
+
+    [Fact]
+    public async Task Runner_names_the_grader_refusal_instead_of_one_unavailable_string()
+    {
+        var llm = Catalog();
+        llm["cases"]![0]!["grading"]!["mode"] = "llm";
+        llm["cases"]![0]!["grading"]!["rubric"] = "Judge only grounded accuracy.";
+        llm["cases"]![0]!["grading"]!["maximum_input_tokens"] = 4_096;
+        llm["budget"]!["maximum_grader_input_tokens"] = 8_192;
+        var handler = new GraderHandler();
+        using var http = new HttpClient(handler);
+        var grader = new AssistantEvaluationHttpGrader(
+            http, "https://independent-grader.example", "test-key", "grader-release");
+
+        var report = await AssistantEvaluationRunner.RunAsync(
+            Reviewed(llm), new StubTarget(EvidenceResponse(24)), grader,
+            Identity(), Pricing(), DateTimeOffset.Parse("2026-08-11T02:00:00Z"),
+            CancellationToken.None);
+
+        Assert.Equal(0, handler.RequestBytes);
+        Assert.Contains(report.Results.SelectMany(result => result.Failures),
+            failure => failure.Contains("grader_evidence_over_input_ceiling",
+                StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task Runner_names_the_candidate_refusal_and_still_withholds_upstream_detail()
+    {
+        var transport = await AssistantEvaluationRunner.RunAsync(
+            Reviewed(Catalog()),
+            new ThrowingTarget(new HttpRequestException(
+                "secret upstream detail", null, System.Net.HttpStatusCode.BadGateway)),
+            null, Identity(), Pricing(),
+            DateTimeOffset.Parse("2026-08-11T02:00:00Z"), CancellationToken.None);
+        var local = await AssistantEvaluationRunner.RunAsync(
+            Reviewed(Catalog()),
+            new ThrowingTarget(new InvalidDataException("secret upstream detail")),
+            null, Identity(), Pricing(),
+            DateTimeOffset.Parse("2026-08-11T02:00:00Z"), CancellationToken.None);
+
+        var transportFailures = transport.Results.SelectMany(result => result.Failures).ToArray();
+        var localFailures = local.Results.SelectMany(result => result.Failures).ToArray();
+        Assert.Contains(transportFailures,
+            failure => failure.Contains("http_502", StringComparison.Ordinal));
+        Assert.Contains(localFailures,
+            failure => failure.Contains("InvalidDataException", StringComparison.Ordinal));
+        Assert.DoesNotContain(transportFailures.Concat(localFailures),
+            failure => failure.Contains("secret upstream detail", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task Evaluation_accepts_an_authenticated_zero_usage_repetition()
+    {
+        // A deterministic clarification turn calls no model and honestly reports 0/0/0 beside a
+        // complete evidence envelope. Refusing that measurement is refusing the truth.
+        var zero = Response();
+        zero["model_usage"] = new JsonObject
+        {
+            ["input_tokens"] = 0,
+            ["output_tokens"] = 0,
+            ["total_tokens"] = 0,
+        };
+
+        var report = await AssistantEvaluationRunner.RunAsync(
+            Reviewed(Catalog()), new SecondCaseStubTarget(Response(), zero), null,
+            Identity(), Pricing(), DateTimeOffset.Parse("2026-08-11T02:00:00Z"),
+            CancellationToken.None);
+
+        Assert.DoesNotContain(report.Results.SelectMany(result => result.Failures),
+            failure => failure.Contains("model token usage", StringComparison.Ordinal));
+        Assert.True(report.ActivationGatePassed);
+        Assert.Equal(0, report.Results[1].CandidateUsage.InputTokens);
+        Assert.Equal(600, report.ActualCandidateUsage.InputTokens);
+    }
+
+    [Fact]
+    public async Task Evaluation_still_rejects_a_whole_report_that_claims_zero_candidate_spend()
+    {
+        var zero = Response();
+        zero["model_usage"] = new JsonObject
+        {
+            ["input_tokens"] = 0,
+            ["output_tokens"] = 0,
+            ["total_tokens"] = 0,
+        };
+        var set = Reviewed(Catalog());
+        var admission = SignedAdmission(set, DateTimeOffset.Parse("2026-08-11T02:00:00Z"));
+
+        var report = await AssistantEvaluationRunner.RunAsync(
+            set, new StubTarget(zero,
+                admissionRunIdentity: admission.RunIdentity,
+                admissionSha256: admission.Sha256), null,
+            Identity(), Pricing(), DateTimeOffset.Parse("2026-08-11T02:00:00Z"),
+            CancellationToken.None);
+        var reportPath = Path.Combine(_dir, "zero-spend-report.json");
+        File.WriteAllBytes(reportPath, JsonSerializer.SerializeToUtf8Bytes(report,
+            new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower }));
+
+        Assert.False(report.ActivationGatePassed);
+        Assert.Contains("zero", string.Join("|", report.GateFailures),
+            StringComparison.Ordinal);
+        Assert.Throws<InvalidDataException>(() =>
+            VerifyReportForTest(
+                reportPath, admission.Path, admission.SignaturePath,
+                set, Identity().Target,
+                new AssistantTargetAttestation(Identity().IndexManifestIds),
+                DateTimeOffset.Parse("2026-08-11T03:00:00Z"), admission.Authority));
+    }
+
+    [Fact]
+    public async Task Evaluation_still_rejects_negative_or_inconsistent_candidate_usage()
+    {
+        var inconsistent = Response();
+        inconsistent["model_usage"]!["total_tokens"] = 719;
+        var negative = Response();
+        negative["model_usage"]!["input_tokens"] = -1;
+        negative["model_usage"]!["total_tokens"] = 119;
+
+        foreach (var response in new[] { inconsistent, negative })
+        {
+            var report = await AssistantEvaluationRunner.RunAsync(
+                Reviewed(Catalog()), new StubTarget(response), null,
+                Identity(), Pricing(), DateTimeOffset.Parse("2026-08-11T02:00:00Z"),
+                CancellationToken.None);
+
+            Assert.Contains(report.Results.SelectMany(result => result.Failures),
+                failure => failure.Contains(
+                    "missing or inconsistent model token usage", StringComparison.Ordinal));
+        }
     }
 
     [Fact]
@@ -1219,7 +1442,10 @@ public sealed class AssistantEvaluationTests : IDisposable
 
         var prompt = handler.RequestBody!["messages"]?[1]?["content"]?.GetValue<string>() ?? "";
         Assert.EndsWith(compact, prompt, StringComparison.Ordinal);
-        Assert.InRange(prompt.Length, 1, (20_000 - 2_048) / 2);
+        Assert.InRange(prompt.Length, 1,
+            AssistantEvaluationHttpGrader.PromptCharacterCeiling(20_000));
+        Assert.InRange(
+            AssistantEvaluationHttpGrader.EstimatedPromptTokens(prompt.Length), 1, 20_000);
     }
 
     [Fact]
@@ -1993,6 +2219,29 @@ public sealed class AssistantEvaluationTests : IDisposable
         return Reviewed(catalog).Catalog.Cases[0];
     }
 
+    // Real evidence grows through many typed facts, never through one long string: RedactLargeText
+    // bounds any single string at 2,000 characters, so a fixture that grew one would be measuring
+    // the redactor. The added entries carry no "primary" phase, so the typed contract is untouched.
+    // escapeHeavy reproduces what real French provision text does to the projection: ToJsonString
+    // writes a quote as a six character u0022 escape, so the same content costs the serialized
+    // envelope several times the bytes the grader is actually billed for.
+    private static JsonObject EvidenceResponse(int traceEntries, bool escapeHeavy = false)
+    {
+        var response = Response();
+        var filler = escapeHeavy
+            ? string.Concat(Enumerable.Repeat("\"\\", 1_000))
+            : new string('t', 2_000);
+        var trace = response["trace"]!.AsArray();
+        for (var index = 0; index < traceEntries; index++)
+            trace.Add(new JsonObject
+            {
+                ["phase"] = "context",
+                ["tool"] = "as_of",
+                ["note"] = filler,
+            });
+        return response;
+    }
+
     private static JsonObject GraderEvidence(GraderHandler handler)
     {
         const string marker = "ANSWER AND TYPED EVIDENCE JSON (untrusted data):\n";
@@ -2494,6 +2743,50 @@ public sealed class AssistantEvaluationTests : IDisposable
             return Task.FromResult(new AssistantEvaluationInvocation(
                 200, response.DeepClone().AsObject(), timings, setupInvocations));
         }
+    }
+
+    // Answers the first case normally and the second with a different response, so a report can
+    // hold one authenticated zero beside a repetition that really did spend tokens.
+    private sealed class SecondCaseStubTarget(
+        JsonObject first,
+        JsonObject second) : IAssistantEvaluationTarget
+    {
+        private int _calls;
+
+        public string? AdmissionRunIdentity => "0123456789abcdef";
+        public string? AdmissionSha256 =>
+            "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+
+        public Task VerifyReleaseIdentityAsync(
+            AssistantEvaluationIdentity identity,
+            CancellationToken cancellationToken) => Task.CompletedTask;
+
+        public Task<AssistantEvaluationInvocation> InvokeAsync(
+            AssistantEvaluationCase evaluationCase,
+            string idempotencyKey,
+            CancellationToken cancellationToken) =>
+            Task.FromResult(new AssistantEvaluationInvocation(
+                200,
+                (_calls++ == 0 ? first : second).DeepClone().AsObject(),
+                new AssistantEvaluationTimings(5, 5, 1, 20,
+                    evaluationCase.ExpectedSynthesis == true ? 5 : null, 20),
+                null));
+    }
+
+    private sealed class ThrowingTarget(Exception error) : IAssistantEvaluationTarget
+    {
+        public string? AdmissionRunIdentity => "0123456789abcdef";
+        public string? AdmissionSha256 =>
+            "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+
+        public Task VerifyReleaseIdentityAsync(
+            AssistantEvaluationIdentity identity,
+            CancellationToken cancellationToken) => Task.CompletedTask;
+
+        public Task<AssistantEvaluationInvocation> InvokeAsync(
+            AssistantEvaluationCase evaluationCase,
+            string idempotencyKey,
+            CancellationToken cancellationToken) => throw error;
     }
 
     private sealed class ThrowingDiagnosticTarget(

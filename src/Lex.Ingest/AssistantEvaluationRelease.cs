@@ -236,8 +236,11 @@ public static class AssistantEvaluationReleaseVerifier
                         AssistantEvaluationRunner.PromptSha256(evaluationCase))
                     || item.GradingMode != evaluationCase.Grading.Mode
                     || item.GradingThreshold != evaluationCase.Grading.Threshold
-                    || item.CandidateUsage.InputTokens <= 0
-                    || item.CandidateUsage.OutputTokens <= 0
+                    // A deterministic turn that called no model reports zero, so a repetition may
+                    // read zero here; only a negative is impossible. The run-wide sum below is
+                    // where a report claiming no candidate spend at all is refused.
+                    || item.CandidateUsage.InputTokens < 0
+                    || item.CandidateUsage.OutputTokens < 0
                     || evaluationCase.Grading.Mode == "llm"
                         && (item.Grade is null || item.Grade < evaluationCase.Grading.Threshold
                             || item.Grade > 5
@@ -265,6 +268,11 @@ public static class AssistantEvaluationReleaseVerifier
         var graderUsage = Sum(report.Results.Select(item => item.GraderUsage));
         if (candidateUsage != report.ActualCandidateUsage
             || graderUsage != report.ActualGraderUsage
+            // Recomputed from the per-result usages just above, so a report cannot declare spend it
+            // did not measure: a run whose every repetition read zero fails here, which is where
+            // the per-result check used to stop it before deterministic turns could report honestly.
+            || candidateUsage.InputTokens <= 0
+            || candidateUsage.OutputTokens <= 0
             || candidateUsage.InputTokens > caseSet.Catalog.Budget.MaximumCandidateInputTokens
             || candidateUsage.OutputTokens > caseSet.Catalog.Budget.MaximumCandidateOutputTokens
             || graderUsage.InputTokens > caseSet.Catalog.Budget.MaximumGraderInputTokens
