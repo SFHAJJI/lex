@@ -34,6 +34,13 @@ public sealed record EuropeIndexSearchResult(
     V3IndexCapabilityLookupOutcome Outcome,
     IReadOnlyList<string> ArticleIdentities);
 
+public sealed record EuropeIndexResolvedExpression(
+    string PublisherWorkId,
+    string PublisherExpressionId,
+    string Language,
+    IReadOnlyList<string> ArticleIdentities,
+    IReadOnlyList<string> PublisherIdentifiers);
+
 /// <summary>Builds the immutable EU index from one proof-complete Stage 3 envelope.</summary>
 public static class EuropeIndexBuilder
 {
@@ -571,6 +578,50 @@ public sealed class EuropeIndexReader : IDisposable
     public long ArticleCount => Count("articles");
     public long CorrigendumLineCount => Count("corrigendum_lines");
     public long CorrigendumGapCount => Count("corrigendum_gaps");
+
+    public IReadOnlyList<EuropeIndexResolvedExpression> ResolveExact(string identifier)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(identifier);
+        using var command = _connection.CreateCommand();
+        command.CommandText = """
+            SELECT publisher_work_id,publisher_expression_id,language,
+                   article_identity_sha256,publisher_identifier
+            FROM articles
+            WHERE publisher_work_id=$identifier OR publisher_expression_id=$identifier
+               OR article_identity_sha256=$identifier
+            ORDER BY publisher_work_id,publisher_expression_id,language,
+                     article_identity_sha256,publisher_identifier
+            """;
+        command.Parameters.AddWithValue("$identifier", identifier);
+        using var reader = command.ExecuteReader();
+        var rows = new List<(
+            string Work,
+            string Expression,
+            string Language,
+            string Article,
+            string PublisherIdentifier)>();
+        while (reader.Read())
+        {
+            rows.Add((
+                reader.GetString(0),
+                reader.GetString(1),
+                reader.GetString(2),
+                reader.GetString(3),
+                reader.GetString(4)));
+        }
+
+        return rows
+            .GroupBy(static row => (row.Work, row.Expression, row.Language))
+            .Select(static group => new EuropeIndexResolvedExpression(
+                group.Key.Work,
+                group.Key.Expression,
+                group.Key.Language,
+                Array.AsReadOnly(group.Select(static row => row.Article)
+                    .Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray()),
+                Array.AsReadOnly(group.Select(static row => row.PublisherIdentifier)
+                    .Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray())))
+            .ToArray();
+    }
 
     public static EuropeIndexReader OpenAndVerify(
         SourceArtifactRef indexRef,
