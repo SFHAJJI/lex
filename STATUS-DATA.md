@@ -91,7 +91,15 @@ Updated 2026-10-09.
   the #943 build: tool `5ac13b3c` from push CI 37943609391, whose runtime artifact expires 2026-10-12 14:34 UTC (the
   runner keeps its copy, and a supervised resume falls back to it). It reuses the EU population's custody (no EU
   traffic), under the supervisor (`-Next 15`), with the after-LU waiter and the keep-awake helper. It takes about
-  three days with the machine awake. Its two offline derives cover the EU
+  three days with the machine awake.
+  - Run 14 was stopped on 2026-10-10 at about 14:50 UTC at the owner's request (disk space). Its journal ends at
+    `legislative-rgd-a` leaf 9: seven families proven (code s/a/g, loi s/a/g, rgd-s), 3,120 requests spent. On
+    2026-10-11 at 12:27 UTC it was resumed in the same build as run 15 (`C:\lex-v3\lu-population-20261011-15`:
+    122,491 objects hard-linked, journal verified through seq 72), under the supervisor (`-Next 16`), with the after-LU
+    waiter and the keep-awake helper. Remaining: the rest of rgd-a, rgd-g, the census join and about 11,905 documents.
+  - The same day the driver removed 31 unused git worktrees after saving their unpushed work to `backup/20261010/*`
+    branches (`C:\lex-v3\lanes\worktree-backups-20261010.md`); no custody or corpus was touched.
+  - Its two offline derives cover the EU
   and Luxembourg populations together; the EU derive alone peaked at about 14 GB private, so they may need the
   machine's memory more than the acquisition does. They are offline and can be re-run without publisher traffic.
 

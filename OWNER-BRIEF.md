@@ -1,6 +1,6 @@
 # Lex V3: the owner's brief
 
-Updated 2026-10-09 at 14:50 UTC by the driver. The driver updates this file in the first pull request of each
+Updated 2026-10-11 at 12:45 UTC by the driver. The driver updates this file in the first pull request of each
 day and whenever a run starts, ends or stops. At most 40 lines, plain words, no hashes. The detail stays in
 STATUS-WEB.md and STATUS-DATA.md; the acceptance list is LAUNCH-CONTRACT.md.
 
@@ -22,9 +22,9 @@ bounded mount, the GDPR in English: search, dossier, reading, provision history,
   step that tried to hold the whole population in one piece of text. All three are fixed: items added late wait for
   the next run, that one article is left out and recorded, and the checksum now reads the data as it streams.
 - A replay with all three fixes then ran through to the first document downloads, where it stopped as planned.
-- The fix is merged, and the Luxembourg run restarted fresh on 9 October at 14:35 UTC. It needs about three days
-  with the machine awake, so it should end about 12 to 13 October. Please keep the laptop on its charger; on 7
-  October its battery ran out and it slept for 8 hours.
+- The fixed Luxembourg run started on 9 October and had read 7 of its 9 families when you asked to stop it on 10
+  October. It resumed on 11 October at 12:27 UTC from where it stopped, with nothing fetched twice, and should end
+  about 12 to 13 October. Please keep the laptop on its charger so it does not sleep.
 - Then the combined mount is derived twice, its journeys, gates and release rehearsal run, and the first real mount
   is served on this machine about 13 to 15 October. Those derives need a lot of memory; closing unused apps helps.
 
