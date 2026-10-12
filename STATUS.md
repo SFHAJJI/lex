@@ -24,7 +24,8 @@ A feature pull request edits its lane file, not this one; this file changes for 
   2026-10-05 04:07 UTC, and its two offline derives were identical. The Luxembourg population: run 14
   (`C:\lex-v3\lu-population-20261009-14`) started on 2026-10-09 on the build with #937, #940 and #943, was stopped at the
   owner's request on 2026-10-10 after seven of nine families, and resumed from its journal as run 15 on 2026-10-11
-  (`C:\lex-v3\lu-population-20261011-15`); it should end about 12 to 13 October. Runs 1 to 13 stopped on three defects those pull requests fix, and
+  (`C:\lex-v3\lu-population-20261011-15`). Its acquisition completed on 2026-10-12 (260,235 records); the combined
+  offline derive waits for disk and memory (STATUS-DATA.md). Runs 1 to 13 stopped on three defects those pull requests fix, and
   replays of run 13's journal found two more before the restart (#943); all their custody is kept (STATUS-DATA.md).
 - Plan: `C:\lex-v3\V3-FINISH-PLAN-2026-09-27.md` (owner's copy). Decision 94 (one driver, one queue,
   one review per pull request) merged in lex-governance on 2026-09-27. Launch target 2026-11-07.

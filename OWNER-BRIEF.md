@@ -1,6 +1,6 @@
 # Lex V3: the owner's brief
 
-Updated 2026-10-11 at 12:45 UTC by the driver. The driver updates this file in the first pull request of each
+Updated 2026-10-12 at 18:50 UTC by the driver. The driver updates this file in the first pull request of each
 day and whenever a run starts, ends or stops. At most 40 lines, plain words, no hashes. The detail stays in
 STATUS-WEB.md and STATUS-DATA.md; the acceptance list is LAUNCH-CONTRACT.md.
 
@@ -14,19 +14,14 @@ bounded mount, the GDPR in English: search, dossier, reading, provision history,
 ## What is running
 
 - The EU population is complete: fetched by 5 October and derived twice with identical results.
-- The Luxembourg run read all nine families for the first time, then stopped at its final cross-check on 9 October
-  at 02:00 UTC. In the two days it ran, the publisher added 28 new items, including a July 2026 regulation and three
-  new consolidated versions, after our list of laws was taken, and the check treated them as an error.
-- Before restarting, the driver replayed that run on this machine with the fix. The replays found two more problems
-  the run would have hit later: one Code du travail article whose address has an accented letter, and a checksum
-  step that tried to hold the whole population in one piece of text. All three are fixed: items added late wait for
-  the next run, that one article is left out and recorded, and the checksum now reads the data as it streams.
-- A replay with all three fixes then ran through to the first document downloads, where it stopped as planned.
-- The fixed Luxembourg run started on 9 October and had read 7 of its 9 families when you asked to stop it on 10
-  October. It resumed on 11 October at 12:27 UTC from where it stopped, with nothing fetched twice, and should end
-  about 12 to 13 October. Please keep the laptop on its charger so it does not sleep.
-- Then the combined mount is derived twice, its journeys, gates and release rehearsal run, and the first real mount
-  is served on this machine about 13 to 15 October. Those derives need a lot of memory; closing unused apps helps.
+- The Luxembourg population is complete too, as of 12 October at 18:28 UTC: all nine families, 260,235 records and
+  11,145 document bodies (about 3 GB), in 21,972 requests. This week's fixes (old titles, items the publisher added
+  during the run, one accented address, a checksum at full scale) all held on the live data.
+- Nothing is running now. The last step, building the combined EU and Luxembourg data set on this machine, stopped
+  when the disk was almost full: it needs about 20 GB of memory beyond what open apps use, which Windows takes from
+  the disk, and the game install left too little. Nothing was lost; that step sends no request to any publisher.
+- To finish it: free about 35 to 40 GB of disk (or close most apps, or restart the laptop), then tell the driver to
+  derive. It runs twice and compares; the canary, journeys, gates and release rehearsal follow, then serving here.
 
 ## What waits on the owner
 
@@ -37,4 +32,4 @@ bounded mount, the GDPR in English: search, dossier, reading, provision history,
 
 ## Launch
 
-Target 7 November 2026. It holds if the Luxembourg run finishes by about 13 October and Azure is usable soon.
+Target 7 November 2026. It holds if the combined data set is built this week and Azure is usable soon.
