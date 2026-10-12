@@ -1,6 +1,23 @@
 # Lex V3 status: the data lane
 
-Updated 2026-10-09.
+Updated 2026-10-12.
+
+## The Luxembourg population is acquired; the combined derive waits for disk (Claude, 2026-10-12)
+
+- **The acquisition is complete.** Run 15 (`C:\lex-v3\lu-population-20261011-15`, resuming run 14 in the #943 build)
+  proved all nine families (rgd-a at 09:12 and rgd-g at 09:17 UTC on 2026-10-12), passed the census join live,
+  journaled 11,206 document fetches by 14:08 UTC, retained the in-file rights evidence, the final manifest, the gazette
+  phase and the corpus records: 260,235 records, 11,145 held bodies (2.95 GB), 21,972 of 300,000 requests spent.
+  The offline-inputs pointer `mount-inputs-b306a972...json` is in custody.
+- **The post-document step peaks at about 20 GB private.** The final resolution and scope reduction reached 20.2 GB
+  (14:27 UTC, commit headroom 0.3 GB) and released; no replay could reach this step before.
+- **The build process stopped while writing the combined mount** (18:29 UTC, runner resource stop, reason disk: free
+  disk 398 MB, commit headroom 82 MB, peak working set 14.9 GB). The page file grew into the disk the owner's game
+  install had left. No mount file was written; the acquisition is unaffected. The supervisor and the after-LU waiter
+  were stopped, so they would not resume into the same wall.
+- **What follows.** The two offline derives (`Lex.V3.Tool derive --custody ... --checkpoint mount-inputs-b306a972...json`,
+  no publisher traffic), one at a time under a resource guard, once about 35 to 40 GB of disk (or more free memory) is
+  available; then the chained canary, #898, the population-mount journeys and gates, and the release rehearsal.
 
 ## Publisher drift between the census and the later families: a third defect that stops the run (Claude, 2026-10-09)
 
