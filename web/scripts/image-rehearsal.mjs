@@ -497,7 +497,7 @@ export async function rehearse({ mount, keep = false, probe = true, reproduce = 
       sets: cardView.sets.map((set) => ({ set: set.set, arm: set.arm, cases: set.cases, gates: set.gates.map((gate) => `${gate.gate}: ${gate.verdict}`) })),
       controls: cardView.controls.map((control) => `${control.set}, ${control.arm}: ${control.verdict}`),
     };
-    const { webRoot, archive, image } = await buildImage({ into: join(work, "first"), mountPath, epoch: source.epoch, card, log });
+    let { webRoot, archive, image } = await buildImage({ into: join(work, "first"), mountPath, epoch: source.epoch, card, log });
     result.archiveBytes = (await stat(archive)).size;
 
     log("verifying the image");
@@ -551,6 +551,13 @@ export async function rehearse({ mount, keep = false, probe = true, reproduce = 
       if (differences.length > 0) throw new Error(`the image is not reproducible:\n- ${differences.join("\n- ")}`);
     }
 
+    // From here only the image's digests and config are read (the probes unpack the archive from disk, and the release reads
+    // it again), so its bytes (2.6 GB for the population image) are let go before the container starts; WSL's VM then has
+    // that memory for the container's /tmp. Whether holding them made the population release's first start miss its
+    // deadline is not shown (a start by hand that held them answered in 24 s), so a missed start now says what the
+    // container was doing (`containerState`).
+    image = { manifestDigest: image.manifestDigest, manifest: image.manifest, config: image.config, layers: image.layers.map(({ digest }) => ({ digest })) };
+
     if (probe) {
       // The zero-traffic probes, against the image itself: health (it answers), the API (each page's
       // request, answered from the mount it carries), the browser (every live screen, served by the
@@ -560,6 +567,9 @@ export async function rehearse({ mount, keep = false, probe = true, reproduce = 
       const { unpackImage, startImage, tmpMebibytesFor, TMP_MARGIN_MEBIBYTES } = await import("./image-run.mjs");
       const { fixtureMountRuns, realMountRuns } = await import("./journey.mjs");
       const { findBrowser } = await import("./browser-evidence.mjs");
+      // Collected here, where `rehearse`'s frame no longer holds the old image (a collection on the line after it was let
+      // go still found it reachable; the review of #952), and only where the process allows it (`node --expose-gc`).
+      globalThis.gc?.();
       container = unpackImage({ archive, layers: image.layers.map((layer) => layer.digest) });
       // The container's /tmp holds the copies of every index the mount carries (2.3 GB for the combined population).
       const tmpMebibytes = await tmpMebibytesFor(mountPath);

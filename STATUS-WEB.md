@@ -11,6 +11,14 @@ updates this file, not STATUS.md.
   derivations of the combined population **agree on all 6 files** (15:09 to about 17:40 UTC), and the gates ran over
   the mount for the card. It stopped at the image step: Node refuses one SHA-256 update over 2 GiB ("data is too long")
   and one `fs.readFile` of a file over 2 GiB, and the population image's app layer is 2.5 GB.
+- **The release over the derived population mount** (`image-rehearsal.mjs --mount derive-c` at 19f140a4, signed by the
+  release key): the image built, verified, signed and verified, and built again from scratch to the same manifest
+  digest; then its first start in WSL missed the 219 s deadline, with no output (the API's logging is cleared). Started
+  by hand from the same archive it answered 24 s after unpacking while holding the image too, and 31 s after unpacking
+  with another process holding 5 GB beside it, so memory is not the cause, and the cause is not shown.
+  The rehearsal now lets the image's bytes go before the container starts (collected under `node --expose-gc`), and a
+  start that misses its deadline reports what the container was doing from inside WSL: whether the API runs and for
+  how long, whether its port listens and answers there, how much of its `/tmp` it has written, and WSL's memory.
 - **The release path's bytes in pieces** (`large-bytes.mjs`): `sha256Hex` hashes a piece (1 GiB) at a time, and
   `readLargeFile` reads a file a piece at a time; the same digests and bytes. Used wherever the release path hashes or
   reads the image (image reproducibility, the rehearsal, the release assets, the deploy probe) and the derived mount.
