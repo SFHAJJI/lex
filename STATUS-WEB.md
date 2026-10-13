@@ -24,7 +24,14 @@ updates this file, not STATUS.md.
     step.
   - Its `-Apply` was refused by the driver's tool harness (its safety check on actions outside the machine), so
     nothing was sent to Azure. The driver does not route around such a refusal.
-  - The owner either allows the deploy in the harness or runs it.
+  - The owner either allows the deploy in the harness or runs it. The exact command, with the subscription and this
+    machine's address filled in, is kept beside the release in
+    `C:\lex-v3\releases\deploy-v3-20261013T214036Z-9a5f05d3d1b4.txt` (this repository is public). Its shape:
+    `deploy/deploy.ps1 -Subscription <id> -ResourceGroup rg-lex-v3 -EnvironmentId <cae-lex-v3's id> -Registry
+    crlexv3soufien.azurecr.io -IdentityResourceId <id-lex-v3's id> -SigningPublicKey
+    C:\lex-v3\lanes\release-signing-public.pem -SignerIdentity "lex-v3-release (Soufien Hajji)" -Release
+    C:\lex-v3\releases\v3-20261013T214036Z-9a5f05d3d1b4 -ProbeSourceCidr <this machine's address>/32 -Apply`, run
+    from the checkout at 9a5f05d3.
   - Ready: the registry, the pull identity (AcrPull checked), the environment `cae-lex-v3`, and the probe-only
     restriction to this machine's address.
 

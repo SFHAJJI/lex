@@ -111,6 +111,10 @@ Only money, legal or public claims, credentials and going live (ruling 7):
   disk). The owner upgraded the trial to pay-as-you-go on 2026-10-13. Open for the owner: at go-live, point
   soufien.lu's name servers at a new zone (the old zone is out of reach with V2's subscription). Nothing is
   deployed.
+- The zero-traffic Azure candidate of release `v3-20261013T214036Z-9a5f05d3d1b4`: the driver's tool harness refused
+  `deploy.ps1 -Apply`, so the owner allows it there or runs the command kept in
+  `C:\lex-v3\releases\deploy-v3-20261013T214036Z-9a5f05d3d1b4.txt` (STATUS-WEB.md). The candidate is reachable only
+  from this machine's address; billing starts with it (about 26 EUR a month).
 - The weekly 30-minute checkpoint slot.
 - The owner's rulings of 2026-10-04 (relayed by the audit session): the French copy accepted, the acquisition
   code frozen until the combined mount exists, the stage milestones closed, `OWNER-BRIEF.md` kept current.

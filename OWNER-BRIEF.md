@@ -20,7 +20,7 @@ disabled). On this machine the API and the eight screens work over test data and
   harness left old copies running, and the server briefly wrote scratch files while answering (pull request 953).
 - The hidden test copy on Azure (reachable only from this machine, no public traffic) is ready to deploy, but the
   tool that runs the driver refused the deploy command as an action outside this machine. It needs your yes in the
-  tool, or you run the one command the driver gives you.
+  tool, or you run the command kept in the releases folder beside the release (C:\lex-v3\releases).
 - Azure is ready: pay-as-you-go, with the 30 a month budget alerts, the registry, the hosting environment and the
   key vault holding the release signing key.
 - Next: a second small canary (about 400 requests to the live sites) with a Luxembourg law whose dates are
