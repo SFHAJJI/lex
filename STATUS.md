@@ -1,6 +1,6 @@
 # Lex V3 status
 
-Updated 2026-10-03 by the driver. This file holds the heads, the owner's open items and the pointers to the two
+Updated 2026-10-13 by the driver. This file holds the heads, the owner's open items and the pointers to the two
 lane files (the standing order of 2026-10-01 13:50 UTC: STATUS.md was edited by nearly every pull request and was
 the most frequent conflict). Each lane writes its progress in its own file, in the pull request that makes it:
 
@@ -13,7 +13,7 @@ A feature pull request edits its lane file, not this one; this file changes for 
 
 ## Heads
 
-- `v3/integration`: `a19f8b75` (2026-10-09, PR #944 merged). The required checks are strict: `dotnet` (the
+- `v3/integration`: `b457a549` (2026-10-12, PR #947 merged). The required checks are strict: `dotnet` (the
   whole solution, about 14 min on the runner), `web`, `canon-windows` and `journeys`. `journeys`
   walks J1 to J8 in Chrome over three fixture mounts (the fixture, licence-blocked and two-state mounts), by pointer
   and by keyboard on the pages the API serves.
@@ -24,8 +24,9 @@ A feature pull request edits its lane file, not this one; this file changes for 
   2026-10-05 04:07 UTC, and its two offline derives were identical. The Luxembourg population: run 14
   (`C:\lex-v3\lu-population-20261009-14`) started on 2026-10-09 on the build with #937, #940 and #943, was stopped at the
   owner's request on 2026-10-10 after seven of nine families, and resumed from its journal as run 15 on 2026-10-11
-  (`C:\lex-v3\lu-population-20261011-15`). Its acquisition completed on 2026-10-12 (260,235 records); the combined
-  offline derive waits for disk and memory (STATUS-DATA.md). Runs 1 to 13 stopped on three defects those pull requests fix, and
+  (`C:\lex-v3\lu-population-20261011-15`). Its acquisition completed on 2026-10-12 (260,235 records). The combined
+  EU and Luxembourg mount was derived offline on 2026-10-13; its gates found Luxembourg search empty, a derivation
+  defect #948 fixes, and a derive with the fix follows (STATUS-DATA.md). Runs 1 to 13 stopped on three defects those pull requests fix, and
   replays of run 13's journal found two more before the restart (#943); all their custody is kept (STATUS-DATA.md).
 - Plan: `C:\lex-v3\V3-FINISH-PLAN-2026-09-27.md` (owner's copy). Decision 94 (one driver, one queue,
   one review per pull request) merged in lex-governance on 2026-09-27. Launch target 2026-11-07.
@@ -100,12 +101,14 @@ Decision 95 (lex-governance PR #9, merged 2026-09-30) records these rulings and 
 ## Blocked on the owner
 
 Only money, legal or public claims, credentials and going live (ruling 7):
-- Azure. The subscription is `Disabled` on the control plane (pay-as-you-go, spending limit off; every write is
-  refused with `ReadOnlyDisabledSubscription`, observed 2026-10-04; a CLI account list had cached `Enabled`).
-  Re-enabling it is the owner's billing action. Until then the Container Apps environment `cae-platform-law`
-  stays `ManagedClusterSuspended`, so V2 at law.soufien.lu is down and V3 cannot deploy there, and the
-  `soufien.lu` zone does not resolve publicly. The signing identity is made when the release command can
-  take one (OWNER-BRIEF.md).
+- Azure, for V3: a new subscription on 2026-10-13. The old one stays disabled (its billing profile is past due on a
+  EUR 6.10 invoice the portal cannot take; only Azure Support can clear it), so V2 at law.soufien.lu stays down. The
+  owner signed up a third Microsoft account (a free trial; about 30 EUR a month accepted) and, at the owner's request,
+  the driver set up, in France Central: a budget of 30 a month with alerts, resource group `rg-lex-v3`, registry
+  `crlexv3soufien`, a pull identity, Container Apps environment `cae-lex-v3` and key vault `kv-lex-v3-soufien`,
+  which holds the release signing key (P-256, identity "lex-v3-release (Soufien Hajji)"; only its public half is on
+  disk). Open for the owner: upgrade the trial to pay-as-you-go before its credit or 30 days run out; and, at go-live,
+  point soufien.lu's name servers at a new zone (the old zone sits in the disabled subscription). Nothing is deployed.
 - The weekly 30-minute checkpoint slot.
 - The owner's rulings of 2026-10-04 (relayed by the audit session): the French copy accepted, the acquisition
   code frozen until the combined mount exists, the stage milestones closed, `OWNER-BRIEF.md` kept current.
