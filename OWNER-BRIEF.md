@@ -1,6 +1,6 @@
 # Lex V3: the owner's brief
 
-Updated 2026-10-13 at 22:15 UTC by the driver. The driver updates this file in the first pull request of each
+Updated 2026-10-13 at 22:45 UTC by the driver. The driver updates this file in the first pull request of each
 day and whenever a run starts, ends or stops. At most 40 lines, plain words, no hashes. The detail stays in
 STATUS-WEB.md and STATUS-DATA.md; the acceptance list is LAUNCH-CONTRACT.md.
 
@@ -23,8 +23,8 @@ disabled). On this machine the API and the eight screens work over test data and
   tool, or you run the command kept in the releases folder beside the release (C:\lex-v3\releases).
 - Azure is ready: pay-as-you-go, with the 30 a month budget alerts, the registry, the hosting environment and the
   key vault holding the release signing key.
-- Next: a second small canary (about 400 requests to the live sites) with a Luxembourg law whose dates are
-  published, so the history checks can be shown on live data.
+- The second small canary ran tonight (414 requests to the live sites, within its limit) with a Luxembourg law
+  whose dates are published: the history checks hold on live data.
 
 ## What waits on the owner
 

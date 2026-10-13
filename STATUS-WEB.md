@@ -4,6 +4,22 @@ Updated 2026-10-13. The web lane's progress, split out of STATUS.md (which keeps
 items and the pointers) by the standing order of 2026-10-01 13:50 UTC. Every pull request of the web lane
 updates this file, not STATUS.md.
 
+## Replay G1, G3 and G4 over a real chained canary (sole driver, 2026-10-13)
+
+- **The chain**: `C:\lex-v3\chained-canary-after-lu-2`, builds a and b (b chained to a with `--predecessor`), the tool
+  built from 9a5f05d3 and frozen with its renderer sources, the GDPR and the Luxembourg act `loi-2017-08-29-a791`; both
+  verified, 207 of 800 requests each (135 to the Publications Office, 72 to Legilux), 22:04 to 22:31 UTC. The first
+  canary after the population chose `loi-2017-03-14-a439`, which holds no state (its AKN carries no expression
+  applicability date, in the population too), so the chain could not show G1, G3 or G4 for Luxembourg; the canary
+  runner now takes the act (`-LuxembourgWork`, driver decision: an act the population holds a state for), and both
+  builds hold the act's state (2017-10-02, three articles), as the population does.
+- **`V3ReplayOverChainTests` over it** (`V3_REPLAY_CHAIN` = a;b): 7 of 7 pass with the fixture chain's checks.
+  Counts (`replay-counts.json` beside the chain): 2 builds, 1 event in each log (b's carries a's unchanged: G3), 1
+  state named, every state verifying on the latest mount, 2 snapshots compared (each build's state `as_observed` at its
+  snapshot, asked of the latest mount, answers what that build's mount answers: G4). No file was replaced between the
+  builds (the publisher changed nothing in the 13 minutes), so G1's replaced-version check holds vacuously here; the
+  fixture chain shows it with a reworded text.
+
 ## The first signed release over the population (sole driver, 2026-10-13)
 
 - **`v3-20261013T214036Z-9a5f05d3d1b4`** (`image-rehearsal.mjs --mount derive-c` at 9a5f05d3, 21:40 to 22:01 UTC):
