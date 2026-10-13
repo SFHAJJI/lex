@@ -17,8 +17,9 @@ disabled). On this machine the API and the eight screens work over test data and
 - Built twice from the stored copies, the data set came out identical both times (the launch's stability check).
 - The release (the server package, signed with your release key in the key vault) builds, verifies and rebuilds
   identically. Its last step, starting the package on this machine and walking through it, failed twice tonight.
-  The cause was in the test harness, not the product: each test start left the previous copy running, and by the
-  third start this machine's Linux memory was full. The fix (pull request 953) ends each copy before the next.
+  First cause, in the test harness: each test start left the previous copy running, and by the third start this
+  machine's Linux memory was full. Once fixed, the walk-through found a real privacy fault: the server briefly wrote
+  scratch files to disk while answering some requests. Both are fixed (pull request 953), with no cost in speed or memory.
   The release runs again with it tonight; then the hidden test copy goes onto Azure (no public traffic).
 - Azure is ready: pay-as-you-go, with the 30 a month budget alerts, the registry, the hosting environment and the
   key vault holding the release signing key.

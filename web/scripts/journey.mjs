@@ -515,6 +515,25 @@ export function watchFiles(root) {
   };
 }
 
+/**
+ * `watchFiles` over the API's directory and its temporary folder at once: one `stop()` answering both folders' events,
+ * the temporary folder's names prefixed with `TMP/`. The image's probe watches the container's /tmp; a run here watched
+ * only the API's directory, so the SQLite temporary files the API wrote while serving the population mount were seen
+ * only by the release (2026-10-13).
+ */
+export function watchApiFiles(home, temporary) {
+  const watches = [[watchFiles(home), ""], [watchFiles(temporary), "TMP/"]];
+  let stopped = null;
+  return {
+    stop() {
+      stopped ??= Promise.all(watches.map(async ([watched, prefix]) =>
+        (await watched.stop()).map(([event, name]) => [event, event === "error" ? name : `${prefix}${name}`])))
+        .then((events) => events.flat());
+      return stopped;
+    },
+  };
+}
+
 /** Every file under a directory, as its relative path and its size and modification time. */
 async function listFiles(root) {
   const files = new Map();
@@ -570,7 +589,7 @@ export async function startApi(apiOutput, mount, webRoot = null) {
       });
       if (answer.status === 200) {
         const filesAtStart = await listFiles(home);
-        const fileWatch = watchFiles(home);
+        const fileWatch = watchApiFiles(home, temporary);
         return {
           origin, child, stderr: () => stderr, output: () => output, outputAtStart: output.length, fileWatch,
           /** The files under the API's directory that were added or changed since it first answered. */

@@ -24,6 +24,15 @@ updates this file, not STATUS.md.
   start's close); the live test starts its stand-in as the image is (bound root, `chroot --userspec`), and failed before.
   A missed start's report finds the API by its root (it matched unshare by command line). The rehearsal also lets the
   image's bytes go before the container starts (collected under `node --expose-gc`).
+- **The server wrote SQLite temporary files while serving.** With every start answering (22 to 27 s each), the replay's
+  privacy probe failed nine of 29 runs: two `etilqs_*` files in the container's `/tmp` each time, a sort or temporary
+  index past SQLite's 2 MB cache (the counts behind coverage, which every page loads, and the first dossier; three
+  files each over the population mount on Windows). Only the image's probe saw them: a journey here watched the API's
+  directory, not its temporary folder. The readers now serve from connections whose temporary storage is in memory
+  (`PRAGMA temp_store = MEMORY`, set once verification at open has passed, and on the search's and the counts' own
+  connections); the verification keeps SQLite's default. Over the population mount: no file event in the temporary
+  folder while the 14 step requests are served (6 SQLite files before), the same latencies, peak working set 763 MiB
+  against 767. The journey now watches the API's temporary folder too (`watchApiFiles`).
 - **The release path's bytes in pieces** (`large-bytes.mjs`): `sha256Hex` hashes a piece (1 GiB) at a time, and
   `readLargeFile` reads a file a piece at a time; the same digests and bytes. Used wherever the release path hashes or
   reads the image (image reproducibility, the rehearsal, the release assets, the deploy probe) and the derived mount.

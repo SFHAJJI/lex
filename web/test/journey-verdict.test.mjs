@@ -52,6 +52,7 @@ import {
   EU_READING_DATE,
   EU_READING_STEP,
   watchFiles,
+  watchApiFiles,
 } from "../scripts/journey.mjs";
 import { cspValue } from "../scripts/csp.mjs";
 import { EXPORT_WATERMARK } from "../scripts/export-build.mjs";
@@ -312,6 +313,31 @@ test("a file written and deleted while the run is watched fails it, though both 
     assert.ok(failures.some((failure) => failure.startsWith("the API process touched files while serving the run") && failure.includes("request.log")), failures.join("; "));
   } finally {
     await rm(home, { recursive: true, force: true });
+  }
+});
+
+test("a file the API writes in its temporary folder while serving fails the run, named there (2026-10-13)", async () => {
+  // The population mount's API wrote SQLite temporary files (etilqs_*) there; only the image's probe, which watches the
+  // container's /tmp, saw them.
+  const { mkdtemp, rm, unlink, writeFile } = await import("node:fs/promises");
+  const { tmpdir } = await import("node:os");
+  const { join } = await import("node:path");
+  const home = await mkdtemp(join(tmpdir(), "lex-journey-watch-"));
+  const temporary = await mkdtemp(join(tmpdir(), "lex-journey-watch-tmp-"));
+  try {
+    const observed = goodSearch();
+    const expected = { origin: ORIGIN, step: JOURNEY_STEPS.search, state: "success" };
+    const quiet = watchApiFiles(home, temporary);
+    assert.equal(quiet.stop(), quiet.stop(), "the run and the API's close get one stop");
+    assert.deepEqual(journeyVerdict({ ...observed, api: { output: "", changedFiles: [], fileEvents: await quiet.stop() } }, expected), [], "untouched folders pass");
+    const watched = watchApiFiles(home, temporary);
+    await writeFile(join(temporary, "etilqs_5f840f00463e0ba0"), "a spilled sort");
+    await unlink(join(temporary, "etilqs_5f840f00463e0ba0"));
+    const failures = journeyVerdict({ ...observed, api: { output: "", changedFiles: [], fileEvents: await watched.stop() } }, expected);
+    assert.ok(failures.some((failure) => failure.startsWith("the API process touched files while serving the run") && failure.includes("TMP/etilqs_5f840f00463e0ba0")), failures.join("; "));
+  } finally {
+    await rm(home, { recursive: true, force: true });
+    await rm(temporary, { recursive: true, force: true });
   }
 });
 
