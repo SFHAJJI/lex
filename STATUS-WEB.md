@@ -4,6 +4,37 @@ Updated 2026-10-13. The web lane's progress, split out of STATUS.md (which keeps
 items and the pointers) by the standing order of 2026-10-01 13:50 UTC. Every pull request of the web lane
 updates this file, not STATUS.md.
 
+## The first signed release over the population (sole driver, 2026-10-13)
+
+- **`v3-20261013T214036Z-9a5f05d3d1b4`** (`image-rehearsal.mjs --mount derive-c` at 9a5f05d3, 21:40 to 22:01 UTC):
+  - the mount's gates ran for its card;
+  - the image was built, verified, **signed by the owner's release key** (Key Vault `kv-lex-v3-soufien`, piped to
+    standard input; signer "lex-v3-release (Soufien Hajji)") and verified;
+  - it was built again from scratch to **the same manifest digest**;
+  - it was probed in WSL: **all 29 runs pass**, the privacy probe included (nothing written after the first answer),
+    with one container at a time and its `/tmp` freed between starts (2,462 MiB);
+  - V2 is absent: 543 entries scanned and 63 routes asked;
+  - the card route serves the release's card;
+  - its six assets were published and read back with no failure.
+
+  Kept at `C:\lex-v3\releases\v3-20261013T214036Z-9a5f05d3d1b4` (with the rehearsal report and the gates' artifacts
+  beside it).
+- **The zero-traffic Azure candidate waits on the owner.**
+  - `deploy/deploy.ps1` in plan mode verifies the release under the signing identity's public key and prints each
+    step.
+  - Its `-Apply` was refused by the driver's tool harness (its safety check on actions outside the machine), so
+    nothing was sent to Azure. The driver does not route around such a refusal.
+  - The owner either allows the deploy in the harness or runs it. The exact command, with the subscription and this
+    machine's address filled in, is kept beside the release in
+    `C:\lex-v3\releases\deploy-v3-20261013T214036Z-9a5f05d3d1b4.txt` (this repository is public). Its shape:
+    `deploy/deploy.ps1 -Subscription <id> -ResourceGroup rg-lex-v3 -EnvironmentId <cae-lex-v3's id> -Registry
+    crlexv3soufien.azurecr.io -IdentityResourceId <id-lex-v3's id> -SigningPublicKey
+    C:\lex-v3\lanes\release-signing-public.pem -SignerIdentity "lex-v3-release (Soufien Hajji)" -Release
+    C:\lex-v3\releases\v3-20261013T214036Z-9a5f05d3d1b4 -ProbeSourceCidr <this machine's address>/32 -Apply`, run
+    from the checkout at 9a5f05d3.
+  - Ready: the registry, the pull identity (AcrPull checked), the environment `cae-lex-v3`, and the probe-only
+    restriction to this machine's address.
+
 ## The release from custody over the population: derived twice, equal; the image step in pieces (sole driver, 2026-10-13)
 
 - **The first release rehearsal from custody** (`image-rehearsal.mjs --custody` over run 15's custody, the merge commit

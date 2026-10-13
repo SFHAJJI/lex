@@ -22,8 +22,9 @@ Updated 2026-10-13.
 - **The refusal miss was the gate's.** Its `format_not_available` case asked for `docx`, which Legilux publishes for most
   acts (22,908 docx manifestations); the handler rightly answered. The case now asks for a format the work's own
   manifestations do not carry.
-- These are derivation and reader changes; the acquisition code stays frozen. A third derive with the fixed builder
-  (`derive-c`) is running; the gates, the population journeys and the release rehearsal follow it.
+- These are derivation and reader changes; the acquisition code stays frozen. The third derive with the fixed builder
+  (`derive-c`, 09:48 to 11:17 UTC on 2026-10-13) passes every gate at 1.0 with every shuffled control caught; the
+  population journeys pass (29 of 29), and the first signed release is built over it (STATUS-WEB.md).
 - **The chained canary after the population** (`C:\lex-v3\chained-canary-after-lu-1`, tool frozen at the integration
   head): builds a and b both verified, 207 of 800 requests each (135 to the Publications Office for the GDPR, 72 to
   Legilux).
