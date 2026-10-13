@@ -22,6 +22,71 @@ public sealed class LuxembourgIndexBuilderTests
         Assert.AreEqual("97c536e9646dc834758427071ed3df26bed6b44ea40ade7d3b366a4b9e231b02", digest);
     }
 
+    /// <summary>
+    /// The publisher's journal documents carry their applicability on the document and none of the Luxembourg population's
+    /// 8,854 articles carries a date of its own (the mounted gates of 2026-10-13): measured by the article's own date alone,
+    /// the capability manifest stated no searchable text and search answered nothing on the real mount. A search cell counts
+    /// an article at its own date where it has one, else at the date of the state of its language that holds it.
+    /// </summary>
+    [TestMethod]
+    public void ASearchCellCountsAnArticleAtItsOwnDateElseAtTheDateOfTheStateThatHoldsIt()
+    {
+        static LuxembourgIndexBuilder.ArticleRow Article(char identity, string? date, string language, string text) => new(
+            new string(identity, 64), new string('1', 64), "https://example.invalid/expression", $"art_{identity}", null, date,
+            language, new string('4', 64), text, "[]");
+        var articles = new[]
+        {
+            Article('a', null, "fra", "sans date propre"),
+            Article('b', "2023-01-01", "fra", "datée"),
+            Article('c', null, "fra", "dans aucun état"),
+            Article('d', null, "fra", ""),
+            Article('e', null, "eng", "another language"),
+        };
+        var state = new LuxembourgIndexBuilder.StateRow(
+            "loi-2024-01-01-n1", "2024-02-01", new string('5', 64), "https://example.invalid/expression",
+            "http://data.legilux.public.lu/eli/etat/leg/loi/2024/01/01/n1", "http://data.legilux.public.lu/eli/etat/leg/loi/2024/01/01/n1/jo",
+            "fra", "[]", System.Text.Json.JsonSerializer.Serialize(new[] { 'a', 'b', 'd', 'e' }.Select(static c => new string(c, 64))));
+        var digest = new string('9', 64);
+
+        // a at its state's date; b at its own; c in no state, d without text and e of another language than its state: none.
+        var cells = LuxembourgIndexBuilder.MeasureCapabilities(digest, articles, [state]).Cells
+            .Select(static cell => $"{cell.Operation} {cell.Language} {cell.PeriodFrom:yyyy-MM-dd}..{cell.PeriodTo:yyyy-MM-dd} {cell.Population}")
+            .ToArray();
+        CollectionAssert.AreEqual(new[] { "search fra 2023-01-01..2023-01-01 1", "search fra 2024-02-01..2024-02-01 1" }, cells);
+
+        // The earlier rule, which an index built before the fix states and the reader still accepts, counted b alone.
+        var earlier = LuxembourgIndexBuilder.MeasureCapabilitiesByArticleDates(digest, articles).Cells.Single();
+        Assert.AreEqual(new DateOnly(2023, 1, 1), earlier.PeriodFrom);
+    }
+
+    /// <summary>
+    /// The publisher dates its journal documents on the legal resource (<c>.../jo</c>) and titles them on the expression
+    /// (<c>.../jo/fr</c>): none of the population's 2,021 titles had a date before the legal resource was asked. A title's
+    /// date is its own subject's, else its article's work identifier's, else its expression's legal resource's, else the
+    /// article's own date.
+    /// </summary>
+    [TestMethod]
+    public void ATitleIsDatedByItsSubjectThenItsWorkThenItsLegalResourceThenItsArticle()
+    {
+        const string Expression = "http://data.legilux.public.lu/eli/etat/leg/loi/2018/04/17/a257/jo/fr";
+        const string LegalResource = "http://data.legilux.public.lu/eli/etat/leg/loi/2018/04/17/a257/jo";
+        const string Work = "http://data.legilux.public.lu/eli/etat/leg/loi/2018/04/17/a257";
+        var article = new LuxembourgIndexBuilder.ArticleRow(
+            new string('2', 64), new string('1', 64), Expression, "art_1", null, "2018-04-23", "fra", new string('4', 64), "texte", "[]");
+        var legalResources = new Dictionary<string, string>(StringComparer.Ordinal) { [Expression] = LegalResource };
+        string? Dated(Dictionary<string, string> dates, LuxembourgIndexBuilder.ArticleRow row) =>
+            LuxembourgIndexBuilder.TitleDocumentDate(Expression, row, dates, legalResources);
+
+        Assert.AreEqual("2018-04-17", Dated(new(StringComparer.Ordinal) { [LegalResource] = "2018-04-17" }, article), "the legal resource's, the population's case");
+        Assert.AreEqual("2018-04-16", Dated(new(StringComparer.Ordinal) { [Expression] = "2018-04-16", [LegalResource] = "2018-04-17" }, article), "the subject's own first");
+        Assert.AreEqual("2018-04-15", Dated(new(StringComparer.Ordinal) { [Work] = "2018-04-15", [LegalResource] = "2018-04-17" }, article with { PublisherWid = Work }), "then the work's");
+        Assert.AreEqual("2018-04-23", Dated(new(StringComparer.Ordinal), article), "the article's own date last");
+        Assert.IsNull(Dated(new(StringComparer.Ordinal), article with { ApplicabilityDate = null }), "and none when nothing dates it");
+        Assert.IsNull(LuxembourgIndexBuilder.TitleDocumentDate(Expression, article with { ApplicabilityDate = null },
+            new Dictionary<string, string>(StringComparer.Ordinal) { [LegalResource] = "2018-04-17" }, new Dictionary<string, string>(StringComparer.Ordinal)),
+            "an expression whose legal resource is not named takes none of its dates");
+    }
+
     internal const string Retained1991 = "loi-1991-08-10-n3--2024-02-01--fr.bin";
 
     /// <summary>
@@ -794,9 +859,9 @@ public sealed class LuxembourgIndexBuilderTests
         await using var cleanup = fixture;
         var indexPath = Path.Combine(fixture.Directory, Lex.V3.Api.V3CorpusMount.IndexFileName);
         var bytes = ResealedBytes(await File.ReadAllBytesAsync(indexPath),
-            detail => detail["source_body_sha256"] = new System.Text.Json.Nodes.JsonArray(new string('e', 64)), out var articles, out var titles);
+            detail => detail["source_body_sha256"] = new System.Text.Json.Nodes.JsonArray(new string('e', 64)), out var articles, out var states, out var titles);
         await File.WriteAllBytesAsync(indexPath, bytes);
-        var manifest = LuxembourgIndexBuilder.MeasureCapabilities(Convert.ToHexStringLower(SHA256.HashData(bytes)), articles, titles);
+        var manifest = LuxembourgIndexBuilder.MeasureCapabilities(Convert.ToHexStringLower(SHA256.HashData(bytes)), articles, states, titles);
         using (var stream = new MemoryStream())
         {
             _ = V3IndexCapabilityManifestArtifact.Write(stream, manifest);
@@ -1281,7 +1346,7 @@ public sealed class LuxembourgIndexBuilderTests
         LuxembourgIndexBuildResult built,
         Action<System.Text.Json.Nodes.JsonNode> change)
     {
-        var bytes = ResealedBytes(built.IndexBytes.ToArray(), change, out _, out _);
+        var bytes = ResealedBytes(built.IndexBytes.ToArray(), change, out _, out _, out _);
         var digest = Convert.ToHexStringLower(SHA256.HashData(bytes));
         return (bytes, RebindManifest(built.CapabilityManifest, digest), new SourceArtifactRef(LexCorpus6Builder.ResourceIdOf(digest), digest));
     }
@@ -1290,9 +1355,11 @@ public sealed class LuxembourgIndexBuilderTests
         byte[] source,
         Action<System.Text.Json.Nodes.JsonNode> change,
         out LuxembourgIndexBuilder.ArticleRow[] articles,
+        out LuxembourgIndexBuilder.StateRow[] states,
         out LuxembourgIndexBuilder.WorkTitleRow[] titles)
     {
         LuxembourgIndexBuilder.ArticleRow[] readArticles = [];
+        LuxembourgIndexBuilder.StateRow[] readStates = [];
         LuxembourgIndexBuilder.WorkTitleRow[] readTitles = [];
         var bytes = MutateDatabase(source, connection =>
         {
@@ -1301,13 +1368,15 @@ public sealed class LuxembourgIndexBuilderTests
             change(detail);
             Execute(connection, "UPDATE events SET detail_json=$detail WHERE seq=$seq", ("$detail", detail.ToJsonString()), ("$seq", first.Seq));
             readArticles = ReadArticles(connection);
+            readStates = ReadStates(connection);
             readTitles = ReadWorkTitles(connection);
             Execute(connection, "UPDATE stamp SET logical_rows_sha256=$digest WHERE stamp_id=1", ("$digest", LuxembourgIndexBuilder.HashLogicalRows(
-                ReadMembers(connection), readArticles, ReadStates(connection), readTitles, ReadRelations(connection), ReadWorkFacts(connection), ReadEvents(connection))));
+                ReadMembers(connection), readArticles, readStates, readTitles, ReadRelations(connection), ReadWorkFacts(connection), ReadEvents(connection))));
             Execute(connection, "UPDATE log_stamp SET log_rows_sha256=$digest WHERE log_stamp_id=1",
                 ("$digest", LuxembourgIndexBuilder.HashEventLog(ReadObservations(connection), ReadEvents(connection))));
         });
         articles = readArticles;
+        states = readStates;
         titles = readTitles;
         return bytes;
     }

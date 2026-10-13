@@ -1,6 +1,32 @@
 # Lex V3 status: the data lane
 
-Updated 2026-10-12.
+Updated 2026-10-13.
+
+## The combined mount is derived; its gates found Luxembourg search empty (Claude, 2026-10-13)
+
+- **The combined mount exists.** One offline derive of run 15's custody (`derive-a`, the run's own runtime, every proxy
+  at a local trap) wrote the six files: 2.52 GB, of which the EU index 1.40 GB, the Luxembourg index 0.91 GB and the
+  corpus 0.21 GB; peak working set 12.7 GB, 06:02 to 07:46 UTC. The second derive was stopped by its resource guard (commit headroom below 512 MB for a
+  minute as the page file grew), so byte stability is shown by the release rehearsal's two derives instead.
+- **The mounted gates over it** (`V3MountedGatesTests`, 23 of 24 pass): temporal exactness 1.0 on every arm (Luxembourg
+  4 x 120 cases, EU 3 x 562), each date shuffle caught; but refusal 20 of 21 and retrieval anchor nDCG@10 0.846 (n 52).
+  A local trace of each case named the misses.
+- **Luxembourg search answered nothing.** The capability manifest's search cells were measured from each article's own
+  publisher date, and none of the population's 8,854 articles has one: the publisher dates the journal document, which
+  the state carries. With no cell, search said French was not searchable and returned no hit, and coverage counted 0
+  searchable articles. Every EU search case passed. Now an article counts at its own date where it has one, else at its
+  state's date, which is where search serves it. The reader accepts a manifest measured by either rule, so a mount built
+  before (the canary chain, `derive-a`) still opens and serves what its manifest says.
+- **No title had a document date** (0 of 2,021): the publisher puts `dateDocument` on the legal resource (`.../jo`) and
+  the title on the expression (`.../jo/fr`). A title's date now falls back to its expression's legal resource.
+- **The refusal miss was the gate's.** Its `format_not_available` case asked for `docx`, which Legilux publishes for most
+  acts (22,908 docx manifestations); the handler rightly answered. The case now asks for a format the work's own
+  manifestations do not carry.
+- These are derivation and reader changes; the acquisition code stays frozen. A third derive with the fixed builder
+  (`derive-c`) is running; the gates, the population journeys and the release rehearsal follow it.
+- **The chained canary after the population** (`C:\lex-v3\chained-canary-after-lu-1`, tool frozen at the integration
+  head): builds a and b both verified, 207 of 800 requests each (135 to the Publications Office for the GDPR, 72 to
+  Legilux).
 
 ## The Luxembourg population is acquired; the combined derive waits for disk (Claude, 2026-10-12)
 

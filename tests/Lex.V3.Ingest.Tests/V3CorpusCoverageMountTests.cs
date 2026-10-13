@@ -28,7 +28,7 @@ public sealed class V3CorpusCoverageMountTests
     private sealed record Ground(
         (string Outcome, string GapsJson, string ObjectRef)[] Members,
         (string WorkKey, string Language, string Date, string Expression)[] States,
-        (string Language, string? Date, bool HasText)[] Articles);
+        (string Language, string? Date, bool HasText, bool HeldByAState)[] Articles);
 
     /// <summary>The index's rows as the test reads them, one row at a time, grouped here in C#.</summary>
     private static Ground ReadGround(MountedFixture fixture)
@@ -57,14 +57,16 @@ public sealed class V3CorpusCoverageMountTests
             }
         }
 
-        var articles = new List<(string, string?, bool)>();
+        var articles = new List<(string, string?, bool, bool)>();
         using (var command = connection.CreateCommand())
         {
-            command.CommandText = "SELECT language,applicability_date,searchable_text FROM articles";
+            command.CommandText =
+                "SELECT a.language,a.applicability_date,a.searchable_text,EXISTS (SELECT 1 FROM states s, json_each(s.article_identities_json) j " +
+                "WHERE j.value = a.article_identity_sha256 AND s.language = a.language) FROM articles a";
             using var reader = command.ExecuteReader();
             while (reader.Read())
             {
-                articles.Add((reader.GetString(0), reader.IsDBNull(1) ? null : reader.GetString(1), reader.GetString(2).Length > 0));
+                articles.Add((reader.GetString(0), reader.IsDBNull(1) ? null : reader.GetString(1), reader.GetString(2).Length > 0, reader.GetInt64(3) == 1));
             }
         }
 
@@ -155,8 +157,9 @@ public sealed class V3CorpusCoverageMountTests
             Assert.AreEqual(states.Max(static s => s.Date), row.GetProperty("last_state_date").GetString(), language);
             Assert.AreEqual(articles.Length, row.GetProperty("articles").GetInt64(), language);
             Assert.AreEqual(articles.Count(static a => a.Date is null), row.GetProperty("articles_without_publisher_date").GetInt64(), language);
-            // Searchable text is counted where the article carries a publisher date, as the capability cells measure it.
-            Assert.AreEqual(articles.Count(static a => a.Date is not null && a.HasText), row.GetProperty("articles_with_searchable_text").GetInt64(), language);
+            // Searchable text is counted as the capability cells measure it: at the article's own publisher date, else at its
+            // state's (the undated article above is still counted, in its state).
+            Assert.AreEqual(articles.Count(static a => a.HasText && (a.Date is not null || a.HeldByAState)), row.GetProperty("articles_with_searchable_text").GetInt64(), language);
         }
 
         // The undated article is counted and named, not dropped; French is searchable and German, held
