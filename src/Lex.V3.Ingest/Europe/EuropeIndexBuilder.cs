@@ -567,6 +567,31 @@ public static partial class EuropeIndexBuilder
         return connection;
     }
 
+    /// <summary>
+    /// A read-only connection that serves requests: its temporary tables, sorts and indexes stay in memory. SQLite
+    /// otherwise spills one past its 2 MB cache to a file in the temporary folder, and over the population mount nine
+    /// of the release's page probes found two such files written while one request was served (2026-10-13); a server
+    /// writes nothing for a request. The verification at open keeps SQLite's default: only a serving connection is set.
+    /// </summary>
+    internal static SqliteConnection OpenForServing(string path)
+    {
+        var connection = Open(path, SqliteOpenMode.ReadOnly);
+        try
+        {
+            KeepTemporaryStorageInMemory(connection);
+            return connection;
+        }
+        catch
+        {
+            connection.Dispose();
+            throw;
+        }
+    }
+
+    /// <summary>Sets a connection's temporary storage to memory (<c>PRAGMA temp_store = MEMORY</c>), from then on.</summary>
+    internal static void KeepTemporaryStorageInMemory(SqliteConnection connection) =>
+        Execute(connection, "PRAGMA temp_store = MEMORY");
+
     internal static void Execute(SqliteConnection connection, string sql, SqliteTransaction? transaction = null)
     {
         using var command = connection.CreateCommand();
@@ -975,6 +1000,8 @@ public sealed partial class EuropeIndexReader : IDisposable
             var measured = EuropeIndexBuilder.MeasureCapabilities(digest, checks.SearchableArticles);
             if (!measured.Cells.SequenceEqual(capabilityManifest.Cells))
                 throw new InvalidDataException("The EU capability manifest was not measured from the index.");
+            // Verified: from here the connection serves requests.
+            EuropeIndexBuilder.KeepTemporaryStorageInMemory(connection);
             return new EuropeIndexReader(
                 path, connection, capabilityManifest, indexRef, expectedCorpusRef, !legacy, version >= 4, version >= 5, checks.Objects);
         }
@@ -1402,7 +1429,7 @@ public sealed partial class EuropeIndexReader : IDisposable
 
         // Its own read-only connection on the reader's private, verified copy, as the Luxembourg reader's
         // search does: a scan must not hold the shared connection every other operation waits on.
-        using var connection = EuropeIndexBuilder.Open(_path, SqliteOpenMode.ReadOnly);
+        using var connection = EuropeIndexBuilder.OpenForServing(_path);
         using var command = connection.CreateCommand();
         command.CommandText =
             "SELECT publisher_work_id,publisher_work_celex,publisher_expression_id,publisher_identifier,heading," +

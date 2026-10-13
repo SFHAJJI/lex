@@ -12,9 +12,28 @@
 
 import { spawn, spawnSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
+import { readdir, stat } from "node:fs/promises";
 import { createServer } from "node:net";
+import { join } from "node:path";
 
 const DISTRIBUTION = process.env.LEX_WSL_DISTRIBUTION ?? "Ubuntu-24.04";
+
+/** The /tmp a fixture mount was given, kept as the margin beyond a mount's index copies. */
+export const TMP_MARGIN_MEBIBYTES = 256;
+
+/**
+ * The container's private /tmp for a mount, in MiB. Mounting copies every index the mount carries into /tmp before it
+ * is verified (the Luxembourg and EU indexes and each retained generation's: `LuxembourgIndexBuilder`,
+ * `EuropeIndexBuilder`), so the tmpfs holds every `.sqlite3` file of the mount, plus the margin. The combined population
+ * mount's two indexes are 2.3 GB, which the fixed 256m this started with could not hold (2026-10-13).
+ */
+export async function tmpMebibytesFor(mountPath) {
+  let bytes = 0;
+  for (const entry of await readdir(mountPath, { recursive: true, withFileTypes: true })) {
+    if (entry.isFile() && entry.name.endsWith(".sqlite3")) bytes += (await stat(join(entry.parentPath ?? entry.path, entry.name))).size;
+  }
+  return Math.ceil(bytes / (1024 * 1024)) + TMP_MARGIN_MEBIBYTES;
+}
 
 /** A Windows path as WSL mounts it. */
 export function wslPath(path) {
@@ -32,10 +51,24 @@ function wsl(script) {
 const quote = (text) => `'${String(text).replaceAll("'", "'\\''")}'`;
 
 /**
- * Ends every process whose command line names the run directory. The pattern brackets its first
- * character, so it does not match the shell that runs it (a plain `pkill -f <dir>` killed itself).
+ * Ends a run's processes and returns once none is left: the container's (every process whose root is the run's root
+ * filesystem: the API, whatever user it changed to and whoever its parent now is), then every process whose command line
+ * names the run directory (unshare, the /tmp watcher). Ending the container's processes ends its namespaces, and with them
+ * its /tmp. Exits non-zero if any is still there after ten seconds. The script never names the run directory whole (the
+ * root is written in two quoted pieces, and the pattern brackets its first character), so it does not match itself (a
+ * plain `pkill -f <dir>` killed itself).
  */
-export const endProcesses = (run) => `pkill -f ${quote(`[${run[0]}]${run.slice(1)}`)} || true`;
+export const endProcesses = (run) => {
+  const pattern = quote(`[${run[0]}]${run.slice(1)}`);
+  const left = `left=$(for p in /proc/[0-9]*; do [ "$(readlink "$p/root" 2>/dev/null)" = "$R" ] && echo "\${p#/proc/}"; done; pgrep -f ${pattern})`;
+  return [
+    `R=${quote(run[0])}${quote(`${run.slice(1)}/rootfs`)}`,
+    `for p in /proc/[0-9]*; do [ "$(readlink "$p/root" 2>/dev/null)" = "$R" ] && kill -KILL "\${p#/proc/}" 2>/dev/null; done`,
+    `pkill -KILL -f ${pattern}`,
+    `tries=0; ${left}; while [ -n "$left" ] && [ $tries -lt 100 ]; do sleep 0.1; tries=$((tries + 1)); ${left}; done`,
+    `if [ -n "$left" ]; then echo "still running: $(echo $left)"; exit 1; fi`,
+  ].join("\n");
+};
 
 /** Records every change under a directory, one line per event (mask in hex, then the path). */
 const WATCHER = String.raw`import ctypes, os, struct, sys
@@ -100,6 +133,13 @@ ${WATCHER}WATCHER
 export const DEVICES = Object.freeze(["null", "zero", "random", "urandom"]);
 
 /**
+ * How a container is started in WSL: its own mount and PID namespaces. `--kill-child` ends its first process with
+ * unshare only until that process changes its user (`chroot --userspec`), which clears the parent-death signal; the
+ * container is ended by `endProcesses`, which finds its processes by their root.
+ */
+export const CONTAINER_COMMAND = Object.freeze(["unshare", "--mount", "--pid", "--fork", "--kill-child"]);
+
+/**
  * An awk program over `findmnt -R -rn -o TARGET,OPTIONS <root>` that prints every mount a process in
  * the container could write to other than the watched /tmp and the devices: the start refuses to run
  * the image while any is left.
@@ -121,8 +161,10 @@ async function freePort() {
 /**
  * Starts the unpacked image and answers once it serves (`POST /api/v3/coverage` answering 200). `config`
  * is the image config: its user, environment, working directory and entrypoint are the container's.
+ * `tmpMebibytes` sizes its private /tmp (`tmpMebibytesFor` the mount it carries).
  */
-export async function startImage({ run, config, deadlineMs = 90000 }) {
+export async function startImage({ run, config, deadlineMs = 90000, tmpMebibytes = TMP_MARGIN_MEBIBYTES }) {
+  if (!Number.isInteger(tmpMebibytes) || tmpMebibytes < TMP_MARGIN_MEBIBYTES) throw new Error(`a /tmp of ${tmpMebibytes} MiB is not a whole size of at least ${TMP_MARGIN_MEBIBYTES}`);
   const port = await freePort();
   const image = config.config;
   const env = [...(image.Env ?? []), `ASPNETCORE_URLS=http://0.0.0.0:${port}`];
@@ -134,7 +176,7 @@ mount -t proc -o ro,nosuid,nodev,noexec proc "$R/proc"
 mount -t tmpfs -o size=64k,mode=755,nosuid,noexec tmpfs "$R/dev"
 for device in ${DEVICES.join(" ")}; do touch "$R/dev/$device"; mount --bind "/dev/$device" "$R/dev/$device"; done
 mount -o remount,bind,ro "$R/dev"
-mount -t tmpfs -o size=256m,mode=1777,nosuid,nodev tmpfs "$R/tmp"
+mount -t tmpfs -o size=${tmpMebibytes}m,mode=1777,nosuid,nodev tmpfs "$R/tmp"
 mount -o remount,bind,ro "$R"
 if touch "$R/app/.lex-written" 2>/dev/null; then echo "the root filesystem is writable"; exit 3; fi
 writable=$(findmnt -R -rn -o TARGET,OPTIONS "$R" | awk -v root="$R" '${WRITABLE_MOUNTS_AWK}')
@@ -143,7 +185,7 @@ python3 ${run}/watch.py "$R/tmp" ${run}/events.log &
 while ! grep -q '^ready$' ${run}/events.log; do sleep 0.1; done
 cd "$R${image.WorkingDir ?? "/"}"
 exec env -i ${env.map(quote).join(" ")} chroot --userspec=${user} "$R" ${image.Entrypoint.map(quote).join(" ")}`;
-  const child = spawn("wsl", ["-d", DISTRIBUTION, "-u", "root", "-e", "unshare", "--mount", "--pid", "--fork", "sh", "-c", script], { stdio: ["ignore", "pipe", "pipe"] });
+  const child = spawn("wsl", ["-d", DISTRIBUTION, "-u", "root", "-e", ...CONTAINER_COMMAND, "sh", "-c", script], { stdio: ["ignore", "pipe", "pipe"] });
   let output = "";
   child.stdout.on("data", (chunk) => { output += chunk; });
   child.stderr.on("data", (chunk) => { output += chunk; });
@@ -152,9 +194,12 @@ exec env -i ${env.map(quote).join(" ")} chroot --userspec=${user} "$R" ${image.E
   const origin = `http://127.0.0.1:${port}`;
   const close = async () => {
     child.kill();
-    // The processes live in WSL; ending the Windows side does not end them.
-    spawnSync("wsl", ["-d", DISTRIBUTION, "-u", "root", "-e", "sh", "-c", endProcesses(run)], { encoding: "utf8" });
-    await new Promise((resolve) => setTimeout(resolve, 300));
+    // The processes live in WSL; ending the Windows side does not end them, nor does ending unshare end the API (it
+    // changed its user, which cleared --kill-child's signal). A container left running keeps its /tmp, the population
+    // mount's 2.2 GB of index copies: the release's probes start one per step, and filled WSL's memory by the third
+    // (2026-10-13). So the next start waits until this one is gone, and a container that cannot be ended is a failure.
+    const ended = spawnSync("wsl", ["-d", DISTRIBUTION, "-u", "root", "-e", "sh", "-c", endProcesses(run)], { encoding: "utf8" });
+    if (ended.status !== 0) throw new Error(`the container did not end (${ended.status}): ${ended.stdout}${ended.stderr}`);
   };
   const events = () => wsl(`cat ${run}/events.log`).split("\n").filter((line) => line !== "" && line !== "ready");
   const started = Date.now();
@@ -186,8 +231,32 @@ exec env -i ${env.map(quote).join(" ")} chroot --userspec=${user} "$R" ${image.E
     }
     await new Promise((resolve) => setTimeout(resolve, 250));
   }
+  // What the container was doing, read from inside WSL before it is ended: the API prints nothing (its logging is
+  // cleared), so a start that is slow, listening but unreachable, or stopped would otherwise look the same (the
+  // population release's first start missed its deadline with no output, 2026-10-13).
+  const state = containerState(run, port);
   await close();
-  throw new Error(`the image did not answer within ${deadlineMs} ms: ${output.slice(0, 2000)}`);
+  throw new Error(`the image did not answer within ${deadlineMs} ms: ${output.slice(0, 2000)}\nin WSL: ${state}`);
+}
+
+/**
+ * The container's state as WSL sees it, for a start that missed its deadline: whether the API runs (and for how long, with
+ * how much memory), whether anything listens on its port and answers there from inside WSL, how much of its private /tmp
+ * it has written (the index copies), and WSL's memory. Never throws: a failure to read is part of the answer.
+ */
+export function containerState(run, port) {
+  const script = [
+    // The API is the container's process whose root is the run's root filesystem: matching its command line found
+    // unshare instead, whose script names the entrypoint (2026-10-13).
+    `export COLUMNS=200; R=${quote(`${run}/rootfs`)}; api=$(for p in /proc/[0-9]*; do [ "$(readlink "$p/root" 2>/dev/null)" = "$R" ] && echo "\${p#/proc/}"; done | head -1)`,
+    "echo \"api: ${api:-none}$( [ -n \"$api\" ] && ps -o etimes=,rss= -p $api | awk '{print \", up \" $1 \" s, rss \" int($2/1024) \" MiB\"}')\"",
+    `echo "listening on ${port}: $(ss -ltnH 2>/dev/null | grep -c ':${port} ')"`,
+    `echo "answers inside WSL: $(curl -s -m 5 -o /dev/null -w '%{http_code}' -X POST -H 'content-type: application/json' -d '{"operation_id":"coverage","parameters":{}}' http://127.0.0.1:${port}/api/v3/coverage 2>/dev/null) (000: no answer)"`,
+    "[ -n \"$api\" ] && echo \"its /tmp: $(du -sh /proc/$api/root/tmp 2>/dev/null | cut -f1)\"",
+    "free -m | awk '/Mem:/ {print \"WSL memory: \" $3 \" MiB used, \" $7 \" MiB available\"}'",
+  ].join("; ");
+  const result = spawnSync("wsl", ["-d", DISTRIBUTION, "-u", "root", "-e", "sh", "-c", script], { encoding: "utf8", timeout: 30_000 });
+  return `${result.stdout ?? ""}${result.stderr ?? ""}`.trim().replace(/\n/g, "; ") || `nothing read (${result.error?.message ?? result.status})`;
 }
 
 /** Removes a run directory from WSL, and answers whether it is gone. */

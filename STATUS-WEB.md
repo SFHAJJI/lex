@@ -4,6 +4,101 @@ Updated 2026-10-13. The web lane's progress, split out of STATUS.md (which keeps
 items and the pointers) by the standing order of 2026-10-01 13:50 UTC. Every pull request of the web lane
 updates this file, not STATUS.md.
 
+## The first signed release over the population (sole driver, 2026-10-13)
+
+- **`v3-20261013T214036Z-9a5f05d3d1b4`** (`image-rehearsal.mjs --mount derive-c` at 9a5f05d3, 21:40 to 22:01 UTC):
+  - the mount's gates ran for its card;
+  - the image was built, verified, **signed by the owner's release key** (Key Vault `kv-lex-v3-soufien`, piped to
+    standard input; signer "lex-v3-release (Soufien Hajji)") and verified;
+  - it was built again from scratch to **the same manifest digest**;
+  - it was probed in WSL: **all 29 runs pass**, the privacy probe included (nothing written after the first answer),
+    with one container at a time and its `/tmp` freed between starts (2,462 MiB);
+  - V2 is absent: 543 entries scanned and 63 routes asked;
+  - the card route serves the release's card;
+  - its six assets were published and read back with no failure.
+
+  Kept at `C:\lex-v3\releases\v3-20261013T214036Z-9a5f05d3d1b4` (with the rehearsal report and the gates' artifacts
+  beside it).
+- **The zero-traffic Azure candidate waits on the owner.**
+  - `deploy/deploy.ps1` in plan mode verifies the release under the signing identity's public key and prints each
+    step.
+  - Its `-Apply` was refused by the driver's tool harness (its safety check on actions outside the machine), so
+    nothing was sent to Azure. The driver does not route around such a refusal.
+  - The owner either allows the deploy in the harness or runs it. The exact command, with the subscription and this
+    machine's address filled in, is kept beside the release in
+    `C:\lex-v3\releases\deploy-v3-20261013T214036Z-9a5f05d3d1b4.txt` (this repository is public). Its shape:
+    `deploy/deploy.ps1 -Subscription <id> -ResourceGroup rg-lex-v3 -EnvironmentId <cae-lex-v3's id> -Registry
+    crlexv3soufien.azurecr.io -IdentityResourceId <id-lex-v3's id> -SigningPublicKey
+    C:\lex-v3\lanes\release-signing-public.pem -SignerIdentity "lex-v3-release (Soufien Hajji)" -Release
+    C:\lex-v3\releases\v3-20261013T214036Z-9a5f05d3d1b4 -ProbeSourceCidr <this machine's address>/32 -Apply`, run
+    from the checkout at 9a5f05d3.
+  - Ready: the registry, the pull identity (AcrPull checked), the environment `cae-lex-v3`, and the probe-only
+    restriction to this machine's address.
+
+## The release from custody over the population: derived twice, equal; the image step in pieces (sole driver, 2026-10-13)
+
+- **The first release rehearsal from custody** (`image-rehearsal.mjs --custody` over run 15's custody, the merge commit
+  1bb13038's CI runtime as the tool, bound; signed by the owner's release key from Key Vault): the two independent
+  derivations of the combined population **agree on all 6 files** (15:09 to about 17:40 UTC), and the gates ran over
+  the mount for the card. It stopped at the image step: Node refuses one SHA-256 update over 2 GiB ("data is too long")
+  and one `fs.readFile` of a file over 2 GiB, and the population image's app layer is 2.5 GB.
+- **The release over the derived population mount** (`image-rehearsal.mjs --mount derive-c` at 19f140a4, signed by the
+  release key): the image built, verified, signed and verified, and built again from scratch to the same manifest
+  digest; then a start in WSL missed the 219 s deadline, with no output (the API's logging is cleared). Rerun at
+  cf347cd2 with the container's state reported on a miss: WSL's memory was full (7.78 of 7.79 GB). **Cause: the image
+  run never ended a container.** Each probe step starts one (about nineteen starts), and each holds its 2.2 GB `/tmp`
+  of index copies in memory; `unshare --kill-child` ends the API with unshare only until the API changes its user
+  (`chroot --userspec`), which clears that signal, so closing a start ended unshare and the `/tmp` watcher and left the
+  API running. A replay of the probes with WSL sampled every 5 s showed it: three APIs alive after two closes, 4.5 GB of
+  `/tmp` in memory, 1.5 GB left. The run's end (`endProcesses`) now ends every process whose root is the run's root
+  filesystem, then unshare and the watcher, and returns once none is left (a container that cannot be ended fails the
+  start's close); the live test starts its stand-in as the image is (bound root, `chroot --userspec`), and failed before.
+  A missed start's report finds the API by its root (it matched unshare by command line). The rehearsal also lets the
+  image's bytes go before the container starts (collected under `node --expose-gc`).
+- **The server wrote SQLite temporary files while serving.** With every start answering (22 to 27 s each), the replay's
+  privacy probe failed nine of 29 runs: two `etilqs_*` files in the container's `/tmp` each time, a sort or temporary
+  index past SQLite's 2 MB cache (the counts behind coverage, which every page loads, and the first dossier; three
+  files each over the population mount on Windows). Only the image's probe saw them: a journey here watched the API's
+  directory, not its temporary folder. The readers now serve from connections whose temporary storage is in memory
+  (`PRAGMA temp_store = MEMORY`, set once verification at open has passed, and on the search's and the counts' own
+  connections); the verification keeps SQLite's default. Over the population mount: no file event in the temporary
+  folder while the 14 step requests are served (6 SQLite files before), the same latencies, peak working set 763 MiB
+  against 767. The journey now watches the API's temporary folder too (`watchApiFiles`).
+- **The release path's bytes in pieces** (`large-bytes.mjs`): `sha256Hex` hashes a piece (1 GiB) at a time, and
+  `readLargeFile` reads a file a piece at a time; the same digests and bytes. Used wherever the release path hashes or
+  reads the image (image reproducibility, the rehearsal, the release assets, the deploy probe) and the derived mount.
+
+## The deploy kit and the journeys over the population (sole driver, 2026-10-13)
+
+- **The container is one vCPU and 2 GiB** (`deploy/main.bicep`, `main.json` rebuilt): the API opens the population mount
+  with a 0.5 GB peak, and its private `/tmp` holds 2.15 GB of verified index copies, which a half-vCPU replica's 2 GiB of
+  ephemeral storage cannot hold (one vCPU has 4 GiB). A startup probe (`/`, 10 s then 10 tries 30 s apart) gives the
+  mount five minutes before the liveness probe can restart the container.
+- **A restart finds room to mount again.** A replica's `/tmp` outlives a container restart and an ended process leaves
+  its copies there (the review of #949): the bicep sets `LEX_V3_TEMP_IS_PRIVATE=1` and the API then removes an earlier
+  start's copies before it mounts (`V3StaleIndexCopies`); without the variable nothing is removed.
+- **The image run** sizes its private `/tmp` tmpfs from the mount it carries (every `.sqlite3` file plus 256 MiB; it was a
+  fixed 256m) and allows its start 90 s plus a minute per GiB of indexes. The review of #950 found that a closed start
+  kept its container (and its 2.4 GB tmpfs); `unshare --kill-child` did not end it (its stand-in kept its user; the API
+  changes its user, which clears the signal), and the run's end now ends the container by its root (above).
+- **The go-live browser probe** (`deploy-probe.mjs`) chooses its Luxembourg work from the candidate's own answers
+  (`heldLuxembourgWorkFromAnswers`: the same rule, from a search for "loi" and the work's dossier; over the population it
+  chooses what the index read chooses), since a deployed revision's index is not at hand; it asked for the fixture's work,
+  so a population candidate would have failed J1 and been deactivated (the review of #950).
+- **One billed replica.** Each active revision runs a replica (1 vCPU, 2 GiB: about 23 EUR a month idle, about 26 with the
+  registry). The kit keeps every revision, so after a promotion `deploy.ps1` prints the command that deactivates the
+  previous one (kept, stopped); a rollback activates it again (about a minute to mount) and moves the traffic. Keeping it
+  active for an instant rollback would be about 49 EUR a month: the owner's choice (OWNER-BRIEF.md).
+- **The journeys over the population mount pass in Chrome** (`journey.mjs --real-mount --served-by-api`, `derive-c`, the
+  API at #949): all 29 runs. The eight screens (coverage; search, 14 citations verified; dossier; reading, 8; compare;
+  radar; export, 8; provision history), J1 (refused `no_version_for_date`), J2, J5, the three EU steps (search 61
+  citations verified, dossier, reading 200), J6, J7 (REST and MCP alike) and J8. Three journey defects were fixed on
+  the way: the API was given a fixed 60 s to answer (the population mount takes about 50 s; now a minute plus a minute
+  per GiB), the timeout was reported as an exit (the flag was read after the process was ended), and every ended API
+  left 2.3 GB of copies in the shared temporary folder (each now has its own, removed at close). And the steps now ask
+  for a Luxembourg work the mount holds (`heldLuxembourgWork`: `loi-2015-12-03-n1` on 2015-12-11 here); the fixture's
+  work is not in the population, so its steps only ever met `identifier_unknown`.
+
 ## The API serves the combined population in a small server (sole driver, 2026-10-13)
 
 - **What was measured.** The real API (`Lex.V3.Api`) over the combined EU and Luxembourg mount (`derive-c`, 2.52 GB), one

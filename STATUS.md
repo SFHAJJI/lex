@@ -13,7 +13,7 @@ A feature pull request edits its lane file, not this one; this file changes for 
 
 ## Heads
 
-- `v3/integration`: `b457a549` (2026-10-12, PR #947 merged). The required checks are strict: `dotnet` (the
+- `v3/integration`: `9a5f05d3` (2026-10-13, PR #953 merged). The required checks are strict: `dotnet` (the
   whole solution, about 14 min on the runner), `web`, `canon-windows` and `journeys`. `journeys`
   walks J1 to J8 in Chrome over three fixture mounts (the fixture, licence-blocked and two-state mounts), by pointer
   and by keyboard on the pages the API serves.
@@ -26,7 +26,8 @@ A feature pull request edits its lane file, not this one; this file changes for 
   owner's request on 2026-10-10 after seven of nine families, and resumed from its journal as run 15 on 2026-10-11
   (`C:\lex-v3\lu-population-20261011-15`). Its acquisition completed on 2026-10-12 (260,235 records). The combined
   EU and Luxembourg mount was derived offline on 2026-10-13; its gates found Luxembourg search empty, a derivation
-  defect #948 fixes, and a derive with the fix follows (STATUS-DATA.md). Runs 1 to 13 stopped on three defects those pull requests fix, and
+  defect #948 fixed, and the derive with the fix (`derive-c`) passes every gate (STATUS-DATA.md). The first signed
+  release over it, `v3-20261013T214036Z-9a5f05d3d1b4`, passed every check on 2026-10-13 (STATUS-WEB.md). Runs 1 to 13 stopped on three defects those pull requests fix, and
   replays of run 13's journal found two more before the restart (#943); all their custody is kept (STATUS-DATA.md).
 - Plan: `C:\lex-v3\V3-FINISH-PLAN-2026-09-27.md` (owner's copy). Decision 94 (one driver, one queue,
   one review per pull request) merged in lex-governance on 2026-09-27. Launch target 2026-11-07.
@@ -107,9 +108,13 @@ Only money, legal or public claims, credentials and going live (ruling 7):
   the driver set up, in France Central: a budget of 30 a month with alerts, resource group `rg-lex-v3`, registry
   `crlexv3soufien`, a pull identity, Container Apps environment `cae-lex-v3` and key vault `kv-lex-v3-soufien`,
   which holds the release signing key (P-256, identity "lex-v3-release (Soufien Hajji)"; only its public half is on
-  disk). Open for the owner: upgrade the trial to pay-as-you-go before its credit or 30 days run out; and, at go-live,
-  point soufien.lu's name servers at a new zone (the old zone is out of reach with V2's subscription). Nothing is
+  disk). The owner upgraded the trial to pay-as-you-go on 2026-10-13. Open for the owner: at go-live, point
+  soufien.lu's name servers at a new zone (the old zone is out of reach with V2's subscription). Nothing is
   deployed.
+- The zero-traffic Azure candidate of release `v3-20261013T214036Z-9a5f05d3d1b4`: the driver's tool harness refused
+  `deploy.ps1 -Apply`, so the owner allows it there or runs the command kept in
+  `C:\lex-v3\releases\deploy-v3-20261013T214036Z-9a5f05d3d1b4.txt` (STATUS-WEB.md). The candidate is reachable only
+  from this machine's address; billing starts with it (about 26 EUR a month).
 - The weekly 30-minute checkpoint slot.
 - The owner's rulings of 2026-10-04 (relayed by the audit session): the French copy accepted, the acquisition
   code frozen until the combined mount exists, the stage milestones closed, `OWNER-BRIEF.md` kept current.

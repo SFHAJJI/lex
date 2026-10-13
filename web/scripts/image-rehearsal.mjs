@@ -46,9 +46,11 @@ import { tmpdir } from "node:os";
 import { dirname, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { gunzipSync } from "node:zlib";
+import { readLargeFile, sha256Hex } from "./large-bytes.mjs";
 
 const repository = resolve(fileURLToPath(new URL("../../", import.meta.url)));
-const sha256 = (bytes) => createHash("sha256").update(bytes).digest("hex");
+// In pieces: one update over 2 GiB is refused, and the population image's app layer is 2.5 GB (large-bytes.mjs).
+const sha256 = (bytes) => sha256Hex(bytes);
 
 /** The rehearsal identity: named as what it is, so no one mistakes it for the release signer. */
 export const REHEARSAL_IDENTITY = "lex-v3-rehearsal (not a release identity)";
@@ -119,7 +121,7 @@ async function filesUnder(root) {
   for (const entry of await readdir(root, { recursive: true, withFileTypes: true })) {
     if (!entry.isFile()) continue;
     const path = join(entry.parentPath ?? entry.path, entry.name);
-    found.push([relative(root, path).split(sep).join("/"), await readFile(path)]);
+    found.push([relative(root, path).split(sep).join("/"), await readLargeFile(path)]);
   }
   return found;
 }
@@ -417,11 +419,11 @@ async function buildImage({ into, mountPath, epoch, card, log }) {
 
   log("making the image reproducible");
   const { reproducibleImage, writeLayout } = await import("./image-reproducible.mjs");
-  const reproducible = reproducibleImage(readLayout(await readFile(sdkArchive)), { epoch });
+  const reproducible = reproducibleImage(readLayout(await readLargeFile(sdkArchive)), { epoch });
   const archive = join(into, "lex-v3-rehearsal.tar");
   await writeFile(archive, writeLayout(reproducible, { mtime: epoch }));
   await rm(sdkArchive, { force: true });
-  return { webRoot, archive, image: readOciImage(readLayout(await readFile(archive))) };
+  return { webRoot, archive, image: readOciImage(readLayout(await readLargeFile(archive))) };
 }
 
 /**
@@ -495,7 +497,7 @@ export async function rehearse({ mount, keep = false, probe = true, reproduce = 
       sets: cardView.sets.map((set) => ({ set: set.set, arm: set.arm, cases: set.cases, gates: set.gates.map((gate) => `${gate.gate}: ${gate.verdict}`) })),
       controls: cardView.controls.map((control) => `${control.set}, ${control.arm}: ${control.verdict}`),
     };
-    const { webRoot, archive, image } = await buildImage({ into: join(work, "first"), mountPath, epoch: source.epoch, card, log });
+    let { webRoot, archive, image } = await buildImage({ into: join(work, "first"), mountPath, epoch: source.epoch, card, log });
     result.archiveBytes = (await stat(archive)).size;
 
     log("verifying the image");
@@ -505,8 +507,13 @@ export async function rehearse({ mount, keep = false, probe = true, reproduce = 
     const servedCard = web.find(([path]) => `/${path}` === CARD_ROUTE)?.[1];
     if (!servedCard) throw new Error(`the live pages hold no ${CARD_ROUTE}`);
     if (JSON.stringify(JSON.parse(servedCard.toString("utf8"))) !== JSON.stringify(card)) throw new Error(`${CARD_ROUTE} is not the card the pages were built with`);
-    const corpus = await filesUnder(mountPath);
+    // The mount's files (2.5 GB for the population) are let go as soon as they are checked, and the second image below
+    // as soon as it is compared: an async function keeps a dead local reachable across its later awaits, and holding both
+    // took the image step to about 11.8 GB resident for the population image (the review of #951).
+    let corpus = await filesUnder(mountPath);
     const failures = imageFailures(image, { web, mount: corpus, report });
+    const mountFilesVerified = corpus.length;
+    corpus = null;
     Object.assign(result, {
       manifestDigest: image.manifestDigest,
       configDigest: image.manifest.config.digest,
@@ -514,7 +521,7 @@ export async function rehearse({ mount, keep = false, probe = true, reproduce = 
       base: image.config.config.Labels["org.opencontainers.image.base.name"],
       user: image.config.config.User,
       webFilesVerified: web.length,
-      mountFilesVerified: corpus.length,
+      mountFilesVerified,
       reportFilesVerified: (report.files ?? []).length,
       imageFailures: failures,
     });
@@ -536,12 +543,19 @@ export async function rehearse({ mount, keep = false, probe = true, reproduce = 
     if (reproduce) {
       // Reproducible: a second build, from scratch in its own directory, must give the same image.
       log("building the image a second time, from scratch, to check it is reproducible");
-      const second = await buildImage({ into: join(work, "second"), mountPath, epoch: source.epoch, card, log });
+      let second = await buildImage({ into: join(work, "second"), mountPath, epoch: source.epoch, card, log });
       const differences = reproductionFailures(image, second.image);
       result.reproduced = { manifestDigest: second.image.manifestDigest, identical: differences.length === 0 };
+      second = null;
       await rm(join(work, "second"), { recursive: true, force: true });
       if (differences.length > 0) throw new Error(`the image is not reproducible:\n- ${differences.join("\n- ")}`);
     }
+
+    // From here only the image's digests and config are read (the probes unpack the archive from disk, and the release reads
+    // it again), so its bytes (2.6 GB for the population image) are let go before the container starts. (The population
+    // release's missed starts were not this: every closed start left its container and its /tmp in WSL's memory, which
+    // `endProcesses` now ends; 2026-10-13.)
+    image = { manifestDigest: image.manifestDigest, manifest: image.manifest, config: image.config, layers: image.layers.map(({ digest }) => ({ digest })) };
 
     if (probe) {
       // The zero-traffic probes, against the image itself: health (it answers), the API (each page's
@@ -549,14 +563,22 @@ export async function rehearse({ mount, keep = false, probe = true, reproduce = 
       // image), privacy (nothing written after its first answer, on its output or its /tmp) and the
       // security headers the page arrives with.
       log("running the image in WSL and probing it");
-      const { unpackImage, startImage } = await import("./image-run.mjs");
+      const { unpackImage, startImage, tmpMebibytesFor, TMP_MARGIN_MEBIBYTES } = await import("./image-run.mjs");
       const { fixtureMountRuns, realMountRuns } = await import("./journey.mjs");
       const { findBrowser } = await import("./browser-evidence.mjs");
+      // Collected here, where `rehearse`'s frame no longer holds the old image (a collection on the line after it was let
+      // go still found it reachable; the review of #952), and only where the process allows it (`node --expose-gc`).
+      globalThis.gc?.();
       container = unpackImage({ archive, layers: image.layers.map((layer) => layer.digest) });
+      // The container's /tmp holds the copies of every index the mount carries (2.3 GB for the combined population).
+      const tmpMebibytes = await tmpMebibytesFor(mountPath);
+      result.containerTmpMebibytes = tmpMebibytes;
+      // A minute and a half, and a minute more per GiB of indexes the container verifies before it listens.
+      const deadlineMs = 90_000 + Math.ceil(((tmpMebibytes - TMP_MARGIN_MEBIBYTES) / 1024) * 60_000);
       // On a real mount each page is held to what the image's API answers; on the fixture mount every
       // page must answer with the texts the fixture's one work gives it, and its citations verify.
       const probeRuns = mountKind === "fixture" ? fixtureMountRuns : realMountRuns;
-      const runs = await probeRuns(null, mountPath, { servedByApi: true, keyboard: false, startServer: () => startImage({ run: container, config: image.config }) }, await findBrowser(), null);
+      const runs = await probeRuns(null, mountPath, { servedByApi: true, keyboard: false, startServer: () => startImage({ run: container, config: image.config, tmpMebibytes, deadlineMs }) }, await findBrowser(), null);
       result.probes = runs.map(([label, { observed, failures }]) => ({
         step: label, state: observed.answerState, failures,
         paintedElements: observed.paint?.painted ?? 0, citationsVerified: observed.verifications?.length ?? 0,
@@ -566,7 +588,7 @@ export async function rehearse({ mount, keep = false, probe = true, reproduce = 
 
       // V2 unreachable in the image: each route the retired product served answers 404, or V3's own
       // file where V3 serves the same path.
-      const server = await startImage({ run: container, config: image.config });
+      const server = await startImage({ run: container, config: image.config, tmpMebibytes, deadlineMs });
       try {
         const routeFailures = await v2RouteFailures(server.origin, { v3Files: servedPaths(web) });
         Object.assign(result.v2Absent, { routesAsked: V2_ROUTES.length, routeFailures });
@@ -588,7 +610,7 @@ export async function rehearse({ mount, keep = false, probe = true, reproduce = 
     const version = releaseVersion(source, { rehearsal: by.rehearsal });
     const published = await publishRelease(join(work, "release"), {
       version, source, manifestDigest: image.manifestDigest, corpusSha256: report.corpus?.Sha256 ?? null, signer: by,
-      assets: [[ASSETS.image, await readFile(archive)], [ASSETS.imageSignature, imageSignatureAsset(signed)], [ASSETS.card, servedCard], [ASSETS.mountReport, mountBytes]],
+      assets: [[ASSETS.image, await readLargeFile(archive)], [ASSETS.imageSignature, imageSignatureAsset(signed)], [ASSETS.card, servedCard], [ASSETS.mountReport, mountBytes]],
     });
     // A release signer's release is read back as that signer's; a rehearsal names no release signer to hold it to.
     const readBack = await releaseFailures(published.directory, { publicKeyPem: by.publicKeyPem, identity: by.rehearsal ? null : by.identity });

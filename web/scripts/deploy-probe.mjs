@@ -23,8 +23,9 @@ import { cspValue } from "./csp.mjs";
 import { CARD_ROUTE } from "./evaluation-card.mjs";
 import { layerTar, readLayout, readOciImage, readTar, servedPaths, v2RouteFailures } from "./image-rehearsal.mjs";
 import { invokedDirectly } from "./invoked-directly.mjs";
-import { realMountRuns } from "./journey.mjs";
+import { heldLuxembourgWorkFromAnswers, realMountRuns } from "./journey.mjs";
 import { ASSETS, RELEASE_MANIFEST, releaseFailures } from "./release-assets.mjs";
+import { readLargeFile } from "./large-bytes.mjs";
 
 const LIVE_PREFIX = "app/v3-web/";
 
@@ -119,13 +120,15 @@ export function remoteRevision(origin) {
 /**
  * The browser probes of a revision deployed from the release at `releaseDirectory`: the journey's real-mount steps
  * (`realMountRuns`, or `runs` in a test) through `browser` against `origin`, the release's mount report standing as the
- * build report they read. Failures, each prefixed with its step; empty when every step passes.
+ * build report they read, and the Luxembourg work they ask for chosen from the revision's own answers (`held`; the
+ * revision's index is not at hand). Failures, each prefixed with its step; empty when every step passes.
  */
-export async function browserFailures(origin, releaseDirectory, { browser, runs = realMountRuns }) {
+export async function browserFailures(origin, releaseDirectory, { browser, runs = realMountRuns, held = heldLuxembourgWorkFromAnswers }) {
   const work = await mkdtemp(join(tmpdir(), "lex-deploy-browser-"));
   try {
     await writeFile(join(work, "build-report.json"), await readFile(join(releaseDirectory, ASSETS.mountReport)));
-    const results = await runs(null, work, { servedByApi: true, keyboard: false, startServer: async () => remoteRevision(origin) }, browser, null);
+    const results = await runs(null, work, { servedByApi: true, keyboard: false, startServer: async () => remoteRevision(origin) }, browser, null,
+      { held: await held(origin) });
     return results.flatMap(([label, { failures }]) => failures.map((failure) => `${label}: ${failure}`));
   } finally {
     await rm(work, { recursive: true, force: true });
@@ -142,7 +145,7 @@ export async function deployedReleaseFailures(origin, releaseDirectory, { public
   if (release.length > 0) return release.map((failure) => `the release does not read back: ${failure}`);
   const manifest = JSON.parse(await readFile(join(releaseDirectory, RELEASE_MANIFEST), "utf8"));
   return revisionFailures(origin, {
-    web: liveFilesOf(await readFile(join(releaseDirectory, ASSETS.image))),
+    web: liveFilesOf(await readLargeFile(join(releaseDirectory, ASSETS.image))),
     card: await readFile(join(releaseDirectory, ASSETS.card)),
     corpusSha256: manifest.corpus.sha256,
   });

@@ -82,6 +82,7 @@ import { Session, findBrowser, launchBrowser } from "./browser-evidence.mjs";
 import { cspValue } from "./csp.mjs";
 import { EXPORT_WATERMARK } from "./export-build.mjs";
 import { EUROPE_TEXT_ACKNOWLEDGEMENT } from "./reading-answer.mjs";
+import { TMP_MARGIN_MEBIBYTES, tmpMebibytesFor } from "./image-run.mjs";
 
 export const ANSWER_DEADLINE_MS = 30_000;
 
@@ -136,10 +137,12 @@ export function pinnedCitation(citation) {
 }
 
 /**
- * The steps: the page each loads, the operation it must ask, and what it does before waiting. A step
- * that `cites` prints at least one citation on an answer.
+ * The steps for one Luxembourg work: the page each loads, the operation it must ask, and what it does before waiting. A
+ * step that `cites` prints at least one citation on an answer. `identifier` is the work, `date` a date one of its states
+ * applies on, and `anchor` an article id that state holds.
  */
-export const JOURNEY_STEPS = Object.freeze({
+export function journeyStepsFor({ identifier, date, anchor }) {
+  return Object.freeze({
   coverage: Object.freeze({ path: "/", operation: "coverage", body: null }),
   search: Object.freeze({
     path: "/search.html",
@@ -152,63 +155,67 @@ export const JOURNEY_STEPS = Object.freeze({
     path: "/dossier.html",
     cites: true,
     operation: "dossier",
-    typed: DOSSIER_IDENTIFIER,
-    body: Object.freeze({ operation_id: "dossier", parameters: Object.freeze({ identifier: DOSSIER_IDENTIFIER }) }),
+    typed: identifier,
+    body: Object.freeze({ operation_id: "dossier", parameters: Object.freeze({ identifier: identifier }) }),
   }),
   reading: Object.freeze({
     path: "/reading.html",
     cites: true,
     operation: "evidence_bundle",
-    typed: Object.freeze([DOSSIER_IDENTIFIER, READING_DATE]),
+    typed: Object.freeze([identifier, date]),
     body: Object.freeze({
       operation_id: "evidence_bundle",
-      parameters: Object.freeze({ identifier: DOSSIER_IDENTIFIER, date: READING_DATE }),
+      parameters: Object.freeze({ identifier: identifier, date: date }),
     }),
   }),
   compare: Object.freeze({
     path: "/compare.html",
     cites: true,
     operation: "diff",
-    typed: Object.freeze([DOSSIER_IDENTIFIER, READING_DATE, READING_DATE]),
+    typed: Object.freeze([identifier, date, date]),
     body: Object.freeze({
       operation_id: "diff",
-      parameters: Object.freeze({ identifier: DOSSIER_IDENTIFIER, date_from: READING_DATE, date_to: READING_DATE }),
+      parameters: Object.freeze({ identifier: identifier, date_from: date, date_to: date }),
     }),
   }),
   radar: Object.freeze({
     path: "/radar.html",
     cites: true,
     operation: "changes_in_period",
-    typed: Object.freeze([READING_DATE, READING_DATE]),
+    typed: Object.freeze([date, date]),
     body: Object.freeze({
       operation_id: "changes_in_period",
-      parameters: Object.freeze({ date_from: READING_DATE, date_to: READING_DATE }),
+      parameters: Object.freeze({ date_from: date, date_to: date }),
     }),
   }),
   export: Object.freeze({
     path: "/export.html",
     cites: true,
     operation: "evidence_bundle",
-    typed: Object.freeze([DOSSIER_IDENTIFIER, READING_DATE]),
+    typed: Object.freeze([identifier, date]),
     // Once the reading has answered: pin the first three articles (journey J4, an answer across several
     // provisions), and the export must be composed.
     then: Object.freeze({ click: "input[data-pin]", count: 3, until: "[data-export-state=composed]" }),
     body: Object.freeze({
       operation_id: "evidence_bundle",
-      parameters: Object.freeze({ identifier: DOSSIER_IDENTIFIER, date: READING_DATE }),
+      parameters: Object.freeze({ identifier: identifier, date: date }),
     }),
   }),
   history: Object.freeze({
     path: "/history.html",
     cites: true,
     operation: "article_history",
-    typed: Object.freeze([DOSSIER_IDENTIFIER, HISTORY_ANCHOR]),
+    typed: Object.freeze([identifier, anchor]),
     body: Object.freeze({
       operation_id: "article_history",
-      parameters: Object.freeze({ identifier: DOSSIER_IDENTIFIER, anchor: HISTORY_ANCHOR }),
+      parameters: Object.freeze({ identifier: identifier, anchor: anchor }),
     }),
   }),
 });
+}
+
+/** The steps on the fixture mount: its one work, on its state's date. */
+export const JOURNEY_STEPS = journeyStepsFor({ identifier: DOSSIER_IDENTIFIER, date: READING_DATE, anchor: HISTORY_ANCHOR });
 
 /**
  * The EU search step: the search page asked for the GDPR by its CELEX, with English chosen in the
@@ -508,6 +515,25 @@ export function watchFiles(root) {
   };
 }
 
+/**
+ * `watchFiles` over the API's directory and its temporary folder at once: one `stop()` answering both folders' events,
+ * the temporary folder's names prefixed with `TMP/`. The image's probe watches the container's /tmp; a run here watched
+ * only the API's directory, so the SQLite temporary files the API wrote while serving the population mount were seen
+ * only by the release (2026-10-13).
+ */
+export function watchApiFiles(home, temporary) {
+  const watches = [[watchFiles(home), ""], [watchFiles(temporary), "TMP/"]];
+  let stopped = null;
+  return {
+    stop() {
+      stopped ??= Promise.all(watches.map(async ([watched, prefix]) =>
+        (await watched.stop()).map(([event, name]) => [event, event === "error" ? name : `${prefix}${name}`])))
+        .then((events) => events.flat());
+      return stopped;
+    },
+  };
+}
+
 /** Every file under a directory, as its relative path and its size and modification time. */
 async function listFiles(root) {
   const files = new Map();
@@ -520,8 +546,21 @@ async function listFiles(root) {
   return files;
 }
 
+/**
+ * How long an API is given to answer after it starts: a minute, and a minute more per GiB of the indexes it verifies into
+ * its temporary folder before it listens (the combined population mount's 2.3 GB took about 50 s on this machine, more
+ * than the minute a fixture mount needed, 2026-10-13).
+ */
+export async function startDeadlineMs(mount) {
+  const indexMebibytes = mount ? (await tmpMebibytesFor(mount)) - TMP_MARGIN_MEBIBYTES : 0;
+  return 60_000 + Math.ceil((indexMebibytes / 1024) * 60_000);
+}
+
 export async function startApi(apiOutput, mount, webRoot = null) {
   const home = await mkdtemp(join(tmpdir(), "lex-journey-api-"));
+  // The API's own temporary folder, beside its directory and removed with it: mounting copies each index there, and a run
+  // that ends the process would otherwise leave the copies (2.3 GB a start for the population mount).
+  const temporary = await mkdtemp(join(tmpdir(), "lex-journey-tmp-"));
   await cp(apiOutput, home, { recursive: true });
   await rm(join(home, "v3-corpus"), { recursive: true, force: true });
   await rm(join(home, "v3-web"), { recursive: true, force: true });
@@ -531,7 +570,7 @@ export async function startApi(apiOutput, mount, webRoot = null) {
   const origin = `http://127.0.0.1:${port}`;
   const child = spawn("dotnet", [join(home, "Lex.V3.Api.dll")], {
     cwd: home,
-    env: { ...process.env, ASPNETCORE_URLS: origin, DOTNET_NOLOGO: "1" },
+    env: { ...process.env, ASPNETCORE_URLS: origin, DOTNET_NOLOGO: "1", TMP: temporary, TEMP: temporary, TMPDIR: temporary },
     stdio: ["ignore", "pipe", "pipe"],
   });
   // Both outputs, from the first byte: what the process records is measured, not assumed.
@@ -541,7 +580,8 @@ export async function startApi(apiOutput, mount, webRoot = null) {
   child.stderr.on("data", (chunk) => { stderr += chunk; output += chunk; });
   let exited = false;
   child.on("exit", () => { exited = true; });
-  const deadline = Date.now() + 60_000;
+  const allowedMs = await startDeadlineMs(mount);
+  const deadline = Date.now() + allowedMs;
   while (Date.now() < deadline && !exited) {
     try {
       const answer = await fetch(`${origin}/api/v3/coverage`, {
@@ -549,7 +589,7 @@ export async function startApi(apiOutput, mount, webRoot = null) {
       });
       if (answer.status === 200) {
         const filesAtStart = await listFiles(home);
-        const fileWatch = watchFiles(home);
+        const fileWatch = watchApiFiles(home, temporary);
         return {
           origin, child, stderr: () => stderr, output: () => output, outputAtStart: output.length, fileWatch,
           /** The files under the API's directory that were added or changed since it first answered. */
@@ -564,6 +604,7 @@ export async function startApi(apiOutput, mount, webRoot = null) {
             child.kill();
             await new Promise((resolve) => setTimeout(resolve, 500));
             await rm(home, { recursive: true, force: true }).catch(() => {});
+            await rm(temporary, { recursive: true, force: true }).catch(() => {});
           },
         };
       }
@@ -572,12 +613,15 @@ export async function startApi(apiOutput, mount, webRoot = null) {
     }
     await new Promise((resolve) => setTimeout(resolve, 250));
   }
+  // Read before the process is ended: ending it is an exit too, and reported a timeout as one (2026-10-13).
+  const exitedByItself = exited;
   child.kill();
   await new Promise((resolve) => setTimeout(resolve, 500));
   await rm(home, { recursive: true, force: true }).catch(() => {});
-  throw new Error(exited
+  await rm(temporary, { recursive: true, force: true }).catch(() => {});
+  throw new Error(exitedByItself
     ? `the API exited before it answered: ${stderr}`
-    : `the API did not answer within 60 s: ${stderr}`);
+    : `the API did not answer within ${allowedMs / 1000} s: ${stderr}`);
 }
 
 /** Sets the form's select to a value as a pointer would: the value, then the change event the page listens for. */
@@ -961,10 +1005,10 @@ export async function run(apiOutput, mount, expected, browser, liveRoot) {
  * the EU steps run too: the GDPR searched by its CELEX, its dossier and its reading, every EU citation
  * pinned and verified (`realMountSteps`).
  */
-export function realMountSteps(report) {
+export function realMountSteps(report, held = null) {
   const steps = [
-    ...Object.entries(JOURNEY_STEPS),
-    ["J1, a date before the history", PRE_HISTORY_READING_STEP],
+    ...Object.entries(held ? journeyStepsFor(held) : JOURNEY_STEPS),
+    ["J1, a date before the history", held ? preHistoryStepFor(held.identifier, held.beforeHistory) : PRE_HISTORY_READING_STEP],
     ["J2, a question no article carries", NO_HIT_SEARCH_STEP],
     ["J5, a law not held", UNKNOWN_LAW_STEP],
   ];
@@ -983,10 +1027,88 @@ export function realMountSteps(report) {
  *   population that does carry the words answers hits, held like any search.
  */
 export function realMountExpectations(step) {
-  if (step === PRE_HISTORY_READING_STEP) return { refine: () => ({ state: "refusal", refusalCode: "no_version_for_date", texts: [NO_EARLIER_STATE] }) };
+  if (step === PRE_HISTORY_READING_STEP || step.preHistory === true) return { refine: () => ({ state: "refusal", refusalCode: "no_version_for_date", texts: [NO_EARLIER_STATE] }) };
   if (step === UNKNOWN_LAW_STEP) return { refine: () => ({ state: "refusal", refusalCode: "identifier_unknown", texts: [ABSENCE_NOTE] }) };
   if (step === NO_HIT_SEARCH_STEP) return { refine: (envelope) => (expectedFromEnvelope(envelope).nothingToCite ? { texts: [ABSENCE_NOTE] } : {}) };
   return {};
+}
+
+/**
+ * The Luxembourg work a real mount's steps ask for, read from the mount's own index (the fixture's work is not in a
+ * population, so on the population mount its steps only ever met `identifier_unknown`, 2026-10-13): the first state,
+ * in work key and date order, that is alone on its date and holds at least three articles with searchable text (the
+ * export step pins three). Its date is the reading's, its first article id with text the history's anchor, and the day
+ * before the work's first state J1's date. Null when the mount holds no Luxembourg index or no such state, and the
+ * fixture's work is asked for, as before.
+ */
+export async function heldLuxembourgWork(mount) {
+  const path = join(mount, "luxembourg-index.sqlite3");
+  try {
+    await stat(path);
+  } catch {
+    return null;
+  }
+
+  const { DatabaseSync } = await import("node:sqlite");
+  const index = new DatabaseSync(path, { readOnly: true });
+  try {
+    const textOf = "FROM json_each(s.article_identities_json) j JOIN articles a ON a.article_identity_sha256 = j.value AND a.language = s.language WHERE a.searchable_text <> ''";
+    const state = index.prepare(`
+      SELECT s.work_key AS work, s.applicability_date AS date,
+             (SELECT min(t.applicability_date) FROM states t WHERE t.work_key = s.work_key) AS first,
+             (SELECT count(*) ${textOf}) AS withText,
+             (SELECT min(a.publisher_id) ${textOf}) AS anchor
+      FROM states s
+      WHERE (SELECT count(*) FROM states t WHERE t.work_key = s.work_key AND t.applicability_date = s.applicability_date) = 1
+      ORDER BY s.work_key, s.applicability_date, s.state_sha256`).all().find((row) => row.withText >= 3);
+    if (!state) return null;
+    return { identifier: `/lu-legilux/${state.work}`, date: state.date, anchor: state.anchor, beforeHistory: dayBefore(state.first) };
+  } finally {
+    index.close();
+  }
+}
+
+/** One operation asked of a server as a page asks it (`POST /api/v3/{operation}`), and its envelope. */
+async function askOperation(origin, operation, parameters) {
+  const answer = await fetch(`${origin}/api/v3/${operation}`, {
+    method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ operation_id: operation, parameters }),
+  });
+  return answer.ok ? answer.json() : null;
+}
+
+/** The day before a civil date, as a civil date. */
+function dayBefore(date) {
+  const day = new Date(`${date}T00:00:00Z`);
+  day.setUTCDate(day.getUTCDate() - 1);
+  return day.toISOString().slice(0, 10);
+}
+
+/**
+ * `heldLuxembourgWork`'s choice made from a server's answers, for a server whose files are not at hand (a deployed
+ * revision; the review of #950 found its probe asking for the fixture's work, which a population does not hold): a search
+ * for "loi" lists hits in work key and date order, each naming its state; the first state with at least three of them
+ * whose dossier shows it alone on its date is the reading's, the first of their article ids the history's anchor, and the
+ * day before the dossier's first state J1's date. Null when none qualifies, and the fixture's work is asked for, as before.
+ */
+export async function heldLuxembourgWorkFromAnswers(origin, { ask = askOperation } = {}) {
+  const search = await ask(origin, "search", { query: "loi", language: "fra" });
+  const states = new Map();
+  for (const hit of search?.result?.value?.hits ?? []) {
+    if (!hit.state_sha256 || !hit.work_key || !hit.applicability_date || !hit.publisher_id) continue;
+    if (!states.has(hit.state_sha256)) states.set(hit.state_sha256, { work: hit.work_key, date: hit.applicability_date, anchors: new Set() });
+    states.get(hit.state_sha256).anchors.add(hit.publisher_id);
+  }
+
+  for (const { work, date, anchors } of states.values()) {
+    if (anchors.size < 3) continue;
+    const identifier = `/lu-legilux/${work}`;
+    const held = (await ask(origin, "dossier", { identifier }))?.result?.value?.states ?? [];
+    if (held.filter((state) => state.applicability_date === date).length !== 1) continue;
+    const first = held.map((state) => state.applicability_date).sort()[0];
+    return { identifier, date, anchor: [...anchors].sort()[0], beforeHistory: dayBefore(first) };
+  }
+
+  return null;
 }
 
 /** How many of the event log's events journey J8 verifies by permalink on a real mount: a population log holds thousands. */
@@ -1001,10 +1123,11 @@ const API_ONLY_OBSERVED = Object.freeze({ answerState: "api", requests: [], cons
  * permalinks. Returns `[label, { observed, failures }]` pairs; an API journey's `observed` is `API_ONLY_OBSERVED`.
  * `runStep` and `apiRuns` stand for `run` and `apiJourneyRuns`, so a test can see what each is asked.
  */
-export async function realMountRuns(apiOutput, mount, options, browser, liveRoot, { runStep = run, apiRuns = apiJourneyRuns } = {}) {
+export async function realMountRuns(apiOutput, mount, options, browser, liveRoot, { runStep = run, apiRuns = apiJourneyRuns, held } = {}) {
   const report = JSON.parse(await readFile(join(mount, "build-report.json"), "utf8"));
+  const work = held === undefined ? await heldLuxembourgWork(mount) : held;
   const runs = [];
-  for (const [name, step] of realMountSteps(report)) {
+  for (const [name, step] of realMountSteps(report, work)) {
     const digests = name === "coverage" ? { corpusSha256: report.corpus.Sha256, indexSha256: report.luxembourgIndex.Sha256 } : {};
     runs.push([`${name}, with the real mount`, await runStep(apiOutput, mount, { ...options, step, fromApi: true, ...digests, ...realMountExpectations(step) }, browser, liveRoot)]);
   }
@@ -1076,14 +1199,21 @@ export const NO_EARLIER_STATE = "No earlier state is held: the requested date pr
  * fixture's date sits before its one state, but a population's history of the work may begin earlier).
  */
 export const PRE_HISTORY_DATE = "1900-01-01";
-export const PRE_HISTORY_READING_STEP = Object.freeze({
-  ...EARLY_READING_STEP,
-  typed: Object.freeze([DOSSIER_IDENTIFIER, PRE_HISTORY_DATE]),
-  body: Object.freeze({
-    operation_id: "evidence_bundle",
-    parameters: Object.freeze({ identifier: DOSSIER_IDENTIFIER, date: PRE_HISTORY_DATE }),
-  }),
-});
+
+/** Journey J1 for one work on one date before its history: the reading page, marked as J1 for its expectation. */
+export function preHistoryStepFor(identifier, date) {
+  return Object.freeze({
+    ...EARLY_READING_STEP,
+    preHistory: true,
+    typed: Object.freeze([identifier, date]),
+    body: Object.freeze({
+      operation_id: "evidence_bundle",
+      parameters: Object.freeze({ identifier, date }),
+    }),
+  });
+}
+
+export const PRE_HISTORY_READING_STEP = preHistoryStepFor(DOSSIER_IDENTIFIER, PRE_HISTORY_DATE);
 
 /** Journey J2: a citizen's question searched as typed, which no held article carries. */
 export const NO_HIT_PHRASE = "combien de jours de congé j'ai le droit quand mon père est décédé";

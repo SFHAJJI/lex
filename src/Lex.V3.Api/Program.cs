@@ -37,6 +37,12 @@ catch (Exception exception)
     state = SyntheticApiState.Unavailable;
 }
 
+// A deployment whose temporary folder is this process's alone has the copies an earlier process left there removed first.
+if (Environment.GetEnvironmentVariable(V3StaleIndexCopies.PrivateTemporaryFolderVariable) == "1")
+{
+    V3StaleIndexCopies.Remove(Path.GetTempPath());
+}
+
 V3CorpusMount? corpusMount = null;
 try
 {
