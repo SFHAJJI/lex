@@ -163,13 +163,18 @@ test("the browser probes run the journey's real-mount steps against the revision
     const report = Buffer.from(JSON.stringify({ corpus: { Sha256: CORPUS }, luxembourgIndex: { Sha256: "d".repeat(64) } }));
     await writeFile(join(release, ASSETS.mountReport), report);
     let seen = null;
-    const runs = async (apiOutput, mount, options, browser) => {
+    const runs = async (apiOutput, mount, options, browser, liveRoot, extra) => {
       const { readFile: read, access } = await import("node:fs/promises");
-      seen = { apiOutput, report: await read(join(mount, "build-report.json")), server: await options.startServer(), options, browser, mount };
+      seen = { apiOutput, report: await read(join(mount, "build-report.json")), server: await options.startServer(), options, browser, mount, extra };
       await access(mount);
       return [["coverage, with the real mount", { failures: [] }], ["search, with the real mount", { failures: ["the page does not name the refusal"] }]];
     };
-    const failures = await browserFailures("https://candidate.example", release, { browser: "the browser", runs });
+    const work = { identifier: "/lu-legilux/loi-2015-12-03-n1", date: "2015-12-11", anchor: "art_1er", beforeHistory: "2015-12-10" };
+    let askedOf = null;
+    const held = async (origin) => { askedOf = origin; return work; };
+    const failures = await browserFailures("https://candidate.example", release, { browser: "the browser", runs, held });
+    assert.equal(askedOf, "https://candidate.example", "the work is chosen from the revision's own answers");
+    assert.deepEqual(seen.extra, { held: work }, "and the steps ask for it (the review of #950)");
     assert.deepEqual(failures, ["search, with the real mount: the page does not name the refusal"]);
     assert.equal(seen.apiOutput, null, "no local API is started");
     assert.ok(seen.report.equals(report), "the release's mount report stands as the build report the steps read");
