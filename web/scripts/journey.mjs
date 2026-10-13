@@ -82,6 +82,7 @@ import { Session, findBrowser, launchBrowser } from "./browser-evidence.mjs";
 import { cspValue } from "./csp.mjs";
 import { EXPORT_WATERMARK } from "./export-build.mjs";
 import { EUROPE_TEXT_ACKNOWLEDGEMENT } from "./reading-answer.mjs";
+import { TMP_MARGIN_MEBIBYTES, tmpMebibytesFor } from "./image-run.mjs";
 
 export const ANSWER_DEADLINE_MS = 30_000;
 
@@ -520,8 +521,21 @@ async function listFiles(root) {
   return files;
 }
 
+/**
+ * How long an API is given to answer after it starts: a minute, and a minute more per GiB of the indexes it verifies into
+ * its temporary folder before it listens (the combined population mount's 2.3 GB took about 50 s on this machine, more
+ * than the minute a fixture mount needed, 2026-10-13).
+ */
+export async function startDeadlineMs(mount) {
+  const indexMebibytes = mount ? (await tmpMebibytesFor(mount)) - TMP_MARGIN_MEBIBYTES : 0;
+  return 60_000 + Math.ceil((indexMebibytes / 1024) * 60_000);
+}
+
 export async function startApi(apiOutput, mount, webRoot = null) {
   const home = await mkdtemp(join(tmpdir(), "lex-journey-api-"));
+  // The API's own temporary folder, beside its directory and removed with it: mounting copies each index there, and a run
+  // that ends the process would otherwise leave the copies (2.3 GB a start for the population mount).
+  const temporary = await mkdtemp(join(tmpdir(), "lex-journey-tmp-"));
   await cp(apiOutput, home, { recursive: true });
   await rm(join(home, "v3-corpus"), { recursive: true, force: true });
   await rm(join(home, "v3-web"), { recursive: true, force: true });
@@ -531,7 +545,7 @@ export async function startApi(apiOutput, mount, webRoot = null) {
   const origin = `http://127.0.0.1:${port}`;
   const child = spawn("dotnet", [join(home, "Lex.V3.Api.dll")], {
     cwd: home,
-    env: { ...process.env, ASPNETCORE_URLS: origin, DOTNET_NOLOGO: "1" },
+    env: { ...process.env, ASPNETCORE_URLS: origin, DOTNET_NOLOGO: "1", TMP: temporary, TEMP: temporary, TMPDIR: temporary },
     stdio: ["ignore", "pipe", "pipe"],
   });
   // Both outputs, from the first byte: what the process records is measured, not assumed.
@@ -541,7 +555,8 @@ export async function startApi(apiOutput, mount, webRoot = null) {
   child.stderr.on("data", (chunk) => { stderr += chunk; output += chunk; });
   let exited = false;
   child.on("exit", () => { exited = true; });
-  const deadline = Date.now() + 60_000;
+  const allowedMs = await startDeadlineMs(mount);
+  const deadline = Date.now() + allowedMs;
   while (Date.now() < deadline && !exited) {
     try {
       const answer = await fetch(`${origin}/api/v3/coverage`, {
@@ -564,6 +579,7 @@ export async function startApi(apiOutput, mount, webRoot = null) {
             child.kill();
             await new Promise((resolve) => setTimeout(resolve, 500));
             await rm(home, { recursive: true, force: true }).catch(() => {});
+            await rm(temporary, { recursive: true, force: true }).catch(() => {});
           },
         };
       }
@@ -572,12 +588,15 @@ export async function startApi(apiOutput, mount, webRoot = null) {
     }
     await new Promise((resolve) => setTimeout(resolve, 250));
   }
+  // Read before the process is ended: ending it is an exit too, and reported a timeout as one (2026-10-13).
+  const exitedByItself = exited;
   child.kill();
   await new Promise((resolve) => setTimeout(resolve, 500));
   await rm(home, { recursive: true, force: true }).catch(() => {});
-  throw new Error(exited
+  await rm(temporary, { recursive: true, force: true }).catch(() => {});
+  throw new Error(exitedByItself
     ? `the API exited before it answered: ${stderr}`
-    : `the API did not answer within 60 s: ${stderr}`);
+    : `the API did not answer within ${allowedMs / 1000} s: ${stderr}`);
 }
 
 /** Sets the form's select to a value as a pointer would: the value, then the change event the page listens for. */

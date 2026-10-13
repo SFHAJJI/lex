@@ -113,6 +113,12 @@ resource app 'Microsoft.App/containerApps@2024-03-01' = {
               name: 'ASPNETCORE_HTTP_PORTS'
               value: '8080'
             }
+            // The replica's /tmp is this container's alone and outlives a restart of it: the API removes the index copies an
+            // earlier start left there before it mounts again (V3StaleIndexCopies).
+            {
+              name: 'LEX_V3_TEMP_IS_PRIVATE'
+              value: '1'
+            }
           ]
           // The API listens only once its mount is open and verified (32 s on one core over the population mount), so a
           // startup probe gives it up to five minutes before the liveness probe, which would otherwise restart it, begins.

@@ -44,6 +44,8 @@ test("one server, with a private writable /tmp, its probes on the image's own ro
   assert.ok(startup.initialDelaySeconds + startup.periodSeconds * startup.failureThreshold >= 300, "at least five minutes to open the mount");
   // One vCPU: a replica's ephemeral storage holds the verified index copies only from one vCPU up (4 GiB; 2 GiB at half).
   assert.deepEqual(containers[0].resources, { cpu: "[json('1.0')]", memory: "2Gi" });
+  // The replica's /tmp outlives a container restart: the API is told it is its own, and removes a previous start's copies.
+  assert.ok(containers[0].env.some((variable) => variable.name === "LEX_V3_TEMP_IS_PRIVATE" && variable.value === "1"));
   assert.equal(app.properties.configuration.ingress.targetPort, 8080);
   assert.equal(app.properties.configuration.ingress.allowInsecure, false);
 });
