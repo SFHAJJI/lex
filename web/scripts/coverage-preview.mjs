@@ -55,9 +55,10 @@ const COUNTS_NOTE =
   'counts are of rows the index holds; totals.articles and languages[].articles count the '
   + 'articles the index holds, and the corpus can have recorded more articles than the index '
   + 'holds: members.article_outcomes counts what it recorded; a missing publisher date is counted '
-  + 'as missing and never dropped; articles_with_searchable_text is counted where the article '
-  + 'carries a publisher date, which is what the capability cells measure, and so it and '
-  + 'articles_without_publisher_date are not addends; when a language is requested, '
+  + 'as missing and never dropped; articles_with_searchable_text is what the capability cells '
+  + 'measure: each article with searchable text, at its own publisher date where it carries one, '
+  + 'else at the date of the state that holds it, and an article with neither is not counted; so '
+  + 'it and articles_without_publisher_date are not addends; when a language is requested, '
   + 'requested_language echoes it and only languages and capability_cells are narrowed to it, and '
   + "every other member, totals included, is the whole mount's";
 
@@ -227,8 +228,9 @@ const FRA = Object.freeze({
 });
 
 // The uncomfortable row, and the one this preview exists for. Its articles all lack a publisher
-// date, so nothing about it can be searched: the index measured no capability for it, the flag is
-// false and the count is zero.
+// date and hold no searchable text, so nothing about it can be searched: the index measured no
+// capability for it, the flag is false and the count is zero. (A missing date alone no longer means
+// that: an undated article is measured at its state's date, 2026-10-13.)
 //
 // Its state dates are VALUES and not nulls. `states.applicability_date` is `NOT NULL` and a
 // language row exists only because `states GROUP BY language` produced a group, so MIN and MAX over
@@ -302,8 +304,8 @@ const WHOLE_MOUNT = {
   heading: 'The whole mount',
   note:
     'Two language rows that disagree on purpose. One holds searchable text across four measured '
-    + 'periods and knows when its states begin and end; the other holds forty articles of which '
-    + 'none carries a publisher date, so nothing about it can be searched and its two date cells '
+    + 'periods and knows when its states begin and end; the other holds forty articles, none with '
+    + 'a publisher date or searchable text, so nothing about it can be searched and its two date cells '
     + 'say "not stated by the platform" rather than sitting blank. The works column sums past the '
     + 'total and is meant to: a work published in two languages is one work in two rows. Its log '
     + 'records four builds and the mount holds the text of three: its own and two earlier ones the '

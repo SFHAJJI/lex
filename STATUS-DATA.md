@@ -5,8 +5,8 @@ Updated 2026-10-13.
 ## The combined mount is derived; its gates found Luxembourg search empty (Claude, 2026-10-13)
 
 - **The combined mount exists.** One offline derive of run 15's custody (`derive-a`, the run's own runtime, every proxy
-  at a local trap) wrote the six files: 2.35 GB, the EU index 1.40 GB and the Luxembourg index 0.91 GB, peak working set
-  12.7 GB, 06:02 to 07:46 UTC. The second derive was stopped by its resource guard (commit headroom below 512 MB for a
+  at a local trap) wrote the six files: 2.52 GB, of which the EU index 1.40 GB, the Luxembourg index 0.91 GB and the
+  corpus 0.21 GB; peak working set 12.7 GB, 06:02 to 07:46 UTC. The second derive was stopped by its resource guard (commit headroom below 512 MB for a
   minute as the page file grew), so byte stability is shown by the release rehearsal's two derives instead.
 - **The mounted gates over it** (`V3MountedGatesTests`, 23 of 24 pass): temporal exactness 1.0 on every arm (Luxembourg
   4 x 120 cases, EU 3 x 562), each date shuffle caught; but refusal 20 of 21 and retrieval anchor nDCG@10 0.846 (n 52).
@@ -25,7 +25,8 @@ Updated 2026-10-13.
 - These are derivation and reader changes; the acquisition code stays frozen. A third derive with the fixed builder
   (`derive-c`) is running; the gates, the population journeys and the release rehearsal follow it.
 - **The chained canary after the population** (`C:\lex-v3\chained-canary-after-lu-1`, tool frozen at the integration
-  head): builds a and b both verified, 207 of 800 requests each.
+  head): builds a and b both verified, 207 of 800 requests each (135 to the Publications Office for the GDPR, 72 to
+  Legilux).
 
 ## The Luxembourg population is acquired; the combined derive waits for disk (Claude, 2026-10-12)
 

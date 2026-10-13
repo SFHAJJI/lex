@@ -1818,8 +1818,10 @@ public static class LuxembourgIndexBuilder
     /// <summary>
     /// The capability manifest measured from the index's rows. A search cell counts, per language and day, the articles with
     /// searchable text applicable on that day: by the article's own publisher date where the publisher states one, else by
-    /// the date of the one state of its language that holds it, which is the date search serves it at
-    /// (<see cref="LuxembourgIndexReader.SearchStateArticles"/>). The publisher's journal documents carry their applicability
+    /// the date of the one state of its language that holds it (the date <see cref="LuxembourgIndexReader.SearchStateArticles"/>
+    /// serves every hit at; a dated article keeps its own date here, as before). Search itself gates only on a language
+    /// holding any cell; the period lookup (<see cref="LuxembourgIndexReader.Search"/>, which nothing served calls) reads
+    /// articles by their own dates. The publisher's journal documents carry their applicability
     /// on the document and not on each article (none of the Luxembourg population's 8,854 articles carries one), so the
     /// earlier measure, by the article's own date alone (<see cref="MeasureCapabilitiesByArticleDates"/>), stated no
     /// searchable text and search answered nothing on a real mount (the mounted gates of 2026-10-13). An article without a

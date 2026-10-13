@@ -101,14 +101,15 @@ Decision 95 (lex-governance PR #9, merged 2026-09-30) records these rulings and 
 ## Blocked on the owner
 
 Only money, legal or public claims, credentials and going live (ruling 7):
-- Azure, for V3: a new subscription on 2026-10-13. The old one stays disabled (its billing profile is past due on a
-  EUR 6.10 invoice the portal cannot take; only Azure Support can clear it), so V2 at law.soufien.lu stays down. The
-  owner signed up a third Microsoft account (a free trial; about 30 EUR a month accepted) and, at the owner's request,
+- Azure, for V3: a new subscription on 2026-10-13. V2's subscription stays disabled (since 2026-10-02), so V2 at
+  law.soufien.lu stays down. The owner's Gmail account could not take V3 either: its billing profile is past due on a
+  EUR 6.10 invoice the portal cannot take (only Azure Support can clear it). The owner signed up a third Microsoft account (a free trial; about 30 EUR a month accepted) and, at the owner's request,
   the driver set up, in France Central: a budget of 30 a month with alerts, resource group `rg-lex-v3`, registry
   `crlexv3soufien`, a pull identity, Container Apps environment `cae-lex-v3` and key vault `kv-lex-v3-soufien`,
   which holds the release signing key (P-256, identity "lex-v3-release (Soufien Hajji)"; only its public half is on
   disk). Open for the owner: upgrade the trial to pay-as-you-go before its credit or 30 days run out; and, at go-live,
-  point soufien.lu's name servers at a new zone (the old zone sits in the disabled subscription). Nothing is deployed.
+  point soufien.lu's name servers at a new zone (the old zone is out of reach with V2's subscription). Nothing is
+  deployed.
 - The weekly 30-minute checkpoint slot.
 - The owner's rulings of 2026-10-04 (relayed by the audit session): the French copy accepted, the acquisition
   code frozen until the combined mount exists, the stage milestones closed, `OWNER-BRIEF.md` kept current.

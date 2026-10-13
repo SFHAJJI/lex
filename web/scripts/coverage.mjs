@@ -62,8 +62,9 @@
 // -- or drop it for `states`.
 //
 // The third rule is a sum this page must NOT do, and the platform says so itself in `counts_note`:
-// "articles_with_searchable_text is counted where the article carries a publisher date, which is
-// what the capability cells measure, and so it and articles_without_publisher_date are not
+// "articles_with_searchable_text is what the capability cells measure: each article with searchable
+// text, at its own publisher date where it carries one, else at the date of the state that holds it,
+// and an article with neither is not counted; so it and articles_without_publisher_date are not
 // addends". An article can carry a date and hold no searchable text. The V2 page REQUIRED exactly
 // this sum of its own two text columns, so on that rule any answer holding one such article -- a
 // dated article whose text is not searchable -- would have had no page at all. Not every honest
