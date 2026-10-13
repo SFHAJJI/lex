@@ -1319,9 +1319,11 @@ public static class LuxembourgIndexBuilder
     /// Why a build time cannot be an upper bound on the corpus's observation, by the one observation clock the corpus
     /// holds (its EU legal notice's capture), or null when it can be.
     /// </summary>
-    internal static string? EarlierThanEuCapture(DateTimeOffset builtAt, VerifiedLexCorpus6ManifestSet corpus)
+    internal static string? EarlierThanEuCapture(DateTimeOffset builtAt, VerifiedLexCorpus6ManifestSet corpus) =>
+        EarlierThanEuCapture(builtAt, corpus.Set.EuropeRightsMatrix.CapturedAt);
+
+    internal static string? EarlierThanEuCapture(DateTimeOffset builtAt, string capturedAt)
     {
-        var capturedAt = corpus.Set.EuropeRightsMatrix.CapturedAt;
         if (!DateTimeOffset.TryParse(
                 capturedAt, CultureInfo.InvariantCulture,
                 DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal, out var captured))
@@ -1338,7 +1340,14 @@ public static class LuxembourgIndexBuilder
 
     /// <summary>The body digest of every Luxembourg member that holds one, by the member's object reference.</summary>
     internal static IReadOnlyDictionary<string, string> BodiesByObjectRef(VerifiedLexCorpus6ManifestSet corpus) =>
-        corpus.Set.Members
+        BodiesByObjectRef(corpus.Set.Members);
+
+    /// <summary>The same, from a mount's view of the corpus, which keeps every member that holds a body.</summary>
+    internal static IReadOnlyDictionary<string, string> BodiesByObjectRef(LexCorpus6MountView corpus) =>
+        BodiesByObjectRef(corpus.HeldMembers);
+
+    private static IReadOnlyDictionary<string, string> BodiesByObjectRef(IEnumerable<LexCorpus6Member> members) =>
+        members
             .Where(static member => member.Publisher == PublisherId.LuLegilux && member.BodySha256 is not null)
             .ToDictionary(static member => member.ObjectRefSha256, static member => member.BodySha256!, StringComparer.Ordinal);
 
@@ -1902,9 +1911,8 @@ public static class LuxembourgIndexBuilder
         IReadOnlyList<WorkFactRow> workFacts,
         IReadOnlyList<EventRow> events)
     {
-        var bytes = JsonSerializer.SerializeToUtf8Bytes(
+        return ContractJson.Sha256OfDefaultJson(
             new LogicalRows(members, articles, states, workTitles, relations, workFacts, events));
-        return Convert.ToHexStringLower(SHA256.HashData(bytes));
     }
 
     internal static SqliteConnection Open(string path, SqliteOpenMode mode)
@@ -2395,12 +2403,14 @@ public sealed class LuxembourgIndexReader : IDisposable
             if (expectedProvenance != LuxembourgIndexBuilder.SqliteProvenance.Read(connection))
                 throw new InvalidDataException("The Luxembourg index SQLite provenance changed.");
 
-            var members = ReadMembers(connection);
+            // The two large tables (260,235 members and 1.5 million facts in the population) are read once, as the hash
+            // reads them; nothing else here needs them.
+            var members = new StreamedRows<LuxembourgIndexBuilder.MemberRow>(StreamMembers(connection));
             var articles = ReadArticles(connection);
             var states = ReadStates(connection);
             var workTitles = ReadWorkTitles(connection);
             var relations = ReadRelations(connection);
-            var workFacts = ReadWorkFacts(connection);
+            var workFacts = new StreamedRows<LuxembourgIndexBuilder.WorkFactRow>(StreamWorkFacts(connection));
             var events = LuxembourgIndexBuilder.ReadLogEvents(connection);
             ValidateStates(articles, states);
             if (!LuxembourgIndexBuilder.ProjectRelations(articles).SequenceEqual(relations))
@@ -3673,16 +3683,14 @@ public sealed class LuxembourgIndexReader : IDisposable
         return Convert.ToString(command.ExecuteScalar(), CultureInfo.InvariantCulture);
     }
 
-    private static LuxembourgIndexBuilder.MemberRow[] ReadMembers(SqliteConnection connection)
+    private static IEnumerable<LuxembourgIndexBuilder.MemberRow> StreamMembers(SqliteConnection connection)
     {
         using var command = connection.CreateCommand();
         command.CommandText = "SELECT object_ref_sha256,source_ordinal,outcome,rights_disposition,stage3_outcomes_json,gaps_json FROM members ORDER BY object_ref_sha256";
         using var reader = command.ExecuteReader();
-        var values = new List<LuxembourgIndexBuilder.MemberRow>();
-        while (reader.Read()) values.Add(new(
+        while (reader.Read()) yield return new(
             reader.GetString(0), reader.GetInt32(1), reader.GetString(2),
-            reader.IsDBNull(3) ? null : reader.GetString(3), reader.GetString(4), reader.GetString(5)));
-        return values.ToArray();
+            reader.IsDBNull(3) ? null : reader.GetString(3), reader.GetString(4), reader.GetString(5));
     }
 
     private static LuxembourgIndexBuilder.ArticleRow[] ReadArticles(SqliteConnection connection)
@@ -3855,7 +3863,19 @@ public sealed class LuxembourgIndexReader : IDisposable
     public void VerifyEventLogSources(VerifiedLexCorpus6ManifestSet corpus)
     {
         ArgumentNullException.ThrowIfNull(corpus);
-        if (corpus.ArtifactRef != CorpusRef)
+        VerifyEventLogSources(corpus.ArtifactRef, () => LuxembourgIndexBuilder.BodiesByObjectRef(corpus), corpus.Set.EuropeRightsMatrix.CapturedAt);
+    }
+
+    /// <summary>The same check, from a mount's view of the corpus (<see cref="LexCorpus6MountView"/>).</summary>
+    public void VerifyEventLogSources(LexCorpus6MountView corpus)
+    {
+        ArgumentNullException.ThrowIfNull(corpus);
+        VerifyEventLogSources(corpus.ArtifactRef, () => LuxembourgIndexBuilder.BodiesByObjectRef(corpus), corpus.EuropeRightsMatrix.CapturedAt);
+    }
+
+    private void VerifyEventLogSources(SourceArtifactRef corpusRef, Func<IReadOnlyDictionary<string, string>> bodies, string euCapturedAt)
+    {
+        if (corpusRef != CorpusRef)
         {
             throw new InvalidDataException("The corpus is not the one this Luxembourg index binds.");
         }
@@ -3871,7 +3891,7 @@ public sealed class LuxembourgIndexReader : IDisposable
         {
             var states = ReadStates(_connection);
             var expected = LuxembourgIndexBuilder.SourceBodiesOfStates(
-                ReadArticles(_connection), states, LuxembourgIndexBuilder.BodiesByObjectRef(corpus));
+                ReadArticles(_connection), states, bodies());
             var held = LuxembourgIndexBuilder.FoldLog(LuxembourgIndexBuilder.ReadLogEvents(_connection));
             foreach (var state in states)
             {
@@ -3885,23 +3905,21 @@ public sealed class LuxembourgIndexReader : IDisposable
             // This build's time is an upper bound on its corpus's observation only if it is no earlier than the corpus's
             // EU capture; the index alone holds no capture time, so the check is made here, with the corpus.
             var builtAt = LuxembourgIndexBuilder.ReadLogObservations(_connection)[^1].BuiltAt;
-            if (LuxembourgIndexBuilder.EarlierThanEuCapture(LuxembourgIndexBuilder.ParseBuiltAt(builtAt)!.Value, corpus) is { } reason)
+            if (LuxembourgIndexBuilder.EarlierThanEuCapture(LuxembourgIndexBuilder.ParseBuiltAt(builtAt)!.Value, euCapturedAt) is { } reason)
             {
                 throw new InvalidDataException($"The Luxembourg event log's last build time {builtAt} {reason}.");
             }
         }
     }
 
-    private static LuxembourgIndexBuilder.WorkFactRow[] ReadWorkFacts(SqliteConnection connection)
+    private static IEnumerable<LuxembourgIndexBuilder.WorkFactRow> StreamWorkFacts(SqliteConnection connection)
     {
         using var command = connection.CreateCommand();
         command.CommandText = "SELECT subject_iri,predicate,fact_kind,object_kind,object_value,datatype_iri,language_tag,evidence_sha256 FROM work_facts ORDER BY subject_iri,predicate,object_kind,object_value,datatype_iri,language_tag,evidence_sha256";
         using var reader = command.ExecuteReader();
-        var values = new List<LuxembourgIndexBuilder.WorkFactRow>();
-        while (reader.Read()) values.Add(new(
+        while (reader.Read()) yield return new(
             reader.GetString(0), reader.GetString(1), reader.GetString(2), reader.GetString(3),
-            reader.GetString(4), reader.GetString(5), reader.GetString(6), reader.GetString(7)));
-        return values.ToArray();
+            reader.GetString(4), reader.GetString(5), reader.GetString(6), reader.GetString(7));
     }
 
 }

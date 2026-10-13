@@ -337,9 +337,15 @@ public sealed class EuropeIndexBuilderTests
         finally { EuropeIndexBuilder.DeleteDatabase(path); }
     }
 
-    private static T[] ReadRows<T>(SqliteConnection connection, string method) =>
-        (T[])typeof(EuropeIndexReader).GetMethod(method,
-            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)!.Invoke(null, [connection])!;
+    private static T[] ReadRows<T>(SqliteConnection connection, string method)
+    {
+        // The three large tables are streamed (StreamArticles, StreamArticleSources, StreamArticleDigests): the reader reads
+        // them once, as their logical-row hash reads them.
+        const System.Reflection.BindingFlags Flags = System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static;
+        var reader = typeof(EuropeIndexReader).GetMethod(method, Flags) ??
+                     typeof(EuropeIndexReader).GetMethod("Stream" + method["Read".Length..], Flags)!;
+        return ((IEnumerable<T>)reader.Invoke(null, [connection])!).ToArray();
+    }
 
     [TestMethod]
     [DataRow("UPDATE article_sources SET package_sha256=printf('%064d',0)")]
