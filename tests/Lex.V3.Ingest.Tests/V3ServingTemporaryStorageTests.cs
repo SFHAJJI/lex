@@ -37,6 +37,9 @@ public sealed class V3ServingTemporaryStorageTests
         using (var reader = LuxembourgIndexReader.OpenAndVerify(luxembourg.IndexRef, luxembourg.IndexBytes.Span, corpus.ArtifactRef, luxembourg.CapabilityManifest))
         {
             Assert.AreEqual(Memory, TemporaryStorage(SharedConnection(reader)), "the Luxembourg reader's shared connection");
+            // The counts are read once for the reader's life (the review of #953): every page asks for coverage, and
+            // its sorts are held in memory while serving.
+            Assert.AreSame(reader.ResolveCoverage(), reader.ResolveCoverage());
         }
     }
 

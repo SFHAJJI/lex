@@ -2253,6 +2253,8 @@ public sealed class LuxembourgIndexReader : IDisposable
     private readonly object _gate = new();
     private readonly object _articleOutcomesGate = new();
     private IReadOnlyList<KeyValuePair<string, long>>? _articleOutcomes;
+    private readonly object _coverageGate = new();
+    private LuxembourgIndexCoverage? _coverage;
 
     private LuxembourgIndexReader(
         string path,
@@ -2895,9 +2897,21 @@ public sealed class LuxembourgIndexReader : IDisposable
     /// publisher date is counted and never dropped. Nothing here says what the publisher holds. It
     /// reads through its own read-only connection on the reader's private verified copy and does not
     /// take the reader's gate, so a caller who asks for it again and again cannot make every other
-    /// operation on the mount wait behind the counts.
+    /// operation on the mount wait behind the counts. The index is immutable, so the counts are read
+    /// once for the reader's life and every later report is the same one: every page asks for
+    /// coverage, and the counts' sorts, held in memory while serving (the gaps' distinct count is
+    /// about 24 MiB over the population mount, the review of #953), would otherwise be built again for
+    /// each request at once.
     /// </summary>
     public LuxembourgIndexCoverage ResolveCoverage()
+    {
+        lock (_coverageGate)
+        {
+            return _coverage ??= ReadCoverage();
+        }
+    }
+
+    private LuxembourgIndexCoverage ReadCoverage()
     {
         {
             using var connection = LuxembourgIndexBuilder.OpenForServing(_path);
