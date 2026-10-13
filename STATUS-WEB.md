@@ -4,6 +4,27 @@ Updated 2026-10-13. The web lane's progress, split out of STATUS.md (which keeps
 items and the pointers) by the standing order of 2026-10-01 13:50 UTC. Every pull request of the web lane
 updates this file, not STATUS.md.
 
+## The deploy kit and the journeys over the population (sole driver, 2026-10-13)
+
+- **The container is one vCPU and 2 GiB** (`deploy/main.bicep`, `main.json` rebuilt): the API opens the population mount
+  with a 0.5 GB peak, and its private `/tmp` holds 2.15 GB of verified index copies, which a half-vCPU replica's 2 GiB of
+  ephemeral storage cannot hold (one vCPU has 4 GiB). A startup probe (`/`, 10 s then 10 tries 30 s apart) gives the
+  mount five minutes before the liveness probe can restart the container.
+- **A restart finds room to mount again.** A replica's `/tmp` outlives a container restart and an ended process leaves
+  its copies there (the review of #949): the bicep sets `LEX_V3_TEMP_IS_PRIVATE=1` and the API then removes an earlier
+  start's copies before it mounts (`V3StaleIndexCopies`); without the variable nothing is removed.
+- **The image run** sizes its private `/tmp` tmpfs from the mount it carries (every `.sqlite3` file plus 256 MiB; it was a
+  fixed 256m) and allows its start 90 s plus a minute per GiB of indexes.
+- **The journeys over the population mount pass in Chrome** (`journey.mjs --real-mount --served-by-api`, `derive-c`, the
+  API at #949): all 29 runs. The eight screens (coverage; search, 14 citations verified; dossier; reading, 8; compare;
+  radar; export, 8; provision history), J1 (refused `no_version_for_date`), J2, J5, the three EU steps (search 61
+  citations verified, dossier, reading 200), J6, J7 (REST and MCP alike) and J8. Three journey defects were fixed on
+  the way: the API was given a fixed 60 s to answer (the population mount takes about 50 s; now a minute plus a minute
+  per GiB), the timeout was reported as an exit (the flag was read after the process was ended), and every ended API
+  left 2.3 GB of copies in the shared temporary folder (each now has its own, removed at close). And the steps now ask
+  for a Luxembourg work the mount holds (`heldLuxembourgWork`: `loi-2015-12-03-n1` on 2015-12-11 here); the fixture's
+  work is not in the population, so its steps only ever met `identifier_unknown`.
+
 ## The API serves the combined population in a small server (sole driver, 2026-10-13)
 
 - **What was measured.** The real API (`Lex.V3.Api`) over the combined EU and Luxembourg mount (`derive-c`, 2.52 GB), one

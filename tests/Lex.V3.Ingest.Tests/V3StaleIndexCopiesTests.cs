@@ -48,7 +48,10 @@ public sealed class V3StaleIndexCopiesTests
             "if (Environment.GetEnvironmentVariable(V3StaleIndexCopies.PrivateTemporaryFolderVariable) == \"1\")");
         Assert.IsLessThan(program.IndexOf("V3CorpusMount.OpenAsync(", StringComparison.Ordinal),
             program.IndexOf("V3StaleIndexCopies.Remove(Path.GetTempPath())", StringComparison.Ordinal), "before the mount opens");
-        Assert.AreEqual("LEX_V3_TEMP_IS_PRIVATE", V3StaleIndexCopies.PrivateTemporaryFolderVariable);
+        // The deployment is what says the folder is the process's own: the container app sets the variable the API reads.
+        var bicep = File.ReadAllText(Path.Combine(RepositoryRoot(), "deploy", "main.bicep"));
+        StringAssert.Matches(bicep, new System.Text.RegularExpressions.Regex(
+            $@"name: '{V3StaleIndexCopies.PrivateTemporaryFolderVariable}'\s+value: '1'"));
     }
 
     private static string RepositoryRoot()
