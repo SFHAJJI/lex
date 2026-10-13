@@ -1,8 +1,30 @@
 # Lex V3 status: the web lane
 
-Updated 2026-10-05. The web lane's progress, split out of STATUS.md (which keeps the heads, the owner's open
+Updated 2026-10-13. The web lane's progress, split out of STATUS.md (which keeps the heads, the owner's open
 items and the pointers) by the standing order of 2026-10-01 13:50 UTC. Every pull request of the web lane
 updates this file, not STATUS.md.
+
+## The API serves the combined population in a small server (sole driver, 2026-10-13)
+
+- **What was measured.** The real API (`Lex.V3.Api`) over the combined EU and Luxembourg mount (`derive-c`, 2.52 GB), one
+  core, the GC heap capped as a container would cap it. Before this change it needed a 9.8 GB peak to open the mount
+  (46 s) and refused it with `OutOfMemoryException` under every cap up to 6 GiB, so no Azure consumption container (at
+  most 8 GiB) could serve it; its first EU search then took 27 to 31 s.
+- **Why.** Every check at open held whole tables: the corpus (207 MB, 260,235 members) was parsed twice and re-serialized
+  whole for its canonical check, and kept as 1.5 GB of objects for the server's life; the EU index (1.4 GB) was read
+  into memory twice; both indexes serialized every row into one byte array to hash it. And the EU articles table has
+  no index on expression, work or CELEX, so lookups by them read every article's text.
+- **What changed, every check kept.** The logical-row hashes are written into SHA-256 as the serializer writes them
+  (the same bytes); the large tables are read once, as the hash reads them, and checked row by row; the EU index is
+  copied and hashed as a stream; the corpus is verified member by member (`LexCorpus6MountView`: each member's exact
+  canonical bytes at its place, the header's canonical bytes around them) and the mount keeps only the members an
+  answer looks up; the EU reader knows, from the rows it verified, which member objects carry each expression, work and
+  CELEX, and finds their articles through the existing object index.
+- **Now.** The mount opens with a 0.52 GB peak and keeps 83 MB; the API serves it on one core under a 1 GiB container's
+  heap cap, answering in 32 s from start (its private `/tmp` holds 2.15 GB of verified index copies). An EU search answers
+  in 0.02 s, the first in 1.9 s; an EU dossier in 0.04 s. The gates over the mount give the same card.
+- **For the deploy.** One vCPU and 2 GiB: the memory fits with room, and a replica's ephemeral storage is 4 GiB at one
+  vCPU (2 GiB at half of one, less than the index copies). The deploy kit's sizing and a startup probe follow.
 
 ## The launch contract, line by line (2026-10-03)
 
@@ -103,7 +125,7 @@ below:
   tool (#924). Runs 9 to 13 stopped before the end, and their custody is kept (STATUS-DATA.md).
 - **The Luxembourg population:** run 11 proved all nine families for the first time and stopped at the census join on
   2026-10-09 (publisher drift during the run). #943 fixes that and two later defects that replays of its journal on the
-  real custody found; a fourth replay reached the document phase. The run restarts fresh on the merged build, under a
+  real custody found; a fourth replay reached the document phase. Run 14 started on 2026-10-09 on the #943 build, was stopped at the owner's request on 2026-10-10 after seven families, and resumed as run 15 on 2026-10-11, under a
   supervisor, reusing the EU population (`claude-lu-population-run.ps1`). Runs 1, 2, 10 and 11 to 13: STATUS-DATA.md.
 - **Robots read per URL; the rights receipt fetched once per build on the Publications Office route; no request to
   eur-lex.europa.eu; transport bytes retained before decode:** by construction in the acquisition (STATUS-DATA.md).

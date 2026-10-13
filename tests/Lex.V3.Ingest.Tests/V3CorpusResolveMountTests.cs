@@ -1259,7 +1259,7 @@ public sealed class V3CorpusResolveMountTests
 
             var indexBytes = await File.ReadAllBytesAsync(indexPath);
             var indexDigest = Convert.ToHexStringLower(SHA256.HashData(indexBytes));
-            var manifest = LuxembourgIndexBuilder.MeasureCapabilities(indexDigest, articles, titles);
+            var manifest = LuxembourgIndexBuilder.MeasureCapabilities(indexDigest, articles, states, titles);
             using var stream = new MemoryStream();
             _ = V3IndexCapabilityManifestArtifact.Write(stream, manifest);
             await File.WriteAllBytesAsync(
@@ -1297,7 +1297,7 @@ public sealed class V3CorpusResolveMountTests
 
             var indexBytes = await File.ReadAllBytesAsync(indexPath);
             var indexDigest = Convert.ToHexStringLower(SHA256.HashData(indexBytes));
-            var manifest = LuxembourgIndexBuilder.MeasureCapabilities(indexDigest, articles, titles);
+            var manifest = LuxembourgIndexBuilder.MeasureCapabilities(indexDigest, articles, states, titles);
             using var stream = new MemoryStream();
             _ = V3IndexCapabilityManifestArtifact.Write(stream, manifest);
             await File.WriteAllBytesAsync(
@@ -1390,7 +1390,7 @@ public sealed class V3CorpusResolveMountTests
 
             var indexBytes = await File.ReadAllBytesAsync(indexPath);
             var indexDigest = Convert.ToHexStringLower(SHA256.HashData(indexBytes));
-            var manifest = LuxembourgIndexBuilder.MeasureCapabilities(indexDigest, articles, titles);
+            var manifest = LuxembourgIndexBuilder.MeasureCapabilities(indexDigest, articles, states, titles);
             using var stream = new MemoryStream();
             _ = V3IndexCapabilityManifestArtifact.Write(stream, manifest);
             await File.WriteAllBytesAsync(
@@ -1469,7 +1469,7 @@ public sealed class V3CorpusResolveMountTests
                     ? article with { ApplicabilityDate = null }
                     : article).ToArray()
                 : articles;
-            var manifest = LuxembourgIndexBuilder.MeasureCapabilities(indexDigest, measured, titles);
+            var manifest = LuxembourgIndexBuilder.MeasureCapabilities(indexDigest, measured, states, titles);
             using var stream = new MemoryStream();
             _ = V3IndexCapabilityManifestArtifact.Write(stream, manifest);
             await File.WriteAllBytesAsync(
@@ -1592,7 +1592,7 @@ public sealed class V3CorpusResolveMountTests
 
             var indexBytes = await File.ReadAllBytesAsync(indexPath);
             var indexDigest = Convert.ToHexStringLower(SHA256.HashData(indexBytes));
-            var manifest = LuxembourgIndexBuilder.MeasureCapabilities(indexDigest, articles, titles);
+            var manifest = LuxembourgIndexBuilder.MeasureCapabilities(indexDigest, articles, states, titles);
             using var stream = new MemoryStream();
             _ = V3IndexCapabilityManifestArtifact.Write(stream, manifest);
             await File.WriteAllBytesAsync(
@@ -1691,7 +1691,7 @@ public sealed class V3CorpusResolveMountTests
 
             var indexBytes = await File.ReadAllBytesAsync(indexPath);
             var indexDigest = Convert.ToHexStringLower(SHA256.HashData(indexBytes));
-            var manifest = LuxembourgIndexBuilder.MeasureCapabilities(indexDigest, articles, titles);
+            var manifest = LuxembourgIndexBuilder.MeasureCapabilities(indexDigest, articles, states, titles);
             using var stream = new MemoryStream();
             _ = V3IndexCapabilityManifestArtifact.Write(stream, manifest);
             await File.WriteAllBytesAsync(
@@ -1742,7 +1742,7 @@ public sealed class V3CorpusResolveMountTests
 
             var indexBytes = await File.ReadAllBytesAsync(indexPath);
             var indexDigest = Convert.ToHexStringLower(SHA256.HashData(indexBytes));
-            var manifest = LuxembourgIndexBuilder.MeasureCapabilities(indexDigest, articles, titles);
+            var manifest = LuxembourgIndexBuilder.MeasureCapabilities(indexDigest, articles, states, titles);
             using var stream = new MemoryStream();
             _ = V3IndexCapabilityManifestArtifact.Write(stream, manifest);
             await File.WriteAllBytesAsync(
@@ -2029,7 +2029,7 @@ public sealed class V3CorpusResolveMountTests
 
             var indexBytes = await File.ReadAllBytesAsync(indexPath);
             var indexDigest = Convert.ToHexStringLower(SHA256.HashData(indexBytes));
-            var manifest = LuxembourgIndexBuilder.MeasureCapabilities(indexDigest, articles, titles);
+            var manifest = LuxembourgIndexBuilder.MeasureCapabilities(indexDigest, articles, states, titles);
             using var stream = new MemoryStream();
             _ = V3IndexCapabilityManifestArtifact.Write(stream, manifest);
             await File.WriteAllBytesAsync(

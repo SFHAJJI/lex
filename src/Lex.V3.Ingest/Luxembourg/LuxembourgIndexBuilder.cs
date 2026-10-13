@@ -681,7 +681,7 @@ public static class LuxembourgIndexBuilder
             var bytes = File.ReadAllBytes(path);
             var digest = Convert.ToHexStringLower(SHA256.HashData(bytes));
             var indexRef = new SourceArtifactRef(LexCorpus6Builder.ResourceIdOf(digest), digest);
-            var manifest = MeasureCapabilities(digest, articles, workTitles);
+            var manifest = MeasureCapabilities(digest, articles, states, workTitles);
             using var manifestStream = new MemoryStream();
             var manifestDigest = V3IndexCapabilityManifestArtifact.Write(manifestStream, manifest);
             var manifestBytes = manifestStream.ToArray();
@@ -858,6 +858,12 @@ public static class LuxembourgIndexBuilder
                 static group => ExactDocumentDate(group.Select(
                     static value => value.Assertion.ObjectIriOrLexical)),
                 StringComparer.Ordinal);
+        // The legal resource each expression's state sources name, for a title's document date (TitleDocumentDate); an
+        // expression named with two legal resources has none.
+        var legalResourceByExpression = stateSources.Values
+            .GroupBy(static source => source.ExpressionIri, StringComparer.Ordinal)
+            .Where(static group => group.Select(static source => source.PublisherLegalResourceIri).Distinct(StringComparer.Ordinal).Count() == 1)
+            .ToDictionary(static group => group.Key, static group => group.First().PublisherLegalResourceIri, StringComparer.Ordinal);
         workTitles = assertions
             .Where(static value => value.FactDisposition.Predicate is
                 Lex.V3.Contracts.Source.Luxembourg.LuxembourgAssertionPredicate.Title or
@@ -870,9 +876,7 @@ public static class LuxembourgIndexBuilder
                     article.Language,
                     assertion.Assertion.ObjectIriOrLexical,
                     NormalizeTitle(assertion.Assertion.ObjectIriOrLexical),
-                    datesBySubject.GetValueOrDefault(assertion.Assertion.SubjectIri) ??
-                        datesBySubject.GetValueOrDefault(article.PublisherWid ?? article.ExpressionIri) ??
-                        article.ApplicabilityDate,
+                    TitleDocumentDate(assertion.Assertion.SubjectIri, article, datesBySubject, legalResourceByExpression),
                     assertion.FactDisposition.Predicate ==
                         Lex.V3.Contracts.Source.Luxembourg.LuxembourgAssertionPredicate.Title
                         ? "title"
@@ -1315,9 +1319,11 @@ public static class LuxembourgIndexBuilder
     /// Why a build time cannot be an upper bound on the corpus's observation, by the one observation clock the corpus
     /// holds (its EU legal notice's capture), or null when it can be.
     /// </summary>
-    internal static string? EarlierThanEuCapture(DateTimeOffset builtAt, VerifiedLexCorpus6ManifestSet corpus)
+    internal static string? EarlierThanEuCapture(DateTimeOffset builtAt, VerifiedLexCorpus6ManifestSet corpus) =>
+        EarlierThanEuCapture(builtAt, corpus.Set.EuropeRightsMatrix.CapturedAt);
+
+    internal static string? EarlierThanEuCapture(DateTimeOffset builtAt, string capturedAt)
     {
-        var capturedAt = corpus.Set.EuropeRightsMatrix.CapturedAt;
         if (!DateTimeOffset.TryParse(
                 capturedAt, CultureInfo.InvariantCulture,
                 DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal, out var captured))
@@ -1334,7 +1340,14 @@ public static class LuxembourgIndexBuilder
 
     /// <summary>The body digest of every Luxembourg member that holds one, by the member's object reference.</summary>
     internal static IReadOnlyDictionary<string, string> BodiesByObjectRef(VerifiedLexCorpus6ManifestSet corpus) =>
-        corpus.Set.Members
+        BodiesByObjectRef(corpus.Set.Members);
+
+    /// <summary>The same, from a mount's view of the corpus, which keeps every member that holds a body.</summary>
+    internal static IReadOnlyDictionary<string, string> BodiesByObjectRef(LexCorpus6MountView corpus) =>
+        BodiesByObjectRef(corpus.HeldMembers);
+
+    private static IReadOnlyDictionary<string, string> BodiesByObjectRef(IEnumerable<LexCorpus6Member> members) =>
+        members
             .Where(static member => member.Publisher == PublisherId.LuLegilux && member.BodySha256 is not null)
             .ToDictionary(static member => member.ObjectRefSha256, static member => member.BodySha256!, StringComparer.Ordinal);
 
@@ -1634,6 +1647,25 @@ public static class LuxembourgIndexBuilder
         return Convert.ToHexStringLower(hash.GetHashAndReset());
     }
 
+    /// <summary>
+    /// A title's document date: the publisher's <c>dateDocument</c> on the title's own subject, else on the article's work
+    /// identifier (its expression when it has none), else on the expression's legal resource, else the article's own
+    /// applicability date. The publisher dates its journal documents on the legal resource (<c>.../jo</c>) and titles them
+    /// on the expression (<c>.../jo/fr</c>), so before the legal resource was asked none of the Luxembourg population's
+    /// 2,021 titles had a date (the mounted gates of 2026-10-13).
+    /// </summary>
+    internal static string? TitleDocumentDate(
+        string titleSubject,
+        ArticleRow article,
+        IReadOnlyDictionary<string, string> datesBySubject,
+        IReadOnlyDictionary<string, string> legalResourceByExpression) =>
+        datesBySubject.GetValueOrDefault(titleSubject) ??
+        datesBySubject.GetValueOrDefault(article.PublisherWid ?? article.ExpressionIri) ??
+        (legalResourceByExpression.TryGetValue(article.ExpressionIri, out var legalResource)
+            ? datesBySubject.GetValueOrDefault(legalResource)
+            : null) ??
+        article.ApplicabilityDate;
+
     private static string ExactDocumentDate(IEnumerable<string> values)
     {
         var dates = values.Select(ApplicabilityDate).Distinct(StringComparer.Ordinal).ToArray();
@@ -1792,40 +1824,78 @@ public static class LuxembourgIndexBuilder
         }
     }
 
+    /// <summary>
+    /// The capability manifest measured from the index's rows. A search cell counts, per language and day, the articles with
+    /// searchable text applicable on that day: by the article's own publisher date where the publisher states one, else by
+    /// the date of the one state of its language that holds it (the date <see cref="LuxembourgIndexReader.SearchStateArticles"/>
+    /// serves every hit at; a dated article keeps its own date here, as before). Search itself gates only on a language
+    /// holding any cell; the period lookup (<see cref="LuxembourgIndexReader.Search"/>, which nothing served calls) reads
+    /// articles by their own dates. The publisher's journal documents carry their applicability
+    /// on the document and not on each article (none of the Luxembourg population's 8,854 articles carries one), so the
+    /// earlier measure, by the article's own date alone (<see cref="MeasureCapabilitiesByArticleDates"/>), stated no
+    /// searchable text and search answered nothing on a real mount (the mounted gates of 2026-10-13). An article without a
+    /// date of its own and in no state is not counted, as before.
+    /// </summary>
     internal static V3IndexCapabilityManifest MeasureCapabilities(
         string digest,
         IReadOnlyList<ArticleRow> articles,
+        IReadOnlyList<StateRow> states,
         IReadOnlyList<WorkTitleRow>? workTitles = null)
     {
-        var cells = articles
+        ArgumentNullException.ThrowIfNull(states);
+        // An article's state, when exactly one state holds it (the reader refuses an index where two do).
+        var stateOfArticle = states
+            .SelectMany(static state => (JsonSerializer.Deserialize<string[]>(state.ArticleIdentitiesJson) ?? [])
+                .Select(identity => (Identity: identity, State: state)))
+            .GroupBy(static entry => entry.Identity, StringComparer.Ordinal)
+            .Where(static group => group.Count() == 1)
+            .ToDictionary(static group => group.Key, static group => group.Single().State, StringComparer.Ordinal);
+        string? Applicable(ArticleRow row) =>
+            row.ApplicabilityDate ??
+            (stateOfArticle.TryGetValue(row.ArticleIdentitySha256, out var state) &&
+             string.Equals(state.Language, row.Language, StringComparison.Ordinal)
+                ? state.ApplicabilityDate
+                : null);
+        return Manifest(digest, articles
+            .Where(static row => row.SearchableText.Length != 0)
+            .Select(row => (row.Language, Date: Applicable(row)))
+            .Where(static row => row.Date is not null)
+            .GroupBy(static row => row)
+            .Select(group => Cell(digest, "search", "articles", "searchable_text", group.Key.Language, group.Key.Date!, group.LongCount()))
+            .Concat(TitleCells(digest, workTitles)));
+    }
+
+    /// <summary>
+    /// The earlier measure, by each article's own publisher date: what an index built before 2026-10-13 states. The reader
+    /// accepts a manifest measured either way, so a retained generation built then still opens and serves what its manifest
+    /// states.
+    /// </summary>
+    internal static V3IndexCapabilityManifest MeasureCapabilitiesByArticleDates(
+        string digest,
+        IReadOnlyList<ArticleRow> articles,
+        IReadOnlyList<WorkTitleRow>? workTitles = null) =>
+        Manifest(digest, articles
             .Where(static row => row.ApplicabilityDate is not null && row.SearchableText.Length != 0)
             .GroupBy(static row => (row.Language, row.ApplicabilityDate))
-            .Select(group => new V3IndexCapabilityCell(
-                PublisherId.LuLegilux,
-                digest,
-                "search",
-                "articles",
-                "searchable_text",
-                group.Key.Language,
-                DateOnly.ParseExact(group.Key.ApplicabilityDate!, "yyyy-MM-dd", CultureInfo.InvariantCulture),
-                DateOnly.ParseExact(group.Key.ApplicabilityDate!, "yyyy-MM-dd", CultureInfo.InvariantCulture),
-                group.LongCount()))
-            .Concat((workTitles ?? Array.Empty<WorkTitleRow>())
-                .Where(static row => row.DocumentDate is not null)
-                .GroupBy(static row => (row.Language, row.DocumentDate))
-                .Select(group => new V3IndexCapabilityCell(
-                    PublisherId.LuLegilux,
-                    digest,
-                    "resolve",
-                    "work_titles",
-                    "normalized_title",
-                    group.Key.Language,
-                    DateOnly.ParseExact(group.Key.DocumentDate!, "yyyy-MM-dd", CultureInfo.InvariantCulture),
-                    DateOnly.ParseExact(group.Key.DocumentDate!, "yyyy-MM-dd", CultureInfo.InvariantCulture),
-                    group.LongCount())))
-            .ToArray();
+            .Select(group => Cell(digest, "search", "articles", "searchable_text", group.Key.Language, group.Key.ApplicabilityDate!, group.LongCount()))
+            .Concat(TitleCells(digest, workTitles)));
+
+    private static IEnumerable<V3IndexCapabilityCell> TitleCells(string digest, IReadOnlyList<WorkTitleRow>? workTitles) =>
+        (workTitles ?? Array.Empty<WorkTitleRow>())
+            .Where(static row => row.DocumentDate is not null)
+            .GroupBy(static row => (row.Language, row.DocumentDate))
+            .Select(group => Cell(digest, "resolve", "work_titles", "normalized_title", group.Key.Language, group.Key.DocumentDate!, group.LongCount()));
+
+    private static V3IndexCapabilityCell Cell(string digest, string operation, string column, string field, string language, string date, long population)
+    {
+        var day = DateOnly.ParseExact(date, "yyyy-MM-dd", CultureInfo.InvariantCulture);
+        return new V3IndexCapabilityCell(PublisherId.LuLegilux, digest, operation, column, field, language, day, day, population);
+    }
+
+    private static V3IndexCapabilityManifest Manifest(string digest, IEnumerable<V3IndexCapabilityCell> cells)
+    {
         if (!V3IndexCapabilityManifest.TryCreate(
-                PublisherId.LuLegilux, digest, cells, V3UnservedOperations.Rows, out var manifest, out var refusal))
+                PublisherId.LuLegilux, digest, cells.ToArray(), V3UnservedOperations.Rows, out var manifest, out var refusal))
         {
             throw new InvalidDataException($"Measured Luxembourg capabilities are invalid: {refusal}.");
         }
@@ -1841,9 +1911,8 @@ public static class LuxembourgIndexBuilder
         IReadOnlyList<WorkFactRow> workFacts,
         IReadOnlyList<EventRow> events)
     {
-        var bytes = JsonSerializer.SerializeToUtf8Bytes(
+        return ContractJson.Sha256OfDefaultJson(
             new LogicalRows(members, articles, states, workTitles, relations, workFacts, events));
-        return Convert.ToHexStringLower(SHA256.HashData(bytes));
     }
 
     internal static SqliteConnection Open(string path, SqliteOpenMode mode)
@@ -2334,12 +2403,14 @@ public sealed class LuxembourgIndexReader : IDisposable
             if (expectedProvenance != LuxembourgIndexBuilder.SqliteProvenance.Read(connection))
                 throw new InvalidDataException("The Luxembourg index SQLite provenance changed.");
 
-            var members = ReadMembers(connection);
+            // The two large tables (260,235 members and 1.5 million facts in the population) are read once, as the hash
+            // reads them; nothing else here needs them.
+            var members = new StreamedRows<LuxembourgIndexBuilder.MemberRow>(StreamMembers(connection));
             var articles = ReadArticles(connection);
             var states = ReadStates(connection);
             var workTitles = ReadWorkTitles(connection);
             var relations = ReadRelations(connection);
-            var workFacts = ReadWorkFacts(connection);
+            var workFacts = new StreamedRows<LuxembourgIndexBuilder.WorkFactRow>(StreamWorkFacts(connection));
             var events = LuxembourgIndexBuilder.ReadLogEvents(connection);
             ValidateStates(articles, states);
             if (!LuxembourgIndexBuilder.ProjectRelations(articles).SequenceEqual(relations))
@@ -2362,8 +2433,10 @@ public sealed class LuxembourgIndexReader : IDisposable
                     StringComparison.Ordinal))
                 throw new InvalidDataException("The Luxembourg index logical rows do not match their stamp.");
 
-            var measured = LuxembourgIndexBuilder.MeasureCapabilities(indexRef.Sha256, articles, workTitles);
-            if (!measured.Cells.SequenceEqual(capabilityManifest.Cells))
+            // Measured by the state dates search serves, or by the earlier article dates an index built before 2026-10-13
+            // states: either is a measurement of these rows, and a retained generation keeps opening.
+            if (!LuxembourgIndexBuilder.MeasureCapabilities(indexRef.Sha256, articles, states, workTitles).Cells.SequenceEqual(capabilityManifest.Cells) &&
+                !LuxembourgIndexBuilder.MeasureCapabilitiesByArticleDates(indexRef.Sha256, articles, workTitles).Cells.SequenceEqual(capabilityManifest.Cells))
                 throw new InvalidDataException("The Luxembourg capability manifest was not measured from the index.");
 
             return new LuxembourgIndexReader(
@@ -3610,16 +3683,14 @@ public sealed class LuxembourgIndexReader : IDisposable
         return Convert.ToString(command.ExecuteScalar(), CultureInfo.InvariantCulture);
     }
 
-    private static LuxembourgIndexBuilder.MemberRow[] ReadMembers(SqliteConnection connection)
+    private static IEnumerable<LuxembourgIndexBuilder.MemberRow> StreamMembers(SqliteConnection connection)
     {
         using var command = connection.CreateCommand();
         command.CommandText = "SELECT object_ref_sha256,source_ordinal,outcome,rights_disposition,stage3_outcomes_json,gaps_json FROM members ORDER BY object_ref_sha256";
         using var reader = command.ExecuteReader();
-        var values = new List<LuxembourgIndexBuilder.MemberRow>();
-        while (reader.Read()) values.Add(new(
+        while (reader.Read()) yield return new(
             reader.GetString(0), reader.GetInt32(1), reader.GetString(2),
-            reader.IsDBNull(3) ? null : reader.GetString(3), reader.GetString(4), reader.GetString(5)));
-        return values.ToArray();
+            reader.IsDBNull(3) ? null : reader.GetString(3), reader.GetString(4), reader.GetString(5));
     }
 
     private static LuxembourgIndexBuilder.ArticleRow[] ReadArticles(SqliteConnection connection)
@@ -3792,7 +3863,19 @@ public sealed class LuxembourgIndexReader : IDisposable
     public void VerifyEventLogSources(VerifiedLexCorpus6ManifestSet corpus)
     {
         ArgumentNullException.ThrowIfNull(corpus);
-        if (corpus.ArtifactRef != CorpusRef)
+        VerifyEventLogSources(corpus.ArtifactRef, () => LuxembourgIndexBuilder.BodiesByObjectRef(corpus), corpus.Set.EuropeRightsMatrix.CapturedAt);
+    }
+
+    /// <summary>The same check, from a mount's view of the corpus (<see cref="LexCorpus6MountView"/>).</summary>
+    public void VerifyEventLogSources(LexCorpus6MountView corpus)
+    {
+        ArgumentNullException.ThrowIfNull(corpus);
+        VerifyEventLogSources(corpus.ArtifactRef, () => LuxembourgIndexBuilder.BodiesByObjectRef(corpus), corpus.EuropeRightsMatrix.CapturedAt);
+    }
+
+    private void VerifyEventLogSources(SourceArtifactRef corpusRef, Func<IReadOnlyDictionary<string, string>> bodies, string euCapturedAt)
+    {
+        if (corpusRef != CorpusRef)
         {
             throw new InvalidDataException("The corpus is not the one this Luxembourg index binds.");
         }
@@ -3808,7 +3891,7 @@ public sealed class LuxembourgIndexReader : IDisposable
         {
             var states = ReadStates(_connection);
             var expected = LuxembourgIndexBuilder.SourceBodiesOfStates(
-                ReadArticles(_connection), states, LuxembourgIndexBuilder.BodiesByObjectRef(corpus));
+                ReadArticles(_connection), states, bodies());
             var held = LuxembourgIndexBuilder.FoldLog(LuxembourgIndexBuilder.ReadLogEvents(_connection));
             foreach (var state in states)
             {
@@ -3822,23 +3905,21 @@ public sealed class LuxembourgIndexReader : IDisposable
             // This build's time is an upper bound on its corpus's observation only if it is no earlier than the corpus's
             // EU capture; the index alone holds no capture time, so the check is made here, with the corpus.
             var builtAt = LuxembourgIndexBuilder.ReadLogObservations(_connection)[^1].BuiltAt;
-            if (LuxembourgIndexBuilder.EarlierThanEuCapture(LuxembourgIndexBuilder.ParseBuiltAt(builtAt)!.Value, corpus) is { } reason)
+            if (LuxembourgIndexBuilder.EarlierThanEuCapture(LuxembourgIndexBuilder.ParseBuiltAt(builtAt)!.Value, euCapturedAt) is { } reason)
             {
                 throw new InvalidDataException($"The Luxembourg event log's last build time {builtAt} {reason}.");
             }
         }
     }
 
-    private static LuxembourgIndexBuilder.WorkFactRow[] ReadWorkFacts(SqliteConnection connection)
+    private static IEnumerable<LuxembourgIndexBuilder.WorkFactRow> StreamWorkFacts(SqliteConnection connection)
     {
         using var command = connection.CreateCommand();
         command.CommandText = "SELECT subject_iri,predicate,fact_kind,object_kind,object_value,datatype_iri,language_tag,evidence_sha256 FROM work_facts ORDER BY subject_iri,predicate,object_kind,object_value,datatype_iri,language_tag,evidence_sha256";
         using var reader = command.ExecuteReader();
-        var values = new List<LuxembourgIndexBuilder.WorkFactRow>();
-        while (reader.Read()) values.Add(new(
+        while (reader.Read()) yield return new(
             reader.GetString(0), reader.GetString(1), reader.GetString(2), reader.GetString(3),
-            reader.GetString(4), reader.GetString(5), reader.GetString(6), reader.GetString(7)));
-        return values.ToArray();
+            reader.GetString(4), reader.GetString(5), reader.GetString(6), reader.GetString(7));
     }
 
 }

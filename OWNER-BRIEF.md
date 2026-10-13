@@ -1,40 +1,37 @@
 # Lex V3: the owner's brief
 
-Updated 2026-10-09 at 13:35 UTC by the driver. The driver updates this file in the first pull request of each
+Updated 2026-10-13 at 10:10 UTC by the driver. The driver updates this file in the first pull request of each
 day and whenever a run starts, ends or stops. At most 40 lines, plain words, no hashes. The detail stays in
 STATUS-WEB.md and STATUS-DATA.md; the acceptance list is LAUNCH-CONTRACT.md.
 
 ## What a user can do today
 
-Nothing in public yet. V3 is not deployed, and V2 at law.soufien.lu is down: the Azure hosting environment is
-still suspended after the subscription was disabled on 2 October, and the soufien.lu name still does not resolve
-(checked again on 9 October). On this machine the API and the eight screens work over test data and over one real
-bounded mount, the GDPR in English: search, dossier, reading, provision history, compare, radar, trust, export.
+Nothing in public yet. V3 is not deployed, and V2 at law.soufien.lu stays down (its Azure subscription is still
+disabled). On this machine the API and the eight screens work over test data and over one real bounded mount.
 
 ## What is running
 
-- The EU population is complete: fetched by 5 October and derived twice with identical results.
-- The Luxembourg run read all nine families for the first time, then stopped at its final cross-check on 9 October
-  at 02:00 UTC. In the two days it ran, the publisher added 28 new items, including a July 2026 regulation and three
-  new consolidated versions, after our list of laws was taken, and the check treated them as an error.
-- Before restarting, the driver replayed that run on this machine with the fix. The replays found two more problems
-  the run would have hit later: one Code du travail article whose address has an accented letter, and a checksum
-  step that tried to hold the whole population in one piece of text. All three are fixed: items added late wait for
-  the next run, that one article is left out and recorded, and the checksum now reads the data as it streams.
-- A replay with all three fixes then ran through to the first document downloads, where it stopped as planned.
-- No Luxembourg run is active now. It restarts fresh once the fix merges, this evening, and needs about three days
-  with the machine awake: it should end about 12 to 13 October. Please keep the laptop on its charger; on 7 October
-  its battery ran out and it slept for 8 hours.
-- Then the combined mount is derived twice, its journeys, gates and release rehearsal run, and the first real mount
-  is served on this machine about 13 to 15 October. Those derives need a lot of memory; closing unused apps helps.
+- Both populations are fetched: the EU (5 October) and Luxembourg (12 October, 260,235 records, 11,145 documents).
+- The combined EU and Luxembourg data set was built this morning (2.5 GB), from the stored copies only.
+- The quality checks over it passed every date test (EU and Luxembourg) but found one real bug: Luxembourg search
+  found nothing. The build recorded which Luxembourg text is searchable from a date on each article, and the
+  publisher dates the whole document instead. The fix (pull request 948) also dates the law titles, and corrects
+  one check that wrongly assumed Word files are never published. EU search was fine.
+- Now running: the data set is being rebuilt with the fix (about 1 hour 45, no request to any publisher). Then the
+  checks again, the browser walk-throughs over the real data, and the release rehearsal (built twice and compared).
+- The canary (two small builds against the live EU and Luxembourg sites, 207 requests each) passed this morning.
+- Found for the hosting: with the real data the server needs at least one full processor, not half of one (Azure
+  gives a half-processor server too little scratch disk for the data). Its memory is measured before deploying.
 
 ## What waits on the owner
 
-- Azure: the subscription is disabled and read-only; only you can re-enable it, by settling the billing. Then
-  the hosting environment can resume and the soufien.lu name be checked. It blocks V2 today and V3 later.
-- The release signing key (P-256, in your key vault); the release command is ready to take it.
-- The word to go live, once the real mount passes its gates.
+- Azure: your new account is set up (budget 30 a month with alerts, the registry, the hosting environment and the
+  key vault holding the release signing key). It is a free trial: click "Upgrade to pay-as-you-go" before its credit
+  or 30 days run out, or the hosting stops.
+- At go-live: point soufien.lu's name servers to the new address book the driver will create (the old one is in
+  V2's disabled subscription). Optional: Azure Support can clear the Gmail account's 6.10 EUR invoice.
+- The word to go live, once the real data passes its checks and a hidden test copy runs on Azure.
 
 ## Launch
 
-Target 7 November 2026. It holds if the Luxembourg run finishes by about 13 October and Azure is usable soon.
+Target 7 November 2026. It holds if the rebuild and checks pass this week and the trial is upgraded.

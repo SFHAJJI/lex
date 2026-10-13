@@ -1,6 +1,49 @@
 # Lex V3 status: the data lane
 
-Updated 2026-10-09.
+Updated 2026-10-13.
+
+## The combined mount is derived; its gates found Luxembourg search empty (Claude, 2026-10-13)
+
+- **The combined mount exists.** One offline derive of run 15's custody (`derive-a`, the run's own runtime, every proxy
+  at a local trap) wrote the six files: 2.52 GB, of which the EU index 1.40 GB, the Luxembourg index 0.91 GB and the
+  corpus 0.21 GB; peak working set 12.7 GB, 06:02 to 07:46 UTC. The second derive was stopped by its resource guard (commit headroom below 512 MB for a
+  minute as the page file grew), so byte stability is shown by the release rehearsal's two derives instead.
+- **The mounted gates over it** (`V3MountedGatesTests`, 23 of 24 pass): temporal exactness 1.0 on every arm (Luxembourg
+  4 x 120 cases, EU 3 x 562), each date shuffle caught; but refusal 20 of 21 and retrieval anchor nDCG@10 0.846 (n 52).
+  A local trace of each case named the misses.
+- **Luxembourg search answered nothing.** The capability manifest's search cells were measured from each article's own
+  publisher date, and none of the population's 8,854 articles has one: the publisher dates the journal document, which
+  the state carries. With no cell, search said French was not searchable and returned no hit, and coverage counted 0
+  searchable articles. Every EU search case passed. Now an article counts at its own date where it has one, else at its
+  state's date, which is where search serves it. The reader accepts a manifest measured by either rule, so a mount built
+  before (the canary chain, `derive-a`) still opens and serves what its manifest says.
+- **No title had a document date** (0 of 2,021): the publisher puts `dateDocument` on the legal resource (`.../jo`) and
+  the title on the expression (`.../jo/fr`). A title's date now falls back to its expression's legal resource.
+- **The refusal miss was the gate's.** Its `format_not_available` case asked for `docx`, which Legilux publishes for most
+  acts (22,908 docx manifestations); the handler rightly answered. The case now asks for a format the work's own
+  manifestations do not carry.
+- These are derivation and reader changes; the acquisition code stays frozen. A third derive with the fixed builder
+  (`derive-c`) is running; the gates, the population journeys and the release rehearsal follow it.
+- **The chained canary after the population** (`C:\lex-v3\chained-canary-after-lu-1`, tool frozen at the integration
+  head): builds a and b both verified, 207 of 800 requests each (135 to the Publications Office for the GDPR, 72 to
+  Legilux).
+
+## The Luxembourg population is acquired; the combined derive waits for disk (Claude, 2026-10-12)
+
+- **The acquisition is complete.** Run 15 (`C:\lex-v3\lu-population-20261011-15`, resuming run 14 in the #943 build)
+  proved all nine families (rgd-a at 09:12 and rgd-g at 09:17 UTC on 2026-10-12), passed the census join live,
+  journaled 11,206 document fetches by 14:08 UTC, retained the in-file rights evidence, the final manifest, the gazette
+  phase and the corpus records: 260,235 records, 11,145 held bodies (2.95 GB), 21,972 of 300,000 requests spent.
+  The offline-inputs pointer `mount-inputs-b306a972...json` is in custody.
+- **The post-document step peaks at about 20 GB private.** The final resolution and scope reduction reached 20.2 GB
+  (14:27 UTC, commit headroom 0.3 GB) and released; no replay could reach this step before.
+- **The build process stopped while writing the combined mount** (18:29 UTC, runner resource stop, reason disk: free
+  disk 398 MB, commit headroom 82 MB, peak working set 14.9 GB). The page file grew into the disk the owner's game
+  install had left. No mount file was written; the acquisition is unaffected. The supervisor and the after-LU waiter
+  were stopped, so they would not resume into the same wall.
+- **What follows.** The two offline derives (`Lex.V3.Tool derive --custody ... --checkpoint mount-inputs-b306a972...json`,
+  no publisher traffic), one at a time under a resource guard, once about 35 to 40 GB of disk (or more free memory) is
+  available; then the chained canary, #898, the population-mount journeys and gates, and the release rehearsal.
 
 ## Publisher drift between the census and the later families: a third defect that stops the run (Claude, 2026-10-09)
 
@@ -87,8 +130,19 @@ Updated 2026-10-09.
 - **No cross-build resume (driver decision).** The tool and the runner both hold that a journal resumes only in the build
   that wrote it. Loosening that would change the frozen resume path beyond the smallest fix, so the Luxembourg run
   restarts fresh on the merged build.
-- **What follows.** The Luxembourg run restarts fresh on the merged build, under the supervisor, with the after-LU waiter
-  and the keep-awake helper. It takes about three days with the machine awake. Its two offline derives cover the EU
+- **What follows.** Luxembourg run 14 (`C:\lex-v3\lu-population-20261009-14`) started fresh at 14:35 UTC on 2026-10-09 on
+  the #943 build: tool `5ac13b3c` from push CI 37943609391, whose runtime artifact expires 2026-10-12 14:34 UTC (the
+  runner keeps its copy, and a supervised resume falls back to it). It reuses the EU population's custody (no EU
+  traffic), under the supervisor (`-Next 15`), with the after-LU waiter and the keep-awake helper. It takes about
+  three days with the machine awake.
+  - Run 14 was stopped on 2026-10-10 at about 14:50 UTC at the owner's request (disk space). Its journal ends at
+    `legislative-rgd-a` leaf 9: seven families proven (code s/a/g, loi s/a/g, rgd-s), 3,120 requests spent. On
+    2026-10-11 at 12:27 UTC it was resumed in the same build as run 15 (`C:\lex-v3\lu-population-20261011-15`:
+    122,491 objects hard-linked, journal verified through seq 72), under the supervisor (`-Next 16`), with the after-LU
+    waiter and the keep-awake helper. Remaining: the rest of rgd-a, rgd-g, the census join and about 11,905 documents.
+  - The same day the driver removed 31 unused git worktrees after saving their unpushed work to `backup/20261010/*`
+    branches (`C:\lex-v3\lanes\worktree-backups-20261010.md`); no custody or corpus was touched.
+  - Its two offline derives cover the EU
   and Luxembourg populations together; the EU derive alone peaked at about 14 GB private, so they may need the
   machine's memory more than the acquisition does. They are offline and can be re-run without publisher traffic.
 

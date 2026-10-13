@@ -504,20 +504,27 @@ public static partial class EuropeIndexBuilder
 
     internal static V3IndexCapabilityManifest MeasureCapabilities(
         string digest,
-        IReadOnlyList<ArticleRow> articles)
-    {
-        var cells = articles.Where(static row => row.SearchableText.Length != 0)
+        IReadOnlyList<ArticleRow> articles) =>
+        MeasureCapabilities(digest, articles.Where(static row => row.SearchableText.Length != 0)
             .GroupBy(static row => (row.Language, row.WordingDate))
-            .Select(group => new V3IndexCapabilityCell(
+            .Select(static group => KeyValuePair.Create(group.Key, group.LongCount())));
+
+    /// <summary>The manifest from the count of articles with searchable text per language and wording date.</summary>
+    internal static V3IndexCapabilityManifest MeasureCapabilities(
+        string digest,
+        IEnumerable<KeyValuePair<(string Language, string WordingDate), long>> searchable)
+    {
+        var cells = searchable
+            .Select(pair => new V3IndexCapabilityCell(
                 PublisherId.EuEurLex,
                 digest,
                 "search",
                 "articles",
                 "searchable_text",
-                group.Key.Language,
-                DateOnly.ParseExact(group.Key.WordingDate, "yyyy-MM-dd", CultureInfo.InvariantCulture),
-                DateOnly.ParseExact(group.Key.WordingDate, "yyyy-MM-dd", CultureInfo.InvariantCulture),
-                group.LongCount()))
+                pair.Key.Language,
+                DateOnly.ParseExact(pair.Key.WordingDate, "yyyy-MM-dd", CultureInfo.InvariantCulture),
+                DateOnly.ParseExact(pair.Key.WordingDate, "yyyy-MM-dd", CultureInfo.InvariantCulture),
+                pair.Value))
             .ToArray();
         // The EU manifest states the operations no route serves and the operations an EU identifier is refused, each with its
         // typed reason (the launch contract: "each either served or refusing with a typed reason its capability manifest states").
@@ -536,16 +543,16 @@ public static partial class EuropeIndexBuilder
         IReadOnlyList<ArticleSourceRow>? sources = null,
         IReadOnlyList<ArticleDigestRow>? digests = null,
         IReadOnlyList<EuropeIndexState>? states = null) =>
-        Convert.ToHexStringLower(SHA256.HashData(states is not null
-            ? JsonSerializer.SerializeToUtf8Bytes(new LogicalRowsWithStates(members, lines, gaps, articles,
+        states is not null
+            ? ContractJson.Sha256OfDefaultJson(new LogicalRowsWithStates(members, lines, gaps, articles,
                 sources ?? throw new ArgumentNullException(nameof(sources)),
                 digests ?? throw new ArgumentNullException(nameof(digests)), states))
             : digests is not null
-            ? JsonSerializer.SerializeToUtf8Bytes(new LogicalRowsWithDigests(members, lines, gaps, articles,
+            ? ContractJson.Sha256OfDefaultJson(new LogicalRowsWithDigests(members, lines, gaps, articles,
                 sources ?? throw new ArgumentNullException(nameof(sources)), digests))
             : sources is null
-                ? JsonSerializer.SerializeToUtf8Bytes(new LogicalRows(members, lines, gaps, articles))
-                : JsonSerializer.SerializeToUtf8Bytes(new LogicalRowsWithSources(members, lines, gaps, articles, sources))));
+                ? ContractJson.Sha256OfDefaultJson(new LogicalRows(members, lines, gaps, articles))
+                : ContractJson.Sha256OfDefaultJson(new LogicalRowsWithSources(members, lines, gaps, articles, sources));
 
     internal static SqliteConnection Open(string path, SqliteOpenMode mode)
     {
@@ -748,15 +755,70 @@ public sealed partial class EuropeIndexReader : IDisposable
     private readonly SourceArtifactRef _indexRef;
     private readonly SourceArtifactRef _corpusRef;
     private readonly object _gate = new();
+    private readonly ArticleObjects _objects;
     public bool HasArticleSourceEvidence { get; }
     public bool HasArticleByteDigests { get; }
 
     private EuropeIndexReader(string path, SqliteConnection connection,
         V3IndexCapabilityManifest capabilityManifest,
         SourceArtifactRef indexRef,
-        SourceArtifactRef corpusRef, bool hasArticleSourceEvidence, bool hasArticleByteDigests, bool hasStates) =>
-        (_path, _connection, _capabilityManifest, _indexRef, _corpusRef, HasArticleSourceEvidence, HasArticleByteDigests, HasStates) =
-        (path, connection, capabilityManifest, indexRef, corpusRef, hasArticleSourceEvidence, hasArticleByteDigests, hasStates);
+        SourceArtifactRef corpusRef, bool hasArticleSourceEvidence, bool hasArticleByteDigests, bool hasStates,
+        ArticleObjects objects) =>
+        (_path, _connection, _capabilityManifest, _indexRef, _corpusRef, HasArticleSourceEvidence, HasArticleByteDigests, HasStates, _objects) =
+        (path, connection, capabilityManifest, indexRef, corpusRef, hasArticleSourceEvidence, hasArticleByteDigests, hasStates, objects);
+
+    /// <summary>
+    /// The member objects whose articles carry each expression, work and CELEX, read at open from the verified article
+    /// rows. The articles table has no index on those columns, so a lookup by one read every article's text (one EU search
+    /// took 31 s on one core over the population index, 2026-10-13); every lookup by them is also restricted to their
+    /// objects, which <c>articles_object_ref</c> finds. The restriction drops no row: a row that matches a lookup's
+    /// condition has its object among the objects of the value it matched. In the population each expression is one object.
+    /// </summary>
+    internal sealed class ArticleObjects
+    {
+        private readonly Dictionary<string, SortedSet<string>> _byExpression = new(StringComparer.Ordinal);
+        private readonly Dictionary<string, SortedSet<string>> _byWork = new(StringComparer.Ordinal);
+        private readonly Dictionary<string, SortedSet<string>> _byCelex = new(StringComparer.Ordinal);
+
+        public void Add(EuropeIndexBuilder.ArticleRow row)
+        {
+            Add(_byExpression, row.PublisherExpressionId, row.ObjectRefSha256);
+            Add(_byWork, row.PublisherWorkId, row.ObjectRefSha256);
+            if (row.PublisherWorkCelex is { } celex) Add(_byCelex, celex, row.ObjectRefSha256);
+        }
+
+        public IEnumerable<string> OfExpression(string value) => Of(_byExpression, value);
+
+        public IEnumerable<string> OfWork(string value) => Of(_byWork, value);
+
+        public IEnumerable<string> OfCelex(string value) => Of(_byCelex, value);
+
+        private static void Add(Dictionary<string, SortedSet<string>> map, string key, string objectRef)
+        {
+            if (!map.TryGetValue(key, out var objects)) map[key] = objects = new SortedSet<string>(StringComparer.Ordinal);
+            objects.Add(objectRef);
+        }
+
+        private static IEnumerable<string> Of(Dictionary<string, SortedSet<string>> map, string key) =>
+            map.TryGetValue(key, out var objects) ? objects : [];
+    }
+
+    /// <summary>
+    /// <c>{column} IN (...)</c> over the given objects, each bound as a parameter (an empty list matches nothing: no object
+    /// reference is empty).
+    /// </summary>
+    private static string ObjectsIn(SqliteCommand command, string column, IEnumerable<string> objects)
+    {
+        var names = new List<string>();
+        foreach (var objectRef in objects.Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal))
+        {
+            var name = $"$object{names.Count}";
+            command.Parameters.AddWithValue(name, objectRef);
+            names.Add(name);
+        }
+
+        return names.Count == 0 ? $"{column} IN ('')" : $"{column} IN ({string.Join(",", names)})";
+    }
 
     public long MemberCount => Count("members");
     public long ArticleCount => Count("articles");
@@ -781,6 +843,75 @@ public sealed partial class EuropeIndexReader : IDisposable
         ArgumentNullException.ThrowIfNull(expectedCorpusRef);
         ArgumentNullException.ThrowIfNull(capabilityManifest);
         var digest = Convert.ToHexStringLower(SHA256.HashData(indexBytes));
+        RequireIdentity(digest, indexRef, expectedCorpusRef, capabilityManifest);
+        var path = Path.Combine(Path.GetTempPath(), $"lex-v3-eu-mount-{Guid.NewGuid():N}.sqlite");
+        using (var file = new FileStream(path, FileMode.CreateNew, FileAccess.Write, FileShare.None))
+        {
+            file.Write(indexBytes);
+        }
+
+        return OpenVerifiedFile(path, digest, indexRef, expectedCorpusRef, capabilityManifest);
+    }
+
+    /// <summary>
+    /// Mounts an EU index file: it is copied to a private temporary file and the copy is hashed and verified, as the
+    /// Luxembourg reader does, so the 1.4 GB population index is never read into memory (it was, twice, before 2026-10-13).
+    /// </summary>
+    public static async Task<EuropeIndexReader> OpenAndVerifyFileAsync(
+        string indexPath,
+        ReadOnlyMemory<byte> capabilityManifestBytes,
+        SourceArtifactRef expectedCorpusRef,
+        CancellationToken cancellationToken)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(indexPath);
+        ArgumentNullException.ThrowIfNull(expectedCorpusRef);
+        if (!File.Exists(indexPath))
+            throw new FileNotFoundException("The EU index artifact is missing.", indexPath);
+        var path = Path.Combine(Path.GetTempPath(), $"lex-v3-eu-mount-{Guid.NewGuid():N}.sqlite");
+        try
+        {
+            await using (var source = new FileStream(
+                indexPath, FileMode.Open, FileAccess.Read, FileShare.Read,
+                bufferSize: 64 * 1024, FileOptions.Asynchronous | FileOptions.SequentialScan))
+            await using (var destination = new FileStream(
+                path, FileMode.CreateNew, FileAccess.Write, FileShare.None,
+                bufferSize: 64 * 1024, FileOptions.Asynchronous | FileOptions.SequentialScan))
+            {
+                await source.CopyToAsync(destination, cancellationToken).ConfigureAwait(false);
+                await destination.FlushAsync(cancellationToken).ConfigureAwait(false);
+            }
+
+            string digest;
+            await using (var copied = new FileStream(
+                path, FileMode.Open, FileAccess.Read, FileShare.Read,
+                bufferSize: 64 * 1024, FileOptions.Asynchronous | FileOptions.SequentialScan))
+            {
+                digest = Convert.ToHexStringLower(await SHA256.HashDataAsync(copied, cancellationToken).ConfigureAwait(false));
+            }
+
+            var indexRef = new SourceArtifactRef(LexCorpus6Builder.ResourceIdOf(digest), digest);
+            var capabilityDigest = V3IndexCapabilityManifestArtifact.ComputeSha256(
+                capabilityManifestBytes.Span);
+            var capabilityRef = new SourceArtifactRef(
+                LexCorpus6Builder.ResourceIdOf(capabilityDigest), capabilityDigest);
+            var capability = V3IndexCapabilityManifestArtifact.ParseAndVerify(
+                capabilityRef,
+                capabilityManifestBytes.Span,
+                PublisherId.EuEurLex,
+                digest);
+            RequireIdentity(digest, indexRef, expectedCorpusRef, capability);
+            return OpenVerifiedFile(path, digest, indexRef, expectedCorpusRef, capability);
+        }
+        catch
+        {
+            EuropeIndexBuilder.DeleteDatabase(path);
+            throw;
+        }
+    }
+
+    private static void RequireIdentity(
+        string digest, SourceArtifactRef indexRef, SourceArtifactRef expectedCorpusRef, V3IndexCapabilityManifest capabilityManifest)
+    {
         if (!string.Equals(digest, indexRef.Sha256, StringComparison.Ordinal) ||
             !string.Equals(indexRef.ResourceId, LexCorpus6Builder.ResourceIdOf(digest), StringComparison.Ordinal) ||
             capabilityManifest.Publisher != PublisherId.EuEurLex ||
@@ -789,9 +920,21 @@ public sealed partial class EuropeIndexReader : IDisposable
         if (!string.Equals(expectedCorpusRef.ResourceId,
                 LexCorpus6Builder.ResourceIdOf(expectedCorpusRef.Sha256), StringComparison.Ordinal))
             throw new InvalidDataException("The expected corpus resource identity is not bound to its digest.");
+    }
 
-        var path = Path.Combine(Path.GetTempPath(), $"lex-v3-eu-mount-{Guid.NewGuid():N}.sqlite");
-        File.WriteAllBytes(path, indexBytes.ToArray());
+    /// <summary>
+    /// Verifies the private copy whose digest is <paramref name="digest"/> and answers its reader; the copy is deleted on
+    /// any failure. The article, source and digest rows are read once, as the logical-row hash reads them, and checked row
+    /// by row as they pass (<see cref="StreamedArticleChecks"/>): what was checked over whole arrays is checked over the
+    /// stream, and only each article's identity, package entry and text digest are kept beside it.
+    /// </summary>
+    private static EuropeIndexReader OpenVerifiedFile(
+        string path,
+        string digest,
+        SourceArtifactRef indexRef,
+        SourceArtifactRef expectedCorpusRef,
+        V3IndexCapabilityManifest capabilityManifest)
+    {
         SqliteConnection? connection = null;
         try
         {
@@ -822,42 +965,18 @@ public sealed partial class EuropeIndexReader : IDisposable
             var members = ReadMembers(connection);
             var lines = ReadLines(connection);
             var gaps = ReadGaps(connection);
-            var articles = ReadArticles(connection);
-            var sources = legacy ? null : ReadArticleSources(connection);
-            if (sources is not null &&
-                (!sources.Select(static row => row.ArticleIdentitySha256).SequenceEqual(
-                    articles.Select(static row => row.ArticleIdentitySha256), StringComparer.Ordinal) ||
-                 sources.Any(static row => row.PackageSha256.Length != 64 ||
-                    row.PackageSha256.Any(static c => !char.IsAsciiHexDigitLower(c)) ||
-                    !Uri.TryCreate(row.OfficialSourceUri, UriKind.Absolute, out var uri) ||
-                    (uri.Scheme != Uri.UriSchemeHttps && uri.Scheme != Uri.UriSchemeHttp))))
-                throw new InvalidDataException("EU article source coordinates are invalid or incomplete.");
-            var digests = version >= 4 ? ReadArticleDigests(connection) : null;
-            if (digests is not null)
-            {
-                if (!digests.Select(static row => row.ArticleIdentitySha256).SequenceEqual(
-                        articles.Select(static row => row.ArticleIdentitySha256), StringComparer.Ordinal) ||
-                    digests.Any(static row => !IsSha256(row.SourceEntrySha256) || !IsSha256(row.TextSha256)))
-                    throw new InvalidDataException("EU article byte digests are invalid or incomplete.");
-                for (var i = 0; i < articles.Length; i++)
-                    if (digests[i].TextSha256 != Convert.ToHexStringLower(SHA256.HashData(
-                            Encoding.UTF8.GetBytes(articles[i].SearchableText))))
-                        throw new InvalidDataException("EU article text does not match its byte digest.");
-                if (articles.Select((article, i) => (sources![i].PackageSha256, article.PackageEntry,
-                        digests[i].SourceEntrySha256)).GroupBy(value => (value.PackageSha256, value.PackageEntry))
-                    .Any(group => group.Select(value => value.SourceEntrySha256).Distinct(StringComparer.Ordinal).Count() != 1))
-                    throw new InvalidDataException("EU articles disagree about the same source entry bytes.");
-            }
             var states = version >= 5 ? ReadStates(connection) : null;
             if (states is not null) EuropeIndexBuilder.ValidateStateEvidence(states);
-            if (!string.Equals(EuropeIndexBuilder.HashLogicalRows(members, lines, gaps, articles, sources, digests, states),
-                    expectedLogical, StringComparison.Ordinal))
+            var checks = new StreamedArticleChecks(connection, sources: !legacy, digests: version >= 4);
+            var logical = EuropeIndexBuilder.HashLogicalRows(members, lines, gaps, checks.Articles, checks.Sources, checks.Digests, states);
+            checks.RequireComplete();
+            if (!string.Equals(logical, expectedLogical, StringComparison.Ordinal))
                 throw new InvalidDataException("The EU index logical rows do not match their stamp.");
-            var measured = EuropeIndexBuilder.MeasureCapabilities(digest, articles);
+            var measured = EuropeIndexBuilder.MeasureCapabilities(digest, checks.SearchableArticles);
             if (!measured.Cells.SequenceEqual(capabilityManifest.Cells))
                 throw new InvalidDataException("The EU capability manifest was not measured from the index.");
             return new EuropeIndexReader(
-                path, connection, capabilityManifest, indexRef, expectedCorpusRef, !legacy, version >= 4, version >= 5);
+                path, connection, capabilityManifest, indexRef, expectedCorpusRef, !legacy, version >= 4, version >= 5, checks.Objects);
         }
         catch
         {
@@ -867,30 +986,117 @@ public sealed partial class EuropeIndexReader : IDisposable
         }
     }
 
-    public static async Task<EuropeIndexReader> OpenAndVerifyFileAsync(
-        string indexPath,
-        ReadOnlyMemory<byte> capabilityManifestBytes,
-        SourceArtifactRef expectedCorpusRef,
-        CancellationToken cancellationToken)
+    /// <summary>
+    /// The article, source and digest rows of an index, each read once in identity order as the logical-row hash
+    /// serializes them (articles, then sources, then digests), and held there to the rules the reader holds them to: the
+    /// sources and the digests name exactly the articles, in order; a source's package digest and official URI are well
+    /// formed; a digest's two values are SHA-256; an article's text has its digest; and articles of one package entry agree
+    /// on its bytes. Beside the stream only each article's identity, package entry and text digest, each source's package
+    /// digest, and the searchable articles' count per language and wording date are kept.
+    /// </summary>
+    private sealed class StreamedArticleChecks(SqliteConnection connection, bool sources, bool digests)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(indexPath);
-        ArgumentNullException.ThrowIfNull(expectedCorpusRef);
-        if (!File.Exists(indexPath))
-            throw new FileNotFoundException("The EU index artifact is missing.", indexPath);
-        var indexBytes = await File.ReadAllBytesAsync(indexPath, cancellationToken)
-            .ConfigureAwait(false);
-        var digest = Convert.ToHexStringLower(SHA256.HashData(indexBytes));
-        var indexRef = new SourceArtifactRef(LexCorpus6Builder.ResourceIdOf(digest), digest);
-        var capabilityDigest = V3IndexCapabilityManifestArtifact.ComputeSha256(
-            capabilityManifestBytes.Span);
-        var capabilityRef = new SourceArtifactRef(
-            LexCorpus6Builder.ResourceIdOf(capabilityDigest), capabilityDigest);
-        var capability = V3IndexCapabilityManifestArtifact.ParseAndVerify(
-            capabilityRef,
-            capabilityManifestBytes.Span,
-            PublisherId.EuEurLex,
-            digest);
-        return OpenAndVerify(indexRef, indexBytes, expectedCorpusRef, capability);
+        private readonly List<string> _identities = [];
+        private readonly List<string> _entries = [];
+        private readonly List<string>? _textDigests = digests ? [] : null;
+        private readonly List<string>? _packages = sources ? [] : null;
+        private readonly Dictionary<(string Language, string WordingDate), long> _searchable = [];
+        private bool _articlesRead;
+
+        public ArticleObjects Objects { get; } = new();
+        private bool _sourcesRead;
+        private bool _digestsRead;
+
+        public IReadOnlyList<EuropeIndexBuilder.ArticleRow> Articles => new StreamedRows<EuropeIndexBuilder.ArticleRow>(ReadArticles());
+
+        public IReadOnlyList<EuropeIndexBuilder.ArticleSourceRow>? Sources =>
+            sources ? new StreamedRows<EuropeIndexBuilder.ArticleSourceRow>(ReadSources()) : null;
+
+        public IReadOnlyList<EuropeIndexBuilder.ArticleDigestRow>? Digests =>
+            digests ? new StreamedRows<EuropeIndexBuilder.ArticleDigestRow>(ReadDigests()) : null;
+
+        public IEnumerable<KeyValuePair<(string Language, string WordingDate), long>> SearchableArticles =>
+            _articlesRead ? _searchable : throw new InvalidOperationException("The articles have not been read.");
+
+        public void RequireComplete()
+        {
+            if (!_articlesRead || (sources && !_sourcesRead) || (digests && !_digestsRead))
+                throw new InvalidOperationException("The logical-row hash did not read every streamed table.");
+        }
+
+        private IEnumerable<EuropeIndexBuilder.ArticleRow> ReadArticles()
+        {
+            foreach (var row in StreamArticles(connection))
+            {
+                _identities.Add(row.ArticleIdentitySha256);
+                _entries.Add(row.PackageEntry);
+                Objects.Add(row);
+                _textDigests?.Add(Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(row.SearchableText))));
+                if (row.SearchableText.Length != 0)
+                {
+                    var key = (row.Language, row.WordingDate);
+                    _searchable[key] = _searchable.GetValueOrDefault(key) + 1;
+                }
+
+                yield return row;
+            }
+
+            _articlesRead = true;
+        }
+
+        private IEnumerable<EuropeIndexBuilder.ArticleSourceRow> ReadSources()
+        {
+            if (!_articlesRead) throw new InvalidOperationException("The sources are read after the articles.");
+            var at = 0;
+            foreach (var row in StreamArticleSources(connection))
+            {
+                if (at >= _identities.Count ||
+                    !string.Equals(row.ArticleIdentitySha256, _identities[at], StringComparison.Ordinal) ||
+                    row.PackageSha256.Length != 64 ||
+                    row.PackageSha256.Any(static c => !char.IsAsciiHexDigitLower(c)) ||
+                    !Uri.TryCreate(row.OfficialSourceUri, UriKind.Absolute, out var uri) ||
+                    (uri.Scheme != Uri.UriSchemeHttps && uri.Scheme != Uri.UriSchemeHttp))
+                    throw new InvalidDataException("EU article source coordinates are invalid or incomplete.");
+                _packages!.Add(row.PackageSha256);
+                at++;
+                yield return row;
+            }
+
+            if (at != _identities.Count) throw new InvalidDataException("EU article source coordinates are invalid or incomplete.");
+            _sourcesRead = true;
+        }
+
+        private IEnumerable<EuropeIndexBuilder.ArticleDigestRow> ReadDigests()
+        {
+            if (!_sourcesRead) throw new InvalidOperationException("The digests are read after the sources.");
+            var sourceEntries = new Dictionary<(string Package, string Entry), string>();
+            var at = 0;
+            foreach (var row in StreamArticleDigests(connection))
+            {
+                if (at >= _identities.Count ||
+                    !string.Equals(row.ArticleIdentitySha256, _identities[at], StringComparison.Ordinal) ||
+                    !IsSha256(row.SourceEntrySha256) || !IsSha256(row.TextSha256))
+                    throw new InvalidDataException("EU article byte digests are invalid or incomplete.");
+                if (row.TextSha256 != _textDigests![at])
+                    throw new InvalidDataException("EU article text does not match its byte digest.");
+                var entry = (_packages![at], _entries[at]);
+                if (sourceEntries.TryGetValue(entry, out var seen))
+                {
+                    if (!string.Equals(seen, row.SourceEntrySha256, StringComparison.Ordinal))
+                        throw new InvalidDataException("EU articles disagree about the same source entry bytes.");
+                }
+                else
+                {
+                    sourceEntries[entry] = row.SourceEntrySha256;
+                }
+
+                at++;
+                yield return row;
+            }
+
+            if (at != _identities.Count) throw new InvalidDataException("EU article byte digests are invalid or incomplete.");
+            _digestsRead = true;
+        }
     }
 
     /// <summary>Returns a pinned article's coordinates; null for a missing article or a legacy index.
@@ -949,10 +1155,11 @@ public sealed partial class EuropeIndexReader : IDisposable
                 "a.package_entry,a.searchable_text," +
                 (HasArticleSourceEvidence ? "s.package_sha256,s.official_source_uri," : "NULL,NULL,") +
                 (HasArticleByteDigests ? "d.source_entry_sha256,d.text_sha256 " : "NULL,NULL ") +
-                "FROM articles a " +
+                "FROM articles AS a INDEXED BY articles_object_ref " +
                 (HasArticleSourceEvidence ? "LEFT JOIN article_sources s USING(article_identity_sha256) " : "") +
                 (HasArticleByteDigests ? "LEFT JOIN article_digests d USING(article_identity_sha256) " : "") +
-                "WHERE a.publisher_expression_id=$expression ORDER BY a.publisher_identifier,a.article_identity_sha256";
+                "WHERE " + ObjectsIn(command, "a.object_ref_sha256", _objects.OfExpression(publisherExpressionId)) +
+                " AND a.publisher_expression_id=$expression ORDER BY a.publisher_identifier,a.article_identity_sha256";
             command.Parameters.AddWithValue("$expression", publisherExpressionId);
             using var reader = command.ExecuteReader();
             var values = new List<EuropeIndexArticleText>();
@@ -971,6 +1178,15 @@ public sealed partial class EuropeIndexReader : IDisposable
 
     private static bool IsSha256(string value) => value.Length == 64 && value.All(char.IsAsciiHexDigitLower);
 
+    /// <summary>The object of the article an identity names, by the primary key; none for an identity the index does not hold.</summary>
+    private string[] ObjectOfArticle(string identity)
+    {
+        using var command = _connection.CreateCommand();
+        command.CommandText = "SELECT object_ref_sha256 FROM articles WHERE article_identity_sha256=$identity";
+        command.Parameters.AddWithValue("$identity", identity);
+        return command.ExecuteScalar() is string objectRef ? [objectRef] : [];
+    }
+
     /// <summary>Legacy original-wording resolution. Schema 5 consolidated works use ReadStateExpressions.</summary>
     public IReadOnlyList<EuropeIndexResolvedExpression> ResolveExact(string identifier)
     {
@@ -980,11 +1196,19 @@ public sealed partial class EuropeIndexReader : IDisposable
         lock (_gate)
         {
             using var command = _connection.CreateCommand();
+            // The objects a match can come from: those of the work, CELEX or expression the identifier names, of the
+            // qualified provision's expression, and of the article it names by identity (its primary key).
+            var objects = _objects.OfWork(identifier).Concat(_objects.OfCelex(identifier)).Concat(_objects.OfExpression(identifier))
+                .Concat(hasQualifiedProvision ? _objects.OfExpression(provisionExpression) : [])
+                .Concat(ObjectOfArticle(identifier)).ToArray();
             command.CommandText = """
                 SELECT publisher_work_id,publisher_expression_id,language,
                        publisher_identifier,article_identity_sha256
-                FROM articles
-                WHERE (publisher_work_id=$identifier OR publisher_work_celex=$identifier
+                FROM articles INDEXED BY articles_object_ref
+                WHERE
+                """ + " " + ObjectsIn(command, "object_ref_sha256", objects) + """
+
+                  AND (publisher_work_id=$identifier OR publisher_work_celex=$identifier
                    OR publisher_expression_id=$identifier
                    OR article_identity_sha256=$identifier
                    OR ($has_qualified_provision=1
@@ -1102,8 +1326,10 @@ public sealed partial class EuropeIndexReader : IDisposable
             command.CommandText = """
                 SELECT a.publisher_work_id,a.publisher_work_celex,a.publisher_expression_id,a.language,
                        a.wording_date,a.object_ref_sha256,m.outcome,m.content_class,count(*)
-                FROM articles a JOIN members m ON m.object_ref_sha256=a.object_ref_sha256
-                WHERE a.publisher_work_id=$work AND a.publisher_work_celex IS NOT NULL
+                FROM articles AS a INDEXED BY articles_object_ref JOIN members m ON m.object_ref_sha256=a.object_ref_sha256
+                WHERE
+                """ + " " + ObjectsIn(command, "a.object_ref_sha256", _objects.OfWork(publisherWorkId)) + """
+                 AND a.publisher_work_id=$work AND a.publisher_work_celex IS NOT NULL
                   AND ($has_states=0 OR m.content_class='original_legal_text')
                 GROUP BY a.publisher_work_id,a.publisher_work_celex,a.publisher_expression_id,a.language,
                          a.wording_date,a.object_ref_sha256,m.outcome,m.content_class
@@ -1180,8 +1406,9 @@ public sealed partial class EuropeIndexReader : IDisposable
         using var command = connection.CreateCommand();
         command.CommandText =
             "SELECT publisher_work_id,publisher_work_celex,publisher_expression_id,publisher_identifier,heading," +
-            "wording_date,language,article_identity_sha256 FROM articles " +
-            "WHERE language=$language AND publisher_expression_id=$expression AND publisher_work_celex IS NOT NULL" +
+            "wording_date,language,article_identity_sha256 FROM articles INDEXED BY articles_object_ref " +
+            "WHERE " + ObjectsIn(command, "object_ref_sha256", _objects.OfExpression(publisherExpressionId)) +
+            " AND language=$language AND publisher_expression_id=$expression AND publisher_work_celex IS NOT NULL" +
             " AND ($has_states=0 OR EXISTS (SELECT 1 FROM members m" +
             " WHERE m.object_ref_sha256=articles.object_ref_sha256 AND m.content_class='original_legal_text'))" +
             string.Concat(needles.Select(static (_, index) => $" AND instr(searchable_text,$needle{index})>0")) +
@@ -1271,36 +1498,30 @@ public sealed partial class EuropeIndexReader : IDisposable
         return values.ToArray();
     }
 
-    private static EuropeIndexBuilder.ArticleDigestRow[] ReadArticleDigests(SqliteConnection connection)
+    private static IEnumerable<EuropeIndexBuilder.ArticleDigestRow> StreamArticleDigests(SqliteConnection connection)
     {
         using var command = connection.CreateCommand();
         command.CommandText = "SELECT article_identity_sha256,source_entry_sha256,text_sha256 FROM article_digests ORDER BY article_identity_sha256";
         using var reader = command.ExecuteReader();
-        var values = new List<EuropeIndexBuilder.ArticleDigestRow>();
-        while (reader.Read()) values.Add(new(reader.GetString(0), reader.GetString(1), reader.GetString(2)));
-        return values.ToArray();
+        while (reader.Read()) yield return new(reader.GetString(0), reader.GetString(1), reader.GetString(2));
     }
 
-    private static EuropeIndexBuilder.ArticleSourceRow[] ReadArticleSources(SqliteConnection connection)
+    private static IEnumerable<EuropeIndexBuilder.ArticleSourceRow> StreamArticleSources(SqliteConnection connection)
     {
         using var command = connection.CreateCommand();
         command.CommandText = "SELECT article_identity_sha256,package_sha256,official_source_uri FROM article_sources ORDER BY article_identity_sha256";
         using var reader = command.ExecuteReader();
-        var values = new List<EuropeIndexBuilder.ArticleSourceRow>();
-        while (reader.Read()) values.Add(new(reader.GetString(0), reader.GetString(1), reader.GetString(2)));
-        return values.ToArray();
+        while (reader.Read()) yield return new(reader.GetString(0), reader.GetString(1), reader.GetString(2));
     }
 
-    private static EuropeIndexBuilder.ArticleRow[] ReadArticles(SqliteConnection connection)
+    private static IEnumerable<EuropeIndexBuilder.ArticleRow> StreamArticles(SqliteConnection connection)
     {
         using var command = connection.CreateCommand();
         command.CommandText = "SELECT article_identity_sha256,object_ref_sha256,publisher_work_id,publisher_work_celex,publisher_expression_id,package_entry,publisher_identifier,heading,wording_date,language,searchable_text,tokens_json FROM articles ORDER BY article_identity_sha256";
         using var reader = command.ExecuteReader();
-        var values = new List<EuropeIndexBuilder.ArticleRow>();
-        while (reader.Read()) values.Add(new(reader.GetString(0), reader.GetString(1), reader.GetString(2),
+        while (reader.Read()) yield return new(reader.GetString(0), reader.GetString(1), reader.GetString(2),
             reader.IsDBNull(3) ? null : reader.GetString(3), reader.GetString(4), reader.GetString(5), reader.GetString(6),
             reader.GetString(7), reader.GetString(8), reader.GetString(9), reader.GetString(10),
-            reader.GetString(11)));
-        return values.ToArray();
+            reader.GetString(11));
     }
 }

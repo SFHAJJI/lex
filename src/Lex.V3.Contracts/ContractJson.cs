@@ -36,6 +36,21 @@ public static class ContractJson
         return hashing.Complete();
     }
 
+    /// <summary>
+    /// The lowercase SHA-256 of exactly the bytes <see cref="JsonSerializer.SerializeToUtf8Bytes{TValue}(TValue, JsonSerializerOptions?)"/>
+    /// returns for <paramref name="value"/> with the serializer's default options, hashed while the serializer writes them, so
+    /// no byte array is built. An index's logical rows serialize to more bytes than the article text they hold: the combined
+    /// population's EU index (1.4 GB) needed some 11 GB to verify at mount (2026-10-13). Collections are written as they
+    /// are enumerated, so rows read lazily are never all held at once.
+    /// </summary>
+    public static string Sha256OfDefaultJson<T>(T value)
+    {
+        ArgumentNullException.ThrowIfNull(value);
+        using var hashing = new Sha256WriteStream();
+        JsonSerializer.Serialize(hashing, value);
+        return hashing.Complete();
+    }
+
     public static T Deserialize<T>(string json)
     {
         try
@@ -43,6 +58,37 @@ public static class ContractJson
             var requestedType = typeof(T);
             var contractType = FindRegisteredPolymorphicContract(requestedType) ?? requestedType;
             var value = JsonSerializer.Deserialize(json, contractType, Options)
+                ?? throw new JsonException("The contract document cannot be null.");
+            return value is T typed
+                ? typed
+                : throw new JsonException(
+                    $"The contract discriminator does not name {requestedType.Name}.");
+        }
+        catch (ArgumentException exception)
+        {
+            throw new JsonException("The contract document violates a typed invariant.", exception);
+        }
+    }
+
+    /// <summary>
+    /// <see cref="Deserialize{T}(string)"/> from the document's UTF-8 bytes, with <paramref name="converters"/> taking
+    /// precedence for this read only: no string of the document is built, and a converter can read a long list one element
+    /// at a time (the corpus's members, <c>LexCorpus6MountView</c>). The bytes are not checked to be valid UTF-8 here.
+    /// </summary>
+    public static T DeserializeUtf8<T>(ReadOnlySpan<byte> json, IEnumerable<JsonConverter> converters)
+    {
+        ArgumentNullException.ThrowIfNull(converters);
+        var options = new JsonSerializerOptions(Options);
+        foreach (var converter in converters.Reverse())
+        {
+            options.Converters.Insert(0, converter);
+        }
+
+        try
+        {
+            var requestedType = typeof(T);
+            var contractType = FindRegisteredPolymorphicContract(requestedType) ?? requestedType;
+            var value = JsonSerializer.Deserialize(json, contractType, options)
                 ?? throw new JsonException("The contract document cannot be null.");
             return value is T typed
                 ? typed
