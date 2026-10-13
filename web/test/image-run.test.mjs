@@ -28,11 +28,15 @@ test("the container's /tmp holds a copy of every index the mount carries, genera
   await assert.rejects(startImage({ run: "/nowhere", config: { config: {} }, tmpMebibytes: 300.5 }), /not a whole size/);
 });
 
-test("ending a container's run ends its first process, which the API is, so its /tmp goes with it (review of #950)", async (t) => {
+test("ending a container's run ends every process of the container, so its /tmp goes with it (review of #950)", async (t) => {
   const { CONTAINER_COMMAND } = await import("../scripts/image-run.mjs");
   assert.deepEqual(CONTAINER_COMMAND, ["unshare", "--mount", "--pid", "--fork", "--kill-child"]);
-  // Shown where WSL runs (the rehearsal's machine): a stand-in first process with no signal handler, as the API has none
-  // for the hang-up a closed wsl.exe sends, survived the run's end without --kill-child.
+  // Shown where WSL runs (the rehearsal's machine), with a stand-in started as the image is: in the run's root filesystem,
+  // bound on itself in the container's mount namespace, by `chroot --userspec` under another user, with no handler for
+  // the hang-up a closed wsl.exe sends. The change of user clears the parent-death signal --kill-child sets, so ending
+  // unshare left the stand-in (and every population probe's API, each holding its 2.2 GB /tmp) running: the release's
+  // probes filled WSL's memory by the third start and the next missed its deadline (2026-10-13). The run's end ends the
+  // processes whose root is the run's, and returns only once none is left.
   const { spawn, spawnSync } = await import("node:child_process");
   const distribution = process.env.LEX_WSL_DISTRIBUTION ?? "Ubuntu-24.04";
   const inWsl = (script) => spawnSync("wsl", ["-d", distribution, "-u", "root", "-e", "sh", "-c", script], { encoding: "utf8" });
@@ -41,18 +45,21 @@ test("ending a container's run ends its first process, which the API is, so its 
     return;
   }
   const run = `/tmp/lex-image-run-kill-${process.pid}`;
-  const marker = `sleep 731 # ${run}`;
-  const child = spawn("wsl", ["-d", distribution, "-u", "root", "-e", ...CONTAINER_COMMAND, "sh", "-c", `exec ${marker}`], { stdio: "ignore" });
-  const count = () => Number(inWsl("pgrep -c -f '^sleep 731$' || true").stdout.trim() || 0);
+  // A root filesystem holding `sleep` and the libraries it loads.
+  const prepared = inWsl(`set -e; R=${run}/rootfs; for file in /usr/bin/sleep $(ldd /usr/bin/sleep | grep -o '/[^ ]*'); do mkdir -p "$R$(dirname "$file")"; cp "$file" "$R$file"; done`);
+  assert.equal(prepared.status, 0, prepared.stderr);
+  const start = `R=${run}/rootfs; mount --bind "$R" "$R"; exec chroot --userspec=65534:65534 "$R" /usr/bin/sleep 731`;
+  const child = spawn("wsl", ["-d", distribution, "-u", "root", "-e", ...CONTAINER_COMMAND, "sh", "-c", start], { stdio: "ignore" });
+  const count = () => Number(inWsl("pgrep -c -f '^/usr/bin/sleep 731$' || true").stdout.trim() || 0);
   try {
     for (let tries = 0; tries < 50 && count() === 0; tries++) await new Promise((resolve) => setTimeout(resolve, 200));
     assert.equal(count(), 1, "the stand-in started");
     child.kill();
-    inWsl(endProcesses(run));
-    for (let tries = 0; tries < 25 && count() > 0; tries++) await new Promise((resolve) => setTimeout(resolve, 200));
-    assert.equal(count(), 0, "the container's first process ended with its run");
+    const ended = inWsl(endProcesses(run));
+    assert.equal(ended.status, 0, `${ended.stdout}${ended.stderr}`);
+    assert.equal(count(), 0, "the container's process ended with its run, before the run's end returned");
   } finally {
-    inWsl("pkill -9 -f '^sleep 731$' || true");
+    inWsl(`pkill -9 -f '^/usr/bin/sleep 731$'; rm -rf ${run}; true`);
   }
 });
 
@@ -64,7 +71,8 @@ test("a Windows path is handed to WSL as WSL mounts it", () => {
 test("the pattern that ends a run's processes matches them and never the shell that runs it", () => {
   const run = "/tmp/lex-image-run-68fdcc24-edd8-45dc-a37e-2e6dba547f8e";
   const script = endProcesses(run);
-  const pattern = script.match(/pkill -f '([^']+)'/)[1];
+  const pattern = script.match(/pkill -KILL -f '([^']+)'/)[1];
+  assert.ok(!script.includes(run), "the script never names the run directory whole, its root included");
   // pkill -f matches the pattern as an extended regular expression against each full command line.
   const matches = (commandLine) => new RegExp(pattern).test(commandLine);
   assert.ok(matches(`chroot --userspec=1654:1654 ${run}/rootfs dotnet /app/Lex.V3.Api.dll`), "the image's API");

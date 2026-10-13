@@ -552,10 +552,9 @@ export async function rehearse({ mount, keep = false, probe = true, reproduce = 
     }
 
     // From here only the image's digests and config are read (the probes unpack the archive from disk, and the release reads
-    // it again), so its bytes (2.6 GB for the population image) are let go before the container starts; WSL's VM then has
-    // that memory for the container's /tmp. Whether holding them made the population release's first start miss its
-    // deadline is not shown (a start by hand that held them answered in 24 s), so a missed start now says what the
-    // container was doing (`containerState`).
+    // it again), so its bytes (2.6 GB for the population image) are let go before the container starts. (The population
+    // release's missed starts were not this: every closed start left its container and its /tmp in WSL's memory, which
+    // `endProcesses` now ends; 2026-10-13.)
     image = { manifestDigest: image.manifestDigest, manifest: image.manifest, config: image.config, layers: image.layers.map(({ digest }) => ({ digest })) };
 
     if (probe) {

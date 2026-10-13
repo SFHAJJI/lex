@@ -107,8 +107,8 @@ Only money, legal or public claims, credentials and going live (ruling 7):
   the driver set up, in France Central: a budget of 30 a month with alerts, resource group `rg-lex-v3`, registry
   `crlexv3soufien`, a pull identity, Container Apps environment `cae-lex-v3` and key vault `kv-lex-v3-soufien`,
   which holds the release signing key (P-256, identity "lex-v3-release (Soufien Hajji)"; only its public half is on
-  disk). Open for the owner: upgrade the trial to pay-as-you-go before its credit or 30 days run out; and, at go-live,
-  point soufien.lu's name servers at a new zone (the old zone is out of reach with V2's subscription). Nothing is
+  disk). The owner upgraded the trial to pay-as-you-go on 2026-10-13. Open for the owner: at go-live, point
+  soufien.lu's name servers at a new zone (the old zone is out of reach with V2's subscription). Nothing is
   deployed.
 - The weekly 30-minute checkpoint slot.
 - The owner's rulings of 2026-10-04 (relayed by the audit session): the French copy accepted, the acquisition

@@ -1928,6 +1928,31 @@ public static class LuxembourgIndexBuilder
         return connection;
     }
 
+    /// <summary>
+    /// A read-only connection that serves requests: its temporary tables, sorts and indexes stay in memory. SQLite
+    /// otherwise spills one past its 2 MB cache to a file in the temporary folder, and over the population mount nine
+    /// of the release's page probes found two such files written while one request was served (2026-10-13); a server
+    /// writes nothing for a request. The verification at open keeps SQLite's default: only a serving connection is set.
+    /// </summary>
+    internal static SqliteConnection OpenForServing(string path)
+    {
+        var connection = Open(path, SqliteOpenMode.ReadOnly);
+        try
+        {
+            KeepTemporaryStorageInMemory(connection);
+            return connection;
+        }
+        catch
+        {
+            connection.Dispose();
+            throw;
+        }
+    }
+
+    /// <summary>Sets a connection's temporary storage to memory (<c>PRAGMA temp_store = MEMORY</c>), from then on.</summary>
+    internal static void KeepTemporaryStorageInMemory(SqliteConnection connection) =>
+        Execute(connection, "PRAGMA temp_store = MEMORY");
+
     internal static void Execute(SqliteConnection connection, string sql, SqliteTransaction? transaction = null)
     {
         using var command = connection.CreateCommand();
@@ -2228,6 +2253,8 @@ public sealed class LuxembourgIndexReader : IDisposable
     private readonly object _gate = new();
     private readonly object _articleOutcomesGate = new();
     private IReadOnlyList<KeyValuePair<string, long>>? _articleOutcomes;
+    private readonly object _coverageGate = new();
+    private LuxembourgIndexCoverage? _coverage;
 
     private LuxembourgIndexReader(
         string path,
@@ -2439,6 +2466,8 @@ public sealed class LuxembourgIndexReader : IDisposable
                 !LuxembourgIndexBuilder.MeasureCapabilitiesByArticleDates(indexRef.Sha256, articles, workTitles).Cells.SequenceEqual(capabilityManifest.Cells))
                 throw new InvalidDataException("The Luxembourg capability manifest was not measured from the index.");
 
+            // Verified: from here the connection serves requests.
+            LuxembourgIndexBuilder.KeepTemporaryStorageInMemory(connection);
             return new LuxembourgIndexReader(
                 path,
                 connection,
@@ -2659,7 +2688,7 @@ public sealed class LuxembourgIndexReader : IDisposable
         // one reads; a local process able to rewrite that file could alter either, which is no wider
         // than it was.
         {
-            using var connection = LuxembourgIndexBuilder.Open(_path, SqliteOpenMode.ReadOnly);
+            using var connection = LuxembourgIndexBuilder.OpenForServing(_path);
             using var command = connection.CreateCommand();
             command.CommandText =
                 "SELECT s.work_key, s.applicability_date, s.state_sha256, a.article_identity_sha256, a.publisher_id, a.publisher_wid " +
@@ -2868,12 +2897,24 @@ public sealed class LuxembourgIndexReader : IDisposable
     /// publisher date is counted and never dropped. Nothing here says what the publisher holds. It
     /// reads through its own read-only connection on the reader's private verified copy and does not
     /// take the reader's gate, so a caller who asks for it again and again cannot make every other
-    /// operation on the mount wait behind the counts.
+    /// operation on the mount wait behind the counts. The index is immutable, so the counts are read
+    /// once for the reader's life and every later report is the same one: every page asks for
+    /// coverage, and the counts' sorts, held in memory while serving (the gaps' distinct count is
+    /// about 24 MiB over the population mount, the review of #953), would otherwise be built again for
+    /// each request at once.
     /// </summary>
     public LuxembourgIndexCoverage ResolveCoverage()
     {
+        lock (_coverageGate)
         {
-            using var connection = LuxembourgIndexBuilder.Open(_path, SqliteOpenMode.ReadOnly);
+            return _coverage ??= ReadCoverage();
+        }
+    }
+
+    private LuxembourgIndexCoverage ReadCoverage()
+    {
+        {
+            using var connection = LuxembourgIndexBuilder.OpenForServing(_path);
             List<KeyValuePair<string, long>> Grouped(string sql)
             {
                 var rows = new List<KeyValuePair<string, long>>();
