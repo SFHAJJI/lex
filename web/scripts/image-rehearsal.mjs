@@ -497,7 +497,7 @@ export async function rehearse({ mount, keep = false, probe = true, reproduce = 
       sets: cardView.sets.map((set) => ({ set: set.set, arm: set.arm, cases: set.cases, gates: set.gates.map((gate) => `${gate.gate}: ${gate.verdict}`) })),
       controls: cardView.controls.map((control) => `${control.set}, ${control.arm}: ${control.verdict}`),
     };
-    const { webRoot, archive, image } = await buildImage({ into: join(work, "first"), mountPath, epoch: source.epoch, card, log });
+    let { webRoot, archive, image } = await buildImage({ into: join(work, "first"), mountPath, epoch: source.epoch, card, log });
     result.archiveBytes = (await stat(archive)).size;
 
     log("verifying the image");
@@ -550,6 +550,13 @@ export async function rehearse({ mount, keep = false, probe = true, reproduce = 
       await rm(join(work, "second"), { recursive: true, force: true });
       if (differences.length > 0) throw new Error(`the image is not reproducible:\n- ${differences.join("\n- ")}`);
     }
+
+    // From here only the image's digests and config are read (the probes unpack the archive from disk, and the release reads
+    // it again), so its bytes (2.6 GB for the population image) are let go, and collected when the process allows it
+    // (`node --expose-gc`), before the container starts: the population release's first start missed its 219 s deadline
+    // while this process still held them, and started in 24 s once they were gone (2026-10-13).
+    image = { manifestDigest: image.manifestDigest, manifest: image.manifest, config: image.config, layers: image.layers.map(({ digest }) => ({ digest })) };
+    globalThis.gc?.();
 
     if (probe) {
       // The zero-traffic probes, against the image itself: health (it answers), the API (each page's
