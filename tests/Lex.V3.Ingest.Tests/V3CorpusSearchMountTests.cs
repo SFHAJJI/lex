@@ -882,6 +882,103 @@ public sealed class V3CorpusSearchMountTests
         DateOnly.ParseExact(date, "yyyy-MM-dd", CultureInfo.InvariantCulture).AddDays(days)
             .ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
 
+    /// <summary>
+    /// The Luxembourg population's articles carry no date of their own (the publisher dates the document): measured by the
+    /// article's own date alone the capability manifest held no searchable text, and search over the real mount answered that
+    /// French was not searchable (the mounted gates of 2026-10-13). Measured at the state that holds each article, the text is
+    /// searched, and each hit is the state's, at its date.
+    /// </summary>
+    [TestMethod]
+    public async Task ArticlesThatCarryNoDateOfTheirOwnAreSearchedAtTheirStatesDate()
+    {
+        var fixture = await MountedFixture.CreateAsync();
+        await using var cleanup = fixture;
+        var (both, terms, _) = await WriteTextsAsync(fixture);
+        await ClearArticleDatesAsync(fixture);
+        using var mount = await V3CorpusMount.OpenAsync(fixture.Directory, CancellationToken.None);
+        Assert.IsNotNull(mount);
+
+        var body = (await SearchAsync(mount, Phrase)).Result!.Value;
+        Assert.IsTrue(body.GetProperty("searchable_text_held_for_language").GetBoolean());
+        CollectionAssert.AreEqual(new[] { "fra" }, Strings(body.GetProperty("searchable_languages")));
+        var hits = body.GetProperty("hits").EnumerateArray().ToArray();
+        CollectionAssert.AreEqual(new[] { both, terms }, hits.Select(static hit => hit.GetProperty("publisher_id").GetString()).ToArray());
+        Assert.IsTrue(hits.All(hit => hit.GetProperty("state_sha256").GetString() == fixture.StateSha256 &&
+                                      hit.GetProperty("applicability_date").GetString() == fixture.ApplicabilityDate));
+    }
+
+    /// <summary>
+    /// An index built before 2026-10-13 states its manifest by the earlier rule (each article's own date alone), and a retained
+    /// generation must keep opening: the reader accepts a manifest measured by either rule and serves what it states, so the
+    /// earlier one still says French is not searchable. A manifest measured by neither, one cell more than the rows give, is
+    /// refused.
+    /// </summary>
+    [TestMethod]
+    public async Task AManifestMeasuredByEitherRuleOpensAndOneMeasuredByNeitherIsRefused()
+    {
+        var fixture = await MountedFixture.CreateAsync();
+        await using var cleanup = fixture;
+        await WriteTextsAsync(fixture);
+        await ClearArticleDatesAsync(fixture);
+
+        await WriteManifestAsync(fixture, static (digest, articles, _, titles) =>
+            LuxembourgIndexBuilder.MeasureCapabilitiesByArticleDates(digest, articles, titles));
+        using (var earlier = await V3CorpusMount.OpenAsync(fixture.Directory, CancellationToken.None))
+        {
+            Assert.IsNotNull(earlier);
+            var body = (await SearchAsync(earlier, Phrase)).Result!.Value;
+            Assert.IsFalse(body.GetProperty("searchable_text_held_for_language").GetBoolean(), "what the earlier manifest states");
+            Assert.AreEqual(0, body.GetProperty("hits").GetArrayLength());
+        }
+
+        await WriteManifestAsync(fixture, (digest, articles, states, titles) =>
+        {
+            var measured = LuxembourgIndexBuilder.MeasureCapabilities(digest, articles, states, titles);
+            var day = DateOnly.ParseExact(fixture.ApplicabilityDate, "yyyy-MM-dd", CultureInfo.InvariantCulture);
+            var forged = new Lex.V3.Contracts.Index.V3IndexCapabilityCell(
+                PublisherId.LuLegilux, digest, "search", "articles", "searchable_text", "deu", day, day, 1);
+            Assert.IsTrue(Lex.V3.Contracts.Index.V3IndexCapabilityManifest.TryCreate(
+                PublisherId.LuLegilux, digest, measured.Cells.Append(forged), V3UnservedOperations.Rows, out var manifest, out var refusal), refusal.ToString());
+            return manifest!;
+        });
+        var refused = await Assert.ThrowsExactlyAsync<InvalidDataException>(async () =>
+            await V3CorpusMount.OpenAsync(fixture.Directory, CancellationToken.None));
+        StringAssert.Contains(refused.Message, "capability manifest was not measured from the index");
+    }
+
+    /// <summary>Blanks the publisher date of every article of the fixture's own state, as the population's articles hold none.</summary>
+    private static async Task ClearArticleDatesAsync(MountedFixture fixture)
+    {
+        foreach (var identity in fixture.ArticleDatesOfOwnState().Keys)
+        {
+            await fixture.SetArticleDateAsync(identity, null);
+        }
+
+        Assert.IsTrue(fixture.ArticleDatesOfOwnState().Values.All(static date => date is null));
+    }
+
+    /// <summary>Writes the fixture's Luxembourg capability manifest as a rule measures it from the index's rows.</summary>
+    private static async Task WriteManifestAsync(
+        MountedFixture fixture,
+        Func<string, LuxembourgIndexBuilder.ArticleRow[], LuxembourgIndexBuilder.StateRow[], LuxembourgIndexBuilder.WorkTitleRow[], Lex.V3.Contracts.Index.V3IndexCapabilityManifest> measure)
+    {
+        var indexPath = Path.Combine(fixture.Directory, V3CorpusMount.IndexFileName);
+        LuxembourgIndexBuilder.ArticleRow[] articles;
+        LuxembourgIndexBuilder.StateRow[] states;
+        LuxembourgIndexBuilder.WorkTitleRow[] titles;
+        using (var connection = LuxembourgIndexBuilder.Open(indexPath, SqliteOpenMode.ReadOnly))
+        {
+            articles = LuxembourgIndexBuilderTests.ReadArticles(connection);
+            states = LuxembourgIndexBuilderTests.ReadStates(connection);
+            titles = LuxembourgIndexBuilderTests.ReadWorkTitles(connection);
+        }
+
+        var digest = Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(await File.ReadAllBytesAsync(indexPath)));
+        using var stream = new MemoryStream();
+        _ = Lex.V3.Contracts.Index.V3IndexCapabilityManifestArtifact.Write(stream, measure(digest, articles, states, titles));
+        await File.WriteAllBytesAsync(Path.Combine(fixture.Directory, V3CorpusMount.CapabilityManifestFileName), stream.ToArray());
+    }
+
     private static async Task<V3Envelope> SearchAsync(
         V3CorpusMount mount, string query, string language = "fra", string? identifier = null, string? date = null,
         string? mode = null, int? limit = null, string? after = null)

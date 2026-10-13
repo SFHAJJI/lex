@@ -42,6 +42,7 @@ public sealed partial class V3MountedGatesTests
         "OR EXISTS (SELECT 1 FROM json_each(s.article_identities_json) j JOIN articles a ON a.article_identity_sha256 = j.value JOIN members m ON m.object_ref_sha256 = a.object_ref_sha256 " +
         $"WHERE m.outcome IS NOT '{ContractWire.NameOf(LexCorpus6OutcomeKind.Acquired)}' OR m.rights_disposition IS NOT '{ContractWire.NameOf(LuxembourgRightsChannelDisposition.AgreedSameRunCcBy)}'))";
     private static readonly string[] CandidateLanguages = ["eng", "deu", "fra", "ltz"];
+    private static readonly string[] CandidateFormats = ["docx", "epub", "odt", "rtf"];
 
     internal static RefusalSet RefusalCases(string mountDirectory, IReadOnlyList<Timeline> timelines)
     {
@@ -89,7 +90,6 @@ public sealed partial class V3MountedGatesTests
         requests["pinned-digest-not-held"] = new("verify", new { identifier = $"{work}/{day}--{new string('0', 64)}", language }, "pinned_digest_mismatch");
         requests["mode-not-held"] = new("search", new { query = "loi", language, mode = "bm25" }, "retrieval_mode_unavailable");
         requests["foreign-cursor"] = new("events", new { after = new string('0', 64) + ":1" }, "snapshot_unknown");
-        requests["format-not-held"] = new("manifestation", new { identifier = work, format = "docx" }, "format_not_available");
 
         var heldLanguages = timelines.Where(value => value.WorkKey == timeline.WorkKey).Select(static value => value.Language).ToHashSet(StringComparer.Ordinal);
         var absent = CandidateLanguages.FirstOrDefault(candidate => !heldLanguages.Contains(candidate));
@@ -114,6 +114,27 @@ public sealed partial class V3MountedGatesTests
         }
 
         using var connection = LuxembourgIndexBuilder.Open(Path.Combine(mountDirectory, V3CorpusMount.IndexFileName), SqliteOpenMode.ReadOnly);
+        // A format none of the work's manifestations carries, by the handler's rule (the last segment of the publisher's
+        // userFormat IRI, over every expression of the work's states). Legilux publishes docx for most acts (22,908 docx
+        // manifestations in the population), so a format assumed absent was answered on the real mount (2026-10-13).
+        var heldFormats = Rows(connection,
+                "SELECT f.object_value FROM states s " +
+                $"JOIN work_facts e ON e.subject_iri = s.expression_iri AND e.predicate = '{ContractWire.NameOf(LuxembourgAssertionPredicate.IsEmbodiedBy)}' " +
+                $"JOIN work_facts f ON f.subject_iri = e.object_value AND f.predicate = '{ContractWire.NameOf(LuxembourgAssertionPredicate.UserFormat)}' " +
+                $"WHERE s.work_key = '{timeline.WorkKey.Replace("'", "''", StringComparison.Ordinal)}'")
+            .Select(static row => row[0].TrimEnd('/'))
+            .Select(static format => format[(format.LastIndexOf('/') + 1)..])
+            .ToHashSet(StringComparer.Ordinal);
+        var unheldFormat = CandidateFormats.FirstOrDefault(candidate => !heldFormats.Contains(candidate));
+        if (unheldFormat is not null)
+        {
+            requests["format-not-held"] = new("manifestation", new { identifier = work, format = unheldFormat }, "format_not_available");
+        }
+        else
+        {
+            notProduced["format_not_available"] = $"{timeline.WorkKey}'s manifestations carry every candidate format";
+        }
+
         var title = AmbiguousTitle(Rows(connection, "SELECT work_identifier, normalized_title FROM work_titles").Select(static row => (row[0], row[1])).ToArray());
         if (title is not null)
         {
@@ -365,6 +386,27 @@ public sealed partial class V3MountedGatesTests
             new[] { "text_withheld", "text_not_available" }, derived.NotProduced.Keys.ToArray(),
             "one mount cannot hold a withheld licence and text beside them; every other produced code is derived: " + string.Join("; ", derived.NotProduced.Select(static pair => pair.Key + " (" + pair.Value + ")")));
         Assert.AreEqual(16, set.CaseCount, "the fixture machine gates' 18 less the two codes another mount holds");
+    }
+
+    [TestMethod]
+    public async Task TheFormatCaseNamesAFormatNoneOfTheWorksManifestationsCarries()
+    {
+        // Legilux publishes docx for most acts (22,908 docx manifestations in the population): the case that assumed docx
+        // absent was answered on the real mount (2026-10-13). With a docx manifestation held, the case asks for the next
+        // candidate, which the handler refuses.
+        var fixture = await MountedFixture.CreateAsync();
+        await using var cleanup = fixture;
+        var docx = fixture.ExpressionIri + "/docx";
+        await fixture.AddWorkFactAsync(fixture.ExpressionIri, ContractWire.NameOf(LuxembourgAssertionPredicate.IsEmbodiedBy),
+            ContractWire.NameOf(LuxembourgAssertionFactKind.WemiStructural), "iri", docx);
+        await fixture.AddWorkFactAsync(docx, ContractWire.NameOf(LuxembourgAssertionPredicate.UserFormat),
+            ContractWire.NameOf(LuxembourgAssertionFactKind.ManifestationFormat), "iri", "http://data.legilux.public.lu/resource/authority/user-format/docx");
+        using var mount = await V3CorpusMount.OpenAsync(fixture.Directory, CancellationToken.None);
+        Assert.IsNotNull(mount);
+
+        var (set, derived) = RunRefusalGate(mount, fixture.Directory, Timelines(fixture.Directory));
+        Assert.AreEqual("epub", System.Text.Json.JsonSerializer.SerializeToElement(derived.Requests["format-not-held"].Parameters).GetProperty("format").GetString());
+        Assert.AreEqual(GateVerdict.Pass, set.Gates.Single().Verdict, "the handler refuses the format the case names");
     }
 
     [TestMethod]
