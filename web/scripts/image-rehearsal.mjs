@@ -46,9 +46,11 @@ import { tmpdir } from "node:os";
 import { dirname, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { gunzipSync } from "node:zlib";
+import { readLargeFile, sha256Hex } from "./large-bytes.mjs";
 
 const repository = resolve(fileURLToPath(new URL("../../", import.meta.url)));
-const sha256 = (bytes) => createHash("sha256").update(bytes).digest("hex");
+// In pieces: one update over 2 GiB is refused, and the population image's app layer is 2.5 GB (large-bytes.mjs).
+const sha256 = (bytes) => sha256Hex(bytes);
 
 /** The rehearsal identity: named as what it is, so no one mistakes it for the release signer. */
 export const REHEARSAL_IDENTITY = "lex-v3-rehearsal (not a release identity)";
@@ -119,7 +121,7 @@ async function filesUnder(root) {
   for (const entry of await readdir(root, { recursive: true, withFileTypes: true })) {
     if (!entry.isFile()) continue;
     const path = join(entry.parentPath ?? entry.path, entry.name);
-    found.push([relative(root, path).split(sep).join("/"), await readFile(path)]);
+    found.push([relative(root, path).split(sep).join("/"), await readLargeFile(path)]);
   }
   return found;
 }
@@ -417,11 +419,11 @@ async function buildImage({ into, mountPath, epoch, card, log }) {
 
   log("making the image reproducible");
   const { reproducibleImage, writeLayout } = await import("./image-reproducible.mjs");
-  const reproducible = reproducibleImage(readLayout(await readFile(sdkArchive)), { epoch });
+  const reproducible = reproducibleImage(readLayout(await readLargeFile(sdkArchive)), { epoch });
   const archive = join(into, "lex-v3-rehearsal.tar");
   await writeFile(archive, writeLayout(reproducible, { mtime: epoch }));
   await rm(sdkArchive, { force: true });
-  return { webRoot, archive, image: readOciImage(readLayout(await readFile(archive))) };
+  return { webRoot, archive, image: readOciImage(readLayout(await readLargeFile(archive))) };
 }
 
 /**
@@ -505,8 +507,13 @@ export async function rehearse({ mount, keep = false, probe = true, reproduce = 
     const servedCard = web.find(([path]) => `/${path}` === CARD_ROUTE)?.[1];
     if (!servedCard) throw new Error(`the live pages hold no ${CARD_ROUTE}`);
     if (JSON.stringify(JSON.parse(servedCard.toString("utf8"))) !== JSON.stringify(card)) throw new Error(`${CARD_ROUTE} is not the card the pages were built with`);
-    const corpus = await filesUnder(mountPath);
+    // The mount's files (2.5 GB for the population) are let go as soon as they are checked, and the second image below
+    // as soon as it is compared: an async function keeps a dead local reachable across its later awaits, and holding both
+    // took the image step to about 11.8 GB resident for the population image (the review of #951).
+    let corpus = await filesUnder(mountPath);
     const failures = imageFailures(image, { web, mount: corpus, report });
+    const mountFilesVerified = corpus.length;
+    corpus = null;
     Object.assign(result, {
       manifestDigest: image.manifestDigest,
       configDigest: image.manifest.config.digest,
@@ -514,7 +521,7 @@ export async function rehearse({ mount, keep = false, probe = true, reproduce = 
       base: image.config.config.Labels["org.opencontainers.image.base.name"],
       user: image.config.config.User,
       webFilesVerified: web.length,
-      mountFilesVerified: corpus.length,
+      mountFilesVerified,
       reportFilesVerified: (report.files ?? []).length,
       imageFailures: failures,
     });
@@ -536,9 +543,10 @@ export async function rehearse({ mount, keep = false, probe = true, reproduce = 
     if (reproduce) {
       // Reproducible: a second build, from scratch in its own directory, must give the same image.
       log("building the image a second time, from scratch, to check it is reproducible");
-      const second = await buildImage({ into: join(work, "second"), mountPath, epoch: source.epoch, card, log });
+      let second = await buildImage({ into: join(work, "second"), mountPath, epoch: source.epoch, card, log });
       const differences = reproductionFailures(image, second.image);
       result.reproduced = { manifestDigest: second.image.manifestDigest, identical: differences.length === 0 };
+      second = null;
       await rm(join(work, "second"), { recursive: true, force: true });
       if (differences.length > 0) throw new Error(`the image is not reproducible:\n- ${differences.join("\n- ")}`);
     }
@@ -593,7 +601,7 @@ export async function rehearse({ mount, keep = false, probe = true, reproduce = 
     const version = releaseVersion(source, { rehearsal: by.rehearsal });
     const published = await publishRelease(join(work, "release"), {
       version, source, manifestDigest: image.manifestDigest, corpusSha256: report.corpus?.Sha256 ?? null, signer: by,
-      assets: [[ASSETS.image, await readFile(archive)], [ASSETS.imageSignature, imageSignatureAsset(signed)], [ASSETS.card, servedCard], [ASSETS.mountReport, mountBytes]],
+      assets: [[ASSETS.image, await readLargeFile(archive)], [ASSETS.imageSignature, imageSignatureAsset(signed)], [ASSETS.card, servedCard], [ASSETS.mountReport, mountBytes]],
     });
     // A release signer's release is read back as that signer's; a rehearsal names no release signer to hold it to.
     const readBack = await releaseFailures(published.directory, { publicKeyPem: by.publicKeyPem, identity: by.rehearsal ? null : by.identity });

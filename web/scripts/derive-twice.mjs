@@ -12,13 +12,14 @@
 // built with UseProxy = false (the publisher client is one), raw sockets or DNS, and the evidence says so
 // (DERIVE_TRAP_LIMITS). The first mount is what the image then carries.
 
-import { createHash } from "node:crypto";
 import { spawn } from "node:child_process";
 import { createServer } from "node:net";
 import { readdir, readFile, rm } from "node:fs/promises";
 import { join, relative, sep } from "node:path";
+import { readLargeFile, sha256Hex } from "./large-bytes.mjs";
 
-const sha256 = (bytes) => createHash("sha256").update(bytes).digest("hex");
+// In pieces: one update over 2 GiB is refused, and the population image's app layer is 2.5 GB (large-bytes.mjs).
+const sha256 = (bytes) => sha256Hex(bytes);
 
 /** What the proxy-variable trap observes, and what it does not: said beside its count, never implied by it. */
 export const DERIVE_TRAP_LIMITS =
@@ -34,7 +35,7 @@ export async function mountDigests(directory) {
     for (const entry of await readdir(at, { withFileTypes: true })) {
       const path = join(at, entry.name);
       if (entry.isDirectory()) await walk(path);
-      else if (entry.isFile()) files.push({ name: relative(directory, path).split(sep).join("/"), sha256: sha256(await readFile(path)) });
+      else if (entry.isFile()) files.push({ name: relative(directory, path).split(sep).join("/"), sha256: sha256(await readLargeFile(path)) });
       else throw new Error(`${path} is neither a file nor a directory; a mount holds files only`);
     }
   }

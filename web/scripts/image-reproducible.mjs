@@ -13,13 +13,14 @@
 // The source date is SOURCE_DATE_EPOCH when set, else the time of the commit the image is built from.
 
 import { spawnSync } from "node:child_process";
-import { createHash } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import { resolve } from "node:path";
 import { layerTar, readOciImage, readTar } from "./image-rehearsal.mjs";
+import { sha256Hex } from "./large-bytes.mjs";
 
 const repository = resolve(fileURLToPath(new URL("../../", import.meta.url)));
-const sha256 = (bytes) => createHash("sha256").update(bytes).digest("hex");
+// In pieces: one update over 2 GiB is refused, and the population image's app layer is 2.5 GB (large-bytes.mjs).
+const sha256 = (bytes) => sha256Hex(bytes);
 
 /** The media type of the app layer the repack writes: a tar, uncompressed. */
 export const REPRODUCIBLE_LAYER = "application/vnd.oci.image.layer.v1.tar";

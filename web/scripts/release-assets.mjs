@@ -27,8 +27,10 @@ import { mkdir, readFile, readdir, writeFile } from "node:fs/promises";
 import { basename, join } from "node:path";
 import { REHEARSAL_IDENTITY, imageSignatureFailures, layerTar, readLayout, readOciImage, readTar, rehearsalSigner } from "./image-rehearsal.mjs";
 import { CARD_ROUTE, readEvaluationCard } from "./evaluation-card.mjs";
+import { readLargeFile, sha256Hex } from "./large-bytes.mjs";
 
-const sha256 = (bytes) => createHash("sha256").update(bytes).digest("hex");
+// In pieces: one update over 2 GiB is refused, and the population image's app layer is 2.5 GB (large-bytes.mjs).
+const sha256 = (bytes) => sha256Hex(bytes);
 
 export const RELEASE_SCHEMA = "lex-v3-release-rehearsal/1";
 /** The schema of a release signed by the release signer, the owner's key. */
@@ -130,7 +132,7 @@ export async function releaseFailures(directory, { publicKeyPem, identity = null
   const held = new Map();
   for (const [name, asset] of listed) {
     if (!present.has(name)) { failures.push(`${name} is in the manifest but not in the release`); continue; }
-    const bytes = await readFile(join(directory, name));
+    const bytes = await readLargeFile(join(directory, name));
     if (bytes.length !== asset.size) failures.push(`${name} is ${bytes.length} bytes, not the ${asset.size} the manifest records`);
     if (sha256(bytes) !== asset.sha256) failures.push(`${name} is sha256:${sha256(bytes)}, not the ${asset.sha256} the manifest records`);
     held.set(name, bytes);

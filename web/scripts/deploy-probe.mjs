@@ -25,6 +25,7 @@ import { layerTar, readLayout, readOciImage, readTar, servedPaths, v2RouteFailur
 import { invokedDirectly } from "./invoked-directly.mjs";
 import { heldLuxembourgWorkFromAnswers, realMountRuns } from "./journey.mjs";
 import { ASSETS, RELEASE_MANIFEST, releaseFailures } from "./release-assets.mjs";
+import { readLargeFile } from "./large-bytes.mjs";
 
 const LIVE_PREFIX = "app/v3-web/";
 
@@ -144,7 +145,7 @@ export async function deployedReleaseFailures(origin, releaseDirectory, { public
   if (release.length > 0) return release.map((failure) => `the release does not read back: ${failure}`);
   const manifest = JSON.parse(await readFile(join(releaseDirectory, RELEASE_MANIFEST), "utf8"));
   return revisionFailures(origin, {
-    web: liveFilesOf(await readFile(join(releaseDirectory, ASSETS.image))),
+    web: liveFilesOf(await readLargeFile(join(releaseDirectory, ASSETS.image))),
     card: await readFile(join(releaseDirectory, ASSETS.card)),
     corpusSha256: manifest.corpus.sha256,
   });
