@@ -202,7 +202,7 @@ public sealed class DurableBlobReceiptFamilyIngestSurfaceTests
                     + "Lex.V3.Ingest.Stage3EvidenceLineage::<LuxembourgScopeManifestReceipt>k__Back"
                     + "ingField -> Lex.V3.Contracts.Custody.DurableBlobWriteReceipt",
                 "method internal instance "
-                    + "Lex.V3.Ingest.LexCorpus6Builder+<>c::<CorrigendumReceipts>b__21_0(Lex.V3.Ing"
+                    + "Lex.V3.Ingest.LexCorpus6Builder+<>c::<CorrigendumReceipts>b__27_0(Lex.V3.Ing"
                     + "est.Europe.EuCorrigendumTripwireProductionResult) -> "
                     + "System.Collections.Generic.IEnumerable<Lex.V3.Contracts.Custody.DurableBlobW"
                     + "riteReceipt>",
