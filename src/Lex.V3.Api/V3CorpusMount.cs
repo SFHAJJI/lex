@@ -25,7 +25,8 @@ internal sealed partial class V3CorpusMount : IDisposable
 
     private readonly LuxembourgIndexReader? _reader;
     private readonly EuropeIndexReader? _europeReader;
-    private readonly VerifiedLexCorpus6ManifestSet _corpus;
+    // The corpus as a mount keeps it: verified whole at open, holding only the members an answer looks up.
+    private readonly LexCorpus6MountView _corpus;
 
     // The retention line's decision the mounted generations carry, held to the mounted log at open; null when the mount
     // keeps no generation.
@@ -40,7 +41,7 @@ internal sealed partial class V3CorpusMount : IDisposable
     private V3CorpusMount(
         LuxembourgIndexReader? reader,
         EuropeIndexReader? europeReader,
-        VerifiedLexCorpus6ManifestSet corpus,
+        LexCorpus6MountView corpus,
         V3RetentionDecision? generations = null,
         IReadOnlyList<GenerationReader>? generationReaders = null)
     {
@@ -85,9 +86,7 @@ internal sealed partial class V3CorpusMount : IDisposable
             throw new InvalidDataException("A V3 corpus mount keeps generations only of a Luxembourg event log it holds.");
         }
 
-        var corpusBytes = await File.ReadAllBytesAsync(corpusPath, cancellationToken)
-            .ConfigureAwait(false);
-        var corpus = VerifiedLexCorpus6ManifestSet.ParseCanonicalAndVerify(corpusBytes);
+        var corpus = await ReadCorpusAsync(corpusPath, cancellationToken).ConfigureAwait(false);
         LuxembourgIndexReader? reader = null;
         EuropeIndexReader? europeReader = null;
         V3RetentionDecision? generations = null;
@@ -145,6 +144,16 @@ internal sealed partial class V3CorpusMount : IDisposable
             foreach (var generation in generationReaders) generation.Reader.Dispose();
             throw;
         }
+    }
+
+    /// <summary>
+    /// The mounted corpus, verified member by member (<see cref="LexCorpus6MountView"/>). Its own method, so the file's bytes
+    /// are not held for the rest of the mount's opening by the caller's state.
+    /// </summary>
+    private static async Task<LexCorpus6MountView> ReadCorpusAsync(string corpusPath, CancellationToken cancellationToken)
+    {
+        var corpusBytes = await File.ReadAllBytesAsync(corpusPath, cancellationToken).ConfigureAwait(false);
+        return LexCorpus6MountView.ParseCanonicalAndVerify(corpusBytes);
     }
 
     public V3PlatformOperationOutcome Resolve(
@@ -1242,14 +1251,10 @@ internal sealed partial class V3CorpusMount : IDisposable
     }
 
     private LexCorpus6Member? MemberOf(string objectRefSha256) =>
-        _corpus.Set.Members.FirstOrDefault(candidate =>
-            candidate.Publisher == PublisherId.LuLegilux &&
-            string.Equals(candidate.ObjectRefSha256, objectRefSha256, StringComparison.Ordinal));
+        _corpus.Member(PublisherId.LuLegilux, objectRefSha256);
 
     private LexCorpus6Member? EuropeMemberOf(string objectRefSha256) =>
-        _corpus.Set.Members.FirstOrDefault(candidate =>
-            candidate.Publisher == PublisherId.EuEurLex &&
-            string.Equals(candidate.ObjectRefSha256, objectRefSha256, StringComparison.Ordinal));
+        _corpus.Member(PublisherId.EuEurLex, objectRefSha256);
 
     /// <summary>The article's notes, each the publisher's marker and the text of its body's text and reference tokens, in order.</summary>
     private static object[] ArticleNotes(string tokensJson)
@@ -2881,9 +2886,7 @@ internal sealed partial class V3CorpusMount : IDisposable
     /// </summary>
     private object SourceRow(LuxembourgIndexStateSource source)
     {
-        var member = _corpus.Set.Members.FirstOrDefault(candidate =>
-            candidate.Publisher == PublisherId.LuLegilux &&
-            string.Equals(candidate.ObjectRefSha256, source.ObjectRefSha256, StringComparison.Ordinal));
+        var member = MemberOf(source.ObjectRefSha256);
         return new
         {
             object_ref_sha256 = source.ObjectRefSha256,

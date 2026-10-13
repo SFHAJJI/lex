@@ -783,6 +783,32 @@ public sealed record LexCorpus6ManifestSet(
 {
     public LexCorpus6ManifestSet Validate()
     {
+        ValidateHeader();
+        if (Members.Count == 0 || Members.Any(static member => member is null))
+        {
+            throw new ArgumentException("A corpus manifest set requires members.", nameof(Members));
+        }
+
+        foreach (var member in Members)
+        {
+            member.Validate();
+        }
+
+        for (var i = 1; i < Members.Count; i++)
+        {
+            if (CompareMembers(Members[i - 1], Members[i]) >= 0)
+            {
+                throw new ArgumentException("Corpus members must be sorted and unique.", nameof(Members));
+            }
+        }
+
+        return this;
+    }
+
+    /// <summary>Every check of <see cref="Validate"/> but the members': what a reader that checks the members one at a time
+    /// (<see cref="LexCorpus6MountView"/>) checks of the rest.</summary>
+    internal void ValidateHeader()
+    {
         if (!string.Equals(Schema, LexCorpus6Builder.Schema, StringComparison.Ordinal))
         {
             throw new ArgumentException("Unexpected corpus manifest-set schema.", nameof(Schema));
@@ -812,25 +838,6 @@ public sealed record LexCorpus6ManifestSet(
             if (string.CompareOrdinal(CorrigendumProductions[i - 1].FamilyKey, CorrigendumProductions[i].FamilyKey) >= 0)
                 throw new ArgumentException("Corrigendum productions must be sorted and unique.", nameof(CorrigendumProductions));
         }
-        if (Members.Count == 0 || Members.Any(static member => member is null))
-        {
-            throw new ArgumentException("A corpus manifest set requires members.", nameof(Members));
-        }
-
-        foreach (var member in Members)
-        {
-            member.Validate();
-        }
-
-        for (var i = 1; i < Members.Count; i++)
-        {
-            if (CompareMembers(Members[i - 1], Members[i]) >= 0)
-            {
-                throw new ArgumentException("Corpus members must be sorted and unique.", nameof(Members));
-            }
-        }
-
-        return this;
     }
 
     internal static int CompareMembers(LexCorpus6Member left, LexCorpus6Member right)
@@ -1093,13 +1100,13 @@ public static class LexCorpus6Builder
     internal static byte[] Write(LexCorpus6ManifestSet set)
     {
         set.Validate();
+        return WriteCanonical(set, set.Members);
+    }
+
+    private static byte[] WriteCanonical(LexCorpus6ManifestSet set, IReadOnlyList<LexCorpus6Member> members)
+    {
         using var stream = new MemoryStream();
-        using (var writer = new Utf8JsonWriter(stream, new JsonWriterOptions
-        {
-            Encoder = JavaScriptEncoder.Default,
-            Indented = false,
-            SkipValidation = false,
-        }))
+        using (var writer = new Utf8JsonWriter(stream, CanonicalWriterOptions))
         {
             writer.WriteStartObject();
             writer.WriteString("schema", Schema);
@@ -1163,69 +1170,9 @@ public static class LexCorpus6Builder
             }
             writer.WriteEndArray();
             writer.WriteStartArray("members");
-            foreach (var member in set.Members)
+            foreach (var member in members)
             {
-                writer.WriteStartObject();
-                writer.WriteString("publisher", ContractWire.NameOf(member.Publisher));
-                writer.WriteString("object_ref_sha256", member.ObjectRefSha256);
-                writer.WriteNumber("source_ordinal", member.SourceOrdinal);
-                WriteArtifact(writer, "source_manifest_ref", member.SourceManifestRef);
-                WriteArtifact(writer, "run_identity", member.RunIdentity);
-                writer.WriteString("body_disposition", ContractWire.NameOf(member.BodyDisposition));
-                writer.WriteString("outcome", ContractWire.NameOf(member.Outcome));
-                if (member.BodySha256 is null)
-                {
-                    writer.WriteNull("body_sha256"); writer.WriteNull("body_byte_length"); writer.WriteNull("body_receipt_sha256");
-                }
-                else
-                {
-                    writer.WriteString("body_sha256", member.BodySha256);
-                    writer.WriteNumber("body_byte_length", member.BodyByteLength!.Value);
-                    writer.WriteString("body_receipt_sha256", member.BodyReceiptSha256);
-                }
-
-                if (member.EuropeContentClass is null)
-                {
-                    writer.WriteNull("europe_content_class");
-                }
-                else
-                {
-                    writer.WriteStartObject("europe_content_class");
-                    writer.WriteString("content_class", ContractWire.NameOf(member.EuropeContentClass.ContentClass));
-                    WriteArtifact(writer, "evidence_ref", member.EuropeContentClass.EvidenceRef);
-                    writer.WriteEndObject();
-                }
-
-                if (member.LuxembourgRights is null)
-                {
-                    writer.WriteNull("luxembourg_rights");
-                }
-                else
-                {
-                    writer.WriteStartObject("luxembourg_rights");
-                    WriteLuxembourgWemiBinding(writer, member.LuxembourgRights.SelectedWemi);
-                    WriteArtifact(writer, "bound_run_identity", member.LuxembourgRights.BoundRunIdentity);
-                    writer.WriteString("binding_sha256", member.LuxembourgRights.BindingSha256);
-                    writer.WriteString("disposition", ContractWire.NameOf(member.LuxembourgRights.Disposition));
-                    writer.WriteStartArray("evidence_refs");
-                    foreach (var artifact in member.LuxembourgRights.EvidenceRefs) WriteArtifactValue(writer, artifact);
-                    writer.WriteEndArray();
-                    writer.WriteEndObject();
-                }
-
-                writer.WriteStartArray("stage3_outcomes");
-                foreach (var outcome in member.Stage3Outcomes)
-                {
-                    writer.WriteStartObject();
-                    writer.WriteString("domain", ContractWire.NameOf(outcome.Domain));
-                    writer.WriteString("semantic_identity_sha256", outcome.SemanticIdentitySha256);
-                    writer.WriteString("disposition", ContractWire.NameOf(outcome.Disposition));
-                    writer.WriteEndObject();
-                }
-                writer.WriteEndArray();
-
-                WriteStrings(writer, "gaps", member.Gaps);
-                writer.WriteEndObject();
+                WriteMember(writer, member);
             }
 
             writer.WriteEndArray(); writer.WriteEndObject(); writer.Flush();
@@ -1233,6 +1180,103 @@ public static class LexCorpus6Builder
 
         stream.WriteByte((byte)'\n');
         return stream.ToArray();
+    }
+
+    /// <summary>
+    /// The canonical bytes of the set with no member: every byte <see cref="Write"/> writes outside the members array's
+    /// elements, so a reader that checks each member's bytes on its own (<see cref="LexCorpus6MountView"/>) checks the
+    /// rest against these. The header is validated; the members are not read.
+    /// </summary>
+    internal static byte[] WriteWithoutMembers(LexCorpus6ManifestSet set)
+    {
+        set.ValidateHeader();
+        return WriteCanonical(set, []);
+    }
+
+    /// <summary>One member's canonical bytes, exactly as <see cref="Write"/> writes it as an element of the members array.</summary>
+    internal static byte[] WriteMember(LexCorpus6Member member)
+    {
+        ArgumentNullException.ThrowIfNull(member);
+        using var stream = new MemoryStream();
+        using (var writer = new Utf8JsonWriter(stream, CanonicalWriterOptions))
+        {
+            WriteMember(writer, member);
+            writer.Flush();
+        }
+
+        return stream.ToArray();
+    }
+
+    private static JsonWriterOptions CanonicalWriterOptions => new()
+    {
+        Encoder = JavaScriptEncoder.Default,
+        Indented = false,
+        SkipValidation = false,
+    };
+
+    private static void WriteMember(Utf8JsonWriter writer, LexCorpus6Member member)
+    {
+        writer.WriteStartObject();
+        writer.WriteString("publisher", ContractWire.NameOf(member.Publisher));
+        writer.WriteString("object_ref_sha256", member.ObjectRefSha256);
+        writer.WriteNumber("source_ordinal", member.SourceOrdinal);
+        WriteArtifact(writer, "source_manifest_ref", member.SourceManifestRef);
+        WriteArtifact(writer, "run_identity", member.RunIdentity);
+        writer.WriteString("body_disposition", ContractWire.NameOf(member.BodyDisposition));
+        writer.WriteString("outcome", ContractWire.NameOf(member.Outcome));
+        if (member.BodySha256 is null)
+        {
+            writer.WriteNull("body_sha256"); writer.WriteNull("body_byte_length"); writer.WriteNull("body_receipt_sha256");
+        }
+        else
+        {
+            writer.WriteString("body_sha256", member.BodySha256);
+            writer.WriteNumber("body_byte_length", member.BodyByteLength!.Value);
+            writer.WriteString("body_receipt_sha256", member.BodyReceiptSha256);
+        }
+
+        if (member.EuropeContentClass is null)
+        {
+            writer.WriteNull("europe_content_class");
+        }
+        else
+        {
+            writer.WriteStartObject("europe_content_class");
+            writer.WriteString("content_class", ContractWire.NameOf(member.EuropeContentClass.ContentClass));
+            WriteArtifact(writer, "evidence_ref", member.EuropeContentClass.EvidenceRef);
+            writer.WriteEndObject();
+        }
+
+        if (member.LuxembourgRights is null)
+        {
+            writer.WriteNull("luxembourg_rights");
+        }
+        else
+        {
+            writer.WriteStartObject("luxembourg_rights");
+            WriteLuxembourgWemiBinding(writer, member.LuxembourgRights.SelectedWemi);
+            WriteArtifact(writer, "bound_run_identity", member.LuxembourgRights.BoundRunIdentity);
+            writer.WriteString("binding_sha256", member.LuxembourgRights.BindingSha256);
+            writer.WriteString("disposition", ContractWire.NameOf(member.LuxembourgRights.Disposition));
+            writer.WriteStartArray("evidence_refs");
+            foreach (var artifact in member.LuxembourgRights.EvidenceRefs) WriteArtifactValue(writer, artifact);
+            writer.WriteEndArray();
+            writer.WriteEndObject();
+        }
+
+        writer.WriteStartArray("stage3_outcomes");
+        foreach (var outcome in member.Stage3Outcomes)
+        {
+            writer.WriteStartObject();
+            writer.WriteString("domain", ContractWire.NameOf(outcome.Domain));
+            writer.WriteString("semantic_identity_sha256", outcome.SemanticIdentitySha256);
+            writer.WriteString("disposition", ContractWire.NameOf(outcome.Disposition));
+            writer.WriteEndObject();
+        }
+        writer.WriteEndArray();
+
+        WriteStrings(writer, "gaps", member.Gaps);
+        writer.WriteEndObject();
     }
 
     internal static string ComputeSha256(ReadOnlySpan<byte> bytes)

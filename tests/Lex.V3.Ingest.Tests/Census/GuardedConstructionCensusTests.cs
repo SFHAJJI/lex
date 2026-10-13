@@ -466,6 +466,7 @@ public sealed class GuardedConstructionCensusTests
                     + "Lex.V3.Ingest.Europe.EuXhtmlAnnexInventoryProducer::RunAsync",
                 "Lex.V3.Ingest.Europe.EuropeIndexReader: constructor private instance "
                     + "Lex.V3.Ingest.Europe.EuropeIndexReader::.ctor, "
+                    + "method private static Lex.V3.Ingest.Europe.EuropeIndexReader::OpenVerifiedFile, "
                     + "method public static Lex.V3.Ingest.Europe.EuropeIndexReader::OpenAndVerify, "
                     + "method public static "
                     + "Lex.V3.Ingest.Europe.EuropeIndexReader::OpenAndVerifyFileAsync",
@@ -485,6 +486,9 @@ public sealed class GuardedConstructionCensusTests
                     + "Lex.V3.Ingest.Europe.LuxembourgOpinionRequestGraphRunRequest::<Clone>$, "
                     + "method public static "
                     + "Lex.V3.Ingest.Europe.LuxembourgOpinionRequestGraphRunRequest::ForBatch",
+                "Lex.V3.Ingest.LexCorpus6MountView: constructor private instance "
+                    + "Lex.V3.Ingest.LexCorpus6MountView::.ctor, "
+                    + "method public static Lex.V3.Ingest.LexCorpus6MountView::ParseCanonicalAndVerify",
                 "Lex.V3.Ingest.Luxembourg.LuxembourgAknArticleInventory: by-ref-method private "
                     + "static "
                     + "Lex.V3.Ingest.Luxembourg.LuxembourgAknArticleInventoryProducer::TryInventory, "
