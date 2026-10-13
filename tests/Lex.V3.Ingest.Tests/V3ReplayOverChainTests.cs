@@ -35,7 +35,8 @@ public sealed class V3ReplayOverChainTests
         int FileReplaced,
         int FileReplacedWithNewVersion,
         int StatesNamed,
-        int SnapshotsCompared);
+        int SnapshotsCompared,
+        int EarlierSnapshotsCompared);
 
     [TestMethod]
     public async Task TheReplayChecksHoldOverTheFixtureChain()
@@ -47,6 +48,7 @@ public sealed class V3ReplayOverChainTests
         Assert.AreEqual(1, counts.FileReplacedWithNewVersion, "only the third changed its text");
         Assert.AreEqual(2, counts.StatesNamed, "the original version and the reworded one");
         Assert.AreEqual(3, counts.SnapshotsCompared, "one state in each build");
+        Assert.AreEqual(2, counts.EarlierSnapshotsCompared, "the first and second builds' states, asked of the third");
         Assert.IsTrue(counts.EventsPerBuild.Zip(counts.EventsPerBuild.Skip(1)).All(static pair => pair.First < pair.Second), "each build appends");
     }
 
@@ -62,7 +64,9 @@ public sealed class V3ReplayOverChainTests
         var mounts = named.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
         Assert.IsGreaterThanOrEqualTo(2, mounts.Length, "a chain is at least two builds");
         var counts = await ReplayAsync(mounts);
-        Assert.IsGreaterThan(0, counts.SnapshotsCompared, "the chain holds at least one Luxembourg state");
+        // An earlier build's state, asked of the latest mount: the latest build asked about itself shows no replay (the review
+        // of #898 passed a chain whose only comparison was the latest build's own).
+        Assert.IsGreaterThan(0, counts.EarlierSnapshotsCompared, "an earlier build of the chain holds at least one Luxembourg state");
         if (Environment.GetEnvironmentVariable(OutVariable) is { Length: > 0 } output)
         {
             await File.WriteAllTextAsync(output, JsonSerializer.Serialize(new { chain = mounts, counts }, new JsonSerializerOptions { WriteIndented = true }));
@@ -90,6 +94,16 @@ public sealed class V3ReplayOverChainTests
         for (var build = 0; build < directories.Count - 1; build++)
         {
             using var earlier = await OpenAsync(directories[build]);
+            // The mount at this place is the build the latest log records there: its own log is that build's, with the
+            // builds before it as its ancestors (the review of #898 passed the latest build named twice, and an earlier
+            // build of another chain).
+            var own = (await ResultAsync(earlier, "events", new { limit = 1 })).GetProperty("log");
+            Assert.AreEqual(snapshots[build], own.GetProperty("log_id").GetString(), $"build {build + 1}: the mount is the build the latest log records at its place");
+            Assert.AreEqual(builtAts[build], own.GetProperty("built_at").GetString(), $"build {build + 1}: built when the latest log says");
+            CollectionAssert.AreEqual(
+                snapshots.Take(build).ToArray(),
+                own.GetProperty("ancestors").EnumerateArray().Select(static ancestor => ancestor.GetProperty("log_id").GetString()!).ToArray(),
+                $"build {build + 1}: its ancestors are the builds before it");
             var rows = await EventsAsync(earlier);
             eventsPerBuild[build] = rows.Length;
             Assert.IsLessThanOrEqualTo(latestEvents.Length, rows.Length, $"build {build + 1}: the latest log holds every event it held");
@@ -135,6 +149,7 @@ public sealed class V3ReplayOverChainTests
 
         // G4: every state each build's own mount holds, asked of the latest mount at that build's snapshot.
         var compared = 0;
+        var earlierCompared = 0;
         for (var build = 0; build < directories.Count; build++)
         {
             using var then = build == directories.Count - 1 ? null : await OpenAsync(directories[build]);
@@ -167,11 +182,15 @@ public sealed class V3ReplayOverChainTests
                     Assert.AreEqual(JsonNode.Parse(state.GetRawText())!.ToJsonString(), WithoutTextSource(answered),
                         $"build {build + 1}, {work} at {state.GetProperty("applicability_date").GetString()}: the state that build's mount answers");
                     compared++;
+                    if (build < directories.Count - 1)
+                    {
+                        earlierCompared++;
+                    }
                 }
             }
         }
 
-        return new ReplayCounts(directories.Count, eventsPerBuild, replaced.Length, withNewVersion, named.Length, compared);
+        return new ReplayCounts(directories.Count, eventsPerBuild, replaced.Length, withNewVersion, named.Length, compared, earlierCompared);
     }
 
     private static async Task<V3CorpusMount> OpenAsync(string directory)

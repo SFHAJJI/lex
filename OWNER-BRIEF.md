@@ -24,7 +24,8 @@ disabled). On this machine the API and the eight screens work over test data and
 - Azure is ready: pay-as-you-go, with the 30 a month budget alerts, the registry, the hosting environment and the
   key vault holding the release signing key.
 - The second small canary ran tonight (414 requests to the live sites, within its limit) with a Luxembourg law
-  whose dates are published: the history checks hold on live data.
+  whose dates are published. Two of the three history checks are shown on live data; the publisher changed nothing
+  between the two builds, so the changed-text check is shown on test data only.
 
 ## What waits on the owner
 

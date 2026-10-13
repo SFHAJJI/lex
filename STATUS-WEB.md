@@ -14,11 +14,18 @@ updates this file, not STATUS.md.
   runner now takes the act (`-LuxembourgWork`, driver decision: an act the population holds a state for), and both
   builds hold the act's state (2017-10-02, three articles), as the population does.
 - **`V3ReplayOverChainTests` over it** (`V3_REPLAY_CHAIN` = a;b): 7 of 7 pass with the fixture chain's checks.
-  Counts (`replay-counts.json` beside the chain): 2 builds, 1 event in each log (b's carries a's unchanged: G3), 1
-  state named, every state verifying on the latest mount, 2 snapshots compared (each build's state `as_observed` at its
-  snapshot, asked of the latest mount, answers what that build's mount answers: G4). No file was replaced between the
-  builds (the publisher changed nothing in the 13 minutes), so G1's replaced-version check holds vacuously here; the
-  fixture chain shows it with a reworded text.
+  Counts (`replay-counts.json` beside the chain): 2 builds, each the build the latest log records at its place (its
+  own log id, build time and ancestors), 1 event in each log (b's carries a's unchanged: G3), 1 state named, every
+  state verifying on the latest mount, 2 snapshots compared, 1 of them an earlier build's (a's state `as_observed` at
+  a's snapshot, asked of b's mount, answers what a's mount answers: G4). The state is the same in both builds, so b
+  answers it from its own text, not from a's kept copy. No file was replaced between the builds (the publisher changed
+  nothing in the 13 minutes), so G1's replaced-version check holds vacuously here; the fixture chain shows it with a
+  reworded text.
+- **The review of #898 found the chain test too trusting**: it checked only the number of builds, so the latest build
+  named twice, a copy of it, or an earlier build of another canary passed with the same counts, and its coverage check
+  could be met by the latest build asked about itself. Each earlier mount is now held to the build the latest log
+  records at its place, and at least one earlier build's state must be compared; those three chains now fail, and b's
+  own kept copy of a passes in a's place.
 
 ## The first signed release over the population (sole driver, 2026-10-13)
 
