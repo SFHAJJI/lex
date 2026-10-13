@@ -549,14 +549,17 @@ export async function rehearse({ mount, keep = false, probe = true, reproduce = 
       // image), privacy (nothing written after its first answer, on its output or its /tmp) and the
       // security headers the page arrives with.
       log("running the image in WSL and probing it");
-      const { unpackImage, startImage } = await import("./image-run.mjs");
+      const { unpackImage, startImage, tmpMebibytesFor } = await import("./image-run.mjs");
       const { fixtureMountRuns, realMountRuns } = await import("./journey.mjs");
       const { findBrowser } = await import("./browser-evidence.mjs");
       container = unpackImage({ archive, layers: image.layers.map((layer) => layer.digest) });
+      // The container's /tmp holds the copies of every index the mount carries (2.3 GB for the combined population).
+      const tmpMebibytes = await tmpMebibytesFor(mountPath);
+      result.containerTmpMebibytes = tmpMebibytes;
       // On a real mount each page is held to what the image's API answers; on the fixture mount every
       // page must answer with the texts the fixture's one work gives it, and its citations verify.
       const probeRuns = mountKind === "fixture" ? fixtureMountRuns : realMountRuns;
-      const runs = await probeRuns(null, mountPath, { servedByApi: true, keyboard: false, startServer: () => startImage({ run: container, config: image.config }) }, await findBrowser(), null);
+      const runs = await probeRuns(null, mountPath, { servedByApi: true, keyboard: false, startServer: () => startImage({ run: container, config: image.config, tmpMebibytes }) }, await findBrowser(), null);
       result.probes = runs.map(([label, { observed, failures }]) => ({
         step: label, state: observed.answerState, failures,
         paintedElements: observed.paint?.painted ?? 0, citationsVerified: observed.verifications?.length ?? 0,
@@ -566,7 +569,7 @@ export async function rehearse({ mount, keep = false, probe = true, reproduce = 
 
       // V2 unreachable in the image: each route the retired product served answers 404, or V3's own
       // file where V3 serves the same path.
-      const server = await startImage({ run: container, config: image.config });
+      const server = await startImage({ run: container, config: image.config, tmpMebibytes });
       try {
         const routeFailures = await v2RouteFailures(server.origin, { v3Files: servedPaths(web) });
         Object.assign(result.v2Absent, { routesAsked: V2_ROUTES.length, routeFailures });

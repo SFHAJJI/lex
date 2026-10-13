@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.44.1.10279",
-      "templateHash": "5224429521808818018"
+      "templateHash": "11019983391648066639"
     }
   },
   "parameters": {
@@ -109,8 +109,8 @@
               "name": "lex-v3",
               "image": "[parameters('image')]",
               "resources": {
-                "cpu": "[json('0.5')]",
-                "memory": "1Gi"
+                "cpu": "[json('1.0')]",
+                "memory": "2Gi"
               },
               "env": [
                 {
@@ -119,6 +119,16 @@
                 }
               ],
               "probes": [
+                {
+                  "type": "Startup",
+                  "httpGet": {
+                    "path": "/",
+                    "port": 8080
+                  },
+                  "initialDelaySeconds": 10,
+                  "periodSeconds": 30,
+                  "failureThreshold": 10
+                },
                 {
                   "type": "Liveness",
                   "httpGet": {

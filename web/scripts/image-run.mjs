@@ -12,9 +12,28 @@
 
 import { spawn, spawnSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
+import { readdir, stat } from "node:fs/promises";
 import { createServer } from "node:net";
+import { join } from "node:path";
 
 const DISTRIBUTION = process.env.LEX_WSL_DISTRIBUTION ?? "Ubuntu-24.04";
+
+/** The /tmp a fixture mount was given, kept as the margin beyond a mount's index copies. */
+export const TMP_MARGIN_MEBIBYTES = 256;
+
+/**
+ * The container's private /tmp for a mount, in MiB. Mounting copies every index the mount carries into /tmp before it
+ * is verified (the Luxembourg and EU indexes and each retained generation's: `LuxembourgIndexBuilder`,
+ * `EuropeIndexBuilder`), so the tmpfs holds every `.sqlite3` file of the mount, plus the margin. The combined population
+ * mount's two indexes are 2.3 GB, which the fixed 256m this started with could not hold (2026-10-13).
+ */
+export async function tmpMebibytesFor(mountPath) {
+  let bytes = 0;
+  for (const entry of await readdir(mountPath, { recursive: true, withFileTypes: true })) {
+    if (entry.isFile() && entry.name.endsWith(".sqlite3")) bytes += (await stat(join(entry.parentPath ?? entry.path, entry.name))).size;
+  }
+  return Math.ceil(bytes / (1024 * 1024)) + TMP_MARGIN_MEBIBYTES;
+}
 
 /** A Windows path as WSL mounts it. */
 export function wslPath(path) {
@@ -121,8 +140,10 @@ async function freePort() {
 /**
  * Starts the unpacked image and answers once it serves (`POST /api/v3/coverage` answering 200). `config`
  * is the image config: its user, environment, working directory and entrypoint are the container's.
+ * `tmpMebibytes` sizes its private /tmp (`tmpMebibytesFor` the mount it carries).
  */
-export async function startImage({ run, config, deadlineMs = 90000 }) {
+export async function startImage({ run, config, deadlineMs = 90000, tmpMebibytes = TMP_MARGIN_MEBIBYTES }) {
+  if (!Number.isInteger(tmpMebibytes) || tmpMebibytes < TMP_MARGIN_MEBIBYTES) throw new Error(`a /tmp of ${tmpMebibytes} MiB is not a whole size of at least ${TMP_MARGIN_MEBIBYTES}`);
   const port = await freePort();
   const image = config.config;
   const env = [...(image.Env ?? []), `ASPNETCORE_URLS=http://0.0.0.0:${port}`];
@@ -134,7 +155,7 @@ mount -t proc -o ro,nosuid,nodev,noexec proc "$R/proc"
 mount -t tmpfs -o size=64k,mode=755,nosuid,noexec tmpfs "$R/dev"
 for device in ${DEVICES.join(" ")}; do touch "$R/dev/$device"; mount --bind "/dev/$device" "$R/dev/$device"; done
 mount -o remount,bind,ro "$R/dev"
-mount -t tmpfs -o size=256m,mode=1777,nosuid,nodev tmpfs "$R/tmp"
+mount -t tmpfs -o size=${tmpMebibytes}m,mode=1777,nosuid,nodev tmpfs "$R/tmp"
 mount -o remount,bind,ro "$R"
 if touch "$R/app/.lex-written" 2>/dev/null; then echo "the root filesystem is writable"; exit 3; fi
 writable=$(findmnt -R -rn -o TARGET,OPTIONS "$R" | awk -v root="$R" '${WRITABLE_MOUNTS_AWK}')

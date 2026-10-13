@@ -101,9 +101,12 @@ resource app 'Microsoft.App/containerApps@2024-03-01' = {
         {
           name: 'lex-v3'
           image: image
+          // One vCPU and 2 GiB, measured over the combined population mount (2026-10-13, STATUS-WEB.md): the API opens it with
+          // a 0.5 GB peak, and its private /tmp holds 2.15 GB of verified index copies, more than the 2 GiB of ephemeral
+          // storage a half-vCPU replica has (one vCPU has 4 GiB).
           resources: {
-            cpu: json('0.5')
-            memory: '1Gi'
+            cpu: json('1.0')
+            memory: '2Gi'
           }
           env: [
             {
@@ -111,7 +114,19 @@ resource app 'Microsoft.App/containerApps@2024-03-01' = {
               value: '8080'
             }
           ]
+          // The API listens only once its mount is open and verified (32 s on one core over the population mount), so a
+          // startup probe gives it up to five minutes before the liveness probe, which would otherwise restart it, begins.
           probes: [
+            {
+              type: 'Startup'
+              httpGet: {
+                path: '/'
+                port: 8080
+              }
+              initialDelaySeconds: 10
+              periodSeconds: 30
+              failureThreshold: 10
+            }
             {
               type: 'Liveness'
               httpGet: {

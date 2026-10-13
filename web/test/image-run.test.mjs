@@ -5,7 +5,28 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { endProcesses, wslPath } from "../scripts/image-run.mjs";
+import { endProcesses, startImage, tmpMebibytesFor, TMP_MARGIN_MEBIBYTES, wslPath } from "../scripts/image-run.mjs";
+
+test("the container's /tmp holds a copy of every index the mount carries, generations included, plus the margin", async () => {
+  // The combined population mount's indexes are 2.3 GB; the fixed 256m tmpfs could not hold their copies (2026-10-13).
+  const { mkdtemp, mkdir, rm, writeFile } = await import("node:fs/promises");
+  const { tmpdir } = await import("node:os");
+  const { join } = await import("node:path");
+  const mount = await mkdtemp(join(tmpdir(), "lex-tmp-size-"));
+  try {
+    await writeFile(join(mount, "luxembourg-index.sqlite3"), Buffer.alloc(3 * 1024 * 1024 + 1));
+    await writeFile(join(mount, "europe-index.sqlite3"), Buffer.alloc(1024 * 1024));
+    await mkdir(join(mount, "generations", "one"), { recursive: true });
+    await writeFile(join(mount, "generations", "one", "luxembourg-index.sqlite3"), Buffer.alloc(512 * 1024));
+    await writeFile(join(mount, "lex-corpus-6.json"), Buffer.alloc(8 * 1024 * 1024));
+    // 4.5 MiB and one byte of indexes: 5 MiB whole, and the corpus file is read, not copied.
+    assert.equal(await tmpMebibytesFor(mount), 5 + TMP_MARGIN_MEBIBYTES);
+  } finally {
+    await rm(mount, { recursive: true, force: true });
+  }
+  await assert.rejects(startImage({ run: "/nowhere", config: { config: {} }, tmpMebibytes: 255 }), /not a whole size of at least 256/);
+  await assert.rejects(startImage({ run: "/nowhere", config: { config: {} }, tmpMebibytes: 300.5 }), /not a whole size/);
+});
 
 test("a Windows path is handed to WSL as WSL mounts it", () => {
   assert.equal(wslPath(String.raw`C:\Users\Hajji\AppData\Local\Temp\lex-image\image.tar`), "/mnt/c/Users/Hajji/AppData/Local/Temp/lex-image/image.tar");
