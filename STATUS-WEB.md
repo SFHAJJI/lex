@@ -4,6 +4,17 @@ Updated 2026-10-13. The web lane's progress, split out of STATUS.md (which keeps
 items and the pointers) by the standing order of 2026-10-01 13:50 UTC. Every pull request of the web lane
 updates this file, not STATUS.md.
 
+## The release from custody over the population: derived twice, equal; the image step in pieces (sole driver, 2026-10-13)
+
+- **The first release rehearsal from custody** (`image-rehearsal.mjs --custody` over run 15's custody, the merge commit
+  1bb13038's CI runtime as the tool, bound; signed by the owner's release key from Key Vault): the two independent
+  derivations of the combined population **agree on all 6 files** (15:09 to about 17:40 UTC), and the gates ran over
+  the mount for the card. It stopped at the image step: Node refuses one SHA-256 update over 2 GiB ("data is too long")
+  and one `fs.readFile` of a file over 2 GiB, and the population image's app layer is 2.5 GB.
+- **The release path's bytes in pieces** (`large-bytes.mjs`): `sha256Hex` hashes a piece (1 GiB) at a time, and
+  `readLargeFile` reads a file a piece at a time; the same digests and bytes. Used wherever the release path hashes or
+  reads the image (image reproducibility, the rehearsal, the release assets, the deploy probe) and the derived mount.
+
 ## The deploy kit and the journeys over the population (sole driver, 2026-10-13)
 
 - **The container is one vCPU and 2 GiB** (`deploy/main.bicep`, `main.json` rebuilt): the API opens the population mount
