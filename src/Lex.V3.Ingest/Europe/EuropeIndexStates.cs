@@ -195,12 +195,25 @@ public sealed partial class EuropeIndexReader
         if (!HasStates) throw new InvalidOperationException("This historical EU index has no states table.");
         lock (_gate)
         {
+            // The articles are found by the objects of the seed's works (ArticleObjects): the join on the work id has no
+            // index, and it read every article's text once per seed (27 s for the population's 82 seeds on one core).
+            var works = new List<string>();
+            using (var seedWorks = _connection.CreateCommand())
+            {
+                seedWorks.CommandText = "SELECT DISTINCT publisher_work_iri FROM states WHERE seed_celex=$seed";
+                seedWorks.Parameters.AddWithValue("$seed", seedCelex);
+                using var workReader = seedWorks.ExecuteReader();
+                while (workReader.Read()) works.Add(workReader.GetString(0));
+            }
+
             using var command = _connection.CreateCommand();
             command.CommandText = """
                 SELECT s.state_identity_sha256,s.seed_celex,s.publisher_work_iri,s.publisher_work_celex,
                        a.publisher_expression_id,a.language,a.article_identity_sha256
-                FROM states s JOIN articles a ON a.publisher_work_id=s.publisher_work_iri
-                WHERE s.seed_celex=$seed
+                FROM states s JOIN articles AS a INDEXED BY articles_object_ref ON a.publisher_work_id=s.publisher_work_iri
+                WHERE s.seed_celex=$seed AND
+                """ + " " + ObjectsIn(command, "a.object_ref_sha256", works.SelectMany(_objects.OfWork)) + """
+
                 ORDER BY s.state_identity_sha256,a.publisher_expression_id,a.language,a.article_identity_sha256
                 """;
             command.Parameters.AddWithValue("$seed", seedCelex);

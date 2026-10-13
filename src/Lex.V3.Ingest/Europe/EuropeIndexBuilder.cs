@@ -755,15 +755,70 @@ public sealed partial class EuropeIndexReader : IDisposable
     private readonly SourceArtifactRef _indexRef;
     private readonly SourceArtifactRef _corpusRef;
     private readonly object _gate = new();
+    private readonly ArticleObjects _objects;
     public bool HasArticleSourceEvidence { get; }
     public bool HasArticleByteDigests { get; }
 
     private EuropeIndexReader(string path, SqliteConnection connection,
         V3IndexCapabilityManifest capabilityManifest,
         SourceArtifactRef indexRef,
-        SourceArtifactRef corpusRef, bool hasArticleSourceEvidence, bool hasArticleByteDigests, bool hasStates) =>
-        (_path, _connection, _capabilityManifest, _indexRef, _corpusRef, HasArticleSourceEvidence, HasArticleByteDigests, HasStates) =
-        (path, connection, capabilityManifest, indexRef, corpusRef, hasArticleSourceEvidence, hasArticleByteDigests, hasStates);
+        SourceArtifactRef corpusRef, bool hasArticleSourceEvidence, bool hasArticleByteDigests, bool hasStates,
+        ArticleObjects objects) =>
+        (_path, _connection, _capabilityManifest, _indexRef, _corpusRef, HasArticleSourceEvidence, HasArticleByteDigests, HasStates, _objects) =
+        (path, connection, capabilityManifest, indexRef, corpusRef, hasArticleSourceEvidence, hasArticleByteDigests, hasStates, objects);
+
+    /// <summary>
+    /// The member objects whose articles carry each expression, work and CELEX, read at open from the verified article
+    /// rows. The articles table has no index on those columns, so a lookup by one read every article's text (one EU search
+    /// took 31 s on one core over the population index, 2026-10-13); every lookup by them is also restricted to their
+    /// objects, which <c>articles_object_ref</c> finds. The restriction drops no row: a row that matches a lookup's
+    /// condition has its object among the objects of the value it matched. In the population each expression is one object.
+    /// </summary>
+    internal sealed class ArticleObjects
+    {
+        private readonly Dictionary<string, SortedSet<string>> _byExpression = new(StringComparer.Ordinal);
+        private readonly Dictionary<string, SortedSet<string>> _byWork = new(StringComparer.Ordinal);
+        private readonly Dictionary<string, SortedSet<string>> _byCelex = new(StringComparer.Ordinal);
+
+        public void Add(EuropeIndexBuilder.ArticleRow row)
+        {
+            Add(_byExpression, row.PublisherExpressionId, row.ObjectRefSha256);
+            Add(_byWork, row.PublisherWorkId, row.ObjectRefSha256);
+            if (row.PublisherWorkCelex is { } celex) Add(_byCelex, celex, row.ObjectRefSha256);
+        }
+
+        public IEnumerable<string> OfExpression(string value) => Of(_byExpression, value);
+
+        public IEnumerable<string> OfWork(string value) => Of(_byWork, value);
+
+        public IEnumerable<string> OfCelex(string value) => Of(_byCelex, value);
+
+        private static void Add(Dictionary<string, SortedSet<string>> map, string key, string objectRef)
+        {
+            if (!map.TryGetValue(key, out var objects)) map[key] = objects = new SortedSet<string>(StringComparer.Ordinal);
+            objects.Add(objectRef);
+        }
+
+        private static IEnumerable<string> Of(Dictionary<string, SortedSet<string>> map, string key) =>
+            map.TryGetValue(key, out var objects) ? objects : [];
+    }
+
+    /// <summary>
+    /// <c>{column} IN (...)</c> over the given objects, each bound as a parameter (an empty list matches nothing: no object
+    /// reference is empty).
+    /// </summary>
+    private static string ObjectsIn(SqliteCommand command, string column, IEnumerable<string> objects)
+    {
+        var names = new List<string>();
+        foreach (var objectRef in objects.Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal))
+        {
+            var name = $"$object{names.Count}";
+            command.Parameters.AddWithValue(name, objectRef);
+            names.Add(name);
+        }
+
+        return names.Count == 0 ? $"{column} IN ('')" : $"{column} IN ({string.Join(",", names)})";
+    }
 
     public long MemberCount => Count("members");
     public long ArticleCount => Count("articles");
@@ -921,7 +976,7 @@ public sealed partial class EuropeIndexReader : IDisposable
             if (!measured.Cells.SequenceEqual(capabilityManifest.Cells))
                 throw new InvalidDataException("The EU capability manifest was not measured from the index.");
             return new EuropeIndexReader(
-                path, connection, capabilityManifest, indexRef, expectedCorpusRef, !legacy, version >= 4, version >= 5);
+                path, connection, capabilityManifest, indexRef, expectedCorpusRef, !legacy, version >= 4, version >= 5, checks.Objects);
         }
         catch
         {
@@ -947,6 +1002,8 @@ public sealed partial class EuropeIndexReader : IDisposable
         private readonly List<string>? _packages = sources ? [] : null;
         private readonly Dictionary<(string Language, string WordingDate), long> _searchable = [];
         private bool _articlesRead;
+
+        public ArticleObjects Objects { get; } = new();
         private bool _sourcesRead;
         private bool _digestsRead;
 
@@ -973,6 +1030,7 @@ public sealed partial class EuropeIndexReader : IDisposable
             {
                 _identities.Add(row.ArticleIdentitySha256);
                 _entries.Add(row.PackageEntry);
+                Objects.Add(row);
                 _textDigests?.Add(Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(row.SearchableText))));
                 if (row.SearchableText.Length != 0)
                 {
@@ -1097,10 +1155,11 @@ public sealed partial class EuropeIndexReader : IDisposable
                 "a.package_entry,a.searchable_text," +
                 (HasArticleSourceEvidence ? "s.package_sha256,s.official_source_uri," : "NULL,NULL,") +
                 (HasArticleByteDigests ? "d.source_entry_sha256,d.text_sha256 " : "NULL,NULL ") +
-                "FROM articles a " +
+                "FROM articles AS a INDEXED BY articles_object_ref " +
                 (HasArticleSourceEvidence ? "LEFT JOIN article_sources s USING(article_identity_sha256) " : "") +
                 (HasArticleByteDigests ? "LEFT JOIN article_digests d USING(article_identity_sha256) " : "") +
-                "WHERE a.publisher_expression_id=$expression ORDER BY a.publisher_identifier,a.article_identity_sha256";
+                "WHERE " + ObjectsIn(command, "a.object_ref_sha256", _objects.OfExpression(publisherExpressionId)) +
+                " AND a.publisher_expression_id=$expression ORDER BY a.publisher_identifier,a.article_identity_sha256";
             command.Parameters.AddWithValue("$expression", publisherExpressionId);
             using var reader = command.ExecuteReader();
             var values = new List<EuropeIndexArticleText>();
@@ -1119,6 +1178,15 @@ public sealed partial class EuropeIndexReader : IDisposable
 
     private static bool IsSha256(string value) => value.Length == 64 && value.All(char.IsAsciiHexDigitLower);
 
+    /// <summary>The object of the article an identity names, by the primary key; none for an identity the index does not hold.</summary>
+    private string[] ObjectOfArticle(string identity)
+    {
+        using var command = _connection.CreateCommand();
+        command.CommandText = "SELECT object_ref_sha256 FROM articles WHERE article_identity_sha256=$identity";
+        command.Parameters.AddWithValue("$identity", identity);
+        return command.ExecuteScalar() is string objectRef ? [objectRef] : [];
+    }
+
     /// <summary>Legacy original-wording resolution. Schema 5 consolidated works use ReadStateExpressions.</summary>
     public IReadOnlyList<EuropeIndexResolvedExpression> ResolveExact(string identifier)
     {
@@ -1128,11 +1196,19 @@ public sealed partial class EuropeIndexReader : IDisposable
         lock (_gate)
         {
             using var command = _connection.CreateCommand();
+            // The objects a match can come from: those of the work, CELEX or expression the identifier names, of the
+            // qualified provision's expression, and of the article it names by identity (its primary key).
+            var objects = _objects.OfWork(identifier).Concat(_objects.OfCelex(identifier)).Concat(_objects.OfExpression(identifier))
+                .Concat(hasQualifiedProvision ? _objects.OfExpression(provisionExpression) : [])
+                .Concat(ObjectOfArticle(identifier)).ToArray();
             command.CommandText = """
                 SELECT publisher_work_id,publisher_expression_id,language,
                        publisher_identifier,article_identity_sha256
-                FROM articles
-                WHERE (publisher_work_id=$identifier OR publisher_work_celex=$identifier
+                FROM articles INDEXED BY articles_object_ref
+                WHERE
+                """ + " " + ObjectsIn(command, "object_ref_sha256", objects) + """
+
+                  AND (publisher_work_id=$identifier OR publisher_work_celex=$identifier
                    OR publisher_expression_id=$identifier
                    OR article_identity_sha256=$identifier
                    OR ($has_qualified_provision=1
@@ -1250,8 +1326,10 @@ public sealed partial class EuropeIndexReader : IDisposable
             command.CommandText = """
                 SELECT a.publisher_work_id,a.publisher_work_celex,a.publisher_expression_id,a.language,
                        a.wording_date,a.object_ref_sha256,m.outcome,m.content_class,count(*)
-                FROM articles a JOIN members m ON m.object_ref_sha256=a.object_ref_sha256
-                WHERE a.publisher_work_id=$work AND a.publisher_work_celex IS NOT NULL
+                FROM articles AS a INDEXED BY articles_object_ref JOIN members m ON m.object_ref_sha256=a.object_ref_sha256
+                WHERE
+                """ + " " + ObjectsIn(command, "a.object_ref_sha256", _objects.OfWork(publisherWorkId)) + """
+                 AND a.publisher_work_id=$work AND a.publisher_work_celex IS NOT NULL
                   AND ($has_states=0 OR m.content_class='original_legal_text')
                 GROUP BY a.publisher_work_id,a.publisher_work_celex,a.publisher_expression_id,a.language,
                          a.wording_date,a.object_ref_sha256,m.outcome,m.content_class
@@ -1328,8 +1406,9 @@ public sealed partial class EuropeIndexReader : IDisposable
         using var command = connection.CreateCommand();
         command.CommandText =
             "SELECT publisher_work_id,publisher_work_celex,publisher_expression_id,publisher_identifier,heading," +
-            "wording_date,language,article_identity_sha256 FROM articles " +
-            "WHERE language=$language AND publisher_expression_id=$expression AND publisher_work_celex IS NOT NULL" +
+            "wording_date,language,article_identity_sha256 FROM articles INDEXED BY articles_object_ref " +
+            "WHERE " + ObjectsIn(command, "object_ref_sha256", _objects.OfExpression(publisherExpressionId)) +
+            " AND language=$language AND publisher_expression_id=$expression AND publisher_work_celex IS NOT NULL" +
             " AND ($has_states=0 OR EXISTS (SELECT 1 FROM members m" +
             " WHERE m.object_ref_sha256=articles.object_ref_sha256 AND m.content_class='original_legal_text'))" +
             string.Concat(needles.Select(static (_, index) => $" AND instr(searchable_text,$needle{index})>0")) +
