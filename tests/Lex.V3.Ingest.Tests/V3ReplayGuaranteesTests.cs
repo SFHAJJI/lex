@@ -337,7 +337,7 @@ public sealed class V3ReplayGuaranteesTests
     }
 
     /// <summary>The chain the G1, G3 and G4 cases run over: each build's mount, index digest, build time and as-of version.</summary>
-    private sealed record Chain(string[] Mounts, string[] IndexSha256s, string[] BuiltAts, string[] Versions, string WorkKey) : IDisposable
+    internal sealed record Chain(string[] Mounts, string[] IndexSha256s, string[] BuiltAts, string[] Versions, string WorkKey) : IDisposable
     {
         public void Dispose()
         {
@@ -353,7 +353,7 @@ public sealed class V3ReplayGuaranteesTests
     /// then with one byte added and its text unchanged, then with one article reworded. Each is written as the mount it
     /// would be, with the earlier builds kept beside it whole and the retention line's record, and verified.
     /// </summary>
-    private static async Task<Chain> ChainAsync()
+    internal static async Task<Chain> ChainAsync()
     {
         Func<string, string>?[] files =
         [
