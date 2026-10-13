@@ -13,12 +13,17 @@ updates this file, not STATUS.md.
   and one `fs.readFile` of a file over 2 GiB, and the population image's app layer is 2.5 GB.
 - **The release over the derived population mount** (`image-rehearsal.mjs --mount derive-c` at 19f140a4, signed by the
   release key): the image built, verified, signed and verified, and built again from scratch to the same manifest
-  digest; then its first start in WSL missed the 219 s deadline, with no output (the API's logging is cleared). Started
-  by hand from the same archive it answered 24 s after unpacking while holding the image too, and 31 s after unpacking
-  with another process holding 5 GB beside it, so memory is not the cause, and the cause is not shown.
-  The rehearsal now lets the image's bytes go before the container starts (collected under `node --expose-gc`), and a
-  start that misses its deadline reports what the container was doing from inside WSL: whether the API runs and for
-  how long, whether its port listens and answers there, how much of its `/tmp` it has written, and WSL's memory.
+  digest; then a start in WSL missed the 219 s deadline, with no output (the API's logging is cleared). Rerun at
+  cf347cd2 with the container's state reported on a miss: WSL's memory was full (7.78 of 7.79 GB). **Cause: the image
+  run never ended a container.** Each probe step starts one (about nineteen starts), and each holds its 2.2 GB `/tmp`
+  of index copies in memory; `unshare --kill-child` ends the API with unshare only until the API changes its user
+  (`chroot --userspec`), which clears that signal, so closing a start ended unshare and the `/tmp` watcher and left the
+  API running. A replay of the probes with WSL sampled every 5 s showed it: three APIs alive after two closes, 4.5 GB of
+  `/tmp` in memory, 1.5 GB left. The run's end (`endProcesses`) now ends every process whose root is the run's root
+  filesystem, then unshare and the watcher, and returns once none is left (a container that cannot be ended fails the
+  start's close); the live test starts its stand-in as the image is (bound root, `chroot --userspec`), and failed before.
+  A missed start's report finds the API by its root (it matched unshare by command line). The rehearsal also lets the
+  image's bytes go before the container starts (collected under `node --expose-gc`).
 - **The release path's bytes in pieces** (`large-bytes.mjs`): `sha256Hex` hashes a piece (1 GiB) at a time, and
   `readLargeFile` reads a file a piece at a time; the same digests and bytes. Used wherever the release path hashes or
   reads the image (image reproducibility, the rehearsal, the release assets, the deploy probe) and the derived mount.
@@ -33,10 +38,9 @@ updates this file, not STATUS.md.
   its copies there (the review of #949): the bicep sets `LEX_V3_TEMP_IS_PRIVATE=1` and the API then removes an earlier
   start's copies before it mounts (`V3StaleIndexCopies`); without the variable nothing is removed.
 - **The image run** sizes its private `/tmp` tmpfs from the mount it carries (every `.sqlite3` file plus 256 MiB; it was a
-  fixed 256m) and allows its start 90 s plus a minute per GiB of indexes. And it now ends the container it started
-  (`unshare --kill-child`): the API is the namespace's first process and ignored the hang-up an ended `wsl.exe` sends,
-  so every start kept its 2.4 GB tmpfs, and the rehearsal's sixteen starts would have exhausted WSL's 7.8 GB (the review
-  of #950; shown in WSL with a stand-in before and after).
+  fixed 256m) and allows its start 90 s plus a minute per GiB of indexes. The review of #950 found that a closed start
+  kept its container (and its 2.4 GB tmpfs); `unshare --kill-child` did not end it (its stand-in kept its user; the API
+  changes its user, which clears the signal), and the run's end now ends the container by its root (above).
 - **The go-live browser probe** (`deploy-probe.mjs`) chooses its Luxembourg work from the candidate's own answers
   (`heldLuxembourgWorkFromAnswers`: the same rule, from a search for "loi" and the work's dossier; over the population it
   chooses what the index read chooses), since a deployed revision's index is not at hand; it asked for the fixture's work,

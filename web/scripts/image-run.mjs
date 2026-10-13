@@ -51,10 +51,24 @@ function wsl(script) {
 const quote = (text) => `'${String(text).replaceAll("'", "'\\''")}'`;
 
 /**
- * Ends every process whose command line names the run directory. The pattern brackets its first
- * character, so it does not match the shell that runs it (a plain `pkill -f <dir>` killed itself).
+ * Ends a run's processes and returns once none is left: the container's (every process whose root is the run's root
+ * filesystem: the API, whatever user it changed to and whoever its parent now is), then every process whose command line
+ * names the run directory (unshare, the /tmp watcher). Ending the container's processes ends its namespaces, and with them
+ * its /tmp. Exits non-zero if any is still there after ten seconds. The script never names the run directory whole (the
+ * root is written in two quoted pieces, and the pattern brackets its first character), so it does not match itself (a
+ * plain `pkill -f <dir>` killed itself).
  */
-export const endProcesses = (run) => `pkill -f ${quote(`[${run[0]}]${run.slice(1)}`)} || true`;
+export const endProcesses = (run) => {
+  const pattern = quote(`[${run[0]}]${run.slice(1)}`);
+  const left = `left=$(for p in /proc/[0-9]*; do [ "$(readlink "$p/root" 2>/dev/null)" = "$R" ] && echo "\${p#/proc/}"; done; pgrep -f ${pattern})`;
+  return [
+    `R=${quote(run[0])}${quote(`${run.slice(1)}/rootfs`)}`,
+    `for p in /proc/[0-9]*; do [ "$(readlink "$p/root" 2>/dev/null)" = "$R" ] && kill -KILL "\${p#/proc/}" 2>/dev/null; done`,
+    `pkill -KILL -f ${pattern}`,
+    `tries=0; ${left}; while [ -n "$left" ] && [ $tries -lt 100 ]; do sleep 0.1; tries=$((tries + 1)); ${left}; done`,
+    `if [ -n "$left" ]; then echo "still running: $(echo $left)"; exit 1; fi`,
+  ].join("\n");
+};
 
 /** Records every change under a directory, one line per event (mask in hex, then the path). */
 const WATCHER = String.raw`import ctypes, os, struct, sys
@@ -118,7 +132,11 @@ ${WATCHER}WATCHER
  */
 export const DEVICES = Object.freeze(["null", "zero", "random", "urandom"]);
 
-/** How a container is started in WSL: its own mount and PID namespaces, its first process killed when unshare ends. */
+/**
+ * How a container is started in WSL: its own mount and PID namespaces. `--kill-child` ends its first process with
+ * unshare only until that process changes its user (`chroot --userspec`), which clears the parent-death signal; the
+ * container is ended by `endProcesses`, which finds its processes by their root.
+ */
 export const CONTAINER_COMMAND = Object.freeze(["unshare", "--mount", "--pid", "--fork", "--kill-child"]);
 
 /**
@@ -167,10 +185,6 @@ python3 ${run}/watch.py "$R/tmp" ${run}/events.log &
 while ! grep -q '^ready$' ${run}/events.log; do sleep 0.1; done
 cd "$R${image.WorkingDir ?? "/"}"
 exec env -i ${env.map(quote).join(" ")} chroot --userspec=${user} "$R" ${image.Entrypoint.map(quote).join(" ")}`;
-  // `--kill-child`: when unshare ends, its child, the container's first process (the API, by exec), is sent SIGKILL, which
-  // ends the namespace and frees its /tmp. Without it the API outlived close(): ending unshare (pkill by the run folder,
-  // or the Windows side) left the API running, since a namespace's first process ignores a signal it has no handler for,
-  // and every start kept its tmpfs, 2.4 GB for the population mount (the review of #950).
   const child = spawn("wsl", ["-d", DISTRIBUTION, "-u", "root", "-e", ...CONTAINER_COMMAND, "sh", "-c", script], { stdio: ["ignore", "pipe", "pipe"] });
   let output = "";
   child.stdout.on("data", (chunk) => { output += chunk; });
@@ -180,9 +194,12 @@ exec env -i ${env.map(quote).join(" ")} chroot --userspec=${user} "$R" ${image.E
   const origin = `http://127.0.0.1:${port}`;
   const close = async () => {
     child.kill();
-    // The processes live in WSL; ending the Windows side does not end them.
-    spawnSync("wsl", ["-d", DISTRIBUTION, "-u", "root", "-e", "sh", "-c", endProcesses(run)], { encoding: "utf8" });
-    await new Promise((resolve) => setTimeout(resolve, 300));
+    // The processes live in WSL; ending the Windows side does not end them, nor does ending unshare end the API (it
+    // changed its user, which cleared --kill-child's signal). A container left running keeps its /tmp, the population
+    // mount's 2.2 GB of index copies: the release's probes start one per step, and filled WSL's memory by the third
+    // (2026-10-13). So the next start waits until this one is gone, and a container that cannot be ended is a failure.
+    const ended = spawnSync("wsl", ["-d", DISTRIBUTION, "-u", "root", "-e", "sh", "-c", endProcesses(run)], { encoding: "utf8" });
+    if (ended.status !== 0) throw new Error(`the container did not end (${ended.status}): ${ended.stdout}${ended.stderr}`);
   };
   const events = () => wsl(`cat ${run}/events.log`).split("\n").filter((line) => line !== "" && line !== "ready");
   const started = Date.now();
@@ -217,7 +234,7 @@ exec env -i ${env.map(quote).join(" ")} chroot --userspec=${user} "$R" ${image.E
   // What the container was doing, read from inside WSL before it is ended: the API prints nothing (its logging is
   // cleared), so a start that is slow, listening but unreachable, or stopped would otherwise look the same (the
   // population release's first start missed its deadline with no output, 2026-10-13).
-  const state = containerState(port);
+  const state = containerState(run, port);
   await close();
   throw new Error(`the image did not answer within ${deadlineMs} ms: ${output.slice(0, 2000)}\nin WSL: ${state}`);
 }
@@ -227,10 +244,11 @@ exec env -i ${env.map(quote).join(" ")} chroot --userspec=${user} "$R" ${image.E
  * how much memory), whether anything listens on its port and answers there from inside WSL, how much of its private /tmp
  * it has written (the index copies), and WSL's memory. Never throws: a failure to read is part of the answer.
  */
-export function containerState(port) {
+export function containerState(run, port) {
   const script = [
-    // The bracket keeps pgrep from finding this script, whose own command line names the API.
-    "export COLUMNS=200; api=$(pgrep -f '[L]ex.V3.Api.dll' | head -1)",
+    // The API is the container's process whose root is the run's root filesystem: matching its command line found
+    // unshare instead, whose script names the entrypoint (2026-10-13).
+    `export COLUMNS=200; R=${quote(`${run}/rootfs`)}; api=$(for p in /proc/[0-9]*; do [ "$(readlink "$p/root" 2>/dev/null)" = "$R" ] && echo "\${p#/proc/}"; done | head -1)`,
     "echo \"api: ${api:-none}$( [ -n \"$api\" ] && ps -o etimes=,rss= -p $api | awk '{print \", up \" $1 \" s, rss \" int($2/1024) \" MiB\"}')\"",
     `echo "listening on ${port}: $(ss -ltnH 2>/dev/null | grep -c ':${port} ')"`,
     `echo "answers inside WSL: $(curl -s -m 5 -o /dev/null -w '%{http_code}' -X POST -H 'content-type: application/json' -d '{"operation_id":"coverage","parameters":{}}' http://127.0.0.1:${port}/api/v3/coverage 2>/dev/null) (000: no answer)"`,
