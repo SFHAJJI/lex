@@ -552,11 +552,11 @@ export async function rehearse({ mount, keep = false, probe = true, reproduce = 
     }
 
     // From here only the image's digests and config are read (the probes unpack the archive from disk, and the release reads
-    // it again), so its bytes (2.6 GB for the population image) are let go, and collected when the process allows it
-    // (`node --expose-gc`), before the container starts: the population release's first start missed its 219 s deadline
-    // while this process still held them, and started in 24 s once they were gone (2026-10-13).
+    // it again), so its bytes (2.6 GB for the population image) are let go before the container starts; WSL's VM then has
+    // that memory for the container's /tmp. Whether holding them made the population release's first start miss its
+    // deadline is not shown (a start by hand that held them answered in 24 s), so a missed start now says what the
+    // container was doing (`containerState`).
     image = { manifestDigest: image.manifestDigest, manifest: image.manifest, config: image.config, layers: image.layers.map(({ digest }) => ({ digest })) };
-    globalThis.gc?.();
 
     if (probe) {
       // The zero-traffic probes, against the image itself: health (it answers), the API (each page's
@@ -567,6 +567,9 @@ export async function rehearse({ mount, keep = false, probe = true, reproduce = 
       const { unpackImage, startImage, tmpMebibytesFor, TMP_MARGIN_MEBIBYTES } = await import("./image-run.mjs");
       const { fixtureMountRuns, realMountRuns } = await import("./journey.mjs");
       const { findBrowser } = await import("./browser-evidence.mjs");
+      // Collected here, where `rehearse`'s frame no longer holds the old image (a collection on the line after it was let
+      // go still found it reachable; the review of #952), and only where the process allows it (`node --expose-gc`).
+      globalThis.gc?.();
       container = unpackImage({ archive, layers: image.layers.map((layer) => layer.digest) });
       // The container's /tmp holds the copies of every index the mount carries (2.3 GB for the combined population).
       const tmpMebibytes = await tmpMebibytesFor(mountPath);

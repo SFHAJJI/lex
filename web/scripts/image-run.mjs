@@ -214,8 +214,31 @@ exec env -i ${env.map(quote).join(" ")} chroot --userspec=${user} "$R" ${image.E
     }
     await new Promise((resolve) => setTimeout(resolve, 250));
   }
+  // What the container was doing, read from inside WSL before it is ended: the API prints nothing (its logging is
+  // cleared), so a start that is slow, listening but unreachable, or stopped would otherwise look the same (the
+  // population release's first start missed its deadline with no output, 2026-10-13).
+  const state = containerState(port);
   await close();
-  throw new Error(`the image did not answer within ${deadlineMs} ms: ${output.slice(0, 2000)}`);
+  throw new Error(`the image did not answer within ${deadlineMs} ms: ${output.slice(0, 2000)}\nin WSL: ${state}`);
+}
+
+/**
+ * The container's state as WSL sees it, for a start that missed its deadline: whether the API runs (and for how long, with
+ * how much memory), whether anything listens on its port and answers there from inside WSL, how much of its private /tmp
+ * it has written (the index copies), and WSL's memory. Never throws: a failure to read is part of the answer.
+ */
+export function containerState(port) {
+  const script = [
+    // The bracket keeps pgrep from finding this script, whose own command line names the API.
+    "export COLUMNS=200; api=$(pgrep -f '[L]ex.V3.Api.dll' | head -1)",
+    "echo \"api: ${api:-none}$( [ -n \"$api\" ] && ps -o etimes=,rss= -p $api | awk '{print \", up \" $1 \" s, rss \" int($2/1024) \" MiB\"}')\"",
+    `echo "listening on ${port}: $(ss -ltnH 2>/dev/null | grep -c ':${port} ')"`,
+    `echo "answers inside WSL: $(curl -s -m 5 -o /dev/null -w '%{http_code}' -X POST -H 'content-type: application/json' -d '{"operation_id":"coverage","parameters":{}}' http://127.0.0.1:${port}/api/v3/coverage 2>/dev/null) (000: no answer)"`,
+    "[ -n \"$api\" ] && echo \"its /tmp: $(du -sh /proc/$api/root/tmp 2>/dev/null | cut -f1)\"",
+    "free -m | awk '/Mem:/ {print \"WSL memory: \" $3 \" MiB used, \" $7 \" MiB available\"}'",
+  ].join("; ");
+  const result = spawnSync("wsl", ["-d", DISTRIBUTION, "-u", "root", "-e", "sh", "-c", script], { encoding: "utf8", timeout: 30_000 });
+  return `${result.stdout ?? ""}${result.stderr ?? ""}`.trim().replace(/\n/g, "; ") || `nothing read (${result.error?.message ?? result.status})`;
 }
 
 /** Removes a run directory from WSL, and answers whether it is gone. */
