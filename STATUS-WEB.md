@@ -14,7 +14,18 @@ updates this file, not STATUS.md.
   its copies there (the review of #949): the bicep sets `LEX_V3_TEMP_IS_PRIVATE=1` and the API then removes an earlier
   start's copies before it mounts (`V3StaleIndexCopies`); without the variable nothing is removed.
 - **The image run** sizes its private `/tmp` tmpfs from the mount it carries (every `.sqlite3` file plus 256 MiB; it was a
-  fixed 256m) and allows its start 90 s plus a minute per GiB of indexes.
+  fixed 256m) and allows its start 90 s plus a minute per GiB of indexes. And it now ends the container it started
+  (`unshare --kill-child`): the API is the namespace's first process and ignored the hang-up an ended `wsl.exe` sends,
+  so every start kept its 2.4 GB tmpfs, and the rehearsal's sixteen starts would have exhausted WSL's 7.8 GB (the review
+  of #950; shown in WSL with a stand-in before and after).
+- **The go-live browser probe** (`deploy-probe.mjs`) chooses its Luxembourg work from the candidate's own answers
+  (`heldLuxembourgWorkFromAnswers`: the same rule, from a search for "loi" and the work's dossier; over the population it
+  chooses what the index read chooses), since a deployed revision's index is not at hand; it asked for the fixture's work,
+  so a population candidate would have failed J1 and been deactivated (the review of #950).
+- **One billed replica.** Each active revision runs a replica (1 vCPU, 2 GiB: about 23 EUR a month idle, about 26 with the
+  registry). The kit keeps every revision, so after a promotion `deploy.ps1` prints the command that deactivates the
+  previous one (kept, stopped); a rollback activates it again (about a minute to mount) and moves the traffic. Keeping it
+  active for an instant rollback would be about 49 EUR a month: the owner's choice (OWNER-BRIEF.md).
 - **The journeys over the population mount pass in Chrome** (`journey.mjs --real-mount --served-by-api`, `derive-c`, the
   API at #949): all 29 runs. The eight screens (coverage; search, 14 citations verified; dossier; reading, 8; compare;
   radar; export, 8; provision history), J1 (refused `no_version_for_date`), J2, J5, the three EU steps (search 61

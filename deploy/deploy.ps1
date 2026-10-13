@@ -181,7 +181,12 @@ else {
 Write-Host "  To remove it instead: pwsh -File deploy/deploy.ps1 -Subscription $Subscription -ResourceGroup $ResourceGroup -AppName $AppName -Remove -Revision $candidate"
 if (-not [string]::IsNullOrEmpty($LiveRevision)) {
     # Rollback and forward again are traffic moves, the owner's like promotion: printed, never run.
-    Write-Host "  After promotion, to roll back to $LiveRevision (kept, since every revision is kept):"
+    # Each active revision runs a billed replica (1 vCPU, 2 GiB: about 23 EUR a month idle), so the budget of about 30 a
+    # month holds one: after a promotion the previous revision is deactivated, kept but stopped (the review of #950).
+    Write-Host "  After promotion, deactivate $LiveRevision so one replica is billed (it is kept, and can be activated again):"
+    Write-Host "  > az containerapp revision deactivate -g $ResourceGroup -n $AppName --revision $LiveRevision"
+    Write-Host "  To roll back: activate it, wait until it is ready (about a minute to mount), then move the traffic:"
+    Write-Host "  > az containerapp revision activate -g $ResourceGroup -n $AppName --revision $LiveRevision"
     Write-Host "  > az containerapp ingress traffic set -g $ResourceGroup -n $AppName --revision-weight $LiveRevision=100"
     Write-Host "  and forward again to the candidate:"
     Write-Host "  > az containerapp ingress traffic set -g $ResourceGroup -n $AppName --revision-weight $candidate=100"

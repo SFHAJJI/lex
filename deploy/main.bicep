@@ -121,7 +121,8 @@ resource app 'Microsoft.App/containerApps@2024-03-01' = {
             }
           ]
           // The API listens only once its mount is open and verified (32 s on one core over the population mount), so a
-          // startup probe gives it up to five minutes before the liveness probe, which would otherwise restart it, begins.
+          // startup probe gives it about four and a half minutes (restarted at the tenth failure, 10 + 9 x 30 s) before the
+          // liveness probe, which would otherwise restart it, begins.
           probes: [
             {
               type: 'Startup'

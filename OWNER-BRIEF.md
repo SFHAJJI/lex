@@ -31,6 +31,8 @@ disabled). On this machine the API and the eight screens work over test data and
 - At go-live: point soufien.lu's name servers to the new address book the driver will create (the old one is in
   V2's disabled subscription). Optional: Azure Support can clear the Gmail account's 6.10 EUR invoice.
 - The word to go live, once the real data passes its checks and a hidden test copy runs on Azure.
+- Optional, money: after go-live the previous version is switched off (about 26 EUR a month in all; going back to it then
+  takes about a minute). Keeping it running for an instant switch back would be about 49 EUR a month.
 
 ## Launch
 

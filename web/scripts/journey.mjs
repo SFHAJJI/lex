@@ -1043,12 +1043,53 @@ export async function heldLuxembourgWork(mount) {
       WHERE (SELECT count(*) FROM states t WHERE t.work_key = s.work_key AND t.applicability_date = s.applicability_date) = 1
       ORDER BY s.work_key, s.applicability_date, s.state_sha256`).all().find((row) => row.withText >= 3);
     if (!state) return null;
-    const before = new Date(`${state.first}T00:00:00Z`);
-    before.setUTCDate(before.getUTCDate() - 1);
-    return { identifier: `/lu-legilux/${state.work}`, date: state.date, anchor: state.anchor, beforeHistory: before.toISOString().slice(0, 10) };
+    return { identifier: `/lu-legilux/${state.work}`, date: state.date, anchor: state.anchor, beforeHistory: dayBefore(state.first) };
   } finally {
     index.close();
   }
+}
+
+/** One operation asked of a server as a page asks it (`POST /api/v3/{operation}`), and its envelope. */
+async function askOperation(origin, operation, parameters) {
+  const answer = await fetch(`${origin}/api/v3/${operation}`, {
+    method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ operation_id: operation, parameters }),
+  });
+  return answer.ok ? answer.json() : null;
+}
+
+/** The day before a civil date, as a civil date. */
+function dayBefore(date) {
+  const day = new Date(`${date}T00:00:00Z`);
+  day.setUTCDate(day.getUTCDate() - 1);
+  return day.toISOString().slice(0, 10);
+}
+
+/**
+ * `heldLuxembourgWork`'s choice made from a server's answers, for a server whose files are not at hand (a deployed
+ * revision; the review of #950 found its probe asking for the fixture's work, which a population does not hold): a search
+ * for "loi" lists hits in work key and date order, each naming its state; the first state with at least three of them
+ * whose dossier shows it alone on its date is the reading's, the first of their article ids the history's anchor, and the
+ * day before the dossier's first state J1's date. Null when none qualifies, and the fixture's work is asked for, as before.
+ */
+export async function heldLuxembourgWorkFromAnswers(origin, { ask = askOperation } = {}) {
+  const search = await ask(origin, "search", { query: "loi", language: "fra" });
+  const states = new Map();
+  for (const hit of search?.result?.value?.hits ?? []) {
+    if (!hit.state_sha256 || !hit.work_key || !hit.applicability_date || !hit.publisher_id) continue;
+    if (!states.has(hit.state_sha256)) states.set(hit.state_sha256, { work: hit.work_key, date: hit.applicability_date, anchors: new Set() });
+    states.get(hit.state_sha256).anchors.add(hit.publisher_id);
+  }
+
+  for (const { work, date, anchors } of states.values()) {
+    if (anchors.size < 3) continue;
+    const identifier = `/lu-legilux/${work}`;
+    const held = (await ask(origin, "dossier", { identifier }))?.result?.value?.states ?? [];
+    if (held.filter((state) => state.applicability_date === date).length !== 1) continue;
+    const first = held.map((state) => state.applicability_date).sort()[0];
+    return { identifier, date, anchor: [...anchors].sort()[0], beforeHistory: dayBefore(first) };
+  }
+
+  return null;
 }
 
 /** How many of the event log's events journey J8 verifies by permalink on a real mount: a population log holds thousands. */

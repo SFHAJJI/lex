@@ -28,6 +28,34 @@ test("the container's /tmp holds a copy of every index the mount carries, genera
   await assert.rejects(startImage({ run: "/nowhere", config: { config: {} }, tmpMebibytes: 300.5 }), /not a whole size/);
 });
 
+test("ending a container's run ends its first process, which the API is, so its /tmp goes with it (review of #950)", async (t) => {
+  const { CONTAINER_COMMAND } = await import("../scripts/image-run.mjs");
+  assert.deepEqual(CONTAINER_COMMAND, ["unshare", "--mount", "--pid", "--fork", "--kill-child"]);
+  // Shown where WSL runs (the rehearsal's machine): a stand-in first process with no signal handler, as the API has none
+  // for the hang-up a closed wsl.exe sends, survived the run's end without --kill-child.
+  const { spawn, spawnSync } = await import("node:child_process");
+  const distribution = process.env.LEX_WSL_DISTRIBUTION ?? "Ubuntu-24.04";
+  const inWsl = (script) => spawnSync("wsl", ["-d", distribution, "-u", "root", "-e", "sh", "-c", script], { encoding: "utf8" });
+  if (process.platform !== "win32" || inWsl("true").status !== 0) {
+    t.skip("WSL is not available here");
+    return;
+  }
+  const run = `/tmp/lex-image-run-kill-${process.pid}`;
+  const marker = `sleep 731 # ${run}`;
+  const child = spawn("wsl", ["-d", distribution, "-u", "root", "-e", ...CONTAINER_COMMAND, "sh", "-c", `exec ${marker}`], { stdio: "ignore" });
+  const count = () => Number(inWsl("pgrep -c -f '^sleep 731$' || true").stdout.trim() || 0);
+  try {
+    for (let tries = 0; tries < 50 && count() === 0; tries++) await new Promise((resolve) => setTimeout(resolve, 200));
+    assert.equal(count(), 1, "the stand-in started");
+    child.kill();
+    inWsl(endProcesses(run));
+    for (let tries = 0; tries < 25 && count() > 0; tries++) await new Promise((resolve) => setTimeout(resolve, 200));
+    assert.equal(count(), 0, "the container's first process ended with its run");
+  } finally {
+    inWsl("pkill -9 -f '^sleep 731$' || true");
+  }
+});
+
 test("a Windows path is handed to WSL as WSL mounts it", () => {
   assert.equal(wslPath(String.raw`C:\Users\Hajji\AppData\Local\Temp\lex-image\image.tar`), "/mnt/c/Users/Hajji/AppData/Local/Temp/lex-image/image.tar");
   assert.equal(wslPath("D:/work/x"), "/mnt/d/work/x");

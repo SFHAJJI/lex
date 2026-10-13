@@ -20,6 +20,7 @@ import {
   HISTORY_ANCHOR,
   JOURNEY_STEPS,
   journeyStepsFor,
+  heldLuxembourgWorkFromAnswers,
   MCP_PROTOCOL_VERSION,
   NO_HIT_SEARCH_STEP,
   READING_DATE,
@@ -825,6 +826,32 @@ test("on a real mount the steps ask for a Luxembourg work the mount holds, and J
   // Without a held work, the fixture's steps, unchanged; and the fixture's steps are the same steps built for its work.
   assert.deepEqual(realMountSteps(report, null), realMountSteps(report));
   assert.deepEqual(journeyStepsFor({ identifier: DOSSIER_IDENTIFIER, date: READING_DATE, anchor: HISTORY_ANCHOR }), JOURNEY_STEPS);
+});
+
+test("a revision's held work is chosen from its answers as from an index: three hits in a state alone on its date", async () => {
+  const hit = (work, date, state, publisher_id) => ({ work_key: work, applicability_date: date, state_sha256: state, publisher_id });
+  const answers = {
+    search: { result: { value: { hits: [
+      hit("a-few", "2001-01-01", "s1", "art_1"), hit("a-few", "2001-01-01", "s1", "art_2"),
+      hit("b-twin", "2002-02-02", "s2", "art_1"), hit("b-twin", "2002-02-02", "s2", "art_2"), hit("b-twin", "2002-02-02", "s2", "art_3"),
+      hit("c-held", "2010-05-05", "s3", "art_9"), hit("c-held", "2010-05-05", "s3", "art_10"), hit("c-held", "2010-05-05", "s3", "art_10"),
+      hit("c-held", "2010-05-05", "s3", "art_2"),
+    ] } } },
+    "/lu-legilux/b-twin": { result: { value: { states: [{ applicability_date: "2002-02-02" }, { applicability_date: "2002-02-02" }] } } },
+    "/lu-legilux/c-held": { result: { value: { states: [{ applicability_date: "2010-05-05" }, { applicability_date: "2008-03-01" }] } } },
+  };
+  const asked = [];
+  const ask = async (origin, operation, parameters) => {
+    asked.push([operation, parameters]);
+    return operation === "search" ? answers.search : answers[parameters.identifier];
+  };
+  assert.deepEqual(await heldLuxembourgWorkFromAnswers("http://revision", { ask }),
+    { identifier: "/lu-legilux/c-held", date: "2010-05-05", anchor: "art_10", beforeHistory: "2008-02-29" },
+    "two hits are too few, twins on a date are refused, and J1 is the day before the work's first state");
+  assert.deepEqual(asked[0], ["search", { query: "loi", language: "fra" }]);
+  assert.deepEqual(asked.slice(1).map(([operation, parameters]) => [operation, parameters.identifier]),
+    [["dossier", "/lu-legilux/b-twin"], ["dossier", "/lu-legilux/c-held"]], "a state with too few hits is not asked about");
+  assert.equal(await heldLuxembourgWorkFromAnswers("http://revision", { ask: async () => null }), null, "no answer, no work: the fixture's is asked");
 });
 
 test("a page's expectation is the API's outcome, then the step's own refinement of it, which wins", () => {

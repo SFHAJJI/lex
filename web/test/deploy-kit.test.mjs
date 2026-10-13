@@ -39,9 +39,10 @@ test("one server, with a private writable /tmp, its probes on the image's own ro
   assert.deepEqual(containers[0].volumeMounts, [{ volumeName: "tmp", mountPath: "/tmp" }]);
   assert.deepEqual(containers[0].probes.map((probe) => [probe.type, probe.httpGet.path, probe.httpGet.port]),
     [["Startup", "/", 8080], ["Liveness", "/", 8080], ["Readiness", "/evaluation-card.json", 8080]]);
-  // The API listens only once its mount is verified: the startup probe gives it five minutes before liveness can restart it.
+  // The API listens only once its mount is verified: the startup probe gives it about four and a half minutes before the
+  // container is restarted, at the probe's last failure (initial delay and every period but the last).
   const startup = containers[0].probes[0];
-  assert.ok(startup.initialDelaySeconds + startup.periodSeconds * startup.failureThreshold >= 300, "at least five minutes to open the mount");
+  assert.ok(startup.initialDelaySeconds + startup.periodSeconds * (startup.failureThreshold - 1) >= 270, "four and a half minutes to open the mount");
   // One vCPU: a replica's ephemeral storage holds the verified index copies only from one vCPU up (4 GiB; 2 GiB at half).
   assert.deepEqual(containers[0].resources, { cpu: "[json('1.0')]", memory: "2Gi" });
   // The replica's /tmp outlives a container restart: the API is told it is its own, and removes a previous start's copies.

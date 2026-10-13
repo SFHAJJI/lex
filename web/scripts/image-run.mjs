@@ -118,6 +118,9 @@ ${WATCHER}WATCHER
  */
 export const DEVICES = Object.freeze(["null", "zero", "random", "urandom"]);
 
+/** How a container is started in WSL: its own mount and PID namespaces, its first process killed when unshare ends. */
+export const CONTAINER_COMMAND = Object.freeze(["unshare", "--mount", "--pid", "--fork", "--kill-child"]);
+
 /**
  * An awk program over `findmnt -R -rn -o TARGET,OPTIONS <root>` that prints every mount a process in
  * the container could write to other than the watched /tmp and the devices: the start refuses to run
@@ -164,7 +167,11 @@ python3 ${run}/watch.py "$R/tmp" ${run}/events.log &
 while ! grep -q '^ready$' ${run}/events.log; do sleep 0.1; done
 cd "$R${image.WorkingDir ?? "/"}"
 exec env -i ${env.map(quote).join(" ")} chroot --userspec=${user} "$R" ${image.Entrypoint.map(quote).join(" ")}`;
-  const child = spawn("wsl", ["-d", DISTRIBUTION, "-u", "root", "-e", "unshare", "--mount", "--pid", "--fork", "sh", "-c", script], { stdio: ["ignore", "pipe", "pipe"] });
+  // `--kill-child`: when unshare ends, its child, the container's first process (the API, by exec), is sent SIGKILL, which
+  // ends the namespace and frees its /tmp. Without it the API outlived close(): ending unshare (pkill by the run folder,
+  // or the Windows side) left the API running, since a namespace's first process ignores a signal it has no handler for,
+  // and every start kept its tmpfs, 2.4 GB for the population mount (the review of #950).
+  const child = spawn("wsl", ["-d", DISTRIBUTION, "-u", "root", "-e", ...CONTAINER_COMMAND, "sh", "-c", script], { stdio: ["ignore", "pipe", "pipe"] });
   let output = "";
   child.stdout.on("data", (chunk) => { output += chunk; });
   child.stderr.on("data", (chunk) => { output += chunk; });
