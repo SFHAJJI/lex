@@ -13,7 +13,7 @@ A feature pull request edits its lane file, not this one; this file changes for 
 
 ## Heads
 
-- `v3/integration`: `801e9b06` (2026-10-14, PR #959 merged: a law's page arrives whole, rendered by the server). The
+- `v3/integration`: `36ede59c` (2026-10-14, PR #960 merged: the private copy stays private on every deployment). The
   required checks are strict: `dotnet` (the whole solution, about 14 min on the runner), `web`, `canon-windows` and
   `journeys`. `journeys` walks J1 to J8 and the site's own addresses in Chrome over four fixture mounts (the fixture,
   licence-blocked, two-state and EU annex control mounts), by pointer and by keyboard on the pages the API serves.
