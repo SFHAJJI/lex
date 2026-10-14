@@ -1,6 +1,6 @@
 # Lex V3: the owner's brief
 
-Updated 2026-10-14 at 07:00 UTC by the driver. The driver updates this file in the first pull request of each
+Updated 2026-10-14 at 09:00 UTC by the driver. The driver updates this file in the first pull request of each
 day and whenever a run starts, ends or stops. At most 40 lines, plain words, no hashes. The detail stays in
 STATUS-WEB.md and STATUS-DATA.md; the acceptance list is LAUNCH-CONTRACT.md.
 
@@ -16,9 +16,10 @@ STATUS-WEB.md and STATUS-DATA.md; the acceptance list is LAUNCH-CONTRACT.md.
 
 ## What is happening now
 
-- First fix (this pull request): a real front door. The home page is search, every page has a header with a menu
-  and a footer saying "documentation, not legal advice; only the published texts are authentic", the development
-  banner is gone, and the pages use a readable style that works on phones.
+- Done: a real front door. The home page is search, every page has a header with a menu and a footer saying
+  "documentation, not legal advice; only the published texts are authentic", and the pages work on phones.
+- This pull request: every link to a law now opens its page. A search result opens the text at that article, and a
+  link someone shares opens the exact version it names (or says plainly that the site now serves another one).
 - A review of your 84 specification files is writing one consistent "spec of record": every contradiction,
   outdated fact and weak requirement ruled on, with your decisions listed and a recommendation for each.
 - A second review checks every area of the specification against what is built; the plan to the public opening
@@ -27,8 +28,10 @@ STATUS-WEB.md and STATUS-DATA.md; the acceptance list is LAUNCH-CONTRACT.md.
 
 ## What waits on you
 
-- Nothing new today. Coming with the plan: a few decisions (the public wording, the assistant's cost and when it
-  switches on, and who labels the assistant's 120 test questions, which the specification requires a person to do).
+- When convenient: Azure now asks you to sign in again (its security defaults). Run "az login" once in a terminal on
+  this PC, on a normal connection. Until then the driver can build and test, but cannot update the Azure site.
+- Coming with the plan: a few decisions (the public wording, the assistant's cost and when it switches on, and who
+  labels the assistant's 120 test questions, which the specification requires a person to do).
 
 ## Launch
 

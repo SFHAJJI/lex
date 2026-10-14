@@ -10,8 +10,13 @@
 // otherwise say that is not true. The publisher's text is quoted in its state's language
 // (`lang` on the quotation, never the interface's). An article whose own date differs from its
 // state's shows both dates, and this page does not decide which controlled. An article held without
-// text is named as such, never shown as an empty quotation. The form's controls carry no `name`, and
-// permalinks are printed, not linked.
+// text is named as such, never shown as an empty quotation. The form's controls carry no `name`.
+//
+// A permalink is a link to this site's own reading of it (`permalinks.mjs`), and the page served at a permalink asks
+// that reading itself once it has loaded: the work and date the address names, one request, as a submit would ask
+// it. The answer is held to the address's pin: when no state (or EU wording) it shows is the one the address pins,
+// the page says so above the reading rather than letting another version pass for it, and brings that notice into
+// view; otherwise the article the address names after `#` (or the state) is brought into view, and given the focus.
 //
 // An EU work's reading is the wording that answers the date asked, original or consolidated: each wording
 // is headed by its own date as a wording's (never an applicability date), and the acknowledgement and
@@ -28,7 +33,8 @@ import {
   createReadingSession,
   quotationLanguageTag,
 } from '../scripts/live-reading.mjs';
-import { ENGLISH_LANG, countedEntry, liveChrome } from '../scripts/live-chrome.mjs';
+import { CHROME_LOCALE, ENGLISH_LANG, countedEntry, liveChrome } from '../scripts/live-chrome.mjs';
+import { anchorOf, parseSitePath, permalinkHref } from '../scripts/permalinks.mjs';
 
 /** The forms' labels and buttons, and this screen's sentences, from the interface copy table. */
 const FORM = liveChrome().form;
@@ -51,7 +57,7 @@ export function QuoteEvidence({ article }) {
           text: <code>{article.textSha256}</code>,
           body: <code>{article.bodySha256}</code>,
           source: <code>{article.officialSource}</code>,
-          permalink: <code>{article.permalink}</code>,
+          permalink: <a href={permalinkHref(article.permalink, CHROME_LOCALE)}><code>{article.permalink}</code></a>,
         }}
       />
     </p>
@@ -93,7 +99,7 @@ function StateReading({ state, workKey }) {
         )}
       </h2>
       <p>
-        <code>{state.permalink}</code>
+        <a href={permalinkHref(state.permalink, CHROME_LOCALE)}><code>{state.permalink}</code></a>
       </p>
       <p data-counts="">
         <Say
@@ -206,7 +212,7 @@ function EuropeWordingReading({ wording, celex }) {
       <EuropeDisclosure template={COPY.europeSameDateWorks} rows={wording.sameDateWorks} name="same-date" />
       <EuropeDisclosure template={COPY.europeUnplaced} rows={wording.unplacedVersions} name="unplaced" />
       <p>
-        <code>{wording.permalink}</code>
+        <a href={permalinkHref(wording.permalink, CHROME_LOCALE)}><code>{wording.permalink}</code></a>
       </p>
       <p data-counts="">
         <Say
@@ -282,10 +288,10 @@ export function ReadingAnswerView({ outcome }) {
  * The reading form: a work identifier, a date and a language, handed to `onAsk` on submit. Shared
  * with the export composer, which asks the same reading.
  */
-export function ReadingForm({ onAsk, submitLabel = FORM.submit.reading }) {
-  const [identifier, setIdentifier] = useState('');
-  const [date, setDate] = useState('');
-  const [language, setLanguage] = useState('');
+export function ReadingForm({ onAsk, submitLabel = FORM.submit.reading, initial = null }) {
+  const [identifier, setIdentifier] = useState(initial?.identifier ?? '');
+  const [date, setDate] = useState(initial?.date ?? '');
+  const [language, setLanguage] = useState(initial?.language ?? '');
   return (
     <form
       role="search"
@@ -338,6 +344,10 @@ export function ReadingForm({ onAsk, submitLabel = FORM.submit.reading }) {
  */
 export function LiveReading({ contract, fetchImpl }) {
   const [outcome, setOutcome] = useState(IDLE);
+  // The permalink this page was opened at, if any: what it names and the request that asks it (null on a page opened at
+  // reading.html). `pinned` holds while the reading shown is that request's: until the reader asks another.
+  const [pin, setPin] = useState(null);
+  const [pinned, setPinned] = useState(false);
   const session = useRef(null);
   if (session.current === null) {
     session.current = createReadingSession({ contract, fetchImpl, onOutcome: setOutcome });
@@ -345,12 +355,61 @@ export function LiveReading({ contract, fetchImpl }) {
 
   useEffect(() => () => session.current.cancel(), []);
 
+  // Opened at a permalink: ask the reading it names, once, after hydration (the server rendered the idle form).
+  useEffect(() => {
+    const named = parseSitePath(window.location.pathname);
+    if (named === null || named.kind !== 'state') return;
+    const request = { identifier: named.identifier, date: named.date, language: named.language ?? '' };
+    setPin({ permalink: named.permalink, digest: named.digest, request });
+    setPinned(true);
+    session.current.ask(request);
+  }, []);
+
+  // What the address names, brought into view once the reading is shown and given the focus, as a browser does for an
+  // anchor (so the keyboard and a screen reader continue from there): the article named after `#` in the pinned state
+  // (or wording), or that state when no article is named. When the reading shows another version, its notice instead:
+  // a reader must not land on an article without meeting the notice that it is not the version the link pins.
+  useEffect(() => {
+    if (!pinned || outcome.state !== 'success') return;
+    let target;
+    if (!readingHolds(outcome.view, pin.permalink)) {
+      target = document.querySelector('[data-pin-replaced]');
+    } else {
+      const section = document.querySelector(`[data-state="${pin.digest}"], [data-wording="${pin.digest}"]`);
+      const anchor = anchorOf(window.location.hash);
+      target = anchor === null ? section : [...(section ?? document).querySelectorAll('[data-article]')].find((element) => element.getAttribute('data-article') === anchor);
+    }
+    if (!target) return;
+    target.scrollIntoView();
+    if (!target.hasAttribute('tabindex')) target.setAttribute('tabindex', '-1');
+    target.focus({ preventScroll: true });
+  }, [pinned, pin, outcome]);
+
+  const ask = (request) => {
+    setPinned(false);
+    session.current.ask(request);
+  };
+  const replaced = pinned && outcome.state === 'success' && !readingHolds(outcome.view, pin.permalink);
   return (
     <div>
-      <ReadingForm onAsk={(request) => session.current.ask(request)} />
+      <ReadingForm key={pin === null ? 'blank' : pin.permalink} initial={pin?.request ?? null} onAsk={ask} />
       <LiveAnswer>
+        {replaced ? (
+          <p data-pin-replaced="">
+            <Say
+              template={outcome.view.publisher === 'eu-eurlex' ? COPY.europePinReplaced : COPY.pinReplaced}
+              values={{ pinned: <code>{pin.permalink}</code> }}
+            />
+          </p>
+        ) : null}
         <ReadingAnswerView outcome={outcome} />
       </LiveAnswer>
     </div>
   );
+}
+
+/** Whether a reading view shows the state (or EU wording) a permalink pins. */
+export function readingHolds(view, permalink) {
+  if (view.publisher === 'eu-eurlex') return view.wordings.some((wording) => wording.permalink === permalink);
+  return view.states.some((state) => state.permalink === permalink);
 }

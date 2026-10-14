@@ -115,8 +115,11 @@ test("a served search answer is the results, read by the search reader", async (
   assert.match(markup, /^<section data-answer-state="success">/);
   const shown = text(markup);
   for (const hit of envelope.result.value.hits) {
-    assert.ok(markup.includes(hit.resolve.identifier), `the page pins ${hit.publisher_id} by its permalink`);
+    assert.ok(markup.includes(`<a href="${hit.resolve.identifier}#${hit.publisher_id}">`), `${hit.publisher_id} links to its reading at the article, by its permalink`);
     assert.ok(shown.includes(`${hit.publisher_id} in ${hit.work_key}, version of ${hit.applicability_date}`));
+  }
+  for (const row of markup.match(/<li data-lane="[^"]*">.*?<\/li>/g)) {
+    assert.doesNotMatch(text(row), /[0-9a-f]{64}/, "a hit row prints no digest (UX spec section 2): its link carries the pin");
   }
   assert.equal((markup.match(/data-lane="strict"/g) ?? []).length, 4);
   assert.equal((markup.match(/data-lane="relaxed"/g) ?? []).length, 1);
@@ -142,8 +145,10 @@ test("an EU work's search is the EU results: the pinned wording once, each hit's
   assert.ok(shown.includes(`Every hit is in the original wording of 32016R0679 this server holds in eng, dated ${value.pinned_wording.wording_date} and pinned by its digest`));
   assert.ok(shown.includes(`The wording date (wording_date in search, wording_dates in dossier) is the date the publisher's Formex package gives the act`),
     "the answer's own sentence says what the date is, as a sentence");
+  assert.ok(markup.includes(`<a href="${value.pinned_wording.permalink}"><code>`), "the wording's permalink links to its reading");
   for (const hit of value.hits) {
-    assert.ok(markup.includes(`<code>${hit.permalink}</code>`), `the page pins ${hit.publisher_id} by its permalink`);
+    assert.ok(markup.includes(`<a href="${hit.permalink}">`), `${hit.publisher_id} links to its reading at the provision, by its permalink`);
+    assert.ok(!markup.includes(`<code>${hit.permalink}</code>`), "and the row prints no digest");
     assert.ok(shown.includes(`${hit.heading} of ${hit.celex}, wording of ${hit.wording_date}`));
     assert.ok(markup.includes(`<strong lang="en">${hit.heading}</strong>`), "the publisher's heading is marked in its language");
   }

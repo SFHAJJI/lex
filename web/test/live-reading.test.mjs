@@ -12,7 +12,7 @@ import { readFile } from "node:fs/promises";
 import { createElement as h } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 
-import { LiveReading, ReadingAnswerView, RefusalCard, renderLiveReadingPage } from "../.react-build/app.mjs";
+import { LiveReading, ReadingAnswerView, RefusalCard, readingHolds, renderLiveReadingPage } from "../.react-build/app.mjs";
 import {
   LIVE_READING_IDLE,
   LIVE_READING_REFUSAL_SENTENCES,
@@ -89,9 +89,13 @@ test("a served bundle is the text of the state, quoted in its language, with bot
   assert.match(markup, /^<section data-answer-state="success">/);
   assert.equal((markup.match(/<blockquote lang="fr">/g) ?? []).length, state.articles.length, "every quotation in the state's language, never the interface's");
   for (const article of state.articles) {
-    assert.ok(markup.includes(article.article_permalink), `${article.publisher_id} is pinned by its permalink`);
+    assert.ok(markup.includes(`<a href="${article.article_permalink}"><code>${article.article_permalink}</code></a>`), `${article.publisher_id} is pinned by its permalink, a link to this reading at it`);
     assert.ok(markup.includes(article.text_sha256));
   }
+  assert.ok(markup.includes(`<a href="${state.permalink}"><code>${state.permalink}</code></a>`), "the state's permalink is a link to this reading");
+  assert.equal(readingHolds(outcome.view, state.permalink), true, "a permalink to the state shown is held");
+  assert.equal(readingHolds(outcome.view, `${state.stable_coordinate}--${"0".repeat(64)}`), false, "another state of that date is not");
+  assert.equal(readingHolds(outcome.view, `${state.permalink}#${state.articles[0].publisher_id}`), false, "a permalink is held to whole, without its article");
   const conflicted = state.articles.filter((article) => article.validity_conflict);
   assert.equal((markup.match(/data-validity-conflict=""/g) ?? []).length, conflicted.length);
   assert.ok(markup.includes(`This article&#x27;s own date is ${conflicted[0].article_valid_from}; its state applies from ${state.applicability_date}.`));

@@ -12,6 +12,7 @@
   </ItemGroup>
   <ItemGroup>
     <Content Include="Fixtures/EuManifestationListing/*.json" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="Fixtures/SitePaths/*.json" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="JsonSchema.Net" Version="9.4.0" PrivateAssets="all" />

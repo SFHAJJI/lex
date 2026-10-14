@@ -88,6 +88,8 @@ const EN = Object.freeze({
     wordingDate: "Wording date",
   }),
   reading: Object.freeze({
+    pinReplaced: "This link pins {pinned}, which is not the version this site serves for that date; the version it serves is shown below.",
+    europePinReplaced: "This link pins {pinned}, which is not the wording that answers that date on this site; the wording that does is shown below.",
     title: "Reading",
     eyebrow: "Reading",
     heading: "The text on a date",

@@ -47,6 +47,7 @@ import { dirname, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { gunzipSync } from "node:zlib";
 import { readLargeFile, sha256Hex } from "./large-bytes.mjs";
+import { pageForSitePath } from "./permalinks.mjs";
 
 const repository = resolve(fileURLToPath(new URL("../../", import.meta.url)));
 // In pieces: one update over 2 GiB is refused, and the population image's app layer is 2.5 GB (large-bytes.mjs).
@@ -242,7 +243,11 @@ export async function v2RouteFailures(origin, { v3Files = new Map(), routes = V2
   for (const [method, path] of routes) {
     const response = await fetch(`${origin}${path}`, { method, headers: { "content-type": "application/json" }, body: method === "POST" ? "{}" : undefined, redirect: "manual" });
     const body = Buffer.from(await response.arrayBuffer());
-    const own = method === "GET" ? v3Files.get(path.split("?")[0]) : undefined;
+    // V3's own page at a law's address (a permalink or a work's coordinate, `permalinks.mjs`) is V3's, not V2's: V2 served
+    // pages at /lu-legilux/{work} and /eu-eurlex/{celex} too. Anything else must still be V3's own file or a 404.
+    const bare = path.split("?")[0];
+    const page = method === "GET" ? pageForSitePath(bare) : null;
+    const own = method === "GET" ? (v3Files.get(bare) ?? (page === null ? undefined : v3Files.get(`/${page}`))) : undefined;
     if (own === undefined) {
       if (response.status !== 404) failures.push(`${method} ${path} answered ${response.status}, not 404`);
     } else if (response.status !== 200 || !body.equals(own)) {

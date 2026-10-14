@@ -19,7 +19,9 @@ import {
   EU_SEARCH_STEP,
   HISTORY_ANCHOR,
   JOURNEY_STEPS,
+  answerCitations,
   journeyStepsFor,
+  pinnedStep,
   heldLuxembourgWorkFromAnswers,
   MCP_PROTOCOL_VERSION,
   NO_HIT_SEARCH_STEP,
@@ -206,6 +208,127 @@ test("a reading run types two fields and is held to the exact body of both", () 
   assert.deepEqual(journeyVerdict(observed, expected), []);
   observed.requests[1].postData = JSON.stringify({ operation_id: "evidence_bundle", parameters: { identifier: DOSSIER_IDENTIFIER } });
   assert.ok(journeyVerdict(observed, expected).some((failure) => /body was/.test(failure)), "a request that dropped the date fails");
+});
+
+test("a work's address and a state's permalink open their pages with nothing typed, each asking one exact body", () => {
+  const { address, permalink } = JOURNEY_STEPS;
+  assert.equal(address.path, DOSSIER_IDENTIFIER, "the work's address is its coordinate");
+  assert.equal(address.typed, undefined);
+  assert.deepEqual(address.body, JOURNEY_STEPS.dossier.body);
+  assert.equal(permalink.typed, undefined);
+  assert.deepEqual(permalink.body, JOURNEY_STEPS.reading.body);
+  assert.deepEqual(permalink.pins, { identifier: DOSSIER_IDENTIFIER, date: READING_DATE, anchor: HISTORY_ANCHOR });
+  assert.equal(permalink.path, `${DOSSIER_IDENTIFIER}/${READING_DATE}--${"0".repeat(64)}#${HISTORY_ANCHOR}`, "a placeholder that pins nothing");
+  const held = journeyStepsFor({ identifier: "/lu-legilux/rgd-2017-12-13-a1050", date: "2018-01-01", anchor: "art_2" });
+  assert.equal(held.address.path, "/lu-legilux/rgd-2017-12-13-a1050");
+  assert.equal(held.permalink.path, `/lu-legilux/rgd-2017-12-13-a1050/2018-01-01--${"0".repeat(64)}#art_2`);
+});
+
+test("a permalink step opens the permalink the server's dossier names for its date, and keeps its placeholder otherwise", async () => {
+  const { permalink } = JOURNEY_STEPS;
+  const digest = "e".repeat(64);
+  const states = [
+    { applicability_date: "2020-01-01", permalink: `${DOSSIER_IDENTIFIER}/2020-01-01--${"d".repeat(64)}` },
+    { applicability_date: READING_DATE, permalink: `${DOSSIER_IDENTIFIER}/${READING_DATE}--${digest}` },
+  ];
+  const asked = [];
+  const ask = async (origin, operation, parameters) => {
+    asked.push([origin, operation, parameters]);
+    return { verdict: "answer", result: { value: { states } } };
+  };
+  const pinned = await pinnedStep(ORIGIN, permalink, { ask });
+  assert.deepEqual(asked, [[ORIGIN, "dossier", { identifier: DOSSIER_IDENTIFIER }]], "one dossier, of the same server");
+  assert.equal(pinned.path, `${DOSSIER_IDENTIFIER}/${READING_DATE}--${digest}#${HISTORY_ANCHOR}`, "the state on the date, at the article");
+  assert.deepEqual({ ...pinned, path: permalink.path }, { ...permalink }, "nothing else changes");
+  assert.equal(await pinnedStep(ORIGIN, JOURNEY_STEPS.reading, { ask }), JOURNEY_STEPS.reading, "a step that pins nothing is left as it is");
+  assert.equal(asked.length, 1, "and asks nothing");
+  const twoOnTheDate = [...states, { applicability_date: READING_DATE, permalink: `${DOSSIER_IDENTIFIER}/${READING_DATE}--${"f".repeat(64)}` }];
+  for (const answer of [
+    null,
+    { verdict: "refuse", refusal: { code: "no_corpus_mounted" } },
+    { verdict: "answer", result: { value: { states: [] } } },
+    { verdict: "answer", result: { value: { states: twoOnTheDate } } },
+    { verdict: "answer", result: { value: { states: [{ applicability_date: READING_DATE, permalink: "/reading.html" }] } } },
+  ]) {
+    assert.equal(await pinnedStep(ORIGIN, permalink, { ask: async () => answer }), permalink, `${JSON.stringify(answer)}: the placeholder stays`);
+  }
+});
+
+test("an answer's citations are its permalinks printed as code and its links to a reading, under any interface", () => {
+  const state = `${DOSSIER_IDENTIFIER}/${READING_DATE}--${"e".repeat(64)}`;
+  const wording = `/eu-eurlex/32016R0679/eng/2016-04-27--${"c".repeat(64)}`;
+  assert.deepEqual(answerCitations([state, `${state}#art_15`, "e".repeat(64), "https://legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo", "art_15"], []), [state, `${state}#art_15`], "code beginning with a slash");
+  assert.deepEqual(answerCitations([], [`${state}#art_15`, `/fr${wording}#art_5`, `${wording}#art_5`, "/reading.html", DOSSIER_IDENTIFIER, "#main", "https://legilux.public.lu/"]), [`${state}#art_15`, `${wording}#art_5`],
+    "a link to a state's or a wording's reading, as the permalink it opens; a work's address, a page or another site is no citation");
+  assert.deepEqual(answerCitations([state], [state]), [state], "a permalink printed and linked is one citation");
+});
+
+test("a permalink run passes when its page shows the pinned state with the article in view, and fails otherwise", () => {
+  const step = { ...JOURNEY_STEPS.permalink, path: `${DOSSIER_IDENTIFIER}/${READING_DATE}--${"e".repeat(64)}#${HISTORY_ANCHOR}` };
+  const observed = () => ({
+    ...goodSearch(),
+    requests: [
+      { url: `${ORIGIN}${step.path.split("#")[0]}`, method: "GET", headers: {} },
+      { url: `${ORIGIN}/client-live-reading.js`, method: "GET", headers: {} },
+      { url: `${ORIGIN}/api/v3/evidence_bundle`, method: "POST", headers: {}, headersSent: true, postData: JSON.stringify(step.body) },
+    ],
+    location: `${ORIGIN}${step.path}`,
+    text: "49 articles quoted",
+    pinReplaced: false,
+    inView: "shown",
+    targetFocused: true,
+  });
+  const expected = { origin: ORIGIN, step, state: "success", texts: ["49 articles quoted"] };
+  assert.deepEqual(journeyVerdict(observed(), expected), []);
+  for (const [what, change, reason] of [
+    ["another version shown", { pinReplaced: true }, /not the one served \(true\)/],
+    ["the notice not observed", { pinReplaced: undefined }, /not the one served \(not observed\)/],
+    ["the article off-screen", { inView: "at 2400 px of a 600 px window" }, /not in view \(at 2400 px of a 600 px window\)/],
+    ["the article missing", { inView: "absent" }, /art_15 the permalink names is not on the page/],
+    ["the article not observed", { inView: undefined }, /not in view \(not observed\)/],
+    ["the article in view without the focus", { targetFocused: false }, /art_15 the permalink names is in view without the focus/],
+    ["the article dropped from the address", { location: `${ORIGIN}${step.path.split("#")[0]}` }, /ended at/],
+    ["a form submitted as well", { requests: [...observed().requests, observed().requests[2]] }, /2 requests to the API/],
+  ]) {
+    const failures = journeyVerdict({ ...observed(), ...change }, expected);
+    assert.ok(failures.some((failure) => reason.test(failure)), `${what}: ${failures.join(" | ")}`);
+  }
+  const refused = { ...observed(), answerState: "refusal", text: "no_corpus_mounted", pinReplaced: false, inView: "absent" };
+  assert.deepEqual(journeyVerdict(refused, { origin: ORIGIN, step, state: "refusal", refusalCode: "no_corpus_mounted" }), [], "a refusal holds no state to show");
+});
+
+test("a stale permalink run passes when its page says, in view, that the version shown is not the one the link pins", () => {
+  const step = JOURNEY_STEPS.stale;
+  assert.equal(step.path, `${DOSSIER_IDENTIFIER}/${READING_DATE}--${"0".repeat(64)}#${HISTORY_ANCHOR}`, "a digest no state has");
+  assert.equal(step.pins, undefined, "opened as it is, never replaced by the dossier's permalink");
+  assert.deepEqual(step.body, JOURNEY_STEPS.reading.body);
+  const observed = () => ({
+    ...goodSearch(),
+    requests: [
+      { url: `${ORIGIN}${step.path.split("#")[0]}`, method: "GET", headers: {} },
+      { url: `${ORIGIN}/api/v3/evidence_bundle`, method: "POST", headers: {}, headersSent: true, postData: JSON.stringify(step.body) },
+    ],
+    location: `${ORIGIN}${step.path}`,
+    text: "This link pins …, which is not the version this site serves for that date",
+    pinReplaced: true,
+    inView: "shown",
+    targetFocused: true,
+    pinNamed: step.path.split("#")[0],
+    pinVerification: { identifier: step.path.split("#")[0], refusal: "pinned_digest_mismatch", verdict: null },
+  });
+  const expected = { origin: ORIGIN, step, state: "success", texts: ["which is not the version this site serves for that date"] };
+  assert.deepEqual(journeyVerdict(observed(), expected), []);
+  for (const [what, change, reason] of [
+    ["no notice", { pinReplaced: false }, /does not say that the version shown is not the one the link pins \(false\)/],
+    ["the notice not observed", { pinReplaced: undefined }, /does not say .* \(not observed\)/],
+    ["the notice scrolled past", { inView: "at -1180 px of a 844 px window" }, /notice .* is not in view \(at -1180 px/],
+    ["the notice in view without the focus", { targetFocused: false }, /notice .* is in view without the focus/],
+    ["a notice naming the version served", { pinVerification: { refusal: null, verdict: "digest_matches" } }, /with digest_matches, not pinned_digest_mismatch/],
+    ["a notice verify was not asked about", { pinNamed: null, pinVerification: undefined }, /\(none\) with nothing, not pinned_digest_mismatch/],
+  ]) {
+    const failures = journeyVerdict({ ...observed(), ...change }, expected);
+    assert.ok(failures.some((failure) => reason.test(failure)), `${what}: ${failures.join(" | ")}`);
+  }
 });
 
 test("a provision history run types the identifier and the article id and is held to both in the body", () => {

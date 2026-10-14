@@ -31,6 +31,9 @@
 // work on the home page an "acte", the radar's noun "modifications", and the authentic Luxembourg publication the
 // "Journal officiel du Grand-Duché de Luxembourg (Mémorial A)", as the loi du 23 décembre 2016 names it; the English
 // footer changed with it).
+// The notice a permalink's reading shows when the version (or EU wording) served is not the one the link pins
+// (`reading.pinReplaced`, `reading.europePinReplaced`) was reviewed by the same reviewer under the same delegation in a
+// second addendum of 2026-10-14 (both approved; a link "épingle" what it pins, the export's verb).
 // No French entry ships unreviewed.
 //
 // Vocabulary: a work is an "acte" (a publisher's Cellar work, one record of an EU act, is an "œuvre de l’éditeur"), a
@@ -104,6 +107,8 @@ export const LIVE_CHROME_FR = Object.freeze({
     wordingDate: 'Date du libellé',
   }),
   reading: Object.freeze({
+    pinReplaced: 'Ce lien épingle {pinned}, qui n’est pas la version que ce site communique pour cette date ; la version qu’il communique est affichée ci-dessous.',
+    europePinReplaced: 'Ce lien épingle {pinned}, qui n’est pas le libellé qui sert de réponse pour cette date sur ce site ; celui qui sert de réponse est affiché ci-dessous.',
     title: 'Lecture',
     eyebrow: 'Lecture',
     heading: 'Le texte à une date',

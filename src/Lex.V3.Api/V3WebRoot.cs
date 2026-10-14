@@ -102,8 +102,9 @@ internal sealed class V3WebRoot
     }
 
     /// <summary>
-    /// Serves the file <paramref name="rawTarget"/> names, if this root holds it, and returns true; returns
-    /// false, touching nothing, for a path it does not hold. The query string is not part of the path.
+    /// Serves the file <paramref name="rawTarget"/> names, if this root holds it, or, for a law's address
+    /// (<see cref="PageForSitePath"/>), the page that reads it, and returns true; returns false, touching nothing,
+    /// for any other path. The query string is not part of the path.
     /// </summary>
     internal async Task<bool> TryServeAsync(HttpContext context, string rawTarget, CancellationToken cancellationToken)
     {
@@ -112,7 +113,12 @@ internal sealed class V3WebRoot
         var path = queryAt < 0 ? rawTarget : rawTarget[..queryAt];
         if (!_files.TryGetValue(path, out var file))
         {
-            return false;
+            // A law's address (a permalink or a work's coordinate) is served the page that reads it; the page reads its own
+            // address (web/scripts/permalinks.mjs). Nothing else is claimed.
+            if (PageForSitePath(path) is not { } page || !_files.TryGetValue(page, out file))
+            {
+                return false;
+            }
         }
 
         var response = context.Response;
@@ -145,6 +151,33 @@ internal sealed class V3WebRoot
     // Plain patterns, not source-generated ones: the generator adds types of its own to the assembly, with names
     // derived from this file, which the closed-surface census would then have to pin (review of #788's CI).
     private static readonly Regex SafePath = new(@"^[a-z0-9-]+(/[a-z0-9-]+)*\.[a-z0-9]+$", RegexOptions.CultureInvariant);
+
+    /// <summary>
+    /// The site's addresses for law, as <c>web/scripts/permalinks.mjs</c> parses them (a test holds the two to one table): a
+    /// Luxembourg work (<c>/lu-legilux/{work}</c>) or an EU act (<c>/eu-eurlex/{celex}</c>), served its dossier; a Luxembourg
+    /// state (<c>/lu-legilux/{work}/{date}--{sha256}</c>) or an EU wording (<c>/eu-eurlex/{celex}/{lng}/{date}--{sha256}</c>),
+    /// served its reading; each also under the French interface's <c>/fr/</c>. A permalink's <c>#article</c> never reaches a
+    /// server. The end is <c>\z</c>, not <c>$</c>, which in .NET also matches before a final newline.
+    /// </summary>
+    private static readonly Regex SitePath = new(
+        "^/(?:(?<locale>fr)/)?(?:lu-legilux/[A-Za-z0-9][A-Za-z0-9._-]*(?<pin>/[0-9]{4}-[0-9]{2}-[0-9]{2}--[0-9a-f]{64})?" +
+        "|eu-eurlex/[0-9A-Za-z][0-9A-Za-z()._-]*(?<eupin>/[a-z]{3}/[0-9]{4}-[0-9]{2}-[0-9]{2}--[0-9a-f]{64})?)\\z",
+        RegexOptions.CultureInvariant,
+        TimeSpan.FromMilliseconds(100));
+
+    /// <summary>The page a site path is served by (<c>/reading.html</c>, <c>/fr/dossier.html</c>), or null for any other path.</summary>
+    internal static string? PageForSitePath(string path)
+    {
+        ArgumentNullException.ThrowIfNull(path);
+        var match = SitePath.Match(path);
+        if (!match.Success)
+        {
+            return null;
+        }
+
+        var page = match.Groups["pin"].Success || match.Groups["eupin"].Success ? "reading.html" : "dossier.html";
+        return match.Groups["locale"].Success ? $"/{match.Groups["locale"].Value}/{page}" : "/" + page;
+    }
 
     private static readonly Regex PolicyMeta = new("<meta http-equiv=\"Content-Security-Policy\" content=\"(?<policy>[^\"]*)\"", RegexOptions.CultureInvariant);
 }

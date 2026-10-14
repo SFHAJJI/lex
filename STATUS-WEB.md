@@ -4,6 +4,51 @@ Updated 2026-10-14. The web lane's progress, split out of STATUS.md (which keeps
 items and the pointers) by the standing order of 2026-10-01 13:50 UTC. Every pull request of the web lane
 updates this file, not STATUS.md.
 
+## Every law address opens its page; search results open the text (sole driver, 2026-10-14)
+
+The site printed permalinks and served nothing at them, and a search hit led nowhere (the review of #955: screens nothing
+linked to). The UX specification's URLs (section 1: a dossier at `/{publisher}/{work}`, a reading at
+`/{publisher}/{work}/{valid_from}--{hash}`, the article after `#`) are now the site's own addresses:
+- **The addresses** (`web/scripts/permalinks.mjs`): a Luxembourg state's permalink
+  `/lu-legilux/{work}/{date}--{sha256}` and an EU wording's `/eu-eurlex/{celex}/{lng}/{date}--{sha256}` open the reading
+  page; a work's address, `/lu-legilux/{work}` or `/eu-eurlex/{celex}`, opens its dossier; each also under `/fr/`. The
+  API (`V3WebRoot.PageForSitePath`) and the live server serve the page, and claim no other path. One table of 40 paths
+  (13 served, 27 not claimed, `tests/Lex.V3.Tests/Fixtures/SitePaths/site-paths.json`) holds the API's pattern and the
+  web's to the same answers.
+- **The pages read their address.** The reading page asks the state's reading as it loads (one request, the one a submit
+  would send), fills the form with it, and brings into view what the address names: the article after `#`, in the
+  pinned state, or the state. The dossier page asks the work's dossier. An EU act is asked by its CELEX, which the EU
+  index resolves (`/eu-eurlex/{celex}` is not an identifier it takes).
+- **A link cannot silently drift** (UX spec section 1). When the version (or EU wording) the server answers for the
+  date is not the one the link pins, a notice above the reading says so, and the page brings the notice, not the
+  article, into view: "This link pins {permalink}, which is not the version this site serves for that date; the
+  version it serves is shown below." (the EU's says "the wording that answers that date"). The notice lasts only while
+  the reading shown is the link's own; a reading the reader asks next carries none.
+- **Results lead to the text** (UX spec section 2): each search hit is a link to its reading at its article, and hit
+  rows print no digest (the link carries the pin). Every permalink the reading, the dossier and the search print is a
+  link to its page, under the page's interface language.
+- **The journeys** gain three steps, walked in Chrome through the live server and through the API (CI's journeys, the
+  image rehearsal and the deploy probe run every step):
+  - `address`: a work's address opens its dossier;
+  - `permalink`: the permalink the server's own dossier names for the date, opened at an article, shows that state
+    with no notice and the article in view;
+  - `stale`: a permalink whose digest pins nothing shows the state the date resolves to under the notice, in view, and
+    `verify` must refuse the permalink the notice names with `pinned_digest_mismatch` (the notice is true only if the
+    server says so too).
+
+  A link to a reading now counts as a citation and is verified like a printed one; the permalink a notice names is not
+  a citation.
+- **V2's routes.** V2 showed its own page at `/lu-legilux/{work}` and `/eu-eurlex/{celex}`; the rehearsal's V2-route
+  check now requires V3's dossier page there, and still a 404 at V2's dated and comparison addresses.
+- **French**: the two notices went through a second addendum of 2026-10-14 of the French review (both approved; a link
+  "épingle" what it pins) (`C:\lex-v3\lanes\fr-review\review.md`).
+- **Measured**: web suite 1,088 of 1,088; Lex.V3.Tests 3,145 passed, 1 skipped; the journeys run locally against the API published from this branch: the fixture mount through the live server 44 of 44, served by the API with the keyboard 44 of 44, the licence-blocked mount 12 of 12 (each new step passing on each, and refusing `no_corpus_mounted` with no mount); Chrome at 390 and 1280 CSS pixels: a permalink scrolls to its article, a stale one to its notice, the French permalink to its article.
+- **Next on this road** (driver decisions, reversible): every answer measured at 320 CSS pixels (the dossier's states
+  table is 411 pixels wide at a 390-pixel phone, before this change too); after a reading resolves from the form, its
+  permalink written into the address (UX spec section 4: "the resolved pair is written into the URL"); the interface
+  language switch keeping the reader on the same document; the reading server-rendered at its permalink for readers
+  without scripts (the specification of record's draft asks for pages readable without JavaScript).
+
 ## The public front door (sole driver, 2026-10-14)
 
 The owner opened the deployed candidate and saw no product: the home page was the Trust and Coverage report, no page

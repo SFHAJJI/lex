@@ -22,7 +22,8 @@ import { RefusalCard } from './RefusalCard.jsx';
 import { DOSSIER_LANGUAGES, LIVE_DOSSIER_IDLE, createDossierSession } from '../scripts/live-dossier.mjs';
 import { EuropeAnnexes, LiveAnswer, Say, StatusSentence, inEnglish, refusalCardCopyFor } from './LiveAnswer.jsx';
 import { quotationLanguageTag } from '../scripts/live-reading.mjs';
-import { ENGLISH_LANG, countedEntry, liveChrome } from '../scripts/live-chrome.mjs';
+import { CHROME_LOCALE, ENGLISH_LANG, countedEntry, liveChrome } from '../scripts/live-chrome.mjs';
+import { parseSitePath, permalinkHref } from '../scripts/permalinks.mjs';
 
 /** The forms' labels and buttons, and this screen's sentences, from the interface copy table. */
 const FORM = liveChrome().form;
@@ -107,7 +108,7 @@ export function DossierView({ view }) {
               <td>{state.nextApplicabilityDate ?? COMMON.noneHeld}</td>
               <td>{state.articleCount}</td>
               <td>{state.articlesNotAdmitted}</td>
-              <td><code>{state.permalink}</code></td>
+              <td><a href={permalinkHref(state.permalink, CHROME_LOCALE)}><code>{state.permalink}</code></a></td>
             </tr>
           ))}
         </tbody>
@@ -152,7 +153,7 @@ export function EuropeDossierView({ view }) {
               <td>{expression.language}</td>
               <td>{expression.wording.wordingDate}</td>
               <td>{expression.articleCount}</td>
-              <td><code>{expression.wording.permalink}</code></td>
+              <td><a href={permalinkHref(expression.wording.permalink, CHROME_LOCALE)}><code>{expression.wording.permalink}</code></a></td>
             </tr>
           ))}
         </tbody>
@@ -215,6 +216,14 @@ export function LiveDossier({ contract, fetchImpl }) {
   }
 
   useEffect(() => () => session.current.cancel(), []);
+
+  // Opened at a work's address (`/lu-legilux/{work}`, `/eu-eurlex/{celex}`): ask its dossier, once, after hydration.
+  useEffect(() => {
+    const named = parseSitePath(window.location.pathname);
+    if (named === null || named.kind !== 'work') return;
+    setIdentifier(named.identifier);
+    session.current.ask({ identifier: named.identifier, language: '' });
+  }, []);
 
   return (
     <div>
