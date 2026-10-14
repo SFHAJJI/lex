@@ -33,11 +33,14 @@ A feature pull request edits its lane file, not this one; this file changes for 
   specification. The specification of record, version 2 (`C:\lex-v3\SPEC-OF-RECORD-2026-10-14-v2.md`, written from
   the lex-governance pack, Decisions 82 to 95, the launch contract and 257 verified review findings, then revised after
   a 20-finding review), rules where they disagree, lists what must hold at launch (its L lines) and the owner's
-  decisions O1 to O31 with recommended answers. The driver builds toward it; the owner adopts it (O1). The plan to the
-  public opening is being written from it.
-- Plan: `C:\lex-v3\V3-FINISH-PLAN-2026-09-27.md` (owner's copy, superseded by the plan above when it lands). Decision 94
-  (one driver, one queue, one review per pull request) merged in lex-governance on 2026-09-27. Launch target
-  2026-11-07, to be confirmed or moved by the plan.
+  decisions O1 to O31 with recommended answers. The driver builds toward it; the owner adopts it (O1).
+- Plan: `C:\lex-v3\PLAN-2026-10-14.md`, written from the specification of record on 2026-10-14 and revised the same day
+  after a completeness and a feasibility review; the owner has it as a private page. Counted item by item, the launch
+  set is about 230 driver-days. It recommends one public opening with the full launch set on Tuesday 2 February 2027
+  (go/no-go on Wednesday 27 January), with a private preview for the owner on 7 November (the codes, the new home page
+  and search) and the near-final site on 15 December. It supersedes `C:\lex-v3\V3-FINISH-PLAN-2026-09-27.md` and its
+  2026-11-07 target. Decision 94 (one driver, one queue, one review per pull request) merged in lex-governance on
+  2026-09-27.
 
 ## Owner rulings, 2026-09-30
 
@@ -120,14 +123,31 @@ Only money, legal or public claims, credentials and going live (ruling 7):
   2026-10-14 (app `ca-lex-v3`, reachable only from this machine's address, about 26 EUR a month). Since 2026-10-14 08:04
   UTC every Azure call from this machine fails with AADSTS530035 (blocked by the tenant's security defaults): the owner
   signs in again (`az login`) on a normal connection before the driver can change anything there.
-- Where DNS lives (the specification of record's O14, R117: decide before the name-server switch completes). The
-  soufien.lu zone was created in Azure DNS (resource group `rg-lex-v3`) on 2026-10-14, with `law` as a CNAME to the
-  app's default host and the `asuid.law` verification record; the owner set the registrar's name servers to it, and the
-  switch had not reached the resolvers by 09:00 UTC. R117 rules DNS out of the subscription that hosts the site (V2 went
-  down with its subscription). Recommended: keep the zone at the registrar (or another provider outside Azure) with
-  the same two records, and delete the Azure zone.
-- The specification of record (O1) and its owner decisions O2 to O31, each with a recommended answer; the plan orders
-  them by the date each blocks.
+- Where DNS lives (O14): **decided by the owner on 2026-10-14**: at the registrar, outside Azure (R117: V2 went down
+  with its subscription), and the site keeps V2's address, `law.soufien.lu`. The owner sets the registrar's name
+  servers back to the registrar's own (they had been pointed at the Azure DNS zone made on 2026-10-14) and adds two
+  records there: `law` as a CNAME to the app's default host, and the `asuid.law` TXT verification record, whose value
+  the driver gives. The driver then binds the name with a managed certificate, keeps the private copy's address list
+  (it stays private until the opening), and deletes the Azure zone.
+- The plan's decisions (its section 5: each with its recommended answer, its cost and what stops without it):
+  - **Now, by Friday 16 October**: the Azure sign-in; O15, an encrypted external disk (1 to 2 TB), so custody gets a
+    second copy before step 0 deletes anything; turning hibernation off (6.3 GB).
+  - **The decision sitting, by Wednesday 21 October** (one reply approves the pre-filled answers, striking what the
+    owner disagrees with; nothing is assumed from silence): O1, adopt the record and one opening with the full launch
+    set on 2 February 2027; O3, where the delegation ends (the owner acts in person for the signing identity,
+    production credentials, deployment, promotion, money and public legal claims; a deployment to the private copy is
+    the driver's; the publisher runs the plan names are delegated); O2, Lex at `law.soufien.lu` after a name check;
+    N1, one money envelope (a ceiling of 150 EUR a month, about 120 expected; the external disk; the rented machine; the
+    people's checks on quotes, up to about 19,000 EUR); N2, the checks only people may do, by paid independent people,
+    never agents (a Luxembourg lawyer, an accessibility auditor, a French-reading legal annotator, a session moderator
+    and ten testers).
+  - **By Friday 30 October**: O6, the Luxembourg licence rulings (recommended: L2, L1 and L1b yes for every file, each
+    with a visible per-file disclosure; L3 yes in principle; L4 kept withheld; a letter to the SCL); O7, the population
+    and its yield; O28, personal data; O5, the legal pages; O4, the lawyer's read as a condition of going live; O26, the
+    usability sessions; O13, hosting and money; O16, the signing keys; N3, how outside reviewers reach the private copy.
+  - **Later**: by 13 November O19, O10, O11, O20 and the attribution wording; by 27 November O12, O21, O27 and O29; by 11
+    December O17, N4 and O18; only if needed, N5 (by 1 December) and N6; at the go/no-go on 27 January, O31 and the
+    sign-offs.
 - The weekly 30-minute checkpoint slot.
 - The owner's rulings of 2026-10-04 (relayed by the audit session): the French copy accepted, the acquisition
   code frozen until the combined mount exists, the stage milestones closed, `OWNER-BRIEF.md` kept current.
