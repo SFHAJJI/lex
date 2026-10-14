@@ -8,8 +8,12 @@ targetScope = 'resourceGroup'
 // names (no registry password), and the app runs with no environment secret. The app keeps every revision it deploys
 // (multiple revision mode): a new revision arrives as the `candidate` label with no traffic while a live revision
 // serves, so the zero-traffic probe runs against the candidate's own URL before anything is promoted. On a first
-// deployment there is no live revision to keep the traffic, so the candidate takes it, and ingress admits only the
-// owner's probe address until the owner promotes the app by redeploying without that restriction.
+// deployment there is no live revision to keep the traffic, so the candidate takes it.
+//
+// Until the owner opens the site, the app is the private copy: on every deployment, ingress admits only the address
+// ranges deploy.ps1 names (the operator's, and a reviewer's while a review runs), and a deployment that names none admits
+// no one. Only the owner's opening (deploy.ps1 -Open, then -Public on every later deployment) admits everyone. (The plan's
+// item 0.5: the first version applied the list on a first deployment only, so a second deployment opened the copy.)
 
 @description('Azure region of the app; the managed environment\'s by default.')
 param location string = resourceGroup().location
@@ -35,10 +39,34 @@ param revisionSuffix string
 @description('The revision serving traffic now, kept at 100 per cent; empty on the first deployment.')
 param liveRevision string = ''
 
-@description('On a first deployment only: the one address range ingress admits (the owner\'s probe), as a CIDR.')
-param probeSourceCidr string = ''
+@description('Until the opening: the address ranges ingress admits, as CIDRs. A deployment that names none admits no one.')
+param allowedSourceCidrs array = []
+
+@description('True only once the owner has opened the site (deploy.ps1 -Public): ingress then admits everyone.')
+param openToPublic bool = false
 
 var firstDeployment = empty(liveRevision)
+
+// Every address range named, each admitted; ingress refuses every other address.
+var allowedOnly = [
+  for (cidr, index) in allowedSourceCidrs: {
+    name: 'private-copy-${index + 1}'
+    description: 'The private copy: only the named addresses reach it until the owner opens the site.'
+    ipAddressRange: cidr
+    action: 'Allow'
+  }
+]
+
+// With no range named, one that is never routed (TEST-NET-1, RFC 5737): a deployment that forgets the list is closed, not
+// open.
+var admitNoOne = [
+  {
+    name: 'private-copy-closed'
+    description: 'No address range was named: the private copy admits no one.'
+    ipAddressRange: '192.0.2.1/32'
+    action: 'Allow'
+  }
+]
 
 resource app 'Microsoft.App/containerApps@2024-03-01' = {
   name: appName
@@ -77,16 +105,7 @@ resource app 'Microsoft.App/containerApps@2024-03-01' = {
                 label: 'candidate'
               }
             ]
-        ipSecurityRestrictions: firstDeployment && !empty(probeSourceCidr)
-          ? [
-              {
-                name: 'owner-probe-only'
-                description: 'First deployment: only the owner\'s probe reaches the candidate until promotion.'
-                ipAddressRange: probeSourceCidr
-                action: 'Allow'
-              }
-            ]
-          : []
+        ipSecurityRestrictions: openToPublic ? [] : (empty(allowedSourceCidrs) ? admitNoOne : allowedOnly)
       }
       registries: [
         {
