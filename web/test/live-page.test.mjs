@@ -100,7 +100,7 @@ test("the live build writes its own directory, embeds the contract and nothing e
   const destination = await mkdtemp(join(tmpdir(), "lex-live-build-"));
   const url = new URL(`file:///${destination.replaceAll("\\", "/")}/`);
   try {
-    await buildLive(url);
+    await buildLive(url, { buildTag: "live-page-test" });
     // The home page is the search screen under the site's introduction (UX spec section 2), hydrated by the search script.
     const home = await readFile(join(destination, "index.html"), "utf8");
     assert.match(home, /data-preview-state="live-home"/, "the root is the home page");
@@ -204,7 +204,7 @@ test("every live page offers the interface languages, each named in itself; an u
 
   const destination = await mkdtemp(join(tmpdir(), "lex-live-locales-"));
   try {
-    await buildLive(new URL(`file:///${destination.replaceAll("\\", "/")}/`));
+    await buildLive(new URL(`file:///${destination.replaceAll("\\", "/")}/`), { buildTag: "live-page-locales-test" });
     await assert.rejects(readFile(join(destination, "locale-en.html")), "English chrome is reviewed: no refusal page for it");
     await assert.rejects(readFile(join(destination, "locale-fr.html")), "French chrome is reviewed: its pages are under fr/, and no refusal page stands for it");
     for (const [code, name] of [["de", "German"], ["lb", "Luxembourgish"]]) {

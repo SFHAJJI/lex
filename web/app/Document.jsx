@@ -41,12 +41,17 @@ export function SyntheticBanner() {
 export const LIVE_MARKER = 'lex-v3-live-mount';
 
 /**
- * The site's menu: each entry's copy key, its page, and the pages that are it (the home page is the search
- * screen, UX spec section 2). A work's own screens (dossier, reading, history, compare) are reached from its
- * search hit and its dossier, so the menu names the screens a reader starts from.
+ * The site's menu: each entry's copy key, its page, and the page that is it (the home page is the search screen, UX
+ * spec section 2). Every screen is in it: until search hits and dossier rows link into a work's own screens, a reader
+ * reaches reading, the dossier, history and compare from here (review of #955). The search entry is the home page, so it
+ * is current only there; search.html is the same screen under its own title.
  */
 const MENU = Object.freeze([
-  Object.freeze({ key: 'search', page: 'index.html', states: Object.freeze(['live-home', 'live-search']) }),
+  Object.freeze({ key: 'search', page: 'index.html', states: Object.freeze(['live-home']) }),
+  Object.freeze({ key: 'reading', page: 'reading.html', states: Object.freeze(['live-reading']) }),
+  Object.freeze({ key: 'dossier', page: 'dossier.html', states: Object.freeze(['live-dossier']) }),
+  Object.freeze({ key: 'history', page: 'history.html', states: Object.freeze(['live-history']) }),
+  Object.freeze({ key: 'compare', page: 'compare.html', states: Object.freeze(['live-compare']) }),
   Object.freeze({ key: 'radar', page: 'radar.html', states: Object.freeze(['live-radar']) }),
   Object.freeze({ key: 'export', page: 'export.html', states: Object.freeze(['live-export']) }),
   Object.freeze({ key: 'coverage', page: 'coverage.html', states: Object.freeze(['live-coverage']) }),
@@ -62,6 +67,8 @@ export function SiteHeader({ state, locale }) {
   const site = liveChrome().site;
   return (
     <header className="site-header" data-live={LIVE_MARKER}>
+      {/* First on the page, so a keyboard reader passes the menu in one key press (WCAG 2.4.1 bypass blocks). */}
+      <a className="skip-link" href="#main">{site.skip}</a>
       <a className="site-brand" href={localeHome(CHROME_LOCALE)}>
         <span className="site-name">{site.brand}</span>
         <span className="site-tagline">{site.tagline}</span>

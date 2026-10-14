@@ -107,7 +107,8 @@ test("the live build carries the card it is handed, as a release build will hand
   const destination = await mkdtemp(join(tmpdir(), "lex-card-build-"));
   try {
     const release = mutate((c) => { c.target = "RELEASE CARD TARGET: the release's own mounted corpus."; });
-    await buildLive(new URL(`file:///${destination.replaceAll("\\", "/")}/`), { card: release });
+    // Tagged, so this build's intermediate bundles never collide with another test file's build (review of #955).
+    await buildLive(new URL(`file:///${destination.replaceAll("\\", "/")}/`), { card: release, buildTag: "card-test" });
     const index = await readFile(join(destination, "coverage.html"), "utf8");
     assert.ok(index.includes("RELEASE CARD TARGET: the release"), "the handed card is the one printed");
     assert.ok(!index.includes("THE MOUNT IS A FIXTURE"), "and not the platform's rendered one");

@@ -51,7 +51,7 @@ test("every live page renders its chrome from the table", () => {
     const entry = copy[key];
     assert.ok(html.includes(`<title>${escaped(entry.title)} - Lex</title>`), `${key}: title`);
     // The site around the screen: its name, its menu, and the statements every page carries (no development banner).
-    for (const text of [copy.site.brand, copy.site.tagline, copy.site.search, copy.site.radar, copy.site.export, copy.site.coverage, copy.site.advice, copy.site.sources]) {
+    for (const text of [copy.site.brand, copy.site.tagline, copy.site.skip, copy.site.search, copy.site.reading, copy.site.dossier, copy.site.history, copy.site.compare, copy.site.radar, copy.site.export, copy.site.coverage, copy.site.advice, copy.site.sources]) {
       assert.ok(html.includes(escaped(text)), `${key}: the site says ${JSON.stringify(text.slice(0, 40))}`);
     }
     assert.ok(!html.includes("development build"), `${key}: no development banner`);
