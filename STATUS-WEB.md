@@ -38,7 +38,7 @@ everyone.
   workflows only from the default branch, which is still the legacy line until the branch switch; until then the
   read-back of the app's own configuration stands for it. The operator's current address is pinned again once the
   owner's Azure sign-in works.
-- **Measured**: `deploy/validate.ps1` (`main.json` is `main.bicep`'s build, lint clean, the script parses); web suite 1,096 of 1,096 (`deploy-kit.test.mjs` 11 of 11, three of them running the checks under pwsh); plan runs of `deploy.ps1 -File` against release v3-20261013T214036Z-9a5f05d3d1b4: refused with no range, with `-Public` and a range, with `203.0.113.7` and with `0.0.0.0/0`; `-AllowedCidr 203.0.113.7/32,198.51.100.0/24` names both ranges as the template's parameter.
+- **Measured**: `deploy/validate.ps1` (`main.json` is `main.bicep`'s build, lint clean, the script parses); web suite 1,109 of 1,109 on #959's merge (`deploy-kit.test.mjs` 11 of 11, three of them running the checks under pwsh); plan runs of `deploy.ps1 -File` against release v3-20261013T214036Z-9a5f05d3d1b4: refused with no range, with `-Public` and a range, with `203.0.113.7` and with `0.0.0.0/0`; `-AllowedCidr 203.0.113.7/32,198.51.100.0/24` names both ranges as the template's parameter.
 
 ## A law's page arrives whole: the server renders it (sole driver, 2026-10-14)
 
