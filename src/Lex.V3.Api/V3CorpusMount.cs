@@ -6316,11 +6316,27 @@ internal sealed partial class V3CorpusMount : IDisposable
 
     /// <summary>
     /// This service's own EU coordinates: a wording's permalink or stable coordinate (<c>/eu-eurlex/…</c>), as a path or under
-    /// its origin. They name EU law, so they are EU-shaped (review of #913: they were answered as having no publisher shape).
+    /// its origin, and the address of the page that shows one, under an interface language (<c>/fr/eu-eurlex/…</c>). They name
+    /// EU law, so they are EU-shaped (review of #913: they were answered as having no publisher shape).
     /// </summary>
-    private static bool IsEuropeCoordinate(string identifier) =>
-        identifier.StartsWith("/" + EuropePermalinkPublisher + "/", StringComparison.Ordinal) ||
-        identifier.StartsWith(EuropeCoordinateOrigin + "/" + EuropePermalinkPublisher + "/", StringComparison.Ordinal);
+    private static bool IsEuropeCoordinate(string identifier)
+    {
+        var path = identifier.StartsWith(EuropeCoordinateOrigin + "/", StringComparison.Ordinal)
+            ? identifier[EuropeCoordinateOrigin.Length..]
+            : identifier;
+        return WithoutInterfaceLanguage(path).StartsWith("/" + EuropePermalinkPublisher + "/", StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// A path on this site with the interface language its page stands under taken off (the specification of record's R61:
+    /// <c>/fr/lu-legilux/{work}</c> is the page of <c>/lu-legilux/{work}</c>), so a page's address, given as an identifier,
+    /// names the law the page shows. The coordinates and permalinks this API mints name no language (R64); only the
+    /// interface languages are taken off (<see cref="V3WebRoot.InterfaceLanguages"/>), and only once.
+    /// </summary>
+    private static string WithoutInterfaceLanguage(string path) =>
+        path.Length > 4 && path[0] == '/' && path[3] == '/' && V3WebRoot.InterfaceLanguages.Contains(path[1..3], StringComparer.Ordinal)
+            ? path[3..]
+            : path;
 
     /// <summary>The identifier forms this product and Legilux mint for Luxembourg law.</summary>
     private static bool IsLuxembourgShaped(string identifier) =>
@@ -6338,7 +6354,8 @@ internal sealed partial class V3CorpusMount : IDisposable
         host.EndsWith(".legilux.public.lu", StringComparison.OrdinalIgnoreCase);
 
     /// <summary>
-    /// The stable work coordinate <c>/lu-legilux/{work_key}</c>, on this origin or as a bare path.
+    /// The stable work coordinate <c>/lu-legilux/{work_key}</c>, on this origin or as a bare path, and the address of its
+    /// dossier page under an interface language (<c>/fr/lu-legilux/{work_key}</c>, <see cref="WithoutInterfaceLanguage"/>).
     /// Two segments only; the three-segment hash-pinned permalink is a different grammar.
     /// </summary>
     private static bool TryParseStableWorkCoordinate(string value, out string workKey)
@@ -6362,6 +6379,7 @@ internal sealed partial class V3CorpusMount : IDisposable
             return false;
         }
 
+        path = WithoutInterfaceLanguage(path);
         var segments = path.Split('/', StringSplitOptions.RemoveEmptyEntries);
         if (segments.Length != 2 ||
             !string.Equals(segments[0], "lu-legilux", StringComparison.Ordinal) ||
@@ -6580,7 +6598,8 @@ internal sealed partial class V3CorpusMount : IDisposable
 
     /// <summary>
     /// Parses an EU permalink, <c>/eu-eurlex/{celex}/{language}/{wording date}--{wording sha256}</c> with an optional
-    /// provision after #, as a path or under the product's own https origin.
+    /// provision after #, as a path or under the product's own https origin, and the address of its reading page under an
+    /// interface language (<c>/fr/eu-eurlex/…</c>, <see cref="WithoutInterfaceLanguage"/>).
     /// </summary>
     private static bool TryParseEuropePermalink(
         string value,
@@ -6618,6 +6637,7 @@ internal sealed partial class V3CorpusMount : IDisposable
             path = uri.AbsolutePath;
         }
 
+        path = WithoutInterfaceLanguage(path);
         var segments = path.Split('/', StringSplitOptions.RemoveEmptyEntries);
         if (segments.Length != 4 ||
             !string.Equals(segments[0], EuropePermalinkPublisher, StringComparison.Ordinal) ||
@@ -6798,6 +6818,10 @@ internal sealed partial class V3CorpusMount : IDisposable
         return true;
     }
 
+    /// <summary>
+    /// The pinned permalink <c>/lu-legilux/{work}/{date}--{state sha256}</c>, as a path or under this origin, and the address
+    /// of its reading page under an interface language (<c>/fr/lu-legilux/…</c>, <see cref="WithoutInterfaceLanguage"/>).
+    /// </summary>
     private static bool TryParsePinnedPermalink(
         string value,
         out string workKey,
@@ -6825,6 +6849,7 @@ internal sealed partial class V3CorpusMount : IDisposable
             return false;
         }
 
+        path = WithoutInterfaceLanguage(path);
         var segments = path.Split('/', StringSplitOptions.RemoveEmptyEntries);
         if (segments.Length != 3 ||
             !string.Equals(segments[0], "lu-legilux", StringComparison.Ordinal) ||

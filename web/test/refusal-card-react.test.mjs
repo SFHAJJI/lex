@@ -128,7 +128,9 @@ test('the React card renders the platform\'s own ambiguous_version payload, and 
 
   const markup = react(props);
   for (const candidate of payload.candidates) {
-    assert.ok(markup.includes(`href="${candidate}"`), `the card offers ${candidate} to read`);
+    // Under the page's own language, English for this bundle (R61; review of #958), never the bare address the redirect
+    // would send to the language the browser prefers.
+    assert.ok(markup.includes(`href="/en${candidate}"`), `the card offers ${candidate} to read, on the English page`);
   }
   assert.equal((markup.match(/publication date not stated by the platform/g) ?? []).length, payload.candidates.length);
   assert.equal((markup.match(/withdrawal not stated by the platform/g) ?? []).length, payload.candidates.length);

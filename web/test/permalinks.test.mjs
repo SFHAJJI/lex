@@ -30,6 +30,8 @@ test('each path of the shared table is served the page the table names, or sent 
     assert.ok(TABLE.paths.some(({ path, redirect }) => redirect !== null && PERMALINK_PATTERNS[kind].test(path)), `the table sends a ${kind} address`);
   }
   assert.equal(redirectFor('/lu-legilux/loi-2017-03-14-a439', '?a=1', 'en'), '/en/lu-legilux/loi-2017-03-14-a439?a=1', 'the query goes along');
+  assert.equal(redirectFor('/', '?from=card', 'en'), '/en/?from=card', 'from the root too (review of #958)');
+  assert.equal(redirectFor('/index.html', '?from=card', undefined), '/fr/?from=card');
 });
 
 test('a reader starts in the interface language the browser prefers of French and English, else French (R61)', () => {

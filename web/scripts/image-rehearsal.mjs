@@ -234,9 +234,10 @@ export function v2Failures(image) {
 
 /**
  * The V2 routes a running image answers, as failures (empty when V2 answers none), asked of the image's
- * own origin. Each must answer 404, except a path V3 serves itself from its live pages (`v3Files`, URL
- * path to bytes: `/` and a font V2 also had), which must answer 200 with V3's own file, byte for byte.
- * Redirects are not followed: a V2 redirect is an answer.
+ * own origin. Each must answer 404, except where V3 answers the path itself: the root and a law's address
+ * with no interface language with V3's own redirect to the reader's language, to the exact address
+ * (`redirectFor`, R61), and a file of V3's live pages (`v3Files`, URL path to bytes: a font V2 also had)
+ * with 200 and that file, byte for byte. Redirects are not followed: a V2 redirect is an answer.
  */
 export async function v2RouteFailures(origin, { v3Files = new Map(), routes = V2_ROUTES } = {}) {
   const failures = [];

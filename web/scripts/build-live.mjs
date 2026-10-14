@@ -4,15 +4,16 @@
 // gates measure against a closed list (`pages.json`) and a network gate that fails on any request,
 // and this page's whole purpose is one request to the server it came from. The shell (stylesheet,
 // fonts, favicon) is the same, copied from `src/` with the generated tokens appended, as the
-// preview build does. The pages are `index.html` (the home page: the search screen under the site's
-// introduction, script `client-live-search.js`), `coverage.html` (Trust and Coverage, script `client-live.js`),
-// `search.html` (search, script `client-live-search.js`), `dossier.html` (dossier, script
-// `client-live-dossier.js`), `reading.html` (reading, script `client-live-reading.js`) and `history.html`
-// (provision history, script `client-live-history.js`), `compare.html` (compare, script
+// preview build does, at the root with the evaluation card. The pages stand under each interface language,
+// English under `en/` and French under `fr/` (R61): `index.html` (the home page: the search screen under
+// the site's introduction, script `client-live-search.js`), `coverage.html` (Trust and Coverage, script
+// `client-live.js`), `search.html` (search, script `client-live-search.js`), `dossier.html` (dossier,
+// script `client-live-dossier.js`), `reading.html` (reading, script `client-live-reading.js`),
+// `history.html` (provision history, script `client-live-history.js`), `compare.html` (compare, script
 // `client-live-compare.js`), `radar.html` (change radar, script `client-live-radar.js`) and
-// `export.html` (export composer, script `client-live-export.js`). The same nine, in French, are under
-// `fr/`; German and Luxembourgish are `locale-de.html` and `locale-lb.html`, which say they are not
-// reviewed.
+// `export.html` (export composer, script `client-live-export.js`). The root holds no page: both servers
+// send it to a language. German and Luxembourgish are `locale-de.html` and `locale-lb.html`, at the root,
+// which say they are not reviewed.
 
 import { cp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { pathToFileURL } from "node:url";

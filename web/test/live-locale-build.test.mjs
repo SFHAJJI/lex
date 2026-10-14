@@ -1,10 +1,11 @@
 // A reviewed interface language builds its own live pages (Decision 41; the launch contract's chrome
 // line). French is reviewed (by Claude, an AI reviewer, under the owner's delegation of 2026-10-02), so
-// the product build writes the eight pages and their scripts in English at the root and in French under
-// `/fr/`. This test builds it and holds:
+// the product build writes the nine pages and their scripts in English under `/en/` and in French under
+// `/fr/` (R61). This test builds it and holds:
 // - every French page and the script that hydrates it under `/fr/`, labelled `fr`, loading its own script;
 // - the French table's chrome on every French page, and none of the English table's where the two differ;
-// - the English pages at the root exactly as the English bundle renders them;
+// - the English pages under `/en/` exactly as the English bundle renders them;
+// - each page's alternate-language links, whole, to pages the build wrote;
 // - every page and script served by the live server, the French home included;
 // - no `locale-fr.html`: French leads to its pages, German and Luxembourgish to the page that says they
 //   are not reviewed.
@@ -126,9 +127,31 @@ test("the product build writes every page in French under /fr/, in the French ta
     }
 
     const frenchFiles = await readdir(join(destination, "fr"));
+    const englishFiles = await readdir(join(destination, "en"));
     for (const [page, [key, script, render, state, formKey = key]] of Object.entries(PAGES)) {
       // English under en/, exactly as the English bundle renders each page.
       assert.equal(await readFile(join(destination, "en", page), "utf8"), render(), `en/${page}: English as the English bundle renders it`);
+
+      // Each page names itself in both languages, whole, and the page for a reader of any other language (R61, hreflang),
+      // each a page the build wrote; the reading and dossier pages name none, as either may stand at a law's address.
+      for (const language of ["en", "fr"]) {
+        const html = await readFile(join(destination, language, page), "utf8");
+        const links = [...html.matchAll(/<link rel="alternate" hrefLang="([^"]+)" href="([^"]+)"\/>/g)].map((match) => [match[1], match[2]]);
+        if (page === "reading.html" || page === "dossier.html") {
+          assert.deepEqual(links, [], `${language}/${page} names no alternate page`);
+          continue;
+        }
+        const own = page === "index.html" ? "" : page;
+        assert.deepEqual(links, [
+          ["fr", `https://law.soufien.lu/fr/${own}`],
+          ["en", `https://law.soufien.lu/en/${own}`],
+          ["x-default", page === "index.html" ? "https://law.soufien.lu/" : `https://law.soufien.lu/fr/${own}`],
+        ], `${language}/${page}: its alternates`);
+        for (const [, href] of links.filter(([hrefLang]) => hrefLang !== "x-default" || page !== "index.html")) {
+          const [, folder, file] = /^https:\/\/law\.soufien\.lu\/(en|fr)\/(.*)$/.exec(href);
+          assert.ok((folder === "fr" ? frenchFiles : englishFiles).includes(file === "" ? "index.html" : file), `${href} is a page the build wrote`);
+        }
+      }
 
       assert.ok(frenchFiles.includes(page) && frenchFiles.includes(script), `fr/${page} and fr/${script} are built`);
       const html = await readFile(join(destination, "fr", page), "utf8");

@@ -83,7 +83,7 @@ import { cspValue } from "./csp.mjs";
 import { EXPORT_WATERMARK } from "./export-build.mjs";
 import { EUROPE_TEXT_ACKNOWLEDGEMENT } from "./reading-answer.mjs";
 import { TMP_MARGIN_MEBIBYTES, tmpMebibytesFor } from "./image-run.mjs";
-import { parseSitePath } from "./permalinks.mjs";
+import { INTERFACE_LANGUAGES, parseSitePath, sameDocumentIn } from "./permalinks.mjs";
 
 export const ANSWER_DEADLINE_MS = 30_000;
 
@@ -145,7 +145,7 @@ export function pinnedCitation(citation) {
 export function journeyStepsFor({ identifier, date, anchor }) {
   return Object.freeze({
   coverage: Object.freeze({ path: "/en/coverage.html", operation: "coverage", body: null }),
-  // The home page is the search screen at the root (UX spec section 2): the same step, from the front door.
+  // The home page is the search screen at the language's root (UX spec section 2; R61): the same step, from the front door.
   home: Object.freeze({
     path: "/en/",
     cites: true,
@@ -567,6 +567,16 @@ export function journeyVerdict(observed, expected) {
     }
   }
   if (observed.console.length > 0) failures.push(`the page logged ${observed.console.length} console message(s): ${observed.console.join(" | ")}`);
+  // Once the page has loaded, its language menu leads to this same page in each interface language, the article named
+  // after # included (R61; review of #958: nothing held the rewrite).
+  if (observed.languageLinks !== undefined) {
+    const here = new URL(observed.location);
+    for (const language of INTERFACE_LANGUAGES) {
+      const expectedHref = `${sameDocumentIn(language, here.pathname)}${here.hash}`;
+      const href = observed.languageLinks?.[language] ?? null;
+      if (href !== expectedHref) failures.push(`the language menu's ${language} link leads to ${href ?? "nothing"}, not ${expectedHref}`);
+    }
+  }
   if (observed.storage.local !== 0 || observed.storage.session !== 0) failures.push("the page wrote to storage");
   if (observed.csp !== cspValue()) failures.push("the page's CSP is not the reviewed one");
   if (observed.hydrated !== "clean") failures.push(`hydration was ${observed.hydrated ?? "never reported"}, not clean`);
@@ -1026,6 +1036,8 @@ async function observe(browser, pageOrigin, step, { keyboard = false } = {}) {
         state: await evaluate("JSON.stringify(history.state)"),
       },
       cookie: await evaluate("document.cookie"),
+      // Where each reviewed language's link in the language menu leads, once the page has loaded.
+      languageLinks: await evaluate("Object.fromEntries([...document.querySelectorAll('[data-locale-nav] a[data-same-document]')].map((link) => [link.dataset.sameDocument, link.getAttribute('href')]))"),
       pageHeaders,
       then,
       userAgent: await evaluate("navigator.userAgent"),

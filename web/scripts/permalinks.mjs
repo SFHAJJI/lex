@@ -34,22 +34,26 @@ export const PERMALINK_PATTERNS = Object.freeze({
 /** The interface languages, each under its own path (R61); the first is the one a reader with no preference gets. */
 export const INTERFACE_LANGUAGES = Object.freeze(['fr', 'en']);
 
+/** A header value's optional whitespace taken off its ends: HTTP's own, space and tab, as `V3WebRoot` takes it off. */
+const trimmed = (text) => text.replace(/^[ \t]+|[ \t]+$/g, '');
+
 /**
  * The interface language a reader starts in (R61): of French and English, the one the browser's `Accept-Language` prefers
  * (the highest weight, the first listed on a tie; a weight of 0 refuses), else French. Only the primary subtag counts, so
- * `fr-LU` is French and `en-GB` English; any other language counts for neither.
+ * `fr-LU` is French and `en-GB` English; any other language counts for neither. Only spaces and tabs are whitespace, as
+ * HTTP says (review of #958: JavaScript's and .NET's own trims disagree on U+0085 and U+FEFF).
  */
 export function negotiateLanguage(acceptLanguage) {
   let best = null;
   let bestWeight = 0;
   for (const part of String(acceptLanguage ?? '').split(',')) {
-    const [range, ...parameters] = part.trim().split(';');
-    const primary = range.trim().toLowerCase().split('-')[0];
+    const [range, ...parameters] = trimmed(part).split(';');
+    const primary = trimmed(range).toLowerCase().split('-')[0];
     if (!INTERFACE_LANGUAGES.includes(primary)) continue;
     let weight = 1;
     for (const parameter of parameters) {
-      const [name, value] = parameter.trim().split('=');
-      if (name?.trim().toLowerCase() === 'q') weight = /^(?:0(?:\.\d{0,3})?|1(?:\.0{0,3})?)$/.test(value?.trim() ?? '') ? Number(value.trim()) : 0;
+      const [name, value] = trimmed(parameter).split('=');
+      if (trimmed(name ?? '').toLowerCase() === 'q') weight = /^(?:0(?:\.\d{0,3})?|1(?:\.0{0,3})?)$/.test(trimmed(value ?? '')) ? Number(trimmed(value)) : 0;
     }
     if (weight > bestWeight) {
       best = primary;
@@ -106,12 +110,12 @@ export function pageForSitePath(pathname) {
 /**
  * Where a path with no interface language is sent, for a reader whose browser says `acceptLanguage`: the root to that
  * language's home page (`/fr/`), and an address for law to the same address under that language
- * (`/fr/lu-legilux/{work}`); null for any other path. The query string goes along unchanged.
+ * (`/fr/lu-legilux/{work}`); null for any other path. The query string goes along unchanged, from the root too.
  */
 export function redirectFor(pathname, search, acceptLanguage) {
   if (typeof pathname !== 'string') return null;
   const language = negotiateLanguage(acceptLanguage);
-  if (pathname === '/' || pathname === '/index.html') return `/${language}/`;
+  if (pathname === '/' || pathname === '/index.html') return `/${language}/${search ?? ''}`;
   if (INTERFACE_LANGUAGES.includes(pathname.slice(1))) return `${pathname}/${search ?? ''}`;
   const named = parseSitePath(pathname);
   if (named === null || named.locale !== null) return null;

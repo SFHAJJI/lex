@@ -19,6 +19,7 @@ import { cspValue } from '../scripts/csp.mjs';
 import { LocaleNav, localeHome } from './LocaleNav.jsx';
 import { CHROME_LOCALE, fillText, liveChrome, livePath } from '../scripts/live-chrome.mjs';
 import { INTERFACE_LANGUAGES } from '../scripts/permalinks.mjs';
+import { CANONICAL_HOST } from '../scripts/routes.mjs';
 
 /** The marker that says, in the DOM, that nothing on this page is law. */
 export const SYNTHETIC_MARKER = 'lex-v3-synthetic-preview';
@@ -59,7 +60,7 @@ const MENU = Object.freeze([
 ]);
 
 /** The origin the site is published at, which the alternate-language links name (search engines want them whole). */
-export const SITE_ORIGIN = 'https://law.soufien.lu';
+export const SITE_ORIGIN = `https://${CANONICAL_HOST}`;
 
 /**
  * The page each live page is in every interface language, by its state, for the alternate-language links (R61, hreflang).
@@ -76,13 +77,18 @@ const ALTERNATE_PAGES = Object.freeze({
   'live-coverage': 'coverage.html',
 });
 
-/** The alternate-language links of a live page: the same page in each interface language, and the root for any other. */
+/**
+ * The alternate-language links of a live page: the same page in each interface language, and for a reader of any other
+ * language (`x-default`) the page a reader with no preference gets: the home page's root, which sends each reader to their
+ * language, and for any other page that page in French (`negotiateLanguage`'s default; review of #958: the root named a
+ * different page).
+ */
 export function alternateLinks(state) {
   const page = ALTERNATE_PAGES[state];
   if (page === undefined) return [];
   return [
     ...INTERFACE_LANGUAGES.map((language) => ({ hrefLang: language, href: `${SITE_ORIGIN}/${language}/${page}` })),
-    { hrefLang: 'x-default', href: `${SITE_ORIGIN}/` },
+    { hrefLang: 'x-default', href: page === '' ? `${SITE_ORIGIN}/` : `${SITE_ORIGIN}/${INTERFACE_LANGUAGES[0]}/${page}` },
   ];
 }
 

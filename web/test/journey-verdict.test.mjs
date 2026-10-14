@@ -88,6 +88,18 @@ test("a run that did what the page must do passes", () => {
   assert.deepEqual(journeyVerdict(refused, { origin: ORIGIN, state: "refusal", refusalCode: "no_corpus_mounted" }), []);
 });
 
+test("once loaded, the language menu leads to the same page in each language, its article included", () => {
+  const at = (path, languageLinks) => ({ ...good(), location: `${ORIGIN}${path}`, languageLinks });
+  assert.deepEqual(journeyVerdict(at("/en/coverage.html", { fr: "/fr/coverage.html", en: "/en/coverage.html" }), SUCCESS), []);
+
+  const unrewritten = journeyVerdict(at("/en/coverage.html", { fr: "/fr/", en: "/en/" }), SUCCESS);
+  assert.ok(unrewritten.some((failure) => failure === "the language menu's fr link leads to /fr/, not /fr/coverage.html"), unrewritten.join(" | "));
+  const article = journeyVerdict(at("/en/coverage.html#art_15", { fr: "/fr/coverage.html", en: "/en/coverage.html#art_15" }), SUCCESS);
+  assert.ok(article.some((failure) => failure === "the language menu's fr link leads to /fr/coverage.html, not /fr/coverage.html#art_15"), "the article named after # goes along");
+  const missing = journeyVerdict(at("/en/coverage.html", {}), SUCCESS);
+  assert.ok(missing.some((failure) => failure === "the language menu's fr link leads to nothing, not /fr/coverage.html"), "a menu without the links fails");
+});
+
 test("the empty provisional referrer a browser reports under no-referrer is no referrer", () => {
   const observed = good();
   observed.requests[2].headers.Referer = "";

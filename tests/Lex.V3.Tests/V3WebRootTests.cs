@@ -149,6 +149,9 @@ public sealed class V3WebRootTests
                 ("/index.html", "fr-LU", "/fr/"),
                 ("/en", null, "/en/"),
                 ("/lu-legilux/loi-1991-08-10-n3?from=search", "en", "/en/lu-legilux/loi-1991-08-10-n3?from=search"),
+                // The query goes along from the root too (review of #958).
+                ("/?from=card", "en", "/en/?from=card"),
+                ("/index.html?from=card", null, "/fr/?from=card"),
             })
             {
                 var context = Request("GET", target, acceptLanguage);

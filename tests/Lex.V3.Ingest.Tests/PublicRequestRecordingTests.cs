@@ -623,7 +623,9 @@ public sealed class PublicRequestRecordingTests
     private static readonly (string Rule, Regex Pattern)[] Rules =
     [
         ("the caller's address", new Regex(@"\b(RemoteIpAddress|LocalIpAddress|RemotePort|LocalPort|ClientCertificate)\b")),
-        ("the caller's headers", new Regex(@"(?<![Rr]esponse)\.Headers\b|\bHeaderNames\b|\bIHeaderDictionary\b")),
+        // One request header is read, by name, and counted on its own below: the browser's Accept-Language, which chooses
+        // the language a redirect sends a reader to (R61) and is recorded nowhere.
+        ("the caller's headers", new Regex(@"(?<![Rr]esponse)\.Headers\b(?!\.AcceptLanguage\b)|\bHeaderNames\b|\bIHeaderDictionary\b")),
         ("the agent, the referrer or a cookie", new Regex(@"\b(UserAgent|Referer|Cookies?|Authorization)\b")),
         ("forwarded-header handling", new Regex(@"\b(UseForwardedHeaders|ForwardedHeaders\w*)\b")),
         ("the connection", new Regex(@"\.Connection\b")),
@@ -744,6 +746,34 @@ public sealed class PublicRequestRecordingTests
             .Select(path => (Path.GetRelativePath(api, path).Replace('\\', '/'), Blank(File.ReadAllText(path, Encoding.UTF8))))
             .OrderBy(static value => value.Item1, StringComparer.Ordinal)
             .ToArray();
+    }
+
+    [TestMethod]
+    public void TheOneRequestHeaderTheApiReadsIsAcceptLanguageOnceToChooseARedirectsLanguage()
+    {
+        // The specification of record's R61: a reader naming no language is sent to the one their browser prefers. The
+        // header goes straight into the pure choice of a redirect (V3WebRoot.RedirectFor, NegotiateLanguage), whose
+        // answer is one of two languages, so neither it nor anything of it is kept or written anywhere (S4-A11).
+        var reads = ApiSources()
+            .SelectMany(static source => Regex.Matches(source.Code, @"\.Headers\.AcceptLanguage\b[^;]*").Select(match => (source.File, Line: match.Value)))
+            .ToArray();
+        Assert.HasCount(1, reads, string.Join("; ", reads.Select(static read => $"{read.File}: {read.Line}")));
+        Assert.AreEqual("V3WebRoot.cs", reads[0].File);
+        var call = Regex.Match(ApiSources().Single(static source => source.File == "V3WebRoot.cs").Code,
+            @"RedirectFor\(path, query, context\.Request\.Headers\.AcceptLanguage\.ToString\(\)\)");
+        Assert.IsTrue(call.Success, "the header is handed to RedirectFor and to nothing else");
+
+        Assert.IsEmpty(Findings(Blank("var choice = RedirectFor(path, query, context.Request.Headers.AcceptLanguage.ToString());")));
+        foreach (var other in new[]
+                 {
+                     "var a = context.Request.Headers.UserAgent;",
+                     "var a = context.Request.Headers[\"Accept-Language\"];",
+                     "var a = context.Request.Headers.AcceptLanguageX;",
+                     "var a = context.Request.Headers;",
+                 })
+        {
+            CollectionAssert.Contains(Findings(Blank(other)).ToArray(), "the caller's headers", other);
+        }
     }
 
     [TestMethod]

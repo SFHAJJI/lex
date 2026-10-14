@@ -3,9 +3,9 @@
 // app's public traffic, and of the release the revision was deployed from:
 // - the release must read back first, under the signing identity's public key the owner names (`releaseFailures`:
 //   the manifest's signature, every asset by size and hash, the image blob by blob and its signature);
-// - health and the page: `GET /` answers 200 with the release image's own page, byte for byte, carrying the
-//   security headers the image run probes (CSP with `frame-ancestors 'none'`, HSTS, `Referrer-Policy: no-referrer`,
-//   `nosniff`);
+// - health and the page: `GET /` sends a reader who names no language to `/fr/` (R61), with `Vary: Accept-Language`,
+//   and `GET /fr/` answers 200 with the release image's own page, byte for byte, carrying the security headers the
+//   image run probes (CSP with `frame-ancestors 'none'`, HSTS, `Referrer-Policy: no-referrer`, `nosniff`);
 // - the card: the evaluation card at its stable route is the release's card, byte for byte, as JSON;
 // - the API: `coverage` answers from the mount the release names, by its corpus digest;
 // - V2 absent: every route V2 served answers 404, except where V3 serves the same path from its own pages;

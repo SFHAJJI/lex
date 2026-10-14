@@ -29,6 +29,28 @@ public sealed class V3CorpusVerifyMountTests
     }
 
     [TestMethod]
+    public async Task TheAddressOfAPermalinksReadingPageVerifiesAsThePermalink()
+    {
+        var fixture = await MountedFixture.CreateAsync();
+        await using var cleanup = fixture;
+        using var mount = await V3CorpusMount.OpenAsync(fixture.Directory, CancellationToken.None);
+        Assert.IsNotNull(mount);
+
+        // The page that reads a permalink stands under an interface language (R61); its address names the same state.
+        foreach (var identifier in new[] { "/fr" + fixture.Permalink, "https://law.soufien.lu/en" + fixture.Permalink })
+        {
+            var envelope = await VerifyAsync(mount, new { identifier });
+            Assert.AreEqual(V3Verdicts.Answer, envelope.Verdict, identifier);
+            var body = envelope.Result!.Value;
+            Assert.AreEqual("digest_matches", body.GetProperty("verdict").GetString(), identifier);
+            Assert.AreEqual(fixture.Permalink, body.GetProperty("permalink").GetString(), "the permalink the API mints names no language");
+        }
+
+        var other = await VerifyAsync(mount, new { identifier = "/de" + fixture.Permalink });
+        Assert.AreEqual(V3Verdicts.Refuse, other.Verdict, "a language the site has no pages in is no page address");
+    }
+
+    [TestMethod]
     public async Task ThePinnedPermalinkOfTheHeldStateVerifiesByItsDigestAndNamesItsSources()
     {
         var fixture = await MountedFixture.CreateAsync();

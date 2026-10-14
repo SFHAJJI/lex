@@ -342,6 +342,22 @@
     {
       "accept": "lb-LU,fr;q=0.3",
       "language": "fr"
+    },
+    {
+      "accept": "\u0085en,fr;q=0.9",
+      "language": "fr"
+    },
+    {
+      "accept": "\ufeffen,fr;q=0.9",
+      "language": "fr"
+    },
+    {
+      "accept": "en;q=0.5\u0085,fr;q=0.4",
+      "language": "fr"
+    },
+    {
+      "accept": "\ten;q=0.5 \t, fr;q=0.4",
+      "language": "en"
     }
   ]
 }

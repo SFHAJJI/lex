@@ -232,7 +232,8 @@ internal sealed class V3WebRoot
     /// <summary>
     /// The interface language a reader starts in (R61), as <c>negotiateLanguage</c> in <c>web/scripts/permalinks.mjs</c>
     /// chooses it: of French and English, the one <paramref name="acceptLanguage"/> prefers (the highest weight, the first
-    /// listed on a tie; a weight of 0 refuses), else French. Only the primary subtag counts.
+    /// listed on a tie; a weight of 0 refuses), else French. Only the primary subtag counts, and only spaces and tabs are
+    /// whitespace, as HTTP says (review of #958: .NET's own trim and JavaScript's disagree on U+0085 and U+FEFF).
     /// </summary>
     internal static string NegotiateLanguage(string? acceptLanguage)
     {
@@ -240,8 +241,8 @@ internal sealed class V3WebRoot
         var bestWeight = 0.0;
         foreach (var part in (acceptLanguage ?? string.Empty).Split(','))
         {
-            var pieces = part.Trim().Split(';');
-            var primary = pieces[0].Trim().ToLowerInvariant().Split('-')[0];
+            var pieces = part.Trim(Whitespace).Split(';');
+            var primary = pieces[0].Trim(Whitespace).ToLowerInvariant().Split('-')[0];
             if (!InterfaceLanguages.Contains(primary))
             {
                 continue;
@@ -250,10 +251,10 @@ internal sealed class V3WebRoot
             var weight = 1.0;
             foreach (var parameter in pieces.Skip(1))
             {
-                var pair = parameter.Trim().Split('=');
-                if (string.Equals(pair[0].Trim(), "q", StringComparison.OrdinalIgnoreCase))
+                var pair = parameter.Trim(Whitespace).Split('=');
+                if (string.Equals(pair[0].Trim(Whitespace), "q", StringComparison.OrdinalIgnoreCase))
                 {
-                    var value = pair.Length > 1 ? pair[1].Trim() : string.Empty;
+                    var value = pair.Length > 1 ? pair[1].Trim(Whitespace) : string.Empty;
                     weight = Weight.IsMatch(value) ? double.Parse(value, System.Globalization.CultureInfo.InvariantCulture) : 0.0;
                 }
             }
@@ -272,7 +273,7 @@ internal sealed class V3WebRoot
     /// Where a path with no interface language is sent, for a reader whose browser says <paramref name="acceptLanguage"/>:
     /// the root (<c>/</c>, <c>/index.html</c>) to that language's home page, a language's root written without its slash to
     /// it with one, and an address for law to the same address under that language; the query (<paramref name="query"/>,
-    /// with its <c>?</c>) goes along. Null for any other path. <c>Language</c> is the home page the redirect relies on.
+    /// with its <c>?</c>) goes along, from the root too. Null for any other path. <c>Language</c> is the home page the redirect relies on.
     /// </summary>
     internal static (string Location, string Language)? RedirectFor(string path, string query, string? acceptLanguage)
     {
@@ -280,7 +281,7 @@ internal sealed class V3WebRoot
         var language = NegotiateLanguage(acceptLanguage);
         if (path is "/" or "/index.html")
         {
-            return ($"/{language}/", $"/{language}/");
+            return ($"/{language}/{query}", $"/{language}/");
         }
 
         if (path.Length > 1 && InterfaceLanguages.Contains(path[1..]))
@@ -296,6 +297,9 @@ internal sealed class V3WebRoot
 
         return ($"/{language}{path}{query}", $"/{language}/");
     }
+
+    /// <summary>A header value's optional whitespace, as HTTP has it: space and tab.</summary>
+    private static readonly char[] Whitespace = [' ', '\t'];
 
     private static readonly Regex Weight = new(@"^(?:0(?:\.[0-9]{0,3})?|1(?:\.0{0,3})?)\z", RegexOptions.CultureInvariant);
 
