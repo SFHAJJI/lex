@@ -8,8 +8,9 @@
 // browser run can wait for it rather than for a clock.
 //
 // A hit carries no text snippet (the answer holds none), so a row says which article of which work
-// and version matched, in which lane, and the permalink that pins it. The permalink is printed, not
-// linked: this origin serves no reading page for it yet.
+// and version matched, in which lane, and links to this site's reading of it at that article (the
+// permalink that pins it, `permalinks.mjs`). The row prints no digest (UX spec section 2: hit rows carry no
+// hashes); the reading shows the pin.
 //
 // An EU answer (one named EU work, `view.publisher` "eu-eurlex") is laid out with its own words: the
 // one wording the hits are in, its date and its permalink, said once above the hits; each hit's
@@ -32,7 +33,8 @@ import {
   SEARCH_QUERY_MAX,
   createSearchSession,
 } from '../scripts/live-search.mjs';
-import { ENGLISH_LANG, countedEntry, liveChrome } from '../scripts/live-chrome.mjs';
+import { CHROME_LOCALE, ENGLISH_LANG, countedEntry, liveChrome } from '../scripts/live-chrome.mjs';
+import { permalinkHref } from '../scripts/permalinks.mjs';
 
 /** The forms' labels and buttons, and this screen's sentences, from the interface copy table. */
 const FORM = liveChrome().form;
@@ -114,13 +116,13 @@ function EuropeHit({ hit }) {
   // The heading is the publisher's text, marked in the language of the wording it is in.
   return (
     <li data-lane={hit.lane}>
-      <Say
-        template={COPY.euHit}
-        values={{ heading: <strong lang={quotationLanguageTag(hit.language)}>{hit.heading}</strong>, celex: hit.celex, date: hit.wordingDate }}
-      />{' '}
+      <a href={permalinkHref(hit.permalink, CHROME_LOCALE)}>
+        <Say
+          template={COPY.euHit}
+          values={{ heading: <strong lang={quotationLanguageTag(hit.language)}>{hit.heading}</strong>, celex: hit.celex, date: hit.wordingDate }}
+        />
+      </a>{' '}
       <span className="badge">{COPY.lane[hit.lane]}</span>
-      <br />
-      <code>{hit.permalink}</code>
     </li>
   );
 }
@@ -134,7 +136,7 @@ function EuropeWording({ view }) {
       <p data-pinned-wording={wording.wordingSha256}>
         <Say
           template={COPY.euWording}
-          values={{ celex: wording.celex, language: view.language, date: wording.wordingDate, permalink: <code>{wording.permalink}</code> }}
+          values={{ celex: wording.celex, language: view.language, date: wording.wordingDate, permalink: <a href={permalinkHref(wording.permalink, CHROME_LOCALE)}><code>{wording.permalink}</code></a> }}
         />
       </p>
       <p data-date-semantics="" lang={ENGLISH_LANG}>{asSentence(view.dateSemantics)}</p>
@@ -160,10 +162,10 @@ function NotCovered({ rows }) {
 function Hit({ hit }) {
   return (
     <li data-lane={hit.lane}>
-      <Say template={COPY.hit} values={{ article: <strong>{hit.publisherId}</strong>, work: hit.workKey, date: hit.applicabilityDate }} />{' '}
+      <a href={permalinkHref(`${hit.permalink}#${encodeURIComponent(hit.publisherId)}`, CHROME_LOCALE)}>
+        <Say template={COPY.hit} values={{ article: <strong>{hit.publisherId}</strong>, work: hit.workKey, date: hit.applicabilityDate }} />
+      </a>{' '}
       <span className="badge">{COPY.lane[hit.lane]}</span>
-      <br />
-      <code>{hit.permalink}</code>
     </li>
   );
 }

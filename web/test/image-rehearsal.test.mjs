@@ -221,6 +221,27 @@ test("V2's routes must each answer 404 from the running image, or V3's own file 
       "GET /ai answered 301, not 404",
       "POST /api/ask answered 405, not 404",
     ], "V2's home in V3's place, a V2 redirect and a V2 method refusal are each caught");
+
+    // A work's address, where V2 showed its timeline, is V3's dossier page where V3 holds one (`permalinks.mjs`); V2's
+    // dated text and comparison under it are still nothing.
+    const dossier = Buffer.from("<!doctype html><title>Dossier - Lex</title>");
+    const withDossier = servedPaths([["index.html", index], ["client-live.js", Buffer.from("hydrate()")], ["dossier.html", dossier]]);
+    answering.set("GET /", { status: 200, body: index });
+    answering.delete("POST /api/ask");
+    answering.delete("GET /ai");
+    assert.deepEqual(await v2RouteFailures(origin, { v3Files: withDossier }), [
+      "GET /lu-legilux/loi-1991-08-10-n3 answered 404 with bytes that are not V3's own file at that path",
+      "GET /eu-eurlex/32016R0679 answered 404 with bytes that are not V3's own file at that path",
+    ], "V3's dossier page must be at each work's address");
+    answering.set("GET /lu-legilux/loi-1991-08-10-n3", { status: 200, body: dossier });
+    answering.set("GET /eu-eurlex/32016R0679", { status: 200, body: dossier });
+    assert.deepEqual(await v2RouteFailures(origin, { v3Files: withDossier }), [], "the dossier page at both addresses, every other V2 route 404");
+    answering.set("GET /lu-legilux/loi-1991-08-10-n3", { status: 200, body: "<h1>Timeline</h1>" });
+    answering.set("GET /lu-legilux/loi-1991-08-10-n3/2024-02-01", { status: 200, body: dossier });
+    assert.deepEqual(await v2RouteFailures(origin, { v3Files: withDossier }), [
+      "GET /lu-legilux/loi-1991-08-10-n3 answered 200 with bytes that are not V3's own file at that path",
+      "GET /lu-legilux/loi-1991-08-10-n3/2024-02-01 answered 200, not 404",
+    ], "V2's timeline at a work's address, and a page at V2's dated address (no permalink: it pins no digest), are each caught");
   } finally {
     await new Promise((resolve) => server.close(resolve));
   }

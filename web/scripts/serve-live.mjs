@@ -14,6 +14,7 @@
 // before it is read in full, and an API that cannot be reached is a transport problem the client
 // names, never a page.
 
+import { pageForSitePath } from "./permalinks.mjs";
 import { createServer, request as httpRequest } from "node:http";
 import { readFile, stat } from "node:fs/promises";
 import { extname, resolve, sep } from "node:path";
@@ -85,7 +86,8 @@ function forward(apiOrigin, path, body, deadlineMs) {
 async function serveStatic(response, root, pathname, method) {
   let relative;
   try {
-    relative = pathname === "/" ? "index.html" : decodeURIComponent(pathname.slice(1));
+    // A law's address (a permalink or a work's coordinate) is served the page that reads it (`permalinks.mjs`).
+    relative = pathname === "/" ? "index.html" : (pageForSitePath(pathname) ?? decodeURIComponent(pathname.slice(1)));
   } catch {
     problem(response, 404, "not_found");
     return;

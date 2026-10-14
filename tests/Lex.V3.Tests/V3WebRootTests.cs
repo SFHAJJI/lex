@@ -138,6 +138,85 @@ public sealed class V3WebRootTests
     }
 
     [TestMethod]
+    public async Task ALawsAddressIsServedThePageThatReadsItAsTheSitesOwnTableSays()
+    {
+        var directory = NewWebDirectory();
+        Directory.CreateDirectory(Path.Combine(directory, "fr"));
+        foreach (var page in new[] { "reading.html", "dossier.html", "fr/reading.html", "fr/dossier.html" })
+        {
+            File.WriteAllText(Path.Combine(directory, page), $"<!doctype html><p>{page}</p>");
+        }
+
+        try
+        {
+            var root = V3WebRoot.Open(directory)!;
+            using var table = System.Text.Json.JsonDocument.Parse(File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "Fixtures", "SitePaths", "site-paths.json")));
+            var rows = table.RootElement.GetProperty("paths").EnumerateArray().ToArray();
+            Assert.IsGreaterThan(30, rows.Length, "the table web/scripts/permalinks.mjs is held to");
+            foreach (var row in rows)
+            {
+                var path = row.GetProperty("path").GetString()!;
+                var page = row.GetProperty("page").ValueKind == System.Text.Json.JsonValueKind.Null ? null : row.GetProperty("page").GetString();
+                Assert.AreEqual(page is null ? null : "/" + page, V3WebRoot.PageForSitePath(path), path);
+
+                var context = Request("GET", path);
+                var served = await root.TryServeAsync(context, path, CancellationToken.None);
+                if (page is null)
+                {
+                    Assert.AreEqual(root.Paths.Contains(path), served, $"{path}: not a law's address, so served only as a file the root recorded");
+                    continue;
+                }
+
+                Assert.IsTrue(served, path);
+                Assert.AreEqual(StatusCodes.Status200OK, context.Response.StatusCode, path);
+                Assert.AreEqual("text/html; charset=utf-8", context.Response.ContentType, path);
+                Assert.AreEqual($"<!doctype html><p>{page}</p>", Body(context), path);
+                Assert.AreEqual(root.ContentSecurityPolicy, context.Response.Headers.ContentSecurityPolicy.ToString(), $"{path}: the page's own policy");
+                Assert.AreEqual("no-store", context.Response.Headers.CacheControl.ToString(), path);
+            }
+
+            const string withQuery = "/lu-legilux/loi-2017-03-14-a439?from=search";
+            var queried = Request("GET", withQuery);
+            Assert.IsTrue(await root.TryServeAsync(queried, withQuery, CancellationToken.None), "the query string is not part of the path");
+            Assert.AreEqual("<!doctype html><p>dossier.html</p>", Body(queried));
+
+            var post = Request("POST", "/lu-legilux/loi-2017-03-14-a439");
+            Assert.IsTrue(await root.TryServeAsync(post, "/lu-legilux/loi-2017-03-14-a439", CancellationToken.None));
+            Assert.AreEqual(StatusCodes.Status405MethodNotAllowed, post.Response.StatusCode, "a law's address is a page, read with GET or HEAD");
+
+            var handler = new V3ApiHandler(SyntheticApiState.Unavailable, new V3PlatformHost(), static () => DateTimeOffset.UnixEpoch, null, root);
+            var permalink = Request("GET", $"/fr/eu-eurlex/32016R0679/fra/2016-05-04--{new string('a', 64)}");
+            await handler.HandleAsync(permalink, CancellationToken.None);
+            Assert.AreEqual(StatusCodes.Status200OK, permalink.Response.StatusCode);
+            Assert.AreEqual("<!doctype html><p>fr/reading.html</p>", Body(permalink), "the API serves a permalink the reading page beside its routes");
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    [TestMethod]
+    public async Task ALawsAddressIsNotClaimedByARootWithoutThePageThatReadsIt()
+    {
+        var directory = NewWebDirectory();
+        try
+        {
+            var root = V3WebRoot.Open(directory)!;
+            foreach (var target in new[] { "/lu-legilux/loi-2017-03-14-a439", $"/eu-eurlex/32016R0679/fra/2016-05-04--{new string('a', 64)}", "/fr/eu-eurlex/32016R0679" })
+            {
+                var context = Request("GET", target);
+                Assert.IsFalse(await root.TryServeAsync(context, target, CancellationToken.None), $"{target}: this root holds no reading or dossier page");
+                Assert.AreEqual(0, context.Response.Headers.Count, target);
+            }
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    [TestMethod]
     public void ADirectoryWithAPageWithoutItsPolicyOrAFileOfAnotherTypeIsRefused()
     {
         var unguarded = NewWebDirectory("<!doctype html><p>no policy</p>");

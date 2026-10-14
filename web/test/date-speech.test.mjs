@@ -82,6 +82,7 @@ const EUROPE_ENTRIES = new Set([
   "refusalCard.europeNotes.ambiguous_version",
   "reading.europeSameDateWorks.one", "reading.europeSameDateWorks.other", "reading.europeUnplaced.one", "reading.europeUnplaced.other",
   "common.europeAnnexes.one", "common.europeAnnexes.other",
+  "reading.europePinReplaced",
 ]);
 
 function fieldsOf(node, found = new Set()) {

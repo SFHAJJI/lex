@@ -123,8 +123,9 @@ internal sealed class V3ApiHandler
             return;
         }
 
-        // The live pages, when this server holds them: only the files its web root recorded, so every
-        // other path reaches the synthetic routes exactly as before.
+        // The live pages, when this server holds them: only the files its web root recorded, and a law's
+        // address (V3WebRoot.PageForSitePath) served the page that reads it, so every other path reaches the
+        // synthetic routes exactly as before.
         if (_webRoot is not null && await _webRoot.TryServeAsync(context, rawTarget, cancellationToken).ConfigureAwait(false))
         {
             return;
