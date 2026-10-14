@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.44.1.10279",
-      "templateHash": "9424966466826615909"
+      "templateHash": "6154718822588103810"
     }
   },
   "parameters": {
@@ -60,16 +60,43 @@
         "description": "The revision serving traffic now, kept at 100 per cent; empty on the first deployment."
       }
     },
-    "probeSourceCidr": {
-      "type": "string",
-      "defaultValue": "",
+    "allowedSourceCidrs": {
+      "type": "array",
+      "defaultValue": [],
       "metadata": {
-        "description": "On a first deployment only: the one address range ingress admits (the owner's probe), as a CIDR."
+        "description": "Until the opening: the address ranges ingress admits, as CIDRs. A deployment that names none admits no one."
+      }
+    },
+    "openToPublic": {
+      "type": "bool",
+      "defaultValue": false,
+      "metadata": {
+        "description": "True only once the owner has opened the site (deploy.ps1 -Public): ingress then admits everyone."
       }
     }
   },
   "variables": {
-    "firstDeployment": "[empty(parameters('liveRevision'))]"
+    "copy": [
+      {
+        "name": "allowedOnly",
+        "count": "[length(parameters('allowedSourceCidrs'))]",
+        "input": {
+          "name": "[format('private-copy-{0}', add(copyIndex('allowedOnly'), 1))]",
+          "description": "The private copy: only the named addresses reach it until the owner opens the site.",
+          "ipAddressRange": "[parameters('allowedSourceCidrs')[copyIndex('allowedOnly')]]",
+          "action": "Allow"
+        }
+      }
+    ],
+    "firstDeployment": "[empty(parameters('liveRevision'))]",
+    "admitNoOne": [
+      {
+        "name": "private-copy-closed",
+        "description": "No address range was named: the private copy admits no one.",
+        "ipAddressRange": "192.0.2.1/32",
+        "action": "Allow"
+      }
+    ]
   },
   "resources": [
     {
@@ -93,7 +120,7 @@
             "transport": "http",
             "allowInsecure": false,
             "traffic": "[if(variables('firstDeployment'), createArray(createObject('latestRevision', true(), 'weight', 100, 'label', 'candidate')), createArray(createObject('revisionName', parameters('liveRevision'), 'weight', 100), createObject('latestRevision', true(), 'weight', 0, 'label', 'candidate')))]",
-            "ipSecurityRestrictions": "[if(and(variables('firstDeployment'), not(empty(parameters('probeSourceCidr')))), createArray(createObject('name', 'owner-probe-only', 'description', 'First deployment: only the owner''s probe reaches the candidate until promotion.', 'ipAddressRange', parameters('probeSourceCidr'), 'action', 'Allow')), createArray())]"
+            "ipSecurityRestrictions": "[if(parameters('openToPublic'), createArray(), if(empty(parameters('allowedSourceCidrs')), variables('admitNoOne'), variables('allowedOnly')))]"
           },
           "registries": [
             {

@@ -19,19 +19,28 @@ With -Apply, in order:
 2. the release image is copied into the registry out of the release by its manifest digest (`oras cp`); the app is
    deployed by that digest, never by a tag;
 3. `deploy/main.bicep` is deployed: the image by digest as a new revision with the `candidate` label and no traffic
-   while -LiveRevision keeps 100 per cent (on a first deployment ingress admits only -ProbeSourceCidr);
-4. the zero-traffic probe runs against the candidate's own URL (`web/scripts/deploy-probe.mjs --origin`), the browser
+   while -LiveRevision keeps 100 per cent. Until the owner opens the site, every deployment is of the private copy:
+   ingress admits only the -AllowedCidr ranges (the operator's address first), and the script refuses a deployment that
+   names none; after the opening, every deployment says -Public;
+4. who ingress admits is read back from the app, and must be exactly those ranges (or everyone, with -Public); if it is
+   not, the ranges are set again and read back once more, and the script stops if they still do not hold;
+5. the zero-traffic probe runs against the candidate's own URL (`web/scripts/deploy-probe.mjs --origin`), the browser
    probes included (`--browser`: the journey's real-mount steps through a browser; Chrome or Edge must be installed),
    unless -SkipBrowserProbe says they are skipped;
-5. if the probe fails, the candidate revision is deactivated (the removal step) and the script exits non-zero.
+6. if the probe fails, the candidate revision is deactivated (the removal step) and the script exits non-zero.
 Promotion (moving traffic to the candidate) is printed for the owner and never run.
 
 -Remove deactivates one revision of the app and exits: the removal step on its own.
 
+-Open is the owner's opening, on the opening day and never otherwise: it removes every address rule, so ingress admits
+everyone, and exits. From then on every deployment says -Public. (The plan's item 0.5: the first version restricted
+ingress on a first deployment only, so a second deployment would have opened the private copy to everyone.)
+
 .EXAMPLE
 pwsh -File deploy/deploy.ps1 -Subscription <id> -ResourceGroup rg-lex-v3 -EnvironmentId <managed environment id> `
   -Registry crlex.azurecr.io -IdentityResourceId <user-assigned identity id> -SigningPublicKey release-signing.pem `
-  -SignerIdentity <the release signer's identity> -Release C:\releases\v3-... -LiveRevision ca-lex-v3--v3-previous -Apply
+  -SignerIdentity <the release signer's identity> -Release C:\releases\v3-... -LiveRevision ca-lex-v3--v3-previous `
+  -AllowedCidr 203.0.113.7/32 -Apply
 #>
 [CmdletBinding(DefaultParameterSetName = 'Deploy')]
 param(
@@ -47,12 +56,15 @@ param(
     [Parameter(ParameterSetName = 'Deploy')] [string] $SignerIdentity = '',
     [Parameter(Mandatory, ParameterSetName = 'Deploy')] [string] $Release,
     [Parameter(ParameterSetName = 'Deploy')] [string] $LiveRevision = '',
-    [Parameter(ParameterSetName = 'Deploy')] [string] $ProbeSourceCidr = '',
+    [Parameter(ParameterSetName = 'Deploy')] [string[]] $AllowedCidr = @(),
+    [Parameter(ParameterSetName = 'Deploy')] [switch] $Public,
     [Parameter(ParameterSetName = 'Deploy')] [switch] $Apply,
     [Parameter(ParameterSetName = 'Deploy')] [switch] $SkipBrowserProbe,
 
     [Parameter(Mandatory, ParameterSetName = 'Remove')] [switch] $Remove,
-    [Parameter(Mandatory, ParameterSetName = 'Remove')] [string] $Revision
+    [Parameter(Mandatory, ParameterSetName = 'Remove')] [string] $Revision,
+
+    [Parameter(Mandatory, ParameterSetName = 'Open')] [switch] $Open
 )
 
 $ErrorActionPreference = 'Stop'
@@ -63,7 +75,7 @@ function Step([string] $what) { Write-Host "== $what" }
 function Run([string] $display, [scriptblock] $command) {
     # Every command is shown before it runs; without -Apply it is only shown. No command line carries a secret.
     Write-Host "  > $display"
-    if ($Apply -or $Remove) {
+    if ($Apply -or $Remove -or $Open) {
         & $command
         if ($LASTEXITCODE -ne 0) { throw "failed ($LASTEXITCODE): $display" }
     }
@@ -78,12 +90,32 @@ if ($Remove) {
     exit 0
 }
 
-if ($Registry -notmatch '^[a-z0-9]+\.azurecr\.io$') { throw "-Registry must be an Azure Container Registry login server, such as crlex.azurecr.io." }
-if (-not [string]::IsNullOrEmpty($ProbeSourceCidr) -and -not [string]::IsNullOrEmpty($LiveRevision)) {
-    throw "-ProbeSourceCidr applies to a first deployment only; with -LiveRevision the candidate carries no traffic and needs no restriction."
+if ($Open) {
+    # The owner's opening: every address rule removed, so ingress admits everyone. Never part of a deployment.
+    Step "open: $AppName admits everyone"
+    Run "az account set --subscription $Subscription" { az account set --subscription $Subscription }
+    $rules = @(az containerapp ingress access-restriction list -g $ResourceGroup -n $AppName --query "[].name" -o tsv) | Where-Object { $_ }
+    foreach ($rule in $rules) {
+        Run "az containerapp ingress access-restriction remove -g $ResourceGroup -n $AppName --rule-name $rule" {
+            az containerapp ingress access-restriction remove -g $ResourceGroup -n $AppName --rule-name $rule
+        }
+    }
+    Write-Host "  The site is open. From now on every deployment says -Public, so none restricts it again."
+    exit 0
 }
-if ([string]::IsNullOrEmpty($LiveRevision) -and [string]::IsNullOrEmpty($ProbeSourceCidr)) {
-    throw "A first deployment (no -LiveRevision) needs -ProbeSourceCidr, so that only the owner's probe reaches the candidate until promotion."
+
+if ($Registry -notmatch '^[a-z0-9]+\.azurecr\.io$') { throw "-Registry must be an Azure Container Registry login server, such as crlex.azurecr.io." }
+# Until the opening the app is the private copy, on every deployment, not only the first.
+if ($Public -and $AllowedCidr.Count -gt 0) {
+    throw "-Public admits everyone and names no address range; -AllowedCidr is for the private copy."
+}
+if (-not $Public -and $AllowedCidr.Count -eq 0) {
+    throw "Until the opening every deployment names the address ranges the private copy admits (-AllowedCidr, the operator's address first, such as 203.0.113.7/32). After the owner's opening (-Open), every deployment says -Public."
+}
+foreach ($cidr in $AllowedCidr) {
+    if ($cidr -notmatch '^((25[0-5]|2[0-4][0-9]|1?[0-9]?[0-9])\.){3}(25[0-5]|2[0-4][0-9]|1?[0-9]?[0-9])/([0-9]|[12][0-9]|3[0-2])$') {
+        throw "-AllowedCidr '$cidr' is not an IPv4 address range such as 203.0.113.7/32."
+    }
 }
 if ($Apply -and [string]::IsNullOrWhiteSpace($SignerIdentity)) {
     throw "-Apply deploys a release signed by the release signer: name its identity with -SignerIdentity. A rehearsal release is for plan runs only."
@@ -134,20 +166,69 @@ finally {
     if (Test-Path $session) { Remove-Item -Recurse -Force $session -Confirm:$false }
 }
 
-# 3. The candidate revision, with no traffic while a live revision serves.
+# 3. The candidate revision, with no traffic while a live revision serves, admitting only the named ranges until the
+# opening. The parameters go in a file, since the ranges are an array; it holds no secret.
 Step "deploy the candidate revision $suffix"
-$parameters = @(
-    "environmentId=$EnvironmentId", "appName=$AppName", "image=$image", "registryServer=$Registry",
-    "identityResourceId=$IdentityResourceId", "revisionSuffix=$suffix", "liveRevision=$LiveRevision", "probeSourceCidr=$ProbeSourceCidr"
-)
-Run "az deployment group what-if -g $ResourceGroup -f deploy/main.bicep -p $($parameters -join ' ')" {
-    az deployment group what-if -g $ResourceGroup -f (Join-Path $checkout 'deploy/main.bicep') -p @parameters
+$values = [ordered]@{
+    environmentId = $EnvironmentId; appName = $AppName; image = $image; registryServer = $Registry
+    identityResourceId = $IdentityResourceId; revisionSuffix = $suffix; liveRevision = $LiveRevision
+    allowedSourceCidrs = @($AllowedCidr); openToPublic = [bool]$Public
 }
-Run "az deployment group create -g $ResourceGroup -f deploy/main.bicep -p $($parameters -join ' ')" {
-    az deployment group create -g $ResourceGroup -f (Join-Path $checkout 'deploy/main.bicep') -p @parameters -o none
+$document = [ordered]@{
+    '$schema' = 'https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#'
+    contentVersion = '1.0.0.0'
+    parameters = [ordered]@{}
+}
+foreach ($name in $values.Keys) { $document.parameters[$name] = @{ value = $values[$name] } }
+$parametersFile = Join-Path ([System.IO.Path]::GetTempPath()) "lex-v3-deploy-$([guid]::NewGuid().ToString('N')).parameters.json"
+$shown = ($values.Keys | ForEach-Object { "$_=$(if ($values[$_] -is [array]) { '[' + ($values[$_] -join ',') + ']' } else { $values[$_] })" }) -join ' '
+try {
+    $document | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $parametersFile -Encoding utf8NoBOM
+    Run "az deployment group what-if -g $ResourceGroup -f deploy/main.bicep -p <parameters: $shown>" {
+        az deployment group what-if -g $ResourceGroup -f (Join-Path $checkout 'deploy/main.bicep') -p "@$parametersFile"
+    }
+    Run "az deployment group create -g $ResourceGroup -f deploy/main.bicep -p <parameters: $shown>" {
+        az deployment group create -g $ResourceGroup -f (Join-Path $checkout 'deploy/main.bicep') -p "@$parametersFile" -o none
+    }
+}
+finally {
+    Remove-Item -LiteralPath $parametersFile -ErrorAction SilentlyContinue
 }
 
-# 4. The zero-traffic probe against the candidate's own URL.
+# 4. Who ingress admits, read back from the app: exactly the named ranges until the opening, everyone after it.
+function AdmittedFailure {
+    $read = az containerapp show -g $ResourceGroup -n $AppName --query "properties.configuration.ingress.ipSecurityRestrictions" -o json
+    $rules = @($read | ConvertFrom-Json) | Where-Object { $_ }
+    $ranges = @($rules | ForEach-Object { $_.ipAddressRange } | Sort-Object)
+    if ($Public) {
+        if ($ranges.Count -ne 0) { return "ingress still admits only $($ranges -join ', ')" }
+        return $null
+    }
+    $actions = @($rules | ForEach-Object { $_.action } | Sort-Object -Unique)
+    $expected = @($AllowedCidr | Sort-Object)
+    if ($ranges.Count -eq 0) { return "ingress admits everyone" }
+    if ($actions.Count -ne 1 -or $actions[0] -ne 'Allow' -or (Compare-Object $ranges $expected)) {
+        return "ingress admits $($ranges -join ', ') ($($actions -join ', ')), not exactly $($expected -join ', ')"
+    }
+    return $null
+}
+if ($Apply) {
+    Step "read back who ingress admits"
+    $failure = AdmittedFailure
+    if ($failure -and -not $Public) {
+        Write-Host "  ${failure}: setting the private copy's ranges again"
+        $index = 0
+        foreach ($cidr in $AllowedCidr) {
+            $index += 1
+            az containerapp ingress access-restriction set -g $ResourceGroup -n $AppName --rule-name "private-copy-$index" --ip-address $cidr --action Allow -o none
+        }
+        $failure = AdmittedFailure
+    }
+    if ($failure) { throw "Who ingress admits is not what this deployment names: $failure. Nothing more is done; fix it before anything else." }
+    if ($Public) { Write-Host "  ingress admits everyone (-Public)" } else { Write-Host "  ingress admits only $($AllowedCidr -join ', ')" }
+}
+
+# 5. The zero-traffic probe against the candidate's own URL.
 Step "probe the candidate"
 $browserProbe = if ($SkipBrowserProbe) { @() } else { @('--browser') }
 if (-not $Apply) {
@@ -162,7 +243,7 @@ $origin = "https://$AppName---candidate.$domain"
 if ($SkipBrowserProbe) { Write-Host "  the browser probes are skipped (-SkipBrowserProbe): only the HTTP probes run" }
 & node (Join-Path $checkout 'web/scripts/deploy-probe.mjs') --origin $origin --release $releasePath --public-key $keyPath @signerProbe @browserProbe
 if ($LASTEXITCODE -ne 0) {
-    # 5. The removal step: the candidate never carried traffic (or only the owner's probe), and is deactivated.
+    # 6. The removal step: the candidate never carried traffic (or only the allowed addresses'), and is deactivated.
     Step "the probe failed: deactivate the candidate $candidate"
     az containerapp revision deactivate -g $ResourceGroup -n $AppName --revision $candidate
     throw "The candidate failed its probe and was deactivated; no traffic moved."
@@ -171,14 +252,17 @@ if ($LASTEXITCODE -ne 0) {
 Step "the candidate $candidate answers as the release holds"
 Write-Host "  Promotion is the owner's decision and is not run here."
 if ([string]::IsNullOrEmpty($LiveRevision)) {
-    Write-Host "  A first deployment already routes to the candidate behind the probe-only restriction. To open it to everyone:"
-    Write-Host "  > az containerapp ingress access-restriction remove -g $ResourceGroup -n $AppName --rule-name owner-probe-only"
+    Write-Host "  A first deployment already routes to the candidate."
 }
 else {
     Write-Host "  To move all traffic from $LiveRevision to the candidate:"
     Write-Host "  > az containerapp ingress traffic set -g $ResourceGroup -n $AppName --revision-weight $candidate=100"
 }
 Write-Host "  To remove it instead: pwsh -File deploy/deploy.ps1 -Subscription $Subscription -ResourceGroup $ResourceGroup -AppName $AppName -Remove -Revision $candidate"
+if (-not $Public) {
+    Write-Host "  The site stays private: ingress admits only $($AllowedCidr -join ', '). The opening, the owner's, on the opening day:"
+    Write-Host "  > pwsh -File deploy/deploy.ps1 -Subscription $Subscription -ResourceGroup $ResourceGroup -AppName $AppName -Open"
+}
 if (-not [string]::IsNullOrEmpty($LiveRevision)) {
     # Rollback and forward again are traffic moves, the owner's like promotion: printed, never run.
     # Each active revision runs a billed replica (1 vCPU, 2 GiB: about 23 EUR a month idle), so the budget of about 30 a

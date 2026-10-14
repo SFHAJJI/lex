@@ -55,9 +55,40 @@ test("a new revision arrives as the candidate with no traffic while a live revis
   const { activeRevisionsMode, ingress } = app.properties.configuration;
   assert.equal(activeRevisionsMode, "Multiple", "every revision is kept, so the live one serves while the candidate is probed");
   assert.match(ingress.traffic, /createObject\('revisionName', parameters\('liveRevision'\), 'weight', 100\), createObject\('latestRevision', true\(\), 'weight', 0, 'label', 'candidate'\)/);
-  // On a first deployment there is no live revision to carry the traffic, so ingress admits only the owner's probe.
-  assert.match(ingress.ipSecurityRestrictions, /if\(and\(variables\('firstDeployment'\), not\(empty\(parameters\('probeSourceCidr'\)\)\)\)/);
-  assert.match(ingress.ipSecurityRestrictions, /'action', 'Allow'/);
+});
+
+test("until the owner opens the site, every deployment admits only the named ranges, and one that names none admits no one", () => {
+  const { ingress } = app.properties.configuration;
+  // Not only on a first deployment (the plan's item 0.5: a second deployment emptied the list and opened the private copy).
+  assert.equal(ingress.ipSecurityRestrictions,
+    "[if(parameters('openToPublic'), createArray(), if(empty(parameters('allowedSourceCidrs')), variables('admitNoOne'), variables('allowedOnly')))]");
+  assert.ok(!/firstDeployment/.test(ingress.ipSecurityRestrictions), "who ingress admits does not depend on the deployment being the first");
+  assert.equal(template.parameters.openToPublic.defaultValue, false, "the site is private unless the owner's step says otherwise");
+  assert.deepEqual(template.parameters.allowedSourceCidrs.defaultValue, []);
+  const [closed] = template.variables.admitNoOne;
+  assert.deepEqual(closed, { name: "private-copy-closed", description: closed.description, ipAddressRange: "192.0.2.1/32", action: "Allow" }, "with no range named, a range that is never routed: closed, not open");
+  const allowed = template.variables.copy.find((copy) => copy.name === "allowedOnly");
+  assert.equal(allowed.count, "[length(parameters('allowedSourceCidrs'))]");
+  assert.equal(allowed.input.ipAddressRange, "[parameters('allowedSourceCidrs')[copyIndex('allowedOnly')]]");
+  assert.equal(allowed.input.action, "Allow");
+});
+
+test("the script deploys the private copy with its ranges every time, reads them back, and opens the site only on the owner's step", () => {
+  // Every deployment names its ranges, or says -Public after the opening; never neither, never both.
+  assert.match(code, /if \(-not \$Public -and \$AllowedCidr\.Count -eq 0\) \{\s*throw "Until the opening every deployment names the address ranges/);
+  assert.match(code, /if \(\$Public -and \$AllowedCidr\.Count -gt 0\) \{\s*throw/);
+  assert.match(code, /allowedSourceCidrs = @\(\$AllowedCidr\); openToPublic = \[bool\]\$Public/);
+  assert.ok(!/ProbeSourceCidr|probeSourceCidr/.test(script), "the first-deployment-only parameter is gone");
+  // Read back before the probe, and stop if the ranges do not hold.
+  const readBack = code.indexOf('Step "read back who ingress admits"');
+  assert.ok(readBack > code.indexOf("az deployment group create") && readBack < code.indexOf('Step "probe the candidate"'), "read back after the deployment, before the probe");
+  assert.match(code, /if \(\$failure\) \{ throw "Who ingress admits is not what this deployment names/);
+  // Removing the ranges is the owner's -Open alone: nowhere else does the script remove one, and promotion stays printed.
+  const opening = code.slice(code.indexOf("if ($Open) {"), code.indexOf("exit 0", code.indexOf("if ($Open) {")));
+  assert.match(opening, /az containerapp ingress access-restriction remove -g \$ResourceGroup -n \$AppName --rule-name \$rule/);
+  const elsewhere = code.replace(opening, "").split("\n").filter((line) => line.includes("access-restriction remove"));
+  assert.ok(elsewhere.every((line) => line.trim().startsWith("Write-Host")), `a range removed outside the opening: ${elsewhere.join(" | ")}`);
+  assert.match(script, /\[Parameter\(Mandatory, ParameterSetName = 'Open'\)\] \[switch\] \$Open/);
 });
 
 test("the script never logs in, never handles a secret on a command line or on disk, and never promotes", () => {
@@ -70,11 +101,13 @@ test("the script never logs in, never handles a secret on a command line or on d
   assert.match(code, /oras cp --from-oci-layout "\$\{archive\}@\$digest" "\$Registry\/\$\{Repository\}:\$tag" --to-registry-config \$registryConfig/);
   assert.match(code, /finally \{\s*if \(Test-Path \$session\) \{ Remove-Item -Recurse -Force \$session/);
   assert.ok(!/--to-password|--password(?!-stdin)/.test(code), "no password on a command line");
-  // Promotion is printed for the owner, never run: the traffic and access-restriction commands appear only inside Write-Host.
-  const promotion = script.split("\n").filter((line) => line.includes("ingress traffic set") || line.includes("access-restriction remove"));
+  // Promotion is printed for the owner, never run: the traffic commands appear only inside Write-Host. (Opening the site,
+  // the owner's -Open, is held below.)
+  const promotion = script.split("\n").filter((line) => line.includes("ingress traffic set"));
   assert.ok(promotion.length >= 2 && promotion.every((line) => line.trim().startsWith("Write-Host")), `promotion runs: ${promotion.join(" | ")}`);
-  // Without -Apply nothing runs: every Azure or registry command is inside Run, which only shows it unless -Apply.
-  assert.match(script, /if \(\$Apply -or \$Remove\) \{\s*& \$command/);
+  // Without -Apply nothing runs: every Azure or registry command is inside Run, which only shows it unless -Apply (or the
+  // removal step or the opening, each its own parameter set).
+  assert.match(script, /if \(\$Apply -or \$Remove -or \$Open\) \{\s*& \$command/);
 });
 
 test("the script deploys only a release that verifies, and only by the image's digest", () => {
@@ -84,7 +117,7 @@ test("the script deploys only a release that verifies, and only by the image's d
   assert.ok(verify > 0 && verify < firstAzure, "the release is read back under the signing identity's key before any Azure command");
   assert.match(script, /\$image = "\$Registry\/\$Repository@\$digest"/);
   assert.match(script, /\$digest -notmatch '\^sha256:\[0-9a-f\]\{64\}\$'/);
-  assert.match(script, /"image=\$image"/);
+  assert.match(script, /image = \$image;/);
   // The browser probes run unless -SkipBrowserProbe says they do not, and a skip is stated.
   assert.match(code, /\$browserProbe = if \(\$SkipBrowserProbe\) \{ @\(\) \} else \{ @\('--browser'\) \}/);
   assert.match(code, /deploy-probe\.mjs'\) --origin \$origin --release \$releasePath --public-key \$keyPath @signerProbe @browserProbe/);

@@ -4,6 +4,28 @@ Updated 2026-10-14. The web lane's progress, split out of STATUS.md (which keeps
 items and the pointers) by the standing order of 2026-10-01 13:50 UTC. Every pull request of the web lane
 updates this file, not STATUS.md.
 
+## The private copy stays private on every deployment (sole driver, 2026-10-14)
+
+The plan's item 0.5 (`C:\lex-v3\PLAN-2026-10-14.md`; its feasibility review found it): the deploy kit restricted ingress
+to the owner's address on a first deployment only (`firstDeployment && !empty(probeSourceCidr)` in `deploy/main.bicep`),
+so the next deployment, the release rehearsal's included, would have emptied the list and opened the private copy to
+everyone.
+- **Every deployment names the address ranges the private copy admits** (`deploy.ps1 -AllowedCidr`, the operator's
+  address first): the template applies them on every deployment (`allowedSourceCidrs`), and a deployment that names
+  none admits no one (one rule for a never-routed TEST-NET-1 address), so a slip fails closed, not open. The script
+  refuses a deployment with no range, and a range that is not an IPv4 address with its prefix length.
+- **Who ingress admits is read back after each deployment**, before the probe: exactly the named ranges, each `Allow`.
+  If not, the script sets them again, reads them back once more, and stops if they still do not hold.
+- **The opening is the owner's own step** (`deploy.ps1 -Open`, a parameter set of its own, never part of a
+  deployment): it removes every address rule. Every deployment after it says `-Public` (`openToPublic`), so none
+  restricts the site again by mistake; the script refuses `-Public` together with ranges.
+- **Not yet** (driver decisions, reversible): a probe from an address outside the list needs a vantage point off this
+  machine, such as a scheduled GitHub check against the private copy, and GitHub runs scheduled and dispatched
+  workflows only from the default branch, which is still the legacy line until the branch switch; until then the
+  read-back of the app's own configuration stands for it. The operator's current address is pinned again once the
+  owner's Azure sign-in works.
+- **Measured**: `deploy/validate.ps1` (`main.json` is `main.bicep`'s build, lint clean, the script parses); web suite 1,093 of 1,093 (`deploy-kit.test.mjs` 8 of 8); plan runs of `deploy.ps1` against release v3-20261013T214036Z-9a5f05d3d1b4: refused with no range, with `-Public` and a range, and with `203.0.113.7` (no prefix length); with two ranges, the plan shows both as the template's parameters, from a parameters file (a single range stays an array).
+
 ## A law's page arrives whole: the server renders it (sole driver, 2026-10-14)
 
 The specification of record's R67: "Dossier, Reading, Provision history and Coverage pages are complete HTML from the
