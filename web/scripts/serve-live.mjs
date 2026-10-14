@@ -22,7 +22,7 @@
 import { INTERFACE_LANGUAGES, pageForSitePath, redirectFor, sitePageFor } from "./permalinks.mjs";
 import { createServer, request as httpRequest } from "node:http";
 import { readFile, stat } from "node:fs/promises";
-import { extname, join, resolve, sep } from "node:path";
+import { extname, join, relative as pathRelative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import vm from "node:vm";
 
@@ -143,8 +143,9 @@ async function serveStatic(response, root, pathname, method) {
     return;
   }
   const file = resolve(root, relative);
-  // The server renderers are run here, never served.
-  if ((file !== root && !file.startsWith(root + sep)) || file.startsWith(join(root, "ssr") + sep)) {
+  // The server renderers are run here, never served: the first segment is compared without case, as Windows' and macOS's
+  // file systems compare names (review of #959: /SSR/en.js was served).
+  if ((file !== root && !file.startsWith(root + sep)) || pathRelative(root, file).split(sep)[0].toLowerCase() === "ssr") {
     problem(response, 404, "not_found");
     return;
   }

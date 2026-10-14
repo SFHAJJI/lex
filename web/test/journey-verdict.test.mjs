@@ -396,7 +396,7 @@ test("a page at a law's address the server renders asks nothing as it loads and 
     const failures = journeyVerdict({ ...observed(), ...change }, expected);
     assert.ok(failures.some((failure) => reason.test(failure)), `${what}: ${failures.join(" | ")}`);
   }
-  // With no corpus the server has no answer to render from: the page asks once, as any page does.
+  // A step that does not require a rendered page (`mustRender` unset): a page that asks once, as any page does, passes.
   const unrendered = { ...observed(), serverRendered: false, withoutScripts: undefined, answerState: "refusal", text: "no_corpus_mounted", requests: [...observed().requests, askOnce] };
   assert.deepEqual(journeyVerdict(unrendered, { origin: ORIGIN, step, state: "refusal", refusalCode: "no_corpus_mounted" }), []);
 });

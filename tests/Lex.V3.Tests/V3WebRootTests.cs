@@ -361,7 +361,7 @@ public sealed class V3WebRootTests
 
             foreach (var (what, answer) in new (string, Func<V3SitePage, CancellationToken, byte[]?>?)[]
             {
-                ("no corpus mounted", null),
+                ("no answer to ask (a root given no answer)", null),
                 ("no answer", (_, _) => null),
                 ("a render that fails", (_, _) => "{\"broken\":true}"u8.ToArray()),
             })

@@ -33,7 +33,8 @@ namespace Lex.V3.Api;
 /// <para>
 /// A law's address under an interface language is rendered from the API's own answer when the server can (R67: complete
 /// HTML, readable without JavaScript): the directory's <c>ssr/</c> holds the pages' server renderer
-/// (<see cref="V3PageRenderer"/>), which is run, never served. When there is no answer (no corpus mounted) or the render
+/// (<see cref="V3PageRenderer"/>), which is run, never served. With no corpus mounted the page renders the refusal every
+/// request gets. When there is no answer (a request the API would refuse as malformed) or the render
 /// fails, the page is served as built and asks for itself.
 /// </para>
 /// </remarks>

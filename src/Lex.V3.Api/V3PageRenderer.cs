@@ -60,17 +60,19 @@ internal sealed class V3PageRenderer : IDisposable
     private readonly IReadOnlyDictionary<string, SemaphoreSlim> _gates;
     private readonly TimeSpan _budget;
     private readonly TimeSpan _wait;
+    private readonly Func<V8ScriptEngine> _newEngine;
     private readonly Dictionary<string, Engine> _engines = new(StringComparer.Ordinal);
     private readonly HashSet<string> _unloadable = new(StringComparer.Ordinal);
     private readonly Lock _state = new();
     private bool _disposed;
 
-    private V3PageRenderer(IReadOnlyDictionary<string, string> scripts, TimeSpan budget, TimeSpan wait)
+    private V3PageRenderer(IReadOnlyDictionary<string, string> scripts, TimeSpan budget, TimeSpan wait, Func<V8ScriptEngine> newEngine)
     {
         _scripts = scripts;
         _gates = scripts.Keys.ToDictionary(language => language, _ => new SemaphoreSlim(1, 1), StringComparer.Ordinal);
         _budget = budget;
         _wait = wait;
+        _newEngine = newEngine;
     }
 
     /// <summary>The interface languages a renderer was found for.</summary>
@@ -79,9 +81,10 @@ internal sealed class V3PageRenderer : IDisposable
     /// <summary>
     /// The renderers in <paramref name="directory"/> (<c>{language}.js</c> for each interface language), or null when it holds
     /// none. Each render may take <paramref name="budget"/> (five seconds when not given) before it is stopped, and wait
-    /// <paramref name="wait"/> (two seconds when not given) for the render before it to end.
+    /// <paramref name="wait"/> (two seconds when not given) for the render before it to end. <paramref name="newEngine"/>
+    /// makes an engine (the bounded V8 engine when not given; a test hands one that fails).
     /// </summary>
-    internal static V3PageRenderer? Open(string directory, TimeSpan? budget = null, TimeSpan? wait = null)
+    internal static V3PageRenderer? Open(string directory, TimeSpan? budget = null, TimeSpan? wait = null, Func<V8ScriptEngine>? newEngine = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(directory);
         var scripts = new Dictionary<string, string>(StringComparer.Ordinal);
@@ -94,8 +97,20 @@ internal sealed class V3PageRenderer : IDisposable
             }
         }
 
-        return scripts.Count == 0 ? null : new V3PageRenderer(scripts, budget ?? TimeSpan.FromSeconds(5), wait ?? TimeSpan.FromSeconds(2));
+        return scripts.Count == 0
+            ? null
+            : new V3PageRenderer(scripts, budget ?? TimeSpan.FromSeconds(5), wait ?? TimeSpan.FromSeconds(2), newEngine ?? NewEngine);
     }
+
+    /// <summary>An engine bounded in heap and stack, holding nothing of this process.</summary>
+    private static V8ScriptEngine NewEngine() =>
+        new(
+            new V8RuntimeConstraints { MaxOldSpaceSize = HardHeapMegabytes, MaxNewSpaceSize = 32, HeapExpansionMultiplier = 2 },
+            V8ScriptEngineFlags.None)
+        {
+            MaxRuntimeHeapSize = (nuint)SoftHeapBytes,
+            MaxRuntimeStackUsage = (nuint)StackBytes,
+        };
 
     /// <summary>
     /// The page <paramref name="kind"/> (<c>reading</c>, <c>dossier</c>) at <paramref name="path"/> in
@@ -117,6 +132,11 @@ internal sealed class V3PageRenderer : IDisposable
         try
         {
             return RenderAlone(language, kind, envelopeJson, path);
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            // Whatever else fails in a render, the page is served as built and asks for itself (review of #959).
+            return null;
         }
         finally
         {
@@ -182,7 +202,10 @@ internal sealed class V3PageRenderer : IDisposable
         return result is string html && html.StartsWith("<!doctype html>", StringComparison.Ordinal) ? html : null;
     }
 
-    /// <summary>The language's engine, made on its first render and after one was retired; null when its renderer does not load.</summary>
+    /// <summary>
+    /// The language's engine, made on its first render and after one was retired; null when V8 cannot be made here or the
+    /// renderer does not load in its time.
+    /// </summary>
     private Engine? EngineFor(string language)
     {
         lock (_state)
@@ -201,18 +224,29 @@ internal sealed class V3PageRenderer : IDisposable
 
         // Made with the language's gate held, outside the lock: no second render of the language makes one meanwhile, and
         // another language's render does not wait.
-        var runtime = new V8ScriptEngine(
-            new V8RuntimeConstraints { MaxOldSpaceSize = HardHeapMegabytes, MaxNewSpaceSize = 32, HeapExpansionMultiplier = 2 },
-            V8ScriptEngineFlags.None)
-        {
-            MaxRuntimeHeapSize = (nuint)SoftHeapBytes,
-            MaxRuntimeStackUsage = (nuint)StackBytes,
-        };
+        V8ScriptEngine? runtime = null;
         try
         {
-            runtime.Execute(Prelude);
-            runtime.Execute(_scripts[language]);
-            if (runtime.Global.GetProperty("lexSsr") is ScriptObject renderer)
+            runtime = _newEngine();
+            bool interrupted;
+            using (var deadline = new CancellationTokenSource(_budget))
+            {
+                // The renderer loads within a render's time, so a load that never ends holds no gate for ever.
+                var interrupt = deadline.Token.Register(static engine => ((V8ScriptEngine)engine!).Interrupt(), runtime);
+                try
+                {
+                    runtime.Execute(Prelude);
+                    runtime.Execute(_scripts[language]);
+                }
+                finally
+                {
+                    interrupt.Dispose();
+                }
+
+                interrupted = deadline.IsCancellationRequested;
+            }
+
+            if (!interrupted && runtime.Global.GetProperty("lexSsr") is ScriptObject renderer)
             {
                 lock (_state)
                 {
@@ -228,12 +262,13 @@ internal sealed class V3PageRenderer : IDisposable
                 return null;
             }
         }
-        catch (Exception exception) when (exception is ScriptEngineException or ScriptInterruptedException)
+        catch (Exception exception) when (exception is ScriptInterruptedException || exception is not OperationCanceledException)
         {
-            // The renderer does not load: it never will, as its file is read once.
+            // The renderer does not load, or not in its time, or V8 itself cannot be made (its native library is not there for
+            // this platform; review of #959: every law page answered 500). None of it changes while the process runs.
         }
 
-        runtime.Dispose();
+        runtime?.Dispose();
         lock (_state)
         {
             _unloadable.Add(language);

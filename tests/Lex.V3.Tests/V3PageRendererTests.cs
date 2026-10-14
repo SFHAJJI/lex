@@ -157,6 +157,51 @@ public sealed class V3PageRendererTests
     }
 
     [TestMethod]
+    public async Task AnEngineThatCannotBeMadeIsNoPageAndIsNotTriedAgain()
+    {
+        // As on a platform whose V8 native library is not there: ClearScript throws when the engine is made (review of #959).
+        var directory = NewRendererDirectory(("en", Echo), ("fr", "globalThis.lexSsr = { render() { return '<!doctype html><p>fr</p>'; } };"));
+        try
+        {
+            var made = 0;
+            using var renderer = V3PageRenderer.Open(directory, newEngine: () =>
+            {
+                made++;
+                throw new TypeLoadException("Cannot load ClearScript V8 library.");
+            })!;
+            Assert.IsNull(await renderer.RenderAsync("en", "reading", "{\"word\":\"a\"}", "/en/x", CancellationToken.None), "no V8: no page, never a failure");
+            Assert.IsNull(await renderer.RenderAsync("en", "reading", "{\"word\":\"a\"}", "/en/y", CancellationToken.None), "nor on a second asking");
+            Assert.AreEqual(1, made, "and the language is not tried again");
+            Assert.IsNull(await renderer.RenderAsync("fr", "reading", "{}", "/fr/x", CancellationToken.None));
+            Assert.AreEqual(2, made, "each language tries once");
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    [TestMethod]
+    public async Task ARendererThatNeverFinishesLoadingIsStoppedAndNotTriedAgain()
+    {
+        var directory = NewRendererDirectory(("en", "for (;;) {}"));
+        try
+        {
+            using var renderer = V3PageRenderer.Open(directory, TimeSpan.FromMilliseconds(300))!;
+            var clock = Stopwatch.StartNew();
+            Assert.IsNull(await renderer.RenderAsync("en", "reading", "{}", "/en/x", CancellationToken.None), "a load that never ends is stopped");
+            Assert.IsLessThan(10_000L, clock.ElapsedMilliseconds, "at a render's time");
+            clock.Restart();
+            Assert.IsNull(await renderer.RenderAsync("en", "reading", "{}", "/en/x", CancellationToken.None));
+            Assert.IsLessThan(250L, clock.ElapsedMilliseconds, "and not loaded again");
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    [TestMethod]
     public void ADirectoryWithNoRendererIsNoRenderer()
     {
         var directory = NewRendererDirectory();

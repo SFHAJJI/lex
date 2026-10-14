@@ -34,9 +34,23 @@ and every visit waited for a second round trip before any text.
 - **The journeys hold it**: the address, permalink and stale-permalink steps must arrive carrying the answer, make no
   API request as they load, and show the same answer state in the page's own bytes, read with no script run. A page
   that never loaded (the browser's error page) is now one named failure; it was a crash of the run.
+- **The review of #959** (independent Claude subagent; it drove the real `V3PageRenderer` with the real bundle: 2,940
+  articles in 310 ms, 12,250 in 886 ms, and 49,000 (a 117 MB answer) stopped by the soft heap limit with the process
+  standing and the next render on a fresh engine; 60 concurrent law pages, none failed): two minor findings, repaired.
+  - A host where V8 cannot be made (its native library missing for the platform) answered every law page with a 500:
+    now any failure to make an engine, or to load the renderer within a render's time, leaves the language unrendered
+    for the process's life, and the page is served as built (tested through a seam that makes V8 fail, and with a
+    renderer that never finishes loading); anything else that fails in a render is no page either.
+  - On Windows and macOS, whose file systems ignore case, the live server served the renderer at `/SSR/en.js`: its
+    guard now compares the first segment without case (tested with `/SSR/` and `/Ssr/`).
+  - Adopted from its notes: a stale permalink's page names the state it shows as canonical and in its alternates,
+    never the digest it was opened at; three comments that described a no-corpus case the code does not have.
+  - The API's privacy test pins the public process's packages: ClearScript (and Newtonsoft.Json, which it brings and the
+    API does not call) is now named there, as a script engine that holds nothing of the process.
 - **Not yet** (driver decisions, reversible): the provision history and coverage pages; each law's title and description
   in the page's head; R67's indexing half (schema.org Legislation markup, robots.txt, the sitemap, noindex on search);
-  the address that resolves to a work's current version.
+  the address that resolves to a work's current version; a 503 for `no_corpus_mounted`, with the maintenance page
+  (R60); a journey that opens an EU law's address with a real EU answer.
 - **Measured**: web suite 1,101 of 1,101 (in one of five runs, made while other work loaded the machine, one test failed and did not fail again); Lex.V3.Tests 3,154 passed, 1 skipped (`V3PageRendererTests` 5 of 5, `V3WebRootTests` 11 of 11); `eng/verify-v3-tree.ps1` 1,503 tracked paths; the journeys against an API published from this branch: the fixture mount through the live server 44 of 44 and served by the API with the keyboard 44 of 44 (each of the six law-address steps with no API request), the licence-blocked mount 12 of 12, the two-state mount 2 of 2, the EU annex control mount 3 of 3.
 
 ## Every page under its language: /fr/ and /en/ (sole driver, 2026-10-14)

@@ -33,6 +33,16 @@ function rootOf(html, id) {
   return html.slice(start, html.lastIndexOf("</div>", end));
 }
 
+test("a stale permalink's page names the state it shows as its own, never the digest it was opened at", () => {
+  const stale = STATE.permalink.replace(/--[0-9a-f]{64}$/, `--${"0".repeat(64)}`);
+  const html = renderLiveReadingPage({ initial: { envelope: READING, path: `/en${stale}` } });
+  assert.ok(html.includes(`<link rel="canonical" href="https://law.soufien.lu/en${STATE.permalink}"/>`), "the canonical is the state the page shows");
+  assert.ok(html.includes(`hrefLang="fr" href="https://law.soufien.lu/fr${STATE.permalink}"`), "and so is each language's alternate");
+  assert.ok(!html.includes(`${"0".repeat(64)}"/>`), "the digest it was opened at is named nowhere in the head");
+  const exact = renderLiveReadingPage({ initial: { envelope: READING, path: `/en${STATE.permalink}` } });
+  assert.ok(exact.includes(`<link rel="canonical" href="https://law.soufien.lu/en${STATE.permalink}"/>`), "a permalink that holds names itself");
+});
+
 test("each law's address under a language is rendered from what the page itself would ask, as the shared table says", () => {
   const served = TABLE.paths.filter(({ render }) => render !== null);
   assert.ok(served.length >= 12, "the table the API is held to as well");
@@ -160,6 +170,9 @@ test("the live server renders a law's address from the API's answer, refuses to 
       const french = await fetch(`${origin}/fr/lu-legilux/loi-1991-08-10-n3`);
       assert.equal(french.status, 404, "no French renderer and no French page as built: nothing");
       assert.equal((await fetch(`${origin}/ssr/en.js`)).status, 404, "the renderer is run, never served");
+      for (const variant of ["/SSR/en.js", "/Ssr/en.js", "/en/../ssr/en.js", "/ssr%2fen.js"]) {
+        assert.equal((await fetch(`${origin}${variant}`)).status, 404, `${variant}: not under another spelling either`);
+      }
     } finally {
       await new Promise((resolve) => live.close(resolve));
     }
