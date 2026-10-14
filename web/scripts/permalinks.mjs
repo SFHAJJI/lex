@@ -12,8 +12,11 @@
 // This module is data and pure functions only: the live pages' bundles, the live server and the tests share it, and the
 // API holds the same patterns (V3WebRoot), held to these by a test.
 
-/** A Luxembourg work key as the API mints it: letters, digits, dot, underscore and hyphen, starting with a letter or digit. */
-const WORK = '[A-Za-z0-9][A-Za-z0-9._-]*';
+/**
+ * A Luxembourg work key as the API takes it (`IsWorkKey`): lower-case letters, digits, hyphen and underscore, here starting
+ * with a letter or digit, as every key the publisher's catalogue yields does. A key the API refuses opens no page.
+ */
+const WORK = '[a-z0-9][a-z0-9_-]*';
 /** A CELEX number as the API mints it (sector, year, type, number, and an optional suffix such as (01) or -20160504). */
 const CELEX = '[0-9A-Za-z][0-9A-Za-z()._-]*';
 const PIN = '([0-9]{4}-[0-9]{2}-[0-9]{2})--([0-9a-f]{64})';
@@ -68,16 +71,20 @@ export function pageForSitePath(pathname) {
   return named.locale === 'en' ? page : `${named.locale}/${page}`;
 }
 
+/** Whether a permalink (with or without `#…`) is an address this site serves a page at. */
+export function isSiteAddress(permalink) {
+  if (typeof permalink !== 'string') return false;
+  const hash = permalink.indexOf('#');
+  return parseSitePath(hash < 0 ? permalink : permalink.slice(0, hash)) !== null;
+}
+
 /**
  * A permalink the API minted (`/lu-legilux/…`, `/eu-eurlex/…`, with or without `#…`) as a link on a page in `locale`:
  * under the locale's path for any interface but English. Anything else is returned unchanged, so a link is never built
  * to an address this site does not serve.
  */
 export function permalinkHref(permalink, locale = 'en') {
-  if (typeof permalink !== 'string') return permalink;
-  const hash = permalink.indexOf('#');
-  const path = hash < 0 ? permalink : permalink.slice(0, hash);
-  if (parseSitePath(path) === null) return permalink;
+  if (!isSiteAddress(permalink)) return permalink;
   return locale === 'en' ? permalink : `/${locale}${permalink}`;
 }
 

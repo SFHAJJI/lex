@@ -93,7 +93,7 @@ test("a two-state radar lists the later state as compared with its baseline", ()
   assert.deepEqual([...markup.matchAll(/data-reason="([a-z_]+)"/g)].map((match) => match[1]), ["first_held_state", "changed"]);
   const answer = withDigests(row.answer);
   const [, later] = answer.changes;
-  assert.ok(markup.includes(`wording changed from the state of 2024-02-01 (baseline <code>${later.baseline.permalink}</code>): 1 changed, 1 added, 1 removed, 47 unchanged`),
+  assert.ok(markup.includes(`wording changed from the state of 2024-02-01 (baseline <a href="${later.baseline.permalink}"><code>${later.baseline.permalink}</code></a>): 1 changed, 1 added, 1 removed, 47 unchanged`),
     "the baseline a row was compared with is named by its permalink");
 });
 
@@ -116,14 +116,14 @@ test("an uncompared row names the states it could not choose between, or the bas
     other = `${entry.state.stable_coordinate}--${"e".repeat(64)}`;
     uncompared(entry, "ambiguous_version").candidates = [own, other];
   });
-  assert.ok(ambiguous.includes(`(candidates <code>${own}</code>, <code>${other}</code>)`), "an ambiguity lists its candidates");
+  assert.ok(ambiguous.includes(`(candidates <a href="${own}"><code>${own}</code></a>, <a href="${other}"><code>${other}</code></a>)`), "an ambiguity lists its candidates");
 
   let baseline = null;
   const differ = shown((entry) => {
     baseline = entry.baseline.permalink;
     uncompared(entry, "profiles_differ").state.rule_profile_sha256s = ["d".repeat(64)];
   });
-  assert.ok(differ.includes(`<code>${baseline}</code>`) && differ.includes("different rule profiles, so they are not compared (baseline"), "profiles that differ name the baseline");
+  assert.ok(differ.includes(`<a href="${baseline}"><code>${baseline}</code></a>`) && differ.includes("different rule profiles, so they are not compared (baseline"), "profiles that differ name the baseline");
 });
 
 test("no mount is the card naming the missing index; an unreadable answer is said as such", async () => {

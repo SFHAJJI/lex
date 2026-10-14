@@ -9,15 +9,15 @@
 // The comparison is by the publisher's article id and wording digest, and says nothing about legal
 // effect; the page says the platform's own note beside it. It is linear, not a colour-coded diff:
 // each status is a word, and the changed, added and removed articles are listed before the unchanged
-// ones, which are one disclosure away. The form's controls carry no `name`, and permalinks are
-// printed, not linked.
+// ones, which are one disclosure away. The form's controls carry no `name`, and every permalink
+// is a link to its page (`Permalink`).
 
 import { useEffect, useRef, useState } from 'react';
 
 import { RefusalCard } from './RefusalCard.jsx';
 import { COMPARE_LANGUAGES, LIVE_COMPARE_IDLE, createCompareSession } from '../scripts/live-compare.mjs';
 import { ENGLISH_LANG, countedEntry, liveChrome } from '../scripts/live-chrome.mjs';
-import { LiveAnswer, Say, StatusSentence, inEnglish, refusalCardCopyFor } from './LiveAnswer.jsx';
+import { LiveAnswer, Permalink, Say, StatusSentence, inEnglish, refusalCardCopyFor } from './LiveAnswer.jsx';
 
 /** The forms' labels and buttons, and this screen's sentences, from the interface copy table. */
 const FORM = liveChrome().form;
@@ -44,7 +44,7 @@ function Side({ label, side }) {
           ...(side.nextApplicabilityDate === null ? {} : { next: side.nextApplicabilityDate }),
           articles: side.articleCount,
           conflicts: side.validityConflictCount,
-          permalink: <code>{side.permalink}</code>,
+          permalink: <Permalink value={side.permalink} />,
         }}
       />
     </p>

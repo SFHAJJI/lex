@@ -20,10 +20,10 @@ import { useEffect, useRef, useState } from 'react';
 
 import { RefusalCard } from './RefusalCard.jsx';
 import { DOSSIER_LANGUAGES, LIVE_DOSSIER_IDLE, createDossierSession } from '../scripts/live-dossier.mjs';
-import { EuropeAnnexes, LiveAnswer, Say, StatusSentence, inEnglish, refusalCardCopyFor } from './LiveAnswer.jsx';
+import { EuropeAnnexes, LiveAnswer, Permalink, Say, StatusSentence, TableRegion, inEnglish, refusalCardCopyFor } from './LiveAnswer.jsx';
 import { quotationLanguageTag } from '../scripts/live-reading.mjs';
-import { CHROME_LOCALE, ENGLISH_LANG, countedEntry, liveChrome } from '../scripts/live-chrome.mjs';
-import { parseSitePath, permalinkHref } from '../scripts/permalinks.mjs';
+import { ENGLISH_LANG, countedEntry, liveChrome } from '../scripts/live-chrome.mjs';
+import { parseSitePath } from '../scripts/permalinks.mjs';
 
 /** The forms' labels and buttons, and this screen's sentences, from the interface copy table. */
 const FORM = liveChrome().form;
@@ -82,13 +82,14 @@ export function DossierView({ view }) {
         <Say template={COPY.heldIn} values={{ iri: <code>{view.publisherWorkIri}</code>, languages: view.availableLanguages.join(', ') }} />
       </p>
       <DossierTitles titles={view.titles} />
-      <p data-history="">
+      <p data-history="" id="dossier-states">
         {view.language === null ? (
           <Say template={countedEntry(COPY.states, view.stateCount)} values={{ count: view.stateCount, from: view.historyBegins, to: view.latestApplicabilityDate }} />
         ) : (
           <Say template={countedEntry(COPY.statesIn, view.stateCount)} values={{ count: view.stateCount, language: view.language, from: view.historyBegins, to: view.latestApplicabilityDate }} />
         )}
       </p>
+      <TableRegion labelledBy="dossier-states">
       <table>
         <thead>
           <tr>
@@ -108,11 +109,12 @@ export function DossierView({ view }) {
               <td>{state.nextApplicabilityDate ?? COMMON.noneHeld}</td>
               <td>{state.articleCount}</td>
               <td>{state.articlesNotAdmitted}</td>
-              <td><a href={permalinkHref(state.permalink, CHROME_LOCALE)}><code>{state.permalink}</code></a></td>
+              <td><Permalink value={state.permalink} /></td>
             </tr>
           ))}
         </tbody>
       </table>
+      </TableRegion>
       <p lang={ENGLISH_LANG}>{asSentence(view.articlesNotAdmittedNote)}</p>
       <h3>{COPY.notHeldHeading}</h3>
       <ul data-not-held={view.notHeld.length}>
@@ -135,9 +137,10 @@ export function EuropeDossierView({ view }) {
       <p>
         <Say template={COPY.heldIn} values={{ iri: <code>{view.publisherWorkIri}</code>, languages: view.availableLanguages.join(', ') }} />
       </p>
-      <p data-expressions={view.expressionCount}>
+      <p data-expressions={view.expressionCount} id="dossier-expressions">
         <Say template={countedEntry(COPY.euExpressions, view.expressionCount)} values={{ count: view.expressionCount }} />
       </p>
+      <TableRegion labelledBy="dossier-expressions">
       <table>
         <thead>
           <tr>
@@ -153,11 +156,12 @@ export function EuropeDossierView({ view }) {
               <td>{expression.language}</td>
               <td>{expression.wording.wordingDate}</td>
               <td>{expression.articleCount}</td>
-              <td><a href={permalinkHref(expression.wording.permalink, CHROME_LOCALE)}><code>{expression.wording.permalink}</code></a></td>
+              <td><Permalink value={expression.wording.permalink} /></td>
             </tr>
           ))}
         </tbody>
       </table>
+      </TableRegion>
       {view.expressions.map((expression) => (
         <EuropeAnnexes key={expression.expressionIri} rows={expression.annexesNotServed} language={expression.language} />
       ))}

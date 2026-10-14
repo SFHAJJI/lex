@@ -19,6 +19,7 @@ import {
   EU_SEARCH_STEP,
   HISTORY_ANCHOR,
   JOURNEY_STEPS,
+  REFLOW_WIDTH,
   answerCitations,
   journeyStepsFor,
   pinnedStep,
@@ -169,6 +170,19 @@ test("each way a search run can fail is a failure, named", () => {
     const failures = journeyVerdict(observed, SEARCH);
     assert.ok(failures.some((failure) => reason.test(failure)), `${what}: ${failures.join(" | ")}`);
   }
+});
+
+test("a page that scrolls sideways at 320 CSS pixels fails, naming what stands out past the window", () => {
+  assert.equal(REFLOW_WIDTH, 320, "WCAG 2.2, 1.4.10: 320 CSS pixels");
+  const fits = { ...goodSearch(), reflow: { width: 305, scrollWidth: 305, offenders: [] } };
+  assert.deepEqual(journeyVerdict(fits, SEARCH), [], "a page as wide as its window passes");
+  const wide = { ...fits, reflow: { width: 305, scrollWidth: 423, offenders: ["table in the answer 411 px", "tr in the answer 407 px"] } };
+  assert.ok(journeyVerdict(wide, SEARCH).includes("at 320 CSS pixels the page scrolls sideways (423 px of content in a 305 px window): table in the answer 411 px, tr in the answer 407 px"));
+  const unnamed = { ...fits, reflow: { width: 305, scrollWidth: 306, offenders: [] } };
+  assert.ok(journeyVerdict(unnamed, SEARCH).some((failure) => /scrolls sideways \(306 px .*\): no single element/.test(failure)), "a pixel over, named even when no one element stands out");
+  // Fails closed (review of #957): a measurement not taken, or taken in a wider window, is no evidence.
+  assert.ok(journeyVerdict({ ...fits, reflow: { failed: true } }, SEARCH).includes("the page was not measured at 320 CSS pixels"));
+  assert.ok(journeyVerdict({ ...fits, reflow: { width: 1265, scrollWidth: 1265, offenders: [] } }, SEARCH).includes("the page was measured in a 1265 px window, not one of at most 320"));
 });
 
 test("a coverage run is still judged as one, with no body required", () => {

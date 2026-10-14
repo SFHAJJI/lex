@@ -18,7 +18,30 @@
 
 import { Fragment } from 'react';
 
-import { ENGLISH_LANG, countedEntry, fillParts, liveChrome } from '../scripts/live-chrome.mjs';
+import { CHROME_LOCALE, ENGLISH_LANG, countedEntry, fillParts, liveChrome } from '../scripts/live-chrome.mjs';
+import { isSiteAddress, permalinkHref } from '../scripts/permalinks.mjs';
+
+/**
+ * A permalink as every live page prints it: its text as code, inside a link to this site's page for it (`permalinks.mjs`),
+ * under the page's interface language, when it is an address this site serves; an address it does not serve stays text,
+ * so no link leads nowhere. `linked` false keeps it text on a page a link would make the reader lose work on.
+ */
+export function Permalink({ value, linked = true }) {
+  return linked && isSiteAddress(value) ? <a href={permalinkHref(value, CHROME_LOCALE)}><code>{value}</code></a> : <code>{value}</code>;
+}
+
+/**
+ * A table too wide for a small phone, in a region that scrolls sideways on its own (WCAG 2.2, 1.4.10: two-dimensional
+ * content may scroll; the page must not). The region is in the tab order, so a keyboard can scroll it, and is named by
+ * the sentence above the table (`labelledBy`, that sentence's id), so it needs no words of its own.
+ */
+export function TableRegion({ labelledBy, children }) {
+  return (
+    <div className="table-scroll" role="region" tabIndex={0} aria-labelledby={labelledBy}>
+      {children}
+    </div>
+  );
+}
 
 export function Say({ template, values }) {
   return fillParts(template, values).map((part, index) => (typeof part === 'string' ? part : <Fragment key={index}>{part}</Fragment>));

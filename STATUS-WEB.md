@@ -4,6 +4,35 @@ Updated 2026-10-14. The web lane's progress, split out of STATUS.md (which keeps
 items and the pointers) by the standing order of 2026-10-01 13:50 UTC. Every pull request of the web lane
 updates this file, not STATUS.md.
 
+## Every answer fits a small phone; every permalink opens its page (sole driver, 2026-10-14)
+
+The specification of record asks for WCAG 2.2 AA with layouts at 320, 768 and 1280 pixels (R62), and #955 measured only
+the pages before an answer. The journeys now measure every page after its answer:
+- **Reflow at 320 CSS pixels** (WCAG 2.2, 1.4.10): each journey step, once its page has answered, lays the page out again
+  in a window 320 pixels wide and fails if the page scrolls sideways, naming what stands out past the window
+  (`REFLOW_WIDTH`, measured last, so nothing else is read at that width). A table may scroll inside its own region.
+  Measured first over the five journey configurations: three tables failed, the dossier's states (411 pixels in a
+  305-pixel window), the EU dossier's expressions (301) and the provision history (413).
+- **The three tables scroll in a region of their own** (`TableRegion`): in the tab order, so a keyboard can scroll it,
+  and named by the sentence above the table (`aria-labelledby`), so no new words, and no new French, were needed.
+- **Every printed permalink is a link** (`Permalink`, `isSiteAddress`): history, compare and the changes radar now
+  link theirs, as the reading, dossier and search pages do since #956 (and the search page's list of candidate states);
+  a permalink this site serves no page at stays text, so no link leads nowhere. The export composer is the exception:
+  its pins last only while the page is open, so its permalinks stay text (since #956 its quotes' permalinks were links,
+  through the reading's shared evidence line; no longer).
+- **The notes of #956's review** (independent Claude subagent: merge, no material finding): the pin notice's spacing
+  tokens had no fallback, so it rendered with no padding (fixed); an `#article` the pinned state does not hold now
+  brings the state into view; the Luxembourg work pattern now matches the API's `IsWorkKey` (lower case), so
+  `/lu-legilux/LOI-1` opens no page (the shared table has 44 paths). Left for later: an EU address and permalink step
+  in the EU annex journey (the reviewer walked the EU path by hand on the annex and population mounts).
+- **The review of #957** (independent Claude subagent): changes requested, repaired in one round. The export
+  composer's JSON, once opened ("The JSON as it will be saved"), made the page 9,518 pixels wide at 320 and wider than
+  the window at 768 and 1280, because the check measured with every disclosure closed: the JSON now wraps, and the check
+  opens every disclosure in the answer before it measures, fails when the measurement was not taken at 320, and names a
+  box whose own content overflows it. This file's first account said the export composer links its permalinks and that
+  the API's code was unchanged; neither was true.
+- **Measured**: web suite 1,091 of 1,091; the journeys against the API published from this branch's C# (the work pattern in `V3WebRoot` changed here), each page measured at 320 CSS pixels with every disclosure in its answer open: the fixture mount through the live server 44 of 44 and served by the API with the keyboard 44 of 44, the licence-blocked mount 12 of 12, the two-state mount 2 of 2, the EU annex control mount 3 of 3 by both servers.
+
 ## Every law address opens its page; search results open the text (sole driver, 2026-10-14)
 
 The site printed permalinks and served nothing at them, and a search hit led nowhere (the review of #955: screens nothing
@@ -43,8 +72,7 @@ linked to). The UX specification's URLs (section 1: a dossier at `/{publisher}/{
 - **French**: the two notices went through a second addendum of 2026-10-14 of the French review (both approved; a link
   "épingle" what it pins) (`C:\lex-v3\lanes\fr-review\review.md`).
 - **Measured**: web suite 1,088 of 1,088; Lex.V3.Tests 3,145 passed, 1 skipped; the journeys run locally against the API published from this branch: the fixture mount through the live server 44 of 44, served by the API with the keyboard 44 of 44, the licence-blocked mount 12 of 12 (each new step passing on each, and refusing `no_corpus_mounted` with no mount); Chrome at 390 and 1280 CSS pixels: a permalink scrolls to its article, a stale one to its notice, the French permalink to its article.
-- **Next on this road** (driver decisions, reversible): every answer measured at 320 CSS pixels (the dossier's states
-  table is 411 pixels wide at a 390-pixel phone, before this change too); after a reading resolves from the form, its
+- **Next on this road** (driver decisions, reversible): after a reading resolves from the form, its
   permalink written into the address (UX spec section 4: "the resolved pair is written into the URL"); the interface
   language switch keeping the reader on the same document; the reading server-rendered at its permalink for readers
   without scripts (the specification of record's draft asks for pages readable without JavaScript).

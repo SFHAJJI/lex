@@ -15,7 +15,7 @@
     },
     {
       "path": "/lu-legilux/a..b",
-      "page": "dossier.html"
+      "page": null
     },
     {
       "path": "/eu-eurlex/32016R0679",
@@ -159,6 +159,22 @@
     },
     {
       "path": "/lu-legilux/loi-2017-03-14-a439\n",
+      "page": null
+    },
+    {
+      "path": "/lu-legilux/LOI-2017-03-14-A439",
+      "page": null
+    },
+    {
+      "path": "/lu-legilux/loi.2017",
+      "page": null
+    },
+    {
+      "path": "/lu-legilux/code_civil",
+      "page": "dossier.html"
+    },
+    {
+      "path": "/lu-legilux/Loi-2017-03-14-a439/2024-01-01--0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
       "page": null
     }
   ]
