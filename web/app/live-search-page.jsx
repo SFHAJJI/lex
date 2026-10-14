@@ -19,14 +19,15 @@ export function liveSearchTree() {
   return <LiveSearch contract={LIVE_CONTRACT} />;
 }
 
-export function renderLiveSearchPage() {
-  const copy = liveChrome().search;
+/** The search page; `home` renders it as the site's home page, under the site's introduction (UX spec section 2). */
+function renderSearchDocument({ home }) {
+  const copy = home ? liveChrome().home : liveChrome().search;
   return renderHydratableDocument(
     <Document
-      state="live-search"
+      state={home ? 'live-home' : 'live-search'}
       title={copy.title}
-      shell="dev"
-      density={skinFor('dev').density}
+      shell="ask"
+      density={skinFor('ask').density}
       banner="live"
     >
       <p className="eyebrow">{copy.eyebrow}</p>
@@ -36,4 +37,13 @@ export function renderLiveSearchPage() {
       <script src={livePath('client-live-search.js')} defer />
     </Document>,
   );
+}
+
+export function renderLiveSearchPage() {
+  return renderSearchDocument({ home: false });
+}
+
+/** The home page: the same search, hydrated by the same script, under the site's own heading. */
+export function renderLiveHomePage() {
+  return renderSearchDocument({ home: true });
 }

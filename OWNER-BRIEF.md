@@ -1,40 +1,35 @@
 # Lex V3: the owner's brief
 
-Updated 2026-10-13 at 22:45 UTC by the driver. The driver updates this file in the first pull request of each
+Updated 2026-10-14 at 07:00 UTC by the driver. The driver updates this file in the first pull request of each
 day and whenever a run starts, ends or stops. At most 40 lines, plain words, no hashes. The detail stays in
 STATUS-WEB.md and STATUS-DATA.md; the acceptance list is LAUNCH-CONTRACT.md.
 
-## What a user can do today
+## Where V3 stands
 
-Nothing in public yet. V3 is not deployed, and V2 at law.soufien.lu stays down (its Azure subscription is still
-disabled). On this machine the API and the eight screens work over test data and over one real bounded mount.
+- The engine underneath is solid: the EU and Luxembourg law collected, every quote checkable against its official
+  source, dates and refusals 100 per cent right in the checks, and a signed release that rebuilds identically.
+- You deployed that release to Azure on 14 October; it answers only from your PC (no public traffic yet).
+- What a visitor saw was not a product: a technical coverage report as the home page, no menu, a "development
+  build" banner. The checklist the driver followed asked only that the screens exist. That was the driver's miss.
+- Your goal, as now held: an ideal public website built to a legitimate, consistent specification: a legal
+  research site (search, read the law at any date) with the assistant as one feature.
 
-## What is running
+## What is happening now
 
-- Both populations are fetched: the EU (5 October) and Luxembourg (12 October, 260,235 records, 11,145 documents).
-- The combined data set was rebuilt with the Luxembourg search fix and passes every quality check (all at 100 per
-  cent). The browser walk-throughs over the real data pass (29 of 29), and the server opens it in under 1 GB of memory.
-- Built twice from the stored copies, the data set came out identical both times (the launch's stability check).
-- The release is done: the server package, signed with your release key, built twice identically, and all 29
-  walk-throughs pass on this machine, the privacy check included. Two faults were found and fixed on the way: the test
-  harness left old copies running, and the server briefly wrote scratch files while answering (pull request 953).
-- The hidden test copy on Azure (reachable only from this machine, no public traffic) is ready to deploy, but the
-  tool that runs the driver refused the deploy command as an action outside this machine. It needs your yes in the
-  tool, or you run the command kept in the releases folder beside the release (C:\lex-v3\releases).
-- Azure is ready: pay-as-you-go, with the 30 a month budget alerts, the registry, the hosting environment and the
-  key vault holding the release signing key.
-- The second small canary ran tonight (414 requests to the live sites, within its limit) with a Luxembourg law
-  whose dates are published. Two of the three history checks are shown on live data; the publisher changed nothing
-  between the two builds, so the changed-text check is shown on test data only.
+- First fix (this pull request): a real front door. The home page is search, every page has a header with a menu
+  and a footer saying "documentation, not legal advice; only the published texts are authentic", the development
+  banner is gone, and the pages use a readable style that works on phones.
+- A review of your 84 specification files is writing one consistent "spec of record": every contradiction,
+  outdated fact and weak requirement ruled on, with your decisions listed and a recommendation for each.
+- A second review checks every area of the specification against what is built; the plan to the public opening
+  will be written from both, with honest dates.
+- The domain: the new address book for soufien.lu is ready; your registrar is switching to it (up to a day).
 
-## What waits on the owner
+## What waits on you
 
-- At go-live: point soufien.lu's name servers to the new address book the driver will create (the old one is in
-  V2's disabled subscription). Optional: Azure Support can clear the Gmail account's 6.10 EUR invoice.
-- Allow the hidden Azure deploy (see above), then the word to go live once the hidden copy passes its probes.
-- Optional, money: after go-live the previous version is switched off (about 26 EUR a month in all; going back to it then
-  takes about a minute). Keeping it running for an instant switch back would be about 49 EUR a month.
+- Nothing new today. Coming with the plan: a few decisions (the public wording, the assistant's cost and when it
+  switches on, and who labels the assistant's 120 test questions, which the specification requires a person to do).
 
 ## Launch
 
-Target 7 November 2026. It holds: the data and the release pass their checks; the hidden Azure copy is next.
+The public opening waits until the site matches the specification of record; the plan will give the date.

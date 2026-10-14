@@ -1,8 +1,49 @@
 # Lex V3 status: the web lane
 
-Updated 2026-10-13. The web lane's progress, split out of STATUS.md (which keeps the heads, the owner's open
+Updated 2026-10-14. The web lane's progress, split out of STATUS.md (which keeps the heads, the owner's open
 items and the pointers) by the standing order of 2026-10-01 13:50 UTC. Every pull request of the web lane
 updates this file, not STATUS.md.
+
+## The public front door (sole driver, 2026-10-14)
+
+The owner opened the deployed candidate and saw no product: the home page was the Trust and Coverage report, no page
+linked to another, and every page carried a "Live development build ... not a release" banner in the Gateway's
+monospace skin. The launch contract asks only that the screens exist and the journeys pass; the ideal UX
+specification (35-ideal-ux.md, the product the pack calls TENEUR) was never the target. This slice is the first of
+the work to that specification (a consolidated specification of record and a plan are being written from the pack).
+- **Home is search** (UX spec section 2, Screen 1): `index.html` renders the search screen under the site's
+  introduction (`renderLiveHomePage`, hydrated by the search script); Trust and Coverage moved to `coverage.html`;
+  `search.html` stays. The journeys' coverage step is `/coverage.html`.
+- **The site around every live screen** (`Document.jsx`): a header with the name, the menu (Search, Changes,
+  Export, What this site holds; the current one marked) and the interface languages, carrying the live marker the
+  banner carried; a footer with the product's statements (documentation, not legal advice; consolidated texts have
+  no legal effect, the Journal officiel du Grand-Duché de Luxembourg (Mémorial A) and the Official Journal of the
+  European Union are authentic; the sources). English and reviewed French.
+- **The development banner is gone**; live pages use the Ask skin (comfortable density, Inter and Source Serif 4)
+  instead of the Gateway's monospace; forms have one layout (label above field, full width, a primary button,
+  visible focus, dark mode); the evaluation card's tables scroll inside labelled regions.
+- **Measured** with Chrome's device emulation: home, search, coverage, dossier, reading, history, compare, radar,
+  export and the French home fit 390 CSS pixels with no horizontal overflow (coverage did not: its card tables were
+  519 px wide); the home page fits 320. Web suite 1,077 of 1,077.
+- **The review of #955** (independent Claude subagent): changes requested, repaired in one round.
+  - The French footer used "conseil juridique", "valeur légale" and "chaque citation", which broke the French review's
+    own terms (T10: "consultation juridique"; "effet juridique"; a "citation" is the reference string). The French now
+    says "Documentation, et non consultation juridique. Les textes consolidés n’ont aucun effet juridique", "chaque
+    article cité", and "détient" for held. Every new French entry went through the French review's addendum of
+    2026-10-14 (6 of 19 changed: "droit de l’UE", "acte", "Modifications", and the authentic Luxembourg publication named
+    as the loi du 23 décembre 2016 names it, "Journal officiel du Grand-Duché de Luxembourg (Mémorial A)", in both
+    languages) (`C:\lex-v3\lanes\fr-review\review.md`).
+  - "Luxembourg and EU law, as it stood on any date" claimed more than the site holds (UX spec section 14: never imply
+    coverage beyond what is disclosed). The tagline now reads "The Luxembourg and EU law this site holds, at a date you
+    choose", and the home page adds "Where the site does not hold a text or a date, it says so". This is public wording,
+    so it is a driver decision under the owner's authorisation of 2026-10-14, and the owner may revise it.
+  - The home page promised screens nothing linked to: the menu now reaches every screen (Search, Read, Dossier, History,
+    Compare, Changes, Export, What this site holds) until search hits and dossier rows link into a work's screens.
+  - The Search entry is current only on the home page; a skip link leads past the menu (WCAG 2.4.1); the journeys gain a
+    `home` step (the search step at `/`), so hydration, CSP, console and one-request checks run on the front door in
+    CI, the image rehearsal and the deploy probe.
+  - Two tests that built the live pages raced on shared bundles (failing about 7 runs in 10 when run together, on the
+    base too); each now builds under its own tag.
 
 ## Replay G1, G3 and G4 over a real chained canary (sole driver, 2026-10-13)
 

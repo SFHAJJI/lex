@@ -31,7 +31,7 @@ test("the live page is the loading state under the live banner, with its own scr
   assert.match(html, /<script src="\/client-live.js" defer=""><\/script>/);
   assert.ok(!html.includes('src="/client.js"'), "the preview pages' bundle is not this page's");
   assert.deepEqual(LIVE_CONTRACT, census.contract, "the contract is the census's, as the platform rendered it");
-  assert.match(html, /<title>Trust and Coverage - Lex V3 live<\/title>/, "the title does not call a live page a preview");
+  assert.match(html, /<title>Trust and Coverage - Lex<\/title>/, "the title does not call a live page a preview");
 });
 
 test("the tree the browser hydrates is the tree the server rendered (review of #765)", () => {
@@ -100,8 +100,14 @@ test("the live build writes its own directory, embeds the contract and nothing e
   const destination = await mkdtemp(join(tmpdir(), "lex-live-build-"));
   const url = new URL(`file:///${destination.replaceAll("\\", "/")}/`);
   try {
-    await buildLive(url);
-    const index = await readFile(join(destination, "index.html"), "utf8");
+    await buildLive(url, { buildTag: "live-page-test" });
+    // The home page is the search screen under the site's introduction (UX spec section 2), hydrated by the search script.
+    const home = await readFile(join(destination, "index.html"), "utf8");
+    assert.match(home, /data-preview-state="live-home"/, "the root is the home page");
+    assert.match(home, /<script src="\/client-live-search.js" defer=""><\/script>/, "the home page is hydrated by the search script");
+    assert.match(home, new RegExp(`data-live="${LIVE_MARKER}"`));
+    // Trust and Coverage, with its card, is coverage.html.
+    const index = await readFile(join(destination, "coverage.html"), "utf8");
     const bundle = await readFile(join(destination, "client-live.js"), "utf8");
     assert.match(index, new RegExp(`data-live="${LIVE_MARKER}"`));
     for (const asset of ["styles.css", "favicon.svg"]) await readFile(join(destination, asset));
@@ -182,7 +188,8 @@ test("the live build writes its own directory, embeds the contract and nothing e
 test("every live page offers the interface languages, each named in itself; an unreviewed one leads to localization_unavailable", async () => {
   for (const render of [renderLiveCoveragePage, renderLiveSearchPage, renderLiveReadingPage, renderLiveExportPage]) {
     const html = render();
-    const nav = html.slice(html.indexOf('<nav aria-label="Interface language"'), html.indexOf("</nav>") + 6);
+    const start = html.indexOf('<nav aria-label="Interface language"');
+    const nav = html.slice(start, html.indexOf("</nav>", start) + 6);
     assert.deepEqual([...nav.matchAll(/<a href="([^"]+)" lang="([a-z]+)" hrefLang="([a-z]+)"[^>]*>([^<]+)<\/a>/g)].map((m) => [m[1], m[2], m[3], m[4]]), [
       ["/", "en", "en", "English"],
       // The name in its own language; the destination's language as hrefLang: French for the reviewed French
@@ -197,7 +204,7 @@ test("every live page offers the interface languages, each named in itself; an u
 
   const destination = await mkdtemp(join(tmpdir(), "lex-live-locales-"));
   try {
-    await buildLive(new URL(`file:///${destination.replaceAll("\\", "/")}/`));
+    await buildLive(new URL(`file:///${destination.replaceAll("\\", "/")}/`), { buildTag: "live-page-locales-test" });
     await assert.rejects(readFile(join(destination, "locale-en.html")), "English chrome is reviewed: no refusal page for it");
     await assert.rejects(readFile(join(destination, "locale-fr.html")), "French chrome is reviewed: its pages are under fr/, and no refusal page stands for it");
     for (const [code, name] of [["de", "German"], ["lb", "Luxembourgish"]]) {

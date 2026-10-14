@@ -25,8 +25,8 @@ export function renderLiveComparePage() {
     <Document
       state="live-compare"
       title={copy.title}
-      shell="dev"
-      density={skinFor('dev').density}
+      shell="ask"
+      density={skinFor('ask').density}
       banner="live"
     >
       <p className="eyebrow">{copy.eyebrow}</p>

@@ -66,7 +66,7 @@ function good() {
     answerState: "success",
     text: `Coverage ${CORPUS} ${INDEX}`,
     requests: [
-      { url: `${ORIGIN}/`, method: "GET", headers: {} },
+      { url: `${ORIGIN}/coverage.html`, method: "GET", headers: {} },
       { url: `${ORIGIN}/client-live.js`, method: "GET", headers: {} },
       { url: `${ORIGIN}/api/v3/coverage`, method: "POST", headers: { "Content-Type": "application/json" }, headersSent: true },
     ],
@@ -171,8 +171,10 @@ test("each way a search run can fail is a failure, named", () => {
 
 test("a coverage run is still judged as one, with no body required", () => {
   assert.equal(JOURNEY_STEPS.coverage.body, null);
-  assert.deepEqual(journeyVerdict({ ...good(), location: `${ORIGIN}/` }, SUCCESS), []);
-  assert.ok(journeyVerdict({ ...good(), location: `${ORIGIN}/?x=1` }, SUCCESS).some((failure) => /ended at/.test(failure)));
+  // Trust and Coverage is coverage.html; the root is the home page (the search screen).
+  assert.deepEqual(journeyVerdict({ ...good(), location: `${ORIGIN}/coverage.html` }, SUCCESS), []);
+  assert.ok(journeyVerdict({ ...good(), location: `${ORIGIN}/coverage.html?x=1` }, SUCCESS).some((failure) => /ended at/.test(failure)));
+  assert.ok(journeyVerdict({ ...good(), location: `${ORIGIN}/` }, SUCCESS).some((failure) => /ended at/.test(failure)), "the root is no longer Trust and Coverage");
 });
 
 test("a dossier run is held to its own page, operation and exact body", () => {

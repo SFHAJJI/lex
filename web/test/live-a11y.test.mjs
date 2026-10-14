@@ -47,6 +47,7 @@ const SCREENS = [
 ];
 
 const PAGES = {
+  home: app.renderLiveHomePage,
   coverage: app.renderLiveCoveragePage, search: app.renderLiveSearchPage, dossier: app.renderLiveDossierPage,
   reading: app.renderLiveReadingPage, history: app.renderLiveHistoryPage, compare: app.renderLiveComparePage,
   radar: app.renderLiveRadarPage, export: app.renderLiveExportPage,

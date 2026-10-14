@@ -16,6 +16,7 @@ import {
   renderLiveDossierPage,
   renderLiveExportPage,
   renderLiveHistoryPage,
+  renderLiveHomePage,
   renderLiveRadarPage,
   renderLiveReadingPage,
   renderLiveSearchPage,
@@ -28,6 +29,7 @@ import { CHROME_REVIEWS, isReviewed, provenanceOf } from "../scripts/localizatio
 const SEPARATORS = new Set(["common.listSeparator"]);
 
 const PAGES = {
+  home: renderLiveHomePage,
   coverage: renderLiveCoveragePage,
   search: renderLiveSearchPage,
   dossier: renderLiveDossierPage,
@@ -43,11 +45,16 @@ const escaped = (text) => text.replaceAll("&", "&amp;").replaceAll("'", "&#x27;"
 
 test("every live page renders its chrome from the table", () => {
   const copy = liveChrome("en");
-  assert.deepEqual(Object.keys(copy).filter((key) => !["form", "common", "shell", "card", "refusalCard", "coverageAnswer"].includes(key)).sort(), Object.keys(PAGES).sort(), "one entry per live page, the forms, the page shell, the evaluation and refusal cards, the coverage answer, and what the screens share");
+  assert.deepEqual(Object.keys(copy).filter((key) => !["form", "common", "shell", "site", "card", "refusalCard", "coverageAnswer"].includes(key)).sort(), Object.keys(PAGES).sort(), "one entry per live page, the forms, the page shell, the site around it, the evaluation and refusal cards, the coverage answer, and what the screens share");
   for (const [key, render] of Object.entries(PAGES)) {
     const html = render();
     const entry = copy[key];
-    assert.ok(html.includes(`<title>${escaped(entry.title)} - Lex V3 live</title>`), `${key}: title`);
+    assert.ok(html.includes(`<title>${escaped(entry.title)} - Lex</title>`), `${key}: title`);
+    // The site around the screen: its name, its menu, and the statements every page carries (no development banner).
+    for (const text of [copy.site.brand, copy.site.tagline, copy.site.skip, copy.site.search, copy.site.reading, copy.site.dossier, copy.site.history, copy.site.compare, copy.site.radar, copy.site.export, copy.site.coverage, copy.site.advice, copy.site.sources]) {
+      assert.ok(html.includes(escaped(text)), `${key}: the site says ${JSON.stringify(text.slice(0, 40))}`);
+    }
+    assert.ok(!html.includes("development build"), `${key}: no development banner`);
     assert.ok(html.includes(`<p class="eyebrow">${escaped(entry.eyebrow)}</p>`), `${key}: eyebrow`);
     assert.ok(html.includes(`<h1>${escaped(entry.heading)}</h1>`), `${key}: heading`);
     assert.ok(html.includes(`<p>${escaped(entry.intro)}</p>`), `${key}: introduction`);
@@ -58,10 +65,12 @@ test("every form's labels and button come from the table", () => {
   const { form } = liveChrome("en");
   for (const [key, render] of Object.entries(PAGES)) {
     if (key === "coverage") continue;
+    // The home page is the search screen under the site's introduction: its form is search's.
+    const formKey = key === "home" ? "search" : key;
     // A page rendered for hydration marks text boundaries with empty comments; they are not text.
     const html = render().replaceAll("<!-- -->", "");
-    assert.ok(html.includes(`<button type="submit">${escaped(form.submit[key])}</button>`), `${key}: the submit button`);
-    assert.ok(html.includes(`<option value="">${escaped(form.anyLanguage)}</option>`) || html.includes(`<option value="" selected="">${escaped(form.anyLanguage)}</option>`) || key === "search", `${key}: the blank language option`);
+    assert.ok(html.includes(`<button type="submit">${escaped(form.submit[formKey])}</button>`), `${key}: the submit button`);
+    assert.ok(html.includes(`<option value="">${escaped(form.anyLanguage)}</option>`) || html.includes(`<option value="" selected="">${escaped(form.anyLanguage)}</option>`) || formKey === "search", `${key}: the blank language option`);
     assert.ok(html.includes(`${escaped(form.language)} <select`), `${key}: the language label`);
   }
   assert.ok(renderLiveRadarPage().replaceAll("<!-- -->", "").includes(`${escaped(form.workIdentifierOptional)} <input`), "radar's optional identifier");

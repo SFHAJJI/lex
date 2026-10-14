@@ -26,6 +26,11 @@
 // `export.europeItem` and `export.europeExcluded`. The acknowledgement is "la mention de la source" (the Publications
 // Office's own term for the condition it meets) and the authenticity statement "la déclaration sur l’édition qui fait
 // foi" (never "authentique").
+// The site's header, menu, footer and home page (`shell.title`, `site.*`, `home.*`, PR #955) were reviewed by the same
+// reviewer under the same delegation in the addendum of 2026-10-14 (6 of 19 changed: the EU's law is "droit de l’UE", a
+// work on the home page an "acte", the radar's noun "modifications", and the authentic Luxembourg publication the
+// "Journal officiel du Grand-Duché de Luxembourg (Mémorial A)", as the loi du 23 décembre 2016 names it; the English
+// footer changed with it).
 // No French entry ships unreviewed.
 //
 // Vocabulary: a work is an "acte" (a publisher's Cellar work, one record of an EU act, is an "œuvre de l’éditeur"), a
@@ -415,10 +420,30 @@ export const LIVE_CHROME_FR = Object.freeze({
     notHeldRow: '{item} : {reason}',
   }),
   shell: Object.freeze({
-    title: '{title} - Lex V3 en direct',
-    bannerLead: 'Déploiement de développement en direct.',
-    banner: 'Cette page affiche ce que répond le serveur depuis lequel elle a été chargée. Lorsqu’un rapport de couverture arrive, ses empreintes désignent le corpus qu’il a compté ; jusque-là, ou si aucun corpus n’est monté, rien de ce qui suit n’en décrit un. Ce n’est ni une mise en production ni une consultation juridique.',
+    title: '{title} - Lex',
     localeNav: 'Langue de l’interface',
+  }),
+  site: Object.freeze({
+    brand: 'Lex',
+    tagline: 'Le droit luxembourgeois et de l’UE que ce site détient, à la date de votre choix',
+    skip: 'Aller au contenu',
+    menu: 'Menu principal',
+    search: 'Recherche',
+    reading: 'Lecture',
+    dossier: 'Dossier',
+    history: 'Historique',
+    compare: 'Comparaison',
+    radar: 'Modifications',
+    export: 'Export',
+    coverage: 'Ce que ce site détient',
+    advice: 'Documentation, et non consultation juridique. Les textes consolidés n’ont aucun effet juridique : seuls font foi les textes publiés au Journal officiel du Grand-Duché de Luxembourg (Mémorial A) et au Journal officiel de l’Union européenne.',
+    sources: 'Les textes proviennent de Legilux et de l’Office des publications de l’Union européenne, tels que ce site les détient ; chaque article cité indique sa source officielle.',
+  }),
+  home: Object.freeze({
+    title: 'Le droit luxembourgeois et de l’UE à la date de votre choix',
+    eyebrow: 'Rechercher dans le droit',
+    heading: 'Le droit luxembourgeois et de l’UE à la date de votre choix',
+    intro: 'Recherchez dans les textes que ce site détient, ouvrez un acte tel qu’il se présentait à la date de votre choix, voyez comment chaque article a changé, comparez deux dates et exportez avec des citations que chacun peut vérifier auprès de la source officielle. Lorsque ce site ne détient pas un texte ou une date, il le dit.',
   }),
   common: Object.freeze({
     loading: 'Interrogation de ce serveur.',

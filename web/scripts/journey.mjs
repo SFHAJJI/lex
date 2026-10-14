@@ -143,7 +143,15 @@ export function pinnedCitation(citation) {
  */
 export function journeyStepsFor({ identifier, date, anchor }) {
   return Object.freeze({
-  coverage: Object.freeze({ path: "/", operation: "coverage", body: null }),
+  coverage: Object.freeze({ path: "/coverage.html", operation: "coverage", body: null }),
+  // The home page is the search screen at the root (UX spec section 2): the same step, from the front door.
+  home: Object.freeze({
+    path: "/",
+    cites: true,
+    operation: "search",
+    typed: SEARCH_PHRASE,
+    body: Object.freeze({ operation_id: "search", parameters: Object.freeze({ query: SEARCH_PHRASE, language: "fra" }) }),
+  }),
   search: Object.freeze({
     path: "/search.html",
     cites: true,
@@ -1162,10 +1170,12 @@ export async function licenceBlockedRuns(apiOutput, mount, options, browser, liv
  * expected]`: every page answers, with the texts the fixture's one work gives it.
  */
 export function fixtureMountExpectations(journeyMount) {
-  const { coverage, search, dossier, reading, history, compare, radar, export: exporting } = JOURNEY_STEPS;
+  const { coverage, home, search, dossier, reading, history, compare, radar, export: exporting } = JOURNEY_STEPS;
+  const searchTexts = [`“${SEARCH_PHRASE}” in fra: 4 with the exact phrase, 1 with every word, in 1 work.`, "art_15 in", "The first hits in the stated order, not the best hits."];
   return [
     ["coverage", { step: coverage, state: "success", corpusSha256: journeyMount.corpus_sha256, indexSha256: journeyMount.index_sha256 }],
-    ["search", { step: search, state: "success", texts: [`“${SEARCH_PHRASE}” in fra: 4 with the exact phrase, 1 with every word, in 1 work.`, "art_15 in", "The first hits in the stated order, not the best hits."] }],
+    ["home", { step: home, state: "success", texts: searchTexts }],
+    ["search", { step: search, state: "success", texts: searchTexts }],
     ["dossier", { step: dossier, state: "success", texts: [journeyMount.work_key, "1 state, from 2024-02-01 to 2024-02-01.", "What this dossier does not hold"] }],
     ["reading", { step: reading, state: "success", texts: ["the state applying from 2024-02-01", "49 articles quoted", "Art. 15.", "Text served under agreed_same_run_cc_by"] }],
     ["history", { step: history, state: "success", texts: [`${HISTORY_ANCHOR} in loi-1991-08-10-n3`, "Carried by 1 held state, from 2024-02-01", "first held wording"] }],
