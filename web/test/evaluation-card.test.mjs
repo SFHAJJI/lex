@@ -99,6 +99,21 @@ test("the page prints the card after the answer, its target first, every table w
   assert.ok(section.includes(`<a href="${CARD_ROUTE}">The same card for machines, as JSON</a>`), "the card links its JSON at the stable route (36 s6)");
 });
 
+test("the card's prose wraps a long token, as a release's card names its mount by digest, so no phone scrolls sideways", async () => {
+  // A release's card is run over its mount and says so by the corpus file's digest, one word of 71 characters, which at
+  // 320 CSS pixels set the page's width to 668 (the image rehearsal's probes); the journeys' card names no digest there.
+  const digest = `sha256:${"f".repeat(64)}`;
+  const markup = unescape(renderToStaticMarkup(h(EvaluationCardView, { view: readEvaluationCard(mutate((copy) => { copy.target = `the mount whose corpus file is ${digest}`; })) })));
+  assert.ok(markup.includes(`<p data-card-target="">Run over: the mount whose corpus file is ${digest}</p>`), "the target, with its digest, is a paragraph of the card");
+  const css = await readFile(new URL("../src/styles.css", import.meta.url), "utf8");
+  const wrapping = [...css.matchAll(/([^{}]+)\{([^}]*)\}/g)]
+    .filter(([, , body]) => /overflow-wrap:\s*anywhere/.test(body))
+    .flatMap(([, selectors]) => selectors.split(",").map((selector) => selector.replace(/\/\*[\s\S]*?\*\//g, "").trim()));
+  for (const selector of ["[data-evaluation-card] p", "[data-evaluation-card] li"]) {
+    assert.ok(wrapping.includes(selector), `${selector} wraps a long token`);
+  }
+});
+
 test("the live build carries the card it is handed, as a release build will hand it (review of #792)", async () => {
   const { buildLive } = await import("../scripts/build-live.mjs");
   const { mkdtemp, rm } = await import("node:fs/promises");
