@@ -13,7 +13,7 @@ A feature pull request edits its lane file, not this one; this file changes for 
 
 ## Heads
 
-- `v3/integration`: `d07e81b4` (2026-10-14, PR #956 merged: every permalink and work address opens its page). The
+- `v3/integration`: `e5d0bd88` (2026-10-14, PR #958 merged: every page under its language, `/fr/` and `/en/`). The
   required checks are strict: `dotnet` (the whole solution, about 14 min on the runner), `web`, `canon-windows` and
   `journeys`. `journeys` walks J1 to J8 and the site's own addresses in Chrome over four fixture mounts (the fixture,
   licence-blocked, two-state and EU annex control mounts), by pointer and by keyboard on the pages the API serves.
@@ -121,20 +121,28 @@ Only money, legal or public claims, credentials and going live (ruling 7):
   disk). The owner upgraded the trial to pay-as-you-go on 2026-10-13.
 - The zero-traffic Azure candidate of release `v3-20261013T214036Z-9a5f05d3d1b4`: the owner ran the deploy on
   2026-10-14 (app `ca-lex-v3`, reachable only from this machine's address, about 26 EUR a month). Since 2026-10-14 08:04
-  UTC every Azure call from this machine fails with AADSTS530035 (blocked by the tenant's security defaults): the owner
-  signs in again (`az login`) on a normal connection before the driver can change anything there.
-- Where DNS lives (O14): **decided by the owner on 2026-10-14**: at the registrar, outside Azure (R117: V2 went down
-  with its subscription), and the site keeps V2's address, `law.soufien.lu`. The owner sets the registrar's name
-  servers back to the registrar's own (they had been pointed at the Azure DNS zone made on 2026-10-14) and adds two
-  records there: `law` as a CNAME to the app's default host, and the `asuid.law` TXT verification record, whose value
-  the driver gives. The driver then binds the name with a managed certificate, keeps the private copy's address list
-  (it stays private until the opening), and deletes the Azure zone.
+  UTC every Azure call from this machine fails with AADSTS530035 (blocked by the tenant's security defaults). On
+  2026-10-14 the owner asked the driver to run the sign-in ("you run az login"): the driver starts a device-code
+  sign-in when the owner says "sign in", and the owner enters its code on the phone, this PC on a normal connection.
+  Two codes the driver started that day expired unanswered.
+- Where DNS lives (O14): **decided by the owner on 2026-10-14.** Asked "Decide where soufien.lu's DNS lives. I recommend
+  your registrar, outside Azure.", the owner answered "yes like v2 same url you run az login": the zone lives at the
+  registrar, outside Azure (R117: V2 went down with its subscription), and the site keeps V2's address,
+  `law.soufien.lu`. The owner points the registrar's name servers to the registrar's own DNS (they point at the Azure
+  zone made on 2026-10-14) and adds two records there: `law` as a CNAME to the app's default host, and the `asuid.law`
+  TXT verification record, whose value the driver gives. The driver then binds the name with a managed certificate,
+  keeps the private copy's address list (it stays private until the opening), and deletes the Azure zone. O14's other
+  half, the payment method, is not decided yet (below).
 - The plan's decisions (its section 5: each with its recommended answer, its cost and what stops without it):
-  - **Now, by Friday 16 October**: the Azure sign-in; O15, an encrypted external disk (1 to 2 TB), so custody gets a
-    second copy before step 0 deletes anything; turning hibernation off (6.3 GB).
+  - **Now, by Friday 16 October**: the Azure sign-in; the rest of O14 (R117): a valid payment method kept on the V3
+    subscription, a backup one, and billing alerts on two channels, so a failed payment cannot take the site down as
+    it took V2; O15, an encrypted external disk (1 to 2 TB), so custody gets a second copy before step 0 deletes
+    anything; turning hibernation off (6.3 GB).
   - **The decision sitting, by Wednesday 21 October** (one reply approves the pre-filled answers, striking what the
     owner disagrees with; nothing is assumed from silence): O1, adopt the record and one opening with the full launch
-    set on 2 February 2027; O3, where the delegation ends (the owner acts in person for the signing identity,
+    set on 2 February 2027, the four items of the plan's section 4 (tagged PDFs, the export cart across acts, the
+    Developers try-it console, the attested cloud build) moved to dated items within six weeks after it; O3, where the
+    delegation ends (the owner acts in person for the signing identity,
     production credentials, deployment, promotion, money and public legal claims; a deployment to the private copy is
     the driver's; the publisher runs the plan names are delegated); O2, Lex at `law.soufien.lu` after a name check;
     N1, one money envelope (a ceiling of 150 EUR a month, about 120 expected; the external disk; the rented machine; the
