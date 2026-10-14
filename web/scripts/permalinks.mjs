@@ -68,16 +68,20 @@ export function pageForSitePath(pathname) {
   return named.locale === 'en' ? page : `${named.locale}/${page}`;
 }
 
+/** Whether a permalink (with or without `#…`) is an address this site serves a page at. */
+export function isSiteAddress(permalink) {
+  if (typeof permalink !== 'string') return false;
+  const hash = permalink.indexOf('#');
+  return parseSitePath(hash < 0 ? permalink : permalink.slice(0, hash)) !== null;
+}
+
 /**
  * A permalink the API minted (`/lu-legilux/…`, `/eu-eurlex/…`, with or without `#…`) as a link on a page in `locale`:
  * under the locale's path for any interface but English. Anything else is returned unchanged, so a link is never built
  * to an address this site does not serve.
  */
 export function permalinkHref(permalink, locale = 'en') {
-  if (typeof permalink !== 'string') return permalink;
-  const hash = permalink.indexOf('#');
-  const path = hash < 0 ? permalink : permalink.slice(0, hash);
-  if (parseSitePath(path) === null) return permalink;
+  if (!isSiteAddress(permalink)) return permalink;
   return locale === 'en' ? permalink : `/${locale}${permalink}`;
 }
 

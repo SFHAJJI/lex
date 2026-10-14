@@ -9,14 +9,14 @@
 // wording changed from it, or why that is not said (the first held state, an ambiguity, different
 // rule profiles). The platform's caveat is shown with the rows: a version row does not by itself
 // assert a wording change, legal effect or entry into force. The form's controls carry no `name`,
-// and permalinks are printed, not linked.
+// and every permalink is a link to its page (`Permalink`).
 
 import { Fragment, useEffect, useRef, useState } from 'react';
 
 import { RefusalCard } from './RefusalCard.jsx';
 import { LIVE_RADAR_IDLE, RADAR_LANGUAGES, createRadarSession } from '../scripts/live-radar.mjs';
 import { ENGLISH_LANG, fillCounted, liveChrome } from '../scripts/live-chrome.mjs';
-import { LiveAnswer, Say, StatusSentence, refusalCardCopyFor } from './LiveAnswer.jsx';
+import { LiveAnswer, Permalink, Say, StatusSentence, refusalCardCopyFor } from './LiveAnswer.jsx';
 
 /** The forms' labels and buttons, and this screen's sentences, from the interface copy table. */
 const FORM = liveChrome().form;
@@ -35,7 +35,7 @@ function Named({ label, permalinks }) {
   const listed = permalinks.map((permalink, index) => (
     <Fragment key={permalink}>
       {index === 0 ? '' : ', '}
-      <code>{permalink}</code>
+      <Permalink value={permalink} />
     </Fragment>
   ));
   return (
@@ -108,7 +108,7 @@ export function RadarView({ view }) {
                   language: row.state.language,
                   from: row.state.applicabilityDate,
                   verdict: <Verdict row={row} />,
-                  permalink: <code>{row.state.permalink}</code>,
+                  permalink: <Permalink value={row.state.permalink} />,
                 }}
               />
             </li>

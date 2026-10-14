@@ -450,6 +450,9 @@ export function journeyVerdict(observed, expected) {
       }
     }
   }
+  if (observed.reflow !== undefined && observed.reflow.scrollWidth > observed.reflow.width) {
+    failures.push(`at ${REFLOW_WIDTH} CSS pixels the page scrolls sideways (${observed.reflow.scrollWidth} px of content in a ${observed.reflow.width} px window): ${observed.reflow.offenders.join(", ") || "no single element"}`);
+  }
   if (observed.paint !== undefined && observed.paint.unnamed.length > 0) {
     failures.push(`meaning by colour alone: ${[...new Set(observed.paint.unnamed)].join(", ")} painted with no words or accessible name`);
   }
@@ -880,6 +883,29 @@ export const PAINT_ONLY = `(() => {
   return { painted, unnamed: found };
 })()`;
 
+/**
+ * Reflow (WCAG 2.2 success criterion 1.4.10, the launch contract's accessibility line): the page laid out at 320 CSS
+ * pixels, a small phone's width and 1280 pixels at 400 per cent zoom, must not scroll sideways. A table may scroll inside
+ * its own region (two-dimensional content is excepted), so an element inside a box that clips or scrolls sideways is no
+ * offender. `width` is the window's, `scrollWidth` the document's, `offenders` what stands out past the window.
+ */
+export const REFLOW_WIDTH = 320;
+const REFLOW = `(() => {
+  const width = document.documentElement.clientWidth;
+  const scrollWidth = document.documentElement.scrollWidth;
+  const contained = (el) => {
+    for (let node = el.parentElement; node !== null && node !== document.body; node = node.parentElement) {
+      if (['auto', 'scroll', 'hidden', 'clip'].includes(getComputedStyle(node).overflowX)) return true;
+    }
+    return false;
+  };
+  const offenders = scrollWidth <= width ? [] : [...document.querySelectorAll('body *')]
+    .filter((el) => el.getBoundingClientRect().right > width + 1 && !contained(el))
+    .map((el) => el.tagName.toLowerCase() + (typeof el.className === 'string' && el.className ? '.' + el.className.split(' ')[0] : '')
+      + (el.closest('[data-live-answer]') ? ' in the answer' : '') + ' ' + Math.round(el.getBoundingClientRect().width) + ' px');
+  return { width, scrollWidth, offenders: [...new Set(offenders)].slice(0, 8) };
+})()`;
+
 /** The politeness of the live region the answer is written into, or null when it is in none. */
 const ANSWER_LIVE_REGION = "document.querySelector('[data-answer-state]')?.closest('[aria-live]')?.getAttribute('aria-live') ?? null";
 
@@ -964,7 +990,7 @@ async function observe(browser, pageOrigin, step, { keyboard = false } = {}) {
     }
     // Let a late request or log line arrive before the observation is closed.
     await new Promise((resolve) => setTimeout(resolve, 500));
-    return {
+    const observed = {
       answerState,
       text: await evaluate("document.body.innerText"),
       html: await evaluate("document.documentElement.outerHTML"),
@@ -1021,6 +1047,13 @@ async function observe(browser, pageOrigin, step, { keyboard = false } = {}) {
       emptyAnswer: await evaluate("document.querySelector('[data-live-answer] [data-no-row], [data-live-answer] [data-no-hit]') !== null"),
       quotes: await evaluate("[...document.querySelectorAll('[data-live-answer] [data-article]')].filter((node) => node.querySelector('blockquote') !== null).map((node) => ({ article: node.dataset.article, codes: [...node.querySelectorAll('code')].map((code) => code.textContent.trim()) }))"),
     };
+    // Reflow, measured last so that nothing above is read at this width: the page as it ended, laid out again at
+    // `REFLOW_WIDTH` (a desktop window that narrow, so that the layout viewport cannot grow to fit the content as a
+    // phone's does).
+    await session.send("Emulation.setDeviceMetricsOverride", { width: REFLOW_WIDTH, height: 640, deviceScaleFactor: 1, mobile: false }, sessionId);
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    observed.reflow = await evaluate(REFLOW);
+    return observed;
   } finally {
     chrome.kill();
     await new Promise((resolve) => setTimeout(resolve, 500));

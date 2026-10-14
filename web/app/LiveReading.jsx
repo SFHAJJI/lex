@@ -26,15 +26,15 @@
 import { useEffect, useRef, useState } from 'react';
 
 import { RefusalCard } from './RefusalCard.jsx';
-import { EuropeAnnexes, LiveAnswer, Say, StatusSentence, inEnglish, refusalCardCopyFor } from './LiveAnswer.jsx';
+import { EuropeAnnexes, LiveAnswer, Permalink, Say, StatusSentence, inEnglish, refusalCardCopyFor } from './LiveAnswer.jsx';
 import {
   LIVE_READING_IDLE,
   READING_LANGUAGES,
   createReadingSession,
   quotationLanguageTag,
 } from '../scripts/live-reading.mjs';
-import { CHROME_LOCALE, ENGLISH_LANG, countedEntry, liveChrome } from '../scripts/live-chrome.mjs';
-import { anchorOf, parseSitePath, permalinkHref } from '../scripts/permalinks.mjs';
+import { ENGLISH_LANG, countedEntry, liveChrome } from '../scripts/live-chrome.mjs';
+import { anchorOf, parseSitePath } from '../scripts/permalinks.mjs';
 
 /** The forms' labels and buttons, and this screen's sentences, from the interface copy table. */
 const FORM = liveChrome().form;
@@ -57,7 +57,7 @@ export function QuoteEvidence({ article }) {
           text: <code>{article.textSha256}</code>,
           body: <code>{article.bodySha256}</code>,
           source: <code>{article.officialSource}</code>,
-          permalink: <a href={permalinkHref(article.permalink, CHROME_LOCALE)}><code>{article.permalink}</code></a>,
+          permalink: <Permalink value={article.permalink} />,
         }}
       />
     </p>
@@ -99,7 +99,7 @@ function StateReading({ state, workKey }) {
         )}
       </h2>
       <p>
-        <a href={permalinkHref(state.permalink, CHROME_LOCALE)}><code>{state.permalink}</code></a>
+        <Permalink value={state.permalink} />
       </p>
       <p data-counts="">
         <Say
@@ -212,7 +212,7 @@ function EuropeWordingReading({ wording, celex }) {
       <EuropeDisclosure template={COPY.europeSameDateWorks} rows={wording.sameDateWorks} name="same-date" />
       <EuropeDisclosure template={COPY.europeUnplaced} rows={wording.unplacedVersions} name="unplaced" />
       <p>
-        <a href={permalinkHref(wording.permalink, CHROME_LOCALE)}><code>{wording.permalink}</code></a>
+        <Permalink value={wording.permalink} />
       </p>
       <p data-counts="">
         <Say

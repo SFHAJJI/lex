@@ -1018,7 +1018,8 @@ summary {
   min-inline-size: 0;
 }
 
-.coverage-scroll {
+.coverage-scroll,
+.table-scroll {
   overflow-x: auto;
   max-inline-size: 100%;
   min-inline-size: 0;

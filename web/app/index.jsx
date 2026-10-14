@@ -33,6 +33,7 @@ export { LIVE_SEARCH_ROOT, liveSearchTree, renderLiveHomePage, renderLiveSearchP
 export { DossierAnswerView, DossierTitles, DossierView, EuropeDossierView, LiveDossier } from './LiveDossier.jsx';
 export { LIVE_DOSSIER_ROOT, liveDossierTree, renderLiveDossierPage } from './live-dossier-page.jsx';
 export { LiveReading, ReadingAnswerView, ReadingView, readingHolds } from './LiveReading.jsx';
+export { Permalink, TableRegion } from './LiveAnswer.jsx';
 export { LIVE_READING_ROOT, liveReadingTree, renderLiveReadingPage } from './live-reading-page.jsx';
 export { HistoryAnswerView, HistoryView, LiveHistory } from './LiveHistory.jsx';
 export { LIVE_HISTORY_ROOT, liveHistoryTree, renderLiveHistoryPage } from './live-history-page.jsx';

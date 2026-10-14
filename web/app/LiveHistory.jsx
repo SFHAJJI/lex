@@ -11,14 +11,14 @@
 // wording changed from the previous state of the same language, and which states do not carry it.
 // It derives no end date, no "in force" and no diff text. The states that do not carry the id are
 // shown, so a lineage that begins after the work does is never read as the whole history. The form's
-// controls carry no `name`, and permalinks are printed, not linked.
+// controls carry no `name`, and every permalink is a link to its page (`Permalink`).
 
 import { useEffect, useRef, useState } from 'react';
 
 import { RefusalCard } from './RefusalCard.jsx';
 import { HISTORY_LANGUAGES, LIVE_HISTORY_IDLE, createHistorySession } from '../scripts/live-history.mjs';
 import { ENGLISH_LANG, fillCounted, fillText, liveChrome } from '../scripts/live-chrome.mjs';
-import { LiveAnswer, Say, StatusSentence, refusalCardCopyFor } from './LiveAnswer.jsx';
+import { LiveAnswer, Permalink, Say, StatusSentence, TableRegion, refusalCardCopyFor } from './LiveAnswer.jsx';
 
 /** The forms' labels and buttons, and this screen's sentences, from the interface copy table. */
 const FORM = liveChrome().form;
@@ -51,11 +51,12 @@ export function HistoryView({ view }) {
       <h2>
         <Say template={COPY.anchorHeading} values={{ anchor: view.anchor, work: view.workKey }} />
       </h2>
-      <p data-history-summary="">
+      <p data-history-summary="" id="history-summary">
         {carried}{' '}
         {fillCounted(COPY.absent, view.absent.length, {})}{' '}
         {runs.map(([language, count]) => fillCounted(COPY.runs, count, { language, distinct: view.distinctWordings[language] })).join(COMMON.listSeparator)}.
       </p>
+      <TableRegion labelledBy="history-summary">
       <table>
         <thead>
           <tr>
@@ -85,19 +86,20 @@ export function HistoryView({ view }) {
                       : article.validityConflict ? fillText(COPY.ownDateDiffers, { date: article.validFrom }) : article.validFrom))
                     .join(COMMON.listSeparator)}
                 </td>
-                <td><code>{row.permalink}</code></td>
+                <td><Permalink value={row.permalink} /></td>
               </tr>
             );
           })}
         </tbody>
       </table>
+      </TableRegion>
       {view.absent.length > 0 ? (
         <>
           <h3><Say template={COPY.absentHeading} values={{ anchor: view.anchor }} /></h3>
           <ul data-absent={view.absent.length}>
             {view.absent.map((state) => (
               <li key={state.stateSha256}>
-                <Say template={COPY.absentRow} values={{ language: state.language, from: state.applicabilityDate, permalink: <code>{state.permalink}</code> }} />
+                <Say template={COPY.absentRow} values={{ language: state.language, from: state.applicabilityDate, permalink: <Permalink value={state.permalink} /> }} />
               </li>
             ))}
           </ul>

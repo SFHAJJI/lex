@@ -8,8 +8,8 @@
 // states (`data-answer-state` on the reading, `data-export-state` on the export).
 //
 // The reading screen's rules carry over: the publisher's text is quoted in its state's language, an
-// article held without text is named as such, the controls carry no `name`, and permalinks are
-// printed, not linked. The export panel shows, before anything is saved, what the file will carry:
+// article held without text is named as such, the controls carry no `name`, and every permalink is a
+// link to its page (`Permalink`). The export panel shows, before anything is saved, what the file will carry:
 // the counts, the watermark, the rights, each item's citation and digest, the exclusions with their
 // reason, and the JSON itself.
 //
@@ -26,7 +26,7 @@ import { createReadingSession, quotationLanguageTag } from '../scripts/live-read
 import { EXPORT_FORMATS, LIVE_EXPORT_IDLE, exportState, formatRefused, pinKey, saveExport } from '../scripts/live-export.mjs';
 import { EUROPE_EXPORT_SCHEMA, exportJson } from '../scripts/export-build.mjs';
 import { ENGLISH_LANG, countedEntry, fillText, liveChrome } from '../scripts/live-chrome.mjs';
-import { EuropeAnnexes, LiveAnswer, Said, Say, StatusSentence, inEnglish } from './LiveAnswer.jsx';
+import { EuropeAnnexes, LiveAnswer, Permalink, Said, Say, StatusSentence, inEnglish } from './LiveAnswer.jsx';
 
 /** The forms' labels and buttons, and this screen's sentences, from the interface copy table. */
 const FORM = liveChrome().form;
@@ -79,7 +79,7 @@ function StatePins({ state, workKey, pins, onPin }) {
         )}
       </h2>
       <p>
-        <code>{state.permalink}</code>
+        <Permalink value={state.permalink} />
       </p>
       <ol className="articles">
         {state.articles.map((article) => {
@@ -111,7 +111,7 @@ function WordingPins({ wording, celex, pins, onPin }) {
         <EuropeWordingHeading wording={wording} celex={celex} />
       </h2>
       <p>
-        <code>{wording.permalink}</code>
+        <Permalink value={wording.permalink} />
       </p>
       <ol className="articles">
         {wording.articles.map((article) => {

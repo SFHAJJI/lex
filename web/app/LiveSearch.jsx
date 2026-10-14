@@ -25,7 +25,7 @@
 import { useEffect, useRef, useState } from 'react';
 
 import { RefusalCard } from './RefusalCard.jsx';
-import { LiveAnswer, Say, StatusSentence, inEnglish, refusalCardCopyFor } from './LiveAnswer.jsx';
+import { LiveAnswer, Permalink, Say, StatusSentence, inEnglish, refusalCardCopyFor } from './LiveAnswer.jsx';
 import { quotationLanguageTag } from '../scripts/live-reading.mjs';
 import {
   LIVE_SEARCH_IDLE,
@@ -136,7 +136,7 @@ function EuropeWording({ view }) {
       <p data-pinned-wording={wording.wordingSha256}>
         <Say
           template={COPY.euWording}
-          values={{ celex: wording.celex, language: view.language, date: wording.wordingDate, permalink: <a href={permalinkHref(wording.permalink, CHROME_LOCALE)}><code>{wording.permalink}</code></a> }}
+          values={{ celex: wording.celex, language: view.language, date: wording.wordingDate, permalink: <Permalink value={wording.permalink} /> }}
         />
       </p>
       <p data-date-semantics="" lang={ENGLISH_LANG}>{asSentence(view.dateSemantics)}</p>

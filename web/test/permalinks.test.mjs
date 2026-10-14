@@ -5,7 +5,10 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
-import { PERMALINK_PATTERNS, anchorOf, pageForSitePath, parseSitePath, permalinkHref } from '../scripts/permalinks.mjs';
+import { createElement as h } from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
+import { Permalink, TableRegion } from '../.react-build/app.mjs';
+import { PERMALINK_PATTERNS, anchorOf, isSiteAddress, pageForSitePath, parseSitePath, permalinkHref } from '../scripts/permalinks.mjs';
 
 const TABLE = JSON.parse(await readFile(new URL('../../tests/Lex.V3.Tests/Fixtures/SitePaths/site-paths.json', import.meta.url), 'utf8'));
 const DIGEST = '0123456789abcdef'.repeat(4);
@@ -57,6 +60,25 @@ test("a permalink is linked under the page's interface, with its article; anythi
     assert.equal(permalinkHref(other, 'fr'), other, `${other} is not an address this site serves a page at`);
   }
   assert.equal(permalinkHref(undefined, 'fr'), undefined);
+});
+
+test('a permalink is printed as code, inside a link only when this site serves a page at its address', () => {
+  const state = `/lu-legilux/loi-2017-03-14-a439/2024-01-01--${DIGEST}`;
+  assert.equal(isSiteAddress(`${state}#art_1`), true);
+  assert.equal(renderToStaticMarkup(h(Permalink, { value: `${state}#art_1` })), `<a href="${state}#art_1"><code>${state}#art_1</code></a>`);
+  for (const other of ['https://law.soufien.lu/lu-legilux/x', '/lu-legilux/x/2024-01-01', '/reading.html', 42, null]) {
+    assert.equal(isSiteAddress(other), false, String(other));
+  }
+  for (const other of ['https://law.soufien.lu/lu-legilux/x', '/lu-legilux/x/2024-01-01']) {
+    assert.equal(renderToStaticMarkup(h(Permalink, { value: other })), `<code>${other}</code>`, `${other}: no link to an address this site serves no page at`);
+  }
+});
+
+test('a wide table scrolls in a region of its own, in the tab order and named by the sentence above it', () => {
+  assert.equal(
+    renderToStaticMarkup(h(TableRegion, { labelledBy: 'dossier-states' }, h('table'))),
+    '<div class="table-scroll" role="region" tabindex="0" aria-labelledby="dossier-states"><table></table></div>',
+  );
 });
 
 test("the article a reading's address names after # is read decoded, and a malformed one names none", () => {
