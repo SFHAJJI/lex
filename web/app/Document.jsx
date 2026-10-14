@@ -81,9 +81,16 @@ const ALTERNATE_PAGES = Object.freeze({
  * The alternate-language links of a live page: the same page in each interface language, and for a reader of any other
  * language (`x-default`) the page a reader with no preference gets: the home page's root, which sends each reader to their
  * language, and for any other page that page in French (`negotiateLanguage`'s default; review of #958: the root named a
- * different page).
+ * different page). A page the server rendered at a law's address (`lawPath`, the address with no language, as the API
+ * mints it) names that address in each language, and for any other the address itself, which sends a reader to theirs.
  */
-export function alternateLinks(state) {
+export function alternateLinks(state, lawPath = null) {
+  if (lawPath !== null) {
+    return [
+      ...INTERFACE_LANGUAGES.map((language) => ({ hrefLang: language, href: `${SITE_ORIGIN}/${language}${lawPath}` })),
+      { hrefLang: 'x-default', href: `${SITE_ORIGIN}${lawPath}` },
+    ];
+  }
   const page = ALTERNATE_PAGES[state];
   if (page === undefined) return [];
   return [
@@ -166,6 +173,8 @@ export function Document({
   copyLocale = banner === 'live' ? CHROME_LOCALE : 'en',
   shell = null,
   density = null,
+  // The address of the law a page the server rendered stands at, with no language (`/lu-legilux/{work}/...`), or null.
+  lawPath = null,
   children,
 }) {
   // Each axis names itself. Both guards used to raise the same sentence, so a test feeding an
@@ -215,8 +224,10 @@ export function Document({
         <title>{banner === 'live' ? fillText(liveChrome().shell.title, { title }) : `${title} - Lex V3 preview`}</title>
         <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
         <link rel="stylesheet" href="/styles.css" />
+        {/* A page at a law's address names itself as the canonical page of its language (R67). */}
+        {banner === 'live' && lawPath !== null ? <link rel="canonical" href={`${SITE_ORIGIN}/${locale}${lawPath}`} /> : null}
         {banner === 'live'
-          ? alternateLinks(state).map((link) => <link key={link.hrefLang} rel="alternate" hrefLang={link.hrefLang} href={link.href} />)
+          ? alternateLinks(state, lawPath).map((link) => <link key={link.hrefLang} rel="alternate" hrefLang={link.hrefLang} href={link.href} />)
           : null}
       </head>
       <body>

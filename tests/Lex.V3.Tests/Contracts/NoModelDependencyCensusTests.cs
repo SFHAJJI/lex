@@ -204,6 +204,11 @@ public sealed class NoModelDependencyCensusTests
         "Azure.Identity",
         "Azure.Storage.Blobs",
         "JsonSchema.Net",
+        // V8, the JavaScript engine the API renders the pages at a law's address with (the specification of record's
+        // R67, V3PageRenderer): it runs the site's own page renderer, offline, and calls no model and no service.
+        "Microsoft.ClearScript.V8",
+        "Microsoft.ClearScript.V8.Native.linux-x64",
+        "Microsoft.ClearScript.V8.Native.win-x64",
         "Microsoft.Data.Sqlite",
         "PdfPig",
     ];

@@ -108,6 +108,24 @@ export function pageForSitePath(pathname) {
 }
 
 /**
+ * What the server renders a law's address under an interface language from (R67): the page (`reading`, `dossier`), the
+ * operation and the parameters the page itself would ask, exactly as its form sends them (a Luxembourg reading asks by
+ * work and date in any held language, an EU wording by CELEX, date and its language; a dossier by the work), so the page
+ * the server renders and the page a reader asks show one answer. Null for any other path.
+ */
+export function sitePageFor(pathname) {
+  const named = parseSitePath(pathname);
+  if (named === null || named.locale === null) return null;
+  if (named.kind === 'work') {
+    return Object.freeze({ language: named.locale, kind: 'dossier', operation: 'dossier', parameters: Object.freeze({ identifier: named.identifier }) });
+  }
+  const parameters = named.language === null
+    ? { identifier: named.identifier, date: named.date }
+    : { identifier: named.identifier, date: named.date, language: named.language };
+  return Object.freeze({ language: named.locale, kind: 'reading', operation: 'evidence_bundle', parameters: Object.freeze(parameters) });
+}
+
+/**
  * Where a path with no interface language is sent, for a reader whose browser says `acceptLanguage`: the root to that
  * language's home page (`/fr/`), and an address for law to the same address under that language
  * (`/fr/lu-legilux/{work}`); null for any other path. The query string goes along unchanged, from the root too.

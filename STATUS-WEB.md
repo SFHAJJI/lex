@@ -4,6 +4,41 @@ Updated 2026-10-14. The web lane's progress, split out of STATUS.md (which keeps
 items and the pointers) by the standing order of 2026-10-01 13:50 UTC. Every pull request of the web lane
 updates this file, not STATUS.md.
 
+## A law's page arrives whole: the server renders it (sole driver, 2026-10-14)
+
+The specification of record's R67: "Dossier, Reading, Provision history and Coverage pages are complete HTML from the
+server, with title, description, canonical link and authenticity banner. They are readable without JavaScript, then
+enhanced." A law's address served the page's empty form, which then asked the API: without scripts a reader saw no law,
+and every visit waited for a second round trip before any text.
+- **A law's address under a language is rendered from the API's own answer**: the dossier at `/{fr,en}/lu-legilux/{work}`
+  and `/{fr,en}/eu-eurlex/{celex}`, the reading at a state's or an EU wording's permalink. The server asks itself what
+  the page would ask (the same operation and parameters: `sitePageFor` in `permalinks.mjs`, `SitePageFor` in
+  `V3WebRoot`, both held to the shared table), renders the page from that envelope with the pages' own React tree
+  (`app/ssr-entry.jsx`), and writes the envelope beside the root as an inert JSON block (`initial-answer.mjs`; `<`, `>`,
+  `&`, U+2028 and U+2029 escaped). The browser hydrates the same tree from it, so the page asks the API nothing as it
+  loads. A work the API does not know is a 404 with its refusal on the page; with no corpus mounted, the page shows the
+  refusal every request gets.
+- **In the API, V8 runs the renderer** (`V3PageRenderer`, Microsoft.ClearScript 7.5.1.1 with its Linux and Windows
+  natives): one engine per interface language, holding the built renderer (`ssr/{language}.js`, which neither server
+  serves) and nothing of the process (no host object, file or network); one render at a time per language. A render is
+  bounded at 5 seconds, at a soft heap limit of 224 MB that ClearScript samples (V8's hard limit of 320 MB, which would
+  end the process, doubles on demand instead) and at 512 KB of stack; one stopped for its time or its heap retires its
+  engine, and the next render makes a fresh one. A render that waits more than 2 seconds for its engine is not
+  attempted. Whatever fails, the page is served as built and asks for itself. Measured on the built renderer: a reading
+  of 3,000 articles, as large as the largest codes (a 12.9 MB page, half of it the envelope), renders in 110 to 170 ms
+  within 64 MB of heap; one of 120 articles, the largest state the population mount holds, in under 20 ms.
+- **The live server renders the same way** (`serve-live.mjs`, a Node `vm` context per language), so the journeys walk
+  server-rendered pages on both servers.
+- **Canonical and hreflang at a law's address**: the page names itself, in its language, as canonical, names the same
+  address in each language, and the address with no language (which sends a reader to theirs) as `x-default`.
+- **The journeys hold it**: the address, permalink and stale-permalink steps must arrive carrying the answer, make no
+  API request as they load, and show the same answer state in the page's own bytes, read with no script run. A page
+  that never loaded (the browser's error page) is now one named failure; it was a crash of the run.
+- **Not yet** (driver decisions, reversible): the provision history and coverage pages; each law's title and description
+  in the page's head; R67's indexing half (schema.org Legislation markup, robots.txt, the sitemap, noindex on search);
+  the address that resolves to a work's current version.
+- **Measured**: web suite 1,101 of 1,101 (in one of five runs, made while other work loaded the machine, one test failed and did not fail again); Lex.V3.Tests 3,154 passed, 1 skipped (`V3PageRendererTests` 5 of 5, `V3WebRootTests` 11 of 11); `eng/verify-v3-tree.ps1` 1,503 tracked paths; the journeys against an API published from this branch: the fixture mount through the live server 44 of 44 and served by the API with the keyboard 44 of 44 (each of the six law-address steps with no API request), the licence-blocked mount 12 of 12, the two-state mount 2 of 2, the EU annex control mount 3 of 3.
+
 ## Every page under its language: /fr/ and /en/ (sole driver, 2026-10-14)
 
 The specification of record's R61: "Page URLs carry the interface language (/fr/, /en/), with hreflang. The start

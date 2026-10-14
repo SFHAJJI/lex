@@ -13,12 +13,18 @@
 // where that rule quietly stopped holding. A body over the API's own 1 MiB ceiling is refused here
 // before it is read in full, and an API that cannot be reached is a transport problem the client
 // names, never a page.
+//
+// A law's address under an interface language is rendered here as the API renders it (the specification of record's
+// R67): the page asks the API, as itself would, through the same forwarder, and the built server renderer
+// (`ssr/{language}.js`, `app/ssr-entry.jsx`) renders the page from that answer, in a context of its own with nothing
+// of this process in it. When anything in that fails, the page is served as built and asks for itself.
 
-import { INTERFACE_LANGUAGES, pageForSitePath, redirectFor } from "./permalinks.mjs";
+import { INTERFACE_LANGUAGES, pageForSitePath, redirectFor, sitePageFor } from "./permalinks.mjs";
 import { createServer, request as httpRequest } from "node:http";
 import { readFile, stat } from "node:fs/promises";
-import { extname, resolve, sep } from "node:path";
+import { extname, join, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
+import vm from "node:vm";
 
 const OPERATION_PATH = /^\/api\/v3\/[a-z_]+$/;
 export const MAXIMUM_REQUEST_BYTES = 1024 * 1024;
@@ -83,6 +89,48 @@ function forward(apiOrigin, path, body, deadlineMs) {
   });
 }
 
+/**
+ * The built server renderer of each interface language (`ssr/{language}.js`), loaded once into a context of its own,
+ * holding nothing but what the renderer needs; null for a language whose renderer is absent or does not load.
+ */
+function serverRenderers(rootPath) {
+  const loaded = new Map();
+  return (language) => {
+    if (!loaded.has(language)) {
+      loaded.set(language, (async () => {
+        try {
+          const context = vm.createContext({ TextEncoder });
+          vm.runInContext(await readFile(join(rootPath, "ssr", `${language}.js`), "utf8"), context, { timeout: 10_000 });
+          return context.lexSsr ?? null;
+        } catch {
+          return null;
+        }
+      })());
+    }
+    return loaded.get(language);
+  };
+}
+
+/**
+ * The page at a law's address under an interface language, rendered from the API's answer to the request the page itself
+ * would send: `{ status, html }` (404 when the API does not know the work), or null when it cannot be rendered.
+ */
+async function renderSitePage(page, pathname, apiOrigin, renderer, deadlineMs) {
+  if (renderer === null) return null;
+  const answer = await forward(apiOrigin, `/api/v3/${page.operation}`, Buffer.from(JSON.stringify({ operation_id: page.operation, parameters: page.parameters })), deadlineMs);
+  if (answer.status !== 200 || !(answer.contentType ?? "").startsWith("application/json")) return null;
+  const envelopeJson = answer.body.toString("utf8");
+  const html = renderer.render(page.kind, envelopeJson, pathname);
+  if (typeof html !== "string" || !html.startsWith("<!doctype html>")) return null;
+  let code = null;
+  try {
+    code = JSON.parse(envelopeJson)?.refusal?.code ?? null;
+  } catch {
+    return null;
+  }
+  return { status: code === "identifier_unknown" ? 404 : 200, html };
+}
+
 async function serveStatic(response, root, pathname, method) {
   let relative;
   try {
@@ -95,7 +143,8 @@ async function serveStatic(response, root, pathname, method) {
     return;
   }
   const file = resolve(root, relative);
-  if (file !== root && !file.startsWith(root + sep)) {
+  // The server renderers are run here, never served.
+  if ((file !== root && !file.startsWith(root + sep)) || file.startsWith(join(root, "ssr") + sep)) {
     problem(response, 404, "not_found");
     return;
   }
@@ -121,6 +170,7 @@ async function serveStatic(response, root, pathname, method) {
  */
 export function createLiveServer({ root, apiOrigin, apiDeadlineMs = API_DEADLINE_MS }) {
   const rootPath = resolve(root instanceof URL ? fileURLToPath(root) : root);
+  const rendererFor = serverRenderers(rootPath);
   return createServer(async (request, response) => {
     try {
       let url;
@@ -165,6 +215,22 @@ export function createLiveServer({ root, apiOrigin, apiDeadlineMs = API_DEADLINE
         response.writeHead(302, { ...BASE_HEADERS, location, vary: "Accept-Language", "content-length": 0 });
         response.end();
         return;
+      }
+      // A law's address under a language: the page rendered from the API's answer (R67), else the page as built.
+      const page = sitePageFor(url.pathname);
+      if (page !== null) {
+        let rendered = null;
+        try {
+          rendered = await renderSitePage(page, url.pathname, apiOrigin, await rendererFor(page.language), apiDeadlineMs);
+        } catch {
+          rendered = null;
+        }
+        if (rendered !== null) {
+          const bytes = Buffer.from(rendered.html, "utf8");
+          response.writeHead(rendered.status, { ...BASE_HEADERS, "content-type": CONTENT_TYPES[".html"], "content-length": bytes.length });
+          response.end(request.method === "HEAD" ? undefined : bytes);
+          return;
+        }
       }
       await serveStatic(response, rootPath, url.pathname, request.method);
     } catch {
