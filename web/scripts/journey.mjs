@@ -224,6 +224,7 @@ export function journeyStepsFor({ identifier, date, anchor }) {
   // dossier as it loads, nothing typed.
   address: Object.freeze({
     path: `/en${identifier}`,
+    rendered: true,
     cites: true,
     operation: "dossier",
     body: Object.freeze({ operation_id: "dossier", parameters: Object.freeze({ identifier: identifier }) }),
@@ -234,6 +235,7 @@ export function journeyStepsFor({ identifier, date, anchor }) {
   // placeholder's digest (all zeros) pins nothing, and stays only where no state is held on the date (no mount).
   permalink: Object.freeze({
     path: `/en${identifier}/${date}--${"0".repeat(64)}#${anchor}`,
+    rendered: true,
     pins: Object.freeze({ identifier: identifier, date: date, anchor: anchor }),
     cites: true,
     operation: "evidence_bundle",
@@ -247,6 +249,7 @@ export function journeyStepsFor({ identifier, date, anchor }) {
   // pins (UX spec section 1: a link cannot silently drift).
   stale: Object.freeze({
     path: `/en${identifier}/${date}--${"0".repeat(64)}#${anchor}`,
+    rendered: true,
     stale: true,
     cites: true,
     operation: "evidence_bundle",
@@ -355,6 +358,9 @@ export const EU_READING_STEP = Object.freeze({
  *   off the refusal card the page shows (`refusalCodes`).
  */
 export function journeyVerdict(observed, expected) {
+  // A page that never arrived (the browser's own error page, as when the server is down or refuses the connection) is one
+  // failure, named, rather than every check below failing, or throwing, on what it cannot read.
+  if (/^(?:chrome-error|about):/.test(observed.location ?? "")) return [`the page did not load: the browser stands at ${observed.location}`];
   const failures = [];
   const step = expected.step ?? JOURNEY_STEPS.coverage;
   if (observed.answerState !== expected.state) {
@@ -528,9 +534,17 @@ export function journeyVerdict(observed, expected) {
     else if (pageHtml.includes(words)) failures.push(`the page's markup carries withheld text "${words}"`);
   }
 
+  // A page at a law's address the server renders from its own answer (R67) asks the API nothing as it loads and shows
+  // its answer with no script run; any other page asks exactly once.
+  if (expected.mustRender === true) {
+    if (observed.serverRendered !== true) failures.push("the page at a law's address arrived without the answer the server renders it from");
+    const without = observed.withoutScripts?.answerState ?? null;
+    if (without !== expected.state) failures.push(`without scripts the page shows ${without === null ? "no answer" : `a ${without}`}, not a ${expected.state}`);
+  }
   const toApi = observed.requests.filter((request) => new URL(request.url).pathname.startsWith("/api/"));
-  if (toApi.length !== 1) {
-    failures.push(`the page made ${toApi.length} requests to the API, not exactly one`);
+  const asks = expected.mustRender === true ? 0 : 1;
+  if (toApi.length !== asks) {
+    failures.push(`the page made ${toApi.length} requests to the API, not exactly ${asks === 0 ? "none" : "one"}`);
   }
   for (const request of toApi) {
     const url = new URL(request.url);
@@ -577,7 +591,9 @@ export function journeyVerdict(observed, expected) {
       if (href !== expectedHref) failures.push(`the language menu's ${language} link leads to ${href ?? "nothing"}, not ${expectedHref}`);
     }
   }
-  if (observed.storage.local !== 0 || observed.storage.session !== 0) failures.push("the page wrote to storage");
+  if (observed.storage?.local !== 0 || observed.storage?.session !== 0) {
+    failures.push(Number.isInteger(observed.storage?.local) && Number.isInteger(observed.storage?.session) ? "the page wrote to storage" : "the page's storage could not be read");
+  }
   if (observed.csp !== cspValue()) failures.push("the page's CSP is not the reviewed one");
   if (observed.hydrated !== "clean") failures.push(`hydration was ${observed.hydrated ?? "never reported"}, not clean`);
   return failures;
@@ -1026,7 +1042,8 @@ async function observe(browser, pageOrigin, step, { keyboard = false } = {}) {
         headersSent: sentHeaders.has(id),
       })),
       console: consoleMessages,
-      storage: await evaluate("({ local: localStorage.length, session: sessionStorage.length })"),
+      // A document with no storage of its own (the browser's error page) throws on reading it: that is no storage read.
+      storage: await evaluate("(() => { try { return { local: localStorage.length, session: sessionStorage.length }; } catch { return { local: null, session: null }; } })()"),
       csp: await evaluate("document.querySelector('meta[http-equiv=\"Content-Security-Policy\"]')?.content ?? null"),
       hydrated: await evaluate("document.documentElement.dataset.hydrated ?? null"),
       location: await evaluate("location.href"),
@@ -1050,6 +1067,8 @@ async function observe(browser, pageOrigin, step, { keyboard = false } = {}) {
         await evaluate("[...document.querySelectorAll('[data-live-answer] a[href]')].map((node) => node.getAttribute('href'))"),
       ),
       pinNamed: await evaluate("document.querySelector('[data-live-answer] [data-pin-replaced] code')?.textContent.trim() ?? null"),
+      // Whether the document arrived carrying the answer the server rendered it from (`initial-answer.mjs`).
+      serverRendered: await evaluate("document.getElementById('lex-initial-answer') !== null"),
       // At a permalink: whether the page says another version stands in for the pinned one, and where the article it
       // names is (`shown`: its top inside the window).
       pinReplaced: step.pins === undefined && step.stale !== true ? undefined : await evaluate("document.querySelector('[data-pin-replaced]') !== null"),
@@ -1149,6 +1168,9 @@ async function verifyCitations(origin, citations) {
  */
 export async function run(apiOutput, mount, expected, browser, liveRoot) {
   const api = expected.startServer ? await expected.startServer() : await startApi(apiOutput, mount, expected.servedByApi ? liveRoot : null);
+  // A step at a law's address is rendered by the server from its own answer (R67): the corpus's answer, or with no corpus
+  // mounted the refusal every request gets; both servers render it.
+  if (expected.step.rendered === true) expected = { ...expected, mustRender: true };
   // A step opened at a permalink opens the one the server's own dossier names (`pinnedStep`).
   if (expected.step.pins !== undefined) expected = { ...expected, step: await pinnedStep(api.origin, expected.step) };
   if (expected.fromApi) {
@@ -1168,6 +1190,11 @@ export async function run(apiOutput, mount, expected, browser, liveRoot) {
     observed.verifications = await verifyCitations(api.origin, observed.citations.filter((citation) => pinnedCitation(citation) !== null));
     // What `verify` says of the permalink a notice names as not the version served.
     if (observed.pinNamed) observed.pinVerification = (await verifyCitations(api.origin, [observed.pinNamed]))[0];
+    // What a reader with no script receives: the page's own bytes, as the server sends them.
+    if (expected.mustRender === true) {
+      const bytes = await (await fetch(`${pageOrigin}${expected.step.path.split("#")[0]}`)).text();
+      observed.withoutScripts = { answerState: /<section data-answer-state="([a-z_]+)"/.exec(bytes)?.[1] ?? null };
+    }
     return { observed, failures: journeyVerdict(observed, { ...expected, origin: pageOrigin }) };
   } finally {
     if (live !== null) await new Promise((resolve) => live.close(resolve));

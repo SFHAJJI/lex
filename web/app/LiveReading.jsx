@@ -32,9 +32,11 @@ import {
   READING_LANGUAGES,
   createReadingSession,
   quotationLanguageTag,
+  readingOutcome,
 } from '../scripts/live-reading.mjs';
 import { ENGLISH_LANG, countedEntry, liveChrome } from '../scripts/live-chrome.mjs';
 import { anchorOf, parseSitePath } from '../scripts/permalinks.mjs';
+import { answerHandedWith } from '../scripts/v3-client.mjs';
 
 /** The forms' labels and buttons, and this screen's sentences, from the interface copy table. */
 const FORM = liveChrome().form;
@@ -342,12 +344,17 @@ export function ReadingForm({ onAsk, submitLabel = FORM.submit.reading, initial 
  * reader submits, never while rendering; the session cancels the one in flight when another is
  * asked, and unmounting cancels whatever is left.
  */
-export function LiveReading({ contract, fetchImpl }) {
-  const [outcome, setOutcome] = useState(IDLE);
+export function LiveReading({ contract, fetchImpl, initial = null }) {
+  // A page the server rendered from its own answer (`initial`: the envelope and the path it answered, R67) starts with
+  // that reading, read as an answer the page asked for; the browser reads the same answer from the page, so both render
+  // one tree and the page asks nothing as it loads.
+  const [outcome, setOutcome] = useState(() => (initial === null
+    ? IDLE
+    : readingOutcome(answerHandedWith('evidence_bundle', initial.envelope, { contract, objectType: 'evidence_bundle' }))));
   // The permalink this page was opened at, if any: what it names and the request that asks it (null on a page opened at
   // reading.html). `pinned` holds while the reading shown is that request's: until the reader asks another.
-  const [pin, setPin] = useState(null);
-  const [pinned, setPinned] = useState(false);
+  const [pin, setPin] = useState(() => (initial === null ? null : pinOf(initial.path)));
+  const [pinned, setPinned] = useState(() => initial !== null && pinOf(initial.path) !== null);
   const session = useRef(null);
   if (session.current === null) {
     session.current = createReadingSession({ contract, fetchImpl, onOutcome: setOutcome });
@@ -355,14 +362,15 @@ export function LiveReading({ contract, fetchImpl }) {
 
   useEffect(() => () => session.current.cancel(), []);
 
-  // Opened at a permalink: ask the reading it names, once, after hydration (the server rendered the idle form).
+  // Opened at a permalink the server did not render: ask the reading it names, once, after hydration (the server
+  // rendered the idle form).
   useEffect(() => {
-    const named = parseSitePath(window.location.pathname);
-    if (named === null || named.kind !== 'state') return;
-    const request = { identifier: named.identifier, date: named.date, language: named.language ?? '' };
-    setPin({ permalink: named.permalink, digest: named.digest, request });
+    if (initial !== null) return;
+    const named = pinOf(window.location.pathname);
+    if (named === null) return;
+    setPin(named);
     setPinned(true);
-    session.current.ask(request);
+    session.current.ask(named.request);
   }, []);
 
   // What the address names, brought into view once the reading is shown and given the focus, as a browser does for an
@@ -408,6 +416,13 @@ export function LiveReading({ contract, fetchImpl }) {
       </LiveAnswer>
     </div>
   );
+}
+
+/** What a permalink path names for the reading screen: the permalink, its digest and the request that asks it, or null. */
+function pinOf(pathname) {
+  const named = parseSitePath(pathname);
+  if (named === null || named.kind !== 'state') return null;
+  return { permalink: named.permalink, digest: named.digest, request: { identifier: named.identifier, date: named.date, language: named.language ?? '' } };
 }
 
 /** Whether a reading view shows the state (or EU wording) a permalink pins. */

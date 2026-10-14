@@ -19,11 +19,12 @@
 import { useEffect, useRef, useState } from 'react';
 
 import { RefusalCard } from './RefusalCard.jsx';
-import { DOSSIER_LANGUAGES, LIVE_DOSSIER_IDLE, createDossierSession } from '../scripts/live-dossier.mjs';
+import { DOSSIER_LANGUAGES, LIVE_DOSSIER_IDLE, createDossierSession, dossierOutcome } from '../scripts/live-dossier.mjs';
 import { EuropeAnnexes, LiveAnswer, Permalink, Say, StatusSentence, TableRegion, inEnglish, refusalCardCopyFor } from './LiveAnswer.jsx';
 import { quotationLanguageTag } from '../scripts/live-reading.mjs';
 import { ENGLISH_LANG, countedEntry, liveChrome } from '../scripts/live-chrome.mjs';
 import { parseSitePath } from '../scripts/permalinks.mjs';
+import { answerHandedWith } from '../scripts/v3-client.mjs';
 
 /** The forms' labels and buttons, and this screen's sentences, from the interface copy table. */
 const FORM = liveChrome().form;
@@ -210,10 +211,14 @@ export function DossierAnswerView({ outcome }) {
  * asked, and unmounting cancels whatever is left. `contract` and `fetchImpl` must be stable for the
  * screen's life.
  */
-export function LiveDossier({ contract, fetchImpl }) {
-  const [identifier, setIdentifier] = useState('');
+export function LiveDossier({ contract, fetchImpl, initial = null }) {
+  // A page the server rendered from its own answer (`initial`, R67) starts with that dossier and the work its address
+  // names in the form; the browser reads the same answer from the page, so both render one tree.
+  const [identifier, setIdentifier] = useState(() => (initial === null ? '' : (workOf(initial.path) ?? '')));
   const [language, setLanguage] = useState('');
-  const [outcome, setOutcome] = useState(IDLE);
+  const [outcome, setOutcome] = useState(() => (initial === null
+    ? IDLE
+    : dossierOutcome(answerHandedWith('dossier', initial.envelope, { contract, objectType: 'work_record' }))));
   const session = useRef(null);
   if (session.current === null) {
     session.current = createDossierSession({ contract, fetchImpl, onOutcome: setOutcome });
@@ -221,12 +226,14 @@ export function LiveDossier({ contract, fetchImpl }) {
 
   useEffect(() => () => session.current.cancel(), []);
 
-  // Opened at a work's address (`/lu-legilux/{work}`, `/eu-eurlex/{celex}`): ask its dossier, once, after hydration.
+  // Opened at a work's address (`/lu-legilux/{work}`, `/eu-eurlex/{celex}`) the server did not render: ask its dossier,
+  // once, after hydration.
   useEffect(() => {
-    const named = parseSitePath(window.location.pathname);
-    if (named === null || named.kind !== 'work') return;
-    setIdentifier(named.identifier);
-    session.current.ask({ identifier: named.identifier, language: '' });
+    if (initial !== null) return;
+    const work = workOf(window.location.pathname);
+    if (work === null) return;
+    setIdentifier(work);
+    session.current.ask({ identifier: work, language: '' });
   }, []);
 
   return (
@@ -266,4 +273,10 @@ export function LiveDossier({ contract, fetchImpl }) {
       </LiveAnswer>
     </div>
   );
+}
+
+/** The work a site path's address names, as the API is asked for it, or null. */
+function workOf(pathname) {
+  const named = parseSitePath(pathname);
+  return named !== null && named.kind === 'work' ? named.identifier : null;
 }

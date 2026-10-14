@@ -363,6 +363,33 @@ internal sealed class V3PlatformHost
         return ProjectSuccess(request, requestReference, context, execute(request), projection, cancellationToken);
     }
 
+    /// <summary>
+    /// The REST envelope <paramref name="operationId"/> answers <paramref name="requestUtf8"/>, as
+    /// <c>POST /api/v3/{operation}</c> writes it: what a page the API renders itself is rendered from (the specification of
+    /// record's R67), so the page and the API never answer differently. Throws as the route would refuse the request.
+    /// </summary>
+    internal byte[] AnswerRest(
+        ReadOnlyMemory<byte> requestUtf8,
+        string requestReference,
+        string operationId,
+        Func<V3PlatformOperationRequest, V3PlatformOperationOutcome> execute,
+        CancellationToken cancellationToken) =>
+        ExecuteOutcome(requestUtf8, requestReference, operationId, execute, V3EnvelopeProjectionKind.Rest, cancellationToken);
+
+    /// <summary>
+    /// The REST refusal <paramref name="operationId"/> answers <paramref name="requestUtf8"/> with when the route refuses
+    /// every request (no corpus mounted), as <c>POST /api/v3/{operation}</c> writes it: what a page the API renders itself
+    /// is rendered from then (R67). Throws as the route would refuse the request.
+    /// </summary>
+    internal byte[] RefuseRest(
+        ReadOnlyMemory<byte> requestUtf8,
+        string requestReference,
+        string operationId,
+        V3EnvelopeContext context,
+        Func<V3PlatformOperationRequest, V3PlatformOperationRefusal> refuse,
+        CancellationToken cancellationToken) =>
+        ExecuteRefusal(requestUtf8, requestReference, operationId, context, refuse, V3EnvelopeProjectionKind.Rest, cancellationToken);
+
     private byte[] ExecuteOutcome(
         ReadOnlyMemory<byte> requestUtf8,
         string requestReference,

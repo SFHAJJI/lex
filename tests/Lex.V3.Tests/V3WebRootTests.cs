@@ -287,6 +287,104 @@ public sealed class V3WebRootTests
     }
 
     [TestMethod]
+    public void ALawsAddressIsRenderedFromWhatThePageItselfWouldAskAsTheSitesOwnTableSays()
+    {
+        using var table = SiteTable();
+        var rows = table.RootElement.GetProperty("paths").EnumerateArray().ToArray();
+        Assert.IsGreaterThanOrEqualTo(12, rows.Count(row => row.GetProperty("render").ValueKind != JsonValueKind.Null));
+        foreach (var row in rows)
+        {
+            var path = row.GetProperty("path").GetString()!;
+            var page = V3WebRoot.SitePageFor(path);
+            var render = row.GetProperty("render");
+            if (render.ValueKind == JsonValueKind.Null)
+            {
+                Assert.IsNull(page, path);
+                continue;
+            }
+
+            Assert.IsNotNull(page, path);
+            Assert.AreEqual(render.GetProperty("language").GetString(), page.Language, path);
+            Assert.AreEqual(render.GetProperty("kind").GetString(), page.Kind, path);
+            Assert.AreEqual(render.GetProperty("operation").GetString(), page.OperationId, path);
+            CollectionAssert.AreEquivalent(
+                render.GetProperty("parameters").EnumerateObject().Select(property => $"{property.Name}={property.Value.GetString()}").ToArray(),
+                page.Parameters.Select(pair => $"{pair.Key}={pair.Value}").ToArray(),
+                path);
+            using var request = JsonDocument.Parse(page.RequestUtf8);
+            Assert.AreEqual(page.OperationId, request.RootElement.GetProperty("operation_id").GetString(), $"{path}: the body the page would send");
+        }
+    }
+
+    [TestMethod]
+    public async Task ALawsAddressIsRenderedFromTheAnswerAndServedAsBuiltWithoutOne()
+    {
+        var directory = NewWebDirectory();
+        File.WriteAllText(Path.Combine(directory, "en", "reading.html"), "<!doctype html><p>the reading page as built</p>");
+        File.WriteAllText(Path.Combine(directory, "en", "dossier.html"), "<!doctype html><p>the dossier page as built</p>");
+        Directory.CreateDirectory(Path.Combine(directory, "ssr"));
+        File.WriteAllText(Path.Combine(directory, "ssr", "en.js"), """
+            globalThis.lexSsr = { render(kind, envelope, path) {
+              const value = JSON.parse(envelope);
+              if (value.broken) throw new Error('broken');
+              return '<!doctype html><p>' + kind + ' ' + (value.refusal ? value.refusal.code : 'answer') + ' ' + path + '</p>';
+            } };
+            """);
+        try
+        {
+            var root = V3WebRoot.Open(directory)!;
+            Assert.IsTrue(root.RendersPages, "the directory holds the server renderer");
+            Assert.IsFalse(root.Paths.Any(path => path.StartsWith("/ssr/", StringComparison.Ordinal)), "the renderer is run, never served");
+            var ssr = Request("GET", "/ssr/en.js");
+            Assert.IsFalse(await root.TryServeAsync(ssr, "/ssr/en.js", CancellationToken.None, (_, _) => "{}"u8.ToArray()));
+
+            var permalink = $"/en/lu-legilux/loi-1991-08-10-n3/2024-02-01--{new string('a', 64)}";
+            V3SitePage? asked = null;
+            var answered = Request("GET", permalink);
+            Assert.IsTrue(await root.TryServeAsync(answered, permalink, CancellationToken.None, (page, _) =>
+            {
+                asked = page;
+                return "{\"result\":{},\"refusal\":null}"u8.ToArray();
+            }));
+            Assert.AreEqual(StatusCodes.Status200OK, answered.Response.StatusCode);
+            Assert.AreEqual($"<!doctype html><p>reading answer {permalink}</p>", Body(answered), "the page rendered from the answer");
+            Assert.AreEqual("text/html; charset=utf-8", answered.Response.ContentType);
+            AssertPageHeaders(root, answered, permalink);
+            Assert.AreEqual("evidence_bundle", asked!.OperationId);
+            Assert.AreEqual("2024-02-01", asked.Parameters["date"], "asked as the page itself would ask");
+
+            var unknown = Request("GET", "/en/lu-legilux/no-such-work");
+            Assert.IsTrue(await root.TryServeAsync(unknown, "/en/lu-legilux/no-such-work", CancellationToken.None,
+                (_, _) => "{\"result\":null,\"refusal\":{\"code\":\"identifier_unknown\"}}"u8.ToArray()));
+            Assert.AreEqual(StatusCodes.Status404NotFound, unknown.Response.StatusCode, "a work the API does not know is a page that is not there");
+            Assert.AreEqual("<!doctype html><p>dossier identifier_unknown /en/lu-legilux/no-such-work</p>", Body(unknown));
+
+            foreach (var (what, answer) in new (string, Func<V3SitePage, CancellationToken, byte[]?>?)[]
+            {
+                ("no answer to ask (a root given no answer)", null),
+                ("no answer", (_, _) => null),
+                ("a render that fails", (_, _) => "{\"broken\":true}"u8.ToArray()),
+            })
+            {
+                var context = Request("GET", permalink);
+                Assert.IsTrue(await root.TryServeAsync(context, permalink, CancellationToken.None, answer), what);
+                Assert.AreEqual(StatusCodes.Status200OK, context.Response.StatusCode, what);
+                Assert.AreEqual("<!doctype html><p>the reading page as built</p>", Body(context), $"{what}: the page as built, which asks for itself");
+            }
+
+            var head = Request("HEAD", permalink);
+            Assert.IsTrue(await root.TryServeAsync(head, permalink, CancellationToken.None, (_, _) => "{\"result\":{}}"u8.ToArray()));
+            Assert.AreEqual(StatusCodes.Status200OK, head.Response.StatusCode);
+            Assert.AreEqual("", Body(head), "HEAD carries the headers and no body");
+            Assert.IsGreaterThan(0L, head.Response.ContentLength!.Value);
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    [TestMethod]
     public async Task ALawsAddressIsNotClaimedByARootWithoutThePageThatReadsIt()
     {
         var directory = NewWebDirectory();

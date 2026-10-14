@@ -100,6 +100,13 @@ test("once loaded, the language menu leads to the same page in each language, it
   assert.ok(missing.some((failure) => failure === "the language menu's fr link leads to nothing, not /fr/coverage.html"), "a menu without the links fails");
 });
 
+test("a page that never arrived is one failure, named, and nothing the run could not read throws", () => {
+  for (const location of ["chrome-error://chromewebdata/", "about:blank"]) {
+    const observed = { ...good(), location, storage: undefined, text: undefined, requests: [] };
+    assert.deepEqual(journeyVerdict(observed, SUCCESS), [`the page did not load: the browser stands at ${location}`]);
+  }
+});
+
 test("the empty provisional referrer a browser reports under no-referrer is no referrer", () => {
   const observed = good();
   observed.requests[2].headers.Referer = "";
@@ -122,6 +129,7 @@ test("each way a run can fail is a failure, named", () => {
     ["an API request elsewhere", (o) => { o.requests[2].url = "http://127.0.0.1:6000/api/v3/coverage"; }, /left the page's origin/],
     ["a console line", (o) => { o.console = ["error: boom"]; }, /logged 1 console/],
     ["storage written", (o) => { o.storage.local = 1; }, /wrote to storage/],
+    ["storage unread", (o) => { o.storage = { local: null, session: null }; }, /storage could not be read/],
     ["another CSP", (o) => { o.csp = "default-src *"; }, /CSP is not the reviewed one/],
     ["a recovered hydration", (o) => { o.hydrated = "recovered"; }, /hydration was recovered/],
     ["hydration never reported", (o) => { o.hydrated = null; }, /never reported/],
@@ -355,6 +363,42 @@ test("a stale permalink run passes when its page says, in view, that the version
     const failures = journeyVerdict({ ...observed(), ...change }, expected);
     assert.ok(failures.some((failure) => reason.test(failure)), `${what}: ${failures.join(" | ")}`);
   }
+});
+
+test("a page at a law's address the server renders asks nothing as it loads and shows its answer with no script (R67)", () => {
+  for (const name of ["address", "permalink", "stale"]) assert.equal(JOURNEY_STEPS[name].rendered, true, `${name} is rendered by the server`);
+  assert.equal(JOURNEY_STEPS.reading.rendered, undefined, "a page the reader asks from its form is not");
+  const step = { ...JOURNEY_STEPS.permalink, path: `/en${DOSSIER_IDENTIFIER}/${READING_DATE}--${"e".repeat(64)}#${HISTORY_ANCHOR}` };
+  const observed = () => ({
+    ...goodSearch(),
+    requests: [
+      { url: `${ORIGIN}${step.path.split("#")[0]}`, method: "GET", headers: {} },
+      { url: `${ORIGIN}/en/client-live-reading.js`, method: "GET", headers: {} },
+    ],
+    location: `${ORIGIN}${step.path}`,
+    text: "49 articles quoted",
+    pinReplaced: false,
+    inView: "shown",
+    targetFocused: true,
+    serverRendered: true,
+    withoutScripts: { answerState: "success" },
+  });
+  const expected = { origin: ORIGIN, step, state: "success", texts: ["49 articles quoted"], mustRender: true };
+  assert.deepEqual(journeyVerdict(observed(), expected), []);
+  const askOnce = { url: `${ORIGIN}/api/v3/evidence_bundle`, method: "POST", headers: {}, headersSent: true, postData: JSON.stringify(step.body) };
+  for (const [what, change, reason] of [
+    ["the page arrived as built", { serverRendered: false }, /arrived without the answer the server renders it from/],
+    ["it asked anyway", { requests: [...observed().requests, askOnce] }, /made 1 requests to the API, not exactly none/],
+    ["no answer without scripts", { withoutScripts: { answerState: null } }, /without scripts the page shows no answer, not a success/],
+    ["the idle form without scripts", { withoutScripts: { answerState: "idle" } }, /without scripts the page shows a idle, not a success/],
+    ["not looked at without scripts", { withoutScripts: undefined }, /without scripts the page shows no answer/],
+  ]) {
+    const failures = journeyVerdict({ ...observed(), ...change }, expected);
+    assert.ok(failures.some((failure) => reason.test(failure)), `${what}: ${failures.join(" | ")}`);
+  }
+  // A step that does not require a rendered page (`mustRender` unset): a page that asks once, as any page does, passes.
+  const unrendered = { ...observed(), serverRendered: false, withoutScripts: undefined, answerState: "refusal", text: "no_corpus_mounted", requests: [...observed().requests, askOnce] };
+  assert.deepEqual(journeyVerdict(unrendered, { origin: ORIGIN, step, state: "refusal", refusalCode: "no_corpus_mounted" }), []);
 });
 
 test("a provision history run types the identifier and the article id and is held to both in the body", () => {

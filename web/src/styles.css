@@ -130,11 +130,16 @@ main > p:last-child {
    Digests, coordinates and URIs are long unbreakable tokens. Left alone they set the
    page's minimum width and force horizontal scrolling on a narrow viewport, which also
    makes the scroll container itself a keyboard tab stop. Both were caught by the browser
-   evidence run at 320px. */
+   evidence run at 320px. The evaluation card's own prose names what it was run over by its
+   corpus digest ("sha256:" and 64 hex), and its reasons and notes are the platform's: the
+   image rehearsal's probes found the target at 668px in a 305px window (the journeys' card
+   names no digest there). */
 code,
 dt,
 dd,
-.body {
+.body,
+[data-evaluation-card] p,
+[data-evaluation-card] li {
   overflow-wrap: anywhere;
   word-break: break-word;
 }

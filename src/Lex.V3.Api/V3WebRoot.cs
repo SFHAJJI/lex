@@ -1,3 +1,5 @@
+using System.Text;
+using System.Text.Json;
 using System.Text.RegularExpressions;
 using Microsoft.AspNetCore.Http;
 
@@ -28,6 +30,13 @@ namespace Lex.V3.Api;
 /// <c>X-Content-Type-Options: nosniff</c>; and <c>Cache-Control: no-store</c>, so a page never outlives the
 /// corpus it was answered from. A redirect carries them too, and <c>Vary: Accept-Language</c>.
 /// </para>
+/// <para>
+/// A law's address under an interface language is rendered from the API's own answer when the server can (R67: complete
+/// HTML, readable without JavaScript): the directory's <c>ssr/</c> holds the pages' server renderer
+/// (<see cref="V3PageRenderer"/>), which is run, never served. With no corpus mounted the page renders the refusal every
+/// request gets. When there is no answer (a request the API would refuse as malformed) or the render
+/// fails, the page is served as built and asks for itself.
+/// </para>
 /// </remarks>
 internal sealed class V3WebRoot
 {
@@ -48,12 +57,17 @@ internal sealed class V3WebRoot
     };
 
     private readonly IReadOnlyDictionary<string, string> _files;
+    private readonly V3PageRenderer? _renderer;
 
-    private V3WebRoot(IReadOnlyDictionary<string, string> files, string contentSecurityPolicy)
+    private V3WebRoot(IReadOnlyDictionary<string, string> files, string contentSecurityPolicy, V3PageRenderer? renderer)
     {
         _files = files;
         ContentSecurityPolicy = contentSecurityPolicy;
+        _renderer = renderer;
     }
+
+    /// <summary>Whether the directory held the pages' server renderer.</summary>
+    internal bool RendersPages => _renderer is not null;
 
     /// <summary>The Content-Security-Policy header every response carries: the page's own, and frame-ancestors.</summary>
     internal string ContentSecurityPolicy { get; }
@@ -91,6 +105,12 @@ internal sealed class V3WebRoot
                 throw new InvalidDataException($"The web directory holds '{relative}', of a type this server does not serve.");
             }
 
+            // The pages' server renderer is run (V3PageRenderer), never served.
+            if (relative.StartsWith("ssr/", StringComparison.Ordinal))
+            {
+                continue;
+            }
+
             files["/" + relative] = file;
         }
 
@@ -109,7 +129,10 @@ internal sealed class V3WebRoot
         }
 
         // The attribute is HTML: the page's renderer writes each quote of 'self' as an entity.
-        return new V3WebRoot(files, $"{System.Net.WebUtility.HtmlDecode(policy.Groups["policy"].Value)}; {FrameAncestors}");
+        return new V3WebRoot(
+            files,
+            $"{System.Net.WebUtility.HtmlDecode(policy.Groups["policy"].Value)}; {FrameAncestors}",
+            V3PageRenderer.Open(Path.Combine(root, "ssr")));
     }
 
     /// <summary>
@@ -118,7 +141,11 @@ internal sealed class V3WebRoot
     /// with no language with a redirect to the reader's language (<see cref="RedirectFor"/>); and returns true. Returns
     /// false, touching nothing, for any other path. The query string is not part of the path; a redirect keeps it.
     /// </summary>
-    internal async Task<bool> TryServeAsync(HttpContext context, string rawTarget, CancellationToken cancellationToken)
+    internal async Task<bool> TryServeAsync(
+        HttpContext context,
+        string rawTarget,
+        CancellationToken cancellationToken,
+        Func<V3SitePage, CancellationToken, byte[]?>? answer = null)
     {
         ArgumentNullException.ThrowIfNull(context);
         var queryAt = rawTarget.IndexOf('?', StringComparison.Ordinal);
@@ -154,6 +181,22 @@ internal sealed class V3WebRoot
 
         if (!WritePageHeaders(response, method))
         {
+            return true;
+        }
+
+        // A law's address under a language, rendered from the API's own answer when there is one (R67).
+        if (answer is not null && _renderer is not null && SitePageFor(path) is { } sitePage && answer(sitePage, cancellationToken) is { } envelope &&
+            await _renderer.RenderAsync(sitePage.Language, sitePage.Kind, Encoding.UTF8.GetString(envelope), path, cancellationToken).ConfigureAwait(false) is { } html)
+        {
+            var page = Encoding.UTF8.GetBytes(html);
+            response.StatusCode = AnswersUnknownWork(envelope) ? StatusCodes.Status404NotFound : StatusCodes.Status200OK;
+            response.ContentType = ContentTypes[".html"];
+            response.ContentLength = page.Length;
+            if (HttpMethods.IsGet(method))
+            {
+                await response.Body.WriteAsync(page, cancellationToken).ConfigureAwait(false);
+            }
+
             return true;
         }
 
@@ -207,8 +250,8 @@ internal sealed class V3WebRoot
     /// <c>$</c>, which in .NET also matches before a final newline.
     /// </summary>
     private static readonly Regex SitePath = new(
-        "^/(?:(?<locale>fr|en)/)?(?:lu-legilux/[a-z0-9][a-z0-9_-]*(?<pin>/[0-9]{4}-[0-9]{2}-[0-9]{2}--[0-9a-f]{64})?" +
-        "|eu-eurlex/[0-9A-Za-z][0-9A-Za-z()._-]*(?<eupin>/[a-z]{3}/[0-9]{4}-[0-9]{2}-[0-9]{2}--[0-9a-f]{64})?)\\z",
+        "^/(?:(?<locale>fr|en)/)?(?:lu-legilux/(?<work>[a-z0-9][a-z0-9_-]*)(?<pin>/(?<date>[0-9]{4}-[0-9]{2}-[0-9]{2})--[0-9a-f]{64})?" +
+        "|eu-eurlex/(?<celex>[0-9A-Za-z][0-9A-Za-z()._-]*)(?<eupin>/(?<lng>[a-z]{3})/(?<eudate>[0-9]{4}-[0-9]{2}-[0-9]{2})--[0-9a-f]{64})?)\\z",
         RegexOptions.CultureInvariant,
         TimeSpan.FromMilliseconds(100));
 
@@ -227,6 +270,55 @@ internal sealed class V3WebRoot
 
         var page = match.Groups["pin"].Success || match.Groups["eupin"].Success ? "reading.html" : "dossier.html";
         return $"/{match.Groups["locale"].Value}/{page}";
+    }
+
+    /// <summary>
+    /// What the server renders a law's address under an interface language from (R67), as <c>sitePageFor</c> in
+    /// <c>web/scripts/permalinks.mjs</c> says it (a test holds the two to one table): the page, the operation and the request
+    /// the page itself would send. A Luxembourg reading asks by work and date in any held language, an EU wording by CELEX,
+    /// date and its language, a dossier by the work. Null for any other path.
+    /// </summary>
+    internal static V3SitePage? SitePageFor(string path)
+    {
+        ArgumentNullException.ThrowIfNull(path);
+        var match = SitePath.Match(path);
+        if (!match.Success || !match.Groups["locale"].Success)
+        {
+            return null;
+        }
+
+        var language = match.Groups["locale"].Value;
+        var identifier = match.Groups["work"].Success ? "/lu-legilux/" + match.Groups["work"].Value : match.Groups["celex"].Value;
+        var parameters = new Dictionary<string, string>(StringComparer.Ordinal) { ["identifier"] = identifier };
+        if (match.Groups["date"].Success)
+        {
+            parameters["date"] = match.Groups["date"].Value;
+        }
+        else if (match.Groups["eudate"].Success)
+        {
+            parameters["date"] = match.Groups["eudate"].Value;
+            parameters["language"] = match.Groups["lng"].Value;
+        }
+
+        var reading = parameters.ContainsKey("date");
+        return new V3SitePage(language, reading ? "reading" : "dossier", reading ? "evidence_bundle" : "dossier", parameters);
+    }
+
+    /// <summary>Whether an envelope is the refusal of a work the API does not know: its page is a 404, as an absent page is.</summary>
+    private static bool AnswersUnknownWork(byte[] envelope)
+    {
+        try
+        {
+            using var document = JsonDocument.Parse(envelope);
+            return document.RootElement.TryGetProperty("refusal", out var refusal) &&
+                refusal.ValueKind == JsonValueKind.Object &&
+                refusal.TryGetProperty("code", out var code) &&
+                string.Equals(code.GetString(), "identifier_unknown", StringComparison.Ordinal);
+        }
+        catch (JsonException)
+        {
+            return false;
+        }
     }
 
     /// <summary>

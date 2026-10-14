@@ -23,13 +23,13 @@ const work = new URL('.react-build/', root);
  * @param {string} entry   path relative to the workspace root
  * @param {string} outfile path relative to the build directory
  */
-export async function bundle(entry, outfile, { platform = 'node', define = undefined, plugins = undefined } = {}) {
+export async function bundle(entry, outfile, { platform = 'node', define = undefined, plugins = undefined, format = 'esm' } = {}) {
   const out = fileURLToPath(new URL(outfile, work));
   await build({
     entryPoints: [fileURLToPath(new URL(entry, root))],
     outfile: out,
     bundle: true,
-    format: 'esm',
+    format,
     platform,
     jsx: 'automatic',
     // On the server the dependencies stay external. react-dom/server is CommonJS and reaches
@@ -61,6 +61,15 @@ export async function resetWork() {
  */
 export async function bundleClient(entry, outfile, options = {}) {
   return bundle(entry, outfile, { ...options, platform: 'browser' });
+}
+
+/**
+ * Build the server renderer a page at a law's address is rendered with (`app/ssr-entry.jsx`): React's browser server
+ * renderer and the pages, everything bundled, as one classic script (no module syntax) that names `lexSsr`, for an
+ * engine with no module loader and no Node builtins (V8 in the API).
+ */
+export async function bundleServerRenderer(entry, outfile, options = {}) {
+  return bundle(entry, outfile, { ...options, platform: 'browser', format: 'iife' });
 }
 
 /** Write one built page and return its file name. */

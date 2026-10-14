@@ -11,6 +11,29 @@
           "JsonPointer.Net": "7.0.2"
         }
       },
+      "Microsoft.ClearScript.V8": {
+        "type": "Direct",
+        "requested": "[7.5.1.1, )",
+        "resolved": "7.5.1.1",
+        "contentHash": "oEJxEMqzzC8XYE9kA1ajmfmloAuSlNIzNyrIfwROXkKjfeePptvUT22MqHfV6rRV4//B7XShlq7VM6o2ZM1eZQ==",
+        "dependencies": {
+          "Microsoft.ClearScript.Core": "7.5.1.1",
+          "Microsoft.ClearScript.V8.ICUData": "7.5.1.1",
+          "Newtonsoft.Json": "13.0.3"
+        }
+      },
+      "Microsoft.ClearScript.V8.Native.linux-x64": {
+        "type": "Direct",
+        "requested": "[7.5.1.1, )",
+        "resolved": "7.5.1.1",
+        "contentHash": "ZzX0d8KD3h1mkHji3qMZA5gllbArSJErOcgpmOgXp6MNVEcA08TED+InXAS/lnubEs1q0mflnXjHcXIptjDYSA=="
+      },
+      "Microsoft.ClearScript.V8.Native.win-x64": {
+        "type": "Direct",
+        "requested": "[7.5.1.1, )",
+        "resolved": "7.5.1.1",
+        "contentHash": "N79bR+RG7FD8wv/tdXZuOLDx3YAQ+mSB5P0gcUNMGEFO4DljRSPlJcEzHLrPvrlPzNnc3aV6Rx2v5V3qordPJg=="
+      },
       "Microsoft.Data.Sqlite": {
         "type": "Direct",
         "requested": "[10.0.11, )",
@@ -41,6 +64,16 @@
           "Json.More.Net": "3.0.1"
         }
       },
+      "Microsoft.ClearScript.Core": {
+        "type": "Transitive",
+        "resolved": "7.5.1.1",
+        "contentHash": "H3R4OaqQPfwxewnZcvTU6qUFyzJ05FchBD4IlO6Z0WO3iWh8PyAWHDcnt4FUmo/t0m40o8rkgnJ7g9pDT7pwJQ=="
+      },
+      "Microsoft.ClearScript.V8.ICUData": {
+        "type": "Transitive",
+        "resolved": "7.5.1.1",
+        "contentHash": "Jg3yFIWPkfsjOHzVUTbA0VgnxXBtX9BwSL00E8HIljFm3f203e+mlJYO0tTHnqetA0xZyLKbRjRuPotUP/47Nw=="
+      },
       "Microsoft.Data.Sqlite.Core": {
         "type": "Transitive",
         "resolved": "10.0.11",
@@ -48,6 +81,11 @@
         "dependencies": {
           "SQLitePCLRaw.core": "2.1.12"
         }
+      },
+      "Newtonsoft.Json": {
+        "type": "Transitive",
+        "resolved": "13.0.3",
+        "contentHash": "HrC5BXdl00IP9zeV+0Z848QWPAoCr9P3bDEZguI+gkLcBKAOxix/tLEAAHC+UvDNPv4a2d18lOReHMOagPa+zQ=="
       },
       "PdfPig": {
         "type": "Transitive",
@@ -100,6 +138,18 @@
       }
     },
     "net10.0/linux-x64": {
+      "Microsoft.ClearScript.V8.Native.linux-x64": {
+        "type": "Direct",
+        "requested": "[7.5.1.1, )",
+        "resolved": "7.5.1.1",
+        "contentHash": "ZzX0d8KD3h1mkHji3qMZA5gllbArSJErOcgpmOgXp6MNVEcA08TED+InXAS/lnubEs1q0mflnXjHcXIptjDYSA=="
+      },
+      "Microsoft.ClearScript.V8.Native.win-x64": {
+        "type": "Direct",
+        "requested": "[7.5.1.1, )",
+        "resolved": "7.5.1.1",
+        "contentHash": "N79bR+RG7FD8wv/tdXZuOLDx3YAQ+mSB5P0gcUNMGEFO4DljRSPlJcEzHLrPvrlPzNnc3aV6Rx2v5V3qordPJg=="
+      },
       "SQLitePCLRaw.lib.e_sqlite3": {
         "type": "Transitive",
         "resolved": "2.1.12",

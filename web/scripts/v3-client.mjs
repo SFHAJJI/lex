@@ -53,6 +53,16 @@ function mediaType(response) {
 }
 
 /**
+ * An answer the server handed with the page (a page it rendered from its own answer, `initial-answer.mjs`) read as
+ * `askV3` reads one it fetched, with the same checks and the same result: so the tree the browser renders from it is the
+ * tree the server rendered.
+ */
+export function answerHandedWith(operation, value, { contract, objectType } = {}) {
+  const read = readV3Envelope(value, contract, { operation, objectType });
+  return read.ok ? { state: read.state, envelope: read.envelope } : { state: "invalid_envelope", reason: read.reason };
+}
+
+/**
  * Asks one operation. `fetchImpl` is injectable so the rules above are tested without a network;
  * in a page it is the browser's `fetch`.
  *

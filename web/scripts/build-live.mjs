@@ -57,6 +57,11 @@ async function buildPages(destination, { card, locale, buildTag = "" }) {
     await writeFile(new URL(page, out), page === "coverage.html" ? ssr[render]({ card }) : ssr[render](), "utf8");
     await cp(await bundleClient(`app/${clientEntry}`, client.replace(/\.js$/, `${suffix}.js`), options), new URL(client, out));
   }
+  // The server renderer for this language's pages at a law's address (R67), under ssr/, which neither server serves:
+  // the API and the live server run it, a reader never fetches it.
+  const { bundleServerRenderer } = await import("./react-build.mjs");
+  await mkdir(new URL("ssr/", destination), { recursive: true });
+  await cp(await bundleServerRenderer("app/ssr-entry.jsx", `ssr-entry${suffix}.js`, options), new URL(`ssr/${locale}.js`, destination));
 }
 
 /**

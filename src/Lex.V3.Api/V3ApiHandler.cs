@@ -126,7 +126,7 @@ internal sealed class V3ApiHandler
         // The live pages, when this server holds them: only the files its web root recorded, and a law's
         // address (V3WebRoot.PageForSitePath) served the page that reads it, so every other path reaches the
         // synthetic routes exactly as before.
-        if (_webRoot is not null && await _webRoot.TryServeAsync(context, rawTarget, cancellationToken).ConfigureAwait(false))
+        if (_webRoot is not null && await _webRoot.TryServeAsync(context, rawTarget, cancellationToken, AnswerFor(context)).ConfigureAwait(false))
         {
             return;
         }
@@ -243,6 +243,30 @@ internal sealed class V3ApiHandler
         context.Response.ContentType = "application/json; charset=utf-8";
         context.Response.ContentLength = answer.Length;
         await context.Response.Body.WriteAsync(answer, cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// The answer a page at a law's address is rendered from (R67): what the REST route answers the request the page would
+    /// send, byte for byte: the mounted corpus's answer, or with no corpus mounted the refusal every request gets. A request
+    /// the route would refuse as malformed is no answer, and the page is then served as built.
+    /// </summary>
+    private Func<V3SitePage, CancellationToken, byte[]?> AnswerFor(HttpContext context)
+    {
+        var corpusMount = _corpusMount;
+        var requestReference = RequestReference(context.TraceIdentifier);
+        return (page, cancellationToken) =>
+        {
+            try
+            {
+                return corpusMount is null
+                    ? _host.RefuseRest(page.RequestUtf8, requestReference, page.OperationId, UnmountedLuxembourgContext(), static request => NoCorpusMounted(request), cancellationToken)
+                    : _host.AnswerRest(page.RequestUtf8, requestReference, page.OperationId, ExecuteFor(corpusMount, _utcNow, page.OperationId), cancellationToken);
+            }
+            catch (Exception exception) when (exception is not OperationCanceledException)
+            {
+                return null;
+            }
+        };
     }
 
     internal static V3PlatformOperationRefusal NoCorpusMounted(V3PlatformOperationRequest request)

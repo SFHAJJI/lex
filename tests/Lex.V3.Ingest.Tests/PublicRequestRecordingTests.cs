@@ -841,8 +841,15 @@ public sealed class PublicRequestRecordingTests
     {
         var root = RepositoryRoot();
         var project = XDocument.Load(Path.Combine(root, "src", "Lex.V3.Api", "Lex.V3.Api.csproj"));
+        // ClearScript is V8, which renders the pages at a law's address from the API's own answer (R67): a script engine
+        // that holds nothing of this process, no host object, no file, no network, and is handed only the answer and the
+        // path (V3PageRenderer). It is no place to record a request.
         CollectionAssert.AreEqual(
-            new[] { "JsonSchema.Net", "Microsoft.Data.Sqlite" },
+            new[]
+            {
+                "JsonSchema.Net", "Microsoft.ClearScript.V8", "Microsoft.ClearScript.V8.Native.linux-x64",
+                "Microsoft.ClearScript.V8.Native.win-x64", "Microsoft.Data.Sqlite",
+            },
             project.Descendants("PackageReference").Select(static element => (string)element.Attribute("Include")!).OrderBy(static name => name, StringComparer.Ordinal).ToArray(),
             "A package was added to or removed from the public process. A logging, telemetry or diagnostics package would be a place to record a request.");
 
@@ -857,8 +864,11 @@ public sealed class PublicRequestRecordingTests
         CollectionAssert.AreEqual(
             new[]
             {
-                "Humanizer.Core", "Json.More.Net", "JsonPointer.Net", "JsonSchema.Net", "Microsoft.Data.Sqlite",
-                "Microsoft.Data.Sqlite.Core", "PdfPig", "SQLitePCLRaw.bundle_e_sqlite3", "SQLitePCLRaw.core",
+                "Humanizer.Core", "Json.More.Net", "JsonPointer.Net", "JsonSchema.Net", "Microsoft.ClearScript.Core",
+                "Microsoft.ClearScript.V8", "Microsoft.ClearScript.V8.ICUData", "Microsoft.ClearScript.V8.Native.linux-x64",
+                "Microsoft.ClearScript.V8.Native.win-x64", "Microsoft.Data.Sqlite", "Microsoft.Data.Sqlite.Core",
+                // ClearScript's own dependency, which the API does not call.
+                "Newtonsoft.Json", "PdfPig", "SQLitePCLRaw.bundle_e_sqlite3", "SQLitePCLRaw.core",
                 "SQLitePCLRaw.lib.e_sqlite3", "SQLitePCLRaw.provider.e_sqlite3",
             },
             resolved,

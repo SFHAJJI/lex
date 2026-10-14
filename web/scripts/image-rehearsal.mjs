@@ -269,7 +269,8 @@ export async function v2RouteFailures(origin, { v3Files = new Map(), routes = V2
 
 /** The live pages as the image serves them, URL path to bytes: each file at `/<path>`, and each interface language's root (`/en/`, `/fr/`) as its `index.html`. */
 export function servedPaths(web) {
-  const served = new Map(web.map(([path, bytes]) => [`/${path}`, bytes]));
+  // The pages' server renderer (ssr/) is run by the API, never served (R67).
+  const served = new Map(web.filter(([path]) => !path.startsWith("ssr/")).map(([path, bytes]) => [`/${path}`, bytes]));
   // An interface language's root is its home page (R61); the site's root is a redirect, not a page.
   for (const language of ["en", "fr"]) {
     if (served.has(`/${language}/index.html`)) served.set(`/${language}/`, served.get(`/${language}/index.html`));
