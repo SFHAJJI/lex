@@ -3,8 +3,10 @@
 // go-live as one command; these rules are what make it credential-free: no secret in the template or the script, the
 // image pulled with a managed identity and named by digest, one server, and a new revision arriving with no traffic.
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import test from "node:test";
+import { fileURLToPath } from "node:url";
 
 const template = JSON.parse(readFileSync(new URL("../../deploy/main.json", import.meta.url), "utf8"));
 const bicep = readFileSync(new URL("../../deploy/main.bicep", import.meta.url), "utf8");
@@ -13,6 +15,17 @@ const script = readFileSync(new URL("../../deploy/deploy.ps1", import.meta.url),
 const code = script.replace(/<#[\s\S]*?#>/g, "").split("\n").filter((line) => !line.trim().startsWith("#")).join("\n");
 const app = (Array.isArray(template.resources) ? template.resources : Object.values(template.resources))
   .find((resource) => resource.type === "Microsoft.App/containerApps");
+const deployDirectory = fileURLToPath(new URL("../../deploy/", import.meta.url));
+
+/** Runs a PowerShell script (pwsh, as CI has it on both its systems) and returns its standard output and exit code. */
+function pwsh(script, env = {}) {
+  const run = spawnSync("pwsh", ["-NoProfile", "-NonInteractive", "-Command", script], { encoding: "utf8", env: { ...process.env, ...env } });
+  assert.equal(run.error, undefined, `pwsh could not run: ${run.error}`);
+  return { out: run.stdout.trim(), err: run.stderr.trim(), status: run.status };
+}
+
+const quote = (text) => `'${text.replaceAll("'", "''")}'`;
+const privateCopy = quote(`${deployDirectory}private-copy.ps1`);
 
 test("the template holds no secret: no secure parameter, no secret, no key listed, no registry password", () => {
   for (const [name, parameter] of Object.entries(template.parameters)) {
@@ -73,6 +86,56 @@ test("until the owner opens the site, every deployment admits only the named ran
   assert.equal(allowed.input.action, "Allow");
 });
 
+test("who ingress admits is held exactly: the named ranges, each allowed, or everyone only after the opening", () => {
+  const cases = [
+    ["the named ranges", '[{"ipAddressRange":"203.0.113.7/32","action":"Allow"},{"ipAddressRange":"198.51.100.0/24","action":"Allow"}]', "203.0.113.7/32,198.51.100.0/24", false, ""],
+    ["one more rule than named", '[{"ipAddressRange":"203.0.113.7/32","action":"Allow"},{"ipAddressRange":"192.0.2.9/32","action":"Allow"}]', "203.0.113.7/32", false, "not exactly"],
+    ["a named range missing", '[{"ipAddressRange":"203.0.113.7/32","action":"Allow"}]', "203.0.113.7/32,198.51.100.0/24", false, "not exactly"],
+    ["a deny rule", '[{"ipAddressRange":"203.0.113.7/32","action":"Deny"}]', "203.0.113.7/32", false, "not exactly"],
+    ["no rule at all (null)", "null", "203.0.113.7/32", false, "admits everyone"],
+    ["no rule at all ([])", "[]", "203.0.113.7/32", false, "admits everyone"],
+    ["after the opening, none", "[]", "", true, ""],
+    ["after the opening, one left", '[{"ipAddressRange":"203.0.113.7/32","action":"Allow"}]', "", true, "still admits only"],
+  ];
+  for (const [what, rules, allowed, open, failure] of cases) {
+    const { out, status } = pwsh(`. ${privateCopy}; $f = Get-AdmittedFailure ${quote(rules)} (Get-AllowedCidrs ${quote(allowed)}) $${open}; if ($f) { "FAIL:$f" } else { "HOLDS" }`);
+    assert.equal(status, 0, what);
+    if (failure === "") assert.equal(out, "HOLDS", what);
+    else assert.ok(out.startsWith("FAIL:") && out.includes(failure), `${what}: ${out}`);
+  }
+});
+
+test("each range is an address or a small network, and several may be named in the form the runbook uses", () => {
+  const { out } = pwsh(`. ${privateCopy}; (Get-AllowedCidrs @('203.0.113.7/32, 198.51.100.0/24', '192.0.2.1/32')) -join '|'`);
+  assert.equal(out, "203.0.113.7/32|198.51.100.0/24|192.0.2.1/32", "a comma-separated value, as pwsh -File hands it over, names each range");
+  for (const [cidr, refused] of [["203.0.113.7/32", false], ["203.0.113.0/24", false], ["203.0.112.0/23", true], ["0.0.0.0/0", true], ["203.0.113.7", true], ["203.0.113.256/32", true]]) {
+    const { out: verdict } = pwsh(`. ${privateCopy}; $f = Get-AllowedCidrFailure ${quote(cidr)}; if ($f) { 'REFUSED' } else { 'ADMITTED' }`);
+    assert.equal(verdict, refused ? "REFUSED" : "ADMITTED", cidr);
+  }
+});
+
+test("the opening removes every address rule, reads back that ingress admits everyone, and only then says so", () => {
+  // The Azure CLI, made up: the listing fails or names two rules; the read-back says what is left.
+  const stub = `
+    $global:calls = @()
+    function global:az { $line = $args -join ' '; $global:calls += $line; $global:LASTEXITCODE = 0
+      if ($line -like 'containerapp ingress access-restriction list*') { if ($env:LIST_FAILS) { $global:LASTEXITCODE = 3; return }; return @('private-copy-1', 'private-copy-2') }
+      if ($line -like 'containerapp show*') { if ($env:STILL_RESTRICTED) { return '[{"ipAddressRange":"203.0.113.7/32","action":"Allow"}]' }; return '[]' }
+    }
+    try { & ${quote(`${deployDirectory}deploy.ps1`)} -Subscription s -ResourceGroup rg -Open 6>$null; 'RESULT:returned' } catch { "RESULT:threw $($_.Exception.Message)" }
+    'REMOVED:' + (@($global:calls | Where-Object { $_ -like '*access-restriction remove*' }).Count)`;
+  const opened = pwsh(stub);
+  assert.match(opened.out, /RESULT:returned/);
+  assert.match(opened.out, /REMOVED:2/, "both rules removed");
+
+  const unlisted = pwsh(stub, { LIST_FAILS: "1" });
+  assert.match(unlisted.out, /RESULT:threw The address rules of ca-lex-v3 could not be listed; nothing was removed/);
+  assert.match(unlisted.out, /REMOVED:0/);
+
+  const restricted = pwsh(stub, { STILL_RESTRICTED: "1" });
+  assert.match(restricted.out, /RESULT:threw The opening did not take: ingress still admits only 203\.0\.113\.7\/32/);
+});
+
 test("the script deploys the private copy with its ranges every time, reads them back, and opens the site only on the owner's step", () => {
   // Every deployment names its ranges, or says -Public after the opening; never neither, never both.
   assert.match(code, /if \(-not \$Public -and \$AllowedCidr\.Count -eq 0\) \{\s*throw "Until the opening every deployment names the address ranges/);
@@ -83,6 +146,12 @@ test("the script deploys the private copy with its ranges every time, reads them
   const readBack = code.indexOf('Step "read back who ingress admits"');
   assert.ok(readBack > code.indexOf("az deployment group create") && readBack < code.indexOf('Step "probe the candidate"'), "read back after the deployment, before the probe");
   assert.match(code, /if \(\$failure\) \{ throw "Who ingress admits is not what this deployment names/);
+  // The read-back and its repair change Azure only under -Apply, and the deployment hands the template its parameters
+  // only through the parameters file (review of #960).
+  const applied = code.slice(code.indexOf("if ($Apply) {\n    Step \"read back who ingress admits\""));
+  assert.ok(applied.length > 0 && applied.indexOf("access-restriction set") < applied.indexOf("if ($failure) { throw"), "the repair stands inside -Apply's block");
+  assert.match(code, /az deployment group create -g \$ResourceGroup -f \(Join-Path \$checkout 'deploy\/main\.bicep'\) -p "@\$parametersFile" -o none\n/);
+  assert.match(code, /\$AllowedCidr = Get-AllowedCidrs \$AllowedCidr/);
   // Removing the ranges is the owner's -Open alone: nowhere else does the script remove one, and promotion stays printed.
   const opening = code.slice(code.indexOf("if ($Open) {"), code.indexOf("exit 0", code.indexOf("if ($Open) {")));
   assert.match(opening, /az containerapp ingress access-restriction remove -g \$ResourceGroup -n \$AppName --rule-name \$rule/);

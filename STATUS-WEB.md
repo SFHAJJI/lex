@@ -19,12 +19,26 @@ everyone.
 - **The opening is the owner's own step** (`deploy.ps1 -Open`, a parameter set of its own, never part of a
   deployment): it removes every address rule. Every deployment after it says `-Public` (`openToPublic`), so none
   restricts the site again by mistake; the script refuses `-Public` together with ranges.
+- **The review of #960** (a review workflow: three independent reviewers, exposure, template and script semantics, and
+  operations, each finding then put to a skeptic who tried to refute it; 7 confirmed, 5 refuted as not material). The
+  confirmed findings, all repaired:
+  - the opening could say "the site is open" after removing nothing (its listing's failure was never checked, and
+    nothing read back): `-Open` now stops when it cannot list the rules, and says the site is open only after reading
+    back that ingress admits everyone;
+  - two ranges could not be named in the documented `pwsh -File` form: each value is split on commas;
+  - any prefix was accepted, so `0.0.0.0/0` would have deployed as "the site stays private": a range must be /24 to
+    /32;
+  - the kit's test did not hold the read-back or the opening: the checks now live in `deploy/private-copy.ps1` and the
+    web suite runs them under pwsh (exact ranges, an extra, a missing and a deny rule, `null` and `[]`; the opening
+    with a failing listing and with a rule left), with the read-back's place under `-Apply` held too;
+  - the owner's runbook in this file still named `-ProbeSourceCidr`: it now names `-AllowedCidr`, `-Open` and
+    `-Public`.
 - **Not yet** (driver decisions, reversible): a probe from an address outside the list needs a vantage point off this
   machine, such as a scheduled GitHub check against the private copy, and GitHub runs scheduled and dispatched
   workflows only from the default branch, which is still the legacy line until the branch switch; until then the
   read-back of the app's own configuration stands for it. The operator's current address is pinned again once the
   owner's Azure sign-in works.
-- **Measured**: `deploy/validate.ps1` (`main.json` is `main.bicep`'s build, lint clean, the script parses); web suite 1,093 of 1,093 (`deploy-kit.test.mjs` 8 of 8); plan runs of `deploy.ps1` against release v3-20261013T214036Z-9a5f05d3d1b4: refused with no range, with `-Public` and a range, and with `203.0.113.7` (no prefix length); with two ranges, the plan shows both as the template's parameters, from a parameters file (a single range stays an array).
+- **Measured**: `deploy/validate.ps1` (`main.json` is `main.bicep`'s build, lint clean, the script parses); web suite 1,096 of 1,096 (`deploy-kit.test.mjs` 11 of 11, three of them running the checks under pwsh); plan runs of `deploy.ps1 -File` against release v3-20261013T214036Z-9a5f05d3d1b4: refused with no range, with `-Public` and a range, with `203.0.113.7` and with `0.0.0.0/0`; `-AllowedCidr 203.0.113.7/32,198.51.100.0/24` names both ranges as the template's parameter.
 
 ## A law's page arrives whole: the server renders it (sole driver, 2026-10-14)
 
@@ -1528,8 +1542,9 @@ Nothing here logs in, deploys or signs with a production identity; those stay wi
   - every revision kept (multiple revision mode):
     - a new revision arrives as the `candidate` label with no traffic, while `liveRevision` keeps 100
       per cent;
-    - on a first deployment there is no live revision, so the candidate takes the traffic and ingress
-      admits only the owner's probe address (`probeSourceCidr`) until promotion.
+    - on a first deployment there is no live revision, so the candidate takes the traffic;
+  - until the owner opens the site, ingress admits only the ranges every deployment names
+    (`allowedSourceCidrs`), and none at all when it names none; after the opening, `openToPublic`.
 - **`deploy/deploy.ps1`** is the one command.
   - Without `-Apply` it only plans: it verifies the release and prints every command, changing nothing.
   - With `-Apply`, in order:
@@ -1541,12 +1556,16 @@ Nothing here logs in, deploys or signs with a production identity; those stay wi
        `oras cp` reads and which is removed when the copy ends, whatever happens. It is never on a
        command line or printed. `oras cp` takes no password on stdin (review of #890); the custody
        probe's runbook did the same;
-    3. it runs `az deployment group what-if`, then `create`, by digest;
-    4. it probes the candidate's own URL;
-    5. if the probe fails, it deactivates the candidate (the removal step) and exits non-zero.
-  - Promotion is printed for the owner and never run: a traffic move, or on a first deployment lifting
-    the probe-only restriction.
+    3. it runs `az deployment group what-if`, then `create`, by digest, with the private copy's ranges
+       (`-AllowedCidr`) or, after the opening, `-Public`;
+    4. it reads back who ingress admits, sets the ranges again once if they differ, and stops if they
+       still do;
+    5. it probes the candidate's own URL;
+    6. if the probe fails, it deactivates the candidate (the removal step) and exits non-zero.
+  - Promotion is printed for the owner and never run: a traffic move.
   - `-Remove -Revision <name>` is the removal step on its own.
+  - `-Open` is the owner's opening: it removes the address rules, reads back that ingress admits
+    everyone, and only then says the site is open.
 - **`web/scripts/deploy-probe.mjs`** is the zero-traffic probe. First it reads the release back
   under the signing identity's key (`releaseFailures`). Then, against the revision's URL:
   - `/` must be the release image's own page byte for byte, with CSP `frame-ancestors 'none'`, HSTS,
@@ -1587,14 +1606,17 @@ Nothing here logs in, deploys or signs with a production identity; those stay wi
      no Azure is touched).
   3. Plan: `pwsh -File deploy/deploy.ps1 -Subscription <id> -ResourceGroup <rg> -EnvironmentId <id>
      -Registry <name>.azurecr.io -IdentityResourceId <id> -SigningPublicKey <identity's public key,
-     PEM> -SignerIdentity <the identity it signs as> -Release <release directory>`, then either `-LiveRevision <the
-     revision serving now>`, or on a first deployment `-ProbeSourceCidr <your address>/32`. `-Apply` requires
-     `-SignerIdentity`, so only a release signed by the release signer is deployed.
+     PEM> -SignerIdentity <the identity it signs as> -Release <release directory>`, with `-LiveRevision <the revision
+     serving now>` (none on a first deployment), and until the opening `-AllowedCidr <your address>/32` (a reviewer's
+     too, comma-separated, each /24 to /32); after the opening `-Public` instead. `-Apply` requires `-SignerIdentity`,
+     so only a release signed by the release signer is deployed.
   4. The same command with `-Apply` deploys the candidate and probes it. On "answers as the release
      holds", promote with the command it prints. On a failed probe the candidate is already
      deactivated.
   5. Remove a revision at any time with `pwsh -File deploy/deploy.ps1 -Subscription <id>
      -ResourceGroup <rg> -Remove -Revision <name>`.
+  6. On the opening day, and never otherwise: `pwsh -File deploy/deploy.ps1 -Subscription <id> -ResourceGroup <rg>
+     -Open`, then `-Public` on every deployment after it.
 - **Not covered:**
   - the production signing key itself (the owner's, in their key vault);
   - a custom domain, DNS and monitoring;

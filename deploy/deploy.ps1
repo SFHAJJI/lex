@@ -20,8 +20,8 @@ With -Apply, in order:
    deployed by that digest, never by a tag;
 3. `deploy/main.bicep` is deployed: the image by digest as a new revision with the `candidate` label and no traffic
    while -LiveRevision keeps 100 per cent. Until the owner opens the site, every deployment is of the private copy:
-   ingress admits only the -AllowedCidr ranges (the operator's address first), and the script refuses a deployment that
-   names none; after the opening, every deployment says -Public;
+   ingress admits only the -AllowedCidr ranges (the operator's address first; several, comma-separated; each /24 to
+   /32), and the script refuses a deployment that names none; after the opening, every deployment says -Public;
 4. who ingress admits is read back from the app, and must be exactly those ranges (or everyone, with -Public); if it is
    not, the ranges are set again and read back once more, and the script stops if they still do not hold;
 5. the zero-traffic probe runs against the candidate's own URL (`web/scripts/deploy-probe.mjs --origin`), the browser
@@ -32,15 +32,16 @@ Promotion (moving traffic to the candidate) is printed for the owner and never r
 
 -Remove deactivates one revision of the app and exits: the removal step on its own.
 
--Open is the owner's opening, on the opening day and never otherwise: it removes every address rule, so ingress admits
-everyone, and exits. From then on every deployment says -Public. (The plan's item 0.5: the first version restricted
-ingress on a first deployment only, so a second deployment would have opened the private copy to everyone.)
+-Open is the owner's opening, on the opening day and never otherwise: it removes every address rule, reads back that
+ingress admits everyone, and only then says the site is open; if it cannot list the rules, or the read-back still finds
+one, it stops and says so. From then on every deployment says -Public. (The plan's item 0.5: the first version
+restricted ingress on a first deployment only, so a second deployment would have opened the private copy to everyone.)
 
 .EXAMPLE
 pwsh -File deploy/deploy.ps1 -Subscription <id> -ResourceGroup rg-lex-v3 -EnvironmentId <managed environment id> `
   -Registry crlex.azurecr.io -IdentityResourceId <user-assigned identity id> -SigningPublicKey release-signing.pem `
   -SignerIdentity <the release signer's identity> -Release C:\releases\v3-... -LiveRevision ca-lex-v3--v3-previous `
-  -AllowedCidr 203.0.113.7/32 -Apply
+  -AllowedCidr 203.0.113.7/32,198.51.100.0/24 -Apply
 #>
 [CmdletBinding(DefaultParameterSetName = 'Deploy')]
 param(
@@ -69,6 +70,8 @@ param(
 
 $ErrorActionPreference = 'Stop'
 $checkout = Split-Path -Parent $PSScriptRoot
+. (Join-Path $PSScriptRoot 'private-copy.ps1')
+$AllowedCidr = Get-AllowedCidrs $AllowedCidr
 
 function Step([string] $what) { Write-Host "== $what" }
 
@@ -94,12 +97,18 @@ if ($Open) {
     # The owner's opening: every address rule removed, so ingress admits everyone. Never part of a deployment.
     Step "open: $AppName admits everyone"
     Run "az account set --subscription $Subscription" { az account set --subscription $Subscription }
-    $rules = @(az containerapp ingress access-restriction list -g $ResourceGroup -n $AppName --query "[].name" -o tsv) | Where-Object { $_ }
-    foreach ($rule in $rules) {
+    $listed = az containerapp ingress access-restriction list -g $ResourceGroup -n $AppName --query "[].name" -o tsv
+    if ($LASTEXITCODE -ne 0) { throw "The address rules of $AppName could not be listed; nothing was removed, and the site stays private." }
+    foreach ($rule in @($listed) | Where-Object { $_ }) {
         Run "az containerapp ingress access-restriction remove -g $ResourceGroup -n $AppName --rule-name $rule" {
             az containerapp ingress access-restriction remove -g $ResourceGroup -n $AppName --rule-name $rule
         }
     }
+    # Said open only once read back so (review of #960: a failed listing removed nothing and still said open).
+    $read = az containerapp show -g $ResourceGroup -n $AppName --query "properties.configuration.ingress.ipSecurityRestrictions" -o json
+    if ($LASTEXITCODE -ne 0) { throw "Who ingress admits could not be read back after the opening: check it before saying the site is open." }
+    $failure = Get-AdmittedFailure ($read -join "`n") @() $true
+    if ($failure) { throw "The opening did not take: $failure." }
     Write-Host "  The site is open. From now on every deployment says -Public, so none restricts it again."
     exit 0
 }
@@ -113,9 +122,8 @@ if (-not $Public -and $AllowedCidr.Count -eq 0) {
     throw "Until the opening every deployment names the address ranges the private copy admits (-AllowedCidr, the operator's address first, such as 203.0.113.7/32). After the owner's opening (-Open), every deployment says -Public."
 }
 foreach ($cidr in $AllowedCidr) {
-    if ($cidr -notmatch '^((25[0-5]|2[0-4][0-9]|1?[0-9]?[0-9])\.){3}(25[0-5]|2[0-4][0-9]|1?[0-9]?[0-9])/([0-9]|[12][0-9]|3[0-2])$') {
-        throw "-AllowedCidr '$cidr' is not an IPv4 address range such as 203.0.113.7/32."
-    }
+    $failure = Get-AllowedCidrFailure $cidr
+    if ($failure) { throw "-AllowedCidr $failure." }
 }
 if ($Apply -and [string]::IsNullOrWhiteSpace($SignerIdentity)) {
     throw "-Apply deploys a release signed by the release signer: name its identity with -SignerIdentity. A rehearsal release is for plan runs only."
@@ -198,19 +206,8 @@ finally {
 # 4. Who ingress admits, read back from the app: exactly the named ranges until the opening, everyone after it.
 function AdmittedFailure {
     $read = az containerapp show -g $ResourceGroup -n $AppName --query "properties.configuration.ingress.ipSecurityRestrictions" -o json
-    $rules = @($read | ConvertFrom-Json) | Where-Object { $_ }
-    $ranges = @($rules | ForEach-Object { $_.ipAddressRange } | Sort-Object)
-    if ($Public) {
-        if ($ranges.Count -ne 0) { return "ingress still admits only $($ranges -join ', ')" }
-        return $null
-    }
-    $actions = @($rules | ForEach-Object { $_.action } | Sort-Object -Unique)
-    $expected = @($AllowedCidr | Sort-Object)
-    if ($ranges.Count -eq 0) { return "ingress admits everyone" }
-    if ($actions.Count -ne 1 -or $actions[0] -ne 'Allow' -or (Compare-Object $ranges $expected)) {
-        return "ingress admits $($ranges -join ', ') ($($actions -join ', ')), not exactly $($expected -join ', ')"
-    }
-    return $null
+    if ($LASTEXITCODE -ne 0) { return "who ingress admits could not be read back" }
+    return Get-AdmittedFailure ($read -join "`n") $AllowedCidr ([bool]$Public)
 }
 if ($Apply) {
     Step "read back who ingress admits"
