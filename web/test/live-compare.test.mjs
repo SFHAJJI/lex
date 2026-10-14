@@ -62,7 +62,7 @@ test("the server renders the form in its idle state with no named control, and a
   assert.ok(markup.includes(LIVE_COMPARE_IDLE));
   assert.equal(calls.length, 0);
   assert.doesNotMatch(markup.slice(markup.indexOf("<form"), markup.indexOf("</form>")), /\sname=/);
-  assert.ok(renderLiveComparePage().includes('<script src="/client-live-compare.js" defer=""></script>'));
+  assert.ok(renderLiveComparePage().includes('<script src="/en/client-live-compare.js" defer=""></script>'));
 });
 
 test("the request carries the identifier and the two dates as typed, and a language only when chosen", () => {

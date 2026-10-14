@@ -274,6 +274,12 @@ test("an EU refusal card offers wordings by their dates, never applicable states
   assert.ok(europeFr.includes(escaped(FR.refusalCard.europeNotes.ambiguous_version)));
   assert.doesNotMatch(unmarked(europeFr), /applicab|s’appliqu|\bversions?\b/i, "nor does it in French");
   assert.ok(render(french, "lu-legilux", SAID.sentences["Several states of this work apply on that date, and none is chosen."]).includes("applicable à partir du 2024-02-01, empreinte <code>aaaaaaaa</code>, publiée le 2024-01-15"));
+
+  // Each candidate is a permalink as the API mints it, linked under the page's own language (R61), so following one
+  // never sends the reader through the redirect to the language their browser prefers.
+  const hrefs = (markup) => [...markup.matchAll(/<li class="refusal-candidate"><a href="([^"]+)"/g)].map((match) => match[1]);
+  assert.deepEqual(hrefs(europe), candidates.map((candidate) => `/en${candidate.href}`), "the English card links the English pages");
+  assert.deepEqual(hrefs(europeFr), candidates.map((candidate) => `/fr${candidate.href}`), "the French card links the French pages");
 });
 
 test("a list's separators and a label's colon are the table's, so a French page sets a no-break space before them", () => {

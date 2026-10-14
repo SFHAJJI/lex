@@ -104,6 +104,13 @@ public sealed class V3EuropePermalinkTests
 
         var absolute = await VerifyAsync(mount, "https://law.soufien.lu" + hitPermalink);
         Assert.AreEqual("digest_matches", absolute.Result!.Value.GetProperty("verdict").GetString(), "under the product's own origin too");
+        // The address of the wording's reading page, under an interface language (R61), names the same wording.
+        foreach (var page in new[] { "/fr" + hitPermalink, "https://law.soufien.lu/en" + hitPermalink })
+        {
+            var byPage = await VerifyAsync(mount, page);
+            Assert.AreEqual("digest_matches", byPage.Result!.Value.GetProperty("verdict").GetString(), page);
+            Assert.AreEqual(hitPermalink, byPage.Result.Value.GetProperty("article_permalink").GetString(), page);
+        }
     }
 
     [TestMethod]

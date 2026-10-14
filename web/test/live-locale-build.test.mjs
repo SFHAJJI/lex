@@ -1,10 +1,11 @@
 // A reviewed interface language builds its own live pages (Decision 41; the launch contract's chrome
 // line). French is reviewed (by Claude, an AI reviewer, under the owner's delegation of 2026-10-02), so
-// the product build writes the eight pages and their scripts in English at the root and in French under
-// `/fr/`. This test builds it and holds:
+// the product build writes the nine pages and their scripts in English under `/en/` and in French under
+// `/fr/` (R61). This test builds it and holds:
 // - every French page and the script that hydrates it under `/fr/`, labelled `fr`, loading its own script;
 // - the French table's chrome on every French page, and none of the English table's where the two differ;
-// - the English pages at the root exactly as the English bundle renders them;
+// - the English pages under `/en/` exactly as the English bundle renders them;
+// - each page's alternate-language links, whole, to pages the build wrote;
 // - every page and script served by the live server, the French home included;
 // - no `locale-fr.html`: French leads to its pages, German and Luxembourgish to the page that says they
 //   are not reviewed.
@@ -99,13 +100,14 @@ function wholly(text) {
   return new RegExp(`${/^\p{L}/u.test(text) ? "(?<!\\p{L})" : ""}${pattern}${/\p{L}$/u.test(text) ? "(?!\\p{L})" : ""}`, "u");
 }
 
-test("the product build writes every page in French under /fr/, in the French table's words and none of the English's, and English as it was", async () => {
+test("the product build writes every page in French under /fr/, in the French table's words and none of the English's, and in English under /en/", async () => {
   const destination = await mkdtemp(join(tmpdir(), "lex-live-fr-"));
   try {
     // Tagged, so this build's intermediate bundles never collide with another test file's build.
     await buildLive(pathToFileURL(`${destination}/`), { buildTag: "locale-test" });
     const root = await readdir(destination);
-    assert.ok(root.includes("fr"), "French is reviewed, so the product build writes its pages");
+    assert.ok(root.includes("fr") && root.includes("en"), "French and English are reviewed, so the product build writes their pages, each under its own path (R61)");
+    assert.ok(!root.includes("index.html"), "the root holds no page: it sends a reader to a language");
     assert.ok(!root.includes("locale-fr.html"), "French leads to its pages, not to a page saying it is unavailable");
     assert.ok(root.includes("locale-de.html") && root.includes("locale-lb.html"), "German and Luxembourgish still answer localization_unavailable");
 
@@ -120,21 +122,43 @@ test("the product build writes every page in French under /fr/, in the French ta
     assert.ok(englishOnly.length > 150, `most of the English table differs from the French (${englishOnly.length})`);
     // The check below finds English where English is said: on each English page, its own entries.
     for (const [page] of Object.entries(PAGES)) {
-      const said = saidOutsideEnglish(await readFile(join(destination, page), "utf8"));
+      const said = saidOutsideEnglish(await readFile(join(destination, "en", page), "utf8"));
       assert.ok(englishOnly.filter(([, text]) => wholly(text).test(said)).length >= 5, `${page}: the check sees the English page's English`);
     }
 
     const frenchFiles = await readdir(join(destination, "fr"));
+    const englishFiles = await readdir(join(destination, "en"));
     for (const [page, [key, script, render, state, formKey = key]] of Object.entries(PAGES)) {
-      // English at the root, exactly as the English bundle renders each page.
-      assert.equal(await readFile(join(destination, page), "utf8"), render(), `${page}: English as the English bundle renders it`);
+      // English under en/, exactly as the English bundle renders each page.
+      assert.equal(await readFile(join(destination, "en", page), "utf8"), render(), `en/${page}: English as the English bundle renders it`);
+
+      // Each page names itself in both languages, whole, and the page for a reader of any other language (R61, hreflang),
+      // each a page the build wrote; the reading and dossier pages name none, as either may stand at a law's address.
+      for (const language of ["en", "fr"]) {
+        const html = await readFile(join(destination, language, page), "utf8");
+        const links = [...html.matchAll(/<link rel="alternate" hrefLang="([^"]+)" href="([^"]+)"\/>/g)].map((match) => [match[1], match[2]]);
+        if (page === "reading.html" || page === "dossier.html") {
+          assert.deepEqual(links, [], `${language}/${page} names no alternate page`);
+          continue;
+        }
+        const own = page === "index.html" ? "" : page;
+        assert.deepEqual(links, [
+          ["fr", `https://law.soufien.lu/fr/${own}`],
+          ["en", `https://law.soufien.lu/en/${own}`],
+          ["x-default", page === "index.html" ? "https://law.soufien.lu/" : `https://law.soufien.lu/fr/${own}`],
+        ], `${language}/${page}: its alternates`);
+        for (const [, href] of links.filter(([hrefLang]) => hrefLang !== "x-default" || page !== "index.html")) {
+          const [, folder, file] = /^https:\/\/law\.soufien\.lu\/(en|fr)\/(.*)$/.exec(href);
+          assert.ok((folder === "fr" ? frenchFiles : englishFiles).includes(file === "" ? "index.html" : file), `${href} is a page the build wrote`);
+        }
+      }
 
       assert.ok(frenchFiles.includes(page) && frenchFiles.includes(script), `fr/${page} and fr/${script} are built`);
       const html = await readFile(join(destination, "fr", page), "utf8");
       assert.match(html, /<html lang="fr"/, `fr/${page} is labelled French`);
       assert.ok(html.includes(`<script src="/fr/${script}" defer="">`), `fr/${page} loads its own script, compiled for French`);
-      assert.ok(!html.includes(`src="/${script}"`), `fr/${page} does not load the English script`);
-      assert.notEqual(await readFile(join(destination, "fr", script), "utf8"), await readFile(join(destination, script), "utf8"), `fr/${script} is compiled for French`);
+      assert.ok(!html.includes(`src="/en/${script}"`), `fr/${page} does not load the English script`);
+      assert.notEqual(await readFile(join(destination, "fr", script), "utf8"), await readFile(join(destination, "en", script), "utf8"), `fr/${script} is compiled for French`);
 
       // The French table's chrome: the page's own entries, its first state, the shell's.
       assert.ok(html.includes(`<title>${escaped(fillText(french.shell.title, { title: french[key].title }))}</title>`), `fr/${page} has the French title`);
@@ -146,7 +170,7 @@ test("the product build writes every page in French under /fr/, in the French ta
       if (key !== "coverage") {
         assert.ok(html.includes(`<button type="submit">${escaped(french.form.submit[formKey])}</button>`), `fr/${page}: the French submit button`);
       }
-      assert.match(html, /lang="fr" hrefLang="fr" aria-current="true">Français/, `fr/${page}: French is the current language`);
+      assert.match(html, /lang="fr" hrefLang="fr" aria-current="true" data-same-document="fr">Français/, `fr/${page}: French is the current language`);
 
       // And none of the English table's chrome, once the language names, the English marked English and the
       // evaluation card's own values are set aside.
@@ -158,17 +182,21 @@ test("the product build writes every page in French under /fr/, in the French ta
     }
 
     // Through the live server, as a reader reaches them: the language's home, where the locale navigation links it,
-    // and every page and script under it (review of #813: the first link, `/fr/`, was a 404 on both servers).
+    // and every page and script under it (review of #813: the first link, `/fr/`, was a 404 on both servers; each
+    // language's root is now its home page, R61).
     const server = createLiveServer({ root: pathToFileURL(`${destination}/`), apiOrigin: "http://127.0.0.1:9" });
     const origin = await new Promise((resolve) => server.listen(0, "127.0.0.1", () => resolve(`http://127.0.0.1:${server.address().port}`)));
     try {
-      assert.equal(localeHome("fr"), "/fr/index.html");
+      assert.equal(localeHome("fr"), "/fr/");
       for (const path of [localeHome("fr"), ...Object.entries(PAGES).flatMap(([page, [, script]]) => [`/fr/${page}`, `/fr/${script}`])]) {
         const answer = await fetch(`${origin}${path}`);
         assert.equal(answer.status, 200, `${path} is served`);
         await answer.arrayBuffer();
       }
-      assert.equal((await fetch(`${origin}/fr/`)).status, 404, "a directory is not a page, which is why the link names the file");
+      assert.ok((await (await fetch(`${origin}/fr/`)).text()).includes('<html lang="fr"'), "the language's root is its home page, in French");
+      const root = await fetch(`${origin}/`, { redirect: "manual", headers: { "accept-language": "fr-LU,fr;q=0.9" } });
+      assert.equal(root.status, 302);
+      assert.equal(root.headers.get("location"), "/fr/", "a French reader starts in French");
     } finally {
       await new Promise((resolve) => server.close(resolve));
     }

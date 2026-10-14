@@ -368,8 +368,11 @@ public sealed class V3CorpusDossierMountTests
         var byIri = await DossierAsync(mount, PublisherWorkIriOf(fixture));
         var byCoordinate = await DossierAsync(mount, $"/lu-legilux/{fixture.WorkKey}");
         var byOrigin = await DossierAsync(mount, $"https://law.soufien.lu/lu-legilux/{fixture.WorkKey}");
+        // The address of the work's dossier page, under each interface language (R61), names the same work.
+        var byPage = await DossierAsync(mount, $"/en/lu-legilux/{fixture.WorkKey}");
+        var byPageOnOrigin = await DossierAsync(mount, $"https://law.soufien.lu/fr/lu-legilux/{fixture.WorkKey}");
 
-        foreach (var envelope in new[] { byIri, byCoordinate, byOrigin })
+        foreach (var envelope in new[] { byIri, byCoordinate, byOrigin, byPage, byPageOnOrigin })
         {
             Assert.AreEqual(V3Verdicts.Answer, envelope.Verdict);
             Assert.AreEqual(fixture.StateSha256,
@@ -383,6 +386,12 @@ public sealed class V3CorpusDossierMountTests
                      $"http://law.soufien.lu/lu-legilux/{fixture.WorkKey}",
                      $"https://law.soufien.lu:8443/lu-legilux/{fixture.WorkKey}",
                      $"https://law.soufien.lu/lu-legilux/{fixture.WorkKey}?x=1",
+                     // Only an interface language, once, in lower case.
+                     $"/de/lu-legilux/{fixture.WorkKey}",
+                     $"/FR/lu-legilux/{fixture.WorkKey}",
+                     $"/fr/fr/lu-legilux/{fixture.WorkKey}",
+                     $"/fr//lu-legilux/{fixture.WorkKey}",
+                     $"https://law.soufien.lu/en/lu-legilux/{fixture.WorkKey}?x=1",
                  })
         {
             var envelope = await DossierAsync(mount, foreign);

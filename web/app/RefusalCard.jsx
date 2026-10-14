@@ -14,7 +14,8 @@
 // screen reader read English law in a French voice.
 
 import { REFUSAL_CARD_COPY, candidateView, validateRefusal } from '../scripts/refusal-card.mjs';
-import { ENGLISH_LANG, fillText } from '../scripts/live-chrome.mjs';
+import { CHROME_LOCALE, ENGLISH_LANG, fillText } from '../scripts/live-chrome.mjs';
+import { permalinkHref } from '../scripts/permalinks.mjs';
 import { Say } from './LiveAnswer.jsx';
 import { TOKENS } from '../scripts/design-tokens.mjs';
 import { handoffUri } from '../scripts/routes.mjs';
@@ -89,7 +90,8 @@ function Payload({ parts, copy }) {
         <ul className="refusal-candidates" key={item.key}>
           {item.values.map(candidateView).map((candidate) => (
             <li className="refusal-candidate" key={candidate.href}>
-              <a href={candidate.href}>
+              {/* A candidate is a permalink as the API mints it: linked under the page's own language (R61). */}
+              <a href={permalinkHref(candidate.href, CHROME_LOCALE)}>
                 <Candidate candidate={candidate} copy={copy} />
               </a>
             </li>

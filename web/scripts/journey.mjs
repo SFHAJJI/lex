@@ -83,7 +83,7 @@ import { cspValue } from "./csp.mjs";
 import { EXPORT_WATERMARK } from "./export-build.mjs";
 import { EUROPE_TEXT_ACKNOWLEDGEMENT } from "./reading-answer.mjs";
 import { TMP_MARGIN_MEBIBYTES, tmpMebibytesFor } from "./image-run.mjs";
-import { parseSitePath } from "./permalinks.mjs";
+import { INTERFACE_LANGUAGES, parseSitePath, sameDocumentIn } from "./permalinks.mjs";
 
 export const ANSWER_DEADLINE_MS = 30_000;
 
@@ -144,31 +144,31 @@ export function pinnedCitation(citation) {
  */
 export function journeyStepsFor({ identifier, date, anchor }) {
   return Object.freeze({
-  coverage: Object.freeze({ path: "/coverage.html", operation: "coverage", body: null }),
-  // The home page is the search screen at the root (UX spec section 2): the same step, from the front door.
+  coverage: Object.freeze({ path: "/en/coverage.html", operation: "coverage", body: null }),
+  // The home page is the search screen at the language's root (UX spec section 2; R61): the same step, from the front door.
   home: Object.freeze({
-    path: "/",
+    path: "/en/",
     cites: true,
     operation: "search",
     typed: SEARCH_PHRASE,
     body: Object.freeze({ operation_id: "search", parameters: Object.freeze({ query: SEARCH_PHRASE, language: "fra" }) }),
   }),
   search: Object.freeze({
-    path: "/search.html",
+    path: "/en/search.html",
     cites: true,
     operation: "search",
     typed: SEARCH_PHRASE,
     body: Object.freeze({ operation_id: "search", parameters: Object.freeze({ query: SEARCH_PHRASE, language: "fra" }) }),
   }),
   dossier: Object.freeze({
-    path: "/dossier.html",
+    path: "/en/dossier.html",
     cites: true,
     operation: "dossier",
     typed: identifier,
     body: Object.freeze({ operation_id: "dossier", parameters: Object.freeze({ identifier: identifier }) }),
   }),
   reading: Object.freeze({
-    path: "/reading.html",
+    path: "/en/reading.html",
     cites: true,
     operation: "evidence_bundle",
     typed: Object.freeze([identifier, date]),
@@ -178,7 +178,7 @@ export function journeyStepsFor({ identifier, date, anchor }) {
     }),
   }),
   compare: Object.freeze({
-    path: "/compare.html",
+    path: "/en/compare.html",
     cites: true,
     operation: "diff",
     typed: Object.freeze([identifier, date, date]),
@@ -188,7 +188,7 @@ export function journeyStepsFor({ identifier, date, anchor }) {
     }),
   }),
   radar: Object.freeze({
-    path: "/radar.html",
+    path: "/en/radar.html",
     cites: true,
     operation: "changes_in_period",
     typed: Object.freeze([date, date]),
@@ -198,7 +198,7 @@ export function journeyStepsFor({ identifier, date, anchor }) {
     }),
   }),
   export: Object.freeze({
-    path: "/export.html",
+    path: "/en/export.html",
     cites: true,
     operation: "evidence_bundle",
     typed: Object.freeze([identifier, date]),
@@ -211,7 +211,7 @@ export function journeyStepsFor({ identifier, date, anchor }) {
     }),
   }),
   history: Object.freeze({
-    path: "/history.html",
+    path: "/en/history.html",
     cites: true,
     operation: "article_history",
     typed: Object.freeze([identifier, anchor]),
@@ -223,7 +223,7 @@ export function journeyStepsFor({ identifier, date, anchor }) {
   // A work's address (UX spec section 1, URLs; `permalinks.mjs`): the dossier page served at it asks that work's
   // dossier as it loads, nothing typed.
   address: Object.freeze({
-    path: identifier,
+    path: `/en${identifier}`,
     cites: true,
     operation: "dossier",
     body: Object.freeze({ operation_id: "dossier", parameters: Object.freeze({ identifier: identifier }) }),
@@ -233,7 +233,7 @@ export function journeyStepsFor({ identifier, date, anchor }) {
   // is the mount's, so `run` opens the permalink the same server's dossier names for the date (`pinnedStep`); the
   // placeholder's digest (all zeros) pins nothing, and stays only where no state is held on the date (no mount).
   permalink: Object.freeze({
-    path: `${identifier}/${date}--${"0".repeat(64)}#${anchor}`,
+    path: `/en${identifier}/${date}--${"0".repeat(64)}#${anchor}`,
     pins: Object.freeze({ identifier: identifier, date: date, anchor: anchor }),
     cites: true,
     operation: "evidence_bundle",
@@ -246,7 +246,7 @@ export function journeyStepsFor({ identifier, date, anchor }) {
   // the page shows the state the date resolves to, under a notice, brought into view, that it is not the one the link
   // pins (UX spec section 1: a link cannot silently drift).
   stale: Object.freeze({
-    path: `${identifier}/${date}--${"0".repeat(64)}#${anchor}`,
+    path: `/en${identifier}/${date}--${"0".repeat(64)}#${anchor}`,
     stale: true,
     cites: true,
     operation: "evidence_bundle",
@@ -268,7 +268,7 @@ export async function pinnedStep(origin, step, { ask = askOperation } = {}) {
   const { identifier, date, anchor } = step.pins;
   const onDate = ((await ask(origin, "dossier", { identifier }))?.result?.value?.states ?? []).filter((state) => state.applicability_date === date);
   if (onDate.length !== 1 || typeof onDate[0].permalink !== "string" || parseSitePath(onDate[0].permalink)?.kind !== "state") return step;
-  return Object.freeze({ ...step, path: `${onDate[0].permalink}#${anchor}` });
+  return Object.freeze({ ...step, path: `/en${onDate[0].permalink}#${anchor}` });
 }
 
 /**
@@ -297,7 +297,7 @@ export const JOURNEY_STEPS = journeyStepsFor({ identifier: DOSSIER_IDENTIFIER, d
  * `no_corpus_mounted`.
  */
 export const EU_SEARCH_STEP = Object.freeze({
-  path: "/search.html",
+  path: "/en/search.html",
   cites: true,
   operation: "search",
   typed: Object.freeze([EU_SEARCH_PHRASE, EU_SEARCH_IDENTIFIER]),
@@ -314,7 +314,7 @@ export const EU_SEARCH_STEP = Object.freeze({
  * is printed and verified.
  */
 export const EU_DOSSIER_STEP = Object.freeze({
-  path: "/dossier.html",
+  path: "/en/dossier.html",
   cites: true,
   operation: "dossier",
   typed: EU_SEARCH_IDENTIFIER,
@@ -330,7 +330,7 @@ export const EU_READING_DATE = "2016-04-27";
  * acknowledgement, and every article permalink the page prints is verified.
  */
 export const EU_READING_STEP = Object.freeze({
-  path: "/reading.html",
+  path: "/en/reading.html",
   cites: true,
   operation: "evidence_bundle",
   typed: Object.freeze([EU_SEARCH_IDENTIFIER, EU_READING_DATE]),
@@ -567,6 +567,16 @@ export function journeyVerdict(observed, expected) {
     }
   }
   if (observed.console.length > 0) failures.push(`the page logged ${observed.console.length} console message(s): ${observed.console.join(" | ")}`);
+  // Once the page has loaded, its language menu leads to this same page in each interface language, the article named
+  // after # included (R61; review of #958: nothing held the rewrite).
+  if (observed.languageLinks !== undefined) {
+    const here = new URL(observed.location);
+    for (const language of INTERFACE_LANGUAGES) {
+      const expectedHref = `${sameDocumentIn(language, here.pathname)}${here.hash}`;
+      const href = observed.languageLinks?.[language] ?? null;
+      if (href !== expectedHref) failures.push(`the language menu's ${language} link leads to ${href ?? "nothing"}, not ${expectedHref}`);
+    }
+  }
   if (observed.storage.local !== 0 || observed.storage.session !== 0) failures.push("the page wrote to storage");
   if (observed.csp !== cspValue()) failures.push("the page's CSP is not the reviewed one");
   if (observed.hydrated !== "clean") failures.push(`hydration was ${observed.hydrated ?? "never reported"}, not clean`);
@@ -1026,6 +1036,8 @@ async function observe(browser, pageOrigin, step, { keyboard = false } = {}) {
         state: await evaluate("JSON.stringify(history.state)"),
       },
       cookie: await evaluate("document.cookie"),
+      // Where each reviewed language's link in the language menu leads, once the page has loaded.
+      languageLinks: await evaluate("Object.fromEntries([...document.querySelectorAll('[data-locale-nav] a[data-same-document]')].map((link) => [link.dataset.sameDocument, link.getAttribute('href')]))"),
       pageHeaders,
       then,
       userAgent: await evaluate("navigator.userAgent"),
@@ -1350,7 +1362,7 @@ export function fixtureMountExpectations(journeyMount) {
 /** Journey J1's refusal: a reading asked for a date before the work's first held state. */
 export const EARLY_READING_DATE = "2019-03-15";
 export const EARLY_READING_STEP = Object.freeze({
-  path: "/reading.html",
+  path: "/en/reading.html",
   cites: true,
   operation: "evidence_bundle",
   typed: Object.freeze([DOSSIER_IDENTIFIER, EARLY_READING_DATE]),
@@ -1390,7 +1402,7 @@ export const PRE_HISTORY_READING_STEP = preHistoryStepFor(DOSSIER_IDENTIFIER, PR
 /** Journey J2: a citizen's question searched as typed, which no held article carries. */
 export const NO_HIT_PHRASE = "combien de jours de congé j'ai le droit quand mon père est décédé";
 export const NO_HIT_SEARCH_STEP = Object.freeze({
-  path: "/search.html",
+  path: "/en/search.html",
   cites: true,
   operation: "search",
   typed: NO_HIT_PHRASE,
@@ -1400,7 +1412,7 @@ export const NO_HIT_SEARCH_STEP = Object.freeze({
 /** Journey J5: a law the corpus does not hold, asked for by its name. */
 export const UNKNOWN_LAW = "Circulaire CSSF 20/747";
 export const UNKNOWN_LAW_STEP = Object.freeze({
-  path: "/dossier.html",
+  path: "/en/dossier.html",
   cites: true,
   operation: "dossier",
   typed: UNKNOWN_LAW,

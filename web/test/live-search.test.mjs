@@ -66,7 +66,7 @@ test("the server renders the form in its idle state, and asks nothing", () => {
   assert.equal(calls.length, 0, "a search is asked when the reader submits, never while rendering");
 
   const page = renderLiveSearchPage();
-  assert.match(page, /<script src="\/client-live-search.js" defer=""><\/script>/);
+  assert.match(page, /<script src="\/en\/client-live-search.js" defer=""><\/script>/);
   assert.match(page, /id="live-search-root"/);
   const form = page.slice(page.indexOf('<form role="search"'), page.indexOf("</form>"));
   assert.ok(form.length > 0);
@@ -115,7 +115,7 @@ test("a served search answer is the results, read by the search reader", async (
   assert.match(markup, /^<section data-answer-state="success">/);
   const shown = text(markup);
   for (const hit of envelope.result.value.hits) {
-    assert.ok(markup.includes(`<a href="${hit.resolve.identifier}#${hit.publisher_id}">`), `${hit.publisher_id} links to its reading at the article, by its permalink`);
+    assert.ok(markup.includes(`<a href="/en${hit.resolve.identifier}#${hit.publisher_id}">`), `${hit.publisher_id} links to its reading at the article, by its permalink`);
     assert.ok(shown.includes(`${hit.publisher_id} in ${hit.work_key}, version of ${hit.applicability_date}`));
   }
   for (const row of markup.match(/<li data-lane="[^"]*">.*?<\/li>/g)) {
@@ -145,9 +145,9 @@ test("an EU work's search is the EU results: the pinned wording once, each hit's
   assert.ok(shown.includes(`Every hit is in the original wording of 32016R0679 this server holds in eng, dated ${value.pinned_wording.wording_date} and pinned by its digest`));
   assert.ok(shown.includes(`The wording date (wording_date in search, wording_dates in dossier) is the date the publisher's Formex package gives the act`),
     "the answer's own sentence says what the date is, as a sentence");
-  assert.ok(markup.includes(`<a href="${value.pinned_wording.permalink}"><code>`), "the wording's permalink links to its reading");
+  assert.ok(markup.includes(`<a href="/en${value.pinned_wording.permalink}"><code>`), "the wording's permalink links to its reading");
   for (const hit of value.hits) {
-    assert.ok(markup.includes(`<a href="${hit.permalink}">`), `${hit.publisher_id} links to its reading at the provision, by its permalink`);
+    assert.ok(markup.includes(`<a href="/en${hit.permalink}">`), `${hit.publisher_id} links to its reading at the provision, by its permalink`);
     assert.ok(!markup.includes(`<code>${hit.permalink}</code>`), "and the row prints no digest");
     assert.ok(shown.includes(`${hit.heading} of ${hit.celex}, wording of ${hit.wording_date}`));
     assert.ok(markup.includes(`<strong lang="en">${hit.heading}</strong>`), "the publisher's heading is marked in its language");

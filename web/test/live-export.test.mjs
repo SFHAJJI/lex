@@ -70,7 +70,7 @@ test("the server renders the form in its idle state with no named control and no
   assert.equal(calls.length, 0);
   assert.doesNotMatch(markup.slice(markup.indexOf("<form"), markup.indexOf("</form>")), /\sname=/);
   assert.ok(markup.includes("Read for export"));
-  assert.ok(renderLiveExportPage().includes('<script src="/client-live-export.js" defer=""></script>'));
+  assert.ok(renderLiveExportPage().includes('<script src="/en/client-live-export.js" defer=""></script>'));
 });
 
 test("a reading lists every article with a pin and no name, and nothing pinned says so", async () => {

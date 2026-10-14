@@ -4,15 +4,16 @@
 // gates measure against a closed list (`pages.json`) and a network gate that fails on any request,
 // and this page's whole purpose is one request to the server it came from. The shell (stylesheet,
 // fonts, favicon) is the same, copied from `src/` with the generated tokens appended, as the
-// preview build does. The pages are `index.html` (the home page: the search screen under the site's
-// introduction, script `client-live-search.js`), `coverage.html` (Trust and Coverage, script `client-live.js`),
-// `search.html` (search, script `client-live-search.js`), `dossier.html` (dossier, script
-// `client-live-dossier.js`), `reading.html` (reading, script `client-live-reading.js`) and `history.html`
-// (provision history, script `client-live-history.js`), `compare.html` (compare, script
+// preview build does, at the root with the evaluation card. The pages stand under each interface language,
+// English under `en/` and French under `fr/` (R61): `index.html` (the home page: the search screen under
+// the site's introduction, script `client-live-search.js`), `coverage.html` (Trust and Coverage, script
+// `client-live.js`), `search.html` (search, script `client-live-search.js`), `dossier.html` (dossier,
+// script `client-live-dossier.js`), `reading.html` (reading, script `client-live-reading.js`),
+// `history.html` (provision history, script `client-live-history.js`), `compare.html` (compare, script
 // `client-live-compare.js`), `radar.html` (change radar, script `client-live-radar.js`) and
-// `export.html` (export composer, script `client-live-export.js`). The same nine, in French, are under
-// `fr/`; German and Luxembourgish are `locale-de.html` and `locale-lb.html`, which say they are not
-// reviewed.
+// `export.html` (export composer, script `client-live-export.js`). The root holds no page: both servers
+// send it to a language. German and Luxembourgish are `locale-de.html` and `locale-lb.html`, at the root,
+// which say they are not reviewed.
 
 import { cp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { pathToFileURL } from "node:url";
@@ -38,8 +39,9 @@ const PAGES = Object.freeze([
 ]);
 
 /**
- * The nine pages and their scripts for one interface language: English at the root, any other under
- * its own path (`/fr/`), each page and the script that hydrates it compiled for that language.
+ * The nine pages and their scripts for one interface language, under that language's own path (`/en/`,
+ * `/fr/`: the specification of record's R61; the root sends a reader to one of them), each page and the
+ * script that hydrates it compiled for that language.
  */
 async function buildPages(destination, { card, locale, buildTag = "" }) {
   const { bundle, bundleClient } = await import("./react-build.mjs");
@@ -47,7 +49,7 @@ async function buildPages(destination, { card, locale, buildTag = "" }) {
   const options = english ? {} : { define: { __LEX_CHROME_LOCALE__: JSON.stringify(locale) } };
   // A caller's tag keeps its intermediate bundles apart from another build running at the same time.
   const suffix = `${buildTag ? `.${buildTag}` : ""}${english ? "" : `.${locale}`}`;
-  const out = english ? destination : new URL(`${locale}/`, destination);
+  const out = new URL(`${locale}/`, destination);
   await mkdir(out, { recursive: true });
   for (const [source, render, page, clientEntry, client] of PAGES) {
     const ssr = await import(pathToFileURL(await bundle(`app/${source}.jsx`, `${source}${suffix}.mjs`, options)).href);

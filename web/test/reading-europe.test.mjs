@@ -86,8 +86,8 @@ test("the reading screen shows the EU wording: the acknowledgement and authentic
   assert.match(markup, /<blockquote lang="en">This Regulation lays down rules/);
   assert.match(markup, /<span lang="en">Subject-matter and objectives<\/span>/, "the heading is the publisher's, in its language");
   assert.ok(markup.includes(`${PERMALINK}#001`) && markup.includes(sha256(ARTICLES[0][2])), "each quote carries its permalink and text digest");
-  assert.ok(markup.includes(`<a href="${PERMALINK}#001"><code>${PERMALINK}#001</code></a>`), "the permalink is a link to this reading at the provision");
-  assert.ok(markup.includes(`<a href="${PERMALINK}"><code>${PERMALINK}</code></a>`), "the wording's permalink is a link to this reading");
+  assert.ok(markup.includes(`<a href="/en${PERMALINK}#001"><code>${PERMALINK}#001</code></a>`), "the permalink is a link to this reading at the provision");
+  assert.ok(markup.includes(`<a href="/en${PERMALINK}"><code>${PERMALINK}</code></a>`), "the wording's permalink is a link to this reading");
   assert.equal(readingHolds(outcome.view, PERMALINK), true, "a permalink to the wording shown is held");
   assert.equal(readingHolds(outcome.view, PERMALINK.replace(/[0-9a-f]{64}$/, "0".repeat(64))), false, "another wording of that date is not");
   assert.match(markup, /the original wording of 2016-04-27/);

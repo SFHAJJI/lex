@@ -69,8 +69,8 @@ function good() {
     answerState: "success",
     text: `Coverage ${CORPUS} ${INDEX}`,
     requests: [
-      { url: `${ORIGIN}/coverage.html`, method: "GET", headers: {} },
-      { url: `${ORIGIN}/client-live.js`, method: "GET", headers: {} },
+      { url: `${ORIGIN}/en/coverage.html`, method: "GET", headers: {} },
+      { url: `${ORIGIN}/en/client-live.js`, method: "GET", headers: {} },
       { url: `${ORIGIN}/api/v3/coverage`, method: "POST", headers: { "Content-Type": "application/json" }, headersSent: true },
     ],
     console: [],
@@ -86,6 +86,18 @@ test("a run that did what the page must do passes", () => {
   assert.deepEqual(journeyVerdict(good(), SUCCESS), []);
   const refused = { ...good(), answerState: "refusal", text: "no_corpus_mounted This build has no index mounted." };
   assert.deepEqual(journeyVerdict(refused, { origin: ORIGIN, state: "refusal", refusalCode: "no_corpus_mounted" }), []);
+});
+
+test("once loaded, the language menu leads to the same page in each language, its article included", () => {
+  const at = (path, languageLinks) => ({ ...good(), location: `${ORIGIN}${path}`, languageLinks });
+  assert.deepEqual(journeyVerdict(at("/en/coverage.html", { fr: "/fr/coverage.html", en: "/en/coverage.html" }), SUCCESS), []);
+
+  const unrewritten = journeyVerdict(at("/en/coverage.html", { fr: "/fr/", en: "/en/" }), SUCCESS);
+  assert.ok(unrewritten.some((failure) => failure === "the language menu's fr link leads to /fr/, not /fr/coverage.html"), unrewritten.join(" | "));
+  const article = journeyVerdict(at("/en/coverage.html#art_15", { fr: "/fr/coverage.html", en: "/en/coverage.html#art_15" }), SUCCESS);
+  assert.ok(article.some((failure) => failure === "the language menu's fr link leads to /fr/coverage.html, not /fr/coverage.html#art_15"), "the article named after # goes along");
+  const missing = journeyVerdict(at("/en/coverage.html", {}), SUCCESS);
+  assert.ok(missing.some((failure) => failure === "the language menu's fr link leads to nothing, not /fr/coverage.html"), "a menu without the links fails");
 });
 
 test("the empty provisional referrer a browser reports under no-referrer is no referrer", () => {
@@ -130,8 +142,8 @@ function goodSearch() {
     ...good(),
     text: `“${SEARCH_PHRASE}” in fra: 4 with the exact phrase, 1 with every word, in 1 work. art_15 in x`,
     requests: [
-      { url: `${ORIGIN}/search.html`, method: "GET", headers: {} },
-      { url: `${ORIGIN}/client-live-search.js`, method: "GET", headers: {} },
+      { url: `${ORIGIN}/en/search.html`, method: "GET", headers: {} },
+      { url: `${ORIGIN}/en/client-live-search.js`, method: "GET", headers: {} },
       {
         url: `${ORIGIN}/api/v3/search`,
         method: "POST",
@@ -140,7 +152,7 @@ function goodSearch() {
         postData: JSON.stringify(JOURNEY_STEPS.search.body),
       },
     ],
-    location: `${ORIGIN}/search.html`,
+    location: `${ORIGIN}/en/search.html`,
     history: { atLoad: 2, atEnd: 2, state: "null" },
     cookie: "",
   };
@@ -156,7 +168,7 @@ test("each way a search run can fail is a failure, named", () => {
   const cases = [
     ["another body", (o) => { o.requests[2].postData = JSON.stringify({ operation_id: "search", parameters: { query: SEARCH_PHRASE, language: "fra", echo: 1 } }); }, /body was .*echo/],
     ["no body observed", (o) => { delete o.requests[2].postData; }, /body was not observed/],
-    ["the phrase in the address", (o) => { o.location = `${ORIGIN}/search.html?query=x`; }, /ended at .*\?query=x/],
+    ["the phrase in the address", (o) => { o.location = `${ORIGIN}/en/search.html?query=x`; }, /ended at .*\?query=x/],
     ["the coverage operation", (o) => { o.requests[2].url = `${ORIGIN}/api/v3/coverage`; }, /not POST \/api\/v3\/search/],
     ["a text missing", (o) => { o.text = "nothing"; }, /does not show "4 with the exact phrase"/],
     ["two searches", (o) => { o.requests.push({ ...o.requests[2] }); }, /2 requests to the API/],
@@ -188,18 +200,18 @@ test("a page that scrolls sideways at 320 CSS pixels fails, naming what stands o
 test("a coverage run is still judged as one, with no body required", () => {
   assert.equal(JOURNEY_STEPS.coverage.body, null);
   // Trust and Coverage is coverage.html; the root is the home page (the search screen).
-  assert.deepEqual(journeyVerdict({ ...good(), location: `${ORIGIN}/coverage.html` }, SUCCESS), []);
-  assert.ok(journeyVerdict({ ...good(), location: `${ORIGIN}/coverage.html?x=1` }, SUCCESS).some((failure) => /ended at/.test(failure)));
-  assert.ok(journeyVerdict({ ...good(), location: `${ORIGIN}/` }, SUCCESS).some((failure) => /ended at/.test(failure)), "the root is no longer Trust and Coverage");
+  assert.deepEqual(journeyVerdict({ ...good(), location: `${ORIGIN}/en/coverage.html` }, SUCCESS), []);
+  assert.ok(journeyVerdict({ ...good(), location: `${ORIGIN}/en/coverage.html?x=1` }, SUCCESS).some((failure) => /ended at/.test(failure)));
+  assert.ok(journeyVerdict({ ...good(), location: `${ORIGIN}/en/` }, SUCCESS).some((failure) => /ended at/.test(failure)), "the home page is not Trust and Coverage");
 });
 
 test("a dossier run is held to its own page, operation and exact body", () => {
   const observed = goodSearch();
   observed.requests = [
-    { url: `${ORIGIN}/dossier.html`, method: "GET", headers: {} },
+    { url: `${ORIGIN}/en/dossier.html`, method: "GET", headers: {} },
     { url: `${ORIGIN}/api/v3/dossier`, method: "POST", headers: {}, headersSent: true, postData: JSON.stringify(JOURNEY_STEPS.dossier.body) },
   ];
-  observed.location = `${ORIGIN}/dossier.html`;
+  observed.location = `${ORIGIN}/en/dossier.html`;
   observed.text = "loi-1991-08-10-n3 1 state, from 2024-02-01 to 2024-02-01.";
   const expected = { origin: ORIGIN, step: JOURNEY_STEPS.dossier, state: "success", texts: ["1 state, from"] };
   assert.deepEqual(JOURNEY_STEPS.dossier.body, { operation_id: "dossier", parameters: { identifier: DOSSIER_IDENTIFIER } }, "any held language: no language sent");
@@ -213,10 +225,10 @@ test("a reading run types two fields and is held to the exact body of both", () 
   assert.deepEqual(JOURNEY_STEPS.reading.body, { operation_id: "evidence_bundle", parameters: { identifier: DOSSIER_IDENTIFIER, date: READING_DATE } });
   const observed = goodSearch();
   observed.requests = [
-    { url: `${ORIGIN}/reading.html`, method: "GET", headers: {} },
+    { url: `${ORIGIN}/en/reading.html`, method: "GET", headers: {} },
     { url: `${ORIGIN}/api/v3/evidence_bundle`, method: "POST", headers: {}, headersSent: true, postData: JSON.stringify(JOURNEY_STEPS.reading.body) },
   ];
-  observed.location = `${ORIGIN}/reading.html`;
+  observed.location = `${ORIGIN}/en/reading.html`;
   observed.text = "49 articles quoted";
   const expected = { origin: ORIGIN, step: JOURNEY_STEPS.reading, state: "success", texts: ["49 articles quoted"] };
   assert.deepEqual(journeyVerdict(observed, expected), []);
@@ -226,16 +238,16 @@ test("a reading run types two fields and is held to the exact body of both", () 
 
 test("a work's address and a state's permalink open their pages with nothing typed, each asking one exact body", () => {
   const { address, permalink } = JOURNEY_STEPS;
-  assert.equal(address.path, DOSSIER_IDENTIFIER, "the work's address is its coordinate");
+  assert.equal(address.path, `/en${DOSSIER_IDENTIFIER}`, "the work's address is its coordinate, under the interface language");
   assert.equal(address.typed, undefined);
   assert.deepEqual(address.body, JOURNEY_STEPS.dossier.body);
   assert.equal(permalink.typed, undefined);
   assert.deepEqual(permalink.body, JOURNEY_STEPS.reading.body);
   assert.deepEqual(permalink.pins, { identifier: DOSSIER_IDENTIFIER, date: READING_DATE, anchor: HISTORY_ANCHOR });
-  assert.equal(permalink.path, `${DOSSIER_IDENTIFIER}/${READING_DATE}--${"0".repeat(64)}#${HISTORY_ANCHOR}`, "a placeholder that pins nothing");
+  assert.equal(permalink.path, `/en${DOSSIER_IDENTIFIER}/${READING_DATE}--${"0".repeat(64)}#${HISTORY_ANCHOR}`, "a placeholder that pins nothing");
   const held = journeyStepsFor({ identifier: "/lu-legilux/rgd-2017-12-13-a1050", date: "2018-01-01", anchor: "art_2" });
-  assert.equal(held.address.path, "/lu-legilux/rgd-2017-12-13-a1050");
-  assert.equal(held.permalink.path, `/lu-legilux/rgd-2017-12-13-a1050/2018-01-01--${"0".repeat(64)}#art_2`);
+  assert.equal(held.address.path, "/en/lu-legilux/rgd-2017-12-13-a1050");
+  assert.equal(held.permalink.path, `/en/lu-legilux/rgd-2017-12-13-a1050/2018-01-01--${"0".repeat(64)}#art_2`);
 });
 
 test("a permalink step opens the permalink the server's dossier names for its date, and keeps its placeholder otherwise", async () => {
@@ -252,7 +264,7 @@ test("a permalink step opens the permalink the server's dossier names for its da
   };
   const pinned = await pinnedStep(ORIGIN, permalink, { ask });
   assert.deepEqual(asked, [[ORIGIN, "dossier", { identifier: DOSSIER_IDENTIFIER }]], "one dossier, of the same server");
-  assert.equal(pinned.path, `${DOSSIER_IDENTIFIER}/${READING_DATE}--${digest}#${HISTORY_ANCHOR}`, "the state on the date, at the article");
+  assert.equal(pinned.path, `/en${DOSSIER_IDENTIFIER}/${READING_DATE}--${digest}#${HISTORY_ANCHOR}`, "the state on the date, at the article, under the interface language");
   assert.deepEqual({ ...pinned, path: permalink.path }, { ...permalink }, "nothing else changes");
   assert.equal(await pinnedStep(ORIGIN, JOURNEY_STEPS.reading, { ask }), JOURNEY_STEPS.reading, "a step that pins nothing is left as it is");
   assert.equal(asked.length, 1, "and asks nothing");
@@ -278,12 +290,12 @@ test("an answer's citations are its permalinks printed as code and its links to 
 });
 
 test("a permalink run passes when its page shows the pinned state with the article in view, and fails otherwise", () => {
-  const step = { ...JOURNEY_STEPS.permalink, path: `${DOSSIER_IDENTIFIER}/${READING_DATE}--${"e".repeat(64)}#${HISTORY_ANCHOR}` };
+  const step = { ...JOURNEY_STEPS.permalink, path: `/en${DOSSIER_IDENTIFIER}/${READING_DATE}--${"e".repeat(64)}#${HISTORY_ANCHOR}` };
   const observed = () => ({
     ...goodSearch(),
     requests: [
       { url: `${ORIGIN}${step.path.split("#")[0]}`, method: "GET", headers: {} },
-      { url: `${ORIGIN}/client-live-reading.js`, method: "GET", headers: {} },
+      { url: `${ORIGIN}/en/client-live-reading.js`, method: "GET", headers: {} },
       { url: `${ORIGIN}/api/v3/evidence_bundle`, method: "POST", headers: {}, headersSent: true, postData: JSON.stringify(step.body) },
     ],
     location: `${ORIGIN}${step.path}`,
@@ -313,7 +325,7 @@ test("a permalink run passes when its page shows the pinned state with the artic
 
 test("a stale permalink run passes when its page says, in view, that the version shown is not the one the link pins", () => {
   const step = JOURNEY_STEPS.stale;
-  assert.equal(step.path, `${DOSSIER_IDENTIFIER}/${READING_DATE}--${"0".repeat(64)}#${HISTORY_ANCHOR}`, "a digest no state has");
+  assert.equal(step.path, `/en${DOSSIER_IDENTIFIER}/${READING_DATE}--${"0".repeat(64)}#${HISTORY_ANCHOR}`, "a digest no state has");
   assert.equal(step.pins, undefined, "opened as it is, never replaced by the dossier's permalink");
   assert.deepEqual(step.body, JOURNEY_STEPS.reading.body);
   const observed = () => ({
@@ -350,10 +362,10 @@ test("a provision history run types the identifier and the article id and is hel
   assert.deepEqual(JOURNEY_STEPS.history.body, { operation_id: "article_history", parameters: { identifier: DOSSIER_IDENTIFIER, anchor: HISTORY_ANCHOR } });
   const observed = goodSearch();
   observed.requests = [
-    { url: `${ORIGIN}/history.html`, method: "GET", headers: {} },
+    { url: `${ORIGIN}/en/history.html`, method: "GET", headers: {} },
     { url: `${ORIGIN}/api/v3/article_history`, method: "POST", headers: {}, headersSent: true, postData: JSON.stringify(JOURNEY_STEPS.history.body) },
   ];
-  observed.location = `${ORIGIN}/history.html`;
+  observed.location = `${ORIGIN}/en/history.html`;
   observed.text = "art_15 in loi-1991-08-10-n3";
   const expected = { origin: ORIGIN, step: JOURNEY_STEPS.history, state: "success", texts: ["art_15 in"] };
   assert.deepEqual(journeyVerdict(observed, expected), []);
@@ -366,10 +378,10 @@ test("a compare run types the identifier and two dates and is held to all three 
   assert.deepEqual(JOURNEY_STEPS.compare.body, { operation_id: "diff", parameters: { identifier: DOSSIER_IDENTIFIER, date_from: READING_DATE, date_to: READING_DATE } });
   const observed = goodSearch();
   observed.requests = [
-    { url: `${ORIGIN}/compare.html`, method: "GET", headers: {} },
+    { url: `${ORIGIN}/en/compare.html`, method: "GET", headers: {} },
     { url: `${ORIGIN}/api/v3/diff`, method: "POST", headers: {}, headersSent: true, postData: JSON.stringify(JOURNEY_STEPS.compare.body) },
   ];
-  observed.location = `${ORIGIN}/compare.html`;
+  observed.location = `${ORIGIN}/en/compare.html`;
   observed.text = "The same version applied on both dates.";
   const expected = { origin: ORIGIN, step: JOURNEY_STEPS.compare, state: "success", texts: ["The same version applied on both dates."] };
   assert.deepEqual(journeyVerdict(observed, expected), []);
@@ -382,10 +394,10 @@ test("a radar run types two dates and is held to exactly those in the body", () 
   assert.deepEqual(JOURNEY_STEPS.radar.body, { operation_id: "changes_in_period", parameters: { date_from: READING_DATE, date_to: READING_DATE } });
   const observed = goodSearch();
   observed.requests = [
-    { url: `${ORIGIN}/radar.html`, method: "GET", headers: {} },
+    { url: `${ORIGIN}/en/radar.html`, method: "GET", headers: {} },
     { url: `${ORIGIN}/api/v3/changes_in_period`, method: "POST", headers: {}, headersSent: true, postData: JSON.stringify(JOURNEY_STEPS.radar.body) },
   ];
-  observed.location = `${ORIGIN}/radar.html`;
+  observed.location = `${ORIGIN}/en/radar.html`;
   observed.text = "1 state of 1 work";
   const expected = { origin: ORIGIN, step: JOURNEY_STEPS.radar, state: "success", texts: ["1 state of 1 work"] };
   assert.deepEqual(journeyVerdict(observed, expected), []);
@@ -399,10 +411,10 @@ test("an export run reads, pins, and is held to the composed export and to its o
   assert.deepEqual(JOURNEY_STEPS.export.body, JOURNEY_STEPS.reading.body, "the export asks the reading, and nothing else");
   const observed = goodSearch();
   observed.requests = [
-    { url: `${ORIGIN}/export.html`, method: "GET", headers: {} },
+    { url: `${ORIGIN}/en/export.html`, method: "GET", headers: {} },
     { url: `${ORIGIN}/api/v3/evidence_bundle`, method: "POST", headers: {}, headersSent: true, postData: JSON.stringify(JOURNEY_STEPS.export.body) },
   ];
-  observed.location = `${ORIGIN}/export.html`;
+  observed.location = `${ORIGIN}/en/export.html`;
   observed.text = "1 article pinned: 1 exported with text, 0 excluded.";
   observed.then = "reached";
   const expected = { origin: ORIGIN, step: JOURNEY_STEPS.export, state: "success", texts: ["1 article pinned"] };
@@ -793,7 +805,7 @@ test("the specification's journeys the eight steps do not walk are held to their
   // the absence is not evidence that the law does not exist.
   const observed = goodSearch();
   observed.requests = [
-    { url: `${ORIGIN}/search.html`, method: "GET", headers: {} },
+    { url: `${ORIGIN}/en/search.html`, method: "GET", headers: {} },
     { url: `${ORIGIN}/api/v3/search`, method: "POST", headers: {}, headersSent: true, postData: JSON.stringify(NO_HIT_SEARCH_STEP.body) },
   ];
   observed.text = byJourney.J2.texts.join(" ");
@@ -917,7 +929,7 @@ test("on the EU annex control mount the export composer pins both articles and s
   const mount = { eu_annex: { celex: "32016R0679", wording_date: "2026-08-26", annexes: 1, absent_texts: ["Hambali", "ANNEXSENTINELZQXV"] } };
   const [, , [name, exporting]] = europeAnnexExpectations(mount);
   assert.match(name, /exported/);
-  assert.equal(exporting.step.path, "/export.html");
+  assert.equal(exporting.step.path, "/en/export.html");
   assert.deepEqual(exporting.step.typed, ["32016R0679", "2026-08-26"]);
   assert.deepEqual(exporting.step.body, { operation_id: "evidence_bundle", parameters: { identifier: "32016R0679", date: "2026-08-26" } }, "the export asks the reading, and nothing else");
   assert.deepEqual(exporting.step.then, { click: "input[data-pin]", count: 2, until: "[data-export-state=composed] [data-export-annexes]" }, "both articles pinned, and the export must list the annex");
@@ -933,10 +945,10 @@ test("on the EU annex control mount the export composer pins both articles and s
   // Held to it: the composed export passes; the annex's text in the JSON the page shows, no annex listed, or no PDF fails.
   const observed = goodSearch();
   observed.requests = [
-    { url: `${ORIGIN}/export.html`, method: "GET", headers: {} },
+    { url: `${ORIGIN}/en/export.html`, method: "GET", headers: {} },
     { url: `${ORIGIN}/api/v3/evidence_bundle`, method: "POST", headers: {}, headersSent: true, postData: JSON.stringify(exporting.step.body) },
   ];
-  observed.location = `${ORIGIN}/export.html`;
+  observed.location = `${ORIGIN}/en/export.html`;
   observed.text = exporting.texts.join("\n");
   observed.html = '<details><summary>The JSON as it will be saved</summary><pre>{"annexes_not_served": [{"annexes": 1}]}</pre></details>';
   observed.then = "reached";
@@ -966,7 +978,7 @@ test("on a real mount J5 must refuse identifier_unknown with the absence note wh
   assert.equal(steps.J1, PRE_HISTORY_READING_STEP);
   assert.deepEqual(PRE_HISTORY_READING_STEP.body.parameters, { identifier: DOSSIER_IDENTIFIER, date: PRE_HISTORY_DATE });
   assert.deepEqual(PRE_HISTORY_READING_STEP.typed, [DOSSIER_IDENTIFIER, PRE_HISTORY_DATE]);
-  assert.equal(PRE_HISTORY_READING_STEP.path, "/reading.html");
+  assert.equal(PRE_HISTORY_READING_STEP.path, "/en/reading.html");
   assert.deepEqual(realMountExpectations(steps.J1).refine({ verdict: "answer", result: { value: {} } }),
     { state: "refusal", refusalCode: "no_version_for_date", texts: [NO_EARLIER_STATE] }, "another date's text would be the defect");
 });

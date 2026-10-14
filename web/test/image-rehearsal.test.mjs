@@ -200,48 +200,41 @@ test("V2's routes must each answer 404 from the running image, or V3's own file 
     request.on("end", () => {
       const answer = answering.get(`${request.method} ${request.url}`);
       response.statusCode = answer?.status ?? 404;
+      if (answer?.location) response.setHeader("location", answer.location);
       response.end(answer?.body ?? "");
     });
   });
   await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+  // V3's own answers at the paths V2 also used: the root and a work's address with no interface language are V3's
+  // redirects to the reader's language, French for a request naming none (R61, `redirectFor`).
+  const v3Redirects = [["GET /", "/fr/"], ["GET /lu-legilux/loi-1991-08-10-n3", "/fr/lu-legilux/loi-1991-08-10-n3"], ["GET /eu-eurlex/32016R0679", "/fr/eu-eurlex/32016R0679"]];
   try {
     const origin = `http://127.0.0.1:${server.address().port}`;
-    const v3Files = servedPaths([["index.html", index], ["client-live.js", Buffer.from("hydrate()")]]);
-    assert.deepEqual(await v2RouteFailures(origin, { v3Files }), ["GET / answered 404 with bytes that are not V3's own file at that path"], "V3's own page must be there");
-    answering.set("GET /", { status: 200, body: index });
-    assert.deepEqual(await v2RouteFailures(origin, { v3Files }), [], "every V2 route answers 404, and / is V3's own page");
+    const v3Files = servedPaths([["fr/index.html", index], ["en/index.html", index], ["en/client-live.js", Buffer.from("hydrate()")]]);
+    assert.deepEqual(await v2RouteFailures(origin, { v3Files }), [
+      "GET / answered 404, not V3's redirect to /fr/",
+      "GET /lu-legilux/loi-1991-08-10-n3 answered 404, not V3's redirect to /fr/lu-legilux/loi-1991-08-10-n3",
+      "GET /eu-eurlex/32016R0679 answered 404, not V3's redirect to /fr/eu-eurlex/32016R0679",
+    ], "V3's own redirects must be there");
+    for (const [route, location] of v3Redirects) answering.set(route, { status: 302, location });
+    assert.deepEqual(await v2RouteFailures(origin, { v3Files }), [], "every other V2 route answers 404, and V3 answers its own paths");
     answering.set("GET /built", { status: 200, body: "<h1>Overview</h1>" });
     assert.deepEqual(await v2RouteFailures(origin, { v3Files }), ["GET /built answered 200, not 404"], "the reviewer's reproduction: /built served by V2 is caught");
     answering.delete("GET /built");
     answering.set("GET /", { status: 200, body: "<h1>V2 home</h1>" });
     answering.set("POST /api/ask", { status: 405 });
     answering.set("GET /ai", { status: 301 });
-    assert.deepEqual(await v2RouteFailures(origin, { v3Files }), [
-      "GET / answered 200 with bytes that are not V3's own file at that path",
-      "GET /ai answered 301, not 404",
-      "POST /api/ask answered 405, not 404",
-    ], "V2's home in V3's place, a V2 redirect and a V2 method refusal are each caught");
-
-    // A work's address, where V2 showed its timeline, is V3's dossier page where V3 holds one (`permalinks.mjs`); V2's
-    // dated text and comparison under it are still nothing.
-    const dossier = Buffer.from("<!doctype html><title>Dossier - Lex</title>");
-    const withDossier = servedPaths([["index.html", index], ["client-live.js", Buffer.from("hydrate()")], ["dossier.html", dossier]]);
-    answering.set("GET /", { status: 200, body: index });
-    answering.delete("POST /api/ask");
-    answering.delete("GET /ai");
-    assert.deepEqual(await v2RouteFailures(origin, { v3Files: withDossier }), [
-      "GET /lu-legilux/loi-1991-08-10-n3 answered 404 with bytes that are not V3's own file at that path",
-      "GET /eu-eurlex/32016R0679 answered 404 with bytes that are not V3's own file at that path",
-    ], "V3's dossier page must be at each work's address");
-    answering.set("GET /lu-legilux/loi-1991-08-10-n3", { status: 200, body: dossier });
-    answering.set("GET /eu-eurlex/32016R0679", { status: 200, body: dossier });
-    assert.deepEqual(await v2RouteFailures(origin, { v3Files: withDossier }), [], "the dossier page at both addresses, every other V2 route 404");
     answering.set("GET /lu-legilux/loi-1991-08-10-n3", { status: 200, body: "<h1>Timeline</h1>" });
-    answering.set("GET /lu-legilux/loi-1991-08-10-n3/2024-02-01", { status: 200, body: dossier });
-    assert.deepEqual(await v2RouteFailures(origin, { v3Files: withDossier }), [
-      "GET /lu-legilux/loi-1991-08-10-n3 answered 200 with bytes that are not V3's own file at that path",
+    answering.set("GET /eu-eurlex/32016R0679", { status: 302, location: "/en/eu-eurlex/32016R0679" });
+    answering.set("GET /lu-legilux/loi-1991-08-10-n3/2024-02-01", { status: 200, body: index });
+    assert.deepEqual(await v2RouteFailures(origin, { v3Files }), [
+      "GET / answered 200, not V3's redirect to /fr/",
+      "GET /ai answered 301, not 404",
+      "GET /lu-legilux/loi-1991-08-10-n3 answered 200, not V3's redirect to /fr/lu-legilux/loi-1991-08-10-n3",
       "GET /lu-legilux/loi-1991-08-10-n3/2024-02-01 answered 200, not 404",
-    ], "V2's timeline at a work's address, and a page at V2's dated address (no permalink: it pins no digest), are each caught");
+      "GET /eu-eurlex/32016R0679 answered 302 to /en/eu-eurlex/32016R0679, not V3's redirect to /fr/eu-eurlex/32016R0679",
+      "POST /api/ask answered 405, not 404",
+    ], "V2's home in V3's place, V2's timeline at a work's address, a page at V2's dated address (no permalink: it pins no digest), a redirect V3 would not send, a V2 redirect and a V2 method refusal are each caught");
   } finally {
     await new Promise((resolve) => server.close(resolve));
   }

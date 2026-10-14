@@ -18,6 +18,7 @@
 
 import { useEffect } from 'react';
 import { hydrateRoot } from 'react-dom/client';
+import { sameDocumentIn } from '../scripts/permalinks.mjs';
 
 /**
  * Attach behaviour to server-rendered markup, and say so.
@@ -38,6 +39,12 @@ export function attach(container, element) {
   // that commits after React has already reported any recoverable error, and the two need to see
   // the same value.
   const state = { mismatched: false };
+
+  // The interface languages lead to this same page in each, its article included (R61): the build wrote their home pages,
+  // which a reader without scripts follows. The links stand outside the hydrated root, so React reads none of this.
+  for (const link of document.querySelectorAll('[data-locale-nav] a[data-same-document]')) {
+    link.setAttribute('href', `${sameDocumentIn(link.dataset.sameDocument, window.location.pathname)}${window.location.hash}`);
+  }
 
   hydrateRoot(container, <Hydrated state={state}>{element}</Hydrated>, {
     // React recovers from a hydration mismatch by re-rendering the subtree, quietly. A page whose
