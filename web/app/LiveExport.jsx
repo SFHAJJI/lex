@@ -8,8 +8,8 @@
 // states (`data-answer-state` on the reading, `data-export-state` on the export).
 //
 // The reading screen's rules carry over: the publisher's text is quoted in its state's language, an
-// article held without text is named as such, the controls carry no `name`, and every permalink is a
-// link to its page (`Permalink`). The export panel shows, before anything is saved, what the file will carry:
+// article held without text is named as such, the controls carry no `name`, and permalinks are printed,
+// not linked: the composer keeps its pins only while the page is open, and a link would leave it. The export panel shows, before anything is saved, what the file will carry:
 // the counts, the watermark, the rights, each item's citation and digest, the exclusions with their
 // reason, and the JSON itself.
 //
@@ -79,7 +79,7 @@ function StatePins({ state, workKey, pins, onPin }) {
         )}
       </h2>
       <p>
-        <Permalink value={state.permalink} />
+        <Permalink value={state.permalink} linked={false} />
       </p>
       <ol className="articles">
         {state.articles.map((article) => {
@@ -88,7 +88,7 @@ function StatePins({ state, workKey, pins, onPin }) {
             <li key={article.articleIdentitySha256} data-article={article.publisherId}>
               <Pin checked={pins.has(key)} onPin={(on) => onPin(key, on)} label={fillText(COPY.pin, { article: article.publisherId })} />
               <blockquote lang={quotationLanguageTag(state.language)}>{article.text}</blockquote>
-              <QuoteEvidence article={article} />
+              <QuoteEvidence article={article} linked={false} />
             </li>
           );
         })}
@@ -111,7 +111,7 @@ function WordingPins({ wording, celex, pins, onPin }) {
         <EuropeWordingHeading wording={wording} celex={celex} />
       </h2>
       <p>
-        <Permalink value={wording.permalink} />
+        <Permalink value={wording.permalink} linked={false} />
       </p>
       <ol className="articles">
         {wording.articles.map((article) => {
@@ -126,7 +126,7 @@ function WordingPins({ wording, celex, pins, onPin }) {
                 </>
               ) : null}
               <blockquote lang={statuteLanguage}>{article.text}</blockquote>
-              <QuoteEvidence article={article} />
+              <QuoteEvidence article={article} linked={false} />
             </li>
           );
         })}

@@ -48,7 +48,7 @@ const IDLE = Object.freeze({ state: 'idle', sentence: LIVE_READING_IDLE });
  * digest, its official source and the permalink that pins its work, article, date, language and state.
  * Shared with the export composer, which quotes the same articles (review of #805).
  */
-export function QuoteEvidence({ article }) {
+export function QuoteEvidence({ article, linked = true }) {
   return (
     <p data-quote-evidence="">
       <Say
@@ -57,7 +57,7 @@ export function QuoteEvidence({ article }) {
           text: <code>{article.textSha256}</code>,
           body: <code>{article.bodySha256}</code>,
           source: <code>{article.officialSource}</code>,
-          permalink: <Permalink value={article.permalink} />,
+          permalink: <Permalink value={article.permalink} linked={linked} />,
         }}
       />
     </p>
@@ -377,7 +377,9 @@ export function LiveReading({ contract, fetchImpl }) {
     } else {
       const section = document.querySelector(`[data-state="${pin.digest}"], [data-wording="${pin.digest}"]`);
       const anchor = anchorOf(window.location.hash);
-      target = anchor === null ? section : [...(section ?? document).querySelectorAll('[data-article]')].find((element) => element.getAttribute('data-article') === anchor);
+      const named = anchor === null ? undefined : [...(section ?? document).querySelectorAll('[data-article]')].find((element) => element.getAttribute('data-article') === anchor);
+      // An article the state does not hold (a link made by hand, or to another version) brings the state into view.
+      target = named ?? section;
     }
     if (!target) return;
     target.scrollIntoView();

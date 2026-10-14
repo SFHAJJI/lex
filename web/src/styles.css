@@ -597,8 +597,8 @@ blockquote.law {
    reading, in words and by its rule (never by colour alone), so a reader brought to it cannot take what follows for the
    pinned version. */
 [data-pin-replaced] {
-  margin-block: 0 var(--space-4);
-  padding: var(--space-2) var(--space-3);
+  margin-block: 0 var(--space-4, 1rem);
+  padding: var(--space-2, 0.5rem) var(--space-3, 0.75rem);
   border-inline-start: 4px solid currentColor;
   font-weight: 600;
 }

@@ -84,6 +84,8 @@ test("a reading lists every article with a pin and no name, and nothing pinned s
   assert.doesNotMatch(markup, /\sname=/, "a pin carries no name");
   assert.ok(markup.includes(`<blockquote lang="fr">`), "the text is quoted in its state's language");
   assert.ok(!markup.includes(" until "), "the next state's date is its start, never this state's end");
+  assert.ok(markup.includes(`<code>${state.permalink}</code>`) && markup.includes(`<code>${state.articles[0].permalink}</code>`), "the permalinks are printed");
+  assert.doesNotMatch(markup, /<a href=/, "and not linked: the pins last only while the page is open, and a link would leave it");
   const panel = renderToStaticMarkup(h(ExportPanel, { outcome, pins: new Set(), onSave: () => {} }));
   assert.equal(panel, `<section data-export-state="empty"><h2>Export</h2><p role="status">${NOTHING_PINNED}</p></section>`);
 });

@@ -160,7 +160,7 @@ internal sealed class V3WebRoot
     /// server. The end is <c>\z</c>, not <c>$</c>, which in .NET also matches before a final newline.
     /// </summary>
     private static readonly Regex SitePath = new(
-        "^/(?:(?<locale>fr)/)?(?:lu-legilux/[A-Za-z0-9][A-Za-z0-9._-]*(?<pin>/[0-9]{4}-[0-9]{2}-[0-9]{2}--[0-9a-f]{64})?" +
+        "^/(?:(?<locale>fr)/)?(?:lu-legilux/[a-z0-9][a-z0-9_-]*(?<pin>/[0-9]{4}-[0-9]{2}-[0-9]{2}--[0-9a-f]{64})?" +
         "|eu-eurlex/[0-9A-Za-z][0-9A-Za-z()._-]*(?<eupin>/[a-z]{3}/[0-9]{4}-[0-9]{2}-[0-9]{2}--[0-9a-f]{64})?)\\z",
         RegexOptions.CultureInvariant,
         TimeSpan.FromMilliseconds(100));

@@ -24,10 +24,10 @@ import { isSiteAddress, permalinkHref } from '../scripts/permalinks.mjs';
 /**
  * A permalink as every live page prints it: its text as code, inside a link to this site's page for it (`permalinks.mjs`),
  * under the page's interface language, when it is an address this site serves; an address it does not serve stays text,
- * so no link leads nowhere.
+ * so no link leads nowhere. `linked` false keeps it text on a page a link would make the reader lose work on.
  */
-export function Permalink({ value }) {
-  return isSiteAddress(value) ? <a href={permalinkHref(value, CHROME_LOCALE)}><code>{value}</code></a> : <code>{value}</code>;
+export function Permalink({ value, linked = true }) {
+  return linked && isSiteAddress(value) ? <a href={permalinkHref(value, CHROME_LOCALE)}><code>{value}</code></a> : <code>{value}</code>;
 }
 
 /**
