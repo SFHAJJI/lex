@@ -1018,6 +1018,13 @@ summary {
   min-inline-size: 0;
 }
 
+/* The export composer's JSON, shown as it will be saved: wrapped within the page, so opening it never widens the page
+   (WCAG 2.2, 1.4.10; review of #957: its longest line made the page 9,518 pixels wide at 320). */
+[data-export-state] pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
 .coverage-scroll,
 .table-scroll {
   overflow-x: auto;

@@ -100,7 +100,7 @@ function AmbiguousWorks({ works, date }) {
                 candidates: work.candidates.map((candidate, index) => (
                   <span key={candidate}>
                     {index > 0 ? ', ' : ''}
-                    <code>{candidate}</code>
+                    <Permalink value={candidate} />
                   </span>
                 )),
               }}

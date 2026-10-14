@@ -180,6 +180,9 @@ test("a page that scrolls sideways at 320 CSS pixels fails, naming what stands o
   assert.ok(journeyVerdict(wide, SEARCH).includes("at 320 CSS pixels the page scrolls sideways (423 px of content in a 305 px window): table in the answer 411 px, tr in the answer 407 px"));
   const unnamed = { ...fits, reflow: { width: 305, scrollWidth: 306, offenders: [] } };
   assert.ok(journeyVerdict(unnamed, SEARCH).some((failure) => /scrolls sideways \(306 px .*\): no single element/.test(failure)), "a pixel over, named even when no one element stands out");
+  // Fails closed (review of #957): a measurement not taken, or taken in a wider window, is no evidence.
+  assert.ok(journeyVerdict({ ...fits, reflow: { failed: true } }, SEARCH).includes("the page was not measured at 320 CSS pixels"));
+  assert.ok(journeyVerdict({ ...fits, reflow: { width: 1265, scrollWidth: 1265, offenders: [] } }, SEARCH).includes("the page was measured in a 1265 px window, not one of at most 320"));
 });
 
 test("a coverage run is still judged as one, with no body required", () => {

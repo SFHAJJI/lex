@@ -15,16 +15,23 @@ the pages before an answer. The journeys now measure every page after its answer
   305-pixel window), the EU dossier's expressions (301) and the provision history (413).
 - **The three tables scroll in a region of their own** (`TableRegion`): in the tab order, so a keyboard can scroll it,
   and named by the sentence above the table (`aria-labelledby`), so no new words, and no new French, were needed.
-- **Every printed permalink is a link** (`Permalink`, `isSiteAddress`): history, compare, the changes radar and the
-  export composer now link theirs, as the reading, dossier and search pages do since #956; a permalink this site serves
-  no page at stays text, so no link leads nowhere. The export composer is the exception: its pins last only while the
-  page is open, so its permalinks stay text.
+- **Every printed permalink is a link** (`Permalink`, `isSiteAddress`): history, compare and the changes radar now
+  link theirs, as the reading, dossier and search pages do since #956 (and the search page's list of candidate states);
+  a permalink this site serves no page at stays text, so no link leads nowhere. The export composer is the exception:
+  its pins last only while the page is open, so its permalinks stay text (since #956 its quotes' permalinks were links,
+  through the reading's shared evidence line; no longer).
 - **The notes of #956's review** (independent Claude subagent: merge, no material finding): the pin notice's spacing
   tokens had no fallback, so it rendered with no padding (fixed); an `#article` the pinned state does not hold now
   brings the state into view; the Luxembourg work pattern now matches the API's `IsWorkKey` (lower case), so
   `/lu-legilux/LOI-1` opens no page (the shared table has 44 paths). Left for later: an EU address and permalink step
   in the EU annex journey (the reviewer walked the EU path by hand on the annex and population mounts).
-- **Measured**: web suite 1,091 of 1,091; the journeys against the API published from #956's C# (unchanged here), with the reflow check: the fixture mount through the live server 44 of 44 and served by the API with the keyboard 44 of 44, the licence-blocked mount 12 of 12, the two-state mount 2 of 2, the EU annex control mount 3 of 3, none scrolling sideways at 320 CSS pixels.
+- **The review of #957** (independent Claude subagent): changes requested, repaired in one round. The export
+  composer's JSON, once opened ("The JSON as it will be saved"), made the page 9,518 pixels wide at 320 and wider than
+  the window at 768 and 1280, because the check measured with every disclosure closed: the JSON now wraps, and the check
+  opens every disclosure in the answer before it measures, fails when the measurement was not taken at 320, and names a
+  box whose own content overflows it. This file's first account said the export composer links its permalinks and that
+  the API's code was unchanged; neither was true.
+- **Measured**: web suite 1,091 of 1,091; the journeys against the API published from this branch's C# (the work pattern in `V3WebRoot` changed here), each page measured at 320 CSS pixels with every disclosure in its answer open: the fixture mount through the live server 44 of 44 and served by the API with the keyboard 44 of 44, the licence-blocked mount 12 of 12, the two-state mount 2 of 2, the EU annex control mount 3 of 3 by both servers.
 
 ## Every law address opens its page; search results open the text (sole driver, 2026-10-14)
 

@@ -123,7 +123,7 @@ Only money, legal or public claims, credentials and going live (ruling 7):
 - Where DNS lives (the specification of record's O14, R117: decide before the name-server switch completes). The
   soufien.lu zone was created in Azure DNS (resource group `rg-lex-v3`) on 2026-10-14, with `law` as a CNAME to the
   app's default host and the `asuid.law` verification record; the owner set the registrar's name servers to it, and the
-  switch had not reached the resolvers by 11:00 UTC. R117 rules DNS out of the subscription that hosts the site (V2 went
+  switch had not reached the resolvers by 09:00 UTC. R117 rules DNS out of the subscription that hosts the site (V2 went
   down with its subscription). Recommended: keep the zone at the registrar (or another provider outside Azure) with
   the same two records, and delete the Azure zone.
 - The specification of record (O1) and its owner decisions O2 to O31, each with a recommended answer; the plan orders
