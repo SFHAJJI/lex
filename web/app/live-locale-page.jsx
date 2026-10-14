@@ -16,8 +16,8 @@ export function renderLiveLocaleUnavailablePage(requested) {
     <Document
       state="live-localization-unavailable"
       title={copy.title}
-      shell="dev"
-      density={skinFor('dev').density}
+      shell="ask"
+      density={skinFor('ask').density}
       banner="live"
     >
       <h1>{copy.heading}</h1>

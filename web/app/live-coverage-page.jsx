@@ -41,8 +41,8 @@ export function renderLiveCoveragePage({ card = CENSUS_EVALUATION_CARD } = {}) {
     <Document
       state="live-coverage"
       title={copy.title}
-      shell="dev"
-      density={skinFor('dev').density}
+      shell="ask"
+      density={skinFor('ask').density}
       banner="live"
     >
       <p className="eyebrow">{copy.eyebrow}</p>

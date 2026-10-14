@@ -211,6 +211,7 @@ test("no interface text on a live page or a census answer bypasses the chrome ta
 
   // Each page as the server renders it: the shell, the form and the idle or loading state.
   const pages = {
+    home: app.renderLiveHomePage,
     coverage: app.renderLiveCoveragePage, search: app.renderLiveSearchPage, dossier: app.renderLiveDossierPage,
     reading: app.renderLiveReadingPage, history: app.renderLiveHistoryPage, compare: app.renderLiveComparePage,
     radar: app.renderLiveRadarPage, export: app.renderLiveExportPage,
@@ -314,6 +315,7 @@ test("no interface text on a French page or a census answer bypasses the French 
     }
   };
   const pages = {
+    home: app.renderLiveHomePage,
     coverage: app.renderLiveCoveragePage, search: app.renderLiveSearchPage, dossier: app.renderLiveDossierPage,
     reading: app.renderLiveReadingPage, history: app.renderLiveHistoryPage, compare: app.renderLiveComparePage,
     radar: app.renderLiveRadarPage, export: app.renderLiveExportPage,

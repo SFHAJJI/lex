@@ -319,6 +319,171 @@ blockquote.law {
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 }
 
+/* The site around every live screen (Document.jsx): the header with the name, the menu and the
+   interface languages, and the footer with what the site is not and which texts are authentic.
+   Everything wraps, so the header reflows at 320 CSS pixels without horizontal scrolling. */
+.site-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem 1.5rem;
+  padding: 0.85rem clamp(1rem, 4vw, 2.5rem);
+  border-block-end: 1px solid #d6cfbb;
+}
+
+.site-brand {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.25rem 0.75rem;
+  color: inherit;
+  text-decoration: none;
+}
+
+.site-brand:visited {
+  color: inherit;
+}
+
+.site-name {
+  font-family: "Source Serif 4", Georgia, serif;
+  font-size: 1.5rem;
+  font-weight: 700;
+}
+
+.site-tagline {
+  color: #44554a;
+  font-size: 0.9rem;
+}
+
+.site-nav ul,
+.site-header .locale-nav ul {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 1.1rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.site-nav a[aria-current="page"] {
+  font-weight: 700;
+  text-decoration-thickness: 2px;
+}
+
+.site-header .locale-nav {
+  font-size: 0.85rem;
+}
+
+/* Under the site's header a screen starts at the top and keeps a reading measure, rather than the
+   preview's poster layout centred in the viewport. */
+.site-header ~ main {
+  min-block-size: auto;
+  align-content: start;
+  margin-inline: auto;
+  padding-block: clamp(1.5rem, 5vw, 3rem);
+}
+
+.site-header ~ main h1 {
+  font-family: "Source Serif 4", Georgia, serif;
+  font-size: clamp(1.75rem, 5vw, 2.6rem);
+  line-height: 1.15;
+}
+
+.site-footer {
+  display: grid;
+  gap: 0.5rem;
+  max-inline-size: 48rem;
+  margin-inline: auto;
+  padding: 1.5rem clamp(1rem, 4vw, 2.5rem) 2.5rem;
+  border-block-start: 1px solid #d6cfbb;
+  color: #44554a;
+  font-size: 0.85rem;
+  line-height: 1.55;
+}
+
+.site-footer p {
+  margin: 0;
+}
+
+/* The forms of the live screens: each field under its label, full width up to a reading measure, and one
+   clear primary button. Check boxes (the export composer's pins) keep their own size. Field borders keep
+   3:1 against the ground (WCAG 1.4.11) and focus is always visible. */
+.site-header ~ main form {
+  display: grid;
+  gap: 0.85rem;
+  max-inline-size: 40rem;
+}
+
+.site-header ~ main form label {
+  display: grid;
+  gap: 0.3rem;
+  font-size: 0.95rem;
+  font-weight: 600;
+}
+
+.site-header ~ main form input:not([type="checkbox"]):not([type="radio"]),
+.site-header ~ main form select {
+  min-inline-size: 0;
+  padding: 0.6rem 0.75rem;
+  border: 1px solid #7d8274;
+  border-radius: 0.375rem;
+  background: #fffdf7;
+  color: inherit;
+  font: inherit;
+  font-weight: 400;
+}
+
+.site-header ~ main form button[type="submit"] {
+  justify-self: start;
+  padding: 0.6rem 1.4rem;
+  border: 0;
+  border-radius: 0.375rem;
+  background: #1f4d33;
+  color: #ffffff;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.site-header ~ main form input:focus-visible,
+.site-header ~ main form select:focus-visible,
+.site-header ~ main form button:focus-visible {
+  outline: 3px solid #14556b;
+  outline-offset: 2px;
+}
+
+@media (prefers-color-scheme: dark) {
+  .site-header ~ main form input:not([type="checkbox"]):not([type="radio"]),
+  .site-header ~ main form select {
+    border-color: #7f9184;
+    background: #18201b;
+  }
+
+  .site-header ~ main form button[type="submit"] {
+    background: #7fd3a3;
+    color: #111713;
+  }
+
+  .site-header ~ main form input:focus-visible,
+  .site-header ~ main form select:focus-visible,
+  .site-header ~ main form button:focus-visible {
+    outline-color: #9ccfe0;
+  }
+}
+
+@media (prefers-color-scheme: dark) {
+  .site-header,
+  .site-footer {
+    border-color: #2f3d33;
+  }
+
+  .site-tagline,
+  .site-footer {
+    color: #b8c6bc;
+  }
+}
+
 .shell-switcher {
   list-style: none;
   margin: 0;

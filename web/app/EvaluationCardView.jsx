@@ -63,8 +63,11 @@ export function EvaluationCardView({ view }) {
       <p data-card-target=""><Say template={CARD.target} values={{ target: inEnglish(view.target) }} /></p>
       <p data-card-json=""><a href={CARD_ROUTE}>{CARD.machineReadable}</a></p>
       <Summary view={view} />
+      {/* Each table in its own labelled scroll region, as Trust and Coverage's tables are: seven columns do not fit a
+          phone, and a scrollable region is a keyboard stop that must say what it scrolls. */}
       {view.sets.map((set) => (
-        <table key={`${set.set}/${set.arm}`} data-set={set.set}>
+        <div key={`${set.set}/${set.arm}`} className="coverage-scroll" role="region" tabIndex={0} aria-label={fillText(liveChrome().coverageAnswer.scrollable, { caption: `${set.set}, ${set.arm}` })}>
+        <table data-set={set.set}>
           <caption>
             <Say template={CARD.caption} values={{ set: set.set, arm: set.arm, cases: set.cases, digest: <code>{set.casesSha256}</code> }} />
           </caption>
@@ -83,6 +86,7 @@ export function EvaluationCardView({ view }) {
             {set.gates.map((gate) => <GateRow key={gate.gate} gate={gate} />)}
           </tbody>
         </table>
+        </div>
       ))}
       <h3>{CARD.controlsHeading}</h3>
       <ul data-controls={view.controls.length}>

@@ -415,10 +415,25 @@ export const LIVE_CHROME_FR = Object.freeze({
     notHeldRow: '{item} : {reason}',
   }),
   shell: Object.freeze({
-    title: '{title} - Lex V3 en direct',
-    bannerLead: 'Déploiement de développement en direct.',
-    banner: 'Cette page affiche ce que répond le serveur depuis lequel elle a été chargée. Lorsqu’un rapport de couverture arrive, ses empreintes désignent le corpus qu’il a compté ; jusque-là, ou si aucun corpus n’est monté, rien de ce qui suit n’en décrit un. Ce n’est ni une mise en production ni une consultation juridique.',
+    title: '{title} - Lex',
     localeNav: 'Langue de l’interface',
+  }),
+  site: Object.freeze({
+    brand: 'Lex',
+    tagline: 'Le droit luxembourgeois et européen, tel qu’il était à toute date',
+    menu: 'Menu principal',
+    search: 'Recherche',
+    radar: 'Changements',
+    export: 'Export',
+    coverage: 'Ce que ce site contient',
+    advice: 'Documentation, et non conseil juridique. Les textes consolidés n’ont pas de valeur légale : seuls font foi les textes publiés au Mémorial A (Journal officiel du Grand-Duché de Luxembourg) et au Journal officiel de l’Union européenne.',
+    sources: 'Les textes proviennent de Legilux et de l’Office des publications de l’Union européenne, tels que ce site les détient ; chaque citation indique sa source officielle.',
+  }),
+  home: Object.freeze({
+    title: 'Le droit luxembourgeois et européen à toute date',
+    eyebrow: 'Rechercher dans le droit',
+    heading: 'Le droit luxembourgeois et européen, tel qu’il était à toute date',
+    intro: 'Recherchez dans les textes que ce site détient, ouvrez une loi telle qu’elle était à la date de votre choix, voyez comment chaque article a changé, comparez deux dates et exportez avec des citations que chacun peut vérifier auprès de la source officielle.',
   }),
   common: Object.freeze({
     loading: 'Interrogation de ce serveur.',

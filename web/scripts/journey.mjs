@@ -143,7 +143,7 @@ export function pinnedCitation(citation) {
  */
 export function journeyStepsFor({ identifier, date, anchor }) {
   return Object.freeze({
-  coverage: Object.freeze({ path: "/", operation: "coverage", body: null }),
+  coverage: Object.freeze({ path: "/coverage.html", operation: "coverage", body: null }),
   search: Object.freeze({
     path: "/search.html",
     cites: true,

@@ -4,12 +4,13 @@
 // gates measure against a closed list (`pages.json`) and a network gate that fails on any request,
 // and this page's whole purpose is one request to the server it came from. The shell (stylesheet,
 // fonts, favicon) is the same, copied from `src/` with the generated tokens appended, as the
-// preview build does. The pages are `index.html` (Trust and Coverage, script `client-live.js`),
+// preview build does. The pages are `index.html` (the home page: the search screen under the site's
+// introduction, script `client-live-search.js`), `coverage.html` (Trust and Coverage, script `client-live.js`),
 // `search.html` (search, script `client-live-search.js`), `dossier.html` (dossier, script
 // `client-live-dossier.js`), `reading.html` (reading, script `client-live-reading.js`) and `history.html`
 // (provision history, script `client-live-history.js`), `compare.html` (compare, script
 // `client-live-compare.js`), `radar.html` (change radar, script `client-live-radar.js`) and
-// `export.html` (export composer, script `client-live-export.js`). The same eight, in French, are under
+// `export.html` (export composer, script `client-live-export.js`). The same nine, in French, are under
 // `fr/`; German and Luxembourgish are `locale-de.html` and `locale-lb.html`, which say they are not
 // reviewed.
 
@@ -25,7 +26,8 @@ export const LIVE_DESTINATION = new URL("../dist-live/", import.meta.url);
 
 /** The live pages: each page's source, its renderer, the file it is written to, and its script. */
 const PAGES = Object.freeze([
-  ["live-coverage-page", "renderLiveCoveragePage", "index.html", "client-live-entry.jsx", "client-live.js"],
+  ["live-search-page", "renderLiveHomePage", "index.html", "client-live-search-entry.jsx", "client-live-search.js"],
+  ["live-coverage-page", "renderLiveCoveragePage", "coverage.html", "client-live-entry.jsx", "client-live.js"],
   ["live-search-page", "renderLiveSearchPage", "search.html", "client-live-search-entry.jsx", "client-live-search.js"],
   ["live-dossier-page", "renderLiveDossierPage", "dossier.html", "client-live-dossier-entry.jsx", "client-live-dossier.js"],
   ["live-reading-page", "renderLiveReadingPage", "reading.html", "client-live-reading-entry.jsx", "client-live-reading.js"],
@@ -36,7 +38,7 @@ const PAGES = Object.freeze([
 ]);
 
 /**
- * The eight pages and their scripts for one interface language: English at the root, any other under
+ * The nine pages and their scripts for one interface language: English at the root, any other under
  * its own path (`/fr/`), each page and the script that hydrates it compiled for that language.
  */
 async function buildPages(destination, { card, locale, buildTag = "" }) {
@@ -49,7 +51,8 @@ async function buildPages(destination, { card, locale, buildTag = "" }) {
   await mkdir(out, { recursive: true });
   for (const [source, render, page, clientEntry, client] of PAGES) {
     const ssr = await import(pathToFileURL(await bundle(`app/${source}.jsx`, `${source}${suffix}.mjs`, options)).href);
-    await writeFile(new URL(page, out), page === "index.html" ? ssr[render]({ card }) : ssr[render](), "utf8");
+    // Trust and Coverage carries the evaluation card it is handed (ruling 2); no other page carries a card.
+    await writeFile(new URL(page, out), page === "coverage.html" ? ssr[render]({ card }) : ssr[render](), "utf8");
     await cp(await bundleClient(`app/${clientEntry}`, client.replace(/\.js$/, `${suffix}.js`), options), new URL(client, out));
   }
 }

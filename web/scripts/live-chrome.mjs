@@ -292,10 +292,29 @@ const EN = Object.freeze({
   // Trust and Coverage's answer, from `coverage.mjs`, likewise the one English source of its words.
   coverageAnswer: COVERAGE_COPY,
   shell: Object.freeze({
-    title: "{title} - Lex V3 live",
-    bannerLead: "Live development build.",
-    banner: "This page shows what the server it was loaded from answers. When a coverage report arrives, its digests name the corpus it counted; until then, or when no corpus is mounted, nothing below describes one. It is not a release and not legal advice.",
+    title: "{title} - Lex",
     localeNav: "Interface language",
+  }),
+  // The site around every live screen (`Document.jsx`): its name, its menu, and the two statements every page carries
+  // below its content: documentation and never advice, and which texts are authentic (product spec section 4; the
+  // export watermark's "Consolidations have no legal effect"). They replace the development build's banner.
+  site: Object.freeze({
+    brand: "Lex",
+    tagline: "Luxembourg and EU law, as it stood on any date",
+    menu: "Main menu",
+    search: "Search",
+    radar: "Changes",
+    export: "Export",
+    coverage: "What this site holds",
+    advice: "Documentation, not legal advice. Consolidated texts have no legal effect: the authentic texts are those published in the Mémorial A (Journal officiel du Grand-Duché de Luxembourg) and in the Official Journal of the European Union.",
+    sources: "The texts come from Legilux and from the Publications Office of the European Union, as this site holds them; every quote names its official source.",
+  }),
+  // The home page: the search screen (UX spec section 2, Screen 1: Home and search) under the site's own introduction.
+  home: Object.freeze({
+    title: "Luxembourg and EU law at any date",
+    eyebrow: "Search the law",
+    heading: "Luxembourg and EU law, as it stood on any date",
+    intro: "Search the texts this site holds, open a law as it stood on the date you choose, see how each article changed, compare two dates, and export with citations anyone can check against the official source.",
   }),
   common: Object.freeze({
     loading: "Asking this server.",

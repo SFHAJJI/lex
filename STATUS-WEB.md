@@ -1,8 +1,29 @@
 # Lex V3 status: the web lane
 
-Updated 2026-10-13. The web lane's progress, split out of STATUS.md (which keeps the heads, the owner's open
+Updated 2026-10-14. The web lane's progress, split out of STATUS.md (which keeps the heads, the owner's open
 items and the pointers) by the standing order of 2026-10-01 13:50 UTC. Every pull request of the web lane
 updates this file, not STATUS.md.
+
+## The public front door (sole driver, 2026-10-14)
+
+The owner opened the deployed candidate and saw no product: the home page was the Trust and Coverage report, no page
+linked to another, and every page carried a "Live development build ... not a release" banner in the Gateway's
+monospace skin. The launch contract asks only that the screens exist and the journeys pass; the ideal UX
+specification (35-ideal-ux.md, the product the pack calls TENEUR) was never the target. This slice is the first of
+the work to that specification (a consolidated specification of record and a plan are being written from the pack).
+- **Home is search** (UX spec section 2, Screen 1): `index.html` renders the search screen under the site's
+  introduction (`renderLiveHomePage`, hydrated by the search script); Trust and Coverage moved to `coverage.html`;
+  `search.html` stays. The journeys' coverage step is `/coverage.html`.
+- **The site around every live screen** (`Document.jsx`): a header with the name, the menu (Search, Changes,
+  Export, What this site holds; the current one marked) and the interface languages, carrying the live marker the
+  banner carried; a footer with the product's statements (documentation, not legal advice; consolidated texts have
+  no legal effect, the Mémorial A and the Official Journal are authentic; the sources). English and reviewed French.
+- **The development banner is gone**; live pages use the Ask skin (comfortable density, Inter and Source Serif 4)
+  instead of the Gateway's monospace; forms have one layout (label above field, full width, a primary button,
+  visible focus, dark mode); the evaluation card's tables scroll inside labelled regions.
+- **Measured** with Chrome's device emulation: home, search, coverage, dossier, reading, history, compare, radar,
+  export and the French home fit 390 CSS pixels with no horizontal overflow (coverage did not: its card tables were
+  519 px wide); the home page fits 320. Web suite 1,077 of 1,077.
 
 ## Replay G1, G3 and G4 over a real chained canary (sole driver, 2026-10-13)
 

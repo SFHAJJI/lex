@@ -5,7 +5,7 @@
 // compiler between the tests and the code they are testing. Compiling once, the same way the
 // build does, means the tests measure what ships.
 
-export { Document, SyntheticBanner, SYNTHETIC_MARKER, LiveBanner, LIVE_MARKER } from './Document.jsx';
+export { Document, SyntheticBanner, SYNTHETIC_MARKER, SiteFooter, SiteHeader, LIVE_MARKER } from './Document.jsx';
 export { renderDocument } from './render-document.mjs';
 export { RefusalCard, Mark } from './RefusalCard.jsx';
 export { Dossier } from './Dossier.jsx';
@@ -29,7 +29,7 @@ export { EvaluationCardView } from './EvaluationCardView.jsx';
 export { LocaleNav, localeHome, localeHref } from './LocaleNav.jsx';
 export { renderLiveLocaleUnavailablePage } from './live-locale-page.jsx';
 export { LiveSearch, SearchAnswerView, SearchResultsView, SearchWorkResolution } from './LiveSearch.jsx';
-export { LIVE_SEARCH_ROOT, liveSearchTree, renderLiveSearchPage } from './live-search-page.jsx';
+export { LIVE_SEARCH_ROOT, liveSearchTree, renderLiveHomePage, renderLiveSearchPage } from './live-search-page.jsx';
 export { DossierAnswerView, DossierTitles, DossierView, EuropeDossierView, LiveDossier } from './LiveDossier.jsx';
 export { LIVE_DOSSIER_ROOT, liveDossierTree, renderLiveDossierPage } from './live-dossier-page.jsx';
 export { LiveReading, ReadingAnswerView, ReadingView } from './LiveReading.jsx';

@@ -16,8 +16,8 @@
 
 import { CHROME_LOCALES } from '../scripts/localization.mjs';
 import { cspValue } from '../scripts/csp.mjs';
-import { LocaleNav } from './LocaleNav.jsx';
-import { CHROME_LOCALE, fillText, liveChrome } from '../scripts/live-chrome.mjs';
+import { LocaleNav, localeHome } from './LocaleNav.jsx';
+import { CHROME_LOCALE, fillText, liveChrome, livePath } from '../scripts/live-chrome.mjs';
 
 /** The marker that says, in the DOM, that nothing on this page is law. */
 export const SYNTHETIC_MARKER = 'lex-v3-synthetic-preview';
@@ -41,17 +41,62 @@ export function SyntheticBanner() {
 export const LIVE_MARKER = 'lex-v3-live-mount';
 
 /**
- * The banner a live page carries instead of the synthetic one, whose sentence ("describes no real
- * legal record") would be false on a real mount. A driver's draft, before the owner's wording:
- * it claims only what the page does, and names the digests as the way to know which corpus it is.
+ * The site's menu: each entry's copy key, its page, and the pages that are it (the home page is the search
+ * screen, UX spec section 2). A work's own screens (dossier, reading, history, compare) are reached from its
+ * search hit and its dossier, so the menu names the screens a reader starts from.
  */
-export function LiveBanner() {
-  const shell = liveChrome().shell;
+const MENU = Object.freeze([
+  Object.freeze({ key: 'search', page: 'index.html', states: Object.freeze(['live-home', 'live-search']) }),
+  Object.freeze({ key: 'radar', page: 'radar.html', states: Object.freeze(['live-radar']) }),
+  Object.freeze({ key: 'export', page: 'export.html', states: Object.freeze(['live-export']) }),
+  Object.freeze({ key: 'coverage', page: 'coverage.html', states: Object.freeze(['live-coverage']) }),
+]);
+
+/**
+ * The header every live page carries: the site's name (to the home page of the page's language), its menu
+ * with the current screen marked, and the interface languages. It carries the live marker the development
+ * build's banner carried, which says what a live page is (it asks the server it came from) and is how the
+ * pages and their tests tell a live page from a preview.
+ */
+export function SiteHeader({ state, locale }) {
+  const site = liveChrome().site;
   return (
-    <aside className="synthetic" role="note" data-live={LIVE_MARKER}>
-      {/* One text node after the lead, as before the move to the table, so the markup is unchanged. */}
-      <strong>{shell.bannerLead}</strong>{` ${shell.banner}`}
-    </aside>
+    <header className="site-header" data-live={LIVE_MARKER}>
+      <a className="site-brand" href={localeHome(CHROME_LOCALE)}>
+        <span className="site-name">{site.brand}</span>
+        <span className="site-tagline">{site.tagline}</span>
+      </a>
+      <nav aria-label={site.menu} className="site-nav">
+        <ul>
+          {MENU.map((entry) => (
+            <li key={entry.key}>
+              <a href={entry.page === 'index.html' ? localeHome(CHROME_LOCALE) : livePath(entry.page)} aria-current={entry.states.includes(state) ? 'page' : undefined}>
+                {site[entry.key]}
+              </a>
+            </li>
+          ))}
+        </ul>
+      </nav>
+      <LocaleNav current={locale} />
+    </header>
+  );
+}
+
+/**
+ * The footer every live page carries: what the site is not (advice), which texts are authentic, and where the
+ * texts come from, then what it holds. The development build's banner said "not a release and not legal
+ * advice"; the first half was the build's and goes with it, the second is the product's and stays here.
+ */
+export function SiteFooter() {
+  const site = liveChrome().site;
+  return (
+    <footer className="site-footer">
+      <p>{site.advice}</p>
+      <p>{site.sources}</p>
+      <p>
+        <a href={livePath('coverage.html')}>{site.coverage}</a>
+      </p>
+    </footer>
   );
 }
 
@@ -130,10 +175,11 @@ export function Document({
         <link rel="stylesheet" href="/styles.css" />
       </head>
       <body>
-        {banner === 'live' ? <LiveBanner /> : <SyntheticBanner />}
-        {/* The live pages offer the interface languages; an unreviewed one answers localization_unavailable. */}
-        {banner === 'live' ? <LocaleNav current={locale} /> : null}
+        {/* A live page sits in the site (its header, with the interface languages, an unreviewed one answering
+            localization_unavailable, and its footer); a preview page under the synthetic banner. */}
+        {banner === 'live' ? <SiteHeader state={state} locale={locale} /> : <SyntheticBanner />}
         <main id="main">{children}</main>
+        {banner === 'live' ? <SiteFooter /> : null}
       </body>
     </html>
   );
