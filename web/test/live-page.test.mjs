@@ -7,7 +7,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { createServer } from "node:http";
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createElement as h } from "react";
@@ -28,7 +28,7 @@ test("the live page is the loading state under the live banner, with its own scr
   assert.ok(!html.includes(`data-synthetic="${SYNTHETIC_MARKER}"`), "the synthetic banner would misdescribe a live answer");
   assert.match(html, /id="live-coverage-root"><div class="live-answer" aria-live="polite" data-live-answer=""><section data-answer-state="loading">/,
     "the answer is written into a live region the server already rendered, so a screen reader hears it arrive");
-  assert.match(html, /<script src="\/client-live.js" defer=""><\/script>/);
+  assert.match(html, /<script src="\/en\/client-live.js" defer=""><\/script>/);
   assert.ok(!html.includes('src="/client.js"'), "the preview pages' bundle is not this page's");
   assert.deepEqual(LIVE_CONTRACT, census.contract, "the contract is the census's, as the platform rendered it");
   assert.match(html, /<title>Trust and Coverage - Lex<\/title>/, "the title does not call a live page a preview");
@@ -102,13 +102,15 @@ test("the live build writes its own directory, embeds the contract and nothing e
   try {
     await buildLive(url, { buildTag: "live-page-test" });
     // The home page is the search screen under the site's introduction (UX spec section 2), hydrated by the search script.
-    const home = await readFile(join(destination, "index.html"), "utf8");
-    assert.match(home, /data-preview-state="live-home"/, "the root is the home page");
-    assert.match(home, /<script src="\/client-live-search.js" defer=""><\/script>/, "the home page is hydrated by the search script");
+    // Every page stands under its interface language (R61): English under en/, beside fr/; the root holds no page.
+    await assert.rejects(readFile(join(destination, "index.html")), "the root sends a reader to a language: no page stands there");
+    const home = await readFile(join(destination, "en", "index.html"), "utf8");
+    assert.match(home, /data-preview-state="live-home"/, "the English root is the home page");
+    assert.match(home, /<script src="\/en\/client-live-search.js" defer=""><\/script>/, "the home page is hydrated by the search script");
     assert.match(home, new RegExp(`data-live="${LIVE_MARKER}"`));
     // Trust and Coverage, with its card, is coverage.html.
-    const index = await readFile(join(destination, "coverage.html"), "utf8");
-    const bundle = await readFile(join(destination, "client-live.js"), "utf8");
+    const index = await readFile(join(destination, "en", "coverage.html"), "utf8");
+    const bundle = await readFile(join(destination, "en", "client-live.js"), "utf8");
     assert.match(index, new RegExp(`data-live="${LIVE_MARKER}"`));
     for (const asset of ["styles.css", "favicon.svg"]) await readFile(join(destination, asset));
     assert.ok(bundle.includes(census.contract.registry_sha256), "the contract is embedded");
@@ -118,63 +120,63 @@ test("the live build writes its own directory, embeds the contract and nothing e
       assert.ok(!bundle.includes(entry.scenario), `the census envelope "${entry.scenario}" is not shipped to the browser`);
     }
 
-    const search = await readFile(join(destination, "search.html"), "utf8");
-    const searchBundle = await readFile(join(destination, "client-live-search.js"), "utf8");
-    assert.match(search, /<script src="\/client-live-search.js" defer=""><\/script>/);
+    const search = await readFile(join(destination, "en", "search.html"), "utf8");
+    const searchBundle = await readFile(join(destination, "en", "client-live-search.js"), "utf8");
+    assert.match(search, /<script src="\/en\/client-live-search.js" defer=""><\/script>/);
     assert.match(search, new RegExp(`data-live="${LIVE_MARKER}"`));
     assert.ok(searchBundle.includes(census.contract.registry_sha256), "the search bundle embeds the contract");
     for (const entry of census.envelopes) {
       assert.ok(!searchBundle.includes(entry.scenario), `the census envelope "${entry.scenario}" is not shipped with the search page`);
     }
 
-    const dossier = await readFile(join(destination, "dossier.html"), "utf8");
-    const dossierBundle = await readFile(join(destination, "client-live-dossier.js"), "utf8");
-    assert.ok(dossier.includes('<script src="/client-live-dossier.js" defer=""></script>'));
+    const dossier = await readFile(join(destination, "en", "dossier.html"), "utf8");
+    const dossierBundle = await readFile(join(destination, "en", "client-live-dossier.js"), "utf8");
+    assert.ok(dossier.includes('<script src="/en/client-live-dossier.js" defer=""></script>'));
     assert.match(dossier, new RegExp(`data-live="${LIVE_MARKER}"`));
     assert.ok(dossierBundle.includes(census.contract.registry_sha256), "the dossier bundle embeds the contract");
     for (const entry of census.envelopes) {
       assert.ok(!dossierBundle.includes(entry.scenario), `the census envelope "${entry.scenario}" is not shipped with the dossier page`);
     }
 
-    const reading = await readFile(join(destination, "reading.html"), "utf8");
-    const readingBundle = await readFile(join(destination, "client-live-reading.js"), "utf8");
-    assert.ok(reading.includes('<script src="/client-live-reading.js" defer=""></script>'));
+    const reading = await readFile(join(destination, "en", "reading.html"), "utf8");
+    const readingBundle = await readFile(join(destination, "en", "client-live-reading.js"), "utf8");
+    assert.ok(reading.includes('<script src="/en/client-live-reading.js" defer=""></script>'));
     assert.match(reading, new RegExp(`data-live="${LIVE_MARKER}"`));
     assert.ok(readingBundle.includes(census.contract.registry_sha256), "the reading bundle embeds the contract");
     for (const entry of census.envelopes) {
       assert.ok(!readingBundle.includes(entry.scenario), `the census envelope "${entry.scenario}" is not shipped with the reading page`);
     }
 
-    const history = await readFile(join(destination, "history.html"), "utf8");
-    const historyBundle = await readFile(join(destination, "client-live-history.js"), "utf8");
-    assert.ok(history.includes('<script src="/client-live-history.js" defer=""></script>'));
+    const history = await readFile(join(destination, "en", "history.html"), "utf8");
+    const historyBundle = await readFile(join(destination, "en", "client-live-history.js"), "utf8");
+    assert.ok(history.includes('<script src="/en/client-live-history.js" defer=""></script>'));
     assert.match(history, new RegExp(`data-live="${LIVE_MARKER}"`));
     assert.ok(historyBundle.includes(census.contract.registry_sha256), "the history bundle embeds the contract");
     for (const entry of census.envelopes) {
       assert.ok(!historyBundle.includes(entry.scenario), `the census envelope "${entry.scenario}" is not shipped with the history page`);
     }
 
-    const compare = await readFile(join(destination, "compare.html"), "utf8");
-    const compareBundle = await readFile(join(destination, "client-live-compare.js"), "utf8");
-    assert.ok(compare.includes('<script src="/client-live-compare.js" defer=""></script>'));
+    const compare = await readFile(join(destination, "en", "compare.html"), "utf8");
+    const compareBundle = await readFile(join(destination, "en", "client-live-compare.js"), "utf8");
+    assert.ok(compare.includes('<script src="/en/client-live-compare.js" defer=""></script>'));
     assert.match(compare, new RegExp(`data-live="${LIVE_MARKER}"`));
     assert.ok(compareBundle.includes(census.contract.registry_sha256), "the compare bundle embeds the contract");
     for (const entry of census.envelopes) {
       assert.ok(!compareBundle.includes(entry.scenario), `the census envelope "${entry.scenario}" is not shipped with the compare page`);
     }
 
-    const radar = await readFile(join(destination, "radar.html"), "utf8");
-    const radarBundle = await readFile(join(destination, "client-live-radar.js"), "utf8");
-    assert.ok(radar.includes('<script src="/client-live-radar.js" defer=""></script>'));
+    const radar = await readFile(join(destination, "en", "radar.html"), "utf8");
+    const radarBundle = await readFile(join(destination, "en", "client-live-radar.js"), "utf8");
+    assert.ok(radar.includes('<script src="/en/client-live-radar.js" defer=""></script>'));
     assert.match(radar, new RegExp(`data-live="${LIVE_MARKER}"`));
     assert.ok(radarBundle.includes(census.contract.registry_sha256), "the radar bundle embeds the contract");
     for (const entry of census.envelopes) {
       assert.ok(!radarBundle.includes(entry.scenario), `the census envelope "${entry.scenario}" is not shipped with the radar page`);
     }
 
-    const exported = await readFile(join(destination, "export.html"), "utf8");
-    const exportBundle = await readFile(join(destination, "client-live-export.js"), "utf8");
-    assert.ok(exported.includes('<script src="/client-live-export.js" defer=""></script>'));
+    const exported = await readFile(join(destination, "en", "export.html"), "utf8");
+    const exportBundle = await readFile(join(destination, "en", "client-live-export.js"), "utf8");
+    assert.ok(exported.includes('<script src="/en/client-live-export.js" defer=""></script>'));
     assert.match(exported, new RegExp(`data-live="${LIVE_MARKER}"`));
     assert.ok(exportBundle.includes(census.contract.registry_sha256), "the export bundle embeds the contract");
     for (const entry of census.envelopes) {
@@ -191,14 +193,16 @@ test("every live page offers the interface languages, each named in itself; an u
     const start = html.indexOf('<nav aria-label="Interface language"');
     const nav = html.slice(start, html.indexOf("</nav>", start) + 6);
     assert.deepEqual([...nav.matchAll(/<a href="([^"]+)" lang="([a-z]+)" hrefLang="([a-z]+)"[^>]*>([^<]+)<\/a>/g)].map((m) => [m[1], m[2], m[3], m[4]]), [
-      ["/", "en", "en", "English"],
+      ["/en/", "en", "en", "English"],
       // The name in its own language; the destination's language as hrefLang: French for the reviewed French
-      // pages, English for the page that says a language is not reviewed (review of #797).
-      ["/fr/index.html", "fr", "fr", "Français"],
+      // pages, English for the page that says a language is not reviewed (review of #797). Each reviewed language's
+      // link leads to its own root as built; the page points it at the same page in that language once it has loaded.
+      ["/fr/", "fr", "fr", "Français"],
       ["/locale-de.html", "de", "en", "Deutsch"],
       ["/locale-lb.html", "lb", "en", "Lëtzebuergesch"],
     ]);
-    assert.match(nav, /lang="en" hrefLang="en" aria-current="true">English/, "the page's own language is the current one");
+    assert.match(nav, /lang="en" hrefLang="en" aria-current="true" data-same-document="en">English/, "the page's own language is the current one");
+    assert.equal([...nav.matchAll(/data-same-document="([a-z]+)"/g)].map((m) => m[1]).join(","), "en,fr", "only a reviewed language is pointed at the same page in it");
   }
   assert.ok(!renderToStaticMarkup(h(Document, { state: "x", title: "X" }, h("p", null, "x"))).includes("Interface language"), "a preview page offers no live language");
 
@@ -252,8 +256,11 @@ async function listen(server) {
 
 async function withServers(run) {
   const root = await mkdtemp(join(tmpdir(), "lex-live-"));
-  await writeFile(join(root, "index.html"), "<!doctype html><title>live</title>");
-  await writeFile(join(root, "client-live.js"), "void 0;");
+  for (const language of ["en", "fr"]) {
+    await mkdir(join(root, language));
+    await writeFile(join(root, language, "index.html"), `<!doctype html><title>live ${language}</title>`);
+  }
+  await writeFile(join(root, "en", "client-live.js"), "void 0;");
   const received = [];
   const api = createServer((request, response) => {
     const chunks = [];
@@ -278,17 +285,29 @@ async function withServers(run) {
 
 test("the server serves the built page, and nothing outside it", async () => {
   await withServers(async ({ origin }) => {
-    const index = await fetch(`${origin}/`);
+    // The root sends a reader to the language the browser prefers of French and English, else French (R61).
+    for (const [acceptLanguage, location] of [[undefined, "/fr/"], ["en-GB,en;q=0.9", "/en/"], ["de-DE,de;q=0.9,en;q=0.5,fr;q=0.4", "/en/"], ["fr-LU", "/fr/"]]) {
+      const root = await fetch(`${origin}/`, { redirect: "manual", headers: acceptLanguage === undefined ? {} : { "accept-language": acceptLanguage } });
+      assert.equal(root.status, 302, String(acceptLanguage));
+      assert.equal(root.headers.get("location"), location, String(acceptLanguage));
+      assert.equal(root.headers.get("vary"), "Accept-Language", "a cache must not hand one reader's language to another");
+      assert.equal(root.headers.get("cache-control"), "no-store");
+    }
+    const law = await fetch(`${origin}/lu-legilux/loi-1991-08-10-n3?x=1`, { redirect: "manual", headers: { "accept-language": "en" } });
+    assert.equal(law.status, 302);
+    assert.equal(law.headers.get("location"), "/en/lu-legilux/loi-1991-08-10-n3?x=1", "a law's address goes to the same address in the reader's language");
+    const index = await fetch(`${origin}/fr/`);
     assert.equal(index.status, 200);
+    assert.ok((await index.text()).includes("live fr"), "a language's root is its home page");
     assert.equal(index.headers.get("content-type"), "text/html; charset=utf-8");
     assert.equal(index.headers.get("x-content-type-options"), "nosniff");
     assert.equal(index.headers.get("cache-control"), "no-store");
-    const script = await fetch(`${origin}/client-live.js`);
+    const script = await fetch(`${origin}/en/client-live.js`);
     assert.equal(script.headers.get("content-type"), "text/javascript; charset=utf-8");
     for (const path of ["/../package.json", "/%2e%2e/package.json", "/missing.html", "/%E0%A4%A"]) {
       assert.equal((await fetch(`${origin}${path}`)).status, 404, path);
     }
-    assert.equal((await fetch(`${origin}/`, { method: "DELETE" })).status, 405);
+    assert.equal((await fetch(`${origin}/en/`, { method: "DELETE" })).status, 405);
   });
 });
 
@@ -298,7 +317,7 @@ test("a path that climbs out of the built directory is refused, sent raw so no c
   const outer = await mkdtemp(join(tmpdir(), "lex-live-outer-"));
   const root = join(outer, "dist-live");
   await (await import("node:fs/promises")).mkdir(root);
-  await writeFile(join(root, "index.html"), "<!doctype html>");
+  await writeFile(join(root, "page.html"), "<!doctype html>");
   await writeFile(join(outer, "secret.html"), "not for the page");
   const live = createLiveServer({ root, apiOrigin: "http://127.0.0.1:9" });
   const origin = await listen(live);
@@ -315,7 +334,7 @@ test("a path that climbs out of the built directory is refused, sent raw so no c
     for (const path of ["/../secret.html", "/..%2fsecret.html", "/%2e%2e%2fsecret.html", "/..\\secret.html", "/..%5csecret.html", "//", "//..%2fsecret.html"]) {
       assert.equal(await raw(path), 404, path);
     }
-    assert.equal(await raw("/index.html"), 200, "the control: a file inside is served");
+    assert.equal(await raw("/page.html"), 200, "the control: a file inside is served");
   } finally {
     await new Promise((resolve) => live.close(resolve));
     await rm(outer, { recursive: true, force: true });

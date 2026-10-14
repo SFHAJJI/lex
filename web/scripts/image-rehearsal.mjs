@@ -47,7 +47,7 @@ import { dirname, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { gunzipSync } from "node:zlib";
 import { readLargeFile, sha256Hex } from "./large-bytes.mjs";
-import { pageForSitePath } from "./permalinks.mjs";
+import { pageForSitePath, redirectFor } from "./permalinks.mjs";
 
 const repository = resolve(fileURLToPath(new URL("../../", import.meta.url)));
 // In pieces: one update over 2 GiB is refused, and the population image's app layer is 2.5 GB (large-bytes.mjs).
@@ -243,9 +243,18 @@ export async function v2RouteFailures(origin, { v3Files = new Map(), routes = V2
   for (const [method, path] of routes) {
     const response = await fetch(`${origin}${path}`, { method, headers: { "content-type": "application/json" }, body: method === "POST" ? "{}" : undefined, redirect: "manual" });
     const body = Buffer.from(await response.arrayBuffer());
-    // V3's own page at a law's address (a permalink or a work's coordinate, `permalinks.mjs`) is V3's, not V2's: V2 served
-    // pages at /lu-legilux/{work} and /eu-eurlex/{celex} too. Anything else must still be V3's own file or a 404.
-    const bare = path.split("?")[0];
+    // V3's own answer at a path V2 also used is V3's, not V2's: the root and a law's address with no interface language
+    // (V2 served pages at /, /lu-legilux/{work} and /eu-eurlex/{celex}) are V3's redirect to the reader's language, French
+    // for a request naming none (`redirectFor`, R61), to the exact address; a law's address under a language is V3's
+    // page that reads it. Anything else must still be V3's own file or a 404.
+    const [bare, query = ""] = path.split("?");
+    const location = method === "GET" ? redirectFor(bare, query === "" ? "" : `?${query}`, undefined) : null;
+    if (location !== null) {
+      if (response.status !== 302 || response.headers.get("location") !== location) {
+        failures.push(`${method} ${path} answered ${response.status}${response.headers.get("location") ? ` to ${response.headers.get("location")}` : ""}, not V3's redirect to ${location}`);
+      }
+      continue;
+    }
     const page = method === "GET" ? pageForSitePath(bare) : null;
     const own = method === "GET" ? (v3Files.get(bare) ?? (page === null ? undefined : v3Files.get(`/${page}`))) : undefined;
     if (own === undefined) {
@@ -257,10 +266,13 @@ export async function v2RouteFailures(origin, { v3Files = new Map(), routes = V2
   return failures;
 }
 
-/** The live pages as the image serves them, URL path to bytes: each file at `/<path>`, and `/` as `index.html`. */
+/** The live pages as the image serves them, URL path to bytes: each file at `/<path>`, and each interface language's root (`/en/`, `/fr/`) as its `index.html`. */
 export function servedPaths(web) {
   const served = new Map(web.map(([path, bytes]) => [`/${path}`, bytes]));
-  if (served.has("/index.html")) served.set("/", served.get("/index.html"));
+  // An interface language's root is its home page (R61); the site's root is a redirect, not a page.
+  for (const language of ["en", "fr"]) {
+    if (served.has(`/${language}/index.html`)) served.set(`/${language}/`, served.get(`/${language}/index.html`));
+  }
   return served;
 }
 

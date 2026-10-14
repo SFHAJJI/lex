@@ -59,7 +59,7 @@ test("the server renders the form in its idle state with no named control, and a
   assert.doesNotMatch(form, /\sname=/, "a submit the browser performs before hydration sends nothing");
 
   const page = renderLiveDossierPage();
-  assert.match(page, /<script src="\/client-live-dossier.js" defer=""><\/script>/);
+  assert.match(page, /<script src="\/en\/client-live-dossier.js" defer=""><\/script>/);
   assert.match(page, /id="live-dossier-root"/);
 });
 
@@ -86,7 +86,7 @@ test("a served dossier is the work, its states and what it does not hold, read b
   assert.ok(shown.includes(value.work_key));
   assert.ok(markup.includes(value.states[0].permalink), "each state is pinned by its permalink");
   for (const state of value.states) {
-    assert.ok(markup.includes(`<a href="${state.permalink}"><code>${state.permalink}</code></a>`), `the state of ${state.applicability_date} links to its reading`);
+    assert.ok(markup.includes(`<a href="/en${state.permalink}"><code>${state.permalink}</code></a>`), `the state of ${state.applicability_date} links to its reading`);
   }
   assert.ok(markup.includes('<p data-history="" id="dossier-states">'));
   assert.ok(markup.includes('<div class="table-scroll" role="region" tabindex="0" aria-labelledby="dossier-states"><table>'), "the states table scrolls in a region named by the sentence above it");
@@ -115,7 +115,7 @@ test("an EU work's dossier is the work by its CELEX, its expressions with the or
   assert.ok(shown.includes("1 expression held, shown with its original wording."));
   const [expression] = value.expressions;
   assert.ok(markup.includes(`data-pinned-wording="${expression.pinned_wording.wording_sha256}"`));
-  assert.ok(markup.includes(`<a href="${expression.pinned_wording.permalink}"><code>${expression.pinned_wording.permalink}</code></a>`), "the expression is pinned by its wording's permalink, a link to its reading");
+  assert.ok(markup.includes(`<a href="/en${expression.pinned_wording.permalink}"><code>${expression.pinned_wording.permalink}</code></a>`), "the expression is pinned by its wording's permalink, a link to its reading");
   assert.ok(markup.includes('aria-labelledby="dossier-expressions"><table>') && markup.includes('id="dossier-expressions"'), "the expressions table scrolls in a region named by the sentence above it");
   assert.ok(markup.includes("<th scope=\"col\">Wording date</th>"), "the date is a wording date, never an applicability date");
   assert.doesNotMatch(shown, /Applies from|Next state from/, "an EU dossier lists no state");

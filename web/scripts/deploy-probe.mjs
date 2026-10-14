@@ -48,21 +48,28 @@ export function liveFilesOf(archive) {
 export async function revisionFailures(origin, { web, card, corpusSha256 }) {
   const failures = [];
   const served = servedPaths(web);
-  if (!served.has("/")) return ["the release image holds no live page at /, so the revision has nothing to be held to"];
+  if (!served.has("/fr/")) return ["the release image holds no live page at /fr/, so the revision has nothing to be held to"];
 
-  const page = await fetch(`${origin}/`, { redirect: "manual" });
+  // The root sends a reader with no language preference to the French home page (R61), and that page is the image's own.
+  const start = await fetch(`${origin}/`, { redirect: "manual" });
+  await start.arrayBuffer();
+  if (start.status !== 302 || start.headers.get("location") !== "/fr/") {
+    failures.push(`GET / answered ${start.status}${start.headers.get("location") ? ` to ${start.headers.get("location")}` : ""}, not a redirect to /fr/`);
+  }
+  if (start.headers.get("vary") !== "Accept-Language") failures.push(`GET / varies by ${start.headers.get("vary")}, not Accept-Language`);
+  const page = await fetch(`${origin}/fr/`, { redirect: "manual" });
   const body = Buffer.from(await page.arrayBuffer());
   if (page.status !== 200) {
-    failures.push(`GET / answered ${page.status}, not 200`);
-  } else if (!body.equals(served.get("/"))) {
-    failures.push("GET / answered a page that is not the release image's own, byte for byte");
+    failures.push(`GET /fr/ answered ${page.status}, not 200`);
+  } else if (!body.equals(served.get("/fr/"))) {
+    failures.push("GET /fr/ answered a page that is not the release image's own, byte for byte");
   }
   const header = (name) => page.headers.get(name);
   const policy = `${cspValue()}; frame-ancestors 'none'`;
-  if (header("content-security-policy") !== policy) failures.push(`GET / carries the CSP ${header("content-security-policy")}, not ${policy}`);
-  if (!/^max-age=\d+/.test(header("strict-transport-security") ?? "")) failures.push("GET / carries no HSTS");
-  if (header("referrer-policy") !== "no-referrer") failures.push(`GET / carries Referrer-Policy ${header("referrer-policy")}, not no-referrer`);
-  if (header("x-content-type-options") !== "nosniff") failures.push("GET / carries no nosniff");
+  if (header("content-security-policy") !== policy) failures.push(`GET /fr/ carries the CSP ${header("content-security-policy")}, not ${policy}`);
+  if (!/^max-age=\d+/.test(header("strict-transport-security") ?? "")) failures.push("GET /fr/ carries no HSTS");
+  if (header("referrer-policy") !== "no-referrer") failures.push(`GET /fr/ carries Referrer-Policy ${header("referrer-policy")}, not no-referrer`);
+  if (header("x-content-type-options") !== "nosniff") failures.push("GET /fr/ carries no nosniff");
 
   const servedCard = await fetch(`${origin}${CARD_ROUTE}`, { redirect: "manual" });
   const cardBytes = Buffer.from(await servedCard.arrayBuffer());

@@ -388,9 +388,13 @@ export const CHROME_LOCALE = typeof __LEX_CHROME_LOCALE__ === 'string' ? __LEX_C
  */
 export const ENGLISH_LANG = CHROME_LOCALE === 'en' ? undefined : 'en';
 
-/** Where a live page's own file is served for this bundle's language: `/` for English, `/fr/` for French. */
+/**
+ * Where a live page's own file is served for this bundle's language: under the language's own path, `/en/` or `/fr/`
+ * (the specification of record's R61; the root sends a reader to one of them). The home page is the language's root,
+ * `/en/`, not its file.
+ */
 export function livePath(file) {
-  return CHROME_LOCALE === 'en' ? `/${file}` : `/${CHROME_LOCALE}/${file}`;
+  return file === 'index.html' ? `/${CHROME_LOCALE}/` : `/${CHROME_LOCALE}/${file}`;
 }
 
 /** The interface copy for a reviewed language; any other throws, since serving it would be a substitution. */

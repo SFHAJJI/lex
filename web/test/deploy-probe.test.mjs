@@ -14,6 +14,7 @@ import test from "node:test";
 
 import { cspValue } from "../scripts/csp.mjs";
 import { CARD_ROUTE } from "../scripts/evaluation-card.mjs";
+import { redirectFor } from "../scripts/permalinks.mjs";
 import { REMOTE_PRIVACY_NOTE, browserFailures, deployedReleaseFailures, liveFilesOf, remoteRevision, revisionFailures } from "../scripts/deploy-probe.mjs";
 import { rehearsalKey, signRehearsal } from "../scripts/image-rehearsal.mjs";
 import { writeLayout, writeTar } from "../scripts/image-reproducible.mjs";
@@ -31,12 +32,22 @@ const HEADERS = {
   "x-content-type-options": "nosniff",
 };
 
-/** A stand-in revision: `/` and the card as the release holds them, coverage from `corpus`, 404 for everything else. */
+/**
+ * A stand-in revision: `/` a redirect to `/fr/`, `/fr/` and the card as the release holds them, coverage from `corpus`,
+ * 404 for everything else.
+ */
 async function revision(change = {}) {
-  const answer = { page: PAGE, card: CARD, corpus: CORPUS, headers: HEADERS, refusal: null, extra: new Map(), ...change };
+  const answer = { page: PAGE, card: CARD, corpus: CORPUS, headers: HEADERS, refusal: null, extra: new Map(), root: { status: 302, location: "/fr/", vary: "Accept-Language" }, ...change };
   const server = createServer((request, response) => {
     const path = request.url.split("?")[0];
     if (request.method === "GET" && path === "/") {
+      response.writeHead(answer.root.status, { ...answer.headers, ...(answer.root.location ? { location: answer.root.location } : {}), ...(answer.root.vary ? { vary: answer.root.vary } : {}) });
+      response.end();
+    } else if (request.method === "GET" && redirectFor(path, "", request.headers["accept-language"]) !== null) {
+      // A law's address with no interface language, sent to the reader's as V3 sends it.
+      response.writeHead(302, { ...answer.headers, location: redirectFor(path, "", request.headers["accept-language"]), vary: "Accept-Language" });
+      response.end();
+    } else if (request.method === "GET" && path === "/fr/") {
       response.writeHead(200, { "content-type": "text/html; charset=utf-8", ...answer.headers });
       response.end(answer.page);
     } else if (request.method === "GET" && path === CARD_ROUTE) {
@@ -59,7 +70,7 @@ async function revision(change = {}) {
   return { origin: `http://127.0.0.1:${server.address().port}`, close: () => new Promise((resolve) => server.close(resolve)) };
 }
 
-const WEB = [["index.html", PAGE], ["evaluation-card.json", CARD]];
+const WEB = [["fr/index.html", PAGE], ["evaluation-card.json", CARD]];
 
 test("a revision that answers as its release holds passes the probe", async () => {
   const served = await revision();
@@ -72,7 +83,10 @@ test("a revision that answers as its release holds passes the probe", async () =
 
 test("each way a revision can differ from its release fails with its own reason", async () => {
   const cases = [
-    ["another page at /", { page: Buffer.from("<p>someone else's page</p>") }, /GET \/ answered a page that is not the release image's own/],
+    ["another page at /fr/", { page: Buffer.from("<p>someone else's page</p>") }, /GET \/fr\/ answered a page that is not the release image's own/],
+    ["a page at / instead of the redirect", { root: { status: 200 } }, /GET \/ answered 200, not a redirect to \/fr\//],
+    ["a redirect to English for a reader naming no language", { root: { status: 302, location: "/en/", vary: "Accept-Language" } }, /GET \/ answered 302 to \/en\/, not a redirect to \/fr\//],
+    ["a redirect a cache could share", { root: { status: 302, location: "/fr/" } }, /GET \/ varies by null, not Accept-Language/],
     ["no CSP", { headers: { ...HEADERS, "content-security-policy": "default-src *" } }, /carries the CSP default-src \*/],
     ["no HSTS", { headers: Object.fromEntries(Object.entries(HEADERS).filter(([name]) => name !== "strict-transport-security")) }, /carries no HSTS/],
     ["a referrer sent", { headers: { ...HEADERS, "referrer-policy": "origin" } }, /Referrer-Policy origin/],
@@ -111,8 +125,8 @@ function imageArchive() {
 
 test("the live pages are read out of the release image", () => {
   const files = new Map(liveFilesOf(imageArchive().archive));
-  assert.deepEqual([...files.keys()].sort(), ["evaluation-card.json", "index.html"]);
-  assert.ok(files.get("index.html").equals(PAGE));
+  assert.deepEqual([...files.keys()].sort(), ["evaluation-card.json", "fr/index.html"]);
+  assert.ok(files.get("fr/index.html").equals(PAGE));
 });
 
 test("a revision is probed only against a release that reads back under the signing identity's key", async () => {

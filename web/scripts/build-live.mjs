@@ -38,8 +38,9 @@ const PAGES = Object.freeze([
 ]);
 
 /**
- * The nine pages and their scripts for one interface language: English at the root, any other under
- * its own path (`/fr/`), each page and the script that hydrates it compiled for that language.
+ * The nine pages and their scripts for one interface language, under that language's own path (`/en/`,
+ * `/fr/`: the specification of record's R61; the root sends a reader to one of them), each page and the
+ * script that hydrates it compiled for that language.
  */
 async function buildPages(destination, { card, locale, buildTag = "" }) {
   const { bundle, bundleClient } = await import("./react-build.mjs");
@@ -47,7 +48,7 @@ async function buildPages(destination, { card, locale, buildTag = "" }) {
   const options = english ? {} : { define: { __LEX_CHROME_LOCALE__: JSON.stringify(locale) } };
   // A caller's tag keeps its intermediate bundles apart from another build running at the same time.
   const suffix = `${buildTag ? `.${buildTag}` : ""}${english ? "" : `.${locale}`}`;
-  const out = english ? destination : new URL(`${locale}/`, destination);
+  const out = new URL(`${locale}/`, destination);
   await mkdir(out, { recursive: true });
   for (const [source, render, page, clientEntry, client] of PAGES) {
     const ssr = await import(pathToFileURL(await bundle(`app/${source}.jsx`, `${source}${suffix}.mjs`, options)).href);

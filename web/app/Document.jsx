@@ -18,6 +18,7 @@ import { CHROME_LOCALES } from '../scripts/localization.mjs';
 import { cspValue } from '../scripts/csp.mjs';
 import { LocaleNav, localeHome } from './LocaleNav.jsx';
 import { CHROME_LOCALE, fillText, liveChrome, livePath } from '../scripts/live-chrome.mjs';
+import { INTERFACE_LANGUAGES } from '../scripts/permalinks.mjs';
 
 /** The marker that says, in the DOM, that nothing on this page is law. */
 export const SYNTHETIC_MARKER = 'lex-v3-synthetic-preview';
@@ -56,6 +57,34 @@ const MENU = Object.freeze([
   Object.freeze({ key: 'export', page: 'export.html', states: Object.freeze(['live-export']) }),
   Object.freeze({ key: 'coverage', page: 'coverage.html', states: Object.freeze(['live-coverage']) }),
 ]);
+
+/** The origin the site is published at, which the alternate-language links name (search engines want them whole). */
+export const SITE_ORIGIN = 'https://law.soufien.lu';
+
+/**
+ * The page each live page is in every interface language, by its state, for the alternate-language links (R61, hreflang).
+ * The reading and dossier pages are absent: either may be standing at a law's address, which its own path names, and a
+ * link to the page's file in the other language would name a different page.
+ */
+const ALTERNATE_PAGES = Object.freeze({
+  'live-home': '',
+  'live-search': 'search.html',
+  'live-history': 'history.html',
+  'live-compare': 'compare.html',
+  'live-radar': 'radar.html',
+  'live-export': 'export.html',
+  'live-coverage': 'coverage.html',
+});
+
+/** The alternate-language links of a live page: the same page in each interface language, and the root for any other. */
+export function alternateLinks(state) {
+  const page = ALTERNATE_PAGES[state];
+  if (page === undefined) return [];
+  return [
+    ...INTERFACE_LANGUAGES.map((language) => ({ hrefLang: language, href: `${SITE_ORIGIN}/${language}/${page}` })),
+    { hrefLang: 'x-default', href: `${SITE_ORIGIN}/` },
+  ];
+}
 
 /**
  * The header every live page carries: the site's name (to the home page of the page's language), its menu
@@ -180,6 +209,9 @@ export function Document({
         <title>{banner === 'live' ? fillText(liveChrome().shell.title, { title }) : `${title} - Lex V3 preview`}</title>
         <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
         <link rel="stylesheet" href="/styles.css" />
+        {banner === 'live'
+          ? alternateLinks(state).map((link) => <link key={link.hrefLang} rel="alternate" hrefLang={link.hrefLang} href={link.href} />)
+          : null}
       </head>
       <body>
         {/* A live page sits in the site (its header, with the interface languages, an unreviewed one answering

@@ -4,6 +4,37 @@ Updated 2026-10-14. The web lane's progress, split out of STATUS.md (which keeps
 items and the pointers) by the standing order of 2026-10-01 13:50 UTC. Every pull request of the web lane
 updates this file, not STATUS.md.
 
+## Every page under its language: /fr/ and /en/ (sole driver, 2026-10-14)
+
+The specification of record's R61: "Page URLs carry the interface language (/fr/, /en/), with hreflang. The start
+language follows the browser's preference between the two, else French." English stood at the root and French under
+`/fr/`, so an English page's address named no language and a reader with a French browser landed in English.
+- **Every page stands under its language**: the build writes the English pages and their scripts under `en/`, beside
+  `fr/` (`build-live.mjs`, `livePath`); the root keeps the shared assets (styles, fonts, icon, the evaluation card) and
+  the German and Luxembourgish `localization_unavailable` pages. Each language's root (`/en/`, `/fr/`) is its home page
+  on both servers.
+- **The root and the API's own addresses go to the reader's language**: `/` (and `/index.html`), and a law's address as
+  the API mints it with no language (`/lu-legilux/{work}/{date}--{sha256}`, `/eu-eurlex/{celex}`), answer a 302 to the
+  same address under the language the browser prefers of French and English (`Accept-Language`: highest weight, the
+  first listed on a tie, a weight of 0 refusing), else French; the query goes along, a browser keeps the `#article`, and
+  the answer says `Vary: Accept-Language` so no cache hands one reader's language to another
+  (`negotiateLanguage`/`redirectFor` in `permalinks.mjs`, `NegotiateLanguage`/`RedirectFor` in `V3WebRoot`). The shared
+  table now holds 56 paths (13 served, 8 redirected) and 15 `Accept-Language` cases, which the API and the web are both
+  held to.
+- **hreflang**: each live page names itself in both languages and the root as `x-default`
+  (`https://law.soufien.lu/...`), except the reading and dossier pages, which may stand at a law's address the page
+  file does not name (server rendering will give them their own).
+- **The language menu keeps the reader on the same document**: built, its links lead to each language's home; once a
+  page has loaded, they lead to the same page, the same law's address and the same article in the other language
+  (`sameDocumentIn`).
+- **The release probes follow**: the V2-route check now requires V3's exact redirect at `/`, `/lu-legilux/{work}` and
+  `/eu-eurlex/{celex}` (a V2 page there, or a redirect V3 would not send, fails); the deploy probe requires `/` to send a
+  reader naming no language to `/fr/`, with `Vary`, and `/fr/` to be the image's own page with its headers.
+- **The journeys walk the English pages under `/en/`**, through the live server and the API.
+- **Not yet** (driver decisions, reversible): the German and Luxembourgish pages still say `localization_unavailable`
+  in English only (R61 asks for French and English: new French, so a French review); a journey that starts at `/`.
+- **Measured**: web suite 1,093 of 1,093; Lex.V3.Tests 3,147 passed, 1 skipped (`V3WebRootTests` 9 of 9); the journeys under `/en/` against an API published from this branch: the fixture mount through the live server 44 of 44 and served by the API with the keyboard 44 of 44, the licence-blocked mount 12 of 12, the two-state mount 2 of 2, the EU annex control mount 3 of 3.
+
 ## Every answer fits a small phone; every permalink opens its page (sole driver, 2026-10-14)
 
 The specification of record asks for WCAG 2.2 AA with layouts at 320, 768 and 1280 pixels (R62), and #955 measured only

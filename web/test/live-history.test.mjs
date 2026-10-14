@@ -54,7 +54,7 @@ test("the server renders the form in its idle state with no named control, and a
   assert.equal(calls.length, 0);
   assert.doesNotMatch(markup.slice(markup.indexOf("<form"), markup.indexOf("</form>")), /\sname=/);
   const page = renderLiveHistoryPage();
-  assert.ok(page.includes('<script src="/client-live-history.js" defer=""></script>'));
+  assert.ok(page.includes('<script src="/en/client-live-history.js" defer=""></script>'));
 });
 
 test("the request carries the identifier and the article id as typed, and a language only when chosen", () => {
@@ -74,7 +74,7 @@ test("a served lineage is its rows, the states that do not carry the id, and the
   assert.deepEqual(JSON.parse(calls[0].init.body), { operation_id: "article_history", parameters: REQUEST });
   const markup = view(outcome);
   const row = envelope.result.value.states[0];
-  assert.ok(markup.includes(`<a href="${row.permalink}"><code>${row.permalink}</code></a>`), "each row's permalink is a link to its reading");
+  assert.ok(markup.includes(`<a href="/en${row.permalink}"><code>${row.permalink}</code></a>`), "each row's permalink is a link to its reading");
   assert.ok(markup.includes('<p data-history-summary="" id="history-summary">'));
   assert.ok(markup.includes('<div class="table-scroll" role="region" tabindex="0" aria-labelledby="history-summary"><table>'), "the table scrolls in a region named by the summary");
   assert.match(markup, /data-wording="first"/);
@@ -107,7 +107,7 @@ test("a longer lineage shows the change, the next state counting an absent one, 
   assert.equal(outcome.state, "success", outcome.sentence);
   const markup = view(outcome);
   assert.deepEqual([...markup.matchAll(/data-wording="([^"]+)"/g)].map((match) => match[1]), ["first", "changed"]);
-  assert.ok(markup.includes(`<a href="${absent.permalink}"><code>${absent.permalink}</code></a>`), "the state that does not carry the id is shown, linked");
+  assert.ok(markup.includes(`<a href="/en${absent.permalink}"><code>${absent.permalink}</code></a>`), "the state that does not carry the id is shown, linked");
   assert.ok(markup.includes("<td>2025-01-01</td>"), "the first row's next state is the absent one");
   assert.ok(markup.includes("fra: 2 wording runs, 2 distinct"));
 });

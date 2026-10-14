@@ -58,7 +58,7 @@ test("the server renders the form in its idle state with no named control, and a
   const form = markup.slice(markup.indexOf("<form"), markup.indexOf("</form>"));
   assert.doesNotMatch(form, /\sname=/);
   const page = renderLiveReadingPage();
-  assert.ok(page.includes('<script src="/client-live-reading.js" defer=""></script>'));
+  assert.ok(page.includes('<script src="/en/client-live-reading.js" defer=""></script>'));
   assert.match(page, /id="live-reading-root"/);
 });
 
@@ -89,10 +89,10 @@ test("a served bundle is the text of the state, quoted in its language, with bot
   assert.match(markup, /^<section data-answer-state="success">/);
   assert.equal((markup.match(/<blockquote lang="fr">/g) ?? []).length, state.articles.length, "every quotation in the state's language, never the interface's");
   for (const article of state.articles) {
-    assert.ok(markup.includes(`<a href="${article.article_permalink}"><code>${article.article_permalink}</code></a>`), `${article.publisher_id} is pinned by its permalink, a link to this reading at it`);
+    assert.ok(markup.includes(`<a href="/en${article.article_permalink}"><code>${article.article_permalink}</code></a>`), `${article.publisher_id} is pinned by its permalink, a link to this reading at it`);
     assert.ok(markup.includes(article.text_sha256));
   }
-  assert.ok(markup.includes(`<a href="${state.permalink}"><code>${state.permalink}</code></a>`), "the state's permalink is a link to this reading");
+  assert.ok(markup.includes(`<a href="/en${state.permalink}"><code>${state.permalink}</code></a>`), "the state's permalink is a link to this reading");
   assert.equal(readingHolds(outcome.view, state.permalink), true, "a permalink to the state shown is held");
   assert.equal(readingHolds(outcome.view, `${state.stable_coordinate}--${"0".repeat(64)}`), false, "another state of that date is not");
   assert.equal(readingHolds(outcome.view, `${state.permalink}#${state.articles[0].publisher_id}`), false, "a permalink is held to whole, without its article");

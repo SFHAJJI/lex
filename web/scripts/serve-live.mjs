@@ -14,7 +14,7 @@
 // before it is read in full, and an API that cannot be reached is a transport problem the client
 // names, never a page.
 
-import { pageForSitePath } from "./permalinks.mjs";
+import { INTERFACE_LANGUAGES, pageForSitePath, redirectFor } from "./permalinks.mjs";
 import { createServer, request as httpRequest } from "node:http";
 import { readFile, stat } from "node:fs/promises";
 import { extname, resolve, sep } from "node:path";
@@ -86,8 +86,10 @@ function forward(apiOrigin, path, body, deadlineMs) {
 async function serveStatic(response, root, pathname, method) {
   let relative;
   try {
-    // A law's address (a permalink or a work's coordinate) is served the page that reads it (`permalinks.mjs`).
-    relative = pathname === "/" ? "index.html" : (pageForSitePath(pathname) ?? decodeURIComponent(pathname.slice(1)));
+    // An interface language's root is its home page; a law's address under a language is served the page that reads it
+    // (`permalinks.mjs`).
+    const home = INTERFACE_LANGUAGES.find((language) => pathname === `/${language}/`);
+    relative = home !== undefined ? `${home}/index.html` : (pageForSitePath(pathname) ?? decodeURIComponent(pathname.slice(1)));
   } catch {
     problem(response, 404, "not_found");
     return;
@@ -154,6 +156,14 @@ export function createLiveServer({ root, apiOrigin, apiDeadlineMs = API_DEADLINE
       }
       if (request.method !== "GET" && request.method !== "HEAD") {
         problem(response, 405, "method_not_allowed");
+        return;
+      }
+      // The root, and a law's address with no interface language, are sent to the reader's language (R61), as the API
+      // sends them (V3WebRoot).
+      const location = redirectFor(url.pathname, url.search, request.headers["accept-language"]);
+      if (location !== null) {
+        response.writeHead(302, { ...BASE_HEADERS, location, vary: "Accept-Language", "content-length": 0 });
+        response.end();
         return;
       }
       await serveStatic(response, rootPath, url.pathname, request.method);
