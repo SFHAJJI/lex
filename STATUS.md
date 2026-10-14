@@ -1,6 +1,6 @@
 # Lex V3 status
 
-Updated 2026-10-13 by the driver. This file holds the heads, the owner's open items and the pointers to the two
+Updated 2026-10-14 by the driver. This file holds the heads, the owner's open items and the pointers to the two
 lane files (the standing order of 2026-10-01 13:50 UTC: STATUS.md was edited by nearly every pull request and was
 the most frequent conflict). Each lane writes its progress in its own file, in the pull request that makes it:
 
@@ -13,10 +13,10 @@ A feature pull request edits its lane file, not this one; this file changes for 
 
 ## Heads
 
-- `v3/integration`: `9a5f05d3` (2026-10-13, PR #953 merged). The required checks are strict: `dotnet` (the
-  whole solution, about 14 min on the runner), `web`, `canon-windows` and `journeys`. `journeys`
-  walks J1 to J8 in Chrome over three fixture mounts (the fixture, licence-blocked and two-state mounts), by pointer
-  and by keyboard on the pages the API serves.
+- `v3/integration`: `d07e81b4` (2026-10-14, PR #956 merged: every permalink and work address opens its page). The
+  required checks are strict: `dotnet` (the whole solution, about 14 min on the runner), `web`, `canon-windows` and
+  `journeys`. `journeys` walks J1 to J8 and the site's own addresses in Chrome over four fixture mounts (the fixture,
+  licence-blocked, two-state and EU annex control mounts), by pointer and by keyboard on the pages the API serves.
 - Driver: Claude Opus 5.5, the sole driver since 2026-10-02. The owner's order: no Codex, no other Claude session,
   full authorisation, and the owner is never asked. Each pull request is reviewed by an independent Claude subagent
   (STATUS-WEB.md, driver decisions). The data lane's file (`STATUS-DATA.md`) is kept by this driver too.
@@ -29,8 +29,15 @@ A feature pull request edits its lane file, not this one; this file changes for 
   defect #948 fixed, and the derive with the fix (`derive-c`) passes every gate (STATUS-DATA.md). The first signed
   release over it, `v3-20261013T214036Z-9a5f05d3d1b4`, passed every check on 2026-10-13 (STATUS-WEB.md). Runs 1 to 13 stopped on three defects those pull requests fix, and
   replays of run 13's journal found two more before the restart (#943); all their custody is kept (STATUS-DATA.md).
-- Plan: `C:\lex-v3\V3-FINISH-PLAN-2026-09-27.md` (owner's copy). Decision 94 (one driver, one queue,
-  one review per pull request) merged in lex-governance on 2026-09-27. Launch target 2026-11-07.
+- Specification: the owner's goal since 2026-10-14 is an ideal public website to a legitimate, consistent
+  specification. The specification of record, version 2 (`C:\lex-v3\SPEC-OF-RECORD-2026-10-14-v2.md`, written from
+  the lex-governance pack, Decisions 82 to 95, the launch contract and 257 verified review findings, then revised after
+  a 20-finding review), rules where they disagree, lists what must hold at launch (its L lines) and the owner's
+  decisions O1 to O31 with recommended answers. The driver builds toward it; the owner adopts it (O1). The plan to the
+  public opening is being written from it.
+- Plan: `C:\lex-v3\V3-FINISH-PLAN-2026-09-27.md` (owner's copy, superseded by the plan above when it lands). Decision 94
+  (one driver, one queue, one review per pull request) merged in lex-governance on 2026-09-27. Launch target
+  2026-11-07, to be confirmed or moved by the plan.
 
 ## Owner rulings, 2026-09-30
 
@@ -108,13 +115,19 @@ Only money, legal or public claims, credentials and going live (ruling 7):
   the driver set up, in France Central: a budget of 30 a month with alerts, resource group `rg-lex-v3`, registry
   `crlexv3soufien`, a pull identity, Container Apps environment `cae-lex-v3` and key vault `kv-lex-v3-soufien`,
   which holds the release signing key (P-256, identity "lex-v3-release (Soufien Hajji)"; only its public half is on
-  disk). The owner upgraded the trial to pay-as-you-go on 2026-10-13. Open for the owner: at go-live, point
-  soufien.lu's name servers at a new zone (the old zone is out of reach with V2's subscription). Nothing is
-  deployed.
-- The zero-traffic Azure candidate of release `v3-20261013T214036Z-9a5f05d3d1b4`: the driver's tool harness refused
-  `deploy.ps1 -Apply`, so the owner allows it there or runs the command kept in
-  `C:\lex-v3\releases\deploy-v3-20261013T214036Z-9a5f05d3d1b4.txt` (STATUS-WEB.md). The candidate is reachable only
-  from this machine's address; billing starts with it (about 26 EUR a month).
+  disk). The owner upgraded the trial to pay-as-you-go on 2026-10-13.
+- The zero-traffic Azure candidate of release `v3-20261013T214036Z-9a5f05d3d1b4`: the owner ran the deploy on
+  2026-10-14 (app `ca-lex-v3`, reachable only from this machine's address, about 26 EUR a month). Since 2026-10-14 08:04
+  UTC every Azure call from this machine fails with AADSTS530035 (blocked by the tenant's security defaults): the owner
+  signs in again (`az login`) on a normal connection before the driver can change anything there.
+- Where DNS lives (the specification of record's O14, R117: decide before the name-server switch completes). The
+  soufien.lu zone was created in Azure DNS (resource group `rg-lex-v3`) on 2026-10-14, with `law` as a CNAME to the
+  app's default host and the `asuid.law` verification record; the owner set the registrar's name servers to it, and the
+  switch had not reached the resolvers by 11:00 UTC. R117 rules DNS out of the subscription that hosts the site (V2 went
+  down with its subscription). Recommended: keep the zone at the registrar (or another provider outside Azure) with
+  the same two records, and delete the Azure zone.
+- The specification of record (O1) and its owner decisions O2 to O31, each with a recommended answer; the plan orders
+  them by the date each blocks.
 - The weekly 30-minute checkpoint slot.
 - The owner's rulings of 2026-10-04 (relayed by the audit session): the French copy accepted, the acquisition
   code frozen until the combined mount exists, the stage milestones closed, `OWNER-BRIEF.md` kept current.
