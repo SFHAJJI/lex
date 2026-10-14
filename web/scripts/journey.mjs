@@ -1013,7 +1013,8 @@ async function observe(browser, pageOrigin, step, { keyboard = false } = {}) {
         })()`};
         if (node === undefined) return { inView: "absent", targetFocused: false };
         const top = node.getBoundingClientRect().top;
-        return { inView: top >= 0 && top < innerHeight ? "shown" : "at " + Math.round(top) + " px of a " + innerHeight + " px window", targetFocused: node === document.activeElement };
+        // A fraction of a pixel above the window's top is the top (scrolling aligns to a fraction on some fonts: CI's Linux).
+        return { inView: top > -1 && top < innerHeight ? "shown" : "at " + top.toFixed(1) + " px of a " + innerHeight + " px window", targetFocused: node === document.activeElement };
       })()`)),
       // Every quotation the answer shows, with what its article's element prints beside it.
       paint: await evaluate(PAINT_ONLY),
