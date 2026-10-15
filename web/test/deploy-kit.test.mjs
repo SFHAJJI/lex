@@ -45,13 +45,13 @@ test("the image is pulled with the user-assigned identity the owner names", () =
   assert.ok(!("env" in app.properties.template.containers[0]) || app.properties.template.containers[0].env.every((variable) => !("secretRef" in variable)));
 });
 
-test("one server, with a private writable /tmp, its probes on the image's own routes", () => {
+test("one server, with a private writable /tmp, its probes on the image's own routes, ready only with the law mounted", () => {
   const { scale, volumes, containers } = app.properties.template;
   assert.deepEqual(scale, { minReplicas: 1, maxReplicas: 1 });
   assert.deepEqual(volumes, [{ name: "tmp", storageType: "EmptyDir" }]);
   assert.deepEqual(containers[0].volumeMounts, [{ volumeName: "tmp", mountPath: "/tmp" }]);
   assert.deepEqual(containers[0].probes.map((probe) => [probe.type, probe.httpGet.path, probe.httpGet.port]),
-    [["Startup", "/", 8080], ["Liveness", "/", 8080], ["Readiness", "/evaluation-card.json", 8080]]);
+    [["Startup", "/", 8080], ["Liveness", "/", 8080], ["Readiness", "/health/ready", 8080]]);
   // The API listens only once its mount is verified: the startup probe gives it about four and a half minutes before the
   // container is restarted, at the probe's last failure (initial delay and every period but the last).
   const startup = containers[0].probes[0];

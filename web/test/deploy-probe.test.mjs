@@ -34,10 +34,11 @@ const HEADERS = {
 
 /**
  * A stand-in revision: `/` a redirect to `/fr/`, `/fr/` and the card as the release holds them, coverage from `corpus`,
- * 404 for everything else.
+ * its readiness as `ready` says, 404 for everything else.
  */
 async function revision(change = {}) {
-  const answer = { page: PAGE, card: CARD, corpus: CORPUS, headers: HEADERS, refusal: null, extra: new Map(), root: { status: 302, location: "/fr/", vary: "Accept-Language" }, ...change };
+  const answer = { page: PAGE, card: CARD, corpus: CORPUS, headers: HEADERS, refusal: null, extra: new Map(), root: { status: 302, location: "/fr/", vary: "Accept-Language" },
+    ready: { status: 204, cache: "no-store" }, ...change };
   const server = createServer((request, response) => {
     const path = request.url.split("?")[0];
     if (request.method === "GET" && path === "/") {
@@ -47,6 +48,9 @@ async function revision(change = {}) {
       // A law's address with no interface language, sent to the reader's as V3 sends it.
       response.writeHead(302, { ...answer.headers, location: redirectFor(path, "", request.headers["accept-language"]), vary: "Accept-Language" });
       response.end();
+    } else if (request.method === "GET" && path === "/health/ready") {
+      response.writeHead(answer.ready.status, { "cache-control": answer.ready.cache, "x-content-type-options": "nosniff" });
+      response.end(answer.ready.status === 204 ? undefined : "No law is mounted.\n");
     } else if (request.method === "GET" && path === "/fr/") {
       response.writeHead(200, { "content-type": "text/html; charset=utf-8", ...answer.headers });
       response.end(answer.page);
@@ -95,6 +99,10 @@ test("each way a revision can differ from its release fails with its own reason"
     ["another mount", { corpus: "d".repeat(64) }, /answers from corpus d{64}, not the release's c{64}/],
     ["no mount", { refusal: "no_corpus_mounted" }, /coverage refused no_corpus_mounted/],
     ["a V2 route answering", { extra: new Map([["POST /api/ask", "a V2 answer"]]) }, /POST \/api\/ask answered 200, not 404/],
+    ["a server without the law", { ready: { status: 503, cache: "no-store" } }, /GET \/health\/ready answered 503 \(19 bytes\), not 204/],
+    ["a readiness a cache could keep", { ready: { status: 204, cache: "max-age=60" } }, /GET \/health\/ready may be cached \(max-age=60\)/],
+    ["the synthetic preview answering", { extra: new Map([["GET /api/v3-preview/resolve", "{\"synthetic\":true}"]]) },
+      /GET \/api\/v3-preview\/resolve\?family=eli&coordinate=eli%2Fsynthetic-preview answered 200, naming the preview, not the 404/],
   ];
   for (const [what, change, expected] of cases) {
     const served = await revision(change);

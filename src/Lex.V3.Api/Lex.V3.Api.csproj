@@ -29,8 +29,17 @@
     <None Remove="preview-trust/**/*" />
     <Content Remove="preview-graph/**/*" />
     <Content Remove="preview-trust/**/*" />
-    <Content Include="preview-graph/**/*" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
-    <Content Include="preview-trust/**/*" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+  </ItemGroup>
+  <!-- The synthetic preview and its key, for tests and the S0-05 image only: the one-server image, the build that names a
+       corpus mount (web/scripts/image-rehearsal.mjs), publishes neither (plan 0.7), so its server starts no preview
+       (Program.cs). The build output keeps both, and the tests run them. -->
+  <PropertyGroup>
+    <LexPreviewPublish Condition="'$(LexImageMount)' == ''">PreserveNewest</LexPreviewPublish>
+    <LexPreviewPublish Condition="'$(LexImageMount)' != ''">Never</LexPreviewPublish>
+  </PropertyGroup>
+  <ItemGroup>
+    <Content Include="preview-graph/**/*" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="$(LexPreviewPublish)" />
+    <Content Include="preview-trust/**/*" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="$(LexPreviewPublish)" />
   </ItemGroup>
   <!-- The one-server image (web/scripts/image-rehearsal.mjs): the built live pages and a corpus mount,
        published beside the API where it reads them (v3-web, v3-corpus), only when a build names them. -->

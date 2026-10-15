@@ -162,10 +162,12 @@ resource app 'Microsoft.App/containerApps@2024-03-01' = {
               initialDelaySeconds: 10
               periodSeconds: 30
             }
+            // Ready only while it holds the law: the API answers 503 here when no corpus is mounted (plan 0.7), so a replica
+            // whose mount was refused takes no traffic, and monitoring can ask the same route.
             {
               type: 'Readiness'
               httpGet: {
-                path: '/evaluation-card.json'
+                path: '/health/ready'
                 port: 8080
               }
               initialDelaySeconds: 5

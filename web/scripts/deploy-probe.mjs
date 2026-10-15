@@ -8,6 +8,7 @@
 //   image run probes (CSP with `frame-ancestors 'none'`, HSTS, `Referrer-Policy: no-referrer`, `nosniff`);
 // - the card: the evaluation card at its stable route is the release's card, byte for byte, as JSON;
 // - the API: `coverage` answers from the mount the release names, by its corpus digest;
+// - the server: its readiness route answers 204 (it holds the law), and the synthetic preview's route is unknown to it;
 // - V2 absent: every route V2 served answers 404, except where V3 serves the same path from its own pages;
 // - the browser probes (`--browser`): the journey's real-mount steps through a browser against the revision, each
 //   page held to what the API answers its request, its hydration, console, paint and security headers, and every
@@ -21,7 +22,7 @@ import { join } from "node:path";
 import { findBrowser } from "./browser-evidence.mjs";
 import { cspValue } from "./csp.mjs";
 import { CARD_ROUTE } from "./evaluation-card.mjs";
-import { layerTar, readLayout, readOciImage, readTar, servedPaths, v2RouteFailures } from "./image-rehearsal.mjs";
+import { layerTar, readLayout, readOciImage, readTar, servedPaths, serverFailures, v2RouteFailures } from "./image-rehearsal.mjs";
 import { invokedDirectly } from "./invoked-directly.mjs";
 import { heldLuxembourgWorkFromAnswers, realMountRuns } from "./journey.mjs";
 import { ASSETS, RELEASE_MANIFEST, releaseFailures } from "./release-assets.mjs";
@@ -99,6 +100,7 @@ export async function revisionFailures(origin, { web, card, corpusSha256 }) {
     failures.push(`coverage answers from corpus ${envelope.result?.value?.mounted?.corpus_sha256}, not the release's ${corpusSha256}`);
   }
 
+  failures.push(...await serverFailures(origin));
   failures.push(...await v2RouteFailures(origin, { v3Files: served }));
   return failures;
 }

@@ -57,7 +57,7 @@ function tar(files) {
 
 const WEB = [["index.html", Buffer.from("<!doctype html><title>Trust and Coverage</title>")], ["client-live.js", Buffer.from("hydrate()")]];
 const MOUNT_FILE = Buffer.from("{\"schema\":\"lex-v3-source-corpus/6\"}");
-const LONG = `preview-graph/${"a".repeat(96)}.sqlite3`;
+const LONG = `v3-corpus/generations/${"a".repeat(96)}.sqlite3`;
 /** The API's dependency manifest, as the SDK writes it: V3's own projects and third-party packages. */
 const deps = (extra = []) => Buffer.from(JSON.stringify({
   targets: { ".NETCoreApp,Version=v10.0/linux-x64": Object.fromEntries(["Lex.V3.Api/1.0.0", "Lex.V3.Contracts/1.0.0", "Humanizer.Core/2.14.1", ...extra].map((key) => [key, {}])) },
@@ -66,7 +66,7 @@ const deps = (extra = []) => Buffer.from(JSON.stringify({
 const DEPS = deps();
 
 /** A good image: its layout, and what it was built from. */
-function image({ user = "1654", entrypoint = ["dotnet", "/app/Lex.V3.Api.dll"], base = `mcr.microsoft.com/dotnet/aspnet:10.0@sha256:${"c".repeat(64)}`, appFiles } = {}) {
+function image({ user = "1654", entrypoint = ["dotnet", "/app/Lex.V3.Api.dll"], base = `mcr.microsoft.com/dotnet/aspnet:10.0@sha256:${"c".repeat(64)}`, appFiles, extraFiles = [] } = {}) {
   const report = { files: [{ Name: "lex-corpus-6.json", ByteLength: MOUNT_FILE.length, Sha256: sha256(MOUNT_FILE) }] };
   const reportBytes = Buffer.from(JSON.stringify(report));
   const files = appFiles ?? [
@@ -77,7 +77,7 @@ function image({ user = "1654", entrypoint = ["dotnet", "/app/Lex.V3.Api.dll"], 
     ["app/v3-corpus/build-report.json", reportBytes],
     ["app/Lex.V3.Api.deps.json", DEPS],
   ];
-  const layer = gzipSync(tar(files));
+  const layer = gzipSync(tar([...files, ...extraFiles]));
   const config = Buffer.from(JSON.stringify({ architecture: "amd64", os: "linux", config: { User: user, Entrypoint: entrypoint, Labels: { "org.opencontainers.image.base.name": base } } }));
   const manifest = Buffer.from(JSON.stringify({
     schemaVersion: 2,
@@ -140,6 +140,9 @@ test("the image must hold the API, the live pages and the mount byte for byte, a
   assert.ok(failing({ entrypoint: ["sh"] }).some((failure) => failure.startsWith("the image starts")));
   assert.ok(failing({ base: "mcr.microsoft.com/dotnet/aspnet:10.0" }).some((failure) => failure.startsWith("the base image is not named by digest")));
   assert.ok(failing({ appFiles: [["app/v3-web/index.html", WEB[0][1]]] }).includes("the app layer holds no app/Lex.V3.Api.dll"));
+  const shipped = image({ extraFiles: [["app/preview-graph/artifact.json", Buffer.from("{}")], ["app/preview-trust/public-key.spki", Buffer.from("key")]] });
+  assert.deepEqual(imageFailures(readOciImage(shipped), shipped.built),
+    ["the image ships the synthetic preview: app/preview-graph/artifact.json, app/preview-trust/public-key.spki"], "the preview and its key are for tests only (plan 0.7)");
 });
 
 test("the rehearsal signature holds for its image's manifest digest, and for nothing else", () => {

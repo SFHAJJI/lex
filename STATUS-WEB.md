@@ -1,8 +1,29 @@
 # Lex V3 status: the web lane
 
-Updated 2026-10-14. The web lane's progress, split out of STATUS.md (which keeps the heads, the owner's open
+Updated 2026-10-15. The web lane's progress, split out of STATUS.md (which keeps the heads, the owner's open
 items and the pointers) by the standing order of 2026-10-01 13:50 UTC. Every pull request of the web lane
 updates this file, not STATUS.md.
+
+## The server ships no synthetic preview, and says whether it holds the law (sole driver, 2026-10-15)
+
+The plan's item 0.7 (`C:\lex-v3\PLAN-2026-10-14.md`). The one-server image carried the S0-05 synthetic preview and its
+trust key, and its server started them: `/health/ready` answered 204 from the preview whether or not any law was
+mounted, `/api/v3-preview/resolve` answered a synthetic text "with no legal authority", and every path nothing claimed
+answered the preview's own "not found". The Azure readiness probe asked `/evaluation-card.json`, a static file, so a
+replica whose mount was refused at startup still took traffic.
+- **The release image ships neither the preview nor its key.** The build that names a corpus mount (the image
+  rehearsal's, so every release) publishes no `preview-graph/` and no `preview-trust/` (`Lex.V3.Api.csproj`), and the
+  server starts the preview only when its graph is there (`Program.cs`). Test builds and the S0-05 image keep both, so
+  the preview's tests and the S0-05 lane's reproducible receipt run as before.
+- **Readiness is whether the server holds the law** (`V3ApiHandler`, with no preview): `GET` or `HEAD /health/ready`
+  answers 204 with a mount and 503 "No law is mounted." without one, never cached; any other method is 405. The Azure
+  readiness probe now asks it (`deploy/main.bicep`), so a replica without the law takes no traffic, and monitoring can
+  ask the same route.
+- **Every path nothing claims is an unknown route** (the platform's `unknown_route` problem, as under `/api/v3/`),
+  the preview's routes included; nothing names the preview or anything synthetic. The site's own 404 page is item 6.9.
+- **Checked where it ships**: the image check fails an image whose app layer holds a preview file
+  (`imageFailures`), and the image run and the deploy probe ask the server for itself (`serverFailures`): readiness
+  204 and uncached, and the preview's route the 404 of an unknown route, naming nothing synthetic.
 
 ## The private copy stays private on every deployment (sole driver, 2026-10-14)
 
