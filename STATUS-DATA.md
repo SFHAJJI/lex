@@ -76,6 +76,27 @@ Updated 2026-10-15.
   - The name is `LuxembourgAknLegalContentProfile2Producer`, not `…ProducerV2` after `…ProducerV4`:
     `RetiredGenerationBoundaryTests` refuses any compiled identifier or source path in the V3 line that contains "v2"
     (the retired generation). The tests, the fixture folder (`LuAknLegalContent2`) and the probe's variables follow.
+  - The placement and number of an article's direct-child `scl:indexterms` blocks are not constrained (a review
+    observation): two blocks are read into one list, in document order; a block anywhere among the article's direct
+    children is skipped; an empty or white-space-only block is admitted with no terms. The review measured exactly one
+    block per run-15 article, always immediately before `akn:num`, so none of this changes a run-15 result, and wherever
+    a block sits its terms never become wording.
+  - A label made only of U+00A0 (no-break space) is white space to .NET, so it is dropped as the empty template (a
+    review observation). No run-15 label is one.
+- **Review** (one round; one material finding, reproduced by the reviewer, repaired in `6919a58b`; the two observations
+  above are recorded as driver decisions):
+  - The index-term guard's names could be loosened with all 38 /2 tests green: the article's block to any `scl`
+    element, and the term, the label and the nested block to their local names. That admits five typed-gap shapes.
+    Three rows of `AnyOtherIndexTermShapeIsATypedGapForThatArticleOnly` (an `indexterm`, a `label` and a nested
+    `indexterms` in another namespace) and the new `AnyOtherDirectChildStaysContent1sGapForThatArticleOnly` (an
+    `scl:index` wrapping terms of the reviewed shape, an empty `scl:index`, an AKN `indexterms`, each /1's gap with /1's
+    detail under /1 and /2) hold them, each with its exact detail.
+  - The door's /4-only check could be replaced by `if (false)` with every /2 test green, because the population also
+    refuses a /3 source. `TheDoorAloneRefusesAPopulationUnderAnyOtherInventoryDigest` holds the door's parameter name
+    and detail for a /3 population, and a population under a third inventory digest, which only the door refuses.
+  - The proof, in a scratch worktree at `6919a58b`: the reviewer's mutant fails 5 of the 45 /2 tests; each of its four
+    lines alone fails its row (line 253 the two `scl:index` rows); line 253 by local name only fails the AKN row;
+    `if (false)` fails the door test, and so does its third-digest case alone; restored, 45 of 45. /2 tests 38 → 45.
 - **Not yet.** S4 (R1 runs `new LuxembourgAknLegalContentProfile2Producer(store).RunAsync(inventory4, ct)` over the /4
   population and records the /2 digest and population identity); S6 (index /9 stores `IndexTerms`; no reader or page
   shows them yet); the dry run (watches the 175,837,349-byte body, which /2 reads like /4, and the memory of one whole /2
