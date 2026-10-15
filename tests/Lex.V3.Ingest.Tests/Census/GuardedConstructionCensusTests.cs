@@ -492,6 +492,9 @@ public sealed class GuardedConstructionCensusTests
                 "Lex.V3.Ingest.Luxembourg.LuxembourgAknArticleInventory: by-ref-method private "
                     + "static "
                     + "Lex.V3.Ingest.Luxembourg.LuxembourgAknArticleInventoryProducer::TryInventory, "
+                    + "by-ref-method private static "
+                    + "Lex.V3.Ingest.Luxembourg.LuxembourgAknArticleInventoryProducerV4::TryInvento"
+                    + "ry, "
                     + "constructor internal instance "
                     + "Lex.V3.Ingest.Luxembourg.LuxembourgAknArticleInventory::.ctor",
                 "Lex.V3.Ingest.Luxembourg.LuxembourgAknArticleInventoryOutcome: constructor "
@@ -500,8 +503,12 @@ public sealed class GuardedConstructionCensusTests
                 "Lex.V3.Ingest.Luxembourg.LuxembourgAknArticleInventoryPopulation: constructor "
                     + "internal instance "
                     + "Lex.V3.Ingest.Luxembourg.LuxembourgAknArticleInventoryPopulation::.ctor, "
+                    + "method internal instance "
+                    + "Lex.V3.Ingest.Luxembourg.LuxembourgAknArticleInventoryProducerV4::RunAsync, "
                     + "method public instance "
-                    + "Lex.V3.Ingest.Luxembourg.LuxembourgAknArticleInventoryProducer::RunAsync",
+                    + "Lex.V3.Ingest.Luxembourg.LuxembourgAknArticleInventoryProducer::RunAsync, "
+                    + "method public instance "
+                    + "Lex.V3.Ingest.Luxembourg.LuxembourgAknArticleInventoryProducerV4::RunAsync",
                 "Lex.V3.Ingest.Luxembourg.LuxembourgAknLegalContentArticle: constructor internal "
                     + "instance Lex.V3.Ingest.Luxembourg.LuxembourgAknLegalContentArticle::.ctor",
                 "Lex.V3.Ingest.Luxembourg.LuxembourgAknLegalContentOutcome: constructor internal "

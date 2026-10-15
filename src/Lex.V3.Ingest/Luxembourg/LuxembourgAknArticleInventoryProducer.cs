@@ -5,6 +5,7 @@ using System.Text;
 using System.Text.Json.Serialization;
 using System.Xml;
 using System.Xml.Linq;
+using Lex.V3.Contracts;
 using Lex.V3.Contracts.Custody;
 using Lex.V3.Contracts.Source.Http;
 
@@ -24,6 +25,14 @@ public enum LuxembourgAknArticleInventoryDisposition
 
     [JsonStringEnumMemberName("xml_rejected")]
     XmlRejected = 4,
+
+    /// <summary>
+    /// Inventory /4 only: the body reads as an inventory, and at least one content-consistency check
+    /// found that the file belongs to, or copies, a state other than the one it was fetched as. The
+    /// outcome keeps the inventory as evidence and names every check that fired.
+    /// </summary>
+    [JsonStringEnumMemberName("publisher_file_names_other_state")]
+    PublisherFileNamesOtherState = 5,
 }
 
 /// <summary>One publisher-minted top-level AKN article coordinate.</summary>
@@ -36,10 +45,20 @@ public sealed record LuxembourgAknArticleCoordinate(
 /// The deterministic publisher-coordinate inventory for one retained AKN expression.
 /// </summary>
 /// <remarks>
+/// <para>
 /// Its semantic identity deliberately excludes the custody receipt and selected transport address.
 /// Those remain provenance on the enclosing outcome. Identity derives from the expression identity,
 /// stable rule-profile digest and canonical ordered article members, so transporting identical
 /// publisher content in a different container cannot change what this inventory means.
+/// </para>
+/// <para>
+/// Two shapes, never mixed. Inventory /3 mints the expression-state coordinate from the file
+/// (<see cref="PublisherWorkIri"/>, <see cref="PublisherLegalResourceIri"/> and
+/// <see cref="PublisherApplicabilityDate"/>) and carries no <see cref="Evidence"/>; its identity
+/// layout <c>/2</c> is unchanged. Inventory /4 never mints a coordinate from the file: what the file
+/// says about its own identity is <see cref="Evidence"/>, hashed under layout <c>/3</c>, and the
+/// three coordinate values stay null. The constructor refuses an inventory carrying both.
+/// </para>
 /// </remarks>
 public sealed class LuxembourgAknArticleInventory
 {
@@ -49,12 +68,22 @@ public sealed class LuxembourgAknArticleInventory
         IReadOnlyList<LuxembourgAknArticleCoordinate> articles,
         string? publisherWorkIri,
         string? publisherLegalResourceIri,
-        string? publisherApplicabilityDate)
+        string? publisherApplicabilityDate,
+        LuxembourgAknInventoryEvidence? evidence = null)
     {
         if ((publisherWorkIri is null) != (publisherLegalResourceIri is null) ||
             (publisherWorkIri is null) != (publisherApplicabilityDate is null))
         {
             throw new ArgumentException("Publisher expression-state coordinates must be complete or absent.");
+        }
+
+        if (evidence is not null &&
+            (publisherWorkIri is not null || publisherLegalResourceIri is not null ||
+             publisherApplicabilityDate is not null))
+        {
+            throw new ArgumentException(
+                "An inventory carrying in-file evidence never carries a state coordinate minted from the file.",
+                nameof(evidence));
         }
 
         PublisherExpressionIri = publisherExpressionIri;
@@ -63,6 +92,7 @@ public sealed class LuxembourgAknArticleInventory
         PublisherWorkIri = publisherWorkIri;
         PublisherLegalResourceIri = publisherLegalResourceIri;
         PublisherApplicabilityDate = publisherApplicabilityDate;
+        Evidence = evidence;
         IdentitySha256 = IdentityOf(this);
     }
 
@@ -78,17 +108,38 @@ public sealed class LuxembourgAknArticleInventory
 
     public string? PublisherApplicabilityDate { get; }
 
+    /// <summary>What the document's own identification block says, under inventory /4; null under /3.</summary>
+    public LuxembourgAknInventoryEvidence? Evidence { get; }
+
     public string IdentitySha256 { get; }
 
     private static string IdentityOf(LuxembourgAknArticleInventory inventory)
     {
         using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
-        Append(hash, "lex-v3-luxembourg-akn-article-inventory/2");
-        Append(hash, inventory.PublisherExpressionIri);
-        Append(hash, inventory.RuleProfileSha256);
-        Append(hash, inventory.PublisherWorkIri ?? "");
-        Append(hash, inventory.PublisherLegalResourceIri ?? "");
-        Append(hash, inventory.PublisherApplicabilityDate ?? "");
+        if (inventory.Evidence is { } evidence)
+        {
+            Append(hash, "lex-v3-luxembourg-akn-article-inventory/3");
+            Append(hash, inventory.PublisherExpressionIri);
+            Append(hash, inventory.RuleProfileSha256);
+            Append(hash, ContractWire.NameOf(evidence.IdentityClass));
+            Append(hash, evidence.NamedStates.Count.ToString(CultureInfo.InvariantCulture));
+            foreach (var state in evidence.NamedStates)
+            {
+                Append(hash, state);
+            }
+            Append(hash, evidence.InFileLegalResourceIri ?? "");
+            Append(hash, evidence.InFileApplicabilityDate ?? "");
+            Append(hash, evidence.ExcludedArticleCount.ToString(CultureInfo.InvariantCulture));
+        }
+        else
+        {
+            Append(hash, "lex-v3-luxembourg-akn-article-inventory/2");
+            Append(hash, inventory.PublisherExpressionIri);
+            Append(hash, inventory.RuleProfileSha256);
+            Append(hash, inventory.PublisherWorkIri ?? "");
+            Append(hash, inventory.PublisherLegalResourceIri ?? "");
+            Append(hash, inventory.PublisherApplicabilityDate ?? "");
+        }
         foreach (var article in inventory.Articles)
         {
             Append(hash, article.PublisherId);
@@ -115,13 +166,41 @@ public sealed class LuxembourgAknArticleInventoryOutcome
         LuxembourgHeldBodyDerivationInput input,
         LuxembourgAknArticleInventoryDisposition disposition,
         LuxembourgAknArticleInventory? inventory,
-        string? detail)
+        string? detail,
+        IReadOnlyList<LuxembourgAknContentConsistencyFinding>? consistencyFindings = null)
     {
+        var findings = consistencyFindings is null
+            ? Array.Empty<LuxembourgAknContentConsistencyFinding>()
+            : consistencyFindings.ToArray();
+        foreach (var finding in findings)
+        {
+            ArgumentNullException.ThrowIfNull(finding, nameof(consistencyFindings));
+        }
+
+        if ((findings.Length != 0) !=
+            (disposition == LuxembourgAknArticleInventoryDisposition.PublisherFileNamesOtherState))
+        {
+            throw new ArgumentException(
+                "Content-consistency findings are present exactly when the file names another state.",
+                nameof(consistencyFindings));
+        }
+
+        if (disposition == LuxembourgAknArticleInventoryDisposition.PublisherFileNamesOtherState &&
+            inventory?.Evidence is null)
+        {
+            throw new ArgumentException(
+                "A file refused for naming another state keeps its /4 inventory and evidence.",
+                nameof(inventory));
+        }
+
         Input = input;
         TransportReceipt = input.Receipt;
         Disposition = disposition;
         Inventory = inventory;
         Detail = detail;
+        ConsistencyFindings = findings.Length == 0
+            ? Array.Empty<LuxembourgAknContentConsistencyFinding>()
+            : Array.AsReadOnly(findings);
     }
 
     public LuxembourgHeldBodyDerivationInput Input { get; }
@@ -133,29 +212,98 @@ public sealed class LuxembourgAknArticleInventoryOutcome
     public LuxembourgAknArticleInventory? Inventory { get; }
 
     public string? Detail { get; }
+
+    /// <summary>
+    /// Every content-consistency check that fired, ordered by check and then as the check lists its
+    /// states. Empty unless <see cref="Disposition"/> is
+    /// <see cref="LuxembourgAknArticleInventoryDisposition.PublisherFileNamesOtherState"/>.
+    /// </summary>
+    public IReadOnlyList<LuxembourgAknContentConsistencyFinding> ConsistencyFindings { get; }
 }
 
 /// <summary>The exact held-body population with one ordered AKN disposition for every member.</summary>
+/// <remarks>
+/// A population made by inventory /3 carries no versioned rule digest: its identity layout <c>/1</c>
+/// is unchanged and it holds no /4 disposition, finding or evidence. A population made by inventory
+/// /4 names its rule digest, every inventory in it carries evidence under that digest, and its
+/// identity layout <c>/2</c> hashes the digest and every finding.
+/// </remarks>
 public sealed class LuxembourgAknArticleInventoryPopulation
 {
     internal LuxembourgAknArticleInventoryPopulation(
         LuxembourgHeldBodyDerivationPopulation sourcePopulation,
-        IReadOnlyList<LuxembourgAknArticleInventoryOutcome> outcomes)
+        IReadOnlyList<LuxembourgAknArticleInventoryOutcome> outcomes,
+        string? versionedRuleProfileSha256 = null)
     {
+        foreach (var outcome in outcomes)
+        {
+            if (versionedRuleProfileSha256 is null)
+            {
+                if (outcome.Disposition == LuxembourgAknArticleInventoryDisposition.PublisherFileNamesOtherState ||
+                    outcome.ConsistencyFindings.Count != 0 ||
+                    outcome.Inventory?.Evidence is not null)
+                {
+                    throw new ArgumentException(
+                        "An unversioned (/3) population carries no /4 disposition, finding or evidence.",
+                        nameof(outcomes));
+                }
+            }
+            else if (outcome.Inventory is { } inventory &&
+                     (inventory.Evidence is null ||
+                      !string.Equals(inventory.RuleProfileSha256, versionedRuleProfileSha256, StringComparison.Ordinal)))
+            {
+                throw new ArgumentException(
+                    "Every inventory of a versioned population carries evidence under that population's rule profile.",
+                    nameof(outcomes));
+            }
+        }
+
         SourcePopulation = sourcePopulation;
         Outcomes = Array.AsReadOnly(outcomes.ToArray());
-        IdentitySha256 = IdentityOf(outcomes);
+        RuleProfileSha256 = versionedRuleProfileSha256 ?? LuxembourgAknArticleInventoryProducer.RuleProfileSha256;
+        IdentitySha256 = IdentityOf(outcomes, versionedRuleProfileSha256);
     }
 
     public LuxembourgHeldBodyDerivationPopulation SourcePopulation { get; }
 
     public IReadOnlyList<LuxembourgAknArticleInventoryOutcome> Outcomes { get; }
 
+    /// <summary>
+    /// The rule profile every inventory in this population was made under: inventory /4's digest for
+    /// a population it made, otherwise inventory /3's.
+    /// </summary>
+    public string RuleProfileSha256 { get; }
+
     public string IdentitySha256 { get; }
 
-    private static string IdentityOf(IReadOnlyList<LuxembourgAknArticleInventoryOutcome> outcomes)
+    private static string IdentityOf(
+        IReadOnlyList<LuxembourgAknArticleInventoryOutcome> outcomes,
+        string? versionedRuleProfileSha256)
     {
         using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
+        if (versionedRuleProfileSha256 is not null)
+        {
+            LuxembourgAknArticleInventory.Append(
+                hash, "lex-v3-luxembourg-akn-article-inventory-population/2");
+            LuxembourgAknArticleInventory.Append(hash, versionedRuleProfileSha256);
+            foreach (var outcome in outcomes)
+            {
+                LuxembourgAknArticleInventory.Append(
+                    hash, outcome.Input.CorpusRecord.ObjectRef.PublisherUri);
+                LuxembourgAknArticleInventory.Append(
+                    hash, ((int)outcome.Disposition).ToString(CultureInfo.InvariantCulture));
+                LuxembourgAknArticleInventory.Append(hash, outcome.Inventory?.IdentitySha256 ?? "");
+                LuxembourgAknArticleInventory.Append(
+                    hash, outcome.ConsistencyFindings.Count.ToString(CultureInfo.InvariantCulture));
+                foreach (var finding in outcome.ConsistencyFindings)
+                {
+                    LuxembourgAknArticleInventory.Append(hash, ContractWire.NameOf(finding.Check));
+                    LuxembourgAknArticleInventory.Append(hash, finding.NamedState);
+                }
+            }
+            return Convert.ToHexStringLower(hash.GetHashAndReset());
+        }
+
         LuxembourgAknArticleInventory.Append(
             hash, "lex-v3-luxembourg-akn-article-inventory-population/1");
         foreach (var outcome in outcomes)
