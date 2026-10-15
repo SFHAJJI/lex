@@ -17,6 +17,8 @@ import {
   renderLiveExportPage,
   renderLiveHistoryPage,
   renderLiveHomePage,
+  renderLiveMaintenancePage,
+  renderLiveNotFoundPage,
   renderLiveRadarPage,
   renderLiveReadingPage,
   renderLiveSearchPage,
@@ -38,6 +40,9 @@ const PAGES = {
   compare: renderLiveComparePage,
   radar: renderLiveRadarPage,
   export: renderLiveExportPage,
+  // The 404 page and the maintenance page (R60) carry the site's header and footer like every page.
+  notFound: renderLiveNotFoundPage,
+  maintenance: renderLiveMaintenancePage,
 };
 
 // React escapes an apostrophe in text; the table holds the text itself.
@@ -45,7 +50,7 @@ const escaped = (text) => text.replaceAll("&", "&amp;").replaceAll("'", "&#x27;"
 
 test("every live page renders its chrome from the table", () => {
   const copy = liveChrome("en");
-  assert.deepEqual(Object.keys(copy).filter((key) => !["form", "common", "shell", "site", "card", "refusalCard", "coverageAnswer"].includes(key)).sort(), Object.keys(PAGES).sort(), "one entry per live page, the forms, the page shell, the site around it, the evaluation and refusal cards, the coverage answer, and what the screens share");
+  assert.deepEqual(Object.keys(copy).filter((key) => !["form", "common", "shell", "site", "card", "refusalCard", "coverageAnswer", "failure"].includes(key)).sort(), Object.keys(PAGES).sort(), "one entry per live page, the forms, the page shell, the site around it, the evaluation and refusal cards, the coverage answer, the failure panel, and what the screens share");
   for (const [key, render] of Object.entries(PAGES)) {
     const html = render();
     const entry = copy[key];
@@ -64,9 +69,10 @@ test("every live page renders its chrome from the table", () => {
 test("every form's labels and button come from the table", () => {
   const { form } = liveChrome("en");
   for (const [key, render] of Object.entries(PAGES)) {
-    if (key === "coverage") continue;
-    // The home page is the search screen under the site's introduction: its form is search's.
-    const formKey = key === "home" ? "search" : key;
+    // Trust and Coverage asks with no form, and the maintenance page asks nothing.
+    if (key === "coverage" || key === "maintenance") continue;
+    // The home page is the search screen under the site's introduction, and the 404 page offers it: its form is search's.
+    const formKey = key === "home" || key === "notFound" ? "search" : key;
     // A page rendered for hydration marks text boundaries with empty comments; they are not text.
     const html = render().replaceAll("<!-- -->", "");
     assert.ok(html.includes(`<button type="submit">${escaped(form.submit[formKey])}</button>`), `${key}: the submit button`);

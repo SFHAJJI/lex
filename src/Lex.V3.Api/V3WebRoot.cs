@@ -38,7 +38,7 @@ namespace Lex.V3.Api;
 /// fails, the page is served as built and asks for itself.
 /// </para>
 /// </remarks>
-internal sealed class V3WebRoot
+internal sealed partial class V3WebRoot
 {
     internal const string DirectoryName = "v3-web";
 
@@ -58,12 +58,18 @@ internal sealed class V3WebRoot
 
     private readonly IReadOnlyDictionary<string, string> _files;
     private readonly V3PageRenderer? _renderer;
+    private readonly IReadOnlyDictionary<string, string> _notFoundPages;
 
-    private V3WebRoot(IReadOnlyDictionary<string, string> files, string contentSecurityPolicy, V3PageRenderer? renderer)
+    private V3WebRoot(
+        IReadOnlyDictionary<string, string> files,
+        string contentSecurityPolicy,
+        V3PageRenderer? renderer,
+        IReadOnlyDictionary<string, string> notFoundPages)
     {
         _files = files;
         ContentSecurityPolicy = contentSecurityPolicy;
         _renderer = renderer;
+        _notFoundPages = notFoundPages;
     }
 
     /// <summary>Whether the directory held the pages' server renderer.</summary>
@@ -92,6 +98,7 @@ internal sealed class V3WebRoot
 
         var root = Path.GetFullPath(directory);
         var files = new Dictionary<string, string>(StringComparer.Ordinal);
+        var notFound = new Dictionary<string, string>(StringComparer.Ordinal);
         foreach (var file in Directory.EnumerateFiles(root, "*", SearchOption.AllDirectories))
         {
             var relative = Path.GetRelativePath(root, file).Replace('\\', '/');
@@ -105,8 +112,9 @@ internal sealed class V3WebRoot
                 throw new InvalidDataException($"The web directory holds '{relative}', of a type this server does not serve.");
             }
 
-            // The pages' server renderer is run (V3PageRenderer), never served.
-            if (relative.StartsWith("ssr/", StringComparison.Ordinal))
+            // The pages' server renderer is run (V3PageRenderer), never served; the 404 pages answer a page request nothing
+            // claims, and the maintenance pages are the deploy kit's: none is served at its own address (V3WebRoot.NotFound.cs).
+            if (relative.StartsWith("ssr/", StringComparison.Ordinal) || IsUnservedPage(relative, file, notFound))
             {
                 continue;
             }
@@ -132,7 +140,8 @@ internal sealed class V3WebRoot
         return new V3WebRoot(
             files,
             $"{System.Net.WebUtility.HtmlDecode(policy.Groups["policy"].Value)}; {FrameAncestors}",
-            V3PageRenderer.Open(Path.Combine(root, "ssr")));
+            V3PageRenderer.Open(Path.Combine(root, "ssr")),
+            notFound);
     }
 
     /// <summary>

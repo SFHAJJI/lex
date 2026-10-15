@@ -302,6 +302,52 @@ blockquote.law {
   border-radius: 2px;
 }
 
+/* A service failure (R60): one panel, its line first and in bold, so that nothing in it reads as an answer about the
+   law; the screen's own sentence or the refusal card inside it; a retry and the publishers' official sites below. The
+   panel is told apart by its words and its dashed edge, never by colour alone. */
+.failure-panel {
+  display: grid;
+  gap: 0.5rem;
+  min-inline-size: 0;
+  padding: 0.75rem;
+  border: 1px dashed currentColor;
+  border-radius: 2px;
+}
+
+.failure-panel p,
+.official-sites p {
+  margin: 0;
+}
+
+.official-sites ul {
+  margin: 0.25rem 0 0;
+  padding-inline-start: 1.25rem;
+  display: grid;
+  gap: 0.5rem;
+}
+
+.failure-retry {
+  padding: 0.5rem 1.1rem;
+  border: 1px solid currentColor;
+  border-radius: 0.375rem;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.failure-retry:focus-visible {
+  outline: 3px solid #14556b;
+  outline-offset: 2px;
+}
+
+@media (prefers-color-scheme: dark) {
+  .failure-retry:focus-visible {
+    outline-color: #9ccfe0;
+  }
+}
+
 .envelope-strip summary > * + * {
   margin-inline-start: 1rem;
 }

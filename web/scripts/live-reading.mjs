@@ -186,7 +186,9 @@ export async function loadLiveReading({ contract, fetchImpl, signal, request }) 
  */
 export function createReadingSession({ contract, fetchImpl, onOutcome }) {
   let controller = null;
-  return {
+  // The last request sent, which `retry` asks again (the failure panel's retry, R60).
+  let last = null;
+  const session = {
     ask(request) {
       controller?.abort();
       controller = null;
@@ -196,6 +198,7 @@ export function createReadingSession({ contract, fetchImpl, onOutcome }) {
         onOutcome({ state: "invalid_request", ...englishStatement(`${error.message}.`) });
         return false;
       }
+      last = request;
       const own = new AbortController();
       controller = own;
       onOutcome({ state: "loading", sentence: LIVE_READING_LOADING });
@@ -210,9 +213,13 @@ export function createReadingSession({ contract, fetchImpl, onOutcome }) {
         });
       return true;
     },
+    retry() {
+      return last !== null && session.ask(last);
+    },
     cancel() {
       controller?.abort();
       controller = null;
     },
   };
+  return session;
 }

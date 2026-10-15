@@ -66,6 +66,11 @@
 // state (for an EU citation, that very wording, answered by the EU index), and the article it names
 // (an EU provision as `verify` names it, unescaped).
 //
+// The specification of record's R60 has runs of its own on the fixture mount (`failurePageExpectations`): an address
+// the site has no page for must arrive as the 404 page, with status 404, and its search must answer as the home page's
+// does, or with no mount show the failure panel; and the search with no mount must show the failure panel, whose retry,
+// pressed once (by the keyboard on a keyboard run), asks the very same request again.
+//
 // The mount is written by `V3JourneyMountTests` with `V3_WRITE_JOURNEY_MOUNT=<directory>`; it is the
 // test fixture's mount, so the journey proves the wiring, not a real corpus.
 
@@ -541,10 +546,18 @@ export function journeyVerdict(observed, expected) {
     const without = observed.withoutScripts?.answerState ?? null;
     if (without !== expected.state) failures.push(`without scripts the page shows ${without === null ? "no answer" : `a ${without}`}, not a ${expected.state}`);
   }
+  // A page request nothing claims is the site's 404 page, with status 404, in both servers (R60).
+  if (step.notFound === true && observed.pageStatus !== 404) {
+    failures.push(`the page at ${step.path} arrived with status ${observed.pageStatus ?? "not observed"}, not 404`);
+  }
+  // A step that retries a failure presses the failure panel's retry once, which asks the very same request once more (R60).
+  if (step.retry === true && observed.retried !== "reached") {
+    failures.push(`the failure panel's retry was not pressed and settled (${observed.retried ?? "not observed"})`);
+  }
   const toApi = observed.requests.filter((request) => new URL(request.url).pathname.startsWith("/api/"));
-  const asks = expected.mustRender === true ? 0 : 1;
+  const asks = (expected.mustRender === true ? 0 : 1) + (step.retry === true ? 1 : 0);
   if (toApi.length !== asks) {
-    failures.push(`the page made ${toApi.length} requests to the API, not exactly ${asks === 0 ? "none" : "one"}`);
+    failures.push(`the page made ${toApi.length} requests to the API, not exactly ${["none", "one", "two"][asks]}`);
   }
   for (const request of toApi) {
     const url = new URL(request.url);
@@ -962,6 +975,7 @@ async function observe(browser, pageOrigin, step, { keyboard = false } = {}) {
     const consoleMessages = [];
     let documentId = null;
     let pageHeaders = null;
+    let pageStatus = null;
     session.on((message) => {
       if (message.sessionId !== sessionId) return;
       if (message.method === "Network.requestWillBeSent") {
@@ -980,8 +994,12 @@ async function observe(browser, pageOrigin, step, { keyboard = false } = {}) {
       } else if (message.method === "Network.responseReceivedExtraInfo" && message.params.requestId === documentId) {
         // The headers the page's own response carried, as the browser received them.
         pageHeaders = message.params.headers;
+        pageStatus = message.params.statusCode ?? null;
       } else if (message.method === "Runtime.consoleAPICalled") {
         consoleMessages.push(message.params.args.map((arg) => arg.value ?? arg.description ?? "").join(" "));
+      } else if (message.method === "Log.entryAdded" && step.notFound === true && message.params.entry.source === "network"
+        && message.params.entry.url === `${pageOrigin}${step.path}` && / 404 /.test(message.params.entry.text)) {
+        // The browser's own note that the document it was sent is a 404 is what a 404 page is: its status is checked instead.
       } else if (message.method === "Log.entryAdded") {
         consoleMessages.push(`${message.params.entry.level}: ${message.params.entry.text}`);
       } else if (message.method === "Runtime.exceptionThrown") {
@@ -1029,6 +1047,37 @@ async function observe(browser, pageOrigin, step, { keyboard = false } = {}) {
         else await new Promise((resolve) => setTimeout(resolve, 100));
       }
     }
+    // A step that retries a failure: once the page shows the failure panel, its retry is pressed (by the keyboard on a
+    // keyboard run: Tab until it has focus, then Enter), and the page must ask again and settle.
+    let retried;
+    if (step.retry === true) {
+      const asked = () => requests.filter((request) => new URL(request.url).pathname.startsWith("/api/")).length;
+      const before = asked();
+      if (!(await evaluate("document.querySelector('[data-live-answer] [data-failure] [data-retry]') !== null"))) retried = "absent";
+      else if (keyboard) {
+        retried = "absent";
+        for (let tab = 0; tab < 30; tab += 1) {
+          await pressKey(session, sessionId, "Tab");
+          const focused = await evaluate(FOCUSED);
+          if (focused === null) continue;
+          keys?.stops.push(focused);
+          if (await evaluate("document.activeElement?.hasAttribute('data-retry') === true")) {
+            await pressKey(session, sessionId, "Enter");
+            retried = "pressed";
+            break;
+          }
+        }
+      } else {
+        await evaluate("document.querySelector('[data-live-answer] [data-failure] [data-retry]').click()");
+        retried = "pressed";
+      }
+      while (retried === "pressed" && Date.now() < deadline) {
+        const state = await evaluate("document.querySelector('[data-answer-state]')?.dataset.answerState ?? null");
+        if (asked() > before && state !== null && state !== "loading") retried = "reached";
+        else await new Promise((resolve) => setTimeout(resolve, 100));
+      }
+      answerState = await evaluate("document.querySelector('[data-answer-state]')?.dataset.answerState ?? null");
+    }
     // Let a late request or log line arrive before the observation is closed.
     await new Promise((resolve) => setTimeout(resolve, 500));
     const observed = {
@@ -1056,6 +1105,8 @@ async function observe(browser, pageOrigin, step, { keyboard = false } = {}) {
       // Where each reviewed language's link in the language menu leads, once the page has loaded.
       languageLinks: await evaluate("Object.fromEntries([...document.querySelectorAll('[data-locale-nav] a[data-same-document]')].map((link) => [link.dataset.sameDocument, link.getAttribute('href')]))"),
       pageHeaders,
+      pageStatus,
+      retried,
       then,
       userAgent: await evaluate("navigator.userAgent"),
       liveRegion: { atLoad: liveRegionAtLoad, atEnd: await evaluate(ANSWER_LIVE_REGION) },
@@ -1370,6 +1421,36 @@ export async function licenceBlockedRuns(apiOutput, mount, options, browser, liv
 export const AS_PUBLISHED_SAID = "As published; may have been amended since; no consolidated text.";
 
 /**
+ * A page request nothing claims (R60: "A 404 page offers search"): an address the site has no page for, under the English
+ * interface. Both servers answer it with the 404 page, status 404, which offers the home page's search: the step searches
+ * from it, as the home page's step does, and must end in that answer (or, with no mount, the refusal every request gets).
+ */
+export const NOT_FOUND_STEP = Object.freeze({ ...JOURNEY_STEPS.home, path: "/en/no-such-page", notFound: true });
+
+/** What the 404 page says above its search: there is no page at the address. */
+export const NOT_FOUND_SAID = "There is no page at this address";
+
+/**
+ * The search step with no mount, retried: the page shows the failure panel for `no_corpus_mounted`, the retry is pressed
+ * once, and the page asks the very same request again and shows the same refusal (R60).
+ */
+export const RETRIED_SEARCH_STEP = Object.freeze({ ...JOURNEY_STEPS.search, retry: true });
+
+/**
+ * The runs of R60's pages on the fixture mount, as `[name, expected, mounted]` (`mounted`: with the fixture mount, else
+ * with none): the 404 page searched, which answers as the home page does; the 404 page with no mount, whose search shows
+ * the failure panel; and the search with no mount, its failure panel's retry pressed once.
+ */
+export function failurePageExpectations() {
+  const searchTexts = [`“${SEARCH_PHRASE}” in fra: 4 with the exact phrase, 1 with every word, in 1 work.`, "art_15 in", "The first hits in the stated order, not the best hits."];
+  return [
+    ["not found, with the fixture mount", { step: NOT_FOUND_STEP, state: "success", texts: [NOT_FOUND_SAID, ...searchTexts] }, true],
+    ["not found, with no mount", { step: NOT_FOUND_STEP, state: "refusal", refusalCode: "no_corpus_mounted", texts: [NOT_FOUND_SAID, FAILURE_LINE] }, false],
+    ["search retried, with no mount", { step: RETRIED_SEARCH_STEP, state: "refusal", refusalCode: "no_corpus_mounted", texts: [FAILURE_LINE] }, false],
+  ];
+}
+
+/**
  * What each of the eight steps must show on the fixture mount (`journey-mount.json`), as `[step name,
  * expected]`: every page answers, with the texts the fixture's one work gives it.
  */
@@ -1391,6 +1472,9 @@ export function fixtureMountExpectations(journeyMount) {
     ["stale", { step: stale, state: "success", texts: ["which is not the version this site serves for that date", "the state applying from 2024-02-01", "49 articles quoted"] }],
   ];
 }
+
+/** The line a failure panel says first (R60), as the English pages say it. */
+export const FAILURE_LINE = "Lex could not complete this request. This is not an answer about the law.";
 
 /** Journey J1's refusal: a reading asked for a date before the work's first held state. */
 export const EARLY_READING_DATE = "2019-03-15";
@@ -1787,6 +1871,10 @@ async function main(argv) {
     for (const [name, expected] of fixtureMountExpectations(journeyMount)) {
       results.push([`${name}, with the fixture mount`, await run(apiOutput, mount, { servedByApi, keyboard, ...expected }, browser, liveRoot)]);
       results.push([`${name}, with no mount`, await run(apiOutput, null, { servedByApi, keyboard, step: expected.step, state: "refusal", refusalCode: "no_corpus_mounted" }, browser, liveRoot)]);
+    }
+    // The 404 page and a failure's retry (R60).
+    for (const [name, expected, mounted] of failurePageExpectations()) {
+      results.push([name, await run(apiOutput, mounted ? mount : null, { servedByApi, keyboard, ...expected }, browser, liveRoot)]);
     }
     // The specification's journeys the eight steps do not walk (J1's refusal, J2, J5).
     for (const [name, expected] of specificationJourneyExpectations()) {

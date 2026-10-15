@@ -1,0 +1,30 @@
+{
+  "about": "The site's answer to a request nothing claims, held to one table by web/test/live-not-found.test.mjs (web/scripts/not-found.mjs, serve-live.mjs) and tests/Lex.V3.Tests/V3WebRootNotFoundTests.cs (V3WebRoot.NotFound.cs, V3ApiHandler). A page request is a GET or a HEAD whose path is not a machine's (/api/, /mcp, /health/); it is answered with status 404 and the built 404 page `page`, in the interface language the path stands under (/fr/..., /en/...), else in the one Accept-Language chooses between French and English, else French (`negotiated`: the answer then says Vary: Accept-Language). `page` null: not a page request, so it keeps the server's own answer (the API's JSON problem). Each path here is one nothing else claims: no file of the build, no redirect, no law's address.",
+  "requests": [
+    { "method": "GET", "path": "/fr/no-such-page", "acceptLanguage": "en", "page": "not-found/fr.html", "negotiated": false },
+    { "method": "GET", "path": "/en/no-such-page", "acceptLanguage": "fr-LU,fr;q=0.9", "page": "not-found/en.html", "negotiated": false },
+    { "method": "HEAD", "path": "/en/missing.html", "acceptLanguage": null, "page": "not-found/en.html", "negotiated": false },
+    { "method": "GET", "path": "/fr/lu-legilux", "acceptLanguage": null, "page": "not-found/fr.html", "negotiated": false },
+    { "method": "GET", "path": "/en/fr/no-such-page", "acceptLanguage": "fr", "page": "not-found/en.html", "negotiated": false },
+    { "method": "GET", "path": "/no-such-page", "acceptLanguage": "en-GB,en;q=0.9", "page": "not-found/en.html", "negotiated": true },
+    { "method": "GET", "path": "/no-such-page", "acceptLanguage": "fr-LU,en;q=0.5", "page": "not-found/fr.html", "negotiated": true },
+    { "method": "GET", "path": "/no-such-page", "acceptLanguage": null, "page": "not-found/fr.html", "negotiated": true },
+    { "method": "GET", "path": "/de/seite", "acceptLanguage": "de-DE,de;q=0.9,en;q=0.8", "page": "not-found/en.html", "negotiated": true },
+    { "method": "GET", "path": "/FR/no-such-page", "acceptLanguage": "en", "page": "not-found/en.html", "negotiated": true },
+    { "method": "GET", "path": "/ssr/en.js", "acceptLanguage": null, "page": "not-found/fr.html", "negotiated": true },
+    { "method": "GET", "path": "/not-found/en.html", "acceptLanguage": "en", "page": "not-found/en.html", "negotiated": true },
+    { "method": "GET", "path": "/maintenance/fr.html", "acceptLanguage": null, "page": "not-found/fr.html", "negotiated": true },
+    { "method": "GET", "path": "/favicon.ico", "acceptLanguage": null, "page": "not-found/fr.html", "negotiated": true },
+    { "method": "GET", "path": "/api", "acceptLanguage": null, "page": "not-found/fr.html", "negotiated": true },
+    { "method": "GET", "path": "/health", "acceptLanguage": null, "page": "not-found/fr.html", "negotiated": true },
+    { "method": "GET", "path": "/api/v3/no_such_operation", "acceptLanguage": "en", "page": null, "negotiated": null },
+    { "method": "GET", "path": "/api/v2/search", "acceptLanguage": "en", "page": null, "negotiated": null },
+    { "method": "GET", "path": "/api/", "acceptLanguage": null, "page": null, "negotiated": null },
+    { "method": "GET", "path": "/mcp/tools", "acceptLanguage": null, "page": null, "negotiated": null },
+    { "method": "GET", "path": "/mcpx", "acceptLanguage": null, "page": null, "negotiated": null },
+    { "method": "GET", "path": "/health/live", "acceptLanguage": null, "page": null, "negotiated": null },
+    { "method": "POST", "path": "/fr/no-such-page", "acceptLanguage": null, "page": null, "negotiated": null },
+    { "method": "PUT", "path": "/no-such-page", "acceptLanguage": null, "page": null, "negotiated": null },
+    { "method": "OPTIONS", "path": "/en/no-such-page", "acceptLanguage": null, "page": null, "negotiated": null }
+  ]
+}

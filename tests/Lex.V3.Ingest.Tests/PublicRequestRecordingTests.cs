@@ -749,21 +749,28 @@ public sealed class PublicRequestRecordingTests
     }
 
     [TestMethod]
-    public void TheOneRequestHeaderTheApiReadsIsAcceptLanguageOnceToChooseARedirectsLanguage()
+    public void TheOneRequestHeaderTheApiReadsIsAcceptLanguageOnlyToChooseAPagesLanguage()
     {
         // The specification of record's R61: a reader naming no language is sent to the one their browser prefers. The
         // header goes straight into the pure choice of a redirect (V3WebRoot.RedirectFor, NegotiateLanguage), whose
-        // answer is one of two languages, so neither it nor anything of it is kept or written anywhere (S4-A11).
+        // answer is one of two languages, so neither it nor anything of it is kept or written anywhere (S4-A11). Since
+        // R60's 404 page, it is read in one more place, for the same choice: the language of the 404 page a page request
+        // with no language in its path is answered with (V3WebRoot.NotFoundPageFor, NegotiateLanguage). Each read is
+        // handed whole to its pure choice, in the web root, and nowhere else.
         var reads = ApiSources()
             .SelectMany(static source => Regex.Matches(source.Code, @"\.Headers\.AcceptLanguage\b[^;]*").Select(match => (source.File, Line: match.Value)))
             .ToArray();
-        Assert.HasCount(1, reads, string.Join("; ", reads.Select(static read => $"{read.File}: {read.Line}")));
-        Assert.AreEqual("V3WebRoot.cs", reads[0].File);
+        Assert.HasCount(2, reads, string.Join("; ", reads.Select(static read => $"{read.File}: {read.Line}")));
+        CollectionAssert.AreEquivalent(new[] { "V3WebRoot.cs", "V3WebRoot.NotFound.cs" }, reads.Select(static read => read.File).ToArray());
         var call = Regex.Match(ApiSources().Single(static source => source.File == "V3WebRoot.cs").Code,
             @"RedirectFor\(path, query, context\.Request\.Headers\.AcceptLanguage\.ToString\(\)\)");
         Assert.IsTrue(call.Success, "the header is handed to RedirectFor and to nothing else");
+        var notFound = Regex.Match(ApiSources().Single(static source => source.File == "V3WebRoot.NotFound.cs").Code,
+            @"NotFoundPageFor\(method, path, context\.Request\.Headers\.AcceptLanguage\.ToString\(\)\)");
+        Assert.IsTrue(notFound.Success, "the header is handed to NotFoundPageFor and to nothing else");
 
         Assert.IsEmpty(Findings(Blank("var choice = RedirectFor(path, query, context.Request.Headers.AcceptLanguage.ToString());")));
+        Assert.IsEmpty(Findings(Blank("var page = NotFoundPageFor(method, path, context.Request.Headers.AcceptLanguage.ToString());")));
         foreach (var other in new[]
                  {
                      "var a = context.Request.Headers.UserAgent;",

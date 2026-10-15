@@ -12,7 +12,7 @@ import { readFile } from "node:fs/promises";
 import { createElement as h } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 
-import { LiveReading, ReadingAnswerView, RefusalCard, readingHolds, renderLiveReadingPage } from "../.react-build/app.mjs";
+import { FailureFrame, LiveReading, ReadingAnswerView, RefusalCard, readingHolds, renderLiveReadingPage } from "../.react-build/app.mjs";
 import {
   LIVE_READING_IDLE,
   LIVE_READING_REFUSAL_SENTENCES,
@@ -22,6 +22,9 @@ import {
   readingOutcome,
   readingParameters,
 } from "../scripts/live-reading.mjs";
+
+/** A refusal's card as the screen shows it: one about this service (R60) inside the failure panel, under its line; any other alone. */
+const asShown = (outcome, card) => renderToStaticMarkup(h(FailureFrame, { outcome }, h("lex-card"))).replace("<lex-card></lex-card>", card);
 
 const census = JSON.parse(await readFile(new URL("../../schemas/v3-platform/envelope-samples.json", import.meta.url), "utf8"));
 const payloads = JSON.parse(await readFile(new URL("../../schemas/v3-platform/refusal-payload-samples.json", import.meta.url), "utf8"));
@@ -128,7 +131,7 @@ test("the refusals a reading from this page can meet: cards where the card's rul
     assert.equal(outcome.card, true, `${scenario}: the card's rules accept the payload the platform sent`);
     assert.equal(outcome.sentence, expected);
     const card = renderToStaticMarkup(h(RefusalCard, { code, sentence: outcome.sentence, payload: outcome.payload }));
-    assert.equal(view(outcome), `<section data-answer-state="refusal">${card}</section>`, scenario);
+    assert.equal(view(outcome), `<section data-answer-state="refusal">${asShown(outcome, card)}</section>`, scenario);
   }
 
   // The two absences the platform sends are cards now that its payloads carry the absence evidence

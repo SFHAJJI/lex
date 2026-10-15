@@ -12,8 +12,11 @@ import { readFile } from "node:fs/promises";
 import { createElement as h } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 
-import { LiveRadar, RadarAnswerView, RefusalCard, renderLiveRadarPage } from "../.react-build/app.mjs";
+import { FailureFrame, LiveRadar, RadarAnswerView, RefusalCard, renderLiveRadarPage } from "../.react-build/app.mjs";
 import { LIVE_RADAR_IDLE, createRadarSession, loadLiveRadar, radarOutcome, radarParameters } from "../scripts/live-radar.mjs";
+
+/** A refusal's card as the screen shows it: one about this service (R60) inside the failure panel, under its line; any other alone. */
+const asShown = (outcome, card) => renderToStaticMarkup(h(FailureFrame, { outcome }, h("lex-card"))).replace("<lex-card></lex-card>", card);
 
 const census = JSON.parse(await readFile(new URL("../../schemas/v3-platform/envelope-samples.json", import.meta.url), "utf8"));
 const answers = JSON.parse(await readFile(new URL("../../schemas/v3-platform/answer-samples.json", import.meta.url), "utf8"));
@@ -131,7 +134,7 @@ test("no mount is the card naming the missing index; an unreadable answer is sai
   assert.equal(none.card, true);
   assert.equal(none.sentence, "This build has no Luxembourg index mounted.");
   const card = renderToStaticMarkup(h(RefusalCard, { code: none.code, sentence: none.sentence, payload: none.payload }));
-  assert.equal(view(none), `<section data-answer-state="refusal">${card}</section>`);
+  assert.equal(view(none), `<section data-answer-state="refusal">${asShown(none, card)}</section>`);
   const broken = structuredClone(envelopeOf("a window holding"));
   broken.result.value.population.versions_in_window = 5;
   const unreadable = radarOutcome({ state: "success", envelope: broken });

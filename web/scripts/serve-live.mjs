@@ -25,6 +25,7 @@ import { readFile, stat } from "node:fs/promises";
 import { extname, join, relative as pathRelative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import vm from "node:vm";
+import { UNSERVED_DIRECTORIES, notFoundPageFor } from "./not-found.mjs";
 
 const OPERATION_PATH = /^\/api\/v3\/[a-z_]+$/;
 export const MAXIMUM_REQUEST_BYTES = 1024 * 1024;
@@ -131,7 +132,35 @@ async function renderSitePage(page, pathname, apiOrigin, renderer, deadlineMs) {
   return { status: code === "identifier_unknown" ? 404 : 200, html };
 }
 
-async function serveStatic(response, root, pathname, method) {
+/**
+ * The answer to a request no file and no page here claims: for a page request (a GET or HEAD whose path is not a
+ * machine's, `notFoundPageFor`), the built 404 page in the reader's language, with status 404 (the specification of
+ * record's R60), as the API answers it (`V3WebRoot.NotFound.cs`); for any other, or a build that holds no such page, the
+ * problem `not_found`. The language is the path's (`/fr/…`, `/en/…`), else the one the root's redirect chooses, and then
+ * the answer says it depends on Accept-Language.
+ */
+async function notFound(response, root, pathname, method, acceptLanguage) {
+  const chosen = notFoundPageFor(method, pathname, acceptLanguage);
+  let bytes = null;
+  try {
+    bytes = chosen === null ? null : await readFile(join(root, chosen.page));
+  } catch {
+    bytes = null;
+  }
+  if (bytes === null) {
+    problem(response, 404, "not_found");
+    return;
+  }
+  response.writeHead(404, {
+    ...BASE_HEADERS,
+    "content-type": CONTENT_TYPES[".html"],
+    "content-length": bytes.length,
+    ...(chosen.negotiated ? { vary: "Accept-Language" } : {}),
+  });
+  response.end(method === "HEAD" ? undefined : bytes);
+}
+
+async function serveStatic(response, root, pathname, method, acceptLanguage) {
   let relative;
   try {
     // An interface language's root is its home page; a law's address under a language is served the page that reads it
@@ -139,14 +168,15 @@ async function serveStatic(response, root, pathname, method) {
     const home = INTERFACE_LANGUAGES.find((language) => pathname === `/${language}/`);
     relative = home !== undefined ? `${home}/index.html` : (pageForSitePath(pathname) ?? decodeURIComponent(pathname.slice(1)));
   } catch {
-    problem(response, 404, "not_found");
+    await notFound(response, root, pathname, method, acceptLanguage);
     return;
   }
   const file = resolve(root, relative);
-  // The server renderers are run here, never served: the first segment is compared without case, as Windows' and macOS's
-  // file systems compare names (review of #959: /SSR/en.js was served).
-  if ((file !== root && !file.startsWith(root + sep)) || pathRelative(root, file).split(sep)[0].toLowerCase() === "ssr") {
-    problem(response, 404, "not_found");
+  // The server renderers are run here, never served, and the 404 and maintenance pages are never served at their own
+  // address (`UNSERVED_DIRECTORIES`): the first segment is compared without case, as Windows' and macOS's file systems
+  // compare names (review of #959: /SSR/en.js was served).
+  if ((file !== root && !file.startsWith(root + sep)) || UNSERVED_DIRECTORIES.includes(pathRelative(root, file).split(sep)[0].toLowerCase())) {
+    await notFound(response, root, pathname, method, acceptLanguage);
     return;
   }
   const type = CONTENT_TYPES[extname(file)];
@@ -157,7 +187,7 @@ async function serveStatic(response, root, pathname, method) {
     info = null;
   }
   if (!type || !info?.isFile()) {
-    problem(response, 404, "not_found");
+    await notFound(response, root, pathname, method, acceptLanguage);
     return;
   }
   const bytes = await readFile(file);
@@ -233,7 +263,7 @@ export function createLiveServer({ root, apiOrigin, apiDeadlineMs = API_DEADLINE
           return;
         }
       }
-      await serveStatic(response, rootPath, url.pathname, request.method);
+      await serveStatic(response, rootPath, url.pathname, request.method, request.headers["accept-language"]);
     } catch {
       if (!response.headersSent) problem(response, 500, "server_error");
       else response.destroy();

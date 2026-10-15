@@ -26,7 +26,7 @@
 import { useEffect, useRef, useState } from 'react';
 
 import { RefusalCard } from './RefusalCard.jsx';
-import { AsPublished, EuropeAnnexes, LiveAnswer, Permalink, Say, StatusSentence, inEnglish, refusalCardCopyFor } from './LiveAnswer.jsx';
+import { AsPublished, EuropeAnnexes, FailureFrame, LiveAnswer, Permalink, Say, StatusSentence, inEnglish, refusalCardCopyFor } from './LiveAnswer.jsx';
 import {
   LIVE_READING_IDLE,
   READING_LANGUAGES,
@@ -263,7 +263,7 @@ export function EuropeReadingView({ view }) {
 }
 
 /** One view state, laid out: the reading, the refusal card, or the sentence a state carries. */
-export function ReadingAnswerView({ outcome }) {
+export function ReadingAnswerView({ outcome, onRetry }) {
   if (outcome.state === 'success') {
     return (
       <section data-answer-state="success">
@@ -275,14 +275,18 @@ export function ReadingAnswerView({ outcome }) {
   if (outcome.state === 'refusal' && outcome.card) {
     return (
       <section data-answer-state="refusal">
-        <RefusalCard code={outcome.code} sentence={outcome.sentence} payload={outcome.payload} copy={refusalCardCopyFor(outcome.context)} />
+        <FailureFrame outcome={outcome} onRetry={onRetry}>
+          <RefusalCard code={outcome.code} sentence={outcome.sentence} payload={outcome.payload} copy={refusalCardCopyFor(outcome.context)} />
+        </FailureFrame>
       </section>
     );
   }
 
   return (
     <section data-answer-state={outcome.state}>
-      <StatusSentence outcome={outcome} />
+      <FailureFrame outcome={outcome} onRetry={onRetry}>
+        <StatusSentence outcome={outcome} />
+      </FailureFrame>
     </section>
   );
 }
@@ -400,6 +404,11 @@ export function LiveReading({ contract, fetchImpl, initial = null }) {
     setPinned(false);
     session.current.ask(request);
   };
+  // The failure panel's retry (R60): the last reading asked, or on a page the server rendered from a failure, the reading
+  // its permalink names, as the page would have asked it. The pin stays as it was.
+  const retry = () => {
+    if (!session.current.retry() && pin !== null) session.current.ask(pin.request);
+  };
   const replaced = pinned && outcome.state === 'success' && !readingHolds(outcome.view, pin.permalink);
   return (
     <div>
@@ -413,7 +422,7 @@ export function LiveReading({ contract, fetchImpl, initial = null }) {
             />
           </p>
         ) : null}
-        <ReadingAnswerView outcome={outcome} />
+        <ReadingAnswerView outcome={outcome} onRetry={retry} />
       </LiveAnswer>
     </div>
   );

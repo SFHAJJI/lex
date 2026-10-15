@@ -50,6 +50,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { gunzipSync } from "node:zlib";
 import { readLargeFile, sha256Hex } from "./large-bytes.mjs";
 import { pageForSitePath, redirectFor } from "./permalinks.mjs";
+import { UNSERVED_DIRECTORIES } from "./not-found.mjs";
 
 const repository = resolve(fileURLToPath(new URL("../../", import.meta.url)));
 // In pieces: one update over 2 GiB is refused, and the population image's app layer is 2.5 GB (large-bytes.mjs).
@@ -299,8 +300,10 @@ export async function v2RouteFailures(origin, { v3Files = new Map(), routes = V2
 
 /** The live pages as the image serves them, URL path to bytes: each file at `/<path>`, and each interface language's root (`/en/`, `/fr/`) as its `index.html`. */
 export function servedPaths(web) {
-  // The pages' server renderer (ssr/) is run by the API, never served (R67).
-  const served = new Map(web.filter(([path]) => !path.startsWith("ssr/")).map(([path, bytes]) => [`/${path}`, bytes]));
+  // The pages' server renderer (ssr/) is run by the API, never served (R67), and the 404 and maintenance pages are never
+  // served at their own address (R60; `not-found.mjs`).
+  const served = new Map(web.filter(([path]) => !UNSERVED_DIRECTORIES.some((directory) => path.startsWith(`${directory}/`)))
+    .map(([path, bytes]) => [`/${path}`, bytes]));
   // An interface language's root is its home page (R61); the site's root is a redirect, not a page.
   for (const language of ["en", "fr"]) {
     if (served.has(`/${language}/index.html`)) served.set(`/${language}/`, served.get(`/${language}/index.html`));

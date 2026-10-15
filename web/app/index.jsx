@@ -28,12 +28,14 @@ export { CENSUS_EVALUATION_CARD, LIVE_CONTRACT, LIVE_COVERAGE_ROOT, liveCoverage
 export { EvaluationCardView } from './EvaluationCardView.jsx';
 export { LocaleNav, localeHome, localeHref } from './LocaleNav.jsx';
 export { renderLiveLocaleUnavailablePage } from './live-locale-page.jsx';
+export { renderLiveNotFoundPage } from './live-not-found-page.jsx';
+export { renderLiveMaintenancePage } from './live-maintenance-page.jsx';
 export { LiveSearch, SearchAnswerView, SearchResultsView, SearchWorkResolution } from './LiveSearch.jsx';
 export { LIVE_SEARCH_ROOT, liveSearchTree, renderLiveHomePage, renderLiveSearchPage } from './live-search-page.jsx';
 export { DossierAnswerView, DossierTitles, DossierView, EuropeDossierView, LiveDossier } from './LiveDossier.jsx';
 export { LIVE_DOSSIER_ROOT, liveDossierTree, renderLiveDossierPage } from './live-dossier-page.jsx';
 export { LiveReading, ReadingAnswerView, ReadingView, readingHolds } from './LiveReading.jsx';
-export { Permalink, TableRegion } from './LiveAnswer.jsx';
+export { FailureFrame, OfficialSites, Permalink, TableRegion } from './LiveAnswer.jsx';
 export { LIVE_READING_ROOT, liveReadingTree, renderLiveReadingPage } from './live-reading-page.jsx';
 export { HistoryAnswerView, HistoryView, LiveHistory } from './LiveHistory.jsx';
 export { LIVE_HISTORY_ROOT, liveHistoryTree, renderLiveHistoryPage } from './live-history-page.jsx';

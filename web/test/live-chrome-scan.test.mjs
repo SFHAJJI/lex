@@ -215,6 +215,8 @@ test("no interface text on a live page or a census answer bypasses the chrome ta
     coverage: app.renderLiveCoveragePage, search: app.renderLiveSearchPage, dossier: app.renderLiveDossierPage,
     reading: app.renderLiveReadingPage, history: app.renderLiveHistoryPage, compare: app.renderLiveComparePage,
     radar: app.renderLiveRadarPage, export: app.renderLiveExportPage,
+    // The 404 page and the maintenance page (R60).
+    notFound: app.renderLiveNotFoundPage, maintenance: app.renderLiveMaintenancePage,
   };
   for (const [name, render] of Object.entries(pages)) {
     // The locale navigation names each language in that language, which no table translates. Only
@@ -319,6 +321,8 @@ test("no interface text on a French page or a census answer bypasses the French 
     coverage: app.renderLiveCoveragePage, search: app.renderLiveSearchPage, dossier: app.renderLiveDossierPage,
     reading: app.renderLiveReadingPage, history: app.renderLiveHistoryPage, compare: app.renderLiveComparePage,
     radar: app.renderLiveRadarPage, export: app.renderLiveExportPage,
+    // The 404 page and the maintenance page (R60).
+    notFound: app.renderLiveNotFoundPage, maintenance: app.renderLiveMaintenancePage,
   };
   for (const [name, render] of Object.entries(pages)) {
     const html = render();

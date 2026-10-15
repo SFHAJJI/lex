@@ -18,7 +18,7 @@ import { useEffect, useRef, useState } from 'react';
 import { RefusalCard } from './RefusalCard.jsx';
 import { HISTORY_LANGUAGES, LIVE_HISTORY_IDLE, createHistorySession } from '../scripts/live-history.mjs';
 import { ENGLISH_LANG, fillCounted, fillText, liveChrome } from '../scripts/live-chrome.mjs';
-import { LiveAnswer, Permalink, Say, StatusSentence, TableRegion, refusalCardCopyFor } from './LiveAnswer.jsx';
+import { FailureFrame, LiveAnswer, Permalink, Say, StatusSentence, TableRegion, refusalCardCopyFor } from './LiveAnswer.jsx';
 
 /** The forms' labels and buttons, and this screen's sentences, from the interface copy table. */
 const FORM = liveChrome().form;
@@ -111,7 +111,7 @@ export function HistoryView({ view }) {
 }
 
 /** One view state, laid out: the lineage, the refusal card, or the sentence a state carries. */
-export function HistoryAnswerView({ outcome }) {
+export function HistoryAnswerView({ outcome, onRetry }) {
   if (outcome.state === 'success') {
     return (
       <section data-answer-state="success">
@@ -123,14 +123,18 @@ export function HistoryAnswerView({ outcome }) {
   if (outcome.state === 'refusal' && outcome.card) {
     return (
       <section data-answer-state="refusal">
-        <RefusalCard code={outcome.code} sentence={outcome.sentence} payload={outcome.payload} copy={refusalCardCopyFor(outcome.context)} />
+        <FailureFrame outcome={outcome} onRetry={onRetry}>
+          <RefusalCard code={outcome.code} sentence={outcome.sentence} payload={outcome.payload} copy={refusalCardCopyFor(outcome.context)} />
+        </FailureFrame>
       </section>
     );
   }
 
   return (
     <section data-answer-state={outcome.state}>
-      <StatusSentence outcome={outcome} />
+      <FailureFrame outcome={outcome} onRetry={onRetry}>
+        <StatusSentence outcome={outcome} />
+      </FailureFrame>
     </section>
   );
 }
@@ -196,7 +200,7 @@ export function LiveHistory({ contract, fetchImpl }) {
         <button type="submit">{FORM.submit.history}</button>
       </form>
       <LiveAnswer>
-        <HistoryAnswerView outcome={outcome} />
+        <HistoryAnswerView outcome={outcome} onRetry={() => session.current.retry()} />
       </LiveAnswer>
     </div>
   );

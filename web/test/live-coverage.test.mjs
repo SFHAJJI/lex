@@ -10,7 +10,7 @@ import { readFile } from "node:fs/promises";
 import { createElement as h } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 
-import { CoverageAnswerView, LiveCoverage, RefusalCard } from "../.react-build/app.mjs";
+import { CoverageAnswerView, FailureFrame, LiveCoverage, RefusalCard } from "../.react-build/app.mjs";
 import {
   LIVE_COVERAGE_LOADING,
   LIVE_COVERAGE_REFUSAL_SENTENCES,
@@ -19,6 +19,9 @@ import {
   startLiveCoverage,
 } from "../scripts/live-coverage.mjs";
 import { REFUSAL_EXAMPLES } from "../scripts/refusal-catalog.mjs";
+
+/** A refusal's card as the screen shows it: one about this service (R60) inside the failure panel, under its line; any other alone. */
+const asShown = (outcome, card) => renderToStaticMarkup(h(FailureFrame, { outcome }, h("lex-card"))).replace("<lex-card></lex-card>", card);
 
 const census = JSON.parse(await readFile(new URL("../../schemas/v3-platform/envelope-samples.json", import.meta.url), "utf8"));
 const { contract } = census;
@@ -73,7 +76,8 @@ test("no corpus mounted is the refusal card, in the catalog's words", async () =
   assert.equal(LIVE_COVERAGE_REFUSAL_SENTENCES.no_corpus_mounted, REFUSAL_EXAMPLES.no_corpus_mounted.sentence);
   const markup = view(outcome);
   const card = renderToStaticMarkup(h(RefusalCard, { code: outcome.code, sentence: outcome.sentence, payload: outcome.payload }));
-  assert.equal(markup, `<section data-answer-state="refusal">${card}</section>`, "the refusal card itself, not a line that mentions it");
+  assert.equal(markup, `<section data-answer-state="refusal">${asShown(outcome, card)}</section>`, "the refusal card itself, not a line that mentions it");
+  assert.ok(markup.includes('<div class="failure-panel" data-failure="no_corpus_mounted">'), "no index is a failure of this service, in the failure panel (R60)");
   assert.ok(card.includes("required_corpus"), "the card lays out the payload the platform sent");
 });
 

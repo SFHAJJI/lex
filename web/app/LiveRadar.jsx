@@ -16,7 +16,7 @@ import { Fragment, useEffect, useRef, useState } from 'react';
 import { RefusalCard } from './RefusalCard.jsx';
 import { LIVE_RADAR_IDLE, RADAR_LANGUAGES, createRadarSession } from '../scripts/live-radar.mjs';
 import { ENGLISH_LANG, fillCounted, liveChrome } from '../scripts/live-chrome.mjs';
-import { LiveAnswer, Permalink, Say, StatusSentence, refusalCardCopyFor } from './LiveAnswer.jsx';
+import { FailureFrame, LiveAnswer, Permalink, Say, StatusSentence, refusalCardCopyFor } from './LiveAnswer.jsx';
 
 /** The forms' labels and buttons, and this screen's sentences, from the interface copy table. */
 const FORM = liveChrome().form;
@@ -121,7 +121,7 @@ export function RadarView({ view }) {
 }
 
 /** One view state, laid out: the radar, the refusal card, or the sentence a state carries. */
-export function RadarAnswerView({ outcome }) {
+export function RadarAnswerView({ outcome, onRetry }) {
   if (outcome.state === 'success') {
     return (
       <section data-answer-state="success">
@@ -133,14 +133,18 @@ export function RadarAnswerView({ outcome }) {
   if (outcome.state === 'refusal' && outcome.card) {
     return (
       <section data-answer-state="refusal">
-        <RefusalCard code={outcome.code} sentence={outcome.sentence} payload={outcome.payload} copy={refusalCardCopyFor(outcome.context)} />
+        <FailureFrame outcome={outcome} onRetry={onRetry}>
+          <RefusalCard code={outcome.code} sentence={outcome.sentence} payload={outcome.payload} copy={refusalCardCopyFor(outcome.context)} />
+        </FailureFrame>
       </section>
     );
   }
 
   return (
     <section data-answer-state={outcome.state}>
-      <StatusSentence outcome={outcome} />
+      <FailureFrame outcome={outcome} onRetry={onRetry}>
+        <StatusSentence outcome={outcome} />
+      </FailureFrame>
     </section>
   );
 }
@@ -198,7 +202,7 @@ export function LiveRadar({ contract, fetchImpl }) {
         <button type="submit">{FORM.submit.radar}</button>
       </form>
       <LiveAnswer>
-        <RadarAnswerView outcome={outcome} />
+        <RadarAnswerView outcome={outcome} onRetry={() => session.current.retry()} />
       </LiveAnswer>
     </div>
   );
