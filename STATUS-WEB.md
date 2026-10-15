@@ -24,6 +24,17 @@ replica whose mount was refused at startup still took traffic.
 - **Checked where it ships**: the image check fails an image whose app layer holds a preview file
   (`imageFailures`), and the image run and the deploy probe ask the server for itself (`serverFailures`): readiness
   204 and uncached, and the preview's route the 404 of an unknown route, naming nothing synthetic.
+- **Evidence**:
+  - the image rehearsal over the journey's fixture mount, with the WSL probes and without the second build: the image
+    check passed with no preview file, all 12 browser probe steps passed (215 citations verified), V2 was absent (546
+    entries scanned, 63 routes asked), and the server answered readiness 204 and the preview's route as unknown;
+  - a publish naming a mount holds no `preview-graph` or `preview-trust`, and one without a mount still holds both;
+  - `Lex.V3.Tests` 3,156 passed and 1 skipped; `Lex.V3.Ingest.Tests` 2,984 passed and 26 skipped (the new
+    `V3ApiReadinessTests` among them); the web suite 1,109 of 1,109;
+  - `deploy/validate.ps1` (main.json is main.bicep's build, lint clean); `eng/verify-v3-tree.ps1` 1,505 paths.
+  - The first full web run failed one test this change caused: the image-reproducibility fixture's long name lay under
+    `app/preview-graph/`, which the new check rightly rejects. It now lies under `app/runtimes/`. A paint test failed
+    under load and passed alone.
 
 ## The private copy stays private on every deployment (sole driver, 2026-10-14)
 
