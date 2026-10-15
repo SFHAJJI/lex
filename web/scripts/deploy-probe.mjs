@@ -9,6 +9,12 @@
 // - the card: the evaluation card at its stable route is the release's card, byte for byte, as JSON;
 // - the API: `coverage` answers from the mount the release names, by its corpus digest;
 // - the server: its readiness route answers 204 (it holds the law), and the synthetic preview's route is unknown to it;
+// - the clock (plan 0.8): the instant `coverage` was answered at is within a minute of this probe's own, so the date the
+//   revision calls today in Luxembourg is today's; the probe says that date by the coded rule, and whether the instant
+//   fell in the hour whose date the season's offset decides. A revision answers only at its own instant, so the clock
+//   changes themselves are held where an instant can be chosen: the shared table both rules meet in CI;
+// - an accented title (plan 0.8): a title the revision holds, asked for with its accents, in capitals and decomposed,
+//   finds its work as it does without them (`accentedTitleFailures`; the image carries no language library);
 // - V2 absent: every route V2 served answers 404, except where V3 serves the same path from its own pages;
 // - the browser probes (`--browser`): the journey's real-mount steps through a browser against the revision, each
 //   page held to what the API answers its request, its hydration, console, paint and security headers, and every
@@ -24,9 +30,10 @@ import { cspValue } from "./csp.mjs";
 import { CARD_ROUTE } from "./evaluation-card.mjs";
 import { layerTar, readLayout, readOciImage, readTar, servedPaths, serverFailures, v2RouteFailures } from "./image-rehearsal.mjs";
 import { invokedDirectly } from "./invoked-directly.mjs";
-import { heldLuxembourgWorkFromAnswers, realMountRuns } from "./journey.mjs";
+import { askOperation, heldLuxembourgWorkFromAnswers, realMountRuns } from "./journey.mjs";
 import { ASSETS, RELEASE_MANIFEST, releaseFailures } from "./release-assets.mjs";
 import { readLargeFile } from "./large-bytes.mjs";
+import { luxembourgDate, luxembourgOffset, luxembourgSummerTimeEnds, luxembourgSummerTimeStarts } from "./temporal.mjs";
 
 const LIVE_PREFIX = "app/v3-web/";
 
@@ -44,9 +51,11 @@ export function liveFilesOf(archive) {
 
 /**
  * What a deployed revision must answer at `origin`, as failures (empty when it holds): `web` the release image's live
- * page files, `card` the release's evaluation card, `corpusSha256` the corpus the release names.
+ * page files, `card` the release's evaluation card, `corpusSha256` the corpus the release names. What the probe can say
+ * but not hold (the revision's date in Luxembourg, a check with nothing to check) goes to `notes`; `now` is the probe's
+ * clock, `ask` how an operation is asked of the revision.
  */
-export async function revisionFailures(origin, { web, card, corpusSha256 }) {
+export async function revisionFailures(origin, { web, card, corpusSha256, notes = [], now = Date.now, ask = askOperation }) {
   const failures = [];
   const served = servedPaths(web);
   if (!served.has("/fr/")) return ["the release image holds no live page at /fr/, so the revision has nothing to be held to"];
@@ -80,6 +89,7 @@ export async function revisionFailures(origin, { web, card, corpusSha256 }) {
     failures.push(`GET ${CARD_ROUTE} is not the release's evaluation card, byte for byte`);
   }
 
+  const asked = now();
   const coverage = await fetch(`${origin}/api/v3/coverage`, {
     method: "POST",
     headers: { "content-type": "application/json" },
@@ -92,6 +102,7 @@ export async function revisionFailures(origin, { web, card, corpusSha256 }) {
   } catch {
     envelope = null;
   }
+  const answered = now();
   if (envelope === null) {
     failures.push(`coverage answered ${coverage.status}, not a 200 envelope`);
   } else if (envelope.refusal !== null && envelope.refusal !== undefined) {
@@ -99,10 +110,143 @@ export async function revisionFailures(origin, { web, card, corpusSha256 }) {
   } else if (envelope.result?.value?.mounted?.corpus_sha256 !== corpusSha256) {
     failures.push(`coverage answers from corpus ${envelope.result?.value?.mounted?.corpus_sha256}, not the release's ${corpusSha256}`);
   }
+  if (envelope !== null) {
+    const observedAt = envelope.context?.freshness?.observed_at;
+    const clock = clockFailures(observedAt, { asked, answered });
+    failures.push(...clock);
+    if (clock.length === 0) notes.push(luxembourgTodayNote(observedAt));
+  }
+  if (envelope !== null && (envelope.refusal === null || envelope.refusal === undefined)) {
+    failures.push(...await accentedTitleFailures(origin, { ask, notes }));
+  }
 
   failures.push(...await serverFailures(origin));
   failures.push(...await v2RouteFailures(origin, { v3Files: served }));
   return failures;
+}
+
+/** How far the revision's clock may stand from this probe's, either way, before its date in Luxembourg is not trusted. */
+export const CLOCK_TOLERANCE_MS = 60_000;
+
+// The instant an answer was observed at, as the API writes it (V3EnvelopeJson: UTC, seven fractional digits).
+const OBSERVED_AT = /^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\.[0-9]{7}Z$/;
+
+/**
+ * The revision's clock (plan 0.8): the instant an answer says it was observed at, `observedAt`, is the instant the
+ * revision will call today from (R13, item 3.4), so it must stand within `CLOCK_TOLERANCE_MS` of the probe's own clock
+ * between `asked` and `answered` (milliseconds). Failures, empty when it does.
+ */
+export function clockFailures(observedAt, { asked, answered }) {
+  if (typeof observedAt !== "string" || !OBSERVED_AT.test(observedAt)) {
+    return [`coverage was observed at ${JSON.stringify(observedAt)}, not a UTC instant in the API's shape`];
+  }
+  const at = Date.parse(observedAt.replace(/(\.[0-9]{3})[0-9]{4}Z$/, "$1Z"));
+  if (at < asked - CLOCK_TOLERANCE_MS || at > answered + CLOCK_TOLERANCE_MS) {
+    return [`the revision's clock read ${observedAt}, more than a minute from this probe's (${new Date(asked).toISOString()} to ${new Date(answered).toISOString()}): the day it calls today in Luxembourg could be another`];
+  }
+  return [];
+}
+
+/**
+ * What the probe says of the revision's day (not a check: a revision answers at its own instant only): its date in
+ * Luxembourg by the coded rule the API and the pages share, the offset, whether the instant fell in the one hour of the
+ * night (22:00 to 23:00 UTC) whose date the season's offset decides, and the next clock change.
+ */
+export function luxembourgTodayNote(observedAt) {
+  const year = Number(observedAt.slice(0, 4));
+  const at = Date.parse(observedAt.replace(/(\.[0-9]{3})[0-9]*Z$/, "$1Z"));
+  const changes = [luxembourgSummerTimeStarts(year), luxembourgSummerTimeEnds(year), ...(year < 2099 ? [luxembourgSummerTimeStarts(year + 1)] : [])];
+  const next = changes.find((change) => Date.parse(change) > at);
+  const decided = observedAt.slice(11, 13) === "22" ? "in the hour whose date the season's offset decides" : "outside the hour whose date the season's offset decides (22:00 to 23:00 UTC)";
+  return `the revision's clock read ${observedAt}: ${luxembourgDate(observedAt)} in Luxembourg, UTC${luxembourgOffset(observedAt)}, ${decided}; `
+    + `${next ? `the next clock change is at ${next}` : "no clock change is left in the rule's range"}, and the changes themselves are held by the table both rules meet in CI`;
+}
+
+// The bounds search sets on a query (V3CorpusMount.SearchMaxQueryCharacters, SearchMaxTerms).
+const SEARCH_MAX_CHARACTERS = 512;
+const SEARCH_MAX_TERMS = 32;
+/** How many of the works its search for "loi" lists the probe looks through for an accented title. */
+export const TITLE_WORKS_ASKED = 10;
+
+/** A title as a reader without accents types it: decomposed, its combining marks dropped. */
+export function withoutAccents(title) {
+  return title.normalize("NFD").replace(/\p{Mn}/gu, "");
+}
+
+/**
+ * A title in capitals, letter by letter, as a reader types it: a letter whose capital is two letters (ß) or is not its
+ * own capital back (µ, ı, ſ, whose capitals lower to μ, i, s) is kept, so the capitals name the same title.
+ */
+function inCapitals(title) {
+  return [...title].map((letter) => {
+    const capital = letter.toUpperCase();
+    return [...capital].length === 1 && capital.toLowerCase() === letter ? capital : letter;
+  }).join("");
+}
+
+/**
+ * The accented titles a dossier names, in its order (titles, then short titles), each with its language and expression:
+ * those that change when decomposed (they carry an accent), with no control character, within search's bounds.
+ */
+function accentedTitlesOf(dossier) {
+  const titles = [];
+  for (const group of dossier?.result?.value?.titles ?? []) {
+    for (const { title } of [...(group.titles ?? []), ...(group.short_titles ?? [])]) {
+      if (typeof title !== "string" || title.normalize("NFD") === title || /\p{Cc}/u.test(title)) continue;
+      if ([...title].length > SEARCH_MAX_CHARACTERS || new Set(title.split(/\s+/).filter(Boolean)).size > SEARCH_MAX_TERMS) continue;
+      titles.push({ title, language: group.language, expression: group.expression_iri });
+    }
+  }
+  return titles;
+}
+
+/**
+ * An accented title the revision holds, found (plan 0.8). The image carries no language library, and while the title fold
+ * asked for one the server stopped removing the accents from what a reader typed, while every index holds its titles
+ * without them: "congé parental" found nothing on the deployed revision. The title is the revision's own: of the works its
+ * search for "loi" lists (the first `TITLE_WORKS_ASKED`), the first whose dossier names an accented title that, with its
+ * accents removed, resolves to that title's work (the control: a title two works share resolves to neither, and the next
+ * is tried). Then the title as published, in capitals and decomposed must each resolve to the same work by the same match,
+ * and a strict search for it must name that work alone. Failures, empty when it holds; an index holding no titles has
+ * nothing to check, which `notes` says.
+ */
+export async function accentedTitleFailures(origin, { ask = askOperation, notes = [] } = {}) {
+  const listed = await ask(origin, "search", { query: "loi", language: "fra" });
+  if (listed === null || (listed.refusal !== null && listed.refusal !== undefined)) {
+    return [`search for "loi" answered ${listed === null ? "no envelope" : `a refusal, ${listed.refusal.code}`}, so no accented title could be checked`];
+  }
+  if (listed.result?.value?.work_resolution?.outcome === "no_titles_held") {
+    notes.push("an accented title: not checked, the revision's index holds no titles");
+    return [];
+  }
+  const works = [...new Set((listed.result?.value?.hits ?? []).map((hit) => hit.work_key).filter(Boolean))].slice(0, TITLE_WORKS_ASKED);
+  for (const work of works) {
+    const dossier = await ask(origin, "dossier", { identifier: `/lu-legilux/${work}` });
+    for (const { title, language, expression } of accentedTitlesOf(dossier)) {
+      const control = await ask(origin, "resolve", { identifier: withoutAccents(title) });
+      const found = control !== null && (control.refusal === null || control.refusal === undefined) ? control.result?.value : null;
+      if (!found?.expressions?.includes(expression)) continue;
+
+      const failures = [];
+      for (const [form, identifier] of [["as published", title], ["in capitals", inCapitals(title)], ["decomposed", title.normalize("NFD")]]) {
+        const answer = await ask(origin, "resolve", { identifier });
+        const value = answer !== null && (answer.refusal === null || answer.refusal === undefined) ? answer.result?.value : null;
+        if (value === null || value === undefined) {
+          failures.push(`resolve of "${title}" ${form} answered ${answer === null ? "no envelope" : `a refusal, ${answer.refusal.code}`}, where without its accents it finds ${found.work_identifier}`);
+        } else if (value.work_identifier !== found.work_identifier || value.match_reason !== found.match_reason) {
+          failures.push(`resolve of "${title}" ${form} finds ${value.work_identifier} by ${value.match_reason}, where without its accents it finds ${found.work_identifier} by ${found.match_reason}`);
+        }
+      }
+      const searched = await ask(origin, "search", { query: title, language, mode: "strict", limit: 1 });
+      const resolution = searched?.result?.value?.work_resolution;
+      if (resolution?.outcome !== "one_work" || resolution.work?.work_identifier !== found.work_identifier) {
+        failures.push(`search for "${title}" names ${resolution?.outcome ?? (searched === null ? "no envelope" : `a refusal, ${searched.refusal?.code}`)}, not ${found.work_identifier} alone`);
+      }
+      notes.push(`an accented title: "${title}" (${found.work_identifier}), asked as published, in capitals and decomposed`);
+      return failures;
+    }
+  }
+  return [`none of the ${works.length} works the revision's search for "loi" lists names an accented title it resolves without its accents, so no accented title could be checked`];
 }
 
 /** What the browser probes cannot observe on a remote revision, stated with every browser probe run. */
@@ -147,9 +291,9 @@ export async function browserFailures(origin, releaseDirectory, { browser, runs 
 /**
  * The probe of a revision deployed from the release at `releaseDirectory`: the release read back under the signing
  * identity's key (`publicKeyPem`), and as signed by the release signer `identity` when one is named, then the revision
- * held to what the release holds. Failures, empty when both hold.
+ * held to what the release holds. Failures, empty when both hold; what the probe says but does not hold goes to `notes`.
  */
-export async function deployedReleaseFailures(origin, releaseDirectory, { publicKeyPem, identity = null }) {
+export async function deployedReleaseFailures(origin, releaseDirectory, { publicKeyPem, identity = null, notes = [] }) {
   const release = await releaseFailures(releaseDirectory, { publicKeyPem, identity });
   if (release.length > 0) return release.map((failure) => `the release does not read back: ${failure}`);
   const manifest = JSON.parse(await readFile(join(releaseDirectory, RELEASE_MANIFEST), "utf8"));
@@ -157,6 +301,7 @@ export async function deployedReleaseFailures(origin, releaseDirectory, { public
     web: liveFilesOf(await readLargeFile(join(releaseDirectory, ASSETS.image))),
     card: await readFile(join(releaseDirectory, ASSETS.card)),
     corpusSha256: manifest.corpus.sha256,
+    notes,
   });
 }
 
@@ -187,7 +332,9 @@ if (invokedDirectly(import.meta.url, process.argv[1])) {
     process.exit(failures.length === 0 ? 0 : 1);
   }
   const target = origin.replace(/\/+$/, "");
-  const failures = await deployedReleaseFailures(target, release, { publicKeyPem, identity });
+  const notes = [];
+  const failures = await deployedReleaseFailures(target, release, { publicKeyPem, identity, notes });
+  for (const note of notes) console.log(note);
   if (failures.length === 0 && withBrowser) {
     failures.push(...await browserFailures(target, release, { browser: await findBrowser() }));
     console.log(REMOTE_PRIVACY_NOTE);

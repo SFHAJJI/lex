@@ -1274,8 +1274,8 @@ export async function heldLuxembourgWork(mount) {
   }
 }
 
-/** One operation asked of a server as a page asks it (`POST /api/v3/{operation}`), and its envelope. */
-async function askOperation(origin, operation, parameters) {
+/** One operation asked of a server as a page asks it (`POST /api/v3/{operation}`), and its envelope; null when it answers no 200. */
+export async function askOperation(origin, operation, parameters) {
   const answer = await fetch(`${origin}/api/v3/${operation}`, {
     method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ operation_id: operation, parameters }),
   });
