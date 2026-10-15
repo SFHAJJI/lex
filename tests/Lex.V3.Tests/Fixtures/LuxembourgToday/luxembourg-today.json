@@ -1244,6 +1244,14 @@
     {
       "instant": "2100-01-01T00:00:00Z",
       "case": "past the range"
+    },
+    {
+      "instant": "0099-12-31T23:30:00Z",
+      "case": "the year 99, which JavaScript's Date.UTC reads as 1999 (its date would be 2000-01-01)"
+    },
+    {
+      "instant": "0096-01-01T00:00:00Z",
+      "case": "the year 96, which JavaScript's Date.UTC reads as 1996 (the range's first instant)"
     }
   ]
 }

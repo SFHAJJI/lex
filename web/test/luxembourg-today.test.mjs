@@ -36,7 +36,7 @@ test("summer time starts and ends where the shared table says, each year it name
 });
 
 test("an instant outside the rule's range is refused", () => {
-  assert.equal(TABLE.refused.length, 2);
+  assert.equal(TABLE.refused.length, 4);
   for (const row of TABLE.refused) assert.throws(() => luxembourgDate(row.instant), RangeError, row.case);
 });
 

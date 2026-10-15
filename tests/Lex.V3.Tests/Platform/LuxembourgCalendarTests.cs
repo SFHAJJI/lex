@@ -70,7 +70,7 @@ public sealed class LuxembourgCalendarTests
     {
         using var table = Table();
         var refused = table.RootElement.GetProperty("refused").EnumerateArray().ToArray();
-        Assert.HasCount(2, refused);
+        Assert.HasCount(4, refused);
         foreach (var row in refused)
         {
             Assert.ThrowsExactly<ArgumentOutOfRangeException>(

@@ -87,9 +87,6 @@ export function requireUtcInstant(value, field) {
 // 1996-01-01T00:00:00Z (before 1996 summer time ended in September) to 2100-01-01T00:00:00Z. One table holds this and
 // the API's rule to the same answers: tests/Lex.V3.Tests/Fixtures/LuxembourgToday/luxembourg-today.json.
 
-const LUXEMBOURG_FROM = Date.UTC(1996, 0, 1);
-const LUXEMBOURG_UNTIL = Date.UTC(2100, 0, 1);
-
 // An instant as the API writes it (seven fractional digits) or as a page does (none, or three), always UTC. The fraction
 // is truncated, never rounded: 21:59:59.9999999Z is still before 22:00, and no change falls between two seconds.
 const LUXEMBOURG_INSTANT = /^([0-9]{4})-([0-9]{2})-([0-9]{2})T([0-9]{2}):([0-9]{2}):([0-9]{2})(?:\.[0-9]+)?Z$/;
@@ -100,11 +97,12 @@ function luxembourgMilliseconds(instant) {
     throw new Error(`not a UTC instant: ${JSON.stringify(instant)}`);
   }
   const [year, month, day, hours, minutes, seconds] = match.slice(1, 7).map(Number);
-  const milliseconds = Date.UTC(year, month - 1, day, hours, minutes, seconds);
-  if (milliseconds < LUXEMBOURG_FROM || milliseconds >= LUXEMBOURG_UNTIL) {
+  // The range is the years 1996 to 2099 as written, checked before Date.UTC sees the year: Date.UTC reads a year from 0
+  // to 99 as 1900 plus it, so 0099-12-31T23:30:00Z would pass as 1999 and answer 2000-01-01, where the API's rule refuses.
+  if (year < 1996 || year > 2099) {
     throw new RangeError(`Luxembourg's date is held from 1996-01-01T00:00:00Z to 2100-01-01T00:00:00Z, not at ${instant}`);
   }
-  return milliseconds;
+  return Date.UTC(year, month - 1, day, hours, minutes, seconds);
 }
 
 /** 01:00 UTC on the last Sunday of `month` (1 to 12) of `year`, in milliseconds. */
