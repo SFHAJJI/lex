@@ -24,9 +24,9 @@ import { useEffect, useRef, useState } from 'react';
 import { EuropeWordingHeading, QuoteEvidence, ReadingAnswerView, ReadingForm } from './LiveReading.jsx';
 import { createReadingSession, quotationLanguageTag } from '../scripts/live-reading.mjs';
 import { EXPORT_FORMATS, LIVE_EXPORT_IDLE, exportState, formatRefused, pinKey, saveExport } from '../scripts/live-export.mjs';
-import { EUROPE_EXPORT_SCHEMA, exportJson } from '../scripts/export-build.mjs';
+import { EUROPE_EXPORT_SCHEMA, asPublishedParagraph, exportJson } from '../scripts/export-build.mjs';
 import { ENGLISH_LANG, countedEntry, fillText, liveChrome } from '../scripts/live-chrome.mjs';
-import { EuropeAnnexes, LiveAnswer, Permalink, Said, Say, StatusSentence, inEnglish } from './LiveAnswer.jsx';
+import { AsPublished, EuropeAnnexes, LiveAnswer, Permalink, Said, Say, StatusSentence, inEnglish } from './LiveAnswer.jsx';
 
 /** The forms' labels and buttons, and this screen's sentences, from the interface copy table. */
 const FORM = liveChrome().form;
@@ -258,9 +258,16 @@ export function ExportPreview({ model, onSave }) {
           <p data-authenticity="" lang={ENGLISH_LANG}>{model.authenticity}</p>
         </>
       ) : (
-        <p data-rights="">
-          <Say template={COPY.rights} values={{ rights: model.rightsDisposition }} /> {inEnglish(model.rightsRule)}
-        </p>
+        <>
+          <p data-rights="">
+            <Say template={COPY.rights} values={{ rights: model.rightsDisposition }} /> {inEnglish(model.rightsRule)}
+          </p>
+          {/* An act held only as first published: the file carries the platform's label, later-versions sentence and
+              authenticity sentence, in its own English, as the EU file carries its authenticity statement. */}
+          {model.asPublished === null ? null : (
+            <p data-export-as-published="" lang={ENGLISH_LANG}>{asPublishedParagraph(model.asPublished)}</p>
+          )}
+        </>
       )}
       <p>
         <Say
@@ -330,9 +337,12 @@ export function ExportAnswerView({ outcome, pins, onPin }) {
           ))}
         </>
       ) : (
-        view.states.map((state) => (
-          <StatePins key={state.stateSha256} state={state} workKey={view.workKey} pins={pins} onPin={onPin} />
-        ))
+        <>
+          <AsPublished asPublished={view.asPublished} />
+          {view.states.map((state) => (
+            <StatePins key={state.stateSha256} state={state} workKey={view.workKey} pins={pins} onPin={onPin} />
+          ))}
+        </>
       )}
     </section>
   );

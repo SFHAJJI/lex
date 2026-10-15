@@ -7,7 +7,8 @@
 // on the answer (`data-answer-state`).
 //
 // The comparison is by the publisher's article id and wording digest, and says nothing about legal
-// effect; the page says the platform's own note beside it. It is linear, not a colour-coded diff:
+// effect; the page says the platform's own note beside it, except when both dates select one state, which it
+// says in its own language and the publisher's clock (`compare.sameVersion`). It is linear, not a colour-coded diff:
 // each status is a word, and the changed, added and removed articles are listed before the unchanged
 // ones, which are one disclosure away. The form's controls carry no `name`, and every permalink
 // is a link to its page (`Permalink`).
@@ -69,7 +70,15 @@ function Comparison({ comparison }) {
       <h2>{comparison.language}</h2>
       <Side label={COPY.sideFrom} side={comparison.from} />
       <Side label={COPY.sideTo} side={comparison.to} />
-      <p lang={ENGLISH_LANG}>{asSentence(comparison.note)}</p>
+      {/* One state on both dates is said in the page's language and the publisher's clock, never "applied" (R21; the
+          reader holds the platform's note to the same sentence); two states keep the platform's own note. */}
+      {comparison.sameState ? (
+        <p data-same-version="">
+          <Say template={COPY.sameVersion} values={{ from: comparison.from.applicabilityDate }} />
+        </p>
+      ) : (
+        <p lang={ENGLISH_LANG}>{asSentence(comparison.note)}</p>
+      )}
       {comparison.sameState ? null : (
         <>
           <p data-counts="">

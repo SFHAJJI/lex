@@ -761,6 +761,7 @@ internal sealed partial class V3CorpusMount : IDisposable
         // Every selection is per language: a date on which another language's text changes is never
         // reported as a change of the text being served.
         var served = new List<object>();
+        var servedStates = new List<LuxembourgIndexResolvedState>();
         var ambiguous = new List<string>();
         foreach (var language in servedLanguages)
         {
@@ -780,6 +781,7 @@ internal sealed partial class V3CorpusMount : IDisposable
             }
 
             served.Add(StateRow(selected[0], nextDate));
+            servedStates.Add(selected[0]);
         }
 
         if (ambiguous.Count != 0)
@@ -800,6 +802,7 @@ internal sealed partial class V3CorpusMount : IDisposable
             publisher = "lu-legilux",
             work_key = states[0].WorkKey,
             states = served,
+            as_published = AsPublishedAnswer(AsPublishedOf(states, servedStates)),
             articles_not_admitted_note = ArticlesNotAdmittedNote,
             available_languages = availableLanguages,
             corpus_sha256 = _corpus.ArtifactRef.Sha256,
@@ -1224,6 +1227,7 @@ internal sealed partial class V3CorpusMount : IDisposable
             });
         }
 
+        var asPublished = AsPublishedOf(states, selected.Select(static entry => entry.State).ToArray());
         using var result = JsonSerializer.SerializeToDocument(new
         {
             scope = EvidenceBundleScope,
@@ -1235,6 +1239,7 @@ internal sealed partial class V3CorpusMount : IDisposable
             rights_rule = EvidenceBundleRightsRule,
             rights_disposition = EvidenceBundleAdmittingRightsDisposition,
             states = bundles,
+            as_published = AsPublishedAnswer(asPublished),
             articles_not_admitted_note = ArticlesNotAdmittedNote,
             available_languages = availableLanguages,
             verified_by = new
@@ -1243,7 +1248,7 @@ internal sealed partial class V3CorpusMount : IDisposable
                 index_sha256 = _reader!.IndexRef.Sha256,
                 registry_sha256 = V3OperationRegistry.Reviewed.Sha256,
             },
-            not_held = EvidenceBundleNotHeld.Select(static row => new { item = row[0], reason = row[1] }).ToArray(),
+            not_held = NotHeldRows(EvidenceBundleNotHeld, asPublished),
         });
         return V3PlatformOperationOutcome.Success(
             Context("success", observedAt),
@@ -3001,9 +3006,19 @@ internal sealed partial class V3CorpusMount : IDisposable
     }
 
     /// <summary>
+    /// What a comparison says when both dates select one state: the state's own publisher applicability date, in the
+    /// publisher's clock (R21's "applicable from X (publisher)"). It used to say "the same version applied on both dates",
+    /// which spoke of a version as having applied; R21 never says "applied", "in force" or "en vigueur" of a date or an
+    /// interval, and the web's vocabulary check holds the card that shows this note to it.
+    /// </summary>
+    internal static string SameVersionNote(string applicabilityDate) =>
+        $"Both dates fall within the same version, applicable from {applicabilityDate} (publisher)";
+
+    /// <summary>
     /// R6 <c>diff</c> for Luxembourg, at article level: each bound resolves to a state exactly as
     /// <c>as_of</c> resolves it, per language; both states are served in full before anything is
-    /// compared; one state covering both bounds answers "the same version applied on both dates"; two
+    /// compared; one state covering both bounds answers "Both dates fall within the same version, applicable from {date}
+    /// (publisher)", in the publisher's own clock and never "applied" (R21); two
     /// states with the same rule profiles are compared article by article by publisher-minted id and
     /// wording digest (unchanged, changed, added, removed). Two states with different rule profiles
     /// refuse <c>profiles_differ</c>, which nothing overrides. Refusals follow <c>as_of</c>'s rule: an
@@ -3093,7 +3108,7 @@ internal sealed partial class V3CorpusMount : IDisposable
                     from = StateRow(from, fromNext),
                     to = StateRow(to, toNext),
                     same_state = true,
-                    note = "the same version applied on both dates",
+                    note = SameVersionNote(from.ApplicabilityDate),
                     articles = (object?)null,
                     counts = (object?)null,
                 });
@@ -5423,6 +5438,7 @@ internal sealed partial class V3CorpusMount : IDisposable
             history_begins = scope[0].ApplicabilityDate,
             state_count = rows.Count,
             states = rows,
+            as_published = AsPublishedAnswer(AsPublishedOf(states, scope)),
             articles_not_admitted_note = ArticlesNotAdmittedNote,
             available_languages = availableLanguages,
             corpus_sha256 = _corpus.ArtifactRef.Sha256,
@@ -5520,6 +5536,7 @@ internal sealed partial class V3CorpusMount : IDisposable
             .ToArray();
         var notAdmitted = NotAdmittedMap(scope);
         var rows = scope.Select(state => DossierStateRow(state, NextDateInLanguage(scope, state), notAdmitted)).ToArray();
+        var asPublished = AsPublishedOf(states, scope);
 
         using var result = JsonSerializer.SerializeToDocument(new
         {
@@ -5535,8 +5552,9 @@ internal sealed partial class V3CorpusMount : IDisposable
             history_begins = scope[0].ApplicabilityDate,
             latest_applicability_date = scope[^1].ApplicabilityDate,
             states = rows,
+            as_published = AsPublishedAnswer(asPublished),
             articles_not_admitted_note = ArticlesNotAdmittedNote,
-            not_held = DossierNotHeld.Select(static row => new { item = row[0], reason = row[1] }).ToArray(),
+            not_held = NotHeldRows(DossierNotHeld, asPublished),
             corpus_sha256 = _corpus.ArtifactRef.Sha256,
             index_sha256 = _reader.IndexRef.Sha256,
         });

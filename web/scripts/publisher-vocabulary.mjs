@@ -159,3 +159,33 @@ export function sharedSemantics(publishers, where) {
   const distinct = new Set(publishers.map((publisher) => semanticsOf(publisher, where)));
   return distinct.size === 1 ? [...distinct][0] : null;
 }
+
+/**
+ * What a comparison says when both dates select one state, in each publisher's clock: Luxembourg's version with its
+ * publisher applicability start (R21's "applicable from X (publisher)"), the Union's consolidated wording state with its
+ * date (the plan's item 2.5). It used to say "the same version applied on both dates", which R21 never says.
+ */
+export const SAME_STATE_SENTENCE = closedTable({
+  publisher_applicability: (from) => `Both dates fall within the same version, applicable from ${from} (publisher)`,
+  official_consolidation_state: (from) => `Both dates fall within the same consolidated wording state (from ${from})`,
+});
+
+/**
+ * The words R21 never says of a date or an interval, in any language: "in force" and "en vigueur", and "applied" with
+ * its French forms ("appliqué", "s’appliquait"). "Applicable" and "s’applique" are the publisher's own words for a
+ * Luxembourg version, and are not among them; a typed publisher date (an end-of-force date) is spoken as its own value.
+ */
+export const FORBIDDEN_TIME_WORDS = /\bin force\b|\ben vigueur\b|\bapplied\b|\bappliqu(?:é|ée|és|ées)(?!\p{L})|s[’']appliqu(?:ait|aient|a|èrent)(?!\p{L})/iu;
+
+/**
+ * The vocabulary check (R21): throws, naming the word and where it was said, when a text says one of the forbidden
+ * words; returns the text otherwise. The Compare card and its page's copy are held to it in both languages
+ * (`compare-vocabulary.test.mjs`), which also feeds it the old note to show it refusing.
+ */
+export function assertTimeVocabulary(text, where) {
+  const found = String(text).match(FORBIDDEN_TIME_WORDS);
+  if (found !== null) {
+    throw new Error(`${where} says "${found[0]}", which R21 never says of a date or an interval: say what the publisher dates ("applicable from", or "consolidated wording state")`);
+  }
+  return text;
+}

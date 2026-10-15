@@ -123,8 +123,9 @@ public sealed class V3CorpusEvidenceBundleMountTests
         Assert.AreEqual(fixture.WorkKey, body.GetProperty("work_key").GetString());
         Assert.AreEqual("agreed_same_run_cc_by", body.GetProperty("rights_disposition").GetString());
         StringAssert.Contains(body.GetProperty("rights_rule").GetString(), "before any text is read");
+        // The fixed rows, then the later-versions row of an act held only as first published (the plan's item 0.6).
         CollectionAssert.AreEqual(
-            new[] { "publisher_signature", "observation_time", "export_formats", "notes_in_wording_digest" },
+            new[] { "publisher_signature", "observation_time", "export_formats", "notes_in_wording_digest", "later_versions" },
             body.GetProperty("not_held").EnumerateArray().Select(static row => row.GetProperty("item").GetString()).ToArray());
 
         var state = body.GetProperty("states").EnumerateArray().Single();

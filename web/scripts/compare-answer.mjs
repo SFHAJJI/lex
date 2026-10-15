@@ -14,12 +14,15 @@
 //    its validity flags and their count following its dates;
 //  - one comparison per compared language and one entry per language not compared, each language
 //    once and in the languages' order, in the language asked when one was asked;
-//  - the same state on both dates is said as such, with no articles and no counts;
+//  - the same state on both dates is said as such, with no articles and no counts, and its note is the publisher's
+//    clock for that state, "Both dates fall within the same version, applicable from {date} (publisher)" (R21; never
+//    "applied", which the old note said);
 //  - otherwise every article of each side appears in exactly one row, the rows are in the ids'
 //    ordinal order, and each row's status is its sides': added, removed, unchanged when the ordered
 //    wording digests are equal, changed when they are not; the counts are the rows'.
 
 import { isCalendarDate } from './temporal.mjs';
+import { SAME_STATE_SENTENCE } from './publisher-vocabulary.mjs';
 
 const DIGEST = /^[0-9a-f]{64}$/;
 
@@ -167,6 +170,10 @@ function readComparison(comparison, index, context) {
   if (sameState) {
     if (articlesValue !== null || countsValue !== null) {
       throw new Error(`${where} is the same state on both dates, which compares no article and counts none`);
+    }
+    const said = SAME_STATE_SENTENCE.publisher_applicability(from.applicabilityDate);
+    if (note !== said) {
+      throw new Error(`${where} is the same state on both dates, and says ${JSON.stringify(note)} rather than ${JSON.stringify(said)}`);
     }
     return Object.freeze({ language, from, to, sameState, note, articles: null, counts: null });
   }

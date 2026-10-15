@@ -4,7 +4,8 @@
 // in PDF as in JSON and CSV. The PDF is composed from the one export model, so the three formats cannot
 // disagree: every page carries the watermark at its head and its page number at its foot; the first
 // page says what was asked, when the answering snapshot was observed, the rights the text was served
-// under with the platform's rule, and the corpus, index and registry digests; each item carries its
+// under with the platform's rule, the label, later versions and authenticity sentence of an act held only as first
+// published (the plan's item 0.6), and the corpus, index and registry digests; each item carries its
 // citation (the hash-pinned article permalink), its text and body digests, its official source, its
 // rights, its own date where it differs from its state's, its notes, and its text; each exclusion
 // carries its reason.
@@ -26,7 +27,7 @@
 // source, never a text; and every page carries the acknowledgement at its foot, above its number. Its
 // refusal is read off that layout, so the page never offers a PDF its layout then refuses.
 
-import { EUROPE_EXPORT_SCHEMA } from './export-build.mjs';
+import { EUROPE_EXPORT_SCHEMA, asPublishedParagraph } from './export-build.mjs';
 
 const PAGE_WIDTH = 595.28;
 const PAGE_HEIGHT = 841.89;
@@ -103,7 +104,7 @@ export function pdfTextWidth(bytes, font, size) {
 
 /** Every text the PDF sets for a model, as it will set them. */
 function textsOf(model) {
-  const texts = [model.watermark, model.identifier, model.rightsDisposition, model.rightsRule, model.observedAt];
+  const texts = [model.watermark, model.identifier, model.rightsDisposition, model.rightsRule, model.observedAt, asPublishedParagraph(model.asPublished)];
   for (const item of model.items) {
     texts.push(item.publisherId, item.language, item.citation, item.officialSource, item.text, ...item.notes.flatMap((note) => [note.marker, note.text]));
   }
@@ -234,6 +235,8 @@ function layout(model) {
   add('Lex V3 export', { size: 16, leading: 22 });
   add(`Asked: ${model.identifier}, read on ${model.date}. The answering snapshot was observed at ${model.observedAt}.`);
   add(`Text served under ${model.rightsDisposition}. ${sentence(model.rightsRule)}`);
+  // An act held only as first published says so, with its later versions and its authenticity sentence (item 0.6).
+  if (model.asPublished !== null) add(asPublishedParagraph(model.asPublished));
   add(`${total} ${total === 1 ? 'article' : 'articles'} pinned: ${model.items.length} exported with text, ${model.excluded.length} excluded.`);
   gap(4);
   add('Verified by', { size: 9 });

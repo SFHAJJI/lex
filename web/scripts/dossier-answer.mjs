@@ -25,6 +25,7 @@
 
 import { isCalendarDate } from './temporal.mjs';
 import { readAnnexesNotServed } from './europe-annexes.mjs';
+import { readAsPublished } from './as-published.mjs';
 
 const DIGEST = /^[0-9a-f]{64}$/;
 
@@ -221,6 +222,8 @@ export function readDossier(answer) {
     latestApplicabilityDate: latest,
     states: Object.freeze(states),
     notHeld,
+    // An act held only as first published says so (the plan's item 0.6): `as-published.mjs` reads it, or null.
+    asPublished: readAsPublished(answer, { states, workIri, notHeld }),
     scope: requireText(requireOwn(answer, 'scope', where), 'scope'),
     articlesNotAdmittedNote: requireText(requireOwn(answer, 'articles_not_admitted_note', where), 'articles_not_admitted_note'),
     corpusSha256: requireDigest(requireOwn(answer, 'corpus_sha256', where), 'corpus_sha256'),

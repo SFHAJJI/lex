@@ -134,6 +134,18 @@ internal static class LuxembourgIndexQueries
         "ORDER BY f.subject_iri,f.predicate,f.object_kind,f.object_value,f.datatype_iri,f.language_tag,f.evidence_sha256";
 
     /// <summary>
+    /// The publisher's typed assertions about every subject whose IRI starts with a prefix, verbatim, in the
+    /// table's own order: a range over the primary key (its first column is the subject, compared as bytes), so
+    /// the prefix drives one index range and no table is scanned. <c>$low</c> is the prefix and <c>$high</c> the
+    /// prefix with its last character raised by one, which the caller computes.
+    /// </summary>
+    internal const string SubjectFactsUnder =
+        "SELECT f.subject_iri,f.predicate,f.fact_kind,f.object_kind,f.object_value,f.datatype_iri,f.language_tag,f.evidence_sha256 " +
+        "FROM work_facts f " +
+        "WHERE f.subject_iri >= $low AND f.subject_iri < $high " +
+        "ORDER BY f.subject_iri,f.predicate,f.object_kind,f.object_value,f.datatype_iri,f.language_tag,f.evidence_sha256";
+
+    /// <summary>
     /// The held works as one page in work-key order: per work key, the distinct publisher identifiers and
     /// languages its states carry (as JSON arrays, sorted by the caller), the first and latest state dates and
     /// the state count, over every state of the work whatever the filters. The three filters are optional and

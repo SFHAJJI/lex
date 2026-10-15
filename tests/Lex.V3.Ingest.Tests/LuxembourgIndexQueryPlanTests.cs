@@ -55,6 +55,9 @@ public sealed class LuxembourgIndexQueryPlanTests
     private static readonly (string Sql, (string, object)[] Parameters) SubjectFactsQuery =
         (LuxembourgIndexQueries.SubjectFacts, [("$subjects", "[\"http://example.invalid/eli/x\"]")]);
 
+    private static readonly (string Sql, (string, object)[] Parameters) SubjectFactsUnderQuery =
+        (LuxembourgIndexQueries.SubjectFactsUnder, [("$low", "http://example.invalid/eli/x/consolide/"), ("$high", "http://example.invalid/eli/x/consolide0")]);
+
     private static readonly (string Sql, (string, object)[] Parameters) WorkRecordsQuery =
         (LuxembourgIndexQueries.WorkRecords, [("$after", "a"), ("$language", "fra"), ("$type", "LOI"), ("$take", 10)]);
 
@@ -163,6 +166,24 @@ public sealed class LuxembourgIndexQueryPlanTests
         if (!plan.Any(static line => line.StartsWith("SEARCH f USING INDEX sqlite_autoindex_work_facts_1 (subject_iri=?)", StringComparison.Ordinal)))
         {
             yield return "the facts are not searched by the table's primary key on the subject. " + shown;
+        }
+    }
+
+    /// <summary>
+    /// The facts of every subject under a prefix (a work's consolidated versions) are one range of the fact table's
+    /// primary key, which starts with the subject: the table is never scanned, whatever the statistics say.
+    /// </summary>
+    private static IEnumerable<string> SubjectFactsUnderProblems(string label, string[] plan)
+    {
+        var shown = $"{label}, SubjectFactsUnder: {string.Join(" | ", plan)}";
+        if (plan.Any(static line => Regex.IsMatch(line, @"^SCAN f")))
+        {
+            yield return "the fact table is scanned. " + shown;
+        }
+
+        if (!plan.Any(static line => line.StartsWith("SEARCH f USING INDEX sqlite_autoindex_work_facts_1 (subject_iri>? AND subject_iri<?)", StringComparison.Ordinal)))
+        {
+            yield return "the facts are not searched by a range of the table's primary key on the subject. " + shown;
         }
     }
 
@@ -434,6 +455,7 @@ public sealed class LuxembourgIndexQueryPlanTests
             .Concat(CitationsToProblems("the index as built", Plan(connection, CitationsToQuery.Sql, CitationsToQuery.Parameters)))
             .Concat(StatesOfExpressionsProblems("the index as built", Plan(connection, StatesOfExpressionsQuery.Sql, StatesOfExpressionsQuery.Parameters)))
             .Concat(SubjectFactsProblems("the index as built", Plan(connection, SubjectFactsQuery.Sql, SubjectFactsQuery.Parameters)))
+            .Concat(SubjectFactsUnderProblems("the index as built", Plan(connection, SubjectFactsUnderQuery.Sql, SubjectFactsUnderQuery.Parameters)))
             .Concat(WorkRecordsProblems("the index as built", Plan(connection, WorkRecordsQuery.Sql, WorkRecordsQuery.Parameters)))
             // The event pages are not asked of the fixture as built: its log holds one event, and the planner rightly
             // scans a one-row table rather than seek into it. They are held below, with no statistics and with
@@ -500,6 +522,7 @@ public sealed class LuxembourgIndexQueryPlanTests
             problems.AddRange(CitationsToProblems(label, Plan(connection, CitationsToQuery.Sql, CitationsToQuery.Parameters)));
             problems.AddRange(StatesOfExpressionsProblems(label, Plan(connection, StatesOfExpressionsQuery.Sql, StatesOfExpressionsQuery.Parameters)));
             problems.AddRange(SubjectFactsProblems(label, Plan(connection, SubjectFactsQuery.Sql, SubjectFactsQuery.Parameters)));
+            problems.AddRange(SubjectFactsUnderProblems(label, Plan(connection, SubjectFactsUnderQuery.Sql, SubjectFactsUnderQuery.Parameters)));
             problems.AddRange(WorkRecordsProblems(label, Plan(connection, WorkRecordsQuery.Sql, WorkRecordsQuery.Parameters)));
             problems.AddRange(EventsAfterProblems(label, Plan(connection, EventsAfterQuery.Sql, EventsAfterQuery.Parameters)));
             problems.AddRange(EventsOfNameAfterProblems(label, Plan(connection, EventsOfNameAfterQuery.Sql, EventsOfNameAfterQuery.Parameters)));
@@ -534,6 +557,10 @@ public sealed class LuxembourgIndexQueryPlanTests
             1,
             Occurrences(reader, "command.CommandText = LuxembourgIndexQueries.SubjectFacts;"),
             "The reader does not run LuxembourgIndexQueries.SubjectFacts exactly once, so the plan asked of it is not the plan it gets.");
+        Assert.AreEqual(
+            1,
+            Occurrences(reader, "command.CommandText = LuxembourgIndexQueries.SubjectFactsUnder;"),
+            "The reader does not run LuxembourgIndexQueries.SubjectFactsUnder exactly once, so the plan asked of it is not the plan it gets.");
         Assert.AreEqual(
             1,
             Occurrences(reader, "command.CommandText = LuxembourgIndexQueries.WorkRecords;"),

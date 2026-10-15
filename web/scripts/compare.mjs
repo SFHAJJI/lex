@@ -404,8 +404,8 @@ export function renderCompare({ mode, left, right, result }) {
 
   // The identical-state answer and the changed answer are bound to the records, not to the
   // caller's flag. Both directions were reachable: two byte-identical states rendered red and
-  // green change blocks, and two different states rendered "the same version applied on both
-  // dates" over a header naming both of them. The digests are already validated a few lines
+  // green change blocks, and two different states rendered the one-state note ("Both dates fall
+  // within the same version") over a header naming both of them. The digests are already validated a few lines
   // up, so the check costs one comparison and closes the screen's worst failure.
   // The digest decides, not the identifier.
   //

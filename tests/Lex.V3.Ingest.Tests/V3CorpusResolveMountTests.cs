@@ -1312,7 +1312,9 @@ public sealed class V3CorpusResolveMountTests
         /// sibling work: the source's publisher work IRI with its last path segment replaced, which mints
         /// its own work key, so a fixture can hold more than one work.
         /// </summary>
-        public async Task<LuxembourgIndexBuilder.StateRow> AddStateAsync(string applicabilityDate, string expressionSuffix, string? sourceExpressionIri = null, string? workLeaf = null)
+        public async Task<LuxembourgIndexBuilder.StateRow> AddStateAsync(
+            string applicabilityDate, string expressionSuffix, string? sourceExpressionIri = null, string? workLeaf = null,
+            string? legalResourceLeaf = null)
         {
             var indexPath = Path.Combine(Directory, V3CorpusMount.IndexFileName);
             LuxembourgIndexBuilder.MemberRow[] members;
@@ -1330,7 +1332,11 @@ public sealed class V3CorpusResolveMountTests
                 var workIri = workLeaf is null
                     ? sourceState.PublisherWorkIri
                     : sourceState.PublisherWorkIri[..(sourceState.PublisherWorkIri.LastIndexOf('/') + 1)] + workLeaf;
-                var resourceIri = workIri + sourceState.PublisherLegalResourceIri[sourceState.PublisherWorkIri.Length..];
+                // The source state's legal resource under the work, unless another is named (a consolidated version's,
+                // "consolide/{date}", for a work whose consolidated state is held).
+                var resourceIri = legalResourceLeaf is null
+                    ? workIri + sourceState.PublisherLegalResourceIri[sourceState.PublisherWorkIri.Length..]
+                    : workIri + "/" + legalResourceLeaf;
                 var workKey = workLeaf is null ? sourceState.WorkKey : LuxembourgIndexBuilder.WorkKeyOf(workIri);
                 var expression = resourceIri + "/" + expressionSuffix;
                 var identities = new List<string>();

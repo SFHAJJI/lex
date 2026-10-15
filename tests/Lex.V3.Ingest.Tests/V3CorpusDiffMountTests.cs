@@ -47,7 +47,11 @@ public sealed class V3CorpusDiffMountTests
         var comparison = value.GetProperty("comparisons").EnumerateArray().Single();
         Assert.AreEqual("fra", comparison.GetProperty("language").GetString());
         Assert.IsTrue(comparison.GetProperty("same_state").GetBoolean());
-        Assert.AreEqual("the same version applied on both dates", comparison.GetProperty("note").GetString());
+        // The publisher's clock for the one state, never "applied" (R21; the plan's item 0.6).
+        Assert.AreEqual(
+            $"Both dates fall within the same version, applicable from {fixture.ApplicabilityDate} (publisher)",
+            comparison.GetProperty("note").GetString());
+        Assert.DoesNotContain("applied", comparison.GetProperty("note").GetString()!);
         Assert.AreEqual(JsonValueKind.Null, comparison.GetProperty("articles").ValueKind);
         Assert.AreEqual(JsonValueKind.Null, comparison.GetProperty("counts").ValueKind);
         // Both bounds are served in full, as the state as_of serves on that date.

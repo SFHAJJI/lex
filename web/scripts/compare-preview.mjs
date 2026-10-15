@@ -73,7 +73,7 @@ export function renderComparePreview({ locale = 'en' } = {}) {
     mode: 'temporal',
     left: LEFT,
     right: { ...LEFT },
-    result: { changed: false, note: 'the same version applied on both dates' },
+    result: { changed: false, note: 'Both dates fall within the same version, applicable from 2001-01-01 (publisher)' },
   });
 
   const crossProfile = renderCompare({

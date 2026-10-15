@@ -12,6 +12,11 @@
 // the bundle holds without text is excluded, and the exclusion travels in the export with its reason,
 // never as an empty quotation. Nothing here is asserted beyond what the bundle served.
 //
+// An act held only as first published (the plan's item 0.6, `as-published.mjs`) says so in its export as on its
+// pages: the export carries the platform's label, its sentence about later versions and its authenticity sentence, in
+// the platform's English (`as_published` in the JSON, three columns on every CSV row, a paragraph of the PDF), and
+// null or empty for an act whose consolidated text is held.
+//
 // The watermark is the composer's own (`export-composer.mjs`), so the preview and the export say the
 // same sentence.
 //
@@ -50,8 +55,34 @@ export const EUROPE_WITHOUT_TEXT = 'articles_without_text';
 export const CSV_COLUMNS = Object.freeze([
   'work_key', 'language', 'applies_from', 'article', 'status', 'citation', 'state_permalink',
   'text_sha256', 'body_sha256', 'official_source', 'rights_disposition', 'article_valid_from', 'text', 'watermark',
+  'as_published', 'later_versions', 'authenticity',
   'observed_at', 'rights_rule', 'corpus_sha256', 'index_sha256', 'registry_sha256',
 ]);
+
+/**
+ * What an export says of an act held only as first published, from the reading's view (`readAsPublished`): the
+ * platform's label, later-versions sentence and authenticity sentence, and the act as published; null otherwise.
+ */
+function asPublishedOf(view) {
+  if (!Object.hasOwn(view, 'asPublished')) throw new Error('an export says whether its act is held only as published, and this reading does not');
+  const value = view.asPublished;
+  return value === null ? null : Object.freeze({
+    label: value.label,
+    laterVersions: value.laterVersions.sentence,
+    authenticity: value.authenticity.sentence,
+    journalOfficielIri: value.journalOfficielIri,
+  });
+}
+
+/**
+ * The export's paragraph on an act held only as first published, as the preview and the PDF say it: the label, the
+ * later-versions sentence and the authenticity sentence, each a sentence. Empty for null.
+ */
+export function asPublishedParagraph(asPublished) {
+  if (asPublished === null) return '';
+  const sentence = (text) => `${text.charAt(0).toUpperCase()}${text.slice(1)}${/[.!?]$/.test(text) ? '' : '.'}`;
+  return [asPublished.label, asPublished.laterVersions, asPublished.authenticity].map(sentence).join(' ');
+}
 
 /**
  * The EU CSV columns, in order: each row is one pinned article, or one annex row of a wording an
@@ -125,6 +156,7 @@ export function composeExport({ view, pinned, observedAt }) {
     date: view.date,
     rightsDisposition: view.rightsDisposition,
     rightsRule: view.rightsRule,
+    asPublished: asPublishedOf(view),
     verifiedBy: Object.freeze({ corpusSha256: view.corpusSha256, indexSha256: view.indexSha256, registrySha256: view.registrySha256 }),
     items: Object.freeze(items),
     excluded: Object.freeze(excluded),
@@ -230,6 +262,12 @@ export function exportJson(model) {
     requested_date: model.date,
     rights_disposition: model.rightsDisposition,
     rights_rule: model.rightsRule,
+    as_published: model.asPublished === null ? null : {
+      label: model.asPublished.label,
+      later_versions: model.asPublished.laterVersions,
+      authenticity: model.asPublished.authenticity,
+      journal_officiel_iri: model.asPublished.journalOfficielIri,
+    },
     verified_by: {
       corpus_sha256: model.verifiedBy.corpusSha256,
       index_sha256: model.verifiedBy.indexSha256,
@@ -347,15 +385,20 @@ function csvField(value) {
 export function exportCsv(model) {
   if (model.schema === EUROPE_EXPORT_SCHEMA) return europeExportCsv(model);
   const provenance = [model.observedAt, model.rightsRule, model.verifiedBy.corpusSha256, model.verifiedBy.indexSha256, model.verifiedBy.registrySha256];
+  const published = model.asPublished === null
+    ? ['', '', '']
+    : [model.asPublished.label, model.asPublished.laterVersions, model.asPublished.authenticity];
   const rows = [
     ...model.items.map((item) => [
       item.workKey, item.language, item.appliesFrom, item.publisherId, 'exported', item.citation, item.statePermalink,
       item.textSha256, item.bodySha256, item.officialSource, item.rightsDisposition, item.articleValidFrom, item.text, model.watermark,
+      ...published,
       ...provenance,
     ]),
     ...model.excluded.map((entry) => [
       entry.workKey, entry.language, entry.appliesFrom, entry.publisherId, `excluded: ${entry.reason}`, entry.citation, entry.statePermalink,
       '', '', '', model.rightsDisposition, '', '', model.watermark,
+      ...published,
       ...provenance,
     ]),
   ];

@@ -78,6 +78,57 @@ export function EuropeAnnexes({ rows, language }) {
   ));
 }
 
+/**
+ * A Luxembourg act held only as first published (`scripts/as-published.mjs`; the plan's item 0.6), said in the page's
+ * language wherever the act is read or listed: the label, what this site holds of later versions (the consolidated
+ * versions the publisher's record names, each with its publisher dates, and its end-of-force date, each printed as the
+ * record gives it), and the authenticity sentence of its case with the act as published, printed, not linked. Nothing
+ * for a work whose consolidated state is held (`asPublished` null).
+ */
+export function AsPublished({ asPublished }) {
+  if (asPublished === null) return null;
+  const common = liveChrome().common;
+  const copy = common.asPublished;
+  const { consolidations, endOfForce } = asPublished.laterVersions;
+  const label = `${copy.label.charAt(0).toUpperCase()}${copy.label.slice(1)}.`;
+  return (
+    <section data-as-published={asPublished.authenticity.basis}>
+      <p data-as-published-label=""><strong>{label}</strong></p>
+      <p data-later-versions={consolidations.length}>
+        {consolidations.length === 0
+          ? copy.laterNotHeld
+          : <Say template={countedEntry(copy.laterNamed, consolidations.length)} values={{ count: consolidations.length }} />}
+      </p>
+      {consolidations.length > 0 ? (
+        <ul data-consolidations={consolidations.length}>
+          {consolidations.map((consolidation) => {
+            const iri = <code>{consolidation.legalResourceIri}</code>;
+            return (
+              <li key={consolidation.legalResourceIri}>
+                {consolidation.applicabilityDate === null ? (
+                  <Say template={copy.consolidationUndated} values={{ iri }} />
+                ) : consolidation.endApplicabilityDate === null ? (
+                  <Say template={copy.consolidationFrom} values={{ iri, from: consolidation.applicabilityDate }} />
+                ) : (
+                  <Say template={copy.consolidationFromTo} values={{ iri, from: consolidation.applicabilityDate, to: consolidation.endApplicabilityDate }} />
+                )}
+              </li>
+            );
+          })}
+        </ul>
+      ) : null}
+      {endOfForce.length > 0 ? (
+        <p data-end-of-force="">
+          <Say template={copy.endOfForce} values={{ date: endOfForce.join(common.listSeparator) }} />
+        </p>
+      ) : null}
+      <p data-as-published-authenticity="">
+        <Say template={copy.authenticity[asPublished.authenticity.basis]} values={{ act: <code>{asPublished.journalOfficielIri}</code> }} />
+      </p>
+    </section>
+  );
+}
+
 /** A statement (`statement` in `live-chrome.mjs`) laid out: its sentence, or its runs with each English run marked. */
 export function Said({ statement }) {
   if (statement.runs === undefined) return statement.sentence;

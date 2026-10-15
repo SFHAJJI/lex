@@ -73,14 +73,15 @@ test("the request carries the identifier and the two dates as typed, and a langu
   assert.throws(() => compareParameters({ ...REQUEST, language: "ltz" }), /not a language this form offers/);
 });
 
-test("the same state on both dates is said as such, with the platform's note", async () => {
+test("the same state on both dates is said as such, in the publisher's clock", async () => {
   const { calls, fetchImpl } = answering(200, "application/json", envelopeOf(ANSWER));
   const outcome = await loadLiveCompare({ contract, fetchImpl, request: REQUEST });
   assert.equal(outcome.state, "success");
   assert.equal(calls[0].url, "/api/v3/diff");
   assert.deepEqual(JSON.parse(calls[0].init.body).parameters, { identifier: REQUEST.identifier, date_from: "2024-02-01", date_to: "2024-02-01", language: "fra" });
   const markup = view(outcome);
-  assert.ok(markup.includes("The same version applied on both dates."));
+  assert.ok(markup.includes("Both dates fall within the same version, applicable from 2024-02-01 (publisher)."));
+  assert.ok(!markup.includes("applied"), "the card never says applied (R21)");
   assert.ok(!markup.includes("data-counts"), "no counts for the same state");
 });
 

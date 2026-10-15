@@ -29,6 +29,9 @@ public sealed class V3CorpusDossierMountTests
     [
         "document_type", "current_state_flag", "publication_date", "entry_into_force", "application",
         "historical_identifiers", "responsible_ministry", "first_observed", "coverage_gaps",
+        // Not a fixed row: the fixture's act is held only as first published, and the answer says its later versions
+        // are not held (the plan's item 0.6).
+        "later_versions",
     ];
 
     [TestMethod]
@@ -258,6 +261,15 @@ public sealed class V3CorpusDossierMountTests
             (null, fixture.ExpressionIri, "fra", "title", "Loi longue", new string('a', 64)),
             (null, fixture.ExpressionIri, "fra", "title_short", "Loi courte", new string('b', 64)),
             (null, german.ExpressionIri, "deu", "title", "Langes Gesetz", new string('c', 64)));
+        // Every fact as_published reads, so every member it can carry is walked: a consolidated version the publisher
+        // names, an end-of-force date and a publication date of the act as published, and a legal value on the file served.
+        var work = PublisherWorkIriOf(fixture);
+        const string xsdDate = "http://www.w3.org/2001/XMLSchema#date";
+        await fixture.AddWorkFactAsync(work + "/consolide/20250101", "dateApplicability", "consolidation_applicability", "literal", "2025-01-01", xsdDate);
+        await fixture.AddWorkFactAsync(work + "/jo", "dateNoLongerInForce", "act_force", "literal", "2026-01-04", xsdDate);
+        await fixture.AddWorkFactAsync(work + "/jo", "publicationDate", "descriptive_date", "literal", "1991-08-20", xsdDate);
+        await fixture.AddWorkFactAsync(
+            fixture.ExpressionIri + "/xml", "legalValue", "legal_value_assertion", "iri", "http://data.legilux.public.lu/resource/authority/statut-version/definitif");
         using var mount = await V3CorpusMount.OpenAsync(fixture.Directory, CancellationToken.None);
         Assert.IsNotNull(mount);
 
@@ -265,9 +277,22 @@ public sealed class V3CorpusDossierMountTests
 
         var paths = new SortedSet<string>(StringComparer.Ordinal);
         CollectPaths(body, string.Empty, paths);
+        var fact = new[] { "datatype_iri", "evidence_sha256", "language_tag", "object_kind", "subject_iri", "value" };
         var declared = new[]
         {
             "articles_not_admitted_note",
+            "as_published", "as_published.authenticity", "as_published.authenticity.basis",
+            "as_published.authenticity.publication_dates", "as_published.authenticity.rule", "as_published.authenticity.sentence",
+            "as_published.authenticity.served_manifestations", "as_published.authenticity.served_manifestations[].format_iri",
+            "as_published.authenticity.served_manifestations[].legal_values",
+            "as_published.authenticity.served_manifestations[].manifestation_iri",
+            "as_published.journal_officiel_iri", "as_published.label",
+            "as_published.later_version_facts", "as_published.later_version_facts.consolidations",
+            "as_published.later_version_facts.consolidations[].applicability_date",
+            "as_published.later_version_facts.consolidations[].end_applicability_date",
+            "as_published.later_version_facts.consolidations[].legal_resource_iri",
+            "as_published.later_version_facts.end_of_force", "as_published.later_version_facts.rule",
+            "as_published.later_version_facts.sentence", "as_published.rule",
             "available_languages",
             "corpus_sha256",
             "history_begins",
@@ -288,7 +313,10 @@ public sealed class V3CorpusDossierMountTests
             "titles[].short_titles", "titles[].short_titles[].evidence_sha256", "titles[].short_titles[].title",
             "titles[].titles", "titles[].titles[].evidence_sha256", "titles[].titles[].title",
             "work_key",
-        }.Order(StringComparer.Ordinal).ToArray();
+        }.Concat(fact.Select(static name => "as_published.authenticity.publication_dates[]." + name))
+            .Concat(fact.Select(static name => "as_published.authenticity.served_manifestations[].legal_values[]." + name))
+            .Concat(fact.Select(static name => "as_published.later_version_facts.end_of_force[]." + name))
+            .Order(StringComparer.Ordinal).ToArray();
         CollectionAssert.AreEqual(declared, paths.ToArray(), "The answer carries a property that is not declared, or lost one that is.");
         // Every array the paths walked held a row, so a missing row-shape is not hiding behind an empty list.
         foreach (var name in new[] { "titles", "states", "not_held" })
@@ -334,6 +362,7 @@ public sealed class V3CorpusDossierMountTests
                     "no responsible ministry is held",
                     "no observation time is held, so nothing here says when this work was first seen; the event log's first_sighting (events) says only that a state is first present in that log",
                     "each state carries the date it applies from and no end date, so no gap between states can be stated, and this answer never says there is none",
+                    "later versions of this act are not held",
                 },
                 notHeld.Select(static row => row.GetProperty("reason").GetString()).ToArray());
         }

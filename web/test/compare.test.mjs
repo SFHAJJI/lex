@@ -171,7 +171,7 @@ test('a comparison must declare its axis', () => {
 });
 
 test('an unchanged result renders the publisher note verbatim and builds no panes', () => {
-  const note = 'the same version applied on both dates';
+  const note = 'Both dates fall within the same version, applicable from 2001-01-01 (publisher)';
   // Both dates resolving to one state means one state: same identifier, same digest.
   const SAME = { ...GOOD, right: { ...LEFT }, result: { changed: false, note } };
   const html = renderCompare(SAME);
@@ -227,7 +227,7 @@ test('the digest decides whether anything changed, not the identifier', () => {
     ...GOOD,
     left: { ...LEFT, body_sha256: SAME },
     right: other({ body_sha256: SAME }),
-    result: { changed: false, note: 'the same version applied on both dates' },
+    result: { changed: false, note: 'Both dates fall within the same version, applicable from 2001-01-01 (publisher)' },
   });
   assert.ok(identicalText.includes('changed: false'));
 
@@ -236,7 +236,7 @@ test('the digest decides whether anything changed, not the identifier', () => {
     () =>
       renderCompare({
         ...GOOD,
-        result: { changed: false, note: 'the same version applied on both dates' },
+        result: { changed: false, note: 'Both dates fall within the same version, applicable from 2001-01-01 (publisher)' },
       }),
     /different body digests/,
     'the publisher note was printed over evidence against it',

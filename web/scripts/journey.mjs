@@ -1364,6 +1364,12 @@ export async function licenceBlockedRuns(apiOutput, mount, options, browser, liv
 }
 
 /**
+ * What the dossier and the reading say of the fixture's one act, which is held only as first published (the plan's item
+ * 0.6): its label, as the English page sets it.
+ */
+export const AS_PUBLISHED_SAID = "As published; may have been amended since; no consolidated text.";
+
+/**
  * What each of the eight steps must show on the fixture mount (`journey-mount.json`), as `[step name,
  * expected]`: every page answers, with the texts the fixture's one work gives it.
  */
@@ -1374,10 +1380,10 @@ export function fixtureMountExpectations(journeyMount) {
     ["coverage", { step: coverage, state: "success", corpusSha256: journeyMount.corpus_sha256, indexSha256: journeyMount.index_sha256 }],
     ["home", { step: home, state: "success", texts: searchTexts }],
     ["search", { step: search, state: "success", texts: searchTexts }],
-    ["dossier", { step: dossier, state: "success", texts: [journeyMount.work_key, "1 state, from 2024-02-01 to 2024-02-01.", "What this dossier does not hold"] }],
-    ["reading", { step: reading, state: "success", texts: ["the state applying from 2024-02-01", "49 articles quoted", "Art. 15.", "Text served under agreed_same_run_cc_by"] }],
+    ["dossier", { step: dossier, state: "success", texts: [journeyMount.work_key, "1 state, from 2024-02-01 to 2024-02-01.", "What this dossier does not hold", AS_PUBLISHED_SAID] }],
+    ["reading", { step: reading, state: "success", texts: ["the state applying from 2024-02-01", "49 articles quoted", "Art. 15.", "Text served under agreed_same_run_cc_by", AS_PUBLISHED_SAID] }],
     ["history", { step: history, state: "success", texts: [`${HISTORY_ANCHOR} in loi-1991-08-10-n3`, "Carried by 1 held state, from 2024-02-01", "first held wording"] }],
-    ["compare", { step: compare, state: "success", texts: [`loi-1991-08-10-n3: ${READING_DATE} against ${READING_DATE}.`, "The same version applied on both dates."] }],
+    ["compare", { step: compare, state: "success", texts: [`loi-1991-08-10-n3: ${READING_DATE} against ${READING_DATE}.`, `Both dates fall within the same version, applicable from ${READING_DATE} (publisher).`] }],
     ["radar", { step: radar, state: "success", texts: [`${READING_DATE} to ${READING_DATE}: 1 state of 1 work, of 1 held.`, "not compared: the first state this index holds"] }],
     ["export", { step: exporting, state: "success", texts: ["3 articles pinned: 3 exported with text, 0 excluded.", EXPORT_WATERMARK, "Text served under agreed_same_run_cc_by."] }],
     ["address", { step: address, state: "success", texts: [journeyMount.work_key, "1 state, from 2024-02-01 to 2024-02-01."] }],

@@ -38,6 +38,7 @@
 import { isCalendarDate } from './temporal.mjs';
 import { escapeProvision } from './search-answer.mjs';
 import { readAnnexesNotServed } from './europe-annexes.mjs';
+import { readAsPublished } from './as-published.mjs';
 
 /** The acknowledgement every EU text served carries (Decision 95). */
 export const EUROPE_TEXT_ACKNOWLEDGEMENT = '© European Union, https://eur-lex.europa.eu';
@@ -317,6 +318,8 @@ export function readEvidenceBundle(answer) {
     rightsRule: requireText(requireOwn(answer, 'rights_rule', where), 'rights_rule'),
     states: Object.freeze(states),
     notHeld,
+    // An act held only as first published says so (the plan's item 0.6): `as-published.mjs` reads it, or null.
+    asPublished: readAsPublished(answer, { states, notHeld }),
     scope: requireText(requireOwn(answer, 'scope', where), 'scope'),
     articlesNotAdmittedNote: requireText(requireOwn(answer, 'articles_not_admitted_note', where), 'articles_not_admitted_note'),
     corpusSha256: requireDigest(requireOwn(verifiedBy, 'corpus_sha256', 'verified_by'), 'verified_by.corpus_sha256'),
