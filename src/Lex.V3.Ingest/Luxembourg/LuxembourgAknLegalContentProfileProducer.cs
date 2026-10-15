@@ -61,18 +61,36 @@ public sealed record LuxembourgAknLegalContentToken(
     IReadOnlyList<LuxembourgAknLegalContentToken>? NoteBody = null);
 
 /// <summary>Legal content derived from one exact publisher article.</summary>
+/// <remarks>
+/// Two shapes, never mixed. Content /1 carries no <see cref="IndexTerms"/> and hashes its identity
+/// under layout <c>/1</c>, unchanged. Content /2 keeps the publisher's index terms beside the
+/// wording, never in it: every article it makes carries <see cref="IndexTerms"/> (empty when the
+/// article has none), and its identity layout <c>/2</c> counts the tokens and then hashes every term,
+/// so two articles with the same wording and different index terms are two identities while their
+/// tokens, and so everything stored or quoted from them, stay equal.
+/// </remarks>
 public sealed class LuxembourgAknLegalContentArticle
 {
     internal LuxembourgAknLegalContentArticle(
         string publisherExpressionIri,
         LuxembourgAknArticleCoordinate coordinate,
         string ruleProfileSha256,
-        IReadOnlyList<LuxembourgAknLegalContentToken> tokens)
+        IReadOnlyList<LuxembourgAknLegalContentToken> tokens,
+        IReadOnlyList<LuxembourgAknIndexTerm>? indexTerms = null)
     {
         PublisherExpressionIri = publisherExpressionIri;
         Coordinate = coordinate;
         RuleProfileSha256 = ruleProfileSha256;
         Tokens = Array.AsReadOnly(tokens.ToArray());
+        if (indexTerms is not null)
+        {
+            var terms = indexTerms.ToArray();
+            foreach (var term in terms)
+            {
+                ArgumentNullException.ThrowIfNull(term, nameof(indexTerms));
+            }
+            IndexTerms = Array.AsReadOnly(terms);
+        }
         IdentitySha256 = IdentityOf(this);
     }
 
@@ -84,11 +102,39 @@ public sealed class LuxembourgAknLegalContentArticle
 
     public IReadOnlyList<LuxembourgAknLegalContentToken> Tokens { get; }
 
+    /// <summary>
+    /// The publisher's index terms for this article, in document order: article metadata, never
+    /// wording, so no token holds them. Null under content /1; under content /2 a list, empty when the
+    /// article carries none.
+    /// </summary>
+    public IReadOnlyList<LuxembourgAknIndexTerm>? IndexTerms { get; }
+
     public string IdentitySha256 { get; }
 
     private static string IdentityOf(LuxembourgAknLegalContentArticle article)
     {
         using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
+        if (article.IndexTerms is { } indexTerms)
+        {
+            Append(hash, "lex-v3-luxembourg-akn-legal-content-article/2");
+            Append(hash, article.PublisherExpressionIri);
+            Append(hash, article.Coordinate.PublisherId);
+            Append(hash, article.Coordinate.PublisherWId ?? "");
+            Append(hash, article.Coordinate.PublisherApplicability ?? "");
+            Append(hash, article.RuleProfileSha256);
+            Append(hash, article.Tokens.Count.ToString(System.Globalization.CultureInfo.InvariantCulture));
+            foreach (var token in article.Tokens)
+            {
+                AppendToken(hash, token);
+            }
+            Append(hash, indexTerms.Count.ToString(System.Globalization.CultureInfo.InvariantCulture));
+            foreach (var term in indexTerms)
+            {
+                AppendIndexTerm(hash, term);
+            }
+            return Convert.ToHexStringLower(hash.GetHashAndReset());
+        }
+
         Append(hash, "lex-v3-luxembourg-akn-legal-content-article/1");
         Append(hash, article.PublisherExpressionIri);
         Append(hash, article.Coordinate.PublisherId);
@@ -100,6 +146,16 @@ public sealed class LuxembourgAknLegalContentArticle
             AppendToken(hash, token);
         }
         return Convert.ToHexStringLower(hash.GetHashAndReset());
+    }
+
+    private static void AppendIndexTerm(IncrementalHash hash, LuxembourgAknIndexTerm term)
+    {
+        Append(hash, term.Label);
+        Append(hash, term.SubTerms.Count.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        foreach (var subTerm in term.SubTerms)
+        {
+            AppendIndexTerm(hash, subTerm);
+        }
     }
 
     internal static void Append(IncrementalHash hash, string value)
@@ -185,22 +241,94 @@ public sealed class LuxembourgAknLegalContentOutcome
 }
 
 /// <summary>The ordered, complete legal-content disposition population.</summary>
+/// <remarks>
+/// A population made by content /1 carries no versioned rule digest: its identity layout <c>/1</c> is
+/// unchanged and no article in it carries index terms. A population made by content /2 names its
+/// rule digest, reads a versioned inventory (/4, never /3), every article in it carries index-term
+/// metadata under that digest, and its identity layout <c>/2</c> hashes the digest and the source
+/// inventory population's identity before the outcomes.
+/// </remarks>
 public sealed class LuxembourgAknLegalContentPopulation
 {
     internal LuxembourgAknLegalContentPopulation(
         LuxembourgAknArticleInventoryPopulation sourceInventoryPopulation,
-        IReadOnlyList<LuxembourgAknLegalContentOutcome> outcomes)
+        IReadOnlyList<LuxembourgAknLegalContentOutcome> outcomes,
+        string? versionedRuleProfileSha256 = null)
     {
+        foreach (var outcome in outcomes)
+        {
+            if (versionedRuleProfileSha256 is null)
+            {
+                if (outcome.Article?.IndexTerms is not null)
+                {
+                    throw new ArgumentException(
+                        "An unversioned (/1) content population carries no index-term metadata.",
+                        nameof(outcomes));
+                }
+            }
+            else if (outcome.Article is { } article &&
+                     (article.IndexTerms is null ||
+                      !string.Equals(article.RuleProfileSha256, versionedRuleProfileSha256, StringComparison.Ordinal)))
+            {
+                throw new ArgumentException(
+                    "Every article of a versioned content population carries index-term metadata under that population's rule profile.",
+                    nameof(outcomes));
+            }
+        }
+
+        if (versionedRuleProfileSha256 is not null &&
+            string.Equals(
+                sourceInventoryPopulation.RuleProfileSha256,
+                LuxembourgAknArticleInventoryProducer.RuleProfileSha256,
+                StringComparison.Ordinal))
+        {
+            throw new ArgumentException(
+                "A versioned content population reads a versioned inventory population, never inventory /3.",
+                nameof(sourceInventoryPopulation));
+        }
+
         SourceInventoryPopulation = sourceInventoryPopulation;
         Outcomes = Array.AsReadOnly(outcomes.ToArray());
-        IdentitySha256 = IdentityOf(outcomes);
+        RuleProfileSha256 = versionedRuleProfileSha256 ?? LuxembourgAknLegalContentProfileProducer.RuleProfileSha256;
+        IdentitySha256 = versionedRuleProfileSha256 is null
+            ? IdentityOf(outcomes)
+            : VersionedIdentityOf(outcomes, versionedRuleProfileSha256, sourceInventoryPopulation.IdentitySha256);
     }
 
     public LuxembourgAknArticleInventoryPopulation SourceInventoryPopulation { get; }
 
     public IReadOnlyList<LuxembourgAknLegalContentOutcome> Outcomes { get; }
 
+    /// <summary>
+    /// The rule profile every article in this population was made under: content /2's digest for a
+    /// population it made, otherwise content /1's.
+    /// </summary>
+    public string RuleProfileSha256 { get; }
+
     public string IdentitySha256 { get; }
+
+    private static string VersionedIdentityOf(
+        IReadOnlyList<LuxembourgAknLegalContentOutcome> outcomes,
+        string versionedRuleProfileSha256,
+        string sourceInventoryPopulationIdentitySha256)
+    {
+        using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
+        LuxembourgAknLegalContentArticle.Append(
+            hash, "lex-v3-luxembourg-akn-legal-content-population/2");
+        LuxembourgAknLegalContentArticle.Append(hash, versionedRuleProfileSha256);
+        LuxembourgAknLegalContentArticle.Append(hash, sourceInventoryPopulationIdentitySha256);
+        foreach (var outcome in outcomes)
+        {
+            LuxembourgAknLegalContentArticle.Append(
+                hash, outcome.SourceInventoryOutcome.Input.CorpusRecord.ObjectRef.PublisherUri);
+            LuxembourgAknLegalContentArticle.Append(hash, outcome.Coordinate?.PublisherId ?? "");
+            LuxembourgAknLegalContentArticle.Append(
+                hash, ((int)outcome.Disposition).ToString(System.Globalization.CultureInfo.InvariantCulture));
+            LuxembourgAknLegalContentArticle.Append(hash, outcome.Article?.IdentitySha256 ?? "");
+            LuxembourgAknLegalContentArticle.Append(hash, SemanticDetail(outcome));
+        }
+        return Convert.ToHexStringLower(hash.GetHashAndReset());
+    }
 
     private static string IdentityOf(IReadOnlyList<LuxembourgAknLegalContentOutcome> outcomes)
     {

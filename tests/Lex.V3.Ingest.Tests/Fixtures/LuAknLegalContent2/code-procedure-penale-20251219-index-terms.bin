@@ -1,0 +1,306 @@
+<?xml version="1.0" encoding="UTF-8"?><akomaNtoso xmlns="http://docs.oasis-open.org/legaldocml/ns/akn/3.0/CSD13" xmlns:scl="http://www.scl.lu">
+	<act name="Code de procédure pénale" scl:uri="http://eli.legilux.public.lu/eli/etat/leg/code/procedure_penale">
+		<meta>
+			<identification source="#http://data.legilux.public.lu/eli/etat/leg/code/procedure_penale/20251219">
+				<FRBRWork>
+					<FRBRthis value="http://data.legilux.public.lu/eli/etat/leg/code/procedure_penale/20251219"/>
+					<FRBRuri value=""/>
+					<FRBRdate date="2018-11-01" name="document"/>
+					<FRBRauthor as="#author" href="http://data.legilux.public.lu/resource/authority/legal-institution/MJ"/>
+					<FRBRcountry value="http://publications.europa.eu/resource/authority/country/LUX"/>
+				</FRBRWork>
+				<FRBRExpression>
+					<FRBRthis value="http://data.legilux.public.lu/eli/etat/leg/code/procedure_penale/20251219/fr"/>
+					<FRBRuri value=""/>
+					<FRBRdate date="2018-11-01" name="document"/>
+					<FRBRauthor as="#author" href=""/>
+					<FRBRlanguage language="http://publications.europa.eu/resource/authority/language/FRA"/>
+				</FRBRExpression>
+				<FRBRManifestation>
+					<FRBRthis value="http://data.legilux.public.lu/eli/etat/leg/code/procedure_penale/20251219/fr/xml"/>
+					<FRBRuri value=""/>
+					<FRBRdate date="2018-11-01" name="document"/>
+					<FRBRauthor as="#author" href=""/>
+				</FRBRManifestation>
+				<scl:JOLUXWork>
+					<scl:JOLUXComplexWork>
+						<scl:jolux scl:name="uriThis">http://data.legilux.public.lu/eli/etat/leg/code/instruction_criminelle</scl:jolux>
+					</scl:JOLUXComplexWork>
+					<scl:JOLUXLegalResource><scl:jolux scl:name="uriThis">http://data.legilux.public.lu/eli/etat/leg/code/procedure_penale/20251219</scl:jolux><scl:jolux scl:name="isMemberOf">http://data.legilux.public.lu/eli/etat/leg/loi/1808/11/17/n1</scl:jolux><scl:jolux scl:name="typeDocument">http://data.legilux.public.lu/resource/authority/resource-type/CODE</scl:jolux><scl:jolux scl:name="version">1</scl:jolux><scl:jolux scl:name="dateApplicability">2025-12-19</scl:jolux><scl:jolux scl:name="publicationDate">2023-08-01</scl:jolux><scl:jolux scl:lg="fra" scl:name="title">Code de procédure pénale</scl:jolux><scl:jolux scl:lg="fra" scl:name="titleShort">Code de procédure pénale</scl:jolux><scl:jolux scl:name="responsibilityOf">http://data.legilux.public.lu/resource/authority/legal-institution/MJ</scl:jolux><scl:jolux scl:name="personInCharge">Ministère d’Etat – Service central de législation – du Grand-Duché de Luxembourg</scl:jolux><scl:rdf scl:name="type">http://data.legilux.public.lu/resource/ontology/jolux#Code</scl:rdf><scl:rdf scl:name="type">http://data.legilux.public.lu/resource/ontology/jolux#Consolidation</scl:rdf><scl:rdf scl:name="type">http://data.legilux.public.lu/resource/ontology/jolux#Work</scl:rdf><scl:rdf scl:name="type">http://data.legilux.public.lu/resource/ontology/jolux#LegalResource</scl:rdf><scl:rdf scl:name="type">http://data.legilux.public.lu/resource/ontology/jolux#NationalLegalResource</scl:rdf><scl:jolux xmlns="http://www.w3.org/1999/xhtml" xmlns:akoma="http://docs.oasis-open.org/legaldocml/ns/akn/3.0/CSD13" xmlns:m="http://www.w3.org/1998/Math/MathML" xmlns:xopusAttr="http://www.xopus.com/xmlns/id/attr" scl:name="dateEntryInForce"/></scl:JOLUXLegalResource>
+				</scl:JOLUXWork>
+				<scl:JOLUXExpression>
+					<scl:jolux scl:name="uriThis">http://data.legilux.public.lu/eli/etat/leg/code/procedure_penale/20251219/fr</scl:jolux>
+					<scl:jolux scl:name="realizes">http://data.legilux.public.lu/eli/etat/leg/code/procedure_penale/20251219</scl:jolux>
+					<scl:jolux scl:name="language">http://publications.europa.eu/resource/authority/language/FRA</scl:jolux>
+					<scl:jolux scl:lg="fra" scl:name="title">Code de procédure pénale</scl:jolux>
+					<scl:jolux scl:lg="fra" scl:name="titleShort">Code de procédure pénale</scl:jolux>
+				</scl:JOLUXExpression>
+				<scl:JOLUXManifestation>
+					<scl:jolux scl:name="uriThis">http://data.legilux.public.lu/eli/etat/leg/code/procedure_penale/20251219/fr/xml</scl:jolux>
+					<scl:jolux scl:name="embodies">http://data.legilux.public.lu/eli/etat/leg/code/procedure_penale/20251219/fr</scl:jolux>
+					<scl:jolux scl:lg="fra" scl:name="rights">Copyright : Ministère d’Etat – Service central de législation – du Grand-Duché de Luxembourg</scl:jolux>
+					<scl:jolux scl:name="rightsHolder">http://data.legilux.public.lu/authority/legal-institution/ME</scl:jolux>
+					<scl:jolux scl:name="license">http://creativecommons.org/licenses/by/4.0/</scl:jolux>
+					<scl:jolux scl:name="userFormat">http://data.legilux.lu/resource/authority/user-format/xml-akomantoso</scl:jolux>
+					<scl:jolux scl:name="format">http://publications.europa.eu/resource/authority/file-type/XML</scl:jolux>
+				</scl:JOLUXManifestation>
+			</identification>
+		</meta>
+		<preface>
+			<longTitle>
+				<p>Code de procédure pénale</p>
+			</longTitle>
+		</preface>
+		<body>
+			<book xmlns:ns3727365="http://www.scl.lu" id="livre_premier">
+				<num>
+					<b>LIVRE PREMIER</b>
+				</num>
+				<heading>
+					<b>De l'exercice de l'action publique et de l'instruction</b>
+				</heading>
+				<title id="livre_premier.titre_iii" scl:hidden="false" scl:subject1="http://data.legilux.public.lu/resource/authority/legal-subject/2205" scl:subject1lbl="juridiction d'instruction">
+					<num>TITRE III.</num>
+					<heading>Des juridictions d'instruction</heading>
+					<chapter id="livre_premier.titre_iii.chapitre_ier" scl:subject1="http://data.legilux.public.lu/resource/authority/legal-subject/2201" scl:subject1lbl="juge d'instruction">
+						<num>
+							<b>Chapitre Ier.</b>
+						</num>
+						<heading>
+							<b>Du juge d'instruction</b>
+						</heading>
+						<section id="livre_premier.titre_iii.chapitre_ier.section_ii" scl:subject2="http://data.legilux.public.lu/resource/authority/legal-subject/2069" scl:subject2lbl="constitution de partie civile">
+							<num>Section II.</num>
+							<heading>De la constitution de partie civile et de ses effets</heading>
+							<article id="art_56" scl:uri="/eli/etat/leg/code/procedure_penale/art_56">
+								<scl:JOLUXWork>
+									<scl:JOLUXComplexWork>
+										<scl:jolux scl:name="uriThis">http://data.legilux.public.lu/eli/etat/leg/code/instruction_criminelle/art_56</scl:jolux>
+									</scl:JOLUXComplexWork>
+									<scl:JOLUXLegalResource>
+										<scl:jolux scl:name="uriThis">http://data.legilux.public.lu/eli/etat/leg/code/instruction_criminelle/art_56/20170905</scl:jolux>
+										<scl:jolux scl:name="isMemberOf">http://data.legilux.public.lu/eli/etat/leg/loi/1808/11/17/n1</scl:jolux>
+										<scl:jolux scl:lg="fra" scl:name="title">Art. 56.</scl:jolux>
+										<scl:jolux scl:name="dateApplicability">2017-09-05</scl:jolux>
+										<scl:rdf scl:name="type">http://data.legilux.public.lu/resource/ontology/jolux#Article</scl:rdf>
+									</scl:JOLUXLegalResource>
+								</scl:JOLUXWork>
+								<scl:indexterms>
+									<scl:indexterm>
+										<scl:label>Plainte</scl:label>
+										<scl:indexterms>
+											<scl:indexterm>
+												<scl:label>entre les mains du juge d’instruction</scl:label>
+											</scl:indexterm>
+										</scl:indexterms>
+									</scl:indexterm>
+									<scl:indexterm>
+										<scl:label>Instruction préparatoire</scl:label>
+										<scl:indexterms>
+											<scl:indexterm>
+												<scl:label>formalités d’ouverture</scl:label>
+												<scl:indexterms>
+													<scl:indexterm>
+														<scl:label>plainte avec constitution de partie civile</scl:label>
+													</scl:indexterm>
+												</scl:indexterms>
+											</scl:indexterm>
+										</scl:indexterms>
+									</scl:indexterm>
+									<scl:indexterm>
+										<scl:label>Action civile</scl:label>
+										<scl:indexterms>
+											<scl:indexterm>
+												<scl:label>exercice</scl:label>
+												<scl:indexterms>
+													<scl:indexterm>
+														<scl:label>instruction préparatoire</scl:label>
+														<scl:indexterms>
+															<scl:indexterm>
+																<scl:label>constitution de partie civile et ses effets</scl:label>
+															</scl:indexterm>
+														</scl:indexterms>
+													</scl:indexterm>
+												</scl:indexterms>
+											</scl:indexterm>
+										</scl:indexterms>
+									</scl:indexterm>
+								</scl:indexterms>
+								<num>Art. 56.</num>
+								<heading>
+(
+<ref href="/eli/etat/leg/loi/1989/06/16/n1/jo">L. 16 juin 1989</ref>
+)
+</heading>
+								<alinea>
+									<content>
+										<p> Toute personne qui se prétend lésée par un crime ou un délit peut en portant plainte se constituer partie civile devant le juge d'instruction compétent.</p>
+									</content>
+								</alinea>
+							</article>
+						</section>
+						<section id="livre_premier.titre_iii.chapitre_ier.section_ix">
+							<num>Section IX.</num>
+							<heading>
+Des mandats et de leur exécution
+<docTitle>Transfert d'un détenu en une clinique</docTitle>
+							</heading>
+							<article id="art_102" scl:uri="/eli/etat/leg/code/procedure_penale/art_102">
+								<scl:JOLUXWork>
+									<scl:JOLUXComplexWork>
+										<scl:jolux scl:name="uriThis">http://data.legilux.public.lu/eli/etat/leg/code/instruction_criminelle/art_102</scl:jolux>
+									</scl:JOLUXComplexWork>
+									<scl:JOLUXLegalResource>
+										<scl:jolux scl:name="uriThis">http://data.legilux.public.lu/eli/etat/leg/code/instruction_criminelle/art_102/20251219</scl:jolux>
+										<scl:jolux scl:name="isMemberOf">http://data.legilux.public.lu/eli/etat/leg/loi/1808/11/17/n1</scl:jolux>
+										<scl:jolux scl:lg="fra" scl:name="title">Art. 102.</scl:jolux>
+										<scl:jolux scl:name="dateApplicability">2025-12-19</scl:jolux>
+										<scl:rdf scl:name="type">http://data.legilux.public.lu/resource/ontology/jolux#Article</scl:rdf>
+									</scl:JOLUXLegalResource>
+								</scl:JOLUXWork>
+								<scl:indexterms>
+									<scl:indexterm>
+										<scl:label>Officiers de police judiciaire.</scl:label>
+										<scl:indexterms>
+											<scl:indexterm>
+												<scl:label>attributions</scl:label>
+											</scl:indexterm>
+										</scl:indexterms>
+									</scl:indexterm>
+									<scl:indexterm>
+										<scl:label>Mandat d’arrêt</scl:label>
+										<scl:indexterms>
+											<scl:indexterm>
+												<scl:label>notification</scl:label>
+											</scl:indexterm>
+										</scl:indexterms>
+									</scl:indexterm>
+									<scl:indexterm>
+										<scl:label>Greffiers - Dispositions les concernant</scl:label>
+									</scl:indexterm>
+								</scl:indexterms>
+								<num>Art. 102.</num>
+								<heading>(<ref href="/eli/etat/leg/loi/2025/12/12/a556/jo">L. 12 décembre 2025</ref>)</heading>
+								<paragraph>
+<num>(1)</num>
+<alinea>
+<content>
+<p>Si la personne visée par un mandat d’arrêt ne peut être saisie, il est dressé procès-verbal de recherches infructueuses.</p>
+</content>
+</alinea>
+<alinea>
+<content>
+<p>Ce procès-verbal de recherches infructueuses est adressé au juge d’instruction qui a délivré le mandat, ainsi que, s’il y a lieu, au procureur européen délégué pour les affaires relevant de ses compétences.</p>
+</content>
+</alinea>
+<alinea>
+<content>
+<p>La personne est alors considérée comme inculpée pour les faits visés par le mandat d’arrêt au sens des articles 127 et 136-73.</p>
+</content>
+</alinea>
+</paragraph>
+<paragraph>
+<num>(2)</num>
+<alinea>
+<content>
+<p>Le mandat de comparution émis à l’égard d’une personne morale est notifié à son siège social. </p>
+</content>
+</alinea>
+<alinea>
+<content>
+<p>
+Si la personne morale qui s’est vue notifier le mandat ne se présente pas, un procès-verbal de <span scl:no-break="true">non-comparution</span> est dressé par le magistrat qui a délivré le mandat.
+</p>
+</content>
+</alinea>
+<alinea>
+<content>
+<p>Ce procès-verbal de non-comparution vaut inculpation au sens des articles 127 et 136-73 pour les faits visés dans le mandat.</p>
+</content>
+</alinea>
+<alinea>
+<content>
+<p>Il est fait mention de l’alinéa 3 dans le mandat de comparution.</p>
+</content>
+</alinea>
+</paragraph>
+							</article>
+						</section>
+					</chapter>
+				</title>
+			</book>
+			<book xmlns:ns3727365="http://www.scl.lu" id="livre_ii">
+				<num>
+					<b>LIVRE II</b>
+				</num>
+				<heading>
+					<b>De la Justice</b>
+				</heading>
+				<title id="livre_ii.titre_ii-2" scl:hidden="false">
+					<num>TITRE II-2.</num>
+					<heading>
+Des procédures menées à l’encontre des personnes morales
+<docNumber>(L. 3 mars 2010)</docNumber>
+					</heading>
+					<article id="art_283" scl:uri="/eli/etat/leg/code/procedure_penale/art_283">
+						<scl:JOLUXWork>
+							<scl:JOLUXComplexWork>
+								<scl:jolux scl:name="uriThis">http://data.legilux.public.lu/eli/etat/leg/code/instruction_criminelle/art_283</scl:jolux>
+							</scl:JOLUXComplexWork>
+							<scl:JOLUXLegalResource>
+								<scl:jolux scl:name="uriThis">http://data.legilux.public.lu/eli/etat/leg/code/instruction_criminelle/art_283/20170905</scl:jolux>
+								<scl:jolux scl:name="isMemberOf">http://data.legilux.public.lu/eli/etat/leg/loi/1808/11/17/n1</scl:jolux>
+								<scl:jolux scl:lg="fra" scl:name="title">Art. 283.</scl:jolux>
+								<scl:jolux scl:name="dateApplicability">2017-09-05</scl:jolux>
+								<scl:rdf scl:name="type">http://data.legilux.public.lu/resource/ontology/jolux#Article</scl:rdf>
+							</scl:JOLUXLegalResource>
+						</scl:JOLUXWork>
+						<num>Art. 283.</num>
+						<alinea>
+							<content>
+								<p>
+Abrogé (
+<ref href="/eli/etat/leg/loi/1987/06/17/n2/jo">L. 17 juin 1987</ref>
+)
+</p>
+							</content>
+						</alinea>
+					</article>
+				</title>
+			</book>
+			<scl:index>
+				<scl:indexterms>
+					<scl:indexterm>
+						<scl:label>Plainte</scl:label>
+						<scl:indexterms>
+							<scl:indexterm>
+								<scl:label>entre les mains d’officiers de police judiciaire</scl:label>
+								<scl:articles>
+									<scl:num scl:refid="art_11">11</scl:num>
+								</scl:articles>
+							</scl:indexterm>
+							<scl:indexterm>
+								<scl:label>entre les mains du juge d’instruction</scl:label>
+								<scl:articles>
+									<scl:num scl:refid="art_56">56</scl:num>
+									<scl:num scl:refid="art_57">57</scl:num>
+									<scl:num scl:refid="art_58">58</scl:num>
+									<scl:num scl:refid="art_59">59</scl:num>
+									<scl:num scl:refid="art_60">60</scl:num>
+									<scl:num scl:refid="art_61">61</scl:num>
+									<scl:num scl:refid="art_62">62</scl:num>
+								</scl:articles>
+							</scl:indexterm>
+							<scl:indexterm>
+								<scl:label>entre les mains du procureur d’Etat</scl:label>
+								<scl:articles>
+									<scl:num scl:refid="art_23">23</scl:num>
+								</scl:articles>
+							</scl:indexterm>
+						</scl:indexterms>
+					</scl:indexterm>
+				</scl:indexterms>
+			</scl:index>
+		</body>
+	</act>
+</akomaNtoso>

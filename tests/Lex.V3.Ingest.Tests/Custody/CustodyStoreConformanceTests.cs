@@ -76,8 +76,8 @@ public sealed class CustodyStoreConformanceTests
             + "inner store, counts its creates, and takes the one ordinal it refuses - the last "
             + "write of a run, whose digest differs per run and so cannot be named ahead",
         "Lex.V3.Ingest.Tests.LuxembourgAknInventoryV4Run15Probe+ReadOnlyCustody: decorates the "
-            + "run's own custody store for the opt-in run-15 probe, so every read delegates and every "
-            + "write throws: the probe reads custody it must never change",
+            + "run's own custody store for the opt-in run-15 probes (inventory /4 and content /2), so "
+            + "every read delegates and every write throws: the probes read custody they must never change",
         "Lex.V3.Ingest.Tests.LuxembourgGazetteAcquisitionTests+GazetteCustodyStore: decorates an "
             + "inner store, stamps each receipt with an advancing policy observation so a second "
             + "create of the same bytes yields a different receipt digest, and takes the one body "

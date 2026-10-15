@@ -412,13 +412,22 @@ public sealed class LuxembourgAknArticleInventoryProducerV4Tests
 
         var three = (await new LuxembourgAknArticleInventoryProducer(store)
             .RunAsync(population, CancellationToken.None)).Outcomes.Single();
-        var four = (await new LuxembourgAknArticleInventoryProducerV4(store)
-            .RunAsync(population, new Dictionary<string, string>(), CancellationToken.None)).Outcomes.Single();
+        var fourPopulation = await new LuxembourgAknArticleInventoryProducerV4(store)
+            .RunAsync(population, new Dictionary<string, string>(), CancellationToken.None);
+        var four = fourPopulation.Outcomes.Single();
 
         Assert.AreEqual(LuxembourgAknArticleInventoryDisposition.XmlRejected, three.Disposition);
         Assert.AreEqual("publisher XML rejected: XmlException", three.Detail);
         Assert.AreEqual(LuxembourgAknArticleInventoryDisposition.Inventoried, four.Disposition, four.Detail);
         CollectionAssert.AreEqual(new[] { "art_1" }, Ids(four.Inventory!));
+
+        // Content /2 (S3a) re-reads the body through /4's own parse, so it reads it too: the article
+        // is the typed gap its image makes of it, never an XmlRejected body. The large body is built
+        // once, here, for both readings.
+        var content = (await new LuxembourgAknLegalContentProfile2Producer(store)
+            .RunAsync(fourPopulation, CancellationToken.None)).Outcomes.Single();
+        Assert.AreEqual(LuxembourgAknLegalContentDisposition.UnsupportedContentShape, content.Disposition);
+        Assert.AreEqual("unsupported legal-content element: img", content.Detail);
     }
 
     /// <summary>

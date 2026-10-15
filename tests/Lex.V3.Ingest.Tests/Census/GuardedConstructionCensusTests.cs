@@ -517,6 +517,8 @@ public sealed class GuardedConstructionCensusTests
                     + "internal instance "
                     + "Lex.V3.Ingest.Luxembourg.LuxembourgAknLegalContentPopulation::.ctor, "
                     + "method public instance "
+                    + "Lex.V3.Ingest.Luxembourg.LuxembourgAknLegalContentProfile2Producer::RunAsync, "
+                    + "method public instance "
                     + "Lex.V3.Ingest.Luxembourg.LuxembourgAknLegalContentProfileProducer::RunAsync",
                 "Lex.V3.Ingest.Luxembourg.LuxembourgAssertionSnapshot: constructor private "
                     + "instance Lex.V3.Ingest.Luxembourg.LuxembourgAssertionSnapshot::.ctor, "
