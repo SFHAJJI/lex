@@ -121,8 +121,12 @@ public sealed class V3McpJsonRpcTests
         StringAssert.StartsWith(
             descriptions.Single(static tool => tool.Name == "as_observed").Description,
             "The state of a Luxembourg act applicable on a date (publisher) as one build of the mounted log held it");
-        // The check refuses what the two descriptions used to say, and the variants the web's check refuses.
-        foreach (var said in new[] { "as the publisher applied it on a date", "that applied on a date", "in-force", "in force", "sʼappliquait", "appliquée" })
+        // The check refuses what the two descriptions used to say, and the variants the web's check refuses. A decomposed
+        // accent is composed by the operating system's language library, which the release image does not carry (plan 0.8):
+        // there that one probe is left out, and the image-conditions lane holds the rest.
+        var composes = "e\u0301".Normalize(NormalizationForm.FormC) == "\u00e9";
+        string[] variants = ["as the publisher applied it on a date", "that applied on a date", "in-force", "in force", "s\u02bcappliquait", "appliqu\u00e9e"];
+        foreach (var said in composes ? [.. variants, "applique\u0301e"] : variants)
         {
             Assert.IsTrue(forbidden.IsMatch(Fold(said)), said);
         }
