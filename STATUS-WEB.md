@@ -116,7 +116,10 @@ wording's `/eu-eurlex/{celex}/{lng}/{date}--{sha256}` with the provision after `
     rendered again from the handler (the answer samples changed: two permalinks #964's as-published scenarios wrote in
     the shape before R64) and verified without the render variables; the journeys against the API published from this
     head over the fixture mount, through the live server 45 of 45 and by keyboard served by the API 45 of 45; both
-    servers asked the review's addresses again, answering alike; `eng/verify-v3-tree.ps1` 1,557 tracked paths.
+    servers asked the review's addresses again, answering alike. Rebased again on #969's merge (the data lane's
+    producers only): the build 0 warnings, 0 errors; `Lex.V3.Tests` 3,176 (3,170 passed, 6 skipped); the web suite 1,141
+    of 1,141; `Census`, the three samples, resolve and verify 103 (101 passed, 2 skipped); `eng/verify-v3-tree.ps1`
+    1,561 tracked paths.
 
 ## A missing page, a failure and a deployment never look like a legal answer (sole driver, 2026-10-15)
 
