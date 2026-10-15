@@ -145,6 +145,9 @@ so; and the Compare card said "the same version applied on both dates", which R2
   answer and envelope censuses rendered from the real handler and verified without the render switch; the browser
   journeys on the fixture mount 44 of 44, and again with `--keyboard --served-by-api` 44 of 44 (headless Chrome, the API
   published in Release); `eng/verify-v3-tree.ps1` over 1,510 tracked paths.
+- **After 0.8 merged** (#966): its `image-conditions` lane, which runs without the language library, failed the new MCP
+  vocabulary test on one probe, a decomposed accent that only the library composes. That probe now runs only where the
+  process can compose; the precomposed form and every tool description are checked in the lane too.
 
 ## The web suite's race: one bundle every live build shared (sole driver, 2026-10-15)
 
