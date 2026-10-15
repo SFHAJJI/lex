@@ -34,8 +34,8 @@
       "payload": {
         "bound": "from",
         "candidates": [
-          "/lu-legilux/loi-1991-08-10-n3/2026-04-11--6c164597ee18b9c4ca661f4732ceb947975d5a6e6f8b712ac6b333263e804f35",
-          "/lu-legilux/loi-1991-08-10-n3/2026-04-11--b1bf4908e5a8193a1bed3573c007566f58210a79312046f1b1556eb322616b38"
+          "/lu-legilux/loi-1991-08-10-n3/2026-04-11--6c164597ee18b9c4ca661f4732ceb947975d5a6e6f8b712ac6b333263e804f35/fra",
+          "/lu-legilux/loi-1991-08-10-n3/2026-04-11--b1bf4908e5a8193a1bed3573c007566f58210a79312046f1b1556eb322616b38/fra"
         ],
         "requested_date": "2026-04-11"
       },
@@ -233,7 +233,7 @@
       "optional_payload_keys": [],
       "payload": {
         "current_digest": "5bca01f82ef3058cfebe7f8a8a6eb1f1fbeeb32b8a1ea7b2c02ac20963235e3a",
-        "current_hash_pinned_url": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--5bca01f82ef3058cfebe7f8a8a6eb1f1fbeeb32b8a1ea7b2c02ac20963235e3a",
+        "current_hash_pinned_url": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--5bca01f82ef3058cfebe7f8a8a6eb1f1fbeeb32b8a1ea7b2c02ac20963235e3a/fra",
         "requested_digest": "5bca01f82ef3058cfebe7f8a8a6eb1f1fbeeb32b8a1ea7b2c02ac20963235e30",
         "rule_profile_sha256s": [
           "70e926111b25a4d364e96b679de0baaa090a869175a82d42e0052572804cf42e",
@@ -251,12 +251,12 @@
       "optional_payload_keys": [],
       "payload": {
         "language": "fra",
-        "left": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--5bca01f82ef3058cfebe7f8a8a6eb1f1fbeeb32b8a1ea7b2c02ac20963235e3a",
+        "left": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--5bca01f82ef3058cfebe7f8a8a6eb1f1fbeeb32b8a1ea7b2c02ac20963235e3a/fra",
         "left_profile": [
           "70e926111b25a4d364e96b679de0baaa090a869175a82d42e0052572804cf42e",
           "dd32d9a59ea33b8c9e9cd51b7b2657a6fa2b716ad00e35db075416ba4cd38a9b"
         ],
-        "right": "/lu-legilux/loi-1991-08-10-n3/2025-03-07--01c1c6f7bd7ebb3677993e3ee477ea6d36f0b6bc70bbfcb72c338e10c9b4791e",
+        "right": "/lu-legilux/loi-1991-08-10-n3/2025-03-07--01c1c6f7bd7ebb3677993e3ee477ea6d36f0b6bc70bbfcb72c338e10c9b4791e/fra",
         "right_profile": [
           "70e926111b25a4d364e96b679de0baaa090a869175a82d42e0052572804cf42e",
           "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
@@ -317,7 +317,7 @@
         "language": "fra",
         "official_identity": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo",
         "official_source": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3",
-        "permalink": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--5bca01f82ef3058cfebe7f8a8a6eb1f1fbeeb32b8a1ea7b2c02ac20963235e3a",
+        "permalink": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--5bca01f82ef3058cfebe7f8a8a6eb1f1fbeeb32b8a1ea7b2c02ac20963235e3a/fra",
         "retained_transport_evidence": "fb59b9fd9372a286c80c90caae9b8676839c85c22f43fcfeec4444bbbf72addb",
         "stable_coordinate": "/lu-legilux/loi-1991-08-10-n3/2024-02-01",
         "what_would_answer": [
@@ -336,7 +336,7 @@
         "language": "fra",
         "official_identity": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo",
         "official_link": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3",
-        "permalink": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--5bca01f82ef3058cfebe7f8a8a6eb1f1fbeeb32b8a1ea7b2c02ac20963235e3a",
+        "permalink": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--5bca01f82ef3058cfebe7f8a8a6eb1f1fbeeb32b8a1ea7b2c02ac20963235e3a/fra",
         "rights_disposition": "non_admitting_licence_scl",
         "rule": "rights are enforced when the bundle is composed, before any text is read: every corpus member the state\u0027s articles come from must have been acquired with its two rights channels agreeing CC BY in the same run (rights_disposition agreed_same_run_cc_by); under any other outcome or rights disposition the bundle refuses text_withheld and names the official identity, the official link and the retained body digest, so a derived, unofficial or non-redistributable body never enters a bundle as authoritative text; a state none of whose articles holds text refuses text_not_available",
         "source_outcome": "acquired",

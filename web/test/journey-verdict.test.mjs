@@ -18,6 +18,7 @@ import {
   EU_SEARCH_PHRASE,
   EU_SEARCH_STEP,
   HISTORY_ANCHOR,
+  READING_LANGUAGE,
   JOURNEY_STEPS,
   REFLOW_WIDTH,
   answerCitations,
@@ -250,20 +251,24 @@ test("a work's address and a state's permalink open their pages with nothing typ
   assert.equal(address.typed, undefined);
   assert.deepEqual(address.body, JOURNEY_STEPS.dossier.body);
   assert.equal(permalink.typed, undefined);
-  assert.deepEqual(permalink.body, JOURNEY_STEPS.reading.body);
-  assert.deepEqual(permalink.pins, { identifier: DOSSIER_IDENTIFIER, date: READING_DATE, anchor: HISTORY_ANCHOR });
-  assert.equal(permalink.path, `/en${DOSSIER_IDENTIFIER}/${READING_DATE}--${"0".repeat(64)}#${HISTORY_ANCHOR}`, "a placeholder that pins nothing");
-  const held = journeyStepsFor({ identifier: "/lu-legilux/rgd-2017-12-13-a1050", date: "2018-01-01", anchor: "art_2" });
+  // R64: the permalink names its text's language, and the page asks the reading in it.
+  assert.deepEqual(permalink.body, { operation_id: "evidence_bundle", parameters: { identifier: DOSSIER_IDENTIFIER, date: READING_DATE, language: READING_LANGUAGE } });
+  assert.equal(READING_LANGUAGE, "fra");
+  assert.deepEqual(permalink.pins, { identifier: DOSSIER_IDENTIFIER, date: READING_DATE, anchor: HISTORY_ANCHOR, language: READING_LANGUAGE });
+  assert.equal(permalink.path, `/en${DOSSIER_IDENTIFIER}/${READING_DATE}--${"0".repeat(64)}/fra/${HISTORY_ANCHOR}`, "a placeholder that pins nothing, the article a segment of it");
+  const held = journeyStepsFor({ identifier: "/lu-legilux/rgd-2017-12-13-a1050", date: "2018-01-01", anchor: "art_2", language: "deu" });
   assert.equal(held.address.path, "/en/lu-legilux/rgd-2017-12-13-a1050");
-  assert.equal(held.permalink.path, `/en/lu-legilux/rgd-2017-12-13-a1050/2018-01-01--${"0".repeat(64)}#art_2`);
+  assert.equal(held.permalink.path, `/en/lu-legilux/rgd-2017-12-13-a1050/2018-01-01--${"0".repeat(64)}/deu/art_2`);
+  assert.equal(held.permalink.body.parameters.language, "deu");
 });
 
 test("a permalink step opens the permalink the server's dossier names for its date, and keeps its placeholder otherwise", async () => {
   const { permalink } = JOURNEY_STEPS;
   const digest = "e".repeat(64);
   const states = [
-    { applicability_date: "2020-01-01", permalink: `${DOSSIER_IDENTIFIER}/2020-01-01--${"d".repeat(64)}` },
-    { applicability_date: READING_DATE, permalink: `${DOSSIER_IDENTIFIER}/${READING_DATE}--${digest}` },
+    { applicability_date: "2020-01-01", language: "fra", permalink: `${DOSSIER_IDENTIFIER}/2020-01-01--${"d".repeat(64)}/fra` },
+    { applicability_date: READING_DATE, language: "fra", permalink: `${DOSSIER_IDENTIFIER}/${READING_DATE}--${digest}/fra` },
+    { applicability_date: READING_DATE, language: "deu", permalink: `${DOSSIER_IDENTIFIER}/${READING_DATE}--${"c".repeat(64)}/deu` },
   ];
   const asked = [];
   const ask = async (origin, operation, parameters) => {
@@ -272,33 +277,34 @@ test("a permalink step opens the permalink the server's dossier names for its da
   };
   const pinned = await pinnedStep(ORIGIN, permalink, { ask });
   assert.deepEqual(asked, [[ORIGIN, "dossier", { identifier: DOSSIER_IDENTIFIER }]], "one dossier, of the same server");
-  assert.equal(pinned.path, `/en${DOSSIER_IDENTIFIER}/${READING_DATE}--${digest}#${HISTORY_ANCHOR}`, "the state on the date, at the article, under the interface language");
+  assert.equal(pinned.path, `/en${DOSSIER_IDENTIFIER}/${READING_DATE}--${digest}/fra/${HISTORY_ANCHOR}`, "the state of its language on the date, at the article, under the interface language");
   assert.deepEqual({ ...pinned, path: permalink.path }, { ...permalink }, "nothing else changes");
   assert.equal(await pinnedStep(ORIGIN, JOURNEY_STEPS.reading, { ask }), JOURNEY_STEPS.reading, "a step that pins nothing is left as it is");
   assert.equal(asked.length, 1, "and asks nothing");
-  const twoOnTheDate = [...states, { applicability_date: READING_DATE, permalink: `${DOSSIER_IDENTIFIER}/${READING_DATE}--${"f".repeat(64)}` }];
+  const twoOnTheDate = [...states, { applicability_date: READING_DATE, language: "fra", permalink: `${DOSSIER_IDENTIFIER}/${READING_DATE}--${"f".repeat(64)}/fra` }];
   for (const answer of [
     null,
     { verdict: "refuse", refusal: { code: "no_corpus_mounted" } },
     { verdict: "answer", result: { value: { states: [] } } },
     { verdict: "answer", result: { value: { states: twoOnTheDate } } },
-    { verdict: "answer", result: { value: { states: [{ applicability_date: READING_DATE, permalink: "/reading.html" }] } } },
+    { verdict: "answer", result: { value: { states: [{ applicability_date: READING_DATE, language: "fra", permalink: "/reading.html" }] } } },
+    { verdict: "answer", result: { value: { states: [{ applicability_date: READING_DATE, language: "deu", permalink: `${DOSSIER_IDENTIFIER}/${READING_DATE}--${digest}/deu` }] } } },
   ]) {
     assert.equal(await pinnedStep(ORIGIN, permalink, { ask: async () => answer }), permalink, `${JSON.stringify(answer)}: the placeholder stays`);
   }
 });
 
 test("an answer's citations are its permalinks printed as code and its links to a reading, under any interface", () => {
-  const state = `${DOSSIER_IDENTIFIER}/${READING_DATE}--${"e".repeat(64)}`;
-  const wording = `/eu-eurlex/32016R0679/eng/2016-04-27--${"c".repeat(64)}`;
-  assert.deepEqual(answerCitations([state, `${state}#art_15`, "e".repeat(64), "https://legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo", "art_15"], []), [state, `${state}#art_15`], "code beginning with a slash");
-  assert.deepEqual(answerCitations([], [`${state}#art_15`, `/fr${wording}#art_5`, `${wording}#art_5`, "/reading.html", DOSSIER_IDENTIFIER, "#main", "https://legilux.public.lu/"]), [`${state}#art_15`, `${wording}#art_5`],
-    "a link to a state's or a wording's reading, as the permalink it opens; a work's address, a page or another site is no citation");
+  const state = `${DOSSIER_IDENTIFIER}/${READING_DATE}--${"e".repeat(64)}/fra`;
+  const wording = `/eu-eurlex/32016R0679/2016-04-27--${"c".repeat(64)}/eng`;
+  assert.deepEqual(answerCitations([state, `${state}/art_15`, "e".repeat(64), "https://legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo", "art_15"], []), [state, `${state}/art_15`], "code beginning with a slash");
+  assert.deepEqual(answerCitations([], [`${state}/art_15`, `/fr${wording}/art_5`, `${wording}/art_5#par_2`, "/reading.html", DOSSIER_IDENTIFIER, "#main", "https://legilux.public.lu/"]), [`${state}/art_15`, `${wording}/art_5`],
+    "a link to a state's or a wording's reading, as the permalink it opens (a position inside the article is no part of it); a work's address, a page or another site is no citation");
   assert.deepEqual(answerCitations([state], [state]), [state], "a permalink printed and linked is one citation");
 });
 
 test("a permalink run passes when its page shows the pinned state with the article in view, and fails otherwise", () => {
-  const step = { ...JOURNEY_STEPS.permalink, path: `/en${DOSSIER_IDENTIFIER}/${READING_DATE}--${"e".repeat(64)}#${HISTORY_ANCHOR}` };
+  const step = { ...JOURNEY_STEPS.permalink, path: `/en${DOSSIER_IDENTIFIER}/${READING_DATE}--${"e".repeat(64)}/fra/${HISTORY_ANCHOR}` };
   const observed = () => ({
     ...goodSearch(),
     requests: [
@@ -321,7 +327,7 @@ test("a permalink run passes when its page shows the pinned state with the artic
     ["the article missing", { inView: "absent" }, /art_15 the permalink names is not on the page/],
     ["the article not observed", { inView: undefined }, /not in view \(not observed\)/],
     ["the article in view without the focus", { targetFocused: false }, /art_15 the permalink names is in view without the focus/],
-    ["the article dropped from the address", { location: `${ORIGIN}${step.path.split("#")[0]}` }, /ended at/],
+    ["the article dropped from the address", { location: `${ORIGIN}${step.path.slice(0, step.path.lastIndexOf("/"))}` }, /ended at/],
     ["a form submitted as well", { requests: [...observed().requests, observed().requests[2]] }, /2 requests to the API/],
   ]) {
     const failures = journeyVerdict({ ...observed(), ...change }, expected);
@@ -333,9 +339,9 @@ test("a permalink run passes when its page shows the pinned state with the artic
 
 test("a stale permalink run passes when its page says, in view, that the version shown is not the one the link pins", () => {
   const step = JOURNEY_STEPS.stale;
-  assert.equal(step.path, `/en${DOSSIER_IDENTIFIER}/${READING_DATE}--${"0".repeat(64)}#${HISTORY_ANCHOR}`, "a digest no state has");
+  assert.equal(step.path, `/en${DOSSIER_IDENTIFIER}/${READING_DATE}--${"0".repeat(64)}/fra/${HISTORY_ANCHOR}`, "a digest no state has");
   assert.equal(step.pins, undefined, "opened as it is, never replaced by the dossier's permalink");
-  assert.deepEqual(step.body, JOURNEY_STEPS.reading.body);
+  assert.deepEqual(step.body, JOURNEY_STEPS.permalink.body);
   const observed = () => ({
     ...goodSearch(),
     requests: [
@@ -347,8 +353,8 @@ test("a stale permalink run passes when its page says, in view, that the version
     pinReplaced: true,
     inView: "shown",
     targetFocused: true,
-    pinNamed: step.path.split("#")[0],
-    pinVerification: { identifier: step.path.split("#")[0], refusal: "pinned_digest_mismatch", verdict: null },
+    pinNamed: step.path.slice("/en".length, step.path.lastIndexOf("/")),
+    pinVerification: { identifier: step.path.slice("/en".length, step.path.lastIndexOf("/")), refusal: "pinned_digest_mismatch", verdict: null },
   });
   const expected = { origin: ORIGIN, step, state: "success", texts: ["which is not the version this site serves for that date"] };
   assert.deepEqual(journeyVerdict(observed(), expected), []);
@@ -368,7 +374,7 @@ test("a stale permalink run passes when its page says, in view, that the version
 test("a page at a law's address the server renders asks nothing as it loads and shows its answer with no script (R67)", () => {
   for (const name of ["address", "permalink", "stale"]) assert.equal(JOURNEY_STEPS[name].rendered, true, `${name} is rendered by the server`);
   assert.equal(JOURNEY_STEPS.reading.rendered, undefined, "a page the reader asks from its form is not");
-  const step = { ...JOURNEY_STEPS.permalink, path: `/en${DOSSIER_IDENTIFIER}/${READING_DATE}--${"e".repeat(64)}#${HISTORY_ANCHOR}` };
+  const step = { ...JOURNEY_STEPS.permalink, path: `/en${DOSSIER_IDENTIFIER}/${READING_DATE}--${"e".repeat(64)}/fra/${HISTORY_ANCHOR}` };
   const observed = () => ({
     ...goodSearch(),
     requests: [
@@ -399,6 +405,54 @@ test("a page at a law's address the server renders asks nothing as it loads and 
   // A step that does not require a rendered page (`mustRender` unset): a page that asks once, as any page does, passes.
   const unrendered = { ...observed(), serverRendered: false, withoutScripts: undefined, answerState: "refusal", text: "no_corpus_mounted", requests: [...observed().requests, askOnce] };
   assert.deepEqual(journeyVerdict(unrendered, { origin: ORIGIN, step, state: "refusal", refusalCode: "no_corpus_mounted" }), []);
+});
+
+test("a law's page names the permalink with no interface language as canonical, each language and x-default as alternates (R64)", () => {
+  const site = "https://law.soufien.lu";
+  const article = `${DOSSIER_IDENTIFIER}/${READING_DATE}--${"e".repeat(64)}/fra/${HISTORY_ANCHOR}`;
+  const step = { ...JOURNEY_STEPS.permalink, path: `/en${article}` };
+  const links = (address) => ({ canonical: `${site}${address}`, alternates: [["fr", `${site}/fr${address}`], ["en", `${site}/en${address}`], ["x-default", `${site}${address}`]] });
+  const observed = (change = {}) => ({
+    ...goodSearch(),
+    requests: [{ url: `${ORIGIN}${step.path}`, method: "GET", headers: {} }],
+    location: `${ORIGIN}${step.path}`,
+    text: "49 articles quoted",
+    pinReplaced: false,
+    inView: "shown",
+    targetFocused: true,
+    serverRendered: true,
+    withoutScripts: { answerState: "success" },
+    ...links(article),
+    ...change,
+  });
+  const expected = { origin: ORIGIN, step, state: "success", texts: ["49 articles quoted"], mustRender: true };
+  assert.deepEqual(journeyVerdict(observed(), expected), []);
+  for (const [what, change, reason] of [
+    ["no canonical link", { canonical: null }, /names no canonical link/],
+    ["the page's own language", { canonical: `${site}/en${article}` }, /not a law's address .* with no interface language/],
+    ["the state without its article", links(article.slice(0, article.lastIndexOf("/"))), /canonical, not https:\/\/law\.soufien\.lu\/lu-legilux/],
+    ["another origin", { canonical: `${ORIGIN}${article}` }, /not a law's address on https:\/\/law\.soufien\.lu/],
+    ["no x-default", { alternates: [["fr", `${site}/fr${article}`], ["en", `${site}/en${article}`]] }, /alternates are/],
+    // Every link is counted (review of #967): one named twice is a failure, which a map of them would hide.
+    ["an alternate twice", { alternates: [...links(article).alternates, ["en", `${site}/en${article}`]] }, /alternates are .*, each once/],
+    ["two canonical links", { canonical: [`${site}${article}`, `${site}${article}`] }, /not a law's address/],
+  ]) {
+    const failures = journeyVerdict(observed(change), expected);
+    assert.ok(failures.some((failure) => reason.test(failure)), `${what}: ${failures.join(" | ")}`);
+  }
+
+  // A stale permalink's page names the version it shows, never the digest it was opened at.
+  const stale = JOURNEY_STEPS.stale;
+  const shown = `${DOSSIER_IDENTIFIER}/${READING_DATE}--${"e".repeat(64)}/fra`;
+  const staleObserved = (address) => ({
+    ...observed(links(address)), location: `${ORIGIN}${stale.path}`, pinReplaced: true, pinNamed: shown,
+    pinVerification: { identifier: shown, refusal: "pinned_digest_mismatch", verdict: null },
+  });
+  const staleExpected = { origin: ORIGIN, step: stale, state: "success", texts: ["49 articles quoted"], mustRender: true };
+  assert.deepEqual(journeyVerdict(staleObserved(shown), staleExpected), []);
+  assert.ok(journeyVerdict(staleObserved(stale.path.slice("/en".length)), staleExpected).some((failure) => /canonical, not the version it shows/.test(failure)));
+  // The version it shows, with no article: the article the stale address names is not the answer's to mint (review of #967).
+  assert.ok(journeyVerdict(staleObserved(`${shown}/${HISTORY_ANCHOR}`), staleExpected).some((failure) => /canonical, not the version it shows/.test(failure)));
 });
 
 test("a provision history run types the identifier and the article id and is held to both in the body", () => {
@@ -596,8 +650,8 @@ test("a keyboard run reaches every field by Tab alone, and every stop shows wher
 
 test("every citation the page prints is hash-pinned and verifies as the state and article it pins", () => {
   const digest = "a".repeat(64);
-  const state = `/lu-legilux/loi-1991-08-10-n3/2024-02-01--${digest}`;
-  const article = `${state}#art_15`;
+  const state = `/lu-legilux/loi-1991-08-10-n3/2024-02-01--${digest}/fra`;
+  const article = `${state}/art_15`;
   const matches = (identifier, anchor = null) => ({ identifier, refusal: null, verdict: "digest_matches", stateSha256: digest, requestedAnchor: anchor });
   const observed = { ...goodSearch(), citations: [state, article], verifications: [matches(state), matches(article, "art_15")] };
   const expected = { origin: ORIGIN, step: JOURNEY_STEPS.search, state: "success" };
@@ -628,33 +682,33 @@ test("every citation the page prints is hash-pinned and verifies as the state an
 
 test("every quotation carries its digests, its official source and a citation pinning its article (review of #805)", () => {
   const digest = "a".repeat(64);
-  const state = `/lu-legilux/loi-1991-08-10-n3/2024-02-01--${digest}`;
+  const state = `/lu-legilux/loi-1991-08-10-n3/2024-02-01--${digest}/fra`;
   const source = "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo";
-  const quoted = (article, codes = [digest, "b".repeat(64), source, `${state}#${article}`]) => ({ article, codes });
+  const quoted = (article, codes = [digest, "b".repeat(64), source, `${state}/${article}`]) => ({ article, codes });
   const observed = { ...goodSearch(), quotes: [quoted("art_15"), quoted("art_16")] };
   const expected = { origin: ORIGIN, step: JOURNEY_STEPS.search, state: "success" };
   const failing = (quotes) => journeyVerdict({ ...observed, quotes }, expected);
   assert.deepEqual(journeyVerdict(observed, expected), [], "quotes that carry all four pass");
   assert.ok(failing([quoted("art_15"), quoted("art_16", [digest, "b".repeat(64), source])])
     .includes("the quote of art_16 carries no citation that pins it"), "a quote cited only by its state fails (the export composer's 49 quotes)");
-  assert.ok(failing([quoted("art_15"), quoted("art_16", [digest, "b".repeat(64), source, `${state}#art_15`])])
+  assert.ok(failing([quoted("art_15"), quoted("art_16", [digest, "b".repeat(64), source, `${state}/art_15`])])
     .includes("the quote of art_16 carries no citation that pins it"), "a citation of another article does not cite this one");
-  assert.ok(failing([quoted("art_15", [digest, source, `${state}#art_15`])])
+  assert.ok(failing([quoted("art_15", [digest, source, `${state}/art_15`])])
     .includes("the quote of art_15 does not show its text digest, body digest and official source"), "one digest is not two");
-  assert.ok(failing([quoted("art_15", [digest, "b".repeat(64), `${state}#art_15`])])
+  assert.ok(failing([quoted("art_15", [digest, "b".repeat(64), `${state}/art_15`])])
     .includes("the quote of art_15 does not show its text digest, body digest and official source"), "no official source");
 });
 
 test("an EU quotation is pinned by its EU wording permalink, its provision escaped as the platform escapes it (review of #903)", () => {
   const digest = "c".repeat(64);
-  const wording = `/eu-eurlex/32016R0679/eng/2016-04-27--${digest}`;
+  const wording = `/eu-eurlex/32016R0679/2016-04-27--${digest}/eng`;
   const source = "http://publications.europa.eu/resource/cellar/3e485e15-11bd-11e6-ba9a-01aa75ed71a1.0006.02/DOC_1";
   const quoted = (article, codes) => ({ article, codes });
   const expected = { origin: ORIGIN, step: JOURNEY_STEPS.search, state: "success" };
   const verdict = (quotes) => journeyVerdict({ ...goodSearch(), quotes }, expected);
-  assert.deepEqual(verdict([quoted("001", [digest, "d".repeat(64), source, `${wording}#001`])]), [], "an EU quote with its own provision permalink passes");
-  assert.deepEqual(verdict([quoted("art 1", [digest, "d".repeat(64), source, `${wording}#art%201`])]), [], "a provision id is compared unescaped");
-  assert.ok(verdict([quoted("002", [digest, "d".repeat(64), source, `${wording}#001`])])
+  assert.deepEqual(verdict([quoted("001", [digest, "d".repeat(64), source, `${wording}/001`])]), [], "an EU quote with its own provision permalink passes");
+  assert.deepEqual(verdict([quoted("art 1", [digest, "d".repeat(64), source, `${wording}/art%201`])]), [], "a provision id is compared unescaped");
+  assert.ok(verdict([quoted("002", [digest, "d".repeat(64), source, `${wording}/001`])])
     .includes("the quote of 002 carries no citation that pins it"), "another provision's permalink does not pin this one");
   assert.ok(verdict([quoted("001", [digest, "d".repeat(64), source, wording])])
     .includes("the quote of 001 carries no citation that pins it"), "the wording permalink alone pins no provision");
@@ -781,14 +835,16 @@ test("the EU search step names the GDPR by its CELEX, chooses English and is hel
 
 test("an EU citation is pinned by its wording, verifies as that wording, and names its provision unescaped", () => {
   const digest = "c".repeat(64);
-  const wording = `/eu-eurlex/32016R0679/eng/2016-04-27--${digest}`;
-  const article = `${wording}#026`;
-  const escaped = `${wording}#26%28a%29`;
+  const wording = `/eu-eurlex/32016R0679/2016-04-27--${digest}/eng`;
+  const article = `${wording}/026`;
+  const escaped = `${wording}/26%28a%29`;
   assert.deepEqual(pinnedCitation(article), { publisher: "eu-eurlex", digest, anchor: "026" });
   assert.deepEqual(pinnedCitation(escaped), { publisher: "eu-eurlex", digest, anchor: "26(a)" }, "verify names the provision unescaped");
   assert.deepEqual(pinnedCitation(wording), { publisher: "eu-eurlex", digest, anchor: null });
-  assert.equal(pinnedCitation(`${wording}#%E0%A4%A`), null, "a provision that is not a valid escape pins nothing");
+  assert.equal(pinnedCitation(`${wording}/%E0%A4%A`), null, "a provision that is not a valid escape pins nothing");
   assert.equal(pinnedCitation("/eu-eurlex/32016R0679/eng/2016-04-27"), null, "a permalink without its digest pins nothing");
+  assert.equal(pinnedCitation(`/eu-eurlex/32016R0679/eng/2016-04-27--${digest}`), null, "nor does the shape before R64");
+  assert.equal(pinnedCitation(`${wording}#026`), null, "nor a provision after #, which R64 leaves for a position inside it");
   assert.equal(pinnedCitation(`http://publications.europa.eu/resource/cellar/x.0006#lex-provision=026`), null, "nor does the provision coordinate");
 
   const matches = (identifier, anchor = null) => ({ identifier, refusal: null, verdict: "digest_matches", publisher: "eu-eurlex", stateSha256: null, wordingSha256: digest, requestedAnchor: anchor });
@@ -1029,7 +1085,7 @@ test("on a real mount J5 must refuse identifier_unknown with the absence note wh
 
 test("on a real mount the steps ask for a Luxembourg work the mount holds, and J1 for the day before its history", () => {
   // The fixture's work is not in a population: on the population mount its steps met only identifier_unknown (2026-10-13).
-  const held = { identifier: "/lu-legilux/loi-2015-12-03-n1", date: "2015-12-11", anchor: "art_1er", beforeHistory: "2015-12-10" };
+  const held = { identifier: "/lu-legilux/loi-2015-12-03-n1", date: "2015-12-11", anchor: "art_1er", language: "fra", beforeHistory: "2015-12-10" };
   const report = { corpus: {}, luxembourgIndex: {} };
   const steps = Object.fromEntries(realMountSteps(report, held));
   assert.deepEqual(steps.dossier.body.parameters, { identifier: held.identifier });
@@ -1050,7 +1106,7 @@ test("on a real mount the steps ask for a Luxembourg work the mount holds, and J
 });
 
 test("a revision's held work is chosen from its answers as from an index: three hits in a state alone on its date", async () => {
-  const hit = (work, date, state, publisher_id) => ({ work_key: work, applicability_date: date, state_sha256: state, publisher_id });
+  const hit = (work, date, state, publisher_id) => ({ work_key: work, applicability_date: date, state_sha256: state, publisher_id, language: "fra" });
   const answers = {
     search: { result: { value: { hits: [
       hit("a-few", "2001-01-01", "s1", "art_1"), hit("a-few", "2001-01-01", "s1", "art_2"),
@@ -1067,7 +1123,7 @@ test("a revision's held work is chosen from its answers as from an index: three 
     return operation === "search" ? answers.search : answers[parameters.identifier];
   };
   assert.deepEqual(await heldLuxembourgWorkFromAnswers("http://revision", { ask }),
-    { identifier: "/lu-legilux/c-held", date: "2010-05-05", anchor: "art_10", beforeHistory: "2008-02-29" },
+    { identifier: "/lu-legilux/c-held", date: "2010-05-05", anchor: "art_10", language: "fra", beforeHistory: "2008-02-29" },
     "two hits are too few, twins on a date are refused, and J1 is the day before the work's first state");
   assert.deepEqual(asked[0], ["search", { query: "loi", language: "fra" }]);
   assert.deepEqual(asked.slice(1).map(([operation, parameters]) => [operation, parameters.identifier]),
@@ -1131,7 +1187,7 @@ test("the real-mount runs give each step its expectations, then the API journeys
 async function eventLogServer(count, { limit = 200, overlap = false } = {}) {
   const { createServer } = await import("node:http");
   const logId = "e".repeat(64);
-  const events = Array.from({ length: count }, (_, index) => ({ seq: index + 1, permalink: `/lu-legilux/w${index}/2024-02-01--${"f".repeat(64)}` }));
+  const events = Array.from({ length: count }, (_, index) => ({ seq: index + 1, permalink: `/lu-legilux/w${index}/2024-02-01--${"f".repeat(64)}/fra` }));
   const page = (after) => {
     const rest = events.filter((event) => event.seq > (overlap && after > 0 ? after - 1 : after));
     const served = rest.slice(0, limit);

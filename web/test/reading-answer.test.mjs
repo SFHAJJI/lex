@@ -58,7 +58,7 @@ function twoLanguages(base) {
     german.language = "deu";
     german.state_sha256 = sha;
     german.expression_iri = german.expression_iri.replace(/\/fr$/, "/de");
-    german.permalink = `${german.stable_coordinate}--${sha}`;
+    german.permalink = `${german.stable_coordinate}--${sha}/deu`;
     german.sources = german.sources.map((source) => ({ ...source, body_sha256: body, object_ref_sha256: sha256(`de:${source.object_ref_sha256}`) }));
     german.body_sha256s = [body];
     german.article_identities_sha256 = sha256(`de:${german.article_identities_sha256}`);
@@ -66,7 +66,7 @@ function twoLanguages(base) {
       article.language = "deu";
       article.article_identity_sha256 = sha256(`de:${article.article_identity_sha256}`);
       article.body_sha256 = body;
-      article.article_permalink = `${german.permalink}#${article.publisher_id}`;
+      article.article_permalink = `${german.permalink}/${article.publisher_id}`;
     }
     answer.states.unshift(german);
     answer.available_languages = ["deu", "fra"];
@@ -85,7 +85,7 @@ test("the captured bundle reads: one state, its quoted articles, and what the bu
   assert.equal(state.validityConflictCount, state.articles.filter((article) => article.validityConflict).length);
   assert.ok(state.articles.some((article) => article.notes.length > 0), "the notes travel beside the text");
   for (const article of state.articles) {
-    assert.equal(article.permalink, `${state.permalink}#${article.publisherId}`);
+    assert.equal(article.permalink, `${state.permalink}/${article.publisherId}`);
     assert.equal(createHash("sha256").update(article.text, "utf8").digest("hex"), article.textSha256,
       `${article.publisherId}: the text digest is the served text's`);
   }
@@ -110,7 +110,7 @@ test("each rule the bundle states about itself is refused when broken, with that
     ["a state applying after the date", (a) => { a.requested_date = "2024-01-31"; }, /after the date asked/],
     ["a state followed before the date", (a) => { first(a).next_applicability_date = "2024-02-01"; }, /does not apply on the date asked/],
     ["a coordinate of another date", (a) => { first(a).stable_coordinate = `/lu-legilux/${a.work_key}/2020-01-01`; }, /does not name its work and date/],
-    ["a permalink to another digest", (a) => { first(a).permalink = first(a).permalink.slice(0, -1) + "0"; }, /does not pin its coordinate and digest/],
+    ["a permalink to another digest", (a) => { first(a).permalink = first(a).permalink.replace(/[0-9a-f](\/[a-z]{3})$/, "0$1"); }, /does not pin its coordinate, digest and language/],
     ["an article permalink of another article", (a) => { first(a).articles[0].article_permalink += "x"; }, /not its state's permalink with its id/],
     ["a byte length that is not the text's", (a) => { first(a).articles[0].text_byte_length += 1; }, /states \d+ bytes of text and carries/],
     ["an article in another language", (a) => { first(a).articles[0].language = "deu"; }, /in a state held in fra/],
@@ -130,7 +130,11 @@ test("each rule the bundle states about itself is refused when broken, with that
   for (const [what, change, reason] of cases) {
     assert.throws(() => readEvidenceBundle(mutate(answer, change)), reason, what);
   }
-  assert.throws(() => readEvidenceBundle(mutate(two, (a) => { a.states[0].language = "fra"; for (const x of a.states[0].articles) x.language = "fra"; })), /two states in fra/);
+  assert.throws(() => readEvidenceBundle(mutate(two, (a) => {
+    a.states[0].language = "fra";
+    a.states[0].permalink = a.states[0].permalink.replace(/\/deu$/, "/fra");
+    for (const x of a.states[0].articles) Object.assign(x, { language: "fra", article_permalink: x.article_permalink.replace("/deu/", "/fra/") });
+  })), /two states in fra/);
   assert.throws(() => readEvidenceBundle(mutate(two, (a) => { a.requested_language = "fra"; })), /is in deu, and the bundle was asked in fra/);
   assert.throws(() => readEvidenceBundle(mutate(two, (a) => { a.states.reverse(); })), /the state in deu follows the one in fra/);
   assert.throws(() => readEvidenceBundle(mutate(answer, (a) => { a.states = []; })), /none is refused, not answered/);

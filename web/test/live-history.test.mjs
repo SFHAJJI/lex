@@ -95,13 +95,13 @@ test("a longer lineage shows the change, the next state counting an absent one, 
     applicability_date: "2026-01-01",
     state_sha256: sha,
     stable_coordinate: `/lu-legilux/${value.work_key}/2026-01-01`,
-    permalink: `/lu-legilux/${value.work_key}/2026-01-01--${sha}`,
+    permalink: `/lu-legilux/${value.work_key}/2026-01-01--${sha}/${later.language}`,
     next_applicability_date: null,
     wording_changed: true,
   });
   later.articles = later.articles.map((article) => ({ ...article, article_identity_sha256: "f".repeat(64), wording_sha256: "e".repeat(64), validity_conflict: article.article_valid_from !== null && article.article_valid_from !== "2026-01-01" }));
   first.next_applicability_date = "2025-01-01";
-  const absent = { language: "fra", applicability_date: "2025-01-01", state_sha256: "c".repeat(64), permalink: `/lu-legilux/${value.work_key}/2025-01-01--${"c".repeat(64)}` };
+  const absent = { language: "fra", applicability_date: "2025-01-01", state_sha256: "c".repeat(64), permalink: `/lu-legilux/${value.work_key}/2025-01-01--${"c".repeat(64)}/fra` };
   value.states = [first, later];
   value.absent_in_states = [absent];
   value.wording_runs = [{ language: "fra", count: 2 }];

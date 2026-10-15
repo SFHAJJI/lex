@@ -116,7 +116,7 @@ public sealed class V3RefusalPayloadSamplesTests
         Assert.IsNotNull(mount);
         var wrongDigest = fixture.StateSha256[..^1] + (fixture.StateSha256[^1] == '0' ? '1' : '0');
         await DriveAsync(observed, mount, "resolve", "a pinned state whose digest is not the held one",
-            new { identifier = $"/lu-legilux/{fixture.WorkKey}/{fixture.ApplicabilityDate}--{wrongDigest}" }, "pinned_digest_mismatch");
+            new { identifier = fixture.PermalinkOf(wrongDigest) }, "pinned_digest_mismatch");
     }
 
     private static async Task ObserveLuxembourgAsync(Census observed)
@@ -226,12 +226,12 @@ public sealed class V3RefusalPayloadSamplesTests
         await DriveAsync(observed, mount, "verify", "an identifier no work has", new { identifier = unknown }, "identifier_unknown");
         await DriveAsync(observed, mount, "verify", "a European identifier on a Luxembourg-only mount", new { identifier = european }, "retrieval_mode_unavailable");
         await DriveAsync(observed, mount, "verify", "a pinned permalink whose digest the coordinate no longer carries",
-            new { identifier = $"/lu-legilux/{fixture.WorkKey}/{fixture.ApplicabilityDate}--{new string('0', 64)}", language = "fra" }, "pinned_digest_mismatch");
-        await DriveAsync(observed, mount, "verify", "a pinned permalink at a coordinate two languages share, with a digest neither carries",
-            new { identifier = $"/lu-legilux/{fixture.WorkKey}/{fixture.ApplicabilityDate}--{new string('0', 64)}" }, "ambiguous_identifier");
+            new { identifier = fixture.PermalinkOf(new string('0', 64)), language = "fra" }, "pinned_digest_mismatch");
+        await DriveAsync(observed, mount, "verify", "a pinned permalink at a coordinate two states of its language share, with a digest neither carries",
+            new { identifier = $"/lu-legilux/{fixture.WorkKey}/{twinDate}--{new string('0', 64)}/fra" }, "ambiguous_identifier");
         await DriveAsync(observed, mount, "verify", "a language not held", new { identifier = $"/lu-legilux/{fixture.WorkKey}", language = "eng" }, "language_not_available");
         await DriveAsync(observed, mount, "verify", "an article permalink naming an article the pinned state does not hold",
-            new { identifier = $"{fixture.Permalink}#art_no_such_anchor", language = "fra" }, "anchor_not_in_version");
+            new { identifier = $"{fixture.Permalink}/art_no_such_anchor", language = "fra" }, "anchor_not_in_version");
 
         // relations
         await DriveAsync(observed, mount, "relations", "an identifier no work has", new { identifier = unknown }, "identifier_unknown");

@@ -34,7 +34,7 @@ import {
   createSearchSession,
 } from '../scripts/live-search.mjs';
 import { CHROME_LOCALE, ENGLISH_LANG, countedEntry, liveChrome } from '../scripts/live-chrome.mjs';
-import { permalinkHref } from '../scripts/permalinks.mjs';
+import { articlePermalink, permalinkHref } from '../scripts/permalinks.mjs';
 
 /** The forms' labels and buttons, and this screen's sentences, from the interface copy table. */
 const FORM = liveChrome().form;
@@ -162,7 +162,7 @@ function NotCovered({ rows }) {
 function Hit({ hit }) {
   return (
     <li data-lane={hit.lane}>
-      <a href={permalinkHref(`${hit.permalink}#${encodeURIComponent(hit.publisherId)}`, CHROME_LOCALE)}>
+      <a href={permalinkHref(articlePermalink(hit.permalink, hit.publisherId), CHROME_LOCALE)}>
         <Say template={COPY.hit} values={{ article: <strong>{hit.publisherId}</strong>, work: hit.workKey, date: hit.applicabilityDate }} />
       </a>{' '}
       <span className="badge">{COPY.lane[hit.lane]}</span>

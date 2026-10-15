@@ -118,7 +118,7 @@ public sealed class V3CorpusEventsChainMountTests
         Assert.AreEqual(fixture.Language, row.GetProperty("language").GetString());
         Assert.AreEqual(current.GetProperty("applicability_date").GetString(), row.GetProperty("dates_from").GetString());
         Assert.AreEqual(JsonValueKind.Null, row.GetProperty("dates_to_exclusive").ValueKind, "open: every later date moved");
-        Assert.AreEqual($"/lu-legilux/{fixture.WorkKey}/{EarlierDate}--{fixture.HeldStateSha256}", row.GetProperty("answered_before").GetString());
+        Assert.AreEqual($"/lu-legilux/{fixture.WorkKey}/{EarlierDate}--{fixture.HeldStateSha256}/{fixture.Language}", row.GetProperty("answered_before").GetString());
         CollectionAssert.AreEqual(new[] { current.GetProperty("permalink").GetString() }, row.GetProperty("answered_now").EnumerateArray().Select(static p => p.GetString()).ToArray());
         Assert.IsTrue(row.GetProperty("derived").GetBoolean());
         Assert.IsFalse(answer.GetProperty("has_more").GetBoolean());

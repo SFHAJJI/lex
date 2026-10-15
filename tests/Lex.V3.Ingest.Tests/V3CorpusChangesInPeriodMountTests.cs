@@ -187,8 +187,7 @@ public sealed class V3CorpusChangesInPeriodMountTests
         Assert.AreEqual(V3Verdicts.Answer, envelope.Verdict, "One ambiguous date does not silence the radar.");
         var rows = envelope.Result!.Value.GetProperty("changes").EnumerateArray().ToArray();
         Assert.AreEqual(3, rows.Length);
-        var coordinate = fixture.StableCoordinate.Replace("/" + fixture.ApplicabilityDate, "/" + twinDate) + "--";
-        var twins = new[] { coordinate + later.StateSha256, coordinate + twin.StateSha256 }.Order(StringComparer.Ordinal).ToArray();
+        var twins = new[] { MountedFixture.PermalinkOf(later), MountedFixture.PermalinkOf(twin) }.Order(StringComparer.Ordinal).ToArray();
         foreach (var row in rows.Take(2))
         {
             Assert.AreEqual(JsonValueKind.Null, row.GetProperty("wording_changed").ValueKind);
@@ -236,7 +235,7 @@ public sealed class V3CorpusChangesInPeriodMountTests
             .Result!.Value.GetProperty("changes").EnumerateArray().ToArray();
 
         Assert.AreEqual(2, rows.Length);
-        var twins = new[] { fixture.Permalink, fixture.StableCoordinate + "--" + twin.StateSha256 }.Order(StringComparer.Ordinal).ToArray();
+        var twins = new[] { fixture.Permalink, MountedFixture.PermalinkOf(twin) }.Order(StringComparer.Ordinal).ToArray();
         foreach (var row in rows)
         {
             Assert.AreEqual("ambiguous_version", row.GetProperty("reason").GetString(),

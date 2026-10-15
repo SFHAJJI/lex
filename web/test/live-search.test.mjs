@@ -118,7 +118,7 @@ test("a served search answer is the results, read by the search reader", async (
   assert.match(markup, /^<section data-answer-state="success">/);
   const shown = text(markup);
   for (const hit of envelope.result.value.hits) {
-    assert.ok(markup.includes(`<a href="/en${hit.resolve.identifier}#${hit.publisher_id}">`), `${hit.publisher_id} links to its reading at the article, by its permalink`);
+    assert.ok(markup.includes(`<a href="/en${hit.resolve.identifier}/${hit.publisher_id}">`), `${hit.publisher_id} links to its reading at the article, by its permalink (R64: the article a segment of it)`);
     assert.ok(shown.includes(`${hit.publisher_id} in ${hit.work_key}, version of ${hit.applicability_date}`));
   }
   for (const row of markup.match(/<li data-lane="[^"]*">.*?<\/li>/g)) {

@@ -82,7 +82,7 @@ function hit(overrides = {}) {
     valid_to: null,
     publication_date: '2000-12-01',
     text_available: true,
-    permalink: `https://law.soufien.lu/lu-legilux/code-travail/${validFrom}--${'a'.repeat(64)}`,
+    permalink: `https://law.soufien.lu/lu-legilux/code-travail/${validFrom}--${'a'.repeat(64)}/fra`,
     match_reasons: ['keyword'],
     provision_num: 'Art. 1',
     ...overrides,
@@ -481,7 +481,7 @@ test('the heading is the publisher vocabulary of the rows, not a parameter', () 
   const union = hit({
     lex_id: `${UNION}:2018-05-25`,
     valid_from: '2018-05-25',
-    permalink: `https://law.soufien.lu/eu-eurlex/32016R0679/2018-05-25--${'b'.repeat(64)}`,
+    permalink: `https://law.soufien.lu/eu-eurlex/32016R0679/2018-05-25--${'b'.repeat(64)}/eng`,
   });
   const mixed = screen({ hits: [hit(), union], matchingTotal: 2 });
   assert.ok(

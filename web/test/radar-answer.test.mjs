@@ -62,7 +62,7 @@ test("a window holding both states reads: the later one compared with its baseli
 test("each rule the radar states about itself is refused when broken, with that rule's reason", async () => {
   const { first, both } = await capturedAnswers();
   const later = (a) => a.changes[1];
-  const permalinkLike = (a, digit) => `/lu-legilux/${a.changes[0].work_key}/${a.changes[0].state.applicability_date}--${digit.repeat(64)}`;
+  const permalinkLike = (a, digit) => `/lu-legilux/${a.changes[0].work_key}/${a.changes[0].state.applicability_date}--${digit.repeat(64)}/${a.changes[0].state.language}`;
   const cases = [
     ["another publisher's radar", both, (a) => { a.publisher = "eu-eurlex"; }, /Luxembourg \(lu-legilux\) radar only/],
     ["a window that is not the dates'", both, (a) => { a.window_to = "2030-01-01"; }, /closed interval between the two dates/],
@@ -75,7 +75,7 @@ test("each rule the radar states about itself is refused when broken, with that 
     ["a baseline not followed by its state", both, (a) => { later(a).baseline.next_applicability_date = null; }, /not by the state it is the baseline of/],
     ["profiles that differ, compared", both, (a) => { later(a).state.rule_profile_sha256s = ["a".repeat(64)]; }, /different rule profiles/],
     ["a reason outside the vocabulary", first, (a) => { a.changes[0].reason = "not_interesting"; }, /is not one of/],
-    ["a first held state with a baseline", both, (a) => { a.changes[0].baseline = structuredClone(later(a).baseline); a.changes[0].baseline.next_applicability_date = a.changes[0].state.applicability_date; a.changes[0].baseline.applicability_date = "2020-01-01"; a.changes[0].baseline.stable_coordinate = `/lu-legilux/${a.changes[0].work_key}/2020-01-01`; a.changes[0].baseline.permalink = `${a.changes[0].baseline.stable_coordinate}--${a.changes[0].baseline.state_sha256}`; }, /first held state, with no baseline/],
+    ["a first held state with a baseline", both, (a) => { a.changes[0].baseline = structuredClone(later(a).baseline); a.changes[0].baseline.next_applicability_date = a.changes[0].state.applicability_date; a.changes[0].baseline.applicability_date = "2020-01-01"; a.changes[0].baseline.stable_coordinate = `/lu-legilux/${a.changes[0].work_key}/2020-01-01`; a.changes[0].baseline.permalink = `${a.changes[0].baseline.stable_coordinate}--${a.changes[0].baseline.state_sha256}/${a.changes[0].baseline.language}`; }, /first held state, with no baseline/],
     ["an ambiguity without candidates", first, (a) => { a.changes[0].reason = "ambiguous_version"; }, /names candidate states for ambiguous_version/],
     ["an ambiguity not naming its own state", first, (a) => { a.changes[0].reason = "ambiguous_version"; a.changes[0].candidates = [permalinkLike(a, "a"), permalinkLike(a, "b")]; }, /its own state is among the candidates/],
     ["candidates on a first held state", first, (a) => { a.changes[0].candidates = [permalinkLike(a, "a"), permalinkLike(a, "b")]; }, /names no candidate states for first_held_state/],

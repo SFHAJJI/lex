@@ -8,6 +8,8 @@
 //
 // Data and pure functions only: the pages, their client entries and the server-render bundle share it.
 
+import { anchorText, articlePermalink, parseSitePath } from './permalinks.mjs';
+
 /** The id of the data block that carries the answer a page was rendered from. */
 export const INITIAL_ANSWER_ID = 'lex-initial-answer';
 
@@ -28,6 +30,43 @@ export function jsonInScript(value) {
 export function lawPathOf(path) {
   const match = /^\/(?:en|fr)(\/(?:lu-legilux|eu-eurlex)\/.*)$/.exec(path ?? '');
   return match === null ? null : match[1];
+}
+
+/**
+ * The address a reading page names as its own (canonical, and in each language), with no interface language: an address
+ * the platform mints, taken from the answer the page shows and never from the request (review of #967: any article
+ * segment, `/fra/no-such-article` or an escape the platform never writes, `art%5F15`, named itself canonical). `address`
+ * is the address the page stands at with no interface language, an article's included, and `view` the reading it shows
+ * (null when it shows none, as a refusal). When the view shows the state (or EU wording) the address pins: the minted
+ * permalink of the article the address names, if that state quotes it or holds it without text (its publisher id equal
+ * to the segment decoded), else the state's own. When it shows another version in its place, as a stale permalink's page
+ * does (review of #959: any digest named itself canonical): that version's permalink, with no article. With no view: the
+ * pinned state's permalink, with no article. Any other address is returned as it is.
+ */
+export function readingAddressShown(view, address) {
+  const named = parseSitePath(address);
+  if (named === null || named.kind !== 'state') return address;
+  const shown = (view?.publisher === 'eu-eurlex' ? view.wordings : view?.states) ?? [];
+  const pinned = shown.find((one) => one.permalink === named.permalink);
+  if (pinned === undefined) return shown[0]?.permalink ?? named.permalink;
+  const publisherId = anchorText(named.anchor);
+  if (publisherId === null) return pinned.permalink;
+  const quoted = (pinned.articles ?? []).find((article) => article.publisherId === publisherId);
+  if (quoted !== undefined) return quoted.permalink;
+  const withoutText = (pinned.articlesWithoutText ?? []).some((article) => article.publisherId === publisherId);
+  return withoutText ? articlePermalink(pinned.permalink, publisherId) : pinned.permalink;
+}
+
+/**
+ * The address a law's page as built names as its own before it holds an answer (`client.jsx`), for the path it stands at:
+ * a work's address, or a reading's state's permalink with no article, the article segment left out until the reading's
+ * answer says the state holds it (`readingAddressShown`). Null for a path that is no law's address.
+ */
+export function addressBeforeAnswer(path) {
+  const address = lawPathOf(path);
+  const named = parseSitePath(address);
+  if (named === null) return null;
+  return named.kind === 'state' ? named.permalink : address;
 }
 
 /**

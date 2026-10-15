@@ -172,9 +172,8 @@ public sealed class V3CorpusInForceOnMountTests
         Assert.AreEqual("ambiguous_version", ambiguous.GetProperty("reason").GetString());
         Assert.AreEqual(JsonValueKind.Null, ambiguous.GetProperty("state").ValueKind);
         Assert.AreEqual(JsonValueKind.Null, ambiguous.GetProperty("resolve").ValueKind);
-        var coordinate = fixture.StableCoordinate.Replace("/" + fixture.ApplicabilityDate, "/" + twinDate) + "--";
         CollectionAssert.AreEqual(
-            new[] { coordinate + later.StateSha256, coordinate + twin.StateSha256 }.Order(StringComparer.Ordinal).ToArray(),
+            new[] { MountedFixture.PermalinkOf(later), MountedFixture.PermalinkOf(twin) }.Order(StringComparer.Ordinal).ToArray(),
             ambiguous.GetProperty("candidates").EnumerateArray().Select(static v => v.GetString()).ToArray());
         Assert.AreEqual(twinDate, ambiguous.GetProperty("interval").GetProperty("from").GetString());
 
@@ -201,7 +200,7 @@ public sealed class V3CorpusInForceOnMountTests
         Assert.AreEqual(asOfRefusal.HelpfulPayload.GetRawText(), named.Refusal.HelpfulPayload.GetRawText(),
             "The two operations give the same refusal payload for the same work and date.");
         CollectionAssert.AreEqual(
-            new[] { coordinate + later.StateSha256, coordinate + twin.StateSha256 }.Order(StringComparer.Ordinal).ToArray(),
+            new[] { MountedFixture.PermalinkOf(later), MountedFixture.PermalinkOf(twin) }.Order(StringComparer.Ordinal).ToArray(),
             named.Refusal.HelpfulPayload.GetProperty("candidates").EnumerateArray().Select(static v => v.GetString()).ToArray());
         var namedClean = await SelectionAsync(mount, Shift(twinDate, 10), identifier: $"/lu-legilux/{other.WorkKey}");
         Assert.AreEqual(V3Verdicts.Answer, namedClean.Verdict);
@@ -312,8 +311,8 @@ public sealed class V3CorpusInForceOnMountTests
             Assert.AreEqual(asOfGerman.Refusal!.HelpfulPayload.GetRawText(), germanOnly.Refusal.HelpfulPayload.GetRawText());
             Assert.AreEqual(2, Candidates(germanOnly).Length);
             Assert.IsTrue(Candidates(germanOnly).All(candidate =>
-                candidate.EndsWith(germanLater.StateSha256, StringComparison.Ordinal) ||
-                candidate.EndsWith(germanTwin.StateSha256, StringComparison.Ordinal)));
+                candidate.Contains("--" + germanLater.StateSha256 + "/", StringComparison.Ordinal) ||
+                candidate.Contains("--" + germanTwin.StateSha256 + "/", StringComparison.Ordinal)));
         }
 
         // Now French has twins too. With no language asked for, every ambiguous language's candidates
@@ -330,7 +329,7 @@ public sealed class V3CorpusInForceOnMountTests
             CollectionAssert.AreEqual(candidates.Order(StringComparer.Ordinal).ToArray(), candidates);
             foreach (var state in new[] { germanLater, germanTwin, frenchLater, frenchTwin })
             {
-                Assert.AreEqual(1, candidates.Count(candidate => candidate.EndsWith(state.StateSha256, StringComparison.Ordinal)));
+                Assert.AreEqual(1, candidates.Count(candidate => candidate.Contains("--" + state.StateSha256 + "/", StringComparison.Ordinal)));
             }
 
             var asOfBoth = await AsOfAsync(mount, null);

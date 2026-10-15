@@ -91,7 +91,8 @@ public sealed class V3CorpusEuropeTimeViewTests
                     Assert.AreEqual(missingStateCelex ? null : "02016R0679-20240101", wordings[1].GetProperty("celex").GetString());
                     foreach (var wording in wordings)
                     {
-                        StringAssert.StartsWith(wording.GetProperty("permalink").GetString(), $"/eu-eurlex/{GdprSeed}/{code}/{wording.GetProperty("wording_date").GetString()}--");
+                        StringAssert.StartsWith(wording.GetProperty("permalink").GetString(), $"/eu-eurlex/{GdprSeed}/{wording.GetProperty("wording_date").GetString()}--");
+                        StringAssert.EndsWith(wording.GetProperty("permalink").GetString(), $"--{wording.GetProperty("wording_sha256").GetString()}/{code}", "R64: the wording's digest, then its language");
                     }
 
                     Assert.AreEqual(0, language.GetProperty("unplaced_versions").GetArrayLength());
@@ -197,7 +198,7 @@ public sealed class V3CorpusEuropeTimeViewTests
 
             // A digest the wording does not have names the current pin.
             var permalink = wording.GetProperty("permalink").GetString()!;
-            var mismatch = await EnvelopeAsync(mount, "/api/v3/verify", "verify", new { identifier = permalink[..^64] + new string('0', 64) });
+            var mismatch = await EnvelopeAsync(mount, "/api/v3/verify", "verify", new { identifier = System.Text.RegularExpressions.Regex.Replace(permalink, "--[0-9a-f]{64}", "--" + new string('0', 64)) });
             Assert.AreEqual("pinned_digest_mismatch", mismatch.Refusal?.Code);
             Assert.AreEqual(permalink, mismatch.Refusal!.HelpfulPayload.GetProperty("current_hash_pinned_url").GetString());
 

@@ -129,7 +129,7 @@ public sealed class V3CorpusCitedByMountTests
         // The citing state is named the way every other operation names a state.
         Assert.AreEqual(V3StateLocator(other), edges[0].GetProperty("citing_stable_coordinate").GetString());
         Assert.AreEqual(
-            "/lu-legilux/" + other.WorkKey + "/" + other.ApplicabilityDate + "--" + other.StateSha256,
+            MountedFixture.PermalinkOf(other),
             edges[0].GetProperty("citing_permalink").GetString());
 
         // A table of the same rows read by SQL that shares nothing with the reader.

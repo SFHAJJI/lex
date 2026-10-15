@@ -178,7 +178,7 @@ export function renderReadingPreview({ locale = 'en' } = {}) {
         valid_from: '2021-01-26',
         hash: liveHash,
         publication_date: '2021-02-11',
-        href: `/${PUBLISHER}/${WORK}/2021-01-26--${liveHash}`,
+        href: `/${PUBLISHER}/${WORK}/2021-01-26--${liveHash}/fra`,
         withdrawn: false,
       },
       withdrawn: [
@@ -186,7 +186,7 @@ export function renderReadingPreview({ locale = 'en' } = {}) {
           valid_from: '2021-01-26',
           hash: withdrawnHash,
           publication_date: '2021-01-26',
-          href: `/${PUBLISHER}/${WORK}/2021-01-26--${withdrawnHash}`,
+          href: `/${PUBLISHER}/${WORK}/2021-01-26--${withdrawnHash}/fra`,
           withdrawn: true,
         },
       ],

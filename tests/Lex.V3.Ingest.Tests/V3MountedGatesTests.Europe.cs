@@ -129,8 +129,8 @@ public sealed partial class V3MountedGatesTests
                     "SELECT article_identity_sha256 FROM articles WHERE publisher_expression_id = $expression ORDER BY publisher_identifier, article_identity_sha256",
                     ("$expression", expression))
                 .Select(static row => row[0]!);
-            return $"{(work.Original ? "original_wording" : "consolidated_version")}:/eu-eurlex/{act}/{language}/{date}--" +
-                V3EuropePermalinkTests.WordingSha256ByTheStatedRule(act, work.Work, expression, language, date, identities);
+            return $"{(work.Original ? "original_wording" : "consolidated_version")}:/eu-eurlex/{act}/{date}--" +
+                V3EuropePermalinkTests.WordingSha256ByTheStatedRule(act, work.Work, expression, language, date, identities) + $"/{language}";
         }
 
         var timelines = new List<Timeline>();
@@ -404,7 +404,8 @@ public sealed partial class V3MountedGatesTests
         var english = EuropeTimelines(fixture.Directory).Single();
         Assert.AreEqual("32016R0679", english.WorkKey);
         Assert.AreEqual("eng", english.Language);
-        StringAssert.StartsWith(english.Expected(Day("2016-04-27")), "original_wording:/eu-eurlex/32016R0679/eng/2016-04-27--");
+        StringAssert.StartsWith(english.Expected(Day("2016-04-27")), "original_wording:/eu-eurlex/32016R0679/2016-04-27--");
+        StringAssert.EndsWith(english.Expected(Day("2016-04-27")), "/eng", "R64: the wording's language after its pin");
         Assert.AreEqual(NoVersion, english.Expected(Day("2016-04-26")));
 
         var sets = RunEuropeTemporalGate(mount, fixture.Directory);

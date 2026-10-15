@@ -18,7 +18,7 @@ import { CHROME_LOCALES } from '../scripts/localization.mjs';
 import { cspValue } from '../scripts/csp.mjs';
 import { LocaleNav, localeHome } from './LocaleNav.jsx';
 import { CHROME_LOCALE, fillText, liveChrome, livePath } from '../scripts/live-chrome.mjs';
-import { INTERFACE_LANGUAGES } from '../scripts/permalinks.mjs';
+import { INTERFACE_LANGUAGES, lawPageLinks } from '../scripts/permalinks.mjs';
 import { CANONICAL_HOST } from '../scripts/routes.mjs';
 
 /** The marker that says, in the DOM, that nothing on this page is law. */
@@ -82,15 +82,11 @@ const ALTERNATE_PAGES = Object.freeze({
  * language (`x-default`) the page a reader with no preference gets: the home page's root, which sends each reader to their
  * language, and for any other page that page in French (`negotiateLanguage`'s default; review of #958: the root named a
  * different page). A page the server rendered at a law's address (`lawPath`, the address with no language, as the API
- * mints it) names that address in each language, and for any other the address itself, which sends a reader to theirs.
+ * mints it) names that address in each language, and for any other the address itself, which sends a reader to theirs
+ * (`lawPageLinks`, which the page as built writes once loaded, `client.jsx`).
  */
 export function alternateLinks(state, lawPath = null) {
-  if (lawPath !== null) {
-    return [
-      ...INTERFACE_LANGUAGES.map((language) => ({ hrefLang: language, href: `${SITE_ORIGIN}/${language}${lawPath}` })),
-      { hrefLang: 'x-default', href: `${SITE_ORIGIN}${lawPath}` },
-    ];
-  }
+  if (lawPath !== null) return lawPageLinks(lawPath, SITE_ORIGIN).alternates;
   const page = ALTERNATE_PAGES[state];
   if (page === undefined) return [];
   return [
@@ -224,8 +220,9 @@ export function Document({
         <title>{banner === 'live' ? fillText(liveChrome().shell.title, { title }) : `${title} - Lex V3 preview`}</title>
         <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
         <link rel="stylesheet" href="/styles.css" />
-        {/* A page at a law's address names itself as the canonical page of its language (R67). */}
-        {banner === 'live' && lawPath !== null ? <link rel="canonical" href={`${SITE_ORIGIN}/${locale}${lawPath}`} /> : null}
+        {/* A page at a law's address names as canonical the address with no interface language, the permalink Lex prints
+            and cites (R64, R67), which sends each reader to their language; each language's page is an alternate. */}
+        {banner === 'live' && lawPath !== null ? <link rel="canonical" href={lawPageLinks(lawPath, SITE_ORIGIN).canonical} /> : null}
         {banner === 'live'
           ? alternateLinks(state, lawPath).map((link) => <link key={link.hrefLang} rel="alternate" hrefLang={link.hrefLang} href={link.href} />)
           : null}

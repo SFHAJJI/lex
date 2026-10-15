@@ -242,7 +242,7 @@ const moreArticles = (count) => (bundle) => {
     const text = `Article ${id}. ${"The controller shall implement appropriate technical and organisational measures. ".repeat(6).trim()}`;
     wording.articles.push({
       ...structuredClone(wording.articles[0]), article_identity_sha256: sha256(`identity ${id}`), publisher_id: id, heading: `Heading ${id}`,
-      text, text_sha256: sha256(text), text_byte_length: Buffer.byteLength(text, "utf8"), article_permalink: `${wording.permalink}#${id}`,
+      text, text_sha256: sha256(text), text_byte_length: Buffer.byteLength(text, "utf8"), article_permalink: `${wording.permalink}/${id}`,
     });
   }
 };
@@ -250,13 +250,13 @@ const moreArticles = (count) => (bundle) => {
 /** The sample's wording as a consolidated one, dated 2024-01-01 and read on 2025-03-01 (the EU time view). */
 function consolidated(bundle) {
   const sha = "7".repeat(64);
-  const permalink = `/eu-eurlex/${EUROPE_SAMPLE.celex}/eng/2024-01-01--${sha}`;
+  const permalink = `/eu-eurlex/${EUROPE_SAMPLE.celex}/2024-01-01--${sha}/eng`;
   Object.assign(bundle, { requested_date: "2025-03-01", consolidations_held: true });
   Object.assign(bundle.wordings[0], {
     kind: "consolidated_version", wording_date: "2024-01-01", next_date: null, wording_sha256: sha, permalink,
     stable_coordinate: `/eu-eurlex/${EUROPE_SAMPLE.celex}/eng/2024-01-01`,
   });
-  for (const article of bundle.wordings[0].articles) article.article_permalink = `${permalink}#${article.publisher_id}`;
+  for (const article of bundle.wordings[0].articles) article.article_permalink = `${permalink}/${article.publisher_id}`;
 }
 
 /** The body runs of every page of an EU export: without the watermark at its head, nor the acknowledgement and number at its foot. */

@@ -253,8 +253,8 @@ test("the platform's English on a French page is marked English, and on an Engli
 test("an EU refusal card offers wordings by their dates, never applicable states, in English and in French", () => {
   const sha = (digit) => digit.repeat(64);
   const candidates = [
-    { valid_from: "2024-02-01", hash: sha("a"), publication_date: "2024-01-15", href: `/lu-legilux/loi-x/2024-02-01--${sha("a")}`, withdrawn: false },
-    { valid_from: "2024-03-01", hash: sha("b"), publication_date: null, href: `/lu-legilux/loi-x/2024-03-01--${sha("b")}`, withdrawn: false },
+    { valid_from: "2024-02-01", hash: sha("a"), publication_date: "2024-01-15", href: `/lu-legilux/loi-x/2024-02-01--${sha("a")}/fra`, withdrawn: false },
+    { valid_from: "2024-03-01", hash: sha("b"), publication_date: null, href: `/lu-legilux/loi-x/2024-03-01--${sha("b")}/fra`, withdrawn: false },
   ];
   const outcome = (publisher, sentence) => ({
     state: "refusal", code: "ambiguous_version", card: true, sentence, payload: { requested_date: "2024-06-01", candidates }, context: { publisher },

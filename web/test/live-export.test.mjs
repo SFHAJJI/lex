@@ -251,7 +251,7 @@ test("pinned EU articles compose the EU export: the acknowledgement, the authent
   for (const item of model.items) {
     assert.ok(text.includes(`<strong>${item.publisherId}</strong> (eng, wording of 2016-04-27): <code>${item.citation}</code>, text digest <code>${item.textSha256}</code>`), `${item.publisherId}, dated by its wording`);
   }
-  assert.ok(text.includes(`<strong>099</strong> (eng, wording of 2016-04-27): excluded, articles_without_text, <code>${EUROPE_SAMPLE.permalink}#099</code>`));
+  assert.ok(text.includes(`<strong>099</strong> (eng, wording of 2016-04-27): excluded, articles_without_text, <code>${EUROPE_SAMPLE.permalink}/099</code>`));
   const [annex] = outcome.view.wordings[0].annexesNotServed;
   assert.ok(text.includes(`<div data-export-annexes="1"><p data-annexes-not-served="2" data-annex-disposition="annex_text_not_available">2 annexes of the English wording are not served as text, and are never searched, quoted or exported: ${annex.reason}. Official source <code>${annex.officialSource}</code>.</p></div>`));
   assert.ok(text.includes(`<pre>${exportJson(model)}</pre>`), "the JSON shown is the JSON saved");

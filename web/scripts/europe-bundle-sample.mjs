@@ -14,6 +14,7 @@
 
 import { createHash } from 'node:crypto';
 
+import { articlePermalink, europePermalink } from './permalinks.mjs';
 import { escapeProvision } from './search-answer.mjs';
 
 /** The SHA-256 of a text's UTF-8 bytes, as the platform digests a quoted text. */
@@ -28,7 +29,7 @@ export const EUROPE_SAMPLE = Object.freeze({
   wordingDate: '2016-04-27',
   wordingSha256: '5'.repeat(64),
   bodySha256: 'b'.repeat(64),
-  permalink: `/eu-eurlex/32016R0679/eng/2016-04-27--${'5'.repeat(64)}`,
+  permalink: europePermalink({ celex: '32016R0679', date: '2016-04-27', wordingSha256: '5'.repeat(64), language: 'eng' }),
   officialSource: 'http://publications.europa.eu/resource/cellar/3e485e15-11bd-11e6-ba9a-01aa75ed71a1.0006.02/DOC_1',
   /** The quoted articles, as `[publisher id, heading, text]`. */
   articles: Object.freeze([
@@ -89,7 +90,7 @@ export function europeBundle(change = () => {}) {
         package_sha256: 'e'.repeat(64),
         source_entry_sha256: 'f'.repeat(64),
         official_source: officialSource,
-        article_permalink: `${permalink}#${escapeProvision(id)}`,
+        article_permalink: articlePermalink(permalink, id),
         provision_coordinate: `${work}.0006#lex-provision=${escapeProvision(id)}`,
       })),
       articles_without_text: [{ article_identity_sha256: sha256(`identity ${EUROPE_SAMPLE.withoutText}`), publisher_id: EUROPE_SAMPLE.withoutText }],

@@ -154,13 +154,13 @@ test('the non-throwing form refuses rather than raising, for captured data', () 
 // real record, which is the worst shape this failure takes: nothing on the screen is wrong.
 
 const HASH = 'a'.repeat(64);
-const STATE = { publisher: 'lu-legilux', work: 'code-travail', validFrom: '2021-01-26', hash: HASH };
+const STATE = { publisher: 'lu-legilux', work: 'code-travail', validFrom: '2021-01-26', hash: HASH, language: 'fra' };
 
 test('a minted permalink is the one the policy accepts, and it round-trips', () => {
   // The control, first and deliberately. A refusal that also refuses the true case is not a
   // check, and asserting the hostile cases alone cannot tell the two apart.
   const href = canonicalStateHref(STATE);
-  assert.equal(href, `https://${CANONICAL_HOST}/lu-legilux/code-travail/2021-01-26--${HASH}`);
+  assert.equal(href, `https://${CANONICAL_HOST}/lu-legilux/code-travail/2021-01-26--${HASH}/fra`);
 
   const parsed = canonicalStateUrl(href);
   assert.notEqual(parsed, null, 'the builder minted a URL its own parser refuses');
@@ -176,14 +176,15 @@ test('a minted permalink is the one the policy accepts, and it round-trips', () 
   assert.equal(anchored.anchor, 'art_2');
 
   // The root-relative form is the same state, because that is what an internal link looks like.
-  assert.equal(canonicalStateUrl(`/lu-legilux/code-travail/2021-01-26--${HASH}`).work, 'code-travail');
+  assert.equal(canonicalStateUrl(`/lu-legilux/code-travail/2021-01-26--${HASH}/fra`).work, 'code-travail');
+  assert.equal(parsed.language, 'fra', 'the text language the permalink names (R64)');
 });
 
 test('a permalink that is not this product own state URL is refused', () => {
   // Each case carries its own reason, so each guard is held by a case of its own. A shared
   // pattern would let the host check stand in for the scheme check and either could then be
   // deleted with nothing going red.
-  const path = `/lu-legilux/code-travail/2021-01-26--${HASH}`;
+  const path = `/lu-legilux/code-travail/2021-01-26--${HASH}/fra`;
   for (const [value, why] of [
     [`https://evil.example${path}`, 'another host'],
     [`http://${CANONICAL_HOST}${path}`, 'a scheme that is not https'],
@@ -204,10 +205,12 @@ test('a permalink that is not this product own state URL is refused', () => {
     [`https://${CANONICAL_HOST}${path}?next=https://evil.example`, 'a query string'],
     [`https://${CANONICAL_HOST}${path.replace('/code-travail', String.fromCharCode(92) + 'code-travail')}`, 'a backslash'],
     [`https://${CANONICAL_HOST}/lu-legilux/code-travail/2021-01-26`, 'no digest at all'],
-    [`https://${CANONICAL_HOST}/lu-legilux/code-travail/2021-13-45--${HASH}`, 'a version key that is not a date'],
+    [`https://${CANONICAL_HOST}/lu-legilux/code-travail/2021-13-45--${HASH}/fra`, 'a version key that is not a date'],
+    [`https://${CANONICAL_HOST}/lu-legilux/code-travail/2021-01-26--${HASH}`, 'the shape before R64, which names no language'],
+    [`https://${CANONICAL_HOST}${path}#art_2`, 'an article after #, which R64 writes as a segment'],
     [`https://${CANONICAL_HOST}/lu-legilux/code-travail`, 'a dossier, which is not a state'],
-    [`https://${CANONICAL_HOST}//lu-legilux/code-travail/2021-01-26--${HASH}`, 'a doubled separator'],
-    [`https://${CANONICAL_HOST}/lu-legilux/../secret/2021-01-26--${HASH}`, 'a segment that walks out'],
+    [`https://${CANONICAL_HOST}//lu-legilux/code-travail/2021-01-26--${HASH}/fra`, 'a doubled separator'],
+    [`https://${CANONICAL_HOST}/lu-legilux/../secret/2021-01-26--${HASH}/fra`, 'a segment that walks out'],
     ['', 'the empty string'],
     [undefined, 'nothing at all'],
     [{ toString: () => `https://${CANONICAL_HOST}${path}` }, 'an object that stringifies to a good one'],

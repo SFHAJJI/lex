@@ -69,7 +69,7 @@ public sealed class V3CorpusEuropeDossierMountTests
             var pinned = expression.GetProperty("pinned_wording");
             Assert.AreEqual("2016-04-27", pinned.GetProperty("wording_date").GetString());
             var permalink = pinned.GetProperty("permalink").GetString()!;
-            Assert.AreEqual($"/eu-eurlex/{Celex}/eng/2016-04-27--{pinned.GetProperty("wording_sha256").GetString()}", permalink);
+            Assert.AreEqual($"/eu-eurlex/{Celex}/2016-04-27--{pinned.GetProperty("wording_sha256").GetString()}/eng", permalink);
             StringAssert.StartsWith(body.GetProperty("digest_rule").GetString(), "the SHA-256, under the domain lex-v3-eu-wording/1");
             var verified = await EnvelopeAsync(mount, "/api/v3/verify", "verify", new { identifier = permalink });
             Assert.AreEqual("digest_matches", verified.Result?.Value.GetProperty("verdict").GetString(), verified.Refusal?.Code);

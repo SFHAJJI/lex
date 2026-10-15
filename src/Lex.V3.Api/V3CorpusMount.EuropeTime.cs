@@ -53,7 +53,7 @@ internal sealed partial class V3CorpusMount
         "digest of that text (text_sha256), the digest of the corpus member's retained publisher body (body_sha256: the manifestation the corpus " +
         "holds for the expression, such as its XHTML or PDF), the digest of the Formex package the text was read from (package_sha256) and of the " +
         "package entry (source_entry_sha256), its official source and an article permalink (the wording permalink and the publisher's provision " +
-        "id after #, which verify accepts); an article whose text is empty is named under articles_without_text and is not served as a quote; " +
+        "id as a last segment, which verify accepts); an article whose text is empty is named under articles_without_text and is not served as a quote; " +
         "the annexes the corpus classified on those members are listed under annexes_not_served, each served as text not available with the " +
         "official source to read it, and never quoted";
 
@@ -342,7 +342,7 @@ internal sealed partial class V3CorpusMount
         var articles = EuropeArticlesOf(candidate.ExpressionId);
         var sha256 = EuropeWordingSha256(seed, candidate.State.PublisherWorkIri, candidate.ExpressionId, candidate.Language, date,
             articles.Select(static article => article.ArticleIdentitySha256).ToArray());
-        return (sha256, $"/{EuropePermalinkPublisher}/{seed}/{candidate.Language}/{date}--{sha256}",
+        return (sha256, EuropePermalink(seed, date, sha256, candidate.Language),
             articles.Select(static article => article.PublisherIdentifier).Distinct(StringComparer.Ordinal).ToArray());
     }
 

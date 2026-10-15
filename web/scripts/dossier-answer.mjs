@@ -24,6 +24,7 @@
 // wording date. An expression that pins no wording is refused here rather than shown unpinned.
 
 import { isCalendarDate } from './temporal.mjs';
+import { europePermalink, luxembourgPermalink } from './permalinks.mjs';
 import { readAnnexesNotServed } from './europe-annexes.mjs';
 import { readAsPublished } from './as-published.mjs';
 
@@ -93,8 +94,9 @@ function readState(state, index, workKey, workIri) {
   if (coordinate !== `/lu-legilux/${workKey}/${applicabilityDate}`) {
     throw new Error(`${where}'s stable coordinate ${coordinate} does not name its work and date`);
   }
-  if (permalink !== `${coordinate}--${stateSha256}`) {
-    throw new Error(`${where}'s permalink ${permalink} does not pin its coordinate and digest`);
+  const language = requireText(requireOwn(state, 'language', where), `${where} language`);
+  if (permalink !== luxembourgPermalink({ workKey, date: applicabilityDate, stateSha256, language })) {
+    throw new Error(`${where}'s permalink ${permalink} does not pin its coordinate, digest and language`);
   }
   const publisherWorkIri = requireText(requireOwn(state, 'publisher_work_iri', where), `${where} publisher_work_iri`);
   if (publisherWorkIri !== workIri) {
@@ -105,7 +107,7 @@ function readState(state, index, workKey, workIri) {
     throw new Error(`${where} holds no article; a held state holds at least one`);
   }
   return Object.freeze({
-    language: requireText(requireOwn(state, 'language', where), `${where} language`),
+    language,
     applicabilityDate,
     nextApplicabilityDate: next,
     stateSha256,
@@ -264,7 +266,7 @@ function readEuropeExpression(expression, index, celex) {
   if (wordingDates.length !== 1 || wordingDates[0] !== wordingDate) {
     throw new Error(`${where} pins the wording of ${wordingDate}, and its wording dates are ${JSON.stringify(wordingDates)}; one wording is pinned exactly when one is held`);
   }
-  const expected = `/eu-eurlex/${celex}/${language}/${wordingDate}--${wordingSha256}`;
+  const expected = europePermalink({ celex, date: wordingDate, wordingSha256, language });
   if (permalink !== expected) {
     throw new Error(`${where} carries the permalink ${JSON.stringify(permalink)}, not the wording it pins (${expected})`);
   }

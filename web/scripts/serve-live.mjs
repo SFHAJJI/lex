@@ -19,7 +19,7 @@
 // (`ssr/{language}.js`, `app/ssr-entry.jsx`) renders the page from that answer, in a context of its own with nothing
 // of this process in it. When anything in that fails, the page is served as built and asks for itself.
 
-import { INTERFACE_LANGUAGES, pageForSitePath, redirectFor, sitePageFor } from "./permalinks.mjs";
+import { INTERFACE_LANGUAGES, movedFor, pageForSitePath, redirectFor, sitePageFor } from "./permalinks.mjs";
 import { createServer, request as httpRequest } from "node:http";
 import { readFile, stat } from "node:fs/promises";
 import { extname, join, relative as pathRelative, resolve, sep } from "node:path";
@@ -237,6 +237,14 @@ export function createLiveServer({ root, apiOrigin, apiDeadlineMs = API_DEADLINE
       }
       if (request.method !== "GET" && request.method !== "HEAD") {
         problem(response, 405, "method_not_allowed");
+        return;
+      }
+      // An EU permalink of the shape before R64 has moved for good to R64's, under the interface language it had, the same
+      // answer for every reader, as the API moves it (V3WebRoot.MovedFor).
+      const moved = movedFor(url.pathname, url.search);
+      if (moved !== null) {
+        response.writeHead(301, { ...BASE_HEADERS, location: moved, "content-length": 0 });
+        response.end();
         return;
       }
       // The root, and a law's address with no interface language, are sent to the reader's language (R61), as the API

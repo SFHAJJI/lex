@@ -14,7 +14,7 @@ import { renderProvisionHistory } from '../scripts/provision-history.mjs';
 import { renderGetHelp } from '../scripts/get-help.mjs';
 
 const link = (date, seed) =>
-  `https://law.soufien.lu/lu-legilux/loi-2020-07-17-a624/${date}--${seed.repeat(64)}`;
+  `https://law.soufien.lu/lu-legilux/loi-2020-07-17-a624/${date}--${seed.repeat(64)}/fra`;
 
 const HISTORY = {
   work: 'lu-legilux:loi-2020-07-17-a624',

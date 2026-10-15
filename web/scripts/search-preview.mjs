@@ -67,6 +67,7 @@ function hit({ validFrom = '2001-01-01', ...overrides } = {}) {
       work: WORK_KEY,
       validFrom,
       hash: 'a'.repeat(64),
+      language: 'fra',
     }),
     match_reasons: ['keyword'],
     provision_num: 'Art. 1',

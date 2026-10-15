@@ -12,8 +12,8 @@
 //  - one state per served language, in the languages' ordinal order, the one that applies on the
 //    date asked (from on or before it, to a next date after it or none), in the language asked when
 //    one was asked;
-//  - each state's coordinate and permalink name its work, date and digest, and each article's
-//    permalink is the state's with the publisher's article id after `#`;
+//  - each state's coordinate and permalink name its work, date and digest, the permalink its language too
+//    (R64), and each article's permalink is the state's with the publisher's article id as a last segment;
 //  - each quoted article has text, in its state's language, whose UTF-8 length is the one stated,
 //    read from one of the state's sources and pointing at its official source; its validity flag is
 //    exactly "its own date is stated and differs from the state's", and the state's count is theirs;
@@ -29,14 +29,14 @@
 //    consolidation;
 //  - each wording is of the work, in a language it is held in (the one asked, when one was asked), in
 //    the languages' order, dated by the date asked (the original wording answers only its own date),
-//    and pinned: `/eu-eurlex/{celex}/{language}/{wording date}--{wording sha256}`, its coordinate the
-//    same without the digest;
+//    and pinned: `/eu-eurlex/{celex}/{wording date}--{wording sha256}/{language}` (R64), its coordinate
+//    `/eu-eurlex/{celex}/{language}/{wording date}`;
 //  - every source was acquired; each quoted article has text in its wording's language, whose UTF-8
 //    length is the one stated, read from one of the wording's sources, pointing at an official source,
-//    with the wording's permalink and the provision after `#`, escaped as the platform escapes it.
+//    with the wording's permalink and the provision as a last segment, escaped as the platform escapes it.
 
 import { isCalendarDate } from './temporal.mjs';
-import { escapeProvision } from './search-answer.mjs';
+import { articlePermalink, europePermalink, luxembourgPermalink } from './permalinks.mjs';
 import { readAnnexesNotServed } from './europe-annexes.mjs';
 import { readAsPublished } from './as-published.mjs';
 
@@ -116,8 +116,8 @@ function readArticle(article, index, state, where) {
     throw new Error(`${at} (${publisherId}) is in ${language}, in a state held in ${state.language}`);
   }
   const permalink = requireText(requireOwn(article, 'article_permalink', at), `${at} article_permalink`);
-  if (permalink !== `${state.permalink}#${publisherId}`) {
-    throw new Error(`${at}'s permalink ${permalink} is not its state's permalink with its id`);
+  if (permalink !== articlePermalink(state.permalink, publisherId)) {
+    throw new Error(`${at}'s permalink ${permalink} is not its state's permalink with its id as a last segment`);
   }
   const bodySha256 = requireDigest(requireOwn(article, 'body_sha256', at), `${at} body_sha256`);
   if (!state.bodySha256s.includes(bodySha256)) {
@@ -173,8 +173,9 @@ function readState(state, index, context) {
     throw new Error(`${where}'s stable coordinate ${coordinate} does not name its work and date`);
   }
   const permalink = requireText(requireOwn(state, 'permalink', where), `${where} permalink`);
-  if (permalink !== `${coordinate}--${stateSha256}`) {
-    throw new Error(`${where}'s permalink ${permalink} does not pin its coordinate and digest`);
+  const language = requireText(requireOwn(state, 'language', where), `${where} language`);
+  if (permalink !== luxembourgPermalink({ workKey: context.workKey, date: applicabilityDate, stateSha256, language })) {
+    throw new Error(`${where}'s permalink ${permalink} does not pin its coordinate, digest and language`);
   }
 
   const sources = requireList(requireOwn(state, 'sources', where), `${where} sources`).map((source, sourceIndex) => {
@@ -199,7 +200,7 @@ function readState(state, index, context) {
   }
 
   const partial = {
-    language: requireText(requireOwn(state, 'language', where), `${where} language`),
+    language,
     applicabilityDate,
     permalink,
     bodySha256s,
@@ -354,7 +355,7 @@ function readEuropeWording(wording, index, { celex, date }) {
   }
   const wordingSha256 = requireDigest(requireOwn(wording, 'wording_sha256', where), `${where} wording_sha256`);
   const permalink = requireText(requireOwn(wording, 'permalink', where), `${where} permalink`);
-  const expected = `/eu-eurlex/${celex}/${language}/${wordingDate}--${wordingSha256}`;
+  const expected = europePermalink({ celex, date: wordingDate, wordingSha256, language });
   if (permalink !== expected) {
     throw new Error(`${where} carries the permalink ${JSON.stringify(permalink)}, not the wording it pins (${expected})`);
   }
@@ -388,9 +389,9 @@ function readEuropeWording(wording, index, { celex, date }) {
     }
     const bodySha256 = requireDigest(requireOwn(article, 'body_sha256', label), `${label} body_sha256`);
     if (!bodies.has(bodySha256)) throw new Error(`${label} was read from a body its wording does not name as a source`);
-    const articlePermalink = requireText(requireOwn(article, 'article_permalink', label), `${label} article_permalink`);
-    if (articlePermalink !== `${permalink}#${escapeProvision(publisherId)}`) {
-      throw new Error(`${label} carries the permalink ${JSON.stringify(articlePermalink)}, not its wording's with ${publisherId} after #`);
+    const provisionPermalink = requireText(requireOwn(article, 'article_permalink', label), `${label} article_permalink`);
+    if (provisionPermalink !== articlePermalink(permalink, publisherId)) {
+      throw new Error(`${label} carries the permalink ${JSON.stringify(provisionPermalink)}, not its wording's with ${publisherId} as a last segment`);
     }
     const heading = requireOwn(article, 'heading', label);
     if (typeof heading !== 'string') throw new Error(`${label} heading is not text`);
@@ -403,7 +404,7 @@ function readEuropeWording(wording, index, { celex, date }) {
       textByteLength,
       bodySha256,
       officialSource: requireText(requireOwn(article, 'official_source', label), `${label} official_source`),
-      permalink: articlePermalink,
+      permalink: provisionPermalink,
     });
   }));
   const ids = new Set();

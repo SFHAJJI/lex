@@ -43,7 +43,7 @@ function mutate(answer, change) {
 
 function stateRef(answer, language, date, digit) {
   const sha = digit.repeat(64);
-  return { language, applicability_date: date, state_sha256: sha, permalink: `/lu-legilux/${answer.work_key}/${date}--${sha}` };
+  return { language, applicability_date: date, state_sha256: sha, permalink: `/lu-legilux/${answer.work_key}/${date}--${sha}/${language}` };
 }
 
 function row(answer, language, date, digit, wording, next) {
@@ -126,7 +126,7 @@ test("each rule the history states about itself is refused when broken, with tha
     ["a next date that skips the absent state", long, (a) => { a.states[0].next_applicability_date = "2026-01-01"; }, /next later state in scope is from 2025-01-01/],
     ["a state both carried and absent", long, (a) => { a.absent_in_states.push({ ...a.states[2], stable_coordinate: undefined }); }, /listed twice/],
     ["rows out of date order", long, (a) => { a.states.reverse(); }, /date order/],
-    ["a permalink to another digest", answer, (a) => { a.states[0].permalink = a.states[0].permalink.slice(0, -1) + "0"; }, /does not pin its work, date and digest/],
+    ["a permalink to another digest", answer, (a) => { a.states[0].permalink = a.states[0].permalink.replace(/[0-9a-f](\/[a-z]{3})$/, "0$1"); }, /does not pin its work, date, digest and language/],
     ["a coordinate of another date", answer, (a) => { a.states[0].stable_coordinate = `/lu-legilux/${a.work_key}/2020-01-01`; }, /does not name its work and date/],
     ["a state in another language than asked", long, (a) => { a.requested_language = "fra"; }, /is in deu, and the history was asked in fra/],
     ["a language asked that is not held", answer, (a) => { a.requested_language = "eng"; }, /not one the work is held in/],

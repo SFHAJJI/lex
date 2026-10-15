@@ -100,6 +100,7 @@ test('a real search row is described in its own publisher terms, under a real pe
     work: WORK_KEY,
     validFrom: LATER.valid_from,
     hash: LATER_HASH,
+    language: 'fra',
     anchor: 'art_2',
   });
   const hit = {
@@ -142,8 +143,8 @@ test('a real search row is described in its own publisher terms, under a real pe
   // Luxembourg dates applicability, so this row gets the LU vocabulary, derived from the row.
   assert.equal(html.includes('Applicable from 2020-09-25'), true);
   assert.equal(html.includes('Consolidated wording state'), false);
-  // A real permalink carries an anchor and must survive the canonical route policy.
-  assert.equal(html.includes('#art_2'), true, 'the anchor was dropped from a real permalink');
+  // A real permalink carries an anchor (its last segment, R64) and must survive the canonical route policy.
+  assert.equal(html.includes('/fra/art_2'), true, 'the anchor was dropped from a real permalink');
   // A real lex_id carries the digest inside its state segment, so the row's own identifier has
   // three parts with a `--` in the third. The link is bound to publisher, work and start date.
   assert.equal(html.includes(permalink), true, 'the real permalink was refused');

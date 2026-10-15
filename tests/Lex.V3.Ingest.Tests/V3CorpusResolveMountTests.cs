@@ -121,7 +121,7 @@ public sealed class V3CorpusResolveMountTests
         using var mount = await V3CorpusMount.OpenAsync(fixture.Directory, CancellationToken.None);
         Assert.IsNotNull(mount);
         var requested = fixture.StateSha256[..^1] + (fixture.StateSha256[^1] == '0' ? '1' : '0');
-        var identifier = $"/lu-legilux/{fixture.WorkKey}/{fixture.ApplicabilityDate}--{requested}";
+        var identifier = fixture.PermalinkOf(requested);
         var context = Request(identifier);
         var handler = new V3ApiHandler(
             SyntheticApiState.Unavailable,
@@ -183,25 +183,36 @@ public sealed class V3CorpusResolveMountTests
         Assert.AreEqual(V3Verdicts.Answer, envelope.Verdict);
         Assert.AreEqual(fixture.StateSha256, envelope.Result!.Value.GetProperty("state_sha256").GetString());
         Assert.AreNotEqual(alternate.StateSha256, envelope.Result.Value.GetProperty("state_sha256").GetString());
+
+        // R64: the permalink names its text's language, and its digest is that language's. The German state's permalink
+        // resolves the German state; its digest named under French pins no French state, and is refused as one.
+        var german = await ResolveAsync(mount, MountedFixture.PermalinkOf(alternate));
+        Assert.AreEqual(V3Verdicts.Answer, german.Verdict);
+        Assert.AreEqual(alternate.StateSha256, german.Result!.Value.GetProperty("state_sha256").GetString());
+        Assert.AreEqual("deu", german.Result.Value.GetProperty("language").GetString());
+        Assert.AreEqual(MountedFixture.PermalinkOf(alternate), german.Result.Value.GetProperty("permalink").GetString());
+        var crossed = await ResolveAsync(mount, fixture.PermalinkOf(alternate.StateSha256));
+        Assert.AreEqual("pinned_digest_mismatch", crossed.Refusal?.Code);
+        Assert.AreEqual(fixture.Permalink, crossed.Refusal!.HelpfulPayload.GetProperty("current_hash_pinned_url").GetString());
     }
 
     [TestMethod]
-    public async Task UnknownHashAcrossSeveralCurrentStatesReturnsAmbiguousCandidates()
+    public async Task UnknownHashAcrossSeveralCurrentStatesOfItsLanguageReturnsAmbiguousCandidates()
     {
         var fixture = await MountedFixture.CreateAsync();
         await using var cleanup = fixture;
-        var alternate = await fixture.AddSecondLanguageStateAtSameDateAsync();
+        var twin = await fixture.AddStateAsync(fixture.ApplicabilityDate, "twin");
         using var mount = await V3CorpusMount.OpenAsync(fixture.Directory, CancellationToken.None);
         Assert.IsNotNull(mount);
         var unknown = new string('0', 64);
-        if (unknown == fixture.StateSha256 || unknown == alternate.StateSha256) unknown = new string('1', 64);
+        if (unknown == fixture.StateSha256 || unknown == twin.StateSha256) unknown = new string('1', 64);
 
-        var envelope = await ResolveAsync(mount, fixture.StableCoordinate + "--" + unknown);
+        var envelope = await ResolveAsync(mount, fixture.PermalinkOf(unknown));
 
         Assert.AreEqual(V3Verdicts.Refuse, envelope.Verdict);
         Assert.AreEqual("ambiguous_identifier", envelope.Refusal!.Code);
         CollectionAssert.AreEquivalent(
-            new[] { fixture.Permalink, fixture.StableCoordinate + "--" + alternate.StateSha256 },
+            new[] { fixture.Permalink, MountedFixture.PermalinkOf(twin) },
             envelope.Refusal.HelpfulPayload.GetProperty("candidates").EnumerateArray()
                 .Select(static value => value.GetString()).ToArray());
     }
@@ -213,7 +224,7 @@ public sealed class V3CorpusResolveMountTests
         await using var cleanup = fixture;
         using var mount = await V3CorpusMount.OpenAsync(fixture.Directory, CancellationToken.None);
         Assert.IsNotNull(mount);
-        var identifier = $"/lu-legilux/{fixture.WorkKey}/2000-01-01--{new string('a', 64)}";
+        var identifier = $"/lu-legilux/{fixture.WorkKey}/2000-01-01--{new string('a', 64)}/fra";
 
         var envelope = await ResolveAsync(mount, identifier);
 
@@ -236,6 +247,11 @@ public sealed class V3CorpusResolveMountTests
     [DataRow("publisher")]
     [DataRow("uppercase-digest")]
     [DataRow("invalid-date")]
+    [DataRow("no-language")]
+    [DataRow("two-letter-language")]
+    [DataRow("upper-case-language")]
+    [DataRow("article")]
+    [DataRow("empty-segment")]
     public async Task PinnedPermalinkGrammarRejectsEachNonCanonicalForm(string mutation)
     {
         var fixture = await MountedFixture.CreateAsync();
@@ -250,10 +266,17 @@ public sealed class V3CorpusResolveMountTests
             "query" => "https://law.soufien.lu" + fixture.Permalink + "?x=1",
             "fragment" => "https://law.soufien.lu" + fixture.Permalink + "#x",
             "host" => "https://evillaw.soufien.lu" + fixture.Permalink,
-            "segment-count" => fixture.Permalink + "/extra",
+            "segment-count" => fixture.Permalink + "/art_1/extra",
             "publisher" => fixture.Permalink.Replace("/lu-legilux/", "/other/", StringComparison.Ordinal),
-            "uppercase-digest" => fixture.StableCoordinate + "--" + fixture.StateSha256.ToUpperInvariant(),
-            "invalid-date" => fixture.StableCoordinate.Replace(fixture.ApplicabilityDate, "2024-02-30", StringComparison.Ordinal) + "--" + fixture.StateSha256,
+            "uppercase-digest" => fixture.StableCoordinate + "--" + fixture.StateSha256.ToUpperInvariant() + "/fra",
+            "invalid-date" => fixture.StableCoordinate.Replace(fixture.ApplicabilityDate, "2024-02-30", StringComparison.Ordinal) + "--" + fixture.StateSha256 + "/fra",
+            // The shape before R64, which names no language; a language not of three lower-case letters; an article, which
+            // resolve does not name (it names a state); an empty segment.
+            "no-language" => fixture.StableCoordinate + "--" + fixture.StateSha256,
+            "two-letter-language" => fixture.StableCoordinate + "--" + fixture.StateSha256 + "/fr",
+            "upper-case-language" => fixture.StableCoordinate + "--" + fixture.StateSha256 + "/FRA",
+            "article" => fixture.Permalink + "/art_1",
+            "empty-segment" => fixture.Permalink.Replace("/lu-legilux/", "/lu-legilux//", StringComparison.Ordinal),
             _ => throw new AssertFailedException(mutation),
         };
 
@@ -858,7 +881,7 @@ public sealed class V3CorpusResolveMountTests
         Assert.AreEqual("eu", unavailable.Context.Jurisdiction);
 
         var luPermalinkMiss = await ResolveAsync(
-            mount, $"/lu-legilux/unknown/2000-01-01--{new string('a', 64)}");
+            mount, $"/lu-legilux/unknown/2000-01-01--{new string('a', 64)}/fra");
         Assert.AreEqual(V3Verdicts.Refuse, luPermalinkMiss.Verdict);
         Assert.AreEqual("identifier_unknown", luPermalinkMiss.Refusal!.Code);
         Assert.AreEqual(PublisherId.LuLegilux, luPermalinkMiss.Context.Publisher);
@@ -1029,7 +1052,17 @@ public sealed class V3CorpusResolveMountTests
         public string ApplicabilityDate { get; }
         public string StateSha256 { get; }
         public string StableCoordinate => $"/lu-legilux/{WorkKey}/{ApplicabilityDate}";
-        public string Permalink => StableCoordinate + "--" + StateSha256;
+        /// <summary>The fixture state's text language, which its permalink names (R64).</summary>
+        public string Language => "fra";
+
+        public string Permalink => PermalinkOf(StateSha256);
+
+        /// <summary>A permalink in the one shape of R64 at the fixture's work and date, pinning <paramref name="stateSha256"/>.</summary>
+        public string PermalinkOf(string stateSha256, string language = "fra") => StableCoordinate + "--" + stateSha256 + "/" + language;
+
+        /// <summary>A state's permalink in the one shape of R64, as the API mints it.</summary>
+        public static string PermalinkOf(LuxembourgIndexBuilder.StateRow state) =>
+            $"/lu-legilux/{state.WorkKey}/{state.ApplicabilityDate}--{state.StateSha256}/{state.Language}";
         public string CorpusSha256 { get; }
         public string IndexSha256 { get; }
         public byte[] CorpusBytes => _corpusBytes.ToArray();

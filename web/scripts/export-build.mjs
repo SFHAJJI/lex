@@ -35,7 +35,7 @@
 
 import { WATERMARK_PREVIEW } from './export-composer.mjs';
 import { EUROPE_ANNEX_SERVED_AS } from './europe-annexes.mjs';
-import { escapeProvision } from './search-answer.mjs';
+import { articlePermalink } from './permalinks.mjs';
 
 export const EXPORT_SCHEMA = 'lex-v3-export/1';
 export const EUROPE_EXPORT_SCHEMA = 'lex-v3-export-eu/1';
@@ -138,8 +138,8 @@ export function composeExport({ view, pinned, observedAt }) {
         appliesFrom: state.applicabilityDate,
         publisherId: entry.publisherId,
         // The article is held in its state, without text, so it is cited as any article of that
-        // state is: the state's hash-pinned permalink and the publisher's article id.
-        citation: `${state.permalink}#${entry.publisherId}`,
+        // state is: the state's hash-pinned permalink and the publisher's article id as a last segment (R64).
+        citation: articlePermalink(state.permalink, entry.publisherId),
         statePermalink: state.permalink,
         reason: 'no_text_tokens',
       }));
@@ -206,8 +206,8 @@ export function composeEuropeExport({ view, pinned, observedAt, registrySha256 }
         ...read,
         publisherId: entry.publisherId,
         // The article is held in its wording, without text, so it is cited as any article of that wording
-        // is: the wording's permalink and the provision after `#`, escaped as the platform escapes it.
-        citation: `${wording.permalink}#${escapeProvision(entry.publisherId)}`,
+        // is: the wording's permalink and the provision as a last segment, escaped as the platform escapes it (R64).
+        citation: articlePermalink(wording.permalink, entry.publisherId),
         reason: EUROPE_WITHOUT_TEXT,
       }));
     }

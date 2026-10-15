@@ -86,7 +86,7 @@
       "set": "temporal",
       "arm": "EU as_of in eng",
       "cases": 8,
-      "cases_sha256": "641d860e2533dd98a1436375d5416178387f19a9a69730302c6d611c744ca829",
+      "cases_sha256": "ddccdefd49abc7fc3157d3010dd1c0adb065e04da298e388d692cc42afb9d246",
       "gates": [
         {
           "gate": "temporal_exactness",
@@ -106,7 +106,7 @@
       "set": "temporal",
       "arm": "EU as_of in fra",
       "cases": 8,
-      "cases_sha256": "d521d0adc768fa7bace384a6de9c30e2e55ff74cd8e62d3116984cd8a6e71a00",
+      "cases_sha256": "2595050bb6763b9405747b062d62c2b71ce586b5c56d54c4f6139c4dacbda035",
       "gates": [
         {
           "gate": "temporal_exactness",
@@ -126,7 +126,7 @@
       "set": "temporal",
       "arm": "EU as_of with no language",
       "cases": 8,
-      "cases_sha256": "05ee40313d02f3623051d130dd4a5ab55076f78e29d3efe2cfeacd30df9ddcb5",
+      "cases_sha256": "e44e720851f64e1d2d4f55e6e6a181f8fc678e0254be33a515c3a2457dc7522e",
       "gates": [
         {
           "gate": "temporal_exactness",
@@ -256,7 +256,7 @@
       "reason": "every expectation broke after the shift",
       "seed": 20260930,
       "cases": 6,
-      "cases_sha256": "e636ee27b01e5254f1d21ea3599f689b71d918c265f6554a4e669b879da4189d",
+      "cases_sha256": "d336ab44a29714c1db07184835fae5db20a2cbefa89f345b8cc1967a073a6149",
       "note": "the cases at or after the latest held wording are outside the control by its design: a forward shift leaves the same wording answering, so they cannot break"
     },
     {
@@ -267,7 +267,7 @@
       "reason": "every expectation broke after the shift",
       "seed": 20260930,
       "cases": 6,
-      "cases_sha256": "f9218e98f940a87c1620a2e1cb01149e2da518901d7ee7b1e6b93bbd142b1ef7",
+      "cases_sha256": "2b17e6631da31abe31249e6d1c9aa6c5c3ef0ab33e8224234b29e336823dbd16",
       "note": "the cases at or after the latest held wording are outside the control by its design: a forward shift leaves the same wording answering, so they cannot break"
     },
     {
@@ -278,7 +278,7 @@
       "reason": "every expectation broke after the shift",
       "seed": 20260930,
       "cases": 6,
-      "cases_sha256": "e8d49c55d1d6663264a2702c944e3ae41459c63df7dbdd653039c305bf0461ff",
+      "cases_sha256": "2a5a33a3102359696607403c810af3f51ae5ebf3b795c64e6ac24eb7f04b0c67",
       "note": "the cases at or after the latest held wording are outside the control by its design: a forward shift leaves the same wording answering, so they cannot break"
     },
     {

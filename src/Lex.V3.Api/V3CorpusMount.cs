@@ -175,21 +175,27 @@ internal sealed partial class V3CorpusMount : IDisposable
             return Unknown(request, identifier, observedAt);
         }
 
+        // A state's permalink (R64), not an article's: resolve names a state. The digest is the language's the permalink
+        // names, so only the states of that language at the coordinate can answer it.
         if (TryParsePinnedPermalink(
                 identifier,
                 out var workKey,
                 out var applicabilityDate,
-                out var requestedDigest))
+                out var requestedDigest,
+                out var pinnedLanguage,
+                out var pinnedAnchor) && pinnedAnchor is null)
         {
-            var states = _reader?.ResolveState(workKey, applicabilityDate) ?? [];
-            if (states.Count == 0)
+            var states = (_reader?.ResolveState(workKey, applicabilityDate) ?? [])
+                .Where(state => string.Equals(state.Language, pinnedLanguage, StringComparison.Ordinal))
+                .ToArray();
+            if (states.Length == 0)
             {
                 return Unknown(request, identifier, observedAt, PublisherId.LuLegilux);
             }
 
             var matching = states.Where(state => string.Equals(
                 requestedDigest, state.StateSha256, StringComparison.Ordinal)).ToArray();
-            if (matching.Length == 0 && states.Count > 1)
+            if (matching.Length == 0 && states.Length > 1)
             {
                 using var ambiguous = JsonSerializer.SerializeToDocument(new
                 {
@@ -686,7 +692,7 @@ internal sealed partial class V3CorpusMount : IDisposable
     }
 
     private static string ObservedStateUrl(LuxembourgIndexObservedState state) =>
-        $"/lu-legilux/{state.WorkKey}/{state.ApplicabilityDate}--{state.StateSha256}";
+        LuxembourgPermalink(state.WorkKey, state.ApplicabilityDate, state.StateSha256, state.Language);
 
     /// <summary>The one <c>snapshot_unknown</c> refusal of <c>as_observed</c>: the snapshot or time asked for, and what would answer.</summary>
     private V3PlatformOperationOutcome SnapshotUnknown(
@@ -980,7 +986,7 @@ internal sealed partial class V3CorpusMount : IDisposable
         "coordinate, the state digest and its rule profiles, the source documents with their retained body digests (as provenance names them), and every " +
         "article this state holds with its identity, its wording as the publisher wrote it (text), the digest of that text, the digest of its wording " +
         "structure, its notes, its official source, the digest of the publisher body it was read from and an article permalink (the state permalink " +
-        "and the article id after #, which verify accepts); the text is the concatenation of the article's text and reference tokens in publisher order, " +
+        "and the article id as a last segment, which verify accepts); the text is the concatenation of the article's text and reference tokens in publisher order, " +
         "the same bytes the index searches; an article whose tokens carry no text (the index admits a marker-only article as evidence) is named under " +
         "articles_without_text and is not served as a quote";
 
@@ -1190,7 +1196,7 @@ internal sealed partial class V3CorpusMount : IDisposable
                     text_byte_length = textBytes.Length,
                     notes = ArticleNotes(article.TokensJson),
                     official_source = state.PublisherLegalResourceIri,
-                    article_permalink = StateUrl(state) + "#" + article.PublisherId,
+                    article_permalink = ArticlePermalink(StateUrl(state), article.PublisherId),
                 });
             }
 
@@ -2128,8 +2134,9 @@ internal sealed partial class V3CorpusMount : IDisposable
         "carries is the pinned_digest_mismatch refusal naming the current one, unless a retained generation holds that state, when it is verified there as " +
         "digest_matches with held_in naming the generation and superseded_by the current state of its language, null when the coordinate holds none any " +
         "more); for a work identifier or work coordinate, the current digests of every state " +
-        "held, and for a dated stable coordinate those held exactly there, so a caller can pin them; a pinned permalink may carry an article id after # " +
-        "(the article permalink evidence_bundle writes), and then the article must be one the pinned state holds or the answer is anchor_not_in_version; " +
+        "held, and for a dated stable coordinate those held exactly there, so a caller can pin them; a pinned permalink names its state's language, and " +
+        "may carry an article id as a last segment (the article permalink evidence_bundle writes), and then the article must be one the pinned state " +
+        "holds or the answer is anchor_not_in_version; " +
         "nothing about the text or its legal effect is assessed";
 
     internal static readonly string[][] VerifyNotHeld =
@@ -2182,7 +2189,7 @@ internal sealed partial class V3CorpusMount : IDisposable
                 ?? VerifyEurope(request, identifier, celex, europeLanguage, wordingDate, europeDigest, provision, requestedLanguage, observedAt);
         }
 
-        if (TryParsePinnedPermalink(identifier, out var workKey, out var applicabilityDate, out var requestedDigest, out var anchor))
+        if (TryParsePinnedPermalink(identifier, out var workKey, out var applicabilityDate, out var requestedDigest, out var language, out var anchor))
         {
             if (_reader is null)
             {
@@ -2193,13 +2200,42 @@ internal sealed partial class V3CorpusMount : IDisposable
             }
 
             var pinnedStates = _reader.ResolveState(workKey, applicabilityDate);
+            var pinnedLanguages = pinnedStates.Select(static state => state.Language)
+                .Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray();
+
+            // The permalink names its text's language (R64): a language asked beside it must be that one, and only that
+            // language's states at the coordinate can answer its digest. The languages named are held ones, as the EU
+            // answers (review of #967: a permalink naming a language the coordinate does not hold was offered it): the
+            // permalink's own when the coordinate holds it, else those it holds; a coordinate that holds none now names the
+            // permalink's language only when a retained generation holds its digest, and is otherwise a coordinate this
+            // index does not know.
+            if (requestedLanguage is not null && !string.Equals(requestedLanguage, language, StringComparison.Ordinal))
+            {
+                string[] heldLanguages = pinnedLanguages.Length > 0 ? pinnedLanguages
+                    : FromGeneration(workKey, applicabilityDate, language, requestedDigest) is not null ? [language]
+                    : [];
+                if (heldLanguages.Length == 0)
+                {
+                    return Unknown(request, identifier, observedAt, PublisherId.LuLegilux,
+                        "a hash-pinned permalink of a state this index holds at that stable coordinate");
+                }
+
+                using var otherLanguage = JsonSerializer.SerializeToDocument(new
+                {
+                    requested_language = requestedLanguage,
+                    available_languages = heldLanguages.Contains(language, StringComparer.Ordinal) ? new[] { language } : heldLanguages,
+                });
+                return V3PlatformOperationOutcome.Refused(
+                    Context("refusal", observedAt),
+                    new V3PlatformOperationRefusal(request, "language_not_available", otherLanguage.RootElement));
+            }
 
             // A digest the mounted index does not hold at its coordinate, held by a retained generation, is verified there
             // before any refusal over the current states: the coordinate may hold another state, several (one per
             // language), or none any more (review of #889). superseded_by names the current state of that language, if any.
             if (!pinnedStates.Any(state => string.Equals(state.StateSha256, requestedDigest, StringComparison.Ordinal) &&
-                                           (requestedLanguage is null || string.Equals(state.Language, requestedLanguage, StringComparison.Ordinal))) &&
-                FromGeneration(workKey, applicabilityDate, requestedLanguage, requestedDigest) is var (holder, superseded))
+                                           string.Equals(state.Language, language, StringComparison.Ordinal)) &&
+                FromGeneration(workKey, applicabilityDate, language, requestedDigest) is var (holder, superseded))
             {
                 var current = pinnedStates.FirstOrDefault(state => string.Equals(state.Language, superseded.Language, StringComparison.Ordinal));
                 return VerifiedPinned(
@@ -2217,13 +2253,11 @@ internal sealed partial class V3CorpusMount : IDisposable
                     "a hash-pinned permalink of a state this index holds at that stable coordinate");
             }
 
-            var pinnedLanguages = pinnedStates.Select(static state => state.Language)
-                .Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray();
-            if (requestedLanguage is not null && !pinnedLanguages.Contains(requestedLanguage, StringComparer.Ordinal))
+            if (!pinnedLanguages.Contains(language, StringComparer.Ordinal))
             {
                 using var unavailableLanguage = JsonSerializer.SerializeToDocument(new
                 {
-                    requested_language = requestedLanguage,
+                    requested_language = language,
                     available_languages = pinnedLanguages,
                 });
                 return V3PlatformOperationOutcome.Refused(
@@ -2231,14 +2265,12 @@ internal sealed partial class V3CorpusMount : IDisposable
                     new V3PlatformOperationRefusal(request, "language_not_available", unavailableLanguage.RootElement));
             }
 
-            var pinnedScope = requestedLanguage is null
-                ? pinnedStates
-                : pinnedStates.Where(state => string.Equals(state.Language, requestedLanguage, StringComparison.Ordinal)).ToArray();
+            var pinnedScope = pinnedStates.Where(state => string.Equals(state.Language, language, StringComparison.Ordinal)).ToArray();
             var matching = pinnedScope.Where(state => string.Equals(
                 requestedDigest, state.StateSha256, StringComparison.Ordinal)).ToArray();
             if (matching.Length == 0)
             {
-                if (pinnedScope.Count > 1)
+                if (pinnedScope.Length > 1)
                 {
                     using var ambiguous = JsonSerializer.SerializeToDocument(new
                     {
@@ -2320,7 +2352,7 @@ internal sealed partial class V3CorpusMount : IDisposable
                 requested_digest = requestedDigest,
                 requested_language = requestedLanguage,
                 requested_anchor = anchor,
-                article_permalink = anchor is null ? null : StateUrl(verified) + "#" + anchor,
+                article_permalink = anchor is null ? null : ArticlePermalink(StateUrl(verified), anchor),
                 verdict = "digest_matches",
                 publisher = "lu-legilux",
                 work_key = verified.WorkKey,
@@ -4197,7 +4229,7 @@ internal sealed partial class V3CorpusMount : IDisposable
             continue_after = truncated ? Cursor(page[^1]) : null,
             page_is = SearchPageIs,
             // The one held wording the hits are in, pinned (the EU permalink grammar), or null when it holds no single
-            // wording date to pin; each hit's permalink is it with the provision after #.
+            // wording date to pin; each hit's permalink is it with the provision as a last segment.
             pinned_wording = wording is not { } held ? null : new
             {
                 wording_date = held.WordingDate,
@@ -4817,11 +4849,12 @@ internal sealed partial class V3CorpusMount : IDisposable
                 language = value.Language,
                 state_sha256 = value.StateSha256,
                 stable_coordinate = $"/lu-legilux/{value.WorkKey}/{value.ApplicabilityDate}",
-                permalink = $"/lu-legilux/{value.WorkKey}/{value.ApplicabilityDate}--{value.StateSha256}",
+                permalink = LuxembourgPermalink(value.WorkKey, value.ApplicabilityDate, value.StateSha256, value.Language),
                 // The log's own detail, verbatim: the source bodies, and what a revision replaced or moved.
                 detail = JsonDocument.Parse(value.DetailJson).RootElement.Clone(),
                 replaced_permalink = value.Event == V3EventRegistry.FileReplaced
-                    ? $"/lu-legilux/{value.WorkKey}/{value.ApplicabilityDate}--{JsonDocument.Parse(value.DetailJson).RootElement.GetProperty("replaced_state_sha256").GetString()}"
+                    ? LuxembourgPermalink(value.WorkKey, value.ApplicabilityDate,
+                        JsonDocument.Parse(value.DetailJson).RootElement.GetProperty("replaced_state_sha256").GetString()!, value.Language)
                     : null,
             }).ToArray(),
             has_more = hasMore,
@@ -4941,7 +4974,7 @@ internal sealed partial class V3CorpusMount : IDisposable
         var now = _reader!.ResolveWorkStates(value.WorkKey)
             .Where(state => string.Equals(state.ApplicabilityDate, newTo, StringComparison.Ordinal) &&
                             string.Equals(state.Language, value.Language, StringComparison.Ordinal))
-            .Select(state => $"/lu-legilux/{state.WorkKey}/{state.ApplicabilityDate}--{state.StateSha256}")
+            .Select(StateUrl)
             .Order(StringComparer.Ordinal)
             .ToArray();
         return new
@@ -4952,7 +4985,7 @@ internal sealed partial class V3CorpusMount : IDisposable
             language = value.Language,
             dates_from = newTo,
             dates_to_exclusive = previousTo,
-            answered_before = $"/lu-legilux/{value.WorkKey}/{value.ApplicabilityDate}--{value.StateSha256}",
+            answered_before = LuxembourgPermalink(value.WorkKey, value.ApplicabilityDate, value.StateSha256, value.Language),
             answered_now = now,
             derived = true,
         };
@@ -5702,7 +5735,7 @@ internal sealed partial class V3CorpusMount : IDisposable
         "text the index searches), the digest of that text (text_sha256), the digest of the corpus member's retained publisher body (body_sha256: " +
         "the manifestation the corpus holds for the expression, such as its XHTML or PDF), the digest of the Formex package the text was read from " +
         "(package_sha256) and of the package entry (source_entry_sha256), both null on an EU index that predates them, its official source and an " +
-        "article permalink (the wording permalink and the publisher's provision id after #, which verify accepts); an article whose text is empty is " +
+        "article permalink (the wording permalink and the publisher's provision id as a last segment, which verify accepts); an article whose text is empty is " +
         "named under articles_without_text and is not served as a quote; the annexes the corpus classified on those members are listed under " +
         "annexes_not_served, each served as text not available with the official source to read it, and never quoted";
 
@@ -6371,7 +6404,7 @@ internal sealed partial class V3CorpusMount : IDisposable
     /// <summary>The identifier forms this product and Legilux mint for Luxembourg law.</summary>
     private static bool IsLuxembourgShaped(string identifier) =>
         OfficialIdentifier.EliMintedBy(identifier) == PublisherId.LuLegilux ||
-        TryParsePinnedPermalink(identifier, out _, out _, out _, out _) ||
+        TryParsePinnedPermalink(identifier, out _, out _, out _, out _, out _) ||
         (Uri.TryCreate(identifier, UriKind.Absolute, out var uri) && IsLegiluxHost(uri.Host));
 
     /// <summary>
@@ -6484,7 +6517,22 @@ internal sealed partial class V3CorpusMount : IDisposable
         $"/lu-legilux/{state.WorkKey}/{state.ApplicabilityDate}";
 
     private static string StateUrl(LuxembourgIndexResolvedState state) =>
-        StableCoordinate(state) + "--" + state.StateSha256;
+        LuxembourgPermalink(state.WorkKey, state.ApplicabilityDate, state.StateSha256, state.Language);
+
+    /// <summary>
+    /// A Luxembourg state's permalink, in the one shape of the specification of record's R64
+    /// (<c>/lu-legilux/{work}/{date}--{state sha256}/{language}</c>, as <c>web/scripts/permalinks.mjs</c> reads it): a state
+    /// is one expression in one language, and its digest pins that language's articles, so the language is the text's.
+    /// </summary>
+    private static string LuxembourgPermalink(string workKey, string applicabilityDate, string stateSha256, string language) =>
+        $"/lu-legilux/{workKey}/{applicabilityDate}--{stateSha256}/{language}";
+
+    /// <summary>
+    /// An article's (or an EU provision's) permalink (R64): its state's (or wording's), and the publisher's id as the last
+    /// path segment, escaped (RFC 3986's unreserved characters only); a <c>#</c> is left for a position inside the article.
+    /// </summary>
+    private static string ArticlePermalink(string permalink, string publisherId) =>
+        permalink + "/" + Uri.EscapeDataString(publisherId);
 
     /// <summary>
     /// The dated stable coordinate this mount writes (<c>/lu-legilux/{work}/{date}</c>, also under the
@@ -6530,12 +6578,6 @@ internal sealed partial class V3CorpusMount : IDisposable
         return true;
     }
 
-    /// <summary>
-    /// The pinned permalink with an optional article fragment (<c>permalink#publisher_id</c>), the
-    /// article permalink <c>evidence_bundle</c> writes. The fragment is the publisher's article id,
-    /// verbatim; an empty fragment is not a permalink. Only <c>verify</c> reads this form: the
-    /// other operations take the state permalink and no fragment.
-    /// </summary>
     /// <summary>The publisher segment of the EU permalink grammar.</summary>
     private const string EuropePermalinkPublisher = "eu-eurlex";
 
@@ -6549,8 +6591,8 @@ internal sealed partial class V3CorpusMount : IDisposable
         "from the EU index, which stores no wording digest";
 
     internal const string EuropeVerifyScope =
-        "whether a hash-pinned EU provision permalink (/eu-eurlex/{celex}/{language}/{wording date}--{wording sha256}, with the publisher's provision " +
-        "id after #) still names the one wording this EU index holds of that expression, by the wording digest computed from the index (a matching digest " +
+        "whether a hash-pinned EU provision permalink (/eu-eurlex/{celex}/{wording date}--{wording sha256}/{language}, with the publisher's provision " +
+        "id as a last segment) still names the one wording this EU index holds of that expression, by the wording digest computed from the index (a matching digest " +
         "is digest_matches; a digest the wording no longer has is the pinned_digest_mismatch refusal naming the current one); the provision, when named, " +
         "must be one the wording holds or the answer is anchor_not_in_version; nothing about the text or its legal effect is assessed";
 
@@ -6589,7 +6631,7 @@ internal sealed partial class V3CorpusMount : IDisposable
             expression.PublisherWorkCelex, resolved.PublisherWorkId, publisherExpressionId, resolved.Language, wordingDate, resolved.ArticleIdentities);
         return (expression.PublisherWorkCelex, resolved.PublisherWorkId, publisherExpressionId, resolved.Language, wordingDate,
             resolved.PublisherProvisionIdentifiers, sha256,
-            $"/{EuropePermalinkPublisher}/{expression.PublisherWorkCelex}/{resolved.Language}/{wordingDate}--{sha256}");
+            EuropePermalink(expression.PublisherWorkCelex, wordingDate, sha256, resolved.Language));
     }
 
     /// <summary>The wording digest, as <see cref="EuropeWordingDigestRule"/> states it.</summary>
@@ -6619,17 +6661,34 @@ internal sealed partial class V3CorpusMount : IDisposable
         return Convert.ToHexStringLower(hash.GetHashAndReset());
     }
 
-    /// <summary>The EU stable coordinate, <c>/eu-eurlex/{celex}/{language}/{wording date}</c>: the wording's permalink without its digest.</summary>
-    private static string EuropeStableCoordinate(string wordingPermalink) => wordingPermalink[..^(2 + 64)];
-
-    /// <summary>A provision's permalink: the wording's, with the publisher's provision id (escaped) after #.</summary>
-    private static string EuropeProvisionPermalink(string wordingPermalink, string provision) =>
-        wordingPermalink + "#" + Uri.EscapeDataString(provision);
+    /// <summary>
+    /// An EU wording's permalink, in the one shape of the specification of record's R64
+    /// (<c>/eu-eurlex/{celex}/{wording date}--{wording sha256}/{language}</c>, as <c>web/scripts/permalinks.mjs</c> reads it):
+    /// the wording is one expression in one language, and its digest pins that language's articles.
+    /// </summary>
+    private static string EuropePermalink(string celex, string wordingDate, string wordingSha256, string language) =>
+        $"/{EuropePermalinkPublisher}/{celex}/{wordingDate}--{wordingSha256}/{language}";
 
     /// <summary>
-    /// Parses an EU permalink, <c>/eu-eurlex/{celex}/{language}/{wording date}--{wording sha256}</c> with an optional
-    /// provision after #, as a path or under the product's own https origin, and the address of its reading page under an
-    /// interface language (<c>/fr/eu-eurlex/…</c>, <see cref="WithoutInterfaceLanguage"/>).
+    /// The EU stable coordinate, <c>/eu-eurlex/{celex}/{language}/{wording date}</c>, of a wording's permalink
+    /// (<see cref="EuropePermalink"/>): the work, language and date it pins, without the digest. Its shape is not a
+    /// permalink's and is unchanged by R64.
+    /// </summary>
+    private static string EuropeStableCoordinate(string wordingPermalink)
+    {
+        var segments = wordingPermalink.Split('/');
+        return $"/{EuropePermalinkPublisher}/{segments[2]}/{segments[4]}/{segments[3][..10]}";
+    }
+
+    /// <summary>A provision's permalink: the wording's, with the publisher's provision id as its last segment (R64).</summary>
+    private static string EuropeProvisionPermalink(string wordingPermalink, string provision) =>
+        ArticlePermalink(wordingPermalink, provision);
+
+    /// <summary>
+    /// Parses an EU permalink in the one shape of R64, <c>/eu-eurlex/{celex}/{wording date}--{wording sha256}/{language}</c>
+    /// with a provision as an optional last segment (<paramref name="provision"/>, unescaped), as a path or under the
+    /// product's own https origin, and the address of its reading page under an interface language
+    /// (<c>/fr/eu-eurlex/…</c>, <see cref="WithoutInterfaceLanguage"/>).
     /// </summary>
     private static bool TryParseEuropePermalink(
         string value,
@@ -6641,48 +6700,13 @@ internal sealed partial class V3CorpusMount : IDisposable
     {
         celex = language = wordingDate = requestedDigest = string.Empty;
         provision = null;
-        var hash = value.IndexOf('#', StringComparison.Ordinal);
-        var path = hash < 0 ? value : value[..hash];
-        if (hash >= 0)
+        if (PermalinkSegments(value, EuropePermalinkPublisher) is not { } pin ||
+            !pin.Work.All(static character => char.IsAsciiLetterOrDigit(character) || character is '(' or ')' or '_' or '-' or '.'))
         {
-            var fragment = value[(hash + 1)..];
-            if (fragment.Length == 0 || fragment.Any(static character => char.IsWhiteSpace(character) || character == '#'))
-            {
-                return false;
-            }
-
-            provision = Uri.UnescapeDataString(fragment);
-        }
-
-        if (!path.StartsWith("/", StringComparison.Ordinal))
-        {
-            if (!Uri.TryCreate(path, UriKind.Absolute, out var uri) ||
-                !string.Equals(uri.Scheme, Uri.UriSchemeHttps, StringComparison.Ordinal) ||
-                !string.Equals(uri.Host, "law.soufien.lu", StringComparison.Ordinal) ||
-                !uri.IsDefaultPort || uri.UserInfo.Length != 0 || uri.Query.Length != 0)
-            {
-                return false;
-            }
-
-            path = uri.AbsolutePath;
-        }
-
-        path = WithoutInterfaceLanguage(path);
-        var segments = path.Split('/', StringSplitOptions.RemoveEmptyEntries);
-        if (segments.Length != 4 ||
-            !string.Equals(segments[0], EuropePermalinkPublisher, StringComparison.Ordinal) ||
-            segments[1].Length == 0 || !segments[1].All(static character => char.IsAsciiLetterOrDigit(character) || character is '(' or ')' or '_' or '-' or '.') ||
-            segments[2].Length != 3 || !segments[2].All(char.IsAsciiLetterLower) ||
-            segments[3].Length != 10 + 2 + 64 ||
-            !string.Equals(segments[3].Substring(10, 2), "--", StringComparison.Ordinal) ||
-            !DateOnly.TryParseExact(segments[3][..10], "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out _) ||
-            !segments[3][12..].All(static character => character is >= '0' and <= '9' or >= 'a' and <= 'f'))
-        {
-            provision = null;
             return false;
         }
 
-        (celex, language, wordingDate, requestedDigest) = (segments[1], segments[2], segments[3][..10], segments[3][12..]);
+        (celex, wordingDate, requestedDigest, language, provision) = (pin.Work, pin.Date, pin.Digest, pin.Language, pin.Anchor);
         return true;
     }
 
@@ -6820,47 +6844,43 @@ internal sealed partial class V3CorpusMount : IDisposable
             new V3PlatformOperationResult(request, "verification", verification.RootElement));
     }
 
-    private static bool TryParsePinnedPermalink(
-        string value,
-        out string workKey,
-        out string applicabilityDate,
-        out string requestedDigest,
-        out string? anchor)
-    {
-        anchor = null;
-        var hash = value.IndexOf('#', StringComparison.Ordinal);
-        if (hash < 0)
-        {
-            return TryParsePinnedPermalink(value, out workKey, out applicabilityDate, out requestedDigest);
-        }
-
-        var fragment = value[(hash + 1)..];
-        if (fragment.Length == 0 || fragment.Any(static character => char.IsWhiteSpace(character) || character == '#') ||
-            !TryParsePinnedPermalink(value[..hash], out workKey, out applicabilityDate, out requestedDigest))
-        {
-            workKey = string.Empty;
-            applicabilityDate = string.Empty;
-            requestedDigest = string.Empty;
-            return false;
-        }
-
-        anchor = fragment;
-        return true;
-    }
-
     /// <summary>
-    /// The pinned permalink <c>/lu-legilux/{work}/{date}--{state sha256}</c>, as a path or under this origin, and the address
-    /// of its reading page under an interface language (<c>/fr/lu-legilux/…</c>, <see cref="WithoutInterfaceLanguage"/>).
+    /// A Luxembourg state's permalink in the one shape of the specification of record's R64,
+    /// <c>/lu-legilux/{work}/{date}--{state sha256}/{language}</c>, with an article's id as a last segment (the article
+    /// permalink <c>evidence_bundle</c> writes, <see cref="ArticlePermalink"/>; <paramref name="anchor"/> is the id,
+    /// unescaped), as a path or under this origin, and the address of its reading page under an interface language
+    /// (<c>/fr/lu-legilux/…</c>, <see cref="WithoutInterfaceLanguage"/>). <paramref name="language"/> is the text's.
     /// </summary>
     private static bool TryParsePinnedPermalink(
         string value,
         out string workKey,
         out string applicabilityDate,
-        out string requestedDigest)
+        out string requestedDigest,
+        out string language,
+        out string? anchor)
     {
-        workKey = string.Empty;
-        applicabilityDate = string.Empty;
-        requestedDigest = string.Empty;
+        workKey = applicabilityDate = requestedDigest = language = string.Empty;
+        anchor = null;
+        if (PermalinkSegments(value, "lu-legilux") is not { } pin || !IsWorkKey(pin.Work))
+        {
+            return false;
+        }
+
+        (workKey, applicabilityDate, requestedDigest, language, anchor) = (pin.Work, pin.Date, pin.Digest, pin.Language, pin.Anchor);
+        return true;
+    }
+
+    /// <summary>
+    /// The parts of a permalink of <paramref name="publisher"/> in the one shape of R64,
+    /// <c>/{publisher}/{work}/{date}--{digest}/{language}[/{anchor}]</c>: given as a path or under this service's own https
+    /// origin (no query, no fragment), with the interface language its page stands under taken off. The date is a calendar
+    /// date, the digest 64 lower-case hex characters, the language three lower-case letters, and the anchor RFC 3986's path
+    /// characters (anything else percent-encoded, never one that is <c>.</c> or <c>..</c> once decoded), returned unescaped.
+    /// A <c>#</c> (a position inside an article, which no operation resolves), an empty segment or any other segment is no
+    /// permalink: null. Under the origin, the path is read as written, so both forms name the same addresses.
+    /// </summary>
+    private static (string Work, string Date, string Digest, string Language, string? Anchor)? PermalinkSegments(string value, string publisher)
+    {
         string path;
         if (value.StartsWith("/", StringComparison.Ordinal))
         {
@@ -6870,34 +6890,67 @@ internal sealed partial class V3CorpusMount : IDisposable
                  string.Equals(uri.Scheme, Uri.UriSchemeHttps, StringComparison.Ordinal) &&
                  string.Equals(uri.Host, "law.soufien.lu", StringComparison.Ordinal) &&
                  uri.IsDefaultPort && uri.UserInfo.Length == 0 && uri.Query.Length == 0 &&
-                 uri.Fragment.Length == 0)
+                 uri.Fragment.Length == 0 &&
+                 value.IndexOf("://", StringComparison.Ordinal) is var authority and >= 0 &&
+                 value.IndexOf('/', authority + 3) is var start and >= 0)
         {
-            path = uri.AbsolutePath;
+            // The path as written, not Uri's AbsolutePath: Uri removes dot segments (`%2E%2E` among them) and reads a
+            // backslash as a slash, so the address under the origin was another than the same path given alone (review of
+            // #967: `/fra/%2E%2E` was an article as a path, and no permalink under the origin).
+            path = value[start..];
         }
         else
         {
-            return false;
+            return null;
         }
 
-        path = WithoutInterfaceLanguage(path);
-        var segments = path.Split('/', StringSplitOptions.RemoveEmptyEntries);
-        if (segments.Length != 3 ||
-            !string.Equals(segments[0], "lu-legilux", StringComparison.Ordinal) ||
-            !IsWorkKey(segments[1]) || segments[2].Length != 10 + 2 + 64 ||
-            !string.Equals(segments[2].Substring(10, 2), "--", StringComparison.Ordinal) ||
-            !DateOnly.TryParseExact(
-                segments[2][..10], "yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture,
-                System.Globalization.DateTimeStyles.None, out _) ||
-            !segments[2][12..].All(static character =>
-                character is >= '0' and <= '9' or >= 'a' and <= 'f'))
+        var segments = WithoutInterfaceLanguage(path).Split('/');
+        if (segments.Length is not (5 or 6) || segments[0].Length != 0 ||
+            !string.Equals(segments[1], publisher, StringComparison.Ordinal) || segments[2].Length == 0 ||
+            segments[3].Length != 10 + 2 + 64 ||
+            !string.Equals(segments[3].Substring(10, 2), "--", StringComparison.Ordinal) ||
+            !DateOnly.TryParseExact(segments[3][..10], "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out _) ||
+            !segments[3][12..].All(static character => character is >= '0' and <= '9' or >= 'a' and <= 'f') ||
+            segments[4].Length != 3 || !segments[4].All(char.IsAsciiLetterLower) ||
+            (segments.Length == 6 && !IsAnchorSegment(segments[5])))
+        {
+            return null;
+        }
+
+        return (segments[2], segments[3][..10], segments[3][12..], segments[4], segments.Length == 6 ? Uri.UnescapeDataString(segments[5]) : null);
+    }
+
+    /// <summary>
+    /// An article's segment of a permalink: RFC 3986's path characters, each other byte percent-encoded, and not one that is
+    /// <c>.</c> or <c>..</c> once decoded (<c>%2e</c> or <c>%2E</c> for a dot, as a URL parser reads it), which a browser and
+    /// the live server resolve away (review of #967).
+    /// </summary>
+    private static bool IsAnchorSegment(string segment)
+    {
+        if (segment.Length == 0)
         {
             return false;
         }
 
-        workKey = segments[1];
-        applicabilityDate = segments[2][..10];
-        requestedDigest = segments[2][12..];
-        return true;
+        for (var index = 0; index < segment.Length; index++)
+        {
+            var character = segment[index];
+            if (character == '%')
+            {
+                if (index + 2 >= segment.Length || !char.IsAsciiHexDigit(segment[index + 1]) || !char.IsAsciiHexDigit(segment[index + 2]))
+                {
+                    return false;
+                }
+
+                index += 2;
+            }
+            else if (!char.IsAsciiLetterOrDigit(character) && "-._~!$&'()*+,;=:@".IndexOf(character, StringComparison.Ordinal) < 0)
+            {
+                return false;
+            }
+        }
+
+        return Uri.UnescapeDataString(segment) is not ("." or "..");
     }
 
     private static bool IsWorkKey(string value) => value.Length is > 0 and <= 512 &&

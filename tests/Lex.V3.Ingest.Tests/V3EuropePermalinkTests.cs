@@ -13,8 +13,8 @@ namespace Lex.V3.Ingest.Tests;
 
 /// <summary>
 /// The EU permalink grammar (STATUS item 5): an EU search hit carries a hash-pinned provision permalink,
-/// <c>/eu-eurlex/{celex}/{language}/{wording date}--{wording sha256}#{provision}</c>, in Luxembourg's family with the
-/// language part of it, and <c>verify</c> checks it against the one wording the EU index holds. The digest is computed
+/// <c>/eu-eurlex/{celex}/{wording date}--{wording sha256}/{language}/{provision}</c> (the one shape of the specification
+/// of record's R64, Luxembourg's too), and <c>verify</c> checks it against the one wording the EU index holds. The digest is computed
 /// by the API from what the index holds (it stores no wording digest), as its stated rule says; this test recomputes it
 /// from the index on its own and requires the same value.
 /// </summary>
@@ -85,11 +85,11 @@ public sealed class V3EuropePermalinkTests
 
         var wording = answer.GetProperty("pinned_wording");
         var permalink = wording.GetProperty("permalink").GetString()!;
-        StringAssert.StartsWith(permalink, "/eu-eurlex/32016R0679/eng/");
-        StringAssert.Matches(permalink, new System.Text.RegularExpressions.Regex(@"^/eu-eurlex/32016R0679/eng/\d{4}-\d{2}-\d{2}--[0-9a-f]{64}$"));
+        StringAssert.StartsWith(permalink, "/eu-eurlex/32016R0679/");
+        StringAssert.Matches(permalink, new System.Text.RegularExpressions.Regex(@"^/eu-eurlex/32016R0679/\d{4}-\d{2}-\d{2}--[0-9a-f]{64}/eng\z"));
         var hit = answer.GetProperty("hits")[0];
         var hitPermalink = hit.GetProperty("permalink").GetString()!;
-        Assert.AreEqual($"{permalink}#{Uri.EscapeDataString(hit.GetProperty("publisher_id").GetString()!)}", hitPermalink, "each hit's permalink is the wording's with its provision");
+        Assert.AreEqual($"{permalink}/{Uri.EscapeDataString(hit.GetProperty("publisher_id").GetString()!)}", hitPermalink, "each hit's permalink is the wording's with its provision as a last segment");
 
         var verified = await VerifyAsync(mount, hitPermalink, "eng");
         Assert.IsNull(verified.Refusal, verified.Refusal?.Code);
@@ -144,17 +144,17 @@ public sealed class V3EuropePermalinkTests
         await using var cleanup = fixture;
         using var disposeMount = mount;
         var permalink = answer.GetProperty("pinned_wording").GetProperty("permalink").GetString()!;
-        var digest = permalink[^64..];
-        var date = permalink.Split('/')[4][..10];
+        var digest = permalink.Split('/')[3][12..];
+        var date = permalink.Split('/')[3][..10];
 
         var mismatch = await VerifyAsync(mount, permalink.Replace(digest, new string('0', 64), StringComparison.Ordinal));
         Assert.AreEqual("pinned_digest_mismatch", mismatch.Refusal?.Code);
         Assert.AreEqual(digest, mismatch.Refusal!.HelpfulPayload.GetProperty("current_digest").GetString(), "the refusal names the current digest");
         Assert.AreEqual(permalink, mismatch.Refusal.HelpfulPayload.GetProperty("current_hash_pinned_url").GetString());
-        Assert.AreEqual(permalink[..^66], mismatch.Refusal.HelpfulPayload.GetProperty("stable_coordinate").GetString(), "the stable coordinate is the permalink without its digest");
+        Assert.AreEqual($"/eu-eurlex/32016R0679/eng/{date}", mismatch.Refusal.HelpfulPayload.GetProperty("stable_coordinate").GetString(), "the stable coordinate: the work, language and date the permalink pins");
 
-        Assert.AreEqual("anchor_not_in_version", (await VerifyAsync(mount, permalink + "#999999")).Refusal?.Code, "a provision the wording does not hold");
-        Assert.AreEqual("language_not_available", (await VerifyAsync(mount, permalink.Replace("/eng/", "/fra/", StringComparison.Ordinal))).Refusal?.Code,
+        Assert.AreEqual("anchor_not_in_version", (await VerifyAsync(mount, permalink + "/999999")).Refusal?.Code, "a provision the wording does not hold");
+        Assert.AreEqual("language_not_available", (await VerifyAsync(mount, permalink[..^"/eng".Length] + "/fra")).Refusal?.Code,
             "a language the work is not held in");
         Assert.AreEqual("language_not_available", (await VerifyAsync(mount, permalink, "fra")).Refusal?.Code, "a requested language that is not the permalink's");
         Assert.AreEqual("identifier_unknown", (await VerifyAsync(mount, permalink.Replace("32016R0679", "32099R9999", StringComparison.Ordinal))).Refusal?.Code,
@@ -165,8 +165,18 @@ public sealed class V3EuropePermalinkTests
         // The review of #850's reproduction: an article identity of the work in the CELEX slot resolves the same work,
         // and must still be refused: the slot holds the CELEX and nothing else.
         var articleIdentity = answer.GetProperty("hits")[0].GetProperty("article_identity_sha256").GetString()!;
-        var stolen = await VerifyAsync(mount, permalink.Replace("/32016R0679/", $"/{articleIdentity}/", StringComparison.Ordinal) + "#" + answer.GetProperty("hits")[0].GetProperty("publisher_id").GetString());
+        var stolen = await VerifyAsync(mount, permalink.Replace("/32016R0679/", $"/{articleIdentity}/", StringComparison.Ordinal) + "/" + answer.GetProperty("hits")[0].GetProperty("publisher_id").GetString());
         Assert.AreEqual("identifier_unknown", stolen.Refusal?.Code, $"an article identity in the CELEX slot: {stolen.Result?.Value.GetProperty("verdict")}");
+
+        // R64 has one shape: the shape before it (the language before the pin, the provision after #) and a provision
+        // after # verify nothing; the page addresses of the shape before it are moved, not read (V3WebRoot.MovedFor).
+        var provision = Uri.EscapeDataString(answer.GetProperty("hits")[0].GetProperty("publisher_id").GetString()!);
+        foreach (var before in new[] { $"/eu-eurlex/32016R0679/eng/{date}--{digest}", $"/eu-eurlex/32016R0679/eng/{date}--{digest}#{provision}", $"{permalink}#{provision}" })
+        {
+            var refused = await VerifyAsync(mount, before);
+            Assert.IsNotNull(refused.Refusal, $"{before}: {refused.Result?.Value.GetProperty("verdict")}");
+            Assert.IsFalse(refused.Refusal.HelpfulPayload.TryGetProperty("current_digest", out _), before);
+        }
     }
 
     [TestMethod]
@@ -176,7 +186,7 @@ public sealed class V3EuropePermalinkTests
         await using var cleanup = fixture;
         using var mount = await V3CorpusMount.OpenAsync(fixture.Directory, CancellationToken.None);
         Assert.IsNotNull(mount);
-        var envelope = await VerifyAsync(mount, $"/eu-eurlex/32016R0679/eng/2016-04-27--{new string('a', 64)}#001");
+        var envelope = await VerifyAsync(mount, $"/eu-eurlex/32016R0679/2016-04-27--{new string('a', 64)}/eng/001");
         Assert.AreEqual("no_corpus_mounted", envelope.Refusal?.Code);
     }
 

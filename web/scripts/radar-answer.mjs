@@ -24,6 +24,7 @@
 // Nothing is derived: no legal effect, no amending act, no entry into force.
 
 import { isCalendarDate } from './temporal.mjs';
+import { luxembourgPermalink } from './permalinks.mjs';
 
 const DIGEST = /^[0-9a-f]{64}$/;
 
@@ -95,12 +96,13 @@ function readStateReference(state, where, workKey) {
   if (coordinate !== `/lu-legilux/${workKey}/${applicabilityDate}`) {
     throw new Error(`${where}'s stable coordinate ${coordinate} does not name its work and date`);
   }
+  const language = requireText(requireOwn(state, 'language', where), `${where} language`);
   const permalink = requireText(requireOwn(state, 'permalink', where), `${where} permalink`);
-  if (permalink !== `${coordinate}--${stateSha256}`) {
-    throw new Error(`${where}'s permalink ${permalink} does not pin its coordinate and digest`);
+  if (permalink !== luxembourgPermalink({ workKey, date: applicabilityDate, stateSha256, language })) {
+    throw new Error(`${where}'s permalink ${permalink} does not pin its coordinate, digest and language`);
   }
   return Object.freeze({
-    language: requireText(requireOwn(state, 'language', where), `${where} language`),
+    language,
     applicabilityDate,
     nextApplicabilityDate: next,
     stateSha256,

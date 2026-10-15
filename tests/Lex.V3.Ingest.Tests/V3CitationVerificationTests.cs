@@ -27,17 +27,20 @@ public sealed class V3CitationVerificationTests
     private static readonly DateTimeOffset ObservedAt =
         DateTimeOffset.Parse("2026-09-17T00:00:00Z", CultureInfo.InvariantCulture);
 
-    /// <summary>A hash-pinned permalink: the stable coordinate, <c>--</c> and the state digest, and an article id after <c>#</c>.</summary>
+    /// <summary>
+    /// A hash-pinned permalink in the one shape of the specification of record's R64: the stable coordinate, <c>--</c>, the
+    /// state digest and the text's language, and an article id as a last segment, escaped as the platform escapes it.
+    /// </summary>
     private static readonly Regex Permalink = new(
-        @"^/lu-legilux/[a-z0-9_-]+/\d{4}-\d{2}-\d{2}--(?<digest>[0-9a-f]{64})(#(?<anchor>[^#\s]+))?$",
+        @"^/lu-legilux/[a-z0-9_-]+/\d{4}-\d{2}-\d{2}--(?<digest>[0-9a-f]{64})/[a-z]{3}(/(?<anchor>[^/#?\s]+))?$",
         RegexOptions.CultureInvariant);
 
     /// <summary>
-    /// A hash-pinned EU permalink (#850): the CELEX, the language, the wording date, <c>--</c> and the wording digest, and
-    /// the provision after <c>#</c>, escaped as the platform escapes it.
+    /// A hash-pinned EU permalink (#850) in the one shape of R64: the CELEX, the wording date, <c>--</c>, the wording digest
+    /// and the language, and the provision as a last segment, escaped as the platform escapes it.
     /// </summary>
     private static readonly Regex EuropePermalink = new(
-        @"^/eu-eurlex/[^/#\s]+/[a-z]{3}/\d{4}-\d{2}-\d{2}--(?<digest>[0-9a-f]{64})(#(?<anchor>[^#\s]+))?$",
+        @"^/eu-eurlex/[^/#\s]+/\d{4}-\d{2}-\d{2}--(?<digest>[0-9a-f]{64})/[a-z]{3}(/(?<anchor>[^/#?\s]+))?$",
         RegexOptions.CultureInvariant);
 
     [TestMethod]
@@ -89,7 +92,7 @@ public sealed class V3CitationVerificationTests
             new[] { "search", "dossier", "as_of", "evidence_bundle", "article_history", "diff", "changes_in_period" },
             emitted.Select(static entry => entry.Operation).Distinct(StringComparer.Ordinal).ToArray(),
             "an operation a live screen reads emitted no permalink the walk could find");
-        Assert.IsTrue(emitted.Any(static entry => entry.Permalink.Contains('#', StringComparison.Ordinal)), "no article permalink was emitted");
+        Assert.IsTrue(emitted.Any(static entry => Permalink.Match(entry.Permalink).Groups["anchor"].Success), "no article permalink was emitted");
 
         foreach (var (from, operation, permalink) in emitted.Distinct())
         {
@@ -101,7 +104,7 @@ public sealed class V3CitationVerificationTests
             Assert.AreEqual(match.Groups["digest"].Value, body.GetProperty("state_sha256").GetString(), $"{operation}: {permalink} verified another state");
             if (match.Groups["anchor"].Success)
             {
-                Assert.AreEqual(match.Groups["anchor"].Value, body.GetProperty("requested_anchor").GetString(), $"{operation}: {permalink}");
+                Assert.AreEqual(Uri.UnescapeDataString(match.Groups["anchor"].Value), body.GetProperty("requested_anchor").GetString(), $"{operation}: {permalink}");
             }
         }
     }
@@ -145,7 +148,7 @@ public sealed class V3CitationVerificationTests
 
         // Every EU answer contributed, with a provision permalink among them, or the walk proves less than it says.
         CollectionAssert.AreEquivalent(new[] { "search", "dossier", "evidence_bundle" }, permalinks.Select(static entry => entry.Operation).Distinct(StringComparer.Ordinal).ToArray());
-        Assert.IsTrue(permalinks.Any(static entry => entry.Permalink.Contains('#', StringComparison.Ordinal)), "no EU provision permalink was emitted");
+        Assert.IsTrue(permalinks.Any(static entry => EuropePermalink.Match(entry.Permalink).Groups["anchor"].Success), "no EU provision permalink was emitted");
         CollectionAssert.AreEquivalent(new[] { "search", "dossier" }, coordinates.Select(static entry => entry.Operation).Distinct(StringComparer.Ordinal).ToArray());
 
         foreach (var (operation, permalink) in permalinks.Distinct())
@@ -175,25 +178,26 @@ public sealed class V3CitationVerificationTests
         var digest = new string('a', 64);
         var node = JsonNode.Parse($$"""
             {
-              "permalink": "/lu-legilux/loi-x/2024-02-01--{{digest}}",
-              "rows": [{ "nested": { "article_permalink": "/lu-legilux/loi-x/2024-02-01--{{digest}}#art_1" } }],
-              "broken": { "article_permalink": "/lu-legilux/loi-x/2024-02-01--{{digest}}?broken#art_2" },
+              "permalink": "/lu-legilux/loi-x/2024-02-01--{{digest}}/fra",
+              "rows": [{ "nested": { "article_permalink": "/lu-legilux/loi-x/2024-02-01--{{digest}}/fra/art_1" } }],
+              "broken": { "article_permalink": "/lu-legilux/loi-x/2024-02-01--{{digest}}/fra/art_2?broken" },
               "hits": [{ "resolve": { "identifier": "/lu-legilux/loi-x/2024-02-01" } }],
               "baseline": { "permalink": null },
-              "candidates": ["/lu-legilux/loi-x/2024-02-01--{{digest}}", "/lu-legilux/loi-x/2024-02-01"],
-              "note": "a sentence mentioning /lu-legilux/loi-x/2024-02-01--{{digest}} is prose, not a citation",
-              "short": "/lu-legilux/loi-x/2024-02-01--abc"
+              "candidates": ["/lu-legilux/loi-x/2024-02-01--{{digest}}/fra", "/lu-legilux/loi-x/2024-02-01"],
+              "note": "a sentence mentioning /lu-legilux/loi-x/2024-02-01--{{digest}}/fra is prose, not a citation",
+              "short": "/lu-legilux/loi-x/2024-02-01--abc/fra",
+              "before": "/lu-legilux/loi-x/2024-02-01--{{digest}}"
             }
             """)!;
         var found = CitationsIn(node).ToArray();
         CollectionAssert.AreEquivalent(
             new[]
             {
-                ($"$.permalink", $"/lu-legilux/loi-x/2024-02-01--{digest}", true),
-                ($"$.rows[0].nested.article_permalink", $"/lu-legilux/loi-x/2024-02-01--{digest}#art_1", true),
-                ($"$.broken.article_permalink", $"/lu-legilux/loi-x/2024-02-01--{digest}?broken#art_2", true),
+                ($"$.permalink", $"/lu-legilux/loi-x/2024-02-01--{digest}/fra", true),
+                ($"$.rows[0].nested.article_permalink", $"/lu-legilux/loi-x/2024-02-01--{digest}/fra/art_1", true),
+                ($"$.broken.article_permalink", $"/lu-legilux/loi-x/2024-02-01--{digest}/fra/art_2?broken", true),
                 ($"$.hits[0].resolve.identifier", "/lu-legilux/loi-x/2024-02-01", true),
-                ($"$.candidates[0]", $"/lu-legilux/loi-x/2024-02-01--{digest}", false),
+                ($"$.candidates[0]", $"/lu-legilux/loi-x/2024-02-01--{digest}/fra", false),
             },
             found,
             "a citation is taken by its role whatever it holds, so a malformed one is a finding rather than a skip (review of #796)");

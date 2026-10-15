@@ -13,9 +13,13 @@ import { join } from "node:path";
 import vm from "node:vm";
 import { renderToString } from "react-dom/server";
 
-import { LIVE_DOSSIER_ROOT, LIVE_READING_ROOT, liveDossierTree, liveReadingTree, renderLiveDossierPage, renderLiveReadingPage } from "../.react-build/app.mjs";
-import { INITIAL_ANSWER_ID, jsonInScript, readInitialAnswer } from "../scripts/initial-answer.mjs";
-import { sitePageFor } from "../scripts/permalinks.mjs";
+import {
+  LIVE_CONTRACT, LIVE_DOSSIER_ROOT, LIVE_READING_ROOT, liveDossierTree, liveReadingTree, renderLiveDossierPage, renderLiveReadingPage,
+} from "../.react-build/app.mjs";
+import { INITIAL_ANSWER_ID, addressBeforeAnswer, jsonInScript, lawPathOf, readInitialAnswer, readingAddressShown } from "../scripts/initial-answer.mjs";
+import { parseSitePath, sitePageFor } from "../scripts/permalinks.mjs";
+import { readingOutcome } from "../scripts/live-reading.mjs";
+import { answerHandedWith } from "../scripts/v3-client.mjs";
 import { createLiveServer } from "../scripts/serve-live.mjs";
 import { buildLive } from "../scripts/build-live.mjs";
 
@@ -34,13 +38,69 @@ function rootOf(html, id) {
 }
 
 test("a stale permalink's page names the state it shows as its own, never the digest it was opened at", () => {
-  const stale = STATE.permalink.replace(/--[0-9a-f]{64}$/, `--${"0".repeat(64)}`);
+  const stale = STATE.permalink.replace(/--[0-9a-f]{64}\//, `--${"0".repeat(64)}/`);
   const html = renderLiveReadingPage({ initial: { envelope: READING, path: `/en${stale}` } });
-  assert.ok(html.includes(`<link rel="canonical" href="https://law.soufien.lu/en${STATE.permalink}"/>`), "the canonical is the state the page shows");
+  assert.ok(html.includes(`<link rel="canonical" href="https://law.soufien.lu${STATE.permalink}"/>`), "the canonical is the state the page shows, with no interface language");
   assert.ok(html.includes(`hrefLang="fr" href="https://law.soufien.lu/fr${STATE.permalink}"`), "and so is each language's alternate");
-  assert.ok(!html.includes(`${"0".repeat(64)}"/>`), "the digest it was opened at is named nowhere in the head");
+  assert.ok(!html.slice(0, html.indexOf("</head>")).includes("0".repeat(64)), "the digest it was opened at is named nowhere in the head");
   const exact = renderLiveReadingPage({ initial: { envelope: READING, path: `/en${STATE.permalink}` } });
-  assert.ok(exact.includes(`<link rel="canonical" href="https://law.soufien.lu/en${STATE.permalink}"/>`), "a permalink that holds names itself");
+  assert.ok(exact.includes(`<link rel="canonical" href="https://law.soufien.lu${STATE.permalink}"/>`), "a permalink that holds names itself");
+});
+
+test("a law page under /fr/ or /en/ names the permalink with no interface language as canonical, each language and x-default (R64)", () => {
+  const article = `${STATE.permalink}/${STATE.articles[14].publisher_id}`;
+  for (const language of ["en", "fr"]) {
+    const html = renderLiveReadingPage({ initial: { envelope: READING, path: `/${language}${article}` } });
+    const head = html.slice(0, html.indexOf("</head>"));
+    assert.equal((head.match(/rel="canonical"/g) ?? []).length, 1, `/${language}/: one canonical link`);
+    assert.ok(head.includes(`<link rel="canonical" href="https://law.soufien.lu${article}"/>`), `/${language}/: the article's own permalink, with no interface language`);
+    for (const [hrefLang, href] of [["fr", `/fr${article}`], ["en", `/en${article}`], ["x-default", article]]) {
+      assert.ok(head.includes(`<link rel="alternate" hrefLang="${hrefLang}" href="https://law.soufien.lu${href}"/>`), `/${language}/: ${hrefLang}`);
+    }
+    assert.ok(head.includes('http-equiv="Content-Security-Policy"'), "the page's own policy is untouched");
+  }
+});
+
+test("a reading's page names as canonical an address the platform mints, never the request's own, as the shared table says (review of #967)", () => {
+  const origin = "https://law.soufien.lu";
+  const rows = TABLE.paths.filter((row) => row.canonical !== undefined);
+  assert.ok(rows.length >= 5, "the article minted, escaped otherwise, not held, none, and a stale permalink's");
+  const refused = envelopeOf("evidence_bundle", "a date before the work's history");
+  const view = readingOutcome(answerHandedWith("evidence_bundle", READING, { contract: LIVE_CONTRACT, objectType: "evidence_bundle" })).view;
+  for (const { path, canonical } of rows) {
+    const html = renderLiveReadingPage({ initial: { envelope: READING, path } });
+    const head = html.slice(0, html.indexOf("</head>"));
+    assert.deepEqual([...head.matchAll(/<link rel="canonical" href="([^"]*)"\/>/g)].map((match) => match[1]), [canonical], `${path}: one canonical link`);
+    const law = canonical.slice(origin.length);
+    assert.deepEqual(
+      [...head.matchAll(/<link rel="alternate" hrefLang="([^"]*)" href="([^"]*)"\/>/g)].map(([, hrefLang, href]) => [hrefLang, href]),
+      [["fr", `${origin}/fr${law}`], ["en", `${origin}/en${law}`], ["x-default", canonical]],
+      `${path}: each language once, and x-default`,
+    );
+    // The page as a browser loads it names the same once its answer is read (`LiveReading.jsx`), and before that, as built,
+    // the state's permalink with no article (`client.jsx`), an address the platform mints as well.
+    assert.equal(readingAddressShown(view, lawPathOf(path)), law, `${path}: once loaded`);
+    assert.equal(addressBeforeAnswer(path), parseSitePath(path).permalink, `${path}: as built`);
+    assert.equal(parseSitePath(addressBeforeAnswer(path)).anchor, null, `${path}: as built, no article`);
+    // A refusal shows no state: its page names the state's permalink the address pins, with no article.
+    const refusal = renderLiveReadingPage({ initial: { envelope: refused, path } });
+    assert.ok(refusal.includes(`<link rel="canonical" href="${origin}${parseSitePath(path).permalink}"/>`), `${path}: a refusal's page`);
+  }
+
+  // An article the state holds without text is minted as a segment too, and so is an EU wording's provision; an article
+  // neither holds is the state's (or wording's) permalink.
+  const state = { permalink: `/lu-legilux/w/2024-01-01--${"a".repeat(64)}/fra`, articles: [], articlesWithoutText: [{ publisherId: "Art. 2" }] };
+  const luxembourg = { publisher: "lu-legilux", states: [state] };
+  assert.equal(readingAddressShown(luxembourg, `${state.permalink}/Art.%202`), `${state.permalink}/Art.%202`);
+  assert.equal(readingAddressShown(luxembourg, `${state.permalink}/Art.%20%32`), `${state.permalink}/Art.%202`, "as the platform escapes it");
+  assert.equal(readingAddressShown(luxembourg, `${state.permalink}/Art.%203`), state.permalink);
+  const pin = `/eu-eurlex/32016R0679/2016-05-04--${"b".repeat(64)}/eng`;
+  const europe = { publisher: "eu-eurlex", wordings: [{ permalink: pin, articles: [{ publisherId: "art_5(1)", permalink: `${pin}/art_5%281%29` }], articlesWithoutText: [] }] };
+  assert.equal(readingAddressShown(europe, `${pin}/art_5(1)`), `${pin}/art_5%281%29`);
+  assert.equal(readingAddressShown(europe, `${pin}/art_6`), pin);
+  assert.equal(readingAddressShown(null, `${pin}/art_6`), pin, "no view: the pinned wording, with no article");
+  assert.equal(addressBeforeAnswer("/en/eu-eurlex/32016R0679"), "/eu-eurlex/32016R0679", "a work's address is its own");
+  assert.equal(addressBeforeAnswer("/en/search.html"), null);
 });
 
 test("each law's address under a language is rendered from what the page itself would ask, as the shared table says", () => {
@@ -64,7 +124,7 @@ test("the answer a page carries is JSON that cannot end its block, read back as 
 });
 
 test("a permalink's reading is rendered complete, and the browser renders the same tree from the answer the page carries", () => {
-  const initial = { envelope: READING, path: `/en${STATE.permalink}#${STATE.articles[14].publisher_id}`.split("#")[0] };
+  const initial = { envelope: READING, path: `/en${STATE.permalink}/${STATE.articles[14].publisher_id}` };
   const html = renderLiveReadingPage({ initial });
   assert.match(html, /<section data-answer-state="success">/, "the reading, without any script");
   assert.equal((html.match(/<blockquote/g) ?? []).length, STATE.articles.length, "every article quoted in the page itself");
@@ -74,18 +134,19 @@ test("a permalink's reading is rendered complete, and the browser renders the sa
   const block = html.slice(html.indexOf(`id="${INITIAL_ANSWER_ID}">`) + `id="${INITIAL_ANSWER_ID}">`.length, html.indexOf("</script>", html.indexOf(INITIAL_ANSWER_ID)));
   assert.deepEqual(JSON.parse(block), READING, "the page carries the answer it was rendered from");
 
-  const stale = { envelope: READING, path: `/en${STATE.permalink.replace(/[0-9a-f]{64}$/, "0".repeat(64))}` };
+  const stale = { envelope: READING, path: `/en${STATE.permalink.replace(/--[0-9a-f]{64}\//, `--${"0".repeat(64)}/`)}` };
   const staleHtml = renderLiveReadingPage({ initial: stale });
   assert.ok(staleHtml.includes("data-pin-replaced"), "a stale permalink's notice is in the page itself");
   assert.equal(rootOf(staleHtml, LIVE_READING_ROOT), renderToString(liveReadingTree(stale)));
 
   assert.ok(!renderLiveReadingPage().includes(INITIAL_ANSWER_ID), "the page as built carries no answer");
 
-  // The page names its own address as canonical, and the same address in each language, the language-neutral permalink
-  // (which sends a reader to their language) for any other (R61, R67).
+  // The page names as canonical its own address with no interface language, its article included, and the same address
+  // in each language, the language-neutral permalink (which sends a reader to their language) for any other (R61, R64, R67).
   const origin = "https://law.soufien.lu";
-  assert.ok(html.includes(`<link rel="canonical" href="${origin}/en${STATE.permalink}"/>`), "canonical: this page");
-  for (const [hrefLang, href] of [["fr", `${origin}/fr${STATE.permalink}`], ["en", `${origin}/en${STATE.permalink}`], ["x-default", `${origin}${STATE.permalink}`]]) {
+  const article = `${STATE.permalink}/${STATE.articles[14].publisher_id}`;
+  assert.ok(html.includes(`<link rel="canonical" href="${origin}${article}"/>`), "canonical: this article's permalink");
+  for (const [hrefLang, href] of [["fr", `${origin}/fr${article}`], ["en", `${origin}/en${article}`], ["x-default", `${origin}${article}`]]) {
     assert.ok(html.includes(`<link rel="alternate" hrefLang="${hrefLang}" href="${href}"/>`), `${hrefLang}: ${href}`);
   }
   assert.ok(!renderLiveReadingPage().includes('rel="canonical"') && !renderLiveReadingPage().includes('rel="alternate"'),
@@ -150,12 +211,20 @@ test("the live server renders a law's address from the API's answer, refuses to 
     const live = createLiveServer({ root, apiOrigin: `http://127.0.0.1:${api.address().port}` });
     const origin = await new Promise((resolve) => live.listen(0, "127.0.0.1", () => resolve(`http://127.0.0.1:${live.address().port}`)));
     try {
-      const permalink = `/en/lu-legilux/loi-1991-08-10-n3/2024-02-01--${"a".repeat(64)}`;
+      const permalink = `/en/lu-legilux/loi-1991-08-10-n3/2024-02-01--${"a".repeat(64)}/fra/art_15`;
       answers.set("/api/v3/evidence_bundle", { result: { value: {} }, refusal: null });
       const page = await fetch(`${origin}${permalink}`);
       assert.equal(page.status, 200);
       assert.equal(await page.text(), `<!doctype html><p>reading answer ${permalink}</p>`, "rendered from the API's answer");
-      assert.deepEqual(JSON.parse(asked.at(-1).body), { operation_id: "evidence_bundle", parameters: { identifier: "/lu-legilux/loi-1991-08-10-n3", date: "2024-02-01" } }, "asked as the page itself would ask");
+      assert.deepEqual(JSON.parse(asked.at(-1).body), { operation_id: "evidence_bundle", parameters: { identifier: "/lu-legilux/loi-1991-08-10-n3", date: "2024-02-01", language: "fra" } }, "asked as the page itself would ask, in the text's language the permalink names");
+
+      // R64: the EU shape before it has moved for good, its interface language and query kept; the Luxembourg shape before it
+      // names no language, so it is answered as any address the server does not hold.
+      const before = await fetch(`${origin}/en/eu-eurlex/32016R0679/eng/2016-05-04--${"a".repeat(64)}?from=card`, { redirect: "manual" });
+      assert.equal(before.status, 301);
+      assert.equal(before.headers.get("location"), `/en/eu-eurlex/32016R0679/2016-05-04--${"a".repeat(64)}/eng?from=card`);
+      assert.equal(before.headers.get("vary"), null, "the same answer for every reader");
+      assert.equal((await fetch(`${origin}/en/lu-legilux/loi-1991-08-10-n3/2024-02-01--${"a".repeat(64)}`, { redirect: "manual" })).status, 404);
 
       answers.set("/api/v3/dossier", { result: null, refusal: { code: "identifier_unknown" } });
       const unknown = await fetch(`${origin}/en/lu-legilux/no-such-work`);

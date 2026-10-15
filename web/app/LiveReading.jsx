@@ -14,9 +14,10 @@
 //
 // A permalink is a link to this site's own reading of it (`permalinks.mjs`), and the page served at a permalink asks
 // that reading itself once it has loaded: the work and date the address names, one request, as a submit would ask
-// it. The answer is held to the address's pin: when no state (or EU wording) it shows is the one the address pins,
-// the page says so above the reading rather than letting another version pass for it, and brings that notice into
-// view; otherwise the article the address names after `#` (or the state) is brought into view, and given the focus.
+// it, in the text's language the address names (R64). The answer is held to the address's pin: when no state (or EU
+// wording) it shows is the one the address pins, the page says so above the reading rather than letting another version
+// pass for it, and brings that notice into view; otherwise the article the address names (its last segment, or after `#`
+// on an address moved from the shape before R64) or the state is brought into view, and given the focus.
 //
 // An EU work's reading is the wording that answers the date asked, original or consolidated: each wording
 // is headed by its own date as a wording's (never an applicability date), and the acknowledgement and
@@ -35,8 +36,10 @@ import {
   readingOutcome,
 } from '../scripts/live-reading.mjs';
 import { ENGLISH_LANG, countedEntry, liveChrome } from '../scripts/live-chrome.mjs';
-import { anchorOf, parseSitePath } from '../scripts/permalinks.mjs';
+import { anchorOf, anchorText, parseSitePath } from '../scripts/permalinks.mjs';
 import { answerHandedWith } from '../scripts/v3-client.mjs';
+import { readingAddressShown } from '../scripts/initial-answer.mjs';
+import { writeLawPageLinks } from './head-links.mjs';
 
 /** The forms' labels and buttons, and this screen's sentences, from the interface copy table. */
 const FORM = liveChrome().form;
@@ -379,17 +382,19 @@ export function LiveReading({ contract, fetchImpl, initial = null }) {
   }, []);
 
   // What the address names, brought into view once the reading is shown and given the focus, as a browser does for an
-  // anchor (so the keyboard and a screen reader continue from there): the article named after `#` in the pinned state
+  // anchor (so the keyboard and a screen reader continue from there): the article the address names in the pinned state
   // (or wording), or that state when no article is named. When the reading shows another version, its notice instead:
-  // a reader must not land on an article without meeting the notice that it is not the version the link pins.
+  // a reader must not land on an article without meeting the notice that it is not the version the link pins. The head
+  // names the address the reading shows as the page's own, as the server's render does (`readingLawPath`).
   useEffect(() => {
     if (!pinned || outcome.state !== 'success') return;
+    writeLawPageLinks(document, readingAddressShown(outcome.view, pin.address));
     let target;
     if (!readingHolds(outcome.view, pin.permalink)) {
       target = document.querySelector('[data-pin-replaced]');
     } else {
       const section = document.querySelector(`[data-state="${pin.digest}"], [data-wording="${pin.digest}"]`);
-      const anchor = anchorOf(window.location.hash);
+      const anchor = anchorText(pin.anchor) ?? anchorOf(window.location.hash);
       const named = anchor === null ? undefined : [...(section ?? document).querySelectorAll('[data-article]')].find((element) => element.getAttribute('data-article') === anchor);
       // An article the state does not hold (a link made by hand, or to another version) brings the state into view.
       target = named ?? section;
@@ -428,11 +433,20 @@ export function LiveReading({ contract, fetchImpl, initial = null }) {
   );
 }
 
-/** What a permalink path names for the reading screen: the permalink, its digest and the request that asks it, or null. */
+/**
+ * What a permalink path names for the reading screen: the permalink, the whole address (its article included), its digest,
+ * the article's segment, and the request that asks it (in the text's language the permalink names), or null.
+ */
 function pinOf(pathname) {
   const named = parseSitePath(pathname);
   if (named === null || named.kind !== 'state') return null;
-  return { permalink: named.permalink, digest: named.digest, request: { identifier: named.identifier, date: named.date, language: named.language ?? '' } };
+  return {
+    permalink: named.permalink,
+    address: named.address,
+    digest: named.digest,
+    anchor: named.anchor,
+    request: { identifier: named.identifier, date: named.date, language: named.language },
+  };
 }
 
 /** Whether a reading view shows the state (or EU wording) a permalink pins. */

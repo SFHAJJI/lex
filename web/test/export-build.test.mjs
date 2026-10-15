@@ -78,7 +78,7 @@ test("an export carries every pinned article's citation, text, digests, official
   assert.deepEqual(Object.keys(json.verified_by), ["corpus_sha256", "index_sha256", "registry_sha256"]);
   for (const [index, item] of json.items.entries()) {
     const source = state.articles[index];
-    assert.equal(item.citation, `${state.permalink}#${source.publisherId}`, "the citation is the hash-pinned article permalink");
+    assert.equal(item.citation, `${state.permalink}/${source.publisherId}`, "the citation is the hash-pinned article permalink");
     assert.equal(item.text, source.text);
     assert.equal(createHash("sha256").update(item.text, "utf8").digest("hex"), item.text_sha256, "the text still hashes to its digest");
     assert.equal(item.official_source, state.publisherLegalResourceIri);
@@ -116,7 +116,7 @@ test("a pinned article held without text is excluded with its reason in both for
   const json = JSON.parse(exportJson(model));
   assert.deepEqual(json.excluded.map((entry) => entry.article), [moved.publisher_id]);
   assert.ok(!json.items.some((item) => item.article === moved.publisher_id));
-  const citation = `${view.states[0].permalink}#${moved.publisher_id}`;
+  const citation = `${view.states[0].permalink}/${moved.publisher_id}`;
   assert.equal(json.excluded[0].citation, citation, "an excluded article keeps its citation");
   const rows = parseCsv(exportCsv(model)).slice(1);
   const excludedRow = Object.fromEntries(CSV_COLUMNS.map((column, position) => [column, rows.find((row) => row[3] === moved.publisher_id)[position]]));
@@ -160,12 +160,12 @@ function europeExport(change = () => {}, pick = (wording) => [...wording.article
 /** A French wording beside the sample's English one, with no annex. */
 function withFrench(bundle) {
   const french = structuredClone(bundle.wordings[0]);
-  const permalink = `/eu-eurlex/${EUROPE_SAMPLE.celex}/fra/${EUROPE_SAMPLE.wordingDate}--${"6".repeat(64)}`;
+  const permalink = `/eu-eurlex/${EUROPE_SAMPLE.celex}/${EUROPE_SAMPLE.wordingDate}--${"6".repeat(64)}/fra`;
   Object.assign(french, {
     publisher_expression_id: `${EUROPE_SAMPLE.work}.0008`, language: "fra", wording_sha256: "6".repeat(64), permalink,
     stable_coordinate: `/eu-eurlex/${EUROPE_SAMPLE.celex}/fra/${EUROPE_SAMPLE.wordingDate}`, annexes_not_served: [],
   });
-  for (const article of french.articles) Object.assign(article, { language: "fra", article_permalink: `${permalink}#${escapeProvision(article.publisher_id)}` });
+  for (const article of french.articles) Object.assign(article, { language: "fra", article_permalink: `${permalink}/${escapeProvision(article.publisher_id)}` });
   Object.assign(bundle, { requested_language: null, available_languages: ["eng", "fra"], served_languages: ["eng", "fra"] });
   bundle.wordings.push(french);
 }
@@ -187,7 +187,7 @@ test("an EU export carries each article's citation, text, digests, language, wor
   assert.deepEqual(json.items.map((item) => item.article), ["001", "002"]);
   for (const [index, item] of json.items.entries()) {
     const source = wording.articles[index];
-    assert.equal(item.citation, `${wording.permalink}#${source.publisherId}`, "the citation is the article permalink, which pins the wording");
+    assert.equal(item.citation, `${wording.permalink}/${source.publisherId}`, "the citation is the article permalink, which pins the wording");
     assert.equal(item.wording_permalink, wording.permalink);
     assert.deepEqual([item.language, item.wording_kind, item.wording_date], ["eng", "original_wording", "2016-04-27"]);
     assert.equal(item.heading, source.heading);
@@ -229,7 +229,7 @@ test("an EU export excludes an article held without text, cited, and lists its w
   const json = JSON.parse(exportJson(model));
   assert.deepEqual(json.excluded, [{
     celex: EUROPE_SAMPLE.celex, language: "eng", wording_kind: "original_wording", wording_date: "2016-04-27", article: "099",
-    citation: `${wording.permalink}#099`, wording_permalink: wording.permalink, reason: EUROPE_WITHOUT_TEXT,
+    citation: `${wording.permalink}/099`, wording_permalink: wording.permalink, reason: EUROPE_WITHOUT_TEXT,
   }], "an excluded article keeps its citation and says why");
   const [annex] = wording.annexesNotServed;
   assert.deepEqual(json.annexes_not_served, [{
@@ -242,7 +242,7 @@ test("an EU export excludes an article held without text, cited, and lists its w
   const rows = parseCsv(exportCsv(model)).slice(1).map((row) => recordOf(EUROPE_CSV_COLUMNS, row));
   const excludedRow = rows.find((record) => record.article === "099");
   assert.equal(excludedRow.status, `excluded: ${EUROPE_WITHOUT_TEXT}`);
-  assert.equal(excludedRow.citation, `${wording.permalink}#099`, "the excluded row is cited");
+  assert.equal(excludedRow.citation, `${wording.permalink}/099`, "the excluded row is cited");
   assert.equal(excludedRow.text, "");
   const annexRow = rows.find((record) => record.status.startsWith("excluded: annex_"));
   assert.equal(annexRow.status, "excluded: annex_text_not_available");
@@ -252,7 +252,7 @@ test("an EU export excludes an article held without text, cited, and lists its w
 
   // A provision held without text is cited as the platform escapes it in a permalink.
   const { model: escaped } = europeExport((b) => { b.wordings[0].articles_without_text[0].publisher_id = "Article 1(2)"; });
-  assert.equal(escaped.excluded[0].citation, `${wording.permalink}#Article%201%282%29`);
+  assert.equal(escaped.excluded[0].citation, `${wording.permalink}/Article%201%282%29`);
 
   // The annexes travel with an export of their own wording only.
   const { model: french } = europeExport(withFrench, (held) => (held.language === "fra" ? held.articles.slice(0, 1) : []));

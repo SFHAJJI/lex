@@ -97,8 +97,8 @@ test("a served bundle is the text of the state, quoted in its language, with bot
   }
   assert.ok(markup.includes(`<a href="/en${state.permalink}"><code>${state.permalink}</code></a>`), "the state's permalink is a link to this reading");
   assert.equal(readingHolds(outcome.view, state.permalink), true, "a permalink to the state shown is held");
-  assert.equal(readingHolds(outcome.view, `${state.stable_coordinate}--${"0".repeat(64)}`), false, "another state of that date is not");
-  assert.equal(readingHolds(outcome.view, `${state.permalink}#${state.articles[0].publisher_id}`), false, "a permalink is held to whole, without its article");
+  assert.equal(readingHolds(outcome.view, `${state.stable_coordinate}--${"0".repeat(64)}/${state.language}`), false, "another state of that date is not");
+  assert.equal(readingHolds(outcome.view, `${state.permalink}/${state.articles[0].publisher_id}`), false, "a permalink is held to whole, without its article");
   const conflicted = state.articles.filter((article) => article.validity_conflict);
   assert.equal((markup.match(/data-validity-conflict=""/g) ?? []).length, conflicted.length);
   assert.ok(markup.includes(`This article&#x27;s own date is ${conflicted[0].article_valid_from}; its state applies from ${state.applicability_date}.`));
@@ -219,11 +219,11 @@ test("a work read in two languages keeps each article's element id unique (revie
   const sha = "d".repeat(64);
   german.language = "deu";
   german.state_sha256 = sha;
-  german.permalink = `${german.stable_coordinate}--${sha}`;
+  german.permalink = `${german.stable_coordinate}--${sha}/deu`;
   german.articles.forEach((article, index) => {
     article.language = "deu";
     article.article_identity_sha256 = index.toString(16).padStart(64, "e");
-    article.article_permalink = `${german.permalink}#${article.publisher_id}`;
+    article.article_permalink = `${german.permalink}/${article.publisher_id}`;
   });
   value.states.unshift(german);
   value.available_languages = ["deu", "fra"];

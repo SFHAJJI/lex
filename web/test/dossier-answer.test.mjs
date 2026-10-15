@@ -53,7 +53,7 @@ function stateOn(base, date, language, digit) {
     state_sha256: sha,
     expression_iri: `${base.states[0].expression_iri.replace(/\/fr$/, "")}/${language.slice(0, 2)}-${date}`,
     stable_coordinate: coordinate,
-    permalink: `${coordinate}--${sha}`,
+    permalink: `${coordinate}--${sha}/${language}`,
   };
 }
 
@@ -79,7 +79,7 @@ test("the captured answer reads: the work, its one state, and what the dossier d
   assert.equal(view.language, "fra");
   assert.equal(view.states.length, 1);
   const [state] = view.states;
-  assert.equal(state.permalink, `/lu-legilux/${view.workKey}/${state.applicabilityDate}--${state.stateSha256}`);
+  assert.equal(state.permalink, `/lu-legilux/${view.workKey}/${state.applicabilityDate}--${state.stateSha256}/${state.language}`);
   assert.equal(state.nextApplicabilityDate, null, "the only state has no next date");
   assert.equal(state.articleCount, 49);
   assert.equal(state.articlesNotAdmitted, 5);
@@ -114,7 +114,8 @@ test("each rule the answer states about itself is refused when broken, with that
   const cases = [
     ["another publisher's answer", answer, (a) => { a.publisher = "eu-eurlex"; }, /Luxembourg \(lu-legilux\) dossier only/],
     ["a state of another work", answer, (a) => { a.states[0].publisher_work_iri = "http://elsewhere/eli/x"; }, /not to the work/],
-    ["a permalink to another digest", answer, (a) => { a.states[0].permalink = a.states[0].permalink.slice(0, -1) + "0"; }, /does not pin its coordinate and digest/],
+    ["a permalink to another digest", answer, (a) => { a.states[0].permalink = a.states[0].permalink.replace(/[0-9a-f](\/[a-z]{3})$/, "0$1"); }, /does not pin its coordinate, digest and language/],
+    ["a permalink of the shape before R64", answer, (a) => { a.states[0].permalink = a.states[0].permalink.replace(/\/fra$/, ""); }, /does not pin its coordinate, digest and language/],
     ["a coordinate of another date", answer, (a) => { a.states[0].stable_coordinate = `/lu-legilux/${a.work_key}/2020-01-01`; }, /does not name its work and date/],
     ["a next date that is not the next state's", several, (a) => { a.states[0].next_applicability_date = "2025-01-01"; }, /next later state in fra is 2026-01-01/],
     ["a next date on the last state", answer, (a) => { a.states[0].next_applicability_date = "2030-01-01"; }, /next later state in fra is null/],
@@ -154,7 +155,7 @@ test("the captured EU dossier reads: the work by its CELEX, its one expression a
   assert.equal(expression.language, "eng");
   assert.equal(expression.articleCount, 99, "the GDPR's 99 articles");
   assert.deepEqual(expression.wordingDates, ["2016-04-27"]);
-  assert.equal(expression.wording.permalink, `/eu-eurlex/32016R0679/eng/2016-04-27--${expression.wording.wordingSha256}`);
+  assert.equal(expression.wording.permalink, `/eu-eurlex/32016R0679/2016-04-27--${expression.wording.wordingSha256}/eng`);
   assert.equal(expression.coordinate, expression.expressionIri, "the expression is an identifier EU resolve answers");
   assert.deepEqual(expression.annexesNotServed, [], "the GDPR's package holds no annex, so none is listed");
   assert.ok(view.notHeld.some((row) => row.item === "force_dates"), "the dossier says the wording date is no force date");
@@ -178,7 +179,8 @@ const annexRow = (change = {}) => ({
 
 test("each rule an EU dossier states about itself is refused when broken, with that rule's reason", async () => {
   const answer = await capturedAnswer("eu-eurlex");
-  const flipLast = (text) => text.replace(/[0-9a-f]$/, (digit) => (digit === "0" ? "1" : "0"));
+  // A permalink's digest is followed by its language (R64), so the digit flipped is the digest's last.
+  const flipLast = (permalink) => permalink.replace(/([0-9a-f])(\/[a-z]{3})$/, (_, digit, language) => `${digit === "0" ? "1" : "0"}${language}`);
   const second = (a) => {
     const copy = structuredClone(a.expressions[0]);
     copy.publisher_expression_id += "-second";
@@ -189,11 +191,11 @@ test("each rule an EU dossier states about itself is refused when broken, with t
     ["an expression that pins no wording", (a) => { a.expressions[0].pinned_wording = null; }, /expression 1 pins no wording/],
     ["a permalink to another digest", (a) => { a.expressions[0].pinned_wording.permalink = flipLast(a.expressions[0].pinned_wording.permalink); }, /not the wording it pins/],
     ["a permalink of another act", (a) => { a.expressions[0].pinned_wording.permalink = a.expressions[0].pinned_wording.permalink.replace("32016R0679", "32016L0680"); }, /not the wording it pins/],
-    ["a permalink in another language", (a) => { a.expressions[0].pinned_wording.permalink = a.expressions[0].pinned_wording.permalink.replace("/eng/", "/fra/"); }, /not the wording it pins/],
+    ["a permalink in another language", (a) => { a.expressions[0].pinned_wording.permalink = a.expressions[0].pinned_wording.permalink.replace(/\/eng$/, "/fra"); }, /not the wording it pins/],
     ["a pin of a date the expression does not bear", (a) => { a.expressions[0].pinned_wording.wording_date = "2016-05-04"; }, /pins the wording of 2016-05-04/],
     ["a pin beside two wording dates", (a) => { a.expressions[0].wording_dates.push("2016-05-04"); }, /one wording is pinned exactly when one is held/],
     ["a resolve to another expression", (a) => { a.expressions[0].resolve.identifier += "-other"; }, /not to the expression it names/],
-    ["an expression in a language not held", (a) => { a.expressions[0].language = "fra"; a.expressions[0].pinned_wording.permalink = a.expressions[0].pinned_wording.permalink.replace("/eng/", "/fra/"); }, /in fra, which the work is not said to be held in/],
+    ["an expression in a language not held", (a) => { a.expressions[0].language = "fra"; a.expressions[0].pinned_wording.permalink = a.expressions[0].pinned_wording.permalink.replace(/\/eng$/, "/fra"); }, /in fra, which the work is not said to be held in/],
     ["an expression in another language than asked", (a) => { a.available_languages = ["eng", "fra"]; a.requested_language = "fra"; }, /asked in fra/],
     ["a language asked that is not held", (a) => { a.requested_language = "deu"; }, /deu, is not one the work is held in/],
     ["no expression", (a) => { a.expressions = []; a.expression_count = 0; }, /at least one held expression/],
