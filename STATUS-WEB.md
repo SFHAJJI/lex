@@ -17,12 +17,12 @@ typed exactly as published found nothing without the library.
   title a reader types are folded by one table, the 2,140 letters and digits of the Basic Multilingual Plane whose fold
   is not themselves, read from the library letter by letter: lowered, the canonical decomposition's non-spacing marks
   dropped (œ, æ, ß, ø, ł keep their letter, as the library kept them). `LuxembourgIndexBuilder.NormalizeTitle` delegates to
-  it, so `resolve` and `search`'s title step fold the same with the library or without it, and nothing in the API asks
-  the library any more. The index's format is unchanged: on the release index (read only), the table folds all 2,021
-  titles to the stored column byte for byte, with the library and without it, and "congé parental" finds its 5 works in
-  both. A test holds the table to the library wherever one is present, every character of the plane; three differences
-  are by design (U+FFFE and a lone surrogate, which made the library throw, separate words, as does a character beyond the
-  plane; Hangul typed as separate jamo stays as typed).
+  it, so `resolve` and `search`'s title step fold the same with the library or without it, and nothing on that title
+  path asks the library any more. The index's format is unchanged: on the release index (read only), the table folds
+  all 2,021 titles to the stored column byte for byte, with the library and without it, and "congé parental" finds its 5
+  works in both. A test holds the table to the library wherever one is present, every character of the plane; three
+  differences are by design (U+FFFE and a lone surrogate, which made the library throw, separate words, as does a
+  character beyond the plane; Hangul typed as separate jamo stays as typed).
 - **"Today" in Luxembourg by a coded EU rule** (`LuxembourgCalendar`, in Contracts; its twin `luxembourgDate` in
   `web/scripts/temporal.mjs`): UTC+01:00, and UTC+02:00 from 01:00 UTC on the last Sunday of March to 01:00 UTC on the last
   Sunday of October (Directive 2000/84/EC, Articles 2 and 3), held from 1996 to 2099; no zone data, no `TimeZoneInfo`. One
@@ -35,13 +35,17 @@ typed exactly as published found nothing without the library.
 - **CI's `image-conditions` lane** (`v3-ci.yml`), beside `dotnet`: it builds as `dotnet` does, then runs the tests inside
   the pinned base image itself (its runtime 10.0.11, its environment and user; the checkout read-only, `/tmp` a tmpfs, no
   network): `Lex.V3.Tests` whole but the OCI verifier's and the SDK publish's classes (tools the image does not carry),
-  then the request-time `Lex.V3.Ingest.Tests` classes (the mounts the API serves and its answers from them). A canary
-  (`ImageConditionsTests`, with `LEX_IMAGE_CONDITIONS=1`) asserts that the conditions held: no named culture, a
-  normalization that does nothing, no Luxembourg zone, a local clock on UTC, UTC the only zone. The eight tests whose
-  premise needs the library (switching to tr-TR, fr-FR or ar-SA, a culture's order, NFC composition) end inconclusive
-  where there is none, saying so. `eng/test-fast.ps1 -ImageConditions` reproduces the lane on any machine with two
-  switches. The API project sets `InvariantGlobalization` and `InvariantTimezone`, so every run of the API (the journeys',
-  serve-live's) runs as the image does.
+  then the request-time `Lex.V3.Ingest.Tests` classes (the mounts the API serves and its answers from them, Luxembourg's
+  and the EU's, and the image-only annex control case). The two filters are written once
+  (`tests/Lex.V3.TestSupport/image-conditions-lane-filters.json`), and each test app holds every term of its own to a
+  test it has (`ImageConditionsLaneTests`). A canary (`ImageConditionsTests`, with `LEX_IMAGE_CONDITIONS=1`) asserts that
+  the conditions held: no named culture, a normalization that does nothing, no Luxembourg zone, a local clock on UTC, UTC
+  the only zone. The eight tests whose premise needs the library (switching to tr-TR, fr-FR or ar-SA, a culture's order,
+  NFC composition) end inconclusive where there is none, saying so. `eng/test-fast.ps1 -ImageConditions` runs the lane's
+  two runs on any machine, with the lane's filters, under two switches (the language library and the zone database taken
+  away); the second, the Ingest classes, is where the title fault shows, and takes minutes. The API project sets
+  `InvariantGlobalization` and `InvariantTimezone`, so every run of the API (the journeys', serve-live's) runs as the
+  image does.
 - **The deploy probe** (`deploy-probe.mjs`) adds two checks. An accented title the revision holds, chosen from its own
   answers (a work its search for "loi" lists; the first accented title of its dossier that resolves without its accents),
   must be found as published, in capitals and decomposed, by the same match, and a strict search for it must name that
@@ -59,18 +63,46 @@ typed exactly as published found nothing without the library.
   3 of its 5 forms refused without the library before the table, 5 of 5 found after, with the library and without. The
   lane, emulated in WSL at this branch's head (built on Linux as the lane builds, then run in the pinned base's own layers
   with its environment, as user 1654, in `/src` read-only, `/tmp` a tmpfs, loopback alone, the lane's arguments):
-  `Lex.V3.Tests` 3,132 (3,122 passed; 10 inconclusive, the eight, the zone sweep and the table-to-library test; the
-  canary's five passed) and the request-time `Lex.V3.Ingest.Tests` classes 632 (629 passed; 3 inconclusive, which need a
-  named mount or chain); at the base the same run failed 9 and 7 (the eight and the SDK publish; the title ladder's
-  ambiguity, prefix and all-words tiers, the refusal census's "a title two works carry", and the machine gates' refusal
-  set at 0.944, twice). On Windows: the whole solution 6,179 (6,147 passed, 32 inconclusive; `Lex.V3.Tests` 3,166 of them,
-  6 inconclusive); `eng/test-fast.ps1 -ImageConditions` 3,132 (3,121 passed, 11 inconclusive); the title classes, the
-  census and the privacy tests under the image's switches 218 (215 passed, 3 inconclusive); the web suite 1,106 of 1,106.
+  `Lex.V3.Tests` 3,133 (3,123 passed; 10 inconclusive, the eight, the zone sweep and the table-to-library test; the
+  canary's five passed) and the request-time `Lex.V3.Ingest.Tests` classes 645 (642 passed; 3 inconclusive, which need a
+  named mount or chain; the EU capability, time-view and branch tests and the annex control case among the passed); at
+  the base the lane's run then failed 8 and 7 (the eight; the title ladder's ambiguity, prefix and all-words tiers, the
+  refusal census's "a title two works carry", and the machine gates' refusal set at 0.944, twice). On Windows: the whole
+  solution 6,181 (6,149 passed, 32 inconclusive); `eng/test-fast.ps1 -ImageConditions` 3,133 (3,122 passed, 11
+  inconclusive) and 645 (642 passed, 3 inconclusive), 26 minutes; the web suite 1,106 of 1,106.
 - **Not yet** (driver decisions, reversible): the page renderer (#959, merged after this branch's base) shown to load in
   the image (the plan's last line of 0.8); the accented-title check in the image rehearsal's real-mount probes; a live look
   at the date during a real clock change (monitoring at 22:30 UTC on 2026-10-24 and 25, 2027-03-27 and 28, not a deploy
   gate); "today" printed (3.4); full-text matching that ignores accents (4.4, which can fold with this table at the
-  index's next format); the lane as a required check (a repository setting).
+  index's next format); the lane as a required check (a repository setting); the one place the API still asks the
+  library to normalize (the only `string.Normalize` in `src` the API reaches; no culture-sensitive call there either),
+  the synthetic slice's check at startup (`SyntheticSliceArtifactVerifier`, through `SyntheticTextNormalizer`), which
+  composes the source into NFC and compares it with the derived text: without the library, in the image and, since the
+  API sets `InvariantGlobalization`, in every run of the API, that composition does nothing, so a synthetic source
+  holding a decomposed accent, derived where the library is, would be refused at startup (`DerivedContentMismatch`) and
+  the API would serve the slice as unavailable. The bundled source is ASCII, so nothing fails today, and the test that
+  would show it (`DecomposedUnicodeBecomesNfc`) ends inconclusive in the lane; a derive-time refusal of a source that is
+  not NFC, checked without the library, would close it.
+- **The review** (before the pull request): six minor findings, two of them the same, all repaired in one round.
+  - The web's date rule read the years 0096 to 0099 as 1996 to 1999 (`Date.UTC` adds 1900 to a year below 100) and
+    answered a date where the API's rule refuses (0099-12-31T23:30:00Z gave 2000-01-01): the year is now checked as
+    written, before `Date.UTC`, and the shared table refuses 0099-12-31T23:30:00Z and 0096-01-01T00:00:00Z, which both
+    rules' tests hold (the old twin fails the web's).
+  - The lane's Ingest filter named the annex control case by a word no test's name holds, so the image-only annex never
+    ran; two of its exclusions named no class; and excluding `V3FirstMountBuildTests` also dropped the EU capability and
+    time-view tests, request-time answers kept in its partial files. Those three are now classes of their own (as this
+    file already named them), the annex term names its test, the dead exclusions are gone, the two filters are written
+    once, and each test app holds every term of its filter to a test it has (the old filter fails that with exactly its
+    three bad terms). The lane emulation runs 13 more tests, all passing.
+  - `eng/test-fast.ps1 -ImageConditions` was said to reproduce the lane but ran `Lex.V3.Tests` alone, which no title test
+    reaches, so it stayed green with the deployed title fault put back (found twice). It now runs both of the lane's runs
+    with the lane's filters; with the base's title fold put back it fails (exit 2): `Lex.V3.Tests` passes as before, and
+    10 of the 645 Ingest tests fail (the real mount's title in three forms, the ladder's prefix, ambiguity and all-words
+    tiers, the plural title, the refusal census, the machine gates' refusal set and the evaluation card).
+  - This section said nothing in the API asks the library any more; the synthetic slice's check at startup still does.
+    The sentence now names the title path, and the check is under "Not yet".
+  - The base's lane run was said to fail 9 `Lex.V3.Tests`: with the lane's own filter it fails 8, the eight (the SDK
+    publish's class is outside the filter; the 9 came from an earlier run that excluded the OCI verifier alone).
 
 ## The server ships no synthetic preview, and says whether it holds the law (sole driver, 2026-10-15)
 
