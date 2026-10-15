@@ -114,7 +114,7 @@ function answer({ date, digest, identities, articles, sources }) {
         language: 'fra',
         applicability_date: date,
         state_sha256: digest,
-        permalink: `/${PUBLISHER}/${WORK}/${date}--${digest}`,
+        permalink: `/${PUBLISHER}/${WORK}/${date}--${digest}/fra`,
         stable_coordinate: `/${PUBLISHER}/${WORK}/${date}`,
         expression_iri: `https://preview.invalid/${WORK}/${date}/fra`,
         publisher_work_iri: `https://preview.invalid/${WORK}`,

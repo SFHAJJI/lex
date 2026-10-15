@@ -285,7 +285,7 @@ test('every provision carries the hash-carrying permalink built from the state',
 
   for (const provision of [HELD, WITHHELD, NOT_AVAILABLE]) {
     const expected =
-      `/preview-synthetic/synthetic-work/2021-01-26--${STATE_HASH}#${provision.anchor}`;
+      `/preview-synthetic/synthetic-work/2021-01-26--${STATE_HASH}/fra/${provision.anchor}`;
     assert.ok(
       html.includes(`<a href="${expected}">Permalink</a>`),
       `${provision.anchor} has no permalink at ${expected}`,
@@ -301,7 +301,7 @@ test('every provision carries the hash-carrying permalink built from the state',
   // Bound to the state hash: a different state mints different links, which is the whole
   // reason the hash is in the URL.
   const other = renderReading(reading({ state: { ...STATE, hash: hex('f') } }));
-  assert.ok(other.includes(`2021-01-26--${hex('f')}#art_l_121-6`));
+  assert.ok(other.includes(`2021-01-26--${hex('f')}/fra/art_l_121-6`));
   assert.ok(!other.includes(STATE_HASH), 'the old state hash survived into the new links');
 });
 
@@ -705,14 +705,14 @@ test('a withdrawn state discloses the live state that replaced it', () => {
     valid_from: '2021-01-26',
     hash: hex('9'),
     publication_date: '2021-02-01',
-    href: `/preview-synthetic/synthetic-work/2021-01-26--${hex('9')}`,
+    href: `/preview-synthetic/synthetic-work/2021-01-26--${hex('9')}/fra`,
     withdrawn: false,
   };
   const gone = {
     valid_from: '2021-01-26',
     hash: STATE_HASH,
     publication_date: '2021-01-26',
-    href: `/preview-synthetic/synthetic-work/2021-01-26--${STATE_HASH}`,
+    href: `/preview-synthetic/synthetic-work/2021-01-26--${STATE_HASH}/fra`,
     withdrawn: true,
   };
 

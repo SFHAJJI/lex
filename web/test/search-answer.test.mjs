@@ -75,7 +75,7 @@ test("the three captured answers read: both lanes, a truncated page with its cur
   assert.equal(view.truncated, false);
   assert.equal(view.continueAfter, null);
   for (const hit of view.hits) {
-    assert.equal(hit.permalink, `/lu-legilux/${hit.workKey}/${hit.applicabilityDate}--${hit.stateSha256}`);
+    assert.equal(hit.permalink, `/lu-legilux/${hit.workKey}/${hit.applicabilityDate}--${hit.stateSha256}/${hit.language}`);
   }
 
   const page = readSearch(paged);
@@ -115,7 +115,7 @@ test("the page a cursor leads to and a search in one lane read, though the popul
 test("a dated search names the works it could not place, and a resolved work is carried whole", async () => {
   const { both } = await capturedAnswers();
   const work = both.hits[0].work_key;
-  const state = (date, digit) => `/lu-legilux/other-work/${date}--${digit.repeat(64)}`;
+  const state = (date, digit) => `/lu-legilux/other-work/${date}--${digit.repeat(64)}/fra`;
   const dated = mutate(both, (a) => {
     a.requested_date = "2024-02-01";
     a.ambiguous_works = [{ work_key: "other-work", reason: "ambiguous_version", candidates: [state("2023-01-01", "a"), state("2023-01-01", "b")] }];
@@ -128,8 +128,8 @@ test("a dated search names the works it could not place, and a resolved work is 
 
   const refused = [
     ["an ambiguous work on an undated search", mutate(dated, (a) => { a.requested_date = null; }), /only on a date/],
-    ["an ambiguous work with hits", mutate(dated, (a) => { a.ambiguous_works[0].work_key = work; a.ambiguous_works[0].candidates = [`/lu-legilux/${work}/2023-01-01--${"a".repeat(64)}`, `/lu-legilux/${work}/2023-01-01--${"b".repeat(64)}`]; }), /contributes hits/],
-    ["a candidate of another work", mutate(dated, (a) => { a.ambiguous_works[0].candidates[1] = `/lu-legilux/elsewhere/2023-01-01--${"b".repeat(64)}`; }), /not a state of other-work/],
+    ["an ambiguous work with hits", mutate(dated, (a) => { a.ambiguous_works[0].work_key = work; a.ambiguous_works[0].candidates = [`/lu-legilux/${work}/2023-01-01--${"a".repeat(64)}/fra`, `/lu-legilux/${work}/2023-01-01--${"b".repeat(64)}/fra`]; }), /contributes hits/],
+    ["a candidate of another work", mutate(dated, (a) => { a.ambiguous_works[0].candidates[1] = `/lu-legilux/elsewhere/2023-01-01--${"b".repeat(64)}/fra`; }), /not a state of other-work/],
     ["a candidate after the date", mutate(dated, (a) => { a.ambiguous_works[0].candidates[1] = state("2025-01-01", "b"); }), /applying by 2024-02-01/],
     ["one candidate", mutate(dated, (a) => { a.ambiguous_works[0].candidates.pop(); }), /at least 2/],
     ["another reason", mutate(dated, (a) => { a.ambiguous_works[0].reason = "no_version_for_date"; }), /is ambiguous_version/],
@@ -152,7 +152,8 @@ test("each rule the answer states about itself is refused when broken, with that
     ["a reason that is not its lane's", both, (a) => { a.hits[0].match_reasons = ["all_terms"]; }, /matched by exact_phrase and nothing else/],
     ["two reasons", both, (a) => { a.hits[4].match_reasons = ["all_terms", "exact_phrase"]; }, /matched by all_terms and nothing else/],
     ["relaxed before strict", both, (a) => { a.hits.reverse(); }, /relaxed never outranks strict/],
-    ["a permalink to another state", both, (a) => { a.hits[1].resolve.identifier = a.hits[1].resolve.identifier.slice(0, -1) + "0"; }, /not to the state it names/],
+    ["a permalink to another state", both, (a) => { a.hits[1].resolve.identifier = a.hits[1].resolve.identifier.replace(/[0-9a-f](\/[a-z]{3})$/, "0$1"); }, /not to the state it names/],
+    ["a permalink in another language", both, (a) => { a.hits[1].resolve.identifier = a.hits[1].resolve.identifier.replace(/\/fra$/, "/deu"); }, /not to the state it names/],
     ["one article twice", both, (a) => { a.hits[1] = structuredClone(a.hits[0]); }, /twice/],
     ["more hits than the limit", both, (a) => { a.limit = 2; }, /against a limit of 2/],
     ["a truncated page without its cursor", paged, (a) => { a.continue_after = null; }, /exactly when it is truncated/],
@@ -200,12 +201,12 @@ test("the four captured EU answers read: one work's pinned wording, both lanes, 
   assert.equal(view.identifier, "32016R0679");
   assert.equal(view.language, "eng");
   assert.equal(view.wording.celex, "32016R0679");
-  assert.match(view.wording.permalink, /^\/eu-eurlex\/32016R0679\/eng\/\d{4}-\d{2}-\d{2}--[0-9a-f]{64}$/);
-  assert.equal(view.wording.permalink, `/eu-eurlex/32016R0679/eng/${view.wording.wordingDate}--${view.wording.wordingSha256}`);
+  assert.match(view.wording.permalink, /^\/eu-eurlex\/32016R0679\/\d{4}-\d{2}-\d{2}--[0-9a-f]{64}\/eng$/);
+  assert.equal(view.wording.permalink, `/eu-eurlex/32016R0679/${view.wording.wordingDate}--${view.wording.wordingSha256}/eng`);
   assert.deepEqual(view.hits.map((hit) => hit.lane), ["strict", "strict", "relaxed"]);
   assert.deepEqual(view.hits.map((hit) => hit.heading), ["Article 26", "Article 36", "Article 47"]);
   for (const hit of view.hits) {
-    assert.equal(hit.permalink, `${view.wording.permalink}#${hit.publisherId}`, "each hit's permalink is the wording's with its provision");
+    assert.equal(hit.permalink, `${view.wording.permalink}/${hit.publisherId}`, "each hit's permalink is the wording's with its provision as a last segment");
     assert.equal(hit.wordingDate, view.wording.wordingDate);
     assert.equal(hit.coordinate, `${hit.publisherExpressionIri}#lex-provision=${hit.publisherId}`);
   }
@@ -240,10 +241,11 @@ test("an EU provision is escaped as the platform escapes it, in the coordinate a
     const hit = a.hits[0];
     hit.publisher_id = "26(a)";
     hit.resolve.identifier = `${hit.publisher_expression_id}#lex-provision=26%28a%29`;
-    hit.permalink = `${a.pinned_wording.permalink}#26%28a%29`;
+    hit.permalink = `${a.pinned_wording.permalink}/26%28a%29`;
   });
-  assert.equal(readEuropeSearch(escaped).hits[0].permalink.split("#")[1], "26%28a%29");
-  assert.throws(() => readEuropeSearch(mutate(escaped, (a) => { a.hits[0].permalink = `${a.pinned_wording.permalink}#26(a)`; })), /not the pinned wording's with its provision/);
+  assert.equal(readEuropeSearch(escaped).hits[0].permalink.split("/").at(-1), "26%28a%29");
+  assert.throws(() => readEuropeSearch(mutate(escaped, (a) => { a.hits[0].permalink = `${a.pinned_wording.permalink}/26(a)`; })), /not the pinned wording's with its provision/);
+  assert.throws(() => readEuropeSearch(mutate(escaped, (a) => { a.hits[0].permalink = `${a.pinned_wording.permalink}#26%28a%29`; })), /not the pinned wording's with its provision/, "a provision after # is the shape before R64");
   assert.throws(() => readEuropeSearch(mutate(escaped, (a) => { a.hits[0].resolve.identifier = `${a.hits[0].publisher_expression_id}#lex-provision=26(a)`; })), /not to the provision it names/);
 });
 
@@ -251,15 +253,18 @@ test("each rule an EU answer states about itself is refused when broken, with th
   const { both, paged, next, none } = await capturedEuropeAnswers();
   assert.equal(readEuropeSearch(mutate(none, (a) => { a.pinned_wording = null; })).wording, null, "a no-hit answer that pins no wording still reads: it shows no hit");
   const flipLast = (text) => text.replace(/[0-9a-f]$/, (digit) => (digit === "0" ? "1" : "0"));
+  // A permalink's digest is followed by its language (R64), so the digit flipped is the digest's last.
+  const flipDigest = (permalink) => permalink.replace(/([0-9a-f])(\/[a-z]{3})$/, (_, digit, language) => `${digit === "0" ? "1" : "0"}${language}`);
   const cases = [
     ["a date", both, (a) => { a.requested_date = "2020-01-01"; }, /names no date/],
     ["no work named", both, (a) => { a.requested_identifier = null; }, /requested_identifier is not a value/],
     ["hits and no pinned wording", both, (a) => { a.pinned_wording = null; }, /hit 1 pins no wording/],
-    ["a pinned permalink to another digest", both, (a) => { a.pinned_wording.permalink = flipLast(a.pinned_wording.permalink); }, /not the wording it names/],
+    ["a pinned permalink to another digest", both, (a) => { a.pinned_wording.permalink = flipDigest(a.pinned_wording.permalink); }, /not the wording it names/],
     ["a pinned permalink to another date", both, (a) => { a.pinned_wording.wording_date = "2016-05-04"; }, /not the wording it names/],
-    ["a pinned permalink in another language", both, (a) => { a.pinned_wording.permalink = a.pinned_wording.permalink.replace("/eng/", "/fra/"); }, /in fra, and the search was asked in eng/],
-    ["a pinned permalink of another grammar", both, (a) => { a.pinned_wording.permalink = `/lu-legilux/32016R0679/2016-04-27--${a.pinned_wording.wording_sha256}`; }, /not an EU wording permalink/],
-    ["a hit permalink to another provision", both, (a) => { a.hits[0].permalink = a.hits[0].permalink.replace(/#.*$/, "#999"); }, /not the pinned wording's with its provision/],
+    ["a pinned permalink in another language", both, (a) => { a.pinned_wording.permalink = a.pinned_wording.permalink.replace(/\/eng$/, "/fra"); }, /in fra, and the search was asked in eng/],
+    ["a pinned permalink of another grammar", both, (a) => { a.pinned_wording.permalink = `/lu-legilux/32016R0679/2016-04-27--${a.pinned_wording.wording_sha256}/eng`; }, /not an EU wording permalink/],
+    ["a pinned permalink of the shape before R64", both, (a) => { a.pinned_wording.permalink = `/eu-eurlex/32016R0679/eng/2016-04-27--${a.pinned_wording.wording_sha256}`; }, /not an EU wording permalink/],
+    ["a hit permalink to another provision", both, (a) => { a.hits[0].permalink = a.hits[0].permalink.replace(/\/[^/]*$/, "/999"); }, /not the pinned wording's with its provision/],
     ["a hit of another act", both, (a) => { a.hits[1].celex = "32016L0680"; }, /not in the wording the answer pins/],
     ["a hit of another wording date", both, (a) => { a.hits[1].wording_date = "2016-05-04"; }, /not in the wording the answer pins/],
     ["a hit in another language", both, (a) => { a.hits[2].language = "fra"; }, /one language asked \(eng\)/],

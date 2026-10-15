@@ -32,7 +32,7 @@ test("the EU bundle reads: the wording on its date, pinned, its quoted articles 
   assert.deepEqual(wording.articles.map((article) => article.publisherId), ["001", "002"]);
   for (const article of wording.articles) {
     assert.equal(article.textSha256, sha256(article.text), "the digest is the text's");
-    assert.equal(article.permalink, `${PERMALINK}#${article.publisherId}`);
+    assert.equal(article.permalink, `${PERMALINK}/${article.publisherId}`);
     assert.equal(article.bodySha256, BODY);
   }
   assert.deepEqual(view.notHeld.map((row) => row.item), ["later_wordings", "force_dates"]);
@@ -50,7 +50,7 @@ test("each rule the EU bundle states about itself is refused when broken, with t
     ["a text of another length", (b) => { b.wordings[0].articles[0].text_byte_length += 1; }, /bytes of text/],
     ["an article in another language", (b) => { b.wordings[0].articles[1].language = "fra"; }, /its wording is in eng/],
     ["a body that is not a source's", (b) => { b.wordings[0].articles[0].body_sha256 = "9".repeat(64); }, /does not name as a source/],
-    ["an article permalink of another provision", (b) => { b.wordings[0].articles[0].article_permalink = `${PERMALINK}#002`; }, /not its wording's with 001/],
+    ["an article permalink of another provision", (b) => { b.wordings[0].articles[0].article_permalink = `${PERMALINK}/002`; }, /not its wording's with 001/],
     ["a wording in a language not asked", (b) => { b.requested_language = "fra"; b.available_languages = ["eng", "fra"]; }, /asked in fra/],
     ["the same provision quoted twice", (b) => { b.wordings[0].articles[1] = b.wordings[0].articles[0]; }, /quotes 001 twice/],
     ["no wording", (b) => { b.wordings = []; }, /at least one wording/],
@@ -72,9 +72,9 @@ test("an EU provision is escaped as the platform escapes it in an article's perm
   const bundle = europeBundle((b) => {
     const article = b.wordings[0].articles[0];
     article.publisher_id = id;
-    article.article_permalink = `${PERMALINK}#${escapeProvision(id)}`;
+    article.article_permalink = `${PERMALINK}/${escapeProvision(id)}`;
   });
-  assert.equal(readEuropeEvidenceBundle(bundle).wordings[0].articles[0].permalink, `${PERMALINK}#Article%201%282%29`);
+  assert.equal(readEuropeEvidenceBundle(bundle).wordings[0].articles[0].permalink, `${PERMALINK}/Article%201%282%29`);
 });
 
 test("the reading screen shows the EU wording: the acknowledgement and authenticity above the quoted text, each quote with its evidence", () => {
@@ -85,11 +85,11 @@ test("the reading screen shows the EU wording: the acknowledgement and authentic
   assert.match(markup, /data-authenticity=""[^>]*>Only the Official Journal of the European Union published in electronic form is authentic/);
   assert.match(markup, /<blockquote lang="en">This Regulation lays down rules/);
   assert.match(markup, /<span lang="en">Subject-matter and objectives<\/span>/, "the heading is the publisher's, in its language");
-  assert.ok(markup.includes(`${PERMALINK}#001`) && markup.includes(sha256(ARTICLES[0][2])), "each quote carries its permalink and text digest");
-  assert.ok(markup.includes(`<a href="/en${PERMALINK}#001"><code>${PERMALINK}#001</code></a>`), "the permalink is a link to this reading at the provision");
+  assert.ok(markup.includes(`${PERMALINK}/001`) && markup.includes(sha256(ARTICLES[0][2])), "each quote carries its permalink and text digest");
+  assert.ok(markup.includes(`<a href="/en${PERMALINK}/001"><code>${PERMALINK}/001</code></a>`), "the permalink is a link to this reading at the provision");
   assert.ok(markup.includes(`<a href="/en${PERMALINK}"><code>${PERMALINK}</code></a>`), "the wording's permalink is a link to this reading");
   assert.equal(readingHolds(outcome.view, PERMALINK), true, "a permalink to the wording shown is held");
-  assert.equal(readingHolds(outcome.view, PERMALINK.replace(/[0-9a-f]{64}$/, "0".repeat(64))), false, "another wording of that date is not");
+  assert.equal(readingHolds(outcome.view, PERMALINK.replace(/--[0-9a-f]{64}\//, `--${"0".repeat(64)}/`)), false, "another wording of that date is not");
   assert.match(markup, /the original wording of 2016-04-27/);
   // The launch contract: Luxembourg applicability dates and EU wording-state dates are never merged. Once the
   // answer's own data is taken out, what the page says names no Luxembourg date (the rule date-speech.test.mjs holds
@@ -153,14 +153,14 @@ test("an EU refusal on the reading screen is said in EU words: no sentence or hi
 
 test("a time-view bundle reads: a consolidated version answers the dates from its own, and the page says how long it holds (#909)", () => {
   const consolidatedSha = "7".repeat(64);
-  const consolidated = `/eu-eurlex/32016R0679/eng/2024-01-01--${consolidatedSha}`;
+  const consolidated = `/eu-eurlex/32016R0679/2024-01-01--${consolidatedSha}/eng`;
   const timeView = (change = () => {}) => europeBundle((copy) => {
     copy.requested_date = "2025-03-01";
     copy.consolidations_held = true;
     const wording = copy.wordings[0];
     Object.assign(wording, { kind: "consolidated_version", wording_date: "2024-01-01", next_date: null, wording_sha256: consolidatedSha,
       permalink: consolidated, stable_coordinate: "/eu-eurlex/32016R0679/eng/2024-01-01", basis: "single_work" });
-    for (const article of wording.articles) article.article_permalink = `${consolidated}#${escapeProvision(article.publisher_id)}`;
+    for (const article of wording.articles) article.article_permalink = `${consolidated}/${escapeProvision(article.publisher_id)}`;
     change(copy);
   });
   const view = readEuropeEvidenceBundle(timeView());
@@ -200,7 +200,7 @@ test("the time view's disclosure is shown beside the wording: the other works of
 test("an EU ambiguity says its EU sentence and shows no Luxembourg card; an EU text_not_available shows its card (review of #909)", () => {
   const eu = { publisher: "eu-eurlex" };
   const ambiguous = readingOutcome({ state: "refusal", envelope: { refusal: { code: "ambiguous_version", helpful_payload: {
-    requested_date: "2025-03-01", candidates: [`/eu-eurlex/32016R0679/eng/2024-01-01--${"1".repeat(64)}`, `/eu-eurlex/32016R0679/eng/2024-01-01--${"2".repeat(64)}`] } }, context: eu } });
+    requested_date: "2025-03-01", candidates: [`/eu-eurlex/32016R0679/2024-01-01--${"1".repeat(64)}/eng`, `/eu-eurlex/32016R0679/2024-01-01--${"2".repeat(64)}/eng`] } }, context: eu } });
   assert.equal(ambiguous.card, false);
   assert.equal(ambiguous.sentence, LIVE_READING_EUROPE_REFUSAL_SENTENCES.ambiguous_version, "the EU sentence, not a card that cannot be shown");
   const unavailable = readingOutcome({ state: "refusal", envelope: { refusal: { code: "text_not_available", helpful_payload: {
@@ -220,7 +220,7 @@ test("the export composer reads an EU wording to pin from: a pin per article, qu
   assert.match(markup, /data-authenticity=""[^>]*>Only the Official Journal of the European Union published in electronic form is authentic/);
   assert.match(markup, /the original wording of 2016-04-27/, "the wording is headed as the reading screen heads it");
   assert.match(markup, /<span lang="en">Subject-matter and objectives<\/span><blockquote lang="en">This Regulation lays down rules/);
-  assert.ok(markup.includes(`<code>${PERMALINK}#001</code>`) && markup.includes(sha256(ARTICLES[0][2])), "each quote carries its evidence");
+  assert.ok(markup.includes(`<code>${PERMALINK}/001</code>`) && markup.includes(sha256(ARTICLES[0][2])), "each quote carries its evidence");
   const [annexLine] = markup.match(/<p data-annexes-not-served="2" data-annex-disposition="annex_text_not_available">[\s\S]*?<\/p>/) ?? [];
   assert.ok(annexLine?.includes("are not served as text"), "the annexes are said beside the wording");
   assert.ok(!annexLine.includes("<input"), "and no pin reaches an annex");
@@ -229,6 +229,6 @@ test("the export composer reads an EU wording to pin from: a pin per article, qu
   const panel = exportState(outcome, new Set([pinKey(wording.wordingSha256, "002")]));
   assert.equal(panel.state, "composed", panel.sentence);
   assert.equal(panel.model.schema, EUROPE_EXPORT_SCHEMA, "an EU wording is composed into the EU export");
-  assert.deepEqual(panel.model.items.map((item) => item.citation), [`${PERMALINK}#002`]);
+  assert.deepEqual(panel.model.items.map((item) => item.citation), [`${PERMALINK}/002`]);
   assert.equal(liveChrome().export.europeNotComposed, undefined, "the composer no longer says EU text is not composed");
 });

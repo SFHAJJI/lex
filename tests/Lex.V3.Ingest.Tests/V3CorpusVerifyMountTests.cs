@@ -85,13 +85,48 @@ public sealed class V3CorpusVerifyMountTests
     }
 
     [TestMethod]
+    public async Task APermalinkNamesItsTextsLanguageAndOnlyThatLanguageAnswersIt()
+    {
+        // R64: /lu-legilux/{work}/{date}--{digest}/{language}, the digest that language's. A language asked beside the
+        // permalink must be its own; a language the coordinate holds no state in is not available; the shape before R64,
+        // which names none, is no permalink at all.
+        var fixture = await MountedFixture.CreateAsync();
+        await using var cleanup = fixture;
+        using var mount = await V3CorpusMount.OpenAsync(fixture.Directory, CancellationToken.None);
+        Assert.IsNotNull(mount);
+
+        var same = await VerifyAsync(mount, new { identifier = fixture.Permalink, language = "fra" });
+        Assert.AreEqual("digest_matches", same.Result?.Value.GetProperty("verdict").GetString(), same.Refusal?.Code);
+        Assert.AreEqual("fra", same.Result!.Value.GetProperty("language").GetString());
+
+        var other = await VerifyAsync(mount, new { identifier = fixture.Permalink, language = "deu" });
+        Assert.AreEqual("language_not_available", other.Refusal?.Code);
+        CollectionAssert.AreEqual(new[] { "fra" }, other.Refusal!.HelpfulPayload.GetProperty("available_languages").EnumerateArray().Select(static v => v.GetString()).ToArray());
+
+        var notHeld = await VerifyAsync(mount, new { identifier = fixture.PermalinkOf(fixture.StateSha256, "deu") });
+        Assert.AreEqual("language_not_available", notHeld.Refusal?.Code);
+        Assert.AreEqual("deu", notHeld.Refusal!.HelpfulPayload.GetProperty("requested_language").GetString());
+
+        foreach (var before in new[] { fixture.StableCoordinate + "--" + fixture.StateSha256, fixture.StableCoordinate + "--" + fixture.StateSha256 + "#art_2", fixture.Permalink + "#art_2" })
+        {
+            var refused = await VerifyAsync(mount, new { identifier = before });
+            Assert.IsNotNull(refused.Refusal, before);
+            Assert.IsFalse(refused.Refusal.HelpfulPayload.TryGetProperty("current_digest", out _), $"{before} is no permalink of R64's shape");
+        }
+
+        var article = await VerifyAsync(mount, new { identifier = fixture.Permalink + "/art_2" });
+        Assert.AreEqual("digest_matches", article.Result?.Value.GetProperty("verdict").GetString(), article.Refusal?.Code);
+        Assert.AreEqual(fixture.Permalink + "/art_2", article.Result!.Value.GetProperty("article_permalink").GetString());
+    }
+
+    [TestMethod]
     public async Task ADigestTheCoordinateNoLongerCarriesIsThePinnedDigestMismatchNamingTheCurrentOne()
     {
         var fixture = await MountedFixture.CreateAsync();
         await using var cleanup = fixture;
         using var mount = await V3CorpusMount.OpenAsync(fixture.Directory, CancellationToken.None);
         Assert.IsNotNull(mount);
-        var stale = fixture.StableCoordinate + "--" + new string('0', 64);
+        var stale = fixture.PermalinkOf(new string('0', 64));
 
         var envelope = await VerifyAsync(mount, new { identifier = stale });
 
@@ -113,7 +148,7 @@ public sealed class V3CorpusVerifyMountTests
         using var mount = await V3CorpusMount.OpenAsync(fixture.Directory, CancellationToken.None);
         Assert.IsNotNull(mount);
 
-        var envelope = await VerifyAsync(mount, new { identifier = $"/lu-legilux/{fixture.WorkKey}/1900-01-01--{fixture.StateSha256}" });
+        var envelope = await VerifyAsync(mount, new { identifier = $"/lu-legilux/{fixture.WorkKey}/1900-01-01--{fixture.StateSha256}/fra" });
 
         Assert.AreEqual("identifier_unknown", envelope.Refusal!.Code);
         StringAssert.Contains(envelope.Refusal.HelpfulPayload.GetProperty("what_would_answer_detail").GetString(), "hash-pinned permalink");

@@ -26,7 +26,8 @@
 //     only way it could arrive is through a state key, which is why the key set is closed.
 //
 //  3. Every provision carries the hash-carrying permalink, built by `readingUrl` from the
-//     state hash and the publisher's own anchor. A hand-built string is refused rather than
+//     state hash, the text's language (R64: its three letters, from the expression's own
+//     language) and the publisher's own anchor. A hand-built string is refused rather than
 //     preferred, because a permalink is the one thing on this page whose whole value is that
 //     it was checked: a link that carries the hash cannot drift onto different text when the
 //     publisher replaces a file, and a link somebody assembled by concatenation has not been
@@ -214,6 +215,9 @@ function withAuthenticityFooting(html, consolidated) {
  * @param {number} index      its position, so a refusal can name which one
  * @param {object} context    the state, the expression and the work it belongs to
  */
+/** The text's language as a permalink names it (R64): the publisher's three letters, from the expression's two. */
+const TEXT_LANGUAGES = Object.freeze({ fr: 'fra', de: 'deu', en: 'eng', lb: 'ltz' });
+
 export function validateProvision(provision, index, context) {
   const where = `provision ${index + 1}`;
   const { state, expression, publisher, work, consolidated, noteLocale } = context;
@@ -388,6 +392,7 @@ export function validateProvision(provision, index, context) {
       work,
       validFrom: state.valid_from,
       hash: state.hash,
+      language: TEXT_LANGUAGES[expression.language],
       anchor: provision.anchor,
     }),
   });

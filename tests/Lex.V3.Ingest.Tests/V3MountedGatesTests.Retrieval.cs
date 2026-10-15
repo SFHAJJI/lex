@@ -112,20 +112,20 @@ public sealed partial class V3MountedGatesTests
         foreach (var (timeline, date, state) in held.Take(3))
         {
             var day = date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
-            var permalink = $"/lu-legilux/{timeline.WorkKey}/{day}--{state}";
+            var permalink = $"/lu-legilux/{timeline.WorkKey}/{day}--{state}/{timeline.Language}";
             var anchors = Rows(connection, "SELECT a.publisher_id FROM articles a JOIN states s ON s.expression_iri = a.expression_iri " +
                     $"WHERE s.state_sha256 = '{state}' AND s.language = '{timeline.Language}' ORDER BY a.publisher_id LIMIT 3")
                 .Select(static row => row[0]).ToArray();
             foreach (var anchor in anchors)
             {
                 // Keyed by the state too: two states of one work keep their own cases (review of #842).
-                requests[$"exact-{timeline.WorkKey}-{timeline.Language}-{day}-{anchor}"] = new(EvaluationCaseKind.ExactIdentifier, "verify", new { identifier = $"{permalink}#{anchor}", language = timeline.Language },
+                requests[$"exact-{timeline.WorkKey}-{timeline.Language}-{day}-{anchor}"] = new(EvaluationCaseKind.ExactIdentifier, "verify", new { identifier = $"{permalink}/{Uri.EscapeDataString(anchor)}", language = timeline.Language },
                     [new JudgedAnchor(timeline.WorkKey, anchor, JudgedAnchor.SupportingGrade)]);
             }
 
             if (anchors.Length > 0)
             {
-                requests[$"near-miss-{timeline.WorkKey}-{timeline.Language}-{day}"] = new(EvaluationCaseKind.Retrieval, "verify", new { identifier = $"{permalink}#art_no_such_anchor", language = timeline.Language }, []);
+                requests[$"near-miss-{timeline.WorkKey}-{timeline.Language}-{day}"] = new(EvaluationCaseKind.Retrieval, "verify", new { identifier = $"{permalink}/art_no_such_anchor", language = timeline.Language }, []);
             }
         }
 
@@ -200,15 +200,16 @@ public sealed partial class V3MountedGatesTests
 
             var (workId, expressionId, wordingDate) = (wordings[0][0], wordings[0][1], wordings[0][2]);
             var articles = Rows(connection, $"SELECT publisher_identifier, article_identity_sha256 FROM articles WHERE publisher_expression_id = '{expressionId.Replace("'", "''", StringComparison.Ordinal)}' ORDER BY publisher_identifier, article_identity_sha256");
-            var wording = $"/eu-eurlex/{celex}/{language}/{wordingDate}--" +
-                V3EuropePermalinkTests.WordingSha256ByTheStatedRule(celex, workId, expressionId, language, wordingDate, articles.Select(static row => row[1]));
+            var wording = $"/eu-eurlex/{celex}/{wordingDate}--" +
+                V3EuropePermalinkTests.WordingSha256ByTheStatedRule(celex, workId, expressionId, language, wordingDate, articles.Select(static row => row[1])) +
+                $"/{language}";
             foreach (var provision in articles.Select(static row => row[0]).Distinct(StringComparer.Ordinal).Take(3))
             {
-                requests[$"eu-exact-{celex}-{language}-{provision}"] = new(EvaluationCaseKind.ExactIdentifier, "verify", new { identifier = $"{wording}#{Uri.EscapeDataString(provision)}", language },
+                requests[$"eu-exact-{celex}-{language}-{provision}"] = new(EvaluationCaseKind.ExactIdentifier, "verify", new { identifier = $"{wording}/{Uri.EscapeDataString(provision)}", language },
                     [new JudgedAnchor(celex, provision, JudgedAnchor.SupportingGrade)]);
             }
 
-            requests[$"eu-near-miss-{celex}-{language}"] = new(EvaluationCaseKind.Retrieval, "verify", new { identifier = $"{wording}#lex-no-such-provision", language }, []);
+            requests[$"eu-near-miss-{celex}-{language}"] = new(EvaluationCaseKind.Retrieval, "verify", new { identifier = $"{wording}/lex-no-such-provision", language }, []);
         }
     }
 

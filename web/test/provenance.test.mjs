@@ -154,8 +154,10 @@ function form(value) {
   if (typeof value !== "string") return typeof value;
   if (/^[0-9a-f]{64}$/.test(value)) return "digest";
   if (value.startsWith("/")) {
+    // A permalink (R64): the path, then the pin's digest and each segment after it (the text's language).
     const [path, pinned] = value.split("--");
-    return `path:${path.split("/").length - 1}${pinned === undefined ? "" : `--${form(pinned)}`}`;
+    const [digest, ...after] = pinned === undefined ? [] : pinned.split("/");
+    return `path:${path.split("/").length - 1}${pinned === undefined ? "" : `--${form(digest)}${after.map((part) => `/${form(part)}`).join("")}`}`;
   }
   if (/^[a-z][a-z0-9_]*$/.test(value)) return "token";
   if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return "date";
@@ -651,7 +653,7 @@ function withTwoOfEach(answer) {
       language,
       applicability_date: date,
       state_sha256: digest,
-      permalink: `/lu-legilux/a-work/${date}--${digest}`,
+      permalink: `/lu-legilux/a-work/${date}--${digest}/${language}`,
       stable_coordinate: `/lu-legilux/a-work/${date}`,
       expression_iri: `${state.expression_iri}/${date}/${language}`,
       publisher_legal_resource_iri: `${state.publisher_work_iri}/${date}`,

@@ -14,7 +14,7 @@ const HASH = 'a'.repeat(64);
 // Minted through the builder the route policy checks against, so the fixture cannot assert a
 // grammar the policy has stopped producing.
 const permalinkFor = ({ publisher, work, validFrom }) =>
-  canonicalStateHref({ publisher, work, validFrom, hash: HASH });
+  canonicalStateHref({ publisher, work, validFrom, hash: HASH, language: 'fra' });
 
 const PERMALINK = permalinkFor({
   publisher: 'preview-synthetic',
@@ -354,16 +354,17 @@ test('a permalink is a canonical same-origin state URL, bound to the row it sits
   // was rendered as a working href. Every one of these describes the row correctly on every
   // visible field while the link goes somewhere else.
   const hostile = [
-    ['another host', `https://evil.example/preview-synthetic/synthetic-preview-work/2001-01-01--${HASH}`],
-    ['a scheme that is not https', `http://law.soufien.lu/preview-synthetic/synthetic-preview-work/2001-01-01--${HASH}`],
-    ['protocol-relative', `//evil.example/preview-synthetic/synthetic-preview-work/2001-01-01--${HASH}`],
+    ['another host', `https://evil.example/preview-synthetic/synthetic-preview-work/2001-01-01--${HASH}/fra`],
+    ['a scheme that is not https', `http://law.soufien.lu/preview-synthetic/synthetic-preview-work/2001-01-01--${HASH}/fra`],
+    ['protocol-relative', `//evil.example/preview-synthetic/synthetic-preview-work/2001-01-01--${HASH}/fra`],
     ['a javascript URL carrying the separator', 'javascript:alert(1)--x'],
     // `URL` normalises the default port away, so `parsed.port` is empty here and a check on it
     // alone would pass this. The raw authority is what says the host is evil.example.
-    ['userinfo dressed as this host', `https://law.soufien.lu:443@evil.example/preview-synthetic/synthetic-preview-work/2001-01-01--${HASH}`],
-    ['userinfo with no port', `https://law.soufien.lu@evil.example/preview-synthetic/synthetic-preview-work/2001-01-01--${HASH}`],
-    ['a query string', `https://law.soufien.lu/preview-synthetic/synthetic-preview-work/2001-01-01--${HASH}?next=https://evil.example`],
-    ['a backslash', `https://law.soufien.lu/preview-synthetic\\synthetic-preview-work/2001-01-01--${HASH}`],
+    ['userinfo dressed as this host', `https://law.soufien.lu:443@evil.example/preview-synthetic/synthetic-preview-work/2001-01-01--${HASH}/fra`],
+    ['userinfo with no port', `https://law.soufien.lu@evil.example/preview-synthetic/synthetic-preview-work/2001-01-01--${HASH}/fra`],
+    ['a query string', `https://law.soufien.lu/preview-synthetic/synthetic-preview-work/2001-01-01--${HASH}/fra?next=https://evil.example`],
+    ['a backslash', `https://law.soufien.lu/preview-synthetic\\synthetic-preview-work/2001-01-01--${HASH}/fra`],
+    ['the shape before R64, which names no language', `https://law.soufien.lu/preview-synthetic/synthetic-preview-work/2001-01-01--${HASH}`],
     ['no digest', 'https://law.soufien.lu/preview-synthetic/synthetic-preview-work/2001-01-01'],
   ];
   for (const [what, permalink] of hostile) {
@@ -413,10 +414,11 @@ test('a permalink is a canonical same-origin state URL, bound to the row it sits
     work: 'synthetic-preview-work',
     validFrom: '2001-01-01',
     hash: HASH,
+    language: 'fra',
     anchor: 'art_2',
   });
   assert.ok(
-    renderSearchResults({ ...GOOD, hits: [hit({ permalink: anchored })] }).includes('#art_2'),
+    renderSearchResults({ ...GOOD, hits: [hit({ permalink: anchored })] }).includes('/fra/art_2'),
     'the anchor was dropped from a legitimate permalink',
   );
 });

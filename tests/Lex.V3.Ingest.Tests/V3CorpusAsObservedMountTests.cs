@@ -50,7 +50,7 @@ public sealed class V3CorpusAsObservedMountTests
         Assert.AreEqual(EarlierDate, state.GetProperty("applicability_date").GetString());
         Assert.AreEqual(JsonValueKind.Null, state.GetProperty("next_applicability_date").ValueKind, "no later state was held at that snapshot");
         Assert.AreEqual(fixture.HeldStateSha256, state.GetProperty("state_sha256").GetString());
-        Assert.AreEqual($"/lu-legilux/{fixture.WorkKey}/{EarlierDate}--{fixture.HeldStateSha256}", state.GetProperty("permalink").GetString());
+        Assert.AreEqual($"/lu-legilux/{fixture.WorkKey}/{EarlierDate}--{fixture.HeldStateSha256}/{fixture.Language}", state.GetProperty("permalink").GetString());
         Assert.IsFalse(state.GetProperty("text_held").GetBoolean());
         Assert.IsFalse(state.TryGetProperty("articles", out _), "no text of a state the mounted index does not hold");
         Assert.AreEqual(1, state.GetProperty("source_body_sha256").GetArrayLength());

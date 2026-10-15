@@ -96,7 +96,7 @@ public sealed class V3CorpusEuropeEvidenceBundleMountTests
 
             // The launch contract's first promise: the permalink a quote carries verifies.
             var articlePermalink = article.GetProperty("article_permalink").GetString()!;
-            StringAssert.StartsWith(articlePermalink, permalink + "#");
+            StringAssert.StartsWith(articlePermalink, permalink + "/");
             var verified = await EnvelopeAsync(mount, "/api/v3/verify", "verify", new { identifier = articlePermalink, language = "eng" });
             Assert.AreEqual("digest_matches", verified.Result?.Value.GetProperty("verdict").GetString(), $"{articlePermalink}: {verified.Refusal?.Code}");
         }

@@ -300,7 +300,8 @@ public sealed class V3CorpusDiffMountTests
         var rightPermalink = payload.GetProperty("right").GetString()!;
         var laterCoordinate = fixture.StableCoordinate.Replace("/" + fixture.ApplicabilityDate, "/" + laterDate) + "--";
         StringAssert.StartsWith(rightPermalink, laterCoordinate);
-        Assert.AreEqual(64, rightPermalink.Length - laterCoordinate.Length, "The permalink ends in the state digest as mounted.");
+        StringAssert.EndsWith(rightPermalink, "/" + fixture.Language);
+        Assert.AreEqual(64 + 1 + fixture.Language.Length, rightPermalink.Length - laterCoordinate.Length, "The permalink pins the state digest as mounted, in its language.");
         Assert.AreNotEqual(fixture.Permalink, rightPermalink);
         // The same two states, on their own dates, still refuse: there is no way to ask for the diff anyway.
         var direct = await DiffAsync(mount, $"/lu-legilux/{fixture.WorkKey}", Shift(fixture.ApplicabilityDate, 1), Shift(laterDate, 1));
@@ -351,7 +352,7 @@ public sealed class V3CorpusDiffMountTests
         Assert.AreEqual(laterDate, ambiguous.Refusal.HelpfulPayload.GetProperty("requested_date").GetString());
         CollectionAssert.Contains(
             ambiguous.Refusal.HelpfulPayload.GetProperty("candidates").EnumerateArray().Select(static v => v.GetString()).ToArray(),
-            fixture.StableCoordinate.Replace("/" + fixture.ApplicabilityDate, "/" + laterDate) + "--" + twin.StateSha256);
+            MountedFixture.PermalinkOf(twin));
 
         // A twin on date_from names bound from, and its candidates are the two states on that date.
         var twinFrom = await fixture.AddStateAsync(fixture.ApplicabilityDate, "twin-from");
@@ -362,7 +363,7 @@ public sealed class V3CorpusDiffMountTests
         Assert.AreEqual("from", ambiguousFrom.Refusal.HelpfulPayload.GetProperty("bound").GetString());
         Assert.AreEqual(fixture.ApplicabilityDate, ambiguousFrom.Refusal.HelpfulPayload.GetProperty("requested_date").GetString());
         CollectionAssert.AreEquivalent(
-            new[] { fixture.Permalink, fixture.StableCoordinate + "--" + twinFrom.StateSha256 },
+            new[] { fixture.Permalink, MountedFixture.PermalinkOf(twinFrom) },
             ambiguousFrom.Refusal.HelpfulPayload.GetProperty("candidates").EnumerateArray().Select(static v => v.GetString()).ToArray());
     }
 
@@ -425,7 +426,7 @@ public sealed class V3CorpusDiffMountTests
             Assert.AreEqual("ambiguous_version", envelope.Refusal!.Code);
             Assert.AreEqual("to", envelope.Refusal.HelpfulPayload.GetProperty("bound").GetString());
             CollectionAssert.AreEquivalent(
-                new[] { later.StateSha256, twin.StateSha256 }.Select(digest => fixture.StableCoordinate.Replace("/" + fixture.ApplicabilityDate, "/" + laterDate) + "--" + digest).ToArray(),
+                new[] { later, twin }.Select(MountedFixture.PermalinkOf).ToArray(),
                 envelope.Refusal.HelpfulPayload.GetProperty("candidates").EnumerateArray().Select(static v => v.GetString()).ToArray());
             // German alone still answers.
             var germanOnly = await DiffAsync(mount, $"/lu-legilux/{fixture.WorkKey}", fixture.ApplicabilityDate, laterDate, "deu");
@@ -470,7 +471,7 @@ public sealed class V3CorpusDiffMountTests
         Assert.AreEqual("to", envelope.Refusal.HelpfulPayload.GetProperty("bound").GetString());
         Assert.AreEqual(laterDate, envelope.Refusal.HelpfulPayload.GetProperty("requested_date").GetString());
         CollectionAssert.AreEquivalent(
-            new[] { later.StateSha256, twin.StateSha256 }.Select(digest => fixture.StableCoordinate.Replace("/" + fixture.ApplicabilityDate, "/" + laterDate) + "--" + digest).ToArray(),
+            new[] { later, twin }.Select(MountedFixture.PermalinkOf).ToArray(),
             envelope.Refusal.HelpfulPayload.GetProperty("candidates").EnumerateArray().Select(static v => v.GetString()).ToArray());
         // Without the twin on date_to, the same request answers for German and lists French as not compared.
         var germanOnly = await DiffAsync(mount, $"/lu-legilux/{fixture.WorkKey}", Shift(fixture.ApplicabilityDate, -10), Shift(fixture.ApplicabilityDate, -5));
@@ -500,7 +501,7 @@ public sealed class V3CorpusDiffMountTests
             Assert.AreEqual("to", envelope.Refusal.HelpfulPayload.GetProperty("bound").GetString());
             CollectionAssert.AreEquivalent(
                 new[] { germanLater.StateSha256, germanTwin.StateSha256 },
-                envelope.Refusal.HelpfulPayload.GetProperty("candidates").EnumerateArray().Select(static v => v.GetString()!.Split("--")[^1]).ToArray());
+                envelope.Refusal.HelpfulPayload.GetProperty("candidates").EnumerateArray().Select(static v => v.GetString()!.Split("--")[^1].Split('/')[0]).ToArray());
             // French alone is the profile mismatch.
             var french = await DiffAsync(mount, $"/lu-legilux/{ambiguityFirst.WorkKey}", ambiguityFirst.ApplicabilityDate, laterDate, "fra");
             Assert.AreEqual("profiles_differ", french.Refusal!.Code);
@@ -543,9 +544,8 @@ public sealed class V3CorpusDiffMountTests
             Assert.IsNotNull(mount);
             var envelope = await DiffAsync(mount, $"/lu-legilux/{twins.WorkKey}", twins.ApplicabilityDate, laterDate);
             Assert.AreEqual("ambiguous_version", envelope.Refusal!.Code);
-            var coordinate = twins.StableCoordinate.Replace("/" + twins.ApplicabilityDate, "/" + laterDate) + "--";
             CollectionAssert.AreEqual(
-                new[] { coordinate + germanLater.StateSha256, coordinate + germanTwin.StateSha256 }.Order(StringComparer.Ordinal).ToArray(),
+                new[] { MountedFixture.PermalinkOf(germanLater), MountedFixture.PermalinkOf(germanTwin) }.Order(StringComparer.Ordinal).ToArray(),
                 envelope.Refusal.HelpfulPayload.GetProperty("candidates").EnumerateArray().Select(static v => v.GetString()).ToArray(),
                 "Both languages are ambiguous; deu comes first, and its candidates are served in ordinal order.");
         }

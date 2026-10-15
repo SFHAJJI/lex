@@ -22,9 +22,10 @@
 // Nothing is derived here that the answer does not state: no end date, no "in force", no diff text.
 
 import { isCalendarDate } from './temporal.mjs';
+import { luxembourgPermalink } from './permalinks.mjs';
 
 const DIGEST = /^[0-9a-f]{64}$/;
-const STATE_PERMALINK = /^\/lu-legilux\/([^/]+)\/(\d{4}-\d{2}-\d{2})--([0-9a-f]{64})$/;
+const STATE_PERMALINK = /^\/lu-legilux\/([^/]+)\/(\d{4}-\d{2}-\d{2})--([0-9a-f]{64})\/([a-z]{3})$/;
 
 function requireOwn(object, key, where) {
   if (object === null || typeof object !== 'object' || !Object.hasOwn(object, key)) {
@@ -85,8 +86,8 @@ function readStateRef(state, where, workKey) {
   const applicabilityDate = requireDate(requireOwn(state, 'applicability_date', where), `${where} applicability_date`);
   const stateSha256 = requireDigest(requireOwn(state, 'state_sha256', where), `${where} state_sha256`);
   const permalink = requireText(requireOwn(state, 'permalink', where), `${where} permalink`);
-  if (permalink !== `/lu-legilux/${workKey}/${applicabilityDate}--${stateSha256}` || !STATE_PERMALINK.test(permalink)) {
-    throw new Error(`${where}'s permalink ${permalink} does not pin its work, date and digest`);
+  if (permalink !== luxembourgPermalink({ workKey, date: applicabilityDate, stateSha256, language }) || !STATE_PERMALINK.test(permalink)) {
+    throw new Error(`${where}'s permalink ${permalink} does not pin its work, date, digest and language`);
   }
   return { language, applicabilityDate, stateSha256, permalink };
 }

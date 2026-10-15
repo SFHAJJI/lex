@@ -16,7 +16,7 @@ import {
 
 const ELI = 'http://data.legilux.public.lu/eli/etat/leg/loi/1993/04/05/n1';
 const PIN = '7f'.repeat(32);
-const PERMALINK = `https://law.soufien.lu/lu-legilux/loi-1993-04-05-n1/2025-01-01--${PIN}`;
+const PERMALINK = `https://law.soufien.lu/lu-legilux/loi-1993-04-05-n1/2025-01-01--${PIN}/fra`;
 
 function state(overrides = {}) {
   return {
@@ -31,7 +31,7 @@ function state(overrides = {}) {
 test('every citation form this build declares actually parses', () => {
   const cases = {
     lex_id: 'lu-legilux:loi-1993-04-05-n1:2025-01-01',
-    permalink: `https://law.soufien.lu/lu-legilux/loi-1915-08-10-n1/2026-06-02--${'7f'.repeat(32)}`,
+    permalink: `https://law.soufien.lu/lu-legilux/loi-1915-08-10-n1/2026-06-02--${'7f'.repeat(32)}/fra`,
     lu_eli: ELI,
     lu_eli_dated: `${ELI}/consolide/20250101`,
     eu_celex: '32016R0679',
@@ -46,8 +46,11 @@ test('every citation form this build declares actually parses', () => {
 });
 
 test('a permalink off the canonical host does not parse, userinfo included', () => {
-  const good = `https://law.soufien.lu/lu-legilux/loi-1915-08-10-n1/2026-06-02--${'7f'.repeat(32)}`;
+  const good = `https://law.soufien.lu/lu-legilux/loi-1915-08-10-n1/2026-06-02--${'7f'.repeat(32)}/fra`;
   assert.equal(parseCitation(good).digest, '7f'.repeat(32));
+  assert.equal(parseCitation(good).language, 'fra', 'the text language the permalink names (R64)');
+  assert.equal(parseCitation(`${good}/art_1er`).anchor, 'art_1er', 'an article as the last segment');
+  assert.equal(parseCitation(good.slice(0, -4)), null, 'the shape before R64 names no language');
   for (const hostile of [
     good.replace('https://law.soufien.lu', 'https://law.soufien.lu@evil.example'),
     good.replace('https://law.soufien.lu', 'https://evil.example'),

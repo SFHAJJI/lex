@@ -179,7 +179,7 @@ public sealed class V3CorpusAsOfMountTests
         Assert.AreEqual(fixture.ApplicabilityDate,
             envelope.Refusal.HelpfulPayload.GetProperty("requested_date").GetString());
         CollectionAssert.AreEquivalent(
-            new[] { fixture.Permalink, fixture.StableCoordinate + "--" + twin.StateSha256 },
+            new[] { fixture.Permalink, MountedFixture.PermalinkOf(twin) },
             envelope.Refusal.HelpfulPayload.GetProperty("candidates").EnumerateArray()
                 .Select(static value => value.GetString()).ToArray());
     }

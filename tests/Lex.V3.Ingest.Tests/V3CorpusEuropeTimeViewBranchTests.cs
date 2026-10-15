@@ -116,7 +116,7 @@ public sealed class V3CorpusEuropeTimeViewBranchTests
                 Assert.AreEqual("digest_matches", verified.Result?.Value.GetProperty("verdict").GetString(), verified.Refusal?.Code);
             }
 
-            var tampered = await EnvelopeAsync(mount, "/api/v3/verify", "verify", new { identifier = candidates[0][..^64] + new string('0', 64) });
+            var tampered = await EnvelopeAsync(mount, "/api/v3/verify", "verify", new { identifier = System.Text.RegularExpressions.Regex.Replace(candidates[0], "--[0-9a-f]{64}", "--" + new string('0', 64)) });
             Assert.AreEqual("ambiguous_version", tampered.Refusal?.Code);
         }
         finally

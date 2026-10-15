@@ -16,8 +16,15 @@
 // The anchor is the publisher's, verbatim. `art_1er__2` is not tidied into `art-1er-2`,
 // because a re-invented anchor is a coordinate the publisher never minted and cannot be
 // checked against them.
+//
+// The one permalink shape (the specification of record's R64) names the text's language after
+// the pin and the article as the last segment: `/{publisher}/{work}/{date}--{hash}/{language}/{anchor}`
+// (`permalinks.mjs`). The anchor is written as the platform writes a segment (`escapeSegment`, which
+// leaves a publisher's anchor of letters, digits and `-._~` as it is) and read back decoded; "#" is
+// left for a position inside the article, which these builders do not mint.
 
 import { isCalendarDate } from './temporal.mjs';
+import { anchorText, escapeSegment } from './permalinks.mjs';
 
 /** Shells are skins over one component library, chosen by prefix. */
 export const SHELLS = Object.freeze(['ask', 'w', 'dev']);
@@ -26,6 +33,10 @@ const SHELL_SET = new Set(SHELLS);
 const VERSION_KEY = /^([0-9]{4}-[0-9]{2}-[0-9]{2})--([0-9a-f]{64})$/;
 const SEGMENT = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
 const ANCHOR = /^[^#\s/]+$/;
+/** The text's language: the publisher's three lower-case letters. */
+const LANGUAGE = /^[a-z]{3}$/;
+/** An anchor as a path writes it: RFC 3986's path characters, anything else percent-encoded, never `.` or `..`. */
+const ANCHOR_SEGMENT = /^(?!\.\.?$)(?:[0-9A-Za-z._~!$&'()*+,;=:@-]|%[0-9A-Fa-f]{2})+$/;
 
 /**
  * One segment rule, used by the builders and by the parser.
@@ -63,16 +74,17 @@ export function dossierUrl({ publisher, work }) {
 }
 
 /**
- * `/{publisher}/{work}/{valid_from}--{hash}` plus the publisher's anchor verbatim.
+ * `/{publisher}/{work}/{valid_from}--{hash}/{language}` plus the publisher's anchor as the last segment (R64).
  *
  * @param {object} input
  * @param {string} input.publisher
  * @param {string} input.work
  * @param {string} input.validFrom  ISO date the state applies from
  * @param {string} input.hash       the 64 hex characters that make the link undriftable
+ * @param {string} input.language   the text's language, three lower-case letters (`fra`), whose text the hash pins
  * @param {string} [input.anchor]   the publisher-minted anchor, used exactly as given
  */
-export function readingUrl({ publisher, work, validFrom, hash, anchor }) {
+export function readingUrl({ publisher, work, validFrom, hash, language, anchor }) {
   requireSegment(publisher, 'publisher');
   requireSegment(work, 'work');
 
@@ -86,14 +98,20 @@ export function readingUrl({ publisher, work, validFrom, hash, anchor }) {
     throw new Error(`valid_from is not a calendar date: ${JSON.stringify(validFrom)}`);
   }
 
-  const base = `${dossierUrl({ publisher, work })}/${validFrom}--${hash}`;
+  if (typeof language !== 'string' || !LANGUAGE.test(language)) {
+    throw new Error(
+      `a reading URL names the language of the text its hash pins, three lower-case letters: ${JSON.stringify(language)}`,
+    );
+  }
+
+  const base = `${dossierUrl({ publisher, work })}/${validFrom}--${hash}/${language}`;
   if (anchor === undefined || anchor === null || anchor === '') return base;
 
-  if (!isSafeAnchor(anchor)) {
+  if (!isSafeAnchor(anchor) || anchor === '.' || anchor === '..') {
     throw new Error(`anchor is not a publisher anchor: ${JSON.stringify(anchor)}`);
   }
-  // Verbatim. Not normalised, not lowercased, not re-encoded.
-  return `${base}#${anchor}`;
+  // Verbatim. Not normalised, not lowercased; a character a path segment cannot hold is escaped as the platform escapes it.
+  return `${base}/${escapeSegment(anchor)}`;
 }
 
 /** Applies a shell to a shell-neutral path, for the entry screens only. */
@@ -161,32 +179,34 @@ export function shellUrl(shell, path = '/') {
 export function parseObjectUrl(path) {
   if (typeof path !== 'string' || !path.startsWith('/')) return null;
 
-  const hashIndex = path.indexOf('#');
-  const withoutFragment = hashIndex === -1 ? path : path.slice(0, hashIndex);
-  const anchor = hashIndex === -1 ? null : path.slice(hashIndex + 1);
-  if (anchor !== null && !isSafeAnchor(anchor)) return null;
+  // R64: the article is a segment of the path, and "#" a position inside it, which no object URL names. A
+  // fragment is refused rather than dropped: accepting it while dropping it is worse than refusing it.
+  if (path.includes('#')) return null;
 
   // No trailing separator and no empty segment anywhere, including a doubled slash.
-  if (withoutFragment.length > 1 && withoutFragment.endsWith('/')) return null;
-  const segments = withoutFragment.slice(1).split('/');
+  if (path.length > 1 && path.endsWith('/')) return null;
+  const segments = path.slice(1).split('/');
+  // The anchor segment is the publisher's, as the builder writes it; every other segment is a safe one.
+  const anchorSegment = segments.length === 5 ? segments[4] : null;
+  if (anchorSegment !== null && (!ANCHOR_SEGMENT.test(anchorSegment) || anchorText(anchorSegment) === null)) return null;
   // `isSafeSegment` refuses the empty string, so a doubled or leading separator is refused
   // here too. One check, not two: a property with two guards is a property whose first guard
   // can be deleted without anything going red.
-  if (!segments.every((segment) => isSafeSegment(segment))) return null;
+  if (!segments.slice(0, 4).every((segment) => isSafeSegment(segment))) return null;
 
   if (segments.length === 2) {
-    // A dossier addresses a work, not a provision. An anchor here is a coordinate the
-    // builder cannot emit, and accepting it while dropping it is worse than refusing it.
-    if (anchor !== null) return null;
     const [publisher, work] = segments;
     return { kind: 'dossier', publisher, work, anchor: null };
   }
 
-  if (segments.length === 3) {
-    const [publisher, work, versionKey] = segments;
+  if (segments.length === 4 || segments.length === 5) {
+    const [publisher, work, versionKey, language] = segments;
     const match = VERSION_KEY.exec(versionKey);
-    if (!match || !isCalendarDate(match[1])) return null;
-    return { kind: 'reading', publisher, work, validFrom: match[1], hash: match[2], anchor };
+    if (!match || !isCalendarDate(match[1]) || !LANGUAGE.test(language)) return null;
+    return {
+      kind: 'reading', publisher, work, validFrom: match[1], hash: match[2], language,
+      anchor: anchorSegment === null ? null : anchorText(anchorSegment),
+    };
   }
 
   return null;

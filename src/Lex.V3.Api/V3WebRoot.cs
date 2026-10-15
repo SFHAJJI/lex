@@ -17,7 +17,8 @@ namespace Lex.V3.Api;
 /// or HEAD; an interface language's root (<c>/en/</c>, <c>/fr/</c>) is its <c>index.html</c>. Every page
 /// stands under its interface language (the specification of record's R61); the root, and an address for
 /// law the API mints with no language, are answered with a redirect to the reader's language
-/// (<see cref="RedirectFor"/>). A path the directory does not hold is not claimed, so it reaches the API's
+/// (<see cref="RedirectFor"/>), and an EU permalink of the shape before R64 with a permanent one to R64's
+/// (<see cref="MovedFor"/>). A path the directory does not hold is not claimed, so it reaches the API's
 /// routing as before. The set is read once: a file added later is not served, and nothing outside the
 /// directory can be named, because a request is matched against the recorded set, never joined onto the
 /// directory.
@@ -169,6 +170,21 @@ internal sealed partial class V3WebRoot
             if (PageForSitePath(path) is not { } page || !_files.TryGetValue(page, out file))
             {
                 var query = queryAt < 0 ? string.Empty : rawTarget[queryAt..];
+
+                // A permalink of the shape before R64 whose address under R64 is computed from it alone has moved there
+                // for good, under the interface language it had (MovedFor). The answer is the same for every reader.
+                if (MovedFor(path, query) is { } moved && _files.ContainsKey(moved.Page))
+                {
+                    if (WritePageHeaders(response, method))
+                    {
+                        response.Headers.Location = moved.Location;
+                        response.StatusCode = StatusCodes.Status301MovedPermanently;
+                        response.ContentLength = 0;
+                    }
+
+                    return true;
+                }
+
                 if (RedirectFor(path, query, context.Request.Headers.AcceptLanguage.ToString()) is not { } redirect ||
                     !_files.ContainsKey(redirect.Language))
                 {
@@ -252,15 +268,30 @@ internal sealed partial class V3WebRoot
 
     /// <summary>
     /// The site's addresses for law, as <c>web/scripts/permalinks.mjs</c> parses them (a test holds the two to one table): a
-    /// Luxembourg work (<c>/lu-legilux/{work}</c>) or an EU act (<c>/eu-eurlex/{celex}</c>), served its dossier; a Luxembourg
-    /// state (<c>/lu-legilux/{work}/{date}--{sha256}</c>) or an EU wording (<c>/eu-eurlex/{celex}/{lng}/{date}--{sha256}</c>),
-    /// served its reading; each under an interface language (<c>/en/</c>, <c>/fr/</c>), or with none, as the API mints it,
-    /// to be sent to the reader's. A permalink's <c>#article</c> never reaches a server. The end is <c>\z</c>, not
-    /// <c>$</c>, which in .NET also matches before a final newline.
+    /// Luxembourg work (<c>/lu-legilux/{work}</c>) or an EU act (<c>/eu-eurlex/{celex}</c>), served its dossier; and the one
+    /// permalink shape of the specification of record's R64, a Luxembourg state
+    /// (<c>/lu-legilux/{work}/{date}--{sha256}/{lng}</c>) or an EU wording (<c>/eu-eurlex/{celex}/{date}--{sha256}/{lng}</c>),
+    /// with the article (or provision) as a last segment when one is named, served its reading; each under an interface
+    /// language (<c>/en/</c>, <c>/fr/</c>), or with none, as the API mints it, to be sent to the reader's. <c>{lng}</c> is the
+    /// text's language; the article is RFC 3986's path characters, anything else percent-encoded, and never <c>.</c> or
+    /// <c>..</c>. A <c>#</c> (a position inside an article) never reaches a server. The end is <c>\z</c>, not <c>$</c>, which
+    /// in .NET also matches before a final newline.
     /// </summary>
     private static readonly Regex SitePath = new(
-        "^/(?:(?<locale>fr|en)/)?(?:lu-legilux/(?<work>[a-z0-9][a-z0-9_-]*)(?<pin>/(?<date>[0-9]{4}-[0-9]{2}-[0-9]{2})--[0-9a-f]{64})?" +
-        "|eu-eurlex/(?<celex>[0-9A-Za-z][0-9A-Za-z()._-]*)(?<eupin>/(?<lng>[a-z]{3})/(?<eudate>[0-9]{4}-[0-9]{2}-[0-9]{2})--[0-9a-f]{64})?)\\z",
+        "^/(?:(?<locale>fr|en)/)?(?:lu-legilux/(?<work>[a-z0-9][a-z0-9_-]*)|eu-eurlex/(?<celex>[0-9A-Za-z][0-9A-Za-z()._-]*))" +
+        "(?<pin>/(?<date>[0-9]{4}-[0-9]{2}-[0-9]{2})--[0-9a-f]{64}/(?<lng>[a-z]{3})" +
+        "(?:/(?!\\.\\.?\\z)(?:[0-9A-Za-z._~!$&'()*+,;=:@-]|%[0-9A-Fa-f]{2})+)?)?\\z",
+        RegexOptions.CultureInvariant,
+        TimeSpan.FromMilliseconds(100));
+
+    /// <summary>
+    /// An EU wording's permalink of the shape before R64, <c>/eu-eurlex/{celex}/{lng}/{date}--{sha256}</c>, under an interface
+    /// language or none: it names everything R64's does, so it has moved there (<see cref="MovedFor"/>). A Luxembourg state's
+    /// of that time (<c>/lu-legilux/{work}/{date}--{sha256}</c>) names no language, so no address can be computed from it
+    /// alone: it is not matched, and is answered as any address this root does not hold.
+    /// </summary>
+    private static readonly Regex EuropeWordingBeforeR64 = new(
+        "^/(?:(?<locale>fr|en)/)?eu-eurlex/(?<celex>[0-9A-Za-z][0-9A-Za-z()._-]*)/(?<lng>[a-z]{3})/(?<pin>[0-9]{4}-[0-9]{2}-[0-9]{2}--[0-9a-f]{64})\\z",
         RegexOptions.CultureInvariant,
         TimeSpan.FromMilliseconds(100));
 
@@ -277,15 +308,15 @@ internal sealed partial class V3WebRoot
             return null;
         }
 
-        var page = match.Groups["pin"].Success || match.Groups["eupin"].Success ? "reading.html" : "dossier.html";
+        var page = match.Groups["pin"].Success ? "reading.html" : "dossier.html";
         return $"/{match.Groups["locale"].Value}/{page}";
     }
 
     /// <summary>
     /// What the server renders a law's address under an interface language from (R67), as <c>sitePageFor</c> in
     /// <c>web/scripts/permalinks.mjs</c> says it (a test holds the two to one table): the page, the operation and the request
-    /// the page itself would send. A Luxembourg reading asks by work and date in any held language, an EU wording by CELEX,
-    /// date and its language, a dossier by the work. Null for any other path.
+    /// the page itself would send. A reading asks by the work (a Luxembourg coordinate or an EU CELEX), the date and the
+    /// text's language the permalink names, a dossier by the work. Null for any other path.
     /// </summary>
     internal static V3SitePage? SitePageFor(string path)
     {
@@ -299,17 +330,13 @@ internal sealed partial class V3WebRoot
         var language = match.Groups["locale"].Value;
         var identifier = match.Groups["work"].Success ? "/lu-legilux/" + match.Groups["work"].Value : match.Groups["celex"].Value;
         var parameters = new Dictionary<string, string>(StringComparer.Ordinal) { ["identifier"] = identifier };
-        if (match.Groups["date"].Success)
+        var reading = match.Groups["pin"].Success;
+        if (reading)
         {
             parameters["date"] = match.Groups["date"].Value;
-        }
-        else if (match.Groups["eudate"].Success)
-        {
-            parameters["date"] = match.Groups["eudate"].Value;
             parameters["language"] = match.Groups["lng"].Value;
         }
 
-        var reading = parameters.ContainsKey("date");
         return new V3SitePage(language, reading ? "reading" : "dossier", reading ? "evidence_bundle" : "dossier", parameters);
     }
 
@@ -397,6 +424,28 @@ internal sealed partial class V3WebRoot
         }
 
         return ($"/{language}{path}{query}", $"/{language}/");
+    }
+
+    /// <summary>
+    /// Where a permalink of the shape before R64 has moved for good, as <c>movedFor</c> in <c>web/scripts/permalinks.mjs</c>
+    /// says it (a test holds the two to one table): an EU wording's <c>/eu-eurlex/{celex}/{lng}/{date}--{sha256}</c> to
+    /// <c>/eu-eurlex/{celex}/{date}--{sha256}/{lng}</c>, under the interface language it stood under, if any, with the query
+    /// (<paramref name="query"/>, with its <c>?</c>). Null for any other path. <c>Page</c> is the reading page the move relies
+    /// on: the one under that language, or the first interface language's for an address with none.
+    /// </summary>
+    internal static (string Location, string Page)? MovedFor(string path, string query)
+    {
+        ArgumentNullException.ThrowIfNull(path);
+        var match = EuropeWordingBeforeR64.Match(path);
+        if (!match.Success)
+        {
+            return null;
+        }
+
+        var locale = match.Groups["locale"].Success ? match.Groups["locale"].Value : null;
+        return (
+            $"{(locale is null ? string.Empty : "/" + locale)}/eu-eurlex/{match.Groups["celex"].Value}/{match.Groups["pin"].Value}/{match.Groups["lng"].Value}{query}",
+            $"/{locale ?? InterfaceLanguages[0]}/reading.html");
     }
 
     /// <summary>A header value's optional whitespace, as HTTP has it: space and tab.</summary>

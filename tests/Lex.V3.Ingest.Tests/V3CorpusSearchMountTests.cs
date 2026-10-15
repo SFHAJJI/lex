@@ -367,7 +367,7 @@ public sealed class V3CorpusSearchMountTests
         // Each hit's pointer names its own state, on a fixture where two states hold the same article.
         foreach (var hit in hits)
         {
-            StringAssert.EndsWith(hit.GetProperty("resolve").GetProperty("identifier").GetString(), hit.GetProperty("state_sha256").GetString());
+            StringAssert.EndsWith(hit.GetProperty("resolve").GetProperty("identifier").GetString(), hit.GetProperty("state_sha256").GetString() + "/" + hit.GetProperty("language").GetString());
         }
 
         // With a date, only the state as_of selects contributes, and the population counts that, not the whole.
@@ -441,7 +441,7 @@ public sealed class V3CorpusSearchMountTests
         // Each hit's pointer names its own state, on a fixture with four states.
         foreach (var hit in served)
         {
-            StringAssert.EndsWith(hit.GetProperty("resolve").GetProperty("identifier").GetString(), hit.GetProperty("state_sha256").GetString());
+            StringAssert.EndsWith(hit.GetProperty("resolve").GetProperty("identifier").GetString(), hit.GetProperty("state_sha256").GetString() + "/" + hit.GetProperty("language").GetString());
         }
 
         // What a hit counts: eight article-state hits, five provisions (by work and the publisher's own
@@ -492,8 +492,8 @@ public sealed class V3CorpusSearchMountTests
         var candidates = Strings(ambiguous.GetProperty("candidates"));
         Assert.AreEqual(2, candidates.Length);
         CollectionAssert.AreEqual(candidates.Order(StringComparer.Ordinal).ToArray(), candidates);
-        Assert.AreEqual(1, candidates.Count(candidate => candidate.EndsWith(later.StateSha256, StringComparison.Ordinal)));
-        Assert.AreEqual(1, candidates.Count(candidate => candidate.EndsWith(twin.StateSha256, StringComparison.Ordinal)));
+        Assert.AreEqual(1, candidates.Count(candidate => candidate.Contains("--" + later.StateSha256 + "/", StringComparison.Ordinal)));
+        Assert.AreEqual(1, candidates.Count(candidate => candidate.Contains("--" + twin.StateSha256 + "/", StringComparison.Ordinal)));
 
         // One named work on one date is as_of's question, and so are its refusals, byte for byte.
         var named = await SearchAsync(mount, Phrase, identifier: identifier, date: asked);

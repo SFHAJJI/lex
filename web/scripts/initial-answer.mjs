@@ -8,6 +8,8 @@
 //
 // Data and pure functions only: the pages, their client entries and the server-render bundle share it.
 
+import { parseSitePath } from './permalinks.mjs';
+
 /** The id of the data block that carries the answer a page was rendered from. */
 export const INITIAL_ANSWER_ID = 'lex-initial-answer';
 
@@ -28,6 +30,19 @@ export function jsonInScript(value) {
 export function lawPathOf(path) {
   const match = /^\/(?:en|fr)(\/(?:lu-legilux|eu-eurlex)\/.*)$/.exec(path ?? '');
   return match === null ? null : match[1];
+}
+
+/**
+ * The address a reading page names as its own (canonical, and in each language), for the reading view it shows and the
+ * address it stands at with no interface language (`address`, an article's included): that address when the view shows
+ * the state (or EU wording) it pins; else the permalink of the one the view shows in its place, as a stale permalink's
+ * page shows another version (review of #959: any digest named itself canonical); else the address itself.
+ */
+export function readingAddressShown(view, address) {
+  const pinned = parseSitePath(address)?.permalink ?? null;
+  const shown = (view?.publisher === 'eu-eurlex' ? view.wordings : view?.states) ?? [];
+  if (pinned === null || shown.some((one) => one.permalink === pinned)) return address;
+  return shown[0]?.permalink ?? address;
 }
 
 /**

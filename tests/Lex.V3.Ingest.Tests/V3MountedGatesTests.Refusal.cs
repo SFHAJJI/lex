@@ -83,11 +83,11 @@ public sealed partial class V3MountedGatesTests
         var day = date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
         var language = timeline.Language;
         requests["a-held-state"] = new("as_of", new { identifier = work, date = day, language }, "answer");
-        requests["the-held-permalink"] = new("verify", new { identifier = $"{work}/{day}--{state}", language }, "answer");
+        requests["the-held-permalink"] = new("verify", new { identifier = $"{work}/{day}--{state}/{language}", language }, "answer");
         requests["unknown-work"] = new("as_of", new { identifier = NoSuchWork, date = day }, "identifier_unknown");
         requests["before-history"] = new("as_of", new { identifier = work, date = timeline.Dates[0].Date.AddDays(-1).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture), language }, "no_version_for_date");
         requests["anchor-not-held"] = new("article_history", new { identifier = work, anchor = "art_no_such_anchor", language }, "anchor_not_in_version");
-        requests["pinned-digest-not-held"] = new("verify", new { identifier = $"{work}/{day}--{new string('0', 64)}", language }, "pinned_digest_mismatch");
+        requests["pinned-digest-not-held"] = new("verify", new { identifier = $"{work}/{day}--{new string('0', 64)}/{language}", language }, "pinned_digest_mismatch");
         requests["mode-not-held"] = new("search", new { query = "loi", language, mode = "bm25" }, "retrieval_mode_unavailable");
         requests["foreign-cursor"] = new("events", new { after = new string('0', 64) + ":1" }, "snapshot_unknown");
 
@@ -211,7 +211,7 @@ public sealed partial class V3MountedGatesTests
     /// held in (<c>language_not_available</c>); and with a date, which EU search does not serve (<c>retrieval_mode_unavailable</c>).
     /// The work asked of <c>in_force_on</c> at a date (<c>retrieval_mode_unavailable</c>: the EU capability manifest states it refused,
     /// since no build indexes the force dates and a wording date is never one).
-    /// And, when the work's expression in that language holds one wording date, the EU permalink grammar's (#850): a
+    /// And, when the work's expression in that language holds one wording date, the EU permalink grammar's (#850; R64's shape): a
     /// provision of the wording pinned by its digest, recomputed here by the stated rule, so <c>verify</c> answering it also
     /// checks the API's digest (answered); the wording pinned by a digest it does not have (<c>pinned_digest_mismatch</c>);
     /// and a provision the wording does not hold (<c>anchor_not_in_version</c>).
@@ -263,10 +263,10 @@ public sealed partial class V3MountedGatesTests
         var (workId, expressionId, wordingDate) = (wordings[0][0], wordings[0][1], wordings[0][2]);
         var articles = Rows(connection, $"SELECT publisher_identifier, article_identity_sha256 FROM articles WHERE publisher_expression_id = '{expressionId.Replace("'", "''", StringComparison.Ordinal)}' ORDER BY publisher_identifier, article_identity_sha256");
         var digest = V3EuropePermalinkTests.WordingSha256ByTheStatedRule(celex, workId, expressionId, language, wordingDate, articles.Select(static row => row[1]));
-        var wording = $"/eu-eurlex/{celex}/{language}/{wordingDate}--{digest}";
-        requests["eu-pinned-provision"] = new("verify", new { identifier = $"{wording}#{Uri.EscapeDataString(articles[0][0])}" }, "answer");
-        requests["eu-pinned-digest-not-held"] = new("verify", new { identifier = $"{wording[..^64]}{new string('0', 64)}" }, "pinned_digest_mismatch");
-        requests["eu-provision-not-held"] = new("verify", new { identifier = $"{wording}#lex-no-such-provision" }, "anchor_not_in_version");
+        var wording = $"/eu-eurlex/{celex}/{wordingDate}--{digest}/{language}";
+        requests["eu-pinned-provision"] = new("verify", new { identifier = $"{wording}/{Uri.EscapeDataString(articles[0][0])}" }, "answer");
+        requests["eu-pinned-digest-not-held"] = new("verify", new { identifier = $"/eu-eurlex/{celex}/{wordingDate}--{new string('0', 64)}/{language}" }, "pinned_digest_mismatch");
+        requests["eu-provision-not-held"] = new("verify", new { identifier = $"{wording}/lex-no-such-provision" }, "anchor_not_in_version");
     }
 
     /// <summary>

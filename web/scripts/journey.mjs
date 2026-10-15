@@ -88,7 +88,11 @@ import { cspValue } from "./csp.mjs";
 import { EXPORT_WATERMARK } from "./export-build.mjs";
 import { EUROPE_TEXT_ACKNOWLEDGEMENT } from "./reading-answer.mjs";
 import { TMP_MARGIN_MEBIBYTES, tmpMebibytesFor } from "./image-run.mjs";
-import { INTERFACE_LANGUAGES, parseSitePath, sameDocumentIn } from "./permalinks.mjs";
+import { INTERFACE_LANGUAGES, articlePermalink, escapeSegment, parseSitePath, sameDocumentIn } from "./permalinks.mjs";
+import { CANONICAL_HOST } from "./routes.mjs";
+
+/** The origin the site's head links name (`Document.jsx`, `head-links.mjs`), whatever server a journey runs against. */
+const SITE_ORIGIN = `https://${CANONICAL_HOST}`;
 
 export const ANSWER_DEADLINE_MS = 30_000;
 
@@ -113,41 +117,45 @@ export const EU_SEARCH_PHRASE = "personal data";
 /** The language the EU search step chooses in the form's select: the one its held wording is in. */
 export const EU_SEARCH_LANGUAGE = Object.freeze({ value: "eng", label: "English" });
 
-/**
- * A hash-pinned Luxembourg permalink, as `verify` takes it: the stable coordinate, `--` and the state
- * digest, and an article id after `#` (the grammar `V3CitationVerificationTests` holds the served
- * answers to).
- */
-export const PINNED_PERMALINK = /^\/lu-legilux\/[a-z0-9_-]+\/\d{4}-\d{2}-\d{2}--([0-9a-f]{64})(?:#([^#\s]+))?$/;
+/** The language of the fixture state's text, which its permalink names (R64). */
+export const READING_LANGUAGE = "fra";
 
 /**
- * A hash-pinned EU permalink, as `verify` takes it: the CELEX, the language, the wording date, `--` and
- * the wording digest, and a provision after `#`, escaped as the platform escapes it (#850).
+ * A hash-pinned Luxembourg permalink, as `verify` takes it, in the one shape of R64: the stable coordinate, `--`, the
+ * state digest and the text's language, and an article id as a last segment, escaped as the platform escapes it (the
+ * grammar `V3CitationVerificationTests` holds the served answers to).
  */
-export const PINNED_EU_PERMALINK = /^\/eu-eurlex\/[^/#\s]+\/[a-z]{3}\/\d{4}-\d{2}-\d{2}--([0-9a-f]{64})(?:#([^#\s]+))?$/;
+export const PINNED_PERMALINK = /^\/lu-legilux\/[a-z0-9_-]+\/\d{4}-\d{2}-\d{2}--([0-9a-f]{64})\/[a-z]{3}(?:\/([^/#?\s]+))?$/;
+
+/**
+ * A hash-pinned EU permalink, as `verify` takes it, in the one shape of R64: the CELEX, the wording date, `--`, the
+ * wording digest and the language, and a provision as a last segment, escaped as the platform escapes it (#850).
+ */
+export const PINNED_EU_PERMALINK = /^\/eu-eurlex\/[^/#\s]+\/\d{4}-\d{2}-\d{2}--([0-9a-f]{64})\/[a-z]{3}(?:\/([^/#?\s]+))?$/;
 
 /**
  * What a citation pins, or null when it pins nothing: its publisher, the digest (a Luxembourg state's
- * or an EU wording's) and the article, as `verify` names it (an EU provision unescaped).
+ * or an EU wording's) and the article, as `verify` names it (unescaped).
  */
 export function pinnedCitation(citation) {
-  const luxembourg = PINNED_PERMALINK.exec(citation);
-  if (luxembourg !== null) return { publisher: "lu-legilux", digest: luxembourg[1], anchor: luxembourg[2] ?? null };
-  const europe = PINNED_EU_PERMALINK.exec(citation);
-  if (europe === null) return null;
-  try {
-    return { publisher: "eu-eurlex", digest: europe[1], anchor: europe[2] === undefined ? null : decodeURIComponent(europe[2]) };
-  } catch {
-    return null;
+  for (const [publisher, pattern] of [["lu-legilux", PINNED_PERMALINK], ["eu-eurlex", PINNED_EU_PERMALINK]]) {
+    const match = pattern.exec(citation);
+    if (match === null) continue;
+    try {
+      return { publisher, digest: match[1], anchor: match[2] === undefined ? null : decodeURIComponent(match[2]) };
+    } catch {
+      return null;
+    }
   }
+  return null;
 }
 
 /**
  * The steps for one Luxembourg work: the page each loads, the operation it must ask, and what it does before waiting. A
  * step that `cites` prints at least one citation on an answer. `identifier` is the work, `date` a date one of its states
- * applies on, and `anchor` an article id that state holds.
+ * applies on, `anchor` an article id that state holds and `language` that state's text language.
  */
-export function journeyStepsFor({ identifier, date, anchor }) {
+export function journeyStepsFor({ identifier, date, anchor, language = READING_LANGUAGE }) {
   return Object.freeze({
   coverage: Object.freeze({ path: "/en/coverage.html", operation: "coverage", body: null }),
   // The home page is the search screen at the language's root (UX spec section 2; R61): the same step, from the front door.
@@ -239,28 +247,28 @@ export function journeyStepsFor({ identifier, date, anchor }) {
   // is the mount's, so `run` opens the permalink the same server's dossier names for the date (`pinnedStep`); the
   // placeholder's digest (all zeros) pins nothing, and stays only where no state is held on the date (no mount).
   permalink: Object.freeze({
-    path: `/en${identifier}/${date}--${"0".repeat(64)}#${anchor}`,
+    path: `/en${identifier}/${date}--${"0".repeat(64)}/${language}/${escapeSegment(anchor)}`,
     rendered: true,
-    pins: Object.freeze({ identifier: identifier, date: date, anchor: anchor }),
+    pins: Object.freeze({ identifier: identifier, date: date, anchor: anchor, language: language }),
     cites: true,
     operation: "evidence_bundle",
     body: Object.freeze({
       operation_id: "evidence_bundle",
-      parameters: Object.freeze({ identifier: identifier, date: date }),
+      parameters: Object.freeze({ identifier: identifier, date: date, language: language }),
     }),
   }),
   // A permalink whose digest pins no held state (all zeros), as a link made before the text was derived again would:
   // the page shows the state the date resolves to, under a notice, brought into view, that it is not the one the link
   // pins (UX spec section 1: a link cannot silently drift).
   stale: Object.freeze({
-    path: `/en${identifier}/${date}--${"0".repeat(64)}#${anchor}`,
+    path: `/en${identifier}/${date}--${"0".repeat(64)}/${language}/${escapeSegment(anchor)}`,
     rendered: true,
     stale: true,
     cites: true,
     operation: "evidence_bundle",
     body: Object.freeze({
       operation_id: "evidence_bundle",
-      parameters: Object.freeze({ identifier: identifier, date: date }),
+      parameters: Object.freeze({ identifier: identifier, date: date, language: language }),
     }),
   }),
 });
@@ -273,10 +281,11 @@ export function journeyStepsFor({ identifier, date, anchor }) {
  */
 export async function pinnedStep(origin, step, { ask = askOperation } = {}) {
   if (step.pins === undefined) return step;
-  const { identifier, date, anchor } = step.pins;
-  const onDate = ((await ask(origin, "dossier", { identifier }))?.result?.value?.states ?? []).filter((state) => state.applicability_date === date);
+  const { identifier, date, anchor, language } = step.pins;
+  const onDate = ((await ask(origin, "dossier", { identifier }))?.result?.value?.states ?? [])
+    .filter((state) => state.applicability_date === date && state.language === language);
   if (onDate.length !== 1 || typeof onDate[0].permalink !== "string" || parseSitePath(onDate[0].permalink)?.kind !== "state") return step;
-  return Object.freeze({ ...step, path: `/en${onDate[0].permalink}#${anchor}` });
+  return Object.freeze({ ...step, path: `/en${articlePermalink(onDate[0].permalink, anchor)}` });
 }
 
 /**
@@ -286,10 +295,11 @@ export async function pinnedStep(origin, step, { ask = askOperation } = {}) {
  * search hit is such a link, its row printing no digest (UX spec section 2).
  */
 export function answerCitations(codes, hrefs) {
+  // A link's article is a segment of its address (R64); a position inside it, after `#`, is no part of the citation.
   const linked = hrefs.flatMap((href) => {
     const hash = href.indexOf("#");
     const named = parseSitePath(hash < 0 ? href : href.slice(0, hash));
-    return named?.kind === "state" ? [`${named.permalink}${hash < 0 ? "" : href.slice(hash)}`] : [];
+    return named?.kind === "state" ? [named.address] : [];
   });
   return [...new Set([...codes.filter((text) => text.startsWith("/")), ...linked])];
 }
@@ -392,6 +402,21 @@ export function journeyVerdict(observed, expected) {
       // The notice is true only if the server says so too: `verify` refuses the permalink it names as no longer served.
       const said = observed.pinVerification?.refusal ?? observed.pinVerification?.verdict ?? "nothing";
       if (said !== "pinned_digest_mismatch") failures.push(`verify answers the permalink the notice names (${observed.pinNamed ?? "none"}) with ${said}, not pinned_digest_mismatch`);
+    }
+  }
+  // A law's page names as canonical the address with no interface language, the permalink Lex prints and cites (R64): its
+  // own address, article included, when it shows what that names; a stale permalink's page the version it shows, never
+  // the digest it was opened at. Each interface language is an alternate, and the address itself for any other.
+  if (expected.state === "success" && step.rendered === true && observed.canonical !== undefined) {
+    const own = step.path.replace(/^\/(?:en|fr)(?=\/)/, "");
+    const named = typeof observed.canonical === "string" && observed.canonical.startsWith(SITE_ORIGIN) ? observed.canonical.slice(SITE_ORIGIN.length) : null;
+    const law = named === null ? null : parseSitePath(named);
+    if (law === null || law.locale !== null) failures.push(`the page names ${observed.canonical ?? "no"} canonical link, not a law's address on ${SITE_ORIGIN} with no interface language`);
+    else if (step.stale === true ? (law.kind !== "state" || named.includes(parseSitePath(own)?.digest ?? "")) : named !== own) {
+      failures.push(`the page names ${observed.canonical} canonical, not ${step.stale === true ? "the version it shows" : `${SITE_ORIGIN}${own}`}`);
+    } else {
+      const wanted = { ...Object.fromEntries(INTERFACE_LANGUAGES.map((language) => [language, `${SITE_ORIGIN}/${language}${named}`])), "x-default": `${SITE_ORIGIN}${named}` };
+      if (JSON.stringify(observed.alternates ?? {}) !== JSON.stringify(wanted)) failures.push(`the page's alternates are ${JSON.stringify(observed.alternates ?? {})}, not ${JSON.stringify(wanted)}`);
     }
   }
   if (expected.state === "success" && step.then !== undefined && observed.then !== "reached") {
@@ -1120,6 +1145,11 @@ async function observe(browser, pageOrigin, step, { keyboard = false } = {}) {
       pinNamed: await evaluate("document.querySelector('[data-live-answer] [data-pin-replaced] code')?.textContent.trim() ?? null"),
       // Whether the document arrived carrying the answer the server rendered it from (`initial-answer.mjs`).
       serverRendered: await evaluate("document.getElementById('lex-initial-answer') !== null"),
+      // At a law's address: the canonical link and the alternates the page's head names once loaded (R64, R67).
+      ...(step.rendered === true ? {
+        canonical: await evaluate("document.head.querySelector('link[rel=\"canonical\"]')?.getAttribute('href') ?? null"),
+        alternates: await evaluate("Object.fromEntries([...document.head.querySelectorAll('link[rel=\"alternate\"][hreflang]')].map((link) => [link.getAttribute('hreflang'), link.getAttribute('href')]))"),
+      } : {}),
       // At a permalink: whether the page says another version stands in for the pinned one, and where the article it
       // names is (`shown`: its top inside the window).
       pinReplaced: step.pins === undefined && step.stale !== true ? undefined : await evaluate("document.querySelector('[data-pin-replaced]') !== null"),
@@ -1311,7 +1341,7 @@ export async function heldLuxembourgWork(mount) {
   try {
     const textOf = "FROM json_each(s.article_identities_json) j JOIN articles a ON a.article_identity_sha256 = j.value AND a.language = s.language WHERE a.searchable_text <> ''";
     const state = index.prepare(`
-      SELECT s.work_key AS work, s.applicability_date AS date,
+      SELECT s.work_key AS work, s.applicability_date AS date, s.language AS language,
              (SELECT min(t.applicability_date) FROM states t WHERE t.work_key = s.work_key) AS first,
              (SELECT count(*) ${textOf}) AS withText,
              (SELECT min(a.publisher_id) ${textOf}) AS anchor
@@ -1319,7 +1349,7 @@ export async function heldLuxembourgWork(mount) {
       WHERE (SELECT count(*) FROM states t WHERE t.work_key = s.work_key AND t.applicability_date = s.applicability_date) = 1
       ORDER BY s.work_key, s.applicability_date, s.state_sha256`).all().find((row) => row.withText >= 3);
     if (!state) return null;
-    return { identifier: `/lu-legilux/${state.work}`, date: state.date, anchor: state.anchor, beforeHistory: dayBefore(state.first) };
+    return { identifier: `/lu-legilux/${state.work}`, date: state.date, anchor: state.anchor, language: state.language, beforeHistory: dayBefore(state.first) };
   } finally {
     index.close();
   }
@@ -1352,17 +1382,17 @@ export async function heldLuxembourgWorkFromAnswers(origin, { ask = askOperation
   const states = new Map();
   for (const hit of search?.result?.value?.hits ?? []) {
     if (!hit.state_sha256 || !hit.work_key || !hit.applicability_date || !hit.publisher_id) continue;
-    if (!states.has(hit.state_sha256)) states.set(hit.state_sha256, { work: hit.work_key, date: hit.applicability_date, anchors: new Set() });
+    if (!states.has(hit.state_sha256)) states.set(hit.state_sha256, { work: hit.work_key, date: hit.applicability_date, language: hit.language, anchors: new Set() });
     states.get(hit.state_sha256).anchors.add(hit.publisher_id);
   }
 
-  for (const { work, date, anchors } of states.values()) {
+  for (const { work, date, language, anchors } of states.values()) {
     if (anchors.size < 3) continue;
     const identifier = `/lu-legilux/${work}`;
     const held = (await ask(origin, "dossier", { identifier }))?.result?.value?.states ?? [];
     if (held.filter((state) => state.applicability_date === date).length !== 1) continue;
     const first = held.map((state) => state.applicability_date).sort()[0];
-    return { identifier, date, anchor: [...anchors].sort()[0], beforeHistory: dayBefore(first) };
+    return { identifier, date, anchor: [...anchors].sort()[0], language, beforeHistory: dayBefore(first) };
   }
 
   return null;

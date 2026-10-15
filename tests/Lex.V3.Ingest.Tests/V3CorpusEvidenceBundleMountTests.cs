@@ -152,7 +152,7 @@ public sealed class V3CorpusEvidenceBundleMountTests
             Assert.AreEqual(Sha256Hex(text), article.GetProperty("text_sha256").GetString(), identity);
             Assert.AreEqual(Encoding.UTF8.GetByteCount(text), article.GetProperty("text_byte_length").GetInt32(), identity);
             Assert.AreEqual(64, article.GetProperty("wording_sha256").GetString()!.Length, identity);
-            Assert.AreEqual(fixture.Permalink + "#" + expected.PublisherId, article.GetProperty("article_permalink").GetString(), identity);
+            Assert.AreEqual(fixture.Permalink + "/" + Uri.EscapeDataString(expected.PublisherId), article.GetProperty("article_permalink").GetString(), identity);
             Assert.AreEqual(officialSource, article.GetProperty("official_source").GetString(), identity);
             Assert.AreEqual("fra", article.GetProperty("language").GetString(), identity);
             // The quote names the body it was read from: the corpus manifest's digest for the article's own member.
@@ -207,8 +207,8 @@ public sealed class V3CorpusEvidenceBundleMountTests
     public async Task EveryArticlePermalinkTheBundleEmitsVerifiesAndAnArticleTheStateDoesNotHoldDoesNot()
     {
         // Launch contract line 9: verify resolves every citation the product emitted. The article permalink
-        // is the state permalink and the article id after #; verify answers digest_matches naming the article,
-        // and a fragment naming an article the pinned state does not hold is the refusal article_history makes.
+        // is the state permalink and the article id as a last segment (R64); verify answers digest_matches naming the
+        // article, and a segment naming an article the pinned state does not hold is the refusal article_history makes.
         var fixture = await MountedFixture.CreateAsync();
         await using var cleanup = fixture;
         using var mount = await V3CorpusMount.OpenAsync(fixture.Directory, CancellationToken.None);
@@ -231,15 +231,15 @@ public sealed class V3CorpusEvidenceBundleMountTests
             Assert.AreEqual(permalink, body.GetProperty("article_permalink").GetString(), permalink);
         }
 
-        var foreign = await EnvelopeAsync(mount, "/api/v3/verify", "verify", new { identifier = fixture.Permalink + "#art_no_such_anchor" });
+        var foreign = await EnvelopeAsync(mount, "/api/v3/verify", "verify", new { identifier = fixture.Permalink + "/art_no_such_anchor" });
         Assert.AreEqual("anchor_not_in_version", foreign.Refusal?.Code);
         Assert.AreEqual("art_no_such_anchor", foreign.Refusal!.HelpfulPayload.GetProperty("requested_anchor").GetString());
         Assert.IsTrue(foreign.Refusal.HelpfulPayload.GetProperty("do_not_fall_back_to_full_text_search").GetBoolean());
 
-        var empty = await PostAsync(mount, "/api/v3/verify", JsonSerializer.Serialize(new { operation_id = "verify", parameters = new { identifier = fixture.Permalink + "#" } }));
+        var empty = await PostAsync(mount, "/api/v3/verify", JsonSerializer.Serialize(new { operation_id = "verify", parameters = new { identifier = fixture.Permalink + "/" } }));
         Assert.AreEqual(StatusCodes.Status200OK, empty.Response.StatusCode);
         var emptyEnvelope = V3EnvelopeJson.ParseAndVerify(ResponseBytes(empty), V3OperationRegistry.Reviewed);
-        Assert.AreEqual("identifier_unknown", emptyEnvelope.Refusal?.Code, "an empty fragment is not a permalink.");
+        Assert.AreEqual("identifier_unknown", emptyEnvelope.Refusal?.Code, "an empty article segment is not a permalink.");
     }
 
     [TestMethod]

@@ -14,20 +14,21 @@
 // with a mode every hit is in that lane and the other lane is not counted, null rather than zero);
 // the population, which counts the whole result and not the page (an untruncated first page holds
 // all of it; a page after a cursor or before one holds less); the page (a cursor exactly when the
-// page is truncated, naming its last hit); each hit's permalink (the work, the date and the state
-// digest the hit names); the works a dated search could not place (named with their candidate
+// page is truncated, naming its last hit); each hit's permalink (the work, the date, the state
+// digest and the language the hit names); the works a dated search could not place (named with their candidate
 // states, contributing no hit); and how the query was resolved to a work, if it was. A search answer
 // carries no text snippet, so none is read.
 //
 // An EU answer states the same lane, page and population rules, and its own: it is in one work, one
 // expression and one language, it names no date (`requested_date` is null and no work is ambiguous),
 // and every hit is in the one wording the answer pins (`pinned_wording`): the wording's permalink,
-// `/eu-eurlex/{celex}/{language}/{wording date}--{wording sha256}`, and each hit's permalink is it
-// with the provision after `#`. A hit this page shows must pin its wording, so an answer with hits
+// `/eu-eurlex/{celex}/{wording date}--{wording sha256}/{language}` (R64), and each hit's permalink is it
+// with the provision as a last segment. A hit this page shows must pin its wording, so an answer with hits
 // and no pinned wording is refused here rather than shown unpinned. The wording date is the date the
 // publisher's Formex package gives the act (`date_semantics`), never an applicability date.
 
 import { isCalendarDate } from './temporal.mjs';
+import { articlePermalink, escapeSegment, luxembourgPermalink } from './permalinks.mjs';
 
 const DIGEST = /^[0-9a-f]{64}$/;
 
@@ -47,13 +48,13 @@ export const WORK_RESOLUTION_OUTCOMES = Object.freeze([
 ]);
 
 const CURSOR = /^(strict|relaxed)\.[0-9a-f]{64}\.[0-9a-f]{64}$/;
-const STATE_PERMALINK = /^\/lu-legilux\/([^/]+)\/(\d{4}-\d{2}-\d{2})--[0-9a-f]{64}$/;
+const STATE_PERMALINK = /^\/lu-legilux\/([^/]+)\/(\d{4}-\d{2}-\d{2})--[0-9a-f]{64}\/[a-z]{3}$/;
 
 /** An EU page's cursor names the lane and the article identity: an EU search is in one wording, so no state is named. */
 const EUROPE_CURSOR = /^(strict|relaxed)\.[0-9a-f]{64}$/;
 
-/** The EU wording permalink: the CELEX, the language, the wording date and the wording digest. */
-const EUROPE_WORDING_PERMALINK = /^\/eu-eurlex\/([^/#]+)\/([^/#]+)\/(\d{4}-\d{2}-\d{2})--([0-9a-f]{64})$/;
+/** The EU wording permalink (R64): the CELEX, the wording date, the wording digest and the language. */
+const EUROPE_WORDING_PERMALINK = /^\/eu-eurlex\/([^/#]+)\/(\d{4}-\d{2}-\d{2})--([0-9a-f]{64})\/([a-z]{3})$/;
 
 function requireOwn(object, key, where) {
   if (object === null || typeof object !== 'object' || !Object.hasOwn(object, key)) {
@@ -225,7 +226,7 @@ function readHit(hit, index) {
   const stateSha256 = requireDigest(requireOwn(hit, 'state_sha256', where), `${where} state_sha256`);
   const resolve = requireOwn(hit, 'resolve', where);
   const permalink = requireText(requireOwn(resolve, 'identifier', `${where} resolve`), `${where} resolve.identifier`);
-  const expected = `/lu-legilux/${workKey}/${applicabilityDate}--${stateSha256}`;
+  const expected = luxembourgPermalink({ workKey, date: applicabilityDate, stateSha256, language: requireText(requireOwn(hit, 'language', where), `${where} language`) });
   if (permalink !== expected) {
     throw new Error(`${where} resolves to ${permalink}, not to the state it names (${expected})`);
   }
@@ -405,10 +406,11 @@ export function readSearch(answer) {
 
 /**
  * A provision escaped as the platform escapes it (.NET's `Uri.EscapeDataString`, RFC 3986's unreserved
- * characters only): `encodeURIComponent` leaves `!'()*` as they are, and the platform does not.
+ * characters only): `encodeURIComponent` leaves `!'()*` as they are, and the platform does not
+ * (`escapeSegment`, which a permalink's article segment is written with).
  */
 export function escapeProvision(provision) {
-  return encodeURIComponent(provision).replace(/[!'()*]/g, (character) => `%${character.charCodeAt(0).toString(16).toUpperCase()}`);
+  return escapeSegment(provision);
 }
 
 /** The one wording an EU answer's hits are in, pinned; null when the answer pins none. */
@@ -420,9 +422,9 @@ function readPinnedWording(value, language) {
   const permalink = requireText(requireOwn(value, 'permalink', where), `${where}.permalink`);
   const match = EUROPE_WORDING_PERMALINK.exec(permalink);
   if (match === null) {
-    throw new Error(`${where}.permalink ${JSON.stringify(permalink)} is not an EU wording permalink (/eu-eurlex/{celex}/{language}/{wording date}--{wording sha256})`);
+    throw new Error(`${where}.permalink ${JSON.stringify(permalink)} is not an EU wording permalink (/eu-eurlex/{celex}/{wording date}--{wording sha256}/{language})`);
   }
-  const [, celex, permalinkLanguage, permalinkDate, permalinkSha256] = match;
+  const [, celex, permalinkDate, permalinkSha256, permalinkLanguage] = match;
   if (permalinkLanguage !== language) {
     throw new Error(`${where}.permalink is in ${permalinkLanguage}, and the search was asked in ${language}`);
   }
@@ -475,7 +477,7 @@ function readEuropeHit(hit, index, { language, wording }) {
   if (celex !== wording.celex || wordingDate !== wording.wordingDate) {
     throw new Error(`${where} is in ${celex} of ${wordingDate}, not in the wording the answer pins (${wording.celex} of ${wording.wordingDate})`);
   }
-  const expectedPermalink = `${wording.permalink}#${escapeProvision(publisherId)}`;
+  const expectedPermalink = articlePermalink(wording.permalink, publisherId);
   if (permalink !== expectedPermalink) {
     throw new Error(`${where} carries the permalink ${JSON.stringify(permalink)}, not the pinned wording's with its provision (${expectedPermalink})`);
   }

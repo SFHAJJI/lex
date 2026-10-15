@@ -41,7 +41,7 @@ const AMBIGUOUS = checkCitation({
 const OUT_OF_CORPUS = checkCitation({ raw: 'CSSF 20/747' });
 const UNRECOGNISED = checkCitation({ raw: 'see the blue book, page 12' });
 const PINNED_STATE_UNAVAILABLE = checkCitation({
-  raw: `https://law.soufien.lu/lu-legilux/loi-1993-04-05-n1/2025-01-01--${'7f'.repeat(32)}`,
+  raw: `https://law.soufien.lu/lu-legilux/loi-1993-04-05-n1/2025-01-01--${'7f'.repeat(32)}/fra`,
   candidates: [{
     lex_id: 'lu-legilux:loi-1993-04-05-n1:2025-01-01',
     identifier: ELI,

@@ -15,7 +15,7 @@ import { skinFor } from './shells.mjs';
 
 const WORK = 'preview-synthetic:synthetic-preview-work';
 const link = (date, seed) =>
-  `https://law.soufien.lu/preview-synthetic/synthetic-preview-work/${date}--${seed.repeat(64)}`;
+  `https://law.soufien.lu/preview-synthetic/synthetic-preview-work/${date}--${seed.repeat(64)}/fra`;
 
 const CHANGED_TWICE = {
   work: WORK,

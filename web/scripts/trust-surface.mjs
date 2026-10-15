@@ -121,7 +121,7 @@ function candidate(hash, publicationDate, withdrawn = false) {
     hash,
     publication_date: publicationDate,
     withdrawn,
-    href: readingUrl({ publisher: PUBLISHER, work: WORK, validFrom: '2004-01-01', hash }),
+    href: readingUrl({ publisher: PUBLISHER, work: WORK, validFrom: '2004-01-01', hash, language: 'fra' }),
   };
 }
 

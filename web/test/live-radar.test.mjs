@@ -116,7 +116,7 @@ test("an uncompared row names the states it could not choose between, or the bas
   let own = null;
   const ambiguous = shown((entry) => {
     own = entry.state.permalink;
-    other = `${entry.state.stable_coordinate}--${"e".repeat(64)}`;
+    other = `${entry.state.stable_coordinate}--${"e".repeat(64)}/${entry.state.language}`;
     uncompared(entry, "ambiguous_version").candidates = [own, other];
   });
   assert.ok(ambiguous.includes(`(candidates <a href="/en${own}"><code>${own}</code></a>, <a href="/en${other}"><code>${other}</code></a>)`), "an ambiguity lists its candidates");

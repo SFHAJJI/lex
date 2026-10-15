@@ -1,10 +1,11 @@
 {
-  "about": "The site's addresses, held to one table by web/test/permalinks.test.mjs (web/scripts/permalinks.mjs) and tests/Lex.V3.Tests/V3WebRootTests.cs (V3WebRoot). `page`: the page a law's address under an interface language is served; `redirect`: where a path with no interface language is sent, for a reader whose browser names no language (French, R61); neither: the path is left to the files and the API's routing. `languages`: the interface language each Accept-Language starts a reader in. `render`: for a served page, what the server renders it from (R67): its language, the page, and the operation and parameters the page itself would ask.",
+  "about": "The site's addresses, held to one table by web/test/permalinks.test.mjs (web/scripts/permalinks.mjs) and tests/Lex.V3.Tests/V3WebRootTests.cs (V3WebRoot). `page`: the page a law's address under an interface language is served; `redirect`: where a path with no interface language is sent, for a reader whose browser names no language (French, R61); `moved`: where a permalink of the shape before R64 (an EU wording's /eu-eurlex/{celex}/{lng}/{date}--{sha256}) has moved for good, whatever the reader's language; none of them: the path is left to the files and the API's routing, as a Luxembourg state's permalink before R64 (/lu-legilux/{work}/{date}--{sha256}, which names no language) is. `languages`: the interface language each Accept-Language starts a reader in. `render`: for a served page, what the server renders it from (R67): its language, the page, and the operation and parameters the page itself would ask.",
   "paths": [
     {
       "path": "/en/lu-legilux/loi-2017-03-14-a439",
       "page": "en/dossier.html",
       "redirect": null,
+      "moved": null,
       "render": {
         "language": "en",
         "kind": "dossier",
@@ -15,16 +16,18 @@
       }
     },
     {
-      "path": "/en/lu-legilux/loi-2017-03-14-a439/2024-01-01--0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+      "path": "/en/lu-legilux/loi-2017-03-14-a439/2024-01-01--0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef/fra",
       "page": "en/reading.html",
       "redirect": null,
+      "moved": null,
       "render": {
         "language": "en",
         "kind": "reading",
         "operation": "evidence_bundle",
         "parameters": {
           "identifier": "/lu-legilux/loi-2017-03-14-a439",
-          "date": "2024-01-01"
+          "date": "2024-01-01",
+          "language": "fra"
         }
       }
     },
@@ -32,6 +35,7 @@
       "path": "/en/eu-eurlex/32016R0679",
       "page": "en/dossier.html",
       "redirect": null,
+      "moved": null,
       "render": {
         "language": "en",
         "kind": "dossier",
@@ -45,6 +49,7 @@
       "path": "/fr/lu-legilux/loi-2017-03-14-a439",
       "page": "fr/dossier.html",
       "redirect": null,
+      "moved": null,
       "render": {
         "language": "fr",
         "kind": "dossier",
@@ -55,16 +60,18 @@
       }
     },
     {
-      "path": "/fr/lu-legilux/loi-2017-03-14-a439/2024-01-01--0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+      "path": "/fr/lu-legilux/loi-2017-03-14-a439/2024-01-01--0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef/fra",
       "page": "fr/reading.html",
       "redirect": null,
+      "moved": null,
       "render": {
         "language": "fr",
         "kind": "reading",
         "operation": "evidence_bundle",
         "parameters": {
           "identifier": "/lu-legilux/loi-2017-03-14-a439",
-          "date": "2024-01-01"
+          "date": "2024-01-01",
+          "language": "fra"
         }
       }
     },
@@ -72,6 +79,7 @@
       "path": "/fr/eu-eurlex/32016R0679",
       "page": "fr/dossier.html",
       "redirect": null,
+      "moved": null,
       "render": {
         "language": "fr",
         "kind": "dossier",
@@ -82,16 +90,18 @@
       }
     },
     {
-      "path": "/en/lu-legilux/rgd-2017-12-13-a1050/2018-01-01--0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+      "path": "/en/lu-legilux/rgd-2017-12-13-a1050/2018-01-01--0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef/deu",
       "page": "en/reading.html",
       "redirect": null,
+      "moved": null,
       "render": {
         "language": "en",
         "kind": "reading",
         "operation": "evidence_bundle",
         "parameters": {
           "identifier": "/lu-legilux/rgd-2017-12-13-a1050",
-          "date": "2018-01-01"
+          "date": "2018-01-01",
+          "language": "deu"
         }
       }
     },
@@ -99,6 +109,7 @@
       "path": "/en/lu-legilux/code_civil",
       "page": "en/dossier.html",
       "redirect": null,
+      "moved": null,
       "render": {
         "language": "en",
         "kind": "dossier",
@@ -112,6 +123,7 @@
       "path": "/en/eu-eurlex/02016R0679-20160504",
       "page": "en/dossier.html",
       "redirect": null,
+      "moved": null,
       "render": {
         "language": "en",
         "kind": "dossier",
@@ -125,6 +137,7 @@
       "path": "/en/eu-eurlex/32016R0679R(02)",
       "page": "en/dossier.html",
       "redirect": null,
+      "moved": null,
       "render": {
         "language": "en",
         "kind": "dossier",
@@ -135,9 +148,10 @@
       }
     },
     {
-      "path": "/en/eu-eurlex/32016R0679/fra/2016-05-04--0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+      "path": "/en/eu-eurlex/32016R0679/2016-05-04--0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef/fra",
       "page": "en/reading.html",
       "redirect": null,
+      "moved": null,
       "render": {
         "language": "en",
         "kind": "reading",
@@ -150,9 +164,10 @@
       }
     },
     {
-      "path": "/fr/eu-eurlex/32016R0679/deu/2016-05-04--0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+      "path": "/fr/eu-eurlex/32016R0679/2016-05-04--0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef/deu",
       "page": "fr/reading.html",
       "redirect": null,
+      "moved": null,
       "render": {
         "language": "fr",
         "kind": "reading",
@@ -165,9 +180,10 @@
       }
     },
     {
-      "path": "/en/eu-eurlex/02016R0679-20160504/eng/2016-05-04--0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+      "path": "/en/eu-eurlex/02016R0679-20160504/2016-05-04--0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef/eng",
       "page": "en/reading.html",
       "redirect": null,
+      "moved": null,
       "render": {
         "language": "en",
         "kind": "reading",
@@ -180,261 +196,538 @@
       }
     },
     {
+      "path": "/fr/lu-legilux/loi-2017-03-14-a439/2024-01-01--0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef/fra/art_1er",
+      "page": "fr/reading.html",
+      "redirect": null,
+      "moved": null,
+      "render": {
+        "language": "fr",
+        "kind": "reading",
+        "operation": "evidence_bundle",
+        "parameters": {
+          "identifier": "/lu-legilux/loi-2017-03-14-a439",
+          "date": "2024-01-01",
+          "language": "fra"
+        }
+      }
+    },
+    {
+      "path": "/en/lu-legilux/loi-2017-03-14-a439/2024-01-01--0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef/fra/art_35-1",
+      "page": "en/reading.html",
+      "redirect": null,
+      "moved": null,
+      "render": {
+        "language": "en",
+        "kind": "reading",
+        "operation": "evidence_bundle",
+        "parameters": {
+          "identifier": "/lu-legilux/loi-2017-03-14-a439",
+          "date": "2024-01-01",
+          "language": "fra"
+        }
+      }
+    },
+    {
+      "path": "/en/lu-legilux/loi-2017-03-14-a439/2024-01-01--0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef/fra/Art.%201er",
+      "page": "en/reading.html",
+      "redirect": null,
+      "moved": null,
+      "render": {
+        "language": "en",
+        "kind": "reading",
+        "operation": "evidence_bundle",
+        "parameters": {
+          "identifier": "/lu-legilux/loi-2017-03-14-a439",
+          "date": "2024-01-01",
+          "language": "fra"
+        }
+      }
+    },
+    {
+      "path": "/en/eu-eurlex/32016R0679/2016-05-04--0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef/eng/047",
+      "page": "en/reading.html",
+      "redirect": null,
+      "moved": null,
+      "render": {
+        "language": "en",
+        "kind": "reading",
+        "operation": "evidence_bundle",
+        "parameters": {
+          "identifier": "32016R0679",
+          "date": "2016-05-04",
+          "language": "eng"
+        }
+      }
+    },
+    {
+      "path": "/fr/eu-eurlex/32016R0679/2016-05-04--0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef/fra/art_5(1)",
+      "page": "fr/reading.html",
+      "redirect": null,
+      "moved": null,
+      "render": {
+        "language": "fr",
+        "kind": "reading",
+        "operation": "evidence_bundle",
+        "parameters": {
+          "identifier": "32016R0679",
+          "date": "2016-05-04",
+          "language": "fra"
+        }
+      }
+    },
+    {
       "path": "/",
       "page": null,
       "redirect": "/fr/",
+      "moved": null,
       "render": null
     },
     {
       "path": "/index.html",
       "page": null,
       "redirect": "/fr/",
+      "moved": null,
       "render": null
     },
     {
       "path": "/en",
       "page": null,
       "redirect": "/en/",
+      "moved": null,
       "render": null
     },
     {
       "path": "/fr",
       "page": null,
       "redirect": "/fr/",
+      "moved": null,
       "render": null
     },
     {
       "path": "/lu-legilux/loi-2017-03-14-a439",
       "page": null,
       "redirect": "/fr/lu-legilux/loi-2017-03-14-a439",
+      "moved": null,
       "render": null
     },
     {
-      "path": "/lu-legilux/loi-2017-03-14-a439/2024-01-01--0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+      "path": "/lu-legilux/loi-2017-03-14-a439/2024-01-01--0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef/fra",
       "page": null,
-      "redirect": "/fr/lu-legilux/loi-2017-03-14-a439/2024-01-01--0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+      "redirect": "/fr/lu-legilux/loi-2017-03-14-a439/2024-01-01--0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef/fra",
+      "moved": null,
+      "render": null
+    },
+    {
+      "path": "/lu-legilux/loi-2017-03-14-a439/2024-01-01--0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef/fra/art_15",
+      "page": null,
+      "redirect": "/fr/lu-legilux/loi-2017-03-14-a439/2024-01-01--0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef/fra/art_15",
+      "moved": null,
       "render": null
     },
     {
       "path": "/eu-eurlex/32016R0679",
       "page": null,
       "redirect": "/fr/eu-eurlex/32016R0679",
+      "moved": null,
+      "render": null
+    },
+    {
+      "path": "/eu-eurlex/32016R0679/2016-05-04--0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef/fra",
+      "page": null,
+      "redirect": "/fr/eu-eurlex/32016R0679/2016-05-04--0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef/fra",
+      "moved": null,
+      "render": null
+    },
+    {
+      "path": "/eu-eurlex/32016R0679/2016-05-04--0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef/eng/047",
+      "page": null,
+      "redirect": "/fr/eu-eurlex/32016R0679/2016-05-04--0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef/eng/047",
+      "moved": null,
       "render": null
     },
     {
       "path": "/eu-eurlex/32016R0679/fra/2016-05-04--0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
       "page": null,
-      "redirect": "/fr/eu-eurlex/32016R0679/fra/2016-05-04--0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+      "redirect": null,
+      "moved": "/eu-eurlex/32016R0679/2016-05-04--0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef/fra",
+      "render": null
+    },
+    {
+      "path": "/en/eu-eurlex/32016R0679/eng/2016-05-04--0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+      "page": null,
+      "redirect": null,
+      "moved": "/en/eu-eurlex/32016R0679/2016-05-04--0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef/eng",
+      "render": null
+    },
+    {
+      "path": "/fr/eu-eurlex/02016R0679-20160504/deu/2016-05-04--0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+      "page": null,
+      "redirect": null,
+      "moved": "/fr/eu-eurlex/02016R0679-20160504/2016-05-04--0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef/deu",
+      "render": null
+    },
+    {
+      "path": "/lu-legilux/loi-2017-03-14-a439/2024-01-01--0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+      "page": null,
+      "redirect": null,
+      "moved": null,
+      "render": null
+    },
+    {
+      "path": "/en/lu-legilux/loi-2017-03-14-a439/2024-01-01--0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+      "page": null,
+      "redirect": null,
+      "moved": null,
+      "render": null
+    },
+    {
+      "path": "/fr/lu-legilux/rgd-2017-12-13-a1050/2018-01-01--0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+      "page": null,
+      "redirect": null,
+      "moved": null,
+      "render": null
+    },
+    {
+      "path": "/eu-eurlex/32016R0679/fra/2016-05-04--0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef/001",
+      "page": null,
+      "redirect": null,
+      "moved": null,
       "render": null
     },
     {
       "path": "/fr/",
       "page": null,
       "redirect": null,
+      "moved": null,
       "render": null
     },
     {
       "path": "/en/",
       "page": null,
       "redirect": null,
+      "moved": null,
       "render": null
     },
     {
       "path": "/reading.html",
       "page": null,
       "redirect": null,
+      "moved": null,
       "render": null
     },
     {
       "path": "/en/reading.html",
       "page": null,
       "redirect": null,
+      "moved": null,
       "render": null
     },
     {
       "path": "/lu-legilux",
       "page": null,
       "redirect": null,
+      "moved": null,
       "render": null
     },
     {
       "path": "/lu-legilux/",
       "page": null,
       "redirect": null,
+      "moved": null,
       "render": null
     },
     {
       "path": "/lu-legilux/-loi",
       "page": null,
       "redirect": null,
+      "moved": null,
       "render": null
     },
     {
       "path": "/lu-legilux/..",
       "page": null,
       "redirect": null,
+      "moved": null,
       "render": null
     },
     {
       "path": "/en/lu-legilux/a..b",
       "page": null,
       "redirect": null,
+      "moved": null,
       "render": null
     },
     {
       "path": "/lu-legilux/loi-2017-03-14-a439/",
       "page": null,
       "redirect": null,
+      "moved": null,
       "render": null
     },
     {
       "path": "/lu-legilux/loi-2017-03-14-a439/2024-01-01",
       "page": null,
       "redirect": null,
+      "moved": null,
       "render": null
     },
     {
-      "path": "/lu-legilux/loi-2017-03-14-a439/2024-01-01--0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcde",
+      "path": "/lu-legilux/loi-2017-03-14-a439/2024-01-01--0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcde/fra",
       "page": null,
       "redirect": null,
+      "moved": null,
       "render": null
     },
     {
-      "path": "/lu-legilux/loi-2017-03-14-a439/2024-01-01--0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF",
+      "path": "/lu-legilux/loi-2017-03-14-a439/2024-01-01--0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF/fra",
       "page": null,
       "redirect": null,
+      "moved": null,
       "render": null
     },
     {
-      "path": "/lu-legilux/loi-2017-03-14-a439/2024-1-1--0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+      "path": "/lu-legilux/loi-2017-03-14-a439/2024-1-1--0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef/fra",
       "page": null,
       "redirect": null,
+      "moved": null,
       "render": null
     },
     {
       "path": "/lu-legilux/loi-2017-03-14-a439/2024-01-01--0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef/extra",
       "page": null,
       "redirect": null,
+      "moved": null,
+      "render": null
+    },
+    {
+      "path": "/lu-legilux/loi-2017-03-14-a439/2024-01-01--0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef/fr",
+      "page": null,
+      "redirect": null,
+      "moved": null,
+      "render": null
+    },
+    {
+      "path": "/lu-legilux/loi-2017-03-14-a439/2024-01-01--0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef/FRA",
+      "page": null,
+      "redirect": null,
+      "moved": null,
+      "render": null
+    },
+    {
+      "path": "/en/lu-legilux/loi-2017-03-14-a439/2024-01-01--0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef/fra/",
+      "page": null,
+      "redirect": null,
+      "moved": null,
+      "render": null
+    },
+    {
+      "path": "/en/lu-legilux/loi-2017-03-14-a439/2024-01-01--0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef/fra/.",
+      "page": null,
+      "redirect": null,
+      "moved": null,
+      "render": null
+    },
+    {
+      "path": "/en/lu-legilux/loi-2017-03-14-a439/2024-01-01--0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef/fra/..",
+      "page": null,
+      "redirect": null,
+      "moved": null,
+      "render": null
+    },
+    {
+      "path": "/en/lu-legilux/loi-2017-03-14-a439/2024-01-01--0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef/fra/art_1/par_2",
+      "page": null,
+      "redirect": null,
+      "moved": null,
+      "render": null
+    },
+    {
+      "path": "/en/lu-legilux/loi-2017-03-14-a439/2024-01-01--0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef/fra/art%2",
+      "page": null,
+      "redirect": null,
+      "moved": null,
+      "render": null
+    },
+    {
+      "path": "/en/lu-legilux/loi-2017-03-14-a439/2024-01-01--0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef/fra/art 1",
+      "page": null,
+      "redirect": null,
+      "moved": null,
+      "render": null
+    },
+    {
+      "path": "/en/lu-legilux/loi-2017-03-14-a439/2024-01-01--0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef/fra/art_1#par_2",
+      "page": null,
+      "redirect": null,
+      "moved": null,
+      "render": null
+    },
+    {
+      "path": "/en/lu-legilux/loi-2017-03-14-a439/2024-01-01--0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef/fra\n",
+      "page": null,
+      "redirect": null,
+      "moved": null,
+      "render": null
+    },
+    {
+      "path": "/de/lu-legilux/loi-2017-03-14-a439/2024-01-01--0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef/fra",
+      "page": null,
+      "redirect": null,
+      "moved": null,
       "render": null
     },
     {
       "path": "/lu-legilux/loi-2017-03-14-a439/diff/2024-02-01/2024-02-01",
       "page": null,
       "redirect": null,
+      "moved": null,
       "render": null
     },
     {
       "path": "/lu-legilux/loi%2F1",
       "page": null,
       "redirect": null,
+      "moved": null,
       "render": null
     },
     {
       "path": "/lu-legilux/loi-2017-03-14-a439#art-1",
       "page": null,
       "redirect": null,
+      "moved": null,
       "render": null
     },
     {
       "path": "/eu-eurlex/32016R0679/2016-05-04--0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
       "page": null,
       "redirect": null,
+      "moved": null,
       "render": null
     },
     {
       "path": "/eu-eurlex/32016R0679/FRA/2016-05-04--0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
       "page": null,
       "redirect": null,
+      "moved": null,
       "render": null
     },
     {
       "path": "/eu-eurlex/32016R0679/fr/2016-05-04--0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
       "page": null,
       "redirect": null,
+      "moved": null,
+      "render": null
+    },
+    {
+      "path": "/eu-eurlex/32016R0679/eng/2016-05-04--0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef\n",
+      "page": null,
+      "redirect": null,
+      "moved": null,
+      "render": null
+    },
+    {
+      "path": "/de/eu-eurlex/32016R0679/eng/2016-05-04--0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+      "page": null,
+      "redirect": null,
+      "moved": null,
       "render": null
     },
     {
       "path": "/eu-eurlex/32016R0679/2016-05-04",
       "page": null,
       "redirect": null,
+      "moved": null,
       "render": null
     },
     {
       "path": "/de/lu-legilux/loi-2017-03-14-a439",
       "page": null,
       "redirect": null,
+      "moved": null,
       "render": null
     },
     {
       "path": "/en/en/lu-legilux/loi-2017-03-14-a439",
       "page": null,
       "redirect": null,
+      "moved": null,
       "render": null
     },
     {
       "path": "/fr/fr/lu-legilux/loi-2017-03-14-a439",
       "page": null,
       "redirect": null,
+      "moved": null,
       "render": null
     },
     {
       "path": "/FR/lu-legilux/loi-2017-03-14-a439",
       "page": null,
       "redirect": null,
+      "moved": null,
       "render": null
     },
     {
       "path": "/LU-LEGILUX/loi-2017-03-14-a439",
       "page": null,
       "redirect": null,
+      "moved": null,
       "render": null
     },
     {
       "path": "/api/v3/coverage",
       "page": null,
       "redirect": null,
+      "moved": null,
       "render": null
     },
     {
       "path": "/lu-legilux/loi-2017-03-14-a439\n",
       "page": null,
       "redirect": null,
+      "moved": null,
       "render": null
     },
     {
       "path": "/lu-legilux/LOI-2017-03-14-A439",
       "page": null,
       "redirect": null,
+      "moved": null,
       "render": null
     },
     {
       "path": "/lu-legilux/loi.2017",
       "page": null,
       "redirect": null,
+      "moved": null,
       "render": null
     },
     {
-      "path": "/en/lu-legilux/Loi-2017-03-14-a439/2024-01-01--0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+      "path": "/en/lu-legilux/Loi-2017-03-14-a439/2024-01-01--0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef/fra",
       "page": null,
       "redirect": null,
+      "moved": null,
       "render": null
     },
     {
       "path": "/de",
       "page": null,
       "redirect": null,
+      "moved": null,
       "render": null
     },
     {
       "path": "/de/",
       "page": null,
       "redirect": null,
+      "moved": null,
       "render": null
     },
     {
       "path": "/eng",
       "page": null,
       "redirect": null,
+      "moved": null,
       "render": null
     }
   ],

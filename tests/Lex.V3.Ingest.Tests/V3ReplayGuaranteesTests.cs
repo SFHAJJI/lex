@@ -88,7 +88,7 @@ public sealed class V3ReplayGuaranteesTests
                 ["dossier"] = new { identifier = work, language = "fra" },
                 ["citation"] = new { identifier = work, date },
                 ["cited_by"] = new { identifier = work },
-                ["verify"] = new { identifier = fixture.Permalink + "#art_2", language = "fra" },
+                ["verify"] = new { identifier = fixture.Permalink + "/art_2", language = "fra" },
                 ["relations"] = new { identifier = work },
                 ["evidence_bundle"] = new { identifier = work, date, language = "fra" },
                 ["classification"] = new { identifier = work, language = "fra" },
@@ -176,7 +176,7 @@ public sealed class V3ReplayGuaranteesTests
             Assert.AreEqual(Sha256(text), article.GetProperty("text_sha256").GetString(), $"{id}: the text digest is the served text's");
             Assert.AreEqual(text.Length, article.GetProperty("text_byte_length").GetInt32(), id);
             Assert.AreEqual(source.GetProperty("body_sha256").GetString(), article.GetProperty("body_sha256").GetString(), $"{id}: read from the named source");
-            Assert.AreEqual(state.GetProperty("permalink").GetString() + "#" + id, article.GetProperty("article_permalink").GetString(), id);
+            Assert.AreEqual(state.GetProperty("permalink").GetString() + "/" + Uri.EscapeDataString(id), article.GetProperty("article_permalink").GetString(), id);
         }
 
         // The article identities digest and the state digest, recomputed from the derivations the platform publishes
@@ -202,7 +202,7 @@ public sealed class V3ReplayGuaranteesTests
         var stateSha256 = state.GetProperty("state_sha256").GetString();
         Assert.AreEqual(LengthPrefixedSha256(fields), stateSha256,
             "the state digest recomputes from the values provenance's derivation names, in its order, the domain tag first");
-        StringAssert.EndsWith(state.GetProperty("permalink").GetString(), "--" + stateSha256, "the permalink pins that digest");
+        StringAssert.EndsWith(state.GetProperty("permalink").GetString(), "--" + stateSha256 + "/" + state.GetProperty("language").GetString(), "the permalink pins that digest, in its language (R64)");
 
         // The derivation the reader followed is the one the platform states: the domain tag is length-prefixed like
         // every value after it (an earlier wording put it outside that clause, and a reader who followed it got another

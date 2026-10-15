@@ -197,7 +197,7 @@ public sealed class V3CorpusEuropeTimeViewTests
 
             // A digest the wording does not have names the current pin.
             var permalink = wording.GetProperty("permalink").GetString()!;
-            var mismatch = await EnvelopeAsync(mount, "/api/v3/verify", "verify", new { identifier = permalink[..^64] + new string('0', 64) });
+            var mismatch = await EnvelopeAsync(mount, "/api/v3/verify", "verify", new { identifier = System.Text.RegularExpressions.Regex.Replace(permalink, "--[0-9a-f]{64}", "--" + new string('0', 64)) });
             Assert.AreEqual("pinned_digest_mismatch", mismatch.Refusal?.Code);
             Assert.AreEqual(permalink, mismatch.Refusal!.HelpfulPayload.GetProperty("current_hash_pinned_url").GetString());
 

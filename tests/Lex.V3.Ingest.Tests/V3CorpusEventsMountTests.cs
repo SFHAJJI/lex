@@ -72,7 +72,7 @@ public sealed class V3CorpusEventsMountTests
             Assert.AreEqual($"{indexSha256}:{value.GetProperty("seq").GetInt64()}", value.GetProperty("cursor").GetString());
             var permalink = value.GetProperty("permalink").GetString()!;
             Assert.AreEqual(
-                $"{value.GetProperty("stable_coordinate").GetString()}--{value.GetProperty("state_sha256").GetString()}", permalink);
+                $"{value.GetProperty("stable_coordinate").GetString()}--{value.GetProperty("state_sha256").GetString()}/{value.GetProperty("language").GetString()}", permalink);
             var verified = await EnvelopeAsync(mount, V3RestRouteBinding.Verify.RawTarget, "verify", new { identifier = permalink });
             Assert.IsNull(verified.Refusal, $"{permalink}: {verified.Refusal?.Code}");
         }

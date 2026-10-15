@@ -111,12 +111,13 @@ const PATTERNS = Object.freeze([
     re: /^https?:\/\/(?:data\.)?legilux\.public\.lu\/eli\/etat\/(leg|adm)\/([^/]+)\/(\d{4})\/(\d{2})\/(\d{2})\/([^/]+?)(?:\/jo)?\/?$/,
   }),
   // A product permalink carries the state's own digest, so it identifies one exact text
-  // rather than one date. The authority is compared literally against the canonical host,
+  // rather than one date; in the one shape of R64 the text's language follows the pin, and an
+  // article may follow as the last segment. The authority is compared literally against the canonical host,
   // not parsed, because `https://law.soufien.lu@evil.example/` has the canonical host as its
   // userinfo and a URL parser reports the attacker's host as the hostname.
   Object.freeze({
     form: 'permalink',
-    re: /^https:\/\/law\.soufien\.lu\/([a-z-]+)\/([a-z0-9_-]+)\/(\d{4}-\d{2}-\d{2})--([0-9a-f]{64})$/,
+    re: /^https:\/\/law\.soufien\.lu\/([a-z-]+)\/([a-z0-9_-]+)\/(\d{4}-\d{2}-\d{2})--([0-9a-f]{64})\/([a-z]{3})(?:\/([^/#?\s]+))?$/,
   }),
   Object.freeze({ form: 'lex_id', re: /^([a-z-]+):([a-z0-9-]+):(\d{4}-\d{2}-\d{2})$/ }),
 ]);
@@ -185,9 +186,9 @@ export function parseCitation(raw) {
       return parsed;
     }
     if (form === 'permalink') {
-      const [, publisher, work, at, digest] = match;
+      const [, publisher, work, at, digest, language, anchor = null] = match;
       if (!isCalendarDate(at)) return null;
-      return { form, publisher, key: work, at, digest };
+      return { form, publisher, key: work, at, digest, language, anchor };
     }
     const [, publisher, work, at] = match;
     return { form, publisher, key: work, at };

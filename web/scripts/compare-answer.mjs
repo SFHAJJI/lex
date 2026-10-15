@@ -30,6 +30,7 @@
 import { isCalendarDate } from './temporal.mjs';
 import { SAME_STATE_SENTENCE } from './publisher-vocabulary.mjs';
 import { laterVersionFactsBetween, readAsPublished, sameTextHeldNote } from './as-published.mjs';
+import { luxembourgPermalink } from './permalinks.mjs';
 
 const DIGEST = /^[0-9a-f]{64}$/;
 
@@ -109,8 +110,8 @@ function readSide(side, where, context) {
     throw new Error(`${where}'s stable coordinate ${coordinate} does not name its work and date`);
   }
   const permalink = requireText(requireOwn(side, 'permalink', where), `${where} permalink`);
-  if (permalink !== `${coordinate}--${stateSha256}`) {
-    throw new Error(`${where}'s permalink ${permalink} does not pin its coordinate and digest`);
+  if (permalink !== luxembourgPermalink({ workKey: context.workKey, date: applicabilityDate, stateSha256, language })) {
+    throw new Error(`${where}'s permalink ${permalink} does not pin its coordinate, digest and language`);
   }
   const identities = requireList(requireOwn(side, 'article_identities', where), `${where} article_identities`)
     .map((identity, index) => requireDigest(identity, `${where} article_identities[${index}]`));

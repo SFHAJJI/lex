@@ -29,7 +29,7 @@ function candidate(hash, publicationDate, withdrawn = false) {
     hash,
     publication_date: publicationDate,
     withdrawn,
-    href: readingUrl({ publisher: PUBLISHER, work: WORK, validFrom: '2004-01-01', hash }),
+    href: readingUrl({ publisher: PUBLISHER, work: WORK, validFrom: '2004-01-01', hash, language: 'fra' }),
   };
 }
 
@@ -117,8 +117,8 @@ export const REFUSAL_EXAMPLES = Object.freeze({
     payload: {
       requested_date: '2004-06-01',
       candidates: [
-        `/${PUBLISHER}/${WORK}/2004-01-01--${CANDIDATE_A}`,
-        `/${PUBLISHER}/${WORK}/2004-01-15--${CANDIDATE_B}`,
+        `/${PUBLISHER}/${WORK}/2004-01-01--${CANDIDATE_A}/fra`,
+        `/${PUBLISHER}/${WORK}/2004-01-15--${CANDIDATE_B}/fra`,
       ],
     },
   },
@@ -133,7 +133,7 @@ export const REFUSAL_EXAMPLES = Object.freeze({
       requested_digest: CANDIDATE_A,
       current_digest: CANDIDATE_B,
       stable_coordinate: `/${PUBLISHER}/${WORK}/2003-12-15`,
-      current_hash_pinned_url: `/${PUBLISHER}/${WORK}/2003-12-15--${CANDIDATE_B}`,
+      current_hash_pinned_url: `/${PUBLISHER}/${WORK}/2003-12-15--${CANDIDATE_B}/fra`,
       rule_profile_sha256s: [CANDIDATE_A],
     },
   },
@@ -164,7 +164,7 @@ export const REFUSAL_EXAMPLES = Object.freeze({
       official_source: 'https://preview.invalid/synthetic-preview-work',
       retained_transport_evidence: CANDIDATE_B,
       stable_coordinate: `/${PUBLISHER}/${WORK}/2001-01-01`,
-      permalink: `/${PUBLISHER}/${WORK}/2001-01-01--${CANDIDATE_A}`,
+      permalink: `/${PUBLISHER}/${WORK}/2001-01-01--${CANDIDATE_A}/fra`,
       language: 'fr',
       articles_held: 3,
       what_would_answer: ['new_official_observation'],
@@ -182,7 +182,7 @@ export const REFUSAL_EXAMPLES = Object.freeze({
       official_link: 'https://preview.invalid/synthetic-preview-work',
       content_sha256: CANDIDATE_B,
       stable_coordinate: `/${PUBLISHER}/${WORK}/2001-01-01`,
-      permalink: `/${PUBLISHER}/${WORK}/2001-01-01--${CANDIDATE_A}`,
+      permalink: `/${PUBLISHER}/${WORK}/2001-01-01--${CANDIDATE_A}/fra`,
       language: 'fr',
       source_outcome: 'acquired',
       rights_disposition: 'non_admitting_licence_scl',
@@ -210,8 +210,8 @@ export const REFUSAL_EXAMPLES = Object.freeze({
     payload: {
       left_profile: ['synthetic-pdf/1'],
       right_profile: ['synthetic-akn/1'],
-      left: readingUrl({ publisher: PUBLISHER, work: WORK, validFrom: '2004-01-01', hash: CANDIDATE_A }),
-      right: readingUrl({ publisher: PUBLISHER, work: WORK, validFrom: '2004-01-01', hash: CANDIDATE_B }),
+      left: readingUrl({ publisher: PUBLISHER, work: WORK, validFrom: '2004-01-01', hash: CANDIDATE_A, language: 'fra' }),
+      right: readingUrl({ publisher: PUBLISHER, work: WORK, validFrom: '2004-01-01', hash: CANDIDATE_B, language: 'fra' }),
       language: 'fr',
     },
   },

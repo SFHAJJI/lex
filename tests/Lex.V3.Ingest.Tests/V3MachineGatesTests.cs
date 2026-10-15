@@ -272,8 +272,8 @@ public sealed class V3MachineGatesTests
 
         var work = $"/lu-legilux/{fixture.WorkKey}";
         var date = fixture.ApplicabilityDate;
-        var permalink = $"/lu-legilux/{fixture.WorkKey}/{date}--{fixture.StateSha256}";
-        var wrongDigest = $"/lu-legilux/{fixture.WorkKey}/{date}--{new string('0', 64)}";
+        var permalink = $"/lu-legilux/{fixture.WorkKey}/{date}--{fixture.StateSha256}/fra";
+        var wrongDigest = $"/lu-legilux/{fixture.WorkKey}/{date}--{new string('0', 64)}/fra";
 
         // Each case is a request a client can send and the one code the registry says answers it, covering every
         // code the platform produces (the refusal census's `produced` list); "answer" where the request must be
@@ -350,7 +350,7 @@ public sealed class V3MachineGatesTests
 
         // Search cases are asked through `search` (a strict hit, the phrase, above a relaxed one, every term). A scoped
         // search must find the scoped work's article and not the other's, so scope that is ignored and scope that
-        // finds nothing both fail. The exact-identifier cases are article permalinks (`permalink#anchor`), the form
+        // finds nothing both fail. The exact-identifier cases are article permalinks (`permalink/anchor`, R64), the form
         // only `verify` accepts: it answers a held anchor with its work and must refuse an anchor the state does not
         // hold, which the near-miss case (no hit) holds it to. Grades: 3 supports, 1 is context (the relaxed hit that
         // holds the terms but not the phrase).
@@ -372,12 +372,12 @@ public sealed class V3MachineGatesTests
             ["no-hit-scoped-to-a"] = (EvaluationCaseKind.Retrieval, "search", new { query = "cotisation", language = "fra", identifier = $"/lu-legilux/{workA}" }, []),
             ["scoped-to-b"] = (EvaluationCaseKind.Retrieval, "search", new { query = "mandat", language = "fra", identifier = $"/lu-legilux/{workB}" },
                 [Supporting(workB, "art_8")]),
-            ["near-miss-anchor-not-held"] = (EvaluationCaseKind.Retrieval, "verify", new { identifier = permalinkA + "#art_44", language = "fra" }, []),
-            ["exact-first-article"] = (EvaluationCaseKind.ExactIdentifier, "verify", new { identifier = permalinkA + "#art_1er", language = "fra" },
+            ["near-miss-anchor-not-held"] = (EvaluationCaseKind.Retrieval, "verify", new { identifier = permalinkA + "/art_44", language = "fra" }, []),
+            ["exact-first-article"] = (EvaluationCaseKind.ExactIdentifier, "verify", new { identifier = permalinkA + "/art_1er", language = "fra" },
                 [Supporting(workA, "art_1er")]),
-            ["exact-numbered-sub-article"] = (EvaluationCaseKind.ExactIdentifier, "verify", new { identifier = permalinkA + "#art_24-1", language = "fra" },
+            ["exact-numbered-sub-article"] = (EvaluationCaseKind.ExactIdentifier, "verify", new { identifier = permalinkA + "/art_24-1", language = "fra" },
                 [Supporting(workA, "art_24-1")]),
-            ["exact-in-second-work"] = (EvaluationCaseKind.ExactIdentifier, "verify", new { identifier = permalinkB + "#art_10", language = "fra" },
+            ["exact-in-second-work"] = (EvaluationCaseKind.ExactIdentifier, "verify", new { identifier = permalinkB + "/art_10", language = "fra" },
                 [Supporting(workB, "art_10")]),
         };
         var held = fixture.ArticlesOfOwnState().Select(static article => article.PublisherId).ToArray();
@@ -454,7 +454,7 @@ public sealed class V3MachineGatesTests
         Assert.IsNull(envelope.Refusal, envelope.Refusal?.Code);
         var states = envelope.Result!.Value.GetProperty("states").EnumerateArray().ToArray();
         Assert.HasCount(1, states);
-        return $"/lu-legilux/{workKey}/{date}--{states[0].GetProperty("state_sha256").GetString()}";
+        return $"/lu-legilux/{workKey}/{date}--{states[0].GetProperty("state_sha256").GetString()}/{states[0].GetProperty("language").GetString()}";
     }
 
     private static string RepositoryRoot()
@@ -583,7 +583,7 @@ public sealed class V3MachineGatesTests
             "SELECT article_identity_sha256 FROM articles WHERE publisher_expression_id = $expression ORDER BY publisher_identifier, article_identity_sha256",
             ("$expression", expressions[0]));
         Assert.IsNotEmpty(identities);
-        return $"/eu-eurlex/{act}/{language}/{date}--{V3EuropePermalinkTests.WordingSha256ByTheStatedRule(act, work, expressions[0], language, date, identities)}";
+        return $"/eu-eurlex/{act}/{date}--{V3EuropePermalinkTests.WordingSha256ByTheStatedRule(act, work, expressions[0], language, date, identities)}/{language}";
     }
 
     /// <summary>One text column of a query over an index, its parameters bound by name.</summary>
@@ -643,7 +643,7 @@ public sealed class V3MachineGatesTests
             var wordingDate = wording.GetProperty("wording_date").GetString();
             var permalink = wording.GetProperty("permalink").GetString();
             if ((language is not null && served != language) || wordingDate is null || string.CompareOrdinal(wordingDate, date) > 0 ||
-                permalink != $"/eu-eurlex/{workKey}/{served}/{wordingDate}--{wording.GetProperty("wording_sha256").GetString()}")
+                permalink != $"/eu-eurlex/{workKey}/{wordingDate}--{wording.GetProperty("wording_sha256").GetString()}/{served}")
             {
                 return null;
             }

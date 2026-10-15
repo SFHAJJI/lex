@@ -11,7 +11,7 @@ import { LiveReading } from './LiveReading.jsx';
 import { renderHydratableDocument } from './render-document.mjs';
 import { skinFor } from '../scripts/shells.mjs';
 import { LIVE_CONTRACT } from './live-coverage-page.jsx';
-import { INITIAL_ANSWER_ID, jsonInScript, lawPathOf } from '../scripts/initial-answer.mjs';
+import { INITIAL_ANSWER_ID, jsonInScript, lawPathOf, readingAddressShown } from '../scripts/initial-answer.mjs';
 import { readingOutcome } from '../scripts/live-reading.mjs';
 import { answerHandedWith } from '../scripts/v3-client.mjs';
 
@@ -27,16 +27,14 @@ export function liveReadingTree(initial = null) {
 
 /**
  * The address the page at a permalink names as its own (canonical, and in each language): the permalink when the reading
- * shows the state (or EU wording) it pins; else the one the reading shows in its place, as a stale permalink's page shows
- * another version (review of #959: any digest named itself canonical); else, for a refusal, the address it was opened at.
+ * shows the state (or EU wording) it pins, its article included; else the one the reading shows in its place, as a stale
+ * permalink's page shows another version (review of #959: any digest named itself canonical); else, for a refusal, the
+ * address it was opened at (`readingAddressShown`, which the page writes again once loaded).
  */
 export function readingLawPath(initial) {
   const pinned = lawPathOf(initial.path);
   const outcome = readingOutcome(answerHandedWith('evidence_bundle', initial.envelope, { contract: LIVE_CONTRACT, objectType: 'evidence_bundle' }));
-  if (outcome.state !== 'success') return pinned;
-  const shown = (outcome.view.publisher === 'eu-eurlex' ? outcome.view.wordings : outcome.view.states) ?? [];
-  if (shown.some((one) => one.permalink === pinned)) return pinned;
-  return shown[0]?.permalink ?? pinned;
+  return outcome.state === 'success' ? readingAddressShown(outcome.view, pinned) : pinned;
 }
 
 /**

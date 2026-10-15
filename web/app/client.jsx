@@ -18,7 +18,9 @@
 
 import { useEffect } from 'react';
 import { hydrateRoot } from 'react-dom/client';
-import { sameDocumentIn } from '../scripts/permalinks.mjs';
+import { parseSitePath, sameDocumentIn } from '../scripts/permalinks.mjs';
+import { lawPathOf } from '../scripts/initial-answer.mjs';
+import { writeLawPageLinks } from './head-links.mjs';
 
 /**
  * Attach behaviour to server-rendered markup, and say so.
@@ -44,6 +46,12 @@ export function attach(container, element) {
   // which a reader without scripts follows. The links stand outside the hydrated root, so React reads none of this.
   for (const link of document.querySelectorAll('[data-locale-nav] a[data-same-document]')) {
     link.setAttribute('href', `${sameDocumentIn(link.dataset.sameDocument, window.location.pathname)}${window.location.hash}`);
+  }
+
+  // A law's page as built (served when the server could not render it) names no canonical link: it names the address it
+  // stands at, with no interface language, as the server's render would (R64, R67). The head is outside the root too.
+  if (parseSitePath(window.location.pathname)?.locale && document.head.querySelector('link[rel="canonical"]') === null) {
+    writeLawPageLinks(document, lawPathOf(window.location.pathname));
   }
 
   hydrateRoot(container, <Hydrated state={state}>{element}</Hydrated>, {

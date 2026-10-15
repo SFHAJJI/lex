@@ -56,6 +56,7 @@ function candidate(validFrom, hash, publicationDate, withdrawn = false) {
       work: 'synthetic-preview-work',
       validFrom,
       hash,
+      language: 'fra',
     }),
   };
 }
@@ -547,6 +548,7 @@ test('a candidate link is bound to the whole coordinate, not to a date and a has
     work: 'other-work',
     validFrom: CANDIDATES[0].valid_from,
     hash: CANDIDATES[0].hash,
+    language: 'fra',
   });
   assert.throws(
     () =>
@@ -567,6 +569,7 @@ test('a candidate link is bound to the whole coordinate, not to a date and a has
     work: 'synthetic-preview-work',
     validFrom: CANDIDATES[0].valid_from,
     hash: CANDIDATES[0].hash,
+    language: 'fra',
   });
   assert.throws(
     () =>
@@ -894,9 +897,9 @@ test('a code that is not an absence is not made to carry absence evidence', () =
 });
 
 test('a candidate link carries no anchor, because the choice is between states', () => {
-  // Links ending in #art_1 and #art_2 both passed while the candidate declared no anchor,
-  // so two candidates that looked identical led to different provisions.
-  const withAnchor = `${CANDIDATES[0].href}#art_1`;
+  // Links ending in an article (#art_1 and #art_2 then, /art_1 and /art_2 since R64) both passed while the candidate
+  // declared no anchor, so two candidates that looked identical led to different provisions.
+  const withAnchor = `${CANDIDATES[0].href}/art_1`;
   assert.throws(
     () =>
       renderRefusalCard({
@@ -980,13 +983,13 @@ test('the superseded renderer checks the whole coordinate too', () => {
   const superseded = candidate('2004-01-01', HASH_B, '2003-12-15', true);
   for (const [live, sibling, why] of [
     [
-      { ...CANDIDATES[0], href: `${CANDIDATES[0].href}#art_1` },
+      { ...CANDIDATES[0], href: `${CANDIDATES[0].href}/art_1` },
       superseded,
       'an anchored live link',
     ],
     [
       CANDIDATES[0],
-      { ...superseded, href: `${superseded.href}#art_1` },
+      { ...superseded, href: `${superseded.href}/art_1` },
       'an anchored withdrawn link',
     ],
   ]) {
@@ -1165,13 +1168,13 @@ test('a withdrawn state is refused even when the list is part bare links', () =>
   // links renderable. The refusal is unconditional now; this is what says so.
   const bare =
     '/lu-legilux/loi-1991-08-10-n3/2026-04-11--' +
-    '6c164597ee18b9c4ca661f4732ceb947975d5a6e6f8b712ac6b333263e804f35';
+    '6c164597ee18b9c4ca661f4732ceb947975d5a6e6f8b712ac6b333263e804f35/fra';
   const withdrawnState = {
     valid_from: '2026-04-12',
     hash: 'a'.repeat(64),
     publication_date: '2026-04-12',
     withdrawn: true,
-    href: `/lu-legilux/loi-1991-08-10-n3/2026-04-12--${'a'.repeat(64)}`,
+    href: `/lu-legilux/loi-1991-08-10-n3/2026-04-12--${'a'.repeat(64)}/fra`,
   };
 
   for (const candidates of [

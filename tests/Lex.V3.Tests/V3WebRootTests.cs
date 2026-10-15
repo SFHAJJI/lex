@@ -11,7 +11,8 @@ namespace Lex.V3.Tests;
 /// directory held when it was opened, each with the page's own reviewed Content-Security-Policy plus
 /// <c>frame-ancestors 'none'</c>, HSTS, <c>Referrer-Policy: no-referrer</c>, <c>nosniff</c> and
 /// <c>no-store</c>; every page under its interface language (R61), the root and a law's address with no
-/// language sent to the reader's; every other path left to the API's routing.
+/// language sent to the reader's, an EU permalink of the shape before R64 moved to R64's; every other path left to
+/// the API's routing.
 /// </summary>
 [TestClass]
 public sealed class V3WebRootTests
@@ -221,7 +222,7 @@ public sealed class V3WebRootTests
     }
 
     [TestMethod]
-    public async Task ALawsAddressIsServedThePageThatReadsItOrSentToTheReadersLanguageAsTheSitesOwnTableSays()
+    public async Task ALawsAddressIsServedThePageThatReadsItOrSentToTheReadersLanguageOrMovedAsTheSitesOwnTableSays()
     {
         var directory = NewWebDirectory();
         foreach (var page in new[] { "en/reading.html", "en/dossier.html", "fr/reading.html", "fr/dossier.html" })
@@ -234,14 +235,17 @@ public sealed class V3WebRootTests
             var root = V3WebRoot.Open(directory)!;
             using var table = SiteTable();
             var rows = table.RootElement.GetProperty("paths").EnumerateArray().ToArray();
-            Assert.IsGreaterThan(40, rows.Length, "the table web/scripts/permalinks.mjs is held to");
+            Assert.IsGreaterThan(70, rows.Length, "the table web/scripts/permalinks.mjs is held to");
+            Assert.IsGreaterThanOrEqualTo(3, rows.Count(row => row.GetProperty("moved").ValueKind != JsonValueKind.Null), "the shape before R64, moved");
             foreach (var row in rows)
             {
                 var path = row.GetProperty("path").GetString()!;
                 var page = row.GetProperty("page").ValueKind == JsonValueKind.Null ? null : row.GetProperty("page").GetString();
                 var redirect = row.GetProperty("redirect").ValueKind == JsonValueKind.Null ? null : row.GetProperty("redirect").GetString();
+                var moved = row.GetProperty("moved").ValueKind == JsonValueKind.Null ? null : row.GetProperty("moved").GetString();
                 Assert.AreEqual(page is null ? null : "/" + page, V3WebRoot.PageForSitePath(path), path);
                 Assert.AreEqual(redirect, V3WebRoot.RedirectFor(path, string.Empty, null)?.Location, path);
+                Assert.AreEqual(moved, V3WebRoot.MovedFor(path, string.Empty)?.Location, path);
 
                 var context = Request("GET", path);
                 var served = await root.TryServeAsync(context, path, CancellationToken.None);
@@ -259,9 +263,19 @@ public sealed class V3WebRootTests
                     Assert.AreEqual(StatusCodes.Status302Found, context.Response.StatusCode, path);
                     Assert.AreEqual(redirect, context.Response.Headers.Location.ToString(), path);
                 }
+                else if (moved is not null)
+                {
+                    // The same answer for every reader: the reader's languages play no part in it, so it names no Vary.
+                    Assert.IsTrue(served, path);
+                    Assert.AreEqual(StatusCodes.Status301MovedPermanently, context.Response.StatusCode, path);
+                    Assert.AreEqual(moved, context.Response.Headers.Location.ToString(), path);
+                    Assert.AreEqual(0, context.Response.Headers.Vary.Count, path);
+                    Assert.AreEqual("", Body(context), path);
+                    AssertPageHeaders(root, context, path);
+                }
                 else
                 {
-                    Assert.AreEqual(root.Paths.Contains(path), served, $"{path}: neither served nor sent, so served only as a file the root recorded");
+                    Assert.AreEqual(root.Paths.Contains(path), served, $"{path}: neither served, sent nor moved, so served only as a file the root recorded");
                 }
             }
 
@@ -269,16 +283,32 @@ public sealed class V3WebRootTests
             Assert.IsTrue(await root.TryServeAsync(post, "/en/lu-legilux/loi-2017-03-14-a439", CancellationToken.None));
             Assert.AreEqual(StatusCodes.Status405MethodNotAllowed, post.Response.StatusCode, "a law's address is a page, read with GET or HEAD");
 
+            var digest = new string('a', 64);
             var handler = new V3ApiHandler(SyntheticApiState.Unavailable, new V3PlatformHost(), static () => DateTimeOffset.UnixEpoch, null, root);
-            var permalink = Request("GET", $"/fr/eu-eurlex/32016R0679/fra/2016-05-04--{new string('a', 64)}");
+            var permalink = Request("GET", $"/fr/eu-eurlex/32016R0679/2016-05-04--{digest}/fra/047");
             await handler.HandleAsync(permalink, CancellationToken.None);
             Assert.AreEqual(StatusCodes.Status200OK, permalink.Response.StatusCode);
             Assert.AreEqual("<!doctype html><p>fr/reading.html</p>", Body(permalink), "the API serves a permalink the reading page beside its routes");
-            var minted = Request("GET", $"/eu-eurlex/32016R0679/fra/2016-05-04--{new string('a', 64)}", "en-US,en;q=0.9");
+            var minted = Request("GET", $"/eu-eurlex/32016R0679/2016-05-04--{digest}/fra", "en-US,en;q=0.9");
             await handler.HandleAsync(minted, CancellationToken.None);
             Assert.AreEqual(StatusCodes.Status302Found, minted.Response.StatusCode);
-            Assert.AreEqual($"/en/eu-eurlex/32016R0679/fra/2016-05-04--{new string('a', 64)}", minted.Response.Headers.Location.ToString(),
+            Assert.AreEqual($"/en/eu-eurlex/32016R0679/2016-05-04--{digest}/fra", minted.Response.Headers.Location.ToString(),
                 "a permalink as the API mints it goes to the reader's language");
+
+            // R64: the EU shape before it has moved for good, the reader's interface language kept and the query along, for a
+            // reader of any language; the Luxembourg shape before it names no language, so it is answered as an address
+            // nothing serves.
+            var before = Request("GET", $"/en/eu-eurlex/32016R0679/fra/2016-05-04--{digest}?from=card", "fr");
+            await handler.HandleAsync(before, CancellationToken.None);
+            Assert.AreEqual(StatusCodes.Status301MovedPermanently, before.Response.StatusCode);
+            Assert.AreEqual($"/en/eu-eurlex/32016R0679/2016-05-04--{digest}/fra?from=card", before.Response.Headers.Location.ToString());
+            var luxembourgBefore = Request("GET", $"/en/lu-legilux/loi-1991-08-10-n3/2024-02-01--{digest}");
+            await handler.HandleAsync(luxembourgBefore, CancellationToken.None);
+            var unknown = Request("GET", "/en/no-such-page.html");
+            await handler.HandleAsync(unknown, CancellationToken.None);
+            Assert.AreNotEqual(StatusCodes.Status200OK, luxembourgBefore.Response.StatusCode, "no page at a Luxembourg permalink of the shape before R64");
+            Assert.AreEqual(unknown.Response.StatusCode, luxembourgBefore.Response.StatusCode, "answered as an unknown address is");
+            Assert.AreEqual(unknown.Response.ContentType, luxembourgBefore.Response.ContentType, "answered as an unknown address is");
         }
         finally
         {
@@ -338,7 +368,7 @@ public sealed class V3WebRootTests
             var ssr = Request("GET", "/ssr/en.js");
             Assert.IsFalse(await root.TryServeAsync(ssr, "/ssr/en.js", CancellationToken.None, (_, _) => "{}"u8.ToArray()));
 
-            var permalink = $"/en/lu-legilux/loi-1991-08-10-n3/2024-02-01--{new string('a', 64)}";
+            var permalink = $"/en/lu-legilux/loi-1991-08-10-n3/2024-02-01--{new string('a', 64)}/fra/art_15";
             V3SitePage? asked = null;
             var answered = Request("GET", permalink);
             Assert.IsTrue(await root.TryServeAsync(answered, permalink, CancellationToken.None, (page, _) =>
@@ -352,6 +382,8 @@ public sealed class V3WebRootTests
             AssertPageHeaders(root, answered, permalink);
             Assert.AreEqual("evidence_bundle", asked!.OperationId);
             Assert.AreEqual("2024-02-01", asked.Parameters["date"], "asked as the page itself would ask");
+            Assert.AreEqual("fra", asked.Parameters["language"], "in the text's language the permalink names (R64)");
+            Assert.IsFalse(asked.Parameters.ContainsKey("anchor"), "the whole reading: the page brings the article into view");
 
             var unknown = Request("GET", "/en/lu-legilux/no-such-work");
             Assert.IsTrue(await root.TryServeAsync(unknown, "/en/lu-legilux/no-such-work", CancellationToken.None,
@@ -391,10 +423,14 @@ public sealed class V3WebRootTests
         try
         {
             var root = V3WebRoot.Open(directory)!;
-            foreach (var target in new[] { "/en/lu-legilux/loi-2017-03-14-a439", $"/en/eu-eurlex/32016R0679/fra/2016-05-04--{new string('a', 64)}", "/fr/eu-eurlex/32016R0679" })
+            foreach (var target in new[]
+            {
+                "/en/lu-legilux/loi-2017-03-14-a439", $"/en/eu-eurlex/32016R0679/2016-05-04--{new string('a', 64)}/fra", "/fr/eu-eurlex/32016R0679",
+                $"/en/eu-eurlex/32016R0679/fra/2016-05-04--{new string('a', 64)}", $"/eu-eurlex/32016R0679/fra/2016-05-04--{new string('a', 64)}",
+            })
             {
                 var context = Request("GET", target);
-                Assert.IsFalse(await root.TryServeAsync(context, target, CancellationToken.None), $"{target}: this root holds no reading or dossier page");
+                Assert.IsFalse(await root.TryServeAsync(context, target, CancellationToken.None), $"{target}: this root holds no reading or dossier page to serve or to move to");
                 Assert.AreEqual(0, context.Response.Headers.Count, target);
             }
         }

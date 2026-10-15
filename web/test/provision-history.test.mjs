@@ -21,7 +21,7 @@ import {
 const A = 'ba22fa7dfe1d85cddcaaa5ee0ace567accc6b5dc89d4a63ffb34d743fa948c2e';
 const B = 'c44875875ad4ef48283cb16474143c600167642d323c30ce4424fde0afbcd5c3';
 const link = (date, seed) =>
-  `https://law.soufien.lu/lu-legilux/loi-2020-07-17-a624/${date}--${seed.repeat(64)}`;
+  `https://law.soufien.lu/lu-legilux/loi-2020-07-17-a624/${date}--${seed.repeat(64)}/fra`;
 
 const LIVE = Object.freeze({
   work: 'lu-legilux:loi-2020-07-17-a624',
