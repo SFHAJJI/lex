@@ -70,8 +70,13 @@ typed exactly as published found nothing without the library.
   refusal census's "a title two works carry", and the machine gates' refusal set at 0.944, twice). On Windows: the whole
   solution 6,181 (6,149 passed, 32 inconclusive); `eng/test-fast.ps1 -ImageConditions` 3,133 (3,122 passed, 11
   inconclusive) and 645 (642 passed, 3 inconclusive), 26 minutes; the web suite 1,106 of 1,106.
-- **Not yet** (driver decisions, reversible): the page renderer (#959, merged after this branch's base) shown to load in
-  the image (the plan's last line of 0.8); the accented-title check in the image rehearsal's real-mount probes; a live look
+- **The renderer in the image, after the rebase** (the plan's last line of 0.8): rebased on #965, the image rehearsal built
+  the image from this branch, whose API runs without the language library and zone data as the image does, and ran it in
+  WSL with its browser probes over the journey's fixture mount: 12 of 12 steps (the address, permalink and stale pages
+  rendered by V8 in the image), 215 citations verified, V2 absent at its 63 routes, the readiness and preview check
+  clean, the release read back. The rebase also combines the census partition's candidates (616: one from #959, one from
+  this change).
+- **Not yet** (driver decisions, reversible): the accented-title check in the image rehearsal's real-mount probes; a live look
   at the date during a real clock change (monitoring at 22:30 UTC on 2026-10-24 and 25, 2027-03-27 and 28, not a deploy
   gate); "today" printed (3.4); full-text matching that ignores accents (4.4, which can fold with this table at the
   index's next format); the lane as a required check (a repository setting); the one place the API still asks the
