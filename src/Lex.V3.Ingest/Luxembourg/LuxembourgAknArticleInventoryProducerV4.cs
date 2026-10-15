@@ -861,7 +861,12 @@ public sealed class LuxembourgAknArticleInventoryProducerV4
         return true;
     }
 
-    private static bool TryLoad(ReadOnlyMemory<byte> bytes, out XDocument? document, out string? failure)
+    /// <summary>
+    /// Step 3 of the structural reading: the parse, with /3's settings and this reading's ceiling.
+    /// Content /2 reads every body /4 inventoried through this same door, so the two readings see
+    /// the same documents up to the same ceiling.
+    /// </summary>
+    internal static bool TryLoad(ReadOnlyMemory<byte> bytes, out XDocument? document, out string? failure)
     {
         document = null;
         failure = null;

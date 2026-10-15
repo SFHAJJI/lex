@@ -32,6 +32,9 @@
     <Content Include="Fixtures/LuDocumentFetch/*.bin" CopyToOutputDirectory="PreserveNewest" />
     <Content Include="Fixtures/LuAknLegalContent/*.bin" CopyToOutputDirectory="PreserveNewest" />
     <Content Include="Fixtures/LuAknInventoryV4/*.bin" CopyToOutputDirectory="PreserveNewest" />
+    <!-- Copied whole, like the run-15 sample, so the legal-care guard
+         TheContent2ExcerptFolderHoldsOnlyTheAdmittedExcerpt sees every file committed there. -->
+    <Content Include="Fixtures/LuAknLegalContent2/**" CopyToOutputDirectory="PreserveNewest" />
     <!-- The run-15 sample folder is copied whole, every extension and every subfolder, so the
          legal-care guard TheRun15SampleIsAdmittedBodiesOnly sees every file committed there. -->
     <Content Include="Fixtures/LuRun15FrozenReplay/**" CopyToOutputDirectory="PreserveNewest" />
