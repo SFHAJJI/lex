@@ -4,7 +4,8 @@
 // It says plainly that there is no page at the address, and that this is about the site's pages and not about the law,
 // then offers the home page's search: the same search screen, hydrated by the same script (`client-live-search.js`), so
 // a phrase goes to the server in a request body and never into an address, as on the home page. It names no address of
-// its own (no alternate-language links, no canonical) and repeats nothing of the address asked.
+// its own (no alternate-language links, no canonical), and its text repeats nothing of the address asked; once loaded,
+// its language menu leads to the same address in the other language.
 //
 // Built into `dist-live/not-found/{language}.html`, once per interface language, by `scripts/build-live.mjs`; neither server
 // serves it at that address. Both answer a page request nothing claims with it, with status 404, in the reader's

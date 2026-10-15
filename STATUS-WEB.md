@@ -20,8 +20,8 @@ unserved is shown) and R61 (French and English under `/fr/` and `/en/`) hold on 
   no page at this address", then "Check the address, or search the texts this site holds below. A page missing here says
   nothing about the law, only about this site's pages." It has a link to the home page and the home page's own search
   screen, hydrated by the same script, so a phrase still goes only into a request body. It carries the site's header and
-  footer and the reviewed CSP. It names no address of its own (no canonical or alternate links) and never repeats the
-  address that was asked.
+  footer and the reviewed CSP. It names no address of its own (no canonical or alternate links), and its text never
+  repeats the address that was asked; once loaded, its language menu leads to the same address in the other language.
 - **Both servers answer with it** (`V3WebRoot.NotFound.cs` and `V3ApiHandler`; `not-found.mjs` and `serve-live.mjs`). A
   page request that nothing claims gets status 404, in the reader's language: the path's `/fr/` or `/en/`, else the
   language the root's redirect picks from Accept-Language (French by default), in which case the answer says
@@ -61,8 +61,8 @@ unserved is shown) and R61 (French and English under `/fr/` and `/en/`) hold on 
   The gaps were the missing line, retry and official links, and operational refusals laid out as answers. All are
   closed on every screen, and a test holds each screen to each kind of failure.
   Only `no_corpus_mounted` reaches a live page today. `rate_limited` and `upstream_unreachable` are produced by no
-  operation (the refusal census's `not_produced`), and `snapshot_unknown` only by `events` and `answer_drift`, which no
-  page asks. The tests render each of the four from the payload the registry names for it.
+  operation (the refusal census's `not_produced`), and `snapshot_unknown` only by `events`, `answer_drift` and
+  `as_observed`, which no page asks. The tests render each of the four from the payload the registry names for it.
 - **The maintenance page** (`live-maintenance-page.jsx`; `maintenance/en.html` and `maintenance/fr.html`): "Lex is being
   updated", "This site is being updated and cannot answer for the moment. This page is not an answer about the law. Try
   again shortly.", and the official sites. It has the site's header and footer, no script and no form.
@@ -128,6 +128,14 @@ unserved is shown) and R61 (French and English under `/fr/` and `/en/`) hold on 
   - Chrome reports the 404 document in its console ("Failed to load resource: the server responded with a status of
     404"). The journey checks the status instead, and sets that one message aside for the 404 step only; a probe with
     the step's flag off shows the message.
+- **The review of #970** (an independent Claude subagent): no material findings.
+  - It ran its own checks:
+    - both servers fuzzed over 58 paths and 7 methods;
+    - retry pressed in a browser on the dossier, reading and coverage pages, by pointer and by keyboard;
+    - both journey modes, 47 of 47.
+  - Two notes are corrected here: the 404 page's language menu, and `as_observed` among `snapshot_unknown`'s operations.
+  - Left as noted: the two servers answer a few paths no browser sends differently (`/fr/../x`, `/x/../api/...`,
+    `/fr\x`), because the API routes on the raw target and the live server on the parsed path.
 
 ## An act held only as first published says so, and Compare stops saying "applied" (sole driver, 2026-10-15)
 
