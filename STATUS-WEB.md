@@ -4,6 +4,17 @@ Updated 2026-10-15. The web lane's progress, split out of STATUS.md (which keeps
 items and the pointers) by the standing order of 2026-10-01 13:50 UTC. Every pull request of the web lane
 updates this file, not STATUS.md.
 
+## The web suite's race: one bundle every live build shared (sole driver, 2026-10-15)
+
+The web suite failed now and then on one of the live-page tests ("renderLiveLocaleUnavailablePage is not a function"),
+and passed when that file was run alone. It happened four times on 15 October, on four branches.
+- **The cause:** five test files build the live pages at once, in their own processes, each with its own tag for its
+  intermediate bundles. One bundle, the "language not available" page's, was written without the tag, so every build
+  rewrote the same `live-locale-page.mjs`. A test that imported it mid-write found it empty.
+- **The fix:** that bundle carries its build's tag too (`build-live.mjs`). A test holds every bundle call in the live build
+  to a tagged name, and it fails on the old code, naming the untagged line.
+- **Measured:** the whole web suite three times in a row, 1,110 of 1,110 each.
+
 ## The image's language data: accents and "today" without the operating system's (sole driver, 2026-10-15)
 
 The plan's item 0.8, a driver decision reported to the owner: the image stays small. The release image
