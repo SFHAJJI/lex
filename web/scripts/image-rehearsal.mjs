@@ -13,6 +13,8 @@
 //   the mount under `app/v3-corpus/`, byte for byte, and each file the mount's build report lists with
 //   its recorded digest;
 // - the image must run as a non-root user, start the API, and name its base image by digest;
+// - the synthetic preview and its key, kept for tests, must be absent from the app layer, and (with the probes) the
+//   server must answer its readiness route 204 with its mount and the preview's route as an unknown route (plan 0.7);
 // - V2, the retired product, must be absent: no Lex assembly that is not V3's in any layer, no V2
 //   library among the API's dependencies, and (with the probes) each of V2's routes answering 404.
 // The signature is the rehearsal's own: an ECDSA P-256 key made for the run and never kept, over a
@@ -164,6 +166,34 @@ export function imageFailures(image, { web, mount, report }) {
     else if (sha256(held) !== file.Sha256) failures.push(`${file.Name} in the image is sha256:${sha256(held)}, not the ${file.Sha256} the build report records`);
   }
   if ((report.files ?? []).length === 0) failures.push("the build report lists no file");
+  // The synthetic preview and its key are for tests only: the release image ships neither (plan 0.7).
+  const preview = [...files.keys()].filter((path) => PREVIEW_FILE.test(path));
+  if (preview.length > 0) failures.push(`the image ships the synthetic preview: ${preview.slice(0, 5).join(", ")}${preview.length > 5 ? ` and ${preview.length - 5} more` : ""}`);
+  return failures;
+}
+
+/** A file of the synthetic preview or of its key, where a test build of the API keeps them. */
+const PREVIEW_FILE = /^app\/preview-(?:graph|trust)\//;
+
+/** The synthetic preview's own route, asked of a coordinate its graph holds: a release server must not know it. */
+export const PREVIEW_PROBE = "/api/v3-preview/resolve?family=eli&coordinate=eli%2Fsynthetic-preview";
+
+/**
+ * How a release server answers for itself, as failures (empty when it holds): its readiness route is 204, uncached, while
+ * it holds the law (the platform's readiness probe and monitoring ask it; plan 0.7), and the synthetic preview's route is
+ * an unknown route like any other, naming nothing synthetic.
+ */
+export async function serverFailures(origin) {
+  const failures = [];
+  const ready = await fetch(`${origin}/health/ready`, { redirect: "manual" });
+  const readyBody = Buffer.from(await ready.arrayBuffer());
+  if (ready.status !== 204 || readyBody.length !== 0) failures.push(`GET /health/ready answered ${ready.status} (${readyBody.length} bytes), not 204: the server says it does not hold the law`);
+  if (ready.headers.get("cache-control") !== "no-store") failures.push(`GET /health/ready may be cached (${ready.headers.get("cache-control")})`);
+  const preview = await fetch(`${origin}${PREVIEW_PROBE}`, { redirect: "manual" });
+  const previewBody = Buffer.from(await preview.arrayBuffer()).toString("utf8");
+  if (preview.status !== 404 || /synthetic|preview/i.test(previewBody)) {
+    failures.push(`GET ${PREVIEW_PROBE} answered ${preview.status}${/synthetic|preview/i.test(previewBody) ? ", naming the preview" : ""}, not the 404 of a route the server does not know`);
+  }
   return failures;
 }
 
@@ -612,6 +642,9 @@ export async function rehearse({ mount, keep = false, probe = true, reproduce = 
         const routeFailures = await v2RouteFailures(server.origin, { v3Files: servedPaths(web) });
         Object.assign(result.v2Absent, { routesAsked: V2_ROUTES.length, routeFailures });
         if (routeFailures.length > 0) throw new Error(`the image answers V2's routes:\n- ${routeFailures.join("\n- ")}`);
+        // Ready with its mount, and no synthetic preview (plan 0.7).
+        result.server = { failures: await serverFailures(server.origin) };
+        if (result.server.failures.length > 0) throw new Error(`the image's server does not answer for itself:\n- ${result.server.failures.join("\n- ")}`);
         // The card for machines at its stable route: the bytes the release carries and signs.
         const answer = await fetch(`${server.origin}${CARD_ROUTE}`);
         const bytes = Buffer.from(await answer.arrayBuffer());

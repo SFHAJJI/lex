@@ -1,6 +1,6 @@
 # Lex V3 status
 
-Updated 2026-10-14 by the driver. This file holds the heads, the owner's open items and the pointers to the two
+Updated 2026-10-15 by the driver. This file holds the heads, the owner's open items and the pointers to the two
 lane files (the standing order of 2026-10-01 13:50 UTC: STATUS.md was edited by nearly every pull request and was
 the most frequent conflict). Each lane writes its progress in its own file, in the pull request that makes it:
 
@@ -13,7 +13,7 @@ A feature pull request edits its lane file, not this one; this file changes for 
 
 ## Heads
 
-- `v3/integration`: `36ede59c` (2026-10-14, PR #960 merged: the private copy stays private on every deployment). The
+- `v3/integration`: `e0073334` (2026-10-15, PR #962 merged: the renderer's give-up test holds the behaviour). The
   required checks are strict: `dotnet` (the whole solution, about 14 min on the runner), `web`, `canon-windows` and
   `journeys`. `journeys` walks J1 to J8 and the site's own addresses in Chrome over four fixture mounts (the fixture,
   licence-blocked, two-state and EU annex control mounts), by pointer and by keyboard on the pages the API serves.

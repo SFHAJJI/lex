@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.44.1.10279",
-      "templateHash": "6154718822588103810"
+      "templateHash": "3334919308441672450"
     }
   },
   "parameters": {
@@ -172,7 +172,7 @@
                 {
                   "type": "Readiness",
                   "httpGet": {
-                    "path": "/evaluation-card.json",
+                    "path": "/health/ready",
                     "port": 8080
                   },
                   "initialDelaySeconds": 5,

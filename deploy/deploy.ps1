@@ -195,8 +195,22 @@ try {
     Run "az deployment group what-if -g $ResourceGroup -f deploy/main.bicep -p <parameters: $shown>" {
         az deployment group what-if -g $ResourceGroup -f (Join-Path $checkout 'deploy/main.bicep') -p "@$parametersFile"
     }
-    Run "az deployment group create -g $ResourceGroup -f deploy/main.bicep -p <parameters: $shown>" {
-        az deployment group create -g $ResourceGroup -f (Join-Path $checkout 'deploy/main.bicep') -p "@$parametersFile" -o none
+    try {
+        Run "az deployment group create -g $ResourceGroup -f deploy/main.bicep -p <parameters: $shown>" {
+            az deployment group create -g $ResourceGroup -f (Join-Path $checkout 'deploy/main.bicep') -p "@$parametersFile" -o none
+        }
+    }
+    catch {
+        # A candidate that never becomes ready (its readiness route answers 503 while it holds no law) fails the deployment
+        # itself, at Azure's progress deadline, before the probe can run: it is deactivated here as a failed probe's is, so
+        # no revision without the law stays active and billed (review of #963).
+        $failedCandidate = "$AppName--$suffix"
+        $active = az containerapp revision show -g $ResourceGroup -n $AppName --revision $failedCandidate --query properties.active -o tsv 2>$null
+        if ($LASTEXITCODE -eq 0 -and $active -eq 'true') {
+            Step "the deployment failed: deactivate the candidate $failedCandidate"
+            az containerapp revision deactivate -g $ResourceGroup -n $AppName --revision $failedCandidate
+        }
+        throw "The candidate revision did not deploy ($($_.Exception.Message)); a candidate that never becomes ready holds no law (GET /health/ready answers 503). It was deactivated if it was active, and no traffic moved to it."
     }
 }
 finally {

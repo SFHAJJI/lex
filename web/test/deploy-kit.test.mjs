@@ -45,13 +45,13 @@ test("the image is pulled with the user-assigned identity the owner names", () =
   assert.ok(!("env" in app.properties.template.containers[0]) || app.properties.template.containers[0].env.every((variable) => !("secretRef" in variable)));
 });
 
-test("one server, with a private writable /tmp, its probes on the image's own routes", () => {
+test("one server, with a private writable /tmp, its probes on the image's own routes, ready only with the law mounted", () => {
   const { scale, volumes, containers } = app.properties.template;
   assert.deepEqual(scale, { minReplicas: 1, maxReplicas: 1 });
   assert.deepEqual(volumes, [{ name: "tmp", storageType: "EmptyDir" }]);
   assert.deepEqual(containers[0].volumeMounts, [{ volumeName: "tmp", mountPath: "/tmp" }]);
   assert.deepEqual(containers[0].probes.map((probe) => [probe.type, probe.httpGet.path, probe.httpGet.port]),
-    [["Startup", "/", 8080], ["Liveness", "/", 8080], ["Readiness", "/evaluation-card.json", 8080]]);
+    [["Startup", "/", 8080], ["Liveness", "/", 8080], ["Readiness", "/health/ready", 8080]]);
   // The API listens only once its mount is verified: the startup probe gives it about four and a half minutes before the
   // container is restarted, at the probe's last failure (initial delay and every period but the last).
   const startup = containers[0].probes[0];
@@ -204,4 +204,8 @@ test("the script deploys only a release that verifies, and only by the image's d
   assert.match(code, /Write-Host "  > az containerapp ingress traffic set -g \$ResourceGroup -n \$AppName --revision-weight \$LiveRevision=100"/);
   // A failed probe deactivates the candidate (the removal step) and stops.
   assert.match(script, /if \(\$LASTEXITCODE -ne 0\) \{[\s\S]*?revision deactivate[\s\S]*?throw "The candidate failed its probe/);
+  // A candidate that never becomes ready fails the deployment itself, before the probe: it is deactivated too, if active,
+  // and the run stops (review of #963: readiness answers 503 without the law, so Azure's deadline ends the deployment).
+  assert.match(code, /catch \{[\s\S]*?\$failedCandidate = "\$AppName--\$suffix"[\s\S]*?revision show [^\n]*--revision \$failedCandidate --query properties\.active[\s\S]*?revision deactivate -g \$ResourceGroup -n \$AppName --revision \$failedCandidate[\s\S]*?throw "The candidate revision did not deploy/);
+  assert.ok(code.indexOf("az deployment group create") < code.indexOf("$failedCandidate = "), "the catch is the deployment's own");
 });

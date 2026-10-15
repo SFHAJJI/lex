@@ -17,7 +17,7 @@ import { REPRODUCIBLE_LAYER, reproducibleImage, sourceDate, writeLayout, writeTa
 
 const sha256 = (bytes) => createHash("sha256").update(bytes).digest("hex");
 const EPOCH = 1790798393;
-const LONG = `app/preview-graph/sqlite_index.${"b".repeat(64)}.sqlite3`;
+const LONG = `app/runtimes/sqlite_index.${"b".repeat(64)}.sqlite3`;
 
 /** A header block, as the tests need to write one. */
 function block({ name, mode = 0o644, size = 0, mtime = 0, type = "0" }) {

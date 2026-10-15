@@ -12,7 +12,7 @@ internal sealed class V3ApiHandler
     private const string EmptySha256 =
         "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855";
 
-    private readonly SyntheticApiState _syntheticState;
+    private readonly SyntheticApiState? _syntheticState;
     private readonly V3PlatformHost _host;
     private readonly Func<DateTimeOffset> _utcNow;
     private readonly V3CorpusMount? _corpusMount;
@@ -31,14 +31,17 @@ internal sealed class V3ApiHandler
     {
     }
 
+    /// <param name="syntheticState">The synthetic preview, in a test build or the S0-05 image; null in the one-server image,
+    /// which ships no preview (plan 0.7): that server answers its readiness from its mount, and any path nothing claims as
+    /// an unknown route.</param>
     internal V3ApiHandler(
-        SyntheticApiState syntheticState,
+        SyntheticApiState? syntheticState,
         V3PlatformHost host,
         Func<DateTimeOffset> utcNow,
         V3CorpusMount? corpusMount,
         V3WebRoot? webRoot = null)
     {
-        _syntheticState = syntheticState ?? throw new ArgumentNullException(nameof(syntheticState));
+        _syntheticState = syntheticState;
         _host = host ?? throw new ArgumentNullException(nameof(host));
         _utcNow = utcNow ?? throw new ArgumentNullException(nameof(utcNow));
         _corpusMount = corpusMount;
@@ -46,7 +49,7 @@ internal sealed class V3ApiHandler
     }
 
     internal static RequestDelegate CreateRequestDelegate(
-        SyntheticApiState syntheticState,
+        SyntheticApiState? syntheticState,
         Func<DateTimeOffset> utcNow,
         V3CorpusMount? corpusMount = null,
         V3WebRoot? webRoot = null)
@@ -123,15 +126,66 @@ internal sealed class V3ApiHandler
             return;
         }
 
+        if (_syntheticState is null && string.Equals(rawTarget, ReadinessRawTarget, StringComparison.Ordinal))
+        {
+            await WriteReadinessAsync(context, cancellationToken).ConfigureAwait(false);
+            return;
+        }
+
         // The live pages, when this server holds them: only the files its web root recorded, and a law's
         // address (V3WebRoot.PageForSitePath) served the page that reads it, so every other path reaches the
-        // synthetic routes exactly as before.
+        // synthetic routes exactly as before, or with no preview is an unknown route.
         if (_webRoot is not null && await _webRoot.TryServeAsync(context, rawTarget, cancellationToken, AnswerFor(context)).ConfigureAwait(false))
         {
             return;
         }
 
+        if (_syntheticState is null)
+        {
+            await V3TransportResponse.WriteAsync(context.Response, V3TransportFailureKind.UnknownRoute, cancellationToken).ConfigureAwait(false);
+            return;
+        }
+
         await SyntheticApiHandler.HandleAsync(context, _syntheticState, cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>Where the platform's probes and monitoring ask whether this server holds the law (plan 0.7).</summary>
+    internal const string ReadinessRawTarget = "/health/ready";
+
+    private static readonly byte[] NoLawMounted = "No law is mounted.\n"u8.ToArray();
+
+    /// <summary>
+    /// Whether this server can answer about the law: 204 when a corpus is mounted, and 503 with a one-line reason when none
+    /// is, since a server whose mount was refused at startup is up but refuses every question. GET and HEAD only, and
+    /// nothing about it is cached.
+    /// </summary>
+    private async Task WriteReadinessAsync(HttpContext context, CancellationToken cancellationToken)
+    {
+        var response = context.Response;
+        var method = context.Request.Method;
+        response.Headers.CacheControl = "no-store";
+        response.Headers.XContentTypeOptions = "nosniff";
+        if (!HttpMethods.IsGet(method) && !HttpMethods.IsHead(method))
+        {
+            response.StatusCode = StatusCodes.Status405MethodNotAllowed;
+            response.Headers.Allow = "GET, HEAD";
+            response.ContentLength = 0;
+            return;
+        }
+
+        if (_corpusMount is not null)
+        {
+            response.StatusCode = StatusCodes.Status204NoContent;
+            return;
+        }
+
+        response.StatusCode = StatusCodes.Status503ServiceUnavailable;
+        response.ContentType = "text/plain; charset=utf-8";
+        response.ContentLength = NoLawMounted.Length;
+        if (HttpMethods.IsGet(method))
+        {
+            await response.Body.WriteAsync(NoLawMounted, cancellationToken).ConfigureAwait(false);
+        }
     }
 
     /// <summary>The MCP streamable HTTP endpoint: one POST, one JSON-RPC message, one JSON answer (or 202 for a notification).</summary>
