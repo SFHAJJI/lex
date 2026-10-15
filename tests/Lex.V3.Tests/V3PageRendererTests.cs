@@ -132,10 +132,15 @@ public sealed class V3PageRendererTests
         {
             using var renderer = V3PageRenderer.Open(directory, TimeSpan.FromSeconds(5), TimeSpan.FromMilliseconds(100))!;
 
+            // The engine is made first, so no round holds the engine while V8 loads (up to a quarter of a second for the first
+            // engine in a process: the review of #962).
+            StringAssert.StartsWith(await renderer.RenderAsync("en", "reading", "{}", "/en/warm", CancellationToken.None), "<!doctype html><p>/en/warm render");
+
             // The slow render holds the engine for a second, and a render that arrives meanwhile waits its 100 ms and gives
-            // up. On a loaded machine the slow render may not have taken the engine yet when the next one arrives, or may be
-            // done before it does (a render behind it then simply runs): such a round is tried again, up to five slow renders,
-            // so the test holds the behaviour and never the scheduler's timing (it failed once under a full parallel run).
+            // up. On a loaded machine either may take the engine first: the one that arrives second gives up, whichever it
+            // is, and a round in which neither waited (the slow one done before the next arrived) is tried again, up to five
+            // slow renders, so the test holds the behaviour and never the scheduler's timing (it failed once under a full
+            // parallel run).
             var gaveUp = false;
             for (var round = 0; round < 5 && !gaveUp; round++)
             {
@@ -149,7 +154,14 @@ public sealed class V3PageRendererTests
                     }
                 }
 
-                StringAssert.StartsWith(await slow, "<!doctype html><p>/en/slow render", "each slow render ends as a page");
+                if (await slow is { } page)
+                {
+                    StringAssert.StartsWith(page, "<!doctype html><p>/en/slow render", "a slow render that had the engine ends as a page");
+                }
+                else
+                {
+                    gaveUp = true;
+                }
             }
 
             Assert.IsTrue(gaveUp, "a render that arrives while a slow one holds the engine gives up after its wait instead of queueing");
