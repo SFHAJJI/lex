@@ -94,8 +94,10 @@ ${tokenCss()}`, "utf8");
   for (const locale of REVIEWED_CHROME_LOCALES.filter((code) => code !== "en")) await buildPages(destination, { card, locale, buildTag });
   // One static page per chrome locale without reviewed copy: localization_unavailable, in English and
   // labelled English, with no script (Decision 41; the launch contract's DE and LB line).
+  // Tagged as every other intermediate bundle is: an untagged name was one file every concurrent build rewrote, and a test
+  // file importing it mid-write found no renderLiveLocaleUnavailablePage (the web suite's race, 2026-10-15).
   const { bundle } = await import("./react-build.mjs");
-  const localeSsr = await import(pathToFileURL(await bundle("app/live-locale-page.jsx", "live-locale-page.mjs")).href);
+  const localeSsr = await import(pathToFileURL(await bundle("app/live-locale-page.jsx", `live-locale-page${buildTag ? `.${buildTag}` : ""}.mjs`)).href);
   for (const locale of CHROME_LOCALES.filter((code) => !REVIEWED_CHROME_LOCALES.includes(code))) {
     await writeFile(new URL(`locale-${locale}.html`, destination), localeSsr.renderLiveLocaleUnavailablePage(locale), "utf8");
   }

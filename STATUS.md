@@ -13,9 +13,10 @@ A feature pull request edits its lane file, not this one; this file changes for 
 
 ## Heads
 
-- `v3/integration`: `e0073334` (2026-10-15, PR #962 merged: the renderer's give-up test holds the behaviour). The
-  required checks are strict: `dotnet` (the whole solution, about 14 min on the runner), `web`, `canon-windows` and
-  `journeys`. `journeys` walks J1 to J8 and the site's own addresses in Chrome over four fixture mounts (the fixture,
+- `v3/integration`: `25f05874` (2026-10-15, PR #966 merged: the server image's language data, plan 0.8; #962, #963
+  and #965 merged earlier that day). The required checks are strict: `dotnet` (the whole solution, about 14 min on the runner),
+  `web`, `canon-windows`, `journeys` and, since 2026-10-15, `image-conditions` (the API's tests inside the release's
+  base image). `journeys` walks J1 to J8 and the site's own addresses in Chrome over four fixture mounts (the fixture,
   licence-blocked, two-state and EU annex control mounts), by pointer and by keyboard on the pages the API serves.
 - Driver: Claude Opus 5.5, the sole driver since 2026-10-02. The owner's order: no Codex, no other Claude session,
   full authorisation, and the owner is never asked. Each pull request is reviewed by an independent Claude subagent

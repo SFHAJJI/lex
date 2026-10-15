@@ -4,6 +4,24 @@ Updated 2026-10-15. The web lane's progress, split out of STATUS.md (which keeps
 items and the pointers) by the standing order of 2026-10-01 13:50 UTC. Every pull request of the web lane
 updates this file, not STATUS.md.
 
+## The web suite's race: one bundle every live build shared (sole driver, 2026-10-15)
+
+The web suite failed now and then on one of the live-page tests ("renderLiveLocaleUnavailablePage is not a function"),
+and passed when that file was run alone. It happened four times on 15 October, on four branches.
+- **The cause:** four test files run five builds of the live pages at once, in their own processes, each build with
+  its own tag for its intermediate bundles. One bundle, the "language not available" page's, was written without the
+  tag, so every build rewrote the same `live-locale-page.mjs`. A test that imported it mid-write found it empty.
+- **The fix:** that bundle carries its build's tag too (`build-live.mjs`). A test holds every bundle call in the live build
+  to a tagged name, and it fails on the old code, naming the untagged line.
+- **Measured:** the whole web suite three times in a row, 1,110 of 1,110 each.
+- **The review of #968** (an independent Claude subagent): no material findings. It reproduced the race on its own:
+  five processes bundling to one name lost between 49 and 63 of 200 imports each, and none with a name per process.
+  It corrected one count (four test files, five builds). Its sturdier option is not taken here: naming every output
+  through one helper, or a folder per build. The test reads the build's source line by line, so a new untagged call
+  written without `await`, or through another name, would pass it.
+- **Also:** 0.8's `image-conditions` lane is now a required check of `v3/integration` (a repository setting, made on
+  2026-10-15 after #966 merged; it runs on every pull request to the branch).
+
 ## The image's language data: accents and "today" without the operating system's (sole driver, 2026-10-15)
 
 The plan's item 0.8, a driver decision reported to the owner: the image stays small. The release image
@@ -79,7 +97,7 @@ typed exactly as published found nothing without the library.
 - **Not yet** (driver decisions, reversible): the accented-title check in the image rehearsal's real-mount probes; a live look
   at the date during a real clock change (monitoring at 22:30 UTC on 2026-10-24 and 25, 2027-03-27 and 28, not a deploy
   gate); "today" printed (3.4); full-text matching that ignores accents (4.4, which can fold with this table at the
-  index's next format); the lane as a required check (a repository setting); the one place the API still asks the
+  index's next format); the one place the API still asks the
   library to normalize (the only `string.Normalize` in `src` the API reaches; no culture-sensitive call there either),
   the synthetic slice's check at startup (`SyntheticSliceArtifactVerifier`, through `SyntheticTextNormalizer`), which
   composes the source into NFC and compares it with the derived text: without the library, in the image and, since the
