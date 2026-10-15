@@ -2,8 +2,8 @@
 //
 // The plan's item 0.6 (the specification of record's R76, R18 and R20): almost the whole Luxembourg population is
 // held as the act was first published in the Journal officiel, with no consolidated text, and every surface that
-// shows such an act says so. The platform says it in `as_published` on `as_of`, `evidence_bundle`, `timeline` and
-// `dossier` (null when a consolidated state of the work is held): the label, what the index holds about later
+// shows such an act says so. The platform says it in `as_published` on `as_of`, `evidence_bundle`, `timeline`,
+// `dossier` and `diff` (null when a consolidated state of the work is held): the label, what the index holds about later
 // versions (the consolidated versions the publisher's own facts name, and its end-of-force facts), and an
 // authenticity sentence whose case is read from the publisher's publication date of the act as published. This
 // file reads that member; it renders nothing.
@@ -104,6 +104,52 @@ export function laterVersionsSentence(consolidations, endOfForce) {
     sentence += `; the publisher's record gives ${joinWithAnd(endOfForce)} as the act's end-of-force date (dateNoLongerInForce)`;
   }
   return sentence;
+}
+
+/**
+ * Of what `as_published` lists, the facts dated between two dates asked, in either order (a comparison's
+ * `later_version_facts_between_dates`; the review of #964): the consolidated versions whose single applicability date is
+ * after the earlier date and on or before the later one, in their order, and the distinct end-of-force values that are
+ * such a civil date. The platform's own rule (`V3CorpusMount.BetweenDates`).
+ */
+export function laterVersionFactsBetween(asPublished, dateFrom, dateTo) {
+  const [after, onOrBefore] = dateFrom <= dateTo ? [dateFrom, dateTo] : [dateTo, dateFrom];
+  const within = (date) => date !== null && isCalendarDate(date) && date > after && date <= onOrBefore;
+  return Object.freeze({
+    after,
+    onOrBefore,
+    consolidations: Object.freeze(asPublished.laterVersions.consolidations.filter((entry) => within(entry.applicabilityDate))),
+    endOfForce: Object.freeze(asPublished.laterVersions.endOfForce.filter(within)),
+  });
+}
+
+/**
+ * What a comparison of an act held only as published says when both dates select one state (the review of #964): the
+ * one text held (or, when its language holds another state too, the same text held), the act as published, with its
+ * publisher applicability start, and that later versions are not held (or, beside another held state, that no
+ * consolidated version is held); then the facts dated between the two dates, from
+ * `laterVersionFactsBetween`. Never whether the text changed. The platform's own rule
+ * (`V3CorpusMount.AsPublishedSameTextNote`), word for word.
+ */
+export function sameTextHeldNote(applicabilityDate, onlyStateHeld, between) {
+  // With another state of the language held, "later versions are not held" would contradict its sides' next state.
+  let note = `Both dates select ${onlyStateHeld ? 'the one text held' : 'the same text held'}, the act as published, applicable from ` +
+    `${applicabilityDate} (publisher); ${onlyStateHeld ? 'later versions are not held' : 'no consolidated version is held'}`;
+  const { after, onOrBefore, consolidations, endOfForce } = between;
+  if (consolidations.length > 0) {
+    const named = consolidations.length === 1
+      ? '1 consolidated version of it whose applicability date falls'
+      : `${consolidations.length} consolidated versions of it whose applicability dates fall`;
+    const dated = consolidations.map((entry) => (entry.endApplicabilityDate === null
+      ? `from ${entry.applicabilityDate}`
+      : `from ${entry.applicabilityDate} to ${entry.endApplicabilityDate}`));
+    note += `; the publisher's record names ${named} after ${after} and on or before ${onOrBefore}, applicable ${joinWithAnd(dated)} (publisher)`;
+  }
+  if (endOfForce.length > 0) {
+    note += `; the publisher's record gives ${joinWithAnd(endOfForce)} as the act's end-of-force date (dateNoLongerInForce), which ` +
+      `${endOfForce.length === 1 ? 'falls' : 'fall'} after ${after} and on or before ${onOrBefore}`;
+  }
+  return note;
 }
 
 /**

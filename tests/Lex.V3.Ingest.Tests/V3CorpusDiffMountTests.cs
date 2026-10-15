@@ -47,13 +47,20 @@ public sealed class V3CorpusDiffMountTests
         var comparison = value.GetProperty("comparisons").EnumerateArray().Single();
         Assert.AreEqual("fra", comparison.GetProperty("language").GetString());
         Assert.IsTrue(comparison.GetProperty("same_state").GetBoolean());
-        // The publisher's clock for the one state, never "applied" (R21; the plan's item 0.6).
+        // The fixture's act is held only as published (its one state is a /jo expression), so the one state is said as what
+        // it is: the one text held, the act as published, with its publisher applicability start, never "applied" (R21) and
+        // never one version covering both dates (the review of #964). The index holds no fact about later versions.
         Assert.AreEqual(
-            $"Both dates fall within the same version, applicable from {fixture.ApplicabilityDate} (publisher)",
+            $"Both dates select the one text held, the act as published, applicable from {fixture.ApplicabilityDate} (publisher); later versions are not held",
             comparison.GetProperty("note").GetString());
         Assert.DoesNotContain("applied", comparison.GetProperty("note").GetString()!);
         Assert.AreEqual(JsonValueKind.Null, comparison.GetProperty("articles").ValueKind);
         Assert.AreEqual(JsonValueKind.Null, comparison.GetProperty("counts").ValueKind);
+        var between = value.GetProperty("later_version_facts_between_dates");
+        Assert.AreEqual(fixture.ApplicabilityDate, between.GetProperty("after").GetString());
+        Assert.AreEqual(Shift(fixture.ApplicabilityDate, 100), between.GetProperty("on_or_before").GetString());
+        Assert.AreEqual(0, between.GetProperty("consolidations").GetArrayLength());
+        Assert.AreEqual(0, between.GetProperty("end_of_force").GetArrayLength());
         // Both bounds are served in full, as the state as_of serves on that date.
         foreach (var side in new[] { "from", "to" })
         {
@@ -65,6 +72,132 @@ public sealed class V3CorpusDiffMountTests
         var asOf = await AsOfAsync(mount, $"/lu-legilux/{fixture.WorkKey}", fixture.ApplicabilityDate);
         Assert.AreEqual(asOf.Result!.Value.GetProperty("states").EnumerateArray().Single().GetRawText(),
             comparison.GetProperty("from").GetRawText(), "The from side is the as_of state on that date, byte for byte.");
+        // The comparison carries as_published as as_of does, from the same builder: the same member, byte for byte.
+        Assert.AreEqual(asOf.Result.Value.GetProperty("as_published").GetRawText(), value.GetProperty("as_published").GetRawText());
+    }
+
+    /// <summary>
+    /// The review of #964: every held Luxembourg act is held as its one /jo text, so any two dates on or after its date select
+    /// that one state, while the publisher's own record can name a consolidated version, or an end-of-force date, between
+    /// them (rgd-2020-04-08-a265 compared on 2020-04-10 and 2020-05-20, where /consolide/20200511 applies from 2020-05-11;
+    /// in derive-c's index 376 of the 388 named consolidated versions, in 149 acts, start after the held state's date). The
+    /// answer said "Both dates fall within the same version", which those facts contradict. It now says that both dates
+    /// select the one text held, the act as published, and names the consolidated versions whose applicability date falls
+    /// after the earlier date and on or before the later one, and the end-of-force dates that do, from the facts alone.
+    /// </summary>
+    [TestMethod]
+    public async Task TheOneTextHeldOfAnActHeldOnlyAsPublishedNamesTheConsolidatedVersionsAndTheEndOfForceDateBetweenTheDates()
+    {
+        var fixture = await MountedFixture.CreateAsync();
+        await using var cleanup = fixture;
+        var held = fixture.ApplicabilityDate;
+        var work = PublisherWorkIriOf(fixture);
+        const string xsdDate = "http://www.w3.org/2001/XMLSchema#date";
+        // The straddling version, as rgd-2020-04-08-a265's: applicable from a date between the two dates, with its end.
+        await fixture.AddWorkFactAsync($"{work}/consolide/straddling", "dateApplicability", "consolidation_applicability", "literal", Shift(held, 33), xsdDate);
+        await fixture.AddWorkFactAsync($"{work}/consolide/straddling", "dateEndApplicability", "consolidation_applicability", "literal", Shift(held, 77), xsdDate);
+        // On the later date itself: named (on or before it).
+        await fixture.AddWorkFactAsync($"{work}/consolide/onthelater", "dateApplicability", "consolidation_applicability", "literal", Shift(held, 42), xsdDate);
+        // On the earlier date itself, and after the held state's date: not named (it is not after the earlier date).
+        await fixture.AddWorkFactAsync($"{work}/consolide/ontheearlier", "dateApplicability", "consolidation_applicability", "literal", Shift(held, 2), xsdDate);
+        // After the later date, and with no single date: not named.
+        await fixture.AddWorkFactAsync($"{work}/consolide/afterwards", "dateApplicability", "consolidation_applicability", "literal", Shift(held, 200), xsdDate);
+        await fixture.AddWorkFactAsync($"{work}/consolide/undated", "dateEndApplicability", "consolidation_applicability", "literal", Shift(held, 20), xsdDate);
+        // The publisher's end-of-force date, between the dates.
+        await fixture.AddWorkFactAsync(work + "/jo", "dateNoLongerInForce", "act_force", "literal", Shift(held, 40), xsdDate);
+        using var mount = await V3CorpusMount.OpenAsync(fixture.Directory, CancellationToken.None);
+        Assert.IsNotNull(mount);
+        var identifier = $"/lu-legilux/{fixture.WorkKey}";
+
+        foreach (var (dateFrom, dateTo) in new[] { (Shift(held, 2), Shift(held, 42)), (Shift(held, 42), Shift(held, 2)) })
+        {
+            var envelope = await DiffAsync(mount, identifier, dateFrom, dateTo);
+            Assert.AreEqual(V3Verdicts.Answer, envelope.Verdict, envelope.Refusal?.Code);
+            var value = envelope.Result!.Value;
+            var comparison = value.GetProperty("comparisons").EnumerateArray().Single();
+            Assert.IsTrue(comparison.GetProperty("same_state").GetBoolean(), "both dates select the one state held");
+            var note = comparison.GetProperty("note").GetString()!;
+            Assert.AreEqual(
+                $"Both dates select the one text held, the act as published, applicable from {held} (publisher); later versions are not held; " +
+                $"the publisher's record names 2 consolidated versions of it whose applicability dates fall after {Shift(held, 2)} and on or before " +
+                $"{Shift(held, 42)}, applicable from {Shift(held, 33)} to {Shift(held, 77)} and from {Shift(held, 42)} (publisher); the publisher's " +
+                $"record gives {Shift(held, 40)} as the act's end-of-force date (dateNoLongerInForce), which falls after {Shift(held, 2)} and on or " +
+                $"before {Shift(held, 42)}",
+                note, $"{dateFrom} against {dateTo}");
+            Assert.DoesNotContain("same version", note, "never one version covering both dates");
+            Assert.DoesNotContain("changed", note, "facts only: nothing is said of whether the text changed");
+            foreach (var forbidden in new[] { " in force", "en vigueur", "applied" })
+            {
+                Assert.DoesNotContain(forbidden, note, $"the note says {forbidden} (R21)");
+            }
+
+            var between = value.GetProperty("later_version_facts_between_dates");
+            Assert.AreEqual(Shift(held, 2), between.GetProperty("after").GetString());
+            Assert.AreEqual(Shift(held, 42), between.GetProperty("on_or_before").GetString());
+            CollectionAssert.AreEqual(
+                new (string, string?, string?)[]
+                {
+                    ($"{work}/consolide/straddling", Shift(held, 33), Shift(held, 77)),
+                    ($"{work}/consolide/onthelater", Shift(held, 42), null),
+                },
+                between.GetProperty("consolidations").EnumerateArray().Select(static row => ((string, string?, string?))(
+                    row.GetProperty("legal_resource_iri").GetString()!,
+                    row.GetProperty("applicability_date").GetString(),
+                    row.GetProperty("end_applicability_date").GetString())).ToArray());
+            var end = between.GetProperty("end_of_force").EnumerateArray().Single();
+            Assert.AreEqual(work + "/jo", end.GetProperty("subject_iri").GetString());
+            Assert.AreEqual(Shift(held, 40), end.GetProperty("value").GetString());
+            // as_published lists all five consolidated versions, the one each answer about this act's states lists.
+            Assert.AreEqual(5, value.GetProperty("as_published").GetProperty("later_version_facts").GetProperty("consolidations").GetArrayLength());
+        }
+
+        // Dates that straddle nothing the publisher dates name nothing, and say only what is held.
+        var quiet = await DiffAsync(mount, identifier, Shift(held, 100), Shift(held, 150));
+        Assert.AreEqual(
+            $"Both dates select the one text held, the act as published, applicable from {held} (publisher); later versions are not held",
+            quiet.Result!.Value.GetProperty("comparisons").EnumerateArray().Single().GetProperty("note").GetString());
+    }
+
+    [TestMethod]
+    public async Task ASameStateOfAnActHeldAsPublishedWithAnotherStateInItsLanguageIsTheSameTextHeldAndAConsolidatedStateKeepsTheSameVersion()
+    {
+        // Two states of the act as published in one language (no work in the population has two; the fixture can): both
+        // dates before the later one select the earlier, which is then "the same text held", not "the one text held".
+        var fixture = await MountedFixture.CreateAsync();
+        await using var cleanup = fixture;
+        await fixture.AddStateAsync(Shift(fixture.ApplicabilityDate, 400), "later");
+        using (var mount = await V3CorpusMount.OpenAsync(fixture.Directory, CancellationToken.None))
+        {
+            Assert.IsNotNull(mount);
+            var envelope = await DiffAsync(mount, $"/lu-legilux/{fixture.WorkKey}", fixture.ApplicabilityDate, Shift(fixture.ApplicabilityDate, 100));
+            Assert.AreEqual(
+                $"Both dates select the same text held, the act as published, applicable from {fixture.ApplicabilityDate} (publisher); no consolidated version is held",
+                envelope.Result!.Value.GetProperty("comparisons").EnumerateArray().Single().GetProperty("note").GetString());
+        }
+
+        // A work whose consolidated state is held is not held only as published: the one state on both dates keeps the
+        // publisher's clock for one version, and the answer carries neither member.
+        var consolidated = await MountedFixture.CreateAsync();
+        await using var cleanupConsolidated = consolidated;
+        await consolidated.AddStateAsync(Shift(consolidated.ApplicabilityDate, 400), "fr", legalResourceLeaf: "consolide/20250301");
+        using var consolidatedMount = await V3CorpusMount.OpenAsync(consolidated.Directory, CancellationToken.None);
+        Assert.IsNotNull(consolidatedMount);
+        var answer = (await DiffAsync(consolidatedMount, $"/lu-legilux/{consolidated.WorkKey}", consolidated.ApplicabilityDate, Shift(consolidated.ApplicabilityDate, 100))).Result!.Value;
+        Assert.AreEqual(
+            $"Both dates fall within the same version, applicable from {consolidated.ApplicabilityDate} (publisher)",
+            answer.GetProperty("comparisons").EnumerateArray().Single().GetProperty("note").GetString());
+        Assert.AreEqual(JsonValueKind.Null, answer.GetProperty("as_published").ValueKind);
+        Assert.AreEqual(JsonValueKind.Null, answer.GetProperty("later_version_facts_between_dates").ValueKind);
+    }
+
+    private static string PublisherWorkIriOf(MountedFixture fixture)
+    {
+        using var connection = Lex.V3.Ingest.Luxembourg.LuxembourgIndexBuilder.Open(
+            Path.Combine(fixture.Directory, V3CorpusMount.IndexFileName), Microsoft.Data.Sqlite.SqliteOpenMode.ReadOnly);
+        using var command = connection.CreateCommand();
+        command.CommandText = "SELECT publisher_work_iri FROM states WHERE work_key=$work LIMIT 1";
+        command.Parameters.AddWithValue("$work", fixture.WorkKey);
+        return (string)command.ExecuteScalar()!;
     }
 
     [TestMethod]

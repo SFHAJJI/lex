@@ -3006,10 +3006,12 @@ internal sealed partial class V3CorpusMount : IDisposable
     }
 
     /// <summary>
-    /// What a comparison says when both dates select one state: the state's own publisher applicability date, in the
-    /// publisher's clock (R21's "applicable from X (publisher)"). It used to say "the same version applied on both dates",
-    /// which spoke of a version as having applied; R21 never says "applied", "in force" or "en vigueur" of a date or an
-    /// interval, and the web's vocabulary check holds the card that shows this note to it.
+    /// What a comparison says when both dates select one state of a work whose consolidated state is held: the state's own
+    /// publisher applicability date, in the publisher's clock (R21's "applicable from X (publisher)"). It used to say "the
+    /// same version applied on both dates", which spoke of a version as having applied; R21 never says "applied", "in force"
+    /// or "en vigueur" of a date or an interval, and the web's vocabulary check holds the card that shows this note to it. An
+    /// act held only as published says <see cref="AsPublishedSameTextNote"/> instead: its one state is the act as first
+    /// published, and the publisher may name consolidated versions between the two dates (the review of #964).
     /// </summary>
     internal static string SameVersionNote(string applicabilityDate) =>
         $"Both dates fall within the same version, applicable from {applicabilityDate} (publisher)";
@@ -3018,7 +3020,9 @@ internal sealed partial class V3CorpusMount : IDisposable
     /// R6 <c>diff</c> for Luxembourg, at article level: each bound resolves to a state exactly as
     /// <c>as_of</c> resolves it, per language; both states are served in full before anything is
     /// compared; one state covering both bounds answers "Both dates fall within the same version, applicable from {date}
-    /// (publisher)", in the publisher's own clock and never "applied" (R21); two
+    /// (publisher)", in the publisher's own clock and never "applied" (R21), or, for an act held only as published,
+    /// "Both dates select the one text held, the act as published, …" with the consolidated versions and end-of-force dates
+    /// the publisher's facts put between the two dates (<c>as_published</c> and <c>later_version_facts_between_dates</c>); two
     /// states with the same rule profiles are compared article by article by publisher-minted id and
     /// wording digest (unchanged, changed, added, removed). Two states with different rule profiles
     /// refuse <c>profiles_differ</c>, which nothing overrides. Refusals follow <c>as_of</c>'s rule: an
@@ -3064,7 +3068,10 @@ internal sealed partial class V3CorpusMount : IDisposable
                 .ToArray();
         var servedLanguages = requestedLanguage is null ? availableLanguages : new[] { requestedLanguage };
 
-        var comparisons = new List<object>();
+        // Each language compared, held until every language is classified: a same-state note says what the work is held as
+        // (an act held only as published names the facts between the dates), which is known once the compared states are.
+        var compared = new List<(string Language, LuxembourgIndexResolvedState From, string? FromNext,
+            LuxembourgIndexResolvedState To, string? ToNext, bool OnlyStateHeld, (IReadOnlyList<object> Articles, object Counts)? Rows)>();
         var notCompared = new List<object>();
         (string Bound, string Date, string[] Candidates)? ambiguous = null;
         (string Language, LuxembourgIndexResolvedState From, LuxembourgIndexResolvedState To)? profilesDiffer = null;
@@ -3102,16 +3109,7 @@ internal sealed partial class V3CorpusMount : IDisposable
             var to = toSelected[0];
             if (string.Equals(from.StateSha256, to.StateSha256, StringComparison.Ordinal))
             {
-                comparisons.Add(new
-                {
-                    language,
-                    from = StateRow(from, fromNext),
-                    to = StateRow(to, toNext),
-                    same_state = true,
-                    note = SameVersionNote(from.ApplicabilityDate),
-                    articles = (object?)null,
-                    counts = (object?)null,
-                });
+                compared.Add((language, from, fromNext, to, toNext, ofLanguage.Length == 1, null));
                 continue;
             }
 
@@ -3124,16 +3122,7 @@ internal sealed partial class V3CorpusMount : IDisposable
 
             var (articles, counts, _) = CompareArticles(
                 _reader!.ResolveStateArticles(from.StateSha256), _reader.ResolveStateArticles(to.StateSha256));
-            comparisons.Add(new
-            {
-                language,
-                from = StateRow(from, fromNext),
-                to = StateRow(to, toNext),
-                same_state = false,
-                note = "two publisher-dated states; each article is compared by its publisher-minted id and wording digest, and nothing about legal effect is asserted",
-                articles = (object?)articles,
-                counts = (object?)counts,
-            });
+            compared.Add((language, from, fromNext, to, toNext, ofLanguage.Length == 1, (articles, counts)));
         }
 
         // One rule for refusals, the one as_of follows: an ambiguity or a profile mismatch in any served
@@ -3159,7 +3148,7 @@ internal sealed partial class V3CorpusMount : IDisposable
             return RefuseAmbiguousVersion(request, observedAt, ambiguity.Date, ambiguity.Candidates, ambiguity.Bound);
         }
 
-        if (comparisons.Count == 0)
+        if (compared.Count == 0)
         {
             // The refusal speaks for the language that misses the bound: its own history, not the whole
             // scope's. Another served language can hold a state on or before the very date refused here
@@ -3167,6 +3156,27 @@ internal sealed partial class V3CorpusMount : IDisposable
             var (bound, date, ofMissingLanguage) = missing!.Value;
             return RefuseNoVersionForDate(request, observedAt, ofMissingLanguage, date, bound);
         }
+
+        // An act held only as published (the plan's item 0.6; the review of #964) carries as_published as every answer that
+        // serves its states does, and the facts its publisher dates between the two dates. Both dates selecting its one state
+        // is then said as what it is, the one text held, the act as first published, never as one version covering both
+        // dates: the publisher may name a consolidated version, or an end-of-force date, between them.
+        var asPublished = AsPublishedOf(states, compared.SelectMany(static entry => new[] { entry.From, entry.To }).ToArray());
+        var between = asPublished is null ? null : BetweenDates(asPublished, dateFrom, dateTo);
+        var comparisons = compared.Select(entry => new
+        {
+            language = entry.Language,
+            from = StateRow(entry.From, entry.FromNext),
+            to = StateRow(entry.To, entry.ToNext),
+            same_state = entry.Rows is null,
+            note = entry.Rows is not null
+                ? "two publisher-dated states; each article is compared by its publisher-minted id and wording digest, and nothing about legal effect is asserted"
+                : between is null
+                    ? SameVersionNote(entry.From.ApplicabilityDate)
+                    : between.Note(entry.From.ApplicabilityDate, entry.OnlyStateHeld),
+            articles = (object?)entry.Rows?.Articles,
+            counts = entry.Rows?.Counts,
+        }).ToArray();
 
         using var result = JsonSerializer.SerializeToDocument(new
         {
@@ -3178,6 +3188,8 @@ internal sealed partial class V3CorpusMount : IDisposable
             work_key = states[0].WorkKey,
             comparisons,
             languages_not_compared = notCompared,
+            as_published = AsPublishedAnswer(asPublished),
+            later_version_facts_between_dates = BetweenDatesAnswer(between),
             articles_not_admitted_note = ArticlesNotAdmittedNote,
             available_languages = availableLanguages,
             wording_rule = WordingRule,

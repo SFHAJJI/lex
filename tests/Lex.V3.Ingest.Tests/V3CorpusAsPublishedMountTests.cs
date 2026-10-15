@@ -16,7 +16,7 @@ namespace Lex.V3.Ingest.Tests;
 /// the specification of record's R76, R18 and R20), driven through the real handler on a verified mount: <c>as_of</c>,
 /// <c>evidence_bundle</c>, <c>timeline</c> and <c>dossier</c> carry <c>as_published</c> (the label, the facts the index
 /// holds about later versions, and an authenticity sentence whose case is the publisher's publication date of the act as
-/// published), and the two with a not-held list carry the later-versions row. The fixture's act is held as its Journal
+/// published), and the two with a not-held list carry the later-versions row; <c>diff</c> carries it too (the review of #964). The fixture's act is held as its Journal
 /// officiel expression (<c>.../jo/fr</c>) and the index holds none of its facts, so it is the case the whole population is
 /// in today, with the least said; the facts are then added one kind at a time, and none is ever invented.
 /// </summary>
@@ -43,6 +43,8 @@ public sealed class V3CorpusAsPublishedMountTests
             ["evidence_bundle"] = await AnswerAsync(mount, "evidence_bundle", new { identifier, date = fixture.ApplicabilityDate }),
             ["timeline"] = await AnswerAsync(mount, "timeline", new { identifier }),
             ["dossier"] = await AnswerAsync(mount, "dossier", new { identifier }),
+            // A comparison serves the act's states too (the review of #964).
+            ["diff"] = await AnswerAsync(mount, "diff", new { identifier, date_from = fixture.ApplicabilityDate, date_to = fixture.ApplicabilityDate }),
         };
         foreach (var (operation, answer) in answers)
         {
@@ -226,6 +228,7 @@ public sealed class V3CorpusAsPublishedMountTests
                      // The state of the date asked is the act as published, and the work still holds a consolidated text.
                      ("as_of", new { identifier, date = fixture.ApplicabilityDate }),
                      ("evidence_bundle", new { identifier, date = fixture.ApplicabilityDate }),
+                     ("diff", new { identifier, date_from = fixture.ApplicabilityDate, date_to = fixture.ApplicabilityDate }),
                  })
         {
             var answer = await AnswerAsync(mount, operation, parameters);

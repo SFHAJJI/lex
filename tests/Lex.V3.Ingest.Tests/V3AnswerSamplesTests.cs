@@ -325,6 +325,31 @@ public sealed class V3AnswerSamplesTests
         using var comparedMount = await V3CorpusMount.OpenAsync(compared.Directory, CancellationToken.None);
         Assert.IsNotNull(comparedMount);
 
+        // A third mount for `diff` of an act held only as published whose publisher's record dates later versions (the
+        // review of #964): consolidated versions from 2024-02-05, 2024-03-11 and 2024-06-25, and an end-of-force date of
+        // 2024-09-30. Compared on 2024-02-10 and 2024-10-31, both dates select the one text held, and the answer names the
+        // two versions and the end-of-force date dated between them, not the one before. Its own fixture, so every other
+        // sample stays the act with no such fact.
+        var straddled = await MountedFixture.CreateAsync();
+        await using var cleanupStraddled = straddled;
+        string straddledWork;
+        using (var connection = Lex.V3.Ingest.Luxembourg.LuxembourgIndexBuilder.Open(
+                   Path.Combine(straddled.Directory, V3CorpusMount.IndexFileName), Microsoft.Data.Sqlite.SqliteOpenMode.ReadOnly))
+        using (var command = connection.CreateCommand())
+        {
+            command.CommandText = "SELECT publisher_work_iri FROM states LIMIT 1";
+            straddledWork = (string)command.ExecuteScalar()!;
+        }
+        const string xsdDate = "http://www.w3.org/2001/XMLSchema#date";
+        foreach (var (leaf, from, to) in new[] { ("20240205", "2024-02-05", "2024-03-10"), ("20240311", "2024-03-11", "2024-06-24"), ("20240625", "2024-06-25", "2024-09-29") })
+        {
+            await straddled.AddWorkFactAsync($"{straddledWork}/consolide/{leaf}", "dateApplicability", "consolidation_applicability", "literal", from, xsdDate);
+            await straddled.AddWorkFactAsync($"{straddledWork}/consolide/{leaf}", "dateEndApplicability", "consolidation_applicability", "literal", to, xsdDate);
+        }
+        await straddled.AddWorkFactAsync(straddledWork + "/jo", "dateNoLongerInForce", "act_force", "literal", "2024-09-30", xsdDate);
+        using var straddledMount = await V3CorpusMount.OpenAsync(straddled.Directory, CancellationToken.None);
+        Assert.IsNotNull(straddledMount);
+
         // An EU mount for EU `search` in one work, so the search screen's EU reader sees what an EU answer carries: the
         // one held English wording of the GDPR, pinned, and each hit's hash-pinned provision permalink. The phrase has
         // two strict hits and one relaxed hit in that wording, so one small answer holds both lanes.
@@ -385,8 +410,9 @@ public sealed class V3AnswerSamplesTests
             await DriveAsync(mount, "article_history", "one article of the work, in the language it is held in: its lineage through the held states", new { parameters.identifier, anchor = "art_15", parameters.language }),
             // `diff` is sampled for the live compare screen's reader: the work's one state against itself, and two
             // states with one article reworded and one id renamed, in its language.
-            await DriveAsync(mount, "diff", "the work's state on one date against the state on the same date: the same version, nothing compared", new { parameters.identifier, date_from = parameters.date, date_to = parameters.date, parameters.language }),
+            await DriveAsync(mount, "diff", "the work's state on one date against the state on the same date: the one text held, nothing compared", new { parameters.identifier, date_from = parameters.date, date_to = parameters.date, parameters.language }),
             await DriveAsync(comparedMount, "diff", "two states a year apart: one article's wording changed, one article id renamed, the rest unchanged", new { identifier = $"/lu-legilux/{compared.WorkKey}", date_from = compared.ApplicabilityDate, date_to = laterDate, language = "fra" }),
+            await DriveAsync(straddledMount, "diff", "an act held only as published, on two dates between which its publisher's record dates two consolidated versions and an end-of-force date: the one text held, and those facts named", new { identifier = $"/lu-legilux/{straddled.WorkKey}", date_from = "2024-02-10", date_to = "2024-10-31", language = "fra" }),
             // `changes_in_period` is sampled for the live radar screen's reader: a window holding the one-state fixture's
             // first state (no baseline), and the two-state fixture's window holding both (the later one compared).
             await DriveAsync(mount, "changes_in_period", "a window holding the work's first held state: one row, no baseline to compare with", new { date_from = parameters.date, date_to = parameters.date }),

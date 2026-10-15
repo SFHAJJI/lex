@@ -2,9 +2,10 @@
 //
 // The compare screen's renderer (`compare.mjs`) was written before V3 against a shape the platform
 // does not send. This file reads the `diff` answer (object type `diff`, publisher `lu-legilux`), held
-// to the two answers captured by driving the real handler (`schemas/v3-platform/answer-samples.json`:
-// one state against itself, and two states with one article reworded and one id renamed), and turns
-// it into one view a live screen can render. It renders nothing itself.
+// to the three answers captured by driving the real handler (`schemas/v3-platform/answer-samples.json`:
+// one state against itself, two states with one article reworded and one id renamed, and an act held
+// only as published on two dates its publisher's record dates versions between), and turns it into
+// one view a live screen can render. It renders nothing itself.
 //
 // A comparison is article by article, by the publisher's article id and the wording digests on each
 // side, and says nothing about legal effect. Everything it derives the reader derives again, and it
@@ -16,13 +17,19 @@
 //    once and in the languages' order, in the language asked when one was asked;
 //  - the same state on both dates is said as such, with no articles and no counts, and its note is the publisher's
 //    clock for that state, "Both dates fall within the same version, applicable from {date} (publisher)" (R21; never
-//    "applied", which the old note said);
+//    "applied", which the old note said), for a work whose consolidated state is held;
+//  - an act held only as published (`as_published`, read by `as-published.mjs`; the review of #964) is said as what it
+//    is: both dates select the one text held, the act as published, and later versions are not held; the consolidated
+//    versions and end-of-force dates its publisher's record dates between the two dates are named, and the answer's
+//    `later_version_facts_between_dates` is exactly those of `as_published`'s facts; the note is the one those facts give
+//    (`sameTextHeldNote`), "the one text held" only when no other state of the language is in sight;
 //  - otherwise every article of each side appears in exactly one row, the rows are in the ids'
 //    ordinal order, and each row's status is its sides': added, removed, unchanged when the ordered
 //    wording digests are equal, changed when they are not; the counts are the rows'.
 
 import { isCalendarDate } from './temporal.mjs';
 import { SAME_STATE_SENTENCE } from './publisher-vocabulary.mjs';
+import { laterVersionFactsBetween, readAsPublished, sameTextHeldNote } from './as-published.mjs';
 
 const DIGEST = /^[0-9a-f]{64}$/;
 
@@ -134,6 +141,7 @@ function readSide(side, where, context) {
     stableCoordinate: coordinate,
     permalink,
     expressionIri: requireText(requireOwn(side, 'expression_iri', where), `${where} expression_iri`),
+    publisherLegalResourceIri: requireText(requireOwn(side, 'publisher_legal_resource_iri', where), `${where} publisher_legal_resource_iri`),
     articleIdentities: Object.freeze(identities),
     articleCount: identities.length,
     articlesNotAdmitted: requireCount(requireOwn(side, 'articles_not_admitted', where), `${where} articles_not_admitted`),
@@ -171,11 +179,8 @@ function readComparison(comparison, index, context) {
     if (articlesValue !== null || countsValue !== null) {
       throw new Error(`${where} is the same state on both dates, which compares no article and counts none`);
     }
-    const said = SAME_STATE_SENTENCE.publisher_applicability(from.applicabilityDate);
-    if (note !== said) {
-      throw new Error(`${where} is the same state on both dates, and says ${JSON.stringify(note)} rather than ${JSON.stringify(said)}`);
-    }
-    return Object.freeze({ language, from, to, sameState, note, articles: null, counts: null });
+    // Its note is held to what the work is held as once the whole answer is read (`sameStateNoted`).
+    return { language, from, to, sameState, note, articles: null, counts: null };
   }
 
   const rows = requireList(articlesValue, `${where} articles`).map((row, rowIndex) => {
@@ -211,7 +216,77 @@ function readComparison(comparison, index, context) {
       throw new Error(`${where} counts ${counts[status]} ${status}, and ${tallied} of its rows are`);
     }
   }
-  return Object.freeze({ language, from, to, sameState, note, articles: Object.freeze(rows), counts: Object.freeze(counts) });
+  return { language, from, to, sameState, note, articles: Object.freeze(rows), counts: Object.freeze(counts) };
+}
+
+/**
+ * `later_version_facts_between_dates`: null exactly when `as_published` is, and otherwise exactly the facts of
+ * `as_published` dated after the earlier date asked and on or before the later one, in their order (the review of #964).
+ */
+function readBetween(answer, asPublished, dateFrom, dateTo) {
+  const where = 'later_version_facts_between_dates';
+  const value = requireOwn(answer, where, 'this comparison');
+  if (asPublished === null) {
+    if (value !== null) throw new Error(`${where} is given for a work that is not held only as published`);
+    return null;
+  }
+  const expected = laterVersionFactsBetween(asPublished, dateFrom, dateTo);
+  const after = requireDate(requireOwn(value, 'after', where), `${where}.after`);
+  const onOrBefore = requireDate(requireOwn(value, 'on_or_before', where), `${where}.on_or_before`);
+  if (after !== expected.after || onOrBefore !== expected.onOrBefore) {
+    throw new Error(`${where} runs after ${after} and on or before ${onOrBefore}, and the dates asked make it ${expected.after} and ${expected.onOrBefore}`);
+  }
+  const consolidations = requireList(requireOwn(value, 'consolidations', where), `${where}.consolidations`).map((entry, index) => {
+    const at = `${where}.consolidations[${index}]`;
+    return {
+      legalResourceIri: requireText(requireOwn(entry, 'legal_resource_iri', at), `${at}.legal_resource_iri`),
+      applicabilityDate: requireOwn(entry, 'applicability_date', at),
+      endApplicabilityDate: requireOwn(entry, 'end_applicability_date', at),
+    };
+  });
+  if (JSON.stringify(consolidations) !== JSON.stringify(expected.consolidations)) {
+    throw new Error(`${where}.consolidations are not the consolidated versions as_published dates after ${after} and on or before ${onOrBefore}`);
+  }
+  const endOfForce = requireList(requireOwn(value, 'end_of_force', where), `${where}.end_of_force`).map((fact, index) => {
+    const at = `${where}.end_of_force[${index}]`;
+    if (requireOwn(fact, 'subject_iri', at) !== asPublished.journalOfficielIri) {
+      throw new Error(`${at} is not a fact about the act as published, ${asPublished.journalOfficielIri}`);
+    }
+    requireDigest(requireOwn(fact, 'evidence_sha256', at), `${at}.evidence_sha256`);
+    return requireText(requireOwn(fact, 'value', at), `${at}.value`);
+  });
+  if (JSON.stringify([...new Set(endOfForce)]) !== JSON.stringify(expected.endOfForce)) {
+    throw new Error(`${where}.end_of_force is not the end-of-force dates as_published gives after ${after} and on or before ${onOrBefore}`);
+  }
+  requireText(requireOwn(value, 'rule', where), `${where}.rule`);
+  return expected;
+}
+
+/**
+ * One comparison with its note held to what the work is held as: a two-state comparison as it is; one state on both
+ * dates of a work whose consolidated state is held says the publisher's clock for one version; of an act held only as
+ * published, the one text held (or the same text held) and the facts dated between the dates. `onlyTextHeld` says which.
+ */
+function sameStateNoted(comparison, index, asPublished, between) {
+  const where = `comparison ${index + 1}`;
+  if (!comparison.sameState) return Object.freeze({ ...comparison, onlyTextHeld: null });
+  const { note, from, to } = comparison;
+  if (asPublished === null) {
+    const said = SAME_STATE_SENTENCE.publisher_applicability(from.applicabilityDate);
+    if (note !== said) {
+      throw new Error(`${where} is the same state on both dates, and says ${JSON.stringify(note)} rather than ${JSON.stringify(said)}`);
+    }
+    return Object.freeze({ ...comparison, onlyTextHeld: null });
+  }
+  const one = sameTextHeldNote(from.applicabilityDate, true, between);
+  if (note === one) {
+    // "The one text held" cannot be said where another state of the language is in sight.
+    const next = from.nextApplicabilityDate ?? to.nextApplicabilityDate;
+    if (next !== null) throw new Error(`${where} says the one text held, and the language holds another state, from ${next}`);
+    return Object.freeze({ ...comparison, onlyTextHeld: true });
+  }
+  if (note === sameTextHeldNote(from.applicabilityDate, false, between)) return Object.freeze({ ...comparison, onlyTextHeld: false });
+  throw new Error(`${where} is the one state of an act held only as published on both dates, and says ${JSON.stringify(note)} rather than ${JSON.stringify(one)}`);
 }
 
 /**
@@ -236,11 +311,15 @@ export function readDiff(answer) {
     throw new Error(`the language asked for, ${language}, is not one the work is held in`);
   }
 
-  const comparisons = requireList(requireOwn(answer, 'comparisons', where), 'comparisons')
+  const read = requireList(requireOwn(answer, 'comparisons', where), 'comparisons')
     .map((comparison, index) => readComparison(comparison, index, { workKey, dateFrom, dateTo }));
-  if (comparisons.length === 0) {
+  if (read.length === 0) {
     throw new Error('a comparison with nothing compared is refused no_version_for_date, not answered');
   }
+  // An act held only as published says so, as every answer that serves its states does (the review of #964).
+  const asPublished = readAsPublished(answer, { states: read.flatMap((comparison) => [comparison.from, comparison.to]) });
+  const between = readBetween(answer, asPublished, dateFrom, dateTo);
+  const comparisons = read.map((comparison, index) => sameStateNoted(comparison, index, asPublished, between));
   const notCompared = Object.freeze(requireList(requireOwn(answer, 'languages_not_compared', where), 'languages_not_compared')
     .map((entry, index) => {
       const at = `languages_not_compared[${index}]`;
@@ -288,6 +367,8 @@ export function readDiff(answer) {
     availableLanguages,
     comparisons: Object.freeze(comparisons),
     languagesNotCompared: notCompared,
+    asPublished,
+    laterVersionsBetween: between,
     wordingRule: requireText(requireOwn(answer, 'wording_rule', where), 'wording_rule'),
     validityConflictRule: requireText(requireOwn(answer, 'validity_conflict_rule', where), 'validity_conflict_rule'),
     articlesNotAdmittedNote: requireText(requireOwn(answer, 'articles_not_admitted_note', where), 'articles_not_admitted_note'),

@@ -39,7 +39,11 @@
 // sentences) and the Compare card's sentence for one state on both dates (`compare.sameVersion`, with `compare.idle`
 // changed so the page never says "s’appliquaient"), the plan's item 0.6, were reviewed by the same reviewer under the
 // same delegation in the addendum of 2026-10-15 (13 forms, 2 changed in review; the label and the authenticity
-// sentences go to the lawyer's read, the owner's item O4).
+// sentences go to the lawyer's read, the owner's item O4). What Compare says when both dates select the one state of an
+// act held only as published, and what its publisher dates between the two dates (`compare.sameTextHeld`,
+// `compare.sameTextHeldOfSeveral`, `compare.betweenNamed`, `compare.betweenEndOfForce`; the review of #964), were
+// reviewed by the same reviewer under the same delegation in that addendum's section for the review of #964 (5 forms,
+// 3 changed in review: "le même texte détenu", and "pour cet acte" before the count in both counted forms).
 // No French entry ships unreviewed.
 //
 // Vocabulary: a work is an "acte" (a publisher's Cellar work, one record of an EU act, is an "œuvre de l’éditeur"), a
@@ -196,6 +200,13 @@ export const LIVE_CHROME_FR = Object.freeze({
     sideNext: '{side} : la version applicable à partir du {from} (la version suivante détenue s’applique à partir du {next}) ; articles : {articles} ; date propre différente de celle de la version : {conflicts} ; {permalink}',
     counts: 'Modifiés : {changed} ; ajoutés : {added} ; supprimés : {removed} ; inchangés : {unchanged}.',
     sameVersion: 'Les deux dates relèvent de la même version, applicable à partir du {from} (éditeur).',
+    sameTextHeld: 'Pour les deux dates, le texte retenu est le seul texte détenu, l’acte tel que publié, applicable à partir du {from} (éditeur) ; les versions ultérieures ne sont pas détenues.',
+    sameTextHeldOfSeveral: 'Pour les deux dates, le texte retenu est le même texte détenu, l’acte tel que publié, applicable à partir du {from} (éditeur) ; aucune version consolidée n’est détenue.',
+    betweenNamed: Object.freeze({
+      one: 'Les données de l’éditeur nomment, pour cet acte, {count} version consolidée dont la date d’applicabilité se situe après le {after} et au plus tard le {onOrBefore} :',
+      other: 'Les données de l’éditeur nomment, pour cet acte, {count} versions consolidées dont les dates d’applicabilité se situent après le {after} et au plus tard le {onOrBefore} :',
+    }),
+    betweenEndOfForce: 'Les données de l’éditeur indiquent le {date} comme date de fin de vigueur de cet acte, date qui se situe après le {after} et au plus tard le {onOrBefore}.',
     status: Object.freeze({ changed: 'modifié', added: 'ajouté', removed: 'supprimé', unchanged: 'inchangé' }),
     row: '{article} : {status} (libellé {from} → {to})',
     noWording: 'aucun',

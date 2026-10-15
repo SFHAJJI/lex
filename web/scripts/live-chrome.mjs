@@ -171,6 +171,16 @@ const EN = Object.freeze({
     counts: "{changed} changed, {added} added, {removed} removed, {unchanged} unchanged.",
     // Both dates select one state: said in the publisher's clock, never "applied" (R21; the plan's item 0.6).
     sameVersion: "Both dates fall within the same version, applicable from {from} (publisher).",
+    // Both dates select the one state of an act held only as published (the review of #964): what is held, never one
+    // version covering both dates. The publisher may date a consolidated version, or an end-of-force date, between them,
+    // and the card names each, a version in the as-published block's form (`common.asPublished.consolidationFromTo`).
+    sameTextHeld: "Both dates select the one text held, the act as published, applicable from {from} (publisher); later versions are not held.",
+    sameTextHeldOfSeveral: "Both dates select the same text held, the act as published, applicable from {from} (publisher); no consolidated version is held.",
+    betweenNamed: Object.freeze({
+      one: "The publisher's record names, for this act, {count} consolidated version whose applicability date falls after {after} and on or before {onOrBefore}:",
+      other: "The publisher's record names, for this act, {count} consolidated versions whose applicability dates fall after {after} and on or before {onOrBefore}:",
+    }),
+    betweenEndOfForce: "The publisher's record gives {date} as this act's end-of-force date, which falls after {after} and on or before {onOrBefore}.",
     status: Object.freeze({ changed: "changed", added: "added", removed: "removed", unchanged: "unchanged" }),
     row: "{article}: {status} (wording {from} → {to})",
     noWording: "none",

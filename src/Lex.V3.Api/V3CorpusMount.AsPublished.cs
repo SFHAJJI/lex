@@ -10,7 +10,8 @@ namespace Lex.V3.Api;
 /// Almost the whole Luxembourg population is held this way: every state the index holds of the work is an expression of
 /// the publisher's Journal officiel legal resource (<c>{work}/jo</c>, which the publisher types <c>jolux:Act</c>), and none
 /// is a consolidated version (<c>{work}/consolide/{date}</c>, <c>jolux:Consolidation</c>). The answers that serve such a
-/// work's states (<c>as_of</c>, <c>evidence_bundle</c>, <c>timeline</c>, <c>dossier</c>) say so in <c>as_published</c>,
+/// work's states (<c>as_of</c>, <c>evidence_bundle</c>, <c>timeline</c>, <c>dossier</c>, and <c>diff</c>, which also names the
+/// facts dated between its two dates, the review of #964) say so in <c>as_published</c>,
 /// with what the index holds about later versions, read from the publisher's own facts and never invented, and with an
 /// authenticity sentence whose case is read from the publisher's publication date of the act as published. A work with a
 /// consolidated state held answers <c>as_published: null</c>.
@@ -186,6 +187,95 @@ internal sealed partial class V3CorpusMount
     private static string JoinWithAnd(IReadOnlyList<string> values) =>
         values.Count == 1 ? values[0] : string.Join(", ", values.Take(values.Count - 1)) + " and " + values[^1];
 
+    /// <summary>The rule of <c>later_version_facts_between_dates</c>, which a comparison of an act held only as published carries.</summary>
+    internal const string LaterVersionFactsBetweenDatesRule =
+        "of as_published.later_version_facts, the consolidated versions whose dateApplicability is one civil date after the earlier requested date and " +
+        "on or before the later one (after and on_or_before), in the same order, and the end-of-force facts whose value is such a date, verbatim; a " +
+        "comparison in which both dates select one state names them in its note; an empty list says only that the index holds no such fact, and " +
+        "nothing here says whether the text changed between the dates";
+
+    /// <summary>
+    /// What a comparison of an act held only as published says when both dates select one state (the plan's item 0.6; the
+    /// review of #964): the text both dates select is the act as published, with its publisher applicability start, and later
+    /// versions are not held; then, from the publisher's facts and nothing else, the consolidated versions whose applicability
+    /// date falls after the earlier date and on or before the later one, and the end-of-force dates that do. It never says
+    /// whether the text changed between the dates. <paramref name="onlyStateHeld"/> is whether the language holds that state
+    /// alone (the whole population today): only then is it "the one text held", and otherwise "the same text held", of which
+    /// it is said that no consolidated version is held.
+    /// </summary>
+    internal static string AsPublishedSameTextNote(
+        string applicabilityDate,
+        bool onlyStateHeld,
+        string after,
+        string onOrBefore,
+        IReadOnlyList<(string ApplicabilityDate, string? EndApplicabilityDate)> consolidations,
+        IReadOnlyList<string> endOfForce)
+    {
+        // Beside another held state of the language, "later versions are not held" would contradict the sides' next state.
+        var note = $"Both dates select {(onlyStateHeld ? "the one text held" : "the same text held")}, the act as published, applicable from " +
+                   $"{applicabilityDate} (publisher); {(onlyStateHeld ? "later versions are not held" : "no consolidated version is held")}";
+        if (consolidations.Count > 0)
+        {
+            var named = consolidations.Count == 1
+                ? "1 consolidated version of it whose applicability date falls"
+                : $"{consolidations.Count} consolidated versions of it whose applicability dates fall";
+            var dated = consolidations
+                .Select(static entry => entry.EndApplicabilityDate is null
+                    ? $"from {entry.ApplicabilityDate}"
+                    : $"from {entry.ApplicabilityDate} to {entry.EndApplicabilityDate}")
+                .ToArray();
+            note += $"; the publisher's record names {named} after {after} and on or before {onOrBefore}, applicable {JoinWithAnd(dated)} (publisher)";
+        }
+
+        if (endOfForce.Count > 0)
+        {
+            note += $"; the publisher's record gives {JoinWithAnd(endOfForce)} as the act's end-of-force date (dateNoLongerInForce), which " +
+                    $"{(endOfForce.Count == 1 ? "falls" : "fall")} after {after} and on or before {onOrBefore}";
+        }
+
+        return note;
+    }
+
+    /// <summary>
+    /// Of what the index holds about an act held only as published, the facts dated between two requested dates, in either
+    /// order: the consolidated versions whose single applicability date is after the earlier and on or before the later, and
+    /// the end-of-force facts whose value is such a civil date.
+    /// </summary>
+    private static AsPublishedBetween BetweenDates(AsPublishedFacts facts, string dateFrom, string dateTo)
+    {
+        var (after, onOrBefore) = string.CompareOrdinal(dateFrom, dateTo) <= 0 ? (dateFrom, dateTo) : (dateTo, dateFrom);
+        bool Within(string? date) =>
+            date is not null && string.CompareOrdinal(date, after) > 0 && string.CompareOrdinal(date, onOrBefore) <= 0;
+        return new AsPublishedBetween(
+            after,
+            onOrBefore,
+            facts.Consolidations.Where(consolidation => Within(consolidation.ApplicabilityDate)).ToArray(),
+            facts.EndOfForce.Where(fact => Within(SingleCivilDate([fact]))).ToArray());
+    }
+
+    /// <summary>The <c>later_version_facts_between_dates</c> member as a comparison serves it, or null for a work with a consolidated state held.</summary>
+    private static object? BetweenDatesAnswer(AsPublishedBetween? between)
+    {
+        if (between is null)
+        {
+            return null;
+        }
+
+        return new
+        {
+            after = between.After,
+            on_or_before = between.OnOrBefore,
+            consolidations = between.Consolidations.Select(static consolidation => new
+            {
+                legal_resource_iri = consolidation.LegalResourceIri,
+                applicability_date = consolidation.ApplicabilityDate,
+                end_applicability_date = consolidation.EndApplicabilityDate,
+            }).ToArray(),
+            end_of_force = between.EndOfForce,
+            rule = LaterVersionFactsBetweenDatesRule,
+        };
+    }
+
     /// <summary>The <c>as_published</c> member as an answer serves it, or null for a work with a consolidated state held.</summary>
     private static object? AsPublishedAnswer(AsPublishedFacts? facts)
     {
@@ -251,6 +341,23 @@ internal sealed partial class V3CorpusMount
     }
 
     private sealed record AsPublishedConsolidation(string LegalResourceIri, string? ApplicabilityDate, string? EndApplicabilityDate);
+
+    /// <summary>The facts about an act held only as published that are dated after one requested date and on or before the other.</summary>
+    private sealed record AsPublishedBetween(
+        string After,
+        string OnOrBefore,
+        AsPublishedConsolidation[] Consolidations,
+        FactView[] EndOfForce)
+    {
+        /// <summary>The note of a comparison in which both dates select one state of the act as published.</summary>
+        public string Note(string applicabilityDate, bool onlyStateHeld) => AsPublishedSameTextNote(
+            applicabilityDate,
+            onlyStateHeld,
+            After,
+            OnOrBefore,
+            Consolidations.Select(static consolidation => (consolidation.ApplicabilityDate!, consolidation.EndApplicabilityDate)).ToArray(),
+            EndOfForce.Select(static fact => fact.value).Distinct(StringComparer.Ordinal).ToArray());
+    }
 
     private sealed record AsPublishedServedFile(string ManifestationIri, string FormatIri, FactView[] LegalValues);
 }

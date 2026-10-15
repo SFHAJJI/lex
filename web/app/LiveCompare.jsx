@@ -8,7 +8,11 @@
 //
 // The comparison is by the publisher's article id and wording digest, and says nothing about legal
 // effect; the page says the platform's own note beside it, except when both dates select one state, which it
-// says in its own language and the publisher's clock (`compare.sameVersion`). It is linear, not a colour-coded diff:
+// says in its own language and the publisher's clock (`compare.sameVersion`). An act held only as published (the review
+// of #964) shows the as-published block (`AsPublished`), and both dates selecting its one state is said as what it is,
+// the one text held (`compare.sameTextHeld`), with the consolidated versions and the end-of-force date its publisher's
+// record dates between the two dates, each named (`compare.betweenNamed`, `compare.betweenEndOfForce`), and nothing
+// said of whether the text changed. It is linear, not a colour-coded diff:
 // each status is a word, and the changed, added and removed articles are listed before the unchanged
 // ones, which are one disclosure away. The form's controls carry no `name`, and every permalink
 // is a link to its page (`Permalink`).
@@ -18,7 +22,7 @@ import { useEffect, useRef, useState } from 'react';
 import { RefusalCard } from './RefusalCard.jsx';
 import { COMPARE_LANGUAGES, LIVE_COMPARE_IDLE, createCompareSession } from '../scripts/live-compare.mjs';
 import { ENGLISH_LANG, countedEntry, liveChrome } from '../scripts/live-chrome.mjs';
-import { LiveAnswer, Permalink, Say, StatusSentence, inEnglish, refusalCardCopyFor } from './LiveAnswer.jsx';
+import { AsPublished, LiveAnswer, Permalink, Say, StatusSentence, inEnglish, refusalCardCopyFor } from './LiveAnswer.jsx';
 
 /** The forms' labels and buttons, and this screen's sentences, from the interface copy table. */
 const FORM = liveChrome().form;
@@ -62,7 +66,54 @@ function Row({ row }) {
   );
 }
 
-function Comparison({ comparison }) {
+/**
+ * What the publisher's record dates between the two dates of a comparison of an act held only as published (the review
+ * of #964): each consolidated version whose applicability date falls after the earlier date and on or before the later
+ * one, in the as-published block's form, and its end-of-force date when it does. Nothing when the record dates none.
+ */
+function BetweenDates({ between }) {
+  const { after, onOrBefore, consolidations, endOfForce } = between;
+  if (consolidations.length === 0 && endOfForce.length === 0) return null;
+  const common = liveChrome().common;
+  return (
+    <div data-between-dates={consolidations.length}>
+      {consolidations.length > 0 ? (
+        <>
+          <p>
+            <Say template={countedEntry(COPY.betweenNamed, consolidations.length)} values={{ count: consolidations.length, after, onOrBefore }} />
+          </p>
+          <ul>
+            {consolidations.map((consolidation) => {
+              const iri = <code>{consolidation.legalResourceIri}</code>;
+              return (
+                <li key={consolidation.legalResourceIri}>
+                  {consolidation.endApplicabilityDate === null ? (
+                    <Say template={common.asPublished.consolidationFrom} values={{ iri, from: consolidation.applicabilityDate }} />
+                  ) : (
+                    <Say template={common.asPublished.consolidationFromTo} values={{ iri, from: consolidation.applicabilityDate, to: consolidation.endApplicabilityDate }} />
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+        </>
+      ) : null}
+      {endOfForce.length > 0 ? (
+        <p data-end-of-force-between="">
+          <Say template={COPY.betweenEndOfForce} values={{ date: endOfForce.join(common.listSeparator), after, onOrBefore }} />
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
+/** The sentence one state on both dates is said in: one version's clock, or the one text held of an act held only as published. */
+function sameStateTemplate(comparison) {
+  if (comparison.onlyTextHeld === null) return COPY.sameVersion;
+  return comparison.onlyTextHeld ? COPY.sameTextHeld : COPY.sameTextHeldOfSeveral;
+}
+
+function Comparison({ comparison, between }) {
   const moved = comparison.articles?.filter((row) => row.status !== 'unchanged') ?? [];
   const kept = comparison.articles?.filter((row) => row.status === 'unchanged') ?? [];
   return (
@@ -71,11 +122,16 @@ function Comparison({ comparison }) {
       <Side label={COPY.sideFrom} side={comparison.from} />
       <Side label={COPY.sideTo} side={comparison.to} />
       {/* One state on both dates is said in the page's language and the publisher's clock, never "applied" (R21; the
-          reader holds the platform's note to the same sentence); two states keep the platform's own note. */}
+          reader holds the platform's note to the same sentence): one version's, or, of an act held only as published,
+          the one text held and what its publisher dates between the dates (the review of #964). Two states keep the
+          platform's own note. */}
       {comparison.sameState ? (
-        <p data-same-version="">
-          <Say template={COPY.sameVersion} values={{ from: comparison.from.applicabilityDate }} />
-        </p>
+        <>
+          <p data-same-version="">
+            <Say template={sameStateTemplate(comparison)} values={{ from: comparison.from.applicabilityDate }} />
+          </p>
+          {between === null ? null : <BetweenDates between={between} />}
+        </>
       ) : (
         <p lang={ENGLISH_LANG}>{asSentence(comparison.note)}</p>
       )}
@@ -117,7 +173,9 @@ export function CompareView({ view }) {
           <Say template={COPY.summaryIn} values={{ work: view.workKey, from: view.dateFrom, to: view.dateTo, language: view.language }} />
         )}
       </p>
-      {view.comparisons.map((comparison) => <Comparison key={comparison.language} comparison={comparison} />)}
+      {/* An act held only as published says so here as on its reading and its dossier (the review of #964). */}
+      <AsPublished asPublished={view.asPublished} />
+      {view.comparisons.map((comparison) => <Comparison key={comparison.language} comparison={comparison} between={view.laterVersionsBetween} />)}
       {view.languagesNotCompared.length > 0 ? (
         <ul data-not-compared={view.languagesNotCompared.length}>
           {view.languagesNotCompared.map((entry) => (

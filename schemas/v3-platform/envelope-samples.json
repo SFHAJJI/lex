@@ -3120,6 +3120,30 @@
           "schema": "lex-v3-diff-result/1",
           "value": {
             "articles_not_admitted_note": "articles_not_admitted counts the articles the corpus recorded for the publisher\u0027s document for this state that this state does not hold; the number of articles in this state plus articles_not_admitted is the number of articles the corpus recorded for that document, which provenance counts by disposition token; which articles they are is not held. An article is not admitted whole when the reviewed profile cannot represent every element in it: that can be an article the publisher struck out, and it can equally be an article whose text is complete but which carries a mark the profile does not accept, such as an empty placeholder where a list item was removed",
+            "as_published": {
+              "authenticity": {
+                "basis": "publication_date_not_stated",
+                "publication_dates": [],
+                "rule": "the sentence is chosen by the publisher\u0027s publicationDate of the act as published (the Journal officiel legal resource): one civil date on or after 2017-01-01 is electronic_journal_officiel (loi du 23 d\u00E9cembre 2016, art. 5, applying from 1 January 2017 under its art. 9), one before it is printed_memorial, and none, several or one that is not a civil date is publication_date_not_stated; nothing here calls a file authentic: served_manifestations names the publisher file each listed state\u0027s text was read from, with the legalValue the publisher asserts on that file, verbatim, and Lex\u0027s extraction is never authentic whatever that value is",
+                "sentence": "This text was extracted and normalised by Lex, for information; it is not authentic. The publisher\u0027s record gives no single publication date for this act, so Lex does not say which edition is authentic. The act as published: http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo.",
+                "served_manifestations": [
+                  {
+                    "format_iri": "http://data.legilux.public.lu/resource/authority/user-format/xml",
+                    "legal_values": [],
+                    "manifestation_iri": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo/fr/xml"
+                  }
+                ]
+              },
+              "journal_officiel_iri": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo",
+              "label": "as published; may have been amended since; no consolidated text",
+              "later_version_facts": {
+                "consolidations": [],
+                "end_of_force": [],
+                "rule": "later versions are not held, and these are the facts the index holds about them: consolidations lists the legal resources the publisher\u0027s facts name under the work\u0027s /consolide/, each with its dateApplicability and dateEndApplicability as one civil date or null (none, several or another form), and end_of_force the publisher\u0027s dateNoLongerInForce facts on the act as published, verbatim; an empty list says only that the index holds no such fact, never that none exists; the not-held row later_versions carries the same sentence",
+                "sentence": "later versions of this act are not held"
+              },
+              "rule": "a Luxembourg work is held only as published when every state this index holds of it is an expression of the publisher\u0027s Journal officiel legal resource, the act as first published (the publisher work IRI followed by /jo); a consolidated version is a legal resource of its own (/consolide/ and its date), and this index holds no state of one, so no consolidated text of the work is held here; this says nothing about whether the publisher holds one: the consolidated versions the publisher\u0027s own facts name, if any, are listed under later_version_facts"
+            },
             "available_languages": [
               "fra"
             ],
@@ -3440,7 +3464,7 @@
                   "validity_conflict_rule": "article_valid_from is the publisher\u0027s article-level applicability date; validity_conflict is true when it is stated and differs from the state\u0027s applicability_date"
                 },
                 "language": "fra",
-                "note": "Both dates fall within the same version, applicable from 2024-02-01 (publisher)",
+                "note": "Both dates select the one text held, the act as published, applicable from 2024-02-01 (publisher); later versions are not held",
                 "same_state": true,
                 "to": {
                   "applicability_date": "2024-02-01",
@@ -3759,6 +3783,13 @@
             "corpus_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
             "index_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
             "languages_not_compared": [],
+            "later_version_facts_between_dates": {
+              "after": "2024-02-01",
+              "consolidations": [],
+              "end_of_force": [],
+              "on_or_before": "2024-02-01",
+              "rule": "of as_published.later_version_facts, the consolidated versions whose dateApplicability is one civil date after the earlier requested date and on or before the later one (after and on_or_before), in the same order, and the end-of-force facts whose value is such a date, verbatim; a comparison in which both dates select one state names them in its note; an empty list says only that the index holds no such fact, and nothing here says whether the text changed between the dates"
+            },
             "publisher": "lu-legilux",
             "requested_date_from": "2024-02-01",
             "requested_date_to": "2024-02-01",
