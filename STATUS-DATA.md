@@ -20,16 +20,26 @@ Updated 2026-10-15.
   - Six content-consistency checks (shared file, later state, other work, date ahead, copied state, copied act) run in a
     second pass over what the first read, so no body is read twice. Every check that fires is recorded; any of them gives
     the new disposition `publisher_file_names_other_state`, which keeps the inventory as evidence.
-  - Profile `lex-v3-luxembourg-akn-article-inventory-profile/4`, sha256 `40d79090…`, 2,019 bytes. The title grammar of
-    check (c) is one constant, behind both the profile line and the matcher.
-  - The production door takes the run and dates states from the run's own `dateApplicability` facts (3,752 consolidation
-    and code states over run 15); no caller supplies a catalogue.
+  - Profile `lex-v3-luxembourg-akn-article-inventory-profile/4`, sha256 `8a011d87…`, 2,050 bytes (re-pinned after the
+    review from the brief's `40d79090…`, 2,019 bytes, because check (c)'s title designation now names its own ends; see
+    the driver decisions). The title grammar of check (c) is one constant, behind both the profile line and the matcher.
+  - The production door takes the run and dates states from the run's own `dateApplicability` facts; no caller supplies
+    a catalogue. A test holds that projection through the door. Over run 15 the probe builds the same catalogue (3,752
+    consolidation and code states) from the same facts with `CatalogueStarts`, without the door, so S4's R1 is the door's
+    first run over real data.
 - **The frozen verifiers stay frozen.** The /3 class and its profile are byte-identical, content /1 is not edited, and
-  their digests stay `70e92611…` and `dd32d9a5…`; the checkpoint reopen still recomputes /3 and /1 (`854891e3…`,
-  `abc0a299…`). `LuxembourgAknFrozenReplayTests` pins both digests and replays them over 19 admitted run-15 bodies at
-  their real ordinals: every content disposition multiset, admitted article identity, the 7 sealed state rows and the /3
-  replay fields equal what derive-c sealed per body, and the sample's population identities are pinned (/3 `914f9f49…`,
-  /1 `89704509…`). It went in green before any production edit.
+  their digests stay `70e92611…` and `dd32d9a5…`. The checkpoint and its reopen are untouched, and the reopen still
+  recomputes /3 and /1 (`854891e3…`, `abc0a299…`), but through shared constructors this slice changed (inventory,
+  outcome and population): their /3 branches hash byte for byte as before, as the frozen replay and the a439 inventory and
+  population pins show, and their new validations cannot fire on /3 outcomes. Only R0 in the dry run re-verifies the two
+  checkpoint digests. `LuxembourgAknFrozenReplayTests` pins both rule digests and replays /3 and /1 over 19 admitted
+  run-15 bodies at their real ordinals. The content disposition multisets, the admitted article identities and the 7
+  state rows equal what derive-c sealed per body (R0-verified). The /3 replay fields (disposition, detail, coordinate,
+  article order, inventory identity) and the sample's population identities (/3 `914f9f49…`, /1 `89704509…`) equal an
+  independent Python replay of the frozen rules; derive-c sealed none of them. The frozen code reproduced both kinds in
+  the slice's first commit, before any production edit. The sample holds the four /3 rejection kinds that admitted bodies
+  small enough to commit show; /3's `XmlException` at its 64M ceiling and its wId and applicability readers are held by
+  synthetic tests instead (none of derive-c's 8,854 sealed articles has a wId or an applicability date).
 - **Measured: C# /4 over all of run 15** (`LuxembourgAknInventoryV4Run15Probe`, opt-in with `LEX_LU_INVENTORY_V4_PROBE=1`
   and `LEX_LU_INVENTORY_V4_PROBE_ROOT`; custody read by digest and never written; no network; no R0).
   - All 11,205 held inputs: inventoried 10,644 (acts 7,912, consolidations 2,575, codes 157);
@@ -52,8 +62,11 @@ Updated 2026-10-15.
   - Against the reference implementation's per-body results: 0 mismatches over 11,205 bodies (disposition, class, named
     states, legal resource, in-file date, article and excluded counts, findings, rejection details); the wording digest
     equal on all 10,659 inventoried bodies; every aggregate above equal to the brief's acceptance counts.
-  - 401 s for /4 and 177 s to re-read the wording, sequential, peak working set 1.58 GB. The /4 population identity over
-    run 15 as the probe builds it is `9c9d307e…`; S4's R1 should reproduce it from the same custody and catalogue.
+  - 401 s for /4 and 177 s to re-read the wording, sequential, peak working set 1.58 GB (156 s and 67 s on the re-run
+    after the review). The /4 population identity over run 15 as the probe builds it is `2c09daa6…` under profile
+    `8a011d87…` (it was `9c9d307e…` under the brief's `40d79090…`: the rule digest is in every inventory identity); S4's R1
+    should reproduce it from the same custody and catalogue. The re-run's per-body output (`csharp_v4.jsonl`) is byte
+    for byte the one before the review: the title boundary changes no run-15 body.
 - **Driver decisions (reversible), from the brief's reconciliation with run 15:**
   - Checks (e) and (f) compare the articles plus the annexes, not the articles alone: 22 of the design's 31 (e) and (f)
     states differ from the state they name only in their annexes, by 7 to 9,010 words, so they are distinct publications.
@@ -66,8 +79,8 @@ Updated 2026-10-15.
   - Every fired check is recorded, not only the first (`code/civil/20181101` fires a, b, d and e).
   - Seven identity-class tokens: an earlier consolidation and another code date are both `same_work_other_state`.
   - The forbidden id set adds U+061C, U+200E and U+200F to the design's (bidi controls; no run-15 effect).
-  - The CI replay compares outputs sealed per body; population digests hash every member, so no sample reproduces the
-    checkpoint's.
+  - The CI replay compares the outputs derive-c sealed per body, and an independent replay's /3 fields and sample pins;
+    population digests hash every member, so no sample reproduces the checkpoint's.
   - Result: 7 refusals among admission candidates, not the design's 34.
   - **The document ceiling (this slice's own decision).** /4 reads up to the custody object bound
     (`CustodyBounds.MaxObjectBytes`, 268,435,456 characters) where /3 stops at 64M characters. Two run-15 bodies hold an
@@ -76,6 +89,15 @@ Updated 2026-10-15.
     both as `XmlException`; the reference reads them, and the counts above include them. With /3's ceiling they stay
     rejected: inventoried 10,642, rejected 180, today 2,720 / 1 / 4 / 0, L1 2,194 / 0 / 2 / 0. S3a must read them with the
     same ceiling or their 15 articles stay typed gaps; the dry run watches the transient memory of the 175 MB body.
+    Profile /4 does not name the ceiling (/3's does not name its own either), so the /4 digest does not cover it:
+    `ADocumentAboveThreesCeilingIsReadUpToTheCustodyBound` holds it, and S3a must reuse
+    `LuxembourgAknArticleInventoryProducerV4.MaximumXmlCharacters`, not a copy of its value.
+  - **Check (c)'s title designation names its own ends (this slice's own decision, after the review).** The brief's
+    pattern ended in `\b`, so C# and the reference each used their own engine's word characters, and five synthetic
+    titles got different answers (a superscript or a fraction after the year or before the type; a combining mark or a
+    ZWJ after the year). The ends are now `(?<![\p{L}\p{N}_])` and `(?![\p{L}\p{N}_])`, the reference's word set over the
+    Basic Multilingual Plane (R9: the C# side is fixed, never the reference). Profile /4 moves from the brief's
+    `40d79090…` to `8a011d87…`; no run-15 body changes (the probe below).
 - **Risks R1 to R12, with the decision taken:**
   - R1. Refusals fall from 34 to 7, and the P0 question's "30 are then refused as misfiled" under L2 becomes 5. Corrected
     for the owner in the pull request; public wording describes the evidence and never says "misfiled".
@@ -95,13 +117,45 @@ Updated 2026-10-15.
   - R7. A shared XML pair across two works also refuses the true owner: 4 pairs, none admissible. Accepted.
   - R8. Rights versus consistency: for a rights-withheld state that consistency also refuses, S6 states the rights reason
     first and records both.
-  - R9. A text-rule divergence between C# and the reference is caught by the wording pins and the probe and is fixed on the
-    C# side, never in the reference. The probe found none.
+  - R9. A text-rule divergence between C# and the reference is fixed on the C# side, never in the reference. The wording
+    pins and the probe found none; the review found one in check (c)'s title boundary on synthetic titles, fixed above.
+    Over 126,988 synthetic titles (every BMP code point before the type and after the year), 2,911 differed with `\b`,
+    and 21 still differ, none plausible in a title: the eight letters Unicode 16 added (the reference runs Unicode 15.1),
+    U+0130 directly before the type (the reference's full lower-casing makes it `i` and a combining dot), and a letter or
+    number outside the BMP touching the designation (.NET's regex reads UTF-16 units). Accepted.
   - R10. S3a must select articles with `MainBodyArticles` (/1's selection would make every body with annex articles an
     `ArticleCoordinatesMismatch`); its acceptance includes a body with excluded articles.
   - R11. Effort about 1 to 1.25 driver-days against 0.75 planned; one pull request.
   - R12. S1 may reuse `LuxembourgAknInFileIdentityClass` and the named-state rule unchanged; the design's §1.1 counts
     differ because they cover withheld XML only.
+- **Review** (one round; 11 findings, all minor, each reproduced by the reviewer; all repaired, in commits `c0b3104d`,
+  `89e7c7f2` and this one). Each finding and its repair:
+  - The document ceiling was in no digest and no test, so reverting it to 64M kept CI green under the same /4 digest
+    (found twice): `MaximumXmlCharacters` is internal, and a test holds it to `CustodyBounds.MaxObjectBytes` and holds a
+    synthetic body with one 64Mi-character attribute to /3 `XmlException` and /4 inventoried. The ceiling bullet above
+    says the digest does not cover it and S3a reuses the constant.
+  - The provenance of the replay's expectations: this file, the replay's remarks and the pins' summary said derive-c
+    sealed the /3 replay fields and the population pins; an independent Python replay computed them. All three now say
+    which values are sealed and which are replayed. Commit `67b1c870`'s message says the same wrong thing and stays as
+    written (no history rewrite); the pull request corrects it.
+  - The pull request draft said the checkpoint's code paths were unchanged; it now says, as above, that the reopen runs
+    shared constructors this slice changed, whose /3 branches hash as before, and that only R0 re-verifies the checkpoint.
+  - Check (c)'s `\b` meant different characters in C# and the reference: explicit ends, profile /4 re-pinned to
+    `8a011d87…`, nine titles held to the reference's answers, the probe re-run (decision above, R9).
+  - Check (b)'s act branch, (e)'s dated-root guard and (f)'s "names the act" condition had no test and no run-15 instance
+    (found twice): three synthetic facts, one per condition.
+  - The sample's legal-care guard read only the `.bin` and `.json` files the build copied: the project now copies the
+    folder whole and the guard lists every file below it; a stand-in `.xml`, a hidden file and a file in a subfolder each
+    fail it.
+  - The publisher-token tests held neither "never normalized" nor the forbidden ranges' ends: an id and a wId written
+    decomposed come back as written; the forbidden rows cover every range's ends (33 rows), and 20 code points beside the
+    ranges are admitted.
+  - No test ran the production door's catalogue: a test fires (d) through `RunAsync(run)` from the run's own facts and
+    serves the same file without them.
+  - The replay's coverage claims: narrowed to the four /3 rejection kinds the sample holds, naming the two synthetic
+    tests that hold /3's ceiling and its wId and applicability readers.
+  - Every mutant the review used to show a gap now fails a test, and so do a widened and a narrowed forbidden set (10 of
+    10). /4 tests 66 → 115.
 - **Not yet.** S3a (content /2 over `TryDocument` and `MainBodyArticles`, refusing a population whose
   `RuleProfileSha256` is not /4's, with the disposition test first so disposition 5 is never tokenized); S4 (R1 runs
   `new LuxembourgAknArticleInventoryProducerV4(store).RunAsync(r0.Run, ct)` and records the /4 digest and population
