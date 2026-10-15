@@ -1,0 +1,1249 @@
+{
+  "about": "Luxembourg's date and offset at UTC instants (R13: \"today\" is the calendar date in Europe/Luxembourg; plan 0.8), held to one table by tests/Lex.V3.Tests/Platform/LuxembourgCalendarTests.cs (LuxembourgCalendar, the API's) and web/test/luxembourg-today.test.mjs (temporal.mjs, the web's), which also holds every row to the IANA zone database through Intl. `instants`: the date and offset at an instant, around each clock change and local midnight from 2026 to 2040 and at the edges; `summer_time`: when summer time starts and ends in a year; `refused`: instants outside the rule's range, which both refuse.",
+  "rule": "UTC+01:00, and UTC+02:00 from 01:00 UTC on the last Sunday of March to 01:00 UTC on the last Sunday of October (Directive 2000/84/EC, Articles 2 and 3); an instant at a change already has the new offset; the date is the calendar date of the instant plus its offset; held from 1996-01-01T00:00:00Z to 2100-01-01T00:00:00Z.",
+  "instants": [
+    {
+      "instant": "2026-03-28T22:59:59Z",
+      "date": "2026-03-28",
+      "offset": "+01:00",
+      "case": "2026: the last second of the Saturday before summer time starts"
+    },
+    {
+      "instant": "2026-03-28T23:00:00Z",
+      "date": "2026-03-29",
+      "offset": "+01:00",
+      "case": "2026: the Sunday summer time starts begins, at 23:00 UTC"
+    },
+    {
+      "instant": "2026-03-29T00:59:59Z",
+      "date": "2026-03-29",
+      "offset": "+01:00",
+      "case": "2026: the last second before summer time starts"
+    },
+    {
+      "instant": "2026-03-29T01:00:00Z",
+      "date": "2026-03-29",
+      "offset": "+02:00",
+      "case": "2026: summer time starts"
+    },
+    {
+      "instant": "2026-03-29T21:59:59Z",
+      "date": "2026-03-29",
+      "offset": "+02:00",
+      "case": "2026: the last second of that 23-hour Sunday"
+    },
+    {
+      "instant": "2026-03-29T22:00:00Z",
+      "date": "2026-03-30",
+      "offset": "+02:00",
+      "case": "2026: the Monday after begins, at 22:00 UTC"
+    },
+    {
+      "instant": "2026-10-24T21:59:59Z",
+      "date": "2026-10-24",
+      "offset": "+02:00",
+      "case": "2026: the last second of the Saturday before summer time ends"
+    },
+    {
+      "instant": "2026-10-24T22:00:00Z",
+      "date": "2026-10-25",
+      "offset": "+02:00",
+      "case": "2026: the Sunday summer time ends begins, at 22:00 UTC"
+    },
+    {
+      "instant": "2026-10-25T00:59:59Z",
+      "date": "2026-10-25",
+      "offset": "+02:00",
+      "case": "2026: the last second before summer time ends"
+    },
+    {
+      "instant": "2026-10-25T01:00:00Z",
+      "date": "2026-10-25",
+      "offset": "+01:00",
+      "case": "2026: summer time ends"
+    },
+    {
+      "instant": "2026-10-25T22:59:59Z",
+      "date": "2026-10-25",
+      "offset": "+01:00",
+      "case": "2026: the last second of that 25-hour Sunday"
+    },
+    {
+      "instant": "2026-10-25T23:00:00Z",
+      "date": "2026-10-26",
+      "offset": "+01:00",
+      "case": "2026: the Monday after begins, at 23:00 UTC"
+    },
+    {
+      "instant": "2027-03-27T22:59:59Z",
+      "date": "2027-03-27",
+      "offset": "+01:00",
+      "case": "2027: the last second of the Saturday before summer time starts"
+    },
+    {
+      "instant": "2027-03-27T23:00:00Z",
+      "date": "2027-03-28",
+      "offset": "+01:00",
+      "case": "2027: the Sunday summer time starts begins, at 23:00 UTC"
+    },
+    {
+      "instant": "2027-03-28T00:59:59Z",
+      "date": "2027-03-28",
+      "offset": "+01:00",
+      "case": "2027: the last second before summer time starts"
+    },
+    {
+      "instant": "2027-03-28T01:00:00Z",
+      "date": "2027-03-28",
+      "offset": "+02:00",
+      "case": "2027: summer time starts"
+    },
+    {
+      "instant": "2027-03-28T21:59:59Z",
+      "date": "2027-03-28",
+      "offset": "+02:00",
+      "case": "2027: the last second of that 23-hour Sunday"
+    },
+    {
+      "instant": "2027-03-28T22:00:00Z",
+      "date": "2027-03-29",
+      "offset": "+02:00",
+      "case": "2027: the Monday after begins, at 22:00 UTC"
+    },
+    {
+      "instant": "2027-10-30T21:59:59Z",
+      "date": "2027-10-30",
+      "offset": "+02:00",
+      "case": "2027: the last second of the Saturday before summer time ends"
+    },
+    {
+      "instant": "2027-10-30T22:00:00Z",
+      "date": "2027-10-31",
+      "offset": "+02:00",
+      "case": "2027: the Sunday summer time ends begins, at 22:00 UTC"
+    },
+    {
+      "instant": "2027-10-31T00:59:59Z",
+      "date": "2027-10-31",
+      "offset": "+02:00",
+      "case": "2027: the last second before summer time ends"
+    },
+    {
+      "instant": "2027-10-31T01:00:00Z",
+      "date": "2027-10-31",
+      "offset": "+01:00",
+      "case": "2027: summer time ends"
+    },
+    {
+      "instant": "2027-10-31T22:59:59Z",
+      "date": "2027-10-31",
+      "offset": "+01:00",
+      "case": "2027: the last second of that 25-hour Sunday"
+    },
+    {
+      "instant": "2027-10-31T23:00:00Z",
+      "date": "2027-11-01",
+      "offset": "+01:00",
+      "case": "2027: the Monday after begins, at 23:00 UTC"
+    },
+    {
+      "instant": "2028-03-25T22:59:59Z",
+      "date": "2028-03-25",
+      "offset": "+01:00",
+      "case": "2028: the last second of the Saturday before summer time starts"
+    },
+    {
+      "instant": "2028-03-25T23:00:00Z",
+      "date": "2028-03-26",
+      "offset": "+01:00",
+      "case": "2028: the Sunday summer time starts begins, at 23:00 UTC"
+    },
+    {
+      "instant": "2028-03-26T00:59:59Z",
+      "date": "2028-03-26",
+      "offset": "+01:00",
+      "case": "2028: the last second before summer time starts"
+    },
+    {
+      "instant": "2028-03-26T01:00:00Z",
+      "date": "2028-03-26",
+      "offset": "+02:00",
+      "case": "2028: summer time starts"
+    },
+    {
+      "instant": "2028-03-26T21:59:59Z",
+      "date": "2028-03-26",
+      "offset": "+02:00",
+      "case": "2028: the last second of that 23-hour Sunday"
+    },
+    {
+      "instant": "2028-03-26T22:00:00Z",
+      "date": "2028-03-27",
+      "offset": "+02:00",
+      "case": "2028: the Monday after begins, at 22:00 UTC"
+    },
+    {
+      "instant": "2028-10-28T21:59:59Z",
+      "date": "2028-10-28",
+      "offset": "+02:00",
+      "case": "2028: the last second of the Saturday before summer time ends"
+    },
+    {
+      "instant": "2028-10-28T22:00:00Z",
+      "date": "2028-10-29",
+      "offset": "+02:00",
+      "case": "2028: the Sunday summer time ends begins, at 22:00 UTC"
+    },
+    {
+      "instant": "2028-10-29T00:59:59Z",
+      "date": "2028-10-29",
+      "offset": "+02:00",
+      "case": "2028: the last second before summer time ends"
+    },
+    {
+      "instant": "2028-10-29T01:00:00Z",
+      "date": "2028-10-29",
+      "offset": "+01:00",
+      "case": "2028: summer time ends"
+    },
+    {
+      "instant": "2028-10-29T22:59:59Z",
+      "date": "2028-10-29",
+      "offset": "+01:00",
+      "case": "2028: the last second of that 25-hour Sunday"
+    },
+    {
+      "instant": "2028-10-29T23:00:00Z",
+      "date": "2028-10-30",
+      "offset": "+01:00",
+      "case": "2028: the Monday after begins, at 23:00 UTC"
+    },
+    {
+      "instant": "2029-03-24T22:59:59Z",
+      "date": "2029-03-24",
+      "offset": "+01:00",
+      "case": "2029: the last second of the Saturday before summer time starts"
+    },
+    {
+      "instant": "2029-03-24T23:00:00Z",
+      "date": "2029-03-25",
+      "offset": "+01:00",
+      "case": "2029: the Sunday summer time starts begins, at 23:00 UTC"
+    },
+    {
+      "instant": "2029-03-25T00:59:59Z",
+      "date": "2029-03-25",
+      "offset": "+01:00",
+      "case": "2029: the last second before summer time starts"
+    },
+    {
+      "instant": "2029-03-25T01:00:00Z",
+      "date": "2029-03-25",
+      "offset": "+02:00",
+      "case": "2029: summer time starts"
+    },
+    {
+      "instant": "2029-03-25T21:59:59Z",
+      "date": "2029-03-25",
+      "offset": "+02:00",
+      "case": "2029: the last second of that 23-hour Sunday"
+    },
+    {
+      "instant": "2029-03-25T22:00:00Z",
+      "date": "2029-03-26",
+      "offset": "+02:00",
+      "case": "2029: the Monday after begins, at 22:00 UTC"
+    },
+    {
+      "instant": "2029-10-27T21:59:59Z",
+      "date": "2029-10-27",
+      "offset": "+02:00",
+      "case": "2029: the last second of the Saturday before summer time ends"
+    },
+    {
+      "instant": "2029-10-27T22:00:00Z",
+      "date": "2029-10-28",
+      "offset": "+02:00",
+      "case": "2029: the Sunday summer time ends begins, at 22:00 UTC"
+    },
+    {
+      "instant": "2029-10-28T00:59:59Z",
+      "date": "2029-10-28",
+      "offset": "+02:00",
+      "case": "2029: the last second before summer time ends"
+    },
+    {
+      "instant": "2029-10-28T01:00:00Z",
+      "date": "2029-10-28",
+      "offset": "+01:00",
+      "case": "2029: summer time ends"
+    },
+    {
+      "instant": "2029-10-28T22:59:59Z",
+      "date": "2029-10-28",
+      "offset": "+01:00",
+      "case": "2029: the last second of that 25-hour Sunday"
+    },
+    {
+      "instant": "2029-10-28T23:00:00Z",
+      "date": "2029-10-29",
+      "offset": "+01:00",
+      "case": "2029: the Monday after begins, at 23:00 UTC"
+    },
+    {
+      "instant": "2030-03-30T22:59:59Z",
+      "date": "2030-03-30",
+      "offset": "+01:00",
+      "case": "2030: the last second of the Saturday before summer time starts"
+    },
+    {
+      "instant": "2030-03-30T23:00:00Z",
+      "date": "2030-03-31",
+      "offset": "+01:00",
+      "case": "2030: the Sunday summer time starts begins, at 23:00 UTC"
+    },
+    {
+      "instant": "2030-03-31T00:59:59Z",
+      "date": "2030-03-31",
+      "offset": "+01:00",
+      "case": "2030: the last second before summer time starts"
+    },
+    {
+      "instant": "2030-03-31T01:00:00Z",
+      "date": "2030-03-31",
+      "offset": "+02:00",
+      "case": "2030: summer time starts"
+    },
+    {
+      "instant": "2030-03-31T21:59:59Z",
+      "date": "2030-03-31",
+      "offset": "+02:00",
+      "case": "2030: the last second of that 23-hour Sunday"
+    },
+    {
+      "instant": "2030-03-31T22:00:00Z",
+      "date": "2030-04-01",
+      "offset": "+02:00",
+      "case": "2030: the Monday after begins, at 22:00 UTC"
+    },
+    {
+      "instant": "2030-10-26T21:59:59Z",
+      "date": "2030-10-26",
+      "offset": "+02:00",
+      "case": "2030: the last second of the Saturday before summer time ends"
+    },
+    {
+      "instant": "2030-10-26T22:00:00Z",
+      "date": "2030-10-27",
+      "offset": "+02:00",
+      "case": "2030: the Sunday summer time ends begins, at 22:00 UTC"
+    },
+    {
+      "instant": "2030-10-27T00:59:59Z",
+      "date": "2030-10-27",
+      "offset": "+02:00",
+      "case": "2030: the last second before summer time ends"
+    },
+    {
+      "instant": "2030-10-27T01:00:00Z",
+      "date": "2030-10-27",
+      "offset": "+01:00",
+      "case": "2030: summer time ends"
+    },
+    {
+      "instant": "2030-10-27T22:59:59Z",
+      "date": "2030-10-27",
+      "offset": "+01:00",
+      "case": "2030: the last second of that 25-hour Sunday"
+    },
+    {
+      "instant": "2030-10-27T23:00:00Z",
+      "date": "2030-10-28",
+      "offset": "+01:00",
+      "case": "2030: the Monday after begins, at 23:00 UTC"
+    },
+    {
+      "instant": "2031-03-29T22:59:59Z",
+      "date": "2031-03-29",
+      "offset": "+01:00",
+      "case": "2031: the last second of the Saturday before summer time starts"
+    },
+    {
+      "instant": "2031-03-29T23:00:00Z",
+      "date": "2031-03-30",
+      "offset": "+01:00",
+      "case": "2031: the Sunday summer time starts begins, at 23:00 UTC"
+    },
+    {
+      "instant": "2031-03-30T00:59:59Z",
+      "date": "2031-03-30",
+      "offset": "+01:00",
+      "case": "2031: the last second before summer time starts"
+    },
+    {
+      "instant": "2031-03-30T01:00:00Z",
+      "date": "2031-03-30",
+      "offset": "+02:00",
+      "case": "2031: summer time starts"
+    },
+    {
+      "instant": "2031-03-30T21:59:59Z",
+      "date": "2031-03-30",
+      "offset": "+02:00",
+      "case": "2031: the last second of that 23-hour Sunday"
+    },
+    {
+      "instant": "2031-03-30T22:00:00Z",
+      "date": "2031-03-31",
+      "offset": "+02:00",
+      "case": "2031: the Monday after begins, at 22:00 UTC"
+    },
+    {
+      "instant": "2031-10-25T21:59:59Z",
+      "date": "2031-10-25",
+      "offset": "+02:00",
+      "case": "2031: the last second of the Saturday before summer time ends"
+    },
+    {
+      "instant": "2031-10-25T22:00:00Z",
+      "date": "2031-10-26",
+      "offset": "+02:00",
+      "case": "2031: the Sunday summer time ends begins, at 22:00 UTC"
+    },
+    {
+      "instant": "2031-10-26T00:59:59Z",
+      "date": "2031-10-26",
+      "offset": "+02:00",
+      "case": "2031: the last second before summer time ends"
+    },
+    {
+      "instant": "2031-10-26T01:00:00Z",
+      "date": "2031-10-26",
+      "offset": "+01:00",
+      "case": "2031: summer time ends"
+    },
+    {
+      "instant": "2031-10-26T22:59:59Z",
+      "date": "2031-10-26",
+      "offset": "+01:00",
+      "case": "2031: the last second of that 25-hour Sunday"
+    },
+    {
+      "instant": "2031-10-26T23:00:00Z",
+      "date": "2031-10-27",
+      "offset": "+01:00",
+      "case": "2031: the Monday after begins, at 23:00 UTC"
+    },
+    {
+      "instant": "2032-03-27T22:59:59Z",
+      "date": "2032-03-27",
+      "offset": "+01:00",
+      "case": "2032: the last second of the Saturday before summer time starts"
+    },
+    {
+      "instant": "2032-03-27T23:00:00Z",
+      "date": "2032-03-28",
+      "offset": "+01:00",
+      "case": "2032: the Sunday summer time starts begins, at 23:00 UTC"
+    },
+    {
+      "instant": "2032-03-28T00:59:59Z",
+      "date": "2032-03-28",
+      "offset": "+01:00",
+      "case": "2032: the last second before summer time starts"
+    },
+    {
+      "instant": "2032-03-28T01:00:00Z",
+      "date": "2032-03-28",
+      "offset": "+02:00",
+      "case": "2032: summer time starts"
+    },
+    {
+      "instant": "2032-03-28T21:59:59Z",
+      "date": "2032-03-28",
+      "offset": "+02:00",
+      "case": "2032: the last second of that 23-hour Sunday"
+    },
+    {
+      "instant": "2032-03-28T22:00:00Z",
+      "date": "2032-03-29",
+      "offset": "+02:00",
+      "case": "2032: the Monday after begins, at 22:00 UTC"
+    },
+    {
+      "instant": "2032-10-30T21:59:59Z",
+      "date": "2032-10-30",
+      "offset": "+02:00",
+      "case": "2032: the last second of the Saturday before summer time ends"
+    },
+    {
+      "instant": "2032-10-30T22:00:00Z",
+      "date": "2032-10-31",
+      "offset": "+02:00",
+      "case": "2032: the Sunday summer time ends begins, at 22:00 UTC"
+    },
+    {
+      "instant": "2032-10-31T00:59:59Z",
+      "date": "2032-10-31",
+      "offset": "+02:00",
+      "case": "2032: the last second before summer time ends"
+    },
+    {
+      "instant": "2032-10-31T01:00:00Z",
+      "date": "2032-10-31",
+      "offset": "+01:00",
+      "case": "2032: summer time ends"
+    },
+    {
+      "instant": "2032-10-31T22:59:59Z",
+      "date": "2032-10-31",
+      "offset": "+01:00",
+      "case": "2032: the last second of that 25-hour Sunday"
+    },
+    {
+      "instant": "2032-10-31T23:00:00Z",
+      "date": "2032-11-01",
+      "offset": "+01:00",
+      "case": "2032: the Monday after begins, at 23:00 UTC"
+    },
+    {
+      "instant": "2033-03-26T22:59:59Z",
+      "date": "2033-03-26",
+      "offset": "+01:00",
+      "case": "2033: the last second of the Saturday before summer time starts"
+    },
+    {
+      "instant": "2033-03-26T23:00:00Z",
+      "date": "2033-03-27",
+      "offset": "+01:00",
+      "case": "2033: the Sunday summer time starts begins, at 23:00 UTC"
+    },
+    {
+      "instant": "2033-03-27T00:59:59Z",
+      "date": "2033-03-27",
+      "offset": "+01:00",
+      "case": "2033: the last second before summer time starts"
+    },
+    {
+      "instant": "2033-03-27T01:00:00Z",
+      "date": "2033-03-27",
+      "offset": "+02:00",
+      "case": "2033: summer time starts"
+    },
+    {
+      "instant": "2033-03-27T21:59:59Z",
+      "date": "2033-03-27",
+      "offset": "+02:00",
+      "case": "2033: the last second of that 23-hour Sunday"
+    },
+    {
+      "instant": "2033-03-27T22:00:00Z",
+      "date": "2033-03-28",
+      "offset": "+02:00",
+      "case": "2033: the Monday after begins, at 22:00 UTC"
+    },
+    {
+      "instant": "2033-10-29T21:59:59Z",
+      "date": "2033-10-29",
+      "offset": "+02:00",
+      "case": "2033: the last second of the Saturday before summer time ends"
+    },
+    {
+      "instant": "2033-10-29T22:00:00Z",
+      "date": "2033-10-30",
+      "offset": "+02:00",
+      "case": "2033: the Sunday summer time ends begins, at 22:00 UTC"
+    },
+    {
+      "instant": "2033-10-30T00:59:59Z",
+      "date": "2033-10-30",
+      "offset": "+02:00",
+      "case": "2033: the last second before summer time ends"
+    },
+    {
+      "instant": "2033-10-30T01:00:00Z",
+      "date": "2033-10-30",
+      "offset": "+01:00",
+      "case": "2033: summer time ends"
+    },
+    {
+      "instant": "2033-10-30T22:59:59Z",
+      "date": "2033-10-30",
+      "offset": "+01:00",
+      "case": "2033: the last second of that 25-hour Sunday"
+    },
+    {
+      "instant": "2033-10-30T23:00:00Z",
+      "date": "2033-10-31",
+      "offset": "+01:00",
+      "case": "2033: the Monday after begins, at 23:00 UTC"
+    },
+    {
+      "instant": "2034-03-25T22:59:59Z",
+      "date": "2034-03-25",
+      "offset": "+01:00",
+      "case": "2034: the last second of the Saturday before summer time starts"
+    },
+    {
+      "instant": "2034-03-25T23:00:00Z",
+      "date": "2034-03-26",
+      "offset": "+01:00",
+      "case": "2034: the Sunday summer time starts begins, at 23:00 UTC"
+    },
+    {
+      "instant": "2034-03-26T00:59:59Z",
+      "date": "2034-03-26",
+      "offset": "+01:00",
+      "case": "2034: the last second before summer time starts"
+    },
+    {
+      "instant": "2034-03-26T01:00:00Z",
+      "date": "2034-03-26",
+      "offset": "+02:00",
+      "case": "2034: summer time starts"
+    },
+    {
+      "instant": "2034-03-26T21:59:59Z",
+      "date": "2034-03-26",
+      "offset": "+02:00",
+      "case": "2034: the last second of that 23-hour Sunday"
+    },
+    {
+      "instant": "2034-03-26T22:00:00Z",
+      "date": "2034-03-27",
+      "offset": "+02:00",
+      "case": "2034: the Monday after begins, at 22:00 UTC"
+    },
+    {
+      "instant": "2034-10-28T21:59:59Z",
+      "date": "2034-10-28",
+      "offset": "+02:00",
+      "case": "2034: the last second of the Saturday before summer time ends"
+    },
+    {
+      "instant": "2034-10-28T22:00:00Z",
+      "date": "2034-10-29",
+      "offset": "+02:00",
+      "case": "2034: the Sunday summer time ends begins, at 22:00 UTC"
+    },
+    {
+      "instant": "2034-10-29T00:59:59Z",
+      "date": "2034-10-29",
+      "offset": "+02:00",
+      "case": "2034: the last second before summer time ends"
+    },
+    {
+      "instant": "2034-10-29T01:00:00Z",
+      "date": "2034-10-29",
+      "offset": "+01:00",
+      "case": "2034: summer time ends"
+    },
+    {
+      "instant": "2034-10-29T22:59:59Z",
+      "date": "2034-10-29",
+      "offset": "+01:00",
+      "case": "2034: the last second of that 25-hour Sunday"
+    },
+    {
+      "instant": "2034-10-29T23:00:00Z",
+      "date": "2034-10-30",
+      "offset": "+01:00",
+      "case": "2034: the Monday after begins, at 23:00 UTC"
+    },
+    {
+      "instant": "2035-03-24T22:59:59Z",
+      "date": "2035-03-24",
+      "offset": "+01:00",
+      "case": "2035: the last second of the Saturday before summer time starts"
+    },
+    {
+      "instant": "2035-03-24T23:00:00Z",
+      "date": "2035-03-25",
+      "offset": "+01:00",
+      "case": "2035: the Sunday summer time starts begins, at 23:00 UTC"
+    },
+    {
+      "instant": "2035-03-25T00:59:59Z",
+      "date": "2035-03-25",
+      "offset": "+01:00",
+      "case": "2035: the last second before summer time starts"
+    },
+    {
+      "instant": "2035-03-25T01:00:00Z",
+      "date": "2035-03-25",
+      "offset": "+02:00",
+      "case": "2035: summer time starts"
+    },
+    {
+      "instant": "2035-03-25T21:59:59Z",
+      "date": "2035-03-25",
+      "offset": "+02:00",
+      "case": "2035: the last second of that 23-hour Sunday"
+    },
+    {
+      "instant": "2035-03-25T22:00:00Z",
+      "date": "2035-03-26",
+      "offset": "+02:00",
+      "case": "2035: the Monday after begins, at 22:00 UTC"
+    },
+    {
+      "instant": "2035-10-27T21:59:59Z",
+      "date": "2035-10-27",
+      "offset": "+02:00",
+      "case": "2035: the last second of the Saturday before summer time ends"
+    },
+    {
+      "instant": "2035-10-27T22:00:00Z",
+      "date": "2035-10-28",
+      "offset": "+02:00",
+      "case": "2035: the Sunday summer time ends begins, at 22:00 UTC"
+    },
+    {
+      "instant": "2035-10-28T00:59:59Z",
+      "date": "2035-10-28",
+      "offset": "+02:00",
+      "case": "2035: the last second before summer time ends"
+    },
+    {
+      "instant": "2035-10-28T01:00:00Z",
+      "date": "2035-10-28",
+      "offset": "+01:00",
+      "case": "2035: summer time ends"
+    },
+    {
+      "instant": "2035-10-28T22:59:59Z",
+      "date": "2035-10-28",
+      "offset": "+01:00",
+      "case": "2035: the last second of that 25-hour Sunday"
+    },
+    {
+      "instant": "2035-10-28T23:00:00Z",
+      "date": "2035-10-29",
+      "offset": "+01:00",
+      "case": "2035: the Monday after begins, at 23:00 UTC"
+    },
+    {
+      "instant": "2036-03-29T22:59:59Z",
+      "date": "2036-03-29",
+      "offset": "+01:00",
+      "case": "2036: the last second of the Saturday before summer time starts"
+    },
+    {
+      "instant": "2036-03-29T23:00:00Z",
+      "date": "2036-03-30",
+      "offset": "+01:00",
+      "case": "2036: the Sunday summer time starts begins, at 23:00 UTC"
+    },
+    {
+      "instant": "2036-03-30T00:59:59Z",
+      "date": "2036-03-30",
+      "offset": "+01:00",
+      "case": "2036: the last second before summer time starts"
+    },
+    {
+      "instant": "2036-03-30T01:00:00Z",
+      "date": "2036-03-30",
+      "offset": "+02:00",
+      "case": "2036: summer time starts"
+    },
+    {
+      "instant": "2036-03-30T21:59:59Z",
+      "date": "2036-03-30",
+      "offset": "+02:00",
+      "case": "2036: the last second of that 23-hour Sunday"
+    },
+    {
+      "instant": "2036-03-30T22:00:00Z",
+      "date": "2036-03-31",
+      "offset": "+02:00",
+      "case": "2036: the Monday after begins, at 22:00 UTC"
+    },
+    {
+      "instant": "2036-10-25T21:59:59Z",
+      "date": "2036-10-25",
+      "offset": "+02:00",
+      "case": "2036: the last second of the Saturday before summer time ends"
+    },
+    {
+      "instant": "2036-10-25T22:00:00Z",
+      "date": "2036-10-26",
+      "offset": "+02:00",
+      "case": "2036: the Sunday summer time ends begins, at 22:00 UTC"
+    },
+    {
+      "instant": "2036-10-26T00:59:59Z",
+      "date": "2036-10-26",
+      "offset": "+02:00",
+      "case": "2036: the last second before summer time ends"
+    },
+    {
+      "instant": "2036-10-26T01:00:00Z",
+      "date": "2036-10-26",
+      "offset": "+01:00",
+      "case": "2036: summer time ends"
+    },
+    {
+      "instant": "2036-10-26T22:59:59Z",
+      "date": "2036-10-26",
+      "offset": "+01:00",
+      "case": "2036: the last second of that 25-hour Sunday"
+    },
+    {
+      "instant": "2036-10-26T23:00:00Z",
+      "date": "2036-10-27",
+      "offset": "+01:00",
+      "case": "2036: the Monday after begins, at 23:00 UTC"
+    },
+    {
+      "instant": "2037-03-28T22:59:59Z",
+      "date": "2037-03-28",
+      "offset": "+01:00",
+      "case": "2037: the last second of the Saturday before summer time starts"
+    },
+    {
+      "instant": "2037-03-28T23:00:00Z",
+      "date": "2037-03-29",
+      "offset": "+01:00",
+      "case": "2037: the Sunday summer time starts begins, at 23:00 UTC"
+    },
+    {
+      "instant": "2037-03-29T00:59:59Z",
+      "date": "2037-03-29",
+      "offset": "+01:00",
+      "case": "2037: the last second before summer time starts"
+    },
+    {
+      "instant": "2037-03-29T01:00:00Z",
+      "date": "2037-03-29",
+      "offset": "+02:00",
+      "case": "2037: summer time starts"
+    },
+    {
+      "instant": "2037-03-29T21:59:59Z",
+      "date": "2037-03-29",
+      "offset": "+02:00",
+      "case": "2037: the last second of that 23-hour Sunday"
+    },
+    {
+      "instant": "2037-03-29T22:00:00Z",
+      "date": "2037-03-30",
+      "offset": "+02:00",
+      "case": "2037: the Monday after begins, at 22:00 UTC"
+    },
+    {
+      "instant": "2037-10-24T21:59:59Z",
+      "date": "2037-10-24",
+      "offset": "+02:00",
+      "case": "2037: the last second of the Saturday before summer time ends"
+    },
+    {
+      "instant": "2037-10-24T22:00:00Z",
+      "date": "2037-10-25",
+      "offset": "+02:00",
+      "case": "2037: the Sunday summer time ends begins, at 22:00 UTC"
+    },
+    {
+      "instant": "2037-10-25T00:59:59Z",
+      "date": "2037-10-25",
+      "offset": "+02:00",
+      "case": "2037: the last second before summer time ends"
+    },
+    {
+      "instant": "2037-10-25T01:00:00Z",
+      "date": "2037-10-25",
+      "offset": "+01:00",
+      "case": "2037: summer time ends"
+    },
+    {
+      "instant": "2037-10-25T22:59:59Z",
+      "date": "2037-10-25",
+      "offset": "+01:00",
+      "case": "2037: the last second of that 25-hour Sunday"
+    },
+    {
+      "instant": "2037-10-25T23:00:00Z",
+      "date": "2037-10-26",
+      "offset": "+01:00",
+      "case": "2037: the Monday after begins, at 23:00 UTC"
+    },
+    {
+      "instant": "2038-03-27T22:59:59Z",
+      "date": "2038-03-27",
+      "offset": "+01:00",
+      "case": "2038: the last second of the Saturday before summer time starts"
+    },
+    {
+      "instant": "2038-03-27T23:00:00Z",
+      "date": "2038-03-28",
+      "offset": "+01:00",
+      "case": "2038: the Sunday summer time starts begins, at 23:00 UTC"
+    },
+    {
+      "instant": "2038-03-28T00:59:59Z",
+      "date": "2038-03-28",
+      "offset": "+01:00",
+      "case": "2038: the last second before summer time starts"
+    },
+    {
+      "instant": "2038-03-28T01:00:00Z",
+      "date": "2038-03-28",
+      "offset": "+02:00",
+      "case": "2038: summer time starts"
+    },
+    {
+      "instant": "2038-03-28T21:59:59Z",
+      "date": "2038-03-28",
+      "offset": "+02:00",
+      "case": "2038: the last second of that 23-hour Sunday"
+    },
+    {
+      "instant": "2038-03-28T22:00:00Z",
+      "date": "2038-03-29",
+      "offset": "+02:00",
+      "case": "2038: the Monday after begins, at 22:00 UTC"
+    },
+    {
+      "instant": "2038-10-30T21:59:59Z",
+      "date": "2038-10-30",
+      "offset": "+02:00",
+      "case": "2038: the last second of the Saturday before summer time ends"
+    },
+    {
+      "instant": "2038-10-30T22:00:00Z",
+      "date": "2038-10-31",
+      "offset": "+02:00",
+      "case": "2038: the Sunday summer time ends begins, at 22:00 UTC"
+    },
+    {
+      "instant": "2038-10-31T00:59:59Z",
+      "date": "2038-10-31",
+      "offset": "+02:00",
+      "case": "2038: the last second before summer time ends"
+    },
+    {
+      "instant": "2038-10-31T01:00:00Z",
+      "date": "2038-10-31",
+      "offset": "+01:00",
+      "case": "2038: summer time ends"
+    },
+    {
+      "instant": "2038-10-31T22:59:59Z",
+      "date": "2038-10-31",
+      "offset": "+01:00",
+      "case": "2038: the last second of that 25-hour Sunday"
+    },
+    {
+      "instant": "2038-10-31T23:00:00Z",
+      "date": "2038-11-01",
+      "offset": "+01:00",
+      "case": "2038: the Monday after begins, at 23:00 UTC"
+    },
+    {
+      "instant": "2039-03-26T22:59:59Z",
+      "date": "2039-03-26",
+      "offset": "+01:00",
+      "case": "2039: the last second of the Saturday before summer time starts"
+    },
+    {
+      "instant": "2039-03-26T23:00:00Z",
+      "date": "2039-03-27",
+      "offset": "+01:00",
+      "case": "2039: the Sunday summer time starts begins, at 23:00 UTC"
+    },
+    {
+      "instant": "2039-03-27T00:59:59Z",
+      "date": "2039-03-27",
+      "offset": "+01:00",
+      "case": "2039: the last second before summer time starts"
+    },
+    {
+      "instant": "2039-03-27T01:00:00Z",
+      "date": "2039-03-27",
+      "offset": "+02:00",
+      "case": "2039: summer time starts"
+    },
+    {
+      "instant": "2039-03-27T21:59:59Z",
+      "date": "2039-03-27",
+      "offset": "+02:00",
+      "case": "2039: the last second of that 23-hour Sunday"
+    },
+    {
+      "instant": "2039-03-27T22:00:00Z",
+      "date": "2039-03-28",
+      "offset": "+02:00",
+      "case": "2039: the Monday after begins, at 22:00 UTC"
+    },
+    {
+      "instant": "2039-10-29T21:59:59Z",
+      "date": "2039-10-29",
+      "offset": "+02:00",
+      "case": "2039: the last second of the Saturday before summer time ends"
+    },
+    {
+      "instant": "2039-10-29T22:00:00Z",
+      "date": "2039-10-30",
+      "offset": "+02:00",
+      "case": "2039: the Sunday summer time ends begins, at 22:00 UTC"
+    },
+    {
+      "instant": "2039-10-30T00:59:59Z",
+      "date": "2039-10-30",
+      "offset": "+02:00",
+      "case": "2039: the last second before summer time ends"
+    },
+    {
+      "instant": "2039-10-30T01:00:00Z",
+      "date": "2039-10-30",
+      "offset": "+01:00",
+      "case": "2039: summer time ends"
+    },
+    {
+      "instant": "2039-10-30T22:59:59Z",
+      "date": "2039-10-30",
+      "offset": "+01:00",
+      "case": "2039: the last second of that 25-hour Sunday"
+    },
+    {
+      "instant": "2039-10-30T23:00:00Z",
+      "date": "2039-10-31",
+      "offset": "+01:00",
+      "case": "2039: the Monday after begins, at 23:00 UTC"
+    },
+    {
+      "instant": "2040-03-24T22:59:59Z",
+      "date": "2040-03-24",
+      "offset": "+01:00",
+      "case": "2040: the last second of the Saturday before summer time starts"
+    },
+    {
+      "instant": "2040-03-24T23:00:00Z",
+      "date": "2040-03-25",
+      "offset": "+01:00",
+      "case": "2040: the Sunday summer time starts begins, at 23:00 UTC"
+    },
+    {
+      "instant": "2040-03-25T00:59:59Z",
+      "date": "2040-03-25",
+      "offset": "+01:00",
+      "case": "2040: the last second before summer time starts"
+    },
+    {
+      "instant": "2040-03-25T01:00:00Z",
+      "date": "2040-03-25",
+      "offset": "+02:00",
+      "case": "2040: summer time starts"
+    },
+    {
+      "instant": "2040-03-25T21:59:59Z",
+      "date": "2040-03-25",
+      "offset": "+02:00",
+      "case": "2040: the last second of that 23-hour Sunday"
+    },
+    {
+      "instant": "2040-03-25T22:00:00Z",
+      "date": "2040-03-26",
+      "offset": "+02:00",
+      "case": "2040: the Monday after begins, at 22:00 UTC"
+    },
+    {
+      "instant": "2040-10-27T21:59:59Z",
+      "date": "2040-10-27",
+      "offset": "+02:00",
+      "case": "2040: the last second of the Saturday before summer time ends"
+    },
+    {
+      "instant": "2040-10-27T22:00:00Z",
+      "date": "2040-10-28",
+      "offset": "+02:00",
+      "case": "2040: the Sunday summer time ends begins, at 22:00 UTC"
+    },
+    {
+      "instant": "2040-10-28T00:59:59Z",
+      "date": "2040-10-28",
+      "offset": "+02:00",
+      "case": "2040: the last second before summer time ends"
+    },
+    {
+      "instant": "2040-10-28T01:00:00Z",
+      "date": "2040-10-28",
+      "offset": "+01:00",
+      "case": "2040: summer time ends"
+    },
+    {
+      "instant": "2040-10-28T22:59:59Z",
+      "date": "2040-10-28",
+      "offset": "+01:00",
+      "case": "2040: the last second of that 25-hour Sunday"
+    },
+    {
+      "instant": "2040-10-28T23:00:00Z",
+      "date": "2040-10-29",
+      "offset": "+01:00",
+      "case": "2040: the Monday after begins, at 23:00 UTC"
+    },
+    {
+      "instant": "1996-01-01T00:00:00Z",
+      "date": "1996-01-01",
+      "offset": "+01:00",
+      "case": "the first instant of the range"
+    },
+    {
+      "instant": "1996-09-29T01:00:00Z",
+      "date": "1996-09-29",
+      "offset": "+02:00",
+      "case": "1996: still summer time where the rule before 1996 ended it, on the last Sunday of September"
+    },
+    {
+      "instant": "2026-03-29T00:59:59.999Z",
+      "date": "2026-03-29",
+      "offset": "+01:00",
+      "case": "a millisecond before summer time starts: the digits are truncated, never rounded"
+    },
+    {
+      "instant": "2026-10-25T00:59:59.9999999Z",
+      "date": "2026-10-25",
+      "offset": "+02:00",
+      "case": "a tick before summer time ends, in the API's seven digits: truncated, never rounded"
+    },
+    {
+      "instant": "2026-07-14T22:30:00Z",
+      "date": "2026-07-15",
+      "offset": "+02:00",
+      "case": "a summer night: the UTC date is still yesterday's"
+    },
+    {
+      "instant": "2026-01-14T23:30:00Z",
+      "date": "2026-01-15",
+      "offset": "+01:00",
+      "case": "a winter night: the UTC date is still yesterday's"
+    },
+    {
+      "instant": "2026-10-15T00:00:00Z",
+      "date": "2026-10-15",
+      "offset": "+02:00",
+      "case": "UTC and Luxembourg agree on the date"
+    },
+    {
+      "instant": "2026-08-31T23:00:00Z",
+      "date": "2026-09-01",
+      "offset": "+02:00",
+      "case": "the first of September begins in Luxembourg two hours before it does in UTC"
+    },
+    {
+      "instant": "2026-12-31T23:00:00Z",
+      "date": "2027-01-01",
+      "offset": "+01:00",
+      "case": "the new year begins in Luxembourg an hour before it does in UTC: a law in force from 1 January applies"
+    },
+    {
+      "instant": "2028-02-28T23:00:00Z",
+      "date": "2028-02-29",
+      "offset": "+01:00",
+      "case": "a leap day begins"
+    },
+    {
+      "instant": "2099-12-31T23:59:59Z",
+      "date": "2100-01-01",
+      "offset": "+01:00",
+      "case": "the last second of the range, already 2100 in Luxembourg"
+    }
+  ],
+  "summer_time": [
+    {
+      "year": 1996,
+      "starts": "1996-03-31T01:00:00Z",
+      "ends": "1996-10-27T01:00:00Z"
+    },
+    {
+      "year": 2026,
+      "starts": "2026-03-29T01:00:00Z",
+      "ends": "2026-10-25T01:00:00Z"
+    },
+    {
+      "year": 2027,
+      "starts": "2027-03-28T01:00:00Z",
+      "ends": "2027-10-31T01:00:00Z"
+    },
+    {
+      "year": 2028,
+      "starts": "2028-03-26T01:00:00Z",
+      "ends": "2028-10-29T01:00:00Z"
+    },
+    {
+      "year": 2029,
+      "starts": "2029-03-25T01:00:00Z",
+      "ends": "2029-10-28T01:00:00Z"
+    },
+    {
+      "year": 2030,
+      "starts": "2030-03-31T01:00:00Z",
+      "ends": "2030-10-27T01:00:00Z"
+    },
+    {
+      "year": 2031,
+      "starts": "2031-03-30T01:00:00Z",
+      "ends": "2031-10-26T01:00:00Z"
+    },
+    {
+      "year": 2032,
+      "starts": "2032-03-28T01:00:00Z",
+      "ends": "2032-10-31T01:00:00Z"
+    },
+    {
+      "year": 2033,
+      "starts": "2033-03-27T01:00:00Z",
+      "ends": "2033-10-30T01:00:00Z"
+    },
+    {
+      "year": 2034,
+      "starts": "2034-03-26T01:00:00Z",
+      "ends": "2034-10-29T01:00:00Z"
+    },
+    {
+      "year": 2035,
+      "starts": "2035-03-25T01:00:00Z",
+      "ends": "2035-10-28T01:00:00Z"
+    },
+    {
+      "year": 2036,
+      "starts": "2036-03-30T01:00:00Z",
+      "ends": "2036-10-26T01:00:00Z"
+    },
+    {
+      "year": 2037,
+      "starts": "2037-03-29T01:00:00Z",
+      "ends": "2037-10-25T01:00:00Z"
+    },
+    {
+      "year": 2038,
+      "starts": "2038-03-28T01:00:00Z",
+      "ends": "2038-10-31T01:00:00Z"
+    },
+    {
+      "year": 2039,
+      "starts": "2039-03-27T01:00:00Z",
+      "ends": "2039-10-30T01:00:00Z"
+    },
+    {
+      "year": 2040,
+      "starts": "2040-03-25T01:00:00Z",
+      "ends": "2040-10-28T01:00:00Z"
+    },
+    {
+      "year": 2099,
+      "starts": "2099-03-29T01:00:00Z",
+      "ends": "2099-10-25T01:00:00Z"
+    }
+  ],
+  "refused": [
+    {
+      "instant": "1995-12-31T23:59:59Z",
+      "case": "before 1996, when summer time ended on the last Sunday of September"
+    },
+    {
+      "instant": "2100-01-01T00:00:00Z",
+      "case": "past the range"
+    }
+  ]
+}
