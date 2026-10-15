@@ -426,8 +426,8 @@ test("a compare run types the identifier and two dates and is held to all three 
     { url: `${ORIGIN}/api/v3/diff`, method: "POST", headers: {}, headersSent: true, postData: JSON.stringify(JOURNEY_STEPS.compare.body) },
   ];
   observed.location = `${ORIGIN}/en/compare.html`;
-  observed.text = "The same version applied on both dates.";
-  const expected = { origin: ORIGIN, step: JOURNEY_STEPS.compare, state: "success", texts: ["The same version applied on both dates."] };
+  observed.text = `Both dates select the one text held, the act as published, applicable from ${READING_DATE} (publisher); later versions are not held.`;
+  const expected = { origin: ORIGIN, step: JOURNEY_STEPS.compare, state: "success", texts: [`Both dates select the one text held, the act as published, applicable from ${READING_DATE} (publisher); later versions are not held.`] };
   assert.deepEqual(journeyVerdict(observed, expected), []);
   observed.requests[1].postData = JSON.stringify({ operation_id: "diff", parameters: { identifier: DOSSIER_IDENTIFIER, date_from: READING_DATE, date_to: "2025-01-01" } });
   assert.ok(journeyVerdict(observed, expected).some((failure) => /body was/.test(failure)), "a request with another date fails");

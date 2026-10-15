@@ -274,7 +274,9 @@ test("an EU export's files name no Luxembourg date or rights disposition, and a 
     return found;
   };
   const LUXEMBOURG_ONLY = ["work_key", "applies_from", "state_permalink", "rights_disposition", "article_valid_from", "validity_conflict", "notes"];
-  const EUROPE_ONLY = ["celex", "wording_kind", "wording_date", "wording_permalink", "wording_date_semantics", "acknowledgement", "authenticity", "heading", "annexes_not_served", "annexes"];
+  // Not "authenticity": both publishers' exports carry an authenticity sentence, the EU's (R19) and, for a Luxembourg act
+  // held only as first published, Luxembourg's (R20; the plan's item 0.6), each in its own words.
+  const EUROPE_ONLY = ["celex", "wording_kind", "wording_date", "wording_permalink", "wording_date_semantics", "acknowledgement", "heading", "annexes_not_served", "annexes"];
 
   const { model } = europeExport();
   const europeJson = exportJson(model);

@@ -159,3 +159,54 @@ export function sharedSemantics(publishers, where) {
   const distinct = new Set(publishers.map((publisher) => semanticsOf(publisher, where)));
   return distinct.size === 1 ? [...distinct][0] : null;
 }
+
+/**
+ * What a comparison says when both dates select one state, in each publisher's clock: Luxembourg's version with its
+ * publisher applicability start (R21's "applicable from X (publisher)"), the Union's consolidated wording state with its
+ * date (the plan's item 2.5). It used to say "the same version applied on both dates", which R21 never says.
+ */
+export const SAME_STATE_SENTENCE = closedTable({
+  publisher_applicability: (from) => `Both dates fall within the same version, applicable from ${from} (publisher)`,
+  official_consolidation_state: (from) => `Both dates fall within the same consolidated wording state (from ${from})`,
+});
+
+/**
+ * The words R21 never says of a date or an interval, in any language: "in force" and "en vigueur", and "applied" with
+ * every past form of the French "appliquer" ("appliqué", "appliquée", "s’appliquait", "qui s’y appliquaient",
+ * "appliquèrent"), with or without "s’". R21's own words are not among them: "applicable", the publisher's for a
+ * Luxembourg version, and the present "s’applique", "applies", "applying" and "appliquant", which say what applies on a
+ * date asked and are no past interval; a typed publisher date (an end-of-force date, "date de fin de vigueur") is spoken
+ * as its own value. Each word stands alone: no letter before or after it, in any script. It is matched against
+ * `vocabularyText`, never against the raw text.
+ */
+export const FORBIDDEN_TIME_WORDS =
+  /(?<!\p{L})(?:in force|en vigueur|applied|appliqu(?:é|ée|és|ées|ai|ais|ait|aient|a|as|âmes|âtes|èrent))(?!\p{L})/iu;
+
+/**
+ * A text as the vocabulary check reads it (the review of #964, which found each of these let through): composed to NFC,
+ * so a decomposed "appliquée" is "appliquée"; its invisible format characters (a soft hyphen, a zero-width space
+ * or joiner) taken out; every run of spaces and dashes (a no-break or narrow no-break space, a hyphen, a non-breaking
+ * hyphen, an en dash) folded to one space, so "in-force" and "in force" are "in force"; and every apostrophe-like
+ * mark folded to ’, so "sʼappliquait" (a modifier letter, which is a letter) is "s’appliquait".
+ */
+export function vocabularyText(text) {
+  return String(text)
+    .normalize('NFC')
+    .replace(/\p{Cf}+/gu, '')
+    .replace(/[\s\p{Pd}]+/gu, ' ')
+    .replace(/['‘’ʼ`´′]/gu, '’');
+}
+
+/**
+ * The vocabulary check (R21): throws, naming the word and where it was said, when a text says one of the forbidden
+ * words in any of their forms; returns the text otherwise. The Compare card and its page's copy are held to it in both
+ * languages (`compare-vocabulary.test.mjs`), which also feeds it the old note and every variant the review of #964 found
+ * to show it refusing, and so are the as-published block and its copy (`as-published.test.mjs`).
+ */
+export function assertTimeVocabulary(text, where) {
+  const found = vocabularyText(text).match(FORBIDDEN_TIME_WORDS);
+  if (found !== null) {
+    throw new Error(`${where} says "${found[0]}", which R21 never says of a date or an interval: say what the publisher dates ("applicable from", or "consolidated wording state")`);
+  }
+  return text;
+}

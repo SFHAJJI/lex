@@ -1,9 +1,11 @@
 // The V3 comparison reader, held to the answers the real handler sent.
 //
 // The answers come from `schemas/v3-platform/answer-samples.json` (operation `diff`), captured by
-// driving the real handler: the fixture's one state against itself, and a second fixture's two
+// driving the real handler: the fixture's one state against itself, a second fixture's two
 // states a year apart with one article reworded (`art_15`) and one id renamed (`art_16` to
-// `art_16-new`). Each rule the answer states about itself is then broken once.
+// `art_16-new`), and a third fixture's act held only as published compared on two dates between
+// which its publisher's record dates two consolidated versions and an end-of-force date (the
+// review of #964). Each rule the answer states about itself is then broken once.
 
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
@@ -17,10 +19,10 @@ const PLACEHOLDER = "<varies-per-run>";
 async function capturedAnswers() {
   const parsed = JSON.parse(await readFile(SAMPLES, "utf8"));
   const rows = parsed.sampled.filter((sample) => sample.operation === "diff");
-  assert.equal(rows.length, 2, "the census holds the two comparisons this reader is written against");
+  assert.equal(rows.length, 3, "the census holds the three comparisons this reader is written against");
   for (const row of rows) assert.equal(row.object_type, "diff");
-  const [same, two] = rows.map((row) => withDigests(row.answer));
-  return { same, two };
+  const [same, two, straddled] = rows.map((row) => withDigests(row.answer));
+  return { same, two, straddled };
 }
 
 function withDigests(node, counter = { n: 0 }) {
@@ -68,8 +70,15 @@ test("two states read article by article: one changed, one removed, one added, t
 });
 
 test("each rule the comparison states about itself is refused when broken, with that rule's reason", async () => {
-  const { same, two } = await capturedAnswers();
+  const { same, two, straddled } = await capturedAnswers();
   const cases = [
+    // An act held only as published (the review of #964): its note is its facts', and so are the facts between the dates.
+    ["the one text held said as one version", same, (a) => { a.comparisons[0].note = `Both dates fall within the same version, applicable from ${a.comparisons[0].from.applicability_date} (publisher)`; }, /rather than "Both dates select the one text held/],
+    ["a version between the dates left unnamed", straddled, (a) => { a.comparisons[0].note = a.comparisons[0].note.split("; the publisher's record names")[0]; }, /rather than "Both dates select the one text held/],
+    ["a version between the dates dropped from the facts", straddled, (a) => { a.later_version_facts_between_dates.consolidations.shift(); }, /are not the consolidated versions as_published dates/],
+    ["an end of force between the dates dropped", straddled, (a) => { a.later_version_facts_between_dates.end_of_force = []; }, /is not the end-of-force dates as_published gives/],
+    ["facts between the dates of a work not held only as published", same, (a) => { a.as_published = null; }, /is given for a work that is not held only as published/],
+    ["an act held only as published with no facts between the dates", same, (a) => { delete a.later_version_facts_between_dates; }, /does not carry later_version_facts_between_dates/],
     ["another publisher's comparison", two, (a) => { a.publisher = "eu-eurlex"; }, /Luxembourg \(lu-legilux\) comparison only/],
     ["a status its sides do not make", two, (a) => { rowOf(a, "art_15").status = "unchanged"; }, /says "unchanged", and its sides make it changed/],
     ["a renamed id said unchanged", two, (a) => { rowOf(a, "art_16").status = "unchanged"; }, /its sides make it removed/],

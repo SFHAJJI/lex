@@ -34,13 +34,24 @@
 // The notice a permalink's reading shows when the version (or EU wording) served is not the one the link pins
 // (`reading.pinReplaced`, `reading.europePinReplaced`) was reviewed by the same reviewer under the same delegation in a
 // second addendum of 2026-10-14 (both approved; a link "épingle" what it pins, the export's verb).
+// A Luxembourg act held only as first published (`common.asPublished`: its label, the later versions this site does not
+// hold, the consolidated versions the publisher's record names, its end-of-force date and the three authenticity
+// sentences) and the Compare card's sentence for one state on both dates (`compare.sameVersion`, with `compare.idle`
+// changed so the page never says "s’appliquaient"), the plan's item 0.6, were reviewed by the same reviewer under the
+// same delegation in the addendum of 2026-10-15 (13 forms, 2 changed in review; the label and the authenticity
+// sentences go to the lawyer's read, the owner's item O4). What Compare says when both dates select the one state of an
+// act held only as published, and what its publisher dates between the two dates (`compare.sameTextHeld`,
+// `compare.sameTextHeldOfSeveral`, `compare.betweenNamed`, `compare.betweenEndOfForce`; the review of #964), were
+// reviewed by the same reviewer under the same delegation in that addendum's section for the review of #964 (5 forms,
+// 3 changed in review: "le même texte détenu", and "pour cet acte" before the count in both counted forms).
 // No French entry ships unreviewed.
 //
 // Vocabulary: a work is an "acte" (a publisher's Cellar work, one record of an EU act, is an "œuvre de l’éditeur"), a
 // Luxembourg state a "version", the publisher's article id an "identifiant d’article"; a wording (of an EU act, or of a
 // Luxembourg article from state to state) is a "libellé", never a "rédaction" or a "formulation", and an EU date is never
 // "applicable"; held is "détenu", never "disponible"; a build is a "déploiement"; legal advice is "consultation
-// juridique". Typography: a no-break space (U+00A0) stands before : ; ! ? % and » and after «, and the apostrophe is ’.
+// juridique"; the publisher's record is "les données de l’éditeur" (never "registre", which is the operations registry).
+// Typography: a no-break space (U+00A0) stands before : ; ! ? % and » and after «, and the apostrophe is ’.
 //
 // This module is data only: the live pages' bundles carry it, so it imports nothing and reads nothing.
 
@@ -180,7 +191,7 @@ export const LIVE_CHROME_FR = Object.freeze({
     eyebrow: 'Comparer',
     heading: 'Deux versions, article par article',
     intro: 'Les versions d’un acte luxembourgeois applicables à deux dates, comparées selon les identifiants d’article et le libellé de l’éditeur, sans rien affirmer sur l’effet juridique. L’identifiant et les dates sont envoyés à ce serveur dans la requête et nulle part ailleurs, et cette page ne conserve rien.',
-    idle: 'Saisissez un identifiant d’acte et deux dates pour comparer les versions qui s’appliquaient à ces dates.',
+    idle: 'Saisissez un identifiant d’acte et deux dates pour comparer les versions applicables à ces dates.',
     summary: '{work} : {from} comparé au {to}.',
     summaryIn: '{work} : {from} comparé au {to}, en {language}.',
     sideFrom: 'Date de départ',
@@ -188,6 +199,14 @@ export const LIVE_CHROME_FR = Object.freeze({
     side: '{side} : la version applicable à partir du {from} ; articles : {articles} ; date propre différente de celle de la version : {conflicts} ; {permalink}',
     sideNext: '{side} : la version applicable à partir du {from} (la version suivante détenue s’applique à partir du {next}) ; articles : {articles} ; date propre différente de celle de la version : {conflicts} ; {permalink}',
     counts: 'Modifiés : {changed} ; ajoutés : {added} ; supprimés : {removed} ; inchangés : {unchanged}.',
+    sameVersion: 'Les deux dates relèvent de la même version, applicable à partir du {from} (éditeur).',
+    sameTextHeld: 'Pour les deux dates, le texte retenu est le seul texte détenu, l’acte tel que publié, applicable à partir du {from} (éditeur) ; les versions ultérieures ne sont pas détenues.',
+    sameTextHeldOfSeveral: 'Pour les deux dates, le texte retenu est le même texte détenu, l’acte tel que publié, applicable à partir du {from} (éditeur) ; aucune version consolidée n’est détenue.',
+    betweenNamed: Object.freeze({
+      one: 'Les données de l’éditeur nomment, pour cet acte, {count} version consolidée dont la date d’applicabilité se situe après le {after} et au plus tard le {onOrBefore} :',
+      other: 'Les données de l’éditeur nomment, pour cet acte, {count} versions consolidées dont les dates d’applicabilité se situent après le {after} et au plus tard le {onOrBefore} :',
+    }),
+    betweenEndOfForce: 'Les données de l’éditeur indiquent le {date} comme date de fin de vigueur de cet acte, date qui se situe après le {after} et au plus tard le {onOrBefore}.',
     status: Object.freeze({ changed: 'modifié', added: 'ajouté', removed: 'supprimé', unchanged: 'inchangé' }),
     row: '{article} : {status} (libellé {from} → {to})',
     noWording: 'aucun',
@@ -463,6 +482,23 @@ export const LIVE_CHROME_FR = Object.freeze({
     europeAnnexes: Object.freeze({
       one: '{count} annexe du libellé en {language} n’est pas communiquée sous forme de texte et n’est jamais interrogée, citée ni exportée : {reason}. Source officielle {source}.',
       other: '{count} annexes du libellé en {language} ne sont pas communiquées sous forme de texte et ne sont jamais interrogées, citées ni exportées : {reason}. Source officielle {source}.',
+    }),
+    asPublished: Object.freeze({
+      label: 'tel que publié ; peut avoir été modifié depuis ; aucun texte consolidé détenu',
+      laterNotHeld: 'Versions ultérieures : non détenues.',
+      laterNamed: Object.freeze({
+        one: 'Versions ultérieures : non détenues. Les données de l’éditeur nomment {count} version consolidée de cet acte, dont ce site ne détient pas le texte :',
+        other: 'Versions ultérieures : non détenues. Les données de l’éditeur nomment {count} versions consolidées de cet acte, dont ce site ne détient pas les textes :',
+      }),
+      consolidationFrom: '{iri}, applicable à partir du {from} (éditeur)',
+      consolidationFromTo: '{iri}, applicable du {from} au {to} (éditeur)',
+      consolidationUndated: '{iri}, sans date d’applicabilité unique indiquée par l’éditeur',
+      endOfForce: 'Les données de l’éditeur indiquent le {date} comme date de fin de vigueur de cet acte.',
+      authenticity: Object.freeze({
+        electronic_journal_officiel: 'Ce texte a été extrait et normalisé par Lex, à titre d’information ; il ne fait pas foi. Depuis le 1er janvier 2017, le Journal officiel du Grand-Duché de Luxembourg (Mémorial A) publié sous forme électronique fait seul foi (loi du 23 décembre 2016, art. 5). L’acte tel que publié : {act}.',
+        printed_memorial: 'Ce texte a été extrait et normalisé par Lex, à titre d’information ; il ne fait pas foi. Pour un acte publié avant le 1er janvier 2017, le Mémorial imprimé fait foi, et le PDF de l’éditeur en est la reproduction numérique. L’acte tel que publié : {act}.',
+        publication_date_not_stated: 'Ce texte a été extrait et normalisé par Lex, à titre d’information ; il ne fait pas foi. Les données de l’éditeur n’indiquent aucune date de publication unique pour cet acte ; Lex n’indique donc pas quelle édition fait foi. L’acte tel que publié : {act}.',
+      }),
     }),
   }),
   form: Object.freeze({

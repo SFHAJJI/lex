@@ -26,7 +26,7 @@
 import { useEffect, useRef, useState } from 'react';
 
 import { RefusalCard } from './RefusalCard.jsx';
-import { EuropeAnnexes, LiveAnswer, Permalink, Say, StatusSentence, inEnglish, refusalCardCopyFor } from './LiveAnswer.jsx';
+import { AsPublished, EuropeAnnexes, LiveAnswer, Permalink, Say, StatusSentence, inEnglish, refusalCardCopyFor } from './LiveAnswer.jsx';
 import {
   LIVE_READING_IDLE,
   READING_LANGUAGES,
@@ -139,6 +139,7 @@ export function ReadingView({ view }) {
           <Say template={COPY.rightsIn} values={{ rights: view.rightsDisposition, date: view.date, language: view.language }} />
         )}
       </p>
+      <AsPublished asPublished={view.asPublished} />
       {view.states.map((state) => (
         <StateReading key={state.stateSha256} state={state} workKey={view.workKey} />
       ))}

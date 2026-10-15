@@ -73,14 +73,19 @@ test("the request carries the identifier and the two dates as typed, and a langu
   assert.throws(() => compareParameters({ ...REQUEST, language: "ltz" }), /not a language this form offers/);
 });
 
-test("the same state on both dates is said as such, with the platform's note", async () => {
+test("the same state on both dates is said as such: the one text held of an act held only as published, with its label", async () => {
   const { calls, fetchImpl } = answering(200, "application/json", envelopeOf(ANSWER));
   const outcome = await loadLiveCompare({ contract, fetchImpl, request: REQUEST });
   assert.equal(outcome.state, "success");
   assert.equal(calls[0].url, "/api/v3/diff");
   assert.deepEqual(JSON.parse(calls[0].init.body).parameters, { identifier: REQUEST.identifier, date_from: "2024-02-01", date_to: "2024-02-01", language: "fra" });
   const markup = view(outcome);
-  assert.ok(markup.includes("The same version applied on both dates."));
+  // The census act is held only as published (the review of #964): its one state is the one text held, never one
+  // version covering both dates, and the card shows the as-published label.
+  assert.ok(markup.includes("Both dates select the one text held, the act as published, applicable from 2024-02-01 (publisher); later versions are not held."));
+  assert.ok(markup.includes("As published; may have been amended since; no consolidated text."));
+  assert.ok(!markup.includes("same version"), "never one version covering both dates");
+  assert.ok(!markup.includes("applied"), "the card never says applied (R21)");
   assert.ok(!markup.includes("data-counts"), "no counts for the same state");
 });
 

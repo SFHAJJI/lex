@@ -133,13 +133,21 @@ main > p:last-child {
    evidence run at 320px. The evaluation card's own prose names what it was run over by its
    corpus digest ("sha256:" and 64 hex), and its reasons and notes are the platform's: the
    image rehearsal's probes found the target at 668px in a 305px window (the journeys' card
-   names no digest there). */
+   names no digest there). An act held only as first published prints its address as published and the publisher's
+   consolidated versions by IRI, in its block and in the export's paragraph: the journeys found the export at 458px in a
+   305px window (the review of #964's CI). Compare names the versions its publisher dates between two dates the same way
+   (the review of #964). */
 code,
 dt,
 dd,
 .body,
 [data-evaluation-card] p,
-[data-evaluation-card] li {
+[data-evaluation-card] li,
+[data-as-published] p,
+[data-as-published] li,
+[data-between-dates] p,
+[data-between-dates] li,
+[data-export-as-published] {
   overflow-wrap: anywhere;
   word-break: break-word;
 }

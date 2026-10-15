@@ -160,8 +160,8 @@ const EN = Object.freeze({
     title: "Compare",
     eyebrow: "Compare",
     heading: "Two states, article by article",
-    intro: "The states of one Luxembourg work that applied on two dates, compared by the publisher's article ids and wording, with nothing said about legal effect. The identifier and the dates go to this server in the request and nowhere else, and this page keeps nothing.",
-    idle: "Type a work identifier and two dates to compare the states that applied on them.",
+    intro: "The states of one Luxembourg work applicable on two dates, compared by the publisher's article ids and wording, with nothing said about legal effect. The identifier and the dates go to this server in the request and nowhere else, and this page keeps nothing.",
+    idle: "Type a work identifier and two dates to compare the states applicable on them.",
     summary: "{work}: {from} against {to}.",
     summaryIn: "{work}: {from} against {to} in {language}.",
     sideFrom: "From",
@@ -169,6 +169,18 @@ const EN = Object.freeze({
     side: "{side}: the state applying from {from}, {articles} articles, {conflicts} with their own date differing from the state's, {permalink}",
     sideNext: "{side}: the state applying from {from} (the next state held applies from {next}), {articles} articles, {conflicts} with their own date differing from the state's, {permalink}",
     counts: "{changed} changed, {added} added, {removed} removed, {unchanged} unchanged.",
+    // Both dates select one state: said in the publisher's clock, never "applied" (R21; the plan's item 0.6).
+    sameVersion: "Both dates fall within the same version, applicable from {from} (publisher).",
+    // Both dates select the one state of an act held only as published (the review of #964): what is held, never one
+    // version covering both dates. The publisher may date a consolidated version, or an end-of-force date, between them,
+    // and the card names each, a version in the as-published block's form (`common.asPublished.consolidationFromTo`).
+    sameTextHeld: "Both dates select the one text held, the act as published, applicable from {from} (publisher); later versions are not held.",
+    sameTextHeldOfSeveral: "Both dates select the same text held, the act as published, applicable from {from} (publisher); no consolidated version is held.",
+    betweenNamed: Object.freeze({
+      one: "The publisher's record names, for this act, {count} consolidated version whose applicability date falls after {after} and on or before {onOrBefore}:",
+      other: "The publisher's record names, for this act, {count} consolidated versions whose applicability dates fall after {after} and on or before {onOrBefore}:",
+    }),
+    betweenEndOfForce: "The publisher's record gives {date} as this act's end-of-force date, which falls after {after} and on or before {onOrBefore}.",
     status: Object.freeze({ changed: "changed", added: "added", removed: "removed", unchanged: "unchanged" }),
     row: "{article}: {status} (wording {from} → {to})",
     noWording: "none",
@@ -339,6 +351,26 @@ const EN = Object.freeze({
     europeAnnexes: Object.freeze({
       one: "{count} annex of the {language} wording is not served as text, and is never searched, quoted or exported: {reason}. Official source {source}.",
       other: "{count} annexes of the {language} wording are not served as text, and are never searched, quoted or exported: {reason}. Official source {source}.",
+    }),
+    // A Luxembourg act held only as first published (the plan's item 0.6, `as-published.mjs`): its label, what this site
+    // holds of later versions, and the authenticity sentence of its case, with the act as published in {act}. The label
+    // and the authenticity sentences are drafts pending the lawyer's read (the owner's item O4).
+    asPublished: Object.freeze({
+      label: "as published; may have been amended since; no consolidated text",
+      laterNotHeld: "Later versions: not held.",
+      laterNamed: Object.freeze({
+        one: "Later versions: not held. The publisher's record names {count} consolidated version of this act, whose text this site does not hold:",
+        other: "Later versions: not held. The publisher's record names {count} consolidated versions of this act, whose text this site does not hold:",
+      }),
+      consolidationFrom: "{iri}, applicable from {from} (publisher)",
+      consolidationFromTo: "{iri}, applicable from {from} to {to} (publisher)",
+      consolidationUndated: "{iri}, with no single applicability date stated by the publisher",
+      endOfForce: "The publisher's record gives {date} as this act's end-of-force date.",
+      authenticity: Object.freeze({
+        electronic_journal_officiel: "This text was extracted and normalised by Lex, for information; it is not authentic. Since 1 January 2017, only the Journal officiel du Grand-Duché de Luxembourg (Mémorial A) as published electronically is authentic (loi du 23 décembre 2016, art. 5). The act as published: {act}.",
+        printed_memorial: "This text was extracted and normalised by Lex, for information; it is not authentic. For an act published before 1 January 2017, the printed Mémorial is authentic, and the publisher's PDF is its digital reproduction. The act as published: {act}.",
+        publication_date_not_stated: "This text was extracted and normalised by Lex, for information; it is not authentic. The publisher's record gives no single publication date for this act, so Lex does not say which edition is authentic. The act as published: {act}.",
+      }),
     }),
   }),
   form: Object.freeze({

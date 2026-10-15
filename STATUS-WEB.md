@@ -4,6 +4,151 @@ Updated 2026-10-15. The web lane's progress, split out of STATUS.md (which keeps
 items and the pointers) by the standing order of 2026-10-01 13:50 UTC. Every pull request of the web lane
 updates this file, not STATUS.md.
 
+## An act held only as first published says so, and Compare stops saying "applied" (sole driver, 2026-10-15)
+
+The plan's item 0.6, "two wording faults fixed now" (the specification of record's R76, R18, R20 and R21). Every
+Luxembourg act the site holds is held as the publisher first published it, with no consolidated text, and no page said
+so; and the Compare card said "the same version applied on both dates", which R21 never says.
+- **What identifies an act held only as published**: every state the index holds of the work is an expression of the
+  publisher's Journal officiel legal resource, the work IRI followed by `/jo` (expression `/jo/{language}`; the publisher
+  types it `jolux:Act`). A consolidated version is a legal resource of its own, `/consolide/{date}` (`jolux:Consolidation`),
+  and the index holds no state of one. Measured on `derive-c`'s Luxembourg index, read-only: 1,730 states of 1,730 works,
+  every one `/jo/fr`. The index's own facts name 388 consolidated versions (each with one `dateApplicability`) for 154 of
+  those acts, give a `dateNoLongerInForce` for 273, and a `publicationDate` for all 1,730: 29 before 2017, 1,701 since.
+- **The platform says it** (`V3CorpusMount.AsPublished.cs`): `as_of`, `evidence_bundle`, `timeline`, `dossier` and `diff`
+  carry `as_published`, null for a work whose consolidated state is held. It holds the label, the rule, the act as published
+  (`journal_officiel_iri`), `later_version_facts` (the consolidated versions the publisher's facts name under the work's
+  `/consolide/`, each with its applicability dates or null, the end-of-force facts verbatim, and one sentence said from
+  them alone) and `authenticity` (its case, its sentence, the publication dates verbatim, and the publisher file each listed
+  state was read from with the `legalValue` the publisher asserts on it). `dossier` and `evidence_bundle` end their
+  not-held list with the row `later_versions`, in the same sentence. The consolidated versions are read by a new index
+  query (`SubjectFactsUnder`, one range of the fact table's primary key, held to that plan). REST and MCP answer through
+  the one dispatch, and a test holds the MCP dossier's `as_published` byte for byte to the REST one.
+- **The pages say it** (`as-published.mjs` reads it and refuses an answer whose sentences are not its facts'; `AsPublished`
+  in `LiveAnswer.jsx`): the reading, the dossier (whose state table is the act's timeline) and the export page show the
+  label, "Later versions: not held." with the consolidated versions the publisher names and its end-of-force date when
+  held, and the authenticity sentence with the act as published printed (no live page links out). The JSON export carries
+  `as_published`, every CSV row three columns (`as_published`, `later_versions`, `authenticity`), and the PDF a paragraph.
+  Compare's card shows the same block. The journeys expect the label on the dossier, the reading and Compare.
+- **Compare**: one state on both dates of an act held only as published (every held Luxembourg act today) is "Both dates
+  select the one text held, the act as published, applicable from {date} (publisher); later versions are not held"
+  (`AsPublishedSameTextNote`), and the answer and the card then name, from the publisher's facts alone, each consolidated
+  version whose applicability date falls after the earlier date and on or before the later one ("applicable from {from}
+  to {to} (publisher)") and an end-of-force date that falls there (`later_version_facts_between_dates`); nothing is said of
+  whether the text changed. Where the language holds another state too (none in the population), it is "the same text
+  held", and says that no consolidated version is held. A work whose consolidated state is held (none today) keeps
+  "Both dates fall within the same version, applicable from {date} (publisher)" (`SameVersionNote`). The page says each
+  in its own language (`compare.sameTextHeld`,
+  `compare.betweenNamed`, `compare.betweenEndOfForce`, `compare.sameVersion`), and the reader refuses a note, or facts
+  between the dates, that are not the answer's facts'. The EU form, for when Compare serves EU versions (the plan's item
+  2.5), is defined beside it: "Both dates fall within the same consolidated wording state (from {date})". The page's
+  English introduction and idle sentence and the French idle sentence no longer say "applied" or "s’appliquaient". There
+  was no one vocabulary check, only "in force" tests on a few screens: `assertTimeVocabulary` (`publisher-vocabulary.mjs`)
+  now refuses "in force", "en vigueur" and "applied" with every past form of "appliquer", in any spelling (NFC, spaces
+  and dashes folded, apostrophes folded), holds every Compare entry in both languages and the card for every census
+  comparison (`compare-vocabulary.test.mjs`), and is shown failing on purpose: the old note as a string, as an answer
+  (refused by the reader) and as a rendered card, and each variant the review found.
+- **The wording**, drafts pending the lawyer's read (the owner's item O4; not legally reviewed):
+  - label: "as published; may have been amended since; no consolidated text" / "tel que publié ; peut avoir été modifié
+    depuis ; aucun texte consolidé détenu";
+  - later versions: "Later versions: not held." / "Versions ultérieures : non détenues.", and when the publisher's record
+    names consolidated versions, "The publisher's record names {count} consolidated versions of this act, whose text this
+    site does not hold:" / "Les données de l’éditeur nomment {count} versions consolidées de cet acte, dont ce site ne
+    détient pas les textes :", each "applicable from {from} to {to} (publisher)" / "applicable du {from} au {to}
+    (éditeur)"; end of force: "The publisher's record gives {date} as this act's end-of-force date." / "Les données de
+    l’éditeur indiquent le {date} comme date de fin de vigueur de cet acte.";
+  - authenticity, published since 1 January 2017: "This text was extracted and normalised by Lex, for information; it is
+    not authentic. Since 1 January 2017, only the Journal officiel du Grand-Duché de Luxembourg (Mémorial A) as published
+    electronically is authentic (loi du 23 décembre 2016, art. 5). The act as published: {act}." / "Ce texte a été extrait
+    et normalisé par Lex, à titre d’information ; il ne fait pas foi. Depuis le 1er janvier 2017, le Journal officiel du
+    Grand-Duché de Luxembourg (Mémorial A) publié sous forme électronique fait seul foi (loi du 23 décembre 2016, art. 5).
+    L’acte tel que publié : {act}.";
+  - published before: "… For an act published before 1 January 2017, the printed Mémorial is authentic, and the
+    publisher's PDF is its digital reproduction. …" / "… Pour un acte publié avant le 1er janvier 2017, le Mémorial imprimé
+    fait foi, et le PDF de l’éditeur en est la reproduction numérique. …";
+  - no single publication date: "… The publisher's record gives no single publication date for this act, so Lex does not
+    say which edition is authentic. …" / "… Les données de l’éditeur n’indiquent aucune date de publication unique pour
+    cet acte ; Lex n’indique donc pas quelle édition fait foi. …".
+- **French**: written to the review's terms and reviewed in its addendum of 2026-10-15 (`C:\lex-v3\lanes\fr-review\review.md`):
+  13 forms, 2 changed in review (a plural's "les textes"; the statute's own order, "fait seul foi"), 11 approved. New rows:
+  the publisher's record is "les données de l’éditeur", a consolidated version "version consolidée", "(publisher)"
+  "(éditeur)", amended "modifié", the end-of-force date "date de fin de vigueur". The repair round's five Compare forms
+  (`compare.sameTextHeld`, `compare.sameTextHeldOfSeveral`, `compare.betweenNamed`, `compare.betweenEndOfForce`) were
+  reviewed in the same addendum's section for the review of #964 (an independent Claude subagent under the same
+  delegation): 3 changed ("le même texte détenu"; "pour cet acte" before the count, so the clause can only be the
+  versions'), 2 approved; new rows: select "retenir" ("le texte retenu"), "after X and on or before Y" "après le X et au
+  plus tard le Y". The driver took its two points on the English: beside another held state the sentence says "no
+  consolidated version is held" ("aucune version consolidée n’est détenue", the reviewer's rendering), and
+  `compare.betweenNamed` says "names, for this act, …".
+- **Driver decisions** (reversible):
+  - The French label says "aucun texte consolidé détenu": without "détenu" it says the act has none, which the index's
+    facts contradict for 154 acts. The English "no consolidated text" is the specification's and can be read the same way;
+    it goes to the lawyer as a question (O4).
+  - The authenticity case is the publisher's `publicationDate` of the act as published, and nothing but the Journal
+    officiel itself is called authentic: no file is, and Lex's extraction never is, whatever `legalValue` the publisher
+    puts on the file (served verbatim). R20's rule for acts published before 2017 is to be checked against the earlier
+    publication rules by the lawyer.
+  - Both exports now carry a field named `authenticity` (the EU's, R19; Luxembourg's, R20).
+- **Not yet**: search results, the provision history and the radar do not show the label (each links to the reading or
+  the dossier, which do); `as_observed`, `status_on`, `provenance`, `classification` and the other answers do not carry
+  `as_published`; the pre-V3 timeline legend (`LEGENDS` in `publisher-vocabulary.mjs`, on no live page) still says
+  "applied"; the result schemas leave each answer's value open, so the answer and envelope censuses hold the new members.
+  Live strings that still say "in force", kept because none says it of an interval and each names a typed publisher fact
+  or a published contract name (R21's last clause: entry into force comes only from typed publisher dates, spoken as
+  separate values): `status_on`'s reading rule and its member `asserted_in_force_on_date` ("does not say the work was in
+  force", of the requested date, read from `dateEntryInForce` and `dateNoLongerInForce`), and the not-held rows of
+  `classification` and `browse` ("no in-force status … is served here", the predicate `inForceStatus`); the operation id
+  `in_force_on` and its route (its description already says "with a state applicable on a date"); and the EU
+  `status_on` refusal's sentence naming the Publications Office's "in force" fact. Renaming a member, an operation or a
+  route is a contract change, left to the slice that revisits `status_on`.
+- **The review of #964** (each finding reproduced by the reviewer; this is the one repair round):
+  - **Compare told a falsehood for an act held only as published.** Every held work has one state, its `/jo` text, so
+    any two dates on or after it selected that state and the card said "Both dates fall within the same version", even
+    where the publisher's own record names a consolidated version, or an end-of-force date, between the two dates
+    (rgd-2020-04-08-a265 on 2020-04-10 and 2020-05-20, where `/consolide/20200511` applies from 2020-05-11; reproduced
+    on `derive-c`'s index, read-only: 376 of the 388 named consolidated versions, in 149 acts, start after the held
+    state's date, and 269 acts have an end-of-force date after it). Repaired as the driver decided, in **Compare** above:
+    `diff` carries `as_published` and `later_version_facts_between_dates`, the note says "Both dates select the one text
+    held, the act as published, applicable from {date} (publisher); later versions are not held" and names the versions
+    and the end-of-force date dated after the earlier date and on or before the later one, the card shows the
+    as-published block and names each, and the reader refuses a note or facts between the dates that are not the
+    answer's. An index fixture reproduces the straddling case (`V3CorpusDiffMountTests`), and the answer census holds a
+    real-handler comparison across dated versions.
+  - **The R21 check let French and Unicode variants through** ("s’y appliquait", "qui s’y appliquaient", "appliquait"
+    and "appliquaient" without "s’", "in force", "en vigueur", a decomposed "appliquée", "sʼappliquait"
+    with U+02BC, "in-force"). `assertTimeVocabulary` now reads the text composed to NFC, its format characters taken out,
+    its runs of spaces and dashes folded to one space and its apostrophes to one, and refuses every past form of
+    "appliquer" as a word on its own (`(?<!\p{L})appliqu(?:é|ée|és|ées|ai|ais|ait|aient|a|as|âmes|âtes|èrent)(?!\p{L})`).
+    R21 forbids "in force", "en vigueur" and "applied" on an interval and prescribes "applicable", so "applicable" and the
+    present "s’applique", "applies", "applying" stay allowed (`compare.sideNext` and the refusal sentences say "s’applique
+    à partir du" and "s’appliquent à cette date" of a date asked). Every probe is in `compare-vocabulary.test.mjs`; all
+    373 entries of each interface table, the 150 strings of the refusal sentences and the 15 of the localisation table
+    pass the stricter rule.
+  - **Live MCP tool descriptions said "applied" of a date**: `as_of` now says "applicable on a date (publisher)", and
+    `as_observed` "applicable on a date (publisher) as one build of the mounted log held it"; `status_on` names the
+    publisher's force facts by their predicates. No census or golden pins `tools/list`; a new test
+    (`NoToolDescriptionSaysAppliedInForceOrEnVigueurOfADate`) holds every description to the same check. The grep of
+    `src/` and `web/` found no other live string saying "applied", "in force" or "en vigueur" of an interval; the
+    strings kept are in **Not yet**.
+  - **The tree count** said 1,509; it is 1,510 at this head.
+  - **The journeys' CI failure** (before the review): the export step's page was 458 px wide at 320 px, from the export's
+    as-published paragraph and the block's long addresses; repaired before review by wrapping them (`overflow-wrap:
+    anywhere` on `[data-as-published] p`, `[data-as-published] li` and `[data-export-as-published]`, held by a test), and
+    Compare's new list of versions wraps the same way (`[data-between-dates]`).
+- **Measured**: at the slice's head, web suite 1,119 of 1,119; the solution built in Release with no warning;
+  `Lex.V3.Tests` 3,156 passed, 1 skipped; the whole `Lex.V3.Ingest.Tests` 2,987 passed, 26 skipped (the live canaries and
+  opt-in runs), 0 failed, in 43 minutes. At the repair's head: web suite 1,121 of 1,121 (`compare-vocabulary.test.mjs` 5,
+  `compare-answer.test.mjs` 4, `as-published.test.mjs` 7); the solution built in Release, 0 warnings, 0 errors;
+  `Lex.V3.Tests` 3,156 passed, 1 skipped; the `Lex.V3.Ingest.Tests` classes touched and the census, recording, sample,
+  MCP and diff classes 176 passed, 2 skipped (two publisher canaries), 0 failed (`V3CorpusDiffMountTests` 14,
+  `V3McpJsonRpcTests` 20, `V3CorpusAsPublishedMountTests` 5 among them); the whole Ingest suite was not run again; the
+  answer and envelope censuses rendered from the real handler and verified without the render switch; the browser
+  journeys on the fixture mount 44 of 44, and again with `--keyboard --served-by-api` 44 of 44 (headless Chrome, the API
+  published in Release); `eng/verify-v3-tree.ps1` over 1,510 tracked paths.
+- **After 0.8 merged** (#966): its `image-conditions` lane, which runs without the language library, failed the new MCP
+  vocabulary test on one probe, a decomposed accent that only the library composes. That probe now runs only where the
+  process can compose; the precomposed form and every tool description are checked in the lane too.
+
 ## The web suite's race: one bundle every live build shared (sole driver, 2026-10-15)
 
 The web suite failed now and then on one of the live-page tests ("renderLiveLocaleUnavailablePage is not a function"),

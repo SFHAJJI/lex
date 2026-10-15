@@ -3427,6 +3427,41 @@ public sealed class LuxembourgIndexReader : IDisposable
     }
 
     /// <summary>
+    /// The publisher's typed assertions about every subject whose IRI starts with <paramref name="prefix"/>, verbatim,
+    /// in the fact table's order (<see cref="LuxembourgIndexQueries.SubjectFactsUnder"/>): the consolidated versions the
+    /// publisher names under a work (<c>{work}/consolide/</c>), say, which the index holds facts about and no state of.
+    /// An empty prefix is refused, since it would read the whole table.
+    /// </summary>
+    public IReadOnlyList<LuxembourgIndexWorkFact> ResolveFactsUnder(string prefix)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(prefix);
+        var last = prefix[^1];
+        if (last >= '\u007f')
+        {
+            // The range's upper bound raises the last character by one, which is a byte's order only for ASCII.
+            throw new ArgumentException("A subject prefix ends in a character outside ASCII.", nameof(prefix));
+        }
+
+        lock (_gate)
+        {
+            using var command = _connection.CreateCommand();
+            command.CommandText = LuxembourgIndexQueries.SubjectFactsUnder;
+            command.Parameters.AddWithValue("$low", prefix);
+            command.Parameters.AddWithValue("$high", prefix[..^1] + (char)(last + 1));
+            using var reader = command.ExecuteReader();
+            var values = new List<LuxembourgIndexWorkFact>();
+            while (reader.Read())
+            {
+                values.Add(new LuxembourgIndexWorkFact(
+                    reader.GetString(0), reader.GetString(1), reader.GetString(2), reader.GetString(3),
+                    reader.GetString(4), reader.GetString(5), reader.GetString(6), reader.GetString(7)));
+            }
+
+            return Array.AsReadOnly(values.ToArray());
+        }
+    }
+
+    /// <summary>
     /// One page of the held works in work-key order (<see cref="LuxembourgIndexQueries.WorkRecords"/>),
     /// optionally those with a state in a language, those whose publisher typeDocument is the given IRI or
     /// ends in the given token, and those after a work key. <paramref name="take"/> rows at most.
