@@ -16,8 +16,8 @@ import { cspValue } from "../scripts/csp.mjs";
 import { CARD_ROUTE } from "../scripts/evaluation-card.mjs";
 import { redirectFor } from "../scripts/permalinks.mjs";
 import {
-  REMOTE_PRIVACY_NOTE, accentedTitleFailures, browserFailures, clockFailures, deployedReleaseFailures, liveFilesOf, luxembourgTodayNote,
-  remoteRevision, revisionFailures,
+  NOT_FOUND_PROBE, REMOTE_PRIVACY_NOTE, accentedTitleFailures, browserFailures, clockFailures, deployedReleaseFailures, liveFilesOf,
+  luxembourgTodayNote, remoteRevision, revisionFailures,
 } from "../scripts/deploy-probe.mjs";
 import { rehearsalKey, signRehearsal } from "../scripts/image-rehearsal.mjs";
 import { writeLayout, writeTar } from "../scripts/image-reproducible.mjs";
@@ -26,6 +26,7 @@ import { ASSETS, imageSignatureAsset, publishRelease, releaseVersion } from "../
 const sha256 = (bytes) => createHash("sha256").update(bytes).digest("hex");
 const CARD = readFileSync(new URL("../../schemas/v3-platform/evaluation-card.json", import.meta.url));
 const PAGE = Buffer.from("<!doctype html><title>Lex V3</title><p>V3's own page</p>\n");
+const NOT_FOUND_PAGE = Buffer.from("<!doctype html><title>Page introuvable - Lex</title><p>V3's own 404 page</p>\n");
 const CORPUS = "c".repeat(64);
 const SOURCE = { epoch: 1790799760, from: "commit", commit: "23af798d9c78602726280978edcedf07f9408e98", clean: true };
 const HEADERS = {
@@ -86,7 +87,8 @@ function titleAnswer(operation, parameters, { folds, titlesHeld }) {
 async function revision(change = {}) {
   const answer = {
     page: PAGE, card: CARD, corpus: CORPUS, headers: HEADERS, refusal: null, extra: new Map(), root: { status: 302, location: "/fr/", vary: "Accept-Language" },
-    ready: { status: 204, cache: "no-store" }, observedAt: () => observedAt(Date.now()), folds: true, titlesHeld: true, ...change,
+    ready: { status: 204, cache: "no-store" }, observedAt: () => observedAt(Date.now()), folds: true, titlesHeld: true,
+    notFound: { status: 404, body: NOT_FOUND_PAGE }, ...change,
   };
   const server = createServer((request, response) => {
     const path = request.url.split("?")[0];
@@ -120,6 +122,10 @@ async function revision(change = {}) {
         response.writeHead(200, { "content-type": "application/json" });
         response.end(JSON.stringify(titleAnswer(operation, parameters, answer)));
       });
+    } else if (request.method === "GET" && path === NOT_FOUND_PROBE) {
+      // The release's 404 page, as both servers answer an address nothing claims (R60).
+      response.writeHead(answer.notFound.status, { "content-type": "text/html; charset=utf-8", ...answer.headers });
+      response.end(answer.notFound.body);
     } else if (answer.extra.has(`${request.method} ${path}`)) {
       response.writeHead(200, { "content-type": "text/plain" });
       response.end(answer.extra.get(`${request.method} ${path}`));
@@ -132,7 +138,7 @@ async function revision(change = {}) {
   return { origin: `http://127.0.0.1:${server.address().port}`, close: () => new Promise((resolve) => server.close(resolve)) };
 }
 
-const WEB = [["fr/index.html", PAGE], ["evaluation-card.json", CARD]];
+const WEB = [["fr/index.html", PAGE], ["evaluation-card.json", CARD], ["not-found/fr.html", NOT_FOUND_PAGE]];
 
 test("a revision that answers as its release holds passes the probe", async () => {
   const served = await revision();
@@ -156,6 +162,11 @@ test("each way a revision can differ from its release fails with its own reason"
     ["another card", { card: Buffer.from("{}") }, /is not the release's evaluation card/],
     ["another mount", { corpus: "d".repeat(64) }, /answers from corpus d{64}, not the release's c{64}/],
     ["no mount", { refusal: "no_corpus_mounted" }, /coverage refused no_corpus_mounted/],
+    ["the platform's problem where the 404 page belongs", { notFound: { status: 404, body: "{\"code\":\"unknown_route\"}" } },
+      /GET \/fr\/no-such-page answered 404 with a body that is not the release image's own 404 page, not the 404 page/],
+    ["a page where nothing is", { notFound: { status: 200, body: NOT_FOUND_PAGE } }, /GET \/fr\/no-such-page answered 200, not the 404 page/],
+    ["a 404 page without its policy", { notFound: { status: 404, body: NOT_FOUND_PAGE }, headers: { ...HEADERS, "content-security-policy": "default-src *" } },
+      /GET \/fr\/no-such-page carries the CSP default-src \*/],
     ["a V2 route answering", { extra: new Map([["POST /api/ask", "a V2 answer"]]) }, /POST \/api\/ask answered 200, not 404/],
     ["a server without the law", { ready: { status: 503, cache: "no-store" } }, /GET \/health\/ready answered 503 \(19 bytes\), not 204/],
     ["a readiness a cache could keep", { ready: { status: 204, cache: "max-age=60" } }, /GET \/health\/ready may be cached \(max-age=60\)/],
@@ -252,7 +263,7 @@ function imageArchive() {
 
 test("the live pages are read out of the release image", () => {
   const files = new Map(liveFilesOf(imageArchive().archive));
-  assert.deepEqual([...files.keys()].sort(), ["evaluation-card.json", "fr/index.html"]);
+  assert.deepEqual([...files.keys()].sort(), ["evaluation-card.json", "fr/index.html", "not-found/fr.html"]);
   assert.ok(files.get("fr/index.html").equals(PAGE));
 });
 

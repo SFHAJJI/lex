@@ -6,6 +6,8 @@
 // - health and the page: `GET /` sends a reader who names no language to `/fr/` (R61), with `Vary: Accept-Language`,
 //   and `GET /fr/` answers 200 with the release image's own page, byte for byte, carrying the security headers the
 //   image run probes (CSP with `frame-ancestors 'none'`, HSTS, `Referrer-Policy: no-referrer`, `nosniff`);
+// - the 404 page (R60): an address nothing claims answers 404 with the release image's own French 404 page, byte for
+//   byte, carrying the same security headers, for a reader who names no language;
 // - the card: the evaluation card at its stable route is the release's card, byte for byte, as JSON;
 // - the API: `coverage` answers from the mount the release names, by its corpus digest;
 // - the server: its readiness route answers 204 (it holds the law), and the synthetic preview's route is unknown to it;
@@ -36,6 +38,9 @@ import { readLargeFile } from "./large-bytes.mjs";
 import { luxembourgDate, luxembourgOffset, luxembourgSummerTimeEnds, luxembourgSummerTimeStarts } from "./temporal.mjs";
 
 const LIVE_PREFIX = "app/v3-web/";
+
+/** An address nothing claims, asked of a revision for its 404 page (R60): a page request, under no law's address. */
+export const NOT_FOUND_PROBE = "/fr/no-such-page";
 
 /** The live page files a release image serves, as `[path, bytes]` from under `app/v3-web/`, the last layer's copy winning. */
 export function liveFilesOf(archive) {
@@ -80,6 +85,20 @@ export async function revisionFailures(origin, { web, card, corpusSha256, notes 
   if (!/^max-age=\d+/.test(header("strict-transport-security") ?? "")) failures.push("GET /fr/ carries no HSTS");
   if (header("referrer-policy") !== "no-referrer") failures.push(`GET /fr/ carries Referrer-Policy ${header("referrer-policy")}, not no-referrer`);
   if (header("x-content-type-options") !== "nosniff") failures.push("GET /fr/ carries no nosniff");
+
+  // An address nothing claims is the release's own 404 page, in the language its path names, with a page's headers (R60).
+  const notFound = new Map(web).get("not-found/fr.html");
+  if (notFound === undefined) {
+    failures.push("the release image holds no 404 page (not-found/fr.html), so the revision's answer to a page nothing claims cannot be held to it");
+  } else {
+    const missing = await fetch(`${origin}${NOT_FOUND_PROBE}`, { redirect: "manual" });
+    const missingBody = Buffer.from(await missing.arrayBuffer());
+    if (missing.status !== 404 || !missingBody.equals(notFound)) {
+      failures.push(`GET ${NOT_FOUND_PROBE} answered ${missing.status}${missing.status === 404 ? " with a body that is not the release image's own 404 page" : ""}, not the 404 page`);
+    } else if (missing.headers.get("content-security-policy") !== policy) {
+      failures.push(`GET ${NOT_FOUND_PROBE} carries the CSP ${missing.headers.get("content-security-policy")}, not ${policy}`);
+    }
+  }
 
   const servedCard = await fetch(`${origin}${CARD_ROUTE}`, { redirect: "manual" });
   const cardBytes = Buffer.from(await servedCard.arrayBuffer());
