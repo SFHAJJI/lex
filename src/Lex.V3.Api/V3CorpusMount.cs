@@ -438,9 +438,10 @@ internal sealed partial class V3CorpusMount : IDisposable
         "that snapshot; the work is named as the mounted index names it, or by its stable work coordinate when only the log still holds it";
 
     internal const string AsObservedBoundNote =
-        "observed_no_later_than is when the snapshot's build ran, rounded up to the second, so every state it held was observed no later " +
-        "than that; no observation time is held, so nothing here says when a state was first observed, and no time between two snapshots " +
-        "is placed in either";
+        "observed_no_later_than is the snapshot's build time: the time its acquiring build read once the acquisition had ended, rounded up " +
+        "to the second, so every state it held was observed no later than that; an index derived again from custody keeps that time and " +
+        "never moves it forward; no observation time is held, so nothing here says when a state was first observed, and no time between " +
+        "two snapshots is placed in either";
 
     internal const string AsObservedTextNote =
         "a state the mounted index still holds is served in full (text_held true); a state only an earlier build held is served in full from " +
@@ -4770,7 +4771,8 @@ internal sealed partial class V3CorpusMount : IDisposable
     internal const string EventsGenesisNote =
         "this log comes from one observation with no predecessor, so it holds only first_sighting; first_sighting means first present in this log " +
         "and does not say when the publisher published the text or when it was fetched; observed_from is null because no observation time is held; " +
-        "log.built_at is when the build ran, an upper bound on when its corpus was observed and never an observation time; " +
+        "log.built_at is the time the acquiring build read once its acquisition had ended, an upper bound on when its corpus was observed " +
+        "and never an observation time, and an index derived again from custody keeps it rather than the time of that derivation; " +
         "a revision (validity_revised, interval_closed, file_replaced, withdrawn_from_source, ...) needs a later build compared against this one";
 
     /// <summary>The genesis note on a schema-6 index, which records no build time: the same, without the build-time sentence.</summary>
@@ -4791,8 +4793,8 @@ internal sealed partial class V3CorpusMount : IDisposable
 
     internal const string EventsSilenceNote =
         "an empty page says this log holds no further event; it says nothing about whether the publisher changed anything or whether acquisition ran: " +
-        "this mount holds no upstream health, a build's time (log.built_at) says when it ran and not what the publisher did after, and every " +
-        "envelope's freshness names upstream health stale";
+        "this mount holds no upstream health, log.built_at bounds when the corpus was observed and says nothing of what the publisher did " +
+        "after, and every envelope's freshness names upstream health stale";
 
     internal const string EventNamesNote =
         "the Stage 4 registry names thirteen events; mintable lists the twelve this pipeline may mint, never the coverage event (B42 finding 5.2: a " +
@@ -4823,7 +4825,7 @@ internal sealed partial class V3CorpusMount : IDisposable
         ["observation_times", "no observation time is held; observed_from is null on every event"],
         ["withdrawal_events", "a state the log holds and a later build lacks stays held: a withdrawal needs three completed runs and a complete enumeration, which no build here proves"],
         ["work_level_events", "events are scoped to states; no work-level event is minted"],
-        ["upstream_health", "no upstream health is held, and a build's time says when it ran and not what the publisher did after, so silence here is not a statement that the publisher was quiet"],
+        ["upstream_health", "no upstream health is held, and a build's time bounds when its corpus was observed and says nothing of what the publisher did after, so silence here is not a statement that the publisher was quiet"],
     ];
 
     internal const string AnswerDriftChainedBasis =
@@ -4841,7 +4843,7 @@ internal sealed partial class V3CorpusMount : IDisposable
         ["observation_times", "no observation time is held; observed_from is null on every event"],
         ["revision_events", "no predecessor build is compared, so no revision, withdrawal, replacement or relation event is held"],
         ["work_level_events", "events are scoped to states; no work-level event is minted"],
-        ["upstream_health", "no upstream health is held, and a build's time says when it ran and not what the publisher did after, so silence here is not a statement that the publisher was quiet"],
+        ["upstream_health", "no upstream health is held, and a build's time bounds when its corpus was observed and says nothing of what the publisher did after, so silence here is not a statement that the publisher was quiet"],
     ];
 
     internal const string AnswerDriftScope =
@@ -5073,10 +5075,11 @@ internal sealed partial class V3CorpusMount : IDisposable
     }
 
     /// <summary>
-    /// The log block: its id (the index digest); its basis (a genesis log, or one chained to predecessors); when its
-    /// build ran (an upper bound on when its corpus was observed, never an observation time); the predecessor its last
-    /// observation carried forward and how many builds were compared; each ancestor log whose cursors this log still
-    /// honours, to its last sequence number, with when that build ran; and the events it holds.
+    /// The log block: its id (the index digest); its basis (a genesis log, or one chained to predecessors); its build time
+    /// (the acquiring build's, an upper bound on when its corpus was observed, never an observation time, and kept by a
+    /// derivation from custody); the predecessor its last observation carried forward and how many builds were compared;
+    /// each ancestor log whose cursors this log still honours, to its last sequence number, with that build's time; and
+    /// the events it holds.
     /// </summary>
     private object EventLogBlock(string logId, LuxembourgIndexEventLog log, IReadOnlyList<LuxembourgIndexObservation> observations) => new
     {

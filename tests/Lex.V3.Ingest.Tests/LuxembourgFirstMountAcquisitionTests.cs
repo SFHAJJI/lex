@@ -56,6 +56,25 @@ public sealed partial class LuxembourgFirstMountAcquisitionTests
 
     internal static readonly LuxembourgActRange ActRange = new("act-2026", Parent, Parent + "0");
 
+    /// <summary>The consolidation published as Akoma Ntoso: its expression, its <c>/xml</c> manifestation and that file.</summary>
+    internal const string ConsolidationIri = Consolidation;
+    internal const string ConsolidationParent = Parent;
+    internal const string ConsolidationExpression = Expression;
+    internal const string XmlManifestation = Expression + "/xml";
+    private const string XmlItem =
+        "http://data.legilux.public.lu/filestore/eli/etat/leg/loi/2026/01/01/a1/consolide/20260201/fr/xml/eli-etat-leg-loi-2026-01-01-a1-consolide-20260201-fr-xml.xml";
+
+    /// <summary>The same act and consolidation, the consolidation's one manifestation Akoma Ntoso XML rather than PDF.</summary>
+    private static readonly (string Subject, string Predicate, string Value)[] XmlAssertions = Assertions
+        .Select(static row => row.Subject == Manifestation || row.Value == Manifestation
+            ? (row.Subject == Manifestation ? XmlManifestation : row.Subject,
+               row.Predicate,
+               row.Predicate == Jolux + "userFormat" ? Formats + "xml-akomantoso"
+                   : row.Predicate == Jolux + "isExemplifiedBy" ? XmlItem
+                   : row.Value == Manifestation ? XmlManifestation : row.Value)
+            : row)
+        .ToArray();
+
     [TestMethod]
     public async Task OneActIsAcquiredEndToEndFromAnObservedVocabularyAndBuildsACorpus()
     {
@@ -309,18 +328,24 @@ public sealed partial class LuxembourgFirstMountAcquisitionTests
         string? omitRequiredPredicate = null,
         bool includeSecondWork = false,
         bool includeBlankNode = false,
-        bool saturatedRoot = false, bool refuseRelations = false) : HttpMessageHandler
+        bool saturatedRoot = false, bool refuseRelations = false,
+        byte[]? xmlBody = null) : HttpMessageHandler
     {
         // The page query binds VALUES (?has_cursor ?last_key_1 ...) { (1 "last key" ...) } on a
         // continuation and (0 "" ...) on a first page (LuxembourgQueryPlan, has_cursor:uint).
         private static readonly Regex ContinuationCursor = new(@"\(\s*1\s+""", RegexOptions.CultureInvariant | RegexOptions.Compiled);
         private readonly List<string> _families = [];
         private readonly List<string> _documents = [];
+
+        // With an XML body the consolidation is published as Akoma Ntoso (xml-akomantoso) instead of a PDF, under the
+        // publisher's /xml manifestation shape, and the filestore GET of its item gets those bytes.
+        private (string Subject, string Predicate, string Value)[] Published => xmlBody is null ? Assertions : XmlAssertions;
+
         private (string Subject, string Predicate, string Value)[] ActAssertions => includeSecondWork
-            ? Assertions.Concat(Assertions.Select(row => (
+            ? Published.Concat(Published.Select(row => (
                 row.Subject.Replace("/2026/", "/2025/", StringComparison.Ordinal), row.Predicate,
                 row.Value.Replace("/2026/", "/2025/", StringComparison.Ordinal)))).ToArray()
-            : Assertions;
+            : Published;
 
 
         internal IReadOnlyList<string> FamiliesSeen
@@ -363,9 +388,10 @@ public sealed partial class LuxembourgFirstMountAcquisitionTests
                     _documents.Add(uri.AbsoluteUri);
                 }
 
-                var expected = new Uri(Item.Replace("http://data.legilux.public.lu/", "https://legilux.public.lu/", StringComparison.Ordinal)).AbsoluteUri;
+                var expected = new Uri((xmlBody is null ? Item : XmlItem)
+                    .Replace("http://data.legilux.public.lu/", "https://legilux.public.lu/", StringComparison.Ordinal)).AbsoluteUri;
                 return (uri.AbsoluteUri == expected || (includeSecondWork && uri.AbsoluteUri == expected.Replace("/2026/", "/2025/", StringComparison.Ordinal)))
-                    ? Binary(request, pdfBytes, "application/pdf")
+                    ? xmlBody is null ? Binary(request, pdfBytes, "application/pdf") : Binary(request, xmlBody, "application/xml")
                     : Binary(request, [], "text/plain", HttpStatusCode.NotFound);
             }
 

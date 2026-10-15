@@ -781,6 +781,20 @@ public sealed record LexCorpus6ManifestSet(
     IReadOnlyList<LexCorpus6CorrigendumProduction> CorrigendumProductions,
     IReadOnlyList<LexCorpus6Member> Members)
 {
+    /// <summary>
+    /// The SHA-256 of the <c>lex-lu-rederivation/1</c> record whose Luxembourg derivations this corpus carries; null (and
+    /// absent on the wire) for a corpus built from the acquisition's own derivations. Set exactly when
+    /// <see cref="LuxembourgRightsAdmissionPolicy"/> is.
+    /// </summary>
+    public string? LuxembourgRederivation { get; init; }
+
+    /// <summary>
+    /// The SHA-256 of the registered rights admission policy the re-derivation names
+    /// (<see cref="Lex.V3.Contracts.Source.Luxembourg.LuxembourgRightsAdmissionPolicies"/>); null (and absent on the wire)
+    /// without a re-derivation, when the corpus reads as policy /1. Set exactly when <see cref="LuxembourgRederivation"/> is.
+    /// </summary>
+    public string? LuxembourgRightsAdmissionPolicy { get; init; }
+
     public LexCorpus6ManifestSet Validate()
     {
         ValidateHeader();
@@ -829,6 +843,24 @@ public sealed record LexCorpus6ManifestSet(
 
         LexCorpus6Member.RequireSortedStrings(ProfileIdentities, nameof(ProfileIdentities));
         LexCorpus6Member.RequireSortedStrings(CorrigendumEvidenceReceiptSha256, nameof(CorrigendumEvidenceReceiptSha256));
+        if ((LuxembourgRederivation is null) != (LuxembourgRightsAdmissionPolicy is null))
+        {
+            throw new ArgumentException(
+                "A corpus names its Luxembourg re-derivation and its admission policy together, or neither.",
+                nameof(LuxembourgRederivation));
+        }
+
+        if (LuxembourgRederivation is not null)
+        {
+            LexCorpus6Member.RequireSha256(LuxembourgRederivation, nameof(LuxembourgRederivation));
+            if (!Lex.V3.Contracts.Source.Luxembourg.LuxembourgRightsAdmissionPolicies.IsRegistered(LuxembourgRightsAdmissionPolicy))
+            {
+                throw new ArgumentException(
+                    "The corpus names a Luxembourg rights admission policy that is not registered.",
+                    nameof(LuxembourgRightsAdmissionPolicy));
+            }
+        }
+
         if (CorrigendumProductions.Count == 0)
             throw new ArgumentException("The corpus must carry each completed corrigendum production.", nameof(CorrigendumProductions));
         foreach (var production in CorrigendumProductions)
@@ -1085,7 +1117,11 @@ public static class LexCorpus6Builder
             profileIdentities,
             CorrigendumReceipts(eu.CorrigendumTripwires),
             CorrigendumProductions(eu.CorrigendumTripwires),
-            members.OrderBy(static member => member, Comparer<LexCorpus6Member>.Create(LexCorpus6ManifestSet.CompareMembers)).ToArray()).Validate();
+            members.OrderBy(static member => member, Comparer<LexCorpus6Member>.Create(LexCorpus6ManifestSet.CompareMembers)).ToArray())
+        {
+            LuxembourgRederivation = profileEnvelope.LuxembourgRederivation?.Sha256,
+            LuxembourgRightsAdmissionPolicy = profileEnvelope.LuxembourgRederivation?.AdmissionPolicySha256,
+        }.Validate();
         var bytes = Write(set);
         var digest = ComputeSha256(bytes);
         var artifactRef = new SourceArtifactRef(ResourceIdOf(digest), digest);
@@ -1114,6 +1150,13 @@ public static class LexCorpus6Builder
             WriteArtifact(writer, "luxembourg_source_set_ref", set.LuxembourgSourceSetRef);
             WriteEuropeRightsMatrix(writer, set.EuropeRightsMatrix);
             WriteStrings(writer, "profile_identities", set.ProfileIdentities);
+            // A corpus built from the acquisition's own derivations writes neither, so its bytes are what they always were.
+            if (set.LuxembourgRederivation is not null)
+            {
+                writer.WriteString("luxembourg_rederivation", set.LuxembourgRederivation);
+                writer.WriteString("luxembourg_rights_admission_policy", set.LuxembourgRightsAdmissionPolicy);
+            }
+
             WriteStrings(writer, "corrigendum_evidence_receipt_sha256", set.CorrigendumEvidenceReceiptSha256);
             writer.WriteStartArray("corrigendum_productions");
             foreach (var production in set.CorrigendumProductions)
@@ -1516,27 +1559,58 @@ public static class LexCorpus6Builder
         .Distinct().OrderBy(static value => value.ResourceId, StringComparer.Ordinal)
         .ThenBy(static value => value.Sha256, StringComparer.Ordinal).ToArray();
 
+    /// <summary>
+    /// The profiles and derivation identities the corpus was made under. The Luxembourg legal-content profile is the one
+    /// the population was made under (content /1 for the acquisition's own derivation, a later one for a re-derivation),
+    /// never a constant. An inventory under /3 is named by its population identity alone, as it always was, so a corpus
+    /// built from the acquisition's own derivations keeps its bytes; a later inventory profile is named by its rule digest
+    /// too. A population under a later profile comes only from a re-derivation, so the envelope must name its record.
+    /// </summary>
+    /// <remarks>
+    /// State digest /2 (design §3.1) is not named: no code defines it before index /9 (slice S6), and a corpus does not name
+    /// a rule its build does not run.
+    /// </remarks>
     private static IReadOnlyList<string> ProfileIdentities(Stage3DerivationProfileEnvelope envelope)
     {
+        var inventory = envelope.BodyComposition.Envelope.LuxembourgAknArticleInventoryPopulation;
+        var content = envelope.BodyComposition.Envelope.LuxembourgAknLegalContentPopulation;
         if (Lex.V3.Contracts.Derivation.DerivationProfileComparison.Compare(
                 Europe.EuFormexMainBodyLegalContentProducer.ProfileSha256,
-                Luxembourg.LuxembourgAknLegalContentProfileProducer.RuleProfileSha256) !=
+                content.RuleProfileSha256) !=
             Lex.V3.Contracts.Derivation.DerivationProfileComparisonOutcome.ProfilesDiffer)
         {
             throw new InvalidDataException(
                 "EU Formex and Luxembourg AKN legal content must remain bound to distinct profiles.");
         }
-        return new[]
+
+        var frozenInventory = string.Equals(
+            inventory.RuleProfileSha256, Luxembourg.LuxembourgAknArticleInventoryProducer.RuleProfileSha256, StringComparison.Ordinal);
+        var frozenContent = string.Equals(
+            content.RuleProfileSha256, Luxembourg.LuxembourgAknLegalContentProfileProducer.RuleProfileSha256, StringComparison.Ordinal);
+        if ((frozenInventory && frozenContent) != (envelope.LuxembourgRederivation is null))
+        {
+            throw new InvalidDataException(
+                "Luxembourg derivations under a later profile come only from a re-derivation, and its record names them; "
+                + "the acquisition's own derivations name none.");
+        }
+
+        var identities = new List<string>
         {
             Europe.EuFormexMainBodyLegalContentProducer.ProfileSha256,
-            Luxembourg.LuxembourgAknLegalContentProfileProducer.RuleProfileSha256,
-            envelope.BodyComposition.Envelope.LuxembourgAknArticleInventoryPopulation.IdentitySha256,
-            envelope.BodyComposition.Envelope.LuxembourgAknLegalContentPopulation.IdentitySha256,
+            content.RuleProfileSha256,
+            inventory.IdentitySha256,
+            content.IdentitySha256,
             envelope.PdfEligibility.IdentitySha256,
             envelope.PdfLayoutEvidence.IdentitySha256,
             envelope.PublisherPdfTextLayer.IdentitySha256,
             envelope.PublisherPdfActScope.IdentitySha256,
-        }.Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray();
+        };
+        if (!frozenInventory)
+        {
+            identities.Add(inventory.RuleProfileSha256);
+        }
+
+        return identities.Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray();
     }
 
     private static IReadOnlyList<string> CorrigendumReceipts(Europe.EuCorrigendumTripwireCompletion completion) =>

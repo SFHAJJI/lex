@@ -91,6 +91,8 @@ public sealed class VocabularyRegistryCensusTests
                     + "AdministrativeMemorialPrefix, const ExpectedResourceHost, "
                     + "const LegislativeMemorialPrefix, const RuleProfile, "
                     + "static property RuleProfileSha256",
+                "Lex.V3.Ingest.Luxembourg.LuxembourgRederivation: ImplementedRuleSets=1, "
+                    + "const Release1RuleSet, const RightsAsAcquired",
                 "Lex.V3.Ingest.Luxembourg.LuxembourgReferralDateComposition: const HasOpinion, "
                     + "const IriKind, const ReferralDate",
                 "Lex.V3.Ingest.V3CorpusMountWriter: GenerationFiles=6, "
@@ -98,6 +100,7 @@ public sealed class VocabularyRegistryCensusTests
                     + "const RetentionFileName",
                 "Lex.V3.Ingest.V3GenerationRetention: const MonthlyKeeper, const Nightly, "
                     + "const PolicyId, const Referenced",
+                "Lex.V3.Ingest.V3OfflineMount: const RederivationSchema, const Schema",
             },
             ClosedSurfaceCensus.VocabularyRegistries(CensusScope.SweptHere).ToArray(),
             "Observed registries for reviewed transcription:\n" + string.Join("\n", ClosedSurfaceCensus.VocabularyRegistries(CensusScope.SweptHere)));

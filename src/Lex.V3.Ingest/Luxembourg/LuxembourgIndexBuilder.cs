@@ -399,8 +399,8 @@ public sealed record LuxembourgIndexObservedState(
 /// <summary>
 /// One observation of the index's event log: the build that observed (its corpus), the index whose log it carried
 /// forward (null for the first), the events it appended by sequence number (an empty range: first is last + 1), and
-/// when that build ran (<c>yyyy-MM-ddTHH:mm:ssZ</c>), an upper bound on when its corpus was observed and never an
-/// observation time.
+/// its build time (<c>yyyy-MM-ddTHH:mm:ssZ</c>): the time the acquiring build read once its acquisition had ended, an
+/// upper bound on when its corpus was observed and never an observation time, which a derivation from custody keeps.
 /// </summary>
 public sealed record LuxembourgIndexObservation(
     long Observation,

@@ -130,8 +130,10 @@ public sealed partial class V3FirstMountBuildTests
 
     // ---- Shared plumbing. ----
 
+    /// <param name="luxembourgXml">When given, the Luxembourg consolidation is published as these Akoma Ntoso bytes rather
+    /// than as the retained PDF (<see cref="LuxembourgFirstMountAcquisitionTests.LuxembourgFamilyHandler"/>).</param>
     internal static async Task<(EuFirstMountAcquisitionResult Europe, LuxembourgFirstMountAcquisitionResult Luxembourg)> AcquireAsync(
-        ICustodyStore store, string checkout)
+        ICustodyStore store, string checkout, byte[]? luxembourgXml = null)
     {
         var root = EuAxiomWiringHarness.SeedRoot(null);
         var celex = EuAxiomWiringHarness.Seed(null).Celex;
@@ -146,7 +148,7 @@ public sealed partial class V3FirstMountBuildTests
             .RunAsync(celex, europeRenderers, EuAcquisitionTestFixture.TestWireBudget(), CancellationToken.None);
 
         var luxembourgHandler = new LuxembourgFirstMountAcquisitionTests.LuxembourgFamilyHandler(
-            LuxembourgFirstMountAcquisitionTests.PdfBytes());
+            LuxembourgFirstMountAcquisitionTests.PdfBytes(), xmlBody: luxembourgXml);
         var luxembourgRenderers = await LuxembourgRendererSources.FromCheckoutAsync(store, checkout, CancellationToken.None);
         var luxembourg = await new LuxembourgFirstMountAcquisition(
                 store, new LuxembourgAcquisitionTestFixture.FixedTimeProvider(), luxembourgHandler)

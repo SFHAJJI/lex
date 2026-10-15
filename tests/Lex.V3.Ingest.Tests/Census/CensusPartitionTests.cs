@@ -44,8 +44,6 @@ public sealed class CensusPartitionTests
     /// </summary>
     private static readonly string[] Declined =
     [
-        "Lex.V3.Ingest.V3OfflineMount: one private schema identifier for retained mount inputs; "
-            + "the offline orchestrator is not a selectable vocabulary. Catalog framing, custody reopening and independent-process mount comparison are tested.",
         "Lex.V3.Ingest.Luxembourg.LuxembourgPartitionCoverCheckpoint: two private schema identifiers, /1 on the class for a "
             + "single-run cover and /2 on its nested run-block record for a cover over several runs; they name record versions, "
             + "not a selectable vocabulary. Split-history reopening, both versions' restores, run-block tampering and "
@@ -102,14 +100,14 @@ public sealed class CensusPartitionTests
     public void ThePartitionTotalsAreExactlyThese()
     {
         Assert.AreEqual(
-            268, ClosedSurfaceCensus.Candidates(CensusScope.SweptHere).Count, "candidates");
+            270, ClosedSurfaceCensus.Candidates(CensusScope.SweptHere).Count, "candidates");
         Assert.AreEqual(
             106, ClosedSurfaceCensus.ClosedVocabularies(CensusScope.SweptHere).Count, "vocabularies");
         Assert.AreEqual(
-            141, ClosedSurfaceCensus.GuardedConstruction(CensusScope.SweptHere).Count, "guarded types");
+            142, ClosedSurfaceCensus.GuardedConstruction(CensusScope.SweptHere).Count, "guarded types");
         Assert.AreEqual(
-            11, ClosedSurfaceCensus.VocabularyRegistries(CensusScope.SweptHere).Count, "registries");
-        Assert.AreEqual(10, Declined.Length, "declined");
+            13, ClosedSurfaceCensus.VocabularyRegistries(CensusScope.SweptHere).Count, "registries");
+        Assert.AreEqual(9, Declined.Length, "declined");
     }
 
     private static string NameOf(string row) =>

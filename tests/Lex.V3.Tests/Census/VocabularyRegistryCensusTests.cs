@@ -223,6 +223,9 @@ public sealed class VocabularyRegistryCensusTests
                     + "FileName, const ResourceId",
                 "Lex.V3.Contracts.Source.Luxembourg.LuxembourgRelationVocabulary: Authorities=2, "
                     + "Predicates=18",
+                "Lex.V3.Contracts.Source.Luxembourg.LuxembourgRightsAdmissionPolicies: "
+                    + "RegisteredSha256s=1, const Policy1Name, const Policy1Text, "
+                    + "static property Policy1Sha256",
                 "Lex.V3.Contracts.Source.Luxembourg.LuxembourgScopeResolver: AccTypes=1, "
                     + "AdmittedNonShelfTypes=23, MetadataSupportClasses=10, NeverFormats=3, "
                     + "NeverTypes=2, OrdinaryCandidateTypes=17, PointFormats=3, "

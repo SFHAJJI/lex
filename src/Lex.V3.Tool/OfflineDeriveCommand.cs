@@ -35,6 +35,9 @@ internal static class OfflineDeriveCommand
                 var digest = Convert.ToHexStringLower(await System.Security.Cryptography.SHA256.HashDataAsync(stream, cancellation.Token));
                 Console.WriteLine($"{Path.GetRelativePath(write.Directory, file)} sha256={digest}");
             }
+            // A re-derivation names its record: rederive-seal takes this digest.
+            if (write.LuxembourgRederivation is { } record)
+                Console.WriteLine($"luxembourg_rederivation={record.Sha256}");
             Console.WriteLine("verified offline mount; publisher_requests=0");
             return 0;
         }
