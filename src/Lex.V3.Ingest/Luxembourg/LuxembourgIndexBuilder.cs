@@ -2195,34 +2195,9 @@ public static class LuxembourgIndexBuilder
         IReadOnlyList<WorkFactRow> WorkFacts,
         IReadOnlyList<EventRow> Events);
 
-    internal static string NormalizeTitle(string value)
-    {
-        ArgumentNullException.ThrowIfNull(value);
-        var builder = new StringBuilder(value.Length);
-        var pendingSpace = false;
-        foreach (var character in value.Normalize(NormalizationForm.FormD))
-        {
-            if (CharUnicodeInfo.GetUnicodeCategory(character) == UnicodeCategory.NonSpacingMark)
-            {
-                continue;
-            }
-
-            if (char.IsLetterOrDigit(character))
-            {
-                if (pendingSpace && builder.Length != 0)
-                {
-                    builder.Append(' ');
-                }
-                builder.Append(char.ToLowerInvariant(character));
-                pendingSpace = false;
-            }
-            else
-            {
-                pendingSpace = true;
-            }
-        }
-        return builder.ToString().Normalize(NormalizationForm.FormC);
-    }
+    // The work_titles column and every title query are folded by Lex's own table (TitleFolding), never by the operating
+    // system's language library, which the release image does not carry (plan 0.8).
+    internal static string NormalizeTitle(string value) => TitleFolding.NormalizeTitle(value);
 
     internal sealed record SqliteProvenance(string Version, string SourceId, string CompileOptionsSha256)
     {

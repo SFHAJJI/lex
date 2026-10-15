@@ -118,6 +118,43 @@ public sealed class V3CorpusLegacySchema6MountTests
         }
     }
 
+    // The real mount's one work. Its index stores the title as the operating system's language library folded it, on the
+    // machine that built it: "loi du 14 mars 2017 portant modification de la loi modifiee du 7 octobre 1993 ...".
+    private const string RealMountWork = "http://data.legilux.public.lu/eli/etat/leg/loi/2017/03/14/a439/jo/fr";
+
+    /// <summary>
+    /// The deployed fault in the direction the server met it (plan 0.8): titles folded where the library was, asked for as
+    /// a reader types them where it is not. In the release image, and in the image-conditions lane, the accented forms
+    /// found nothing while the fold asked the library; with Lex's own table each form finds the work, with it or without it.
+    /// </summary>
+    [TestMethod]
+    [DataRow("its opening words as published", "Loi du 14 mars 2017 portant modification de la loi modifi\u00E9e du 7 octobre 1993")]
+    [DataRow("its opening words in capitals", "LOI DU 14 MARS 2017 PORTANT MODIFICATION DE LA LOI MODIFI\u00C9E DU 7 OCTOBRE 1993")]
+    [DataRow("its opening words without accents", "Loi du 14 mars 2017 portant modification de la loi modifiee du 7 octobre 1993")]
+    [DataRow("its opening words decomposed", "Loi du 14 mars 2017 portant modification de la loi modifie\u0301e du 7 octobre 1993")]
+    [DataRow("the whole title as published",
+        "Loi du 14 mars 2017 portant modification de la loi modifi\u00E9e du 7 octobre 1993 ayant pour objet\\n1. la " +
+        "cr\u00E9ation d\u2019un Service de Coordination de la Recherche et de l\u2019Innovation p\u00E9dagogiques et " +
+        "technologiques ;\\n2. la cr\u00E9ation d\u2019un \u00AB\u00A0Centre de Gestion Informatique de " +
+        "l\u2019\u00C9ducation\u00A0\u00BB ;\\n3. l\u2019institution d\u2019un Conseil scientifique.")]
+    public async Task TheRealMountsTitleIsFoundHoweverItsAccentsAreTyped(string form, string title)
+    {
+        var directory = MountDirectory(
+            Fixture("lex-corpus-6.json"), Fixture("luxembourg-index.sqlite3"), Fixture("luxembourg-capability-manifest.json"));
+        try
+        {
+            using var mount = await V3CorpusMount.OpenAsync(directory, CancellationToken.None);
+            Assert.IsNotNull(mount);
+            var resolved = await EnvelopeAsync(mount, "/api/v3/resolve", "resolve", new { identifier = title });
+            Assert.IsNull(resolved.Refusal, $"{form}: refused {resolved.Refusal?.Code}");
+            Assert.AreEqual(RealMountWork, resolved.Result!.Value.GetProperty("work_identifier").GetString(), form);
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
     /// <summary>
     /// The state fixture's built index in schema 6's tables, as schema 6 wrote them: the event log's three tables replaced by
     /// schema 6's one, holding its genesis log (state digests only), user_version 6 and the stamp re-sealed. Every other
