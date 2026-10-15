@@ -388,8 +388,11 @@ public sealed class LuxembourgAknInventoryV4Run15Probe
         }
     }
 
-    /// <summary>The run's custody, read and never written.</summary>
-    private sealed class ReadOnlyCustody(ICustodyStore inner) : ICustodyStore
+    /// <summary>
+    /// The run's custody, read and never written. Internal so that S3a's content probe
+    /// (<see cref="LuxembourgAknContent2Run15Probe"/>) reads through this same decorator.
+    /// </summary>
+    internal sealed class ReadOnlyCustody(ICustodyStore inner) : ICustodyStore
     {
         public Task<DurableBlobWriteReceipt> CreateAsync(
             ReadOnlyMemory<byte> bytes, CustodyClass custodyClass, CancellationToken cancellationToken) =>

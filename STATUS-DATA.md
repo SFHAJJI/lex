@@ -2,6 +2,86 @@
 
 Updated 2026-10-15.
 
+## Content /2: a Luxembourg article's index terms are metadata, never wording (Claude, 2026-10-15)
+
+- **What.** Slice S3a of the Luxembourg data design (`C:\lex-v3\LU-DATA-DESIGN-2026-10-14-v2.md` §1.4). Under content
+  /1 an article's index terms (`scl:indexterms`, a direct child of the article) are a node outside the AKN namespace, so
+  the article is a typed gap: 126,397 of the 154,136 main-body code articles /4 reads in run 15 carry them (the design's
+  figures exactly). `LuxembourgAknLegalContentProfile2Producer` sits beside the frozen /1 producer, changes that one
+  thing and reuses /1's output types. Nothing served changes yet: no derive calls /2 until S4 (R1).
+- **How.**
+  - The block is skipped as `scl:JOLUXWork` is, and its terms are kept on `LuxembourgAknLegalContentArticle.IndexTerms`
+    (a tree of labels, verbatim, in document order), never as tokens. So they never reach `tokens_json`, the wording
+    digest, `searchable_text`, a quote or a bundle, which all read the tokens.
+  - The shape is exact, and is the shape of every one of the 582,197 terms (397,179 at the top level, nested up to four
+    levels) in the main-body articles of the 10,659 run-15 bodies /4 reads: `scl:indexterm` elements only; each one
+    `scl:label` of character data, then at most one nested block; no attribute; only white space between elements. Any
+    other shape is a typed gap for that article (`publisher index terms are not the reviewed shape: …`).
+  - Every other shape is /1's: the containers, the token kinds, every typed gap and its detail. The tokenizer is copied
+    from /1 so that /1's class stays byte-identical.
+  - It reads only an inventory /4 population (any other is refused), tests the disposition first so a body /4 refused
+    as `publisher_file_names_other_state` is never tokenized, and re-reads each body through /4's own parse (`TryLoad`,
+    now internal, so the custody-bound ceiling is /4's), `TryDocument` and `MainBodyArticles` (R10 of S2).
+  - Profile `lex-v3-luxembourg-akn-legal-content-profile/2`, 13 lines, 1,191 bytes, sha256
+    `bf3fea5a5229d1a9f035d8d56816bd054abee30591370dfc6fe62f154dfaef2d`, recomputed in Python. It names inventory /4's
+    digest (`8a011d87…`), so a change to the inventory it reads changes its digest too.
+  - The shared types, as S2 did for /4: the article gains `IndexTerms` (null under /1) and identity layout `/2` (token
+    count, tokens, term count, terms); the population gains `RuleProfileSha256`, an optional versioned digest and
+    identity layout `/2` (the digest, the source inventory population's identity, then /1's per-outcome fields). A
+    versioned population refuses an article without terms or under another digest, and an inventory /3 source; an
+    unversioned one refuses an article with terms.
+- **The frozen verifiers stay frozen.** The /1 class is byte-identical to `c05a54eb` (compared as text from its summary
+  to the end of the file) and its digest stays `dd32d9a5…`; the shared types' /1 branches hash as before and their new
+  checks cannot fire on /1. `LuxembourgAknFrozenReplayTests` passes unchanged. Only R0 in the dry run re-verifies the
+  checkpoint's `abc0a299…`.
+- **The code-article test.** A byte-exact excerpt
+  (`Fixtures/LuAknLegalContent2/code-procedure-penale-20251219-index-terms.bin`, 14,942 bytes, sha256 `9448fcc2…`) of
+  `code/procedure_penale/20251219` (body `bddb7a57…`, 2,242,711 bytes, fetched as `xml`, `agreed_same_run_cc_by`,
+  acquired today), cut as S2 cut its excerpts (16 whole element ranges removed; every byte kept is the publisher's, in
+  order). `art_56`'s terms nest four levels and are kept; its tokens equal what /1 reads from the same bytes with the
+  block taken out, and its /2 article identity equals an independent Python computation;
+  `art_102` (terms and a `span`) stays /1's `span` gap; `art_283` (no terms) reads as under /1. Every other shape is
+  synthetic. A legal-care guard holds the folder to that one file. No test uses the withheld fixtures (R4 of S2).
+- **Measured: /2 over run 15** (`LuxembourgAknContent2Run15Probe`, opt-in with `LEX_LU_CONTENT2_PROBE=1` and
+  `LEX_LU_CONTENT2_PROBE_ROOT`, over S2's probe inputs; custody read by digest and never written; no network; no R0;
+  never a CI test). Inventory /4 over all 11,205 held inputs, then /2 and, as a measuring device only, /1 over /4's
+  10,644 inventoried bodies (308,521 main-body articles), in chunks of 32 bodies.
+  - /2 admits 270,552 of the 308,521 articles and leaves 37,969 typed gaps. Codes: 146,008 of 149,542 (97.6%; /1's rules
+    admit 25,760, 17.2%, the design's "17% to 97.7%"); consolidations 75,870 of 90,930; acts 48,674 of 68,049.
+  - **Beyond /1: 121,053 articles**, all through the index terms: 121,047 admitted with at least one kept term (codes
+    120,248, consolidations 799) and 6 whose block is the publisher's empty template (consolidations 4, acts 2).
+  - By admission class: codes today 98,604, policy A 1,179, L2 20,465; consolidations: the 799 with terms are all in
+    bodies admitted under no ruling ("never"), and the 4 empty templates are 2 policy A and 2 L2; acts: 1 today
+    (`loi/2021/02/05/a121/jo` `art_11`) and 1 L1. The design's figure of 360 consolidation articles is not reproduced:
+    over /4's articles the count is 803, and none of the 799 with terms is an admission candidate.
+  - Against /1 over the same articles, wherever /1's own selection agrees with /4's (10,304 bodies): 0 disagreements.
+    Every article /1 admits reads under /2 to the same disposition and tokens with no term, and every /1 gap other
+    than the namespace gap is /2's gap with the same detail. Of the /1 namespace gaps in those bodies, /2 admits 97,578
+    (codes 96,773, consolidations 803, acts 2) and 962 stay gaps on another shape.
+  - 128 s for /4, 94 s for /2 and /1, sequential, peak working set 1.85 GB; a re-run on the final code gave the same
+    summary (117 s, 69 s, 2.01 GB). The per-article output (`csharp_content2.jsonl`, 77.7 MB) stays in the scratch
+    probe root. The probe reads through S2's read-only custody decorator, now internal, so the custody conformance
+    sweep still counts 33 implementations.
+- **Driver decisions (reversible):**
+  - The publisher's empty template (an `scl:indexterm` whose label is white space only and keeps no nested term) keeps
+    nothing rather than making the article a gap: 8 articles in run 15, 6 of which /2 then admits (the other 2 stay gaps
+    on another shape); one is in a body admitted today (`loi/2021/02/05/a121/jo`, `art_11`).
+  - Labels are kept verbatim: no trimming (164 run-15 labels have white space at an end) and no normalization.
+  - Any other index-term shape is a typed gap: the terms could not be kept as the publisher wrote them, and no run-15
+    term has another shape.
+  - The index terms are in the article identity (layout `/2`) and not in the wording: two articles with one wording and
+    different terms have one wording digest and two identities.
+  - The /2 population identity binds its source inventory population's identity; the outcome identity is /1's layout,
+    so a typed gap's outcome identity does not name the content rule, which the population identity does.
+  - The name is `LuxembourgAknLegalContentProfile2Producer`, not `…ProducerV2` after `…ProducerV4`:
+    `RetiredGenerationBoundaryTests` refuses any compiled identifier or source path in the V3 line that contains "v2"
+    (the retired generation). The tests, the fixture folder (`LuAknLegalContent2`) and the probe's variables follow.
+- **Not yet.** S4 (R1 runs `new LuxembourgAknLegalContentProfile2Producer(store).RunAsync(inventory4, ct)` over the /4
+  population and records the /2 digest and population identity); S6 (index /9 stores `IndexTerms`; no reader or page
+  shows them yet); the dry run (watches the 175,837,349-byte body, which /2 reads like /4, and the memory of one whole /2
+  population, about 270,000 admitted articles' tokens at once, which the probe never held: it read in chunks of 32
+  bodies; S4b answers it if the dry run names it).
+
 ## Inventory /4: a Luxembourg file's own identification is evidence, and six checks refuse a file that is another state's (Claude, 2026-10-15)
 
 - **What.** Slice S2 of the Luxembourg data design (`C:\lex-v3\LU-DATA-DESIGN-2026-10-14-v2.md` §1.3), built to its
