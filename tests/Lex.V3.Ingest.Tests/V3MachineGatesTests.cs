@@ -525,13 +525,13 @@ public sealed class V3MachineGatesTests
         var act = EuFirstMountAcquisitionTests.ConsolidatedSeed;
         var twinDate = Shift(EuropeOriginalDate, Spacing);
         var latestDate = Shift(EuropeOriginalDate, 2 * Spacing);
-        var otherEnglish = V3FirstMountBuildTests.OtherEnglishPackage;
-        return V3FirstMountBuildTests.ConsolidatedWorksMountAsync(
-            new(V3FirstMountBuildTests.WorkB, twinDate, V3MountedGatesTests.EuropeConsolidatedCelex(act, twinDate),
-                V3FirstMountBuildTests.EnglishPackage, V3FirstMountBuildTests.FrenchPackage),
-            new(V3FirstMountBuildTests.WorkC, twinDate, null, otherEnglish, EuFirstMountAcquisitionTests.FrenchOf(otherEnglish)),
-            new(V3FirstMountBuildTests.WorkE, latestDate, V3MountedGatesTests.EuropeConsolidatedCelex(act, latestDate),
-                V3FirstMountBuildTests.EnglishPackage, V3FirstMountBuildTests.FrenchPackage));
+        var otherEnglish = V3CorpusEuropeTimeViewBranchTests.OtherEnglishPackage;
+        return V3CorpusEuropeTimeViewTests.ConsolidatedWorksMountAsync(
+            new(V3CorpusEuropeTimeViewBranchTests.WorkB, twinDate, V3MountedGatesTests.EuropeConsolidatedCelex(act, twinDate),
+                V3CorpusEuropeTimeViewBranchTests.EnglishPackage, V3CorpusEuropeTimeViewBranchTests.FrenchPackage),
+            new(V3CorpusEuropeTimeViewBranchTests.WorkC, twinDate, null, otherEnglish, EuFirstMountAcquisitionTests.FrenchOf(otherEnglish)),
+            new(V3CorpusEuropeTimeViewBranchTests.WorkE, latestDate, V3MountedGatesTests.EuropeConsolidatedCelex(act, latestDate),
+                V3CorpusEuropeTimeViewBranchTests.EnglishPackage, V3CorpusEuropeTimeViewBranchTests.FrenchPackage));
     }
 
     /// <summary>
@@ -554,7 +554,7 @@ public sealed class V3MachineGatesTests
             .Select(served => $"{kind}:{EuropeWordingPermalink(mountDirectory, act, work, served, date)}")
             .Order(StringComparer.Ordinal));
         var original = Key(EuAxiomWiringHarness.SeedRoot(act), "original_wording", first);
-        var latest = Key(V3FirstMountBuildTests.WorkE, "consolidated_version", latestDate);
+        var latest = Key(V3CorpusEuropeTimeViewBranchTests.WorkE, "consolidated_version", latestDate);
         return
         [
             new TemporalCase("before-history", act, Day(Shift(first, -1)), NoVersion),

@@ -130,7 +130,7 @@ public sealed partial class V3FirstMountBuildTests
 
     // ---- Shared plumbing. ----
 
-    private static async Task<(EuFirstMountAcquisitionResult Europe, LuxembourgFirstMountAcquisitionResult Luxembourg)> AcquireAsync(
+    internal static async Task<(EuFirstMountAcquisitionResult Europe, LuxembourgFirstMountAcquisitionResult Luxembourg)> AcquireAsync(
         ICustodyStore store, string checkout)
     {
         var root = EuAxiomWiringHarness.SeedRoot(null);
@@ -155,7 +155,7 @@ public sealed partial class V3FirstMountBuildTests
         return (europe, luxembourg);
     }
 
-    private static string CheckoutRoot()
+    internal static string CheckoutRoot()
     {
         var directory = new DirectoryInfo(AppContext.BaseDirectory);
         while (directory is not null && !File.Exists(Path.Combine(directory.FullName, "Lex.V3.slnx")))
