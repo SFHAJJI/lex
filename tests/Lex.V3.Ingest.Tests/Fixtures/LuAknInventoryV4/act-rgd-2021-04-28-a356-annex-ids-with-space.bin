@@ -1,0 +1,206 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?><akomaNtoso xmlns="http://docs.oasis-open.org/legaldocml/ns/akn/3.0/CSD13" xmlns:scl="http://www.scl.lu">
+	<act contains="originalVersion" name="" scl:page-proof="many">
+		<meta>
+			<identification source="#somebody">
+				<FRBRWork>
+					<FRBRthis value="http://data.legilux.public.lu/eli/etat/leg/rgd/2021/04/28/a356/jo"/>
+					<FRBRuri value=""/>
+					<FRBRdate date="2021-04-28" name="document"/>
+					<FRBRauthor as="#author" href="http://data.legilux.public.lu/resource/authority/legal-institution/MT"/>
+					<FRBRcountry value="http://publications.europa.eu/resource/authority/country/LUX"/>
+				</FRBRWork>
+				<FRBRExpression>
+					<FRBRthis value="http://data.legilux.public.lu/eli/etat/leg/rgd/2021/04/28/a356/jo/fr"/>
+					<FRBRuri value=""/>
+					<FRBRdate date="2021-04-28" name="document"/>
+					<FRBRauthor as="#author" href=""/>
+					<FRBRlanguage language="http://publications.europa.eu/resource/authority/language/FRA"/>
+				</FRBRExpression>
+				<FRBRManifestation>
+					<FRBRthis value="http://data.legilux.public.lu/eli/etat/leg/rgd/2021/04/28/a356/jo/fr/xml"/>
+					<FRBRuri value=""/>
+					<FRBRdate date="2021-04-28" name="document"/>
+					<FRBRauthor as="#author" href=""/>
+				</FRBRManifestation>
+				<scl:JOLUXWork>
+					<scl:JOLUXComplexWork>
+						<scl:jolux scl:name="uriThis">http://data.legilux.public.lu/eli/etat/leg/rgd/2021/04/28/a356</scl:jolux>
+					</scl:JOLUXComplexWork>
+					<scl:JOLUXLegalResource>
+						<scl:jolux scl:name="uriThis">http://data.legilux.public.lu/eli/etat/leg/rgd/2021/04/28/a356/jo</scl:jolux>
+						<scl:jolux scl:name="publicationDate">2021-05-11</scl:jolux>
+						<scl:jolux scl:name="typeDocument">http://data.legilux.public.lu/resource/authority/resource-type/RGD</scl:jolux>
+						<scl:jolux scl:name="dateDocument">2021-04-28</scl:jolux>
+						<scl:jolux scl:name="dateEntryInForce">2021-05-15</scl:jolux>
+						<scl:jolux scl:name="dateApplicability">2021-05-15</scl:jolux>
+						<scl:jolux scl:name="isMemberOf">http://data.legilux.public.lu/eli/etat/leg/rgd/2021/04/28/a356</scl:jolux>
+						<scl:jolux scl:name="isPartOf">http://data.legilux.public.lu/eli/etat/leg/memorial/2021/a356</scl:jolux>
+						<scl:jolux scl:name="responsibilityOf">http://data.legilux.public.lu/resource/authority/legal-institution/MT</scl:jolux>
+						<scl:jolux scl:name="subjectLevel1">http://data.legilux.public.lu/resource/authority/legal-subject/704</scl:jolux>
+						<scl:jolux scl:name="subjectLevel2">http://data.legilux.public.lu/resource/authority/legal-subject/4139</scl:jolux>
+						<scl:jolux scl:name="subjectLevel2">http://data.legilux.public.lu/resource/authority/legal-subject/4140</scl:jolux>
+						<scl:jolux scl:name="subjectLevel2">http://data.legilux.public.lu/resource/authority/legal-subject/1112</scl:jolux>
+						<scl:jolux scl:name="subjectLevel2">http://data.legilux.public.lu/resource/authority/legal-subject/4057</scl:jolux>
+						<scl:jolux scl:name="subjectLevel2">http://data.legilux.public.lu/resource/authority/legal-subject/3171</scl:jolux>
+						<scl:jolux scl:name="basedOn">http://data.legilux.public.lu/eli/etat/leg/loi/2006/07/31/n2/jo</scl:jolux>
+						<scl:jolux scl:name="cites">http://data.legilux.public.lu/eli/etat/leg/loi/2017/06/16/a592/jo</scl:jolux>
+						<scl:jolux scl:name="cites">http://data.legilux.public.lu/eli/etat/leg/loi/1998/09/08/n4/jo</scl:jolux>
+						<scl:jolux scl:name="cites">http://data.legilux.public.lu/eli/etat/leg/loi/1978/11/15/n1/jo</scl:jolux>
+						<scl:jolux scl:name="cites">http://data.legilux.public.lu/eli/etat/leg/loi/1973/03/14/n1/jo</scl:jolux>
+						<scl:jolux scl:name="cites">http://data.legilux.public.lu/eli/etat/leg/loi/1982/07/22/n1/jo</scl:jolux>
+						<scl:jolux scl:name="cites">http://data.legilux.public.lu/eli/etat/leg/loi/1992/03/26/n1/jo</scl:jolux>
+						<scl:jolux scl:name="cites">http://data.legilux.public.lu/eli/etat/leg/rgd/1999/05/10/n1/jo</scl:jolux>
+						<scl:jolux scl:name="cites">http://data.legilux.public.lu/eli/etat/leg/loi/1999/02/12/n3/jo</scl:jolux>
+						<scl:rdf scl:name="type">http://data.legilux.public.lu/resource/ontology/jolux#BaseAct</scl:rdf>
+						<scl:rdf scl:name="type">http://data.legilux.public.lu/resource/ontology/jolux#Act</scl:rdf>
+						<scl:rdf scl:name="type">http://data.legilux.public.lu/resource/ontology/jolux#Work</scl:rdf>
+						<scl:rdf scl:name="type">http://data.legilux.public.lu/resource/ontology/jolux#LegalResource</scl:rdf>
+						<scl:rdf scl:name="type">http://data.legilux.public.lu/resource/ontology/jolux#NationalLegalResource</scl:rdf>
+					</scl:JOLUXLegalResource>
+				</scl:JOLUXWork>
+				<scl:JOLUXExpression>
+					<scl:jolux scl:name="uriThis">http://data.legilux.public.lu/eli/etat/leg/rgd/2021/04/28/a356/jo/fr</scl:jolux>
+					<scl:jolux scl:name="realizes">http://data.legilux.public.lu/eli/etat/leg/rgd/2021/04/28/a356/jo</scl:jolux>
+					<scl:jolux scl:name="language">http://publications.europa.eu/resource/authority/language/FRA</scl:jolux>
+					<scl:jolux scl:lg="fra" scl:name="title">Règlement grand-ducal du 28 avril 2021 portant déclaration d’obligation générale de la convention collective de travail pour les salariés du Secteur d’Aide et de Soins et du Secteur social (CCT SAS) signée le 9 février 2021 conclue entre l’a.s.b.l. Fédération COPAS (en abrégé COPAS), l’a.s.b.l. Fédération des Acteurs du Secteur Social au Luxembourg (en abrégé FEDAS Luxembourg) et l’a.s.b.l. Daachverband vun de Lëtzebuerger Jugendstrukturen (en abrégé DLJ), d’une part et les syndicats OGBL et LCGB, d’autre part.</scl:jolux>
+				</scl:JOLUXExpression>
+				<scl:JOLUXManifestation>
+					<scl:jolux scl:name="uriThis">http://data.legilux.public.lu/eli/etat/leg/rgd/2021/04/28/a356/jo/fr/xml</scl:jolux>
+					<scl:jolux scl:name="embodies">http://data.legilux.public.lu/eli/etat/leg/rgd/2021/04/28/a356/jo/fr</scl:jolux>
+					<scl:jolux scl:name="publishedIn">http://data.legilux.public.lu/eli/etat/leg/memorial/2021/a356/fr/pdf</scl:jolux>
+					<scl:jolux scl:name="memorialPage">1</scl:jolux>
+					<scl:jolux scl:name="memorialSequence">A</scl:jolux>
+					<scl:jolux scl:name="publisher">http://data.legilux.public.lu/resource/authority/legal-institution/ME</scl:jolux>
+					<scl:jolux scl:lg="fra" scl:name="rights">Copyright : Ministère d’État du Grand-Duché de Luxembourg – Service central de législation</scl:jolux>
+					<scl:jolux scl:name="rightsHolder">http://data.legilux.public.lu/resource/authority/legal-institution/ME</scl:jolux>
+					<scl:jolux scl:name="license">http://creativecommons.org/licenses/by/4.0/</scl:jolux>
+					<scl:jolux scl:name="userFormat">http://data.legilux.public.lu/resource/authority/user-format/xml-akomantoso</scl:jolux>
+					<scl:jolux scl:name="format">http://publications.europa.eu/resource/authority/file-type/XML</scl:jolux>
+					<scl:jolux scl:name="isExemplifiedBy">http://data.legilux.public.lu/file/eli-etat-leg-rgd-2021-04-28-a356-jo-fr-xml.xml</scl:jolux>
+				</scl:JOLUXManifestation>
+			</identification>
+		</meta>
+		<preface>
+			<longTitle>
+				<p>Règlement grand-ducal du 28 avril 2021 portant déclaration d’obligation générale de la convention collective de travail pour les salariés du Secteur d’Aide et de Soins et du Secteur social (CCT SAS) signée le 9 février 2021 conclue entre l’a.s.b.l. Fédération COPAS (en abrégé COPAS), l’a.s.b.l. Fédération des Acteurs du Secteur Social au Luxembourg (en abrégé FEDAS Luxembourg) et l’a.s.b.l. Daachverband vun de Lëtzebuerger Jugendstrukturen (en abrégé DLJ), d’une part et les syndicats OGBL et LCGB, d’autre part.</p>
+			</longTitle>
+		</preface>
+		<preamble>
+			<container name="preamble">
+				<p>Nous Henri, Grand-Duc de Luxembourg, Duc de Nassau,</p>
+				<p>Vu l’article L.164-8 du <ref href="/eli/etat/leg/code/travail" id="ac160f8a-962b-4506-810c-b2fa632c6722">Code du Travail</ref> ;</p>
+				<p>Sur proposition concordante des assesseurs de l’Office national de conciliation et sur avis des chambres professionnelles compétentes;</p>
+				<p>Vu l’article 1<sup>er</sup>, paragraphe 1<sup>er</sup>, de la <ref href="/eli/etat/leg/loi/2017/06/16/a592/jo" id="01562fbc-0f25-4533-8165-f330fc014340" scl:verify="true">loi du 16 juin 2017</ref> sur l’organisation du Conseil d’État et considérant qu’il y a urgence ;</p>
+				<p>Sur le rapport de Notre ministre du Travail, de l’Emploi et de l’Économie sociale et solidaire et après délibération du Gouvernement en conseil ;</p>
+			</container>
+			<formula name="">
+				<p>Arrêtons :</p>
+			</formula>
+		</preamble>
+		<body>
+			<article id="art_1er">
+				<num>Art. 1<sup>er</sup>.</num>
+				<alinea>
+					<content>
+						<p>La convention collective de travail pour les salariés du Secteur d’Aide et de Soins et du Secteur social (CCT SAS) signée le 9 février 2021 a été conclue entre l’a.s.b.l Fédération COPAS (en abrégé COPAS), l’a.s.b.l. Fédération des Acteurs du Secteur Social au Luxembourg (en abrégé FEDAS Luxembourg) et l’a.s.b.l. Daachverband vun de Lëtzebuerger Jugendstrukturen (en abrégé DLJ), d’une part et les syndicats OGBL et LCGB, d’autre part, est déclarée d’obligation générale pour tout le secteur.</p>
+					</content>
+				</alinea>
+			</article>
+		</body>
+		<conclusions>
+			<p>
+				<signature>
+					<shortTitle> Le Ministre du Travail, de l’Emploi<br/>et de l’Économie sociale et solidaire, </shortTitle>
+					<person refersTo=""> Dan Kersch</person>
+				</signature>
+			</p>
+			<p>
+				<signature>
+					<docDate date="2999-01-01">Palais de Luxembourg, le 28 avril 2021.</docDate>
+					<person refersTo="">Henri</person>
+				</signature>
+			</p>
+		</conclusions>
+		<attachments>
+			<attachment id="attachment_1">
+				<doc name="">
+					<meta>
+						<identification source="">
+							<FRBRWork>
+								<FRBRthis value=""/>
+								<FRBRuri value=""/>
+								<FRBRdate date="2021-04-29" name=""/>
+								<FRBRauthor href=""/>
+								<FRBRcountry value=""/>
+							</FRBRWork>
+							<FRBRExpression>
+								<FRBRthis value=""/>
+								<FRBRuri value=""/>
+								<FRBRdate date="2021-04-29" name=""/>
+								<FRBRauthor href=""/>
+								<FRBRlanguage language=""/>
+							</FRBRExpression>
+							<FRBRManifestation>
+								<FRBRthis value=""/>
+								<FRBRuri value=""/>
+								<FRBRdate date="2021-04-29" name=""/>
+								<FRBRauthor href=""/>
+							</FRBRManifestation>
+						</identification>
+					</meta>
+					<mainBody>
+						<part id="1. Dispositions introductive">
+							<num>
+								<b>1.</b>
+							</num>
+							<heading scl:align="left" scl:separator=" ">
+								<b>Dispositions introductives</b>
+							</heading>
+							<article id="Article 1.">
+								<num>
+									<b>Article 1.</b>
+								</num>
+								<heading>
+									<b>Préambule</b>
+								</heading>
+								<alinea>
+									<content>
+										<p>La présente convention collective de travail a pour but d’assurer un encadrement de qualité à la population cible des services visés, d’assurer des conditions de travail et de salaire coordonnées ainsi que d’assurer la sauvegarde de la paix sociale au niveau de l’entreprise et de la profession. Ce triple but ne pourra être atteint qu’à condition que cette convention collective de travail soit déclarée d’obligation générale suivant les dispositions légales y relatives.</p>
+									</content>
+								</alinea>
+								<alinea>
+									<content>
+										<p>La présente convention collective de travail pour les salariés du secteur d’aide et de soins et du secteur social abroge et se substitue à toute convention collective de travail antérieure. Néanmoins, en cas de litige en relation avec l’interprétation de la présente convention collective de travail pour les salariés du secteur d’aide et de soins et du secteur social, les conventions collectives abrogées sont consultées afin de reconstituer l’esprit de la disposition litigieuse.</p>
+									</content>
+								</alinea>
+								<alinea>
+									<content>
+										<p>Le terme « salarié » vise le salarié qu’il soit de sexe masculin ou féminin.</p>
+									</content>
+								</alinea>
+							</article>
+							<article id="Article 2.">
+								<num>
+									<b>Article 2.</b>
+								</num>
+								<heading>
+									<b>Durée et dénonciation</b>
+								</heading>
+								<alinea>
+									<content>
+										<p>La présente convention collective de travail couvre la période du 1<sup>er</sup> janvier 2021 au 31 décembre 2023. Après cette période, elle est reconduite par accord tacite d’année en année, sauf si l’une des parties signataires la dénonce par lettre recommandée moyennant un préavis de trois mois avant la date de son échéance.</p>
+									</content>
+								</alinea>
+								<alinea>
+									<content>
+										<p>En cas de dénonciation, la convention collective de travail restera en vigueur, conformément à l’article L.162-10(2) du <ref href="/eli/etat/leg/code/travail" id="e794bdb2-3546-4fc1-81a1-6ef471a973f6">Code du Travail</ref>, au plus tard jusqu’au premier jour du douzième mois de sa dénonciation.</p>
+									</content>
+								</alinea>
+							</article>
+						</part>
+					</mainBody>
+				</doc>
+			</attachment>
+		</attachments>
+	</act>
+</akomaNtoso>

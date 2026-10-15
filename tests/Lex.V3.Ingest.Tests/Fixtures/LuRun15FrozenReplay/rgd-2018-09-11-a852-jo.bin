@@ -1,0 +1,131 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?><akomaNtoso xmlns="http://docs.oasis-open.org/legaldocml/ns/akn/3.0/CSD13" xmlns:scl="http://www.scl.lu">
+<act contains="originalVersion" name="" scl:page-proof="many">
+<meta>
+<identification source="#somebody">
+			<FRBRWork>
+			     <FRBRthis value="http://data.legilux.public.lu/eli/etat/leg/rgd/2018/09/11/a852/jo"/>
+			     <FRBRuri value=""/>
+			     <FRBRdate date="2018-09-11" name="document"/>
+			     <FRBRauthor as="#author" href="http://data.legilux.public.lu/resource/authority/legal-institution/MDDI"/>
+			     <FRBRauthor as="#author" href="http://data.legilux.public.lu/resource/authority/legal-institution/MFNP"/>
+			     <FRBRauthor as="#author" href="http://data.legilux.public.lu/resource/authority/legal-institution/MFI"/>
+			     <FRBRauthor as="#author" href="http://data.legilux.public.lu/resource/authority/legal-institution/MI"/>
+			     <FRBRcountry value="http://publications.europa.eu/resource/authority/country/LUX"/>
+			</FRBRWork>
+			<FRBRExpression>
+			     <FRBRthis value="http://data.legilux.public.lu/eli/etat/leg/rgd/2018/09/11/a852/jo/fr"/>
+			     <FRBRuri value=""/>
+			     <FRBRdate date="2018-09-11" name="document"/>
+			     <FRBRauthor as="#author" href=""/>
+			     <FRBRlanguage language="http://publications.europa.eu/resource/authority/language/FRA"/>
+			</FRBRExpression>
+			<FRBRManifestation>
+			     <FRBRthis value="http://data.legilux.public.lu/eli/etat/leg/rgd/2018/09/11/a852/jo/fr/xml"/>
+			     <FRBRuri value=""/>
+			     <FRBRdate date="2018-09-11" name="document"/>
+			     <FRBRauthor as="#author" href=""/>
+			</FRBRManifestation>
+			<scl:JOLUXWork>
+				<scl:JOLUXComplexWork>
+					<scl:jolux scl:name="uriThis">http://data.legilux.public.lu/eli/etat/leg/rgd/2018/09/11/a852</scl:jolux>
+				</scl:JOLUXComplexWork>
+				<scl:JOLUXLegalResource>
+					<scl:jolux scl:name="uriThis">http://data.legilux.public.lu/eli/etat/leg/rgd/2018/09/11/a852/jo</scl:jolux>
+					<scl:jolux scl:name="publicationDate">2018-09-20</scl:jolux>
+					<scl:jolux scl:name="typeDocument">http://data.legilux.public.lu/resource/authority/resource-type/RGD</scl:jolux>
+					<scl:jolux scl:name="dateDocument">2018-09-11</scl:jolux>
+					<scl:jolux scl:name="dateEntryInForce">2018-09-24</scl:jolux>
+					<scl:jolux scl:name="dateApplicability">2018-09-24</scl:jolux>
+					<scl:jolux scl:name="isMemberOf">http://data.legilux.public.lu/eli/etat/leg/rgd/2018/09/11/a852</scl:jolux>
+					<scl:jolux scl:name="isPartOf">http://data.legilux.public.lu/eli/etat/leg/memorial/2018/a852</scl:jolux>
+					<scl:jolux scl:name="responsibilityOf">http://data.legilux.public.lu/resource/authority/legal-institution/MDDI</scl:jolux>
+					<scl:jolux scl:name="responsibilityOf">http://data.legilux.public.lu/resource/authority/legal-institution/MFNP</scl:jolux>
+					<scl:jolux scl:name="responsibilityOf">http://data.legilux.public.lu/resource/authority/legal-institution/MFI</scl:jolux>
+					<scl:jolux scl:name="responsibilityOf">http://data.legilux.public.lu/resource/authority/legal-institution/MI</scl:jolux>
+					<scl:jolux scl:name="subjectLevel1">http://data.legilux.public.lu/resource/authority/legal-subject/728</scl:jolux>
+					<scl:jolux scl:name="subjectLevel1">http://data.legilux.public.lu/resource/authority/legal-subject/159</scl:jolux>
+					<scl:jolux scl:name="subjectLevel2">http://data.legilux.public.lu/resource/authority/legal-subject/422</scl:jolux>
+					<scl:jolux scl:name="subjectLevel2">http://data.legilux.public.lu/resource/authority/legal-subject/1454</scl:jolux>
+					<scl:jolux scl:name="subjectLevel2">http://data.legilux.public.lu/resource/authority/legal-subject/6</scl:jolux>
+					<scl:jolux scl:name="basedOn">http://data.legilux.public.lu/eli/etat/leg/loi/1955/02/14/n3/jo</scl:jolux>
+					<scl:jolux scl:name="modifies">http://data.legilux.public.lu/eli/etat/leg/rgd/2016/01/26/n1/jo</scl:jolux>
+					<scl:jolux scl:name="modifies">http://data.legilux.public.lu/eli/etat/leg/rgd/2016/01/26/n2/jo</scl:jolux>
+					<scl:jolux scl:name="modifies">http://data.legilux.public.lu/eli/etat/leg/agd/1955/11/23/n1/jo</scl:jolux>
+					<scl:jolux scl:name="cites">http://data.legilux.public.lu/eli/reg_ue/2011/19/jo</scl:jolux>
+					<scl:jolux scl:name="cites">http://data.legilux.public.lu/eli/reg_ue/2009/661/jo</scl:jolux>
+					<scl:jolux scl:name="cites">http://data.legilux.public.lu/eli/dir_ue/2004/22/jo</scl:jolux>
+					<scl:jolux scl:name="cites">http://data.legilux.public.lu/eli/dir_ue/1976/756/jo</scl:jolux>
+					<scl:jolux scl:name="cites">http://data.legilux.public.lu/eli/dir_ue/1970/220/jo</scl:jolux>
+					<scl:jolux scl:name="cites">http://data.legilux.public.lu/eli/dir_ue/1988/77/jo</scl:jolux>
+					<scl:jolux scl:name="cites">http://data.legilux.public.lu/eli/dir_ue/2005/55/jo</scl:jolux>
+					<scl:jolux scl:name="cites">http://data.legilux.public.lu/eli/reg_ue/2007/715/jo</scl:jolux>
+					<scl:jolux scl:name="cites">http://data.legilux.public.lu/eli/reg_ue/2009/595/jo</scl:jolux>
+					<scl:jolux scl:name="cites">http://data.legilux.public.lu/eli/dir_ue/1998/69/jo</scl:jolux>
+					<scl:rdf scl:name="type">http://data.legilux.public.lu/resource/ontology/jolux#BaseAct</scl:rdf>
+					<scl:rdf scl:name="type">http://data.legilux.public.lu/resource/ontology/jolux#Act</scl:rdf>
+					<scl:rdf scl:name="type">http://data.legilux.public.lu/resource/ontology/jolux#Work</scl:rdf>
+					<scl:rdf scl:name="type">http://data.legilux.public.lu/resource/ontology/jolux#LegalResource</scl:rdf>
+					<scl:rdf scl:name="type">http://data.legilux.public.lu/resource/ontology/jolux#NationalLegalResource</scl:rdf>
+				</scl:JOLUXLegalResource>
+			</scl:JOLUXWork>
+			<scl:JOLUXExpression>
+				<scl:jolux scl:name="uriThis">http://data.legilux.public.lu/eli/etat/leg/rgd/2018/09/11/a852/jo/fr</scl:jolux>
+				<scl:jolux scl:name="realizes">http://data.legilux.public.lu/eli/etat/leg/rgd/2018/09/11/a852/jo</scl:jolux>
+				<scl:jolux scl:name="language">http://publications.europa.eu/resource/authority/language/FRA</scl:jolux>
+				<scl:jolux scl:lg="fra" scl:name="title">Règlement grand-ducal du 11 septembre 2018 modifiant\na) le règlement grand-ducal modifié du 26 janvier 2016 sur le contrôle technique des véhicules routiers ;\nb) le règlement grand-ducal modifié du 26 janvier 2016 relatif à la réception et l’immatriculation des véhicules routiers ;\nc) l’arrêté grand-ducal modifié du 23 novembre 1955 portant règlement de la circulation sur toutes les voies publiques.</scl:jolux>
+			</scl:JOLUXExpression>
+			<scl:JOLUXManifestation>
+				<scl:jolux scl:name="uriThis">http://data.legilux.public.lu/eli/etat/leg/rgd/2018/09/11/a852/jo/fr/xml</scl:jolux>
+				<scl:jolux scl:name="embodies">http://data.legilux.public.lu/eli/etat/leg/rgd/2018/09/11/a852/jo/fr</scl:jolux>
+				<scl:jolux scl:name="publishedIn">http://data.legilux.public.lu/eli/etat/leg/memorial/2018/a852/fr/pdf</scl:jolux>
+				<scl:jolux scl:name="memorialPage">1</scl:jolux>
+				<scl:jolux scl:name="memorialSequence">A</scl:jolux>
+				<scl:jolux scl:name="publisher">http://data.legilux.public.lu/authority/legal-institution/ME</scl:jolux>
+				<scl:jolux scl:lg="fra" scl:name="rights">Copyright : Ministère d’État du Grand-Duché de Luxembourg – Service central de législation</scl:jolux>
+				<scl:jolux scl:name="rightsHolder">http://data.legilux.public.lu/authority/legal-institution/ME</scl:jolux>
+				<scl:jolux scl:name="license">http://creativecommons.org/licenses/by/4.0/</scl:jolux>
+				<scl:jolux scl:name="userFormat">http://data.legilux.public.lu/resource/authority/user-format/xml-akomantoso</scl:jolux>
+				<scl:jolux scl:name="format">http://publications.europa.eu/resource/authority/file-type/XML</scl:jolux>
+				<scl:jolux scl:name="isExemplifiedBy">http://data.legilux.public.lu/file/eli-etat-leg-rgd-2018-09-11-a852-jo-fr-xml.xml</scl:jolux>
+			</scl:JOLUXManifestation>
+		</identification>
+<lifecycle source="#">
+<eventRef date="2018-08-03" id="e1" source="#ro1" type="generation"/>
+</lifecycle>
+<references source="#">
+<original href="/eli/etat/leg/rgd/2018/08/03/n1/jo" id="ro1" showAs="Original"/>
+</references>
+</meta>
+<preface>
+<longTitle>
+<p>Règlement grand-ducal du 11 septembre 2018 modifiant</p>
+<ol xmlns:ns3727365="http://www.scl.lu" ns3727365:start="1" ns3727365:symbol="a)">
+<li>le règlement grand-ducal modifié du 26 janvier 2016 sur le contrôle technique des véhicules routiers ;</li>
+<li>le règlement grand-ducal modifié du 26 janvier 2016 relatif à la réception et l’immatriculation des véhicules routiers ;</li>
+<li>l’arrêté grand-ducal modifié du 23 novembre 1955 portant règlement de la circulation sur toutes les voies publiques.</li>
+</ol>
+</longTitle>
+</preface>
+<preamble>
+<container name="preamble">
+<p>Nous Henri, Grand-Duc de Luxembourg, Duc de Nassau,</p>
+<p>Vu la <ref href="/eli/etat/leg/loi/1955/02/14/n3/jo" id="cb4088e1-e34b-4c18-adec-2eec4b135148">loi du 14 février 1955</ref> concernant la réglementation de la circulation sur toutes les voies publiques ;</p>
+<p>Vu les avis de la Chambre de commerce et de la Chambre des métiers ; les avis de la Chambre des salariés, de la Chambres des fonctionnaires et employés publics et de la Chambre d’agriculture ayant été demandés ;</p>
+<p>Notre Conseil d’État entendu ;</p>
+<p>Sur le rapport de Notre Ministre du Développement durable et des Infrastructures, de Notre Ministre de la Fonction publique et de la Réforme administrative, de Notre Ministre de l’Intérieur et de Notre Ministre des Finances et après délibération du Gouvernement en Conseil ;</p>
+</container>
+<formula name="">
+<p>Arrêtons :</p>
+</formula>
+</preamble>
+<body>
+<alinea>
+<content>
+<p>(...)</p>
+<p>La version html sera bientôt disponible. </p>
+<p>Pour l’instant veuillez consulter la <ref href="https://data.legilux.public.lu/filestore/eli/etat/leg/rgd/2018/09/11/a852/jo/fr/pdfa/eli-etat-leg-rgd-2018-09-11-a852-jo-fr-pdfa.pdf" id="eee5da48-4b5d-4a33-a03c-7b465c3add51">version pdf du Journal officiel</ref>.</p>
+</content>
+</alinea>
+</body>
+</act>
+</akomaNtoso>

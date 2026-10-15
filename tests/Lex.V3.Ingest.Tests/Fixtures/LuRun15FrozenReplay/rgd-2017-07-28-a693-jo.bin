@@ -1,0 +1,68 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?><akomaNtoso xmlns="http://docs.oasis-open.org/legaldocml/ns/akn/3.0/CSD13" xmlns:scl="http://www.scl.lu"><act contains="originalVersion" name="" scl:page-proof="many"><meta><identification source="#somebody">
+			<FRBRWork>
+			     <FRBRthis value="http://data.legilux.public.lu/eli/etat/leg/rgd/2017/07/28/a693/jo"/>
+			     <FRBRuri value=""/>
+			     <FRBRdate date="2017-07-28" name="document"/>
+			     <FRBRauthor as="#author" href="http://data.legilux.public.lu/resource/authority/legal-institution/MAV"/>
+			     <FRBRcountry value="http://publications.europa.eu/resource/authority/country/LUX"/>
+			</FRBRWork>
+			<FRBRExpression>
+			     <FRBRthis value="http://data.legilux.public.lu/eli/etat/leg/rgd/2017/07/28/a693/jo/fr"/>
+			     <FRBRuri value=""/>
+			     <FRBRdate date="2017-07-28" name="document"/>
+			     <FRBRauthor as="#author" href=""/>
+			     <FRBRlanguage language="http://publications.europa.eu/resource/authority/language/FRA"/>
+			</FRBRExpression>
+			<FRBRManifestation>
+			     <FRBRthis value="http://data.legilux.public.lu/eli/etat/leg/rgd/2017/07/28/a693/jo/fr/xml"/>
+			     <FRBRuri value=""/>
+			     <FRBRdate date="2017-07-28" name="document"/>
+			     <FRBRauthor as="#author" href=""/>
+			</FRBRManifestation>
+			<scl:JOLUXWork>
+				<scl:JOLUXComplexWork>
+					<scl:jolux scl:name="uriThis">http://data.legilux.public.lu/eli/etat/leg/rgd/2017/07/28/a693</scl:jolux>
+				</scl:JOLUXComplexWork>
+				<scl:JOLUXLegalResource>
+					<scl:jolux scl:name="uriThis">http://data.legilux.public.lu/eli/etat/leg/rgd/2017/07/28/a693/jo</scl:jolux>
+					<scl:jolux scl:name="publicationDate">2017-08-07</scl:jolux>
+					<scl:jolux scl:name="typeDocument">http://data.legilux.public.lu/resource/authority/resource-type/RGD</scl:jolux>
+					<scl:jolux scl:name="dateDocument">2017-07-28</scl:jolux>
+					
+					
+					<scl:jolux scl:name="isMemberOf">http://data.legilux.public.lu/eli/etat/leg/rgd/2017/07/28/a693</scl:jolux>
+					<scl:jolux scl:name="responsibilityOf">http://data.legilux.public.lu/resource/authority/legal-institution/MAV</scl:jolux><scl:jolux scl:name="subjectLevel1">http://data.legilux.public.lu/resource/authority/legal-subject/893</scl:jolux><scl:jolux scl:name="cites">http://data.legilux.public.lu/eli/etat/leg/loi/2017/06/16/a592/jo</scl:jolux><scl:jolux scl:name="basedOn">http://data.legilux.public.lu/eli/etat/leg/rgd/2016/03/15/n8/jo</scl:jolux><scl:jolux scl:name="dateEntryInForce">2017-08-11</scl:jolux><scl:jolux scl:name="isPartOf">http://data.legilux.public.lu/eli/etat/leg/memorial/2017/a693</scl:jolux>
+					
+					
+					
+					
+					
+					<scl:rdf scl:name="type">http://data.legilux.public.lu/resource/ontology/jolux#BaseAct</scl:rdf>
+					<scl:rdf scl:name="type">http://data.legilux.public.lu/resource/ontology/jolux#Act</scl:rdf>
+					<scl:rdf scl:name="type">http://data.legilux.public.lu/resource/ontology/jolux#Work</scl:rdf>
+					<scl:rdf scl:name="type">http://data.legilux.public.lu/resource/ontology/jolux#LegalResource</scl:rdf>
+					<scl:rdf scl:name="type">http://data.legilux.public.lu/resource/ontology/jolux#NationalLegalResource</scl:rdf>
+				</scl:JOLUXLegalResource>
+			</scl:JOLUXWork>
+			<scl:JOLUXExpression>
+				<scl:jolux scl:name="uriThis">http://data.legilux.public.lu/eli/etat/leg/rgd/2017/07/28/a693/jo/fr</scl:jolux>
+				<scl:jolux scl:name="realizes">http://data.legilux.public.lu/eli/etat/leg/rgd/2017/07/28/a693/jo</scl:jolux>
+				<scl:jolux scl:name="language">http://publications.europa.eu/resource/authority/language/FRA</scl:jolux>
+				<scl:jolux scl:lg="fra" scl:name="title">Règlement grand-ducal du 28 juillet 2017 fixant la date limite d'arrachage ou de destruction des fanes de pommes de terre des cultures destinées à la production de plants pour l'année 2017.</scl:jolux>
+			</scl:JOLUXExpression>
+			<scl:JOLUXManifestation>
+				<scl:jolux scl:name="uriThis">http://data.legilux.public.lu/eli/etat/leg/rgd/2017/07/28/a693/jo/fr/xml</scl:jolux>
+				<scl:jolux scl:name="embodies">http://data.legilux.public.lu/eli/etat/leg/rgd/2017/07/28/a693/jo/fr</scl:jolux>
+				<scl:jolux scl:name="publishedIn">http://data.legilux.public.lu/eli/etat/leg/memorial/2017/a693/fr/pdf</scl:jolux>
+				<scl:jolux scl:name="memorialPage">1</scl:jolux>
+				<scl:jolux scl:name="memorialSequence">A</scl:jolux>
+				<scl:jolux scl:name="publisher">http://data.legilux.public.lu/authority/legal-institution/ME</scl:jolux>
+				<scl:jolux scl:lg="fra" scl:name="rights">Copyright : Ministère d’État du Grand-Duché de Luxembourg – Service central de législation</scl:jolux>
+				<scl:jolux scl:name="rightsHolder">http://data.legilux.public.lu/authority/legal-institution/ME</scl:jolux>
+				<scl:jolux scl:name="license">http://creativecommons.org/licenses/by/4.0/</scl:jolux>
+				<scl:jolux scl:name="userFormat">http://data.legilux.lu/resource/authority/user-format/xml-akomantoso</scl:jolux>
+				<scl:jolux scl:name="format">http://publications.europa.eu/resource/authority/file-type/XML</scl:jolux>
+				<scl:jolux scl:name="isExemplifiedBy">http://data.legilux.public.lu/file/eli-etat-leg-rgd-2017-07-28-a693-jo-fr-xml.xml</scl:jolux>
+			</scl:JOLUXManifestation>
+		</identification>
+</meta><preface><longTitle><p>Règlement grand-ducal du 28 juillet 2017 fixant la date limite d'arrachage ou de destruction des fanes de pommes de terre des cultures destinées à la production de plants pour l'année 2017.</p></longTitle></preface><preamble><container name="preamble"><p>Nous Henri, Grand-Duc de Luxembourg, Duc de Nassau,</p></container><container name="considerando"><p>Vu le <ref href="/eli/etat/leg/rgd/2016/03/15/n8/jo" id="bdb5ba94-fff4-4c21-8bea-7af3b31ffbd8">règlement grand-ducal du 15 mars 2016</ref> fixant les conditions de commercialisation, de production et de certification des plants de pommes de terre, et notamment son article 37 ;</p><p>Vu l’article 1<sup>er</sup>, paragraphe 1<sup>er</sup>, de la <ref href="/eli/etat/leg/loi/2017/06/16/a592/jo" id="6eb4a9e9-40d4-4249-acda-0bf42b593ec6">loi du 16 juin 2017</ref> sur l’organisation du Conseil d’État et considérant qu’il y a urgence ;</p><p>Sur le rapport de Notre Ministre de l’Agriculture, de la Viticulture et de la Protection des consommateurs, et après délibération du Gouvernement en conseil ;</p></container><formula name=""><p scl:space-after="17" scl:space-before="17">Arrêtons :</p></formula></preamble><body><article id="art_1er"><num>Art. 1<sup>er</sup>.</num><alinea><content><p>Les fanes de pommes de terre des cultures destinées à la production de plants doivent être détruites ou arrachées au plus tard le :</p></content></alinea><alinea><content><table border="1" scl:cols="20 80" scl:cols-align="left left"><tr><td><p>18 août 2017</p></td><td><p>Agila, Corine, Première, Primura, Ukama</p></td></tr><tr><td><p>25 août 2017</p></td><td><p>Alegria, Agria, Anosta, Bianchidea, Bintje, Charlotte, Golden Queen, Désirée, Diamant, Forza, Gala, Heideniere, Hermes, Kennebec, Kondor, Linda, Liseta, Luminella, Marfona, Monalisa, Montblanc, Nicola, Spunta</p></td></tr><tr><td><p>8 septembre 2017</p></td><td><p>Cara, Hansa, Lady Rosetta</p></td></tr></table></content></alinea><alinea><content><p>Les parcelles classées prébase ou base doivent être défanées 4 jours avant la date limite. En cas de non-observation desdites prescriptions, les cultures sont déclassées d’une classe.</p></content></alinea></article><article id="art_2"><num>Art. 2.</num><alinea><content><p>L'inobservation des prescriptions du présent règlement entraîne le déclassement ou le refus des cultures en question.</p></content></alinea></article><article id="art_3"><num>Art. 3.</num><alinea><content><p>Notre Ministre de l’Agriculture, de la Viticulture et de la Protection des consommateurs est chargé de l’exécution du présent règlement qui sera publié au Journal officiel du Grand-Duché de Luxembourg.</p></content></alinea></article><clause><content/></clause></body><conclusions><p><signature><shortTitle>Le Ministre de l’Agriculture,<br/>de la Viticulture et de la<br/>Protection des consommateurs,</shortTitle><person refersTo=""><b>Fernand Etgen</b></person></signature></p><p><signature><docDate date="2999-01-01">Cabasson, le 28 juillet 2017.</docDate><person refersTo="">Henri</person></signature></p></conclusions></act></akomaNtoso>

@@ -1,0 +1,106 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?><akomaNtoso xmlns="http://docs.oasis-open.org/legaldocml/ns/akn/3.0/CSD13" xmlns:scl="http://www.scl.lu">
+<act contains="originalVersion" name=""><meta>
+	<identification source="#2015A1314A">
+		<FRBRWork>
+			<FRBRthis value="http://data.legilux.public.lu/eli/etat/leg/rgd/2015/03/25/n3/jo"/>
+			<FRBRuri value=""/>
+			<FRBRdate date="2015-03-25" name="document"/>
+			<FRBRauthor as="#author" href="http://data.legilux.public.lu/resource/authority/legal-institution/MC"/>
+			<FRBRcountry value="http://publications.europa.eu/resource/authority/country/LUX"/>
+		</FRBRWork>
+		<FRBRExpression>
+			<FRBRthis value="http://data.legilux.public.lu/eli/etat/leg/rgd/2015/03/25/n3/jo/fr"/>
+			<FRBRuri value=""/>
+			<FRBRdate date="2015-03-25" name="document"/>
+			<FRBRauthor as="#author" href=""/>
+			<FRBRlanguage language="http://publications.europa.eu/resource/authority/language/FRA"/>
+		</FRBRExpression>
+		<FRBRManifestation>
+			<FRBRthis value="http://data.legilux.public.lu/eli/etat/leg/rgd/2015/03/25/n3/jo/fr/xml"/>
+			<FRBRuri value=""/>
+			<FRBRdate date="2015-03-25" name="document"/>
+			<FRBRauthor as="#author" href=""/>
+		</FRBRManifestation>
+             <scl:JOLUXWork>
+                 <scl:JOLUXComplexWork>
+                     <scl:jolux scl:name="uriThis">http://data.legilux.public.lu/eli/etat/leg/rgd/2015/03/25/n3</scl:jolux>
+                 </scl:JOLUXComplexWork>
+                 <scl:JOLUXLegalResource>
+                     <scl:jolux scl:name="uriThis">http://data.legilux.public.lu/eli/etat/leg/rgd/2015/03/25/n3/jo</scl:jolux>
+                     <scl:jolux scl:name="isMemberOf">http://data.legilux.public.lu/eli/etat/leg/rgd/2015/03/25/n3</scl:jolux>
+                     <scl:jolux scl:name="typeDocument">http://data.legilux.public.lu/resource/authority/resource-type/RGD</scl:jolux>
+                     <scl:jolux scl:name="dateDocument">2015-03-25</scl:jolux>
+                     <scl:jolux scl:name="publicationDate">2015-04-10</scl:jolux>
+                     <scl:jolux scl:name="draft">http://data.legilux.public.lu/eli/etat/proj/PR/20150021</scl:jolux>
+                     <scl:jolux scl:name="historicalLegalId">2015A1314A</scl:jolux>
+                     <scl:jolux scl:name="dateApplicability">2015-04-14</scl:jolux>
+                     <scl:jolux scl:name="dateEntryInForce">2015-04-13</scl:jolux>
+                     <scl:jolux scl:name="isPartOf">http://data.legilux.public.lu/eli/etat/leg/memorial/2015/67</scl:jolux>
+                     
+                     
+                     <scl:jolux scl:name="responsibilityOf">http://data.legilux.public.lu/resource/authority/legal-institution/MC</scl:jolux>
+                     <scl:jolux scl:name="subjectLevel1">http://data.legilux.public.lu/resource/authority/legal-subject/869</scl:jolux>
+                     <scl:jolux scl:name="subjectLevel2">http://data.legilux.public.lu/resource/authority/legal-subject/278</scl:jolux>
+                     <scl:jolux scl:name="basedOn">http://data.legilux.public.lu/eli/etat/leg/loi/1991/07/27/n1/jo</scl:jolux>
+                     <scl:jolux scl:name="modifies">http://data.legilux.public.lu/eli/etat/leg/rgd/2014/07/28/n21/jo</scl:jolux>
+                     <scl:rdf scl:name="type">http://data.legilux.public.lu/resource/ontology/jolux#Act</scl:rdf>
+                     <scl:rdf scl:name="type">http://data.legilux.public.lu/resource/ontology/jolux#Work</scl:rdf>
+                     <scl:rdf scl:name="type">http://data.legilux.public.lu/resource/ontology/jolux#LegalResource</scl:rdf>
+                     <scl:rdf scl:name="type">http://data.legilux.public.lu/resource/ontology/jolux#NationalLegalResource</scl:rdf>
+                 </scl:JOLUXLegalResource>
+             </scl:JOLUXWork>
+             <scl:JOLUXExpression>
+                 <scl:jolux scl:name="uriThis">http://data.legilux.public.lu/eli/etat/leg/rgd/2015/03/25/n3/jo/fr</scl:jolux>
+                 <scl:jolux scl:name="realizes">http://data.legilux.public.lu/eli/etat/leg/rgd/2015/03/25/n3/jo</scl:jolux>
+                 <scl:jolux scl:name="language">http://publications.europa.eu/resource/authority/language/FRA</scl:jolux>
+                 <scl:jolux scl:lg="fra" scl:name="title">Règlement grand-ducal du 25 mars 2015 modifiant le règlement grand-ducal du 28 juillet 2014 établissant la liste des fréquences de radiodiffusion luxembourgeoises visée à l'article 4 de la loi modifiée du 27 juillet 1991 sur les médias électroniques.</scl:jolux>
+                 <scl:jolux scl:lg="fra" scl:name="titleShort">Liste des fréquences de radiodiffusion luxembourgeoises</scl:jolux>
+             </scl:JOLUXExpression>
+             <scl:JOLUXManifestation>
+                 <scl:jolux scl:name="uriThis">http://data.legilux.public.lu/eli/etat/leg/rgd/2015/03/25/n3/jo/fr/xml</scl:jolux>
+                 <scl:jolux scl:name="embodies">http://data.legilux.public.lu/eli/etat/leg/rgd/2015/03/25/n3/jo/fr</scl:jolux>
+                 <scl:jolux scl:name="publishedIn">http://data.legilux.public.lu/eli/etat/leg/memorial/2015/67/fr/pdf</scl:jolux>
+                 <scl:jolux scl:name="memorialPage">1314</scl:jolux>
+                 <scl:jolux scl:name="memorialSequence">A</scl:jolux>
+                 <scl:jolux scl:name="publisher">http://data.legilux.public.lu/authority/legal-institution/ME</scl:jolux>
+                 <scl:jolux scl:lg="fra" scl:name="rights">Copyright : Ministère d’Etat – Service central de législation – du Grand-Duché de Luxembourg</scl:jolux>
+                 <scl:jolux scl:name="rightsHolder">http://data.legilux.public.lu/authority/legal-institution/ME</scl:jolux>
+                 <scl:jolux scl:name="license">http://creativecommons.org/licenses/by/4.0/</scl:jolux>
+                 <scl:jolux scl:name="userFormat">http://data.legilux.lu/resource/authority/user-format/xml-akomantoso</scl:jolux>
+                 <scl:jolux scl:name="format">http://publications.europa.eu/resource/authority/file-type/XML</scl:jolux>
+                 <scl:jolux scl:name="isExemplifiedBy">http://data.legilux.public.lu/file/eli-etat-leg-rgd-2015-03-25-n3-jo-fr-xml.xml</scl:jolux>
+                 
+             </scl:JOLUXManifestation>
+	</identification>
+</meta>
+     <preface>
+	<longTitle>
+			<p>Règlement grand-ducal du 25 mars 2015 modifiant le règlement grand-ducal du 28 juillet 2014 établissant la liste des fréquences de radiodiffusion luxembourgeoises visée à l'article 4 de la loi modifiée du 27 juillet 1991 sur les médias électroniques.</p>
+	</longTitle>
+</preface>
+     <preamble>
+          <container name="preamble">
+               <p>Nous Henri, Grand-Duc de Luxembourg, Duc de Nassau,</p>
+          </container>
+          <container name="considerando"><p>Vu la <ref href="/eli/etat/leg/loi/1991/07/27/n1">loi modifiée du 27 juillet 1991</ref> sur les médias électroniques, et notamment son article 4;</p>
+          <p>L'avis de la Chambre des métiers ayant été demandé;</p>
+          <p>Vu l'avis de la Chambre de commerce;</p>
+          </container><container name="considerando"><p>Notre Conseil d'Etat entendu;</p><p>Sur proposition de Notre Ministre des Communications et des Médias et après délibération du Gouvernement en conseil;</p></container><formula name=""><p>Arrêtons:</p></formula></preamble>
+     <body>
+          
+          <article id="art_1er">
+               <num>Art. 1<sup>er</sup>.</num>
+               <alinea><content><p>A l'article 1<sup>er</sup>, au point 1, sous c), troisième tiret du <ref href="/eli/etat/leg/rgd/2014/07/28/n21">règlement grand-ducal du 28 juillet 2014</ref> établissant la liste des fréquences de radiodiffusion luxembourgeoises visée à l'article 4 de la loi modifiée du 27 juillet 1991 sur les médias électroniques, les indications concernant les réseaux 2 et 3 sont remplacées comme suit:<mod><quotedText><embeddedStructure>
+                         <alinea><content><p>Réseau 2: 103,4 MHz, 104,2 MHz et 94,3 MHz</p></content></alinea>
+                         <alinea><content><p>Réseau 3: 102,9 MHz, 105,2 MHz et 87,8 MHz</p></content></alinea>
+                    </embeddedStructure></quotedText></mod>.</p>
+          </content></alinea></article>
+          <article id="art_2">
+               <num>Art. 2.</num>
+               <alinea><content><p>Notre Ministre des Communications et des Médias est chargé de l'exécution du présent règlement qui sera publié au Mémorial.</p>
+          </content></alinea></article>
+     </body>
+     
+          <conclusions><p><signature><shortTitle>Le Ministre des Communications et des Médias,</shortTitle><person refersTo="">Xavier Bettel</person></signature></p><p><signature><docDate date="2999-01-01">Palais de Luxembourg, le 25 mars 2015.</docDate><person refersTo="">Henri</person></signature></p></conclusions>
+     
+</act></akomaNtoso>

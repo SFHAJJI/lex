@@ -1,0 +1,983 @@
+{
+ "schema": "lex-v3-lu-run15-frozen-replay-expected/1",
+ "source": {
+  "run": "lu-population-20261011-15",
+  "derivation": "derive-c",
+  "index_file_sha256": "6d7d969cb1da5b07df6a6d87ceadd0cfa5ae0886d572149b210bc1b3d9aab530",
+  "corpus_file_sha256": "bad814f77b453a836f1175a2c85866407fdccdd14bcc66a51dea02f206f993ea",
+  "index_schema": "lex-v3-luxembourg-index/8",
+  "index_corpus_sha256": "9e218b39db8b6d30b976351a34e762ef2ef88c6658a7779ab715728d2b214c94",
+  "index_logical_rows_sha256": "ca8728fc986e93aa14f78b4d52cb34ac508423822e3627713d2c20983635ddac",
+  "checkpoint_inventory_sha256": "854891e390282e382270b8800815914f4537d5970a11d93359ecfaa9ad6eb994",
+  "checkpoint_content_sha256": "abc0a299fda271e9b7aa2316064c7ae4a4ae1ef4536ff4ada9f93c42a5237f93"
+ },
+ "inventory_rule_sha256": "70e926111b25a4d364e96b679de0baaa090a869175a82d42e0052572804cf42e",
+ "content_rule_sha256": "dd32d9a59ea33b8c9e9cd51b7b2657a6fa2b716ad00e35db075416ba4cd38a9b",
+ "members": [
+  {
+   "fixture": "rgd-2021-05-31-a413-jo.bin",
+   "why": "content /1 gap: u",
+   "body_sha256": "90664cc85fd67d52a95945252de136ede327d3f0d66c482116fd6863c5b00b30",
+   "byte_length": 8959,
+   "source_ordinal": 10644,
+   "object_ref_sha256": "0a6b6c7b11d04038444b18361f3851bf3e0d5a4279595b939c4b2a20c6ecc4e4",
+   "root_iri": "http://data.legilux.public.lu/eli/etat/leg/rgd/2021/05/31/a413/jo",
+   "expression_iri": "http://data.legilux.public.lu/eli/etat/leg/rgd/2021/05/31/a413/jo/fr",
+   "manifestation_iri": "http://data.legilux.public.lu/eli/etat/leg/rgd/2021/05/31/a413/jo/fr/xml",
+   "item_iri": "http://data.legilux.public.lu/filestore/eli/etat/leg/rgd/2021/05/31/a413/jo/fr/xml/eli-etat-leg-rgd-2021-05-31-a413-jo-fr-xml.xml",
+   "language_iri": "http://publications.europa.eu/resource/authority/language/FRA",
+   "format": "xml-akomantoso",
+   "rights_disposition": "agreed_same_run_cc_by",
+   "sealed": {
+    "content_dispositions": {
+     "akn_unsupported_content_shape": 3
+    },
+    "admitted_articles": [],
+    "states": []
+   },
+   "replay": {
+    "disposition": "inventoried",
+    "publisher_work_iri": "http://data.legilux.public.lu/eli/etat/leg/rgd/2021/05/31/a413",
+    "publisher_legal_resource_iri": "http://data.legilux.public.lu/eli/etat/leg/rgd/2021/05/31/a413/jo",
+    "publisher_applicability_date": "2021-06-06",
+    "articles": [
+     [
+      "art_1er",
+      null,
+      null
+     ],
+     [
+      "art_2",
+      null,
+      null
+     ],
+     [
+      "art_3",
+      null,
+      null
+     ]
+    ],
+    "replay_inventory_identity_sha256": "11383d163d0cd9c2216d2d4b6a18415488e706f24b730cd2f4a4caff2a8b0551"
+   }
+  },
+  {
+   "fixture": "rgd-2017-07-28-a693-jo.bin",
+   "why": "content /1 gap: table",
+   "body_sha256": "4f7b33efb6b404702e914f94f7a8a517002a901497792c3c67978723b6b44dcd",
+   "byte_length": 8474,
+   "source_ordinal": 25278,
+   "object_ref_sha256": "18ddb4d8898cd653698f75a4d3d803541952c0378653066f73565bfaee54db35",
+   "root_iri": "http://data.legilux.public.lu/eli/etat/leg/rgd/2017/07/28/a693/jo",
+   "expression_iri": "http://data.legilux.public.lu/eli/etat/leg/rgd/2017/07/28/a693/jo/fr",
+   "manifestation_iri": "http://data.legilux.public.lu/eli/etat/leg/rgd/2017/07/28/a693/jo/fr/xml",
+   "item_iri": "http://data.legilux.public.lu/filestore/eli/etat/leg/rgd/2017/07/28/a693/jo/fr/xml/eli-etat-leg-rgd-2017-07-28-a693-jo-fr-xml.xml",
+   "language_iri": "http://publications.europa.eu/resource/authority/language/FRA",
+   "format": "xml-akomantoso",
+   "rights_disposition": "agreed_same_run_cc_by",
+   "sealed": {
+    "content_dispositions": {
+     "akn_admitted": 2,
+     "akn_unsupported_content_shape": 1
+    },
+    "admitted_articles": [
+     {
+      "publisher_id": "art_2",
+      "publisher_wid": null,
+      "applicability_date": null,
+      "article_identity_sha256": "b697886a698f2e6c93afcab4df67be25202e86d06ba2c9e41c85651e46584d98"
+     },
+     {
+      "publisher_id": "art_3",
+      "publisher_wid": null,
+      "applicability_date": null,
+      "article_identity_sha256": "11b8ad74ddffea25ac7a6bcef7c06e006ac40d69ebe3baceeba643721bd365c2"
+     }
+    ],
+    "states": []
+   },
+   "replay": {
+    "disposition": "inventoried",
+    "publisher_work_iri": null,
+    "publisher_legal_resource_iri": null,
+    "publisher_applicability_date": null,
+    "articles": [
+     [
+      "art_1er",
+      null,
+      null
+     ],
+     [
+      "art_2",
+      null,
+      null
+     ],
+     [
+      "art_3",
+      null,
+      null
+     ]
+    ],
+    "replay_inventory_identity_sha256": "1d64ab51b2265709a6cfa4c5f123a7e93c34bad340e0c40447d4e6af463e4fa6"
+   }
+  },
+  {
+   "fixture": "rgd-2018-09-11-a852-jo.bin",
+   "why": "inventory /3 rejects: no top-level article",
+   "body_sha256": "0ee9bcad8cef01e9dc1262671240b8b74152c64319eb97ad2ff4b77c5302e499",
+   "byte_length": 10227,
+   "source_ordinal": 51727,
+   "object_ref_sha256": "32b112219ebc9c938d366dcd52a046400a1866a49da655eac4fa1af65d252b0a",
+   "root_iri": "http://data.legilux.public.lu/eli/etat/leg/rgd/2018/09/11/a852/jo",
+   "expression_iri": "http://data.legilux.public.lu/eli/etat/leg/rgd/2018/09/11/a852/jo/fr",
+   "manifestation_iri": "http://data.legilux.public.lu/eli/etat/leg/rgd/2018/09/11/a852/jo/fr/xml",
+   "item_iri": "http://data.legilux.public.lu/filestore/eli/etat/leg/rgd/2018/09/11/a852/jo/fr/xml/eli-etat-leg-rgd-2018-09-11-a852-jo-fr-xml.xml",
+   "language_iri": "http://publications.europa.eu/resource/authority/language/FRA",
+   "format": "xml",
+   "rights_disposition": "agreed_same_run_cc_by",
+   "sealed": {
+    "content_dispositions": {
+     "akn_upstream_not_inventoried": 1
+    },
+    "admitted_articles": [],
+    "states": []
+   },
+   "replay": {
+    "disposition": "xml_rejected",
+    "replay_detail": "publisher XML contains no top-level article"
+   }
+  },
+  {
+   "fixture": "rgd-2015-03-25-n3-jo.bin",
+   "why": "content /1 gap: a modification boundary that is not empty",
+   "body_sha256": "e542dec372e0279392d5f4551c363a6458d797e687313ae3886104efed269e39",
+   "byte_length": 9004,
+   "source_ordinal": 52317,
+   "object_ref_sha256": "3346c96b2cdfdc95849457646d1e3e5331a53160adad1eb2931193666df17723",
+   "root_iri": "http://data.legilux.public.lu/eli/etat/leg/rgd/2015/03/25/n3/jo",
+   "expression_iri": "http://data.legilux.public.lu/eli/etat/leg/rgd/2015/03/25/n3/jo/fr",
+   "manifestation_iri": "http://data.legilux.public.lu/eli/etat/leg/rgd/2015/03/25/n3/jo/fr/xml",
+   "item_iri": "http://data.legilux.public.lu/filestore/eli/etat/leg/rgd/2015/03/25/n3/jo/fr/xml/eli-etat-leg-rgd-2015-03-25-n3-jo-fr-xml.xml",
+   "language_iri": "http://publications.europa.eu/resource/authority/language/FRA",
+   "format": "xml",
+   "rights_disposition": "agreed_same_run_cc_by",
+   "sealed": {
+    "content_dispositions": {
+     "akn_admitted": 1,
+     "akn_unsupported_content_shape": 1
+    },
+    "admitted_articles": [
+     {
+      "publisher_id": "art_2",
+      "publisher_wid": null,
+      "applicability_date": null,
+      "article_identity_sha256": "4d0aaea543cb1340959da27f0f876d847e9585babecb7fffbf6caa411f737f84"
+     }
+    ],
+    "states": [
+     {
+      "work_key": "rgd-2015-03-25-n3",
+      "applicability_date": "2015-04-14",
+      "publisher_work_iri": "http://data.legilux.public.lu/eli/etat/leg/rgd/2015/03/25/n3",
+      "publisher_legal_resource_iri": "http://data.legilux.public.lu/eli/etat/leg/rgd/2015/03/25/n3/jo",
+      "rule_profiles": [
+       "70e926111b25a4d364e96b679de0baaa090a869175a82d42e0052572804cf42e",
+       "dd32d9a59ea33b8c9e9cd51b7b2657a6fa2b716ad00e35db075416ba4cd38a9b"
+      ]
+     }
+    ]
+   },
+   "replay": {
+    "disposition": "inventoried",
+    "publisher_work_iri": "http://data.legilux.public.lu/eli/etat/leg/rgd/2015/03/25/n3",
+    "publisher_legal_resource_iri": "http://data.legilux.public.lu/eli/etat/leg/rgd/2015/03/25/n3/jo",
+    "publisher_applicability_date": "2015-04-14",
+    "articles": [
+     [
+      "art_1er",
+      null,
+      null
+     ],
+     [
+      "art_2",
+      null,
+      null
+     ]
+    ],
+    "replay_inventory_identity_sha256": "9c0041ccf601dec02c3cc7a15cafdab3ecf6c911b933c173a273fde37e398a6b"
+   }
+  },
+  {
+   "fixture": "loi-2020-05-20-a446-jo.bin",
+   "why": "inventory /3 rejects: an annex identification block (exactly one identification block)",
+   "body_sha256": "81d6dc3958b37a96eee9ae4011f31aaaacb4666072925b240d7a63fe5eb4e375",
+   "byte_length": 8464,
+   "source_ordinal": 52437,
+   "object_ref_sha256": "33633a8844b5e7b0b1ac3485d9f6a47468fe2456755d1d70a95519512bef7d42",
+   "root_iri": "http://data.legilux.public.lu/eli/etat/leg/loi/2020/05/20/a446/jo",
+   "expression_iri": "http://data.legilux.public.lu/eli/etat/leg/loi/2020/05/20/a446/jo/fr",
+   "manifestation_iri": "http://data.legilux.public.lu/eli/etat/leg/loi/2020/05/20/a446/jo/fr/xml",
+   "item_iri": "http://data.legilux.public.lu/filestore/eli/etat/leg/loi/2020/05/20/a446/jo/fr/xml/eli-etat-leg-loi-2020-05-20-a446-jo-fr-xml.xml",
+   "language_iri": "http://publications.europa.eu/resource/authority/language/FRA",
+   "format": "xml",
+   "rights_disposition": "agreed_same_run_cc_by",
+   "sealed": {
+    "content_dispositions": {
+     "akn_upstream_not_inventoried": 1
+    },
+    "admitted_articles": [],
+    "states": []
+   },
+   "replay": {
+    "disposition": "xml_rejected",
+    "replay_detail": "publisher AKN must contain exactly one identification block"
+   }
+  },
+  {
+   "fixture": "loi-2021-08-06-a607-jo.bin",
+   "why": "content /1 gap: embeddedText",
+   "body_sha256": "8f7b701dffa731ccab1628b3831b678fee323a0fdfc553f3a732eb985ea7d1c1",
+   "byte_length": 7539,
+   "source_ordinal": 57889,
+   "object_ref_sha256": "38c2180ecf31f8707eb020dddf0eae4610c9ba043090f95a95c4d3bdfe676a67",
+   "root_iri": "http://data.legilux.public.lu/eli/etat/leg/loi/2021/08/06/a607/jo",
+   "expression_iri": "http://data.legilux.public.lu/eli/etat/leg/loi/2021/08/06/a607/jo/fr",
+   "manifestation_iri": "http://data.legilux.public.lu/eli/etat/leg/loi/2021/08/06/a607/jo/fr/xml",
+   "item_iri": "http://data.legilux.public.lu/filestore/eli/etat/leg/loi/2021/08/06/a607/jo/fr/xml/eli-etat-leg-loi-2021-08-06-a607-jo-fr-xml.xml",
+   "language_iri": "http://publications.europa.eu/resource/authority/language/FRA",
+   "format": "xml-akomantoso",
+   "rights_disposition": "agreed_same_run_cc_by",
+   "sealed": {
+    "content_dispositions": {
+     "akn_unsupported_content_shape": 1
+    },
+    "admitted_articles": [],
+    "states": []
+   },
+   "replay": {
+    "disposition": "inventoried",
+    "publisher_work_iri": "http://data.legilux.public.lu/eli/etat/leg/loi/2021/08/06/a607",
+    "publisher_legal_resource_iri": "http://data.legilux.public.lu/eli/etat/leg/loi/2021/08/06/a607/jo",
+    "publisher_applicability_date": "2021-08-16",
+    "articles": [
+     [
+      "article_unique",
+      null,
+      null
+     ]
+    ],
+    "replay_inventory_identity_sha256": "c5f0d93ffc07a2df96aeedebc9ceb802d59806f1297a0f9a16cfe40b395f3b3c"
+   }
+  },
+  {
+   "fixture": "rgd-2019-12-20-a904-jo.bin",
+   "why": "content /1 gap: sub",
+   "body_sha256": "361edb2391f718f1185cf5ddb30fd4fc5d55ea973bd11388c7b30f5bf21eb7e1",
+   "byte_length": 11057,
+   "source_ordinal": 59386,
+   "object_ref_sha256": "3a429200df5d3d418d96fd0199a24c49342d2cb9feea1848a131de686f208bda",
+   "root_iri": "http://data.legilux.public.lu/eli/etat/leg/rgd/2019/12/20/a904/jo",
+   "expression_iri": "http://data.legilux.public.lu/eli/etat/leg/rgd/2019/12/20/a904/jo/fr",
+   "manifestation_iri": "http://data.legilux.public.lu/eli/etat/leg/rgd/2019/12/20/a904/jo/fr/xml",
+   "item_iri": "http://data.legilux.public.lu/filestore/eli/etat/leg/rgd/2019/12/20/a904/jo/fr/xml/eli-etat-leg-rgd-2019-12-20-a904-jo-fr-xml.xml",
+   "language_iri": "http://publications.europa.eu/resource/authority/language/FRA",
+   "format": "xml-akomantoso",
+   "rights_disposition": "agreed_same_run_cc_by",
+   "sealed": {
+    "content_dispositions": {
+     "akn_unsupported_content_shape": 2
+    },
+    "admitted_articles": [],
+    "states": []
+   },
+   "replay": {
+    "disposition": "inventoried",
+    "publisher_work_iri": "http://data.legilux.public.lu/eli/etat/leg/rgd/2019/12/20/a904",
+    "publisher_legal_resource_iri": "http://data.legilux.public.lu/eli/etat/leg/rgd/2019/12/20/a904/jo",
+    "publisher_applicability_date": "2020-01-01",
+    "articles": [
+     [
+      "art_1er",
+      null,
+      null
+     ],
+     [
+      "art_2",
+      null,
+      null
+     ]
+    ],
+    "replay_inventory_identity_sha256": "e554293fe7da75bb8872ea04cb1c8e75865a5245c93322ffa109ab599b471495"
+   }
+  },
+  {
+   "fixture": "rgd-2017-03-03-a295-jo.bin",
+   "why": "content /1 gap: br",
+   "body_sha256": "4b8e27b439046bddb4fc66cf264f859e0ef7ce30d6a4cc2e97b575216a00471b",
+   "byte_length": 8127,
+   "source_ordinal": 63915,
+   "object_ref_sha256": "3eb3a25d1b540d1426ea06b5b619e70d6f3aa850e7ef11440c9e66e8ddeaaa3b",
+   "root_iri": "http://data.legilux.public.lu/eli/etat/leg/rgd/2017/03/03/a295/jo",
+   "expression_iri": "http://data.legilux.public.lu/eli/etat/leg/rgd/2017/03/03/a295/jo/fr",
+   "manifestation_iri": "http://data.legilux.public.lu/eli/etat/leg/rgd/2017/03/03/a295/jo/fr/xml",
+   "item_iri": "http://data.legilux.public.lu/filestore/eli/etat/leg/rgd/2017/03/03/a295/jo/fr/xml/eli-etat-leg-rgd-2017-03-03-a295-jo-fr-xml.xml",
+   "language_iri": "http://publications.europa.eu/resource/authority/language/FRA",
+   "format": "xml-akomantoso",
+   "rights_disposition": "agreed_same_run_cc_by",
+   "sealed": {
+    "content_dispositions": {
+     "akn_admitted": 2,
+     "akn_unsupported_content_shape": 2
+    },
+    "admitted_articles": [
+     {
+      "publisher_id": "art_3",
+      "publisher_wid": null,
+      "applicability_date": null,
+      "article_identity_sha256": "e253ed866a4137d0a77324d4817070a0d42a0f15aa9e2a8a22b03f6124eca7c3"
+     },
+     {
+      "publisher_id": "art_4",
+      "publisher_wid": null,
+      "applicability_date": null,
+      "article_identity_sha256": "7d306d443153197984c5870162eceea4119af67ee72930a3ed75066c92a33574"
+     }
+    ],
+    "states": []
+   },
+   "replay": {
+    "disposition": "inventoried",
+    "publisher_work_iri": null,
+    "publisher_legal_resource_iri": null,
+    "publisher_applicability_date": null,
+    "articles": [
+     [
+      "art_1er",
+      null,
+      null
+     ],
+     [
+      "art_2",
+      null,
+      null
+     ],
+     [
+      "art_3",
+      null,
+      null
+     ],
+     [
+      "art_4",
+      null,
+      null
+     ]
+    ],
+    "replay_inventory_identity_sha256": "7ede65e152a57bebf75cebf38ec9ac597eb621091d0fc60c6a80002ae3fe6fe0"
+   }
+  },
+  {
+   "fixture": "code-commerce-20231101.bin",
+   "why": "inventory /3 rejects a code: complex work is not isMemberOf (selected WEMI)",
+   "body_sha256": "d18283949a853b2374793fe41664746e0923a2aa23fd68c10905ae3b5c1740d9",
+   "byte_length": 511773,
+   "source_ordinal": 70711,
+   "object_ref_sha256": "458db13ef78a2bb1ac8ddb134e0ca8840064e4d19110421d09bbda2b9ed325fa",
+   "root_iri": "http://data.legilux.public.lu/eli/etat/leg/code/commerce/20231101",
+   "expression_iri": "http://data.legilux.public.lu/eli/etat/leg/code/commerce/20231101/fr",
+   "manifestation_iri": "http://data.legilux.public.lu/eli/etat/leg/code/commerce/20231101/fr/xml",
+   "item_iri": "http://data.legilux.public.lu/filestore/eli/etat/leg/code/commerce/20231101/fr/xml/eli-etat-leg-code-commerce-20231101-fr-xml.xml",
+   "language_iri": "http://publications.europa.eu/resource/authority/language/FRA",
+   "format": "xml",
+   "rights_disposition": "agreed_same_run_cc_by",
+   "sealed": {
+    "content_dispositions": {
+     "akn_upstream_not_inventoried": 1
+    },
+    "admitted_articles": [],
+    "states": []
+   },
+   "replay": {
+    "disposition": "xml_rejected",
+    "replay_detail": "publisher AKN expression coordinate does not match the selected WEMI"
+   }
+  },
+  {
+   "fixture": "rgd-2021-12-17-a896-jo.bin",
+   "why": "inventory /3 inventoried with a dated coordinate; every article admitted",
+   "body_sha256": "b5e46585723c154f1853e1727d0fa4730145c48b178dfbb7867b166d2da25cbd",
+   "byte_length": 6971,
+   "source_ordinal": 80269,
+   "object_ref_sha256": "4efc52aa922e97e76deae9d8418c500e19349c0418e197cfd37a7f977b939a81",
+   "root_iri": "http://data.legilux.public.lu/eli/etat/leg/rgd/2021/12/17/a896/jo",
+   "expression_iri": "http://data.legilux.public.lu/eli/etat/leg/rgd/2021/12/17/a896/jo/fr",
+   "manifestation_iri": "http://data.legilux.public.lu/eli/etat/leg/rgd/2021/12/17/a896/jo/fr/xml",
+   "item_iri": "http://data.legilux.public.lu/filestore/eli/etat/leg/rgd/2021/12/17/a896/jo/fr/xml/eli-etat-leg-rgd-2021-12-17-a896-jo-fr-xml.xml",
+   "language_iri": "http://publications.europa.eu/resource/authority/language/FRA",
+   "format": "xml-akomantoso",
+   "rights_disposition": "agreed_same_run_cc_by",
+   "sealed": {
+    "content_dispositions": {
+     "akn_admitted": 2
+    },
+    "admitted_articles": [
+     {
+      "publisher_id": "art_1er",
+      "publisher_wid": null,
+      "applicability_date": null,
+      "article_identity_sha256": "44436ce765167f6acf25e9b6661ef73d6e1970aecba1be8e6b59011a00d221ba"
+     },
+     {
+      "publisher_id": "art_2",
+      "publisher_wid": null,
+      "applicability_date": null,
+      "article_identity_sha256": "3a1eb395467b5fa34814ff151310aa52a7aa821d4db0a391f3e7aab82cc69eb3"
+     }
+    ],
+    "states": [
+     {
+      "work_key": "rgd-2021-12-17-a896",
+      "applicability_date": "2022-01-01",
+      "publisher_work_iri": "http://data.legilux.public.lu/eli/etat/leg/rgd/2021/12/17/a896",
+      "publisher_legal_resource_iri": "http://data.legilux.public.lu/eli/etat/leg/rgd/2021/12/17/a896/jo",
+      "rule_profiles": [
+       "70e926111b25a4d364e96b679de0baaa090a869175a82d42e0052572804cf42e",
+       "dd32d9a59ea33b8c9e9cd51b7b2657a6fa2b716ad00e35db075416ba4cd38a9b"
+      ]
+     }
+    ]
+   },
+   "replay": {
+    "disposition": "inventoried",
+    "publisher_work_iri": "http://data.legilux.public.lu/eli/etat/leg/rgd/2021/12/17/a896",
+    "publisher_legal_resource_iri": "http://data.legilux.public.lu/eli/etat/leg/rgd/2021/12/17/a896/jo",
+    "publisher_applicability_date": "2022-01-01",
+    "articles": [
+     [
+      "art_1er",
+      null,
+      null
+     ],
+     [
+      "art_2",
+      null,
+      null
+     ]
+    ],
+    "replay_inventory_identity_sha256": "b67b985b1142f9fcc21f8e4ed7aeee56c655ff77aea70633cb4cf856e8672bae"
+   }
+  },
+  {
+   "fixture": "rgd-2021-04-23-a351-jo.bin",
+   "why": "content /1 gap: a reference label shape",
+   "body_sha256": "2de9e44b142b123f307cbcbbdb87f1ae027f61f5584012af164dac4af800b6cf",
+   "byte_length": 10728,
+   "source_ordinal": 85093,
+   "object_ref_sha256": "53d0a5b4cfb443e75f566bc5896bb2be83af989ed2a841ee27f173295b87618f",
+   "root_iri": "http://data.legilux.public.lu/eli/etat/leg/rgd/2021/04/23/a351/jo",
+   "expression_iri": "http://data.legilux.public.lu/eli/etat/leg/rgd/2021/04/23/a351/jo/fr",
+   "manifestation_iri": "http://data.legilux.public.lu/eli/etat/leg/rgd/2021/04/23/a351/jo/fr/xml",
+   "item_iri": "http://data.legilux.public.lu/filestore/eli/etat/leg/rgd/2021/04/23/a351/jo/fr/xml/eli-etat-leg-rgd-2021-04-23-a351-jo-fr-xml.xml",
+   "language_iri": "http://publications.europa.eu/resource/authority/language/FRA",
+   "format": "xml-akomantoso",
+   "rights_disposition": "agreed_same_run_cc_by",
+   "sealed": {
+    "content_dispositions": {
+     "akn_admitted": 3,
+     "akn_unsupported_content_shape": 1
+    },
+    "admitted_articles": [
+     {
+      "publisher_id": "art_2",
+      "publisher_wid": null,
+      "applicability_date": null,
+      "article_identity_sha256": "13079f4637f58c479d94560597d641478db98fe8fd00f524244e94f406d75aa1"
+     },
+     {
+      "publisher_id": "art_3",
+      "publisher_wid": null,
+      "applicability_date": null,
+      "article_identity_sha256": "2058bac9b9aee148ba990cdd4fe4a13a9ad20dff19b9482ec987fa5403e5ce8e"
+     },
+     {
+      "publisher_id": "art_4",
+      "publisher_wid": null,
+      "applicability_date": null,
+      "article_identity_sha256": "9121cc56d251fbd103b3925f997217bbeeb8db578bd2e1874a99eaa3738990dc"
+     }
+    ],
+    "states": [
+     {
+      "work_key": "rgd-2021-04-23-a351",
+      "applicability_date": "2021-05-14",
+      "publisher_work_iri": "http://data.legilux.public.lu/eli/etat/leg/rgd/2021/04/23/a351",
+      "publisher_legal_resource_iri": "http://data.legilux.public.lu/eli/etat/leg/rgd/2021/04/23/a351/jo",
+      "rule_profiles": [
+       "70e926111b25a4d364e96b679de0baaa090a869175a82d42e0052572804cf42e",
+       "dd32d9a59ea33b8c9e9cd51b7b2657a6fa2b716ad00e35db075416ba4cd38a9b"
+      ]
+     }
+    ]
+   },
+   "replay": {
+    "disposition": "inventoried",
+    "publisher_work_iri": "http://data.legilux.public.lu/eli/etat/leg/rgd/2021/04/23/a351",
+    "publisher_legal_resource_iri": "http://data.legilux.public.lu/eli/etat/leg/rgd/2021/04/23/a351/jo",
+    "publisher_applicability_date": "2021-05-14",
+    "articles": [
+     [
+      "art_1er",
+      null,
+      null
+     ],
+     [
+      "art_2",
+      null,
+      null
+     ],
+     [
+      "art_3",
+      null,
+      null
+     ],
+     [
+      "art_4",
+      null,
+      null
+     ]
+    ],
+    "replay_inventory_identity_sha256": "f575fef8d75394fd713572f212b5fc4a419bf66fec75cd9e866db1e9bb377ff8"
+   }
+  },
+  {
+   "fixture": "rgd-2020-10-08-a819-jo.bin",
+   "why": "content /1 gap: def",
+   "body_sha256": "fe957d02727175dd15309a728bce06955681a9097daf75b065bb074b9ef9919b",
+   "byte_length": 8019,
+   "source_ordinal": 94291,
+   "object_ref_sha256": "5ce1b8ca7ecf1e5e0e800808d538cee3de4bf1bbcd7636d993a50b4fa0897991",
+   "root_iri": "http://data.legilux.public.lu/eli/etat/leg/rgd/2020/10/08/a819/jo",
+   "expression_iri": "http://data.legilux.public.lu/eli/etat/leg/rgd/2020/10/08/a819/jo/fr",
+   "manifestation_iri": "http://data.legilux.public.lu/eli/etat/leg/rgd/2020/10/08/a819/jo/fr/xml",
+   "item_iri": "http://data.legilux.public.lu/filestore/eli/etat/leg/rgd/2020/10/08/a819/jo/fr/xml/eli-etat-leg-rgd-2020-10-08-a819-jo-fr-xml.xml",
+   "language_iri": "http://publications.europa.eu/resource/authority/language/FRA",
+   "format": "xml-akomantoso",
+   "rights_disposition": "agreed_same_run_cc_by",
+   "sealed": {
+    "content_dispositions": {
+     "akn_admitted": 1,
+     "akn_unsupported_content_shape": 1
+    },
+    "admitted_articles": [
+     {
+      "publisher_id": "art_2",
+      "publisher_wid": null,
+      "applicability_date": null,
+      "article_identity_sha256": "1397da1357154e2359eda3499389a02dcb65336569f7bc730d851f3f445a47f0"
+     }
+    ],
+    "states": [
+     {
+      "work_key": "rgd-2020-10-08-a819",
+      "applicability_date": "2020-10-16",
+      "publisher_work_iri": "http://data.legilux.public.lu/eli/etat/leg/rgd/2020/10/08/a819",
+      "publisher_legal_resource_iri": "http://data.legilux.public.lu/eli/etat/leg/rgd/2020/10/08/a819/jo",
+      "rule_profiles": [
+       "70e926111b25a4d364e96b679de0baaa090a869175a82d42e0052572804cf42e",
+       "dd32d9a59ea33b8c9e9cd51b7b2657a6fa2b716ad00e35db075416ba4cd38a9b"
+      ]
+     }
+    ]
+   },
+   "replay": {
+    "disposition": "inventoried",
+    "publisher_work_iri": "http://data.legilux.public.lu/eli/etat/leg/rgd/2020/10/08/a819",
+    "publisher_legal_resource_iri": "http://data.legilux.public.lu/eli/etat/leg/rgd/2020/10/08/a819/jo",
+    "publisher_applicability_date": "2020-10-16",
+    "articles": [
+     [
+      "art_1er",
+      null,
+      null
+     ],
+     [
+      "art_2",
+      null,
+      null
+     ]
+    ],
+    "replay_inventory_identity_sha256": "73893e7d28f676e73c9c3a2aa275a742b27174387a7e85d01e155c363b5e9e4f"
+   }
+  },
+  {
+   "fixture": "rgd-2018-11-27-a1079-jo.bin",
+   "why": "content /1 gap: span",
+   "body_sha256": "9c3125bebf1c6581fd7672a042b42209aec660f587996695efe731ccb8f2841b",
+   "byte_length": 8585,
+   "source_ordinal": 94793,
+   "object_ref_sha256": "5d5d43520f55d9cccc2fd00547da83e44cb93759a31048851f26b4394d2c7070",
+   "root_iri": "http://data.legilux.public.lu/eli/etat/leg/rgd/2018/11/27/a1079/jo",
+   "expression_iri": "http://data.legilux.public.lu/eli/etat/leg/rgd/2018/11/27/a1079/jo/fr",
+   "manifestation_iri": "http://data.legilux.public.lu/eli/etat/leg/rgd/2018/11/27/a1079/jo/fr/xml",
+   "item_iri": "http://data.legilux.public.lu/filestore/eli/etat/leg/rgd/2018/11/27/a1079/jo/fr/xml/eli-etat-leg-rgd-2018-11-27-a1079-jo-fr-xml.xml",
+   "language_iri": "http://publications.europa.eu/resource/authority/language/FRA",
+   "format": "xml-akomantoso",
+   "rights_disposition": "agreed_same_run_cc_by",
+   "sealed": {
+    "content_dispositions": {
+     "akn_admitted": 2,
+     "akn_unsupported_content_shape": 1
+    },
+    "admitted_articles": [
+     {
+      "publisher_id": "art_2",
+      "publisher_wid": null,
+      "applicability_date": null,
+      "article_identity_sha256": "cb4d9e7a3640d6d6ac22600889f187e410e5e041060b557f3cdb019cf5c76359"
+     },
+     {
+      "publisher_id": "art_3",
+      "publisher_wid": null,
+      "applicability_date": null,
+      "article_identity_sha256": "12c4931963f38c30358790266956ce1eca748e5778f25e025e1e4dd9a595969d"
+     }
+    ],
+    "states": [
+     {
+      "work_key": "rgd-2018-11-27-a1079",
+      "applicability_date": "2018-12-04",
+      "publisher_work_iri": "http://data.legilux.public.lu/eli/etat/leg/rgd/2018/11/27/a1079",
+      "publisher_legal_resource_iri": "http://data.legilux.public.lu/eli/etat/leg/rgd/2018/11/27/a1079/jo",
+      "rule_profiles": [
+       "70e926111b25a4d364e96b679de0baaa090a869175a82d42e0052572804cf42e",
+       "dd32d9a59ea33b8c9e9cd51b7b2657a6fa2b716ad00e35db075416ba4cd38a9b"
+      ]
+     }
+    ]
+   },
+   "replay": {
+    "disposition": "inventoried",
+    "publisher_work_iri": "http://data.legilux.public.lu/eli/etat/leg/rgd/2018/11/27/a1079",
+    "publisher_legal_resource_iri": "http://data.legilux.public.lu/eli/etat/leg/rgd/2018/11/27/a1079/jo",
+    "publisher_applicability_date": "2018-12-04",
+    "articles": [
+     [
+      "art_1er",
+      null,
+      null
+     ],
+     [
+      "art_2",
+      null,
+      null
+     ],
+     [
+      "art_3",
+      null,
+      null
+     ]
+    ],
+    "replay_inventory_identity_sha256": "8821e1d2f0e91830080b3a68500395155e1ead1ae3bf8b5a13458a68aee33608"
+   }
+  },
+  {
+   "fixture": "loi-2001-03-29-n1-jo.bin",
+   "why": "inventory /3 rejects: a non-ASCII article id (bounded verbatim id)",
+   "body_sha256": "00f121a4ce3043a0b0c56cf4339a7c221012103ba6f474b1351db07541d32e36",
+   "byte_length": 15002,
+   "source_ordinal": 104217,
+   "object_ref_sha256": "66b6dbde24abaab52923d3e5e719389e1a2805a95c259c944318eb9ad6c95857",
+   "root_iri": "http://data.legilux.public.lu/eli/etat/leg/loi/2001/03/29/n1/jo",
+   "expression_iri": "http://data.legilux.public.lu/eli/etat/leg/loi/2001/03/29/n1/jo/fr",
+   "manifestation_iri": "http://data.legilux.public.lu/eli/etat/leg/loi/2001/03/29/n1/jo/fr/xml",
+   "item_iri": "http://data.legilux.public.lu/filestore/eli/etat/leg/loi/2001/03/29/n1/jo/fr/xml/eli-etat-leg-loi-2001-03-29-n1-jo-fr-xml.xml",
+   "language_iri": "http://publications.europa.eu/resource/authority/language/FRA",
+   "format": "xml",
+   "rights_disposition": "agreed_same_run_cc_by",
+   "sealed": {
+    "content_dispositions": {
+     "akn_upstream_not_inventoried": 1
+    },
+    "admitted_articles": [],
+    "states": []
+   },
+   "replay": {
+    "disposition": "xml_rejected",
+    "replay_detail": "top-level article has no bounded verbatim publisher id"
+   }
+  },
+  {
+   "fixture": "rgd-2019-02-08-a68-jo.bin",
+   "why": "content /1 gap: a node outside the AKN namespace",
+   "body_sha256": "dd5904f7035166ef16fd62ce2aba2db4e0a722c895b033a112f6d9a9da721437",
+   "byte_length": 8912,
+   "source_ordinal": 155166,
+   "object_ref_sha256": "98e0ccd465cdbca00b375ad799537edd64900b49b6934535555908cbfe372254",
+   "root_iri": "http://data.legilux.public.lu/eli/etat/leg/rgd/2019/02/08/a68/jo",
+   "expression_iri": "http://data.legilux.public.lu/eli/etat/leg/rgd/2019/02/08/a68/jo/fr",
+   "manifestation_iri": "http://data.legilux.public.lu/eli/etat/leg/rgd/2019/02/08/a68/jo/fr/xml",
+   "item_iri": "http://data.legilux.public.lu/filestore/eli/etat/leg/rgd/2019/02/08/a68/jo/fr/xml/eli-etat-leg-rgd-2019-02-08-a68-jo-fr-xml.xml",
+   "language_iri": "http://publications.europa.eu/resource/authority/language/FRA",
+   "format": "xml-akomantoso",
+   "rights_disposition": "agreed_same_run_cc_by",
+   "sealed": {
+    "content_dispositions": {
+     "akn_admitted": 1,
+     "akn_unsupported_content_shape": 1
+    },
+    "admitted_articles": [
+     {
+      "publisher_id": "art_1er",
+      "publisher_wid": null,
+      "applicability_date": null,
+      "article_identity_sha256": "032263d8979421aed32ea3163d86181062a73ab192608b0cddcb0dcdd8ae7802"
+     }
+    ],
+    "states": [
+     {
+      "work_key": "rgd-2019-02-08-a68",
+      "applicability_date": "2019-02-17",
+      "publisher_work_iri": "http://data.legilux.public.lu/eli/etat/leg/rgd/2019/02/08/a68",
+      "publisher_legal_resource_iri": "http://data.legilux.public.lu/eli/etat/leg/rgd/2019/02/08/a68/jo",
+      "rule_profiles": [
+       "70e926111b25a4d364e96b679de0baaa090a869175a82d42e0052572804cf42e",
+       "dd32d9a59ea33b8c9e9cd51b7b2657a6fa2b716ad00e35db075416ba4cd38a9b"
+      ]
+     }
+    ]
+   },
+   "replay": {
+    "disposition": "inventoried",
+    "publisher_work_iri": "http://data.legilux.public.lu/eli/etat/leg/rgd/2019/02/08/a68",
+    "publisher_legal_resource_iri": "http://data.legilux.public.lu/eli/etat/leg/rgd/2019/02/08/a68/jo",
+    "publisher_applicability_date": "2019-02-17",
+    "articles": [
+     [
+      "art_1er",
+      null,
+      null
+     ],
+     [
+      "art_2",
+      null,
+      null
+     ]
+    ],
+    "replay_inventory_identity_sha256": "50d9688aa936379a9794c0c47876ee4a810b0a3c72a3f60545847ffe6e77a705"
+   }
+  },
+  {
+   "fixture": "rgd-2018-12-05-a1101-jo.bin",
+   "why": "content /1 gap: eop",
+   "body_sha256": "f797137f786d67c167ce1ab999af779f277ae44b222a074144788797c5c26e1a",
+   "byte_length": 8462,
+   "source_ordinal": 170263,
+   "object_ref_sha256": "a78555d2d22bc5e0d31ea6a055aeb9a83fb3182e560c7af777f2eda3c746fbd5",
+   "root_iri": "http://data.legilux.public.lu/eli/etat/leg/rgd/2018/12/05/a1101/jo",
+   "expression_iri": "http://data.legilux.public.lu/eli/etat/leg/rgd/2018/12/05/a1101/jo/fr",
+   "manifestation_iri": "http://data.legilux.public.lu/eli/etat/leg/rgd/2018/12/05/a1101/jo/fr/xml",
+   "item_iri": "http://data.legilux.public.lu/filestore/eli/etat/leg/rgd/2018/12/05/a1101/jo/fr/xml/eli-etat-leg-rgd-2018-12-05-a1101-jo-fr-xml.xml",
+   "language_iri": "http://publications.europa.eu/resource/authority/language/FRA",
+   "format": "xml-akomantoso",
+   "rights_disposition": "agreed_same_run_cc_by",
+   "sealed": {
+    "content_dispositions": {
+     "akn_admitted": 3,
+     "akn_unsupported_content_shape": 1
+    },
+    "admitted_articles": [
+     {
+      "publisher_id": "art_1er",
+      "publisher_wid": null,
+      "applicability_date": null,
+      "article_identity_sha256": "3ae9f209f451bd4bc8319ab6727e86de4a954cb554a95ce17598bbabb38d3deb"
+     },
+     {
+      "publisher_id": "art_2",
+      "publisher_wid": null,
+      "applicability_date": null,
+      "article_identity_sha256": "0f58bd7c1951c0e656f7b8327ba28333ba485196c46bbc4cc2b6a708f0f59baf"
+     },
+     {
+      "publisher_id": "art_3",
+      "publisher_wid": null,
+      "applicability_date": null,
+      "article_identity_sha256": "4aa53c52ff1005fc268ddf08b8712bd2e63318b337d21a697b7d540b0d1ac877"
+     }
+    ],
+    "states": [
+     {
+      "work_key": "rgd-2018-12-05-a1101",
+      "applicability_date": "2019-01-01",
+      "publisher_work_iri": "http://data.legilux.public.lu/eli/etat/leg/rgd/2018/12/05/a1101",
+      "publisher_legal_resource_iri": "http://data.legilux.public.lu/eli/etat/leg/rgd/2018/12/05/a1101/jo",
+      "rule_profiles": [
+       "70e926111b25a4d364e96b679de0baaa090a869175a82d42e0052572804cf42e",
+       "dd32d9a59ea33b8c9e9cd51b7b2657a6fa2b716ad00e35db075416ba4cd38a9b"
+      ]
+     }
+    ]
+   },
+   "replay": {
+    "disposition": "inventoried",
+    "publisher_work_iri": "http://data.legilux.public.lu/eli/etat/leg/rgd/2018/12/05/a1101",
+    "publisher_legal_resource_iri": "http://data.legilux.public.lu/eli/etat/leg/rgd/2018/12/05/a1101/jo",
+    "publisher_applicability_date": "2019-01-01",
+    "articles": [
+     [
+      "art_1er",
+      null,
+      null
+     ],
+     [
+      "art_2",
+      null,
+      null
+     ],
+     [
+      "art_3",
+      null,
+      null
+     ],
+     [
+      "art_4",
+      null,
+      null
+     ]
+    ],
+    "replay_inventory_identity_sha256": "53ad8157c2248a73e741c8485183f147b7a96849594cd75b6b117d23135bf4e6"
+   }
+  },
+  {
+   "fixture": "loi-1948-05-15-n1-jo.bin",
+   "why": "inventory /3 inventories a quoted article outside any article",
+   "body_sha256": "e37950bb07fdad0a45d9ec13910c06b31da912df5a2260c1ee43eb09dbbbe7a8",
+   "byte_length": 10532,
+   "source_ordinal": 218043,
+   "object_ref_sha256": "d67a88f6402890f84a996a09feba871b539abc4b8898b9f02b241fedb33a2b00",
+   "root_iri": "http://data.legilux.public.lu/eli/etat/leg/loi/1948/05/15/n1/jo",
+   "expression_iri": "http://data.legilux.public.lu/eli/etat/leg/loi/1948/05/15/n1/jo/fr",
+   "manifestation_iri": "http://data.legilux.public.lu/eli/etat/leg/loi/1948/05/15/n1/jo/fr/xml",
+   "item_iri": "http://data.legilux.public.lu/filestore/eli/etat/leg/loi/1948/05/15/n1/jo/fr/xml/eli-etat-leg-loi-1948-05-15-n1-jo-fr-xml.xml",
+   "language_iri": "http://publications.europa.eu/resource/authority/language/FRA",
+   "format": "xml",
+   "rights_disposition": "agreed_same_run_cc_by",
+   "sealed": {
+    "content_dispositions": {
+     "akn_admitted": 1
+    },
+    "admitted_articles": [
+     {
+      "publisher_id": "art_52",
+      "publisher_wid": null,
+      "applicability_date": null,
+      "article_identity_sha256": "3112036b9a0930c5a820b6699050ed71b335b4dfc47decc48fd816996d922182"
+     }
+    ],
+    "states": []
+   },
+   "replay": {
+    "disposition": "inventoried",
+    "publisher_work_iri": null,
+    "publisher_legal_resource_iri": null,
+    "publisher_applicability_date": null,
+    "articles": [
+     [
+      "art_52",
+      null,
+      null
+     ]
+    ],
+    "replay_inventory_identity_sha256": "2eb345bb2c70a0f71e299ce377815f41d4bd4dab0c68d94db250bf1ee3b0cf6e"
+   }
+  },
+  {
+   "fixture": "rgd-2017-04-01-a394-jo.bin",
+   "why": "inventory /3 inventoried without a dated coordinate",
+   "body_sha256": "f1bba7b53a774ef5a661da6c04308dc8922ebeafa4d2869cc6869095c4f99540",
+   "byte_length": 7495,
+   "source_ordinal": 229261,
+   "object_ref_sha256": "e186d92925142622b73f3f7edc3423c9948d884c1839ed8e556a35e0601eeddd",
+   "root_iri": "http://data.legilux.public.lu/eli/etat/leg/rgd/2017/04/01/a394/jo",
+   "expression_iri": "http://data.legilux.public.lu/eli/etat/leg/rgd/2017/04/01/a394/jo/fr",
+   "manifestation_iri": "http://data.legilux.public.lu/eli/etat/leg/rgd/2017/04/01/a394/jo/fr/xml",
+   "item_iri": "http://data.legilux.public.lu/filestore/eli/etat/leg/rgd/2017/04/01/a394/jo/fr/xml/eli-etat-leg-rgd-2017-04-01-a394-jo-fr-xml.xml",
+   "language_iri": "http://publications.europa.eu/resource/authority/language/FRA",
+   "format": "xml-akomantoso",
+   "rights_disposition": "agreed_same_run_cc_by",
+   "sealed": {
+    "content_dispositions": {
+     "akn_admitted": 2
+    },
+    "admitted_articles": [
+     {
+      "publisher_id": "art_1er",
+      "publisher_wid": null,
+      "applicability_date": null,
+      "article_identity_sha256": "b78ab3ed6685e891917288854d1cc6d8c330c20a4a9771b25e981f6f72186d66"
+     },
+     {
+      "publisher_id": "art_2",
+      "publisher_wid": null,
+      "applicability_date": null,
+      "article_identity_sha256": "b99f3bdc5132505401c60e8f7c0e25cffcc6aef567ca666dc6bb261e8cf3ab2c"
+     }
+    ],
+    "states": []
+   },
+   "replay": {
+    "disposition": "inventoried",
+    "publisher_work_iri": null,
+    "publisher_legal_resource_iri": null,
+    "publisher_applicability_date": null,
+    "articles": [
+     [
+      "art_1er",
+      null,
+      null
+     ],
+     [
+      "art_2",
+      null,
+      null
+     ]
+    ],
+    "replay_inventory_identity_sha256": "bb54388a4dde5dbff766a30cef57cea367f0d112bfe327d074f524e93d9c2633"
+   }
+  },
+  {
+   "fixture": "loi-2021-04-16-a307-jo.bin",
+   "why": "content /1 gap: embeddedStructure",
+   "body_sha256": "19ef3bb0efcac0638db2e0381a01f8fb602b7826762ea93afba167831927e487",
+   "byte_length": 7873,
+   "source_ordinal": 255335,
+   "object_ref_sha256": "fb3717160e6b8db217805052343fb5711eb72d1f540ca4defbe90a8c060b2f54",
+   "root_iri": "http://data.legilux.public.lu/eli/etat/leg/loi/2021/04/16/a307/jo",
+   "expression_iri": "http://data.legilux.public.lu/eli/etat/leg/loi/2021/04/16/a307/jo/fr",
+   "manifestation_iri": "http://data.legilux.public.lu/eli/etat/leg/loi/2021/04/16/a307/jo/fr/xml",
+   "item_iri": "http://data.legilux.public.lu/filestore/eli/etat/leg/loi/2021/04/16/a307/jo/fr/xml/eli-etat-leg-loi-2021-04-16-a307-jo-fr-xml.xml",
+   "language_iri": "http://publications.europa.eu/resource/authority/language/FRA",
+   "format": "xml-akomantoso",
+   "rights_disposition": "agreed_same_run_cc_by",
+   "sealed": {
+    "content_dispositions": {
+     "akn_unsupported_content_shape": 1
+    },
+    "admitted_articles": [],
+    "states": []
+   },
+   "replay": {
+    "disposition": "inventoried",
+    "publisher_work_iri": "http://data.legilux.public.lu/eli/etat/leg/loi/2021/04/16/a307",
+    "publisher_legal_resource_iri": "http://data.legilux.public.lu/eli/etat/leg/loi/2021/04/16/a307/jo",
+    "publisher_applicability_date": "2021-04-23",
+    "articles": [
+     [
+      "article_unique",
+      null,
+      null
+     ]
+    ],
+    "replay_inventory_identity_sha256": "d48e84bb65173f42ca27ab49f4b493a1615fa4d0cb66b9a18d17ef46ed556f5b"
+   }
+  }
+ ]
+}

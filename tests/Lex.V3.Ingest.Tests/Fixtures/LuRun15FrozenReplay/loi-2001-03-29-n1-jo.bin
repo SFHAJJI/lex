@@ -1,0 +1,225 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?><akomaNtoso xmlns="http://docs.oasis-open.org/legaldocml/ns/akn/3.0/CSD13" xmlns:scl="http://www.scl.lu">
+<act contains="originalVersion" name="">
+        <meta>
+	<identification source="#2001A09401">
+		<FRBRWork>
+			<FRBRthis value="http://data.legilux.public.lu/eli/etat/leg/loi/2001/03/29/n1/jo"/>
+			<FRBRuri value=""/>
+			<FRBRdate date="2001-03-29" name="document"/>
+			<FRBRauthor as="#author" href="http://data.legilux.public.lu/resource/authority/legal-institution/MFA"/>
+			<FRBRcountry value="http://publications.europa.eu/resource/authority/country/LUX"/>
+		</FRBRWork>
+		<FRBRExpression>
+			<FRBRthis value="http://data.legilux.public.lu/eli/etat/leg/loi/2001/03/29/n1/jo/fr"/>
+			<FRBRuri value=""/>
+			<FRBRdate date="2001-03-29" name="document"/>
+			<FRBRauthor as="#author" href=""/>
+			<FRBRlanguage language="http://publications.europa.eu/resource/authority/language/FRA"/>
+		</FRBRExpression>
+		<FRBRManifestation>
+			<FRBRthis value="http://data.legilux.public.lu/eli/etat/leg/loi/2001/03/29/n1/jo/fr/xml"/>
+			<FRBRuri value=""/>
+			<FRBRdate date="2001-03-29" name="document"/>
+			<FRBRauthor as="#author" href=""/>
+		</FRBRManifestation>
+             <scl:JOLUXWork>
+                 <scl:JOLUXComplexWork>
+                     <scl:jolux scl:name="uriThis">http://data.legilux.public.lu/eli/etat/leg/loi/2001/03/29/n1</scl:jolux>
+                 </scl:JOLUXComplexWork>
+                 <scl:JOLUXLegalResource>
+                     <scl:jolux scl:name="uriThis">http://data.legilux.public.lu/eli/etat/leg/loi/2001/03/29/n1/jo</scl:jolux>
+                     <scl:jolux scl:name="isMemberOf">http://data.legilux.public.lu/eli/etat/leg/loi/2001/03/29/n1</scl:jolux>
+                     <scl:jolux scl:name="typeDocument">http://data.legilux.public.lu/resource/authority/resource-type/LOI</scl:jolux>
+                     <scl:jolux scl:name="dateDocument">2001-03-29</scl:jolux>
+                     <scl:jolux scl:name="publicationDate">2001-04-17</scl:jolux>
+                     <scl:jolux scl:name="draft">http://data.legilux.public.lu/eli/etat/proj/PL/19990104</scl:jolux>
+                     <scl:jolux scl:name="historicalLegalId">2001A09401</scl:jolux>
+                     <scl:jolux scl:name="dateEntryInForce">2001-04-20</scl:jolux>
+                     <scl:jolux scl:name="isPartOf">http://data.legilux.public.lu/eli/etat/leg/memorial/2001/43</scl:jolux>
+                     
+                     
+                     <scl:jolux scl:name="responsibilityOf">http://data.legilux.public.lu/resource/authority/legal-institution/MFA</scl:jolux>
+                     <scl:jolux scl:name="subjectLevel1">http://data.legilux.public.lu/resource/authority/legal-subject/687</scl:jolux>
+                     <scl:jolux scl:name="subjectLevel2">http://data.legilux.public.lu/resource/authority/legal-subject/419</scl:jolux>
+                     <scl:jolux scl:name="cites">http://data.legilux.public.lu/eli/etat/leg/loi/1983/07/18/n1/jo</scl:jolux>
+                     <scl:jolux scl:name="cites">http://data.legilux.public.lu/eli/etat/leg/loi/1994/06/08/n3/jo</scl:jolux>
+                     <scl:jolux scl:name="cites">http://data.legilux.public.lu/eli/etat/leg/loi/1988/03/19/n1/jo</scl:jolux>
+                     <scl:rdf scl:name="type">http://data.legilux.public.lu/resource/ontology/jolux#BaseAct</scl:rdf>
+                     <scl:rdf scl:name="type">http://data.legilux.public.lu/resource/ontology/jolux#Act</scl:rdf>
+                     <scl:rdf scl:name="type">http://data.legilux.public.lu/resource/ontology/jolux#Work</scl:rdf>
+                     <scl:rdf scl:name="type">http://data.legilux.public.lu/resource/ontology/jolux#LegalResource</scl:rdf>
+                     <scl:rdf scl:name="type">http://data.legilux.public.lu/resource/ontology/jolux#NationalLegalResource</scl:rdf>
+                 </scl:JOLUXLegalResource>
+             </scl:JOLUXWork>
+             <scl:JOLUXExpression>
+                 <scl:jolux scl:name="uriThis">http://data.legilux.public.lu/eli/etat/leg/loi/2001/03/29/n1/jo/fr</scl:jolux>
+                 <scl:jolux scl:name="realizes">http://data.legilux.public.lu/eli/etat/leg/loi/2001/03/29/n1/jo</scl:jolux>
+                 <scl:jolux scl:name="language">http://publications.europa.eu/resource/authority/language/FRA</scl:jolux>
+                 <scl:jolux scl:lg="fra" scl:name="title">Loi 29 mars 2001 portant sur l'accessibilité des lieux ouverts au public.</scl:jolux>
+                 <scl:jolux scl:lg="fra" scl:name="titleShort">Accessibilité des lieux ouverts au public</scl:jolux>
+             </scl:JOLUXExpression>
+             <scl:JOLUXManifestation>
+                 <scl:jolux scl:name="uriThis">http://data.legilux.public.lu/eli/etat/leg/loi/2001/03/29/n1/jo/fr/xml</scl:jolux>
+                 <scl:jolux scl:name="embodies">http://data.legilux.public.lu/eli/etat/leg/loi/2001/03/29/n1/jo/fr</scl:jolux>
+                 <scl:jolux scl:name="publishedIn">http://data.legilux.public.lu/eli/etat/leg/memorial/2001/43/fr/pdf</scl:jolux>
+                 <scl:jolux scl:name="memorialPage">940</scl:jolux>
+                 <scl:jolux scl:name="memorialSequence">1</scl:jolux>
+                 <scl:jolux scl:name="publisher">http://data.legilux.public.lu/authority/legal-institution/ME</scl:jolux>
+                 <scl:jolux scl:lg="fra" scl:name="rights">Copyright : Ministère d’Etat – Service central de législation – du Grand-Duché de Luxembourg</scl:jolux>
+                 <scl:jolux scl:name="rightsHolder">http://data.legilux.public.lu/authority/legal-institution/ME</scl:jolux>
+                 <scl:jolux scl:name="license">http://creativecommons.org/licenses/by/4.0/</scl:jolux>
+                 <scl:jolux scl:name="userFormat">http://data.legilux.lu/resource/authority/user-format/xml-akomantoso</scl:jolux>
+                 <scl:jolux scl:name="format">http://publications.europa.eu/resource/authority/file-type/XML</scl:jolux>
+                 <scl:jolux scl:name="isExemplifiedBy">http://data.legilux.public.lu/file/eli-etat-leg-loi-2001-03-29-n1-jo-fr-xml.xml</scl:jolux>
+                 
+             </scl:JOLUXManifestation>
+	</identification>
+</meta>
+     <preface>
+	<longTitle>
+			<p>Loi du 29 mars 2001 portant sur l'accessibilité des lieux ouverts au public</p>
+	</longTitle>
+</preface>
+     <preamble>
+          <container name="preamble">
+               <p>Nous HENRI, Grand-Duc de Luxembourg, Duc de Nassau,</p>
+               <p>Notre Conseil d'Etat entendu;</p>
+               <p>De l'assentiment de la Chambre des Députés;</p>
+          </container>
+          <container name="considerando">
+                <p>Vu la décision de la Chambre des Députés du 15 février 2001 et celle du Conseil d'Etat du 13 mars 2001 portant qu'il n'y a pas lieu à second vote;</p>
+     </container>
+            <formula name="">
+                <p>Avons ordonné et ordonnons:</p>
+            </formula>
+        </preamble>
+     <body>
+          
+          <article id="art_1er_objet">
+               <num>Art. 1<sup>er</sup>. Objet</num>
+               <paragraph>
+                    <num>(1)</num>
+                    <alinea>
+                        <content>
+                            <p>L'autorisation de construire ou de rénover un immeuble, une installation ou un espace public, appelé dans la suite «lieu ouvert au public», n'est accordée par l'autorité compétente qu'à condition que le projet de construction respecte les exigences techniques dites d'accessibilité. Ces exigences sont arrêtées par règlement grand-ducal. Elles visent à supprimer les barrières urbanistiques et architectoniques de l'espace physique et à garantir ainsi l'accès à l'ensemble des citoyens.</p>
+                        </content>
+                    </alinea>
+               </paragraph>
+               <paragraph>
+                    <num>(2)</num>
+                    <alinea>
+                        <content>
+                            <p>Les lieux reconnus accessibles donc respectant les exigences d'accessibilité sont certifiés conformes moyennant des labels à remettre par l'organisme chargé de la surveillance de l'application des exigences d'accessibilité.</p>
+                        </content>
+                    </alinea>
+               </paragraph>
+               <paragraph>
+                    <num>(3)</num>
+                    <alinea>
+                        <content>
+                            <p>Ces labels permettent de distinguer de façon claire et nette les lieux reconnus accessibles. Ils doivent être affichés en quelque lieu bien visible et ont fonction d'une attestation officielle.</p>
+                        </content>
+                    </alinea>
+               </paragraph>
+          </article>
+          <article id="art_2_champ_d'application">
+               <num>Art. 2. Champ d'application</num>
+               <paragraph>
+                    <num>(1)</num>
+                    <alinea>
+                        <content>
+                            <p>Les exigences d'accessibilité s'appliquent à tous les projets de nouvelle construction et de rénovation importante d'un lieu ouvert au public relevant de l'Etat, des communes et des établissements publics et visent plus particulièrement les fonctions accessibles au public.</p>
+                        </content>
+                    </alinea>
+               </paragraph>
+               <paragraph>
+                    <num>(2)</num>
+                    <alinea>
+                        <content>
+                            <p>Elles s'appliquent également aux projets de nouvelle construction et de rénovation importante d'un établissement destiné à des fins sociale, familiale et thérapeutique et qui bénéficient du concours financier de l'Etat par le biais du fonds spécial pour le financement des infrastructures socio-familiales.</p>
+                        </content>
+                    </alinea>
+               </paragraph>
+               <paragraph>
+                    <num>(3)</num>
+                    <alinea>
+                        <content>
+                            <p>La liste des lieux et les fonctions visées sont déterminées par règlement grand-ducal.</p>
+                        </content>
+                    </alinea>
+               </paragraph>
+          </article>
+          <article id="art_3_mise_en_application">
+               <num>Art. 3. Mise en application</num>
+               <alinea>
+                    <content>
+                        <p>Les exigences d'accessibilité sont applicables à tous les projets de construction d'un lieu ouvert au public dont la demande d'autorisation de bâtir est introduite après l'entrée en vigueur de la présente loi.</p>
+          </content>
+                </alinea>
+            </article>
+          <article id="art_4_dérogation">
+               <num>Art. 4. Dérogation</num>
+               <paragraph>
+                    <num>(1)</num>
+                    <alinea>
+                        <content>
+                            <p>A titre exceptionnel, le ministre ayant dans ses attributions le service chargé de la surveillance de l'application des exigences d'accessibilité peut, en cas de rénovation, autoriser des dérogations pour des raisons techniques, budgétaires ou historiques.</p>
+                        </content>
+                    </alinea>
+               </paragraph>
+               <paragraph>
+                    <num>(2)</num>
+                    <alinea>
+                        <content>
+                            <p>La dérogation relative à l'application des exigences d'accessibilité à tout projet de construction ou de rénovation concernant un immeuble classé ou proposé pour le classement comme monument national au sens de la loi du 18 juillet 1983 relative à la conservation et la protection du patrimoine historique ou figurant sur l'inventaire supplémentaire définie par cette loi est décidée par le ministre de la Culture.</p>
+                        </content>
+                    </alinea>
+               </paragraph>
+          </article>
+          <article id="art_5_surveillance_de_l'application_des_exigences_d'accessibilité">
+               <num>Art. 5. Surveillance de l'application des exigences d'accessibilité</num>
+               <alinea>
+                    <content>
+                        <p>La surveillance de l'application des exigences d'accessibilité aux projets de nouvelle construction et de rénovation importante des lieux ouverts au public visés à l'article 2 revient au service national de la sécurité dans la fonction publique créé en vertu de la loi du 8 juin 1994 modifiant la loi du 19 mars 1988 concernant la sécurité dans la fonction publique. La surveillance est réalisée conformément aux dispositions prévues par l'article 13 de la loi précitée.</p>
+          </content>
+                </alinea>
+            </article>
+          <article id="art_6_information,_conseil,_sensibilisation_et_formation">
+               <num>Art. 6. Information, Conseil, Sensibilisation et Formation</num>
+               <alinea>
+                    <content>
+                        <p>L'information, le conseil, la sensibilisation et la formation relatifs à l'accessibilité sont organisés par le ministre ayant dans ses attributions le handicap. Ledit ministre peut s'adjoindre des experts et/ou des organismes compétents en matière d'accessibilité.</p>
+          </content>
+                </alinea>
+            </article>
+          <clause>
+                <content>
+                    <p>Mandons et ordonnons que la présente loi soit insérée au Mémorial pour être exécutée et observée par tous ceux que la chose concerne.</p>
+                </content>
+            </clause>
+     </body>
+     
+          <conclusions>
+            <p>
+                <signature>
+                    <shortTitle>La Ministre de la Famille, de la Solidarité Sociale et de la Jeunesse,</shortTitle>
+                    <person refersTo="">Marie-Josée Jacobs</person>
+                </signature>
+            </p>
+            <p>
+                <signature>
+                    <docDate date="2999-01-01">Palais de Luxembourg, le 29 mars 2001.</docDate>
+                    <person refersTo="">Henri</person>
+                </signature>
+            </p>
+        </conclusions>
+     
+     <components>
+            <component>
+                <interstitial>
+                    <p>Doc. parl. n° 4576; sess. ord. 1998-1999; 2<sup>e</sup> sess. extraord. 1999; sess ord. 1999-2000; sess. ord. 2000-2001.</p>
+                </interstitial>
+            </component>
+        </components>
+</act>
+</akomaNtoso>

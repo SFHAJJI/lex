@@ -1,0 +1,124 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?><akomaNtoso xmlns="http://docs.oasis-open.org/legaldocml/ns/akn/3.0/CSD13" xmlns:scl="http://www.scl.lu">
+	<act name="Code de procédure pénale" scl:uri="http://eli.legilux.public.lu/eli/etat/leg/code/procedure_penale">
+		<meta>
+			<identification source="#http://data.legilux.public.lu/eli/etat/leg/code/procedure_penale/20170401">
+				<FRBRWork>
+					<FRBRthis value="http://data.legilux.public.lu/eli/etat/leg/code/procedure_penale/20170401"/>
+					<FRBRuri value=""/>
+					<FRBRdate date="2017-04-01" name="document"/>
+					<FRBRauthor as="#author" href="http://data.legilux.public.lu/resource/authority/legal-institution/MJ"/>
+					<FRBRcountry value="http://publications.europa.eu/resource/authority/country/LUX"/>
+				</FRBRWork>
+				<FRBRExpression>
+					<FRBRthis value="http://data.legilux.public.lu/eli/etat/leg/code/procedure_penale/20170401/fr"/>
+					<FRBRuri value=""/>
+					<FRBRdate date="2017-04-01" name="document"/>
+					<FRBRauthor as="#author" href=""/>
+					<FRBRlanguage language="http://publications.europa.eu/resource/authority/language/FRA"/>
+				</FRBRExpression>
+				<FRBRManifestation>
+					<FRBRthis value="http://data.legilux.public.lu/eli/etat/leg/code/procedure_penale/20170401/fr/xml"/>
+					<FRBRuri value=""/>
+					<FRBRdate date="2017-04-01" name="document"/>
+					<FRBRauthor as="#author" href=""/>
+				</FRBRManifestation>
+				<scl:JOLUXWork>
+					<scl:JOLUXComplexWork>
+						<scl:jolux scl:name="uriThis">http://data.legilux.public.lu/eli/etat/leg/code/instruction_criminelle</scl:jolux>
+					</scl:JOLUXComplexWork>
+					<scl:JOLUXLegalResource>
+                        <scl:jolux scl:name="uriThis">http://data.legilux.public.lu/eli/etat/leg/code/procedure_penale/20170401</scl:jolux>
+                        <scl:jolux scl:name="isMemberOf">http://data.legilux.public.lu/eli/etat/leg/loi/1808/11/17/n1</scl:jolux>
+                        <scl:jolux scl:name="typeDocument">http://data.legilux.public.lu/resource/authority/resource-type/CODE</scl:jolux>
+                        <scl:jolux scl:name="version">1</scl:jolux>
+                        <scl:jolux scl:name="dateApplicability">2017-04-01</scl:jolux>
+                        <scl:jolux scl:name="dateEndApplicability">2017-05-26</scl:jolux>
+                        <scl:jolux scl:name="publicationDate">2017-04-01</scl:jolux>
+                        <scl:jolux scl:lg="fra" scl:name="title">Code de procédure pénale</scl:jolux>
+                        <scl:jolux scl:lg="fra" scl:name="titleShort">Code de procédure pénale</scl:jolux>
+                        <scl:jolux scl:name="responsibilityOf">http://data.legilux.public.lu/resource/authority/legal-institution/MJ</scl:jolux>
+                        <scl:jolux scl:name="personInCharge">Ministère d’Etat – Service central de législation – du Grand-Duché de Luxembourg</scl:jolux>
+                        <scl:rdf scl:name="type">http://data.legilux.public.lu/resource/ontology/jolux#Code</scl:rdf>
+                        <scl:rdf scl:name="type">http://data.legilux.public.lu/resource/ontology/jolux#Consolidation</scl:rdf>
+                        <scl:rdf scl:name="type">http://data.legilux.public.lu/resource/ontology/jolux#Work</scl:rdf>
+                        <scl:rdf scl:name="type">http://data.legilux.public.lu/resource/ontology/jolux#LegalResource</scl:rdf>
+                        <scl:rdf scl:name="type">http://data.legilux.public.lu/resource/ontology/jolux#NationalLegalResource</scl:rdf>
+                        
+                    </scl:JOLUXLegalResource>
+				</scl:JOLUXWork>
+				<scl:JOLUXExpression>
+					<scl:jolux scl:name="uriThis">http://data.legilux.public.lu/eli/etat/leg/code/procedure_penale/20170401/fr</scl:jolux>
+					<scl:jolux scl:name="realizes">http://data.legilux.public.lu/eli/etat/leg/code/procedure_penale/20170401</scl:jolux>
+					<scl:jolux scl:name="language">http://publications.europa.eu/resource/authority/language/FRA</scl:jolux>
+					<scl:jolux scl:lg="fra" scl:name="title">Code de procédure pénale</scl:jolux>
+					<scl:jolux scl:lg="fra" scl:name="titleShort">Code de procédure pénale</scl:jolux>
+				</scl:JOLUXExpression>
+				<scl:JOLUXManifestation>
+					<scl:jolux scl:name="uriThis">http://data.legilux.public.lu/eli/etat/leg/code/procedure_penale/20170401/fr/xml</scl:jolux>
+					<scl:jolux scl:name="embodies">http://data.legilux.public.lu/eli/etat/leg/code/procedure_penale/20170401/fr</scl:jolux>
+					<scl:jolux scl:lg="fra" scl:name="rights">Copyright : Ministère d’Etat – Service central de législation – du Grand-Duché de Luxembourg</scl:jolux>
+					<scl:jolux scl:name="rightsHolder">http://data.legilux.public.lu/authority/legal-institution/ME</scl:jolux>
+					<scl:jolux scl:name="license">http://creativecommons.org/licenses/by/4.0/</scl:jolux>
+					<scl:jolux scl:name="userFormat">http://data.legilux.lu/resource/authority/user-format/xml-akomantoso</scl:jolux>
+					<scl:jolux scl:name="format">http://publications.europa.eu/resource/authority/file-type/XML</scl:jolux>
+					<scl:jolux scl:name="isExemplifiedBy">http://data.legilux.public.lu/file/eli-etat-leg-code-procedure_penale-2017-04-01-fr-xml.xml</scl:jolux>
+				</scl:JOLUXManifestation>
+			</identification>
+		</meta>
+		<preface>
+			<longTitle>
+				<p>Code de procédure pénale</p>
+			</longTitle>
+		</preface>
+		<body>
+			<book xmlns:ns3727365="http://www.scl.lu" id="livre_ii" ns3727365:hidden="false">
+				<num>
+					<b>LIVRE II</b>
+				</num>
+				<heading>
+					<b>De la Justice</b>
+				</heading>
+				<title id="livre_ii.titre_ier" scl:hidden="false" scl:subject1="http://data.legilux.public.lu/resource/authority/legal-subject/2325" scl:subject1lbl="tribunal de police">
+					<num>TITRE Ier.</num>
+					<heading>Des tribunaux de police</heading>
+					<subsection id="livre_ii.titre_ier.subsection_paragraphe_1er">
+						<num>Paragraphe 1er.</num>
+						<heading>Du tribunal du juge de paix comme juge de police</heading>
+						<article id="art_140" scl:uri="/eli/etat/leg/code/procedure_penale/art_140">
+							<scl:indexterms>
+								<scl:indexterm>
+									<scl:label>Vagabonds</scl:label>
+								</scl:indexterm>
+							</scl:indexterms>
+							<num>Art. 140.</num>
+							<heading>(<ref href="/eli/etat/leg/loi/1986/07/31/n7/jo">L. 31 juillet 1986</ref>)</heading>
+							<alinea>
+								<content>
+									<p> Les vagabonds et ceux qui auront été trouvés mendiants au sens de l'<ref href="/eli/etat/leg/code/penal/art_563">article 563, 6° du Code pénal</ref> seront arrêtés et amenés dans les vingt-quatre heures devant le juge de paix à son audience ordinaire ou à celle que le procureur d'Etat requerra pour le lendemain.</p>
+								</content>
+							</alinea>
+						</article>
+						<article id="art_141_à_144" scl:ids="art_141;art_142;art_143;art_144;" scl:uri="/eli/etat/leg/code/procedure_penale/art_141--144">
+							<num>Art. 141 à 144.</num>
+							<alinea>
+								<content>
+									<p>Abrogés (<ref href="/eli/etat/leg/loi/1989/06/16/n1/jo">L. 16 juin 1989</ref>).</p>
+								</content>
+							</alinea>
+						</article>
+					</subsection>
+				</title>
+			</book>
+			<scl:index>
+				<scl:indexterms>
+					<scl:indexterm>
+						<scl:label>Vagabonds</scl:label>
+						<scl:articles>
+							<scl:num scl:refid="art_140">140</scl:num>
+						</scl:articles>
+					</scl:indexterm>
+				</scl:indexterms>
+			</scl:index>
+		</body>
+	</act>
+</akomaNtoso>

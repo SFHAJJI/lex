@@ -1,0 +1,69 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?><akomaNtoso xmlns="http://docs.oasis-open.org/legaldocml/ns/akn/3.0/CSD13" xmlns:scl="http://www.scl.lu"><act contains="originalVersion" name="" scl:page-proof="many"><meta><identification source="#somebody">
+			<FRBRWork>
+			     <FRBRthis value="http://data.legilux.public.lu/eli/etat/leg/rgd/2018/11/27/a1079/jo"/>
+			     <FRBRuri value=""/>
+			     <FRBRdate date="2018-11-27" name="document"/>
+			     <FRBRauthor as="#author" href="http://data.legilux.public.lu/resource/authority/legal-institution/MDDI"/>
+			     <FRBRcountry value="http://publications.europa.eu/resource/authority/country/LUX"/>
+			</FRBRWork>
+			<FRBRExpression>
+			     <FRBRthis value="http://data.legilux.public.lu/eli/etat/leg/rgd/2018/11/27/a1079/jo/fr"/>
+			     <FRBRuri value=""/>
+			     <FRBRdate date="2018-11-27" name="document"/>
+			     <FRBRauthor as="#author" href=""/>
+			     <FRBRlanguage language="http://publications.europa.eu/resource/authority/language/FRA"/>
+			</FRBRExpression>
+			<FRBRManifestation>
+			     <FRBRthis value="http://data.legilux.public.lu/eli/etat/leg/rgd/2018/11/27/a1079/jo/fr/xml"/>
+			     <FRBRuri value=""/>
+			     <FRBRdate date="2018-11-27" name="document"/>
+			     <FRBRauthor as="#author" href=""/>
+			</FRBRManifestation>
+			<scl:JOLUXWork>
+				<scl:JOLUXComplexWork>
+					<scl:jolux scl:name="uriThis">http://data.legilux.public.lu/eli/etat/leg/rgd/2018/11/27/a1079</scl:jolux>
+				</scl:JOLUXComplexWork>
+				<scl:JOLUXLegalResource>
+					<scl:jolux scl:name="uriThis">http://data.legilux.public.lu/eli/etat/leg/rgd/2018/11/27/a1079/jo</scl:jolux>
+					<scl:jolux scl:name="publicationDate">2018-11-30</scl:jolux>
+					<scl:jolux scl:name="typeDocument">http://data.legilux.public.lu/resource/authority/resource-type/RGD</scl:jolux>
+					<scl:jolux scl:name="dateDocument">2018-11-27</scl:jolux>
+					<scl:jolux scl:name="dateEntryInForce">2018-12-04</scl:jolux>
+					<scl:jolux scl:name="dateApplicability">2018-12-04</scl:jolux>
+					<scl:jolux scl:name="isMemberOf">http://data.legilux.public.lu/eli/etat/leg/rgd/2018/11/27/a1079</scl:jolux>
+					<scl:jolux scl:name="isPartOf">http://data.legilux.public.lu/eli/etat/leg/memorial/2018/a1079</scl:jolux>
+					<scl:jolux scl:name="responsibilityOf">http://data.legilux.public.lu/resource/authority/legal-institution/MDDI</scl:jolux>
+					<scl:jolux scl:name="subjectLevel1">http://data.legilux.public.lu/resource/authority/legal-subject/728</scl:jolux>
+					<scl:jolux scl:name="subjectLevel2">http://data.legilux.public.lu/resource/authority/legal-subject/158</scl:jolux>
+					<scl:jolux scl:name="subjectLevel2">http://data.legilux.public.lu/resource/authority/legal-subject/464</scl:jolux>
+					<scl:jolux scl:name="basedOn">http://data.legilux.public.lu/eli/etat/leg/loi/1955/02/14/n3/jo</scl:jolux>
+					<scl:jolux scl:name="cites">http://data.legilux.public.lu/eli/etat/leg/loi/2017/06/16/a592/jo</scl:jolux>
+					<scl:rdf scl:name="type">http://data.legilux.public.lu/resource/ontology/jolux#BaseAct</scl:rdf>
+					<scl:rdf scl:name="type">http://data.legilux.public.lu/resource/ontology/jolux#Act</scl:rdf>
+					<scl:rdf scl:name="type">http://data.legilux.public.lu/resource/ontology/jolux#Work</scl:rdf>
+					<scl:rdf scl:name="type">http://data.legilux.public.lu/resource/ontology/jolux#LegalResource</scl:rdf>
+					<scl:rdf scl:name="type">http://data.legilux.public.lu/resource/ontology/jolux#NationalLegalResource</scl:rdf>
+				</scl:JOLUXLegalResource>
+			</scl:JOLUXWork>
+			<scl:JOLUXExpression>
+				<scl:jolux scl:name="uriThis">http://data.legilux.public.lu/eli/etat/leg/rgd/2018/11/27/a1079/jo/fr</scl:jolux>
+				<scl:jolux scl:name="realizes">http://data.legilux.public.lu/eli/etat/leg/rgd/2018/11/27/a1079/jo</scl:jolux>
+				<scl:jolux scl:name="language">http://publications.europa.eu/resource/authority/language/FRA</scl:jolux>
+				<scl:jolux scl:lg="fra" scl:name="title">Règlement grand-ducal du 27 novembre 2018 concernant la réglementation temporaire de la circulation sur la N12 entre Grosbous et Pratz et le CR307 entre Buschrodt et Grosbous à l’occasion de travaux.</scl:jolux>
+			</scl:JOLUXExpression>
+			<scl:JOLUXManifestation>
+				<scl:jolux scl:name="uriThis">http://data.legilux.public.lu/eli/etat/leg/rgd/2018/11/27/a1079/jo/fr/xml</scl:jolux>
+				<scl:jolux scl:name="embodies">http://data.legilux.public.lu/eli/etat/leg/rgd/2018/11/27/a1079/jo/fr</scl:jolux>
+				<scl:jolux scl:name="publishedIn">http://data.legilux.public.lu/eli/etat/leg/memorial/2018/a1079/fr/pdf</scl:jolux>
+				<scl:jolux scl:name="memorialPage">1</scl:jolux>
+				<scl:jolux scl:name="memorialSequence">A</scl:jolux>
+				<scl:jolux scl:name="publisher">http://data.legilux.public.lu/authority/legal-institution/ME</scl:jolux>
+				<scl:jolux scl:lg="fra" scl:name="rights">Copyright : Ministère d’État du Grand-Duché de Luxembourg – Service central de législation</scl:jolux>
+				<scl:jolux scl:name="rightsHolder">http://data.legilux.public.lu/authority/legal-institution/ME</scl:jolux>
+				<scl:jolux scl:name="license">http://creativecommons.org/licenses/by/4.0/</scl:jolux>
+				<scl:jolux scl:name="userFormat">http://data.legilux.public.lu/resource/authority/user-format/xml-akomantoso</scl:jolux>
+				<scl:jolux scl:name="format">http://publications.europa.eu/resource/authority/file-type/XML</scl:jolux>
+				<scl:jolux scl:name="isExemplifiedBy">http://data.legilux.public.lu/file/eli-etat-leg-rgd-2018-11-27-a1079-jo-fr-xml.xml</scl:jolux>
+			</scl:JOLUXManifestation>
+		</identification>
+<lifecycle source="#"><eventRef date="2018-11-27" id="e1" source="#ro1" type="generation"/></lifecycle><references source="#"><original href="/eli/etat/leg/rgd/2018/11/27/n4/jo" id="ro1" showAs="Original"/></references></meta><preface><longTitle><p>Règlement grand-ducal du 27 novembre 2018 concernant la réglementation temporaire de la circulation sur la N12 entre Grosbous et Pratz et le CR307 entre Buschrodt et Grosbous à l’occasion de travaux.</p></longTitle></preface><preamble><container name="preamble"><p>Nous Henri, Grand-Duc de Luxembourg, Duc de Nassau,</p><p>Vu la <ref href="/eli/etat/leg/loi/1955/02/14/n3/jo" id="9a2bc856-3e4a-482e-a193-87a98f80ff5d">loi modifiée du 14 février 1955</ref> concernant la réglementation de la circulation sur toutes les voies publiques ;</p><p>Vu l'article 1<sup>er</sup>, paragraphe 1<sup>er</sup>, de la <ref href="/eli/etat/leg/loi/2017/06/16/a592/jo" id="9b6e9f96-a9fe-455f-b515-922f4614b90d">loi du 16 juin 2017</ref> sur l’organisation du Conseil d’État et considérant qu’il y a urgence ;</p><p>Sur le rapport de Notre Ministre du Développement durable et des Infrastructures et après délibération du Gouvernement en Conseil ;</p></container><formula name=""><p>Arrêtons :</p></formula></preamble><body><article id="art_1er"><num>Art. 1<sup>er</sup>.</num><alinea><content><p>Pendant la phase d’exécution des travaux, aux endroits ci-après, la vitesse maximale est limitée à <span scl:no-break="true">70 km/h</span> dans les deux sens :</p><ul xmlns:ns3727365="http://www.scl.lu" ns3727365:symbol="dash"><li>sur la N12 (PK 34.000 – 33.500) entre Grosbous et Pratz,</li><li>sur le CR307 (PK 1.150 – 650) entre Buschrodt et Grosbous.</li></ul></content></alinea><alinea><content><p>Cette disposition est indiquée par le signal C,14 adapté. Les signaux A,15 et C,17a sont également mis en place.</p></content></alinea></article><article id="art_2"><num>Art. 2.</num><alinea><content><p>Les infractions aux dispositions du présent règlement sont punies conformément à l'article 7 de la <ref href="/eli/etat/leg/loi/1955/02/14/n3/jo" id="c7ef6edd-1577-4dd8-b8f7-ce00214abd4a">loi modifiée du 14 février 1955</ref> concernant la réglementation de la circulation sur toutes les voies publiques.</p></content></alinea></article><article id="art_3"><num>Art. 3.</num><alinea><content><p>Notre Ministre du Développement durable et des Infrastructures est chargé de l’exécution du présent règlement qui sera publié au Journal officiel du Grand-Duché de Luxembourg.</p></content></alinea></article></body><conclusions><p><signature><shortTitle>Le Ministre du Développement durable<br/>et des Infrastructures,</shortTitle><person refersTo="">François Bausch</person></signature></p><p><signature><docDate date="2999-01-01">Palais de Luxembourg, le 27 novembre 2018.</docDate><person refersTo="">Henri</person></signature></p></conclusions></act></akomaNtoso>

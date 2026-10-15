@@ -30,6 +30,9 @@
     <Content Include="Fixtures/EuDocumentFetch/*.bin" CopyToOutputDirectory="PreserveNewest" />
     <Content Include="Fixtures/LuDocumentFetch/*.bin" CopyToOutputDirectory="PreserveNewest" />
     <Content Include="Fixtures/LuAknLegalContent/*.bin" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="Fixtures/LuAknInventoryV4/*.bin" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="Fixtures/LuRun15FrozenReplay/*.bin" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="Fixtures/LuRun15FrozenReplay/*.json" CopyToOutputDirectory="PreserveNewest" />
     <Content Include="Fixtures/LegacySchema6Mount/*.bin" CopyToOutputDirectory="PreserveNewest" />
     <Content Include="Fixtures/EuDocumentFetch/*.txt" CopyToOutputDirectory="PreserveNewest" />
     <Content Include="Fixtures/EuLegalNotice/*.txt" CopyToOutputDirectory="PreserveNewest" />

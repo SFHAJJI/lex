@@ -1,0 +1,83 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?><akomaNtoso xmlns="http://docs.oasis-open.org/legaldocml/ns/akn/3.0/CSD13" xmlns:scl="http://www.scl.lu"><act contains="originalVersion" name="" scl:page-proof="many"><meta><identification source="#somebody">
+			<FRBRWork>
+			     <FRBRthis value="http://data.legilux.public.lu/eli/etat/leg/rgd/2018/07/20/a684/jo"/>
+			     <FRBRuri value=""/>
+			     <FRBRdate date="2018-07-20" name="document"/>
+			     <FRBRauthor as="#author" href="http://data.legilux.public.lu/resource/authority/legal-institution/MT"/>
+			     <FRBRauthor as="#author" href="http://data.legilux.public.lu/resource/authority/legal-institution/MS"/>
+			     <FRBRcountry value="http://publications.europa.eu/resource/authority/country/LUX"/>
+			</FRBRWork>
+			<FRBRExpression>
+			     <FRBRthis value="http://data.legilux.public.lu/eli/etat/leg/rgd/2018/07/20/a684/jo/fr"/>
+			     <FRBRuri value=""/>
+			     <FRBRdate date="2018-07-20" name="document"/>
+			     <FRBRauthor as="#author" href=""/>
+			     <FRBRlanguage language="http://publications.europa.eu/resource/authority/language/FRA"/>
+			</FRBRExpression>
+			<FRBRManifestation>
+			     <FRBRthis value="http://data.legilux.public.lu/eli/etat/leg/rgd/2018/07/20/a684/jo/fr/xml"/>
+			     <FRBRuri value=""/>
+			     <FRBRdate date="2018-07-20" name="document"/>
+			     <FRBRauthor as="#author" href=""/>
+			</FRBRManifestation>
+			<scl:JOLUXWork>
+				<scl:JOLUXComplexWork>
+					<scl:jolux scl:name="uriThis">http://data.legilux.public.lu/eli/etat/leg/rgd/2018/07/20/a684</scl:jolux>
+				</scl:JOLUXComplexWork>
+				<scl:JOLUXLegalResource>
+					<scl:jolux scl:name="uriThis">http://data.legilux.public.lu/eli/etat/leg/rgd/2018/07/20/a684/jo</scl:jolux>
+					<scl:jolux scl:name="publicationDate">2018-08-16</scl:jolux>
+					<scl:jolux scl:name="typeDocument">http://data.legilux.public.lu/resource/authority/resource-type/RGD</scl:jolux>
+					<scl:jolux scl:name="dateDocument">2018-07-20</scl:jolux>
+					
+					
+					<scl:jolux scl:name="isMemberOf">http://data.legilux.public.lu/eli/etat/leg/rgd/2018/07/20/a684</scl:jolux>
+					<scl:jolux scl:name="responsibilityOf">http://data.legilux.public.lu/resource/authority/legal-institution/MS</scl:jolux><scl:jolux scl:name="responsibilityOf">http://data.legilux.public.lu/resource/authority/legal-institution/MT</scl:jolux><scl:jolux scl:name="subjectLevel1">http://data.legilux.public.lu/resource/authority/legal-subject/261</scl:jolux><scl:jolux scl:name="subjectLevel2">http://data.legilux.public.lu/resource/authority/legal-subject/3010</scl:jolux><scl:jolux scl:name="subjectLevel2">http://data.legilux.public.lu/resource/authority/legal-subject/347</scl:jolux><scl:jolux scl:name="subjectLevel2">http://data.legilux.public.lu/resource/authority/legal-subject/3396</scl:jolux><scl:jolux scl:name="modifies">http://data.legilux.public.lu/eli/etat/leg/rgd/2016/11/14/n1/jo</scl:jolux><scl:jolux scl:name="cites">http://data.legilux.public.lu/eli/dir_ue/1991/322/jo</scl:jolux><scl:jolux scl:name="cites">http://data.legilux.public.lu/eli/dir_ue/1992/58/jo</scl:jolux><scl:jolux scl:name="cites">http://data.legilux.public.lu/eli/dir_ue/1992/85/jo</scl:jolux><scl:jolux scl:name="cites">http://data.legilux.public.lu/eli/dir_ue/1994/33/jo</scl:jolux><scl:jolux scl:name="cites">http://data.legilux.public.lu/eli/dir_ue/1998/24/jo</scl:jolux><scl:jolux scl:name="cites">http://data.legilux.public.lu/eli/dir_ue/2000/39/jo</scl:jolux><scl:jolux scl:name="cites">http://data.legilux.public.lu/eli/dir_ue/2004/37/jo</scl:jolux><scl:jolux scl:name="cites">http://data.legilux.public.lu/eli/dir_ue/2009/161/jo</scl:jolux><scl:jolux scl:name="cites">http://data.legilux.public.lu/eli/reg_ue/2008/1272/jo</scl:jolux><scl:jolux scl:name="draft">http://data.legilux.public.lu/eli/etat/proj/pr/20170123</scl:jolux><scl:jolux scl:name="basedOn">http://data.legilux.public.lu/eli/dir_ue/2014/27/jo</scl:jolux><scl:jolux scl:name="basedOn">http://data.legilux.public.lu/eli/dir_ue/2017/164/jo</scl:jolux><scl:jolux scl:name="basedOn">http://data.legilux.public.lu/eli/etat/leg/loi/2006/07/31/n2/jo</scl:jolux><scl:jolux scl:name="dateApplicability">2018-08-20</scl:jolux><scl:jolux scl:name="dateEntryInForce">2018-08-20</scl:jolux><scl:jolux scl:name="isPartOf">http://data.legilux.public.lu/eli/etat/leg/memorial/2018/a684</scl:jolux>
+					
+					
+					
+					
+					
+					
+					
+					
+					
+					
+					
+					
+					
+					
+					
+					
+					
+					
+					
+					<scl:rdf scl:name="type">http://data.legilux.public.lu/resource/ontology/jolux#BaseAct</scl:rdf>
+					<scl:rdf scl:name="type">http://data.legilux.public.lu/resource/ontology/jolux#Act</scl:rdf>
+					<scl:rdf scl:name="type">http://data.legilux.public.lu/resource/ontology/jolux#Work</scl:rdf>
+					<scl:rdf scl:name="type">http://data.legilux.public.lu/resource/ontology/jolux#LegalResource</scl:rdf>
+					<scl:rdf scl:name="type">http://data.legilux.public.lu/resource/ontology/jolux#NationalLegalResource</scl:rdf>
+				</scl:JOLUXLegalResource>
+			</scl:JOLUXWork>
+			<scl:JOLUXExpression>
+				<scl:jolux scl:name="uriThis">http://data.legilux.public.lu/eli/etat/leg/rgd/2018/07/20/a684/jo/fr</scl:jolux>
+				<scl:jolux scl:name="realizes">http://data.legilux.public.lu/eli/etat/leg/rgd/2018/07/20/a684/jo</scl:jolux>
+				<scl:jolux scl:name="language">http://publications.europa.eu/resource/authority/language/FRA</scl:jolux>
+				<scl:jolux scl:lg="fra" scl:name="title">Règlement grand-ducal du 20 juillet 2018 modifiant le règlement grand-ducal du 14 novembre 2016 concernant la protection de la sécurité et de la santé des salariés contre les risques liés à des agents chimiques sur le lieu de travail.</scl:jolux>
+			</scl:JOLUXExpression>
+			<scl:JOLUXManifestation>
+				<scl:jolux scl:name="uriThis">http://data.legilux.public.lu/eli/etat/leg/rgd/2018/07/20/a684/jo/fr/xml</scl:jolux>
+				<scl:jolux scl:name="embodies">http://data.legilux.public.lu/eli/etat/leg/rgd/2018/07/20/a684/jo/fr</scl:jolux>
+				<scl:jolux scl:name="publishedIn">http://data.legilux.public.lu/eli/etat/leg/memorial/2018/a684/fr/pdf</scl:jolux>
+				<scl:jolux scl:name="memorialPage">1</scl:jolux>
+				<scl:jolux scl:name="memorialSequence">A</scl:jolux>
+				<scl:jolux scl:name="publisher">http://data.legilux.public.lu/authority/legal-institution/ME</scl:jolux>
+				<scl:jolux scl:lg="fra" scl:name="rights">Copyright : Ministère d’État du Grand-Duché de Luxembourg – Service central de législation</scl:jolux>
+				<scl:jolux scl:name="rightsHolder">http://data.legilux.public.lu/authority/legal-institution/ME</scl:jolux>
+				<scl:jolux scl:name="license">http://creativecommons.org/licenses/by/4.0/</scl:jolux>
+				<scl:jolux scl:name="userFormat">http://data.legilux.public.lu/resource/authority/user-format/xml-akomantoso</scl:jolux>
+				<scl:jolux scl:name="format">http://publications.europa.eu/resource/authority/file-type/XML</scl:jolux>
+				<scl:jolux scl:name="isExemplifiedBy">http://data.legilux.public.lu/file/eli-etat-leg-rgd-2018-07-20-a684-jo-fr-xml.xml</scl:jolux>
+			</scl:JOLUXManifestation>
+		</identification>
+<lifecycle source="#"><eventRef date="2018-07-18" id="e1" source="#ro1" type="generation"/></lifecycle><references source="#"><original href="/eli/etat/leg/rgd/2018/07/18/n2/jo" id="ro1" showAs="Original"/></references><notes xmlns:ns3727365="http://www.scl.lu" ns3727365:border="50" ns3727365:delim-left="(" ns3727365:delim-right=")" ns3727365:page-footer="false" source="#eli-etat-leg-rgd-2018-07-18-n2-jo-fr-xml"><note id="note_0_0_0"><p>Le numéro CE (pour Communauté européenne) est le numéro d'identification des substances dans l'Union européenne.</p></note><note id="note_0_0_1"><p>Le numéro CAS est le numéro de registre du « Chemical Abstracts Service » (service des résumés analytiques de chimie).</p></note><note id="note_0_0_2"><p>La mention « peau » accompagnant la valeur limite d'exposition professionnelle indique la possibilité d'une pénétration cutanée importante.</p></note><note id="note_0_0_3"><p>Mesurée ou calculée sur une période de référence de huit heures en moyenne pondérée dans le temps.</p></note><note id="note_0_0_4"><p>Limite d'exposition à court terme: valeur limite que l'exposition ne devrait pas dépasser et qui se rapporte à une période de 15 minutes, sauf indication contraire.</p></note><note id="note_0_0_5"><p>« mg/m<sup>3 </sup>» = milligrammes par mètre cube d'air. Pour les produits chimiques à l'état gazeux ou en phase vapeur, la valeur limite est exprimée à 20<sup>o</sup>C et 101,3 kPa.</p></note><note id="note_0_0_6"><p>« ppm » = parts par million et par volume d'air (ml/m<sup>3</sup>).</p></note></notes></meta><preface><longTitle><p>Règlement grand-ducal du 20 juillet 2018 modifiant le règlement grand-ducal du 14 novembre 2016 concernant la protection de la sécurité et de la santé des salariés contre les risques liés à des agents chimiques sur le lieu de travail.</p></longTitle></preface><preamble><container name="preamble"><p>Nous Henri, Grand-Duc de Luxembourg, Duc de Nassau,</p></container><container name="considerando"><p>Vu l’article L.314-2 du <ref href="/eli/etat/leg/code/travail" id="b81db2b3-e5b9-46fc-8c22-f63d512a700e">Code du travail</ref> ;</p><p>Vu la <ref href="/eli/dir_ue/2017/164/jo" id="0c99ca93-0829-4f0a-8a76-b0e746462b04">directive (UE) 2017/164</ref> de la Commission du 31 janvier 2017 établissant une quatrième liste de valeurs limites indicatives d’exposition professionnelle en application de la <ref href="/eli/dir_ue/1998/24/jo" id="f7e1bbd8-b167-474c-9648-cad2b18852b7">directive 98/24/CE</ref> du Conseil et portant modification des directives de la Commission <ref href="/eli/dir_ue/1991/322/jo" id="6b794a73-602b-421d-816a-a5397f009be8">91/322/CEE</ref>, <ref href="/eli/dir_ue/2000/39/jo" id="bdcb97ce-0214-48de-9a23-9a0786ccfe1e">2000/39/CE</ref> et <ref href="/eli/dir_ue/2009/161/jo" id="1ac38d7f-33a6-44da-beab-70cf9c060341">2009/161/UE</ref> ;</p><p>Vu la <ref href="/eli/dir_ue/2014/27/jo" id="b02ba8b8-fa4b-4805-94e8-884aab65c6f6">directive 2014/27/UE</ref> du Parlement européen et du Conseil du 26 février 2014 modifiant les directives du Conseil <ref href="/eli/dir_ue/1992/58/jo" id="5d1204c2-578a-48eb-9e33-4cc6cb9b3bb0">92/58/CEE</ref>, <ref href="/eli/dir_ue/1992/85/jo" id="3e6e0d2b-fd02-463f-8573-e31795f5e069">92/85/CEE</ref>, <ref href="/eli/dir_ue/1994/33/jo" id="0f69ac84-2ae5-43e1-92e6-65213ef3b3ea">94/33/CE</ref>, <ref href="/eli/dir_ue/1998/24/jo" id="dd64c490-80a6-4f49-9f05-0024a9ba00f4">98/24/CE</ref> et la <ref href="/eli/dir_ue/2004/37/jo" id="30339c5c-dc8f-4928-8207-942199fb16d4">directive 2004/37/CE</ref> du Parlement européen et du Conseil afin de les aligner sur le <ref href="/eli/reg_ue/2008/1272/jo" id="d350f469-7f96-42a9-81a0-efd28774d1be">règlement (CE) n° 1272/2008</ref> relatif à la classification, à l'étiquetage et à l'emballage des substances et des mélanges ;</p><p>Vu les avis de la Chambre de commerce, de la Chambre des métiers et de la Chambre d’agriculture ;</p><p>Vu les demandes d’avis adressées à la Chambre des salariés et à la Chambre des fonctionnaires et employés publics ;</p><p>Notre Conseil d’État entendu ;</p><p>De l’assentiment de la Conférence des Présidents de la Chambre des Députés ;</p><p>Sur le rapport de Notre Ministre du Travail, de l'Emploi et de l’Économie sociale et solidaire et de Notre Ministre de la Santé, et après délibération du Gouvernement en conseil ;</p></container><formula name=""><p>Arrêtons :</p></formula></preamble><body><article id="art_1er"><num>Art. 1<sup>er</sup>.</num><alinea><content><p>L’annexe I du <ref href="/eli/etat/leg/rgd/2016/11/14/n1/jo" id="5508b71d-248f-446f-96a5-aea704059656">règlement grand-ducal du 14 novembre 2016</ref>, concernant la protection de la sécurité et de la santé des salariés contre les risques liés à des agents chimiques sur le lieu de travail, est remplacée par l’annexe suivante :<embeddedStructure><doc name=""><meta><identification source=""><FRBRWork><FRBRthis value=""/><FRBRuri value=""/><FRBRdate date="2018-07-23" name=""/><FRBRauthor href=""/><FRBRcountry value=""/></FRBRWork><FRBRExpression><FRBRthis value=""/><FRBRuri value=""/><FRBRdate date="2018-07-23" name=""/><FRBRauthor href=""/><FRBRlanguage language=""/></FRBRExpression><FRBRManifestation><FRBRthis value=""/><FRBRuri value=""/><FRBRdate date="2018-07-23" name=""/><FRBRauthor href=""/></FRBRManifestation></identification></meta><preface><longTitle><p scl:align="center">ANNEXE I :</p></longTitle></preface><mainBody><alinea><content><p scl:align="center" scl:space-after="10">Liste des valeurs limites contraignantes d’exposition professionnelle</p><table border="1" cellpadding="0" cellspacing="0" scl:cols="12 12 26 10 10 10 10 10" scl:cols-align="left left left left left left left center" scl:cols-nb="8" scl:cols-valign="middle" width="100"><tr><td rowspan="3" scl:align="center" scl:valign="middle"><p>Numéro</p><p>CE<noteRef href="#note_0_0_0"/></p></td><td rowspan="3" scl:align="center" scl:valign="middle"><p>Numéro</p><p>CAS<noteRef href="#note_0_0_1"/></p></td><td rowspan="3" scl:align="center" scl:valign="middle"><p>Nom de l’agent chimique</p></td><td colspan="4" scl:align="center"><p>Valeurs limites</p></td><td rowspan="3" scl:align="center" scl:valign="middle"><p>Mention <noteRef href="#note_0_0_2"/></p></td></tr><tr><td colspan="2" scl:align="center"><p>8 heures<noteRef href="#note_0_0_3"/></p></td><td colspan="2" scl:align="center"><p>Court terme<noteRef href="#note_0_0_4"/></p></td></tr><tr><td scl:align="center"><p>mg/m<sup>3</sup><noteRef href="#note_0_0_5"/></p></td><td scl:align="center"><p>ppm <noteRef href="#note_0_0_6"/></p></td><td scl:align="center" scl:width="10"><p>mg/m<sup>3</sup><noteRef href="#note_0_0_5"/></p></td><td scl:align="center"><p>ppm <noteRef href="#note_0_0_6"/></p></td></tr></table></content></alinea></mainBody></doc></embeddedStructure></p></content></alinea></article></body><conclusions><p><signature><shortTitle>Le Ministre du Travail, de l’Emploi<br/>et de l’Économie sociale et solidaire,</shortTitle><person refersTo="">Nicolas Schmit</person></signature><signature><shortTitle>La Ministre de la Santé,</shortTitle><person refersTo="">Lydia Mutsch</person></signature></p><p><signature><docDate date="2999-01-01">Cabasson, le 20 juillet 2018.</docDate><person refersTo="">Henri</person></signature></p></conclusions><components><component><interstitial><p>Doc. parl. <ref href="/eli/etat/proj/pr/20170123" id="33530f4a-c2eb-4fa2-98b4-7766e3750eea">7158</ref> ; sess. ord. 2016-2017 et 2017-2018.</p></interstitial></component></components></act></akomaNtoso>

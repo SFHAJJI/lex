@@ -1,0 +1,70 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?><akomaNtoso xmlns="http://docs.oasis-open.org/legaldocml/ns/akn/3.0/CSD13" xmlns:scl="http://www.scl.lu"><act contains="originalVersion" name="" scl:page-proof="many"><meta><identification source="#somebody">
+			<FRBRWork>
+			     <FRBRthis value="http://data.legilux.public.lu/eli/etat/leg/loi/2021/08/06/a607/jo"/>
+			     <FRBRuri value=""/>
+			     <FRBRdate date="2021-08-06" name="document"/>
+			     <FRBRauthor as="#author" href="http://data.legilux.public.lu/resource/authority/legal-institution/MJ"/>
+			     <FRBRcountry value="http://publications.europa.eu/resource/authority/country/LUX"/>
+			</FRBRWork>
+			<FRBRExpression>
+			     <FRBRthis value="http://data.legilux.public.lu/eli/etat/leg/loi/2021/08/06/a607/jo/fr"/>
+			     <FRBRuri value=""/>
+			     <FRBRdate date="2021-08-06" name="document"/>
+			     <FRBRauthor as="#author" href=""/>
+			     <FRBRlanguage language="http://publications.europa.eu/resource/authority/language/FRA"/>
+			</FRBRExpression>
+			<FRBRManifestation>
+			     <FRBRthis value="http://data.legilux.public.lu/eli/etat/leg/loi/2021/08/06/a607/jo/fr/xml"/>
+			     <FRBRuri value=""/>
+			     <FRBRdate date="2021-08-06" name="document"/>
+			     <FRBRauthor as="#author" href=""/>
+			</FRBRManifestation>
+			<scl:JOLUXWork>
+				<scl:JOLUXComplexWork>
+					<scl:jolux scl:name="uriThis">http://data.legilux.public.lu/eli/etat/leg/loi/2021/08/06/a607</scl:jolux>
+				</scl:JOLUXComplexWork>
+				<scl:JOLUXLegalResource>
+					<scl:jolux scl:name="uriThis">http://data.legilux.public.lu/eli/etat/leg/loi/2021/08/06/a607/jo</scl:jolux>
+					<scl:jolux scl:name="publicationDate">2021-08-12</scl:jolux>
+					<scl:jolux scl:name="typeDocument">http://data.legilux.public.lu/resource/authority/resource-type/LOI</scl:jolux>
+					<scl:jolux scl:name="dateDocument">2021-08-06</scl:jolux>
+					<scl:jolux scl:name="dateEntryInForce">2021-08-16</scl:jolux>
+					<scl:jolux scl:name="dateApplicability">2021-08-16</scl:jolux>
+					<scl:jolux scl:name="isMemberOf">http://data.legilux.public.lu/eli/etat/leg/loi/2021/08/06/a607</scl:jolux>
+					<scl:jolux scl:name="isPartOf">http://data.legilux.public.lu/eli/etat/leg/memorial/2021/a607</scl:jolux>
+					<scl:jolux scl:name="responsibilityOf">http://data.legilux.public.lu/resource/authority/legal-institution/MJ</scl:jolux>
+					<scl:jolux scl:name="subjectLevel1">http://data.legilux.public.lu/resource/authority/legal-subject/941</scl:jolux>
+					<scl:jolux scl:name="subjectLevel1">http://data.legilux.public.lu/resource/authority/legal-subject/3285</scl:jolux>
+					<scl:jolux scl:name="subjectLevel2">http://data.legilux.public.lu/resource/authority/legal-subject/158</scl:jolux>
+					<scl:jolux scl:name="subjectLevel2">http://data.legilux.public.lu/resource/authority/legal-subject/2303</scl:jolux>
+					<scl:jolux scl:name="modifies">http://data.legilux.public.lu/eli/etat/leg/loi/1915/08/10/n1/jo</scl:jolux>
+					<scl:jolux scl:name="draft">http://data.legilux.public.lu/eli/etat/projet/pl/20170430</scl:jolux>
+					<scl:rdf scl:name="type">http://data.legilux.public.lu/resource/ontology/jolux#BaseAct</scl:rdf>
+					<scl:rdf scl:name="type">http://data.legilux.public.lu/resource/ontology/jolux#Act</scl:rdf>
+					<scl:rdf scl:name="type">http://data.legilux.public.lu/resource/ontology/jolux#Work</scl:rdf>
+					<scl:rdf scl:name="type">http://data.legilux.public.lu/resource/ontology/jolux#LegalResource</scl:rdf>
+					<scl:rdf scl:name="type">http://data.legilux.public.lu/resource/ontology/jolux#NationalLegalResource</scl:rdf>
+				</scl:JOLUXLegalResource>
+			</scl:JOLUXWork>
+			<scl:JOLUXExpression>
+				<scl:jolux scl:name="uriThis">http://data.legilux.public.lu/eli/etat/leg/loi/2021/08/06/a607/jo/fr</scl:jolux>
+				<scl:jolux scl:name="realizes">http://data.legilux.public.lu/eli/etat/leg/loi/2021/08/06/a607/jo</scl:jolux>
+				<scl:jolux scl:name="language">http://publications.europa.eu/resource/authority/language/FRA</scl:jolux>
+				<scl:jolux scl:lg="fra" scl:name="title">Loi du 6 août 2021 portant modification de la loi modifiée du 10 août 1915 concernant les sociétés commerciales.</scl:jolux>
+			</scl:JOLUXExpression>
+			<scl:JOLUXManifestation>
+				<scl:jolux scl:name="uriThis">http://data.legilux.public.lu/eli/etat/leg/loi/2021/08/06/a607/jo/fr/xml</scl:jolux>
+				<scl:jolux scl:name="embodies">http://data.legilux.public.lu/eli/etat/leg/loi/2021/08/06/a607/jo/fr</scl:jolux>
+				<scl:jolux scl:name="publishedIn">http://data.legilux.public.lu/eli/etat/leg/memorial/2021/a607/fr/pdf</scl:jolux>
+				<scl:jolux scl:name="memorialPage">1</scl:jolux>
+				<scl:jolux scl:name="memorialSequence">A</scl:jolux>
+				<scl:jolux scl:name="publisher">http://data.legilux.public.lu/resource/authority/legal-institution/ME</scl:jolux>
+				<scl:jolux scl:lg="fra" scl:name="rights">Copyright : Ministère d’État du Grand-Duché de Luxembourg – Service central de législation</scl:jolux>
+				<scl:jolux scl:name="rightsHolder">http://data.legilux.public.lu/resource/authority/legal-institution/ME</scl:jolux>
+				<scl:jolux scl:name="license">http://creativecommons.org/licenses/by/4.0/</scl:jolux>
+				<scl:jolux scl:name="userFormat">http://data.legilux.public.lu/resource/authority/user-format/xml-akomantoso</scl:jolux>
+				<scl:jolux scl:name="format">http://publications.europa.eu/resource/authority/file-type/XML</scl:jolux>
+				<scl:jolux scl:name="isExemplifiedBy">http://data.legilux.public.lu/file/eli-etat-leg-loi-2021-08-06-a607-jo-fr-xml.xml</scl:jolux>
+			</scl:JOLUXManifestation>
+		</identification>
+</meta><preface><longTitle><p>Loi du 6 août 2021 portant modification de la loi modifiée du 10 août 1915 concernant les sociétés commerciales.</p></longTitle></preface><preamble><container name="preamble"><p>Nous Henri, Grand-Duc de Luxembourg, Duc de Nassau,</p><p>Notre Conseil d’État entendu ;</p><p>De l’assentiment de la Chambre des Députés ;</p><p>Vu la décision de la Chambre des Députés du 14 juillet 2021 et celle du Conseil d’État du 16 juillet 2021 portant qu’il n’y a pas lieu à second vote ;</p></container><formula name=""><p>Avons ordonné et ordonnons :</p></formula></preamble><body><article id="article_unique"><num>Article unique.</num><alinea><content><p>À l’article 1500-7, point 2°, de la <ref href="/eli/etat/leg/loi/1915/08/10/n1/jo" id="6a72c16e-3196-49fe-b1fc-91592c3e794b">loi modifiée du 10 août 1915</ref> concernant les sociétés commerciales, sont supprimés les termes <embeddedText>ou de parts sociales</embeddedText> à deux reprises et les termes <embeddedText>dans le cas des sociétés anonymes</embeddedText>.</p></content></alinea></article><clause><content><p>Mandons et ordonnons que la présente loi soit insérée au Journal officiel du Grand-Duché de Luxembourg pour être exécutée et observée par tous ceux que la chose concerne.</p></content></clause></body><conclusions><p> <signature> <shortTitle>La Ministre de la Justice,</shortTitle> <person refersTo="">Sam Tanson </person> </signature> </p><p> <signature><docDate date="2999-01-01">Cabasson, le 6 août 2021.</docDate> <person refersTo="">Henri</person> </signature> </p></conclusions><components><component><interstitial><p>Doc. parl. <ref href="https://legilux.public.lu/eli/etat/projet/pl/20170430" id="60f7150d-4f57-4d88-8ebe-d3e940881393">7791</ref> ; sess. ord. 2020-2021.</p></interstitial></component></components></act></akomaNtoso>
