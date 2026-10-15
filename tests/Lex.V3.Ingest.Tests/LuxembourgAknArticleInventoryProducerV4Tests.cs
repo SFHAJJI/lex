@@ -1,8 +1,10 @@
 using System.Buffers.Binary;
 using System.Globalization;
+using System.Reflection;
 using System.Security.Cryptography;
 using System.Text;
 using Lex.V3.Contracts;
+using Lex.V3.Contracts.Custody;
 using Lex.V3.Contracts.Source.Core;
 using Lex.V3.Contracts.Source.Http;
 using Lex.V3.Contracts.Source.Luxembourg;
@@ -34,7 +36,14 @@ namespace Lex.V3.Ingest.Tests;
 public sealed class LuxembourgAknArticleInventoryProducerV4Tests
 {
     private const string Eli = LuxembourgHeldPopulationBuilder.Eli;
-    private const string Profile4Sha256 = "40d79090858058adb470be7fa7bda0f6d54630d4a985e453d6fb4995ce90971d";
+
+    /// <summary>
+    /// Profile /4 with the title designation's ends written as explicit classes. The brief pinned
+    /// <c>40d79090…</c>, whose <c>\b</c> ends meant .NET's word characters in C# and Python's in the
+    /// reference; the review found five titles the two answered differently, and the rule now says
+    /// which characters it means. Recomputed independently in Python from the brief's profile text.
+    /// </summary>
+    private const string Profile4Sha256 = "8a011d874aed08b161d90c900d54e9ab26dd9f925ed37323e544e44b2056c63f";
     private const string CodePenal = "code-penal-20230101-complex-work";
     private const string ProcedurePenale = "code-procedure-penale-20170401-accented-id";
     private const string A446 = "act-loi-2020-05-20-a446-annex-identification";
@@ -138,30 +147,64 @@ public sealed class LuxembourgAknArticleInventoryProducerV4Tests
         var outcome = await RunOneAsync(Eli + "code/procedure_penale/20170401", Fixture(ProcedurePenale));
 
         Assert.AreEqual(LuxembourgAknArticleInventoryDisposition.Inventoried, outcome.Disposition);
-        var ids = Ids(outcome.Inventory!);
-        CollectionAssert.AreEqual(new[] { "art_140", "art_141_à_144" }, ids);
-        Assert.AreNotEqual(ids[1].Normalize(NormalizationForm.FormD), ids[1], "the id is kept as the publisher wrote it");
+        CollectionAssert.AreEqual(new[] { "art_140", "art_141_à_144" }, Ids(outcome.Inventory!));
     }
 
+    /// <summary>
+    /// Never normalized: an id written decomposed (a letter, then a combining accent) comes back as
+    /// written, not in the composed form the admitted excerpt happens to use.
+    /// </summary>
     [TestMethod]
-    [DataRow("&#x200B;")]
+    public async Task DecomposedIdIsNeverNormalized()
+    {
+        const string decomposed = "art_a\u0300";
+        var outcome = await RunOneAsync(Eli + "rgd/2001/02/03/n9/jo", Akn(null,
+            "<article id=\"" + decomposed + "\" wId=\"" + decomposed + "\"><p>Texte synthétique.</p></article>"));
+
+        Assert.AreEqual(LuxembourgAknArticleInventoryDisposition.Inventoried, outcome.Disposition);
+        var article = outcome.Inventory!.Articles.Single();
+        Assert.IsTrue(string.Equals(decomposed, article.PublisherId, StringComparison.Ordinal), article.PublisherId);
+        Assert.IsTrue(string.Equals(decomposed, article.PublisherWId, StringComparison.Ordinal), article.PublisherWId);
+        Assert.AreNotEqual(decomposed.Normalize(NormalizationForm.FormC), article.PublisherId);
+    }
+
+    /// <summary>
+    /// The forbidden set, at every range's ends and at the single code points: White_Space, the
+    /// controls, the zero-width set and the bidi controls.
+    /// </summary>
+    [TestMethod]
+    [DataRow("&#x9;")]
+    [DataRow("&#xA;")]
+    [DataRow("&#xD;")]
+    [DataRow(" ")]
+    [DataRow("&#x7F;")]
+    [DataRow("&#x80;")]
+    [DataRow("&#x81;")]
+    [DataRow("&#x85;")]
+    [DataRow("&#x9F;")]
+    [DataRow("&#xA0;")]
+    [DataRow("&#x61C;")]
+    [DataRow("&#x1680;")]
+    [DataRow("&#x2000;")]
+    [DataRow("&#x2005;")]
+    [DataRow("&#x200A;")]
     [DataRow("&#x200C;")]
     [DataRow("&#x200D;")]
-    [DataRow("&#x2060;")]
-    [DataRow("&#xFEFF;")]
-    [DataRow("&#x202A;")]
-    [DataRow("&#x202E;")]
-    [DataRow("&#x2066;")]
-    [DataRow("&#x2069;")]
-    [DataRow("&#x61C;")]
     [DataRow("&#x200E;")]
     [DataRow("&#x200F;")]
-    [DataRow("&#xA0;")]
+    [DataRow("&#x2028;")]
+    [DataRow("&#x2029;")]
+    [DataRow("&#x202A;")]
+    [DataRow("&#x202E;")]
+    [DataRow("&#x202F;")]
+    [DataRow("&#x205F;")]
+    [DataRow("&#x2060;")]
+    [DataRow("&#x2066;")]
+    [DataRow("&#x2067;")]
+    [DataRow("&#x2068;")]
+    [DataRow("&#x2069;")]
     [DataRow("&#x3000;")]
-    [DataRow("&#x85;")]
-    [DataRow("&#x81;")]
-    [DataRow("&#x9;")]
-    [DataRow(" ")]
+    [DataRow("&#xFEFF;")]
     public async Task ForbiddenCodePointInAnIdRefuses(string inserted)
     {
         var xml = ReplaceOnce(
@@ -174,6 +217,44 @@ public sealed class LuxembourgAknArticleInventoryProducerV4Tests
         Assert.AreEqual(LuxembourgAknArticleInventoryDisposition.XmlRejected, outcome.Disposition);
         Assert.AreEqual("main-body article has no valid publisher id", outcome.Detail);
         Assert.IsNull(outcome.Inventory);
+    }
+
+    /// <summary>
+    /// The code points just outside every forbidden range, and one outside the Basic Multilingual
+    /// Plane, are admitted as written: the rule forbids its set and nothing beside it.
+    /// </summary>
+    [TestMethod]
+    [DataRow(0x21)]
+    [DataRow(0x7E)]
+    [DataRow(0xA1)]
+    [DataRow(0x61B)]
+    [DataRow(0x61D)]
+    [DataRow(0x167F)]
+    [DataRow(0x1681)]
+    [DataRow(0x1FFF)]
+    [DataRow(0x2010)]
+    [DataRow(0x2027)]
+    [DataRow(0x2030)]
+    [DataRow(0x205E)]
+    [DataRow(0x2061)]
+    [DataRow(0x2065)]
+    [DataRow(0x206A)]
+    [DataRow(0x2FFF)]
+    [DataRow(0x3001)]
+    [DataRow(0xFEFE)]
+    [DataRow(0xFF00)]
+    [DataRow(0x1D400)]
+    public async Task NeighboursOfTheForbiddenSetAreAdmitted(int codePoint)
+    {
+        var xml = ReplaceOnce(
+            Encoding.UTF8.GetString(Fixture(ProcedurePenale)),
+            "<article id=\"art_140\"",
+            "<article id=\"art_&#x" + codePoint.ToString("X", CultureInfo.InvariantCulture) + ";140\"");
+
+        var outcome = await RunOneAsync(Eli + "code/procedure_penale/20170401", Encoding.UTF8.GetBytes(xml));
+
+        Assert.AreEqual(LuxembourgAknArticleInventoryDisposition.Inventoried, outcome.Disposition, outcome.Detail);
+        Assert.AreEqual("art_" + char.ConvertFromUtf32(codePoint) + "140", Ids(outcome.Inventory!)[0]);
     }
 
     [TestMethod]
@@ -295,6 +376,49 @@ public sealed class LuxembourgAknArticleInventoryProducerV4Tests
 
         Assert.AreEqual(LuxembourgAknArticleInventoryDisposition.XmlRejected, outcome.Disposition);
         Assert.AreEqual("publisher AKN document has more than one own identification block", outcome.Detail);
+    }
+
+    /// <summary>
+    /// The document ceiling, this slice's own decision: /4 reads up to the custody object bound
+    /// where /3 stops at 64M characters. Profile /4 does not name the ceiling, so its digest does
+    /// not move with it; this holds it instead. A body holding one attribute longer than /3's whole
+    /// ceiling, as two run-15 acts hold an image, is rejected by /3 as <c>XmlException</c> and
+    /// inventoried by /4. About 70 MB of synthetic bytes, so it runs alone.
+    /// </summary>
+    [TestMethod]
+    [DoNotParallelize]
+    public async Task ADocumentAboveThreesCeilingIsReadUpToTheCustodyBound()
+    {
+        // Read at run time: two constants compared at compile time would be no assertion at all.
+        var ceiling = typeof(LuxembourgAknArticleInventoryProducerV4)
+            .GetField(
+                nameof(LuxembourgAknArticleInventoryProducerV4.MaximumXmlCharacters),
+                BindingFlags.NonPublic | BindingFlags.Static)!
+            .GetValue(null);
+        Assert.AreEqual(CustodyBounds.MaxObjectBytes, (long)ceiling!);
+
+        const int threesCeiling = 64 * 1024 * 1024;
+        var head = Encoding.UTF8.GetBytes(
+            "<akomaNtoso xmlns=\"http://docs.oasis-open.org/legaldocml/ns/akn/3.0/CSD13\"><act><body>" +
+            "<article id=\"art_1\"><num>Art. 1.</num><content><p>Texte synthétique." +
+            "<img src=\"data:image/png;base64,");
+        var tail = Encoding.UTF8.GetBytes("\"/></p></content></article></body></act></akomaNtoso>");
+        var body = new byte[head.Length + threesCeiling + tail.Length];
+        head.CopyTo(body, 0);
+        body.AsSpan(head.Length, threesCeiling).Fill((byte)'A');
+        tail.CopyTo(body, head.Length + threesCeiling);
+        var (store, population) = await LuxembourgHeldPopulationBuilder.CreateAsync(
+            new LuxembourgHeldPopulationBuilder.Member(Eli + "rgd/2001/02/03/n9/jo", body));
+
+        var three = (await new LuxembourgAknArticleInventoryProducer(store)
+            .RunAsync(population, CancellationToken.None)).Outcomes.Single();
+        var four = (await new LuxembourgAknArticleInventoryProducerV4(store)
+            .RunAsync(population, new Dictionary<string, string>(), CancellationToken.None)).Outcomes.Single();
+
+        Assert.AreEqual(LuxembourgAknArticleInventoryDisposition.XmlRejected, three.Disposition);
+        Assert.AreEqual("publisher XML rejected: XmlException", three.Detail);
+        Assert.AreEqual(LuxembourgAknArticleInventoryDisposition.Inventoried, four.Disposition, four.Detail);
+        CollectionAssert.AreEqual(new[] { "art_1" }, Ids(four.Inventory!));
     }
 
     /// <summary>
@@ -523,6 +647,116 @@ public sealed class LuxembourgAknArticleInventoryProducerV4Tests
             outcome.ConsistencyFindings.ToArray());
     }
 
+    /// <summary>
+    /// The designation's ends are explicit: no letter, number or underscore may touch it. A number of
+    /// any kind (a superscript, a fraction) hides the designation, and a combining mark or a
+    /// zero-width (non-)joiner does not, as in the reference implementation. With <c>\b</c> ends, C#
+    /// answered the first five rows the other way, and the sixth too.
+    /// </summary>
+    [TestMethod]
+    [DataRow("du règlement grand-ducal du 5 avril 2010\u00B9 relatif", false)]
+    [DataRow("du règlement grand-ducal du 5 avril 2010\u00BD relatif", false)]
+    [DataRow("\u00B2règlement grand-ducal du 5 avril 2010", false)]
+    [DataRow("du règlement grand-ducal du 5 avril 2010\u0301 relatif", true)]
+    [DataRow("du règlement grand-ducal du 5 avril 2010\u200D relatif", true)]
+    [DataRow("du règlement grand-ducal du 5 avril 2010\u200C relatif", true)]
+    [DataRow("du règlement grand-ducal du 5 avril 2010_ relatif", false)]
+    [DataRow("du règlement grand-ducal du 5 avril 20101 relatif", false)]
+    [DataRow("du règlement grand-ducal du 5 avril 2010, relatif", true)]
+    public async Task TitleDesignationEndsAreNoLetterNumberOrUnderscore(string title, bool designates)
+    {
+        var outcome = await CoordinatedTextAsync("Texte coordonné " + title + " à un objet synthétique");
+
+        if (designates)
+        {
+            Assert.AreEqual(LuxembourgAknArticleInventoryDisposition.Inventoried, outcome.Disposition);
+            Assert.AreEqual(LuxembourgAknInFileIdentityClass.TcOrTrep, outcome.Inventory!.Evidence!.IdentityClass);
+        }
+        else
+        {
+            CollectionAssert.AreEqual(
+                new[] { new LuxembourgAknContentConsistencyFinding(
+                    LuxembourgAknContentConsistencyCheck.OtherWork, Eli + "tc/2010/06/10/n1/jo") },
+                outcome.ConsistencyFindings.ToArray());
+        }
+    }
+
+    // ---- Conditions of the checks that no run-15 body exercises.
+
+    /// <summary>
+    /// Check (b) for an act: a block naming any consolidation or code state of the act's own work
+    /// refuses, whatever its date; an act naming only itself is served.
+    /// </summary>
+    [TestMethod]
+    public async Task ActNamingAConsolidationOfItsWorkRefuses()
+    {
+        const string work = Eli + "rgd/2005/06/07/n5";
+        const string consolidation = work + "/consolide/20200101";
+
+        var naming = await RunOneAsync(work + "/jo", Akn(
+            Block(work + "/jo", null, null, work + "/jo/fr/xml", consolidation + "/fr/xml"),
+            Articles("Texte synthétique.")));
+        var own = await RunOneAsync(work + "/jo", Akn(
+            Block(work + "/jo", null, null, work + "/jo/fr/xml"), Articles("Texte synthétique.")));
+
+        Assert.AreEqual(LuxembourgAknArticleInventoryDisposition.PublisherFileNamesOtherState, naming.Disposition);
+        CollectionAssert.AreEqual(
+            new[] { new LuxembourgAknContentConsistencyFinding(LuxembourgAknContentConsistencyCheck.LaterState, consolidation) },
+            naming.ConsistencyFindings.ToArray());
+        Assert.AreEqual("content consistency: later_state", naming.Detail);
+        Assert.AreEqual(LuxembourgAknArticleInventoryDisposition.Inventoried, own.Disposition);
+    }
+
+    /// <summary>
+    /// Check (e) applies to consolidation and code roots only: an act worded exactly as a held
+    /// consolidation it names is refused by (b) alone, never as a copied state.
+    /// </summary>
+    [TestMethod]
+    public async Task ActWordedAsAHeldConsolidationItNamesHasNoCopiedState()
+    {
+        const string work = Eli + "rgd/2005/06/07/n5";
+        const string consolidation = work + "/consolide/20200101";
+        var articles = Articles("Texte synthétique partagé.");
+
+        var population = await RunAsync(
+            null,
+            new LuxembourgHeldPopulationBuilder.Member(work + "/jo", Akn(
+                Block(work + "/jo", null, null, work + "/jo/fr/xml", consolidation + "/fr/xml"), articles)),
+            new LuxembourgHeldPopulationBuilder.Member(consolidation, Akn(
+                Block(consolidation, "2020-01-01", null, consolidation + "/fr/xml"), articles)));
+
+        CollectionAssert.AreEqual(
+            new[] { new LuxembourgAknContentConsistencyFinding(LuxembourgAknContentConsistencyCheck.LaterState, consolidation) },
+            population.Outcomes[0].ConsistencyFindings.ToArray());
+        Assert.AreEqual(LuxembourgAknArticleInventoryDisposition.Inventoried, population.Outcomes[1].Disposition);
+    }
+
+    /// <summary>
+    /// Check (f) needs the block to name the base act: a later consolidation worded exactly as its
+    /// held act, after an earlier consolidation, is served when its block names only itself.
+    /// </summary>
+    [TestMethod]
+    public async Task ConsolidationNotNamingItsActIsNoCopiedAct()
+    {
+        const string work = Eli + "rgd/2004/05/06/n6";
+        const string later = work + "/consolide/20200101";
+        var catalogue = new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            [work + "/consolide/20150101"] = "2015-01-01",
+            [later] = "2020-01-01",
+        };
+
+        var population = await RunAsync(
+            catalogue,
+            ActMember(work),
+            new LuxembourgHeldPopulationBuilder.Member(later, Akn(
+                Block(later, "2020-01-01", null, later + "/fr/xml"), Articles("Texte synthétique de l'acte."))));
+
+        Assert.IsTrue(population.Outcomes.All(static outcome =>
+            outcome.Disposition == LuxembourgAknArticleInventoryDisposition.Inventoried));
+        Assert.AreEqual(LuxembourgAknInFileIdentityClass.Own, population.Outcomes[1].Inventory!.Evidence!.IdentityClass);
+    }
+
     // ---- The catalogue and the doors.
 
     [TestMethod]
@@ -570,6 +804,41 @@ public sealed class LuxembourgAknArticleInventoryProducerV4Tests
         Assert.AreEqual(LuxembourgAknInFileIdentityClass.Absent, outcome.Inventory!.Evidence!.IdentityClass);
     }
 
+    /// <summary>
+    /// The door dates states from the run's own <c>dateApplicability</c> facts: a delivered run with
+    /// two such facts among its typed assertions fires check (d) on its consolidation; the same run
+    /// without them dates no next state, and the file is served. The run's parts are a delivered
+    /// gazette run's, but it holds one synthetic consolidation, because that run's own held body is
+    /// an act, which (d) does not read.
+    /// </summary>
+    [TestMethod]
+    public async Task TheRunDoorDatesStatesFromTheRunsOwnFacts()
+    {
+        const string work = Eli + "rgd/2002/03/04/n8";
+        const string root = work + "/consolide/20200101";
+        const string next = work + "/consolide/20210601";
+        var (store, population) = await LuxembourgHeldPopulationBuilder.CreateAsync(
+            new LuxembourgHeldPopulationBuilder.Member(
+                root, Akn(Block(root, "2021-06-01", null, root + "/fr/xml"), Articles("Texte synthétique."))));
+        var delivered = await LuxembourgGazetteAcquisitionTests.CompleteXmlForStage3BodyCompositionAsync();
+        Assert.IsNull(delivered.Refusal);
+        var undated = Redelivered(delivered, delivered.TypedAssertions, population);
+        var dated = Redelivered(
+            delivered,
+            [.. delivered.TypedAssertions, Applicability(root, "2020-01-01"), Applicability(next, "2021-06-01")],
+            population);
+        var producer = new LuxembourgAknArticleInventoryProducerV4(store);
+
+        var refused = await producer.RunAsync(dated, CancellationToken.None);
+        var served = (await producer.RunAsync(undated, CancellationToken.None)).Outcomes.Single();
+
+        Assert.AreSame(population, refused.SourcePopulation);
+        CollectionAssert.AreEqual(
+            new[] { new LuxembourgAknContentConsistencyFinding(LuxembourgAknContentConsistencyCheck.DateAhead, next) },
+            refused.Outcomes.Single().ConsistencyFindings.ToArray());
+        Assert.AreEqual(LuxembourgAknArticleInventoryDisposition.Inventoried, served.Disposition);
+    }
+
     [TestMethod]
     public void PublicDoorTakesTheRunAndNoCallerCatalogue()
     {
@@ -608,7 +877,7 @@ public sealed class LuxembourgAknArticleInventoryProducerV4Tests
 
         Assert.AreEqual(Profile4Sha256, LuxembourgAknArticleInventoryProducerV4.RuleProfileSha256);
         Assert.AreEqual(Profile4Sha256, LuxembourgHeldPopulationBuilder.Sha(bytes));
-        Assert.HasCount(2019, bytes);
+        Assert.HasCount(2050, bytes);
         Assert.AreEqual(21, text.Count(static character => character == '\n'));
         StringAssert.EndsWith(text, "\n");
         StringAssert.StartsWith(text, "lex-v3-luxembourg-akn-article-inventory-profile/4\n");
@@ -837,6 +1106,21 @@ public sealed class LuxembourgAknArticleInventoryProducerV4Tests
             Block(Eli + "tc/2010/06/10/n1/jo", null, title, Eli + "tc/2010/06/10/n1/jo/fr/xml"),
             Articles("Texte synthétique.")));
     }
+
+    /// <summary>A delivered run's parts with other typed assertions and another held population.</summary>
+    private static LuxembourgQueryExecutionResult Redelivered(
+        LuxembourgQueryExecutionResult run,
+        IReadOnlyList<LuxembourgTypedAssertion> typedAssertions,
+        LuxembourgHeldBodyDerivationPopulation population) =>
+        LuxembourgQueryExecutionResult.Delivered(
+            run.Topology, run.FamilyOutcomes, run.RelationFamilyAcquisitions, run.ResolvedRelations,
+            run.LocalInboundRelations, typedAssertions, run.ResourceObservationSubjects,
+            run.ResourceObservationExclusions, run.ScopeManifestReceipt!, run.ScopeManifestCanonicalSha256!,
+            run.DocumentAcquisitionOutcomesByOrdinal!, run.CorpusRecordSetRef!, run.CorpusRecordSetReceipt!,
+            run.CorpusRecordSet!, run.ObservedObjectIdentitySetRef!, run.ObservedObjectIdentitySetReceipt!,
+            run.ObservedObjectIdentitySet!, population, run.GazetteBodySetsByOrdinal!,
+            run.GazetteListingFetchRefusalsByOrdinal!, run.GazetteListingsWithContradictoryLegalValueByOrdinal!,
+            run.PopulationLedger!);
 
     private static LuxembourgTypedAssertion Applicability(
         string subject,

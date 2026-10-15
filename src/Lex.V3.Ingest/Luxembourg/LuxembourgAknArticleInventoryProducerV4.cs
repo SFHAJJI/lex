@@ -246,15 +246,32 @@ public sealed class LuxembourgAknArticleInventoryProducerV4
     private const string AknNamespace =
         "http://docs.oasis-open.org/legaldocml/ns/akn/3.0/CSD13";
     private const string SclNamespace = "http://www.scl.lu";
-    private const long MaximumXmlCharacters = CustodyBounds.MaxObjectBytes;
+    /// <summary>
+    /// The document ceiling: the custody object bound, not /3's 64M characters (see the remarks). The
+    /// rule profile does not name it, so profile /4's digest does not cover it; a test holds it to
+    /// <see cref="CustodyBounds.MaxObjectBytes"/> and holds a document above /3's ceiling to an
+    /// inventory, and a later reader of the same bodies (S3a) reuses this constant, not a copy.
+    /// </summary>
+    internal const long MaximumXmlCharacters = CustodyBounds.MaxObjectBytes;
+
     private const int MaximumPublisherTokenLength = 512;
 
     /// <summary>
     /// The title grammar of check (c). The profile line and the matcher are both built from this one
     /// constant, so a grammar change always changes the rule digest.
     /// </summary>
+    /// <remarks>
+    /// The designation's ends are explicit: no letter, number or underscore (<c>[\p{L}\p{N}_]</c>)
+    /// may touch it. A <c>\b</c> would leave the meaning to the regex engine, and .NET's word
+    /// characters (letters, combining marks, decimal digits, connector punctuation, ZWJ and ZWNJ)
+    /// are not the reference implementation's (letters and every number, superscripts and fractions
+    /// among them). Over the Basic Multilingual Plane this class is the reference's word set, except
+    /// for the eight letters Unicode 16 added that the reference's Unicode 15.1 does not know. The
+    /// engine still reads UTF-16 units, so a letter or number outside that plane touching the
+    /// designation is not seen as one; no run-15 title is affected.
+    /// </remarks>
     private const string TitleDesignationPattern =
-        "\\b(r[e\u00E8]glement grand-ducal|arr[e\u00EA]t[e\u00E9] grand-ducal|r[e\u00E8]glement minist[e\u00E9]riel|arr[e\u00EA]t[e\u00E9] minist[e\u00E9]riel|loi)s?(?: (?:modifi[e\u00E9]e?s?|communale|[e\u00E9]lectorale|g[e\u00E9]n[e\u00E9]rale|organique|budg[e\u00E9]taire))* du (1 ?er|[0-9]{1,2}) (janvier|f[e\u00E9]vrier|mars|avril|mai|juin|juillet|ao[u\u00FB]t|septembre|octobre|novembre|d[e\u00E9]cembre) ([0-9]{4})\\b";
+        "(?<![\\p{L}\\p{N}_])(r[e\u00E8]glement grand-ducal|arr[e\u00EA]t[e\u00E9] grand-ducal|r[e\u00E8]glement minist[e\u00E9]riel|arr[e\u00EA]t[e\u00E9] minist[e\u00E9]riel|loi)s?(?: (?:modifi[e\u00E9]e?s?|communale|[e\u00E9]lectorale|g[e\u00E9]n[e\u00E9]rale|organique|budg[e\u00E9]taire))* du (1 ?er|[0-9]{1,2}) (janvier|f[e\u00E9]vrier|mars|avril|mai|juin|juillet|ao[u\u00FB]t|septembre|octobre|novembre|d[e\u00E9]cembre) ([0-9]{4})(?![\\p{L}\\p{N}_])";
 
     private const string RuleProfile =
         "lex-v3-luxembourg-akn-article-inventory-profile/4\n" +
