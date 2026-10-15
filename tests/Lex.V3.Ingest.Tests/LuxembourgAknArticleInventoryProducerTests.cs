@@ -1,12 +1,5 @@
-using System.Security.Cryptography;
 using System.Text;
-using Lex.V3.Contracts;
-using Lex.V3.Contracts.Custody;
-using Lex.V3.Contracts.Source.Core;
-using Lex.V3.Contracts.Source.Corpus;
 using Lex.V3.Contracts.Source.Http;
-using Lex.V3.Contracts.Source.Luxembourg;
-using Lex.V3.Contracts.Source.Scope;
 using Lex.V3.Ingest.Luxembourg;
 
 namespace Lex.V3.Ingest.Tests;
@@ -286,99 +279,35 @@ public sealed class LuxembourgAknArticleInventoryProducerTests
             value.AsSpan(index + oldValue.Length));
     }
 
-    private sealed record Fixture(
+    /// <summary>
+    /// One held member under this class's retained WEMI: the act <c>loi/2017/03/14/a439</c>'s
+    /// <c>/jo/fr</c> as its root, an expression and a manifestation named below it, and the
+    /// expression's filestore item. The shared multi-body builder does the work.
+    /// </summary>
+    internal sealed record Fixture(
         EuAcquisitionTestFixture.EuInMemoryCustodyStore Store,
         LuxembourgHeldBodyDerivationPopulation Population)
     {
+        internal const string RetainedRoot =
+            "http://data.legilux.public.lu/eli/etat/leg/loi/2017/03/14/a439/jo/fr";
+
         internal static async Task<Fixture> CreateAsync(
             byte[] body,
             LuxembourgUserFormatToken token,
             string? rootIri = null,
             string? expressionIri = null)
         {
-            var store = new EuAcquisitionTestFixture.EuInMemoryCustodyStore();
-            var receipt = await store.CreateAsync(
-                body, CustodyClass.NightlyFloor90d, CancellationToken.None);
-            var enumeration = Artifact('a', "enumeration"u8);
-            var kind = new SourceRegistryMemberRef(enumeration, "lu_document_get_root");
-            rootIri ??=
-                "http://data.legilux.public.lu/eli/etat/leg/loi/2017/03/14/a439/jo/fr";
+            rootIri ??= RetainedRoot;
             expressionIri ??= rootIri + "/expression";
-            var publisherUri = rootIri;
-            var key = "lu-akn:" + publisherUri;
-            var objectRef = new SourceObjectRef(
-                SourceCoreSchemaIds.SourceObjectRef,
-                SourceAuthority.Jolux,
-                kind,
-                publisherUri,
-                key,
-                Sha(Encoding.UTF8.GetBytes(key)),
-                enumeration,
-                null);
-            var manifest = Artifact('b', "manifest"u8);
-            var run = Artifact('c', "run"u8);
-            var record = new CorpusRecord(
-                CorpusRecordSchemaIds.Record,
-                objectRef,
-                0,
-                ScopeDisposition.AcceptedSelected,
-                ScopeDisposition.AcceptedSelected,
-                ScopeDisposition.AcceptedSelected,
-                ScopeDisposition.AcceptedSelected,
-                CorpusBodyRecord.Held(receipt),
-                manifest,
-                run);
-            var set = new CorpusRecordSet(CorpusRecordSetSchemaIds.Set, manifest, run, [record]);
-            using var canonical = new MemoryStream();
-            var setDigest = CorpusRecordSetCanonicalWriter.Write(canonical, set);
-            var verified = VerifiedCorpusRecordSet.ParseAndVerify(
-                new SourceArtifactRef(
-                    "urn:uuid:00000000-0000-0000-0000-00000000000d", setDigest),
-                canonical.ToArray());
-            var address = LuxembourgDocumentFetchAddress.Create(
-                LuxembourgFileUri.RequireValid(
-                    "http://data.legilux.public.lu/filestore/eli/etat/leg/loi/2017/03/14/a439/jo/fr/xml"),
-                token,
-                LuxembourgLegalValue.Unstated,
-                "/eli/etat/leg/loi/2017/03/14/a439/jo/fr");
-            var candidate = new LuxembourgWemiCandidate(
-                rootIri,
-                expressionIri,
-                expressionIri + "/manifestation",
-                address.StoreFileUri.Value.AbsoluteUri,
-                "http://publications.europa.eu/resource/authority/language/FRA",
-                "http://data.legilux.public.lu/resource/authority/user-format/" +
-                    FormatName(token),
-                enumeration,
-                LuxembourgWemiCandidateDisposition.StructurallyConsistent,
-                []);
-            var population = LuxembourgHeldBodyDerivationPopulation.TryCreate(
-                verified,
-                new Dictionary<int, CorpusAcquisitionOutcome> { [0] = CorpusAcquisitionOutcome.Held(receipt) },
-                new Dictionary<SourceObjectRef, LuxembourgSelectedDocumentFetch>
-                {
-                    [objectRef] = new LuxembourgSelectedDocumentFetch(address, candidate),
-                },
-                out var refusal,
-                out var detail);
-            Assert.AreEqual(LuxembourgHeldBodyDerivationPopulationRefusal.None, refusal, detail);
-            Assert.IsNotNull(population);
+            var (store, population) = await LuxembourgHeldPopulationBuilder.CreateAsync(
+                new LuxembourgHeldPopulationBuilder.Member(
+                    rootIri,
+                    body,
+                    token,
+                    Expression: expressionIri,
+                    Manifestation: expressionIri + "/manifestation",
+                    Item: "http://data.legilux.public.lu/filestore/eli/etat/leg/loi/2017/03/14/a439/jo/fr/xml"));
             return new Fixture(store, population);
         }
-
-        private static string FormatName(LuxembourgUserFormatToken token) => token switch
-        {
-            LuxembourgUserFormatToken.XmlAkomaNtoso => "xml-akomantoso",
-            LuxembourgUserFormatToken.Xml => "xml",
-            LuxembourgUserFormatToken.PdfA => "pdfa",
-            LuxembourgUserFormatToken.Pdf => "pdf",
-            _ => throw new ArgumentOutOfRangeException(nameof(token)),
-        };
     }
-
-    private static SourceArtifactRef Artifact(char suffix, ReadOnlySpan<byte> bytes) => new(
-        $"urn:uuid:00000000-0000-0000-0000-00000000000{suffix}", Sha(bytes));
-
-    private static string Sha(ReadOnlySpan<byte> bytes) =>
-        Convert.ToHexStringLower(SHA256.HashData(bytes));
 }

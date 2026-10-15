@@ -1,0 +1,78 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?><akomaNtoso xmlns="http://docs.oasis-open.org/legaldocml/ns/akn/3.0/CSD13" xmlns:scl="http://www.scl.lu"><act contains="originalVersion" name="" scl:page-proof="many"><meta><identification source="#somebody">
+			<FRBRWork>
+			     <FRBRthis value="http://data.legilux.public.lu/eli/etat/leg/rgd/2019/12/20/a904/jo"/>
+			     <FRBRuri value=""/>
+			     <FRBRdate date="2019-12-20" name="document"/>
+			     <FRBRauthor as="#author" href="http://data.legilux.public.lu/resource/authority/legal-institution/MENV"/>
+			     <FRBRauthor as="#author" href="http://data.legilux.public.lu/resource/authority/legal-institution/MDEVDU"/>
+			     <FRBRcountry value="http://publications.europa.eu/resource/authority/country/LUX"/>
+			</FRBRWork>
+			<FRBRExpression>
+			     <FRBRthis value="http://data.legilux.public.lu/eli/etat/leg/rgd/2019/12/20/a904/jo/fr"/>
+			     <FRBRuri value=""/>
+			     <FRBRdate date="2019-12-20" name="document"/>
+			     <FRBRauthor as="#author" href=""/>
+			     <FRBRlanguage language="http://publications.europa.eu/resource/authority/language/FRA"/>
+			</FRBRExpression>
+			<FRBRManifestation>
+			     <FRBRthis value="http://data.legilux.public.lu/eli/etat/leg/rgd/2019/12/20/a904/jo/fr/xml"/>
+			     <FRBRuri value=""/>
+			     <FRBRdate date="2019-12-20" name="document"/>
+			     <FRBRauthor as="#author" href=""/>
+			</FRBRManifestation>
+			<scl:JOLUXWork>
+				<scl:JOLUXComplexWork>
+					<scl:jolux scl:name="uriThis">http://data.legilux.public.lu/eli/etat/leg/rgd/2019/12/20/a904</scl:jolux>
+				</scl:JOLUXComplexWork>
+				<scl:JOLUXLegalResource>
+					<scl:jolux scl:name="uriThis">http://data.legilux.public.lu/eli/etat/leg/rgd/2019/12/20/a904/jo</scl:jolux>
+					<scl:jolux scl:name="publicationDate">2019-12-28</scl:jolux>
+					<scl:jolux scl:name="typeDocument">http://data.legilux.public.lu/resource/authority/resource-type/RGD</scl:jolux>
+					<scl:jolux scl:name="dateDocument">2019-12-20</scl:jolux>
+					<scl:jolux scl:name="dateEntryInForce">2020-01-01</scl:jolux>
+					<scl:jolux scl:name="dateApplicability">2020-01-01</scl:jolux>
+					<scl:jolux scl:name="isMemberOf">http://data.legilux.public.lu/eli/etat/leg/rgd/2019/12/20/a904</scl:jolux>
+					<scl:jolux scl:name="isPartOf">http://data.legilux.public.lu/eli/etat/leg/memorial/2019/a904</scl:jolux>
+					<scl:jolux scl:name="responsibilityOf">http://data.legilux.public.lu/resource/authority/legal-institution/MENV</scl:jolux>
+					<scl:jolux scl:name="responsibilityOf">http://data.legilux.public.lu/resource/authority/legal-institution/MDEVDU</scl:jolux>
+					<scl:jolux scl:name="subjectLevel1">http://data.legilux.public.lu/resource/authority/legal-subject/913</scl:jolux>
+					<scl:jolux scl:name="subjectLevel2">http://data.legilux.public.lu/resource/authority/legal-subject/1454</scl:jolux>
+					<scl:jolux scl:name="subjectLevel2">http://data.legilux.public.lu/resource/authority/legal-subject/3173</scl:jolux>
+					<scl:jolux scl:name="subjectLevel2">http://data.legilux.public.lu/resource/authority/legal-subject/3118</scl:jolux>
+					<scl:jolux scl:name="subjectLevel2">http://data.legilux.public.lu/resource/authority/legal-subject/14</scl:jolux>
+					<scl:jolux scl:name="subjectLevel2">http://data.legilux.public.lu/resource/authority/legal-subject/728</scl:jolux>
+					<scl:jolux scl:name="subjectLevel2">http://data.legilux.public.lu/resource/authority/legal-subject/3174</scl:jolux>
+					<scl:jolux scl:name="subjectLevel2">http://data.legilux.public.lu/resource/authority/legal-subject/168</scl:jolux>
+					<scl:jolux scl:name="basedOn">http://data.legilux.public.lu/eli/etat/leg/loi/2004/12/23/n1/jo</scl:jolux>
+					<scl:jolux scl:name="modifies">http://data.legilux.public.lu/eli/etat/leg/rgd/2019/03/07/a183/jo</scl:jolux>
+					<scl:jolux scl:name="cites">http://data.legilux.public.lu/eli/etat/leg/loi/2017/06/16/a592/jo</scl:jolux>
+					<scl:jolux scl:name="cites">http://data.legilux.public.lu/eli/etat/leg/agd/1955/11/23/n1/jo</scl:jolux>
+					<scl:rdf scl:name="type">http://data.legilux.public.lu/resource/ontology/jolux#BaseAct</scl:rdf>
+					<scl:rdf scl:name="type">http://data.legilux.public.lu/resource/ontology/jolux#Act</scl:rdf>
+					<scl:rdf scl:name="type">http://data.legilux.public.lu/resource/ontology/jolux#Work</scl:rdf>
+					<scl:rdf scl:name="type">http://data.legilux.public.lu/resource/ontology/jolux#LegalResource</scl:rdf>
+					<scl:rdf scl:name="type">http://data.legilux.public.lu/resource/ontology/jolux#NationalLegalResource</scl:rdf>
+				</scl:JOLUXLegalResource>
+			</scl:JOLUXWork>
+			<scl:JOLUXExpression>
+				<scl:jolux scl:name="uriThis">http://data.legilux.public.lu/eli/etat/leg/rgd/2019/12/20/a904/jo/fr</scl:jolux>
+				<scl:jolux scl:name="realizes">http://data.legilux.public.lu/eli/etat/leg/rgd/2019/12/20/a904/jo</scl:jolux>
+				<scl:jolux scl:name="language">http://publications.europa.eu/resource/authority/language/FRA</scl:jolux>
+				<scl:jolux scl:lg="fra" scl:name="title">Règlement grand-ducal du 20 décembre 2019 modifiant le règlement grand-ducal du 7 mars 2019\n- portant introduction d’une aide financière pour la promotion des véhicules routiers à zéro ou à faibles émissions de CO2\n- modifiant l’arrêté grand-ducal modifié du 23 novembre 1955 portant règlement de la circulation sur toutes les voies publiques.\n</scl:jolux>
+			</scl:JOLUXExpression>
+			<scl:JOLUXManifestation>
+				<scl:jolux scl:name="uriThis">http://data.legilux.public.lu/eli/etat/leg/rgd/2019/12/20/a904/jo/fr/xml</scl:jolux>
+				<scl:jolux scl:name="embodies">http://data.legilux.public.lu/eli/etat/leg/rgd/2019/12/20/a904/jo/fr</scl:jolux>
+				<scl:jolux scl:name="publishedIn">http://data.legilux.public.lu/eli/etat/leg/memorial/2019/a904/fr/pdf</scl:jolux>
+				<scl:jolux scl:name="memorialPage">1</scl:jolux>
+				<scl:jolux scl:name="memorialSequence">A</scl:jolux>
+				<scl:jolux scl:name="publisher">http://data.legilux.public.lu/authority/legal-institution/ME</scl:jolux>
+				<scl:jolux scl:lg="fra" scl:name="rights">Copyright : Ministère d’État du Grand-Duché de Luxembourg – Service central de législation</scl:jolux>
+				<scl:jolux scl:name="rightsHolder">http://data.legilux.public.lu/authority/legal-institution/ME</scl:jolux>
+				<scl:jolux scl:name="license">http://creativecommons.org/licenses/by/4.0/</scl:jolux>
+				<scl:jolux scl:name="userFormat">http://data.legilux.public.lu/resource/authority/user-format/xml-akomantoso</scl:jolux>
+				<scl:jolux scl:name="format">http://publications.europa.eu/resource/authority/file-type/XML</scl:jolux>
+				<scl:jolux scl:name="isExemplifiedBy">http://data.legilux.public.lu/file/eli-etat-leg-rgd-2019-12-20-a904-jo-fr-xml.xml</scl:jolux>
+			</scl:JOLUXManifestation>
+		</identification>
+<lifecycle source="#"><eventRef date="2019-12-20" id="e1" source="#ro1" type="generation"/></lifecycle><analysis source="#"/><references source="#"><original href="/eli/etat/leg/rgd/2019/12/20/n3/jo" id="ro1" showAs="Original"/></references></meta><preface><longTitle><p>Règlement grand-ducal du 20 décembre 2019 modifiant le règlement grand-ducal du 7 mars 2019</p><ul scl:symbol="dash"><li>portant introduction d’une aide financière pour la promotion des véhicules routiers à zéro ou à faibles émissions de CO<sub>2</sub></li><li>modifiant l’arrêté grand-ducal modifié du 23 novembre 1955 portant règlement de la circulation sur toutes les voies publiques.</li></ul></longTitle></preface><preamble><container name="preamble"><p>Nous Henri, Grand-Duc de Luxembourg, Duc de Nassau,</p><p>Vu la <ref href="/eli/etat/leg/loi/2004/12/23/n1/jo" id="e6ef9552-d81d-4d19-9ee7-09374349ed79">loi modifiée du 23 décembre 2004</ref> établissant un système d’échange de quotas d’émission de gaz à effet de serre ;</p><p>Vu la fiche financière ;</p><p>Les avis de la Chambre des Métiers, de la Chambre de Commerce, de la Chambre des Fonctionnaires et Employés publics et de la Chambre des Salariés ayant été demandés ;</p><p>Vu l’article 1<sup>er</sup>, paragraphe 1<sup>er</sup>, de la <ref href="/eli/etat/leg/loi/2017/06/16/a592/jo" id="c7f52419-c18e-496e-a26b-b4be04f2c3c8">loi du 16 juin 2017</ref> sur l’organisation du Conseil d’État et considérant qu’il y a urgence ;</p><p>Sur le rapport de Notre Ministre de l’Environnement, du Climat et du Développement durable et après délibération du Gouvernement en conseil ;</p></container><formula name=""><p>Arrêtons :</p></formula></preamble><body><article id="art_1er"><num>Art. 1<sup>er</sup>.</num><alinea><content><p>Le <ref href="/eli/etat/leg/rgd/2019/03/07/a183/jo" id="b1b9e588-b174-4bc4-b3d2-81bc012a409a">règlement grand-ducal du 7 mars 2019</ref> portant introduction d’une aide financière pour la promotion des véhicules routiers à zéro ou à faibles émissions de CO<sub>2</sub> et modifiant l’<ref href="/eli/etat/leg/agd/1955/11/23/n1/jo" id="9fe17796-087d-49d9-b422-70a5b12ccedd">arrêté grand-ducal modifié du 23 novembre 1955</ref> portant règlement de la circulation sur toutes les voies publiques est modifié comme suit :</p><ol scl:start="1" scl:symbol="1°"><li>À l’article 1<sup>er</sup>, paragraphe (1), l’alinéa 2 est complété comme suit :<embeddedStructure scl:hide-quote="true"><alinea><content><p>« Pour les véhicules mis en circulation pour la première fois après le 1<sup>er</sup> juin 2020, la valeur combinée des émissions de CO<sub>2</sub> déterminée selon la procédure d’essai harmonisée au niveau mondial pour les véhicules légers (WLTP) est prise en compte. ».</p></content></alinea></embeddedStructure></li><li>À l’article 1<sup>er</sup>, paragraphe (6), les mots <embeddedText>et le 31 décembre 2019 inclusivement</embeddedText> sont remplacés par les mots <embeddedText>et le 31 décembre 2020 inclusivement</embeddedText>.</li><li>À l’article 2, paragraphe (2), alinéa 1<sup>er</sup>, les mots <embeddedText>âgées de 18 ans au moins au moment de l’achat et</embeddedText> sont supprimés.</li><li>À l’article 2, paragraphe (5), les mots <embeddedText>et le 31 décembre 2019 inclusivement</embeddedText> sont remplacés par les mots <embeddedText>et le 31 décembre 2020 inclusivement</embeddedText>.</li></ol></content></alinea></article><article id="art_2"><num><eop/>Art. 2.</num><alinea><content><p>Notre Ministre ayant l’Environnement dans ses attributions est chargé de l’exécution du présent règlement grand-ducal qui sera publié au Journal officiel du Grand-Duché de Luxembourg.</p></content></alinea></article></body><conclusions><p> <signature> <shortTitle> La Ministre de l’Environnement, <br/>du Climat et du Développement durable,</shortTitle> <person refersTo=""> Carole Dieschbourg </person> </signature> </p><p> <signature> <docDate date="2999-01-01">Crans-Montana, le 20 décembre 2019. </docDate> <person refersTo="">Henri</person> </signature> </p></conclusions></act></akomaNtoso>

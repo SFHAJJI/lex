@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?><akomaNtoso xmlns="http://docs.oasis-open.org/legaldocml/ns/akn/3.0/CSD13" xmlns:scl="http://www.scl.lu"><act contains="originalVersion" name="" scl:page-proof="many"><meta><identification source="#somebody">
+			<FRBRWork>
+			     <FRBRthis value="http://data.legilux.public.lu/eli/etat/leg/loi/2020/05/20/a446/jo"/>
+			     <FRBRuri value=""/>
+			     <FRBRdate date="2020-05-20" name="document"/>
+			     <FRBRauthor as="#author" href="http://data.legilux.public.lu/resource/authority/legal-institution/MAE"/>
+			     <FRBRcountry value="http://publications.europa.eu/resource/authority/country/LUX"/>
+			</FRBRWork>
+			<FRBRExpression>
+			     <FRBRthis value="http://data.legilux.public.lu/eli/etat/leg/loi/2020/05/20/a446/jo/fr"/>
+			     <FRBRuri value=""/>
+			     <FRBRdate date="2020-05-20" name="document"/>
+			     <FRBRauthor as="#author" href=""/>
+			     <FRBRlanguage language="http://publications.europa.eu/resource/authority/language/FRA"/>
+			</FRBRExpression>
+			<FRBRManifestation>
+			     <FRBRthis value="http://data.legilux.public.lu/eli/etat/leg/loi/2020/05/20/a446/jo/fr/xml"/>
+			     <FRBRuri value=""/>
+			     <FRBRdate date="2020-05-20" name="document"/>
+			     <FRBRauthor as="#author" href=""/>
+			</FRBRManifestation>
+			<scl:JOLUXWork>
+				<scl:JOLUXComplexWork>
+					<scl:jolux scl:name="uriThis">http://data.legilux.public.lu/eli/etat/leg/loi/2020/05/20/a446</scl:jolux>
+				</scl:JOLUXComplexWork>
+				<scl:JOLUXLegalResource><scl:jolux scl:name="uriThis">http://data.legilux.public.lu/eli/etat/leg/loi/2020/05/20/a446/jo</scl:jolux><scl:jolux scl:name="publicationDate">2020-05-26</scl:jolux><scl:jolux scl:name="typeDocument">http://data.legilux.public.lu/resource/authority/resource-type/LOI</scl:jolux><scl:jolux scl:name="dateDocument">2020-05-20</scl:jolux><scl:jolux scl:name="dateEntryInForce">2020-05-30</scl:jolux><scl:jolux scl:name="dateApplicability">2020-05-30</scl:jolux><scl:jolux scl:name="isMemberOf">http://data.legilux.public.lu/eli/etat/leg/loi/2020/05/20/a446</scl:jolux><scl:jolux scl:name="isPartOf">http://data.legilux.public.lu/eli/etat/leg/memorial/2020/a446</scl:jolux><scl:jolux scl:name="responsibilityOf">http://data.legilux.public.lu/resource/authority/legal-institution/MAE</scl:jolux><scl:jolux scl:name="subjectLevel1">http://data.legilux.public.lu/resource/authority/legal-subject/259</scl:jolux><scl:jolux scl:name="subjectLevel2">http://data.legilux.public.lu/resource/authority/legal-subject/966</scl:jolux><scl:jolux scl:name="subjectLevel2">http://publications.europa.eu/resource/authority/country/CAN</scl:jolux><scl:jolux scl:name="subjectLevel2">http://data.legilux.public.lu/resource/authority/legal-subject/743</scl:jolux><scl:jolux scl:name="subjectLevel2">http://data.legilux.public.lu/resource/authority/legal-subject/782</scl:jolux><scl:jolux scl:name="draft">http://data.legilux.public.lu/eli/etat/projet/pl/10557</scl:jolux><scl:rdf scl:name="type">http://data.legilux.public.lu/resource/ontology/jolux#BaseAct</scl:rdf><scl:rdf scl:name="type">http://data.legilux.public.lu/resource/ontology/jolux#Act</scl:rdf><scl:rdf scl:name="type">http://data.legilux.public.lu/resource/ontology/jolux#Work</scl:rdf><scl:rdf scl:name="type">http://data.legilux.public.lu/resource/ontology/jolux#LegalResource</scl:rdf><scl:rdf scl:name="type">http://data.legilux.public.lu/resource/ontology/jolux#NationalLegalResource</scl:rdf></scl:JOLUXLegalResource>
+			</scl:JOLUXWork>
+			<scl:JOLUXExpression>
+				<scl:jolux scl:name="uriThis">http://data.legilux.public.lu/eli/etat/leg/loi/2020/05/20/a446/jo/fr</scl:jolux>
+				<scl:jolux scl:name="realizes">http://data.legilux.public.lu/eli/etat/leg/loi/2020/05/20/a446/jo</scl:jolux>
+				<scl:jolux scl:name="language">http://publications.europa.eu/resource/authority/language/FRA</scl:jolux>
+				<scl:jolux scl:lg="fra" scl:name="title">Loi du 20 mai 2020 portant approbation de l’Accord économique et commercial global (AECG) entre le Canada, d’une part, et l’Union européenne et ses États membres, d’autre part, fait à Bruxelles, le 30 octobre 2016.</scl:jolux>
+			</scl:JOLUXExpression>
+			<scl:JOLUXManifestation>
+				<scl:jolux scl:name="uriThis">http://data.legilux.public.lu/eli/etat/leg/loi/2020/05/20/a446/jo/fr/xml</scl:jolux>
+				<scl:jolux scl:name="embodies">http://data.legilux.public.lu/eli/etat/leg/loi/2020/05/20/a446/jo/fr</scl:jolux>
+				<scl:jolux scl:name="publishedIn">http://data.legilux.public.lu/eli/etat/leg/memorial/2020/a446/fr/pdf</scl:jolux>
+				<scl:jolux scl:name="memorialPage">1</scl:jolux>
+				<scl:jolux scl:name="memorialSequence">A</scl:jolux>
+				<scl:jolux scl:name="publisher">http://data.legilux.public.lu/authority/legal-institution/ME</scl:jolux>
+				<scl:jolux scl:lg="fra" scl:name="rights">Copyright : Ministère d’État du Grand-Duché de Luxembourg – Service central de législation</scl:jolux>
+				<scl:jolux scl:name="rightsHolder">http://data.legilux.public.lu/authority/legal-institution/ME</scl:jolux>
+				<scl:jolux scl:name="license">http://creativecommons.org/licenses/by/4.0/</scl:jolux>
+				<scl:jolux scl:name="userFormat">http://data.legilux.public.lu/resource/authority/user-format/xml-akomantoso</scl:jolux>
+				<scl:jolux scl:name="format">http://publications.europa.eu/resource/authority/file-type/XML</scl:jolux>
+				<scl:jolux scl:name="isExemplifiedBy">http://data.legilux.public.lu/file/eli-etat-leg-loi-2020-05-20-a446-jo-fr-xml.xml</scl:jolux>
+			</scl:JOLUXManifestation>
+		</identification>
+<analysis source="#"/></meta><preface><longTitle><p>Loi du 20 mai 2020 portant approbation de l’Accord économique et commercial global (AECG) entre le Canada, d’une part, et l’Union européenne et ses États membres, d’autre part, fait à Bruxelles, le 30 octobre 2016.</p></longTitle></preface><preamble><container name="preamble"><p>Nous Henri, Grand-Duc de Luxembourg, Duc de Nassau,</p><p>Notre Conseil d’État entendu ;</p><p>De l’assentiment de la Chambre des députés ;</p><p>Vu la décision de la Chambre des députés du 6 mai 2020 et celle du Conseil d’État du 12 mai 2020 portant qu’il n’y a pas lieu à second vote ; </p></container><formula name=""><p>Avons ordonné et ordonnons :</p></formula></preamble><body><article id="article_unique"><num><b>Article unique</b>.</num><alinea><content><p>Est approuvé l’Accord économique et commercial global (AECG) entre le Canada, d’une part, et l’Union européenne et ses États membres, d’autre part, fait à Bruxelles, le 30 octobre 2016.</p></content></alinea></article><clause><content><p>Mandons et ordonnons que la présente loi soit insérée au Journal officiel du Grand-Duché de Luxembourg pour être exécutée et observée par tous ceux que la chose concerne.</p></content></clause></body><conclusions><p> <signature> <shortTitle> Le Ministre des Affaires étrangères<br/>et européennes,</shortTitle> <person refersTo=""> Jean Asselborn </person> </signature> </p><p> <signature> <docDate date="2999-01-01">Château de Berg, le 20 mai 2020.</docDate><person refersTo="">Henri</person> </signature> </p></conclusions><attachments><attachment id="attachment_1"><doc name=""><meta><identification source=""><FRBRWork><FRBRthis value=""/><FRBRuri value=""/><FRBRdate date="2020-05-12" name=""/><FRBRauthor href=""/><FRBRcountry value=""/></FRBRWork><FRBRExpression><FRBRthis value=""/><FRBRuri value=""/><FRBRdate date="2020-05-12" name=""/><FRBRauthor href=""/><FRBRlanguage language=""/></FRBRExpression><FRBRManifestation><FRBRthis value=""/><FRBRuri value=""/><FRBRdate date="2020-05-12" name=""/><FRBRauthor href=""/></FRBRManifestation></identification></meta><preface><longTitle><p>Annexe</p></longTitle></preface><mainBody><alinea><content><p>Pour visualiser les annexes, veuillez consulter la <ref href="https://data.legilux.public.lu/filestore/eli/etat/leg/loi/2020/05/20/a446/jo/fr/pdfa/eli-etat-leg-loi-2020-05-20-a446-jo-fr-pdfa.pdf" id="65d3a961-e77f-4419-a92c-79854bf39331">version pdf du Journal officiel</ref>.</p></content></alinea></mainBody></doc></attachment></attachments><components><component><interstitial><p>Doc. parl. <ref href="http://www.legilux.public.lu/eli/etat/projet/pl/10557" id="071ed131-e172-49a8-854d-ef1ac3202e8e">7457</ref> ; sess. ord. 2018-2019 et 2019-2020.</p></interstitial></component></components></act></akomaNtoso>

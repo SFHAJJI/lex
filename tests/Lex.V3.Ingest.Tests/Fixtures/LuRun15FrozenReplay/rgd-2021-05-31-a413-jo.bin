@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?><akomaNtoso xmlns="http://docs.oasis-open.org/legaldocml/ns/akn/3.0/CSD13" xmlns:scl="http://www.scl.lu"><act contains="originalVersion" name="" scl:page-proof="many"><meta><identification source="#somebody">
+			<FRBRWork>
+			     <FRBRthis value="http://data.legilux.public.lu/eli/etat/leg/rgd/2021/05/31/a413/jo"/>
+			     <FRBRuri value=""/>
+			     <FRBRdate date="2021-05-31" name="document"/>
+			     <FRBRauthor as="#author" href="http://data.legilux.public.lu/resource/authority/legal-institution/MTR"/>
+			     <FRBRcountry value="http://publications.europa.eu/resource/authority/country/LUX"/>
+			</FRBRWork>
+			<FRBRExpression>
+			     <FRBRthis value="http://data.legilux.public.lu/eli/etat/leg/rgd/2021/05/31/a413/jo/fr"/>
+			     <FRBRuri value=""/>
+			     <FRBRdate date="2021-05-31" name="document"/>
+			     <FRBRauthor as="#author" href=""/>
+			     <FRBRlanguage language="http://publications.europa.eu/resource/authority/language/FRA"/>
+			</FRBRExpression>
+			<FRBRManifestation>
+			     <FRBRthis value="http://data.legilux.public.lu/eli/etat/leg/rgd/2021/05/31/a413/jo/fr/xml"/>
+			     <FRBRuri value=""/>
+			     <FRBRdate date="2021-05-31" name="document"/>
+			     <FRBRauthor as="#author" href=""/>
+			</FRBRManifestation>
+			<scl:JOLUXWork>
+				<scl:JOLUXComplexWork>
+					<scl:jolux scl:name="uriThis">http://data.legilux.public.lu/eli/etat/leg/rgd/2021/05/31/a413</scl:jolux>
+				</scl:JOLUXComplexWork>
+				<scl:JOLUXLegalResource>
+					<scl:jolux scl:name="uriThis">http://data.legilux.public.lu/eli/etat/leg/rgd/2021/05/31/a413/jo</scl:jolux>
+					<scl:jolux scl:name="publicationDate">2021-06-02</scl:jolux>
+					<scl:jolux scl:name="typeDocument">http://data.legilux.public.lu/resource/authority/resource-type/RGD</scl:jolux>
+					<scl:jolux scl:name="dateDocument">2021-05-31</scl:jolux>
+					<scl:jolux scl:name="dateEntryInForce">2021-06-06</scl:jolux>
+					<scl:jolux scl:name="dateApplicability">2021-06-06</scl:jolux>
+					<scl:jolux scl:name="isMemberOf">http://data.legilux.public.lu/eli/etat/leg/rgd/2021/05/31/a413</scl:jolux>
+					<scl:jolux scl:name="isPartOf">http://data.legilux.public.lu/eli/etat/leg/memorial/2021/a413</scl:jolux>
+					<scl:jolux scl:name="responsibilityOf">http://data.legilux.public.lu/resource/authority/legal-institution/MTR</scl:jolux>
+					<scl:jolux scl:name="subjectLevel1">http://data.legilux.public.lu/resource/authority/legal-subject/879</scl:jolux>
+					<scl:jolux scl:name="subjectLevel2">http://data.legilux.public.lu/resource/authority/legal-subject/126</scl:jolux>
+					<scl:jolux scl:name="subjectLevel2">http://data.legilux.public.lu/resource/authority/legal-subject/957</scl:jolux>
+					<scl:jolux scl:name="subjectLevel2">http://data.legilux.public.lu/resource/authority/legal-subject/122</scl:jolux>
+					<scl:jolux scl:name="basedOn">http://data.legilux.public.lu/eli/etat/leg/loi/1948/01/31/n1/jo</scl:jolux>
+					<scl:jolux scl:name="repeals">http://data.legilux.public.lu/eli/etat/leg/rgd/2010/11/08/n7/jo</scl:jolux>
+					<scl:jolux scl:name="draft">http://data.legilux.public.lu/eli/etat/projet/pr/10575</scl:jolux>
+					<scl:rdf scl:name="type">http://data.legilux.public.lu/resource/ontology/jolux#BaseAct</scl:rdf>
+					<scl:rdf scl:name="type">http://data.legilux.public.lu/resource/ontology/jolux#Act</scl:rdf>
+					<scl:rdf scl:name="type">http://data.legilux.public.lu/resource/ontology/jolux#Work</scl:rdf>
+					<scl:rdf scl:name="type">http://data.legilux.public.lu/resource/ontology/jolux#LegalResource</scl:rdf>
+					<scl:rdf scl:name="type">http://data.legilux.public.lu/resource/ontology/jolux#NationalLegalResource</scl:rdf>
+				</scl:JOLUXLegalResource>
+			</scl:JOLUXWork>
+			<scl:JOLUXExpression>
+				<scl:jolux scl:name="uriThis">http://data.legilux.public.lu/eli/etat/leg/rgd/2021/05/31/a413/jo/fr</scl:jolux>
+				<scl:jolux scl:name="realizes">http://data.legilux.public.lu/eli/etat/leg/rgd/2021/05/31/a413/jo</scl:jolux>
+				<scl:jolux scl:name="language">http://publications.europa.eu/resource/authority/language/FRA</scl:jolux>
+				<scl:jolux scl:lg="fra" scl:name="title">Règlement grand-ducal du 31 mai 2021 concernant les taxes relatives aux licences des contrôleurs de la circulation aérienne.</scl:jolux>
+			</scl:JOLUXExpression>
+			<scl:JOLUXManifestation>
+				<scl:jolux scl:name="uriThis">http://data.legilux.public.lu/eli/etat/leg/rgd/2021/05/31/a413/jo/fr/xml</scl:jolux>
+				<scl:jolux scl:name="embodies">http://data.legilux.public.lu/eli/etat/leg/rgd/2021/05/31/a413/jo/fr</scl:jolux>
+				<scl:jolux scl:name="publishedIn">http://data.legilux.public.lu/eli/etat/leg/memorial/2021/a413/fr/pdf</scl:jolux>
+				<scl:jolux scl:name="memorialPage">1</scl:jolux>
+				<scl:jolux scl:name="memorialSequence">A</scl:jolux>
+				<scl:jolux scl:name="publisher">http://data.legilux.public.lu/resource/authority/legal-institution/ME</scl:jolux>
+				<scl:jolux scl:lg="fra" scl:name="rights">Copyright : Ministère d’État du Grand-Duché de Luxembourg – Service central de législation</scl:jolux>
+				<scl:jolux scl:name="rightsHolder">http://data.legilux.public.lu/resource/authority/legal-institution/ME</scl:jolux>
+				<scl:jolux scl:name="license">http://creativecommons.org/licenses/by/4.0/</scl:jolux>
+				<scl:jolux scl:name="userFormat">http://data.legilux.public.lu/resource/authority/user-format/xml-akomantoso</scl:jolux>
+				<scl:jolux scl:name="format">http://publications.europa.eu/resource/authority/file-type/XML</scl:jolux>
+				<scl:jolux scl:name="isExemplifiedBy">http://data.legilux.public.lu/file/eli-etat-leg-rgd-2021-05-31-a413-jo-fr-xml.xml</scl:jolux>
+			</scl:JOLUXManifestation>
+		</identification>
+</meta><preface><longTitle><p>Règlement grand-ducal du 31 mai 2021 concernant les taxes relatives aux licences des contrôleurs de la circulation aérienne.</p></longTitle></preface><preamble><container name="preamble"><p>Nous Henri, Grand-Duc de Luxembourg, Duc de Nassau,</p><p>Vu la <ref href="/eli/etat/leg/loi/1948/01/31/n1/jo" id="f846a9b0-88f2-4bbe-8340-54fd8d18c394" scl:verify="true">loi modifiée du 31 janvier 1948</ref> relative à la réglementation de la navigation aérienne et notamment son article 7 ;</p><p>Vu l’avis de la Chambre des fonctionnaires et des employés publics ;</p><p>Notre Conseil d’État entendu ;</p><p>Sur le rapport de Notre Ministre de la Mobilité et des Travaux publics et après délibération du Gouvernement en conseil ;</p></container><formula name=""><p>Arrêtons :</p></formula></preamble><body><article id="art_1er"><num>Art. 1<sup>er</sup>.</num><heading><u>Taxes</u></heading><alinea><content><p>Les licences étant des documents personnels, les taxes sont à acquitter par leurs titulaires. Il en va de même pour les homologations des organismes de formation.</p></content></alinea><alinea><content><p>Il est dû une taxe non remboursable pour :</p><ol scl:space-num="5" scl:start="1" scl:style-format="u" scl:symbol="1°"><li>la délivrance d’une licence de contrôleur de la circulation aérienne au montant de 200 euros ;</li><li>la délivrance d’une licence de contrôleur de la circulation aérienne stagiaire au montant de 50 euros ;</li><li>l’inscription d’une ou plusieurs qualifications ainsi que les mentions de qualification, d’unité et linguistiques pour lesquelles une formation a été suivie avec succès, au montant de 50 euros ;</li><li>la prorogation d’une licence de contrôleur de la circulation aérienne, d’une qualification ou d’une mention de qualification, d’unité ou linguistique au montant de 25 euros ;</li><li>l’homologation d’un organisme de formation au montant de 1 000 euros.</li></ol></content></alinea></article><article id="art_2"><num>Art. 2.</num><heading><u>Disposition abrogatoire</u></heading><alinea><content><p>Le <ref href="/eli/etat/leg/rgd/2010/11/08/n7/jo" id="4ceaf57b-5d7f-4831-b2fd-18d1a2d942ae" scl:verify="true">règlement grand-ducal du 8 novembre 2010</ref> relatif aux qualifications et aux mentions associées aux licences des contrôleurs de la circulation aérienne est abrogé.</p></content></alinea></article><article id="art_3"><num>Art. 3.</num><heading><u>Formule exécutoire</u></heading><alinea><content><p>Notre ministre de la Mobilité et des Travaux publics et Notre ministre des Finances sont chargés, chacun en ce qui le concerne, de l’exécution du présent règlement qui sera publié au Journal officiel du Grand-Duché de Luxembourg.</p></content></alinea></article></body><conclusions><p> <signature> <shortTitle>Le Ministre de la Mobilité<br/> et des Travaux publics,</shortTitle> <person refersTo="">François Bausch </person> </signature> </p><p> <signature><docDate date="2999-01-01">Palais de Luxembourg, le 31 mai 2021.</docDate><person refersTo="">Henri</person> </signature> </p></conclusions></act></akomaNtoso>

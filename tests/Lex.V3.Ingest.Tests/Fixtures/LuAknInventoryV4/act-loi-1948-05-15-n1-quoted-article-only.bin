@@ -1,0 +1,165 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?><akomaNtoso xmlns="http://docs.oasis-open.org/legaldocml/ns/akn/3.0/CSD13" xmlns:scl="http://www.scl.lu">
+<act contains="originalVersion" name="">
+        <meta>
+	<identification source="#1948A07171">
+		<FRBRWork>
+			<FRBRthis value="http://data.legilux.public.lu/eli/etat/leg/loi/1948/05/15/n1/jo"/>
+			<FRBRuri value=""/>
+			<FRBRdate date="1948-05-15" name="document"/>
+			<FRBRauthor as="#author" href="http://data.legilux.public.lu/resource/authority/legal-institution/ME"/>
+			<FRBRcountry value="http://publications.europa.eu/resource/authority/country/LUX"/>
+		</FRBRWork>
+		<FRBRExpression>
+			<FRBRthis value="http://data.legilux.public.lu/eli/etat/leg/loi/1948/05/15/n1/jo/fr"/>
+			<FRBRuri value=""/>
+			<FRBRdate date="1948-05-15" name="document"/>
+			<FRBRauthor as="#author" href=""/>
+			<FRBRlanguage language="http://publications.europa.eu/resource/authority/language/FRA"/>
+		</FRBRExpression>
+		<FRBRManifestation>
+			<FRBRthis value="http://data.legilux.public.lu/eli/etat/leg/loi/1948/05/15/n1/jo/fr/xml"/>
+			<FRBRuri value=""/>
+			<FRBRdate date="1948-05-15" name="document"/>
+			<FRBRauthor as="#author" href=""/>
+		</FRBRManifestation>
+             <scl:JOLUXWork>
+                 <scl:JOLUXComplexWork>
+                     <scl:jolux scl:name="uriThis">http://data.legilux.public.lu/eli/etat/leg/loi/1948/05/15/n1</scl:jolux>
+                 </scl:JOLUXComplexWork>
+                 <scl:JOLUXLegalResource>
+                     <scl:jolux scl:name="uriThis">http://data.legilux.public.lu/eli/etat/leg/loi/1948/05/15/n1/jo</scl:jolux>
+                     <scl:jolux scl:name="isMemberOf">http://data.legilux.public.lu/eli/etat/leg/loi/1948/05/15/n1</scl:jolux>
+                     <scl:jolux scl:name="typeDocument">http://data.legilux.public.lu/resource/authority/resource-type/LOI</scl:jolux>
+                     <scl:jolux scl:name="dateDocument">1948-05-15</scl:jolux>
+                     <scl:jolux scl:name="publicationDate">1948-05-19</scl:jolux>
+                     <scl:jolux scl:name="historicalLegalId">1948A07171</scl:jolux>
+                     <scl:jolux scl:name="dateEntryInForce">1948-05-22</scl:jolux>
+                     <scl:jolux scl:name="isPartOf">http://data.legilux.public.lu/eli/etat/leg/memorial/1948/32</scl:jolux>
+                     
+                     
+                     <scl:jolux scl:name="responsibilityOf">http://data.legilux.public.lu/resource/authority/legal-institution/ME</scl:jolux>
+                     <scl:jolux scl:name="subjectLevel1">http://data.legilux.public.lu/resource/authority/legal-subject/748</scl:jolux>
+                     <scl:jolux scl:name="subjectLevel2">http://data.legilux.public.lu/resource/authority/legal-subject/239</scl:jolux>
+                     <scl:jolux scl:name="modifies">http://data.legilux.public.lu/eli/etat/leg/loi/1868/10/17/n1/jo</scl:jolux>
+                     <scl:rdf scl:name="type">http://data.legilux.public.lu/resource/ontology/jolux#Act</scl:rdf>
+                     <scl:rdf scl:name="type">http://data.legilux.public.lu/resource/ontology/jolux#Work</scl:rdf>
+                     <scl:rdf scl:name="type">http://data.legilux.public.lu/resource/ontology/jolux#LegalResource</scl:rdf>
+                     <scl:rdf scl:name="type">http://data.legilux.public.lu/resource/ontology/jolux#NationalLegalResource</scl:rdf>
+                 </scl:JOLUXLegalResource>
+             </scl:JOLUXWork>
+             <scl:JOLUXExpression>
+                 <scl:jolux scl:name="uriThis">http://data.legilux.public.lu/eli/etat/leg/loi/1948/05/15/n1/jo/fr</scl:jolux>
+                 <scl:jolux scl:name="realizes">http://data.legilux.public.lu/eli/etat/leg/loi/1948/05/15/n1/jo</scl:jolux>
+                 <scl:jolux scl:name="language">http://publications.europa.eu/resource/authority/language/FRA</scl:jolux>
+                 <scl:jolux scl:lg="fra" scl:name="title">Loi du 15 mai 1948 portant révision de l'article 52 de la Constitution.</scl:jolux>
+                 <scl:jolux scl:lg="fra" scl:name="titleShort">Révision de la Constitution - art. 52</scl:jolux>
+             </scl:JOLUXExpression>
+             <scl:JOLUXManifestation>
+                 <scl:jolux scl:name="uriThis">http://data.legilux.public.lu/eli/etat/leg/loi/1948/05/15/n1/jo/fr/xml</scl:jolux>
+                 <scl:jolux scl:name="embodies">http://data.legilux.public.lu/eli/etat/leg/loi/1948/05/15/n1/jo/fr</scl:jolux>
+                 <scl:jolux scl:name="publishedIn">http://data.legilux.public.lu/eli/etat/leg/memorial/1948/32/fr/pdf</scl:jolux>
+                 <scl:jolux scl:name="memorialPage">717</scl:jolux>
+                 <scl:jolux scl:name="memorialSequence">1</scl:jolux>
+                 <scl:jolux scl:name="publisher">http://data.legilux.public.lu/authority/legal-institution/ME</scl:jolux>
+                 <scl:jolux scl:lg="fra" scl:name="rights">Copyright : Ministère d’Etat – Service central de législation – du Grand-Duché de Luxembourg</scl:jolux>
+                 <scl:jolux scl:name="rightsHolder">http://data.legilux.public.lu/authority/legal-institution/ME</scl:jolux>
+                 <scl:jolux scl:name="license">http://creativecommons.org/licenses/by/4.0/</scl:jolux>
+                 <scl:jolux scl:name="userFormat">http://data.legilux.lu/resource/authority/user-format/xml-akomantoso</scl:jolux>
+                 <scl:jolux scl:name="format">http://publications.europa.eu/resource/authority/file-type/XML</scl:jolux>
+                 
+                 <scl:jolux scl:name="isExemplifiedBy">http://data.legilux.public.lu/file/eli-etat-leg-loi-1948-05-15-n1-jo-fr-xml.xml</scl:jolux>
+             </scl:JOLUXManifestation>
+	</identification>
+</meta>
+     <preface>
+	<longTitle>
+			<p>Révision de la Constitution.</p>
+	</longTitle>
+</preface>
+     <preamble>
+          <container name="preamble">
+               <p>Nous CHARLOTTE, par la grâce de Dieu, Grande-Duchesse de Luxembourg, Duchesse de Nassau, etc., etc., etc.;</p>
+          </container>
+          <container name="considerando">
+                <p>Vu la décision de la Chambre des députés du 27 avril 1948, prise dans les conditions prescrites par l'art. 114 de la Constitution;</p>
+          <p>Notre Conseil d'Etat entendu;</p>
+          <p>Vu la décision de la Chambre des députés du 27 avril 1948 et celle du Conseil d'Etat du 11 mai 1948, portant qu'il n'y a pas lieu à second vote;</p>
+     </container>
+            <formula name="">
+                <p>Sanctionnons ce qui suit:</p>
+            </formula>
+        </preamble>
+     <body>
+          
+          
+               <alinea>
+                    <content>
+                        <p>L'art. 52 de la Constitution est remplacé par la disposition suivante:<mod>
+                                <quotedText>
+                                    <embeddedStructure>
+                         <article id="art_52">
+                              <num>Art. 52. </num>
+                              <alinea>
+                                                <content>
+                                                    <p>Pour être électeur, il faut: </p>
+                                                    <ol scl:symbol="1°">
+                                        <li>être Luxembourgeois ou Luxembourgeoise; </li>
+                                        <li>jouir des droits civils et politiques; </li>
+                                        <li>être âgé de 21 ans accomplis; </li>
+                                        <li>être domicilié dans le Grand-Duché.</li>
+                                   </ol>
+                                                </content>
+                                            </alinea>
+                              <alinea>
+                                                <content>
+                                                    <p>Il faut en outre réunir à ces quatre qualités celles déterminées par la loi. Aucune condition de cens ne pourra être exigée.</p>
+                                                </content>
+                                            </alinea>
+                              <alinea>
+                                                <content>
+                                                    <p>Pour être éligible, il faut être âgé de 25 ans accomplis et remplir pour le surplus les trois autres conditions énumérées ci-dessus.</p>
+                                                </content>
+                                            </alinea>
+                              <alinea>
+                                                <content>
+                                                    <p>Aucune autre condition d'éligibilité ne pourra être requise.</p>
+                                                </content>
+                                            </alinea>
+                         </article>
+                    </embeddedStructure>
+                                </quotedText>
+                            </mod>
+                        </p>
+                    </content>
+                </alinea>
+          
+          <clause>
+                <content>
+                    <p>Mandons et ordonnons que la présente disposition sera insérée au Mémorial pour être exécutée et observée par tous ceux que la chose concerne.</p>
+                </content>
+            </clause>
+     </body>
+     
+          <conclusions>
+            <p>
+                <signature>
+                    <shortTitle>Les Membres du Gouvernement,</shortTitle>
+                    <person refersTo="">Pierre Dupong.</person>
+                    <person refersTo="">Joseph Bech.</person>
+                    <person refersTo="">Nicolas Margue.</person>
+                    <person refersTo="">Eugène Schaus.</person>
+                    <person refersTo="">Lambert Schaus.</person>
+                    <person refersTo="">Alphonse Osch.</person>
+                    <person refersTo="">Robert Schaffner.</person>
+                </signature>
+            </p>
+            <p>
+                <signature>
+                    <docDate date="2999-01-01">Luxembourg, le 15 mai 1948.</docDate>
+                    <person refersTo="">Charlotte.</person>
+                </signature>
+            </p>
+        </conclusions>
+     
+</act>
+</akomaNtoso>

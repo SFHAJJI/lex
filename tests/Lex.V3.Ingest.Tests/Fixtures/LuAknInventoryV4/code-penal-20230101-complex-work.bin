@@ -1,0 +1,168 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?><akomaNtoso xmlns="http://docs.oasis-open.org/legaldocml/ns/akn/3.0/CSD13" xmlns:scl="http://www.scl.lu">
+	<act name="Code pénal" scl:uri="http://eli.legilux.public.lu/eli/etat/leg/code/penal">
+		<meta>
+			<identification source="#http://data.legilux.public.lu/eli/etat/leg/code/penal/20230101">
+				<FRBRWork>
+					<FRBRthis value="http://data.legilux.public.lu/eli/etat/leg/code/penal/20230101"/>
+					<FRBRuri value=""/>
+					<FRBRdate date="2019-04-02" name="document"/>
+					<FRBRauthor as="#author" href="http://data.legilux.public.lu/resource/authority/legal-institution/MJ"/>
+					<FRBRcountry value="http://publications.europa.eu/resource/authority/country/LUX"/>
+				</FRBRWork>
+				<FRBRExpression>
+					<FRBRthis value="http://data.legilux.public.lu/eli/etat/leg/code/penal/20230101/fr"/>
+					<FRBRuri value=""/>
+					<FRBRdate date="2019-04-02" name="document"/>
+					<FRBRauthor as="#author" href=""/>
+					<FRBRlanguage language="http://publications.europa.eu/resource/authority/language/FRA"/>
+				</FRBRExpression>
+				<FRBRManifestation>
+					<FRBRthis value="http://data.legilux.public.lu/eli/etat/leg/code/penal/20230101/fr/xml"/>
+					<FRBRuri value=""/>
+					<FRBRdate date="2019-04-02" name="document"/>
+					<FRBRauthor as="#author" href=""/>
+				</FRBRManifestation>
+				<scl:JOLUXWork>
+					<scl:JOLUXComplexWork>
+						<scl:jolux scl:name="uriThis">http://data.legilux.public.lu/eli/etat/leg/code/penal</scl:jolux>
+					</scl:JOLUXComplexWork>
+					<scl:JOLUXLegalResource>
+						<scl:jolux scl:name="uriThis">http://data.legilux.public.lu/eli/etat/leg/code/penal/20230101</scl:jolux>
+						<scl:jolux scl:name="isMemberOf">http://data.legilux.public.lu/eli/etat/leg/loi/1879/06/18/n1</scl:jolux>
+						<scl:jolux scl:name="typeDocument">http://data.legilux.public.lu/resource/authority/resource-type/CODE</scl:jolux>
+						<scl:jolux scl:name="version">1</scl:jolux>
+						<scl:jolux scl:name="dateApplicability">2023-01-01</scl:jolux>
+						<scl:jolux scl:name="publicationDate">2023-01-10</scl:jolux>
+						<scl:jolux scl:name="responsibilityOf">http://data.legilux.public.lu/resource/authority/legal-institution/MJ</scl:jolux>
+						<scl:jolux scl:name="personInCharge">Ministère d’Etat – Service central de législation – du Grand-Duché de Luxembourg</scl:jolux>
+						<scl:rdf scl:name="type">http://data.legilux.public.lu/resource/ontology/jolux#Code</scl:rdf>
+						<scl:rdf scl:name="type">http://data.legilux.public.lu/resource/ontology/jolux#Consolidation</scl:rdf>
+						<scl:rdf scl:name="type">http://data.legilux.public.lu/resource/ontology/jolux#Work</scl:rdf>
+						<scl:rdf scl:name="type">http://data.legilux.public.lu/resource/ontology/jolux#LegalResource</scl:rdf>
+						<scl:rdf scl:name="type">http://data.legilux.public.lu/resource/ontology/jolux#NationalLegalResource</scl:rdf>
+					</scl:JOLUXLegalResource>
+				</scl:JOLUXWork>
+				<scl:JOLUXExpression>
+					<scl:jolux scl:name="uriThis">http://data.legilux.public.lu/eli/etat/leg/code/penal/20230101/fr</scl:jolux>
+					<scl:jolux scl:name="realizes">http://data.legilux.public.lu/eli/etat/leg/code/penal/20230101</scl:jolux>
+					<scl:jolux scl:name="language">http://publications.europa.eu/resource/authority/language/FRA</scl:jolux>
+					<scl:jolux scl:lg="fra" scl:name="title">Code pénal</scl:jolux>
+					<scl:jolux scl:lg="fra" scl:name="titleShort">Code pénal</scl:jolux>
+				</scl:JOLUXExpression>
+				<scl:JOLUXManifestation>
+					<scl:jolux scl:name="uriThis">http://data.legilux.public.lu/eli/etat/leg/code/penal/20230101/fr/xml</scl:jolux>
+					<scl:jolux scl:name="embodies">http://data.legilux.public.lu/eli/etat/leg/code/penal/20230101/fr</scl:jolux>
+					<scl:jolux scl:lg="fra" scl:name="rights">Copyright : Ministère d’Etat – Service central de législation – du Grand-Duché de Luxembourg</scl:jolux>
+					<scl:jolux scl:name="rightsHolder">http://data.legilux.public.lu/authority/legal-institution/ME</scl:jolux>
+					<scl:jolux scl:name="license">http://creativecommons.org/licenses/by/4.0/</scl:jolux>
+					<scl:jolux scl:name="userFormat">http://data.legilux.lu/resource/authority/user-format/xml-akomantoso</scl:jolux>
+					<scl:jolux scl:name="format">http://publications.europa.eu/resource/authority/file-type/XML</scl:jolux>
+					<scl:jolux scl:name="isExemplifiedBy">http://data.legilux.public.lu/file/eli-etat-leg-code-penal-2023-01-01-fr-xml.xml</scl:jolux>
+				</scl:JOLUXManifestation>
+			</identification>
+		</meta>
+		<preface>
+			<longTitle>
+				<p>Code pénal</p>
+			</longTitle>
+		</preface>
+		<body>
+			<book xmlns:ns3727365="http://www.scl.lu" id="livre_ier" ns3727365:hidden="false">
+				<num>
+					<b>LIVRE Ier.</b>
+				</num>
+				<heading>
+					<b>Des infractions et de la répression en général</b>
+				</heading>
+				<chapter id="livre_ier.chapitre_ier" ns3727365:hidden="false" scl:subject1="http://data.legilux.public.lu/resource/authority/legal-subject/2194" scl:subject1lbl="infraction">
+					<num>
+						<b>Chapitre Ier.</b>
+					</num>
+					<heading>
+						<b>Des infractions</b>
+					</heading>
+					<article id="art_1er" scl:uri="/eli/etat/leg/code/penal/art_1">
+						<scl:JOLUXWork>
+							<scl:JOLUXComplexWork>
+								<scl:jolux scl:name="uriThis">http://data.legilux.public.lu/eli/etat/leg/code/penal/art_1</scl:jolux>
+							</scl:JOLUXComplexWork>
+							<scl:JOLUXLegalResource>
+								<scl:jolux scl:name="uriThis">http://data.legilux.public.lu/eli/etat/leg/code/penal/art_1/20170905</scl:jolux>
+								<scl:jolux scl:name="isMemberOf">http://data.legilux.public.lu/eli/etat/leg/loi/1879/06/18/n1</scl:jolux>
+								<scl:jolux scl:lg="fra" scl:name="title">Art. 1er.</scl:jolux>
+								<scl:jolux scl:name="dateApplicability">2017-09-05</scl:jolux>
+								<scl:rdf scl:name="type">http://data.legilux.public.lu/resource/ontology/jolux#Article</scl:rdf>
+							</scl:JOLUXLegalResource>
+						</scl:JOLUXWork>
+						<scl:indexterms>
+							<scl:indexterm>
+								<scl:label>Infraction</scl:label>
+								<scl:indexterms>
+									<scl:indexterm>
+										<scl:label>- définition</scl:label>
+									</scl:indexterm>
+								</scl:indexterms>
+							</scl:indexterm>
+						</scl:indexterms>
+						<num>Art. 1er.</num>
+						<alinea>
+							<content>
+								<p>L'infraction que les lois punissent d'une peine criminelle est un crime.</p>
+							</content>
+						</alinea>
+						<alinea>
+							<content>
+								<p>L'infraction que les lois punissent d'une peine correctionnelle est un délit.</p>
+							</content>
+						</alinea>
+						<alinea>
+							<content>
+								<p>L'infraction que les lois punissent d'une peine de police est une contravention.</p>
+							</content>
+						</alinea>
+					</article>
+					<article id="art_2" scl:uri="/eli/etat/leg/code/penal/art_2">
+						<scl:JOLUXWork>
+							<scl:JOLUXComplexWork>
+								<scl:jolux scl:name="uriThis">http://data.legilux.public.lu/eli/etat/leg/code/penal/art_2</scl:jolux>
+							</scl:JOLUXComplexWork>
+							<scl:JOLUXLegalResource>
+								<scl:jolux scl:name="uriThis">http://data.legilux.public.lu/eli/etat/leg/code/penal/art_2/20170905</scl:jolux>
+								<scl:jolux scl:name="isMemberOf">http://data.legilux.public.lu/eli/etat/leg/loi/1879/06/18/n1</scl:jolux>
+								<scl:jolux scl:lg="fra" scl:name="title">Art. 2.</scl:jolux>
+								<scl:jolux scl:name="dateApplicability">2017-09-05</scl:jolux>
+								<scl:rdf scl:name="type">http://data.legilux.public.lu/resource/ontology/jolux#Article</scl:rdf>
+							</scl:JOLUXLegalResource>
+						</scl:JOLUXWork>
+						<scl:indexterms>
+							<scl:indexterm>
+								<scl:label>Non rétroactivité de la loi pénale</scl:label>
+							</scl:indexterm>
+						</scl:indexterms>
+						<num>Art. 2.</num>
+						<alinea>
+							<content>
+								<p>Nulle infraction ne peut être punie de peines qui n'étaient pas portées par la loi avant que l'infraction fût commise.</p>
+							</content>
+						</alinea>
+						<alinea>
+							<content>
+								<p>Si la peine établie au temps du jugement diffère de celle qui était portée au temps de l'infraction, la peine la moins forte sera appliquée.</p>
+							</content>
+						</alinea>
+					</article>
+				</chapter>
+			</book>
+			<scl:index>
+				<scl:indexterms>
+					<scl:indexterm>
+						<scl:label>Non rétroactivité de la loi pénale</scl:label>
+						<scl:articles>
+							<scl:num scl:refid="art_2">2</scl:num>
+						</scl:articles>
+					</scl:indexterm>
+				</scl:indexterms>
+			</scl:index>
+		</body>
+	</act>
+</akomaNtoso>

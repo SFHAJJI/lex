@@ -1,0 +1,74 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?><akomaNtoso xmlns="http://docs.oasis-open.org/legaldocml/ns/akn/3.0/CSD13" xmlns:scl="http://www.scl.lu"><act contains="originalVersion" name="" scl:page-proof="many"><meta><identification source="#somebody">
+			<FRBRWork>
+			     <FRBRthis value="http://data.legilux.public.lu/eli/etat/leg/rgd/2021/04/23/a351/jo"/>
+			     <FRBRuri value=""/>
+			     <FRBRdate date="2021-04-23" name="document"/>
+			     <FRBRauthor as="#author" href="http://data.legilux.public.lu/resource/authority/legal-institution/MTR"/>
+			     <FRBRcountry value="http://publications.europa.eu/resource/authority/country/LUX"/>
+			</FRBRWork>
+			<FRBRExpression>
+			     <FRBRthis value="http://data.legilux.public.lu/eli/etat/leg/rgd/2021/04/23/a351/jo/fr"/>
+			     <FRBRuri value=""/>
+			     <FRBRdate date="2021-04-23" name="document"/>
+			     <FRBRauthor as="#author" href=""/>
+			     <FRBRlanguage language="http://publications.europa.eu/resource/authority/language/FRA"/>
+			</FRBRExpression>
+			<FRBRManifestation>
+			     <FRBRthis value="http://data.legilux.public.lu/eli/etat/leg/rgd/2021/04/23/a351/jo/fr/xml"/>
+			     <FRBRuri value=""/>
+			     <FRBRdate date="2021-04-23" name="document"/>
+			     <FRBRauthor as="#author" href=""/>
+			</FRBRManifestation>
+			<scl:JOLUXWork>
+				<scl:JOLUXComplexWork>
+					<scl:jolux scl:name="uriThis">http://data.legilux.public.lu/eli/etat/leg/rgd/2021/04/23/a351</scl:jolux>
+				</scl:JOLUXComplexWork>
+				<scl:JOLUXLegalResource>
+					<scl:jolux scl:name="uriThis">http://data.legilux.public.lu/eli/etat/leg/rgd/2021/04/23/a351/jo</scl:jolux>
+					<scl:jolux scl:name="publicationDate">2021-05-10</scl:jolux>
+					<scl:jolux scl:name="typeDocument">http://data.legilux.public.lu/resource/authority/resource-type/RGD</scl:jolux>
+					<scl:jolux scl:name="dateDocument">2021-04-23</scl:jolux>
+					<scl:jolux scl:name="dateEntryInForce">2021-05-14</scl:jolux>
+					<scl:jolux scl:name="dateApplicability">2021-05-14</scl:jolux>
+					<scl:jolux scl:name="isMemberOf">http://data.legilux.public.lu/eli/etat/leg/rgd/2021/04/23/a351</scl:jolux>
+					<scl:jolux scl:name="isPartOf">http://data.legilux.public.lu/eli/etat/leg/memorial/2021/a351</scl:jolux>
+					<scl:jolux scl:name="responsibilityOf">http://data.legilux.public.lu/resource/authority/legal-institution/MTR</scl:jolux>
+					<scl:jolux scl:name="subjectLevel1">http://data.legilux.public.lu/resource/authority/legal-subject/685</scl:jolux>
+					<scl:jolux scl:name="subjectLevel2">http://data.legilux.public.lu/resource/authority/legal-subject/769</scl:jolux>
+					<scl:jolux scl:name="subjectLevel2">http://data.legilux.public.lu/resource/authority/legal-subject/879</scl:jolux>
+					<scl:jolux scl:name="basedOn">http://data.legilux.public.lu/eli/reg_ue/2014/376/jo</scl:jolux>
+					<scl:jolux scl:name="cites">http://data.legilux.public.lu/eli/etat/leg/constitution/1868/10/17/n1/jo</scl:jolux>
+					<scl:jolux scl:name="cites">http://data.legilux.public.lu/eli/reg_ue/2010/996/jo</scl:jolux>
+					<scl:jolux scl:name="cites">http://data.legilux.public.lu/eli/reg_ue/2007/1321/jo</scl:jolux>
+					<scl:jolux scl:name="cites">http://data.legilux.public.lu/eli/reg_ue/2007/1330/jo</scl:jolux>
+					<scl:jolux scl:name="cites">http://data.legilux.public.lu/eli/dir_ue/2003/42/jo</scl:jolux>
+					<scl:jolux scl:name="draft">http://data.legilux.public.lu/eli/etat/projet/pr/20160039</scl:jolux>
+					<scl:rdf scl:name="type">http://data.legilux.public.lu/resource/ontology/jolux#BaseAct</scl:rdf>
+					<scl:rdf scl:name="type">http://data.legilux.public.lu/resource/ontology/jolux#Act</scl:rdf>
+					<scl:rdf scl:name="type">http://data.legilux.public.lu/resource/ontology/jolux#Work</scl:rdf>
+					<scl:rdf scl:name="type">http://data.legilux.public.lu/resource/ontology/jolux#LegalResource</scl:rdf>
+					<scl:rdf scl:name="type">http://data.legilux.public.lu/resource/ontology/jolux#NationalLegalResource</scl:rdf>
+				</scl:JOLUXLegalResource>
+			</scl:JOLUXWork>
+			<scl:JOLUXExpression>
+				<scl:jolux scl:name="uriThis">http://data.legilux.public.lu/eli/etat/leg/rgd/2021/04/23/a351/jo/fr</scl:jolux>
+				<scl:jolux scl:name="realizes">http://data.legilux.public.lu/eli/etat/leg/rgd/2021/04/23/a351/jo</scl:jolux>
+				<scl:jolux scl:name="language">http://publications.europa.eu/resource/authority/language/FRA</scl:jolux>
+				<scl:jolux scl:lg="fra" scl:name="title">Règlement grand-ducal du 23 avril 2021 instituant l’organe consultatif pour la culture juste.</scl:jolux>
+			</scl:JOLUXExpression>
+			<scl:JOLUXManifestation>
+				<scl:jolux scl:name="uriThis">http://data.legilux.public.lu/eli/etat/leg/rgd/2021/04/23/a351/jo/fr/xml</scl:jolux>
+				<scl:jolux scl:name="embodies">http://data.legilux.public.lu/eli/etat/leg/rgd/2021/04/23/a351/jo/fr</scl:jolux>
+				<scl:jolux scl:name="publishedIn">http://data.legilux.public.lu/eli/etat/leg/memorial/2021/a351/fr/pdf</scl:jolux>
+				<scl:jolux scl:name="memorialPage">1</scl:jolux>
+				<scl:jolux scl:name="memorialSequence">A</scl:jolux>
+				<scl:jolux scl:name="publisher">http://data.legilux.public.lu/resource/authority/legal-institution/ME</scl:jolux>
+				<scl:jolux scl:lg="fra" scl:name="rights">Copyright : Ministère d’État du Grand-Duché de Luxembourg – Service central de législation</scl:jolux>
+				<scl:jolux scl:name="rightsHolder">http://data.legilux.public.lu/resource/authority/legal-institution/ME</scl:jolux>
+				<scl:jolux scl:name="license">http://creativecommons.org/licenses/by/4.0/</scl:jolux>
+				<scl:jolux scl:name="userFormat">http://data.legilux.public.lu/resource/authority/user-format/xml-akomantoso</scl:jolux>
+				<scl:jolux scl:name="format">http://publications.europa.eu/resource/authority/file-type/XML</scl:jolux>
+				<scl:jolux scl:name="isExemplifiedBy">http://data.legilux.public.lu/file/eli-etat-leg-rgd-2021-04-23-a351-jo-fr-xml.xml</scl:jolux>
+			</scl:JOLUXManifestation>
+		</identification>
+</meta><preface><longTitle><p>Règlement grand-ducal du 23 avril 2021 instituant l’organe consultatif pour la culture juste.</p></longTitle></preface><preamble><container name="preamble"><p>Nous Henri, Grand-Duc de Luxembourg, Duc de Nassau,</p><p>Vu l’article 37 de la <ref href="/eli/etat/leg/constitution/1868/10/17/n1/jo" id="8e6e8d31-0c7a-4871-8a26-ec8bf39e1368">Constitution</ref> ;</p><p>Vu le <ref href="/eli/reg_ue/2014/376/jo" id="8d5a020f-a524-4cfe-8be9-3e66ef955267" scl:verify="true">règlement (UE) n° 376/2014</ref> du Parlement européen et du Conseil du 3 avril 2014 concernant les comptes rendus, l’analyse et le suivi d’événements dans l’aviation civile, modifiant le <ref href="/eli/reg_ue/2010/996/jo" id="ecb25702-05f9-496c-af2b-b38fdc3ae38a" scl:verify="true">règlement (UE) <span scl:no-break="true">n</span>° 996/2010</ref> du Parlement européen et du Conseil et abrogeant la <ref href="/eli/dir_ue/2003/42/jo" id="9604072e-7a18-423e-96b7-5d7366a43c49" scl:verify="true">directive 2003/42/CE</ref> du Parlement européen et du Conseil et les <ref href="/eli/reg_ue/2007/1321/jo" id="9e00a94a-cf0b-4a0d-bcbf-6242fb7fab89">règlements de la Commission (CE) n° 1321/2007</ref> et <ref href="/eli/reg_ue/2007/1330/jo" id="9cbf4030-ea86-4852-9dcf-9cfb4e884738">(CE) n° 1330/2007</ref>, tel que modifié, et notamment son article 16, paragraphe 12 ; </p><p>Vu l’avis de la Chambre de commerce ;</p><p>Notre Conseil d’État entendu ;</p><p>Sur le rapport de Notre Ministre de la Mobilité et des Travaux publics et après délibération du Gouvernement en conseil ;</p></container><formula name=""><p>Arrêtons :</p></formula></preamble><body><article id="art_1er"><num>Art. 1<sup>er</sup>.</num><heading><b>Organe consultatif pour la culture juste</b></heading><alinea><content><p>Il est institué auprès de la Direction de l’aviation civile, ci-après « DAC », un Organe consultatif pour la culture juste, ci-après « Organe consultatif », conformément à l’article 16, paragraphe 12, du <ref href="/eli/reg_ue/2014/376/jo" id="7fc5b8a2-95f9-4954-8642-6de3ece9124c" scl:verify="true">règlement (UE) <span scl:no-break="true">n</span>° 376/2014</ref> du Parlement européen et du Conseil du 3 avril 2014 concernant les comptes rendus, l’analyse et le suivi d’événements dans l’aviation civile, modifiant le <ref href="/eli/reg_ue/2010/996/jo" id="7fb7033e-37c8-41eb-a602-2915c27a7a4b" scl:verify="true">règlement (UE) n° 996/2010</ref> du Parlement européen et du Conseil et abrogeant la <ref href="/eli/dir_ue/2003/42/jo" id="82a364c0-2ac3-4b08-9a52-a7404990a3d7" scl:verify="true">directive 2003/42/CE</ref> du Parlement européen et du Conseil et les <ref href="/eli/reg_ue/2007/1321/jo" id="85952ea5-a4e7-4e4f-9c56-8c255e48fc7b">règlements de la Commission (CE) n° 1321/2007</ref> et <ref href="/eli/reg_ue/2007/1330/jo" id="77315c54-88d0-4265-8ed6-f3053327e731">(CE) n° 1330/2007</ref>, tel que modifié.</p></content></alinea></article><article id="art_2"><num>Art. 2.</num><heading><b>Composition</b></heading><alinea><content><p>L’Organe consultatif est composé de trois membres effectifs et trois membres suppléants, dont deux représentants de la DAC et un représentant du ministre ayant la Navigation et les transports aériens dans ses attributions.</p></content></alinea><alinea><content><p>Les membres effectifs et suppléants sont nommés par le ministre ayant la Navigation et les transports aériens dans ses attributions.</p></content></alinea><alinea><content><p>L’Organe consultatif peut s’adjoindre des experts s’il le juge nécessaire.</p></content></alinea></article><article id="art_3"><num>Art. 3.</num><heading><b>Organisation interne</b></heading><alinea><content><p>L’Organe consultatif se réunit aussi souvent que la mission l’exige et au moins une fois par an. Il établit son règlement intérieur qui est approuvé par le directeur de l’aviation civile.</p></content></alinea></article><article id="art_4"><num>Art. 4.</num><heading><b>Formule exécutoire</b></heading><alinea><content><p>Notre ministre ayant la Navigation et les transports aériens dans ses attributions est chargé de l’exécution du présent règlement qui sera publié au Journal officiel du Grand-Duché de Luxembourg.</p></content></alinea></article></body><conclusions><p> <signature> <shortTitle>Le Ministre de la Mobilité<br/> et des Travaux publics,</shortTitle> <person refersTo="">François Bausch </person> </signature> </p><p> <signature>Château de Berg, le 23 avril 2021<docDate date="2999-01-01">. </docDate> <person refersTo="">Henri</person> </signature> </p></conclusions></act></akomaNtoso>

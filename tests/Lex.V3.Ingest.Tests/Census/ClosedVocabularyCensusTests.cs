@@ -229,7 +229,11 @@ public sealed class ClosedVocabularyCensusTests
                 "Lex.V3.Ingest.LexCorpus6Stage3OutcomeDomain: LuxembourgAknLegalContent, "
                     + "LuxembourgPublisherPdfActScope, EuropeAnnexBody, EuropeFormexMainBody",
                 "Lex.V3.Ingest.Luxembourg.LuxembourgAknArticleInventoryDisposition: Inventoried, "
-                    + "NotAkn, RetainedBytesUnavailable, XmlRejected",
+                    + "NotAkn, RetainedBytesUnavailable, XmlRejected, PublisherFileNamesOtherState",
+                "Lex.V3.Ingest.Luxembourg.LuxembourgAknContentConsistencyCheck: SharedFile, "
+                    + "LaterState, OtherWork, DateAhead, CopiedState, CopiedAct",
+                "Lex.V3.Ingest.Luxembourg.LuxembourgAknInFileIdentityClass: Own, SameWorkAct, "
+                    + "SameWorkOtherState, TcOrTrep, OtherWork, TemplateEmpty, Absent",
                 "Lex.V3.Ingest.Luxembourg.LuxembourgAknLegalContentDisposition: Admitted, "
                     + "UpstreamNotInventoried, RetainedBytesUnavailable, XmlRejected, "
                     + "ArticleCoordinatesMismatch, UnsupportedContentShape, MarkerOnlyEvidence",

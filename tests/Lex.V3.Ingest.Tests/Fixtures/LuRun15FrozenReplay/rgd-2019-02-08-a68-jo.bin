@@ -1,0 +1,70 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?><akomaNtoso xmlns="http://docs.oasis-open.org/legaldocml/ns/akn/3.0/CSD13" xmlns:scl="http://www.scl.lu"><act contains="originalVersion" name="" scl:page-proof="many"><meta><identification source="#somebody">
+			<FRBRWork>
+			     <FRBRthis value="http://data.legilux.public.lu/eli/etat/leg/rgd/2019/02/08/a68/jo"/>
+			     <FRBRuri value=""/>
+			     <FRBRdate date="2019-02-08" name="document"/>
+			     <FRBRauthor as="#author" href="http://data.legilux.public.lu/resource/authority/legal-institution/MJ"/>
+			     <FRBRauthor as="#author" href="http://data.legilux.public.lu/resource/authority/legal-institution/MFI"/>
+			     <FRBRcountry value="http://publications.europa.eu/resource/authority/country/LUX"/>
+			</FRBRWork>
+			<FRBRExpression>
+			     <FRBRthis value="http://data.legilux.public.lu/eli/etat/leg/rgd/2019/02/08/a68/jo/fr"/>
+			     <FRBRuri value=""/>
+			     <FRBRdate date="2019-02-08" name="document"/>
+			     <FRBRauthor as="#author" href=""/>
+			     <FRBRlanguage language="http://publications.europa.eu/resource/authority/language/FRA"/>
+			</FRBRExpression>
+			<FRBRManifestation>
+			     <FRBRthis value="http://data.legilux.public.lu/eli/etat/leg/rgd/2019/02/08/a68/jo/fr/xml"/>
+			     <FRBRuri value=""/>
+			     <FRBRdate date="2019-02-08" name="document"/>
+			     <FRBRauthor as="#author" href=""/>
+			</FRBRManifestation>
+			<scl:JOLUXWork>
+				<scl:JOLUXComplexWork>
+					<scl:jolux scl:name="uriThis">http://data.legilux.public.lu/eli/etat/leg/rgd/2019/02/08/a68</scl:jolux>
+				</scl:JOLUXComplexWork>
+				<scl:JOLUXLegalResource>
+					<scl:jolux scl:name="uriThis">http://data.legilux.public.lu/eli/etat/leg/rgd/2019/02/08/a68/jo</scl:jolux>
+					<scl:jolux scl:name="publicationDate">2019-02-13</scl:jolux>
+					<scl:jolux scl:name="typeDocument">http://data.legilux.public.lu/resource/authority/resource-type/RGD</scl:jolux>
+					<scl:jolux scl:name="dateDocument">2019-02-08</scl:jolux>
+					<scl:jolux scl:name="dateEntryInForce">2019-02-17</scl:jolux>
+					<scl:jolux scl:name="dateApplicability">2019-02-17</scl:jolux>
+					<scl:jolux scl:name="isMemberOf">http://data.legilux.public.lu/eli/etat/leg/rgd/2019/02/08/a68</scl:jolux>
+					<scl:jolux scl:name="isPartOf">http://data.legilux.public.lu/eli/etat/leg/memorial/2019/a68</scl:jolux>
+					<scl:jolux scl:name="responsibilityOf">http://data.legilux.public.lu/resource/authority/legal-institution/MJ</scl:jolux>
+					<scl:jolux scl:name="responsibilityOf">http://data.legilux.public.lu/resource/authority/legal-institution/MFI</scl:jolux>
+					<scl:jolux scl:name="subjectLevel1">http://data.legilux.public.lu/resource/authority/legal-subject/327</scl:jolux>
+					<scl:jolux scl:name="subjectLevel2">http://data.legilux.public.lu/resource/authority/legal-subject/59</scl:jolux>
+					<scl:jolux scl:name="subjectLevel2">http://data.legilux.public.lu/resource/authority/legal-subject/1428</scl:jolux>
+					<scl:jolux scl:name="basedOn">http://data.legilux.public.lu/eli/etat/leg/loi/1984/03/12/n1/jo</scl:jolux>
+					<scl:rdf scl:name="type">http://data.legilux.public.lu/resource/ontology/jolux#BaseAct</scl:rdf>
+					<scl:rdf scl:name="type">http://data.legilux.public.lu/resource/ontology/jolux#Act</scl:rdf>
+					<scl:rdf scl:name="type">http://data.legilux.public.lu/resource/ontology/jolux#Work</scl:rdf>
+					<scl:rdf scl:name="type">http://data.legilux.public.lu/resource/ontology/jolux#LegalResource</scl:rdf>
+					<scl:rdf scl:name="type">http://data.legilux.public.lu/resource/ontology/jolux#NationalLegalResource</scl:rdf>
+				</scl:JOLUXLegalResource>
+			</scl:JOLUXWork>
+			<scl:JOLUXExpression>
+				<scl:jolux scl:name="uriThis">http://data.legilux.public.lu/eli/etat/leg/rgd/2019/02/08/a68/jo/fr</scl:jolux>
+				<scl:jolux scl:name="realizes">http://data.legilux.public.lu/eli/etat/leg/rgd/2019/02/08/a68/jo</scl:jolux>
+				<scl:jolux scl:name="language">http://publications.europa.eu/resource/authority/language/FRA</scl:jolux>
+				<scl:jolux scl:lg="fra" scl:name="title">Règlement grand-ducal du 8 février 2019 fixant pour l’année 2019 le montant maximum des indemnités qui peuvent être allouées à certaines victimes de dommages corporels résultant d’une infraction.</scl:jolux>
+			</scl:JOLUXExpression>
+			<scl:JOLUXManifestation>
+				<scl:jolux scl:name="uriThis">http://data.legilux.public.lu/eli/etat/leg/rgd/2019/02/08/a68/jo/fr/xml</scl:jolux>
+				<scl:jolux scl:name="embodies">http://data.legilux.public.lu/eli/etat/leg/rgd/2019/02/08/a68/jo/fr</scl:jolux>
+				<scl:jolux scl:name="publishedIn">http://data.legilux.public.lu/eli/etat/leg/memorial/2019/a68/fr/pdf</scl:jolux>
+				<scl:jolux scl:name="memorialPage">1</scl:jolux>
+				<scl:jolux scl:name="memorialSequence">A</scl:jolux>
+				<scl:jolux scl:name="publisher">http://data.legilux.public.lu/authority/legal-institution/ME</scl:jolux>
+				<scl:jolux scl:lg="fra" scl:name="rights">Copyright : Ministère d’État du Grand-Duché de Luxembourg – Service central de législation</scl:jolux>
+				<scl:jolux scl:name="rightsHolder">http://data.legilux.public.lu/authority/legal-institution/ME</scl:jolux>
+				<scl:jolux scl:name="license">http://creativecommons.org/licenses/by/4.0/</scl:jolux>
+				<scl:jolux scl:name="userFormat">http://data.legilux.public.lu/resource/authority/user-format/xml-akomantoso</scl:jolux>
+				<scl:jolux scl:name="format">http://publications.europa.eu/resource/authority/file-type/XML</scl:jolux>
+				<scl:jolux scl:name="isExemplifiedBy">http://data.legilux.public.lu/file/eli-etat-leg-rgd-2019-02-08-a68-jo-fr-xml.xml</scl:jolux>
+			</scl:JOLUXManifestation>
+		</identification>
+<lifecycle source="#"><eventRef date="2019-01-11" id="e1" source="#ro1" type="generation"/></lifecycle><analysis source="#"/><references source="#"><original href="/eli/etat/leg/rgd/2019/01/11/n3/jo" id="ro1" showAs="Original"/></references></meta><preface><longTitle><p>Règlement grand-ducal du <?xm-deletion_mark author='Xopus' time='20190212T143504+0000' data='00 00 '?><?xm-insertion_mark_start author='Xopus' time='20190212T143504+0000'?>8 février <?xm-insertion_mark_end?>2019 fixant pour l’année 2019 le montant maximum des indemnités qui peuvent être allouées à certaines victimes de dommages corporels résultant d’une infraction.</p></longTitle></preface><preamble><container name="preamble"><p>Nous Henri, Grand-Duc de Luxembourg, Duc de Nassau,</p></container><container name="considerando"><p>Vu l’article 11 de la <ref href="/eli/etat/leg/loi/1984/03/12/n1/jo" id="7d955a59-8c1c-4079-8d81-742e9c0d3cf5">loi modifiée du 12 mars 1984</ref> relative à l’indemnisation de certaines victimes de dommages corporels résultant d’une infraction et à la répression de l’insolvabilité frauduleuse ;</p><p>Vu la fiche financière ;</p><p>Notre Conseil d’État entendu ;</p><p>Sur le rapport de Notre <?xm-deletion_mark author='Xopus' time='20190212T143551+0000' data='Vice-Premier Ministre, '?>Ministre de la Justice, et de Notre Ministre des Finances, et après délibération du Gouvernement en conseil ;</p></container><formula name=""><p>Arrêtons :</p></formula></preamble><body><article id="art_1er"><num>Art. 1<sup>er</sup>.</num><alinea><content><p>Le montant maximum de l’indemnité qui peut être allouée par le ministre de la Justice conformément à l’article 11 de la <ref href="/eli/etat/leg/loi/1984/03/12/n1/jo" id="4e08345d-52a1-45f5-a234-efda3490c4c7">loi modifiée du 12 mars 1984</ref> relative à l’indemnisation de certaines victimes de dommages corporels résultant d’une infraction et à la répression de l’insolvabilité frauduleuse est fixé pour l’année 2019 à 63 000 euros.</p></content></alinea></article><article id="art_2"><num>Art. 2.</num><alinea><content><p>Notre <?xm-deletion_mark author='Xopus' time='20190212T143602+0000' data='Vice-Premier Ministre, '?>Ministre de la Justice, et Notre Ministre des Finances sont chargés, chacun en ce qui le concerne, de l’exécution du présent règlement qui sera publié au Journal officiel du Grand-Duché de Luxembourg.</p></content></alinea></article></body><conclusions><p><signature><shortTitle><?xm-insertion_mark_start author='Xopus' time='20190212T143611+0000'?>Le <?xm-insertion_mark_end?>Ministre de la Justice,</shortTitle><person refersTo="">Félix Braz</person></signature><signature><shortTitle>Le Ministre des Finances,</shortTitle><person refersTo="">Pierre Gramegna</person></signature></p><p><signature><docDate date="2999-01-01">Palais de Luxembourg, le <?xm-deletion_mark author='Xopus' time='20190212T143511+0000' data='00 00 '?><?xm-insertion_mark_start author='Xopus' time='20190212T143511+0000'?>8 février <?xm-insertion_mark_end?>2019.</docDate><person refersTo="">Henri</person></signature></p></conclusions></act></akomaNtoso>
