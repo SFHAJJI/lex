@@ -97,7 +97,8 @@ public sealed class V3CorpusEuropeTimeViewBranchTests
                 payload.EnumerateObject().Select(static field => field.Name).ToArray(), "the registry's fields and no other");
             var candidates = payload.GetProperty("candidates").EnumerateArray().Select(static value => value.GetString()!).ToArray();
             Assert.HasCount(2, candidates);
-            Assert.IsTrue(candidates.All(static candidate => candidate.StartsWith($"/eu-eurlex/{GdprSeed}/eng/{ConsolidationDate}--", StringComparison.Ordinal)));
+            Assert.IsTrue(candidates.All(static candidate => candidate.StartsWith($"/eu-eurlex/{GdprSeed}/{ConsolidationDate}--", StringComparison.Ordinal) &&
+                candidate.EndsWith("/eng", StringComparison.Ordinal)));
 
             // The original wording, before the consolidation, is not touched by the ambiguity.
             Assert.IsNull((await EuAsOfAsync(mount, "2020-06-01")).Refusal);

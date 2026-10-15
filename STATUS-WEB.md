@@ -4,6 +4,80 @@ Updated 2026-10-15. The web lane's progress, split out of STATUS.md (which keeps
 items and the pointers) by the standing order of 2026-10-01 13:50 UTC. Every pull request of the web lane
 updates this file, not STATUS.md.
 
+## One permalink shape: publisher, work, date and digest, language, article (sole driver, 2026-10-15)
+
+The plan's item 3.2, first part (`C:\lex-v3\PLAN-2026-10-14.md`), to the specification of record's R64: "One permalink
+shape: /{publisher}/{work}/{date}--{digest}/{language}/{anchor}, where the digest is that language's body. '#' is used
+only for positions inside an article. ... The interface language never enters a permalink." The API minted two shapes:
+a Luxembourg state's `/lu-legilux/{work}/{date}--{sha256}` with the article after `#` and no language, and an EU
+wording's `/eu-eurlex/{celex}/{lng}/{date}--{sha256}` with the provision after `#`.
+- **What the digest is, per publisher** (read from the code that mints it): neither is a digest of the publisher's
+  bytes, and both are already per language.
+  - Luxembourg's `state_sha256` (`LuxembourgIndexBuilder.StateSha256`, domain `lex-v3-luxembourg-expression-state/1`)
+    digests one expression state: the work key, the applicability date, the expression, work and legal-resource IRIs,
+    the language, the rule profiles and every article identity of that expression, sorted. An index state row is keyed by
+    work, date, expression and language, so a state is one language's; each article identity is itself a digest of the
+    article's text tokens (`lex-v3-luxembourg-akn-legal-content-article/1`), so the digest pins that language's text.
+  - The EU `wording_sha256` (`EuropeWordingDigestRule`, domain `lex-v3-eu-wording/1`) digests the CELEX, the work and
+    expression IRIs, the language, the wording date and every article identity of the expression in the publisher's
+    order: one language's wording, its text pinned through the article identities.
+- **The new shape, minted everywhere the API mints a permalink**: `/lu-legilux/{work}/{date}--{state sha256}/{lng}` and
+  `/eu-eurlex/{celex}/{date}--{wording sha256}/{lng}`, `{lng}` the text's three letters (`fra`, `deu`, `eng`); an
+  article's permalink adds the publisher's id as a last segment, escaped as .NET's `Uri.EscapeDataString` escapes it
+  (`art_1er`, `Article%201%282%29`), where `#` stood before. Every answer that carries one changes with it: as_of,
+  timeline, dossier, evidence_bundle (state and article permalinks), provenance, status_on, article_history, diff,
+  changes_in_period, in_force_on, cited_by, citation, search (hits, candidates, the EU pinned wording), verify, events
+  and answer_drift (`permalink`, `replaced_permalink`, `answered_before`, `answered_now`), as_observed, and the
+  refusals that name one (`current_hash_pinned_url`, `candidates`); MCP answers through the same dispatch. The scope
+  sentences that described the article "after #" now say "as a last segment". The stable coordinates
+  (`/lu-legilux/{work}/{date}`, `/eu-eurlex/{celex}/{lng}/{date}`) are not permalinks and keep their shape.
+- **The API reads the new shape and only it** (`PermalinkSegments`, one reader for both publishers: as a path, under
+  `https://law.soufien.lu`, or under `/fr/` and `/en/`; no query, no `#`, no empty segment; a calendar date, a lower-case
+  digest, three lower-case letters, and an article of RFC 3986's path characters, never `.` or `..`). The language now
+  counts: `resolve` and `verify` answer a Luxembourg permalink from its language's states only, so a German state's
+  digest named under `fra` is `pinned_digest_mismatch` naming the French state, a coordinate with no state in that
+  language is `language_not_available` to `verify` (`identifier_unknown` to `resolve`), and `ambiguous_identifier`
+  names two states of one language at one date. A `language` asked beside a permalink that names another is
+  `language_not_available`, as the EU already answered.
+- **The site**: the reading page stands at `/{fr,en}/lu-legilux/{work}/{date}--{sha256}/{lng}[/{article}]` and
+  `/{fr,en}/eu-eurlex/{celex}/{date}--{sha256}/{lng}[/{provision}]` on both servers (`permalinks.mjs`, `V3WebRoot`), and
+  the server renders it from `evidence_bundle` asked in the permalink's language (a Luxembourg reading now asks in that
+  language, as the EU one did). The page brings the article the path names into view; a search hit links its article
+  as a segment; the export cites an EU article without text in the new shape. The citation checker, the UX URL module
+  (`urls.mjs`, which the refusal card reads candidates with) and the previews speak the new shape.
+- **The shapes before R64**: an EU wording's permalink names everything the new one does, so
+  `/eu-eurlex/{celex}/{lng}/{date}--{sha256}` answers `301 Moved Permanently` to the new address, under the interface
+  language it had (`/fr/...` to `/fr/...`, none to none), the query kept, the same answer for every reader (no `Vary`);
+  a browser keeps its `#provision`, which the reading page still brings into view. A Luxembourg state's permalink of that
+  time names no language, so no address can be computed from it alone: it is answered as any address the site does not
+  hold (the API's routing; the live server's 404). Nothing outside this machine holds one: the site has never been public.
+- **Canonical and hreflang**: a law's page under `/fr/` or `/en/` names as canonical the address with no interface
+  language (`https://law.soufien.lu/lu-legilux/.../fra/art_1er`, the permalink Lex prints and cites, which sends each
+  reader to theirs), with alternates for `fr`, `en` and `x-default` (the address itself). The server's render writes
+  them (`Document.jsx`, `lawPageLinks`); the page as built, which a server sends when it cannot render, writes them
+  once loaded (`head-links.mjs`, `client.jsx`), and a stale permalink's reading names the version it shows, as the
+  render does (`readingAddressShown`). Link elements only: the Content-Security-Policy is unchanged. The dossier at a
+  work's address follows the same rule.
+- **The shared table** (`tests/Lex.V3.Tests/Fixtures/SitePaths/site-paths.json`) gains `moved` and holds 83 paths: 18
+  served (anchors included, one percent-encoded), 10 sent to the reader's language, 3 moved (the EU shape before R64,
+  with and without an interface language), 52 neither (the Luxembourg shape before R64, a two-letter or upper-case
+  language, `.`, `..`, two anchor segments, a broken escape, a space, `#`, a final newline); `permalinks.test.mjs` and
+  `V3WebRootTests` hold both servers to it, and to what each page is rendered from.
+- **The journeys** open the permalink and stale steps in the new shape (`/en/lu-legilux/{work}/{date}--{sha256}/fra/art_15`),
+  ask the reading in its language, and now check each rendered law page's canonical link and alternates in the browser.
+- **Not in this part** (3.2b, next in order below): the cited article rendered first with its own title, the banner when
+  anything changed since, `text_withheld` and `pinned_digest_mismatch` at a permalink, and readable current-version
+  addresses.
+- **Measured** (this branch, from `v3/integration` at #962's merge): web suite 1,115 of 1,115; `dotnet build
+  Lex.V3.slnx -c Release` 0 warnings, 0 errors; `Lex.V3.Tests` 3,157 (3,156 passed, 1 skipped); `Lex.V3.Ingest.Tests`
+  whole, 3,014 (2,985 passed, 26 skipped, 3 failed: two EU time-view assertions still on the old shape, repaired), then
+  `V3FirstMountBuildTests` with `Census`, `PublicRequestRecordingTests` and `AnswerSamples` 91 (88 passed, 3 skipped);
+  the answer, envelope and refusal samples and the evaluation card rendered again (the card's EU temporal
+  case digests move with the permalinks they key) and verified; the journeys against the API published from this branch:
+  the fixture mount through the live server 45 of 45 and by keyboard served by the API 45 of 45, the licence-blocked
+  mount 12 of 12 both ways, the two-state mount 2 of 2 both ways, the EU annex control mount 3 of 3 both ways;
+  `eng/verify-v3-tree.ps1` 1,505 tracked paths.
+
 ## A missing page, a failure and a deployment never look like a legal answer (sole driver, 2026-10-15)
 
 The plan's item 6.9 (`C:\lex-v3\PLAN-2026-10-14.md`, Phase 6), from the specification of record's R60: "Service failures
@@ -3637,6 +3711,17 @@ date" now measures EU dated selection, the owner's main use case.
 
 ## Next, in order (web lane; the data lane's items 1 to 3 are in STATUS-DATA.md)
 
+The plan's item 3.2, second part (3.2b), after the permalink shape (2026-10-15, above):
+1. The cited article first, rendered by the server with its own title (and its canonical link, done), and a link to
+   the whole act; the rest of the reading after it (with 3.7's reading by article).
+2. The cited text always shown, with a banner when anything changed since: "The publisher replaced this file on
+   {date}"; "A newer version applies from {date}".
+3. `text_withheld` at a permalink whose text was later withheld (R83, R92), with its hashes.
+4. `pinned_digest_mismatch` at a permalink whose digest Lex no longer holds, with the current link, on the page as
+   `verify` already answers it.
+5. Readable current-version addresses for every act and article, identical version pages pointing their canonical link
+   there (R67); the stable coordinates' own shape is settled with them.
+
 The web lane's order since the owner's proxy's journey corrections (2026-10-01 14:30 UTC,
 `C:\lex-v3\lanes\STANDING-ORDERS.md` section 7, overriding the queues below):
 1. Pay the merge debt: this STATUS split (PR #902: the lane files and the tree allowlist), with the deployment
@@ -3845,6 +3930,29 @@ The plan, in order (its items 1 to 3 are the data lane's, in STATUS-DATA.md):
 ## Driver decisions (reversible)
 
 Each is the driver's call under ruling 7 and can be reversed by a later pull request that says why.
+
+- The permalink's digest (R64, 2026-10-15): "that language's body" is read as the digest each publisher already mints
+  per language, Luxembourg's `state_sha256` and the EU `wording_sha256`. Both cover one expression in one language and
+  pin its text through every article identity, a digest of the article's text tokens; no new digest is minted. The
+  reason: a digest of the publisher's raw bytes would change with a re-wrapped file whose text did not change, and
+  minting one would re-derive every index and break every pin for no reader-visible gain. What the reading differs in,
+  said here so it is not taken for more: both digests also cover the expression's identifiers and the date, and
+  Luxembourg's covers its rule profiles (a re-derivation under a new profile changes it) and sorts the article identities
+  (an order change alone does not). Reversible by minting a body digest and a new permalink generation, with the moves
+  below.
+- The shapes before R64 (2026-10-15): an EU wording's old permalink moves for good (`301`) to the new one, under the
+  interface language it had and with its query, the same answer for every reader; it is computed from the old address
+  alone. A Luxembourg state's old permalink names no language, so nothing is computed from it alone, and it is answered
+  as an unknown address, as the task's rule says; the index could find the language by the digest, but a redirect that
+  reads the corpus would answer differently per release. No public link exists to break: the site has never been open.
+  The API's operations read only the new shape. Reversible: a move for the Luxembourg shape through the index.
+- The text language in the address (2026-10-15): three letters, the publisher's own code (`fra`, `deu`, `eng`), as the
+  EU permalink already wrote it and the API's `language` parameter takes it; a Luxembourg reading at a permalink now asks
+  in that language, so a page shows the language the permalink pins and not every language held on the date.
+- The canonical link (2026-10-15, the plan's 3.2): every law page under `/fr/` or `/en/`, the reading and the dossier
+  alike, names the address with no interface language as canonical, the permalink Lex prints and cites, and each
+  language's page and `x-default` as alternates. A canonical that answers a redirect is a weaker signal to a search
+  engine than one that answers 200; the plan chose the address Lex cites, and the sitemap and indexing (3.6) revisit it.
 
 - The sole-driver period (the owner's order of 2026-10-02: one Claude driver, no Codex, no other
   Claude, full authorisation, never ask the owner): each pull request is reviewed by an independent

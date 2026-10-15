@@ -91,7 +91,8 @@ public sealed class V3CorpusEuropeTimeViewTests
                     Assert.AreEqual(missingStateCelex ? null : "02016R0679-20240101", wordings[1].GetProperty("celex").GetString());
                     foreach (var wording in wordings)
                     {
-                        StringAssert.StartsWith(wording.GetProperty("permalink").GetString(), $"/eu-eurlex/{GdprSeed}/{code}/{wording.GetProperty("wording_date").GetString()}--");
+                        StringAssert.StartsWith(wording.GetProperty("permalink").GetString(), $"/eu-eurlex/{GdprSeed}/{wording.GetProperty("wording_date").GetString()}--");
+                        StringAssert.EndsWith(wording.GetProperty("permalink").GetString(), $"--{wording.GetProperty("wording_sha256").GetString()}/{code}", "R64: the wording's digest, then its language");
                     }
 
                     Assert.AreEqual(0, language.GetProperty("unplaced_versions").GetArrayLength());
