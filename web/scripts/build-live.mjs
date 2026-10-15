@@ -13,7 +13,9 @@
 // `client-live-compare.js`), `radar.html` (change radar, script `client-live-radar.js`) and
 // `export.html` (export composer, script `client-live-export.js`). The root holds no page: both servers
 // send it to a language. German and Luxembourgish are `locale-de.html` and `locale-lb.html`, at the root,
-// which say they are not reviewed.
+// which say they are not reviewed. Each interface language's 404 page is `not-found/{language}.html` (the search
+// screen under the page's own words, script `client-live-search.js`) and its maintenance page
+// `maintenance/{language}.html` (no script); neither server serves either at that address (`not-found.mjs`).
 
 import { cp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { pathToFileURL } from "node:url";
@@ -21,6 +23,7 @@ import { pathToFileURL } from "node:url";
 import { tokenCss } from "./design-tokens.mjs";
 import { CHROME_LOCALES } from "./localization.mjs";
 import { REVIEWED_CHROME_LOCALES } from "./locale-unavailable.mjs";
+import { MAINTENANCE_DIRECTORY, NOT_FOUND_DIRECTORY } from "./not-found.mjs";
 
 const source = new URL("../src/", import.meta.url);
 export const LIVE_DESTINATION = new URL("../dist-live/", import.meta.url);
@@ -62,6 +65,14 @@ async function buildPages(destination, { card, locale, buildTag = "" }) {
   const { bundleServerRenderer } = await import("./react-build.mjs");
   await mkdir(new URL("ssr/", destination), { recursive: true });
   await cp(await bundleServerRenderer("app/ssr-entry.jsx", `ssr-entry${suffix}.js`, options), new URL(`ssr/${locale}.js`, destination));
+  // This language's 404 page, which both servers answer a page request nothing claims with (R60; `not-found.mjs`), and its
+  // maintenance page, for the deploy kit: each under a directory of its own at the root, which neither server serves.
+  const notFound = await import(pathToFileURL(await bundle("app/live-not-found-page.jsx", `live-not-found-page${suffix}.mjs`, options)).href);
+  const maintenance = await import(pathToFileURL(await bundle("app/live-maintenance-page.jsx", `live-maintenance-page${suffix}.mjs`, options)).href);
+  for (const [directory, html] of [[NOT_FOUND_DIRECTORY, notFound.renderLiveNotFoundPage()], [MAINTENANCE_DIRECTORY, maintenance.renderLiveMaintenancePage()]]) {
+    await mkdir(new URL(`${directory}/`, destination), { recursive: true });
+    await writeFile(new URL(`${directory}/${locale}.html`, destination), html, "utf8");
+  }
 }
 
 /**

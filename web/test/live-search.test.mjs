@@ -14,7 +14,7 @@ import { readFile } from "node:fs/promises";
 import { createElement as h } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 
-import { LiveSearch, RefusalCard, SearchAnswerView, SearchResultsView, renderLiveSearchPage } from "../.react-build/app.mjs";
+import { FailureFrame, LiveSearch, RefusalCard, SearchAnswerView, SearchResultsView, renderLiveSearchPage } from "../.react-build/app.mjs";
 import {
   LIVE_SEARCH_IDLE,
   LIVE_SEARCH_REFUSAL_SENTENCES,
@@ -28,6 +28,9 @@ import {
   startLiveSearch,
 } from "../scripts/live-search.mjs";
 import { REFUSAL_EXAMPLES } from "../scripts/refusal-catalog.mjs";
+
+/** A refusal's card as the screen shows it: one about this service (R60) inside the failure panel, under its line; any other alone. */
+const asShown = (outcome, card) => renderToStaticMarkup(h(FailureFrame, { outcome }, h("lex-card"))).replace("<lex-card></lex-card>", card);
 
 const census = JSON.parse(await readFile(new URL("../../schemas/v3-platform/envelope-samples.json", import.meta.url), "utf8"));
 const { contract } = census;
@@ -210,7 +213,8 @@ test("an answer the search reader refuses is an invalid answer, said, never rend
   const outcome = searchOutcome({ state: "success", envelope });
   assert.equal(outcome.state, "invalid_envelope");
   assert.match(outcome.sentence, /relaxed never outranks strict/);
-  assert.match(view(outcome), /^<section data-answer-state="invalid_envelope"><p role="status">/);
+  assert.match(view(outcome), /^<section data-answer-state="invalid_envelope"><div class="failure-panel" data-failure="invalid_envelope"><p class="failure-line"[^]*<p role="status">/,
+    "an answer the page cannot read is a failure, said under the failure line (R60)");
 });
 
 test("the refusals a search from this page can meet are refusal cards, an EU work's too", async () => {
@@ -228,7 +232,7 @@ test("the refusals a search from this page can meet are refusal cards, an EU wor
     assert.equal(outcome.card, true, `${code}: the card's rules accept the payload the platform sent`);
     assert.equal(outcome.sentence, code === "no_corpus_mounted" ? "This build has no Luxembourg index mounted." : LIVE_SEARCH_REFUSAL_SENTENCES[code]);
     const card = renderToStaticMarkup(h(RefusalCard, { code, sentence: outcome.sentence, payload: outcome.payload }));
-    assert.equal(view(outcome), `<section data-answer-state="refusal">${card}</section>`);
+    assert.equal(view(outcome), `<section data-answer-state="refusal">${asShown(outcome, card)}</section>`);
   }
   assert.equal(LIVE_SEARCH_REFUSAL_SENTENCES.no_corpus_mounted, undefined, "the missing index is named from the payload, never a sentence claiming none is mounted (review of #775)");
   assert.ok(REFUSAL_EXAMPLES.no_corpus_mounted.payload.required_corpus, "the catalog's example carries the corpus the sentence names");

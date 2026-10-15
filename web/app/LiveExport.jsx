@@ -315,8 +315,8 @@ export function ExportPanel({ outcome, pins, onSave }) {
 }
 
 /** The reading to pin from, or whatever state the reading is in. */
-export function ExportAnswerView({ outcome, pins, onPin }) {
-  if (outcome.state !== 'success') return <ReadingAnswerView outcome={outcome} />;
+export function ExportAnswerView({ outcome, pins, onPin, onRetry }) {
+  if (outcome.state !== 'success') return <ReadingAnswerView outcome={outcome} onRetry={onRetry} />;
   const { view } = outcome;
   return (
     <section data-answer-state="success">
@@ -379,7 +379,7 @@ export function LiveExport({ contract, fetchImpl, save = saveExport }) {
     <div>
       <ReadingForm submitLabel={FORM.submit.export} onAsk={(request) => session.current.ask(request)} />
       <LiveAnswer>
-        <ExportAnswerView outcome={outcome} pins={pins} onPin={onPin} />
+        <ExportAnswerView outcome={outcome} pins={pins} onPin={onPin} onRetry={() => session.current.retry()} />
       </LiveAnswer>
       {/* The export is its own live region: pinning changes it, and the reading above does not change. */}
       <LiveAnswer>

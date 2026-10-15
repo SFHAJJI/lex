@@ -13,7 +13,7 @@ import { readFile } from "node:fs/promises";
 import { createElement as h } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 
-import { ExportAnswerView, ExportPanel, LiveExport, RefusalCard, renderLiveExportPage } from "../.react-build/app.mjs";
+import { ExportAnswerView, ExportPanel, FailureFrame, LiveExport, RefusalCard, renderLiveExportPage } from "../.react-build/app.mjs";
 import { loadLiveReading, readingOutcome } from "../scripts/live-reading.mjs";
 import { EUROPE_EXPORT_SCHEMA, EXPORT_WATERMARK, exportCsv, exportJson } from "../scripts/export-build.mjs";
 import { exportPdf } from "../scripts/export-pdf.mjs";
@@ -28,6 +28,9 @@ import {
   pinKey,
   saveExport,
 } from "../scripts/live-export.mjs";
+
+/** A refusal's card as the screen shows it: one about this service (R60) inside the failure panel, under its line; any other alone. */
+const asShown = (outcome, card) => renderToStaticMarkup(h(FailureFrame, { outcome }, h("lex-card"))).replace("<lex-card></lex-card>", card);
 
 const census = JSON.parse(await readFile(new URL("../../schemas/v3-platform/envelope-samples.json", import.meta.url), "utf8"));
 const { contract } = census;
@@ -161,7 +164,7 @@ test("no mount is the reading's card, with no export panel", async () => {
   assert.equal(outcome.card, true);
   const markup = renderToStaticMarkup(h(ExportAnswerView, { outcome, pins: new Set(), onPin: () => {} }));
   const card = renderToStaticMarkup(h(RefusalCard, { code: outcome.code, sentence: outcome.sentence, payload: outcome.payload }));
-  assert.equal(markup, `<section data-answer-state="refusal">${card}</section>`);
+  assert.equal(markup, `<section data-answer-state="refusal">${asShown(outcome, card)}</section>`);
   assert.equal(renderToStaticMarkup(h(ExportPanel, { outcome, pins: new Set(["x#y"]), onSave: () => {} })), "");
 });
 

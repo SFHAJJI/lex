@@ -191,8 +191,9 @@ export function startLiveSearch({ contract, fetchImpl, request, onOutcome }) {
 
 /**
  * One reader's searches on one screen: `ask` sends a search (cancelling the one in flight), `next`
- * asks the page after the last one with the cursor that page handed over, and `cancel` abandons
- * whatever is in flight. A request the form will not send is said as a state and nothing is asked.
+ * asks the page after the last one with the cursor that page handed over, `retry` asks the last
+ * search sent again (the failure panel's retry, R60), and `cancel` abandons whatever is in flight.
+ * A request the form will not send is said as a state and nothing is asked.
  * Every state goes to `onOutcome`: loading when a search is sent, then what it settled to.
  */
 export function createSearchSession({ contract, fetchImpl, onOutcome }) {
@@ -215,6 +216,9 @@ export function createSearchSession({ contract, fetchImpl, onOutcome }) {
     },
     next(after) {
       return last !== null && session.ask({ ...last, after });
+    },
+    retry() {
+      return last !== null && session.ask(last);
     },
     cancel() {
       cancelInFlight?.();

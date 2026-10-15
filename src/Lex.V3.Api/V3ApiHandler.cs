@@ -133,9 +133,17 @@ internal sealed class V3ApiHandler
         }
 
         // The live pages, when this server holds them: only the files its web root recorded, and a law's
-        // address (V3WebRoot.PageForSitePath) served the page that reads it, so every other path reaches the
-        // synthetic routes exactly as before, or with no preview is an unknown route.
+        // address (V3WebRoot.PageForSitePath) served the page that reads it; every other path goes on to the 404 page
+        // below, the synthetic routes, or with no preview the unknown route.
         if (_webRoot is not null && await _webRoot.TryServeAsync(context, rawTarget, cancellationToken, AnswerFor(context)).ConfigureAwait(false))
+        {
+            return;
+        }
+
+        // A page request nothing claims (a GET or HEAD whose path is not a machine's: /api/, /mcp, /health/) is the site's
+        // 404 page, in the reader's language (R60; V3WebRoot.NotFound.cs). A machine's path, and any other method, goes on
+        // to the preview's routes or the unknown route's problem, as before.
+        if (_webRoot is not null && await _webRoot.TryServeNotFoundAsync(context, rawTarget, cancellationToken).ConfigureAwait(false))
         {
             return;
         }

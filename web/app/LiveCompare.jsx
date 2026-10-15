@@ -22,7 +22,7 @@ import { useEffect, useRef, useState } from 'react';
 import { RefusalCard } from './RefusalCard.jsx';
 import { COMPARE_LANGUAGES, LIVE_COMPARE_IDLE, createCompareSession } from '../scripts/live-compare.mjs';
 import { ENGLISH_LANG, countedEntry, liveChrome } from '../scripts/live-chrome.mjs';
-import { AsPublished, LiveAnswer, Permalink, Say, StatusSentence, inEnglish, refusalCardCopyFor } from './LiveAnswer.jsx';
+import { AsPublished, FailureFrame, LiveAnswer, Permalink, Say, StatusSentence, inEnglish, refusalCardCopyFor } from './LiveAnswer.jsx';
 
 /** The forms' labels and buttons, and this screen's sentences, from the interface copy table. */
 const FORM = liveChrome().form;
@@ -192,7 +192,7 @@ export function CompareView({ view }) {
 }
 
 /** One view state, laid out: the comparison, the refusal card, or the sentence a state carries. */
-export function CompareAnswerView({ outcome }) {
+export function CompareAnswerView({ outcome, onRetry }) {
   if (outcome.state === 'success') {
     return (
       <section data-answer-state="success">
@@ -204,14 +204,18 @@ export function CompareAnswerView({ outcome }) {
   if (outcome.state === 'refusal' && outcome.card) {
     return (
       <section data-answer-state="refusal">
-        <RefusalCard code={outcome.code} sentence={outcome.sentence} payload={outcome.payload} copy={refusalCardCopyFor(outcome.context)} />
+        <FailureFrame outcome={outcome} onRetry={onRetry}>
+          <RefusalCard code={outcome.code} sentence={outcome.sentence} payload={outcome.payload} copy={refusalCardCopyFor(outcome.context)} />
+        </FailureFrame>
       </section>
     );
   }
 
   return (
     <section data-answer-state={outcome.state}>
-      <StatusSentence outcome={outcome} />
+      <FailureFrame outcome={outcome} onRetry={onRetry}>
+        <StatusSentence outcome={outcome} />
+      </FailureFrame>
     </section>
   );
 }
@@ -269,7 +273,7 @@ export function LiveCompare({ contract, fetchImpl }) {
         <button type="submit">{FORM.submit.compare}</button>
       </form>
       <LiveAnswer>
-        <CompareAnswerView outcome={outcome} />
+        <CompareAnswerView outcome={outcome} onRetry={() => session.current.retry()} />
       </LiveAnswer>
     </div>
   );

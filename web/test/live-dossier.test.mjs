@@ -12,7 +12,7 @@ import { readFile } from "node:fs/promises";
 import { createElement as h } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 
-import { DossierAnswerView, LiveDossier, RefusalCard, renderLiveDossierPage } from "../.react-build/app.mjs";
+import { DossierAnswerView, FailureFrame, LiveDossier, RefusalCard, renderLiveDossierPage } from "../.react-build/app.mjs";
 import {
   LIVE_DOSSIER_IDLE,
   LIVE_DOSSIER_REFUSAL_SENTENCES,
@@ -22,6 +22,9 @@ import {
   loadLiveDossier,
 } from "../scripts/live-dossier.mjs";
 import { noCorpusMountedSentence } from "../scripts/live-refusals.mjs";
+
+/** A refusal's card as the screen shows it: one about this service (R60) inside the failure panel, under its line; any other alone. */
+const asShown = (outcome, card) => renderToStaticMarkup(h(FailureFrame, { outcome }, h("lex-card"))).replace("<lex-card></lex-card>", card);
 
 const census = JSON.parse(await readFile(new URL("../../schemas/v3-platform/envelope-samples.json", import.meta.url), "utf8"));
 const { contract } = census;
@@ -183,7 +186,7 @@ test("the other refusals a dossier from this page can meet are refusal cards wit
     assert.equal(outcome.card, true, `${scenario}: the card's rules accept the payload the platform sent`);
     assert.equal(outcome.sentence, expected, `${scenario}: a server holding the Luxembourg index is never said to hold none (review of #775)`);
     const card = renderToStaticMarkup(h(RefusalCard, { code, sentence: outcome.sentence, payload: outcome.payload }));
-    assert.equal(view(outcome), `<section data-answer-state="refusal">${card}</section>`, scenario);
+    assert.equal(view(outcome), `<section data-answer-state="refusal">${asShown(outcome, card)}</section>`, scenario);
   }
   assert.equal(LIVE_DOSSIER_REFUSAL_SENTENCES.no_corpus_mounted, undefined, "the missing index is named from the payload");
 });

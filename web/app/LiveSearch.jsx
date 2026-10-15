@@ -25,7 +25,7 @@
 import { useEffect, useRef, useState } from 'react';
 
 import { RefusalCard } from './RefusalCard.jsx';
-import { LiveAnswer, Permalink, Say, StatusSentence, inEnglish, refusalCardCopyFor } from './LiveAnswer.jsx';
+import { FailureFrame, LiveAnswer, Permalink, Say, StatusSentence, inEnglish, refusalCardCopyFor } from './LiveAnswer.jsx';
 import { quotationLanguageTag } from '../scripts/live-reading.mjs';
 import {
   LIVE_SEARCH_IDLE,
@@ -224,7 +224,7 @@ export function SearchResultsView({ view, onNextPage }) {
 }
 
 /** One view state, laid out: the results, the refusal card, or the sentence a state carries. */
-export function SearchAnswerView({ outcome, onNextPage }) {
+export function SearchAnswerView({ outcome, onNextPage, onRetry }) {
   if (outcome.state === 'success') {
     return (
       <section data-answer-state="success">
@@ -236,14 +236,18 @@ export function SearchAnswerView({ outcome, onNextPage }) {
   if (outcome.state === 'refusal' && outcome.card) {
     return (
       <section data-answer-state="refusal">
-        <RefusalCard code={outcome.code} sentence={outcome.sentence} payload={outcome.payload} copy={refusalCardCopyFor(outcome.context)} />
+        <FailureFrame outcome={outcome} onRetry={onRetry}>
+          <RefusalCard code={outcome.code} sentence={outcome.sentence} payload={outcome.payload} copy={refusalCardCopyFor(outcome.context)} />
+        </FailureFrame>
       </section>
     );
   }
 
   return (
     <section data-answer-state={outcome.state}>
-      <StatusSentence outcome={outcome} />
+      <FailureFrame outcome={outcome} onRetry={onRetry}>
+        <StatusSentence outcome={outcome} />
+      </FailureFrame>
     </section>
   );
 }
@@ -308,7 +312,7 @@ export function LiveSearch({ contract, fetchImpl }) {
         <button type="submit">{FORM.submit.search}</button>
       </form>
       <LiveAnswer>
-        <SearchAnswerView outcome={outcome} onNextPage={(after) => session.current.next(after)} />
+        <SearchAnswerView outcome={outcome} onNextPage={(after) => session.current.next(after)} onRetry={() => session.current.retry()} />
       </LiveAnswer>
     </div>
   );

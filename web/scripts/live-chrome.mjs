@@ -335,6 +335,35 @@ const EN = Object.freeze({
     heading: "Luxembourg and EU law at a date you choose",
     intro: "Search the texts this site holds, open a law as it stood on the date you choose, see how each article changed, compare two dates, and export with citations anyone can check against the official source. Where the site does not hold a text or a date, it says so.",
   }),
+  // A service failure on a screen, panel by panel (the specification of record's R60; `live-failure.mjs`): its line, word
+  // for word the specification's, above what the screen says of the failure; the retry, which asks the same request again;
+  // and the publishers' official sites, each named by what it publishes.
+  failure: Object.freeze({
+    line: "Lex could not complete this request. This is not an answer about the law.",
+    retry: "Try again",
+    official: "The publishers' official sites:",
+    sites: Object.freeze({
+      legilux: "Legilux, for Luxembourg law",
+      eurlex: "EUR-Lex, for EU law",
+    }),
+  }),
+  // The page at an address the site has no page for (R60: "A 404 page offers search"): it says so, says that this is about
+  // the site's pages and not about the law, and offers the home page's search.
+  notFound: Object.freeze({
+    title: "Page not found",
+    eyebrow: "Page not found",
+    heading: "There is no page at this address",
+    intro: "Check the address, or search the texts this site holds below. A page missing here says nothing about the law, only about this site's pages.",
+    home: "Go to the home page",
+  }),
+  // The page the deploy kit can show while the site is deployed (R60): no answer, the same line's second half, and where the
+  // law is published.
+  maintenance: Object.freeze({
+    title: "Maintenance",
+    eyebrow: "Maintenance",
+    heading: "Lex is being updated",
+    intro: "This site is being updated and cannot answer for the moment. This page is not an answer about the law. Try again shortly.",
+  }),
   common: Object.freeze({
     loading: "Asking this server.",
     languageNames: Object.freeze({ fra: "French", deu: "German", eng: "English" }),

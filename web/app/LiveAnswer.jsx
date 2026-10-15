@@ -15,10 +15,16 @@
 // the platform's own phrases (`inEnglish`, `ENGLISH_LANG`) and the runs of a state's sentence that
 // have no reviewed wording in the page's language (`Said`). On an English page none of this adds a
 // tag or an attribute, so the English pages are exactly what they were.
+//
+// A state that is a service failure (`isFailure`, `live-failure.mjs`: the request did not complete, or was refused for a
+// reason about this service) is laid out inside the failure panel (`FailureFrame`), never as an answer: the
+// specification's line first, then what the screen says of it (its sentence, or the refusal card from the refusal's
+// payload), a retry that asks the same request again, and the publishers' official sites (R60).
 
 import { Fragment } from 'react';
 
 import { CHROME_LOCALE, ENGLISH_LANG, countedEntry, fillParts, liveChrome } from '../scripts/live-chrome.mjs';
+import { OFFICIAL_SITES, isFailure } from '../scripts/live-failure.mjs';
 import { isSiteAddress, permalinkHref } from '../scripts/permalinks.mjs';
 
 /**
@@ -143,6 +149,48 @@ export function StatusSentence({ outcome }) {
     <p role="status">
       <Said statement={outcome} />
     </p>
+  );
+}
+
+/**
+ * The publishers' official sites (R60): Legilux for Luxembourg law and EUR-Lex for EU law, each linked to its home page and
+ * named by what it publishes. Each is a constant `live-failure.mjs` holds, which a test holds to the publisher-link policy.
+ */
+export function OfficialSites() {
+  const copy = liveChrome().failure;
+  return (
+    <div className="official-sites" data-official-sites="">
+      <p>{copy.official}</p>
+      <ul>
+        {OFFICIAL_SITES.map((site) => (
+          <li key={site.key}>
+            <a href={site.uri} rel="external" data-publisher={site.publisher}>{copy.sites[site.key]}</a>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+/**
+ * A screen's state, inside the failure panel when it is a service failure (`isFailure`), as itself otherwise. The panel says
+ * the specification's line first, so that nothing below it reads as an answer about the law; then what the screen says of
+ * the failure (`children`: its sentence, or the refusal card rendered from the refusal's payload); then a retry, which
+ * calls `onRetry` to ask the same request again; then the official sites (R60). `data-failure` names the state, or the
+ * refusal's code.
+ */
+export function FailureFrame({ outcome, onRetry, children }) {
+  if (!isFailure(outcome)) return children;
+  const copy = liveChrome().failure;
+  return (
+    <div className="failure-panel" data-failure={outcome.state === 'refusal' ? outcome.code : outcome.state}>
+      <p className="failure-line" data-failure-line=""><strong>{copy.line}</strong></p>
+      {children}
+      <p>
+        <button type="button" className="failure-retry" data-retry="" onClick={onRetry}>{copy.retry}</button>
+      </p>
+      <OfficialSites />
+    </div>
   );
 }
 

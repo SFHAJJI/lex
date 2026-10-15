@@ -11,7 +11,7 @@ import { readFile } from "node:fs/promises";
 import { createElement as h } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 
-import { HistoryAnswerView, LiveHistory, RefusalCard, renderLiveHistoryPage } from "../.react-build/app.mjs";
+import { FailureFrame, HistoryAnswerView, LiveHistory, RefusalCard, renderLiveHistoryPage } from "../.react-build/app.mjs";
 import {
   LIVE_HISTORY_IDLE,
   LIVE_HISTORY_REFUSAL_SENTENCES,
@@ -20,6 +20,9 @@ import {
   historyParameters,
   loadLiveHistory,
 } from "../scripts/live-history.mjs";
+
+/** A refusal's card as the screen shows it: one about this service (R60) inside the failure panel, under its line; any other alone. */
+const asShown = (outcome, card) => renderToStaticMarkup(h(FailureFrame, { outcome }, h("lex-card"))).replace("<lex-card></lex-card>", card);
 
 const census = JSON.parse(await readFile(new URL("../../schemas/v3-platform/envelope-samples.json", import.meta.url), "utf8"));
 const { contract } = census;
@@ -126,7 +129,7 @@ test("the refusals a lineage from this page can meet", async () => {
   assert.equal(none.card, true);
   assert.equal(none.sentence, "This build has no Luxembourg index mounted.");
   const card = renderToStaticMarkup(h(RefusalCard, { code: none.code, sentence: none.sentence, payload: none.payload }));
-  assert.equal(view(none), `<section data-answer-state="refusal">${card}</section>`);
+  assert.equal(view(none), `<section data-answer-state="refusal">${asShown(none, card)}</section>`);
   assert.equal(typeof LIVE_HISTORY_REFUSAL_SENTENCES.language_not_available, "string");
 });
 
