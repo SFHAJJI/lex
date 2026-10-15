@@ -47,7 +47,7 @@ internal static class V3McpJsonRpc
     private static string DescriptionOf(string operationId) => operationId switch
     {
         "resolve" => "Resolve a Luxembourg legal-act identifier or a hash-pinned permalink to the work and expression it names.",
-        "as_of" => "The state of a Luxembourg act as the publisher applied it on a date, with its articles; for an EU act, the wording dated at or before the date (an EU wording date, never an applicability date).",
+        "as_of" => "The state of a Luxembourg act applicable on a date (publisher), with its articles; for an EU act, the wording dated at or before the date (an EU wording date, never an applicability date).",
         "timeline" => "Every state of a Luxembourg act the index holds, in publisher applicability order; for an EU act, every wording its census discovered, in wording-date order.",
         "article_history" => "The history of one article of a Luxembourg act across its states.",
         "diff" => "The article-level difference between the states of a Luxembourg act on two dates.",
@@ -64,12 +64,12 @@ internal static class V3McpJsonRpc
         "evidence_bundle" => "What a quote of a Luxembourg state needs: every article's text with its digests, the state's permalink, digests, sources and official identities, composed under the rights rule; for an EU act, the same for the wording of the date.",
         "classification" => "The publisher's typed facts about a Luxembourg work, verbatim: document type, RDF types, legal value, responsible body, historical identifiers, publication and document dates.",
         "manifestation" => "The publisher's manifestations of a Luxembourg work's expressions with their formats and items, the retained one marked with its body digest.",
-        "status_on" => "The publisher's force assertions about a Luxembourg work (in-force status, entry into force, no longer in force), verbatim, beside the state applicable on a date, with one fixed reading of the dates.",
+        "status_on" => "The publisher's force assertions about a Luxembourg work (its inForceStatus, dateEntryInForce and dateNoLongerInForce facts), verbatim, beside the state applicable on a date, with one fixed reading of the dates.",
         "browse" => "The Luxembourg works this mount holds, one ordered and paged list with their identifiers, languages, state dates and the publisher's document types; filter by type or language.",
         "ask" => "The contained assistant (Decisions 51 and 91): every question answers the typed presentation result assistant_v3_unavailable, naming the deterministic operations that answer from held law; no model answers.",
         "events" => "The Luxembourg event log, polled by cursor, at least once: a genesis log holds one first_sighting per held state; a chained log adds each later build's comparison events; each build's time, never an observation time.",
         "answer_drift" => "The past dated answers a publisher revision invalidated, enumerated from the log's revising events; a genesis log holds none, and the answer says why rather than asserting that nothing drifted.",
-        "as_observed" => "The state of a Luxembourg act that applied on a date as one build of the mounted log held it, named by that build's index digest, with its build time as an upper bound on observation; a time refuses, since no observation time is held.",
+        "as_observed" => "The state of a Luxembourg act applicable on a date (publisher) as one build of the mounted log held it, named by that build's index digest, with its build time as an upper bound on observation; a time refuses, since no observation time is held.",
         _ => throw new InvalidOperationException($"The served operation {operationId} has no MCP tool description."),
     };
 

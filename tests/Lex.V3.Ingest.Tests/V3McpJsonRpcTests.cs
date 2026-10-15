@@ -88,6 +88,46 @@ public sealed class V3McpJsonRpcTests
             inputSchema.GetProperty("required").EnumerateArray().Select(static v => v.GetString()).ToArray());
     }
 
+    /// <summary>
+    /// R21 holds the tool descriptions an agent reads as it holds the pages: no description says "applied", "in force" or
+    /// "en vigueur" of a date (the review of #964 found <c>as_of</c>'s "as the publisher applied it on a date" and
+    /// <c>as_observed</c>'s "that applied on a date"). The text is matched as the web's check matches it
+    /// (<c>assertTimeVocabulary</c>): composed to NFC, its runs of spaces and dashes folded to one space, its apostrophes to
+    /// one. The publisher's force facts are named by their predicates (<c>dateNoLongerInForce</c>), which are not words.
+    /// </summary>
+    [TestMethod]
+    public async Task NoToolDescriptionSaysAppliedInForceOrEnVigueurOfADate()
+    {
+        using var response = await HandleAsync(new { jsonrpc = "2.0", id = 1, method = "tools/list" });
+        var forbidden = new System.Text.RegularExpressions.Regex(
+            @"(?<!\p{L})(?:in force|en vigueur|applied|appliqu(?:é|ée|és|ées|ai|ais|ait|aient|a|as|âmes|âtes|èrent))(?!\p{L})",
+            System.Text.RegularExpressions.RegexOptions.IgnoreCase | System.Text.RegularExpressions.RegexOptions.CultureInvariant);
+        static string Fold(string text) => System.Text.RegularExpressions.Regex.Replace(
+            System.Text.RegularExpressions.Regex.Replace(text.Normalize(NormalizationForm.FormC), @"[\s\p{Pd}]+", " "),
+            "['‘’ʼ`´′]", "’");
+        var descriptions = response.RootElement.GetProperty("result").GetProperty("tools").EnumerateArray()
+            .Select(static tool => (Name: tool.GetProperty("name").GetString()!, Description: tool.GetProperty("description").GetString()!))
+            .ToArray();
+        foreach (var (name, description) in descriptions)
+        {
+            var found = forbidden.Match(Fold(description));
+            Assert.IsFalse(found.Success, $"The {name} tool's description says \"{found.Value}\", which R21 never says of a date.");
+        }
+
+        Assert.AreEqual(
+            "The state of a Luxembourg act applicable on a date (publisher), with its articles; for an EU act, the wording dated at or before " +
+            "the date (an EU wording date, never an applicability date).",
+            descriptions.Single(static tool => tool.Name == "as_of").Description);
+        StringAssert.StartsWith(
+            descriptions.Single(static tool => tool.Name == "as_observed").Description,
+            "The state of a Luxembourg act applicable on a date (publisher) as one build of the mounted log held it");
+        // The check refuses what the two descriptions used to say, and the variants the web's check refuses.
+        foreach (var said in new[] { "as the publisher applied it on a date", "that applied on a date", "in-force", "in force", "sʼappliquait", "appliquée" })
+        {
+            Assert.IsTrue(forbidden.IsMatch(Fold(said)), said);
+        }
+    }
+
     /// <summary>The tool's declared input schema is exactly the reviewed request schema's own "parameters" shape, not a hand-drifted copy.</summary>
     [TestMethod]
     public async Task EveryToolsInputSchemaIsExactlyItsReviewedRequestSchemasParametersShape()
