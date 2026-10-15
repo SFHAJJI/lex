@@ -210,3 +210,13 @@ test("the export page and the three export files say it too", () => {
   assert.equal(JSON.parse(exportJson(plain)).as_published, null);
   assert.ok(!exportCsv(plain).includes(AS_PUBLISHED_LABEL));
 });
+
+test("the as-published block and the export's paragraph wrap their long addresses at a phone's width (#964's CI)", async () => {
+  const css = await readFile(new URL("../src/styles.css", import.meta.url), "utf8");
+  const wrapping = [...css.matchAll(/([^{}]+)\{([^}]*)\}/g)]
+    .filter(([, , body]) => /overflow-wrap:\s*anywhere/.test(body))
+    .flatMap(([, selectors]) => selectors.split(",").map((selector) => selector.replace(/\/\*[\s\S]*?\*\//g, "").trim()));
+  for (const selector of ["[data-as-published] p", "[data-as-published] li", "[data-export-as-published]"]) {
+    assert.ok(wrapping.includes(selector), `${selector} wraps a long token`);
+  }
+});
