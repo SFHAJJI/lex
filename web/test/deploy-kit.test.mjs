@@ -204,4 +204,8 @@ test("the script deploys only a release that verifies, and only by the image's d
   assert.match(code, /Write-Host "  > az containerapp ingress traffic set -g \$ResourceGroup -n \$AppName --revision-weight \$LiveRevision=100"/);
   // A failed probe deactivates the candidate (the removal step) and stops.
   assert.match(script, /if \(\$LASTEXITCODE -ne 0\) \{[\s\S]*?revision deactivate[\s\S]*?throw "The candidate failed its probe/);
+  // A candidate that never becomes ready fails the deployment itself, before the probe: it is deactivated too, if active,
+  // and the run stops (review of #963: readiness answers 503 without the law, so Azure's deadline ends the deployment).
+  assert.match(code, /catch \{[\s\S]*?\$failedCandidate = "\$AppName--\$suffix"[\s\S]*?revision show [^\n]*--revision \$failedCandidate --query properties\.active[\s\S]*?revision deactivate -g \$ResourceGroup -n \$AppName --revision \$failedCandidate[\s\S]*?throw "The candidate revision did not deploy/);
+  assert.ok(code.indexOf("az deployment group create") < code.indexOf("$failedCandidate = "), "the catch is the deployment's own");
 });

@@ -35,6 +35,16 @@ replica whose mount was refused at startup still took traffic.
   - The first full web run failed one test this change caused: the image-reproducibility fixture's long name lay under
     `app/preview-graph/`, which the new check rightly rejects. It now lies under `app/runtimes/`. A paint test failed
     under load and passed alone.
+- **The review of #963** (an independent Claude subagent, which ran the release server from a publish with a mount,
+  with none and with a corrupt one, and `serverFailures` against each). One finding, repaired:
+  - With readiness now honest, a candidate whose mount is refused never becomes ready. Azure then fails the deployment
+    itself at its progress deadline, so `deploy.ps1` stopped at the deployment step. Its removal step ran only after a
+    failed probe, so the candidate stayed active and billed. The traced path is exact; Azure's deadline behaviour is as
+    Microsoft documents it, not exercised here.
+  - The deployment step now catches that failure, deactivates the candidate if it is active, and stops, saying why. A
+    static rule in `deploy-kit.test.mjs` holds it, and fails when the deactivation is taken out.
+  - Noted: the signed release of 13 October still ships the preview, and the deploy probe now fails it on the preview's
+    route. The next deployment needs a release built after this change.
 
 ## The private copy stays private on every deployment (sole driver, 2026-10-14)
 
