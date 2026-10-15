@@ -286,6 +286,12 @@ public sealed class LuxembourgAknLegalContentProfile2ProducerTests
         "an empty scl:label over nested terms")]
     [DataRow("<scl:indexterms><scl:indexterm><scl:label>T</scl:label><scl:indexterms><x:term xmlns:x=\"urn:x\"/></scl:indexterms></scl:indexterm></scl:indexterms>",
         "scl:indexterms holds term in another namespace")]
+    [DataRow("<scl:indexterms><x:indexterm xmlns:x=\"urn:x\"><scl:label>T</scl:label></x:indexterm></scl:indexterms>",
+        "scl:indexterms holds indexterm in another namespace")]
+    [DataRow("<scl:indexterms><scl:indexterm><x:label xmlns:x=\"urn:x\">T</x:label></scl:indexterm></scl:indexterms>",
+        "scl:indexterm holds label in another namespace")]
+    [DataRow("<scl:indexterms><scl:indexterm><scl:label>T</scl:label><x:indexterms xmlns:x=\"urn:x\"/></scl:indexterm></scl:indexterms>",
+        "scl:indexterm holds indexterms in another namespace")]
     public async Task AnyOtherIndexTermShapeIsATypedGapForThatArticleOnly(string block, string reason)
     {
         var run = await RunAsync(Member(Eli + "rgd/2001/02/03/n9/jo", Akn(
@@ -297,6 +303,33 @@ public sealed class LuxembourgAknLegalContentProfile2ProducerTests
         Assert.AreEqual(LuxembourgAknLegalContentDisposition.UnsupportedContentShape, gap.Disposition);
         Assert.AreEqual(IndexTermsFailure + reason, gap.Detail);
         Assert.IsNull(gap.Article);
+        Assert.AreEqual(LuxembourgAknLegalContentDisposition.Admitted, Outcome(run.Content, "art_2").Disposition);
+    }
+
+    /// <summary>
+    /// Only <c>scl:indexterms</c> itself is skipped. Another <c>scl</c> element, even one wrapping terms
+    /// of the reviewed shape, and an AKN element of the same local name stay the typed gap /1 makes of
+    /// them, with /1's detail, for that article only.
+    /// </summary>
+    [TestMethod]
+    [DataRow("<scl:index><scl:indexterm><scl:label>T</scl:label></scl:indexterm></scl:index>", Namespace0)]
+    [DataRow("<scl:index/>", Namespace0)]
+    [DataRow("<indexterms><indexterm><label>T</label></indexterm></indexterms>", "unsupported legal-content element: indexterms")]
+    public async Task AnyOtherDirectChildStaysContent1sGapForThatArticleOnly(string child, string detail)
+    {
+        var run = await RunAsync(Member(Eli + "rgd/2001/02/03/n9/jo", Akn(
+            "<article id=\"art_1\">" + child + "<num>Art. 1.</num><content><p>Texte synthétique.</p></content></article>" +
+            "<article id=\"art_2\"><scl:indexterms><scl:indexterm><scl:label>T</scl:label></scl:indexterm></scl:indexterms>" +
+            "<num>Art. 2.</num><content><p>Texte synthétique.</p></content></article>")));
+        var content1 = await new LuxembourgAknLegalContentProfileProducer(run.Store).RunAsync(run.Inventory, CancellationToken.None);
+
+        foreach (var population in new[] { run.Content, content1 })
+        {
+            var gap = Outcome(population, "art_1");
+            Assert.AreEqual(LuxembourgAknLegalContentDisposition.UnsupportedContentShape, gap.Disposition);
+            Assert.AreEqual(detail, gap.Detail);
+            Assert.IsNull(gap.Article);
+        }
         Assert.AreEqual(LuxembourgAknLegalContentDisposition.Admitted, Outcome(run.Content, "art_2").Disposition);
     }
 
@@ -456,6 +489,29 @@ public sealed class LuxembourgAknLegalContentProfile2ProducerTests
 
         await Assert.ThrowsExactlyAsync<ArgumentException>(() =>
             new LuxembourgAknLegalContentProfile2Producer(store).RunAsync(inventory3, CancellationToken.None));
+    }
+
+    /// <summary>
+    /// The door's own refusal, apart from the content population's, which refuses only an inventory /3
+    /// source: a population under any third inventory digest is refused by the door alone, and a /3
+    /// population is refused by the door, with its detail, before the population could refuse it.
+    /// </summary>
+    [TestMethod]
+    public async Task TheDoorAloneRefusesAPopulationUnderAnyOtherInventoryDigest()
+    {
+        var run = await RunAsync(Member(Eli + "rgd/2001/02/03/n9/jo", Akn(
+            "<article id=\"art_1\"><content><p>Texte synthétique.</p></content></article>")));
+        var inventory3 = await new LuxembourgAknArticleInventoryProducer(run.Store)
+            .RunAsync(run.Inventory.SourcePopulation, CancellationToken.None);
+        var otherDigest = new LuxembourgAknArticleInventoryPopulation(run.Inventory.SourcePopulation, [], new string('0', 64));
+
+        foreach (var population in new[] { inventory3, otherDigest })
+        {
+            var refused = await Assert.ThrowsExactlyAsync<ArgumentException>(() =>
+                new LuxembourgAknLegalContentProfile2Producer(run.Store).RunAsync(population, CancellationToken.None));
+            Assert.AreEqual("inventoryPopulation", refused.ParamName);
+            StringAssert.StartsWith(refused.Message, "Content /2 reads only an inventory /4 population.");
+        }
     }
 
     /// <summary>
