@@ -4,6 +4,131 @@ Updated 2026-10-15. The web lane's progress, split out of STATUS.md (which keeps
 items and the pointers) by the standing order of 2026-10-01 13:50 UTC. Every pull request of the web lane
 updates this file, not STATUS.md.
 
+## A missing page, a failure and a deployment never look like a legal answer (sole driver, 2026-10-15)
+
+The plan's item 6.9 (`C:\lex-v3\PLAN-2026-10-14.md`, Phase 6), from the specification of record's R60: "Service failures
+are not refusals. A 404 page offers search. A failure says 'Lex could not complete this request. This is not an answer
+about the law.', with a retry and official links. Failures are shown per panel, and a maintenance page shows during
+deployments. The operational refusals (rate_limited, upstream_unreachable, no_corpus_mounted, snapshot_unknown) render
+from their payloads with the same line. A failure never shows as an empty list, a zero or 'no version'." R52 (nothing
+unserved is shown) and R61 (French and English under `/fr/` and `/en/`) hold on the new pages.
+- **Before:** both servers answered an address nothing claims with a JSON problem, even a browser asking for
+  `/fr/no-such-page` (the API `unknown_route`, since #963; the live server `not_found`). Each screen said a failure in
+  one English sentence, such as "The search could not be reached (api_unreachable).", with no retry and no official
+  links, and showed `no_corpus_mounted` as a refusal card, laid out like an answer.
+- **The 404 page** (`live-not-found-page.jsx`; built per language as `not-found/en.html` and `not-found/fr.html`): "There is
+  no page at this address", then "Check the address, or search the texts this site holds below. A page missing here says
+  nothing about the law, only about this site's pages." It has a link to the home page and the home page's own search
+  screen, hydrated by the same script, so a phrase still goes only into a request body. It carries the site's header and
+  footer and the reviewed CSP. It names no address of its own (no canonical or alternate links) and never repeats the
+  address that was asked.
+- **Both servers answer with it** (`V3WebRoot.NotFound.cs` and `V3ApiHandler`; `not-found.mjs` and `serve-live.mjs`). A
+  page request that nothing claims gets status 404, in the reader's language: the path's `/fr/` or `/en/`, else the
+  language the root's redirect picks from Accept-Language (French by default), in which case the answer says
+  `Vary: Accept-Language`. The API sends every header a page carries (CSP with `frame-ancestors 'none'`, HSTS,
+  `Referrer-Policy`, `nosniff`, `no-store`); the live server sends what it sends for its other pages. Machine paths
+  (`/api/`, `/mcp`, `/health/`) and every method but GET and HEAD keep their JSON problems. Neither the 404 pages nor the
+  maintenance pages are served at their own address, any more than `ssr/` is. A web directory built before them leaves
+  every unclaimed path to the unknown route, as before. A new shared table, `tests/Lex.V3.Tests/Fixtures/SitePaths/not-found.json`
+  (25 requests), holds both servers to the same choice. The deploy probe now requires a revision to answer an address
+  nothing claims (`/fr/no-such-page`) with the release image's own 404 page, byte for byte, with its CSP. The release
+  probes' list of served paths leaves both pages out.
+- **The failure panel** (`live-failure.mjs`; `FailureFrame` and `OfficialSites` in `LiveAnswer.jsx`) appears on all eight
+  screens: search (and the home page and the 404 page, which carry it), reading, dossier, history, compare, radar, export
+  and coverage. A failure is:
+  - a transport failure: the network, or a problem the API or the live server sent (502 `api_unreachable`, 504
+    `api_timeout`, a 500);
+  - an answer the page cannot read, which is also what a 5xx without a problem body becomes;
+  - a refusal whose code is operational.
+
+  The panel shows, in order:
+  - the line, in bold;
+  - what the screen already said: its sentence, or the refusal card rendered from the refusal's payload;
+  - a "Try again" button, which asks the same request once more. The sessions gained `retry()`. Coverage asks again
+    through its effect. A page the server rendered from a failure asks the request its address names.
+  - the publishers' official sites: Legilux "for Luxembourg law" and EUR-Lex "for EU law", their home pages.
+
+  These are the first links a live page makes to another site. They are constants: the server renderer has no `URL`, so
+  a test holds each one to the publisher-link policy (`publisherSourceUri`). `data-answer-state` is unchanged, so every
+  other check still holds. A refusal about the law (`identifier_unknown`, `no_version_for_date`, …) stays an answer, and
+  a request the form will not send stays the reader's to correct.
+- **The audit, screen by screen, before the change:** each of the eight screens maps an answer through its own reader
+  and said every failure as one sentence. None showed a failure as an empty list, a zero or "no version":
+  - a reader that cannot account for an answer turns it into `invalid_envelope` rather than render part of it;
+  - the export panel composes only from a successful reading;
+  - coverage's evaluation card is the build's, not an answer.
+
+  The gaps were the missing line, retry and official links, and operational refusals laid out as answers. All are
+  closed on every screen, and a test holds each screen to each kind of failure.
+  Only `no_corpus_mounted` reaches a live page today. `rate_limited` and `upstream_unreachable` are produced by no
+  operation (the refusal census's `not_produced`), and `snapshot_unknown` only by `events` and `answer_drift`, which no
+  page asks. The tests render each of the four from the payload the registry names for it.
+- **The maintenance page** (`live-maintenance-page.jsx`; `maintenance/en.html` and `maintenance/fr.html`): "Lex is being
+  updated", "This site is being updated and cannot answer for the moment. This page is not an answer about the law. Try
+  again shortly.", and the official sites. It has the site's header and footer, no script and no form.
+- **Wording**, English and French:
+  - the failure line: "Lex could not complete this request. This is not an answer about the law." / "Lex n’a pas pu
+    mener à bien cette demande. Ce n’est pas une réponse sur le droit.";
+  - the retry: "Try again" / "Réessayer";
+  - the official sites: "The publishers' official sites:" / "Les sites officiels des éditeurs :", with "Legilux, for
+    Luxembourg law" / "Legilux, pour le droit luxembourgeois" and "EUR-Lex, for EU law" / "EUR-Lex, pour le droit de
+    l’UE";
+  - the 404 page: "Page not found" / "Page introuvable" (title and eyebrow); "There is no page at this address" / "Il n’y
+    a aucune page à cette adresse"; "Check the address, or search the texts this site holds below. A page missing here
+    says nothing about the law, only about this site's pages." / "Vérifiez l’adresse ou recherchez ci-dessous dans les
+    textes que ce site détient. Une page absente ici ne dit rien du droit, seulement des pages de ce site."; "Go to the
+    home page" / "Aller à la page d’accueil";
+  - the maintenance page: "Maintenance" (title and eyebrow, both languages); "Lex is being updated" / "Lex est en cours
+    de mise à jour"; "This site is being updated and cannot answer for the moment. This page is not an answer about the
+    law. Try again shortly." / "Ce site est en cours de mise à jour et ne peut pas répondre pour le moment. Cette page
+    n’est pas une réponse sur le droit. Réessayez dans quelques instants."
+- **French**: written to the review's terms and reviewed in its second addendum of 2026-10-15
+  (`C:\lex-v3\lanes\fr-review\review.md`): 14 forms, 1 changed in review (no comma before "ou" in the 404 page's
+  introduction), 13 approved. New rows: the reader's request is a "demande", as on the refusal card's retry line on the
+  same panel ("requête" stays the request a page sends to the server); complete is "mener à bien"; an answer about the
+  law is "une réponse sur le droit", not "réponse juridique"; page not found is "Page introuvable"; being updated is "en
+  cours de mise à jour". The header comment of `live-chrome-fr.mjs` names the fourteen entries.
+- **Driver decisions** (reversible; also under "Driver decisions (reversible)" below):
+  - A page request is told from a machine's by a rule on the method and the path alone: a GET or HEAD whose path is not
+    under `/api/`, `/mcp` or `/health/`. No header is read for it. The one header the API reads, Accept-Language, is
+    read a second time, only to choose the 404 page's language when the path names none, and the privacy scan
+    (`PublicRequestRecordingTests`) now holds it to exactly those two reads, each handed whole to its pure choice.
+  - Every state that carries no answer because the request did not complete is a failure, an unreadable answer
+    included, and so are the four operational refusals. A refusal about the law, and a request the form will not send,
+    are not.
+  - The 404 page offers the home page's live search screen, not a form that submits to the search page: a form a
+    browser submits puts the phrase into an address, which this site never does.
+  - The official links are the two publishers' home pages, not a page per work. A failure has no answer to take a
+    work from, and these are the routes the get-help screen already names.
+  - The 404 table is a new file beside `site-paths.json`, not rows in it: the permalink slice (#967) reshapes every
+    row of that table, and a separate table merges cleanly with it.
+- **Not yet**:
+  - The maintenance page is built and tested, and nothing serves it. During a deployment Azure keeps the live revision
+    serving while the candidate is probed (multiple revision mode), so there is no gap for it to fill except a first
+    deployment or a planned outage. Putting a page in front of the app for those needs a front door or a static host,
+    which is a hosting change with a cost: the owner's decision, not taken here.
+  - A `/de/` or `/lb/` path nothing claims gets the 404 page in the language Accept-Language picks between French and
+    English, not a `localization_unavailable` page.
+  - The retry is pressed in a browser for the search screen only (the journeys' "search retried"). The other screens'
+    retries are held by their sessions' tests and by the views.
+  - A law's address rendered with no index mounted still answers status 200 with the failure panel; the 503 the
+    server-rendering slice listed is not done. A failure status would also put a browser console message on every
+    no-mount journey step, which the journeys set aside today only for the 404 page.
+- **Evidence**:
+  - the web suite: 1,149 of 1,149;
+  - `dotnet build Lex.V3.slnx -c Release`: 0 warnings, 0 errors;
+  - `Lex.V3.Tests`: 3,181, of which 3,175 passed and 6 were skipped, the new `V3WebRootNotFoundTests` among them;
+  - `Lex.V3.Ingest.Tests` filtered to `Census`, `PublicRequestRecordingTests` and `V3ApiReadinessTests`: 48, of which 46
+    passed and 2 were skipped;
+  - `eng/verify-v3-tree.ps1`: verified;
+  - the journeys against an API published from this branch, over the journey fixture mount: through the live server, 47
+    of 47 (32 browser runs and 15 API journeys); by keyboard on the pages the API serves, 47 of 47. Both modes include
+    "not found" with the fixture mount and with none, and "search retried, with no mount" (two requests, the second
+    the same as the first).
+  - Chrome reports the 404 document in its console ("Failed to load resource: the server responded with a status of
+    404"). The journey checks the status instead, and sets that one message aside for the 404 step only; a probe with
+    the step's flag off shows the message.
+
 ## An act held only as first published says so, and Compare stops saying "applied" (sole driver, 2026-10-15)
 
 The plan's item 0.6, "two wording faults fixed now" (the specification of record's R76, R18, R20 and R21). Every
@@ -3926,6 +4051,21 @@ Each is the driver's call under ruling 7 and can be reversed by a later pull req
   library once and held to it by a test; "today" in Luxembourg is the EU summer-time rule coded in the API and in the
   pages, held to one table; a CI lane runs the API's tests inside the image's base. The `-extra` image (ICU and zone data,
   tens of megabytes more) would hand both back to the operating system, whose answers then move with the image's version.
+- The 404 page, the failure panel and the maintenance page (plan 6.9, R60, 2026-10-15; the section at the top):
+  - A page request is told from a machine's by a rule on the method and the path alone: a GET or HEAD whose path is not
+    under `/api/`, `/mcp` or `/health/`. No header is read for it. Accept-Language, the one header the API reads, is read
+    a second time, only to choose the 404 page's language when the path names none; the privacy scan holds it to those
+    two reads.
+  - Every state that carries no answer because the request did not complete is a failure (an unreadable answer and a
+    5xx without a problem body included), as are the four operational refusals. A refusal about the law, and a request
+    the form will not send, are not.
+  - The 404 page carries the home page's live search screen rather than a form that submits to the search page: a
+    form a browser submits puts the phrase into an address.
+  - The failure panel's official links are the two publishers' home pages, Legilux and EUR-Lex, the routes the get-help
+    screen already names.
+  - The 404 table is its own file beside `site-paths.json` (`not-found.json`), held by both servers' tests.
+  - The maintenance page is built into the release (`maintenance/{language}.html`) and served by nothing: wiring it in
+    front of the app is a hosting change with a cost, the owner's.
 
 ## Waiting on others
 
