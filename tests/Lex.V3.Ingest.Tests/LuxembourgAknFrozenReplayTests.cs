@@ -7,7 +7,8 @@ namespace Lex.V3.Ingest.Tests;
 
 /// <summary>
 /// The frozen verifiers stay frozen: inventory /3 and legal content /1 reproduce, over a retained
-/// sample of run 15, the outputs the run's verified derivation sealed per body.
+/// sample of run 15, what the run's verified derivation sealed per body and what an independent
+/// replay of the frozen rules computed from the same bytes.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -15,16 +16,33 @@ namespace Lex.V3.Ingest.Tests;
 /// text; they cannot catch an edit to the logic that reads it. The checkpoint's reopen recomputes
 /// /3 and /1 over all of run 15 and compares two population digests, and only a full reopen can
 /// reproduce those, because they hash every member. So this replays the frozen code over 19 of the
-/// run's own bodies and compares what was sealed per body: derive-c's index rows and corpus outcome
-/// dispositions, which its reopen produced after verifying both checkpoint digests.
+/// run's own bodies, against two kinds of expectation the expected file keeps apart:
 /// </para>
+/// <list type="bullet">
+/// <item><description>SEALED (<c>sealed</c>): the content disposition multisets, the admitted article
+/// identities and the 7 state rows, read from derive-c's index and corpus, which its reopen built
+/// after verifying both checkpoint digests.</description></item>
+/// <item><description>REPLAYED (<c>replay</c>): /3's disposition, rejection detail, coordinate, article
+/// order and inventory identity, and the sample's two population identities. derive-c sealed none
+/// of these. An independent Python replay of the frozen rules computed them from the bytes, and the
+/// frozen code reproduced them before any production edit.</description></item>
+/// </list>
 /// <para>
 /// THE SAMPLE IS ADMITTED BYTES ONLY. Every body is one the run admitted under the agreed CC BY
-/// reading, and <see cref="TheRun15SampleIsAdmittedBodiesOnly"/> holds every retained file to that,
-/// so this directory can never become a way to commit a withheld body. The sample covers both /3
-/// outcomes with and without a dated coordinate, each /3 rejection seen in the run (an annex
-/// identification block, no top-level article, a non-ASCII id, a code's complex work), the act whose
-/// only article is quoted, and twelve content /1 gap kinds.
+/// reading, and <see cref="TheRun15SampleIsAdmittedBodiesOnly"/> holds every file committed in the
+/// sample folder to that, so this directory can never become a way to commit a withheld body.
+/// </para>
+/// <para>
+/// WHAT THE SAMPLE HOLDS, AND WHAT IT DOES NOT. Both /3 outcomes with and without a dated
+/// coordinate; the four /3 rejection kinds that admitted bodies small enough to commit show (an
+/// annex identification block, no top-level article, a non-ASCII id, a code's complex work); the
+/// act whose only article is quoted; and twelve content /1 gap kinds. It does not hold /3's
+/// <c>XmlException</c> at its 64M-character ceiling, which the admitted act
+/// <c>rgd/2021/06/09/a444/jo</c> (175,837,349 bytes) hits, nor /3's per-article wId and
+/// applicability readers, because none of the 8,854 articles derive-c sealed carries either. Two
+/// synthetic tests hold those instead:
+/// <c>LuxembourgAknArticleInventoryProducerV4Tests.ADocumentAboveThreesCeilingIsReadUpToTheCustodyBound</c>
+/// and <c>LuxembourgAknArticleInventoryProducerTests.BothPublisherXmlTokensUseOneStableAknRuleProfile</c>.
 /// </para>
 /// <para>
 /// The expected file's own digest is pinned at load, so an edit to the sealed side fails here
@@ -197,8 +215,10 @@ public sealed class LuxembourgAknFrozenReplayTests
 
     /// <summary>
     /// The two population identities over the sample. They hash every member, so they are this
-    /// sample's own values, never the run's checkpoint digests; they were computed independently
-    /// from the sealed per-body values before any /4 code existed.
+    /// sample's own values, never the run's checkpoint digests. derive-c sealed neither: an
+    /// independent Python replay computed them, /3's from its replayed inventory identities and
+    /// /1's from the sealed admitted-article identities and its replayed article statuses, and the
+    /// frozen code reproduced both before any /4 code existed.
     /// </summary>
     [TestMethod]
     public async Task TheRun15SamplePopulationIdentitiesArePinned()
@@ -215,8 +235,10 @@ public sealed class LuxembourgAknFrozenReplayTests
 
     /// <summary>
     /// The legal-care guard: every member was admitted by the run under the agreed CC BY reading,
-    /// every retained body is exactly the bytes the run held, and no file sits in the directory
-    /// that the sealed expectations do not name.
+    /// every retained body is exactly the bytes the run held, and no file sits in the directory, or
+    /// in any folder below it, that the sealed expectations do not name. The test project copies
+    /// the committed folder whole (<c>Fixtures/LuRun15FrozenReplay/**</c>), whatever a file's
+    /// extension, so the copy this reads holds every file committed there.
     /// </summary>
     [TestMethod]
     public void TheRun15SampleIsAdmittedBodiesOnly()
@@ -235,7 +257,9 @@ public sealed class LuxembourgAknFrozenReplayTests
 
         CollectionAssert.AreEquivalent(
             named.ToArray(),
-            Directory.EnumerateFiles(SampleRoot()).Select(Path.GetFileName).ToArray(),
+            Directory.EnumerateFiles(SampleRoot(), "*", SearchOption.AllDirectories)
+                .Select(static path => Path.GetRelativePath(SampleRoot(), path))
+                .ToArray(),
             "the directory holds the sealed expectations and the bodies they name, nothing else");
     }
 
