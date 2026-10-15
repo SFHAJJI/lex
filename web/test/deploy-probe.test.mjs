@@ -15,7 +15,10 @@ import test from "node:test";
 import { cspValue } from "../scripts/csp.mjs";
 import { CARD_ROUTE } from "../scripts/evaluation-card.mjs";
 import { redirectFor } from "../scripts/permalinks.mjs";
-import { REMOTE_PRIVACY_NOTE, browserFailures, deployedReleaseFailures, liveFilesOf, remoteRevision, revisionFailures } from "../scripts/deploy-probe.mjs";
+import {
+  REMOTE_PRIVACY_NOTE, accentedTitleFailures, browserFailures, clockFailures, deployedReleaseFailures, liveFilesOf, luxembourgTodayNote,
+  remoteRevision, revisionFailures,
+} from "../scripts/deploy-probe.mjs";
 import { rehearsalKey, signRehearsal } from "../scripts/image-rehearsal.mjs";
 import { writeLayout, writeTar } from "../scripts/image-reproducible.mjs";
 import { ASSETS, imageSignatureAsset, publishRelease, releaseVersion } from "../scripts/release-assets.mjs";
@@ -32,13 +35,59 @@ const HEADERS = {
   "x-content-type-options": "nosniff",
 };
 
+// The one Luxembourg work the stand-in holds, and its title as the publisher wrote it.
+const WORK_KEY = "loi-2017-12-21-a1117";
+const WORK = "http://data.legilux.public.lu/eli/etat/leg/loi/2017/12/21/a1117/jo";
+const EXPRESSION = `${WORK}/fr`;
+const TITLE = "Loi du 21 d\u00E9cembre 2017 concernant l\u2019Institut grand-ducal.";
+
+/** An instant as the API writes one: UTC, seven fractional digits. */
+const observedAt = (milliseconds) => new Date(milliseconds).toISOString().replace("Z", "0000Z");
+
 /**
- * A stand-in revision: `/` a redirect to `/fr/`, `/fr/` and the card as the release holds them, coverage from `corpus`,
- * its readiness as `ready` says, 404 for everything else.
+ * A title folded as a server folds it: lowered, without its accents, its words split at anything else. `folds` false is
+ * the deployed fault: the image's .NET has no language library, so decomposing did nothing, a typed accent stayed, and
+ * only a decomposed accent's mark was dropped.
+ */
+function foldTitle(text, folds) {
+  return (folds ? text.normalize("NFD") : text).replace(/\p{Mn}/gu, "").toLowerCase().split(/[^\p{L}\p{Nd}]+/u).filter(Boolean).join(" ");
+}
+
+/** What the stand-in answers `resolve`, `dossier` and `search`: the ladder's exact and prefix tiers over its one title. */
+function titleAnswer(operation, parameters, { folds, titlesHeld }) {
+  const stored = foldTitle(TITLE, true);
+  const resolved = (text) => {
+    const asked = foldTitle(text, folds);
+    if (!titlesHeld || asked.length === 0 || !stored.startsWith(asked)) return null;
+    return { work_identifier: WORK, expressions: [EXPRESSION], match_reason: asked === stored ? "exact_normalized_title" : "prefix" };
+  };
+  if (operation === "resolve") {
+    const found = resolved(parameters.identifier);
+    return found === null
+      ? { refusal: { code: titlesHeld ? "identifier_unknown" : "retrieval_mode_unavailable" }, result: null }
+      : { refusal: null, result: { value: found } };
+  }
+  if (operation === "dossier") {
+    const titles = titlesHeld ? [{ language: "fra", expression_iri: EXPRESSION, titles: [{ title: TITLE }], short_titles: [] }] : [];
+    return { refusal: null, result: { value: { titles } } };
+  }
+  const found = resolved(parameters.query);
+  return { refusal: null, result: { value: {
+    work_resolution: { outcome: !titlesHeld ? "no_titles_held" : found === null ? "no_title_match" : "one_work", work: found, candidates: null },
+    hits: parameters.query === "loi" ? [{ work_key: WORK_KEY, state_sha256: "e".repeat(64), applicability_date: "2018-01-01", publisher_id: "art_1" }] : [],
+  } } };
+}
+
+/**
+ * A stand-in revision: `/` a redirect to `/fr/`, `/fr/` and the card as the release holds them, coverage from `corpus`
+ * observed at `observedAt()`, its readiness as `ready` says, one Luxembourg work with an accented title (folded unless
+ * `folds` is false; none held when `titlesHeld` is false), 404 for everything else.
  */
 async function revision(change = {}) {
-  const answer = { page: PAGE, card: CARD, corpus: CORPUS, headers: HEADERS, refusal: null, extra: new Map(), root: { status: 302, location: "/fr/", vary: "Accept-Language" },
-    ready: { status: 204, cache: "no-store" }, ...change };
+  const answer = {
+    page: PAGE, card: CARD, corpus: CORPUS, headers: HEADERS, refusal: null, extra: new Map(), root: { status: 302, location: "/fr/", vary: "Accept-Language" },
+    ready: { status: 204, cache: "no-store" }, observedAt: () => observedAt(Date.now()), folds: true, titlesHeld: true, ...change,
+  };
   const server = createServer((request, response) => {
     const path = request.url.split("?")[0];
     if (request.method === "GET" && path === "/") {
@@ -59,9 +108,18 @@ async function revision(change = {}) {
       response.end(answer.card);
     } else if (request.method === "POST" && path === "/api/v3/coverage") {
       response.writeHead(200, { "content-type": "application/json" });
+      const context = { freshness: { observed_at: answer.observedAt() } };
       response.end(JSON.stringify(answer.refusal === null
-        ? { refusal: null, result: { value: { mounted: { corpus_sha256: answer.corpus } } } }
-        : { refusal: { code: answer.refusal }, result: null }));
+        ? { refusal: null, context, result: { value: { mounted: { corpus_sha256: answer.corpus } } } }
+        : { refusal: { code: answer.refusal }, context, result: null }));
+    } else if (request.method === "POST" && ["/api/v3/resolve", "/api/v3/dossier", "/api/v3/search"].includes(path)) {
+      const chunks = [];
+      request.on("data", (chunk) => chunks.push(chunk));
+      request.on("end", () => {
+        const { operation_id: operation, parameters } = JSON.parse(Buffer.concat(chunks).toString("utf8"));
+        response.writeHead(200, { "content-type": "application/json" });
+        response.end(JSON.stringify(titleAnswer(operation, parameters, answer)));
+      });
     } else if (answer.extra.has(`${request.method} ${path}`)) {
       response.writeHead(200, { "content-type": "text/plain" });
       response.end(answer.extra.get(`${request.method} ${path}`));
@@ -103,6 +161,9 @@ test("each way a revision can differ from its release fails with its own reason"
     ["a readiness a cache could keep", { ready: { status: 204, cache: "max-age=60" } }, /GET \/health\/ready may be cached \(max-age=60\)/],
     ["the synthetic preview answering", { extra: new Map([["GET /api/v3-preview/resolve", "{\"synthetic\":true}"]]) },
       /GET \/api\/v3-preview\/resolve\?family=eli&coordinate=eli%2Fsynthetic-preview answered 200, naming the preview, not the 404/],
+    ["no accent folded, the deployed fault", { folds: false }, /resolve of "Loi du 21 d\u00E9cembre 2017 concernant l\u2019Institut grand-ducal\." as published answered a refusal, identifier_unknown/],
+    ["a clock two minutes slow", { observedAt: () => observedAt(Date.now() - 120_000) }, /the revision's clock read .+, more than a minute from this probe's/],
+    ["an answer observed at no instant", { observedAt: () => undefined }, /coverage was observed at undefined, not a UTC instant in the API's shape/],
   ];
   for (const [what, change, expected] of cases) {
     const served = await revision(change);
@@ -113,6 +174,64 @@ test("each way a revision can differ from its release fails with its own reason"
       await served.close();
     }
   }
+});
+
+test("beside its pass, the probe says the revision's date in Luxembourg and the accented title it found", async () => {
+  const served = await revision();
+  try {
+    const notes = [];
+    assert.deepEqual(await revisionFailures(served.origin, { web: WEB, card: CARD, corpusSha256: CORPUS, notes }), []);
+    assert.equal(notes.length, 2, JSON.stringify(notes));
+    assert.match(notes[0], /^the revision's clock read \S+: \d{4}-\d{2}-\d{2} in Luxembourg, UTC\+0[12]:00, /);
+    assert.equal(notes[1], `an accented title: "${TITLE}" (${WORK}), asked as published, in capitals and decomposed`);
+  } finally {
+    await served.close();
+  }
+});
+
+test("a revision that does not fold accents fails the title as published and in capitals, and finds it decomposed, as the deployed one did", async () => {
+  const served = await revision({ folds: false });
+  try {
+    const failures = await accentedTitleFailures(served.origin);
+    assert.deepEqual(failures.map((failure) => failure.replace(TITLE, "the title").replace(/,.*$/, "")), [
+      "resolve of \"the title\" as published answered a refusal",
+      "resolve of \"the title\" in capitals answered a refusal",
+      "search for \"the title\" names no_title_match",
+    ]);
+  } finally {
+    await served.close();
+  }
+});
+
+test("an index that holds no titles is said, not failed", async () => {
+  const served = await revision({ titlesHeld: false });
+  try {
+    const notes = [];
+    assert.deepEqual(await accentedTitleFailures(served.origin, { notes }), []);
+    assert.deepEqual(notes, ["an accented title: not checked, the revision's index holds no titles"]);
+  } finally {
+    await served.close();
+  }
+});
+
+// The image reader's instants (plan 0.8): on the Sunday summer time ends, 22:30 UTC is still that Sunday in Luxembourg
+// (summer time would make it Monday), and the evening before, 22:30 UTC is already Sunday.
+test("the date the probe says is the coded rule's, on either side of a clock change", () => {
+  assert.match(luxembourgTodayNote("2026-10-24T22:30:00.0000000Z"),
+    /: 2026-10-25 in Luxembourg, UTC\+02:00, in the hour whose date the season's offset decides; the next clock change is at 2026-10-25T01:00:00Z,/);
+  assert.match(luxembourgTodayNote("2026-10-25T22:30:00.0000000Z"),
+    /: 2026-10-25 in Luxembourg, UTC\+01:00, in the hour whose date the season's offset decides; the next clock change is at 2027-03-28T01:00:00Z,/);
+});
+
+test("the revision's clock may stand a minute from the probe's, and no more", () => {
+  const asked = Date.UTC(2026, 9, 15, 8, 0, 0);
+  const answered = asked + 250;
+  assert.deepEqual([
+    clockFailures(observedAt(asked - 60_000), { asked, answered }).length,
+    clockFailures(observedAt(answered + 60_000), { asked, answered }).length,
+    clockFailures(observedAt(asked - 60_001), { asked, answered }).length,
+    clockFailures(observedAt(answered + 60_001), { asked, answered }).length,
+  ], [0, 0, 1, 1]);
 });
 
 /** A small release image: the API, and the live pages under app/v3-web/. */

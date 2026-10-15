@@ -3,6 +3,7 @@ using Lex.V3.Api;
 using Lex.V3.Contracts;
 using Lex.V3.Contracts.Platform;
 using static Lex.V3.Ingest.Tests.V3CorpusClassificationMountTests;
+using static Lex.V3.Ingest.Tests.V3CorpusEuropeTimeViewTests;
 
 namespace Lex.V3.Ingest.Tests;
 
@@ -12,7 +13,9 @@ namespace Lex.V3.Ingest.Tests;
 /// (ambiguous, none chosen, not even by verify), the latest wording with no text in a language (text_not_available there),
 /// and versions with no usable date (disclosed when their held text is the same, ambiguous when it differs).
 /// </summary>
-public sealed partial class V3FirstMountBuildTests
+[TestClass]
+[DoNotParallelize]
+public sealed class V3CorpusEuropeTimeViewBranchTests
 {
     internal const string WorkB = "http://publications.europa.eu/resource/cellar/bbbbbbbb-0000-0000-0000-00000000000b";
     internal const string WorkC = "http://publications.europa.eu/resource/cellar/cccccccc-0000-0000-0000-00000000000c";

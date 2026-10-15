@@ -10,14 +10,18 @@ namespace Lex.V3.Ingest.Tests;
 /// The EU time view (V3CorpusMount.EuropeTime.cs) over a derived mount whose EU census holds the GDPR's original wording and one
 /// consolidated version dated 2024-01-01 (the data lane's consolidated fixture), each in English and French: the timeline lists
 /// both wordings, as_of answers the wording of the date, evidence_bundle quotes it, verify confirms its permalinks, and the original
-/// wording keeps the permalink EU dossier pins.
+/// wording keeps the permalink EU dossier pins. Its own class, as are the capability and branch tests beside it: they answer
+/// requests over a derived mount, so the image-conditions lane runs them, and <see cref="V3FirstMountBuildTests"/>, the build
+/// and its command line, it does not.
 /// </summary>
-public sealed partial class V3FirstMountBuildTests
+[TestClass]
+[DoNotParallelize]
+public sealed class V3CorpusEuropeTimeViewTests
 {
-    private const string GdprSeed = "32016R0679";
+    internal const string GdprSeed = "32016R0679";
     internal const string ConsolidationDate = "2024-01-01";
 
-    private static Task<(string Root, string Mount)> ConsolidatedMountAsync(bool missingStateCelex = false) =>
+    internal static Task<(string Root, string Mount)> ConsolidatedMountAsync(bool missingStateCelex = false) =>
         MountOfAsync(store => EuFirstMountAcquisitionTests.AcquireConsolidatedAsync(store, missingStateCelex));
 
     /// <summary>A mount derived from the generalised consolidated fixture: the directory to delete, and the mount's.</summary>
@@ -30,7 +34,7 @@ public sealed partial class V3FirstMountBuildTests
         var root = Path.Combine(Path.GetTempPath(), "lex-v3-eu-time-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(root);
         var store = new FileSystemCustodyStore(Path.Combine(root, "custody"));
-        var (_, luxembourg) = await AcquireAsync(store, CheckoutRoot());
+        var (_, luxembourg) = await V3FirstMountBuildTests.AcquireAsync(store, V3FirstMountBuildTests.CheckoutRoot());
         var europe = await acquireEurope(store);
         Assert.IsTrue(europe.Delivered, europe.Detail);
         Assert.IsTrue(luxembourg.Delivered, luxembourg.Detail);

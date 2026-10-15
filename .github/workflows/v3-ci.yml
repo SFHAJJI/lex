@@ -466,6 +466,71 @@ jobs:
       - run: npm test
         working-directory: web
 
+  image-conditions:
+    name: image-conditions
+    # The API's tests as the release image runs the API (plan 0.8): inside the pinned base image the release is built on
+    # (aspnet:10.0-noble-chiseled), on its own .NET runtime, environment and user, so with no language library (the
+    # image's environment sets .NET globalization-invariant) and no zone database (it carries none, and .NET then knows
+    # UTC alone), the checkout read-only and /tmp a fresh tmpfs. The tests are built here as `dotnet` builds them;
+    # LEX_IMAGE_CONDITIONS makes the canary (ImageConditionsTests) assert those conditions held. Lex.V3.Tests whole but
+    # the two classes that drive tools the image does not carry (the OCI verifier's pwsh, the SDK's publish), then the
+    # request-time Lex.V3.Ingest.Tests classes: the mounts the API serves and what it answers from them, and the image-only
+    # annex control case (the derive-time classes run in `dotnet`). The two filters are written once, in
+    # tests/Lex.V3.TestSupport/image-conditions-lane-filters.json, which eng/test-fast.ps1 -ImageConditions reads too, and
+    # each test app holds every term of its own filter to a test it has (ImageConditionsLaneTests). It runs beside
+    # `dotnet`, so it adds nothing to a pull request's wait.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    env:
+      BASE_IMAGE: mcr.microsoft.com/dotnet/aspnet:10.0-noble-chiseled@sha256:0839314d08bb65da369135389a5d8291f75ace587fbb0488f469eb92c62eef68
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+          ref: ${{ env.CANDIDATE_SHA }}
+      - name: Verify exact candidate checkout and the release's base image
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$CANDIDATE_SHA"
+          grep -qF "<ContainerBaseImage>$BASE_IMAGE</ContainerBaseImage>" src/Lex.V3.Api/Lex.V3.Api.csproj
+      - uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1 # v5
+        with:
+          global-json-file: global.json
+      - name: Locked restore and build
+        shell: bash
+        run: |
+          set -euo pipefail
+          dotnet restore Lex.V3.slnx --locked-mode
+          dotnet build Lex.V3.slnx --configuration Release --no-restore
+      - name: The API's tests inside the release's base image
+        shell: bash
+        run: |
+          set -euo pipefail
+          results="$RUNNER_TEMP/image-conditions"
+          mkdir -p "$results" && chmod 0777 "$results"
+          docker pull --quiet "$BASE_IMAGE"
+          in_image() {
+            docker run --rm --network none --tmpfs /tmp:rw,exec,nosuid,nodev,mode=1777 \
+              -v "$PWD:/src:ro" -v "$results:/results" -w /src \
+              -e LEX_IMAGE_CONDITIONS=1 -e TESTINGPLATFORM_TELEMETRY_OPTOUT=1 \
+              --entrypoint dotnet "$BASE_IMAGE" "$@" --results-directory /results
+          }
+          filters=tests/Lex.V3.TestSupport/image-conditions-lane-filters.json
+          lex_v3_tests="$(jq -er '.lex_v3_tests' "$filters")"
+          ingest_request_time="$(jq -er '.ingest_request_time' "$filters")"
+          in_image tests/Lex.V3.Tests/bin/Release/net10.0/Lex.V3.Tests.dll --report-trx --report-trx-filename lex-v3-tests.trx \
+            --filter "$lex_v3_tests"
+          in_image tests/Lex.V3.Ingest.Tests/bin/Release/net10.0/Lex.V3.Ingest.Tests.dll --report-trx --report-trx-filename ingest-request-time.trx \
+            --filter "$ingest_request_time"
+      - name: Upload the image-conditions results
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: image-conditions
+          path: ${{ runner.temp }}/image-conditions/*.trx
+          if-no-files-found: ignore
+
   journeys:
     name: journeys
     # The launch contract's "Journeys J1 to J8 pass in a real browser", on every pull request: the journey suite

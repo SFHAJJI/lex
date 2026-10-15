@@ -6,6 +6,7 @@ using Lex.V3.Contracts.Index;
 using Lex.V3.Contracts.Platform;
 using Lex.V3.Contracts.Source.Core;
 using static Lex.V3.Ingest.Tests.V3CorpusClassificationMountTests;
+using static Lex.V3.Ingest.Tests.V3CorpusEuropeTimeViewTests;
 
 namespace Lex.V3.Ingest.Tests;
 
@@ -16,7 +17,9 @@ namespace Lex.V3.Ingest.Tests;
 /// identifier, each operation the time view serves for an EU act answers, and every registered operation is one or the other,
 /// served by no route, or takes no work identifier.
 /// </summary>
-public sealed partial class V3FirstMountBuildTests
+[TestClass]
+[DoNotParallelize]
+public sealed class V3CorpusEuropeCapabilityMountTests
 {
     /// <summary>A request for each operation the EU manifest states refused, shaped as the operation takes it, with an EU identifier.</summary>
     private static readonly IReadOnlyDictionary<string, object> EuropeRefusedRequests = new Dictionary<string, object>(StringComparer.Ordinal)

@@ -5,6 +5,7 @@ using Lex.V3.Contracts.Source.Absence;
 using Lex.V3.Contracts.Source.Core;
 using Lex.V3.Contracts.Source.Luxembourg;
 using Lex.V3.Tests.Contracts.Source.Core;
+using Lex.V3.Tests.Platform;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
 namespace Lex.V3.Tests.Contracts.Source.Luxembourg;
@@ -254,6 +255,8 @@ public sealed class LuxembourgNeverConsolidatedCoverageTests
     [TestMethod]
     public void TheEmittedOrderIsOrdinalNotCultural()
     {
+        ImageConditions.RequireLanguageLibrary(
+            "a culture's order of \"b1\" before \"B2\" (without the library, culture order is the ordinal order)");
         // Ordinal puts "B2" before "b1" (66 < 98); a culture-aware compare puts "b1" first.
         const string Lower = "http://data.legilux.public.lu/eli/etat/leg/loi/2026/06/06/b1/jo";
         const string Upper = "http://data.legilux.public.lu/eli/etat/leg/loi/2026/06/06/B2/jo";

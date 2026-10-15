@@ -7,11 +7,13 @@
     <Compile Include="../Lex.V3.TestSupport/ConstructionSurface.cs" Link="TestSupport/ConstructionSurface.cs" />
     <Compile Include="../Lex.V3.TestSupport/ClosedSurfaceCensus.cs" Link="TestSupport/ClosedSurfaceCensus.cs" />
     <Compile Include="../Lex.V3.TestSupport/CustodyStoreConformance.cs" Link="TestSupport/CustodyStoreConformance.cs" />
+    <Compile Include="../Lex.V3.TestSupport/ImageConditionsLane.cs" Link="TestSupport/ImageConditionsLane.cs" />
     <Compile Include="../Lex.V3.TestSupport/LuxembourgProfiles.cs" Link="TestSupport/LuxembourgProfiles.cs" />
     <Compile Include="../Lex.V3.TestSupport/ScopeLineQuestions.cs" Link="TestSupport/ScopeLineQuestions.cs" />
   </ItemGroup>
   <ItemGroup>
     <Content Include="Fixtures/EuManifestationListing/*.json" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="Fixtures/LuxembourgToday/*.json" CopyToOutputDirectory="PreserveNewest" />
     <Content Include="Fixtures/SitePaths/*.json" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
   <ItemGroup>

@@ -5,6 +5,7 @@ using System.Text.Json;
 using Lex.V3.Contracts.Source.Core;
 using Lex.V3.Contracts.Source.Http;
 using Lex.V3.TestSupport;
+using Lex.V3.Tests.Platform;
 
 namespace Lex.V3.Tests.Contracts.Source.Http;
 
@@ -57,6 +58,7 @@ public sealed class HeldAcquisitionReceiptContractTests
     [TestMethod]
     public void ReceiptHasTheExactClosedShapeAndRoundTripsAcrossCultures()
     {
+        ImageConditions.RequireLanguageLibrary("switching to the en-US and fr-FR cultures");
         byte[]? baseline = null;
         foreach (var cultureName in new[] { "en-US", "fr-FR" })
         {

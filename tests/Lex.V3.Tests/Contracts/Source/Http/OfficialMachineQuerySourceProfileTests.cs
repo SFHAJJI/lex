@@ -6,6 +6,7 @@ using System.Text.Json.Serialization;
 using Lex.V3.Contracts.Custody;
 using Lex.V3.Contracts.Source.Core;
 using Lex.V3.Contracts.Source.Http;
+using Lex.V3.Tests.Platform;
 
 namespace Lex.V3.Tests.Contracts.Source.Http;
 
@@ -271,6 +272,7 @@ public sealed class OfficialMachineQuerySourceProfileTests
     [TestMethod]
     public void ProfileIdentityIsCultureInvariantAndCanonical()
     {
+        ImageConditions.RequireLanguageLibrary("switching to the fr-FR and en-US cultures");
         var identities = new HashSet<string>(StringComparer.Ordinal);
         foreach (var id in Enum.GetValues<OfficialMachineQuerySourceProfileId>())
         {

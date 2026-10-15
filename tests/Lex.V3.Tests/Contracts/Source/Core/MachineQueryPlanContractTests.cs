@@ -5,6 +5,7 @@ using System.Security.Cryptography;
 using System.Text;
 using Lex.V3.Contracts;
 using Lex.V3.Contracts.Source.Core;
+using Lex.V3.Tests.Platform;
 
 namespace Lex.V3.Tests.Contracts.Source.Core;
 
@@ -575,6 +576,7 @@ public sealed class MachineQueryPlanContractTests
     [TestMethod]
     public void OfflineRerenderIsCultureEnvironmentAndInvocationHistoryIndependent()
     {
+        ImageConditions.RequireLanguageLibrary("switching to the tr-TR and fr-FR cultures");
         var originalCulture = CultureInfo.CurrentCulture;
         var originalUiCulture = CultureInfo.CurrentUICulture;
         const string environmentName = "LEX_V3_MACHINE_QUERY_TEST_CANARY";
@@ -1055,6 +1057,7 @@ public sealed class MachineQueryPlanContractTests
     [TestMethod]
     public void PlanAndReceiptIdentitiesHaveFixedGetAndPostVectors()
     {
+        ImageConditions.RequireLanguageLibrary("switching to each named culture of the validation vectors");
         var originalCulture = CultureInfo.CurrentCulture;
         var originalUiCulture = CultureInfo.CurrentUICulture;
         string[][] vectors;

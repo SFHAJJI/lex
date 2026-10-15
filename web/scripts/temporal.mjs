@@ -78,3 +78,66 @@ export function requireUtcInstant(value, field) {
   }
   return value;
 }
+
+// "Today" in Luxembourg (the specification of record's R13): the calendar date in Europe/Luxembourg at a UTC instant,
+// by the European Union's summer-time rule coded here as the API codes it (`LuxembourgCalendar`, plan 0.8), never from
+// a zone database: the answer is the same in a browser anywhere, in Node under any TZ, and in the server's image, which
+// carries none. UTC+01:00, and UTC+02:00 from 01:00 UTC on the last Sunday of March to 01:00 UTC on the last Sunday of
+// October (Directive 2000/84/EC, Articles 2 and 3); an instant at a change already has the new offset. Held from
+// 1996-01-01T00:00:00Z (before 1996 summer time ended in September) to 2100-01-01T00:00:00Z. One table holds this and
+// the API's rule to the same answers: tests/Lex.V3.Tests/Fixtures/LuxembourgToday/luxembourg-today.json.
+
+// An instant as the API writes it (seven fractional digits) or as a page does (none, or three), always UTC. The fraction
+// is truncated, never rounded: 21:59:59.9999999Z is still before 22:00, and no change falls between two seconds.
+const LUXEMBOURG_INSTANT = /^([0-9]{4})-([0-9]{2})-([0-9]{2})T([0-9]{2}):([0-9]{2}):([0-9]{2})(?:\.[0-9]+)?Z$/;
+
+function luxembourgMilliseconds(instant) {
+  const match = typeof instant === 'string' ? LUXEMBOURG_INSTANT.exec(instant) : null;
+  if (!match || !isUtcInstant(`${match[1]}-${match[2]}-${match[3]}T${match[4]}:${match[5]}:${match[6]}Z`)) {
+    throw new Error(`not a UTC instant: ${JSON.stringify(instant)}`);
+  }
+  const [year, month, day, hours, minutes, seconds] = match.slice(1, 7).map(Number);
+  // The range is the years 1996 to 2099 as written, checked before Date.UTC sees the year: Date.UTC reads a year from 0
+  // to 99 as 1900 plus it, so 0099-12-31T23:30:00Z would pass as 1999 and answer 2000-01-01, where the API's rule refuses.
+  if (year < 1996 || year > 2099) {
+    throw new RangeError(`Luxembourg's date is held from 1996-01-01T00:00:00Z to 2100-01-01T00:00:00Z, not at ${instant}`);
+  }
+  return Date.UTC(year, month - 1, day, hours, minutes, seconds);
+}
+
+/** 01:00 UTC on the last Sunday of `month` (1 to 12) of `year`, in milliseconds. */
+function lastSundayAtOneUtc(year, month) {
+  if (!Number.isInteger(year) || year < 1996 || year > 2099) {
+    throw new RangeError(`Luxembourg's summer time is held from 1996 to 2099, not in ${year}`);
+  }
+  const last = new Date(Date.UTC(year, month, 0));
+  return Date.UTC(year, month - 1, last.getUTCDate() - last.getUTCDay(), 1);
+}
+
+const utcInstant = (milliseconds) => new Date(milliseconds).toISOString().replace('.000Z', 'Z');
+
+/** When summer time starts in `year`, as a UTC instant: 01:00 UTC on the last Sunday of March. */
+export function luxembourgSummerTimeStarts(year) {
+  return utcInstant(lastSundayAtOneUtc(year, 3));
+}
+
+/** When summer time ends in `year`, as a UTC instant: 01:00 UTC on the last Sunday of October. */
+export function luxembourgSummerTimeEnds(year) {
+  return utcInstant(lastSundayAtOneUtc(year, 10));
+}
+
+function luxembourgOffsetHours(milliseconds) {
+  const year = new Date(milliseconds).getUTCFullYear();
+  return milliseconds >= lastSundayAtOneUtc(year, 3) && milliseconds < lastSundayAtOneUtc(year, 10) ? 2 : 1;
+}
+
+/** Luxembourg's offset from UTC at a UTC instant: '+02:00' in summer time, '+01:00' otherwise. */
+export function luxembourgOffset(instant) {
+  return `+0${luxembourgOffsetHours(luxembourgMilliseconds(instant))}:00`;
+}
+
+/** The calendar date in Luxembourg at a UTC instant, as `YYYY-MM-DD`: "today" for an answer observed then. */
+export function luxembourgDate(instant) {
+  const milliseconds = luxembourgMilliseconds(instant);
+  return new Date(milliseconds + luxembourgOffsetHours(milliseconds) * 3_600_000).toISOString().slice(0, 10);
+}

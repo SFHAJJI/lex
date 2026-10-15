@@ -356,16 +356,16 @@ public sealed partial class V3MountedGatesTests
         // English date ambiguous, and French, which holds no text of it, still answers.
         var (root, directory) = await (branch switch
         {
-            "one text held by two works of one date" => V3FirstMountBuildTests.ConsolidatedWorksMountAsync(
-                new(V3FirstMountBuildTests.WorkB, V3FirstMountBuildTests.ConsolidationDate, V3FirstMountBuildTests.Designated, V3FirstMountBuildTests.EnglishPackage, V3FirstMountBuildTests.FrenchPackage),
-                new(V3FirstMountBuildTests.WorkC, V3FirstMountBuildTests.ConsolidationDate, null, V3FirstMountBuildTests.EnglishPackage, V3FirstMountBuildTests.FrenchPackage),
-                new(V3FirstMountBuildTests.WorkD, V3FirstMountBuildTests.ConsolidationDate, null, null, null)),
-            "no English text of the latest wording" => V3FirstMountBuildTests.ConsolidatedWorksMountAsync(
+            "one text held by two works of one date" => V3CorpusEuropeTimeViewTests.ConsolidatedWorksMountAsync(
+                new(V3CorpusEuropeTimeViewBranchTests.WorkB, V3CorpusEuropeTimeViewTests.ConsolidationDate, V3CorpusEuropeTimeViewBranchTests.Designated, V3CorpusEuropeTimeViewBranchTests.EnglishPackage, V3CorpusEuropeTimeViewBranchTests.FrenchPackage),
+                new(V3CorpusEuropeTimeViewBranchTests.WorkC, V3CorpusEuropeTimeViewTests.ConsolidationDate, null, V3CorpusEuropeTimeViewBranchTests.EnglishPackage, V3CorpusEuropeTimeViewBranchTests.FrenchPackage),
+                new(V3CorpusEuropeTimeViewBranchTests.WorkD, V3CorpusEuropeTimeViewTests.ConsolidationDate, null, null, null)),
+            "no English text of the latest wording" => V3CorpusEuropeTimeViewTests.ConsolidatedWorksMountAsync(
                 new EuFirstMountAcquisitionTests.ConsolidatedWorkSpec(
-                    V3FirstMountBuildTests.WorkB, V3FirstMountBuildTests.ConsolidationDate, V3FirstMountBuildTests.Designated, null, V3FirstMountBuildTests.FrenchPackage)),
-            "an undated version holding another English text" => V3FirstMountBuildTests.ConsolidatedWorksMountAsync(
-                new(V3FirstMountBuildTests.WorkB, V3FirstMountBuildTests.ConsolidationDate, V3FirstMountBuildTests.Designated, V3FirstMountBuildTests.EnglishPackage, V3FirstMountBuildTests.FrenchPackage),
-                new(V3FirstMountBuildTests.WorkC, null, null, V3FirstMountBuildTests.OtherEnglishPackage, null)),
+                    V3CorpusEuropeTimeViewBranchTests.WorkB, V3CorpusEuropeTimeViewTests.ConsolidationDate, V3CorpusEuropeTimeViewBranchTests.Designated, null, V3CorpusEuropeTimeViewBranchTests.FrenchPackage)),
+            "an undated version holding another English text" => V3CorpusEuropeTimeViewTests.ConsolidatedWorksMountAsync(
+                new(V3CorpusEuropeTimeViewBranchTests.WorkB, V3CorpusEuropeTimeViewTests.ConsolidationDate, V3CorpusEuropeTimeViewBranchTests.Designated, V3CorpusEuropeTimeViewBranchTests.EnglishPackage, V3CorpusEuropeTimeViewBranchTests.FrenchPackage),
+                new(V3CorpusEuropeTimeViewBranchTests.WorkC, null, null, V3CorpusEuropeTimeViewBranchTests.OtherEnglishPackage, null)),
             _ => throw new ArgumentOutOfRangeException(nameof(branch), branch, "no such branch"),
         });
         try
