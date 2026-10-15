@@ -120,7 +120,7 @@ unserved is shown) and R61 (French and English under `/fr/` and `/en/`) hold on 
   - `Lex.V3.Tests`: 3,181, of which 3,175 passed and 6 were skipped, the new `V3WebRootNotFoundTests` among them;
   - `Lex.V3.Ingest.Tests` filtered to `Census`, `PublicRequestRecordingTests` and `V3ApiReadinessTests`: 48, of which 46
     passed and 2 were skipped;
-  - `eng/verify-v3-tree.ps1`: verified;
+  - `eng/verify-v3-tree.ps1`: 1,566 tracked paths verified;
   - the journeys against an API published from this branch, over the journey fixture mount: through the live server, 47
     of 47 (32 browser runs and 15 API journeys); by keyboard on the pages the API serves, 47 of 47. Both modes include
     "not found" with the fixture mount and with none, and "search retried, with no mount" (two requests, the second
