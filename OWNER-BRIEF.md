@@ -1,6 +1,6 @@
 # Lex V3: the owner's brief
 
-Updated 2026-10-14 at 12:50 UTC by the driver. The driver updates this file in the first pull request of each
+Updated 2026-10-15 at 12:55 UTC by the driver. The driver updates this file in the first pull request of each
 day and whenever a run starts, ends or stops. At most 40 lines, plain words, no hashes. The detail stays in
 STATUS-WEB.md and STATUS-DATA.md; the acceptance list is LAUNCH-CONTRACT.md.
 
@@ -9,7 +9,8 @@ STATUS-WEB.md and STATUS-DATA.md; the acceptance list is LAUNCH-CONTRACT.md.
 - The engine underneath is solid: every quote checkable against its official source, and a signed release that
   rebuilds identically. For Luxembourg the date checks prove little yet: each act has one version so far.
 - Since 14 October the public site is being built properly: a real front page, links that open the law at the right
-  article, the phone layout, every page in French or English, and law pages that arrive complete from the server.
+  article, the phone layout, and every page in French or English. Law pages now arrive complete from the server, and
+  the private copy stays private on every deployment. Next: the server stops carrying its old test preview.
 - The law itself is still thin: Luxembourg has 1,730 acts as first published and no codes yet, and EU text is held for
   511 of 1,170 versions. The codes come next, rebuilt from the publisher files already on this PC.
 
@@ -25,10 +26,11 @@ STATUS-WEB.md and STATUS-DATA.md; the acceptance list is LAUNCH-CONTRACT.md.
 
 ## What waits on you
 
-- This week: say "sign in" when your phone is at hand (the driver starts the Azure sign-in, you enter its code);
-  keep a valid payment method on the Azure subscription, plus a backup one, with billing alerts on two channels; plug
-  in an encrypted external disk of 1 to 2 TB, so the publisher files get a second copy; point soufien.lu's name
-  servers to your registrar's own and add the two records the driver gives you; say whether hibernation may go off.
+- This week: the Azure sign-in by phone code is blocked by your tenant's security defaults, so paste the one Cloud
+  Shell line the driver gave you and send back the two values it prints; keep a valid payment method on the Azure
+  subscription, plus a backup one, with billing alerts on two channels; plug in an encrypted external disk of 1 to 2
+  TB, so the publisher files get a second copy; point soufien.lu's name servers to your registrar's own and add the
+  two records the driver gives you; say whether hibernation may go off.
 - By Wednesday 21 October, one reply to the decision list, each with its recommended answer: adopt the specification
   and the opening's shape, the name, how far the driver acts alone, one money envelope (about 120 EUR a month, at most
   150; the checks only people may do, up to about 19,000 EUR once), and who does those checks.
