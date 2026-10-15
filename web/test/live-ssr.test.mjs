@@ -13,9 +13,13 @@ import { join } from "node:path";
 import vm from "node:vm";
 import { renderToString } from "react-dom/server";
 
-import { LIVE_DOSSIER_ROOT, LIVE_READING_ROOT, liveDossierTree, liveReadingTree, renderLiveDossierPage, renderLiveReadingPage } from "../.react-build/app.mjs";
-import { INITIAL_ANSWER_ID, jsonInScript, readInitialAnswer } from "../scripts/initial-answer.mjs";
-import { sitePageFor } from "../scripts/permalinks.mjs";
+import {
+  LIVE_CONTRACT, LIVE_DOSSIER_ROOT, LIVE_READING_ROOT, liveDossierTree, liveReadingTree, renderLiveDossierPage, renderLiveReadingPage,
+} from "../.react-build/app.mjs";
+import { INITIAL_ANSWER_ID, addressBeforeAnswer, jsonInScript, lawPathOf, readInitialAnswer, readingAddressShown } from "../scripts/initial-answer.mjs";
+import { parseSitePath, sitePageFor } from "../scripts/permalinks.mjs";
+import { readingOutcome } from "../scripts/live-reading.mjs";
+import { answerHandedWith } from "../scripts/v3-client.mjs";
 import { createLiveServer } from "../scripts/serve-live.mjs";
 import { buildLive } from "../scripts/build-live.mjs";
 
@@ -55,6 +59,48 @@ test("a law page under /fr/ or /en/ names the permalink with no interface langua
     }
     assert.ok(head.includes('http-equiv="Content-Security-Policy"'), "the page's own policy is untouched");
   }
+});
+
+test("a reading's page names as canonical an address the platform mints, never the request's own, as the shared table says (review of #967)", () => {
+  const origin = "https://law.soufien.lu";
+  const rows = TABLE.paths.filter((row) => row.canonical !== undefined);
+  assert.ok(rows.length >= 5, "the article minted, escaped otherwise, not held, none, and a stale permalink's");
+  const refused = envelopeOf("evidence_bundle", "a date before the work's history");
+  const view = readingOutcome(answerHandedWith("evidence_bundle", READING, { contract: LIVE_CONTRACT, objectType: "evidence_bundle" })).view;
+  for (const { path, canonical } of rows) {
+    const html = renderLiveReadingPage({ initial: { envelope: READING, path } });
+    const head = html.slice(0, html.indexOf("</head>"));
+    assert.deepEqual([...head.matchAll(/<link rel="canonical" href="([^"]*)"\/>/g)].map((match) => match[1]), [canonical], `${path}: one canonical link`);
+    const law = canonical.slice(origin.length);
+    assert.deepEqual(
+      [...head.matchAll(/<link rel="alternate" hrefLang="([^"]*)" href="([^"]*)"\/>/g)].map(([, hrefLang, href]) => [hrefLang, href]),
+      [["fr", `${origin}/fr${law}`], ["en", `${origin}/en${law}`], ["x-default", canonical]],
+      `${path}: each language once, and x-default`,
+    );
+    // The page as a browser loads it names the same once its answer is read (`LiveReading.jsx`), and before that, as built,
+    // the state's permalink with no article (`client.jsx`), an address the platform mints as well.
+    assert.equal(readingAddressShown(view, lawPathOf(path)), law, `${path}: once loaded`);
+    assert.equal(addressBeforeAnswer(path), parseSitePath(path).permalink, `${path}: as built`);
+    assert.equal(parseSitePath(addressBeforeAnswer(path)).anchor, null, `${path}: as built, no article`);
+    // A refusal shows no state: its page names the state's permalink the address pins, with no article.
+    const refusal = renderLiveReadingPage({ initial: { envelope: refused, path } });
+    assert.ok(refusal.includes(`<link rel="canonical" href="${origin}${parseSitePath(path).permalink}"/>`), `${path}: a refusal's page`);
+  }
+
+  // An article the state holds without text is minted as a segment too, and so is an EU wording's provision; an article
+  // neither holds is the state's (or wording's) permalink.
+  const state = { permalink: `/lu-legilux/w/2024-01-01--${"a".repeat(64)}/fra`, articles: [], articlesWithoutText: [{ publisherId: "Art. 2" }] };
+  const luxembourg = { publisher: "lu-legilux", states: [state] };
+  assert.equal(readingAddressShown(luxembourg, `${state.permalink}/Art.%202`), `${state.permalink}/Art.%202`);
+  assert.equal(readingAddressShown(luxembourg, `${state.permalink}/Art.%20%32`), `${state.permalink}/Art.%202`, "as the platform escapes it");
+  assert.equal(readingAddressShown(luxembourg, `${state.permalink}/Art.%203`), state.permalink);
+  const pin = `/eu-eurlex/32016R0679/2016-05-04--${"b".repeat(64)}/eng`;
+  const europe = { publisher: "eu-eurlex", wordings: [{ permalink: pin, articles: [{ publisherId: "art_5(1)", permalink: `${pin}/art_5%281%29` }], articlesWithoutText: [] }] };
+  assert.equal(readingAddressShown(europe, `${pin}/art_5(1)`), `${pin}/art_5%281%29`);
+  assert.equal(readingAddressShown(europe, `${pin}/art_6`), pin);
+  assert.equal(readingAddressShown(null, `${pin}/art_6`), pin, "no view: the pinned wording, with no article");
+  assert.equal(addressBeforeAnswer("/en/eu-eurlex/32016R0679"), "/eu-eurlex/32016R0679", "a work's address is its own");
+  assert.equal(addressBeforeAnswer("/en/search.html"), null);
 });
 
 test("each law's address under a language is rendered from what the page itself would ask, as the shared table says", () => {

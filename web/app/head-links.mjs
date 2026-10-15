@@ -2,10 +2,11 @@
 //
 // The server renders a law's page with them (`Document.jsx`, `lawPath`). The page as built (`reading.html`,
 // `dossier.html`), which either server sends when it cannot render one, stands at every law's address and names none, so
-// once loaded it writes them for the address it stands at (`client.jsx`), and the reading page names the version it
-// shows in place of a permalink's when that is another (`LiveReading.jsx`), as the server's render does. A link element
-// is not a script, so the page's Content-Security-Policy is untouched; the head is outside the hydrated root, so React
-// reads none of it.
+// once loaded it writes them for the work's address, or a reading's state's permalink (`client.jsx`), and the reading
+// page names what its answer shows, the article the address names when the state holds it (`LiveReading.jsx`,
+// `readingAddressShown`), as the server's render does: only addresses the platform mints, never the request's. A link
+// element is not a script, so the page's Content-Security-Policy is untouched; the head is outside the hydrated root, so
+// React reads none of it.
 
 import { lawPageLinks } from '../scripts/permalinks.mjs';
 import { CANONICAL_HOST } from '../scripts/routes.mjs';

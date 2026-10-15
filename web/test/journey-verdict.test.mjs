@@ -411,7 +411,7 @@ test("a law's page names the permalink with no interface language as canonical, 
   const site = "https://law.soufien.lu";
   const article = `${DOSSIER_IDENTIFIER}/${READING_DATE}--${"e".repeat(64)}/fra/${HISTORY_ANCHOR}`;
   const step = { ...JOURNEY_STEPS.permalink, path: `/en${article}` };
-  const links = (address) => ({ canonical: `${site}${address}`, alternates: { fr: `${site}/fr${address}`, en: `${site}/en${address}`, "x-default": `${site}${address}` } });
+  const links = (address) => ({ canonical: `${site}${address}`, alternates: [["fr", `${site}/fr${address}`], ["en", `${site}/en${address}`], ["x-default", `${site}${address}`]] });
   const observed = (change = {}) => ({
     ...goodSearch(),
     requests: [{ url: `${ORIGIN}${step.path}`, method: "GET", headers: {} }],
@@ -432,7 +432,10 @@ test("a law's page names the permalink with no interface language as canonical, 
     ["the page's own language", { canonical: `${site}/en${article}` }, /not a law's address .* with no interface language/],
     ["the state without its article", links(article.slice(0, article.lastIndexOf("/"))), /canonical, not https:\/\/law\.soufien\.lu\/lu-legilux/],
     ["another origin", { canonical: `${ORIGIN}${article}` }, /not a law's address on https:\/\/law\.soufien\.lu/],
-    ["no x-default", { alternates: { fr: `${site}/fr${article}`, en: `${site}/en${article}` } }, /alternates are/],
+    ["no x-default", { alternates: [["fr", `${site}/fr${article}`], ["en", `${site}/en${article}`]] }, /alternates are/],
+    // Every link is counted (review of #967): one named twice is a failure, which a map of them would hide.
+    ["an alternate twice", { alternates: [...links(article).alternates, ["en", `${site}/en${article}`]] }, /alternates are .*, each once/],
+    ["two canonical links", { canonical: [`${site}${article}`, `${site}${article}`] }, /not a law's address/],
   ]) {
     const failures = journeyVerdict(observed(change), expected);
     assert.ok(failures.some((failure) => reason.test(failure)), `${what}: ${failures.join(" | ")}`);
@@ -448,6 +451,8 @@ test("a law's page names the permalink with no interface language as canonical, 
   const staleExpected = { origin: ORIGIN, step: stale, state: "success", texts: ["49 articles quoted"], mustRender: true };
   assert.deepEqual(journeyVerdict(staleObserved(shown), staleExpected), []);
   assert.ok(journeyVerdict(staleObserved(stale.path.slice("/en".length)), staleExpected).some((failure) => /canonical, not the version it shows/.test(failure)));
+  // The version it shows, with no article: the article the stale address names is not the answer's to mint (review of #967).
+  assert.ok(journeyVerdict(staleObserved(`${shown}/${HISTORY_ANCHOR}`), staleExpected).some((failure) => /canonical, not the version it shows/.test(failure)));
 });
 
 test("a provision history run types the identifier and the article id and is held to both in the body", () => {

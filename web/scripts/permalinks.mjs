@@ -40,9 +40,10 @@ const PIN = '([0-9]{4}-[0-9]{2}-[0-9]{2})--([0-9a-f]{64})';
 const LANGUAGE = '([a-z]{3})';
 /**
  * An article or provision: one path segment of RFC 3986's characters (`pchar`), anything else percent-encoded, and never
- * `.` or `..`, which a browser would resolve away.
+ * one that is `.` or `..` once decoded (`%2e` or `%2E` for a dot, as a URL parser reads it), which a browser and the live
+ * server resolve away (review of #967: the API served `%2E%2E` as an article).
  */
-const ANCHOR = "(?!\\.\\.?$)((?:[0-9A-Za-z._~!$&'()*+,;=:@-]|%[0-9A-Fa-f]{2})+)";
+const ANCHOR = "(?!(?:\\.|%2[eE]){1,2}$)((?:[0-9A-Za-z._~!$&'()*+,;=:@-]|%[0-9A-Fa-f]{2})+)";
 
 export const PERMALINK_PATTERNS = Object.freeze({
   luxembourgWork: new RegExp(`^/lu-legilux/(${WORK})$`),

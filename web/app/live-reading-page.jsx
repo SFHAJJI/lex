@@ -26,15 +26,17 @@ export function liveReadingTree(initial = null) {
 }
 
 /**
- * The address the page at a permalink names as its own (canonical, and in each language): the permalink when the reading
- * shows the state (or EU wording) it pins, its article included; else the one the reading shows in its place, as a stale
- * permalink's page shows another version (review of #959: any digest named itself canonical); else, for a refusal, the
- * address it was opened at (`readingAddressShown`, which the page writes again once loaded).
+ * The address the page at a permalink names as its own (canonical, and in each language), always one the platform mints:
+ * the permalink of the article the address names when the reading shows the state (or EU wording) it pins and that state
+ * holds the article, else the state's; the one the reading shows in its place when that is another version, as a stale
+ * permalink's page shows (review of #959: any digest named itself canonical); for a refusal, the pinned state's permalink,
+ * with no article (review of #967: any article segment named itself canonical). `readingAddressShown`, which the page
+ * writes again once loaded.
  */
 export function readingLawPath(initial) {
   const pinned = lawPathOf(initial.path);
   const outcome = readingOutcome(answerHandedWith('evidence_bundle', initial.envelope, { contract: LIVE_CONTRACT, objectType: 'evidence_bundle' }));
-  return outcome.state === 'success' ? readingAddressShown(outcome.view, pinned) : pinned;
+  return readingAddressShown(outcome.state === 'success' ? outcome.view : null, pinned);
 }
 
 /**

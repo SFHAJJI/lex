@@ -19,7 +19,7 @@
 import { useEffect } from 'react';
 import { hydrateRoot } from 'react-dom/client';
 import { parseSitePath, sameDocumentIn } from '../scripts/permalinks.mjs';
-import { lawPathOf } from '../scripts/initial-answer.mjs';
+import { addressBeforeAnswer } from '../scripts/initial-answer.mjs';
 import { writeLawPageLinks } from './head-links.mjs';
 
 /**
@@ -48,10 +48,12 @@ export function attach(container, element) {
     link.setAttribute('href', `${sameDocumentIn(link.dataset.sameDocument, window.location.pathname)}${window.location.hash}`);
   }
 
-  // A law's page as built (served when the server could not render it) names no canonical link: it names the address it
-  // stands at, with no interface language, as the server's render would (R64, R67). The head is outside the root too.
+  // A law's page as built (served when the server could not render it) names no canonical link: it names an address the
+  // platform mints, with no interface language (R64, R67), never the request's own (`addressBeforeAnswer`): a reading's
+  // state's permalink with no article, which the reading page replaces with what its answer shows once loaded
+  // (`readingAddressShown`; review of #967: any article segment named itself canonical). The head is outside the root too.
   if (parseSitePath(window.location.pathname)?.locale && document.head.querySelector('link[rel="canonical"]') === null) {
-    writeLawPageLinks(document, lawPathOf(window.location.pathname));
+    writeLawPageLinks(document, addressBeforeAnswer(window.location.pathname));
   }
 
   hydrateRoot(container, <Hydrated state={state}>{element}</Hydrated>, {

@@ -2200,15 +2200,30 @@ internal sealed partial class V3CorpusMount : IDisposable
             }
 
             var pinnedStates = _reader.ResolveState(workKey, applicabilityDate);
+            var pinnedLanguages = pinnedStates.Select(static state => state.Language)
+                .Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray();
 
             // The permalink names its text's language (R64): a language asked beside it must be that one, and only that
-            // language's states at the coordinate can answer its digest.
+            // language's states at the coordinate can answer its digest. The languages named are held ones, as the EU
+            // answers (review of #967: a permalink naming a language the coordinate does not hold was offered it): the
+            // permalink's own when the coordinate holds it, else those it holds; a coordinate that holds none now names the
+            // permalink's language only when a retained generation holds its digest, and is otherwise a coordinate this
+            // index does not know.
             if (requestedLanguage is not null && !string.Equals(requestedLanguage, language, StringComparison.Ordinal))
             {
+                string[] heldLanguages = pinnedLanguages.Length > 0 ? pinnedLanguages
+                    : FromGeneration(workKey, applicabilityDate, language, requestedDigest) is not null ? [language]
+                    : [];
+                if (heldLanguages.Length == 0)
+                {
+                    return Unknown(request, identifier, observedAt, PublisherId.LuLegilux,
+                        "a hash-pinned permalink of a state this index holds at that stable coordinate");
+                }
+
                 using var otherLanguage = JsonSerializer.SerializeToDocument(new
                 {
                     requested_language = requestedLanguage,
-                    available_languages = new[] { language },
+                    available_languages = heldLanguages.Contains(language, StringComparer.Ordinal) ? new[] { language } : heldLanguages,
                 });
                 return V3PlatformOperationOutcome.Refused(
                     Context("refusal", observedAt),
@@ -2238,8 +2253,6 @@ internal sealed partial class V3CorpusMount : IDisposable
                     "a hash-pinned permalink of a state this index holds at that stable coordinate");
             }
 
-            var pinnedLanguages = pinnedStates.Select(static state => state.Language)
-                .Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray();
             if (!pinnedLanguages.Contains(language, StringComparer.Ordinal))
             {
                 using var unavailableLanguage = JsonSerializer.SerializeToDocument(new
@@ -6862,8 +6875,9 @@ internal sealed partial class V3CorpusMount : IDisposable
     /// <c>/{publisher}/{work}/{date}--{digest}/{language}[/{anchor}]</c>: given as a path or under this service's own https
     /// origin (no query, no fragment), with the interface language its page stands under taken off. The date is a calendar
     /// date, the digest 64 lower-case hex characters, the language three lower-case letters, and the anchor RFC 3986's path
-    /// characters (anything else percent-encoded, never <c>.</c> or <c>..</c>), returned unescaped. A <c>#</c> (a position
-    /// inside an article, which no operation resolves), an empty segment or any other segment is no permalink: null.
+    /// characters (anything else percent-encoded, never one that is <c>.</c> or <c>..</c> once decoded), returned unescaped.
+    /// A <c>#</c> (a position inside an article, which no operation resolves), an empty segment or any other segment is no
+    /// permalink: null. Under the origin, the path is read as written, so both forms name the same addresses.
     /// </summary>
     private static (string Work, string Date, string Digest, string Language, string? Anchor)? PermalinkSegments(string value, string publisher)
     {
@@ -6876,9 +6890,14 @@ internal sealed partial class V3CorpusMount : IDisposable
                  string.Equals(uri.Scheme, Uri.UriSchemeHttps, StringComparison.Ordinal) &&
                  string.Equals(uri.Host, "law.soufien.lu", StringComparison.Ordinal) &&
                  uri.IsDefaultPort && uri.UserInfo.Length == 0 && uri.Query.Length == 0 &&
-                 uri.Fragment.Length == 0)
+                 uri.Fragment.Length == 0 &&
+                 value.IndexOf("://", StringComparison.Ordinal) is var authority and >= 0 &&
+                 value.IndexOf('/', authority + 3) is var start and >= 0)
         {
-            path = uri.AbsolutePath;
+            // The path as written, not Uri's AbsolutePath: Uri removes dot segments (`%2E%2E` among them) and reads a
+            // backslash as a slash, so the address under the origin was another than the same path given alone (review of
+            // #967: `/fra/%2E%2E` was an article as a path, and no permalink under the origin).
+            path = value[start..];
         }
         else
         {
@@ -6901,10 +6920,14 @@ internal sealed partial class V3CorpusMount : IDisposable
         return (segments[2], segments[3][..10], segments[3][12..], segments[4], segments.Length == 6 ? Uri.UnescapeDataString(segments[5]) : null);
     }
 
-    /// <summary>An article's segment of a permalink: RFC 3986's path characters, each other byte percent-encoded, not <c>.</c> or <c>..</c>.</summary>
+    /// <summary>
+    /// An article's segment of a permalink: RFC 3986's path characters, each other byte percent-encoded, and not one that is
+    /// <c>.</c> or <c>..</c> once decoded (<c>%2e</c> or <c>%2E</c> for a dot, as a URL parser reads it), which a browser and
+    /// the live server resolve away (review of #967).
+    /// </summary>
     private static bool IsAnchorSegment(string segment)
     {
-        if (segment.Length == 0 || segment is "." or "..")
+        if (segment.Length == 0)
         {
             return false;
         }
@@ -6927,7 +6950,7 @@ internal sealed partial class V3CorpusMount : IDisposable
             }
         }
 
-        return true;
+        return Uri.UnescapeDataString(segment) is not ("." or "..");
     }
 
     private static bool IsWorkKey(string value) => value.Length is > 0 and <= 512 &&

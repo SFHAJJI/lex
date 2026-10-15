@@ -35,8 +35,11 @@ const SEGMENT = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
 const ANCHOR = /^[^#\s/]+$/;
 /** The text's language: the publisher's three lower-case letters. */
 const LANGUAGE = /^[a-z]{3}$/;
-/** An anchor as a path writes it: RFC 3986's path characters, anything else percent-encoded, never `.` or `..`. */
-const ANCHOR_SEGMENT = /^(?!\.\.?$)(?:[0-9A-Za-z._~!$&'()*+,;=:@-]|%[0-9A-Fa-f]{2})+$/;
+/**
+ * An anchor as a path writes it: RFC 3986's path characters, anything else percent-encoded, never one that is `.` or `..`
+ * once decoded (`%2e` or `%2E` for a dot; review of #967).
+ */
+const ANCHOR_SEGMENT = /^(?!(?:\.|%2[eE]){1,2}$)(?:[0-9A-Za-z._~!$&'()*+,;=:@-]|%[0-9A-Fa-f]{2})+$/;
 
 /**
  * One segment rule, used by the builders and by the parser.

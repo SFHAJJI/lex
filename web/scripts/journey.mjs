@@ -405,18 +405,22 @@ export function journeyVerdict(observed, expected) {
     }
   }
   // A law's page names as canonical the address with no interface language, the permalink Lex prints and cites (R64): its
-  // own address, article included, when it shows what that names; a stale permalink's page the version it shows, never
-  // the digest it was opened at. Each interface language is an alternate, and the address itself for any other.
+  // own address, article included, when it shows what that names; a stale permalink's page the version it shows, with no
+  // article and never the digest it was opened at (review of #967: the canonical is what the answer shows, never the
+  // request). Each interface language is an alternate, and the address itself for any other, each named once: the links
+  // are counted, so a page that names one twice fails.
   if (expected.state === "success" && step.rendered === true && observed.canonical !== undefined) {
     const own = step.path.replace(/^\/(?:en|fr)(?=\/)/, "");
     const named = typeof observed.canonical === "string" && observed.canonical.startsWith(SITE_ORIGIN) ? observed.canonical.slice(SITE_ORIGIN.length) : null;
     const law = named === null ? null : parseSitePath(named);
     if (law === null || law.locale !== null) failures.push(`the page names ${observed.canonical ?? "no"} canonical link, not a law's address on ${SITE_ORIGIN} with no interface language`);
-    else if (step.stale === true ? (law.kind !== "state" || named.includes(parseSitePath(own)?.digest ?? "")) : named !== own) {
+    else if (step.stale === true ? (law.kind !== "state" || law.anchor !== null || named.includes(parseSitePath(own)?.digest ?? "")) : named !== own) {
       failures.push(`the page names ${observed.canonical} canonical, not ${step.stale === true ? "the version it shows" : `${SITE_ORIGIN}${own}`}`);
     } else {
-      const wanted = { ...Object.fromEntries(INTERFACE_LANGUAGES.map((language) => [language, `${SITE_ORIGIN}/${language}${named}`])), "x-default": `${SITE_ORIGIN}${named}` };
-      if (JSON.stringify(observed.alternates ?? {}) !== JSON.stringify(wanted)) failures.push(`the page's alternates are ${JSON.stringify(observed.alternates ?? {})}, not ${JSON.stringify(wanted)}`);
+      const wanted = [...INTERFACE_LANGUAGES.map((language) => [language, `${SITE_ORIGIN}/${language}${named}`]), ["x-default", `${SITE_ORIGIN}${named}`]];
+      const seen = Array.isArray(observed.alternates) ? observed.alternates : [];
+      const counted = (pairs) => JSON.stringify(pairs.map((pair) => JSON.stringify(pair)).sort());
+      if (counted(seen) !== counted(wanted)) failures.push(`the page's alternates are ${JSON.stringify(observed.alternates ?? null)}, not ${JSON.stringify(wanted)}, each once`);
     }
   }
   if (expected.state === "success" && step.then !== undefined && observed.then !== "reached") {
@@ -1145,10 +1149,11 @@ async function observe(browser, pageOrigin, step, { keyboard = false } = {}) {
       pinNamed: await evaluate("document.querySelector('[data-live-answer] [data-pin-replaced] code')?.textContent.trim() ?? null"),
       // Whether the document arrived carrying the answer the server rendered it from (`initial-answer.mjs`).
       serverRendered: await evaluate("document.getElementById('lex-initial-answer') !== null"),
-      // At a law's address: the canonical link and the alternates the page's head names once loaded (R64, R67).
+      // At a law's address: the canonical link and the alternates the page's head names once loaded (R64, R67), every one
+      // of them (review of #967): two canonical links are observed as the list of both, and each alternate as a pair.
       ...(step.rendered === true ? {
-        canonical: await evaluate("document.head.querySelector('link[rel=\"canonical\"]')?.getAttribute('href') ?? null"),
-        alternates: await evaluate("Object.fromEntries([...document.head.querySelectorAll('link[rel=\"alternate\"][hreflang]')].map((link) => [link.getAttribute('hreflang'), link.getAttribute('href')]))"),
+        canonical: await evaluate("(() => { const links = [...document.head.querySelectorAll('link[rel=\"canonical\"]')].map((link) => link.getAttribute('href')); return links.length > 1 ? links : links[0] ?? null; })()"),
+        alternates: await evaluate("[...document.head.querySelectorAll('link[rel=\"alternate\"][hreflang]')].map((link) => [link.getAttribute('hreflang'), link.getAttribute('href')])"),
       } : {}),
       // At a permalink: whether the page says another version stands in for the pinned one, and where the article it
       // names is (`shown`: its top inside the window).

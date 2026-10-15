@@ -273,14 +273,16 @@ internal sealed partial class V3WebRoot
     /// (<c>/lu-legilux/{work}/{date}--{sha256}/{lng}</c>) or an EU wording (<c>/eu-eurlex/{celex}/{date}--{sha256}/{lng}</c>),
     /// with the article (or provision) as a last segment when one is named, served its reading; each under an interface
     /// language (<c>/en/</c>, <c>/fr/</c>), or with none, as the API mints it, to be sent to the reader's. <c>{lng}</c> is the
-    /// text's language; the article is RFC 3986's path characters, anything else percent-encoded, and never <c>.</c> or
-    /// <c>..</c>. A <c>#</c> (a position inside an article) never reaches a server. The end is <c>\z</c>, not <c>$</c>, which
-    /// in .NET also matches before a final newline.
+    /// text's language; the article is RFC 3986's path characters, anything else percent-encoded, and never one that is
+    /// <c>.</c> or <c>..</c> once decoded (<c>%2e</c> or <c>%2E</c> for a dot, as a URL parser reads it; review of #967: this
+    /// root served <c>%2E%2E</c> as an article, which the live server and a browser resolve away). A <c>#</c> (a position
+    /// inside an article) never reaches a server. The end is <c>\z</c>, not <c>$</c>, which in .NET also matches before a
+    /// final newline.
     /// </summary>
     private static readonly Regex SitePath = new(
         "^/(?:(?<locale>fr|en)/)?(?:lu-legilux/(?<work>[a-z0-9][a-z0-9_-]*)|eu-eurlex/(?<celex>[0-9A-Za-z][0-9A-Za-z()._-]*))" +
         "(?<pin>/(?<date>[0-9]{4}-[0-9]{2}-[0-9]{2})--[0-9a-f]{64}/(?<lng>[a-z]{3})" +
-        "(?:/(?!\\.\\.?\\z)(?:[0-9A-Za-z._~!$&'()*+,;=:@-]|%[0-9A-Fa-f]{2})+)?)?\\z",
+        "(?:/(?!(?:\\.|%2[eE]){1,2}\\z)(?:[0-9A-Za-z._~!$&'()*+,;=:@-]|%[0-9A-Fa-f]{2})+)?)?\\z",
         RegexOptions.CultureInvariant,
         TimeSpan.FromMilliseconds(100));
 

@@ -120,6 +120,82 @@ public sealed class V3CorpusVerifyMountTests
     }
 
     [TestMethod]
+    public async Task ALanguageAskedBesideAPermalinkIsOfferedOnlyTheLanguagesItsCoordinateHolds()
+    {
+        // Review of #967: a permalink naming German at a coordinate that holds only French, asked in English, was offered
+        // German. As the EU answers it: the permalink's language when the coordinate holds it, else the ones it holds.
+        var fixture = await MountedFixture.CreateAsync();
+        await using var cleanup = fixture;
+        using var mount = await V3CorpusMount.OpenAsync(fixture.Directory, CancellationToken.None);
+        Assert.IsNotNull(mount);
+        static string[] Offered(V3Envelope envelope) =>
+            envelope.Refusal!.HelpfulPayload.GetProperty("available_languages").EnumerateArray().Select(static v => v.GetString()!).ToArray();
+
+        var notHeld = await VerifyAsync(mount, new { identifier = fixture.PermalinkOf(fixture.StateSha256, "deu"), language = "eng" });
+        Assert.AreEqual("language_not_available", notHeld.Refusal?.Code);
+        Assert.AreEqual("eng", notHeld.Refusal!.HelpfulPayload.GetProperty("requested_language").GetString());
+        CollectionAssert.AreEqual(new[] { "fra" }, Offered(notHeld), "the languages the coordinate holds, not the permalink's");
+
+        var held = await VerifyAsync(mount, new { identifier = fixture.Permalink, language = "eng" });
+        Assert.AreEqual("language_not_available", held.Refusal?.Code);
+        CollectionAssert.AreEqual(new[] { "fra" }, Offered(held), "the permalink's own, which the coordinate holds");
+
+        // A coordinate that holds no state offers no language: it is one this index does not know, as the EU answers a work
+        // it does not hold before any language.
+        var nowhere = await VerifyAsync(mount, new { identifier = $"/lu-legilux/{fixture.WorkKey}/1900-01-01--{fixture.StateSha256}/fra", language = "deu" });
+        Assert.AreEqual("identifier_unknown", nowhere.Refusal?.Code);
+    }
+
+    [TestMethod]
+    public async Task ADotSegmentPercentEncodedIsNoArticleAndAPermalinkUnderTheOriginReadsAsTheSamePath()
+    {
+        // Review of #967: `/fra/%2E%2E` was verified as the article "..", which a browser and the live server resolve away,
+        // while the same permalink under the origin was read through Uri, which resolved it away too. Both forms now read the
+        // path as written, and a segment that is "." or ".." once decoded is no article.
+        var fixture = await MountedFixture.CreateAsync();
+        await using var cleanup = fixture;
+        using var mount = await V3CorpusMount.OpenAsync(fixture.Directory, CancellationToken.None);
+        Assert.IsNotNull(mount);
+
+        var refusedAsDots = await VerifyAsync(mount, new { identifier = fixture.Permalink + "/.." });
+        Assert.IsNotNull(refusedAsDots.Refusal, "a literal dot segment is no article");
+        foreach (var dots in new[] { ".", "..", "%2E", "%2e", "%2E%2E", "%2e%2e", ".%2E", "%2e." })
+        {
+            foreach (var identifier in new[] { fixture.Permalink + "/" + dots, "https://law.soufien.lu" + fixture.Permalink + "/" + dots })
+            {
+                var refused = await VerifyAsync(mount, new { identifier });
+                Assert.AreEqual(refusedAsDots.Refusal.Code, refused.Refusal?.Code, identifier);
+                Assert.AreNotEqual("anchor_not_in_version", refused.Refusal!.Code, identifier);
+                Assert.IsFalse(refused.Refusal.HelpfulPayload.TryGetProperty("requested_anchor", out _), $"{identifier} named an article");
+            }
+        }
+
+        // A segment that only decodes to dots and something more is an article: verified, and not one this state holds.
+        var threeDots = await VerifyAsync(mount, new { identifier = fixture.Permalink + "/%2E%2E%2E" });
+        Assert.AreEqual("anchor_not_in_version", threeDots.Refusal?.Code);
+        Assert.AreEqual("...", threeDots.Refusal!.HelpfulPayload.GetProperty("requested_anchor").GetString());
+
+        // Under the origin, the path as written: what Uri would resolve or rewrite (a dot segment before the publisher, a
+        // backslash) is no permalink in either form, and an article is unescaped as it is from the path alone.
+        foreach (var path in new[] { "/en/." + fixture.Permalink, fixture.Permalink.Replace("/fra", "\\fra", StringComparison.Ordinal) })
+        {
+            foreach (var identifier in new[] { path, "https://law.soufien.lu" + path })
+            {
+                var refused = await VerifyAsync(mount, new { identifier });
+                Assert.IsNotNull(refused.Refusal, identifier);
+                Assert.IsFalse(refused.Refusal.HelpfulPayload.TryGetProperty("current_digest", out _), $"{identifier} was read as a permalink");
+            }
+        }
+
+        foreach (var identifier in new[] { fixture.Permalink + "/art%5F2", "https://law.soufien.lu/en" + fixture.Permalink + "/art%5F2" })
+        {
+            var verified = await VerifyAsync(mount, new { identifier });
+            Assert.AreEqual("digest_matches", verified.Result?.Value.GetProperty("verdict").GetString(), $"{identifier}: {verified.Refusal?.Code}");
+            Assert.AreEqual(fixture.Permalink + "/art_2", verified.Result!.Value.GetProperty("article_permalink").GetString(), identifier);
+        }
+    }
+
+    [TestMethod]
     public async Task ADigestTheCoordinateNoLongerCarriesIsThePinnedDigestMismatchNamingTheCurrentOne()
     {
         var fixture = await MountedFixture.CreateAsync();

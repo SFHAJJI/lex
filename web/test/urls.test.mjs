@@ -157,8 +157,15 @@ test('the parser refuses every coordinate the builders refuse', () => {
     `/lu-legilux/loi/2001-01-01--${HASH}/fra/has space`,
     `/lu-legilux/loi/2001-01-01--${HASH}/fra/..`,
     `/lu-legilux/loi/2001-01-01--${HASH}/fra/art_5#art_6`,
+    // A dot segment percent-encoded is one still (review of #967): a URL parser reads `%2e` as a dot and resolves it away.
+    ...['.', '%2E', '%2e', '%2E%2E', '%2e%2e', '.%2E', '%2e.'].map((dots) => `/lu-legilux/loi/2001-01-01--${HASH}/fra/${dots}`),
   ]) {
     assert.equal(parseObjectUrl(path), null, `${path} parsed as an object URL`);
+  }
+  // A segment that only decodes to dots and something else is an article: `...`, `%2E%2E%2E`, `.a`, and `%252E`, which
+  // decodes to the three characters `%2E`.
+  for (const segment of ['...', '%2E%2E%2E', '.a', '%252E']) {
+    assert.ok(parseObjectUrl(`/lu-legilux/loi/2001-01-01--${HASH}/fra/${segment}`), segment);
   }
   // 2024 is a leap year and 2100 is not, and both are decidable rather than approximated.
   assert.ok(parseObjectUrl(`/lu-legilux/loi/2024-02-29--${HASH}/fra`));
