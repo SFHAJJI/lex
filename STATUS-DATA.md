@@ -1,6 +1,111 @@
 # Lex V3 status: the data lane
 
-Updated 2026-10-13.
+Updated 2026-10-15.
+
+## Inventory /4: a Luxembourg file's own identification is evidence, and six checks refuse a file that is another state's (Claude, 2026-10-15)
+
+- **What.** Slice S2 of the Luxembourg data design (`C:\lex-v3\LU-DATA-DESIGN-2026-10-14-v2.md` §1.3), built to its
+  implementation brief, which reconciled the design with measurements over run 15. /3 rejected every code and 1,473
+  consolidations over identity checks, and any non-ASCII id rejected a whole document; /4 accepts valid Legilux files and
+  still refuses one that is another state's. `LuxembourgAknArticleInventoryProducerV4` sits beside the frozen /3 producer
+  and reuses its outcome types. Nothing served changes yet: no derive calls /4 until S4 (R1).
+- **How.**
+  - It reads only the document's own identification block (`<document>/meta/identification`) and never rejects a file
+    over it. The block becomes evidence: the states its manifestations name, one of seven identity classes, its legal
+    resource and its in-file date. The state coordinate is never minted from the file (`Publisher*` stays null); S6 dates
+    states from the catalogue.
+  - Only the main body's top-level articles count. Annex, component and quoted articles are counted and never read. An id
+    or wId is a publisher token: 1 to 512 UTF-16 units, any scalar but Unicode White_Space, controls, the zero-width set
+    and the bidi controls, never normalized (1,658 non-ASCII ids such as `art_141_à_144` are admitted).
+  - Six content-consistency checks (shared file, later state, other work, date ahead, copied state, copied act) run in a
+    second pass over what the first read, so no body is read twice. Every check that fires is recorded; any of them gives
+    the new disposition `publisher_file_names_other_state`, which keeps the inventory as evidence.
+  - Profile `lex-v3-luxembourg-akn-article-inventory-profile/4`, sha256 `40d79090…`, 2,019 bytes. The title grammar of
+    check (c) is one constant, behind both the profile line and the matcher.
+  - The production door takes the run and dates states from the run's own `dateApplicability` facts (3,752 consolidation
+    and code states over run 15); no caller supplies a catalogue.
+- **The frozen verifiers stay frozen.** The /3 class and its profile are byte-identical, content /1 is not edited, and
+  their digests stay `70e92611…` and `dd32d9a5…`; the checkpoint reopen still recomputes /3 and /1 (`854891e3…`,
+  `abc0a299…`). `LuxembourgAknFrozenReplayTests` pins both digests and replays them over 19 admitted run-15 bodies at
+  their real ordinals: every content disposition multiset, admitted article identity, the 7 sealed state rows and the /3
+  replay fields equal what derive-c sealed per body, and the sample's population identities are pinned (/3 `914f9f49…`,
+  /1 `89704509…`). It went in green before any production edit.
+- **Measured: C# /4 over all of run 15** (`LuxembourgAknInventoryV4Run15Probe`, opt-in with `LEX_LU_INVENTORY_V4_PROBE=1`
+  and `LEX_LU_INVENTORY_V4_PROBE_ROOT`; custody read by digest and never written; no network; no R0).
+  - All 11,205 held inputs: inventoried 10,644 (acts 7,912, consolidations 2,575, codes 157);
+    `publisher_file_names_other_state` 15 (consolidations 13, codes 2); `xml_rejected` 178 (177 "no main-body article",
+    1 `XmlException`); `not_akn` 368; `retained_bytes_unavailable` 0.
+  - Main-body articles in inventoried bodies: 308,521 (codes 149,542, consolidations 90,930, acts 68,049). Excluded
+    articles 10,437 in 339 bodies. In-file date present in 5,121 bodies.
+  - Identity classes over the 10,659 bodies that read as inventories: own 6,582, template_empty 1,953, same_work_act
+    1,754, same_work_other_state 233, tc_or_trep 129, other_work 8, absent 0.
+  - Checks, as bodies fired: shared_file 10, later_state 1, other_work 2, date_ahead 2, copied_state 4, copied_act 1.
+  - By admission class (inventoried / refused / rejected / not AKN): today 2,721 / 1 / 3 / 0, with 139,640 articles
+    (codes 120,111, acts 19,529; /3 inventoried 2,102 of these bodies); policy A 702 / 1 / 0 / 0; L2 1,050 / 5 / 0 / 0;
+    L1 2,195 / 0 / 1 / 0; L1b 31 / 0 / 0 / 0; never 3,945 / 8 / 174 / 368. So 126 of the 127 acquired code states
+    inventory, 32 withheld code states inventory, and 2,588 of the 2,591 XML consolidations read as inventories.
+  - The 7 refused admission candidates: `code/civil/20190428` (a); `code/civil/20181101` (a, b, d and e, all naming
+    20190428); `rgd/1991/01/24/n2/consolide/20230710` (d, naming `/20250413`); `rgd/2006/02/03/n3/consolide/20221227`
+    (e, `/20220201`); `loi/2018/08/01/a681/consolide/20241215` (e, `/20190312`); `loi/2005/12/09/n1/consolide/20180904`
+    (e, `/20180901`); `loi/1802/04/08/n1/consolide/20180501` (f, its `/jo`). The other 8 refusals are 4 shared XML pairs,
+    none admissible; two of them also fire (c) (`rgd/2014/08/01/n9`, `rgd/2012/03/16/n14`).
+  - Against the reference implementation's per-body results: 0 mismatches over 11,205 bodies (disposition, class, named
+    states, legal resource, in-file date, article and excluded counts, findings, rejection details); the wording digest
+    equal on all 10,659 inventoried bodies; every aggregate above equal to the brief's acceptance counts.
+  - 401 s for /4 and 177 s to re-read the wording, sequential, peak working set 1.58 GB. The /4 population identity over
+    run 15 as the probe builds it is `9c9d307e…`; S4's R1 should reproduce it from the same custody and catalogue.
+- **Driver decisions (reversible), from the brief's reconciliation with run 15:**
+  - Checks (e) and (f) compare the articles plus the annexes, not the articles alone: 22 of the design's 31 (e) and (f)
+    states differ from the state they name only in their annexes, by 7 to 9,010 words, so they are distinct publications.
+  - Check (d) has no heading guard: machine fields decide, and text parsing stays limited to (c). Its cost is one policy-A
+    state, `rgd/1991/01/24/n2/consolide/20230710`, whose file declares 2025-04-13.
+  - Check (c) uses the leftmost title grammar with qualifiers; the start-of-title grammar misfired on 8 of 10 files.
+  - A code that names another work always refuses (a code's title has no dated designation). No run-15 code names another
+    work, so this rule and the reference's code exemption agree on every body.
+  - Articles inside a quotation outside any article are another instrument's (R2 below).
+  - Every fired check is recorded, not only the first (`code/civil/20181101` fires a, b, d and e).
+  - Seven identity-class tokens: an earlier consolidation and another code date are both `same_work_other_state`.
+  - The forbidden id set adds U+061C, U+200E and U+200F to the design's (bidi controls; no run-15 effect).
+  - The CI replay compares outputs sealed per body; population digests hash every member, so no sample reproduces the
+    checkpoint's.
+  - Result: 7 refusals among admission candidates, not the design's 34.
+  - **The document ceiling (this slice's own decision).** /4 reads up to the custody object bound
+    (`CustodyBounds.MaxObjectBytes`, 268,435,456 characters) where /3 stops at 64M characters. Two run-15 bodies hold an
+    image in one attribute and exceed 64M characters: `rgd/2021/06/09/a444/jo` (175,837,349 bytes, admitted today,
+    13,034 characters of text, 7 articles) and `rgd/2023/11/10/a762/jo` (110,151,932 bytes, L1, 8 articles). /3 rejects
+    both as `XmlException`; the reference reads them, and the counts above include them. With /3's ceiling they stay
+    rejected: inventoried 10,642, rejected 180, today 2,720 / 1 / 4 / 0, L1 2,194 / 0 / 2 / 0. S3a must read them with the
+    same ceiling or their 15 articles stay typed gaps; the dry run watches the transient memory of the 175 MB body.
+- **Risks R1 to R12, with the decision taken:**
+  - R1. Refusals fall from 34 to 7, and the P0 question's "30 are then refused as misfiled" under L2 becomes 5. Corrected
+    for the owner in the pull request; public wording describes the evidence and never says "misfiled".
+  - R2. Two acts served today become textless, `loi/1948/05/15/n1/jo` and `n2/jo`, one article each: their only article
+    is quoted from another instrument (for n1, the Constitution's Article 52), which /3 served as the law's own, losing
+    the amending sentence. Adopted; disclosed in the pull request and the release notes.
+  - R3. Index /8 over /4 has no dated Luxembourg state until S6, because `Publisher*` is null: S4's end-to-end test and the
+    dry run check members, articles and resources; dated-state counts are S6's acceptance.
+  - R4. Withheld bytes already in the repository (`LuAknLegalContent/loi-1991-08-10-n3--2024-02-01--fr.bin`,
+    `loi-1984-02-24-n1--2020-09-01--fr.bin`, `LuDocumentFetch/lu-pdf-invisible-1987-12-23-n5.bin`): the owner's decision
+    (legal), asked in the pull request. Recommended: replace them in a separate pull request (`rgd-2021-12-17-a896-jo.bin`
+    for /3's mutation tests, synthetic fixtures for the token shapes); a history rewrite is the owner's call. This slice
+    adds no use of them.
+  - R5. The 512 KB code body stays: it is the only admitted real-bytes case of /3's complex-work branch if R4's fixtures go.
+  - R6. The title grammar cannot separate two instruments of one type and date, and an unparsed title refuses; no
+    candidate is affected. Accepted.
+  - R7. A shared XML pair across two works also refuses the true owner: 4 pairs, none admissible. Accepted.
+  - R8. Rights versus consistency: for a rights-withheld state that consistency also refuses, S6 states the rights reason
+    first and records both.
+  - R9. A text-rule divergence between C# and the reference is caught by the wording pins and the probe and is fixed on the
+    C# side, never in the reference. The probe found none.
+  - R10. S3a must select articles with `MainBodyArticles` (/1's selection would make every body with annex articles an
+    `ArticleCoordinatesMismatch`); its acceptance includes a body with excluded articles.
+  - R11. Effort about 1 to 1.25 driver-days against 0.75 planned; one pull request.
+  - R12. S1 may reuse `LuxembourgAknInFileIdentityClass` and the named-state rule unchanged; the design's §1.1 counts
+    differ because they cover withheld XML only.
+- **Not yet.** S3a (content /2 over `TryDocument` and `MainBodyArticles`, refusing a population whose
+  `RuleProfileSha256` is not /4's, with the disposition test first so disposition 5 is never tokenized); S4 (R1 runs
+  `new LuxembourgAknArticleInventoryProducerV4(store).RunAsync(r0.Run, ct)` and records the /4 digest and population
+  identity, never pairing content /1 with /4); S6 (index /9 reads `Evidence` and `ConsistencyFindings`); the dry run.
 
 ## The combined mount is derived; its gates found Luxembourg search empty (Claude, 2026-10-13)
 

@@ -49,26 +49,42 @@ internal static class LuxembourgHeldPopulationBuilder
         LuxembourgHeldBodyDerivationPopulation Population)> CreateAsync(params Member[] members)
     {
         ArgumentNullException.ThrowIfNull(members);
-        Assert.IsNotEmpty(members, "a population has at least one member");
         var store = new EuAcquisitionTestFixture.EuInMemoryCustodyStore();
+        var held = new (Member Member, DurableBlobWriteReceipt Receipt)[members.Length];
+        for (var index = 0; index < members.Length; index++)
+        {
+            held[index] = (members[index], await store.CreateAsync(
+                members[index].Body, CustodyClass.NightlyFloor90d, CancellationToken.None));
+        }
+
+        return (store, Create(held));
+    }
+
+    /// <summary>
+    /// The same population over receipts the caller already holds, such as the run-15 probe's
+    /// receipts for bytes that stay in the run's own custody. Each member's <c>Body</c> is not read.
+    /// </summary>
+    internal static LuxembourgHeldBodyDerivationPopulation Create(
+        IReadOnlyList<(Member Member, DurableBlobWriteReceipt Receipt)> held)
+    {
+        ArgumentNullException.ThrowIfNull(held);
+        Assert.IsNotEmpty(held, "a population has at least one member");
         var enumeration = Artifact('a', "enumeration"u8);
         var manifest = Artifact('b', "manifest"u8);
         var run = Artifact('c', "run"u8);
         var kind = new SourceRegistryMemberRef(enumeration, "lu_document_get_root");
 
-        var records = new List<CorpusRecord>(members.Length);
+        var records = new List<CorpusRecord>(held.Count);
         var outcomes = new Dictionary<int, CorpusAcquisitionOutcome>();
         var fetches = new Dictionary<SourceObjectRef, LuxembourgSelectedDocumentFetch>();
         var previousOrdinal = -1;
-        for (var index = 0; index < members.Length; index++)
+        for (var index = 0; index < held.Count; index++)
         {
-            var member = members[index];
+            var (member, receipt) = held[index];
             var ordinal = member.Ordinal ?? index;
             Assert.IsGreaterThan(previousOrdinal, ordinal, "member ordinals are strictly increasing");
             previousOrdinal = ordinal;
 
-            var receipt = await store.CreateAsync(
-                member.Body, CustodyClass.NightlyFloor90d, CancellationToken.None);
             var key = "lu-akn:" + member.Root;
             var objectRef = new SourceObjectRef(
                 SourceCoreSchemaIds.SourceObjectRef,
@@ -124,7 +140,7 @@ internal static class LuxembourgHeldPopulationBuilder
             verified, outcomes, fetches, out var refusal, out var detail);
         Assert.AreEqual(LuxembourgHeldBodyDerivationPopulationRefusal.None, refusal, detail);
         Assert.IsNotNull(population);
-        return (store, population);
+        return population;
     }
 
     /// <summary>The token's own user-format name, as the publisher's authority IRI spells it.</summary>
