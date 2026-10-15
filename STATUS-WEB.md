@@ -8,12 +8,17 @@ updates this file, not STATUS.md.
 
 The web suite failed now and then on one of the live-page tests ("renderLiveLocaleUnavailablePage is not a function"),
 and passed when that file was run alone. It happened four times on 15 October, on four branches.
-- **The cause:** five test files build the live pages at once, in their own processes, each with its own tag for its
-  intermediate bundles. One bundle, the "language not available" page's, was written without the tag, so every build
-  rewrote the same `live-locale-page.mjs`. A test that imported it mid-write found it empty.
+- **The cause:** four test files run five builds of the live pages at once, in their own processes, each build with
+  its own tag for its intermediate bundles. One bundle, the "language not available" page's, was written without the
+  tag, so every build rewrote the same `live-locale-page.mjs`. A test that imported it mid-write found it empty.
 - **The fix:** that bundle carries its build's tag too (`build-live.mjs`). A test holds every bundle call in the live build
   to a tagged name, and it fails on the old code, naming the untagged line.
 - **Measured:** the whole web suite three times in a row, 1,110 of 1,110 each.
+- **The review of #968** (an independent Claude subagent): no material findings. It reproduced the race on its own:
+  five processes bundling to one name lost between 49 and 63 of 200 imports each, and none with a name per process.
+  It corrected one count (four test files, five builds). Its sturdier option is not taken here: naming every output
+  through one helper, or a folder per build. The test reads the build's source line by line, so a new untagged call
+  written without `await`, or through another name, would pass it.
 - **Also:** 0.8's `image-conditions` lane is now a required check of `v3/integration` (a repository setting, made on
   2026-10-15 after #966 merged; it runs on every pull request to the branch).
 

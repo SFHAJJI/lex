@@ -206,8 +206,8 @@ test("the product build writes every page in French under /fr/, in the French ta
 });
 
 test("every intermediate bundle the live build writes is named by its build's tag, so concurrent builds never share a file", async () => {
-  // Five test files build the live pages at once, each with its own tag; one untagged bundle (the locale page's) was
-  // rewritten by all of them, and a test that imported it mid-write failed (the web suite's race, 2026-10-15).
+  // Four test files run five builds of the live pages at once, each with its own tag; one untagged bundle (the locale
+  // page's) was rewritten by all of them, and a test that imported it mid-write failed (the web suite's race, 2026-10-15).
   const source = await readFile(new URL("../scripts/build-live.mjs", import.meta.url), "utf8");
   const calls = source.split("\n").filter((line) => /await bundle(?:Client|ServerRenderer)?\(/.test(line));
   assert.ok(calls.length >= 4, `the build's bundle calls are found (${calls.length})`);
