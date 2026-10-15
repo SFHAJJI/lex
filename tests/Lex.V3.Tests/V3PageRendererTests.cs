@@ -131,22 +131,40 @@ public sealed class V3PageRendererTests
         try
         {
             using var renderer = V3PageRenderer.Open(directory, TimeSpan.FromSeconds(5), TimeSpan.FromMilliseconds(100))!;
-            var slow = Task.Run(() => renderer.RenderAsync("en", "reading", "{}", "/en/slow", CancellationToken.None));
-            var clock = Stopwatch.StartNew();
-            while (clock.ElapsedMilliseconds < 5_000)
+
+            // The engine is made first, so no round holds the engine while V8 loads (up to a quarter of a second for the first
+            // engine in a process: the review of #962).
+            StringAssert.StartsWith(await renderer.RenderAsync("en", "reading", "{}", "/en/warm", CancellationToken.None), "<!doctype html><p>/en/warm render");
+
+            // The slow render holds the engine for a second, and a render that arrives meanwhile waits its 100 ms and gives
+            // up. On a loaded machine either may take the engine first: the one that arrives second gives up, whichever it
+            // is, and a round in which neither waited (the slow one done before the next arrived) is tried again, up to five
+            // slow renders, so the test holds the behaviour and never the scheduler's timing (it failed once under a full
+            // parallel run).
+            var gaveUp = false;
+            for (var round = 0; round < 5 && !gaveUp; round++)
             {
-                // Waits until the slow render holds the engine: a render behind it then waits its 100 ms and gives up.
-                var behind = await renderer.RenderAsync("en", "reading", "{}", "/en/behind", CancellationToken.None);
-                if (behind is null)
+                var slow = Task.Run(() => renderer.RenderAsync("en", "reading", "{}", "/en/slow", CancellationToken.None));
+                while (!slow.IsCompleted)
                 {
-                    break;
+                    if (await renderer.RenderAsync("en", "reading", "{}", "/en/behind", CancellationToken.None) is null)
+                    {
+                        gaveUp = true;
+                        break;
+                    }
                 }
 
-                Assert.IsFalse(slow.IsCompleted, "a render behind the slow one either ran before it or gives up");
+                if (await slow is { } page)
+                {
+                    StringAssert.StartsWith(page, "<!doctype html><p>/en/slow render", "a slow render that had the engine ends as a page");
+                }
+                else
+                {
+                    gaveUp = true;
+                }
             }
 
-            Assert.IsLessThan(5_000L, clock.ElapsedMilliseconds, "a render behind a slow one gives up instead of queueing");
-            StringAssert.StartsWith(await slow, "<!doctype html><p>/en/slow render", "the slow render ends as a page");
+            Assert.IsTrue(gaveUp, "a render that arrives while a slow one holds the engine gives up after its wait instead of queueing");
             StringAssert.StartsWith(await renderer.RenderAsync("en", "reading", "{}", "/en/after", CancellationToken.None), "<!doctype html><p>/en/after render",
                 "and the engine is free again");
         }
