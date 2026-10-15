@@ -14,6 +14,8 @@ and passed when that file was run alone. It happened four times on 15 October, o
 - **The fix:** that bundle carries its build's tag too (`build-live.mjs`). A test holds every bundle call in the live build
   to a tagged name, and it fails on the old code, naming the untagged line.
 - **Measured:** the whole web suite three times in a row, 1,110 of 1,110 each.
+- **Also:** 0.8's `image-conditions` lane is now a required check of `v3/integration` (a repository setting, made on
+  2026-10-15 after #966 merged; it runs on every pull request to the branch).
 
 ## The image's language data: accents and "today" without the operating system's (sole driver, 2026-10-15)
 
@@ -90,7 +92,7 @@ typed exactly as published found nothing without the library.
 - **Not yet** (driver decisions, reversible): the accented-title check in the image rehearsal's real-mount probes; a live look
   at the date during a real clock change (monitoring at 22:30 UTC on 2026-10-24 and 25, 2027-03-27 and 28, not a deploy
   gate); "today" printed (3.4); full-text matching that ignores accents (4.4, which can fold with this table at the
-  index's next format); the lane as a required check (a repository setting); the one place the API still asks the
+  index's next format); the one place the API still asks the
   library to normalize (the only `string.Normalize` in `src` the API reaches; no culture-sensitive call there either),
   the synthetic slice's check at startup (`SyntheticSliceArtifactVerifier`, through `SyntheticTextNormalizer`), which
   composes the source into NFC and compares it with the derived text: without the library, in the image and, since the
