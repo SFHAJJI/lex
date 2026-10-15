@@ -2,6 +2,7 @@ using System.Text;
 using Lex.V3.Artifacts;
 using Lex.V3.Contracts;
 using Lex.V3.Preview;
+using Lex.V3.Tests.Platform;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
 namespace Lex.V3.Tests.Preview;
@@ -58,6 +59,7 @@ public sealed class DerivationNormalizationTests
     [TestMethod]
     public void DecomposedUnicodeBecomesNfc()
     {
+        ImageConditions.RequireLanguageLibrary("composing decomposed text into NFC (string.Normalize)");
         var source = Encoding.UTF8.GetBytes("Cafe\u0301\n");
 
         var derived = SyntheticTextNormalizer.Normalize(source);

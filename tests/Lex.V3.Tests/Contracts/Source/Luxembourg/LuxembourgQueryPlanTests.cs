@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Text;
 using Lex.V3.Contracts.Source.Core;
 using Lex.V3.Contracts.Source.Luxembourg;
+using Lex.V3.Tests.Platform;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
 namespace Lex.V3.Tests.Contracts.Source.Luxembourg;
@@ -339,6 +340,7 @@ public sealed class LuxembourgQueryPlanTests
     [TestMethod]
     public void PlanAndWireBytesAreCultureStableAndEveryIdentityInputIsLoadBearing()
     {
+        ImageConditions.RequireLanguageLibrary("switching to the ar-SA culture");
         var original = CultureInfo.CurrentCulture;
         try
         {
@@ -599,6 +601,7 @@ public sealed class LuxembourgQueryPlanTests
     [TestMethod]
     public void RenderedWireIsCultureIdenticalAndHostileTextCannotBreakItsSparqlString()
     {
+        ImageConditions.RequireLanguageLibrary("switching to the fr-FR and en-US cultures");
         var original = CultureInfo.CurrentCulture;
         try
         {

@@ -8,6 +8,10 @@
     <ContainerGenerateLabelsImageCreated>false</ContainerGenerateLabelsImageCreated>
     <ContainerImageFormat>OCI</ContainerImageFormat>
     <ContainerRepository>lex-v3-s0-05</ContainerRepository>
+    <!-- The image carries no language library and no zone database (plan 0.8): every run of the API, the journeys' and
+         serve-live's included, runs as the image does, whatever the machine holds. -->
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <InvariantTimezone>true</InvariantTimezone>
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="JsonSchema.Net" Version="9.4.0" />
