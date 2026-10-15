@@ -4,6 +4,74 @@ Updated 2026-10-15. The web lane's progress, split out of STATUS.md (which keeps
 items and the pointers) by the standing order of 2026-10-01 13:50 UTC. Every pull request of the web lane
 updates this file, not STATUS.md.
 
+## The image's language data: accents and "today" without the operating system's (sole driver, 2026-10-15)
+
+The plan's item 0.8, a driver decision reported to the owner: the image stays small. The release image
+(`aspnet:10.0-noble-chiseled`) carries no language library (ICU) and no zone database: its own environment runs .NET
+globalization-invariant, where `string.Normalize` returns its input unchanged, and with no zone files .NET knows UTC
+alone, silently. So the deployed revision never found an accented title ("congé parental" found nothing): the title fold
+asked the library, the server stopped removing the accents from what a reader typed, and every index, built on the
+laptop with the library, holds its titles without them. On the release index (`derive-c`), 2,000 of its 2,021 titles
+typed exactly as published found nothing without the library.
+- **Accents folded by Lex's own table** (`TitleFolding`, in Contracts): the index's `normalized_title` column and every
+  title a reader types are folded by one table, the 2,140 letters and digits of the Basic Multilingual Plane whose fold
+  is not themselves, read from the library letter by letter: lowered, the canonical decomposition's non-spacing marks
+  dropped (œ, æ, ß, ø, ł keep their letter, as the library kept them). `LuxembourgIndexBuilder.NormalizeTitle` delegates to
+  it, so `resolve` and `search`'s title step fold the same with the library or without it, and nothing in the API asks
+  the library any more. The index's format is unchanged: on the release index (read only), the table folds all 2,021
+  titles to the stored column byte for byte, with the library and without it, and "congé parental" finds its 5 works in
+  both. A test holds the table to the library wherever one is present, every character of the plane; three differences
+  are by design (U+FFFE and a lone surrogate, which made the library throw, separate words, as does a character beyond the
+  plane; Hangul typed as separate jamo stays as typed).
+- **"Today" in Luxembourg by a coded EU rule** (`LuxembourgCalendar`, in Contracts; its twin `luxembourgDate` in
+  `web/scripts/temporal.mjs`): UTC+01:00, and UTC+02:00 from 01:00 UTC on the last Sunday of March to 01:00 UTC on the last
+  Sunday of October (Directive 2000/84/EC, Articles 2 and 3), held from 1996 to 2099; no zone data, no `TimeZoneInfo`. One
+  table (`tests/Lex.V3.Tests/Fixtures/LuxembourgToday/luxembourg-today.json`, written from the IANA zone database through
+  Intl) holds both rules to the same dates and offsets at 191 instants, around every clock change and local midnight from
+  2026 to 2040 and at the range's edges, and to 17 years of change instants; the web's test holds every row to the IANA
+  zone database, and each side sweeps its host's zone database where there is one (the API's every hour from 1996 to 2099,
+  the web's each night at 22:30 UTC and at each change), so a change of the rule fails CI. Nothing computes "today" yet:
+  printing it everywhere is item 3.4, on this rule.
+- **CI's `image-conditions` lane** (`v3-ci.yml`), beside `dotnet`: it builds as `dotnet` does, then runs the tests inside
+  the pinned base image itself (its runtime 10.0.11, its environment and user; the checkout read-only, `/tmp` a tmpfs, no
+  network): `Lex.V3.Tests` whole but the OCI verifier's and the SDK publish's classes (tools the image does not carry),
+  then the request-time `Lex.V3.Ingest.Tests` classes (the mounts the API serves and its answers from them). A canary
+  (`ImageConditionsTests`, with `LEX_IMAGE_CONDITIONS=1`) asserts that the conditions held: no named culture, a
+  normalization that does nothing, no Luxembourg zone, a local clock on UTC, UTC the only zone. The eight tests whose
+  premise needs the library (switching to tr-TR, fr-FR or ar-SA, a culture's order, NFC composition) end inconclusive
+  where there is none, saying so. `eng/test-fast.ps1 -ImageConditions` reproduces the lane on any machine with two
+  switches. The API project sets `InvariantGlobalization` and `InvariantTimezone`, so every run of the API (the journeys',
+  serve-live's) runs as the image does.
+- **The deploy probe** (`deploy-probe.mjs`) adds two checks. An accented title the revision holds, chosen from its own
+  answers (a work its search for "loi" lists; the first accented title of its dossier that resolves without its accents),
+  must be found as published, in capitals and decomposed, by the same match, and a strict search for it must name that
+  work alone; the deployed release fails exactly this. And the revision's clock: the instant `coverage` was observed at
+  must stand within a minute of the probe's own; the probe says the revision's date in Luxembourg by the coded rule,
+  whether the instant fell in the hour whose date the season's offset decides (22:00 to 23:00 UTC), and the next clock
+  change. A revision answers only at its own instant, so the clock changes themselves are held where an instant can be
+  chosen, the shared table in CI; once 3.4 writes "today" into answers, the probe checks it is the rule's date for the
+  same answer's instant.
+- **Measured**: on the release index (`derive-c`, read only), by a probe that folds a typed title as `resolve` does and
+  looks it up: inside the release's own base layers at this branch's base (runtime 10.0.11, no ICU, no zone files),
+  "congé parental" found nothing and 21 of the 2,021 titles typed as published found their work; with the table, on this
+  machine with the library and without it, all 2,021 fold to the stored column and find their work, "congé parental" finds
+  its 5 works and "Code pénal" its 10. The real first mount's title (`TheRealMountsTitleIsFoundHoweverItsAccentsAreTyped`):
+  3 of its 5 forms refused without the library before the table, 5 of 5 found after, with the library and without. The
+  lane, emulated in WSL at this branch's head (built on Linux as the lane builds, then run in the pinned base's own layers
+  with its environment, as user 1654, in `/src` read-only, `/tmp` a tmpfs, loopback alone, the lane's arguments):
+  `Lex.V3.Tests` 3,132 (3,122 passed; 10 inconclusive, the eight, the zone sweep and the table-to-library test; the
+  canary's five passed) and the request-time `Lex.V3.Ingest.Tests` classes 632 (629 passed; 3 inconclusive, which need a
+  named mount or chain); at the base the same run failed 9 and 7 (the eight and the SDK publish; the title ladder's
+  ambiguity, prefix and all-words tiers, the refusal census's "a title two works carry", and the machine gates' refusal
+  set at 0.944, twice). On Windows: the whole solution 6,179 (6,147 passed, 32 inconclusive; `Lex.V3.Tests` 3,166 of them,
+  6 inconclusive); `eng/test-fast.ps1 -ImageConditions` 3,132 (3,121 passed, 11 inconclusive); the title classes, the
+  census and the privacy tests under the image's switches 218 (215 passed, 3 inconclusive); the web suite 1,106 of 1,106.
+- **Not yet** (driver decisions, reversible): the page renderer (#959, merged after this branch's base) shown to load in
+  the image (the plan's last line of 0.8); the accented-title check in the image rehearsal's real-mount probes; a live look
+  at the date during a real clock change (monitoring at 22:30 UTC on 2026-10-24 and 25, 2027-03-27 and 28, not a deploy
+  gate); "today" printed (3.4); full-text matching that ignores accents (4.4, which can fold with this table at the
+  index's next format); the lane as a required check (a repository setting).
+
 ## The server ships no synthetic preview, and says whether it holds the law (sole driver, 2026-10-15)
 
 The plan's item 0.7 (`C:\lex-v3\PLAN-2026-10-14.md`). The one-server image carried the S0-05 synthetic preview and its
@@ -3653,6 +3721,11 @@ Each is the driver's call under ruling 7 and can be reversed by a later pull req
 - Data acquisitions: the owner's 2026-09-30 data-lane instruction authorises the bounded first
   mount, complete EU and Luxembourg populations, and French EU bodies. Production signing,
   deployment and promotion remain outside that authorisation.
+- The server image and its language data (plan 0.8, 2026-10-15, reported to the owner): the image stays the small
+  chiseled one, with no language library and no zone database. Titles are folded by Lex's own table, read from the
+  library once and held to it by a test; "today" in Luxembourg is the EU summer-time rule coded in the API and in the
+  pages, held to one table; a CI lane runs the API's tests inside the image's base. The `-extra` image (ICU and zone data,
+  tens of megabytes more) would hand both back to the operating system, whose answers then move with the image's version.
 
 ## Waiting on others
 
