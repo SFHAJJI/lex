@@ -82,7 +82,21 @@ link.") and R67 ("Every work and article has a readable address that resolves to
   generation's corpus); "The publisher replaced this file on {date}", which needs the date of the replacement; and R67's
   "identical version pages point their canonical link there" (a permalink page showing the current version still names the
   permalink, the 967 decision, which 3.6 revisits with the sitemap).
-- **Measured**: MEASURED_PLACEHOLDER
+- **Measured** (this branch, from `v3/integration` at #967's merge, 9673693a): `dotnet build Lex.V3.slnx -c Release` (from
+  scratch, `--no-incremental`) 0 warnings, 0 errors; `Lex.V3.Tests` 3,181 (3,175 passed, 6 skipped; a first run missed one
+  renderer timing bound, 3,016 ms for 3,000, the flake #967 recorded under load, and passed alone, 7 of 7, and in the
+  rerun); the `Lex.V3.Ingest.Tests` classes this slice touched with the brief's (`Census`, `PublicRequestRecordingTests`,
+  the answer, envelope and refusal samples, resolve, verify, the pinned permalinks, as_of, the EU time view, the evidence
+  bundles, provenance, MCP, the machine and mounted gates and the journey mounts) 316 (309 passed, 7 skipped); the answer,
+  envelope and refusal samples rendered again from the handler with the `V3_RENDER_*` variables, then verified without
+  them; the web build, and the web suite 1,161 of 1,161 over 105 of its 108 files (the three that start a browser,
+  `keyboard-walk`, `launch-browser` and `paint-check`, not run locally after the owner's order of 2026-10-16 that no agent
+  starts Chrome on this machine; the full suite, run earlier on this branch, was 1,165 of 1,165); `eng/verify-v3-tree.ps1`
+  1,575 tracked paths. The journeys ran once on this branch before that order, against the API published from c70a649f
+  (before the French review's change and `provenance` at a permalink, neither of which the journeys read): the fixture
+  mount 51 of 51 through the live server and 51 of 51 by keyboard served by the API, the licence-blocked mount 13 of 13 both
+  ways, the two-state mount 2 of 2 and the EU annex control mount 3 of 3 both ways; at the final head they are left to CI's
+  journeys lane, on Linux.
 
 ## The home page, and the sentence that says what Lex is not (sole driver, 2026-10-16)
 
