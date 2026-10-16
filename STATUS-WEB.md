@@ -107,7 +107,7 @@ three-field form, no date, no coverage line, and a footer whose advice line R50 
   page's render); in `Lex.V3.Ingest.Tests` the Census and `PublicRequestRecordingTests` classes 44 passed, 2 skipped (the
   slice touches no Ingest class); `eng/verify-v3-tree.ps1` passes; the journeys against an API published from this
   branch: the fixture mount through the live server 49 of 49 and served by the API with the keyboard 49 of 49 (32 browser
-  steps, the home page's front door in each, and 17 at the API), the licence-blocked mount 12 of 12 in both modes, the
+  steps, the home page's front door among them, with the fixture mount and with none, and 17 at the API), the licence-blocked mount 12 of 12 in both modes, the
   two-state mount 2 of 2 in both, the EU annex control mount 3 of 3 in both. The review's French checks: 17 forms, 209
   checks, all pass.
 
