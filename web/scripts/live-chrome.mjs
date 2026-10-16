@@ -108,6 +108,7 @@ const EN = Object.freeze({
     europePinNotHeld: "This link pins {pinned}, which is not a wording this site holds for that date; the wording that answers that date on this site is {current}.",
     citedTitle: "{work}, {article}",
     citedFrom: "Quoted from {source}.",
+    citedWithoutText: "Held without text in {source}.",
     wholeAct: "The whole act at this version",
     europeWholeAct: "The whole act in this wording",
     newerVersion: "A newer version is applicable from {date} (publisher).",

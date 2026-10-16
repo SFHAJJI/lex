@@ -85,8 +85,9 @@ test("the cited article comes first, under its own title, quoted from its versio
   withoutText.result.value.states[0].articles_without_text.push({ article_identity_sha256: moved.article_identity_sha256, publisher_id: moved.publisher_id, reason: "no_text_tokens" });
   if (moved.validity_conflict) withoutText.result.value.states[0].validity_conflict_count -= 1;
   const held = lead(success(withoutText), pin);
-  assert.ok(held.includes(`<p data-without-text="">Held without text: ${ARTICLE.publisher_id}.</p>`), held);
+  assert.ok(held.includes(`<p data-cited-from="" data-without-text="">Held without text in loi-1991-08-10-n3, fra, the state applying from ${STATE.applicability_date}.</p>`), held);
   assert.ok(!held.includes("<blockquote"), "no empty quotation");
+  assert.ok(!held.includes("Quoted from"), "and never said to be quoted (the French review of 2026-10-16)");
 });
 
 test("a version that is not the latest held says so, in its publisher's words, with the act at today's date (R64, R21)", () => {
@@ -154,7 +155,7 @@ test("the page at a permalink, as the server renders it, leads with the cited ar
 });
 
 test("what the page says first holds to R21's words in both languages, and the French is reviewed beside the English", () => {
-  const keys = ["pinNotHeld", "europePinNotHeld", "citedTitle", "citedFrom", "wholeAct", "europeWholeAct", "newerVersion", "europeNewerWording", "openToday"];
+  const keys = ["pinNotHeld", "europePinNotHeld", "citedTitle", "citedFrom", "citedWithoutText", "wholeAct", "europeWholeAct", "newerVersion", "europeNewerWording", "openToday"];
   for (const [language, table] of [["en", LIVE_CHROME.en], ["fr", LIVE_CHROME.fr]]) {
     const entries = new Map(entriesOf(table));
     for (const key of keys) {

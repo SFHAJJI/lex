@@ -63,6 +63,14 @@
 // applicable from the date or an earlier one, an act held only as published searched as published) and that only
 // Luxembourg acts were searched, and `search.noHitLuxembourg`, `search.luxembourgOnly` and `search.searchPage` say the
 // home page's box searches Luxembourg law and lead to the search page for an EU act.
+// The reading's lead at a law's address (the plan's item 3.2b; R64, R67): a stale permalink's notice with the current link
+// (`reading.pinNotHeld`, `reading.europePinNotHeld`), the cited article's title, its source and its whole act
+// (`reading.citedTitle`, `reading.citedFrom`, `reading.citedWithoutText`, `reading.wholeAct`, `reading.europeWholeAct`),
+// the changed-since banner and its link (`reading.newerVersion`, `reading.europeNewerWording`, `reading.openToday`), and
+// the two refusal sentences for `pinned_digest_mismatch` in `REFUSALS_FR.sentences`, were reviewed by the same reviewer
+// under the same delegation in the addendum of 2026-10-16 (11 forms, 1 changed in review: a quotation is "cité d’après" its
+// version, never "extrait de", the table's word for Lex's own extraction; `reading.citedWithoutText` is the review's own
+// rendering, given for the article held without text, which the review found the page said "quoted from").
 // No French entry ships unreviewed.
 //
 // Vocabulary: a work is an "acte" (a publisher's Cellar work, one record of an EU act, is an "œuvre de l’éditeur"), a
@@ -148,7 +156,8 @@ export const LIVE_CHROME_FR = Object.freeze({
     pinNotHeld: 'Ce lien épingle {pinned}, qui n’est pas la version que ce site détient pour cette date ; la version qu’il détient est {current}.',
     europePinNotHeld: 'Ce lien épingle {pinned}, qui n’est pas un libellé que ce site détient pour cette date ; le libellé qui sert de réponse pour cette date sur ce site est {current}.',
     citedTitle: '{work}, {article}',
-    citedFrom: 'Extrait de {source}.',
+    citedFrom: 'Cité d’après {source}.',
+    citedWithoutText: 'Détenu sans texte dans {source}.',
     wholeAct: 'L’acte entier dans cette version',
     europeWholeAct: 'L’acte entier dans ce libellé',
     newerVersion: 'Une version plus récente est applicable à partir du {date} (éditeur).',

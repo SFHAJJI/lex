@@ -85,6 +85,12 @@ const EUROPE_ENTRIES = new Set([
   "reading.europePinReplaced", "reading.europePinNotHeld", "reading.europeWholeAct", "reading.europeNewerWording",
 ]);
 
+/**
+ * The entries the reading's lead says on both publishers' pages (`PinnedReading.jsx`): they name the version through its own
+ * heading, so they say no date word of either publisher themselves (the French review of 2026-10-16 asked for the check).
+ */
+const SHARED_LEAD_ENTRIES = new Set(["reading.citedTitle", "reading.citedFrom", "reading.citedWithoutText", "reading.openToday"]);
+
 function fieldsOf(node, found = new Set()) {
   if (Array.isArray(node)) node.forEach((item) => fieldsOf(item, found));
   else if (node !== null && typeof node === "object") {
@@ -116,6 +122,12 @@ test("no EU answer carries a Luxembourg state's date, and no Luxembourg answer a
 test("the interface's EU entries say no Luxembourg date word, and no other entry says an EU one, in English and in French", () => {
   for (const [language, table] of [["en", LIVE_CHROME.en], ["fr", LIVE_CHROME.fr]]) {
     const entries = entriesOf(table);
+    const shared = entries.filter(([path]) => SHARED_LEAD_ENTRIES.has(path));
+    assert.equal(shared.length, SHARED_LEAD_ENTRIES.size, `${language}: every entry of the reading's lead is in the table`);
+    for (const [path, text] of shared) {
+      assert.doesNotMatch(text, LUXEMBOURG_DATE_WORDS, `${language} ${path}, said on EU pages too, says a Luxembourg date word`);
+      assert.doesNotMatch(text, EUROPE_DATE_WORDS, `${language} ${path}, said on Luxembourg pages too, says an EU date word`);
+    }
     const europe = entries.filter(([path]) => EUROPE_ENTRIES.has(path));
     assert.equal(europe.length, EUROPE_ENTRIES.size, `${language}: every EU entry is in the table`);
     for (const [path, text] of europe) {

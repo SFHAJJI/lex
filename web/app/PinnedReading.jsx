@@ -103,15 +103,16 @@ function CitedArticle({ view, version, pin, cited }) {
           </>
         ) : null}
       </h2>
-      <p data-cited-from="">
-        <Say template={COPY.citedFrom} values={{ source: <VersionHeading view={view} version={version} /> }} />
-      </p>
+      {/* An article held without text is named, never said to be quoted (the French review of 2026-10-16). */}
       {cited.quoted === null ? (
-        <p data-without-text="">
-          <Say template={COPY.withoutText} values={{ articles: cited.publisherId }} />
+        <p data-cited-from="" data-without-text="">
+          <Say template={COPY.citedWithoutText} values={{ source: <VersionHeading view={view} version={version} /> }} />
         </p>
       ) : (
         <>
+          <p data-cited-from="">
+            <Say template={COPY.citedFrom} values={{ source: <VersionHeading view={view} version={version} /> }} />
+          </p>
           <ArticleText article={cited.quoted} language={version.language} applicabilityDate={europe ? null : version.applicabilityDate} />
           <QuoteEvidence article={cited.quoted} />
         </>
