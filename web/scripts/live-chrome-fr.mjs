@@ -145,6 +145,15 @@ export const LIVE_CHROME_FR = Object.freeze({
   reading: Object.freeze({
     pinReplaced: 'Ce lien épingle {pinned}, qui n’est pas la version que ce site communique pour cette date ; la version qu’il communique est affichée ci-dessous.',
     europePinReplaced: 'Ce lien épingle {pinned}, qui n’est pas le libellé qui sert de réponse pour cette date sur ce site ; celui qui sert de réponse est affiché ci-dessous.',
+    pinNotHeld: 'Ce lien épingle {pinned}, qui n’est pas la version que ce site détient pour cette date ; la version qu’il détient est {current}.',
+    europePinNotHeld: 'Ce lien épingle {pinned}, qui n’est pas un libellé que ce site détient pour cette date ; le libellé qui sert de réponse pour cette date sur ce site est {current}.',
+    citedTitle: '{work}, {article}',
+    citedFrom: 'Extrait de {source}.',
+    wholeAct: 'L’acte entier dans cette version',
+    europeWholeAct: 'L’acte entier dans ce libellé',
+    newerVersion: 'Une version plus récente est applicable à partir du {date} (éditeur).',
+    europeNewerWording: 'Un libellé ultérieur de cet acte est détenu : le libellé du {date}.',
+    openToday: 'Lire cet acte à la date du jour',
     title: 'Lecture',
     eyebrow: 'Lecture',
     heading: 'Le texte à une date',
@@ -654,6 +663,10 @@ export const REFUSALS_FR = Object.freeze({
       'Le texte de ce libellé n’est pas communiqué : ses droits ne le permettaient pas.',
     'This index knows this wording of the EU act but holds no text for it.':
       'Cet index connaît ce libellé de l’acte de l’UE, mais n’en contient aucun texte.',
+    'The version this permalink pins is not the one this index holds for its date.':
+      'La version que ce permalien épingle n’est pas celle que cet index contient pour sa date.',
+    'The wording this permalink pins is not one this index holds for its date.':
+      'Le libellé que ce permalien épingle n’est pas un libellé que cet index contient pour sa date.',
   }),
   templates: Object.freeze({
     coverage: Object.freeze({

@@ -13,11 +13,14 @@
 // text is named as such, never shown as an empty quotation. The form's controls carry no `name`.
 //
 // A permalink is a link to this site's own reading of it (`permalinks.mjs`), and the page served at a permalink asks
-// that reading itself once it has loaded: the work and date the address names, one request, as a submit would ask
-// it, in the text's language the address names (R64). The answer is held to the address's pin: when no state (or EU
-// wording) it shows is the one the address pins, the page says so above the reading rather than letting another version
-// pass for it, and brings that notice into view; otherwise the article the address names (its last segment, or after `#`
-// on an address moved from the shape before R64) or the state is brought into view, and given the focus.
+// that reading itself once it has loaded: the permalink itself, with its date and the text's language it names, one
+// request (R64), so the API answers the version it pins or refuses (`pinned_digest_mismatch`, with the current link), never
+// another version in its place; an act's readable address (R67) asks the work at today's date in its language. What the
+// page says first, the cited article and what changed since, or the current link, is `PinnedReading.jsx`'s. The answer is
+// still held to the address's pin: when no state (or EU wording) it shows is the one the address pins, the page says so
+// above the reading rather than letting another version pass for it, and brings that notice into view; otherwise what it
+// says first, or the article the address names (its last segment, or after `#` on an address moved from the shape before
+// R64), or the state is brought into view, and given the focus.
 //
 // An EU work's reading is the wording that answers the date asked, original or consolidated: each wording
 // is headed by its own date as a wording's (never an applicability date), and the acknowledgement and
@@ -29,6 +32,7 @@
 import { useEffect, useRef, useState } from 'react';
 
 import { RefusalCard } from './RefusalCard.jsx';
+import { PinnedLead, citedTitle } from './PinnedReading.jsx';
 import { AsPublished, EuropeAnnexes, FailureFrame, LiveAnswer, Permalink, Say, StatusSentence, inEnglish, refusalCardCopyFor } from './LiveAnswer.jsx';
 import {
   LIVE_READING_IDLE,
@@ -37,10 +41,10 @@ import {
   quotationLanguageTag,
   readingOutcome,
 } from '../scripts/live-reading.mjs';
-import { ENGLISH_LANG, countedEntry, liveChrome } from '../scripts/live-chrome.mjs';
-import { anchorOf, anchorText, parseSitePath } from '../scripts/permalinks.mjs';
+import { ENGLISH_LANG, countedEntry, fillText, liveChrome } from '../scripts/live-chrome.mjs';
+import { anchorOf, anchorText } from '../scripts/permalinks.mjs';
 import { answerHandedWith } from '../scripts/v3-client.mjs';
-import { readingAddressShown } from '../scripts/initial-answer.mjs';
+import { readingAddressShown, readingPinOf } from '../scripts/initial-answer.mjs';
 import { writeLawPageLinks } from './head-links.mjs';
 
 /** The forms' labels and buttons, and this screen's sentences, from the interface copy table. */
@@ -71,25 +75,38 @@ export function QuoteEvidence({ article, linked = true }) {
   );
 }
 
-function Article({ article, state }) {
+/**
+ * One article's text as the publisher wrote it, in its state's language, with its own date when it differs from the
+ * state's (`applicabilityDate`, a Luxembourg state's; null for an EU wording) and its notes. Shared with the cited article
+ * (`PinnedReading.jsx`), which quotes the same article first.
+ */
+export function ArticleText({ article, language, applicabilityDate }) {
   return (
-    <li id={`${state.language}-${article.publisherId}`} data-article={article.publisherId}>
-      <h3>{article.publisherId}</h3>
-      <blockquote lang={quotationLanguageTag(state.language)}>{article.text}</blockquote>
-      {article.validityConflict ? (
+    <>
+      <blockquote lang={quotationLanguageTag(language)}>{article.text}</blockquote>
+      {applicabilityDate !== null && article.validityConflict ? (
         <p data-validity-conflict="">
-          <Say template={COPY.validityConflict} values={{ own: article.validFrom, state: state.applicabilityDate }} />
+          <Say template={COPY.validityConflict} values={{ own: article.validFrom, state: applicabilityDate }} />
         </p>
       ) : null}
-      {article.notes.length > 0 ? (
+      {(article.notes ?? []).length > 0 ? (
         <ol data-notes={article.notes.length}>
           {article.notes.map((note, index) => (
             <li key={`${index}.${note.marker}`}>
-              <span>[{note.marker}]</span> <span lang={quotationLanguageTag(state.language)}>{note.text}</span>
+              <span>[{note.marker}]</span> <span lang={quotationLanguageTag(language)}>{note.text}</span>
             </li>
           ))}
         </ol>
       ) : null}
+    </>
+  );
+}
+
+function Article({ article, state }) {
+  return (
+    <li id={`${state.language}-${article.publisherId}`} data-article={article.publisherId}>
+      <h3>{article.publisherId}</h3>
+      <ArticleText article={article} language={state.language} applicabilityDate={state.applicabilityDate} />
       <QuoteEvidence article={article} />
     </li>
   );
@@ -361,10 +378,11 @@ export function LiveReading({ contract, fetchImpl, initial = null }) {
   const [outcome, setOutcome] = useState(() => (initial === null
     ? IDLE
     : readingOutcome(answerHandedWith('evidence_bundle', initial.envelope, { contract, objectType: 'evidence_bundle' }))));
-  // The permalink this page was opened at, if any: what it names and the request that asks it (null on a page opened at
-  // reading.html). `pinned` holds while the reading shown is that request's: until the reader asks another.
-  const [pin, setPin] = useState(() => (initial === null ? null : pinOf(initial.path)));
-  const [pinned, setPinned] = useState(() => initial !== null && pinOf(initial.path) !== null);
+  // The law's address this page was opened at, if any (a permalink, or an act's readable address): what it names and the
+  // request that asks it (`readingPinOf`; null on a page opened at reading.html). `pinned` holds while the reading shown is
+  // that request's: until the reader asks another.
+  const [pin, setPin] = useState(() => (initial === null ? null : readingPinOf(initial.path, initial.envelope)));
+  const [pinned, setPinned] = useState(() => initial !== null && readingPinOf(initial.path, initial.envelope) !== null);
   const session = useRef(null);
   if (session.current === null) {
     session.current = createReadingSession({ contract, fetchImpl, onOutcome: setOutcome });
@@ -376,7 +394,7 @@ export function LiveReading({ contract, fetchImpl, initial = null }) {
   // rendered the idle form).
   useEffect(() => {
     if (initial !== null) return;
-    const named = pinOf(window.location.pathname);
+    const named = readingPinOf(window.location.pathname);
     if (named === null) return;
     setPin(named);
     setPinned(true);
@@ -384,18 +402,27 @@ export function LiveReading({ contract, fetchImpl, initial = null }) {
   }, []);
 
   // What the address names, brought into view once the reading is shown and given the focus, as a browser does for an
-  // anchor (so the keyboard and a screen reader continue from there): the article the address names in the pinned state
-  // (or wording), or that state when no article is named. When the reading shows another version, its notice instead:
-  // a reader must not land on an article without meeting the notice that it is not the version the link pins. The head
-  // names the address the reading shows as the page's own, as the server's render does (`readingLawPath`).
+  // anchor (so the keyboard and a screen reader continue from there): what the page says first (`PinnedLead`: what changed
+  // since, then the cited article), else the article the address names in the pinned state (or wording), or that state
+  // when no article is named. When the reading shows another version, its notice instead, and for a permalink refused as
+  // no version held at its date, the notice with the current link: a reader must not land on an article without meeting
+  // the notice that it is not the version the link pins. The head names the address the reading shows as the page's own,
+  // and the cited article's title, as the server's render does (`readingLawPath`, `readingTitle`).
   useEffect(() => {
-    if (!pinned || outcome.state !== 'success') return;
-    writeLawPageLinks(document, readingAddressShown(outcome.view, pin.address));
+    if (!pinned || (outcome.state !== 'success' && outcome.state !== 'refusal')) return;
+    const view = outcome.state === 'success' ? outcome.view : null;
+    writeLawPageLinks(document, readingAddressShown(view, pin.address, outcome.state === 'refusal' ? { code: outcome.code, payload: outcome.payload } : null));
+    const title = citedTitle(outcome, pin);
+    if (title !== null) document.title = fillText(liveChrome().shell.title, { title });
     let target;
-    if (!readingHolds(outcome.view, pin.permalink)) {
+    if (view === null) {
+      target = document.querySelector('[data-pin-not-held]');
+    } else if (pin.kind === 'state' && !readingHolds(view, pin.permalink)) {
       target = document.querySelector('[data-pin-replaced]');
+    } else if (document.querySelector('[data-pinned-lead]') !== null) {
+      target = document.querySelector('[data-pinned-lead]');
     } else {
-      const section = document.querySelector(`[data-state="${pin.digest}"], [data-wording="${pin.digest}"]`);
+      const section = pin.digest === null ? null : document.querySelector(`[data-state="${pin.digest}"], [data-wording="${pin.digest}"]`);
       const anchor = anchorText(pin.anchor) ?? anchorOf(window.location.hash);
       const named = anchor === null ? undefined : [...(section ?? document).querySelectorAll('[data-article]')].find((element) => element.getAttribute('data-article') === anchor);
       // An article the state does not hold (a link made by hand, or to another version) brings the state into view.
@@ -416,13 +443,14 @@ export function LiveReading({ contract, fetchImpl, initial = null }) {
   const retry = () => {
     if (!session.current.retry() && pin !== null) session.current.ask(pin.request);
   };
-  const replaced = pinned && outcome.state === 'success' && !readingHolds(outcome.view, pin.permalink);
+  const replaced = pinned && pin.kind === 'state' && outcome.state === 'success' && !readingHolds(outcome.view, pin.permalink);
   return (
     <div>
-      <ReadingForm key={pin === null ? 'blank' : pin.permalink} initial={pin?.request ?? null} onAsk={ask} />
+      <ReadingForm key={pin === null ? 'blank' : pin.address} initial={pin?.form ?? null} onAsk={ask} />
       {/* What Lex is not, above the text it shows (the specification of record's R50: Reading says it). */}
       <p className="not-advice" data-not-advice="">{liveChrome().site.notAdvice}</p>
       <LiveAnswer>
+        {pinned && !replaced ? <PinnedLead outcome={outcome} pin={pin} /> : null}
         {replaced ? (
           <p data-pin-replaced="">
             <Say
@@ -435,22 +463,6 @@ export function LiveReading({ contract, fetchImpl, initial = null }) {
       </LiveAnswer>
     </div>
   );
-}
-
-/**
- * What a permalink path names for the reading screen: the permalink, the whole address (its article included), its digest,
- * the article's segment, and the request that asks it (in the text's language the permalink names), or null.
- */
-function pinOf(pathname) {
-  const named = parseSitePath(pathname);
-  if (named === null || named.kind !== 'state') return null;
-  return {
-    permalink: named.permalink,
-    address: named.address,
-    digest: named.digest,
-    anchor: named.anchor,
-    request: { identifier: named.identifier, date: named.date, language: named.language },
-  };
 }
 
 /** Whether a reading view shows the state (or EU wording) a permalink pins. */

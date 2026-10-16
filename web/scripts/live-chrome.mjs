@@ -101,6 +101,18 @@ const EN = Object.freeze({
   reading: Object.freeze({
     pinReplaced: "This link pins {pinned}, which is not the version this site serves for that date; the version it serves is shown below.",
     europePinReplaced: "This link pins {pinned}, which is not the wording that answers that date on this site; the wording that does is shown below.",
+    // A permalink whose digest is not the version (or EU wording) the site holds at its date (R64: pinned_digest_mismatch,
+    // "with the current link"), said above the refusal card with that link; the cited article, first, at an address that
+    // names one; and what changed since the version shown (R64's banner), with a link to the act at today's date (R67).
+    pinNotHeld: "This link pins {pinned}, which is not the version this site holds for that date; the version it holds is {current}.",
+    europePinNotHeld: "This link pins {pinned}, which is not a wording this site holds for that date; the wording that answers that date on this site is {current}.",
+    citedTitle: "{work}, {article}",
+    citedFrom: "Quoted from {source}.",
+    wholeAct: "The whole act at this version",
+    europeWholeAct: "The whole act in this wording",
+    newerVersion: "A newer version is applicable from {date} (publisher).",
+    europeNewerWording: "A later wording of this act is held: the wording of {date}.",
+    openToday: "Read this act at today's date",
     title: "Reading",
     eyebrow: "Reading",
     heading: "The text on a date",
