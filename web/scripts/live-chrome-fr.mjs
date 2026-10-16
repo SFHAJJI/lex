@@ -51,6 +51,14 @@
 // second addendum of 2026-10-15 (14 forms, 1 changed in review: no comma before "ou" in `notFound.intro`; the reader's
 // request is a "demande", as on the refusal card's retry line, and "not an answer about the law" is "pas une réponse sur
 // le droit").
+// The home page and the sentence that says what Lex is not (the plan's items 4.1 and 6.8; R47, R52, R11, R13, R50):
+// `search.placeholder`, `search.dated`, `search.undated`, `site.notAdvice`, `site.authenticity` (the second sentence of the
+// withdrawn `site.advice`, unchanged), `home.aboutHeading`, `home.coverage`, `home.coverageUndated`, `home.acts`,
+// `home.versions` and `home.articles` (each `one` and `other`), `home.links` and `form.today`, and the search page's refusal
+// sentence for an EU act searched at a date, were reviewed by the same reviewer under the same delegation in the
+// addendum of 2026-10-16 (17 forms, none changed). `site.notAdvice` is J6's French as R50 fixes it, "conseil juridique"
+// included against T10's "consultation juridique": the lawyer's read settles it (the owner's item O4), with the two other
+// points the addendum records.
 // No French entry ships unreviewed.
 //
 // Vocabulary: a work is an "acte" (a publisher's Cellar work, one record of an EU act, is an "œuvre de l’éditeur"), a
