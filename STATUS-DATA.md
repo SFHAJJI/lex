@@ -1,6 +1,112 @@
 # Lex V3 status: the data lane
 
-Updated 2026-10-15.
+Updated 2026-10-16.
+
+## R1 for the profiles: inventory /4 and content /2 re-derived from an acquisition's own custody (Claude, 2026-10-15)
+
+- **What.** Slice S4 of the Luxembourg data design (`C:\lex-v3\LU-DATA-DESIGN-2026-10-14-v2.md` §2.2 to §2.4), Release 1's
+  R1 only: inventory /4 (S2) and content /2 (S3a) run over R0's own population, rights unchanged. Nothing served changes
+  yet: no mount has been derived with it; the dry run over run 15 is the next machine step, waiting on disk.
+- **R1.** `LuxembourgRederivation.ApplyAsync` takes R0's verified result (delivered, catalogued, under inventory /3 and
+  content /1, its derivations over its own held-body population) and a request (rule set, rule digests, policy,
+  `derived_at`, the sealed record or none).
+  - It runs `LuxembourgAknArticleInventoryProducerV4.RunAsync(run)` (the production door: R0's own population object,
+    dated by R0's own catalogue) and `LuxembourgAknLegalContentProfile2Producer.RunAsync` over it.
+  - It mints `LuxembourgFirstMountAcquisitionResult.Success` on R0's own run, profile and vocabulary evidence, then keeps
+    R0's vocabulary checkpoint, catalog, resumption and scope-manifest references (`With*`), and the record and
+    `derived_at` (`WithRederivation`, once). The envelope's identity checks hold because the run and its population are
+    R0's objects: the end-to-end test asserts `AreSame` on the run, the population and the inventory's source.
+  - R0's result is passed straight in and R1 drops its references to it, the frozen inventory and the frozen content once
+    it has taken what the record names (the design's "drop R0's /3 and /1 once their digests match"; R0 matched them
+    against its catalog when it reopened).
+  - It has no wire capability: its whole surface is a custody store, an acquisition result and a request.
+- **The record `lex-lu-rederivation/1`**, held in custody; its resource id is `ContentDerivedIdentity` over its bytes. It
+  names no tool commit and no clock (a test re-derives at another `derived_at` and gets the same bytes and id).
+  - `acquisition`: the catalog, the query checkpoint, the record set, the observed set, the final manifests, run
+    identities and rights-bound run identities the records name (sorted arrays), and the scope manifest (null for an act
+    range).
+  - `verified_under`: the inventory /3 and content /1 rule digests and R0's two derivation identities (run 15's
+    `854891e3…` and `abc0a299…` in the dry run).
+  - `rules`: the rule set `lu-release-1`, its profiles by name and digest (inventory /4 `8a011d87…`, content /2
+    `bf3fea5a…`), the admission policy, `rights_resolution: as_acquired`.
+  - `outputs`: the /4 and /2 population identities. `counts`: held bodies, rights dispositions, inventory dispositions,
+    content-consistency refusals, content dispositions, admitted articles. `publisher_requests: 0`.
+  - The fixture record (one synthetic consolidation) is 2,045 bytes; its digest moves with each fixture acquisition,
+    whose catalog names fresh URNs.
+- **Wiring.**
+  - `V3OfflineMount.DeriveAsync` reads inputs `lex-v3-offline-mount-inputs/3` (and /1 and /2 unchanged): the base inputs
+    /1 or /2 by digest, the rule set and its digests, the policy, `derived_at`, `expected_rederivation`. It refuses an
+    unimplemented rule or policy before reopening anything, then runs R0 and R1. The build time stays the base's.
+  - The profile envelope carries the record (`WithLuxembourgRederivation`, refused when it names other populations), so
+    the corpus and both index builds write one header.
+  - `LexCorpus6Builder.ProfileIdentities` takes the content profile from the population, not the /1 constant, and adds
+    the inventory's rule digest when it is not /3; a population under a later profile without a record cannot be built.
+  - The corpus header gains `luxembourg_rederivation` and `luxembourg_rights_admission_policy`, written only when set, so a
+    corpus from the acquisition's own derivations keeps its bytes; both or neither, the policy registered.
+- **Tool steps** (`src/Lex.V3.Tool/RederiveCommands.cs`): `rederive-inputs --custody … --base <mount-inputs.json> --rules
+  lu-release-1 --policy <digest> --derived-at <utc>` and `rederive-seal --custody … --inputs … --record <sha256>`, each
+  holding the inputs in custody and writing a `mount-inputs-<sha>.json` pointer beside it, as `build` does; `derive`
+  prints `luxembourg_rederivation=<sha>` for inputs /3.
+- **Clock and texts.** The served genesis, silence, upstream-health and as-observed texts no longer say built_at is when
+  the build ran: built_at is the time the acquiring build read once its acquisition ended, an upper bound on observation,
+  which a derivation from custody keeps. The build report gains a `derivation` block: a statement naming the catalog
+  (and, for a resumed acquisition, its window and spend), `derivedAt`, the rule set and rules, the policy, the record,
+  the tool source and `publisherRequests: 0`.
+- **Tamper checks.** R1 refuses an unimplemented rule set or digest, or a policy the set does not name; a held body the
+  frozen inventory read that no longer reads as its digest; a record other than the sealed one; and R0 results that are
+  refused, uncatalogued or already re-derived. No record is held for a refusal.
+- **Tests** (`LuxembourgRederivationTests`, 11, and one in `V3OfflineMountTests`), over a synthetic Akoma Ntoso
+  consolidation served by the shared Luxembourg fixture in place of its PDF (every byte written in the test; no publisher
+  file and none of the withheld fixtures). Content /1 reads one of its two articles (the other carries index terms); R1
+  admits both.
+  - `V3FirstMountBuild` end to end over the re-derived population: the header names the record and policy /1, the profile
+    identities name inventory /4, content /2 and their populations and not content /1, every EU member is byte-identical
+    to R0's build, the Luxembourg index holds 2 articles under content /2 and `built_at` stays the acquisition's, the report
+    states the derivation, and the API's own mount opens it.
+  - Tamper: an altered body (a byte flipped in file custody), seven unimplemented rule or policy requests, and a sealed
+    record mismatch each refuse, holding nothing; R1 over a re-derived or refused result refuses.
+  - Inputs /3 in process over an act range (/1) and over a population scope (/2, the dry run's shape): derive, seal,
+    derive again, the same files as an in-process build over R1; six malformed inputs /3 refuse before writing anything.
+  - Through the tool, each step in its own process with every proxy at a local trap: `rederive-inputs`, `derive`,
+    `rederive-seal`, `derive`, a wrong seal refused (exit 3), usage errors (exit 2); no connection reaches the trap, and
+    `derive` prints `publisher_requests=0`.
+  - R0's pins hold: the frozen rule digests (`70e92611…`, `dd32d9a5…`) are asserted, `LuxembourgAknFrozenReplayTests`
+    passes unchanged, and a corpus built from the acquisition's own derivations writes no new header field.
+  - Censuses: one new guarded type (the record) and its doors, `WithRederivation`, `WithLuxembourgRederivation`,
+    `ApplyAsync`, `ReopenLuxembourgAsync`; two new registries in Ingest (`LuxembourgRederivation`, `V3OfflineMount`, which
+    leaves the declined list) and one in Contracts (`LuxembourgRightsAdmissionPolicies`). The answer samples move by the
+    four reworded texts.
+- **Driver decisions (reversible):**
+  - **Release 1's policy digest** is policy /1's: the canonical text `lex-lu-rights-admission-policy/1` (admits exactly
+    `agreed_same_run_cc_by`, no single-channel admission, no ruling), 246 bytes, sha256
+    `a477f4f2e6e0468bc9069da742f6f34f248ec831e01277a40552cb1e5bad2abb`, recomputed in Python. It is today's admission (the
+    builder admits `ChannelsAgreeOnAdmittingLicence` only). It sits in Contracts as `LuxembourgRightsAdmissionPolicies`
+    with that one entry; S1 adds the registry's type rules and policy A. Rule set `lu-release-1` names this policy and no
+    other.
+  - **State digest /2 is deferred to S6.** No code defines it (it is index /9's state digest, §3.1), and neither the
+    record nor `profile_identities` names a rule the build does not run. S6 adds it to `lu-release-1`, which changes the
+    set's digests, so inputs written before S6 refuse under an S6 build: no rule is substituted.
+  - **`derived_at` on the observations row is deferred to S6.** The observations table is exact-schema-checked (the
+    reader accepts index 8 and 6 only), hashed into `log_stamp` and carried by chained builds, so a column means an index
+    schema change; S6 changes the index to /9 anyway. Until then `derived_at` is in inputs /3, on the acquisition result
+    and in the build report; the served texts say only what is true without it, and S6 adds `log.derived_at` and its
+    sentence.
+  - **Coverage's row "history gives when each build ran"** stays for S7c: the web holds it verbatim (the coverage
+    preview, a web test, `COUNTS_PROVENANCE_NOTE` and the timeline preview), and no re-derived mount is served before
+    Release 1.
+  - The base may be inputs /1 or /2 (the design names /2); a base that is inputs /3 refuses. `derived_at` is a whole UTC
+    second, not before the base's build time.
+  - Inputs /3 and their seal have content-derived resource ids, so the same arguments give the same pointer. Sealed
+    inputs are never sealed again; the unsealed inputs stay in custody.
+  - A body check compares with R0: a body /4 cannot read by its digest refuses unless /3 could not read it either (run 15:
+    none); any body content /2 cannot read refuses.
+  - `V3OfflineMount` now holds two schema identifiers, so it moves from the census's declined list to the registry pin.
+- **For the dry run.** `rederive-inputs` and a derive of inputs /3 write two small objects (the inputs and the record) into
+  the custody they read, and a pointer file into its root; nothing else in custody is written. R1 parses each held XML body
+  twice more (/4, /2), after R0's two, and holds content /2's tokens for about 270,000 articles through the builds; the
+  dry run measures that.
+- **Not yet.** Release 2's R1 (S4r: reading /2, the re-resolution, the licence-page index, `measure-lu-rights`); state digest
+  /2 and `log.derived_at` (S6); the coverage row and its web copies (S7c); S4b; the dry run.
 
 ## Content /2: a Luxembourg article's index terms are metadata, never wording (Claude, 2026-10-15)
 
