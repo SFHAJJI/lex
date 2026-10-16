@@ -20,6 +20,7 @@
 // of this process in it. When anything in that fails, the page is served as built and asks for itself.
 
 import { INTERFACE_LANGUAGES, movedFor, pageForSitePath, redirectFor, sitePageFor } from "./permalinks.mjs";
+import { luxembourgDate } from "./temporal.mjs";
 import { createServer, request as httpRequest } from "node:http";
 import { readFile, stat } from "node:fs/promises";
 import { extname, join, relative as pathRelative, resolve, sep } from "node:path";
@@ -195,11 +196,21 @@ async function serveStatic(response, root, pathname, method, acceptLanguage) {
   response.end(method === "HEAD" ? undefined : bytes);
 }
 
+/** Today in Luxembourg (R13) at the instant `now` gives, or null outside the range the rule is held for. */
+function luxembourgToday(now) {
+  try {
+    return luxembourgDate(now());
+  } catch {
+    return null;
+  }
+}
+
 /**
  * The server. `root` is the built live directory (`dist-live/`), `apiOrigin` the origin of a
- * running `Lex.V3.Api` (for example `http://127.0.0.1:5075`). It is returned unstarted.
+ * running `Lex.V3.Api` (for example `http://127.0.0.1:5075`), and `now` its clock (a UTC instant), which says the date a
+ * readable address's page is rendered at (R67: the current version, today in Luxembourg). It is returned unstarted.
  */
-export function createLiveServer({ root, apiOrigin, apiDeadlineMs = API_DEADLINE_MS }) {
+export function createLiveServer({ root, apiOrigin, apiDeadlineMs = API_DEADLINE_MS, now = () => new Date().toISOString() }) {
   const rootPath = resolve(root instanceof URL ? fileURLToPath(root) : root);
   const rendererFor = serverRenderers(rootPath);
   return createServer(async (request, response) => {
@@ -255,8 +266,9 @@ export function createLiveServer({ root, apiOrigin, apiDeadlineMs = API_DEADLINE
         response.end();
         return;
       }
-      // A law's address under a language: the page rendered from the API's answer (R67), else the page as built.
-      const page = sitePageFor(url.pathname);
+      // A law's address under a language: the page rendered from the API's answer (R67), else the page as built. A
+      // readable address asks for today in Luxembourg (R13), as the API asks it (V3WebRoot.SitePageFor).
+      const page = sitePageFor(url.pathname, { today: luxembourgToday(now) });
       if (page !== null) {
         let rendered = null;
         try {

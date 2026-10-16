@@ -156,7 +156,8 @@ internal sealed partial class V3WebRoot
         HttpContext context,
         string rawTarget,
         CancellationToken cancellationToken,
-        Func<V3SitePage, CancellationToken, byte[]?>? answer = null)
+        Func<V3SitePage, CancellationToken, byte[]?>? answer = null,
+        Func<string?>? today = null)
     {
         ArgumentNullException.ThrowIfNull(context);
         var queryAt = rawTarget.IndexOf('?', StringComparison.Ordinal);
@@ -210,8 +211,9 @@ internal sealed partial class V3WebRoot
             return true;
         }
 
-        // A law's address under a language, rendered from the API's own answer when there is one (R67).
-        if (answer is not null && _renderer is not null && SitePageFor(path) is { } sitePage && answer(sitePage, cancellationToken) is { } envelope &&
+        // A law's address under a language, rendered from the API's own answer when there is one (R67). A readable address asks
+        // for today in Luxembourg (R13), which the caller's clock says; with no clock its page is served as built.
+        if (answer is not null && _renderer is not null && SitePageFor(path, today?.Invoke()) is { } sitePage && answer(sitePage, cancellationToken) is { } envelope &&
             await _renderer.RenderAsync(sitePage.Language, sitePage.Kind, Encoding.UTF8.GetString(envelope), path, cancellationToken).ConfigureAwait(false) is { } html)
         {
             var page = Encoding.UTF8.GetBytes(html);
@@ -269,21 +271,27 @@ internal sealed partial class V3WebRoot
 
     /// <summary>
     /// The site's addresses for law, as <c>web/scripts/permalinks.mjs</c> parses them (a test holds the two to one table): a
-    /// Luxembourg work (<c>/lu-legilux/{work}</c>) or an EU act (<c>/eu-eurlex/{celex}</c>), served its dossier; and the one
+    /// Luxembourg work (<c>/lu-legilux/{work}</c>) or an EU act (<c>/eu-eurlex/{celex}</c>), served its dossier; the one
     /// permalink shape of the specification of record's R64, a Luxembourg state
     /// (<c>/lu-legilux/{work}/{date}--{sha256}/{lng}</c>) or an EU wording (<c>/eu-eurlex/{celex}/{date}--{sha256}/{lng}</c>),
-    /// with the article (or provision) as a last segment when one is named, served its reading; each under an interface
-    /// language (<c>/en/</c>, <c>/fr/</c>), or with none, as the API mints it, to be sent to the reader's. <c>{lng}</c> is the
-    /// text's language; the article is RFC 3986's path characters, anything else percent-encoded, and never one that is
-    /// <c>.</c> or <c>..</c> once decoded (<c>%2e</c> or <c>%2E</c> for a dot, as a URL parser reads it; review of #967: this
-    /// root served <c>%2E%2E</c> as an article, which the live server and a browser resolve away). A <c>#</c> (a position
-    /// inside an article) never reaches a server. The end is <c>\z</c>, not <c>$</c>, which in .NET also matches before a
-    /// final newline.
+    /// with the article (or provision) as a last segment when one is named, served its reading; and the readable address of an
+    /// act's current version in a language (R67), <c>/lu-legilux/{work}/{lng}</c> or <c>/eu-eurlex/{celex}/{lng}</c>, with an
+    /// article (or provision) as a last segment, served its reading as it stands today; each under an interface language
+    /// (<c>/en/</c>, <c>/fr/</c>), or with none, as the API mints it, to be sent to the reader's. <c>{lng}</c> is the text's
+    /// language; the article is RFC 3986's path characters, anything else percent-encoded, and never one that is <c>.</c> or
+    /// <c>..</c> once decoded (<c>%2e</c> or <c>%2E</c> for a dot, as a URL parser reads it; review of #967: this root served
+    /// <c>%2E%2E</c> as an article, which the live server and a browser resolve away). A readable address's article is never
+    /// a calendar date, with or without a digest after it: <c>/eu-eurlex/{celex}/{lng}/{date}</c> is an EU stable coordinate
+    /// and <c>/eu-eurlex/{celex}/{lng}/{date}--{sha256}</c> the EU permalink shape before R64 (<see cref="MovedFor"/>), so
+    /// neither shape names an article. A <c>#</c> (a position inside an article) never reaches a server. The end is
+    /// <c>\z</c>, not <c>$</c>, which in .NET also matches before a final newline.
     /// </summary>
     private static readonly Regex SitePath = new(
-        "^/(?:(?<locale>fr|en)/)?(?:lu-legilux/(?<work>[a-z0-9][a-z0-9_-]*)|eu-eurlex/(?<celex>[0-9A-Za-z][0-9A-Za-z()._-]*))" +
-        "(?<pin>/(?<date>[0-9]{4}-[0-9]{2}-[0-9]{2})--[0-9a-f]{64}/(?<lng>[a-z]{3})" +
-        "(?:/(?!(?:\\.|%2[eE]){1,2}\\z)(?:[0-9A-Za-z._~!$&'()*+,;=:@-]|%[0-9A-Fa-f]{2})+)?)?\\z",
+        "^/(?:(?<locale>fr|en)/)?(?<law>lu-legilux/(?<work>[a-z0-9][a-z0-9_-]*)|eu-eurlex/(?<celex>[0-9A-Za-z][0-9A-Za-z()._-]*))" +
+        "(?:(?<pin>/(?<date>[0-9]{4}-[0-9]{2}-[0-9]{2})--(?<digest>[0-9a-f]{64})/(?<lng>[a-z]{3})" +
+        "(?:/(?!(?:\\.|%2[eE]){1,2}\\z)(?:[0-9A-Za-z._~!$&'()*+,;=:@-]|%[0-9A-Fa-f]{2})+)?)" +
+        "|(?<current>/(?<currentLng>[a-z]{3})" +
+        "(?:/(?![0-9]{4}-[0-9]{2}-[0-9]{2}(?:--[0-9a-f]{64})?\\z)(?!(?:\\.|%2[eE]){1,2}\\z)(?:[0-9A-Za-z._~!$&'()*+,;=:@-]|%[0-9A-Fa-f]{2})+)?))?\\z",
         RegexOptions.CultureInvariant,
         TimeSpan.FromMilliseconds(100));
 
@@ -311,20 +319,22 @@ internal sealed partial class V3WebRoot
             return null;
         }
 
-        var page = match.Groups["pin"].Success ? "reading.html" : "dossier.html";
+        var page = match.Groups["pin"].Success || match.Groups["current"].Success ? "reading.html" : "dossier.html";
         return $"/{match.Groups["locale"].Value}/{page}";
     }
 
     /// <summary>
     /// What the server renders a law's address under an interface language from (R67), as <c>sitePageFor</c> in
     /// <c>web/scripts/permalinks.mjs</c> says it (a test holds the two to one table): the page, the operation and the request
-    /// the page itself would send. A reading asks by the work (a Luxembourg coordinate or an EU CELEX), the date and the
-    /// text's language the permalink names, a dossier by the work. An interface language's home page (<c>/en/</c>,
-    /// <c>/en/index.html</c>) is rendered from <c>coverage</c>, asked with no parameters, as the page as built asks it once
-    /// loaded: its coverage line and today's date in Luxembourg (R11, R13; <c>web/scripts/live-home.mjs</c>). Null for any
-    /// other path.
+    /// the page itself would send. A permalink's reading asks by the permalink itself (R64: the version it pins, or why not),
+    /// with the date and the text's language it names; a readable address's reading asks by the work (a Luxembourg coordinate
+    /// or an EU CELEX), <paramref name="today"/> (Luxembourg's date, R13) and the text's language it names, and with no
+    /// <paramref name="today"/> is not rendered; a dossier asks by the work. An interface language's home page
+    /// (<c>/en/</c>, <c>/en/index.html</c>) is rendered from <c>coverage</c>, asked with no parameters, as the page as built
+    /// asks it once loaded: its coverage line and today's date in Luxembourg (R11, R13; <c>web/scripts/live-home.mjs</c>).
+    /// Null for any other path.
     /// </summary>
-    internal static V3SitePage? SitePageFor(string path)
+    internal static V3SitePage? SitePageFor(string path, string? today = null)
     {
         ArgumentNullException.ThrowIfNull(path);
         foreach (var home in InterfaceLanguages)
@@ -342,16 +352,35 @@ internal sealed partial class V3WebRoot
         }
 
         var language = match.Groups["locale"].Value;
-        var identifier = match.Groups["work"].Success ? "/lu-legilux/" + match.Groups["work"].Value : match.Groups["celex"].Value;
-        var parameters = new Dictionary<string, string>(StringComparer.Ordinal) { ["identifier"] = identifier };
-        var reading = match.Groups["pin"].Success;
-        if (reading)
+        var work = match.Groups["work"].Success ? "/lu-legilux/" + match.Groups["work"].Value : match.Groups["celex"].Value;
+        if (match.Groups["pin"].Success)
         {
-            parameters["date"] = match.Groups["date"].Value;
-            parameters["language"] = match.Groups["lng"].Value;
+            var date = match.Groups["date"].Value;
+            var lng = match.Groups["lng"].Value;
+            return new V3SitePage(language, "reading", "evidence_bundle", new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["identifier"] = $"/{match.Groups["law"].Value}/{date}--{match.Groups["digest"].Value}/{lng}",
+                ["date"] = date,
+                ["language"] = lng,
+            });
         }
 
-        return new V3SitePage(language, reading ? "reading" : "dossier", reading ? "evidence_bundle" : "dossier", parameters);
+        if (match.Groups["current"].Success)
+        {
+            if (today is null)
+            {
+                return null;
+            }
+
+            return new V3SitePage(language, "reading", "evidence_bundle", new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["identifier"] = work,
+                ["date"] = today,
+                ["language"] = match.Groups["currentLng"].Value,
+            });
+        }
+
+        return new V3SitePage(language, "dossier", "dossier", new Dictionary<string, string>(StringComparer.Ordinal) { ["identifier"] = work });
     }
 
     /// <summary>Whether an envelope is the refusal of a work the API does not know: its page is a 404, as an absent page is.</summary>

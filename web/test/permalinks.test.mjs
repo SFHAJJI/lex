@@ -9,8 +9,9 @@ import { createElement as h } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { Permalink, TableRegion } from '../.react-build/app.mjs';
 import {
-  INTERFACE_LANGUAGES, PERMALINK_PATTERNS, anchorOf, anchorText, articlePermalink, escapeSegment, europePermalink, isSiteAddress, lawPageLinks,
-  luxembourgPermalink, movedFor, negotiateLanguage, pageForSitePath, parseSitePath, permalinkHref, redirectFor, sameDocumentIn, sitePageFor,
+  INTERFACE_LANGUAGES, PERMALINK_PATTERNS, anchorOf, anchorText, articlePermalink, currentAddress, escapeSegment, europePermalink, isSiteAddress,
+  lawPageLinks, luxembourgPermalink, movedFor, negotiateLanguage, pageForSitePath, parseSitePath, permalinkHref, readingRequestFor, redirectFor,
+  sameDocumentIn, sitePageFor,
 } from '../scripts/permalinks.mjs';
 
 const TABLE = JSON.parse(await readFile(new URL('../../tests/Lex.V3.Tests/Fixtures/SitePaths/site-paths.json', import.meta.url), 'utf8'));
@@ -29,7 +30,8 @@ test('each path of the shared table is served the page the table names, or sent 
   assert.ok(TABLE.paths.filter(({ moved }) => moved !== null).length >= 3, 'the shape before R64, with and without an interface language');
   const served = TABLE.paths.filter(({ page }) => page !== null).map(({ page }) => page);
   assert.deepEqual([...new Set(served)].sort(), ['en/dossier.html', 'en/reading.html', 'fr/dossier.html', 'fr/reading.html'], 'both pages, in both interfaces');
-  for (const kind of ['luxembourgWork', 'luxembourgState', 'europeWork', 'europeWording']) {
+  assert.deepEqual(Object.keys(PERMALINK_PATTERNS).sort(), ['europeCurrent', 'europeWording', 'europeWork', 'luxembourgCurrent', 'luxembourgState', 'luxembourgWork']);
+  for (const kind of Object.keys(PERMALINK_PATTERNS)) {
     assert.ok(TABLE.paths.some(({ path, page }) => page !== null && PERMALINK_PATTERNS[kind].test(path.replace(/^\/(?:en|fr)\//, '/'))), `the table serves a ${kind} address`);
     assert.ok(TABLE.paths.some(({ path, redirect }) => redirect !== null && PERMALINK_PATTERNS[kind].test(path)), `the table sends a ${kind} address`);
   }
@@ -47,7 +49,45 @@ test('each path of the shared table is served the page the table names, or sent 
 });
 
 test('what the server renders a law page from is what the shared table says, the text language included', () => {
-  for (const { path, render } of TABLE.paths) assert.deepEqual(sitePageFor(path) === null ? null : JSON.parse(JSON.stringify(sitePageFor(path))), render, path);
+  assert.match(TABLE.today, /^[0-9]{4}-[0-9]{2}-[0-9]{2}$/, 'the date in Luxembourg the table is held at');
+  for (const { path, render } of TABLE.paths) {
+    const page = sitePageFor(path, { today: TABLE.today });
+    assert.deepEqual(page === null ? null : JSON.parse(JSON.stringify(page)), render, path);
+  }
+  // A permalink's reading asks by the permalink itself, with no article (R64); a readable address's by the work at today's
+  // date, and with no date it is not rendered (the page as built asks for itself).
+  const pinned = `/lu-legilux/loi-2017-03-14-a439/2024-01-01--${DIGEST}/fra`;
+  assert.deepEqual({ ...sitePageFor(`/en${pinned}/art_1er`).parameters }, { identifier: pinned, date: '2024-01-01', language: 'fra' });
+  assert.equal(sitePageFor('/en/lu-legilux/loi-2017-03-14-a439/fra/art_1er'), null, 'no today: not rendered');
+  assert.equal(sitePageFor('/en/lu-legilux/loi-2017-03-14-a439/fra', { today: '15/10/2026' }), null, 'a date written otherwise is none');
+  assert.deepEqual({ ...sitePageFor('/fr/eu-eurlex/32016R0679/eng/Article%2017', { today: '2026-10-15' }).parameters }, { identifier: '32016R0679', date: '2026-10-15', language: 'eng' });
+  assert.equal(readingRequestFor(parseSitePath('/en/lu-legilux/loi-2017-03-14-a439'), '2026-10-15'), null, "a work's address asks no reading");
+});
+
+test("an act's readable address names its work, the text's language and an article, never a date or a pin (R67)", () => {
+  const act = parseSitePath('/fr/lu-legilux/loi-2017-03-14-a439/fra');
+  assert.deepEqual({ ...act }, {
+    kind: 'current', publisher: 'lu-legilux', work: 'loi-2017-03-14-a439', identifier: '/lu-legilux/loi-2017-03-14-a439', language: 'fra', anchor: null,
+    locale: 'fr', act: '/lu-legilux/loi-2017-03-14-a439/fra', address: '/lu-legilux/loi-2017-03-14-a439/fra',
+  });
+  const provision = parseSitePath('/eu-eurlex/32016R0679/eng/art_5%281%29');
+  assert.equal(provision.kind, 'current');
+  assert.equal(provision.identifier, '32016R0679', 'an EU act is asked by its CELEX');
+  assert.equal(provision.act, '/eu-eurlex/32016R0679/eng');
+  assert.equal(anchorText(provision.anchor), 'art_5(1)');
+  assert.equal(currentAddress({ publisher: 'eu-eurlex', work: '32016R0679', language: 'eng', publisherId: 'art_5(1)' }), '/eu-eurlex/32016R0679/eng/art_5%281%29', 'escaped as the platform escapes a segment');
+  assert.equal(currentAddress({ publisher: 'lu-legilux', work: 'loi-2017-03-14-a439', language: 'fra' }), '/lu-legilux/loi-2017-03-14-a439/fra');
+  for (const path of [
+    `/en/eu-eurlex/32016R0679/eng/2016-05-04`,
+    `/en/eu-eurlex/32016R0679/eng/2016-05-04--${DIGEST}`,
+    '/en/lu-legilux/loi-2017-03-14-a439/fra/2024-01-01',
+    '/en/lu-legilux/loi-2017-03-14-a439/fra/%2e%2E',
+    '/en/lu-legilux/loi-2017-03-14-a439/fra/',
+  ]) {
+    assert.notEqual(parseSitePath(path)?.kind, 'current', `${path}: no readable address`);
+  }
+  // A readable address is a site address, so a page links it under its own language; it is never a citation.
+  assert.equal(permalinkHref('/lu-legilux/loi-2017-03-14-a439/fra/art_1er', 'en'), '/en/lu-legilux/loi-2017-03-14-a439/fra/art_1er');
 });
 
 test('a reader starts in the interface language the browser prefers of French and English, else French (R61)', () => {
