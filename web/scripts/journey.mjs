@@ -183,9 +183,11 @@ export function pinnedCitation(citation) {
 /**
  * The steps for one Luxembourg work: the page each loads, the operation it must ask, and what it does before waiting. A
  * step that `cites` prints at least one citation on an answer. `identifier` is the work, `date` a date one of its states
- * applies on, `anchor` an article id that state holds and `language` that state's text language.
+ * applies on, `anchor` an article id that state holds and `language` that state's text language; `today`, the date in
+ * Luxembourg the readable address's page asks (R13, R67), by this machine's clock unless given.
  */
-export function journeyStepsFor({ identifier, date, anchor, language = READING_LANGUAGE }) {
+export function journeyStepsFor({ identifier, date, anchor, language = READING_LANGUAGE, today = luxembourgDate(new Date().toISOString()) }) {
+  const placeholder = `${identifier}/${date}--${"0".repeat(64)}/${language}`;
   return Object.freeze({
   coverage: Object.freeze({ path: "/en/coverage.html", operation: "coverage", body: null }),
   // The home page at the language's root (R47, R61): the search, from the front door, at today's date in Luxembourg (R13).
@@ -274,32 +276,46 @@ export function journeyStepsFor({ identifier, date, anchor, language = READING_L
     body: Object.freeze({ operation_id: "dossier", parameters: Object.freeze({ identifier: identifier }) }),
   }),
   // A state's permalink at one of its articles, as a search hit links it: the reading page served at it asks that
-  // state's reading as it loads, shows it as the state the permalink pins and brings the article into view. The digest
-  // is the mount's, so `run` opens the permalink the same server's dossier names for the date (`pinnedStep`); the
-  // placeholder's digest (all zeros) pins nothing, and stays only where no state is held on the date (no mount).
+  // state's reading by the permalink itself (R64), shows it as the state the permalink pins, the cited article first, and
+  // brings that article into view. The digest is the mount's, so `run` opens the permalink the same server's dossier names
+  // for the date (`pinnedStep`); the placeholder's digest (all zeros) pins nothing, and stays only where no state is held
+  // on the date (no mount).
   permalink: Object.freeze({
-    path: `/en${identifier}/${date}--${"0".repeat(64)}/${language}/${escapeSegment(anchor)}`,
+    path: `/en${placeholder}/${escapeSegment(anchor)}`,
     rendered: true,
     pins: Object.freeze({ identifier: identifier, date: date, anchor: anchor, language: language }),
     cites: true,
     operation: "evidence_bundle",
     body: Object.freeze({
       operation_id: "evidence_bundle",
-      parameters: Object.freeze({ identifier: identifier, date: date, language: language }),
+      parameters: Object.freeze({ identifier: placeholder, date: date, language: language }),
     }),
   }),
-  // A permalink whose digest pins no held state (all zeros), as a link made before the text was derived again would:
-  // the page shows the state the date resolves to, under a notice, brought into view, that it is not the one the link
-  // pins (UX spec section 1: a link cannot silently drift).
+  // A permalink whose digest pins no held state (all zeros), as a link made before the text was derived again would: the
+  // API refuses it pinned_digest_mismatch with the current link (R64), and the page says so above the refusal card, in
+  // view, with that link (UX spec section 1: a link cannot silently drift).
   stale: Object.freeze({
-    path: `/en${identifier}/${date}--${"0".repeat(64)}/${language}/${escapeSegment(anchor)}`,
+    path: `/en${placeholder}/${escapeSegment(anchor)}`,
     rendered: true,
     stale: true,
     cites: true,
     operation: "evidence_bundle",
     body: Object.freeze({
       operation_id: "evidence_bundle",
-      parameters: Object.freeze({ identifier: identifier, date: date, language: language }),
+      parameters: Object.freeze({ identifier: placeholder, date: date, language: language }),
+    }),
+  }),
+  // The work's readable address at one of its articles (R67): the reading page served at it asks the work at today's
+  // date in Luxembourg, in the text's language it names, and shows that article first, brought into view.
+  current: Object.freeze({
+    path: `/en${identifier}/${language}/${escapeSegment(anchor)}`,
+    rendered: true,
+    current: Object.freeze({ anchor: anchor }),
+    cites: true,
+    operation: "evidence_bundle",
+    body: Object.freeze({
+      operation_id: "evidence_bundle",
+      parameters: Object.freeze({ identifier: identifier, date: today, language: language }),
     }),
   }),
 });
@@ -316,7 +332,11 @@ export async function pinnedStep(origin, step, { ask = askOperation } = {}) {
   const onDate = ((await ask(origin, "dossier", { identifier }))?.result?.value?.states ?? [])
     .filter((state) => state.applicability_date === date && state.language === language);
   if (onDate.length !== 1 || typeof onDate[0].permalink !== "string" || parseSitePath(onDate[0].permalink)?.kind !== "state") return step;
-  return Object.freeze({ ...step, path: `/en${articlePermalink(onDate[0].permalink, anchor)}` });
+  // The page asks by the permalink it stands at (R64), so the body names the dossier's permalink too.
+  const body = step.body === null || step.body === undefined
+    ? step.body
+    : Object.freeze({ ...step.body, parameters: Object.freeze({ ...step.body.parameters, identifier: onDate[0].permalink }) });
+  return Object.freeze({ ...step, path: `/en${articlePermalink(onDate[0].permalink, anchor)}`, body });
 }
 
 /**
@@ -417,20 +437,25 @@ export function journeyVerdict(observed, expected) {
       if (!observed.text.includes(digest)) failures.push(`the page does not show the mounted digest ${digest}`);
     }
   }
-  // A permalink's page shows the state the permalink pins (no notice that another version stands in for it) and
-  // brings the article it names into view; a stale permalink's page says, in view, that the version shown is not the
-  // one the link pins.
-  if (expected.state === "success" && step.pins !== undefined) {
-    if (observed.pinReplaced !== false) failures.push(`the page says the permalink's state is not the one served (${observed.pinReplaced ?? "not observed"})`);
-    if (observed.inView !== "shown") failures.push(`the article ${step.pins.anchor} the permalink names is ${observed.inView === "absent" ? "not on the page" : `not in view (${observed.inView ?? "not observed"})`}`);
-    else if (observed.targetFocused !== true) failures.push(`the article ${step.pins.anchor} the permalink names is in view without the focus`);
+  // A permalink's page shows the state the permalink pins (no notice that another version stands in for it), the cited
+  // article first, and brings it into view (R64); a readable address's page shows the article first too (R67). A stale
+  // permalink is refused pinned_digest_mismatch, and its page says, in view, that the link pins no version held at its
+  // date, with the current link.
+  const cites = step.pins?.anchor ?? step.current?.anchor;
+  if (expected.state === "success" && cites !== undefined) {
+    if (step.pins !== undefined && observed.pinReplaced !== false) failures.push(`the page says the permalink's state is not the one served (${observed.pinReplaced ?? "not observed"})`);
+    if (observed.inView !== "shown") failures.push(`the article ${cites} the address names is ${observed.inView === "absent" ? "not on the page, first" : `not in view (${observed.inView ?? "not observed"})`}`);
+    else if (observed.targetFocused !== true) failures.push(`the article ${cites} the address names is in view without the focus`);
   }
-  if (expected.state === "success" && step.stale === true) {
-    if (observed.pinReplaced !== true) failures.push(`the page does not say that the version shown is not the one the link pins (${observed.pinReplaced ?? "not observed"})`);
+  if (step.stale === true && expected.state !== "success" && expected.refusalCode === "pinned_digest_mismatch") {
+    if (observed.pinNotHeld !== true) failures.push(`the page does not say that the link pins no version held at its date (${observed.pinNotHeld ?? "not observed"})`);
     else {
-      if (observed.inView !== "shown") failures.push(`the notice that the version shown is not the one the link pins is not in view (${observed.inView ?? "not observed"})`);
-      else if (observed.targetFocused !== true) failures.push("the notice that the version shown is not the one the link pins is in view without the focus");
-      // The notice is true only if the server says so too: `verify` refuses the permalink it names as no longer served.
+      if (observed.inView !== "shown") failures.push(`the notice that the link pins no version held at its date is not in view (${observed.inView ?? "not observed"})`);
+      else if (observed.targetFocused !== true) failures.push("the notice that the link pins no version held at its date is in view without the focus");
+      if (typeof observed.pinCurrent !== "string" || parseSitePath(observed.pinCurrent.replace(/^\/(?:en|fr)(?=\/)/, ""))?.kind !== "state") {
+        failures.push(`the notice links no current version (${observed.pinCurrent ?? "none"})`);
+      }
+      // The notice is true only if the server says so too: `verify` refuses the permalink it names as no longer held.
       const said = observed.pinVerification?.refusal ?? observed.pinVerification?.verdict ?? "nothing";
       if (said !== "pinned_digest_mismatch") failures.push(`verify answers the permalink the notice names (${observed.pinNamed ?? "none"}) with ${said}, not pinned_digest_mismatch`);
     }
@@ -440,7 +465,7 @@ export function journeyVerdict(observed, expected) {
   // article and never the digest it was opened at (review of #967: the canonical is what the answer shows, never the
   // request). Each interface language is an alternate, and the address itself for any other, each named once: the links
   // are counted, so a page that names one twice fails.
-  if (expected.state === "success" && step.rendered === true && observed.canonical !== undefined) {
+  if ((expected.state === "success" || (step.stale === true && expected.refusalCode === "pinned_digest_mismatch")) && step.rendered === true && observed.canonical !== undefined) {
     const own = step.path.replace(/^\/(?:en|fr)(?=\/)/, "");
     const named = typeof observed.canonical === "string" && observed.canonical.startsWith(SITE_ORIGIN) ? observed.canonical.slice(SITE_ORIGIN.length) : null;
     const law = named === null ? null : parseSitePath(named);
@@ -1235,12 +1260,15 @@ async function observe(browser, pageOrigin, step, { keyboard = false } = {}) {
       liveRegion: { atLoad: liveRegionAtLoad, atEnd: await evaluate(ANSWER_LIVE_REGION) },
       keyboard: keys,
       // Every citation the answer prints, as code or as a link (`answerCitations`). The permalink a stale link's notice
-      // names is no citation: the notice says it is not the version served.
+      // names is no citation: the notice says it is not the version served, or held; the current version it links is one.
       citations: answerCitations(
-        await evaluate("[...document.querySelectorAll('[data-live-answer] code')].filter((node) => node.closest('[data-pin-replaced]') === null).map((node) => node.textContent.trim())"),
+        await evaluate("[...document.querySelectorAll('[data-live-answer] code')].filter((node) => node.closest('[data-pin-replaced], [data-pin-not-held]') === null).map((node) => node.textContent.trim())"),
         await evaluate("[...document.querySelectorAll('[data-live-answer] a[href]')].map((node) => node.getAttribute('href'))"),
       ),
-      pinNamed: await evaluate("document.querySelector('[data-live-answer] [data-pin-replaced] code')?.textContent.trim() ?? null"),
+      pinNamed: await evaluate("document.querySelector('[data-live-answer] [data-pin-replaced] code, [data-live-answer] [data-pin-not-held] > code')?.textContent.trim() ?? null"),
+      // At a stale permalink: whether the page says the link pins no version held at its date, and the current link it gives.
+      pinNotHeld: step.stale === true ? await evaluate("document.querySelector('[data-pin-not-held]') !== null") : undefined,
+      pinCurrent: step.stale === true ? await evaluate("document.querySelector('[data-pin-not-held] a[href]')?.getAttribute('href') ?? null") : undefined,
       // Whether the document arrived carrying the answer the server rendered it from (`initial-answer.mjs`).
       serverRendered: await evaluate("document.getElementById('lex-initial-answer') !== null"),
       // At a law's address: the canonical link and the alternates the page's head names once loaded (R64, R67), every one
@@ -1252,21 +1280,19 @@ async function observe(browser, pageOrigin, step, { keyboard = false } = {}) {
       // At a permalink: whether the page says another version stands in for the pinned one, and where the article it
       // names is (`shown`: its top inside the window).
       pinReplaced: step.pins === undefined && step.stale !== true ? undefined : await evaluate("document.querySelector('[data-pin-replaced]') !== null"),
-      // At a permalink: where what the address names is (`shown`: its top inside the window) and whether it has the focus,
-      // as an anchor a browser follows would: the article it names, or for a stale permalink the notice.
-      ...(step.pins === undefined && step.stale !== true ? {} : await evaluate(`(() => {
+      // At a permalink or a readable address: where what the address names is (`shown`: its top inside the window) and
+      // whether it has the focus, as an anchor a browser follows would: the cited article, first (R64), which the page
+      // focuses with what it says first (`data-pinned-lead`), or for a stale permalink the notice.
+      ...(step.pins === undefined && step.current === undefined && step.stale !== true ? {} : await evaluate(`(() => {
         const answer = document.querySelector('[data-live-answer]');
         const node = ${step.stale === true
-          ? "answer?.querySelector('[data-pin-replaced]') ?? undefined"
-          : `(() => {
-          const digest = ${JSON.stringify(parseSitePath(step.path.split("#")[0])?.digest ?? "")};
-          const scope = answer?.querySelector('[data-state="' + digest + '"], [data-wording="' + digest + '"]') ?? answer;
-          return [...(scope?.querySelectorAll('[data-article]') ?? [])].find((candidate) => candidate.dataset.article === ${JSON.stringify(step.pins?.anchor ?? "")});
-        })()`};
+          ? "answer?.querySelector('[data-pin-not-held], [data-pin-replaced]') ?? undefined"
+          : `[...(answer?.querySelectorAll('[data-cited-article]') ?? [])].find((candidate) => candidate.dataset.citedArticle === ${JSON.stringify(step.pins?.anchor ?? step.current?.anchor ?? "")})`};
         if (node === undefined) return { inView: "absent", targetFocused: false };
         const top = node.getBoundingClientRect().top;
+        const focused = node === document.activeElement || node.closest('[data-pinned-lead]') === document.activeElement;
         // A fraction of a pixel above the window's top is the top (scrolling aligns to a fraction on some fonts: CI's Linux).
-        return { inView: top > -1 && top < innerHeight ? "shown" : "at " + top.toFixed(1) + " px of a " + innerHeight + " px window", targetFocused: node === document.activeElement };
+        return { inView: top > -1 && top < innerHeight ? "shown" : "at " + top.toFixed(1) + " px of a " + innerHeight + " px window", targetFocused: focused };
       })()`)),
       // Every quotation the answer shows, with what its article's element prints beside it.
       paint: await evaluate(PAINT_ONLY),
@@ -1541,7 +1567,9 @@ export async function licenceBlockedRuns(apiOutput, mount, options, browser, liv
   if (absentTexts.length === 0) throw new Error("the licence-blocked mount names no withheld text to look for");
   const runs = [];
   for (const [name, step] of Object.entries(JOURNEY_STEPS)) {
-    const mustRefuse = ["reading", "export", "permalink", "stale"].includes(name) ? { mustRefuse: "text_withheld" } : {};
+    // A stale permalink pins no version held, so it is refused pinned_digest_mismatch before any rights are read (R64).
+    const mustRefuse = name === "stale" ? { mustRefuse: "pinned_digest_mismatch" }
+      : ["reading", "export", "permalink", "current"].includes(name) ? { mustRefuse: "text_withheld" } : {};
     const digests = name === "coverage" ? { corpusSha256: journeyMount.corpus_sha256, indexSha256: journeyMount.index_sha256 } : {};
     runs.push([`${name}, with the licence-blocked mount`, await run(apiOutput, mount, { ...options, step, fromApi: true, absentTexts, ...mustRefuse, ...digests }, browser, liveRoot)]);
   }
@@ -1589,7 +1617,7 @@ export function failurePageExpectations() {
  * expected]`: every page answers, with the texts the fixture's one work gives it.
  */
 export function fixtureMountExpectations(journeyMount) {
-  const { coverage, home, search, dossier, reading, history, compare, radar, export: exporting, address, permalink, stale } = JOURNEY_STEPS;
+  const { coverage, home, search, dossier, reading, history, compare, radar, export: exporting, address, permalink, stale, current } = JOURNEY_STEPS;
   const searchTexts = [`“${SEARCH_PHRASE}” in fra: 4 with the exact phrase, 1 with every word, in 1 work.`, "art_15 in", "The first hits in the stated order, not the best hits.", NOT_ADVICE_SAID];
   // The home page's search is dated today, which the fixture's one state (2024-02-01) applies on; its coverage line counts the
   // fixture's one work, one state and 49 articles.
@@ -1612,7 +1640,8 @@ export function fixtureMountExpectations(journeyMount) {
     ["export", { step: exporting, state: "success", texts: ["3 articles pinned: 3 exported with text, 0 excluded.", EXPORT_WATERMARK, "Text served under agreed_same_run_cc_by."] }],
     ["address", { step: address, state: "success", texts: [journeyMount.work_key, "1 state, from 2024-02-01 to 2024-02-01."] }],
     ["permalink", { step: permalink, state: "success", texts: ["the state applying from 2024-02-01", "49 articles quoted", "Art. 15.", "Text served under agreed_same_run_cc_by", NOT_ADVICE_SAID] }],
-    ["stale", { step: stale, state: "success", texts: ["which is not the version this site serves for that date", "the state applying from 2024-02-01", "49 articles quoted"] }],
+    ["stale", { step: stale, state: "refusal", refusalCode: "pinned_digest_mismatch", texts: ["which is not the version this site holds for that date; the version it holds is"] }],
+    ["current", { step: current, state: "success", texts: ["Quoted from loi-1991-08-10-n3, fra, the state applying from 2024-02-01.", "The whole act at this version", "49 articles quoted", NOT_ADVICE_SAID] }],
   ];
 }
 
