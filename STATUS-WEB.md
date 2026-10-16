@@ -4,7 +4,7 @@ Updated 2026-10-16. The web lane's progress, split out of STATUS.md (which keeps
 items and the pointers) by the standing order of 2026-10-01 13:50 UTC. Every pull request of the web lane
 updates this file, not STATUS.md.
 
-## The home page, and the sentence that says what Lex is not (sole driver, 2026-10-15)
+## The home page, and the sentence that says what Lex is not (sole driver, 2026-10-16)
 
 The plan's items 4.1 (the home page) and 6.8 (the not-legal-advice sentence), to the specification of record's R47, R52,
 R11, R13 and R50. PR #955 made the home page the search screen under the site's introduction; it had the search page's
