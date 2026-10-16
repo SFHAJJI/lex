@@ -49,10 +49,13 @@ public sealed class V3CorpusPinnedPermalinkMountTests
         var unasked = await EnvelopeAsync(mount, "evidence_bundle", new { identifier = fixture.Permalink, date = fixture.ApplicabilityDate });
         Assert.AreEqual("fra", unasked.Result!.Value.GetProperty("requested_language").GetString());
 
-        // as_of answers it the same way, the state's row as as_of serves it.
-        var asOf = await EnvelopeAsync(mount, "as_of", new { identifier = fixture.Permalink, date = fixture.ApplicabilityDate });
-        Assert.IsNull(asOf.Refusal, asOf.Refusal?.Code);
-        Assert.AreEqual(fixture.Permalink, asOf.Result!.Value.GetProperty("states").EnumerateArray().Single().GetProperty("permalink").GetString());
+        // as_of and provenance, which take as_of's request, answer it the same way.
+        foreach (var operation in new[] { "as_of", "provenance" })
+        {
+            var other = await EnvelopeAsync(mount, operation, new { identifier = fixture.Permalink, date = fixture.ApplicabilityDate });
+            Assert.IsNull(other.Refusal, $"{operation}: {other.Refusal?.Code}");
+            Assert.AreEqual(fixture.Permalink, other.Result!.Value.GetProperty("states").EnumerateArray().Single().GetProperty("permalink").GetString(), operation);
+        }
     }
 
     [TestMethod]
@@ -90,7 +93,7 @@ public sealed class V3CorpusPinnedPermalinkMountTests
         var verify = await EnvelopeAsync(mount, "verify", new { identifier = stale, language = "fra" });
         Assert.AreEqual("pinned_digest_mismatch", verify.Refusal!.Code);
 
-        foreach (var operation in new[] { "evidence_bundle", "as_of" })
+        foreach (var operation in new[] { "evidence_bundle", "as_of", "provenance" })
         {
             var envelope = await EnvelopeAsync(mount, operation, new { identifier = stale, date = fixture.ApplicabilityDate, language = "fra" });
             Assert.AreEqual(V3Verdicts.Refuse, envelope.Verdict, operation);

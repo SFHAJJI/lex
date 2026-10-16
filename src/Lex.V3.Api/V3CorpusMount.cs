@@ -919,38 +919,72 @@ internal sealed partial class V3CorpusMount : IDisposable
                 "The requested date is not a civil calendar date.");
         }
 
-        if (RefuseUnlessWorkStates(request, identifier, observedAt, "r6_provenance", requestedLanguage,
-                out var states, out var availableLanguages) is { } refused)
+        // A state's hash-pinned permalink (R64) is answered with the state it pins, or refused, as as_of and evidence_bundle
+        // answer it (V3CorpusMount.Pinned.cs); any other identifier is selected as as_of selects.
+        IReadOnlyList<LuxembourgIndexResolvedState> states;
+        string[] availableLanguages;
+        var chosen = new List<LuxembourgIndexResolvedState>();
+        if (TryParsePinnedState(identifier, out var pinnedWork, out var pinnedDate, out var pinnedDigest, out var pinnedLanguage))
         {
-            return refused;
+            RequirePinnedDate(requestedDate, pinnedDate);
+            if (RefuseUnlessPinnedState(request, identifier, pinnedWork, pinnedDate, pinnedDigest, pinnedLanguage, requestedLanguage, observedAt,
+                    out var pinnedState, out states, out availableLanguages) is { } refusedPin)
+            {
+                return refusedPin;
+            }
+
+            requestedLanguage = pinnedLanguage;
+            chosen.Add(pinnedState);
+        }
+        else
+        {
+            if (RefuseUnlessWorkStates(request, identifier, observedAt, "r6_provenance", requestedLanguage,
+                    out states, out availableLanguages) is { } refused)
+            {
+                return refused;
+            }
+
+            var scope = requestedLanguage is null
+                ? states
+                : states.Where(state => string.Equals(state.Language, requestedLanguage, StringComparison.Ordinal))
+                    .ToArray();
+            var servedLanguages = requestedLanguage is null ? availableLanguages : new[] { requestedLanguage };
+
+            var ambiguous = new List<string>();
+            foreach (var language in servedLanguages)
+            {
+                var ofLanguage = scope
+                    .Where(state => string.Equals(state.Language, language, StringComparison.Ordinal))
+                    .ToArray();
+                var (selected, _) = SelectAtDate(ofLanguage, requestedDate);
+                if (selected.Length == 0)
+                {
+                    continue;
+                }
+
+                if (selected.Length > 1)
+                {
+                    ambiguous.AddRange(selected.Select(StateUrl));
+                    continue;
+                }
+
+                chosen.Add(selected[0]);
+            }
+
+            if (ambiguous.Count != 0)
+            {
+                return RefuseAmbiguousVersion(request, observedAt, requestedDate, ambiguous.Order(StringComparer.Ordinal).ToArray(), bound: null);
+            }
+
+            if (chosen.Count == 0)
+            {
+                return RefuseNoVersionForDate(request, observedAt, scope, requestedDate, bound: null);
+            }
         }
 
-        var scope = requestedLanguage is null
-            ? states
-            : states.Where(state => string.Equals(state.Language, requestedLanguage, StringComparison.Ordinal))
-                .ToArray();
-        var servedLanguages = requestedLanguage is null ? availableLanguages : new[] { requestedLanguage };
-
         var served = new List<object>();
-        var ambiguous = new List<string>();
-        foreach (var language in servedLanguages)
+        foreach (var state in chosen)
         {
-            var ofLanguage = scope
-                .Where(state => string.Equals(state.Language, language, StringComparison.Ordinal))
-                .ToArray();
-            var (selected, _) = SelectAtDate(ofLanguage, requestedDate);
-            if (selected.Length == 0)
-            {
-                continue;
-            }
-
-            if (selected.Length > 1)
-            {
-                ambiguous.AddRange(selected.Select(StateUrl));
-                continue;
-            }
-
-            var state = selected[0];
             served.Add(new
             {
                 language = state.Language,
@@ -966,16 +1000,6 @@ internal sealed partial class V3CorpusMount : IDisposable
                 article_identities_sha256 = ArticleIdentitiesSha256(state.ArticleIdentities),
                 sources = _reader!.ResolveStateSources(state.StateSha256).Select(SourceRow).ToArray(),
             });
-        }
-
-        if (ambiguous.Count != 0)
-        {
-            return RefuseAmbiguousVersion(request, observedAt, requestedDate, ambiguous.Order(StringComparer.Ordinal).ToArray(), bound: null);
-        }
-
-        if (served.Count == 0)
-        {
-            return RefuseNoVersionForDate(request, observedAt, scope, requestedDate, bound: null);
         }
 
         using var result = JsonSerializer.SerializeToDocument(new
