@@ -740,64 +740,92 @@ internal sealed partial class V3CorpusMount : IDisposable
                 "The requested date is not a civil calendar date.");
         }
 
-        // An EU act whose census the EU index holds is answered by the EU time view (V3CorpusMount.EuropeTime.cs); an EU
-        // identifier it does not hold is unknown there (review of #913).
-        if (LocateEuropeSeedForTime(request, identifier, observedAt, out var europeSeed) is { } refusedEurope)
-        {
-            return refusedEurope;
-        }
-
-        if (europeSeed is not null)
-        {
-            return AsOfEurope(request, identifier, europeSeed, requestedDate, requestedLanguage, observedAt);
-        }
-
-        if (RefuseUnlessWorkStates(request, identifier, observedAt, "r6_as_of", requestedLanguage,
-                out var states, out var availableLanguages) is { } refused)
-        {
-            return refused;
-        }
-
-        var scope = requestedLanguage is null
-            ? states
-            : states.Where(state => string.Equals(state.Language, requestedLanguage, StringComparison.Ordinal))
-                .ToArray();
-        var servedLanguages = requestedLanguage is null ? availableLanguages : new[] { requestedLanguage };
-
-        // Every selection is per language: a date on which another language's text changes is never
-        // reported as a change of the text being served.
+        // A hash-pinned permalink (R64) answers the version it pins, or why not, as evidence_bundle answers it
+        // (V3CorpusMount.Pinned.cs); any other identifier is selected below.
+        IReadOnlyList<LuxembourgIndexResolvedState> states;
+        string[] availableLanguages;
         var served = new List<object>();
         var servedStates = new List<LuxembourgIndexResolvedState>();
-        var ambiguous = new List<string>();
-        foreach (var language in servedLanguages)
+        if (TryParsePinnedWording(identifier, out var pinnedCelex, out var pinnedWordingDate, out var pinnedWordingDigest, out var pinnedWordingLanguage))
         {
-            var ofLanguage = scope
-                .Where(state => string.Equals(state.Language, language, StringComparison.Ordinal))
-                .ToArray();
-            var (selected, nextDate) = SelectAtDate(ofLanguage, requestedDate);
-            if (selected.Length == 0)
-            {
-                continue;
-            }
-
-            if (selected.Length > 1)
-            {
-                ambiguous.AddRange(selected.Select(StateUrl));
-                continue;
-            }
-
-            served.Add(StateRow(selected[0], nextDate));
-            servedStates.Add(selected[0]);
+            RequirePinnedDate(requestedDate, pinnedWordingDate);
+            return AsOfEuropePinned(
+                request, identifier, pinnedCelex, pinnedWordingDate, pinnedWordingDigest, pinnedWordingLanguage, requestedLanguage, observedAt);
         }
 
-        if (ambiguous.Count != 0)
+        if (TryParsePinnedState(identifier, out var pinnedWork, out var pinnedDate, out var pinnedDigest, out var pinnedLanguage))
         {
-            return RefuseAmbiguousVersion(request, observedAt, requestedDate, ambiguous.Order(StringComparer.Ordinal).ToArray(), bound: null);
-        }
+            RequirePinnedDate(requestedDate, pinnedDate);
+            if (RefuseUnlessPinnedState(request, identifier, pinnedWork, pinnedDate, pinnedDigest, pinnedLanguage, requestedLanguage, observedAt,
+                    out var pinnedState, out states, out availableLanguages) is { } refusedPin)
+            {
+                return refusedPin;
+            }
 
-        if (served.Count == 0)
+            // The permalink names its language, so the answer is in it, asked or not.
+            requestedLanguage = pinnedLanguage;
+            served.Add(StateRow(pinnedState, NextDateInLanguage(states, pinnedState)));
+            servedStates.Add(pinnedState);
+        }
+        else
         {
-            return RefuseNoVersionForDate(request, observedAt, scope, requestedDate, bound: null);
+            // An EU act whose census the EU index holds is answered by the EU time view (V3CorpusMount.EuropeTime.cs); an EU
+            // identifier it does not hold is unknown there (review of #913).
+            if (LocateEuropeSeedForTime(request, identifier, observedAt, out var europeSeed) is { } refusedEurope)
+            {
+                return refusedEurope;
+            }
+
+            if (europeSeed is not null)
+            {
+                return AsOfEurope(request, identifier, europeSeed, requestedDate, requestedLanguage, observedAt);
+            }
+
+            if (RefuseUnlessWorkStates(request, identifier, observedAt, "r6_as_of", requestedLanguage,
+                    out states, out availableLanguages) is { } refused)
+            {
+                return refused;
+            }
+
+            var scope = requestedLanguage is null
+                ? states
+                : states.Where(state => string.Equals(state.Language, requestedLanguage, StringComparison.Ordinal))
+                    .ToArray();
+            var servedLanguages = requestedLanguage is null ? availableLanguages : new[] { requestedLanguage };
+
+            // Every selection is per language: a date on which another language's text changes is never
+            // reported as a change of the text being served.
+            var ambiguous = new List<string>();
+            foreach (var language in servedLanguages)
+            {
+                var ofLanguage = scope
+                    .Where(state => string.Equals(state.Language, language, StringComparison.Ordinal))
+                    .ToArray();
+                var (selected, nextDate) = SelectAtDate(ofLanguage, requestedDate);
+                if (selected.Length == 0)
+                {
+                    continue;
+                }
+
+                if (selected.Length > 1)
+                {
+                    ambiguous.AddRange(selected.Select(StateUrl));
+                    continue;
+                }
+
+                served.Add(StateRow(selected[0], nextDate));
+                servedStates.Add(selected[0]);
+            }
+
+            if (ambiguous.Count != 0)
+            {
+                return RefuseAmbiguousVersion(request, observedAt, requestedDate, ambiguous.Order(StringComparer.Ordinal).ToArray(), bound: null);
+            }
+
+            if (served.Count == 0)
+            {
+                return RefuseNoVersionForDate(request, observedAt, scope, requestedDate, bound: null);
+            }
         }
 
         using var result = JsonSerializer.SerializeToDocument(new
@@ -988,7 +1016,7 @@ internal sealed partial class V3CorpusMount : IDisposable
         "structure, its notes, its official source, the digest of the publisher body it was read from and an article permalink (the state permalink " +
         "and the article id as a last segment, which verify accepts); the text is the concatenation of the article's text and reference tokens in publisher order, " +
         "the same bytes the index searches; an article whose tokens carry no text (the index admits a marker-only article as evidence) is named under " +
-        "articles_without_text and is not served as a quote";
+        "articles_without_text and is not served as a quote; " + PinnedPermalinkRule;
 
     internal const string EvidenceBundleRightsRule =
         "rights are enforced when the bundle is composed, before any text is read: every corpus member the state's articles come from must have " +
@@ -1033,74 +1061,102 @@ internal sealed partial class V3CorpusMount : IDisposable
                 "The requested date is not a civil calendar date.");
         }
 
-        // An EU work the EU index holds is answered from it (the owner's proxy, 2026-10-01 14:30 UTC: serve EU text now,
-        // from the original wording the EU index holds); a Luxembourg work takes the path below, unchanged. With no EU index
-        // mounted, an EU identifier keeps the refusal it had (retrieval_mode_unavailable), which the refusal census pins.
-        if (_europeReader is not null)
+        // A wording's hash-pinned permalink (R64) answers the wording it pins, or why not (V3CorpusMount.Pinned.cs).
+        if (TryParsePinnedWording(identifier, out var pinnedCelex, out var pinnedWordingDate, out var pinnedWordingDigest, out var pinnedWordingLanguage))
         {
-            // An EU act whose census the EU index holds is quoted at the requested date by the EU time view; an index with
-            // no states table keeps the original-wording path below.
-            if (LocateEuropeSeed(request, identifier, observedAt, out var europeSeed) is { } refusedSeed)
-            {
-                return refusedSeed;
-            }
-
-            if (europeSeed is not null)
-            {
-                return EvidenceBundleEuropeAtDate(request, identifier, europeSeed, requestedDate, requestedLanguage, observedAt);
-            }
-
-            if (LocateEuropeWork(request, identifier, observedAt, out var europe) is { } refusedEurope)
-            {
-                return refusedEurope;
-            }
-
-            if (europe.Count > 0)
-            {
-                return EvidenceBundleEurope(request, identifier, europe, requestedDate, requestedLanguage, observedAt);
-            }
+            RequirePinnedDate(requestedDate, pinnedWordingDate);
+            return EvidenceBundleEuropePinned(
+                request, identifier, pinnedCelex, pinnedWordingDate, pinnedWordingDigest, pinnedWordingLanguage, requestedLanguage, observedAt);
         }
 
-        if (RefuseUnlessWorkStates(request, identifier, observedAt, "r7_evidence_bundle", requestedLanguage,
-                out var states, out var availableLanguages) is { } refused)
-        {
-            return refused;
-        }
-
-        var scope = requestedLanguage is null
-            ? states
-            : states.Where(state => string.Equals(state.Language, requestedLanguage, StringComparison.Ordinal)).ToArray();
-        var servedLanguages = requestedLanguage is null ? availableLanguages : new[] { requestedLanguage };
+        // A Luxembourg state's hash-pinned permalink answers the state it pins, read as verify reads it, never the state the date
+        // resolves to in its place; any other identifier is selected as as_of selects.
+        IReadOnlyList<LuxembourgIndexResolvedState> states;
+        string[] availableLanguages;
         var selected = new List<(LuxembourgIndexResolvedState State, string? NextDate)>();
-        var ambiguous = new List<string>();
-        foreach (var language in servedLanguages)
+        if (TryParsePinnedState(identifier, out var pinnedWork, out var pinnedDate, out var pinnedDigest, out var pinnedLanguage))
         {
-            var ofLanguage = scope
-                .Where(state => string.Equals(state.Language, language, StringComparison.Ordinal))
-                .ToArray();
-            var (candidates, nextDate) = SelectAtDate(ofLanguage, requestedDate);
-            if (candidates.Length == 0)
+            RequirePinnedDate(requestedDate, pinnedDate);
+            if (RefuseUnlessPinnedState(request, identifier, pinnedWork, pinnedDate, pinnedDigest, pinnedLanguage, requestedLanguage, observedAt,
+                    out var pinnedState, out states, out availableLanguages) is { } refusedPin)
             {
-                continue;
+                return refusedPin;
             }
 
-            if (candidates.Length > 1)
+            // The permalink names its language, so the answer is in it, asked or not.
+            requestedLanguage = pinnedLanguage;
+            selected.Add((pinnedState, NextDateInLanguage(states, pinnedState)));
+        }
+        else
+        {
+            // An EU work the EU index holds is answered from it (the owner's proxy, 2026-10-01 14:30 UTC: serve EU text now,
+            // from the original wording the EU index holds); a Luxembourg work takes the path below, unchanged. With no EU index
+            // mounted, an EU identifier keeps the refusal it had (retrieval_mode_unavailable), which the refusal census pins.
+            if (_europeReader is not null)
             {
-                ambiguous.AddRange(candidates.Select(StateUrl));
-                continue;
+                // An EU act whose census the EU index holds is quoted at the requested date by the EU time view; an index with
+                // no states table keeps the original-wording path below.
+                if (LocateEuropeSeed(request, identifier, observedAt, out var europeSeed) is { } refusedSeed)
+                {
+                    return refusedSeed;
+                }
+
+                if (europeSeed is not null)
+                {
+                    return EvidenceBundleEuropeAtDate(request, identifier, europeSeed, requestedDate, requestedLanguage, observedAt);
+                }
+
+                if (LocateEuropeWork(request, identifier, observedAt, out var europe) is { } refusedEurope)
+                {
+                    return refusedEurope;
+                }
+
+                if (europe.Count > 0)
+                {
+                    return EvidenceBundleEurope(request, identifier, europe, requestedDate, requestedLanguage, observedAt);
+                }
             }
 
-            selected.Add((candidates[0], nextDate));
-        }
+            if (RefuseUnlessWorkStates(request, identifier, observedAt, "r7_evidence_bundle", requestedLanguage,
+                    out states, out availableLanguages) is { } refused)
+            {
+                return refused;
+            }
 
-        if (ambiguous.Count != 0)
-        {
-            return RefuseAmbiguousVersion(request, observedAt, requestedDate, ambiguous.Order(StringComparer.Ordinal).ToArray(), bound: null);
-        }
+            var scope = requestedLanguage is null
+                ? states
+                : states.Where(state => string.Equals(state.Language, requestedLanguage, StringComparison.Ordinal)).ToArray();
+            var servedLanguages = requestedLanguage is null ? availableLanguages : new[] { requestedLanguage };
+            var ambiguous = new List<string>();
+            foreach (var language in servedLanguages)
+            {
+                var ofLanguage = scope
+                    .Where(state => string.Equals(state.Language, language, StringComparison.Ordinal))
+                    .ToArray();
+                var (candidates, nextDate) = SelectAtDate(ofLanguage, requestedDate);
+                if (candidates.Length == 0)
+                {
+                    continue;
+                }
 
-        if (selected.Count == 0)
-        {
-            return RefuseNoVersionForDate(request, observedAt, scope, requestedDate, bound: null);
+                if (candidates.Length > 1)
+                {
+                    ambiguous.AddRange(candidates.Select(StateUrl));
+                    continue;
+                }
+
+                selected.Add((candidates[0], nextDate));
+            }
+
+            if (ambiguous.Count != 0)
+            {
+                return RefuseAmbiguousVersion(request, observedAt, requestedDate, ambiguous.Order(StringComparer.Ordinal).ToArray(), bound: null);
+            }
+
+            if (selected.Count == 0)
+            {
+                return RefuseNoVersionForDate(request, observedAt, scope, requestedDate, bound: null);
+            }
         }
 
         // ---- Rights at compose time, per selected state, before any text is read. ----
@@ -1120,6 +1176,7 @@ internal sealed partial class V3CorpusMount : IDisposable
                     official_identity = state.PublisherLegalResourceIri,
                     official_link = state.PublisherWorkIri,
                     content_sha256 = member?.BodySha256 ?? state.StateSha256,
+                    state_sha256 = state.StateSha256,
                     stable_coordinate = StableCoordinate(state),
                     permalink = StateUrl(state),
                     language = state.Language,
@@ -5737,7 +5794,7 @@ internal sealed partial class V3CorpusMount : IDisposable
         "(package_sha256) and of the package entry (source_entry_sha256), both null on an EU index that predates them, its official source and an " +
         "article permalink (the wording permalink and the publisher's provision id as a last segment, which verify accepts); an article whose text is empty is " +
         "named under articles_without_text and is not served as a quote; the annexes the corpus classified on those members are listed under " +
-        "annexes_not_served, each served as text not available with the official source to read it, and never quoted";
+        "annexes_not_served, each served as text not available with the official source to read it, and never quoted; " + EuropePinnedPermalinkRule;
 
     internal const string EuropeEvidenceBundleDateRule =
         "the EU index holds one wording of each expression, the original act's, dated by its Formex act date; no consolidated version is held, so " +

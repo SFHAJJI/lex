@@ -244,6 +244,15 @@ public sealed class V3RefusalPayloadSamplesTests
         await DriveAsync(observed, mount, "evidence_bundle", "a language not held", new { identifier = work, date, language = "eng" }, "language_not_available");
         await DriveAsync(observed, mount, "evidence_bundle", "an identifier no work has", new { identifier = unknown, date, language = "fra" }, "identifier_unknown");
         await DriveAsync(observed, mount, "evidence_bundle", "a European identifier on a Luxembourg-only mount", new { identifier = european, date, language = "fra" }, "retrieval_mode_unavailable");
+        // At a hash-pinned permalink (R64), the reading page's own request: never another state in the pinned one's place.
+        await DriveAsync(observed, mount, "evidence_bundle", "a pinned permalink whose digest the coordinate no longer carries",
+            new { identifier = fixture.PermalinkOf(new string('0', 64)), date, language = "fra" }, "pinned_digest_mismatch");
+        await DriveAsync(observed, mount, "evidence_bundle", "a pinned permalink at a coordinate two states of its language share, with a digest neither carries",
+            new { identifier = $"/lu-legilux/{fixture.WorkKey}/{twinDate}--{new string('0', 64)}/fra", date = twinDate }, "ambiguous_identifier");
+        await DriveAsync(observed, mount, "evidence_bundle", "a pinned permalink with another language asked beside it",
+            new { identifier = fixture.Permalink, date, language = "deu" }, "language_not_available");
+        await DriveAsync(observed, mount, "as_of", "a pinned permalink whose digest the coordinate no longer carries",
+            new { identifier = fixture.PermalinkOf(new string('0', 64)), date, language = "fra" }, "pinned_digest_mismatch");
 
         // classification
         await DriveAsync(observed, mount, "classification", "a language not held", new { identifier = work, language = "eng" }, "language_not_available");
@@ -282,6 +291,8 @@ public sealed class V3RefusalPayloadSamplesTests
             Assert.IsNotNull(mount);
             await DriveAsync(observed, mount, "evidence_bundle", "a member whose rights channels did not agree CC BY",
                 new { identifier = $"/lu-legilux/{withheld.WorkKey}", date = withheld.ApplicabilityDate, language = "fra" }, "text_withheld");
+            await DriveAsync(observed, mount, "evidence_bundle", "a pinned permalink to a state whose member's rights channels did not agree CC BY",
+                new { identifier = withheld.Permalink, date = withheld.ApplicabilityDate, language = "fra" }, "text_withheld");
         }
 
         var empty = await MountedFixture.CreateAsync();

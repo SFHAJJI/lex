@@ -72,6 +72,9 @@ public sealed class V3EnvelopeSamplesTests
             await CaptureAsync(fixture, mount, "evidence_bundle", "a work the index does not hold: a refusal with a payload", new { identifier = "/lu-legilux/no-such-work", date = fixture.ApplicabilityDate }),
             await CaptureAsync(fixture, mount, "evidence_bundle", "an EU identifier on a mount without the EU index: a refusal with a payload", new { identifier = "32016R0679", date = fixture.ApplicabilityDate }),
             await CaptureAsync(fixture, null, "evidence_bundle", "no corpus mounted: a refusal", new { identifier = $"/lu-legilux/{fixture.WorkKey}", date = fixture.ApplicabilityDate }),
+            // The reading at a permalink asks by the permalink itself (R64): the state it pins, or why not.
+            await CaptureAsync(fixture, mount, "evidence_bundle", "a state's permalink at its own date: an answer, the state it pins", new { identifier = fixture.Permalink, date = fixture.ApplicabilityDate, language = "fra" }),
+            await CaptureAsync(fixture, mount, "evidence_bundle", "a state's permalink whose digest is not the one held at its date: a refusal with the current link", new { identifier = fixture.PermalinkOf(new string('0', 64)), date = fixture.ApplicabilityDate, language = "fra" }),
             await CaptureAsync(fixture, mount, "article_history", "one article of the work, in the language it is held in: an answer", new { identifier = $"/lu-legilux/{fixture.WorkKey}", anchor = "art_15", language = "fra" }),
             await CaptureAsync(fixture, mount, "article_history", "an article id no held state carries: a refusal with a payload", new { identifier = $"/lu-legilux/{fixture.WorkKey}", anchor = "art_44" }),
             await CaptureAsync(fixture, mount, "article_history", "a work the index does not hold: a refusal with a payload", new { identifier = "/lu-legilux/no-such-work", anchor = "art_15" }),

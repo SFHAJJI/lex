@@ -55,7 +55,7 @@ internal sealed partial class V3CorpusMount
         "package entry (source_entry_sha256), its official source and an article permalink (the wording permalink and the publisher's provision " +
         "id as a last segment, which verify accepts); an article whose text is empty is named under articles_without_text and is not served as a quote; " +
         "the annexes the corpus classified on those members are listed under annexes_not_served, each served as text not available with the " +
-        "official source to read it, and never quoted";
+        "official source to read it, and never quoted; " + EuropePinnedPermalinkRule;
 
     internal static readonly string[][] EuropeTimeBundleNotHeld =
     [
@@ -754,6 +754,20 @@ internal sealed partial class V3CorpusMount
             return refused;
         }
 
+        return AsOfEuropeOf(request, identifier, seed, timeline, answered, requestedDate, requestedLanguage, observedAt);
+    }
+
+    /// <summary>EU <c>as_of</c>'s answer for the selected wordings (<paramref name="answered"/>).</summary>
+    private V3PlatformOperationOutcome AsOfEuropeOf(
+        V3PlatformOperationRequest request,
+        string identifier,
+        string seed,
+        EuropeSeedTimeline timeline,
+        IReadOnlyList<EuropeSelection> answered,
+        string requestedDate,
+        string? requestedLanguage,
+        DateTimeOffset observedAt)
+    {
         using var result = JsonSerializer.SerializeToDocument(new
         {
             requested_identifier = identifier,
@@ -803,6 +817,23 @@ internal sealed partial class V3CorpusMount
             return refused;
         }
 
+        return EvidenceBundleEuropeOf(request, identifier, seed, timeline, answered, requestedDate, requestedLanguage, observedAt);
+    }
+
+    /// <summary>
+    /// The EU time view's bundle of the selected wordings (<paramref name="answered"/>): rights enforced per wording before any
+    /// text is served, then each wording quoted with the acknowledgement and authenticity statement Decision 95 requires.
+    /// </summary>
+    private V3PlatformOperationOutcome EvidenceBundleEuropeOf(
+        V3PlatformOperationRequest request,
+        string identifier,
+        string seed,
+        EuropeSeedTimeline timeline,
+        IReadOnlyList<EuropeSelection> answered,
+        string requestedDate,
+        string? requestedLanguage,
+        DateTimeOffset observedAt)
+    {
         // ---- Rights at compose time, per selected wording, before any text is served. ----
         foreach (var selection in answered)
         {
@@ -821,6 +852,7 @@ internal sealed partial class V3CorpusMount
                     official_identity = candidate.ExpressionId,
                     official_link = articles.Select(static article => article.OfficialSourceUri).FirstOrDefault(static uri => uri is not null) ?? candidate.State.PublisherWorkIri,
                     content_sha256 = blocking.Member?.BodySha256 ?? pin.Sha256,
+                    wording_sha256 = pin.Sha256,
                     stable_coordinate = EuropeStableCoordinate(pin.Permalink),
                     permalink = pin.Permalink,
                     language = candidate.Language,

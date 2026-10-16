@@ -213,6 +213,52 @@ public sealed class V3CorpusEuropeTimeViewTests
     }
 
     [TestMethod]
+    public async Task AWordingsPermalinkAnswersTheWordingItPinsWithTheLaterWordingsDateAndAnotherDigestIsRefusedWithTheCurrentLink()
+    {
+        var (root, directory) = await ConsolidatedMountAsync();
+        try
+        {
+            using var mount = await V3CorpusMount.OpenAsync(directory, CancellationToken.None);
+            Assert.IsNotNull(mount);
+            var (originalDate, originalPermalink) = await OriginalPinAsync(mount, "eng");
+
+            // The original wording's permalink (R64): that wording, never the consolidated one, and the date of the later
+            // wording the page's banner says; as_of answers it alike.
+            var bundle = await EnvelopeAsync(mount, "/api/v3/evidence_bundle", "evidence_bundle", new { identifier = originalPermalink, date = originalDate });
+            Assert.IsNull(bundle.Refusal, bundle.Refusal?.Code);
+            Assert.AreEqual(originalPermalink, bundle.Result!.Value.GetProperty("requested_identifier").GetString());
+            Assert.AreEqual("eng", bundle.Result.Value.GetProperty("requested_language").GetString(), "the permalink's language, asked or not");
+            var wording = bundle.Result.Value.GetProperty("wordings").EnumerateArray().Single();
+            Assert.AreEqual(originalPermalink, wording.GetProperty("permalink").GetString());
+            Assert.AreEqual("original_wording", wording.GetProperty("kind").GetString());
+            Assert.AreEqual(ConsolidationDate, wording.GetProperty("next_date").GetString());
+            var asOf = await EnvelopeAsync(mount, "/api/v3/as_of", "as_of", new { identifier = originalPermalink, date = originalDate, language = "eng" });
+            Assert.IsNull(asOf.Refusal, asOf.Refusal?.Code);
+            Assert.AreEqual(originalPermalink, asOf.Result!.Value.GetProperty("states").EnumerateArray().Single().GetProperty("wording").GetProperty("permalink").GetString());
+
+            // Another digest at that date: pinned_digest_mismatch naming the wording the date answers with, as verify names it.
+            var stale = System.Text.RegularExpressions.Regex.Replace(originalPermalink, "--[0-9a-f]{64}", "--" + new string('0', 64));
+            var verify = await EnvelopeAsync(mount, "/api/v3/verify", "verify", new { identifier = stale });
+            foreach (var operation in new[] { "evidence_bundle", "as_of" })
+            {
+                var refused = await EnvelopeAsync(mount, "/api/v3/" + operation, operation, new { identifier = stale, date = originalDate });
+                Assert.AreEqual("pinned_digest_mismatch", refused.Refusal?.Code, operation);
+                Assert.AreEqual(originalPermalink, refused.Refusal!.HelpfulPayload.GetProperty("current_hash_pinned_url").GetString(), operation);
+                Assert.AreEqual(JsonSerializer.Serialize(verify.Refusal!.HelpfulPayload), JsonSerializer.Serialize(refused.Refusal.HelpfulPayload), operation);
+            }
+
+            // A date with no wording of its own names nothing this index holds.
+            var between = System.Text.RegularExpressions.Regex.Replace(originalPermalink, "/[0-9]{4}-[0-9]{2}-[0-9]{2}--", "/2020-06-01--");
+            var unknown = await EnvelopeAsync(mount, "/api/v3/evidence_bundle", "evidence_bundle", new { identifier = between, date = "2020-06-01" });
+            Assert.AreEqual("identifier_unknown", unknown.Refusal?.Code);
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [TestMethod]
     public async Task AConsolidatedVersionsIdentifierNamesItsActsDossierWhichListsBothWordings()
     {
         var (root, directory) = await ConsolidatedMountAsync();
