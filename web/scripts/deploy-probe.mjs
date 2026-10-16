@@ -4,8 +4,10 @@
 // - the release must read back first, under the signing identity's public key the owner names (`releaseFailures`:
 //   the manifest's signature, every asset by size and hash, the image blob by blob and its signature);
 // - health and the page: `GET /` sends a reader who names no language to `/fr/` (R61), with `Vary: Accept-Language`,
-//   and `GET /fr/` answers 200 with the release image's own page, byte for byte, carrying the security headers the
-//   image run probes (CSP with `frame-ancestors 'none'`, HSTS, `Referrer-Policy: no-referrer`, `nosniff`);
+//   and `GET /fr/` answers 200 with the release image's own home page (`isOwnHomePage`: byte for byte as built, or as
+//   the server renders it from its coverage answer, the built page's head byte for byte and the facts it was rendered
+//   from), carrying the security headers the image run probes (CSP with `frame-ancestors 'none'`, HSTS,
+//   `Referrer-Policy: no-referrer`, `nosniff`);
 // - the 404 page (R60): an address nothing claims answers 404 with the release image's own French 404 page, byte for
 //   byte, carrying the same security headers, for a reader who names no language;
 // - the card: the evaluation card at its stable route is the release's card, byte for byte, as JSON;
@@ -35,9 +37,24 @@ import { invokedDirectly } from "./invoked-directly.mjs";
 import { askOperation, heldLuxembourgWorkFromAnswers, realMountRuns } from "./journey.mjs";
 import { ASSETS, RELEASE_MANIFEST, releaseFailures } from "./release-assets.mjs";
 import { readLargeFile } from "./large-bytes.mjs";
+import { HOME_FACTS_ID } from "./live-home.mjs";
 import { luxembourgDate, luxembourgOffset, luxembourgSummerTimeEnds, luxembourgSummerTimeStarts } from "./temporal.mjs";
 
 const LIVE_PREFIX = "app/v3-web/";
+
+/**
+ * Whether `served` is the release image's own home page `built`: that page byte for byte (served as built), or that page
+ * as the server renders it from its coverage answer (`live-home.mjs`, R67): the built page's head, byte for byte (its title,
+ * its policy, its links: nothing in it depends on the answer), its script, and the facts it was rendered from.
+ */
+export function isOwnHomePage(served, built) {
+  if (served.equals(built)) return true;
+  const page = served.toString("utf8");
+  const own = built.toString("utf8");
+  const head = (text) => (text.includes("</head>") ? text.slice(0, text.indexOf("</head>")) : null);
+  const script = /<script src="[^"]+" defer=""><\/script>/.exec(own)?.[0] ?? null;
+  return head(own) !== null && head(page) === head(own) && script !== null && page.includes(script) && page.includes(`<script type="application/json" id="${HOME_FACTS_ID}">`);
+}
 
 /** An address nothing claims, asked of a revision for its 404 page (R60): a page request, under no law's address. */
 export const NOT_FOUND_PROBE = "/fr/no-such-page";
@@ -76,8 +93,8 @@ export async function revisionFailures(origin, { web, card, corpusSha256, notes 
   const body = Buffer.from(await page.arrayBuffer());
   if (page.status !== 200) {
     failures.push(`GET /fr/ answered ${page.status}, not 200`);
-  } else if (!body.equals(served.get("/fr/"))) {
-    failures.push("GET /fr/ answered a page that is not the release image's own, byte for byte");
+  } else if (!isOwnHomePage(body, served.get("/fr/"))) {
+    failures.push("GET /fr/ answered a page that is not the release image's own home page, as built or rendered from its coverage answer");
   }
   const header = (name) => page.headers.get(name);
   const policy = `${cspValue()}; frame-ancestors 'none'`;

@@ -128,15 +128,17 @@ export function SiteHeader({ state, locale }) {
 }
 
 /**
- * The footer every live page carries: what the site is not (advice), which texts are authentic, and where the
- * texts come from, then what it holds. The development build's banner said "not a release and not legal
- * advice"; the first half was the build's and goes with it, the second is the product's and stays here.
+ * The footer every live page carries: what Lex is not (the specification of record's R50, word for word, which replaced
+ * "Documentation, not legal advice."), which texts are authentic, and where the texts come from, then what it holds. The
+ * development build's banner said "not a release and not legal advice"; the first half was the build's and went with it,
+ * the second is the product's and is said here.
  */
 export function SiteFooter() {
   const site = liveChrome().site;
   return (
     <footer className="site-footer">
-      <p>{site.advice}</p>
+      <p data-not-advice="">{site.notAdvice}</p>
+      <p>{site.authenticity}</p>
       <p>{site.sources}</p>
       <p>
         <a href={livePath('coverage.html')}>{site.coverage}</a>

@@ -59,6 +59,11 @@ const EN = Object.freeze({
     euWording: "Every hit is in the original wording of {celex} this server holds in {language}, dated {date} and pinned by its digest: {permalink}",
     euHit: "{heading} of {celex}, wording of {date}",
     notHeldHeading: "What this search does not cover",
+    // The one box's placeholder, word for word the specification of record's (R52).
+    placeholder: "Search by title, number, ELI or CELEX, or words from the text",
+    // What a Luxembourg search was asked at (R13: the date is printed): the date the answer echoes, or none.
+    dated: "Searched the version of each act that applies on {date}; an act with no version applying on that date is not searched.",
+    undated: "No date was given: every version held was searched, and each result names its version's date.",
   }),
   dossier: Object.freeze({
     title: "Dossier",
@@ -309,9 +314,11 @@ const EN = Object.freeze({
     title: "{title} - Lex",
     localeNav: "Interface language",
   }),
-  // The site around every live screen (`Document.jsx`): its name, its menu, and the two statements every page carries
-  // below its content: documentation and never advice, and which texts are authentic (product spec section 4; the
-  // export watermark's "Consolidations have no legal effect"). They replace the development build's banner.
+  // The site around every live screen (`Document.jsx`): its name, its menu, and the statements every page carries below
+  // its content: what Lex is not (the specification of record's R50, word for word, which replaced the footer's
+  // "Documentation, not legal advice."; the home page, the search results and Reading say it too), which texts are
+  // authentic (product spec section 4; the export watermark's "Consolidations have no legal effect"; R20 rewrites it), and
+  // where the texts come from.
   site: Object.freeze({
     brand: "Lex",
     tagline: "The Luxembourg and EU law this site holds, at a date you choose",
@@ -325,15 +332,34 @@ const EN = Object.freeze({
     radar: "Changes",
     export: "Export",
     coverage: "What this site holds",
-    advice: "Documentation, not legal advice. Consolidated texts have no legal effect: the authentic texts are those published in the Journal officiel du Grand-Duché de Luxembourg (Mémorial A) and in the Official Journal of the European Union.",
+    notAdvice: "Lex shows the published text of the law. It does not tell you whether or how it applies to your situation and is not legal advice.",
+    authenticity: "Consolidated texts have no legal effect: the authentic texts are those published in the Journal officiel du Grand-Duché de Luxembourg (Mémorial A) and in the Official Journal of the European Union.",
     sources: "The texts come from Legilux and from the Publications Office of the European Union, as this site holds them; every quote names its official source.",
   }),
-  // The home page: the search screen (UX spec section 2, Screen 1: Home and search) under the site's own introduction.
+  // The home page (the specification of record's R47 and R52; UX spec section 2, Screen 1: Home and search): the one box
+  // first, what Lex is and is not, a coverage line whose every count is the coverage answer's (R11), and links to the
+  // site's served pages. A count is said with its noun by the language's plural rule.
   home: Object.freeze({
     title: "Luxembourg and EU law at a date you choose",
     eyebrow: "Search the law",
     heading: "Luxembourg and EU law at a date you choose",
     intro: "Search the texts this site holds, open a law as it stood on the date you choose, see how each article changed, compare two dates, and export with citations anyone can check against the official source. Where the site does not hold a text or a date, it says so.",
+    aboutHeading: "What Lex is and is not",
+    coverage: "This site holds {acts} of Luxembourg law, in {versions} with {articles}, as of the index built on {date}.",
+    coverageUndated: "This site holds {acts} of Luxembourg law, in {versions} with {articles}; the index it holds records no build date.",
+    acts: Object.freeze({
+      one: "{count} act",
+      other: "{count} acts",
+    }),
+    versions: Object.freeze({
+      one: "{count} version",
+      other: "{count} versions",
+    }),
+    articles: Object.freeze({
+      one: "{count} article",
+      other: "{count} articles",
+    }),
+    links: "Elsewhere on this site",
   }),
   // A service failure on a screen, panel by panel (the specification of record's R60; `live-failure.mjs`): its line, word
   // for word the specification's, above what the screen says of the failure; the retry, which asks the same request again;
@@ -408,6 +434,8 @@ const EN = Object.freeze({
     phrase: "Phrase",
     date: "Date",
     datePlaceholder: "yyyy-mm-dd",
+    // Beside a search's date field: today, the calendar date in Luxembourg (R13), never the build's.
+    today: "Today in Luxembourg: {date}.",
     articleIdPlaceholder: "art_15",
     from: "From",
     to: "To",

@@ -37,7 +37,7 @@ import { entriesOf, fillText, liveChrome } from "../scripts/live-chrome.mjs";
 // Each page: its copy entry, its script, its renderer, its first state, and the entry that holds its form's sentences
 // (the home page is the search screen under the site's own introduction).
 const PAGES = {
-  "index.html": ["home", "client-live-search.js", renderLiveHomePage, "idle", "search"],
+  "index.html": ["home", "client-live-home.js", renderLiveHomePage, "idle", "search"],
   "coverage.html": ["coverage", "client-live.js", renderLiveCoveragePage, "loading"],
   "search.html": ["search", "client-live-search.js", renderLiveSearchPage, "idle"],
   "dossier.html": ["dossier", "client-live-dossier.js", renderLiveDossierPage, "idle"],
@@ -162,7 +162,7 @@ test("the product build writes every page in French under /fr/, in the French ta
 
       // The French table's chrome: the page's own entries, its first state, the shell's.
       assert.ok(html.includes(`<title>${escaped(fillText(french.shell.title, { title: french[key].title }))}</title>`), `fr/${page} has the French title`);
-      for (const text of [french[key].eyebrow, french[key].heading, french[key].intro, french.shell.localeNav, french.site.tagline, french.site.menu, french.site.advice, french.site.sources]) {
+      for (const text of [french[key].eyebrow, french[key].heading, french[key].intro, french.shell.localeNav, french.site.tagline, french.site.menu, french.site.notAdvice, french.site.authenticity, french.site.sources]) {
         assert.ok(html.includes(escaped(text)), `fr/${page} says ${JSON.stringify(text.slice(0, 50))}`);
       }
       const first = state === "loading" ? french.coverage.loading : french[formKey].idle;

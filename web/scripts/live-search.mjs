@@ -8,17 +8,25 @@
 // refusal in `refusal-card.mjs`; this file builds the request, decides which of them a state goes
 // to, and holds the few sentences a page needs for the states that carry no answer.
 //
-// The request carries the query, the language and the work identifier, if any, and nothing else
-// about the reader: the client sends no cookie and no referrer, and this file stores nothing. The
-// query is sent as typed, never trimmed or folded, because the platform matches it byte for byte; so
-// is the identifier, as the dossier screen sends it. An EU work is searched only within it: the
-// platform serves no search across EU works, so an EU answer comes from naming the work.
+// The request carries the query, the language, the work identifier, if any, and the date, if any, and
+// nothing else about the reader: the client sends no cookie and no referrer, and this file stores
+// nothing. The query is sent as typed, never trimmed or folded, because the platform matches it byte
+// for byte; so is the identifier, as the dossier screen sends it. An EU work is searched only within
+// it: the platform serves no search across EU works, so an EU answer comes from naming the work.
+//
+// The date is the platform's own `date` parameter, the one date mechanism a search has: with it, each
+// Luxembourg work contributes the version that applies on that date (or, named, is answered as `as_of`
+// answers it), and the answer echoes it as `requested_date`, which the page prints. The home page's
+// date field starts at today, the calendar date in Luxembourg (R13; `todayInLuxembourg`, by the coded
+// rule of `temporal.mjs`); the search page's starts empty, because an EU act is searched in the one
+// wording held and the platform refuses it a date (`retrieval_mode_unavailable`), which the page says.
 
 import { askV3 } from "./v3-client.mjs";
 import { readSearchAnswer } from "./search-answer.mjs";
 import { validateRefusal } from "./refusal-card.mjs";
 import { noCorpusMountedSentence, tableRefusalSentence, unshownRefusal } from "./live-refusals.mjs";
 import { englishStatement, fillText, liveChrome, refusalTemplate } from "./live-chrome.mjs";
+import { isCalendarDate, luxembourgDate } from "./temporal.mjs";
 
 /** The ceiling on a query's characters, the platform's own (`SearchMaxQueryCharacters`). */
 export const SEARCH_QUERY_MAX = 512;
@@ -58,6 +66,11 @@ export const LIVE_SEARCH_REFUSAL_SENTENCES = Object.freeze({
   language_not_available: "This index holds no searchable text in the language asked for.",
   identifier_unknown: "This index holds no work under that identifier.",
   ambiguous_identifier: "That identifier names more than one held work or expression, so none is searched.",
+  // A named Luxembourg work and a date are `as_of`'s question, and these are its refusals, said as the reading says them.
+  no_version_for_date: "No state of this work that this index holds applies on that date.",
+  ambiguous_version: "Several states of this work apply on that date, and none is chosen.",
+  // An EU work and a date: the search reads the one wording held, and the platform refuses it a date.
+  retrieval_mode_unavailable: "An EU act is searched in the wording this server holds, not at a date: leave the date empty to search it.",
 });
 
 export const LIVE_SEARCH_IDLE = liveChrome().search.idle;
@@ -91,12 +104,26 @@ export function invalidAnswerSentence(reason) {
 }
 
 /**
+ * Today, the calendar date in Luxembourg at `now` (milliseconds, the browser's clock where no server said it), by the
+ * coded rule (`luxembourgDate`, the specification of record's R13), never the build's time; null for a clock outside the
+ * years the rule holds, which then names no date rather than a wrong one.
+ */
+export function todayInLuxembourg(now = Date.now()) {
+  try {
+    return luxembourgDate(new Date(now).toISOString());
+  } catch {
+    return null;
+  }
+}
+
+/**
  * The request parameters for one search, checked before anything is sent: a query that is not
  * blank and within the platform's two ceilings (characters and distinct terms), a language the form
- * offers, a work identifier only when the reader named one (a blank one is no identifier), and a
- * cursor only when a later page is asked for. Nothing else is sent.
+ * offers, a work identifier only when the reader named one (a blank one is no identifier), a date
+ * only when the field holds one, which must then be a calendar date written yyyy-mm-dd (a blank one
+ * is no date), and a cursor only when a later page is asked for. Nothing else is sent.
  */
-export function searchParameters({ query, language, identifier = "", after = null }) {
+export function searchParameters({ query, language, identifier = "", date = "", after = null }) {
   if (typeof query !== "string" || query.trim().length === 0) {
     throw new Error("a search needs a phrase to look for");
   }
@@ -113,6 +140,13 @@ export function searchParameters({ query, language, identifier = "", after = nul
   if (typeof identifier !== "string") {
     throw new Error("a work identifier is text");
   }
+  if (typeof date !== "string") {
+    throw new Error("a date is text");
+  }
+  const dated = date.trim().length > 0;
+  if (dated && !isCalendarDate(date)) {
+    throw new Error("a search's date is a calendar date, written yyyy-mm-dd");
+  }
   if (after !== null && (typeof after !== "string" || after.length === 0)) {
     throw new Error("a later page is asked for with the cursor the previous page handed over");
   }
@@ -120,6 +154,7 @@ export function searchParameters({ query, language, identifier = "", after = nul
     query,
     language,
     ...(identifier.trim().length === 0 ? {} : { identifier }),
+    ...(dated ? { date } : {}),
     ...(after === null ? {} : { after }),
   };
 }

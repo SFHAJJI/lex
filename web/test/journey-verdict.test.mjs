@@ -22,7 +22,12 @@ import {
   JOURNEY_STEPS,
   REFLOW_WIDTH,
   answerCitations,
+  bodyOn,
+  frontDoorOf,
   journeyStepsFor,
+  NOT_ADVICE_SAID,
+  TODAY_IN_LUXEMBOURG,
+  todayInLuxembourgAt,
   pinnedStep,
   heldLuxembourgWorkFromAnswers,
   MCP_PROTOCOL_VERSION,
@@ -204,6 +209,67 @@ test("a page that scrolls sideways at 320 CSS pixels fails, naming what stands o
   // Fails closed (review of #957): a measurement not taken, or taken in a wider window, is no evidence.
   assert.ok(journeyVerdict({ ...fits, reflow: { failed: true } }, SEARCH).includes("the page was not measured at 320 CSS pixels"));
   assert.ok(journeyVerdict({ ...fits, reflow: { width: 1265, scrollWidth: 1265, offenders: [] } }, SEARCH).includes("the page was measured in a 1265 px window, not one of at most 320"));
+});
+
+/** A home page's run that did what the front door must: its search dated today, its own bytes and its first screen. */
+function goodHome(today = todayInLuxembourgAt(Date.now())) {
+  const run = goodSearch();
+  run.requests[0].url = `${ORIGIN}/en/`;
+  run.requests[1].url = `${ORIGIN}/en/client-live-home.js`;
+  run.requests[2].postData = JSON.stringify(bodyOn(JOURNEY_STEPS.home.body, today));
+  run.location = `${ORIGIN}/en/`;
+  run.todays = [today];
+  run.frontDoor = { coverageLine: "counted", dateField: today, facts: true };
+  run.firstScreen = { height: 640, inputFirst: true, input: 333, statement: 591 };
+  return run;
+}
+
+const HOME = { origin: ORIGIN, step: JOURNEY_STEPS.home, state: "success", texts: ["4 with the exact phrase"] };
+
+test("the home page's run passes when it arrived rendered, dated today in Luxembourg, with the box and the sentence under it in view", () => {
+  assert.equal(JOURNEY_STEPS.home.frontDoor, true);
+  assert.deepEqual(JOURNEY_STEPS.home.body.parameters, { query: SEARCH_PHRASE, language: "fra", date: TODAY_IN_LUXEMBOURG });
+  assert.deepEqual(journeyVerdict(goodHome(), HOME), []);
+  // A run across midnight in Luxembourg: the page asked on either of its two days.
+  const across = goodHome("2026-10-25");
+  across.todays = ["2026-10-24", "2026-10-25"];
+  assert.deepEqual(journeyVerdict(across, HOME), []);
+  assert.equal(todayInLuxembourgAt(Date.parse("2026-10-24T22:30:00Z")), "2026-10-25", "the coded rule: 23:30 in summer time is 00:30 on the 25th");
+  assert.deepEqual(frontDoorOf('<p class="coverage-line" data-coverage-line="counted">x</p><input type="text" data-search-date="" aria-describedby="search-today" value="2026-10-16"/>'
+    + '<script type="application/json" id="lex-home-facts">{}</script>'), { coverageLine: "counted", dateField: "2026-10-16", facts: true });
+  assert.deepEqual(frontDoorOf("<p>nothing</p>"), { coverageLine: null, dateField: null, facts: false });
+  assert.equal(NOT_ADVICE_SAID, "Lex shows the published text of the law. It does not tell you whether or how it applies to your situation and is not legal advice.");
+});
+
+test("each way the home page's run can fail is a failure, named", () => {
+  const cases = [
+    ["another day sent", (o) => { o.requests[2].postData = JSON.stringify(bodyOn(JOURNEY_STEPS.home.body, "2001-01-01")); }, /body was .*2001-01-01.*, not /],
+    ["no date sent", (o) => { o.requests[2].postData = JSON.stringify(JOURNEY_STEPS.search.body); }, /body was .*, not /],
+    ["the placeholder sent", (o) => { o.requests[2].postData = JSON.stringify(JOURNEY_STEPS.home.body); }, /body was .*today in Luxembourg/],
+    ["its own bytes not read", (o) => { delete o.frontDoor; }, /home page's own bytes were not read/],
+    ["not rendered by the server", (o) => { o.frontDoor.facts = false; }, /arrived without the facts the server renders it from/],
+    ["no coverage line", (o) => { o.frontDoor.coverageLine = null; }, /coverage line is absent, not counted/],
+    ["the no-mount line on a mount", (o) => { o.frontDoor.coverageLine = "unmounted"; }, /coverage line is unmounted, not counted/],
+    ["another day in the field", (o) => { o.frontDoor.dateField = "2001-01-01"; }, /date field holds "2001-01-01", not today in Luxembourg/],
+    ["an empty field", (o) => { o.frontDoor.dateField = ""; }, /date field holds "", not today/],
+    ["not measured on a phone", (o) => { delete o.firstScreen; }, /not measured at a small phone's size/],
+    ["the box not first", (o) => { o.firstScreen.inputFirst = false; }, /search box is not the first control/],
+    ["the box below the fold", (o) => { o.firstScreen.input = 700; }, /search box ends at 700 px, below the first 640 px/],
+    ["the sentence below the fold", (o) => { o.firstScreen.statement = 659; }, /sentence under the box ends at 659 px, below the first 640 px/],
+    ["no sentence", (o) => { o.firstScreen.statement = null; }, /sentence under the box ends at null px/],
+  ];
+  for (const [what, mutate, reason] of cases) {
+    const observed = goodHome();
+    mutate(observed);
+    const failures = journeyVerdict(observed, HOME);
+    assert.ok(failures.some((failure) => reason.test(failure)), `${what}: ${failures.join(" | ")}`);
+  }
+  // With no mount, the home page's line is the no-mount sentence, and a counted one fails.
+  const unmounted = { ...HOME, state: "refusal", refusalCode: "no_corpus_mounted" };
+  const run = goodHome();
+  assert.ok(journeyVerdict(run, unmounted).some((failure) => /coverage line is counted, not unmounted/.test(failure)));
+  run.frontDoor.coverageLine = "unmounted";
+  assert.ok(!journeyVerdict(run, unmounted).some((failure) => /coverage line/.test(failure)));
 });
 
 test("a coverage run is still judged as one, with no body required", () => {
@@ -952,8 +1018,10 @@ test("journey J7 asks every request the journeys' pages make, each once", () => 
   const keys = bodies.map((body) => JSON.stringify(body));
   assert.equal(new Set(keys).size, keys.length, "each request once");
   for (const step of [...Object.values(JOURNEY_STEPS), ...specificationJourneyExpectations().map(([, expected]) => expected.step)]) {
-    assert.ok(keys.includes(JSON.stringify(step.body ?? { operation_id: "coverage", parameters: {} })), `${step.path} ${step.operation}`);
+    // A home page's search names today, which the run fills in (`bodyOn`).
+    assert.ok(keys.includes(JSON.stringify(bodyOn(step.body ?? { operation_id: "coverage", parameters: {} }, todayInLuxembourgAt(Date.now())))), `${step.path} ${step.operation}`);
   }
+  assert.ok(!keys.some((key) => key.includes(TODAY_IN_LUXEMBOURG)), "no request asks the placeholder itself");
 });
 
 test("journey J6: ask answers the contained assistant's card, never a conclusion, and hands the reader to the primary text", () => {

@@ -168,9 +168,13 @@ export function pageForSitePath(pathname) {
  * What the server renders a law's address under an interface language from (R67): the page (`reading`, `dossier`), the
  * operation and the parameters the page itself would ask, exactly as its form sends them (a reading asks by the work (a
  * Luxembourg coordinate or an EU CELEX), the date and the text's language the permalink names; a dossier by the work), so
- * the page the server renders and the page a reader asks show one answer. Null for any other path.
+ * the page the server renders and the page a reader asks show one answer. An interface language's home page (`/en/`,
+ * `/en/index.html`) is rendered from `coverage`, asked with no parameters, as the page as built asks it once loaded
+ * (`live-home.mjs`). Null for any other path.
  */
 export function sitePageFor(pathname) {
+  const home = INTERFACE_LANGUAGES.find((language) => pathname === `/${language}/` || pathname === `/${language}/index.html`);
+  if (home !== undefined) return Object.freeze({ language: home, kind: 'home', operation: 'coverage', parameters: Object.freeze({}) });
   const named = parseSitePath(pathname);
   if (named === null || named.locale === null) return null;
   if (named.kind === 'work') {

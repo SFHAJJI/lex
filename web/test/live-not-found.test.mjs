@@ -74,7 +74,7 @@ test("the 404 page and the maintenance page are built in each language, carry th
         assert.match(html, new RegExp(`^<!doctype html>\\n<html lang="${language}" data-product-line="lex-v3" data-preview-state="live-${name}"`), `${label}: labelled ${language}`);
         assert.ok(html.includes(`<meta http-equiv="Content-Security-Policy" content="${escaped(cspValue())}"/>`), `${label}: the reviewed CSP`);
         assert.ok(html.includes(`<title>${escaped(entry.title)} - Lex</title>`), `${label}: its title`);
-        for (const text of [entry.eyebrow, entry.heading, entry.intro, copy.site.brand, copy.site.menu, copy.site.advice, copy.site.sources]) {
+        for (const text of [entry.eyebrow, entry.heading, entry.intro, copy.site.brand, copy.site.menu, copy.site.notAdvice, copy.site.authenticity, copy.site.sources]) {
           assert.ok(html.includes(escaped(text)), `${label} says ${JSON.stringify(text.slice(0, 50))}`);
         }
         assert.ok(html.includes('data-live="lex-v3-live-mount"') && html.includes('<footer class="site-footer">'), `${label}: the site's header and footer`);
@@ -86,10 +86,11 @@ test("the 404 page and the maintenance page are built in each language, carry th
       // The 404 page: plainly a missing page, saying it says nothing about the law, with the home page's search.
       assert.match(copy.notFound.intro, language === "en" ? /says nothing about the law/ : /ne dit rien du droit/);
       assert.ok(notFound.includes(`<a href="/${language}/">${escaped(copy.notFound.home)}</a>`), `not-found/${language}: the home page`);
-      assert.ok(notFound.includes('<div id="live-search-root">'), `not-found/${language}: the search screen`);
+      assert.ok(notFound.includes('<div id="live-search-root" data-variant="home">'), `not-found/${language}: the search screen, in the home page's form (R47)`);
+      assert.ok(!notFound.includes(escaped(copy.form.workIdentifierOptional)), `not-found/${language}: the one box, with no work identifier`);
       assert.ok(notFound.includes(`<form role="search">`) && notFound.replaceAll("<!-- -->", "").includes(`<button type="submit">${escaped(copy.form.submit.search)}</button>`), `not-found/${language}: the search form`);
       assert.ok(notFound.includes(`<p role="status">${escaped(copy.search.idle)}</p>`), `not-found/${language}: the search's idle state`);
-      assert.ok(notFound.includes(`<script src="/${language}/client-live-search.js" defer="">`), `not-found/${language}: hydrated by the home page's own script, named from the root`);
+      assert.ok(notFound.includes(`<script src="/${language}/client-live-search.js" defer="">`), `not-found/${language}: hydrated by the search script in the form its root names, named from the root`);
       assert.ok(!/ name="/.test(notFound.replace(/<meta [^>]*>/g, "")), `not-found/${language}: no field a browser would put in an address`);
 
       // The maintenance page: not an answer about the law, the official sites, no script and no form.

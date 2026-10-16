@@ -66,6 +66,13 @@
 // state (for an EU citation, that very wording, answered by the EU index), and the article it names
 // (an EU provision as `verify` names it, unescaped).
 //
+// The home page (the specification of record's R47, R11, R13 and R50) is held to more (`frontDoor`): it arrives rendered
+// by the server from its coverage answer, carrying the coverage line (counted, or with no mount the no-mount sentence)
+// and a date field that holds today, the calendar date in Luxembourg, so it asks nothing as it loads; its search sends
+// that date (the step's body names it as `TODAY_IN_LUXEMBOURG`, filled with today when the run asks, either side of a
+// midnight in Luxembourg during the run); and at 320 by 640 CSS pixels, the box is the first control of the page's
+// content and both it and the sentence under it, which says what Lex is not, are in view without scrolling.
+//
 // The specification of record's R60 has runs of its own on the fixture mount (`failurePageExpectations`): an address
 // the site has no page for must arrive as the 404 page, with status 404, and its search must answer as the home page's
 // does, or with no mount show the failure panel; and the search with no mount must show the failure panel, whose retry,
@@ -90,6 +97,7 @@ import { EUROPE_TEXT_ACKNOWLEDGEMENT } from "./reading-answer.mjs";
 import { TMP_MARGIN_MEBIBYTES, tmpMebibytesFor } from "./image-run.mjs";
 import { INTERFACE_LANGUAGES, articlePermalink, escapeSegment, parseSitePath, sameDocumentIn } from "./permalinks.mjs";
 import { CANONICAL_HOST } from "./routes.mjs";
+import { luxembourgDate } from "./temporal.mjs";
 
 /** The origin the site's head links name (`Document.jsx`, `head-links.mjs`), whatever server a journey runs against. */
 const SITE_ORIGIN = `https://${CANONICAL_HOST}`;
@@ -98,6 +106,28 @@ export const ANSWER_DEADLINE_MS = 30_000;
 
 /** The phrase the search step types: on the fixture mount, 4 strict hits and 1 relaxed. */
 export const SEARCH_PHRASE = "assemblée générale";
+
+/**
+ * The date a home page's search sends, in a step's body: today, the calendar date in Luxembourg when the page asked
+ * (R13), which the run fills in with its own today (`bodyOn`).
+ */
+export const TODAY_IN_LUXEMBOURG = "{today in Luxembourg}";
+
+/** Today in Luxembourg at `now` (milliseconds), by the coded rule the pages and the API use (plan 0.8). */
+export function todayInLuxembourgAt(now) {
+  return luxembourgDate(new Date(now).toISOString());
+}
+
+/** A step's request body with today written where it names `TODAY_IN_LUXEMBOURG`. */
+export function bodyOn(body, today) {
+  if (body === null || body.parameters === undefined) return body;
+  const named = Object.values(body.parameters).includes(TODAY_IN_LUXEMBOURG);
+  if (!named) return body;
+  return { ...body, parameters: Object.fromEntries(Object.entries(body.parameters).map(([key, value]) => [key, value === TODAY_IN_LUXEMBOURG ? today : value])) };
+}
+
+/** What a page says of itself beside the law it shows, as the English pages say it (R50). */
+export const NOT_ADVICE_SAID = "Lex shows the published text of the law. It does not tell you whether or how it applies to your situation and is not legal advice.";
 
 /** The identifier the dossier step types: the fixture mount's one work, asked in any held language. */
 export const DOSSIER_IDENTIFIER = "/lu-legilux/loi-1991-08-10-n3";
@@ -158,13 +188,14 @@ export function pinnedCitation(citation) {
 export function journeyStepsFor({ identifier, date, anchor, language = READING_LANGUAGE }) {
   return Object.freeze({
   coverage: Object.freeze({ path: "/en/coverage.html", operation: "coverage", body: null }),
-  // The home page is the search screen at the language's root (UX spec section 2; R61): the same step, from the front door.
+  // The home page at the language's root (R47, R61): the search, from the front door, at today's date in Luxembourg (R13).
   home: Object.freeze({
     path: "/en/",
     cites: true,
+    frontDoor: true,
     operation: "search",
     typed: SEARCH_PHRASE,
-    body: Object.freeze({ operation_id: "search", parameters: Object.freeze({ query: SEARCH_PHRASE, language: "fra" }) }),
+    body: Object.freeze({ operation_id: "search", parameters: Object.freeze({ query: SEARCH_PHRASE, language: "fra", date: TODAY_IN_LUXEMBOURG }) }),
   }),
   search: Object.freeze({
     path: "/en/search.html",
@@ -575,6 +606,9 @@ export function journeyVerdict(observed, expected) {
     const without = observed.withoutScripts?.answerState ?? null;
     if (without !== expected.state) failures.push(`without scripts the page shows ${without === null ? "no answer" : `a ${without}`}, not a ${expected.state}`);
   }
+  // The home page (R47, R11, R13): rendered by the server from its coverage answer, with the coverage line and today in
+  // its date field, in its own bytes; and at a small phone's size the box first, and it and the sentence under it in view.
+  if (step.frontDoor === true) failures.push(...frontDoorFailures(observed, expected));
   // A page request nothing claims is the site's 404 page, with status 404, in both servers (R60).
   if (step.notFound === true && observed.pageStatus !== 404) {
     failures.push(`the page at ${step.path} arrived with status ${observed.pageStatus ?? "not observed"}, not 404`);
@@ -601,8 +635,11 @@ export function journeyVerdict(observed, expected) {
       } catch {
         // Recorded as not the body below.
       }
-      if (JSON.stringify(body) !== JSON.stringify(step.body)) {
-        failures.push(`the API request's body was ${request.postData ?? "not observed"}, not ${JSON.stringify(step.body)}`);
+      // A home page's body names today, which is the run's today at its start or at its end (a run across midnight in
+      // Luxembourg meets either).
+      const wanted = [...new Set(todaysOf(observed).map((today) => JSON.stringify(bodyOn(step.body, today))))];
+      if (!wanted.includes(JSON.stringify(body))) {
+        failures.push(`the API request's body was ${request.postData ?? "not observed"}, not ${wanted.join(" or ")}`);
       }
     }
     if (request.method !== "POST") failures.push(`an API request used ${request.method}`);
@@ -638,6 +675,47 @@ export function journeyVerdict(observed, expected) {
   }
   if (observed.csp !== cspValue()) failures.push("the page's CSP is not the reviewed one");
   if (observed.hydrated !== "clean") failures.push(`hydration was ${observed.hydrated ?? "never reported"}, not clean`);
+  return failures;
+}
+
+/** The days a run was in, in Luxembourg: at its start and at its end (once when they are one), or now for a record with none. */
+function todaysOf(observed) {
+  return Array.isArray(observed.todays) && observed.todays.length > 0 ? observed.todays : [todayInLuxembourgAt(Date.now())];
+}
+
+/** What a home page's own bytes say of its front door: its coverage line's state, its date field's value, its facts block. */
+export function frontDoorOf(bytes) {
+  const field = /<input[^>]*data-search-date=""[^>]*>/.exec(bytes)?.[0] ?? null;
+  return {
+    coverageLine: /data-coverage-line="([a-z]+)"/.exec(bytes)?.[1] ?? null,
+    dateField: field === null ? null : (/\svalue="([^"]*)"/.exec(field)?.[1] ?? ""),
+    facts: bytes.includes('id="lex-home-facts"'),
+  };
+}
+
+/**
+ * The home page's own checks, as failures: rendered by the server (its facts block in the bytes it was sent), its
+ * coverage line counted (or, with no mount, the no-mount sentence), its date field holding the run's today in Luxembourg;
+ * and at 320 by 640 CSS pixels the box the first control of the content, and it and the sentence under it in view.
+ */
+export function frontDoorFailures(observed, expected) {
+  const failures = [];
+  const door = observed.frontDoor;
+  if (door === undefined) return ["the home page's own bytes were not read"];
+  if (door.facts !== true) failures.push("the home page arrived without the facts the server renders it from");
+  const unmounted = expected.state === "refusal" && expected.refusalCode === "no_corpus_mounted";
+  const line = unmounted ? "unmounted" : "counted";
+  if (door.coverageLine !== line) failures.push(`the home page's coverage line is ${door.coverageLine ?? "absent"}, not ${line}`);
+  if (!todaysOf(observed).includes(door.dateField)) {
+    failures.push(`the home page's date field holds ${JSON.stringify(door.dateField)}, not today in Luxembourg (${todaysOf(observed).join(" or ")})`);
+  }
+  const screen = observed.firstScreen;
+  if (screen === undefined || screen === null || typeof screen.height !== "number") failures.push("the home page was not measured at a small phone's size");
+  else {
+    if (screen.inputFirst !== true) failures.push("the search box is not the first control of the home page's content");
+    if (!(typeof screen.input === "number" && screen.input <= screen.height)) failures.push(`the search box ends at ${screen.input} px, below the first ${screen.height} px`);
+    if (!(typeof screen.statement === "number" && screen.statement <= screen.height)) failures.push(`the sentence under the box ends at ${screen.statement} px, below the first ${screen.height} px`);
+  }
   return failures;
 }
 
@@ -989,6 +1067,21 @@ const REFLOW = `(() => {
   return { width, scrollWidth, offenders: [...new Set(offenders)].slice(0, 8) };
 })()`;
 
+/**
+ * The home page's first screen (R47: on phones the input stays first, and the one-line statement stays visible), at the
+ * top of the page: whether the search box is the first control of the page's content, and where it and the sentence under
+ * it end, against the window's height.
+ */
+const FIRST_SCREEN = `(() => {
+  window.scrollTo(0, 0);
+  const main = document.querySelector('main');
+  const first = main?.querySelector('input, select, textarea, button') ?? null;
+  const box = main?.querySelector('form[role=search] input[type=search]') ?? null;
+  const statement = main?.querySelector('[data-not-advice]') ?? null;
+  const bottom = (el) => (el === null ? null : Math.round(el.getBoundingClientRect().bottom));
+  return { height: window.innerHeight, inputFirst: first !== null && first === box, input: bottom(box), statement: bottom(statement) };
+})()`;
+
 /** The politeness of the live region the answer is written into, or null when it is in none. */
 const ANSWER_LIVE_REGION = "document.querySelector('[data-answer-state]')?.closest('[aria-live]')?.getAttribute('aria-live') ?? null";
 
@@ -1039,6 +1132,7 @@ async function observe(browser, pageOrigin, step, { keyboard = false } = {}) {
       }
     });
     for (const domain of ["Network", "Runtime", "Log", "Page"]) await session.send(`${domain}.enable`, {}, sessionId);
+    const todayAtStart = todayInLuxembourgAt(Date.now());
     await session.send("Page.navigate", { url: `${pageOrigin}${step.path}` }, sessionId);
     const evaluate = async (expression) =>
       (await session.send("Runtime.evaluate", { expression, returnByValue: true }, sessionId)).result.value;
@@ -1187,6 +1281,9 @@ async function observe(browser, pageOrigin, step, { keyboard = false } = {}) {
     await new Promise((resolve) => setTimeout(resolve, 300));
     // A measurement that could not be taken fails the run (`journeyVerdict`), never passes it.
     observed.reflow = (await evaluate(REFLOW)) ?? { failed: true };
+    // The home page at a small phone's size (R47): the window is now 320 by 640.
+    if (step.frontDoor === true) observed.firstScreen = await evaluate(FIRST_SCREEN);
+    observed.todays = [...new Set([todayAtStart, todayInLuxembourgAt(Date.now())])];
     return observed;
   } finally {
     chrome.kill();
@@ -1261,7 +1358,7 @@ export async function run(apiOutput, mount, expected, browser, liveRoot) {
   if (expected.step.pins !== undefined) expected = { ...expected, step: await pinnedStep(api.origin, expected.step) };
   if (expected.fromApi) {
     // Asked before the browser, of the same server, with the page's own request.
-    const body = expected.step.body ?? COVERAGE_BODY;
+    const body = bodyOn(expected.step.body ?? COVERAGE_BODY, todayInLuxembourgAt(Date.now()));
     const answer = await fetch(`${api.origin}/api/v3/${body.operation_id}`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
     expected = expectedForAnswer(expected, await answer.json());
   }
@@ -1281,6 +1378,8 @@ export async function run(apiOutput, mount, expected, browser, liveRoot) {
       const bytes = await (await fetch(`${pageOrigin}${expected.step.path.split("#")[0]}`)).text();
       observed.withoutScripts = { answerState: /<section data-answer-state="([a-z_]+)"/.exec(bytes)?.[1] ?? null };
     }
+    // The home page as a reader with no script receives it.
+    if (expected.step.frontDoor === true) observed.frontDoor = frontDoorOf(await (await fetch(`${pageOrigin}${expected.step.path}`)).text());
     return { observed, failures: journeyVerdict(observed, { ...expected, origin: pageOrigin }) };
   } finally {
     if (live !== null) await new Promise((resolve) => live.close(resolve));
@@ -1460,7 +1559,7 @@ export const AS_PUBLISHED_SAID = "As published; may have been amended since; no 
  * interface. Both servers answer it with the 404 page, status 404, which offers the home page's search: the step searches
  * from it, as the home page's step does, and must end in that answer (or, with no mount, the refusal every request gets).
  */
-export const NOT_FOUND_STEP = Object.freeze({ ...JOURNEY_STEPS.home, path: "/en/no-such-page", notFound: true });
+export const NOT_FOUND_STEP = Object.freeze({ ...JOURNEY_STEPS.home, path: "/en/no-such-page", notFound: true, frontDoor: false });
 
 /** What the 404 page says above its search: there is no page at the address. */
 export const NOT_FOUND_SAID = "There is no page at this address";
@@ -1491,19 +1590,22 @@ export function failurePageExpectations() {
  */
 export function fixtureMountExpectations(journeyMount) {
   const { coverage, home, search, dossier, reading, history, compare, radar, export: exporting, address, permalink, stale } = JOURNEY_STEPS;
-  const searchTexts = [`“${SEARCH_PHRASE}” in fra: 4 with the exact phrase, 1 with every word, in 1 work.`, "art_15 in", "The first hits in the stated order, not the best hits."];
+  const searchTexts = [`“${SEARCH_PHRASE}” in fra: 4 with the exact phrase, 1 with every word, in 1 work.`, "art_15 in", "The first hits in the stated order, not the best hits.", NOT_ADVICE_SAID];
+  // The home page's search is dated today, which the fixture's one state (2024-02-01) applies on; its coverage line counts the
+  // fixture's one work, one state and 49 articles.
+  const homeTexts = [...searchTexts, "Searched the version of each act that applies on", "This site holds 1 act of Luxembourg law, in 1 version with 49 articles, as of the index built on"];
   return [
     ["coverage", { step: coverage, state: "success", corpusSha256: journeyMount.corpus_sha256, indexSha256: journeyMount.index_sha256 }],
-    ["home", { step: home, state: "success", texts: searchTexts }],
-    ["search", { step: search, state: "success", texts: searchTexts }],
+    ["home", { step: home, state: "success", texts: homeTexts }],
+    ["search", { step: search, state: "success", texts: [...searchTexts, "No date was given: every version held was searched"] }],
     ["dossier", { step: dossier, state: "success", texts: [journeyMount.work_key, "1 state, from 2024-02-01 to 2024-02-01.", "What this dossier does not hold", AS_PUBLISHED_SAID] }],
-    ["reading", { step: reading, state: "success", texts: ["the state applying from 2024-02-01", "49 articles quoted", "Art. 15.", "Text served under agreed_same_run_cc_by", AS_PUBLISHED_SAID] }],
+    ["reading", { step: reading, state: "success", texts: ["the state applying from 2024-02-01", "49 articles quoted", "Art. 15.", "Text served under agreed_same_run_cc_by", AS_PUBLISHED_SAID, NOT_ADVICE_SAID] }],
     ["history", { step: history, state: "success", texts: [`${HISTORY_ANCHOR} in loi-1991-08-10-n3`, "Carried by 1 held state, from 2024-02-01", "first held wording"] }],
     ["compare", { step: compare, state: "success", texts: [`loi-1991-08-10-n3: ${READING_DATE} against ${READING_DATE}.`, `Both dates select the one text held, the act as published, applicable from ${READING_DATE} (publisher); later versions are not held.`, AS_PUBLISHED_SAID] }],
     ["radar", { step: radar, state: "success", texts: [`${READING_DATE} to ${READING_DATE}: 1 state of 1 work, of 1 held.`, "not compared: the first state this index holds"] }],
     ["export", { step: exporting, state: "success", texts: ["3 articles pinned: 3 exported with text, 0 excluded.", EXPORT_WATERMARK, "Text served under agreed_same_run_cc_by."] }],
     ["address", { step: address, state: "success", texts: [journeyMount.work_key, "1 state, from 2024-02-01 to 2024-02-01."] }],
-    ["permalink", { step: permalink, state: "success", texts: ["the state applying from 2024-02-01", "49 articles quoted", "Art. 15.", "Text served under agreed_same_run_cc_by"] }],
+    ["permalink", { step: permalink, state: "success", texts: ["the state applying from 2024-02-01", "49 articles quoted", "Art. 15.", "Text served under agreed_same_run_cc_by", NOT_ADVICE_SAID] }],
     ["stale", { step: stale, state: "success", texts: ["which is not the version this site serves for that date", "the state applying from 2024-02-01", "49 articles quoted"] }],
   ];
 }
@@ -1653,7 +1755,8 @@ export function envelopeIdentityFailures(rest, mcp) {
 
 /** Every request the pages of the journeys make: the eight steps', J1's, J2's and J5's, each once. */
 export function pageRequestBodies() {
-  const bodies = [...Object.values(JOURNEY_STEPS), EARLY_READING_STEP, NO_HIT_SEARCH_STEP, UNKNOWN_LAW_STEP].map((step) => step.body ?? COVERAGE_BODY);
+  const today = todayInLuxembourgAt(Date.now());
+  const bodies = [...Object.values(JOURNEY_STEPS), EARLY_READING_STEP, NO_HIT_SEARCH_STEP, UNKNOWN_LAW_STEP].map((step) => bodyOn(step.body ?? COVERAGE_BODY, today));
   return [...new Map(bodies.map((body) => [JSON.stringify(body), body])).values()];
 }
 

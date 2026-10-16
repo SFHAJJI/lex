@@ -96,6 +96,9 @@ export const LIVE_CHROME_FR = Object.freeze({
     euWording: 'Chaque résultat se trouve dans le libellé original de {celex} que ce serveur détient en {language}, daté du {date} et épinglé par son empreinte : {permalink}',
     euHit: '{heading} de {celex}, libellé du {date}',
     notHeldHeading: 'Ce que cette recherche ne couvre pas',
+    placeholder: 'Rechercher par intitulé, numéro, ELI ou CELEX, ou par des mots du texte',
+    dated: 'Chaque acte a été interrogé dans sa version applicable au {date} ; un acte sans version applicable à cette date n’a pas été interrogé.',
+    undated: 'Aucune date n’a été indiquée : toutes les versions détenues ont été interrogées, et chaque résultat indique la date de sa version.',
   }),
   dossier: Object.freeze({
     title: 'Dossier',
@@ -467,7 +470,8 @@ export const LIVE_CHROME_FR = Object.freeze({
     radar: 'Modifications',
     export: 'Export',
     coverage: 'Ce que ce site détient',
-    advice: 'Documentation, et non consultation juridique. Les textes consolidés n’ont aucun effet juridique : seuls font foi les textes publiés au Journal officiel du Grand-Duché de Luxembourg (Mémorial A) et au Journal officiel de l’Union européenne.',
+    notAdvice: 'Lex montre le texte de la loi. Il ne dit pas ce qui s’applique à votre situation, et ce n’est pas un conseil juridique.',
+    authenticity: 'Les textes consolidés n’ont aucun effet juridique : seuls font foi les textes publiés au Journal officiel du Grand-Duché de Luxembourg (Mémorial A) et au Journal officiel de l’Union européenne.',
     sources: 'Les textes proviennent de Legilux et de l’Office des publications de l’Union européenne, tels que ce site les détient ; chaque article cité indique sa source officielle.',
   }),
   home: Object.freeze({
@@ -475,6 +479,22 @@ export const LIVE_CHROME_FR = Object.freeze({
     eyebrow: 'Rechercher dans le droit',
     heading: 'Le droit luxembourgeois et de l’UE à la date de votre choix',
     intro: 'Recherchez dans les textes que ce site détient, ouvrez un acte tel qu’il se présentait à la date de votre choix, voyez comment chaque article a changé, comparez deux dates et exportez avec des citations que chacun peut vérifier auprès de la source officielle. Lorsque ce site ne détient pas un texte ou une date, il le dit.',
+    aboutHeading: 'Ce qu’est Lex et ce qu’il n’est pas',
+    coverage: 'Ce site détient {acts} du droit luxembourgeois, en {versions} comptant {articles}, d’après l’index construit le {date}.',
+    coverageUndated: 'Ce site détient {acts} du droit luxembourgeois, en {versions} comptant {articles} ; l’index qu’il détient ne consigne aucune date de construction.',
+    acts: Object.freeze({
+      one: '{count} acte',
+      other: '{count} actes',
+    }),
+    versions: Object.freeze({
+      one: '{count} version',
+      other: '{count} versions',
+    }),
+    articles: Object.freeze({
+      one: '{count} article',
+      other: '{count} articles',
+    }),
+    links: 'Ailleurs sur ce site',
   }),
   failure: Object.freeze({
     line: 'Lex n’a pas pu mener à bien cette demande. Ce n’est pas une réponse sur le droit.',
@@ -536,6 +556,7 @@ export const LIVE_CHROME_FR = Object.freeze({
     phrase: 'Expression',
     date: 'Date',
     datePlaceholder: 'aaaa-mm-jj',
+    today: 'Aujourd’hui au Luxembourg : {date}.',
     articleIdPlaceholder: 'art_15',
     from: 'Du',
     to: 'Au',
@@ -578,6 +599,8 @@ export const REFUSALS_FR = Object.freeze({
       'Cet index ne contient aucun acte sous cet identifiant.',
     'That identifier names more than one held work or expression, so none is searched.':
       'Cet identifiant désigne plusieurs actes ou expressions détenus ; la recherche ne porte donc sur aucun d’eux.',
+    'An EU act is searched in the wording this server holds, not at a date: leave the date empty to search it.':
+      'Un acte de l’UE est interrogé dans le libellé que ce serveur détient, et non à une date : laissez la date vide pour l’interroger.',
     'This work is not held in the language asked for.':
       'Cet acte n’est pas détenu dans la langue demandée.',
     'That identifier names more than one held work, so no dossier is chosen.':

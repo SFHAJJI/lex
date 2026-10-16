@@ -32,8 +32,9 @@ namespace Lex.V3.Api;
 /// corpus it was answered from. A redirect carries them too, and <c>Vary: Accept-Language</c>.
 /// </para>
 /// <para>
-/// A law's address under an interface language is rendered from the API's own answer when the server can (R67: complete
-/// HTML, readable without JavaScript): the directory's <c>ssr/</c> holds the pages' server renderer
+/// A law's address under an interface language, and each language's home page (from the coverage answer), are rendered
+/// from the API's own answer when the server can (R67: complete HTML, readable without JavaScript): the directory's
+/// <c>ssr/</c> holds the pages' server renderer
 /// (<see cref="V3PageRenderer"/>), which is run, never served. With no corpus mounted the page renders the refusal every
 /// request gets. When there is no answer (a request the API would refuse as malformed) or the render
 /// fails, the page is served as built and asks for itself.
@@ -318,11 +319,22 @@ internal sealed partial class V3WebRoot
     /// What the server renders a law's address under an interface language from (R67), as <c>sitePageFor</c> in
     /// <c>web/scripts/permalinks.mjs</c> says it (a test holds the two to one table): the page, the operation and the request
     /// the page itself would send. A reading asks by the work (a Luxembourg coordinate or an EU CELEX), the date and the
-    /// text's language the permalink names, a dossier by the work. Null for any other path.
+    /// text's language the permalink names, a dossier by the work. An interface language's home page (<c>/en/</c>,
+    /// <c>/en/index.html</c>) is rendered from <c>coverage</c>, asked with no parameters, as the page as built asks it once
+    /// loaded: its coverage line and today's date in Luxembourg (R11, R13; <c>web/scripts/live-home.mjs</c>). Null for any
+    /// other path.
     /// </summary>
     internal static V3SitePage? SitePageFor(string path)
     {
         ArgumentNullException.ThrowIfNull(path);
+        foreach (var home in InterfaceLanguages)
+        {
+            if (string.Equals(path, $"/{home}/", StringComparison.Ordinal) || string.Equals(path, $"/{home}/index.html", StringComparison.Ordinal))
+            {
+                return new V3SitePage(home, "home", "coverage", new Dictionary<string, string>(StringComparer.Ordinal));
+            }
+        }
+
         var match = SitePath.Match(path);
         if (!match.Success || !match.Groups["locale"].Success)
         {
