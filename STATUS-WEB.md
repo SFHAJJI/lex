@@ -4,6 +4,86 @@ Updated 2026-10-16. The web lane's progress, split out of STATUS.md (which keeps
 items and the pointers) by the standing order of 2026-10-01 13:50 UTC. Every pull request of the web lane
 updates this file, not STATUS.md.
 
+## The cited article first, what changed since, a stale permalink's current link, and readable addresses (sole driver, 2026-10-16)
+
+The plan's item 3.2, second part (3.2b; `C:\lex-v3\PLAN-2026-10-14.md`), to the specification of record's R64 ("The server
+renders the cited article first, with its own title and canonical URL and a link to the whole act. A permalink always
+shows the cited bytes, with a banner when anything changed since ... If the text was later withheld (R83, R92), it
+answers `text_withheld` with the hashes. A digest Lex no longer holds answers `pinned_digest_mismatch` with the current
+link.") and R67 ("Every work and article has a readable address that resolves to its current version").
+- **What the platform answered before this part** (read from the code): both refusals are in the registry, with their
+  mandatory payloads (`text_withheld`: official identity, official link, content digest; `pinned_digest_mismatch`: the
+  digest asked, the current digest, the stable coordinate and the current hash-pinned link). `verify` answered a mismatch
+  at either publisher's permalink, and `resolve` at a Luxembourg state's; `evidence_bundle` answered `text_withheld` only
+  when asked by the work and a date. `as_of`, `evidence_bundle` and `provenance` took no permalink (`identifier_unknown`),
+  so the reading page asked by the work and the date and, when the state shown was not the pinned one, showed that state
+  under a notice: another version in the pinned one's place.
+- **`evidence_bundle`, `as_of` and `provenance` at a hash-pinned permalink** (`V3CorpusMount.Pinned.cs`): a state's (or an
+  EU wording's) permalink given as the identifier, with its own date, answers the version it pins, read as `verify` reads
+  it, for both publishers (the EU through the time view when the census holds the act, else through the original
+  wording, as `verify` chooses; `provenance` is Luxembourg's only, as before). A digest the coordinate no longer carries in
+  the permalink's language is `pinned_digest_mismatch` naming the current state, with the payload `verify` gives the same
+  permalink; two states of its language there with neither the pinned one are `ambiguous_identifier`, and a permalink pins
+  one of two states of one date without that date being ambiguous; another language asked beside it, or one the coordinate
+  does not hold, is `language_not_available`; a coordinate holding no state is `identifier_unknown`; a date other than the
+  permalink's own is `request_schema_invalid` (it would ask another version than the one pinned). The answer is in the
+  permalink's language, asked or not. An article's permalink is not one of these identifiers (they name a state, as
+  `resolve` does): the page asks by its state's. `text_withheld` names the state's (or wording's) digest beside the
+  withholding body's (`state_sha256`, `wording_sha256`): the hashes R64 and R83 ask for, on the card. The scopes say the
+  rule. No request schema changed, so the registry digest did not move.
+- **The page at a permalink asks by the permalink** (`sitePageFor`, `V3WebRoot.SitePageFor`, `readingPinOf`): the server
+  renders it from that answer, and the page as built asks it once loaded; the form keeps the work, the date and the
+  language, so a reader asking another date asks the work.
+- **The cited article first** (`PinnedReading.jsx`): at an address that names an article the version shown holds, the page
+  shows it first, under its own title (the publisher's id, and an EU provision's heading in the text's language), with the
+  version it is quoted from ("Quoted from {version}", the version's own heading), its text, own date and notes as the
+  reading quotes them (`ArticleText`, now shared), its evidence line and its permalink, and a link to the whole act at that
+  version (the state's permalink; at a readable address, the act's readable address). The page's own title is the
+  article's ("{work}, {article} - Lex"), from the server and once loaded. An article held without text is named first,
+  "Held without text in {version}.", never quoted empty nor said to be quoted. The whole act follows on the same page, the cited article in its place too: the API answers a whole
+  version until reading by article (3.7) pages it. The page focuses what it says first, so a reader meets it before the
+  text it is about.
+- **What changed since** (R64's banner): a Luxembourg state that is not the latest held says "A newer version is applicable
+  from {date} (publisher)." (R21's words; the date is the answer's next applicability date), and an EU wording "A later
+  wording of this act is held: the wording of {date}." (never an applicability date), each with "Read this act at today's
+  date", a link to the act's (or article's) readable address; a readable address is that page already, and links nothing.
+  "The publisher replaced this file on {date}" is not said: the API's typed fact for it, a chained log's `file_replaced`
+  event, holds no date of the replacement (driver decisions).
+- **A stale permalink** (`pinned_digest_mismatch`): the page says "This link pins {pinned}, which is not the version this
+  site holds for that date; the version it holds is {current}." (an EU wording's: "...which is not a wording this site holds
+  for that date; the wording that answers that date on this site is {current}."), above the refusal card, which shows the
+  payload; the notice is in view and has the focus, and the page names the current link canonical. The refusal card takes
+  the EU payload's `digest_rule` (it refused it as undeclared). The reading's refusal sentence: "The version this permalink
+  pins is not the one this index holds for its date." (EU: "The wording this permalink pins is not one this index holds for
+  its date.").
+- **Readable addresses** (R67): `/lu-legilux/{work}/{lng}[/{article}]` and `/eu-eurlex/{celex}/{lng}[/{provision}]` open the
+  reading of the version that answers today in Luxembourg (R13), on both servers (each server's clock, `LuxembourgCalendar`
+  and `luxembourgDate`; a page as built asks at the browser's), the cited article first; `/lu-legilux/{work}` stays the
+  dossier. The third segment is a language, never a pin, so no readable address is a permalink; the article is never a
+  calendar date, with or without a digest after it, so neither the EU stable coordinate (`/eu-eurlex/{celex}/{lng}/{date}`)
+  nor the EU shape before R64 (moved) is read as one. Its canonical link is itself: the article's readable address when the
+  version shown holds the article (escaped as the platform escapes it), else the act's.
+- **The shared table** (`site-paths.json`) holds 118 paths (96 before): 34 served (10 readable, four of them naming their
+  canonical), 14 sent, 3 moved, 67 neither (8 readable shapes that are none: the EU stable coordinate, a date as an
+  article, `FRA`, `fr`, an empty or `%2E%2E` segment, two segments, `/de/`), and the date it is held at (`today`); every
+  served permalink row renders from the permalink itself.
+- **French** (Decision 41): eleven new forms (nine reading entries and two refusal sentences), reviewed by an independent
+  reviewer in the addendum of 2026-10-16 of `C:\lex-v3\lanes\fr-review\review.md` (1 changed: "Cité d’après {source}.", never
+  "Extrait de", the table's word for Lex's own extraction), and a twelfth, `reading.citedWithoutText`, in the review's own
+  French ("Détenu sans texte dans {source}."), for the article held without text the review found said to be "quoted";
+  named in `live-chrome-fr.mjs`'s header. The four entries the lead says on both publishers' pages are held to neither
+  publisher's date words (`date-speech.test.mjs`).
+- **Journeys**: the permalink step asks by the permalink and holds the cited article first, in view and focused; the stale
+  step is refused `pinned_digest_mismatch`, its notice in view and focused, linking a current version `verify` confirms,
+  its canonical that version; a new step opens the work's readable address at the article. On the licence-blocked mount
+  the stale step is refused `pinned_digest_mismatch` before any rights are read, and the readable address `text_withheld`.
+- **Not in this part** (3.2c, next in order below): quoting the cited bytes of a state only a retained generation holds
+  (it answers `pinned_digest_mismatch` naming the current state, while `verify` names the generation: the mount keeps no
+  generation's corpus); "The publisher replaced this file on {date}", which needs the date of the replacement; and R67's
+  "identical version pages point their canonical link there" (a permalink page showing the current version still names the
+  permalink, the 967 decision, which 3.6 revisits with the sitemap).
+- **Measured**: MEASURED_PLACEHOLDER
+
 ## The home page, and the sentence that says what Lex is not (sole driver, 2026-10-16)
 
 The plan's items 4.1 (the home page) and 6.8 (the not-legal-advice sentence), to the specification of record's R47, R52,
@@ -218,7 +298,7 @@ wording's `/eu-eurlex/{celex}/{lng}/{date}--{sha256}` with the provision after `
 - **The journeys** open the permalink and stale steps in the new shape (`/en/lu-legilux/{work}/{date}--{sha256}/fra/art_15`),
   ask the reading in its language, and now check each rendered law page's canonical link and alternates in the browser,
   every link counted, a stale page's canonical with no article.
-- **Not in this part** (3.2b, next in order below): the cited article rendered first with its own title, the banner when
+- **Not in this part** (3.2b, done on 2026-10-16, above): the cited article rendered first with its own title, the banner when
   anything changed since, `text_withheld` and `pinned_digest_mismatch` at a permalink, and readable current-version
   addresses.
 - **Measured** (this branch, from `v3/integration` at #962's merge): web suite 1,115 of 1,115; `dotnet build
@@ -3898,16 +3978,14 @@ date" now measures EU dated selection, the owner's main use case.
 
 ## Next, in order (web lane; the data lane's items 1 to 3 are in STATUS-DATA.md)
 
-The plan's item 3.2, second part (3.2b), after the permalink shape (2026-10-15, above):
-1. The cited article first, rendered by the server with its own title (and its canonical link, done), and a link to
-   the whole act; the rest of the reading after it (with 3.7's reading by article).
-2. The cited text always shown, with a banner when anything changed since: "The publisher replaced this file on
-   {date}"; "A newer version applies from {date}".
-3. `text_withheld` at a permalink whose text was later withheld (R83, R92), with its hashes.
-4. `pinned_digest_mismatch` at a permalink whose digest Lex no longer holds, with the current link, on the page as
-   `verify` already answers it.
-5. Readable current-version addresses for every act and article, identical version pages pointing their canonical link
-   there (R67); the stable coordinates' own shape is settled with them.
+The plan's item 3.2, what is left after its second part (3.2b, done on 2026-10-16, above), as 3.2c:
+1. The cited bytes of a state only a retained generation holds, quoted from that generation (the mount opens the
+   generation's corpus beside its index), with `held_in` and the state that replaced it; it answers
+   `pinned_digest_mismatch` today. No mount holds a generation yet.
+2. "The publisher replaced this file on {date}", once the log holds when the replacement was observed (a chained log's
+   `file_replaced` event carries no date; a build's time only bounds it).
+3. R67's "identical version pages point their canonical link there": a permalink page showing the current version names
+   the act's readable address as canonical, with the sitemap (3.6), which revisits the 967 decision.
 
 The web lane's order since the owner's proxy's journey corrections (2026-10-01 14:30 UTC,
 `C:\lex-v3\lanes\STANDING-ORDERS.md` section 7, overriding the queues below):
@@ -4136,6 +4214,40 @@ Each is the driver's call under ruling 7 and can be reversed by a later pull req
 - The text language in the address (2026-10-15): three letters, the publisher's own code (`fra`, `deu`, `eng`), as the
   EU permalink already wrote it and the API's `language` parameter takes it; a Luxembourg reading at a permalink now asks
   in that language, so a page shows the language the permalink pins and not every language held on the date.
+- A permalink's page asks by the permalink (2026-10-16, the plan's 3.2b): `evidence_bundle`, `as_of` and `provenance` take
+  a state's (or an EU wording's) hash-pinned permalink as the identifier, with its own date, and answer the version it pins
+  or refuse (`pinned_digest_mismatch` with the current link, as `verify`), never another version in its place; the reading
+  page asks that, and the stale page of #967 (another version under a notice) becomes the refusal with the current link.
+  The reason: R64 says a digest Lex no longer holds "answers `pinned_digest_mismatch`", and one request, the server's and
+  the browser's alike, cannot both show another version and refuse. Another date beside the permalink is
+  `request_schema_invalid` rather than a refusal: the request names two versions. An article's permalink is not taken (it
+  names an article), as `resolve` does not take it. Reversible: a `digest` parameter beside the work and date (it moves
+  the registry digest).
+- The rest of the act after the cited article (2026-10-16): it follows, whole, on the same page, the cited article in its
+  place too, rather than being linked. The API answers a whole version until reading by article (3.7) pages it, so a page
+  carrying only the article would still carry the whole answer in its data block; the cited block links the whole act at
+  its own address too. Reversible with 3.7, which renders the article first and loads the rest on demand.
+- "The publisher replaced this file on {date}" is not said (2026-10-16): the typed fact exists (a chained log's
+  `file_replaced` event, which `events` serves with `replaced_permalink`), but it holds no date of the replacement
+  (`observed_from` is null; a build's time only bounds observation from above), and R64's sentence states one. A stale
+  permalink is refused with the current link instead. Reversible when the log records when a replacement was observed.
+- A state only a retained generation holds (2026-10-16): `evidence_bundle` at its permalink answers
+  `pinned_digest_mismatch` naming the current state, while `verify` verifies it there (`held_in`): the mount keeps a
+  generation's index, not its corpus, and a bundle names each body's digest from the corpus. The two answers are about
+  different questions (is the digest one Lex verified once; which version this site holds now). Reversible (3.2c): keep
+  each generation's corpus view and quote from it.
+- The banner (2026-10-16): "A newer version is applicable from {date} (publisher)." for a Luxembourg state that is not
+  the latest held, R21's words for the publisher's applicability date, rather than R64's "applies from", which R21 does not
+  forbid but which states the applicability without its attribution; "A later wording of this act is held: the wording of
+  {date}." for an EU wording, whose date is never an applicability date. Each links the act at today's date (its readable
+  address), never a newer version's permalink, which the answer does not name.
+- The readable address (2026-10-16, R67): `/lu-legilux/{work}/{lng}[/{article}]` and `/eu-eurlex/{celex}/{lng}[/{provision}]`,
+  the text's language in the place a permalink's pin stands, at today in Luxembourg; the act with no language stays its
+  dossier. The language is the address's, so a reader's link opens the text in the language they cited. An article segment
+  that is a calendar date, with or without a digest, is none (an EU stable coordinate, the EU shape before R64). Its page
+  names itself canonical. Reversible: another segment order, with moves.
+- The cited article's title (2026-10-16): "{work}, {article}" (the work key and the publisher's id): the reading's answer
+  names no act title, and the dossier's titles are another answer. Reversible when the bundle carries the title.
 - The canonical link (2026-10-15, the plan's 3.2): every law page under `/fr/` or `/en/`, the reading and the dossier
   alike, names the address with no interface language as canonical, the permalink Lex prints and cites, and each
   language's page and `x-default` as alternates. A canonical that answers a redirect is a weaker signal to a search
