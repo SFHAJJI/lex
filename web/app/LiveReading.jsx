@@ -39,7 +39,7 @@
 import { useEffect, useRef, useState } from 'react';
 
 import { RefusalCard } from './RefusalCard.jsx';
-import { PinnedLead, citedTitle } from './PinnedReading.jsx';
+import { ArticleNotHeld, PinnedLead, citedTitle } from './PinnedReading.jsx';
 import { AsPublished, EuropeAnnexes, FailureFrame, LiveAnswer, Permalink, Say, StatusSentence, inEnglish, refusalCardCopyFor } from './LiveAnswer.jsx';
 import {
   LIVE_READING_IDLE,
@@ -142,10 +142,14 @@ export function PageContents({ version }) {
         {version.pages.map((row) => (
           <li key={row.number}>
             <a href={pageHref(version, row.number)} aria-current={row.number >= shown.first && row.number <= shown.last ? 'page' : undefined}>
-              <Say
-                template={COPY.contentsPage}
-                values={{ number: row.number, first: <PageEnd version={version} row={row} end="first" />, last: <PageEnd version={version} row={row} end="last" /> }}
-              />
+              {row.articles === 1 ? (
+                <Say template={COPY.contentsPageOne} values={{ number: row.number, first: <PageEnd version={version} row={row} end="first" /> }} />
+              ) : (
+                <Say
+                  template={COPY.contentsPage}
+                  values={{ number: row.number, first: <PageEnd version={version} row={row} end="first" />, last: <PageEnd version={version} row={row} end="last" /> }}
+                />
+              )}
             </a>
           </li>
         ))}
@@ -160,6 +164,14 @@ export function PagesShown({ version }) {
   const shown = pagesShown(version);
   const first = version.pages[shown.first - 1];
   const last = version.pages[shown.last - 1];
+  // A page of one article names it once (the French review of 2026-10-18, point 4).
+  if (shown.first === shown.last && first.articles === 1) {
+    return (
+      <p data-pages-shown={`${shown.first}-${shown.last}`}>
+        <Say template={COPY.pageShownOne} values={{ number: shown.first, pages: version.page.pages, first: <PageEnd version={version} row={first} end="first" /> }} />
+      </p>
+    );
+  }
   return (
     <p data-pages-shown={`${shown.first}-${shown.last}`}>
       <Say
@@ -563,7 +575,7 @@ export function LiveReading({ contract, fetchImpl, initial = null }) {
     if (title !== null) document.title = fillText(liveChrome().shell.title, { title });
     let target;
     if (view === null) {
-      target = document.querySelector('[data-pin-not-held]') ?? document.querySelector('[data-pinned-lead]');
+      target = document.querySelector('[data-pin-not-held]') ?? document.querySelector('[data-answer-state="refusal"]');
     } else if (pin.kind === 'state' && !readingHolds(view, pin.permalink)) {
       target = document.querySelector('[data-pin-replaced]');
     } else if (document.querySelector('[data-pinned-lead]') !== null) {
@@ -652,6 +664,8 @@ export function LiveReading({ contract, fetchImpl, initial = null }) {
           </p>
         ) : null}
         <ReadingAnswerView outcome={shown} onRetry={retry} paging={more.base === outcome ? more.paging : {}} onNext={onNext} />
+        {/* After the card that says the article is not held, the whole act (the French review of 2026-10-18, point 2). */}
+        {pinned ? <ArticleNotHeld outcome={outcome} pin={pin} /> : null}
       </LiveAnswer>
     </div>
   );

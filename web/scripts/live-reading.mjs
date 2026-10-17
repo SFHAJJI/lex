@@ -51,7 +51,7 @@ export const LIVE_READING_REFUSAL_SENTENCES = Object.freeze({
   // A permalink whose digest is not the state this index holds at its date (R64); the page says the current link above.
   pinned_digest_mismatch: "The version this permalink pins is not the one this index holds for its date.",
   // An article address whose article the version does not hold (the plan's item 3.7: the page that holds it is asked).
-  anchor_not_in_version: "This version holds no article with that id.",
+  anchor_not_in_version: "This index holds no article with that id in this version.",
 });
 
 /**
@@ -68,7 +68,7 @@ export const LIVE_READING_EUROPE_REFUSAL_SENTENCES = Object.freeze({
   text_not_available: "This index knows this wording of the EU act but holds no text for it.",
   retrieval_mode_unavailable: "This index cannot read this work's text.",
   pinned_digest_mismatch: "The wording this permalink pins is not one this index holds for its date.",
-  anchor_not_in_version: "This wording holds no article with that id.",
+  anchor_not_in_version: "This index holds no article with that id in this wording.",
 });
 
 /** The refusal sentences for a refusal's publisher, as its envelope context names it. */

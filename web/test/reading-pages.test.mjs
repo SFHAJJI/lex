@@ -156,7 +156,7 @@ test("the export composer pins from the page shown, with the control that pins e
   assert.ok(markup.includes('<p data-pages-shown="1-1">Page 1 of 2: art_1er to art_50.</p>'));
   assert.ok(markup.includes(`<button type="button" data-pin-all="${outcome.view.states[0].stateSha256}">Pin every article</button>`));
   const reading = renderToStaticMarkup(h(ExportAnswerView, { outcome, pins: new Set(), onPin: () => {}, onPinAll: () => {}, assembling: { [outcome.view.states[0].stateSha256]: { state: "loading", done: 1, pages: 2 } } }));
-  assert.ok(reading.includes("Reading every page: 1 of 2."));
+  assert.ok(reading.includes("Reading every page: 1 of 2 read."));
   assert.ok(reading.includes("disabled"), "one reading at a time");
 });
 
@@ -177,17 +177,18 @@ test("a page names its own address: a page after the first with its page, the ci
   assert.deepEqual({ ...sitePageFor(`/fr${permalink}`, { search: "?page=2" }).parameters }, { identifier: permalink, date: second.states[0].applicabilityDate, language: "fra", page: 2 });
 });
 
-test("an article the version does not hold is refused with the ids nearest it, and the page links the whole act", async () => {
-  const { PinnedLead } = await import("../.react-build/app.mjs");
+test("an article the version does not hold is refused with the ids nearest it, and the page links the whole act after the card", async () => {
+  const { ArticleNotHeld, PinnedLead } = await import("../.react-build/app.mjs");
   const { readingPinOf } = await import("../scripts/initial-answer.mjs");
   assert.equal(NOT_HELD.refusal.code, "anchor_not_in_version");
   assert.ok(NOT_HELD.refusal.helpful_payload.nearest_anchors.includes("art_15"));
   const outcome = readingOutcome({ state: "refusal", envelope: NOT_HELD });
   assert.equal(outcome.card, true, "the card shows the platform's payload");
-  assert.equal(outcome.sentence, "This version holds no article with that id.");
+  assert.equal(outcome.sentence, "This index holds no article with that id in this version.", "the index's claim, never the version's (the French review of 2026-10-18)");
   const permalink = ONE_PAGE.result.value.states[0].permalink;
-  const lead = renderToStaticMarkup(h(PinnedLead, { outcome, pin: readingPinOf(`/en${permalink}/art_15-9`, NOT_HELD) }));
-  assert.equal(lead, `<p data-pinned-lead="" data-article-not-held=""><a href="/en${permalink}">The whole act at this version</a></p>`);
+  const pin = readingPinOf(`/en${permalink}/art_15-9`, NOT_HELD);
+  assert.equal(renderToStaticMarkup(h(PinnedLead, { outcome, pin })), "", "nothing before the card");
+  assert.equal(renderToStaticMarkup(h(ArticleNotHeld, { outcome, pin })), `<p data-article-not-held=""><a href="/en${permalink}">The whole act at this version</a></p>`);
 });
 
 test("the speed check of the stand-in for the codes: the first page of 3,000 articles is a small fraction of the whole (R73)", () => {
@@ -206,4 +207,13 @@ test("the speed check of the stand-in for the codes: the first page of 3,000 art
   assert.equal((html.match(/ data-article="/g) ?? []).length, 50, "one page of articles");
   assert.ok(html.replaceAll("<!-- -->", "").includes("Page 1 of 60: art_1er to art_50."));
   assert.ok(elapsed < 2_000, `rendered in ${Math.round(elapsed)} ms`);
+});
+
+test("a page of one article names it once, in the contents and in the pages shown (the French review of 2026-10-18)", () => {
+  const whole = mergedAnswer(cutIntoPages(structuredClone(FIRST.result.value), 60)[0]);
+  const [, last] = cutIntoPages(whole, 59);
+  const markup = markupOf(readingOutcome({ state: "success", envelope: { ...structuredClone(FIRST), result: { ...FIRST.result, value: last } } }));
+  assert.ok(markup.includes('<p data-pages-shown="2-2">Page 2 of 2: art_60.</p>'), markup.slice(0, 400));
+  assert.ok(markup.includes(">Page 2: art_60</a>"));
+  assert.ok(markup.includes(">Page 1: art_1er to art_59</a>"));
 });

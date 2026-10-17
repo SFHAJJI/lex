@@ -39,7 +39,7 @@ export { LIVE_DOSSIER_ROOT, liveDossierTree, renderLiveDossierPage } from './liv
 export { LiveReading, ReadingAnswerView, ReadingView, readingHolds } from './LiveReading.jsx';
 export { FailureFrame, OfficialSites, Permalink, TableRegion } from './LiveAnswer.jsx';
 export { LIVE_READING_ROOT, liveReadingTree, readingLawPath, readingTitle, renderLiveReadingPage } from './live-reading-page.jsx';
-export { Citations, PinnedLead, citedArticle, citedTitle, versionShown } from './PinnedReading.jsx';
+export { ArticleNotHeld, Citations, PinnedLead, citedArticle, citedTitle, versionShown } from './PinnedReading.jsx';
 export { HistoryAnswerView, HistoryView, LiveHistory } from './LiveHistory.jsx';
 export { LIVE_HISTORY_ROOT, liveHistoryTree, renderLiveHistoryPage } from './live-history-page.jsx';
 export { CompareAnswerView, CompareView, LiveCompare } from './LiveCompare.jsx';

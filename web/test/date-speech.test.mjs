@@ -104,6 +104,10 @@ const SHARED_LEAD_ENTRIES = new Set([
   "reading.cite", "reading.citeConventional", "reading.citeWithPermalink", "reading.citeEvidence", "reading.citeNotComposed",
   "export.usualCitation", "citation.withPermalink", "citation.date", "citation.firstOfMonth", "citation.evidence.permalink",
   "citation.evidence.textSha256", "citation.evidence.noText", "citation.evidence.consulted",
+  // A long version's pages, said on both publishers' pages (the plan's item 3.7; the French review of 2026-10-18, point 5).
+  "reading.contents", "reading.contentsPage", "reading.contentsPageOne", "reading.pageShown", "reading.pageShownOne",
+  "reading.pagesShown", "reading.pager", "reading.previousPage", "reading.nextPage", "reading.nextPageFailed",
+  "export.pinAll", "export.readingPages", "export.pagesFailed",
 ]);
 
 function fieldsOf(node, found = new Set()) {

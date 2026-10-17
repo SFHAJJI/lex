@@ -180,7 +180,9 @@ const EN = Object.freeze({
     // before and after them, which the page loads in place when it can.
     contents: "Contents",
     contentsPage: "Page {number}: {first} to {last}",
+    contentsPageOne: "Page {number}: {first}",
     pageShown: "Page {number} of {pages}: {first} to {last}.",
+    pageShownOne: "Page {number} of {pages}: {first}.",
     pagesShown: "Pages {from} to {to} of {pages}: {first} to {last}.",
     pager: "Pages",
     previousPage: "Previous articles",
@@ -319,7 +321,7 @@ const EN = Object.freeze({
     usualCitation: "Usual citation: {citation}",
     // Reading by page (the plan's item 3.7): a version's every article pinned at once, its other pages read first.
     pinAll: "Pin every article",
-    readingPages: "Reading every page: {done} of {pages}.",
+    readingPages: "Reading every page: {done} of {pages} read.",
     pagesFailed: "Not every page could be read; nothing more was pinned.",
   }),
   card: Object.freeze({

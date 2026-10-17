@@ -99,6 +99,17 @@
 // (a Luxembourg version it does not hold; a version, or an EU wording, it holds with no article), were reviewed by an
 // independent reviewer (Claude, AI reviewer, not the author) under the same delegation in the addendum of 2026-10-17 for
 // the repair, "the repair of exact references (the review of #974)" (the record names each, with what changed in review).
+// Reading by page (the plan's item 3.7; R73): a long version's contents and its pages (`reading.contents`,
+// `reading.contentsPage`, `reading.pageShown`, `reading.pagesShown`), the navigation and its links (`reading.pager`,
+// `reading.previousPage`, `reading.nextPage`, `reading.nextPageFailed`), the export composer's pin of every article
+// (`export.pinAll`, `export.readingPages`, `export.pagesFailed`), and the two refusal sentences for an article a version
+// does not hold (`anchor_not_in_version`) in `REFUSALS_FR.sentences`, were reviewed by an independent reviewer (Claude, AI
+// reviewer, not the author) under the same delegation in the addendum of 2026-10-18 on reading by page (13 forms, 2 changed
+// in review: the refusal sentences say what the index holds, "Cet index ne contient aucun article portant cet identifiant
+// dans cette version", never that the version has no such article, which an article not admitted would make false; the
+// English changed with them). The forms that review gave for its points 4 and 6 (`reading.contentsPageOne`,
+// `reading.pageShownOne`, a page of one article named once; `export.readingPages`, "pages lues : {done} sur {pages}") ship
+// as it gave them, with the English it named.
 // No French entry ships unreviewed.
 //
 // Vocabulary: a work is an "acte" (a publisher's Cellar work, one record of an EU act, is an "œuvre de l’éditeur"), a
@@ -246,7 +257,9 @@ export const LIVE_CHROME_FR = Object.freeze({
     citeNotComposed: 'Lex ne compose pas de citation usuelle pour cet article ; son permalien le cite.',
     contents: 'Sommaire',
     contentsPage: 'Page {number} : {first} à {last}',
+    contentsPageOne: 'Page {number} : {first}',
     pageShown: 'Page {number} sur {pages} : {first} à {last}.',
+    pageShownOne: 'Page {number} sur {pages} : {first}.',
     pagesShown: 'Pages {from} à {to} sur {pages} : {first} à {last}.',
     pager: 'Pages',
     previousPage: 'Articles précédents',
@@ -378,7 +391,7 @@ export const LIVE_CHROME_FR = Object.freeze({
     jsonSummary: 'Le JSON tel qu’il sera enregistré',
     usualCitation: 'Citation usuelle : {citation}',
     pinAll: 'Épingler tous les articles',
-    readingPages: 'Lecture de toutes les pages : {done} sur {pages}.',
+    readingPages: 'Lecture de toutes les pages ; pages lues : {done} sur {pages}.',
     pagesFailed: 'Les pages n’ont pas toutes pu être lues ; rien de plus n’a été épinglé.',
   }),
   card: Object.freeze({
@@ -814,10 +827,10 @@ export const REFUSALS_FR = Object.freeze({
       'La version que la date retient ne comporte aucun article de ce numéro, et aucun autre article n’est ouvert à sa place.',
     'This server holds this EU act in one wording only, and answers no date for it: leave the date out of the reference.':
       'Ce serveur ne détient cet acte de l’UE que dans un seul libellé, et ne répond à aucune date pour celui-ci : retirez la date de la référence.',
-    'This version holds no article with that id.':
-      'Cette version ne contient aucun article portant cet identifiant.',
-    'This wording holds no article with that id.':
-      'Ce libellé ne contient aucun article portant cet identifiant.',
+    'This index holds no article with that id in this version.':
+      'Cet index ne contient aucun article portant cet identifiant dans cette version.',
+    'This index holds no article with that id in this wording.':
+      'Cet index ne contient aucun article portant cet identifiant dans ce libellé.',
   }),
   templates: Object.freeze({
     coverage: Object.freeze({
