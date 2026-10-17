@@ -20,16 +20,21 @@
 // of this process in it. When anything in that fails, the page is served as built and asks for itself.
 //
 // What it says to search engines is the release's switch (`search-engines.mjs`, R67), as the API says it
-// (`V3WebRoot.SearchEngines.cs`): `/robots.txt` in the switch's state, `/sitemap.xml` only with the site indexed, and
-// `X-Robots-Tag: noindex` on every page, file and 404 it answers but a page the switch opened, whose kept-out marker it
-// removed, and on a redirect while the site is kept out. The switch is `LEX_V3_SEARCH_ENGINES` when the server is made,
-// unless the caller names one; the indexing record (R92's outcome) is a file the caller names, none by default.
+// (`V3WebRoot.SearchEngines.cs`): `/robots.txt` in the switch's state, the sitemap (`/sitemap.xml` and its parts) only with
+// the site indexed, and `X-Robots-Tag: noindex` on the pages, files and 404 pages it serves, but a page the switch opened
+// (whose kept-out marker it removed), and on a redirect while the site is kept out; a problem it answers in JSON (a method
+// refused, a path forwarded to nothing) names none, as the API's own problems name none. The switch is
+// `LEX_V3_SEARCH_ENGINES` when the server is made, unless the caller names one; the indexing record (R92's outcome) is a file
+// the caller names, none by default. With the site indexed, the server asks its API once, when a page first needs it, the
+// mounted index's build time and which of the record's works it holds (`searchEngineFacts`), and builds the sitemap's bytes
+// then, once (review of #976, F4 and F5); an API it cannot reach is asked again on the next request, and meanwhile nothing
+// is opened.
 
 import { INTERFACE_LANGUAGES, movedFor, pageForSitePath, redirectFor, sitePageFor } from "./permalinks.mjs";
 import { luxembourgDate } from "./temporal.mjs";
 import {
-  ROBOTS_CONTENT_TYPE, ROBOTS_PATH, SEARCH_ENGINES_VARIABLE, SITEMAP_CONTENT_TYPE, SITEMAP_PATH, INDEXED, X_ROBOTS_TAG, readIndexingRecord,
-  robotsTxt, searchEnginesState, servedPage, sitemapXml,
+  ROBOTS_CONTENT_TYPE, ROBOTS_PATH, SEARCH_ENGINES_VARIABLE, SITEMAP_CONTENT_TYPE, SITEMAP_PART, SITEMAP_PATH, INDEXED, KEPT_OUT, X_ROBOTS_TAG,
+  readIndexingRecord, robotsTxt, searchEngineFacts, searchEnginesState, servedPage, sitemapFiles,
 } from "./search-engines.mjs";
 import { createServer, request as httpRequest } from "node:http";
 import { readFileSync } from "node:fs";
@@ -54,6 +59,9 @@ const CONTENT_TYPES = Object.freeze({
 });
 
 const BASE_HEADERS = Object.freeze({ "x-content-type-options": "nosniff", "cache-control": "no-store" });
+
+/** robots.txt in each state of the switch, as bytes, built once. */
+const ROBOTS_BYTES = Object.freeze({ [INDEXED]: Buffer.from(robotsTxt(INDEXED), "utf8"), [KEPT_OUT]: Buffer.from(robotsTxt(KEPT_OUT), "utf8") });
 
 function problem(response, status, code) {
   const body = JSON.stringify({ schema: "lex-v3-live-server-problem/1", code });
@@ -176,13 +184,45 @@ async function notFound(response, root, pathname, method, acceptLanguage) {
 
 /**
  * A page's bytes as served in the switch's state (`servedPage`), and the headers it adds: `X-Robots-Tag` unless the page was
- * opened. Any other file is served as it is, with the header.
+ * opened. Any other file is served as it is, with the header. `searchEngines` is the server's switch and, with the site
+ * indexed, `facts()`, which answers the record of the works the API holds (`searchEngineFacts`).
  */
-function forSearchEngines(bytes, type, pathname, searchEngines) {
+async function forSearchEngines(bytes, type, pathname, searchEngines) {
   // Kept out, nothing is opened, so a page is never read as text here.
   if (type !== CONTENT_TYPES[".html"] || searchEngines.state !== INDEXED) return { bytes, headers: { "x-robots-tag": X_ROBOTS_TAG } };
-  const served = servedPage(bytes.toString("utf8"), { state: searchEngines.state, pathname, record: searchEngines.record });
+  const { record, reached } = await searchEngines.facts();
+  // An API the server could not reach opens nothing: no page is told to search engines it did not ask about.
+  if (!reached) return { bytes, headers: { "x-robots-tag": X_ROBOTS_TAG } };
+  const served = servedPage(bytes.toString("utf8"), { state: searchEngines.state, pathname, record });
   return served.opened ? { bytes: Buffer.from(served.html, "utf8"), headers: {} } : { bytes, headers: { "x-robots-tag": X_ROBOTS_TAG } };
+}
+
+/**
+ * With the site indexed, what the API says the search engines are told, asked once (`searchEngineFacts`): the record of the
+ * works it holds, the mounted index's build time, and the sitemap's files as bytes, built then. Kept for the server's life
+ * once the API answered; while it cannot be reached, nothing is opened and it is asked again on the next request.
+ */
+function searchEngineFactsOf(record, apiOrigin, deadlineMs) {
+  let kept = null;
+  return async () => {
+    if (kept !== null) return kept;
+    let reached = true;
+    const ask = async (operation, parameters) => {
+      try {
+        const answer = await forward(apiOrigin, `/api/v3/${operation}`, Buffer.from(JSON.stringify({ operation_id: operation, parameters })), deadlineMs);
+        if (answer.status !== 200 || !(answer.contentType ?? "").startsWith("application/json")) return null;
+        return JSON.parse(answer.body.toString("utf8"));
+      } catch {
+        reached = false;
+        return null;
+      }
+    };
+    const facts = await searchEngineFacts(record, ask);
+    if (!reached) return Object.freeze({ record: null, lastmod: null, sitemap: null, reached: false });
+    const sitemap = new Map(Object.entries(sitemapFiles(facts.record, { lastmod: facts.lastmod })).map(([path, text]) => [path, Buffer.from(text, "utf8")]));
+    kept = Object.freeze({ ...facts, sitemap, reached: true });
+    return kept;
+  };
 }
 
 async function serveStatic(response, root, pathname, method, acceptLanguage, searchEngines) {
@@ -215,7 +255,7 @@ async function serveStatic(response, root, pathname, method, acceptLanguage, sea
     await notFound(response, root, pathname, method, acceptLanguage);
     return;
   }
-  const served = forSearchEngines(await readFile(file), type, pathname, searchEngines);
+  const served = await forSearchEngines(await readFile(file), type, pathname, searchEngines);
   response.writeHead(200, { ...BASE_HEADERS, ...served.headers, "content-type": type, "content-length": served.bytes.length });
   response.end(method === "HEAD" ? undefined : served.bytes);
 }
@@ -244,8 +284,8 @@ function luxembourgToday(now) {
  * running `Lex.V3.Api` (for example `http://127.0.0.1:5075`), and `now` its clock (a UTC instant), which says the date a
  * readable address's page is rendered at (R67: the current version, today in Luxembourg). `searchEngines` is the release's
  * switch (`indexed`, or anything else for kept out; `LEX_V3_SEARCH_ENGINES` by default) and `indexingRecord` the file of
- * the release's indexing record, R92's outcome (`readIndexingRecord`; none by default, so no law's page is opened). It is
- * returned unstarted.
+ * the release's indexing record, R92's outcome (`readIndexingRecord`; none by default, so no law's page is opened), whose works
+ * the API's `dossier` must answer to be opened or listed. It is returned unstarted.
  */
 export function createLiveServer({
   root,
@@ -257,7 +297,8 @@ export function createLiveServer({
 }) {
   const rootPath = resolve(root instanceof URL ? fileURLToPath(root) : root);
   const rendererFor = serverRenderers(rootPath);
-  const engines = Object.freeze({ state: searchEnginesState(searchEngines), record: indexingRecordAt(indexingRecord) });
+  const state = searchEnginesState(searchEngines);
+  const engines = Object.freeze({ state, facts: state === INDEXED ? searchEngineFactsOf(indexingRecordAt(indexingRecord), apiOrigin, apiDeadlineMs) : null });
   // A redirect or a move with the site indexed carries no X-Robots-Tag: it is no page, and the page it leads to says what it
   // says (an x-default alternate is the root's or a law's redirect). Kept out, it keeps the header, as the API answers it.
   const redirectRobots = engines.state === INDEXED ? {} : { "x-robots-tag": X_ROBOTS_TAG };
@@ -298,14 +339,17 @@ export function createLiveServer({
         problem(response, 405, "method_not_allowed");
         return;
       }
-      // robots.txt in the switch's state, and the sitemap only with the site indexed (R67); kept out, the sitemap is an
-      // address this site does not hold.
-      if (url.pathname === ROBOTS_PATH || (url.pathname === SITEMAP_PATH && engines.state === INDEXED)) {
-        const bytes = Buffer.from(url.pathname === ROBOTS_PATH ? robotsTxt(engines.state) : sitemapXml(engines.record), "utf8");
+      // robots.txt in the switch's state, and the sitemap's index and parts only with the site indexed (R67); kept out, or
+      // a part the sitemap has not, is an address this site does not hold.
+      const sitemap = engines.state === INDEXED && (url.pathname === SITEMAP_PATH || SITEMAP_PART.test(url.pathname))
+        ? (await engines.facts()).sitemap?.get(url.pathname) ?? null
+        : null;
+      if (url.pathname === ROBOTS_PATH || sitemap !== null) {
+        const bytes = sitemap ?? ROBOTS_BYTES[engines.state];
         response.writeHead(200, {
           ...BASE_HEADERS,
           "x-robots-tag": X_ROBOTS_TAG,
-          "content-type": url.pathname === ROBOTS_PATH ? ROBOTS_CONTENT_TYPE : SITEMAP_CONTENT_TYPE,
+          "content-type": sitemap === null ? ROBOTS_CONTENT_TYPE : SITEMAP_CONTENT_TYPE,
           "content-length": bytes.length,
         });
         response.end(request.method === "HEAD" ? undefined : bytes);
@@ -338,7 +382,7 @@ export function createLiveServer({
           rendered = null;
         }
         if (rendered !== null) {
-          const served = forSearchEngines(Buffer.from(rendered.html, "utf8"), CONTENT_TYPES[".html"], url.pathname, engines);
+          const served = await forSearchEngines(Buffer.from(rendered.html, "utf8"), CONTENT_TYPES[".html"], url.pathname, engines);
           response.writeHead(rendered.status, { ...BASE_HEADERS, ...served.headers, "content-type": CONTENT_TYPES[".html"], "content-length": served.bytes.length });
           response.end(request.method === "HEAD" ? undefined : served.bytes);
           return;

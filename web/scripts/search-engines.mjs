@@ -7,13 +7,15 @@
 // has not answered O27 (search-engine indexing), and the plan says: "If unanswered: the pages open but are kept out of
 // search engines."
 //
-//   kept out   robots.txt disallows everything, every response carries `X-Robots-Tag: noindex`, every page names
-//              `<meta name="robots" content="noindex">`, and no sitemap is offered (`/sitemap.xml` is an address the site
-//              does not hold).
-//   indexed    robots.txt allows the pages and disallows the API, MCP, the health routes, search and export
-//              (`ROBOTS_INDEXED`), and names the sitemap; a page whose kept-out marker the server may remove
-//              (`indexablePage`) is served without it and without the header, a redirect or a move without the header (it
-//              is no page: the page it leads to says what it says), and every other response keeps the header.
+//   kept out   robots.txt allows the pages and disallows the API, MCP, the health routes, search and export, as indexed,
+//              and names no sitemap (`ROBOTS_KEPT_OUT`): a crawler must fetch a page to read its noindex, which a page
+//              robots.txt blocks never is, and a blocked address can still be listed bare (review of #976, F1). Every
+//              response carries `X-Robots-Tag: noindex`, every page names `<meta name="robots" content="noindex">`, and no
+//              sitemap is offered (`/sitemap.xml` is an address the site does not hold).
+//   indexed    robots.txt allows the pages, disallows the same and names the sitemap (`ROBOTS_INDEXED`); a page whose
+//              kept-out marker the server may remove (`indexablePage`) is served without it and without the header, a
+//              redirect or a move without the header (it is no page: the page it leads to says what it says), and every
+//              other response keeps the header.
 //
 // The pages carry one of two robots meta elements (`Document.jsx`): `NEVER_INDEXED_META` on a page no search engine is ever
 // asked to index (search, export, the provision history, compare and radar forms, a law's page as built, a refusal, the 404
@@ -24,8 +26,10 @@
 // Names (R92: "keep the text with names out of full-text search and search engines, with an objection contact ... or
 // point to the publisher"; the owner's O28): a law's page is opened only for a work the release's indexing record lists
 // (`readIndexingRecord`), the outcome of R92's measurement of which classes of acts name private individuals (the plan's
-// item 1.11, in the data lane). No release carries one yet, so with the switch on no law's page is opened and the sitemap
-// lists none: the home pages and Trust and Coverage only. A work the record does not name is kept out, whatever the switch.
+// item 1.11, in the data lane), and that the mounted corpus holds: when the site is indexed, each server asks its API's
+// `dossier` of every listed work once, and a work it does not answer is dropped (`searchEngineFacts`, review of #976, F5).
+// No release carries a record yet, so with the switch on no law's page is opened and the sitemap lists none: the home pages
+// and Trust and Coverage only. A work the record does not name is kept out, whatever the switch.
 //
 // This module is data and pure functions only.
 
@@ -57,24 +61,28 @@ export const SITEMAP_PATH = "/sitemap.xml";
 export const ROBOTS_CONTENT_TYPE = "text/plain; charset=utf-8";
 export const SITEMAP_CONTENT_TYPE = "application/xml; charset=utf-8";
 
-/** robots.txt with the site kept out: every address, for every crawler. */
-export const ROBOTS_KEPT_OUT = "User-agent: *\nDisallow: /\n";
-
 /**
- * robots.txt with the site indexed (R67: "robots.txt allows dossiers and reading pages, and disallows /api, /mcp, search
+ * robots.txt's rules, in both states (R67: "robots.txt allows dossiers and reading pages, and disallows /api, /mcp, search
  * results and exports"): the API, the MCP endpoint, the health routes, and each language's search and export pages; the rest
- * is allowed, and the sitemap is named.
+ * is allowed.
  */
-export const ROBOTS_INDEXED = [
+const ROBOTS_RULES = Object.freeze([
   "User-agent: *",
   "Disallow: /api/",
   "Disallow: /mcp",
   "Disallow: /health/",
   ...INTERFACE_LANGUAGES.flatMap((language) => [`Disallow: /${language}/search.html`, `Disallow: /${language}/export.html`]),
-  "",
-  `Sitemap: ${SITE_ORIGIN}${SITEMAP_PATH}`,
-  "",
-].join("\n");
+]);
+
+/**
+ * robots.txt with the site kept out: the same rules, and no sitemap. The pages stay crawlable so that a crawler reads their
+ * noindex (header and element), which is what keeps them out; `Disallow: /` would hide it, and a blocked address can still be
+ * listed bare when linked (review of #976, F1).
+ */
+export const ROBOTS_KEPT_OUT = `${ROBOTS_RULES.join("\n")}\n`;
+
+/** robots.txt with the site indexed: the same rules, and the sitemap named. */
+export const ROBOTS_INDEXED = `${ROBOTS_RULES.join("\n")}\n\nSitemap: ${SITE_ORIGIN}${SITEMAP_PATH}\n`;
 
 /** robots.txt in a state of the switch. */
 export function robotsTxt(state) {
@@ -87,8 +95,16 @@ export const INDEXING_RECORD_SCHEMA = "lex-v3-indexing-record/1";
 /** The file the API reads it from, beside its corpus mount (`v3-corpus/`). */
 export const INDEXING_RECORD_FILE = "indexing-record.json";
 
-/** A sitemap file holds at most this many addresses (the sitemaps protocol); a record that would list more is refused. */
+/**
+ * A sitemap file holds at most this many addresses and bytes (the sitemaps protocol: 50,000 and 50 MiB, uncompressed); more
+ * are split into numbered parts a sitemap index names (`sitemapFiles`).
+ */
 export const SITEMAP_MAXIMUM_URLS = 50_000;
+export const SITEMAP_MAXIMUM_BYTES = 50 * 1024 * 1024;
+
+/** The sitemap's numbered parts, `/sitemap-1.xml` on, each of which the index at `/sitemap.xml` names. */
+export const SITEMAP_PART = /^\/sitemap-([1-9][0-9]*)\.xml$/;
+export const sitemapPartPath = (number) => `/sitemap-${number}.xml`;
 
 /** The pages the switch opens that stand at no law's address: each language's home page and Trust and Coverage. */
 export const OPENED_PAGES = Object.freeze(["", "coverage.html"]);
@@ -106,7 +122,8 @@ const CONSOLIDATED_CELEX = /^0[0-9]{4}[A-Z]{1,2}[0-9]{4,}(?:\([0-9]{2}\))?-[0-9]
  * `works`, each work R92's measurement found to name no private individual: its dossier's address with no interface
  * language (`/lu-legilux/{work}`, `/eu-eurlex/{celex}`, never a consolidated version's CELEX) and the text languages its
  * readable address answers a reading in, at least one, in order and each once; the works in their addresses' order, each
- * once; and no more addresses in the sitemap than a sitemap file holds. Nothing else is read from it.
+ * once. Nothing else is read from it. How many works it lists is no rule of it: a sitemap splits into parts (review of #976,
+ * F3), and R92's gate does not hang on a sitemap's size.
  */
 export function readIndexingRecord(text) {
   let value;
@@ -135,9 +152,45 @@ export function readIndexingRecord(text) {
     }
     works.push(Object.freeze({ address: work.address, languages: Object.freeze([...work.languages]) }));
   }
-  const urls = INTERFACE_LANGUAGES.length * (OPENED_PAGES.length + works.reduce((count, work) => count + 1 + work.languages.length, 0));
-  if (urls > SITEMAP_MAXIMUM_URLS) return null;
   return Object.freeze({ builtAt, works: Object.freeze(works) });
+}
+
+/** The `dossier` identifier of a work the record names: a Luxembourg work's address, or an EU act's CELEX. */
+export function dossierIdentifierOf(address) {
+  return parseSitePath(address)?.identifier ?? null;
+}
+
+/**
+ * The build time of the mounted index, from the API's `coverage` envelope: the `built_at` of the snapshot its history names
+ * `mounted`, an instant in UTC, else null (no corpus, an index that records no build, or anything else).
+ */
+export function mountedBuiltAt(envelope) {
+  const snapshots = envelope?.refusal === null ? envelope?.result?.value?.history?.snapshots_with_text : null;
+  if (!Array.isArray(snapshots)) return null;
+  const mounted = snapshots.filter((snapshot) => Array.isArray(snapshot?.retained_as) && snapshot.retained_as.includes("mounted"));
+  return mounted.length === 1 && isUtcInstant(mounted[0].built_at) ? mounted[0].built_at : null;
+}
+
+/** Whether a `dossier` envelope answers the work: a result, and no refusal. */
+export function dossierHolds(envelope) {
+  return envelope !== null && typeof envelope === "object" && envelope.refusal === null && envelope.result !== null && envelope.result !== undefined;
+}
+
+/**
+ * What a server says to search engines with the site indexed, from its API's own answers, asked once (review of #976, F5):
+ * `lastmod`, the mounted index's build time (`mountedBuiltAt` of `coverage`), and `record`, the indexing record with each
+ * work the API's `dossier` does not answer dropped (a work the mount does not hold is never opened nor listed), or null with
+ * no record. `ask(operation, parameters)` answers an envelope, or null when there is none (which drops the work, or names no
+ * build time).
+ */
+export async function searchEngineFacts(record, ask) {
+  const lastmod = mountedBuiltAt(await ask("coverage", {}));
+  if (record === null) return Object.freeze({ record: null, lastmod });
+  const works = [];
+  for (const work of record.works) {
+    if (dossierHolds(await ask("dossier", { identifier: dossierIdentifierOf(work.address) }))) works.push(work);
+  }
+  return Object.freeze({ record: Object.freeze({ builtAt: record.builtAt, works: Object.freeze(works) }), lastmod });
 }
 
 /** A law's address's work, as the indexing record names it (`/lu-legilux/{work}`, `/eu-eurlex/{celex}`), or null. */
@@ -185,20 +238,9 @@ function entries(addressIn, xDefault, lastmod) {
   return INTERFACE_LANGUAGES.map((language) => entry(`${SITE_ORIGIN}${addressIn(language)}`, alternates, lastmod));
 }
 
-/**
- * The sitemap with the site indexed (R67: "A sitemap lists dossiers and current reading pages, with lastmod from the build
- * or acquisition time, never valid_from"): each interface language's home page (its `x-default` the root, which sends a
- * reader to theirs) and Trust and Coverage (its `x-default` the French page, as the pages' own alternates say); then, for each
- * work the indexing record lists, its dossier and its readable address in each text language it lists (the act's, with no
- * article), each in both interface languages, its `x-default` the address with no interface language. Never a permalink:
- * a permalink pins one version, and the readable address is the current one. `lastmod` is the record's `built_at`, the
- * build of the index it read, and is left out with no record or none.
- */
-export function sitemapXml(record) {
-  const lastmod = record?.builtAt ?? null;
+/** The sitemap's entries (R67), in order, each an ASCII line: its addresses are the site's, which escape anything else. */
+function sitemapEntries(record, lastmod) {
   const lines = [
-    '<?xml version="1.0" encoding="UTF-8"?>',
-    '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:xhtml="http://www.w3.org/1999/xhtml">',
     ...entries((language) => `/${language}/`, "/", lastmod),
     ...entries((language) => `/${language}/coverage.html`, `/${INTERFACE_LANGUAGES[0]}/coverage.html`, lastmod),
   ];
@@ -211,6 +253,44 @@ export function sitemapXml(record) {
       lines.push(...entries((locale) => `/${locale}${act}`, act, lastmod));
     }
   }
-  lines.push("</urlset>", "");
-  return lines.join("\n");
+  return lines;
+}
+
+const URLSET_HEAD = '<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:xhtml="http://www.w3.org/1999/xhtml">\n';
+const URLSET_TAIL = "</urlset>\n";
+
+/** The first two lines of the sitemap's index (`/sitemap.xml`), as `sitemapFiles` writes it. */
+export const SITEMAP_INDEX_HEAD = '<?xml version="1.0" encoding="UTF-8"?>\n<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n';
+
+/**
+ * The sitemap with the site indexed (R67: "A sitemap lists dossiers and current reading pages, with lastmod from the
+ * build or acquisition time, never valid_from"), by its paths: `/sitemap.xml`, the index naming each part, and
+ * `/sitemap-1.xml` on, each part at most `partSize` addresses and `maximumBytes` bytes, the protocol's by default
+ * (review of #976, F3: the population already lists about 29,000). The entries: each interface language's home page
+ * (its `x-default` the root, which sends a reader to theirs) and Trust and Coverage (its `x-default` the French page,
+ * as the pages' own alternates say); then, for each work the indexing record lists, its dossier and its readable
+ * address in each text language it lists (the act's, with no article), each in both interface languages, its
+ * `x-default` the address with no interface language. Never a permalink: a permalink pins one version, and the readable
+ * address is the current one. `lastmod` is the mounted index's build time (`mountedBuiltAt`, review of #976, F5), on
+ * every entry and part, and is left out when it is null.
+ */
+export function sitemapFiles(record, { lastmod = null, partSize = SITEMAP_MAXIMUM_URLS, maximumBytes = SITEMAP_MAXIMUM_BYTES } = {}) {
+  const parts = [];
+  let part = [];
+  let bytes = URLSET_HEAD.length + URLSET_TAIL.length;
+  for (const line of sitemapEntries(record, lastmod)) {
+    if (part.length > 0 && (part.length === partSize || bytes + line.length + 1 > maximumBytes)) {
+      parts.push(part);
+      part = [];
+      bytes = URLSET_HEAD.length + URLSET_TAIL.length;
+    }
+    part.push(line);
+    bytes += line.length + 1;
+  }
+  parts.push(part);
+  const files = {
+    [SITEMAP_PATH]: `${SITEMAP_INDEX_HEAD}${parts.map((_, index) => `<sitemap><loc>${SITE_ORIGIN}${sitemapPartPath(index + 1)}</loc>${lastmod === null ? "" : `<lastmod>${lastmod}</lastmod>`}</sitemap>\n`).join("")}</sitemapindex>\n`,
+  };
+  for (const [index, lines] of parts.entries()) files[sitemapPartPath(index + 1)] = `${URLSET_HEAD}${lines.map((line) => `${line}\n`).join("")}${URLSET_TAIL}`;
+  return Object.freeze(files);
 }

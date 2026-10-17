@@ -1220,7 +1220,49 @@
           "claimed": true,
           "status": 200,
           "type": "application/xml; charset=utf-8",
-          "body": "sitemap"
+          "body": "/sitemap.xml"
+        }
+      }
+    },
+    {
+      "path": "/sitemap-1.xml",
+      "page": null,
+      "redirect": null,
+      "moved": null,
+      "render": null,
+      "searchEngines": {
+        "kept-out": {
+          "claimed": false,
+          "status": 404,
+          "type": null,
+          "body": null
+        },
+        "indexed": {
+          "claimed": true,
+          "status": 200,
+          "type": "application/xml; charset=utf-8",
+          "body": "/sitemap-1.xml"
+        }
+      }
+    },
+    {
+      "path": "/sitemap-2.xml",
+      "page": null,
+      "redirect": null,
+      "moved": null,
+      "render": null,
+      "searchEngines": {
+        "kept-out": {
+          "claimed": false,
+          "status": 404,
+          "type": null,
+          "body": null
+        },
+        "indexed": {
+          "claimed": false,
+          "status": 404,
+          "type": null,
+          "body": null
         }
       }
     }
@@ -1304,7 +1346,7 @@
     }
   ],
   "searchEngines": {
-    "about": "What the site says to search engines (the specification of record's R67; the plan's item 3.6), held to one table by web/test/search-engines.test.mjs (web/scripts/search-engines.mjs, serve-live.mjs) and tests/Lex.V3.Tests/V3WebRootSearchEnginesTests.cs (V3WebRoot.SearchEngines.cs). `variable` is the release's switch, read by both servers when they start; `states` the state each value of it gives (only `indexed` opens; anything else, its absence included, is kept out: the owner has not answered O27). `meta` the two robots elements a live page carries: `never` on a page no search engine is ever asked to index, `keptOut` on one the switch opens, which a server removes with the site indexed when the page may be (`pages`). `robots` robots.txt in each state; `record` an indexing record (R92's outcome: the works its measurement found to name no private individual, with the text languages of their readable addresses), `admitted` and `refused` records each reader takes or refuses whole, and `sitemap` the sitemap with the site indexed and `record` held (no record: the home pages and Trust and Coverage only). `pages`: for a page that carries the kept-out marker at `path`, whether a server opens it (removes the marker and the X-Robots-Tag header) in each state, with `record` held, or with none. The rows /robots.txt and /sitemap.xml under `paths` say what each server answers there in each state (`claimed` false: an address the site does not hold, its 404).",
+    "about": "What the site says to search engines (the specification of record's R67; the plan's item 3.6; the review of #976), held to one table by web/test/search-engines.test.mjs (web/scripts/search-engines.mjs, serve-live.mjs) and tests/Lex.V3.Tests/V3WebRootSearchEnginesTests.cs (V3WebRoot.SearchEngines.cs). `variable` is the release's switch, read by both servers when they start; `states` the state each value of it gives (only `indexed` opens; anything else, its absence included, is kept out: the owner has not answered O27). `meta` the two robots elements a live page carries: `never` on a page no search engine is ever asked to index, `keptOut` on one the switch opens, which a server removes with the site indexed when the page may be (`pages`). `robots` robots.txt in each state: the same rules (the pages allowed, the API, MCP, the health routes, search and export disallowed), and the sitemap named only when indexed: kept out, a crawler must fetch a page to read its noindex (review of #976, F1). `record` an indexing record (R92's outcome: the works its measurement found to name no private individual, with the text languages of their readable addresses), `admitted` and `refused` records each reader takes or refuses whole, whatever their size (F3). `answers` what the API answers the server's own questions with the site indexed (`coverage`, and `dossier` of each listed work; F5), `lastmod` the mounted index's build time read from that coverage answer, `held` the record's works the API's dossier answers (a work it does not answer is never opened nor listed), `builds` and `holds` envelopes each server reads the same way. `sitemap` the sitemap's files with the site indexed, the held works and that lastmod: /sitemap.xml its index, /sitemap-1.xml on its parts (F3); `sitemapWithoutRecord` with no record (the home pages and Trust and Coverage only), and `split` the same with parts of at most `partSize` addresses. `pages`: for a page that carries the kept-out marker at `path`, whether a server opens it (removes the marker and the X-Robots-Tag header) in each state, with the held record, or with none. The rows /robots.txt, /sitemap.xml, /sitemap-1.xml and /sitemap-2.xml under `paths` say what each server answers there in each state, with the held record (`claimed` false: an address the site does not hold, its 404).",
     "variable": "LEX_V3_SEARCH_ENGINES",
     "states": [
       {
@@ -1357,7 +1399,7 @@
       "indexed": null
     },
     "robots": {
-      "kept-out": "User-agent: *\nDisallow: /\n",
+      "kept-out": "User-agent: *\nDisallow: /api/\nDisallow: /mcp\nDisallow: /health/\nDisallow: /fr/search.html\nDisallow: /fr/export.html\nDisallow: /en/search.html\nDisallow: /en/export.html\n",
       "indexed": "User-agent: *\nDisallow: /api/\nDisallow: /mcp\nDisallow: /health/\nDisallow: /fr/search.html\nDisallow: /fr/export.html\nDisallow: /en/search.html\nDisallow: /en/export.html\n\nSitemap: https://law.soufien.lu/sitemap.xml\n"
     },
     "record": {
@@ -1373,6 +1415,12 @@
         },
         {
           "address": "/lu-legilux/loi-1991-08-10-n3",
+          "languages": [
+            "fra"
+          ]
+        },
+        {
+          "address": "/lu-legilux/no-such-work",
           "languages": [
             "fra"
           ]
@@ -1398,6 +1446,12 @@
               "languages": [
                 "fra"
               ]
+            },
+            {
+              "address": "/lu-legilux/no-such-work",
+              "languages": [
+                "fra"
+              ]
             }
           ]
         }
@@ -1416,6 +1470,12 @@
             },
             {
               "address": "/lu-legilux/loi-1991-08-10-n3",
+              "languages": [
+                "fra"
+              ]
+            },
+            {
+              "address": "/lu-legilux/no-such-work",
               "languages": [
                 "fra"
               ]
@@ -1449,6 +1509,12 @@
               "languages": [
                 "fra"
               ]
+            },
+            {
+              "address": "/lu-legilux/no-such-work",
+              "languages": [
+                "fra"
+              ]
             }
           ],
           "measured_by": "the plan's item 1.11"
@@ -1474,6 +1540,12 @@
               "languages": [
                 "fra"
               ]
+            },
+            {
+              "address": "/lu-legilux/no-such-work",
+              "languages": [
+                "fra"
+              ]
             }
           ]
         }
@@ -1493,6 +1565,12 @@
             },
             {
               "address": "/lu-legilux/loi-1991-08-10-n3",
+              "languages": [
+                "fra"
+              ]
+            },
+            {
+              "address": "/lu-legilux/no-such-work",
               "languages": [
                 "fra"
               ]
@@ -1518,6 +1596,12 @@
               "languages": [
                 "fra"
               ]
+            },
+            {
+              "address": "/lu-legilux/no-such-work",
+              "languages": [
+                "fra"
+              ]
             }
           ]
         }
@@ -1540,6 +1624,12 @@
               "languages": [
                 "fra"
               ]
+            },
+            {
+              "address": "/lu-legilux/no-such-work",
+              "languages": [
+                "fra"
+              ]
             }
           ]
         }
@@ -1550,6 +1640,12 @@
           "schema": "lex-v3-indexing-record/1",
           "built_at": "2026-10-13T21:40:36Z",
           "works": [
+            {
+              "address": "/lu-legilux/no-such-work",
+              "languages": [
+                "fra"
+              ]
+            },
             {
               "address": "/lu-legilux/loi-1991-08-10-n3",
               "languages": [
@@ -1719,14 +1815,272 @@
                 "languages": [
                   "fra"
                 ]
+              },
+              {
+                "address": "/lu-legilux/no-such-work",
+                "languages": [
+                  "fra"
+                ]
               }
             ]
           }
         ]
       }
     ],
-    "sitemap": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<urlset xmlns=\"http://www.sitemaps.org/schemas/sitemap/0.9\" xmlns:xhtml=\"http://www.w3.org/1999/xhtml\">\n<url><loc>https://law.soufien.lu/fr/</loc><lastmod>2026-10-13T21:40:36Z</lastmod><xhtml:link rel=\"alternate\" hreflang=\"fr\" href=\"https://law.soufien.lu/fr/\"/><xhtml:link rel=\"alternate\" hreflang=\"en\" href=\"https://law.soufien.lu/en/\"/><xhtml:link rel=\"alternate\" hreflang=\"x-default\" href=\"https://law.soufien.lu/\"/></url>\n<url><loc>https://law.soufien.lu/en/</loc><lastmod>2026-10-13T21:40:36Z</lastmod><xhtml:link rel=\"alternate\" hreflang=\"fr\" href=\"https://law.soufien.lu/fr/\"/><xhtml:link rel=\"alternate\" hreflang=\"en\" href=\"https://law.soufien.lu/en/\"/><xhtml:link rel=\"alternate\" hreflang=\"x-default\" href=\"https://law.soufien.lu/\"/></url>\n<url><loc>https://law.soufien.lu/fr/coverage.html</loc><lastmod>2026-10-13T21:40:36Z</lastmod><xhtml:link rel=\"alternate\" hreflang=\"fr\" href=\"https://law.soufien.lu/fr/coverage.html\"/><xhtml:link rel=\"alternate\" hreflang=\"en\" href=\"https://law.soufien.lu/en/coverage.html\"/><xhtml:link rel=\"alternate\" hreflang=\"x-default\" href=\"https://law.soufien.lu/fr/coverage.html\"/></url>\n<url><loc>https://law.soufien.lu/en/coverage.html</loc><lastmod>2026-10-13T21:40:36Z</lastmod><xhtml:link rel=\"alternate\" hreflang=\"fr\" href=\"https://law.soufien.lu/fr/coverage.html\"/><xhtml:link rel=\"alternate\" hreflang=\"en\" href=\"https://law.soufien.lu/en/coverage.html\"/><xhtml:link rel=\"alternate\" hreflang=\"x-default\" href=\"https://law.soufien.lu/fr/coverage.html\"/></url>\n<url><loc>https://law.soufien.lu/fr/eu-eurlex/32016R0679</loc><lastmod>2026-10-13T21:40:36Z</lastmod><xhtml:link rel=\"alternate\" hreflang=\"fr\" href=\"https://law.soufien.lu/fr/eu-eurlex/32016R0679\"/><xhtml:link rel=\"alternate\" hreflang=\"en\" href=\"https://law.soufien.lu/en/eu-eurlex/32016R0679\"/><xhtml:link rel=\"alternate\" hreflang=\"x-default\" href=\"https://law.soufien.lu/eu-eurlex/32016R0679\"/></url>\n<url><loc>https://law.soufien.lu/en/eu-eurlex/32016R0679</loc><lastmod>2026-10-13T21:40:36Z</lastmod><xhtml:link rel=\"alternate\" hreflang=\"fr\" href=\"https://law.soufien.lu/fr/eu-eurlex/32016R0679\"/><xhtml:link rel=\"alternate\" hreflang=\"en\" href=\"https://law.soufien.lu/en/eu-eurlex/32016R0679\"/><xhtml:link rel=\"alternate\" hreflang=\"x-default\" href=\"https://law.soufien.lu/eu-eurlex/32016R0679\"/></url>\n<url><loc>https://law.soufien.lu/fr/eu-eurlex/32016R0679/eng</loc><lastmod>2026-10-13T21:40:36Z</lastmod><xhtml:link rel=\"alternate\" hreflang=\"fr\" href=\"https://law.soufien.lu/fr/eu-eurlex/32016R0679/eng\"/><xhtml:link rel=\"alternate\" hreflang=\"en\" href=\"https://law.soufien.lu/en/eu-eurlex/32016R0679/eng\"/><xhtml:link rel=\"alternate\" hreflang=\"x-default\" href=\"https://law.soufien.lu/eu-eurlex/32016R0679/eng\"/></url>\n<url><loc>https://law.soufien.lu/en/eu-eurlex/32016R0679/eng</loc><lastmod>2026-10-13T21:40:36Z</lastmod><xhtml:link rel=\"alternate\" hreflang=\"fr\" href=\"https://law.soufien.lu/fr/eu-eurlex/32016R0679/eng\"/><xhtml:link rel=\"alternate\" hreflang=\"en\" href=\"https://law.soufien.lu/en/eu-eurlex/32016R0679/eng\"/><xhtml:link rel=\"alternate\" hreflang=\"x-default\" href=\"https://law.soufien.lu/eu-eurlex/32016R0679/eng\"/></url>\n<url><loc>https://law.soufien.lu/fr/eu-eurlex/32016R0679/fra</loc><lastmod>2026-10-13T21:40:36Z</lastmod><xhtml:link rel=\"alternate\" hreflang=\"fr\" href=\"https://law.soufien.lu/fr/eu-eurlex/32016R0679/fra\"/><xhtml:link rel=\"alternate\" hreflang=\"en\" href=\"https://law.soufien.lu/en/eu-eurlex/32016R0679/fra\"/><xhtml:link rel=\"alternate\" hreflang=\"x-default\" href=\"https://law.soufien.lu/eu-eurlex/32016R0679/fra\"/></url>\n<url><loc>https://law.soufien.lu/en/eu-eurlex/32016R0679/fra</loc><lastmod>2026-10-13T21:40:36Z</lastmod><xhtml:link rel=\"alternate\" hreflang=\"fr\" href=\"https://law.soufien.lu/fr/eu-eurlex/32016R0679/fra\"/><xhtml:link rel=\"alternate\" hreflang=\"en\" href=\"https://law.soufien.lu/en/eu-eurlex/32016R0679/fra\"/><xhtml:link rel=\"alternate\" hreflang=\"x-default\" href=\"https://law.soufien.lu/eu-eurlex/32016R0679/fra\"/></url>\n<url><loc>https://law.soufien.lu/fr/lu-legilux/loi-1991-08-10-n3</loc><lastmod>2026-10-13T21:40:36Z</lastmod><xhtml:link rel=\"alternate\" hreflang=\"fr\" href=\"https://law.soufien.lu/fr/lu-legilux/loi-1991-08-10-n3\"/><xhtml:link rel=\"alternate\" hreflang=\"en\" href=\"https://law.soufien.lu/en/lu-legilux/loi-1991-08-10-n3\"/><xhtml:link rel=\"alternate\" hreflang=\"x-default\" href=\"https://law.soufien.lu/lu-legilux/loi-1991-08-10-n3\"/></url>\n<url><loc>https://law.soufien.lu/en/lu-legilux/loi-1991-08-10-n3</loc><lastmod>2026-10-13T21:40:36Z</lastmod><xhtml:link rel=\"alternate\" hreflang=\"fr\" href=\"https://law.soufien.lu/fr/lu-legilux/loi-1991-08-10-n3\"/><xhtml:link rel=\"alternate\" hreflang=\"en\" href=\"https://law.soufien.lu/en/lu-legilux/loi-1991-08-10-n3\"/><xhtml:link rel=\"alternate\" hreflang=\"x-default\" href=\"https://law.soufien.lu/lu-legilux/loi-1991-08-10-n3\"/></url>\n<url><loc>https://law.soufien.lu/fr/lu-legilux/loi-1991-08-10-n3/fra</loc><lastmod>2026-10-13T21:40:36Z</lastmod><xhtml:link rel=\"alternate\" hreflang=\"fr\" href=\"https://law.soufien.lu/fr/lu-legilux/loi-1991-08-10-n3/fra\"/><xhtml:link rel=\"alternate\" hreflang=\"en\" href=\"https://law.soufien.lu/en/lu-legilux/loi-1991-08-10-n3/fra\"/><xhtml:link rel=\"alternate\" hreflang=\"x-default\" href=\"https://law.soufien.lu/lu-legilux/loi-1991-08-10-n3/fra\"/></url>\n<url><loc>https://law.soufien.lu/en/lu-legilux/loi-1991-08-10-n3/fra</loc><lastmod>2026-10-13T21:40:36Z</lastmod><xhtml:link rel=\"alternate\" hreflang=\"fr\" href=\"https://law.soufien.lu/fr/lu-legilux/loi-1991-08-10-n3/fra\"/><xhtml:link rel=\"alternate\" hreflang=\"en\" href=\"https://law.soufien.lu/en/lu-legilux/loi-1991-08-10-n3/fra\"/><xhtml:link rel=\"alternate\" hreflang=\"x-default\" href=\"https://law.soufien.lu/lu-legilux/loi-1991-08-10-n3/fra\"/></url>\n</urlset>\n",
-    "sitemapWithoutRecord": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<urlset xmlns=\"http://www.sitemaps.org/schemas/sitemap/0.9\" xmlns:xhtml=\"http://www.w3.org/1999/xhtml\">\n<url><loc>https://law.soufien.lu/fr/</loc><xhtml:link rel=\"alternate\" hreflang=\"fr\" href=\"https://law.soufien.lu/fr/\"/><xhtml:link rel=\"alternate\" hreflang=\"en\" href=\"https://law.soufien.lu/en/\"/><xhtml:link rel=\"alternate\" hreflang=\"x-default\" href=\"https://law.soufien.lu/\"/></url>\n<url><loc>https://law.soufien.lu/en/</loc><xhtml:link rel=\"alternate\" hreflang=\"fr\" href=\"https://law.soufien.lu/fr/\"/><xhtml:link rel=\"alternate\" hreflang=\"en\" href=\"https://law.soufien.lu/en/\"/><xhtml:link rel=\"alternate\" hreflang=\"x-default\" href=\"https://law.soufien.lu/\"/></url>\n<url><loc>https://law.soufien.lu/fr/coverage.html</loc><xhtml:link rel=\"alternate\" hreflang=\"fr\" href=\"https://law.soufien.lu/fr/coverage.html\"/><xhtml:link rel=\"alternate\" hreflang=\"en\" href=\"https://law.soufien.lu/en/coverage.html\"/><xhtml:link rel=\"alternate\" hreflang=\"x-default\" href=\"https://law.soufien.lu/fr/coverage.html\"/></url>\n<url><loc>https://law.soufien.lu/en/coverage.html</loc><xhtml:link rel=\"alternate\" hreflang=\"fr\" href=\"https://law.soufien.lu/fr/coverage.html\"/><xhtml:link rel=\"alternate\" hreflang=\"en\" href=\"https://law.soufien.lu/en/coverage.html\"/><xhtml:link rel=\"alternate\" hreflang=\"x-default\" href=\"https://law.soufien.lu/fr/coverage.html\"/></url>\n</urlset>\n",
+    "answers": [
+      {
+        "operation": "coverage",
+        "parameters": {},
+        "envelope": {
+          "refusal": null,
+          "result": {
+            "value": {
+              "history": {
+                "snapshots_with_text": [
+                  {
+                    "snapshot_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                    "built_at": "2026-09-01T08:00:00Z",
+                    "retained_as": [
+                      "nightly"
+                    ]
+                  },
+                  {
+                    "snapshot_id": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+                    "built_at": "2026-10-01T08:00:00Z",
+                    "retained_as": [
+                      "mounted"
+                    ]
+                  }
+                ]
+              }
+            }
+          }
+        }
+      },
+      {
+        "operation": "dossier",
+        "parameters": {
+          "identifier": "32016R0679"
+        },
+        "envelope": {
+          "refusal": null,
+          "result": {
+            "value": {}
+          }
+        }
+      },
+      {
+        "operation": "dossier",
+        "parameters": {
+          "identifier": "/lu-legilux/loi-1991-08-10-n3"
+        },
+        "envelope": {
+          "refusal": null,
+          "result": {
+            "value": {}
+          }
+        }
+      },
+      {
+        "operation": "dossier",
+        "parameters": {
+          "identifier": "/lu-legilux/no-such-work"
+        },
+        "envelope": {
+          "refusal": {
+            "code": "identifier_unknown"
+          },
+          "result": null
+        }
+      }
+    ],
+    "lastmod": "2026-10-01T08:00:00Z",
+    "held": [
+      "/eu-eurlex/32016R0679",
+      "/lu-legilux/loi-1991-08-10-n3"
+    ],
+    "builds": [
+      {
+        "what": "the mounted snapshot's build, beside a retained one",
+        "envelope": {
+          "refusal": null,
+          "result": {
+            "value": {
+              "history": {
+                "snapshots_with_text": [
+                  {
+                    "snapshot_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                    "built_at": "2026-09-01T08:00:00Z",
+                    "retained_as": [
+                      "nightly"
+                    ]
+                  },
+                  {
+                    "snapshot_id": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+                    "built_at": "2026-10-01T08:00:00Z",
+                    "retained_as": [
+                      "mounted"
+                    ]
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "builtAt": "2026-10-01T08:00:00Z"
+      },
+      {
+        "what": "no snapshot named mounted",
+        "envelope": {
+          "refusal": null,
+          "result": {
+            "value": {
+              "history": {
+                "snapshots_with_text": [
+                  {
+                    "built_at": "2026-10-01T08:00:00Z",
+                    "retained_as": [
+                      "nightly"
+                    ]
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "builtAt": null
+      },
+      {
+        "what": "an index that records no build",
+        "envelope": {
+          "refusal": null,
+          "result": {
+            "value": {
+              "history": {
+                "log_records_builds": false,
+                "snapshots_with_text": []
+              }
+            }
+          }
+        },
+        "builtAt": null
+      },
+      {
+        "what": "a build time with a fraction",
+        "envelope": {
+          "refusal": null,
+          "result": {
+            "value": {
+              "history": {
+                "snapshots_with_text": [
+                  {
+                    "built_at": "2026-10-01T08:00:00.5Z",
+                    "retained_as": [
+                      "mounted"
+                    ]
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "builtAt": null
+      },
+      {
+        "what": "two snapshots named mounted",
+        "envelope": {
+          "refusal": null,
+          "result": {
+            "value": {
+              "history": {
+                "snapshots_with_text": [
+                  {
+                    "built_at": "2026-10-01T08:00:00Z",
+                    "retained_as": [
+                      "mounted"
+                    ]
+                  },
+                  {
+                    "built_at": "2026-10-01T08:00:00Z",
+                    "retained_as": [
+                      "mounted"
+                    ]
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "builtAt": null
+      },
+      {
+        "what": "no corpus mounted",
+        "envelope": {
+          "refusal": {
+            "code": "no_corpus_mounted"
+          },
+          "result": null
+        },
+        "builtAt": null
+      },
+      {
+        "what": "no answer",
+        "envelope": null,
+        "builtAt": null
+      }
+    ],
+    "holds": [
+      {
+        "what": "an answer",
+        "envelope": {
+          "refusal": null,
+          "result": {
+            "value": {}
+          }
+        },
+        "held": true
+      },
+      {
+        "what": "a refusal",
+        "envelope": {
+          "refusal": {
+            "code": "identifier_unknown"
+          },
+          "result": null
+        },
+        "held": false
+      },
+      {
+        "what": "no answer",
+        "envelope": null,
+        "held": false
+      },
+      {
+        "what": "an answer with no result",
+        "envelope": {
+          "refusal": null,
+          "result": null
+        },
+        "held": false
+      }
+    ],
+    "sitemap": {
+      "/sitemap.xml": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<sitemapindex xmlns=\"http://www.sitemaps.org/schemas/sitemap/0.9\">\n<sitemap><loc>https://law.soufien.lu/sitemap-1.xml</loc><lastmod>2026-10-01T08:00:00Z</lastmod></sitemap>\n</sitemapindex>\n",
+      "/sitemap-1.xml": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<urlset xmlns=\"http://www.sitemaps.org/schemas/sitemap/0.9\" xmlns:xhtml=\"http://www.w3.org/1999/xhtml\">\n<url><loc>https://law.soufien.lu/fr/</loc><lastmod>2026-10-01T08:00:00Z</lastmod><xhtml:link rel=\"alternate\" hreflang=\"fr\" href=\"https://law.soufien.lu/fr/\"/><xhtml:link rel=\"alternate\" hreflang=\"en\" href=\"https://law.soufien.lu/en/\"/><xhtml:link rel=\"alternate\" hreflang=\"x-default\" href=\"https://law.soufien.lu/\"/></url>\n<url><loc>https://law.soufien.lu/en/</loc><lastmod>2026-10-01T08:00:00Z</lastmod><xhtml:link rel=\"alternate\" hreflang=\"fr\" href=\"https://law.soufien.lu/fr/\"/><xhtml:link rel=\"alternate\" hreflang=\"en\" href=\"https://law.soufien.lu/en/\"/><xhtml:link rel=\"alternate\" hreflang=\"x-default\" href=\"https://law.soufien.lu/\"/></url>\n<url><loc>https://law.soufien.lu/fr/coverage.html</loc><lastmod>2026-10-01T08:00:00Z</lastmod><xhtml:link rel=\"alternate\" hreflang=\"fr\" href=\"https://law.soufien.lu/fr/coverage.html\"/><xhtml:link rel=\"alternate\" hreflang=\"en\" href=\"https://law.soufien.lu/en/coverage.html\"/><xhtml:link rel=\"alternate\" hreflang=\"x-default\" href=\"https://law.soufien.lu/fr/coverage.html\"/></url>\n<url><loc>https://law.soufien.lu/en/coverage.html</loc><lastmod>2026-10-01T08:00:00Z</lastmod><xhtml:link rel=\"alternate\" hreflang=\"fr\" href=\"https://law.soufien.lu/fr/coverage.html\"/><xhtml:link rel=\"alternate\" hreflang=\"en\" href=\"https://law.soufien.lu/en/coverage.html\"/><xhtml:link rel=\"alternate\" hreflang=\"x-default\" href=\"https://law.soufien.lu/fr/coverage.html\"/></url>\n<url><loc>https://law.soufien.lu/fr/eu-eurlex/32016R0679</loc><lastmod>2026-10-01T08:00:00Z</lastmod><xhtml:link rel=\"alternate\" hreflang=\"fr\" href=\"https://law.soufien.lu/fr/eu-eurlex/32016R0679\"/><xhtml:link rel=\"alternate\" hreflang=\"en\" href=\"https://law.soufien.lu/en/eu-eurlex/32016R0679\"/><xhtml:link rel=\"alternate\" hreflang=\"x-default\" href=\"https://law.soufien.lu/eu-eurlex/32016R0679\"/></url>\n<url><loc>https://law.soufien.lu/en/eu-eurlex/32016R0679</loc><lastmod>2026-10-01T08:00:00Z</lastmod><xhtml:link rel=\"alternate\" hreflang=\"fr\" href=\"https://law.soufien.lu/fr/eu-eurlex/32016R0679\"/><xhtml:link rel=\"alternate\" hreflang=\"en\" href=\"https://law.soufien.lu/en/eu-eurlex/32016R0679\"/><xhtml:link rel=\"alternate\" hreflang=\"x-default\" href=\"https://law.soufien.lu/eu-eurlex/32016R0679\"/></url>\n<url><loc>https://law.soufien.lu/fr/eu-eurlex/32016R0679/eng</loc><lastmod>2026-10-01T08:00:00Z</lastmod><xhtml:link rel=\"alternate\" hreflang=\"fr\" href=\"https://law.soufien.lu/fr/eu-eurlex/32016R0679/eng\"/><xhtml:link rel=\"alternate\" hreflang=\"en\" href=\"https://law.soufien.lu/en/eu-eurlex/32016R0679/eng\"/><xhtml:link rel=\"alternate\" hreflang=\"x-default\" href=\"https://law.soufien.lu/eu-eurlex/32016R0679/eng\"/></url>\n<url><loc>https://law.soufien.lu/en/eu-eurlex/32016R0679/eng</loc><lastmod>2026-10-01T08:00:00Z</lastmod><xhtml:link rel=\"alternate\" hreflang=\"fr\" href=\"https://law.soufien.lu/fr/eu-eurlex/32016R0679/eng\"/><xhtml:link rel=\"alternate\" hreflang=\"en\" href=\"https://law.soufien.lu/en/eu-eurlex/32016R0679/eng\"/><xhtml:link rel=\"alternate\" hreflang=\"x-default\" href=\"https://law.soufien.lu/eu-eurlex/32016R0679/eng\"/></url>\n<url><loc>https://law.soufien.lu/fr/eu-eurlex/32016R0679/fra</loc><lastmod>2026-10-01T08:00:00Z</lastmod><xhtml:link rel=\"alternate\" hreflang=\"fr\" href=\"https://law.soufien.lu/fr/eu-eurlex/32016R0679/fra\"/><xhtml:link rel=\"alternate\" hreflang=\"en\" href=\"https://law.soufien.lu/en/eu-eurlex/32016R0679/fra\"/><xhtml:link rel=\"alternate\" hreflang=\"x-default\" href=\"https://law.soufien.lu/eu-eurlex/32016R0679/fra\"/></url>\n<url><loc>https://law.soufien.lu/en/eu-eurlex/32016R0679/fra</loc><lastmod>2026-10-01T08:00:00Z</lastmod><xhtml:link rel=\"alternate\" hreflang=\"fr\" href=\"https://law.soufien.lu/fr/eu-eurlex/32016R0679/fra\"/><xhtml:link rel=\"alternate\" hreflang=\"en\" href=\"https://law.soufien.lu/en/eu-eurlex/32016R0679/fra\"/><xhtml:link rel=\"alternate\" hreflang=\"x-default\" href=\"https://law.soufien.lu/eu-eurlex/32016R0679/fra\"/></url>\n<url><loc>https://law.soufien.lu/fr/lu-legilux/loi-1991-08-10-n3</loc><lastmod>2026-10-01T08:00:00Z</lastmod><xhtml:link rel=\"alternate\" hreflang=\"fr\" href=\"https://law.soufien.lu/fr/lu-legilux/loi-1991-08-10-n3\"/><xhtml:link rel=\"alternate\" hreflang=\"en\" href=\"https://law.soufien.lu/en/lu-legilux/loi-1991-08-10-n3\"/><xhtml:link rel=\"alternate\" hreflang=\"x-default\" href=\"https://law.soufien.lu/lu-legilux/loi-1991-08-10-n3\"/></url>\n<url><loc>https://law.soufien.lu/en/lu-legilux/loi-1991-08-10-n3</loc><lastmod>2026-10-01T08:00:00Z</lastmod><xhtml:link rel=\"alternate\" hreflang=\"fr\" href=\"https://law.soufien.lu/fr/lu-legilux/loi-1991-08-10-n3\"/><xhtml:link rel=\"alternate\" hreflang=\"en\" href=\"https://law.soufien.lu/en/lu-legilux/loi-1991-08-10-n3\"/><xhtml:link rel=\"alternate\" hreflang=\"x-default\" href=\"https://law.soufien.lu/lu-legilux/loi-1991-08-10-n3\"/></url>\n<url><loc>https://law.soufien.lu/fr/lu-legilux/loi-1991-08-10-n3/fra</loc><lastmod>2026-10-01T08:00:00Z</lastmod><xhtml:link rel=\"alternate\" hreflang=\"fr\" href=\"https://law.soufien.lu/fr/lu-legilux/loi-1991-08-10-n3/fra\"/><xhtml:link rel=\"alternate\" hreflang=\"en\" href=\"https://law.soufien.lu/en/lu-legilux/loi-1991-08-10-n3/fra\"/><xhtml:link rel=\"alternate\" hreflang=\"x-default\" href=\"https://law.soufien.lu/lu-legilux/loi-1991-08-10-n3/fra\"/></url>\n<url><loc>https://law.soufien.lu/en/lu-legilux/loi-1991-08-10-n3/fra</loc><lastmod>2026-10-01T08:00:00Z</lastmod><xhtml:link rel=\"alternate\" hreflang=\"fr\" href=\"https://law.soufien.lu/fr/lu-legilux/loi-1991-08-10-n3/fra\"/><xhtml:link rel=\"alternate\" hreflang=\"en\" href=\"https://law.soufien.lu/en/lu-legilux/loi-1991-08-10-n3/fra\"/><xhtml:link rel=\"alternate\" hreflang=\"x-default\" href=\"https://law.soufien.lu/lu-legilux/loi-1991-08-10-n3/fra\"/></url>\n</urlset>\n"
+    },
+    "sitemapWithoutRecord": {
+      "/sitemap.xml": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<sitemapindex xmlns=\"http://www.sitemaps.org/schemas/sitemap/0.9\">\n<sitemap><loc>https://law.soufien.lu/sitemap-1.xml</loc><lastmod>2026-10-01T08:00:00Z</lastmod></sitemap>\n</sitemapindex>\n",
+      "/sitemap-1.xml": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<urlset xmlns=\"http://www.sitemaps.org/schemas/sitemap/0.9\" xmlns:xhtml=\"http://www.w3.org/1999/xhtml\">\n<url><loc>https://law.soufien.lu/fr/</loc><lastmod>2026-10-01T08:00:00Z</lastmod><xhtml:link rel=\"alternate\" hreflang=\"fr\" href=\"https://law.soufien.lu/fr/\"/><xhtml:link rel=\"alternate\" hreflang=\"en\" href=\"https://law.soufien.lu/en/\"/><xhtml:link rel=\"alternate\" hreflang=\"x-default\" href=\"https://law.soufien.lu/\"/></url>\n<url><loc>https://law.soufien.lu/en/</loc><lastmod>2026-10-01T08:00:00Z</lastmod><xhtml:link rel=\"alternate\" hreflang=\"fr\" href=\"https://law.soufien.lu/fr/\"/><xhtml:link rel=\"alternate\" hreflang=\"en\" href=\"https://law.soufien.lu/en/\"/><xhtml:link rel=\"alternate\" hreflang=\"x-default\" href=\"https://law.soufien.lu/\"/></url>\n<url><loc>https://law.soufien.lu/fr/coverage.html</loc><lastmod>2026-10-01T08:00:00Z</lastmod><xhtml:link rel=\"alternate\" hreflang=\"fr\" href=\"https://law.soufien.lu/fr/coverage.html\"/><xhtml:link rel=\"alternate\" hreflang=\"en\" href=\"https://law.soufien.lu/en/coverage.html\"/><xhtml:link rel=\"alternate\" hreflang=\"x-default\" href=\"https://law.soufien.lu/fr/coverage.html\"/></url>\n<url><loc>https://law.soufien.lu/en/coverage.html</loc><lastmod>2026-10-01T08:00:00Z</lastmod><xhtml:link rel=\"alternate\" hreflang=\"fr\" href=\"https://law.soufien.lu/fr/coverage.html\"/><xhtml:link rel=\"alternate\" hreflang=\"en\" href=\"https://law.soufien.lu/en/coverage.html\"/><xhtml:link rel=\"alternate\" hreflang=\"x-default\" href=\"https://law.soufien.lu/fr/coverage.html\"/></url>\n</urlset>\n"
+    },
+    "split": {
+      "partSize": 5,
+      "files": {
+        "/sitemap.xml": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<sitemapindex xmlns=\"http://www.sitemaps.org/schemas/sitemap/0.9\">\n<sitemap><loc>https://law.soufien.lu/sitemap-1.xml</loc><lastmod>2026-10-01T08:00:00Z</lastmod></sitemap>\n<sitemap><loc>https://law.soufien.lu/sitemap-2.xml</loc><lastmod>2026-10-01T08:00:00Z</lastmod></sitemap>\n<sitemap><loc>https://law.soufien.lu/sitemap-3.xml</loc><lastmod>2026-10-01T08:00:00Z</lastmod></sitemap>\n</sitemapindex>\n",
+        "/sitemap-1.xml": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<urlset xmlns=\"http://www.sitemaps.org/schemas/sitemap/0.9\" xmlns:xhtml=\"http://www.w3.org/1999/xhtml\">\n<url><loc>https://law.soufien.lu/fr/</loc><lastmod>2026-10-01T08:00:00Z</lastmod><xhtml:link rel=\"alternate\" hreflang=\"fr\" href=\"https://law.soufien.lu/fr/\"/><xhtml:link rel=\"alternate\" hreflang=\"en\" href=\"https://law.soufien.lu/en/\"/><xhtml:link rel=\"alternate\" hreflang=\"x-default\" href=\"https://law.soufien.lu/\"/></url>\n<url><loc>https://law.soufien.lu/en/</loc><lastmod>2026-10-01T08:00:00Z</lastmod><xhtml:link rel=\"alternate\" hreflang=\"fr\" href=\"https://law.soufien.lu/fr/\"/><xhtml:link rel=\"alternate\" hreflang=\"en\" href=\"https://law.soufien.lu/en/\"/><xhtml:link rel=\"alternate\" hreflang=\"x-default\" href=\"https://law.soufien.lu/\"/></url>\n<url><loc>https://law.soufien.lu/fr/coverage.html</loc><lastmod>2026-10-01T08:00:00Z</lastmod><xhtml:link rel=\"alternate\" hreflang=\"fr\" href=\"https://law.soufien.lu/fr/coverage.html\"/><xhtml:link rel=\"alternate\" hreflang=\"en\" href=\"https://law.soufien.lu/en/coverage.html\"/><xhtml:link rel=\"alternate\" hreflang=\"x-default\" href=\"https://law.soufien.lu/fr/coverage.html\"/></url>\n<url><loc>https://law.soufien.lu/en/coverage.html</loc><lastmod>2026-10-01T08:00:00Z</lastmod><xhtml:link rel=\"alternate\" hreflang=\"fr\" href=\"https://law.soufien.lu/fr/coverage.html\"/><xhtml:link rel=\"alternate\" hreflang=\"en\" href=\"https://law.soufien.lu/en/coverage.html\"/><xhtml:link rel=\"alternate\" hreflang=\"x-default\" href=\"https://law.soufien.lu/fr/coverage.html\"/></url>\n<url><loc>https://law.soufien.lu/fr/eu-eurlex/32016R0679</loc><lastmod>2026-10-01T08:00:00Z</lastmod><xhtml:link rel=\"alternate\" hreflang=\"fr\" href=\"https://law.soufien.lu/fr/eu-eurlex/32016R0679\"/><xhtml:link rel=\"alternate\" hreflang=\"en\" href=\"https://law.soufien.lu/en/eu-eurlex/32016R0679\"/><xhtml:link rel=\"alternate\" hreflang=\"x-default\" href=\"https://law.soufien.lu/eu-eurlex/32016R0679\"/></url>\n</urlset>\n",
+        "/sitemap-2.xml": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<urlset xmlns=\"http://www.sitemaps.org/schemas/sitemap/0.9\" xmlns:xhtml=\"http://www.w3.org/1999/xhtml\">\n<url><loc>https://law.soufien.lu/en/eu-eurlex/32016R0679</loc><lastmod>2026-10-01T08:00:00Z</lastmod><xhtml:link rel=\"alternate\" hreflang=\"fr\" href=\"https://law.soufien.lu/fr/eu-eurlex/32016R0679\"/><xhtml:link rel=\"alternate\" hreflang=\"en\" href=\"https://law.soufien.lu/en/eu-eurlex/32016R0679\"/><xhtml:link rel=\"alternate\" hreflang=\"x-default\" href=\"https://law.soufien.lu/eu-eurlex/32016R0679\"/></url>\n<url><loc>https://law.soufien.lu/fr/eu-eurlex/32016R0679/eng</loc><lastmod>2026-10-01T08:00:00Z</lastmod><xhtml:link rel=\"alternate\" hreflang=\"fr\" href=\"https://law.soufien.lu/fr/eu-eurlex/32016R0679/eng\"/><xhtml:link rel=\"alternate\" hreflang=\"en\" href=\"https://law.soufien.lu/en/eu-eurlex/32016R0679/eng\"/><xhtml:link rel=\"alternate\" hreflang=\"x-default\" href=\"https://law.soufien.lu/eu-eurlex/32016R0679/eng\"/></url>\n<url><loc>https://law.soufien.lu/en/eu-eurlex/32016R0679/eng</loc><lastmod>2026-10-01T08:00:00Z</lastmod><xhtml:link rel=\"alternate\" hreflang=\"fr\" href=\"https://law.soufien.lu/fr/eu-eurlex/32016R0679/eng\"/><xhtml:link rel=\"alternate\" hreflang=\"en\" href=\"https://law.soufien.lu/en/eu-eurlex/32016R0679/eng\"/><xhtml:link rel=\"alternate\" hreflang=\"x-default\" href=\"https://law.soufien.lu/eu-eurlex/32016R0679/eng\"/></url>\n<url><loc>https://law.soufien.lu/fr/eu-eurlex/32016R0679/fra</loc><lastmod>2026-10-01T08:00:00Z</lastmod><xhtml:link rel=\"alternate\" hreflang=\"fr\" href=\"https://law.soufien.lu/fr/eu-eurlex/32016R0679/fra\"/><xhtml:link rel=\"alternate\" hreflang=\"en\" href=\"https://law.soufien.lu/en/eu-eurlex/32016R0679/fra\"/><xhtml:link rel=\"alternate\" hreflang=\"x-default\" href=\"https://law.soufien.lu/eu-eurlex/32016R0679/fra\"/></url>\n<url><loc>https://law.soufien.lu/en/eu-eurlex/32016R0679/fra</loc><lastmod>2026-10-01T08:00:00Z</lastmod><xhtml:link rel=\"alternate\" hreflang=\"fr\" href=\"https://law.soufien.lu/fr/eu-eurlex/32016R0679/fra\"/><xhtml:link rel=\"alternate\" hreflang=\"en\" href=\"https://law.soufien.lu/en/eu-eurlex/32016R0679/fra\"/><xhtml:link rel=\"alternate\" hreflang=\"x-default\" href=\"https://law.soufien.lu/eu-eurlex/32016R0679/fra\"/></url>\n</urlset>\n",
+        "/sitemap-3.xml": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<urlset xmlns=\"http://www.sitemaps.org/schemas/sitemap/0.9\" xmlns:xhtml=\"http://www.w3.org/1999/xhtml\">\n<url><loc>https://law.soufien.lu/fr/lu-legilux/loi-1991-08-10-n3</loc><lastmod>2026-10-01T08:00:00Z</lastmod><xhtml:link rel=\"alternate\" hreflang=\"fr\" href=\"https://law.soufien.lu/fr/lu-legilux/loi-1991-08-10-n3\"/><xhtml:link rel=\"alternate\" hreflang=\"en\" href=\"https://law.soufien.lu/en/lu-legilux/loi-1991-08-10-n3\"/><xhtml:link rel=\"alternate\" hreflang=\"x-default\" href=\"https://law.soufien.lu/lu-legilux/loi-1991-08-10-n3\"/></url>\n<url><loc>https://law.soufien.lu/en/lu-legilux/loi-1991-08-10-n3</loc><lastmod>2026-10-01T08:00:00Z</lastmod><xhtml:link rel=\"alternate\" hreflang=\"fr\" href=\"https://law.soufien.lu/fr/lu-legilux/loi-1991-08-10-n3\"/><xhtml:link rel=\"alternate\" hreflang=\"en\" href=\"https://law.soufien.lu/en/lu-legilux/loi-1991-08-10-n3\"/><xhtml:link rel=\"alternate\" hreflang=\"x-default\" href=\"https://law.soufien.lu/lu-legilux/loi-1991-08-10-n3\"/></url>\n<url><loc>https://law.soufien.lu/fr/lu-legilux/loi-1991-08-10-n3/fra</loc><lastmod>2026-10-01T08:00:00Z</lastmod><xhtml:link rel=\"alternate\" hreflang=\"fr\" href=\"https://law.soufien.lu/fr/lu-legilux/loi-1991-08-10-n3/fra\"/><xhtml:link rel=\"alternate\" hreflang=\"en\" href=\"https://law.soufien.lu/en/lu-legilux/loi-1991-08-10-n3/fra\"/><xhtml:link rel=\"alternate\" hreflang=\"x-default\" href=\"https://law.soufien.lu/lu-legilux/loi-1991-08-10-n3/fra\"/></url>\n<url><loc>https://law.soufien.lu/en/lu-legilux/loi-1991-08-10-n3/fra</loc><lastmod>2026-10-01T08:00:00Z</lastmod><xhtml:link rel=\"alternate\" hreflang=\"fr\" href=\"https://law.soufien.lu/fr/lu-legilux/loi-1991-08-10-n3/fra\"/><xhtml:link rel=\"alternate\" hreflang=\"en\" href=\"https://law.soufien.lu/en/lu-legilux/loi-1991-08-10-n3/fra\"/><xhtml:link rel=\"alternate\" hreflang=\"x-default\" href=\"https://law.soufien.lu/lu-legilux/loi-1991-08-10-n3/fra\"/></url>\n</urlset>\n"
+      }
+    },
     "pages": [
       {
         "path": "/en/",
@@ -1818,6 +2172,14 @@
       },
       {
         "path": "/en/lu-legilux/loi-2017-03-14-a439/fra",
+        "opened": {
+          "kept-out": false,
+          "indexed": false,
+          "indexed, with no record": false
+        }
+      },
+      {
+        "path": "/en/lu-legilux/no-such-work",
         "opened": {
           "kept-out": false,
           "indexed": false,

@@ -7,9 +7,10 @@
 //   legislationIdentifier     the version's ELI (a Luxembourg state's legal resource: the act as published, `.../jo`, or a
 //                             consolidated version), or its CELEX (an EU wording's own, a consolidated version's included);
 //                             on a dossier, the work's ELI or the act's CELEX
-//   name                      the publisher's title: the one title held for the version's expression in its language, or on
-//                             a Luxembourg dossier for the act as published; left out when none or several are held, and
-//                             for the EU, whose index holds no title
+//   name                      the publisher's title: the one title held for the version's expression in its own language,
+//                             or on a Luxembourg dossier for the act as published in each language held, each in its own
+//                             (`@language`); left out when none or several are held, and for the EU, whose index holds no
+//                             title
 //   inLanguage                the text's language as BCP 47 writes it (`fr`, `de`, `en`); on a dossier, each held
 //   legislationJurisdiction   `LU` for Legilux's acts, `EU` for EUR-Lex's: the publisher the answer is from
 //   legislationDate           a Luxembourg act's date as its ELI names it (`/eli/etat/leg/{type}/{yyyy}/{mm}/{dd}/{n}`), the
@@ -79,18 +80,33 @@ export function readingStructuredData({ view, version, canonical }) {
   });
 }
 
+/**
+ * A Luxembourg work's name on its dossier: the one title held for the act as published (its work ELI followed by `/jo`) in
+ * each language the dossier holds it in, each title in its own language; one language's alone, as a plain text, and several
+ * as language-tagged values (`@language`, `@value`), never one language's title in another's place. A language with none or
+ * several titles names none.
+ */
+function publishedNames(view) {
+  const groups = view.titles.filter((group) => group.expressionIri.startsWith(`${view.publisherWorkIri}/jo/`));
+  const names = [...new Set(groups.map((group) => group.language))].sort().flatMap((language) => {
+    const expressions = [...new Set(groups.filter((group) => group.language === language).map((group) => group.expressionIri))];
+    const title = expressions.length === 1 ? oneTitle(groups, expressions[0], language) : null;
+    return title === null ? [] : [{ "@language": quotationLanguageTag(language), "@value": title }];
+  });
+  if (names.length === 0) return null;
+  return names.length === 1 ? names[0]["@value"] : names;
+}
+
 /** The markup of a dossier page of `view` (a dossier view, `readDossierAnswer`) under the canonical link `canonical`. */
 export function dossierStructuredData({ view, canonical }) {
   const europe = view.publisher === "eu-eurlex";
   const languages = [...new Set((europe ? view.expressions : view.states).map((one) => quotationLanguageTag(one.language)))].sort();
-  // A Luxembourg work is named by the act as published (its work ELI followed by /jo), when the dossier holds that expression.
-  const published = europe ? [] : [...new Set(view.titles.map((group) => group.expressionIri).filter((iri) => iri.startsWith(`${view.publisherWorkIri}/jo/`)))];
   return present({
     "@context": "https://schema.org",
     "@type": "Legislation",
     url: canonical,
     legislationIdentifier: europe ? view.celex : view.publisherWorkIri,
-    name: published.length === 1 ? oneTitle(view.titles, published[0], null) : null,
+    name: europe ? null : publishedNames(view),
     inLanguage: languages.length === 0 ? null : oneOrMany(languages),
     legislationJurisdiction: europe ? "EU" : "LU",
     legislationDate: europe ? null : eliDate(view.publisherWorkIri),

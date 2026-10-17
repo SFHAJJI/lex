@@ -344,6 +344,30 @@ internal sealed class V3ApiHandler
         };
     }
 
+    /// <summary>
+    /// What the mounted corpus answers <paramref name="operationId"/> with <paramref name="parameters"/>, as the REST route
+    /// writes it, asked by the server itself before it serves anything (what the pages tell search engines, R67:
+    /// <see cref="V3WebRoot.SearchEngineFacts"/>); null when the route would refuse the request as malformed. No request
+    /// carries anything of a caller here.
+    /// </summary>
+    internal static byte[]? AnswerAtStartup(
+        V3CorpusMount corpusMount,
+        Func<DateTimeOffset> utcNow,
+        string operationId,
+        IReadOnlyDictionary<string, string> parameters)
+    {
+        ArgumentNullException.ThrowIfNull(corpusMount);
+        var page = new V3SitePage(V3WebRoot.InterfaceLanguages[0], "startup", operationId, parameters);
+        try
+        {
+            return new V3PlatformHost().AnswerRest(page.RequestUtf8, RequestReference("startup"), operationId, ExecuteFor(corpusMount, utcNow, operationId), CancellationToken.None);
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            return null;
+        }
+    }
+
     internal static V3PlatformOperationRefusal NoCorpusMounted(V3PlatformOperationRequest request)
     {
         using var helpful = JsonDocument.Parse("{\"required_corpus\":\"lu\"}");

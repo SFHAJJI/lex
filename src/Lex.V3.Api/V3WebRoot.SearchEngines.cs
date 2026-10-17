@@ -14,17 +14,19 @@ namespace Lex.V3.Api;
 /// <para>
 /// One release-level switch decides it, <c>LEX_V3_SEARCH_ENGINES</c>, read when the server starts: <c>indexed</c> opens the
 /// site, and anything else, its absence included, keeps it out, the default while the owner has not answered O27 (the plan:
-/// "If unanswered: the pages open but are kept out of search engines"). Kept out, <c>/robots.txt</c> disallows everything,
-/// every response of this root carries <c>X-Robots-Tag: noindex</c>, every page names a robots <c>noindex</c>, and
-/// <c>/sitemap.xml</c> is an address this root does not hold. Indexed, robots.txt allows the pages and disallows the API, MCP,
-/// the health routes, search and export, and names the sitemap; a page whose kept-out marker this root may remove
-/// (<see cref="IndexablePage"/>) is served without it and without the header, and a redirect or a move without the header (it
-/// is no page: the page it leads to says what it says).
+/// "If unanswered: the pages open but are kept out of search engines"). Kept out, <c>/robots.txt</c> allows the pages and
+/// disallows the API, MCP, the health routes, search and export, as indexed, and names no sitemap: a crawler must fetch a page
+/// to read its noindex (review of #976, F1); every response of this root carries <c>X-Robots-Tag: noindex</c>, every page
+/// names a robots <c>noindex</c>, and the sitemap is an address this root does not hold. Indexed, robots.txt names the
+/// sitemap too; a page whose kept-out marker this root may remove (<see cref="IndexablePage"/>) is served without it and
+/// without the header, and a redirect or a move without the header (it is no page: the page it leads to says what it says).
 /// </para>
 /// <para>
 /// Names (R92, the owner's O28): a law's page is opened only for a work the release's indexing record lists
 /// (<see cref="ReadIndexingRecord"/>), the outcome of R92's measurement of which classes of acts name private individuals
-/// (the plan's item 1.11). No release carries one yet: with the switch on, no law's page is opened and the sitemap lists none.
+/// (the plan's item 1.11), and that the mounted corpus holds: with the site indexed, the API asks its own <c>dossier</c> of
+/// every listed work once, at startup, and drops each it does not answer (<see cref="SearchEngineFacts"/>, review of #976,
+/// F5). No release carries a record yet: with the switch on, no law's page is opened and the sitemap lists none.
 /// </para>
 /// </remarks>
 internal sealed partial class V3WebRoot
@@ -51,6 +53,9 @@ internal sealed partial class V3WebRoot
 
     internal const string SitemapPath = "/sitemap.xml";
 
+    /// <summary>The sitemap's numbered parts, <c>/sitemap-1.xml</c> on, each of which the index at <c>/sitemap.xml</c> names.</summary>
+    internal static string SitemapPartPath(int number) => string.Create(CultureInfo.InvariantCulture, $"/sitemap-{number}.xml");
+
     internal const string RobotsContentType = "text/plain; charset=utf-8";
 
     internal const string SitemapContentType = "application/xml; charset=utf-8";
@@ -60,28 +65,37 @@ internal sealed partial class V3WebRoot
 
     internal const string IndexingRecordSchema = "lex-v3-indexing-record/1";
 
-    /// <summary>A sitemap file holds at most this many addresses; a record that would list more is refused.</summary>
+    /// <summary>
+    /// A sitemap file holds at most this many addresses and bytes (the sitemaps protocol: 50,000 and 50 MiB, uncompressed);
+    /// more are split into numbered parts a sitemap index names (<see cref="SitemapFiles"/>, review of #976, F3).
+    /// </summary>
     internal const int SitemapMaximumUrls = 50_000;
+
+    internal const int SitemapMaximumBytes = 50 * 1024 * 1024;
 
     /// <summary>The site's origin, which robots.txt and the sitemap name whole.</summary>
     internal const string SiteOrigin = "https://law.soufien.lu";
 
-    /// <summary>robots.txt with the site kept out: every address, for every crawler.</summary>
-    internal const string RobotsKeptOut = "User-agent: *\nDisallow: /\n";
-
-    /// <summary>The pages the switch opens that stand at no law's address, under each language: its home page and Trust and Coverage.</summary>
-    private static readonly IReadOnlyList<string> OpenedPages = ["", "coverage.html"];
-
     /// <summary>
-    /// robots.txt with the site indexed (R67: "robots.txt allows dossiers and reading pages, and disallows /api, /mcp, search
-    /// results and exports"): the API, the MCP endpoint, the health routes, and each language's search and export pages. A
-    /// property, not a field: a field's initializer here could run before <see cref="InterfaceLanguages"/>'s, in another file.
+    /// robots.txt's rules, in both states (R67: "robots.txt allows dossiers and reading pages, and disallows /api, /mcp, search
+    /// results and exports"): the API, the MCP endpoint, the health routes, and each language's search and export pages; the
+    /// rest is allowed. A property, not a field: a field's initializer here could run before
+    /// <see cref="InterfaceLanguages"/>'s, in another file.
     /// </summary>
-    internal static string RobotsIndexed => string.Join(
+    private static string RobotsRules => string.Join(
         "\n",
         new[] { "User-agent: *", "Disallow: /api/", "Disallow: /mcp", "Disallow: /health/" }
-            .Concat(InterfaceLanguages.SelectMany(static language => new[] { $"Disallow: /{language}/search.html", $"Disallow: /{language}/export.html" }))
-            .Concat(["", $"Sitemap: {SiteOrigin}{SitemapPath}", ""]));
+            .Concat(InterfaceLanguages.SelectMany(static language => new[] { $"Disallow: /{language}/search.html", $"Disallow: /{language}/export.html" })));
+
+    /// <summary>
+    /// robots.txt with the site kept out: the same rules, and no sitemap. The pages stay crawlable so that a crawler reads
+    /// their noindex, which is what keeps them out; <c>Disallow: /</c> would hide it, and a blocked address can still be listed
+    /// bare when linked (review of #976, F1).
+    /// </summary>
+    internal static string RobotsKeptOut => RobotsRules + "\n";
+
+    /// <summary>robots.txt with the site indexed: the same rules, and the sitemap named.</summary>
+    internal static string RobotsIndexed => $"{RobotsRules}\n\nSitemap: {SiteOrigin}{SitemapPath}\n";
 
     /// <summary>The switch's state for a value of its variable: <c>indexed</c> only when it says so exactly.</summary>
     internal static string SearchEnginesState(string? value) => string.Equals(value, Indexed, StringComparison.Ordinal) ? Indexed : KeptOut;
@@ -104,8 +118,8 @@ internal sealed partial class V3WebRoot
     /// <c>web/scripts/search-engines.mjs</c> reads it, or null when it is none (nothing is then opened): the schema
     /// <c>lex-v3-indexing-record/1</c>; <c>built_at</c> an instant in UTC (<c>yyyy-MM-ddTHH:mm:ssZ</c>) or null; <c>works</c>,
     /// each a dossier's address with no interface language (never a consolidated version's CELEX) and at least one text
-    /// language, in order and each once, the works in their addresses' order, each once; and no more addresses in the sitemap
-    /// than a sitemap file holds.
+    /// language, in order and each once, the works in their addresses' order, each once. How many works it lists is no rule
+    /// of it: the sitemap splits into parts (review of #976, F3).
     /// </summary>
     internal static IndexingRecord? ReadIndexingRecord(string text)
     {
@@ -180,8 +194,7 @@ internal sealed partial class V3WebRoot
                 works.Add(new IndexedWork(address, languages.AsReadOnly()));
             }
 
-            var urls = InterfaceLanguages.Count * (OpenedPages.Count + works.Sum(static work => 1 + work.Languages.Count));
-            return urls > SitemapMaximumUrls ? null : new IndexingRecord(builtAt, works.AsReadOnly());
+            return new IndexingRecord(builtAt, works.AsReadOnly());
         }
         catch (JsonException)
         {
@@ -205,6 +218,100 @@ internal sealed partial class V3WebRoot
         {
             return null;
         }
+    }
+
+    /// <summary>The <c>dossier</c> identifier of a work the record names: a Luxembourg work's address, or an EU act's CELEX.</summary>
+    internal static string DossierIdentifierOf(string address)
+    {
+        ArgumentNullException.ThrowIfNull(address);
+        var match = SiteMatch(address);
+        return match is null ? address : match.Groups["work"].Success ? $"/lu-legilux/{match.Groups["work"].Value}" : match.Groups["celex"].Value;
+    }
+
+    /// <summary>
+    /// The mounted index's build time from the API's <c>coverage</c> envelope, as <c>mountedBuiltAt</c> reads it: the
+    /// <c>built_at</c> of the one snapshot its history names <c>mounted</c>, an instant in UTC, else null.
+    /// </summary>
+    internal static string? MountedBuiltAt(byte[]? envelope)
+    {
+        if (envelope is null)
+        {
+            return null;
+        }
+
+        try
+        {
+            using var document = JsonDocument.Parse(envelope);
+            var root = document.RootElement;
+            if (root.ValueKind != JsonValueKind.Object || !root.TryGetProperty("refusal", out var refusal) || refusal.ValueKind != JsonValueKind.Null ||
+                !root.TryGetProperty("result", out var result) || result.ValueKind != JsonValueKind.Object ||
+                !result.TryGetProperty("value", out var value) || value.ValueKind != JsonValueKind.Object ||
+                !value.TryGetProperty("history", out var history) || history.ValueKind != JsonValueKind.Object ||
+                !history.TryGetProperty("snapshots_with_text", out var snapshots) || snapshots.ValueKind != JsonValueKind.Array)
+            {
+                return null;
+            }
+
+            var mounted = snapshots.EnumerateArray()
+                .Where(static snapshot => snapshot.ValueKind == JsonValueKind.Object &&
+                    snapshot.TryGetProperty("retained_as", out var retained) && retained.ValueKind == JsonValueKind.Array &&
+                    retained.EnumerateArray().Any(static reason => reason.ValueKind == JsonValueKind.String && reason.GetString() == "mounted"))
+                .ToArray();
+            return mounted.Length == 1 && mounted[0].TryGetProperty("built_at", out var built) && built.ValueKind == JsonValueKind.String &&
+                IsUtcInstant(built.GetString()!)
+                ? built.GetString()
+                : null;
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>Whether a <c>dossier</c> envelope answers the work, as <c>dossierHolds</c> says it: a result, and no refusal.</summary>
+    internal static bool DossierHolds(byte[]? envelope)
+    {
+        if (envelope is null)
+        {
+            return false;
+        }
+
+        try
+        {
+            using var document = JsonDocument.Parse(envelope);
+            var root = document.RootElement;
+            return root.ValueKind == JsonValueKind.Object &&
+                root.TryGetProperty("refusal", out var refusal) && refusal.ValueKind == JsonValueKind.Null &&
+                root.TryGetProperty("result", out var result) && result.ValueKind != JsonValueKind.Null;
+        }
+        catch (JsonException)
+        {
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// What this root tells search engines with the site indexed, from the API's own answers, asked once at startup, as
+    /// <c>searchEngineFacts</c> asks them (review of #976, F5): <c>Lastmod</c>, the mounted index's build time
+    /// (<see cref="MountedBuiltAt"/> of <c>coverage</c>), and <c>Record</c>, the indexing record with each work the API's
+    /// <c>dossier</c> does not answer dropped (a work the mount does not hold is never opened nor listed), or null with no
+    /// record. <paramref name="ask"/> answers an operation's envelope, or null.
+    /// </summary>
+    internal static (IndexingRecord? Record, string? Lastmod) SearchEngineFacts(
+        IndexingRecord? record,
+        Func<string, IReadOnlyDictionary<string, string>, byte[]?> ask)
+    {
+        ArgumentNullException.ThrowIfNull(ask);
+        var lastmod = MountedBuiltAt(ask("coverage", new Dictionary<string, string>(StringComparer.Ordinal)));
+        if (record is null)
+        {
+            return (null, lastmod);
+        }
+
+        var held = record.Works
+            .Where(work => DossierHolds(ask("dossier", new Dictionary<string, string>(StringComparer.Ordinal) { ["identifier"] = DossierIdentifierOf(work.Address) })))
+            .ToArray();
+        return (new IndexingRecord(record.BuiltAt, held.AsReadOnly()), lastmod);
     }
 
     /// <summary>A real instant in UTC, written <c>yyyy-MM-ddTHH:mm:ssZ</c>, as <c>isUtcInstant</c> in <c>web/scripts/temporal.mjs</c> says it.</summary>
@@ -290,20 +397,10 @@ internal sealed partial class V3WebRoot
             $"<url><loc>{EscapeXml($"{SiteOrigin}{addressIn(language)}")}</loc>{(lastmod is null ? string.Empty : $"<lastmod>{lastmod}</lastmod>")}{links}</url>");
     }
 
-    /// <summary>
-    /// The sitemap with the site indexed, as <c>sitemapXml</c> writes it (R67: "A sitemap lists dossiers and current reading
-    /// pages, with lastmod from the build or acquisition time, never valid_from"): each language's home page and Trust and
-    /// Coverage, then each listed work's dossier and its readable address in each listed text language, never a permalink;
-    /// <c>lastmod</c> the record's <c>built_at</c>, left out with none.
-    /// </summary>
-    internal static string SitemapXml(IndexingRecord? record)
+    /// <summary>The sitemap's entries, in order, each an ASCII line: its addresses are the site's, which escape anything else.</summary>
+    private static List<string> SitemapLines(IndexingRecord? record, string? lastmod)
     {
-        var lastmod = record?.BuiltAt;
-        var lines = new List<string>
-        {
-            "<?xml version=\"1.0\" encoding=\"UTF-8\"?>",
-            "<urlset xmlns=\"http://www.sitemaps.org/schemas/sitemap/0.9\" xmlns:xhtml=\"http://www.w3.org/1999/xhtml\">",
-        };
+        var lines = new List<string>();
         lines.AddRange(SitemapEntries(static language => $"/{language}/", "/", lastmod));
         lines.AddRange(SitemapEntries(static language => $"/{language}/coverage.html", $"/{InterfaceLanguages[0]}/coverage.html", lastmod));
         foreach (var work in record?.Works ?? [])
@@ -316,8 +413,68 @@ internal sealed partial class V3WebRoot
             }
         }
 
-        lines.Add("</urlset>");
-        lines.Add(string.Empty);
-        return string.Join("\n", lines);
+        return lines;
+    }
+
+    private const string UrlsetHead =
+        "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<urlset xmlns=\"http://www.sitemaps.org/schemas/sitemap/0.9\" xmlns:xhtml=\"http://www.w3.org/1999/xhtml\">\n";
+
+    private const string UrlsetTail = "</urlset>\n";
+
+    /// <summary>The first two lines of the sitemap's index, <c>/sitemap.xml</c>.</summary>
+    internal const string SitemapIndexHead =
+        "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<sitemapindex xmlns=\"http://www.sitemaps.org/schemas/sitemap/0.9\">\n";
+
+    /// <summary>
+    /// The sitemap with the site indexed, by its paths, as <c>sitemapFiles</c> writes it (R67: "A sitemap lists dossiers and
+    /// current reading pages, with lastmod from the build or acquisition time, never valid_from"): <c>/sitemap.xml</c>, the
+    /// index naming each part, and <c>/sitemap-1.xml</c> on, each part at most <paramref name="partSize"/> addresses and
+    /// <paramref name="maximumBytes"/> bytes, the protocol's by default (review of #976, F3). The entries: each language's
+    /// home page and Trust and Coverage, then each listed work's dossier and its readable address in each listed text
+    /// language, never a permalink; <c>lastmod</c> the mounted index's build time (<see cref="MountedBuiltAt"/>, review of
+    /// #976, F5), left out when null.
+    /// </summary>
+    internal static IReadOnlyDictionary<string, string> SitemapFiles(
+        IndexingRecord? record,
+        string? lastmod,
+        int partSize = SitemapMaximumUrls,
+        int maximumBytes = SitemapMaximumBytes)
+    {
+        var parts = new List<List<string>>();
+        var part = new List<string>();
+        var bytes = UrlsetHead.Length + UrlsetTail.Length;
+        foreach (var line in SitemapLines(record, lastmod))
+        {
+            if (part.Count > 0 && (part.Count == partSize || bytes + line.Length + 1 > maximumBytes))
+            {
+                parts.Add(part);
+                part = [];
+                bytes = UrlsetHead.Length + UrlsetTail.Length;
+            }
+
+            part.Add(line);
+            bytes += line.Length + 1;
+        }
+
+        parts.Add(part);
+        var index = new StringBuilder(SitemapIndexHead);
+        for (var number = 1; number <= parts.Count; number++)
+        {
+            index.Append("<sitemap><loc>").Append(SiteOrigin).Append(SitemapPartPath(number)).Append("</loc>");
+            if (lastmod is not null)
+            {
+                index.Append("<lastmod>").Append(lastmod).Append("</lastmod>");
+            }
+
+            index.Append("</sitemap>\n");
+        }
+
+        var files = new Dictionary<string, string>(StringComparer.Ordinal) { [SitemapPath] = index.Append("</sitemapindex>\n").ToString() };
+        for (var number = 1; number <= parts.Count; number++)
+        {
+            files[SitemapPartPath(number)] = UrlsetHead + string.Concat(parts[number - 1].Select(static line => line + "\n")) + UrlsetTail;
+        }
+
+        return files;
     }
 }

@@ -64,6 +64,8 @@ internal sealed partial class V3WebRoot
     private readonly V3PageRenderer? _renderer;
     private readonly IReadOnlyDictionary<string, string> _notFoundPages;
     private readonly IndexingRecord? _indexingRecord;
+    private readonly byte[] _robots;
+    private readonly IReadOnlyDictionary<string, byte[]>? _sitemap;
 
     private V3WebRoot(
         IReadOnlyDictionary<string, string> files,
@@ -71,7 +73,8 @@ internal sealed partial class V3WebRoot
         V3PageRenderer? renderer,
         IReadOnlyDictionary<string, string> notFoundPages,
         string searchEngines,
-        IndexingRecord? indexingRecord)
+        IndexingRecord? indexingRecord,
+        string? lastmod)
     {
         _files = files;
         ContentSecurityPolicy = contentSecurityPolicy;
@@ -79,6 +82,11 @@ internal sealed partial class V3WebRoot
         _notFoundPages = notFoundPages;
         SearchEngines = searchEngines;
         _indexingRecord = indexingRecord;
+        // robots.txt and, with the site indexed, the sitemap's files, built once for the root's life (review of #976, F4).
+        _robots = Encoding.UTF8.GetBytes(RobotsTxt(searchEngines));
+        _sitemap = string.Equals(searchEngines, Indexed, StringComparison.Ordinal)
+            ? SitemapFiles(indexingRecord, lastmod).ToDictionary(static file => file.Key, static file => Encoding.UTF8.GetBytes(file.Value), StringComparer.Ordinal)
+            : null;
     }
 
     /// <summary>The release's switch, as this root read it when it was opened: <see cref="Indexed"/> or <see cref="KeptOut"/>.</summary>
@@ -102,9 +110,11 @@ internal sealed partial class V3WebRoot
     /// or whose files include one of a type this server does not serve, is refused: a page is never served
     /// without its reviewed policy, and a file is never served as a guessed type. <paramref name="searchEngines"/> is the
     /// release's switch, the value of <c>LEX_V3_SEARCH_ENGINES</c> (<see cref="SearchEnginesState"/>: kept out unless it is
-    /// <c>indexed</c>), and <paramref name="indexingRecord"/> the release's indexing record, or null (no law's page opened).
+    /// <c>indexed</c>), <paramref name="indexingRecord"/> the release's indexing record with the works the mount holds
+    /// (<see cref="SearchEngineFacts"/>), or null (no law's page opened), and <paramref name="lastmod"/> the mounted index's
+    /// build time, which the sitemap dates its entries by, or null.
     /// </summary>
-    internal static V3WebRoot? Open(string directory, string? searchEngines = null, IndexingRecord? indexingRecord = null)
+    internal static V3WebRoot? Open(string directory, string? searchEngines = null, IndexingRecord? indexingRecord = null, string? lastmod = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(directory);
         var index = Path.Combine(directory, "en", "index.html");
@@ -160,7 +170,8 @@ internal sealed partial class V3WebRoot
             V3PageRenderer.Open(Path.Combine(root, "ssr")),
             notFound,
             SearchEnginesState(searchEngines),
-            indexingRecord);
+            indexingRecord,
+            lastmod);
     }
 
     /// <summary>
@@ -182,17 +193,16 @@ internal sealed partial class V3WebRoot
         var response = context.Response;
         var method = context.Request.Method;
 
-        // robots.txt in the switch's state, and the sitemap only with the site indexed (R67); kept out, the sitemap is an
-        // address this root does not hold.
-        if (string.Equals(path, RobotsPath, StringComparison.Ordinal) ||
-            (string.Equals(path, SitemapPath, StringComparison.Ordinal) && string.Equals(SearchEngines, Indexed, StringComparison.Ordinal)))
+        // robots.txt in the switch's state, and the sitemap's index and parts only with the site indexed (R67); kept out, or a
+        // part the sitemap has not, is an address this root does not hold.
+        byte[]? sitemap = null;
+        if (string.Equals(path, RobotsPath, StringComparison.Ordinal) || (_sitemap is not null && _sitemap.TryGetValue(path, out sitemap)))
         {
             if (WritePageHeaders(response, method))
             {
-                var robots = string.Equals(path, RobotsPath, StringComparison.Ordinal);
-                var text = Encoding.UTF8.GetBytes(robots ? RobotsTxt(SearchEngines) : SitemapXml(_indexingRecord));
+                var text = sitemap ?? _robots;
                 response.StatusCode = StatusCodes.Status200OK;
-                response.ContentType = robots ? RobotsContentType : SitemapContentType;
+                response.ContentType = sitemap is null ? RobotsContentType : SitemapContentType;
                 response.ContentLength = text.Length;
                 if (HttpMethods.IsGet(method))
                 {

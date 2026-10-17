@@ -65,6 +65,29 @@ public sealed class V3WebRootSearchEnginesTests
     private static V3WebRoot.IndexingRecord Record(JsonDocument table) =>
         V3WebRoot.ReadIndexingRecord(Engines(table).GetProperty("record").GetRawText())!;
 
+    /// <summary>The table's answer to one of the server's own questions, or null; each question asked is counted in <paramref name="asked"/>.</summary>
+    private static Func<string, IReadOnlyDictionary<string, string>, byte[]?> TableAnswers(JsonDocument table, List<string>? asked = null)
+    {
+        var answers = Engines(table).GetProperty("answers").EnumerateArray()
+            .ToDictionary(
+                static answer => $"{answer.GetProperty("operation").GetString()} {string.Join(",", answer.GetProperty("parameters").EnumerateObject().Select(static pair => $"{pair.Name}={pair.Value.GetString()}"))}",
+                static answer => Encoding.UTF8.GetBytes(answer.GetProperty("envelope").GetRawText()),
+                StringComparer.Ordinal);
+        return (operation, parameters) =>
+        {
+            var key = $"{operation} {string.Join(",", parameters.Select(static pair => $"{pair.Key}={pair.Value}"))}";
+            asked?.Add(key);
+            return answers.TryGetValue(key, out var envelope) ? envelope : null;
+        };
+    }
+
+    /// <summary>The record of the works the table's API holds, and the mounted build's time, as the API asks them at startup.</summary>
+    private static (V3WebRoot.IndexingRecord? Record, string? Lastmod) Held(JsonDocument table) => V3WebRoot.SearchEngineFacts(Record(table), TableAnswers(table));
+
+    /// <summary>A table's sitemap files, by their paths.</summary>
+    private static Dictionary<string, string> Files(JsonElement files) =>
+        files.EnumerateObject().ToDictionary(static file => file.Name, static file => file.Value.GetString()!, StringComparer.Ordinal);
+
     [TestMethod]
     public void TheSwitchIsTheReleasesOneVariableKeptOutUnlessItSaysIndexedExactly()
     {
@@ -84,10 +107,14 @@ public sealed class V3WebRootSearchEnginesTests
         Assert.AreEqual(V3WebRoot.XRobotsTag, engines.GetProperty("xRobotsTag").GetString());
         Assert.AreEqual(engines.GetProperty("robots").GetProperty("kept-out").GetString(), V3WebRoot.RobotsTxt(V3WebRoot.KeptOut));
         Assert.AreEqual(engines.GetProperty("robots").GetProperty("indexed").GetString(), V3WebRoot.RobotsTxt(V3WebRoot.Indexed));
+        // Kept out, robots.txt never blocks the pages: a crawler must fetch a page to read its noindex (review of #976, F1).
+        Assert.DoesNotContain("Disallow: /\n", V3WebRoot.RobotsKeptOut.Replace("Disallow: /api/", string.Empty, StringComparison.Ordinal));
+        Assert.DoesNotContain("Sitemap:", V3WebRoot.RobotsKeptOut);
+        Assert.AreEqual($"{V3WebRoot.RobotsKeptOut}\nSitemap: https://law.soufien.lu/sitemap.xml\n", V3WebRoot.RobotsIndexed, "the same rules, and the sitemap named");
     }
 
     [TestMethod]
-    public void TheIndexingRecordIsReadWholeOrRefusedWholeAndTheSitemapIsTheTablesOwn()
+    public void TheIndexingRecordIsReadWholeOrRefusedWholeWhateverItsSizeAndTheSitemapIsTheTablesOwn()
     {
         using var table = SiteTable();
         var engines = Engines(table);
@@ -111,21 +138,83 @@ public sealed class V3WebRootSearchEnginesTests
         Assert.IsNotNull(V3WebRoot.ReadIndexingRecord("\uFEFF" + engines.GetProperty("record").GetRawText()), "a byte-order mark is no part of it");
         var record = Record(table);
         Assert.AreEqual(engines.GetProperty("record").GetProperty("built_at").GetString(), record.BuiltAt);
-        Assert.AreEqual(engines.GetProperty("sitemap").GetString(), V3WebRoot.SitemapXml(record), "the sitemap, byte for byte the live server's");
-        Assert.AreEqual(engines.GetProperty("sitemapWithoutRecord").GetString(), V3WebRoot.SitemapXml(null));
+        var (held, lastmod) = Held(table);
+        Assert.AreEqual(engines.GetProperty("lastmod").GetString(), lastmod);
+        var expected = Files(engines.GetProperty("sitemap"));
+        var files = V3WebRoot.SitemapFiles(held, lastmod);
+        CollectionAssert.AreEqual(expected.Keys.ToArray(), files.Keys.ToArray(), "the index and its parts, in order");
+        foreach (var (path, text) in expected)
+        {
+            Assert.AreEqual(text, files[path], $"{path}, byte for byte the live server's");
+        }
 
-        // A record whose sitemap would hold more addresses than one file may is refused, not cut.
+        CollectionAssert.AreEquivalent(Files(engines.GetProperty("sitemapWithoutRecord")), V3WebRoot.SitemapFiles(null, lastmod).ToDictionary(static file => file.Key, static file => file.Value));
+        var split = engines.GetProperty("split");
+        var parts = V3WebRoot.SitemapFiles(held, lastmod, split.GetProperty("partSize").GetInt32());
+        CollectionAssert.AreEqual(Files(split.GetProperty("files")).ToArray(), parts.ToArray(), "parts of at most partSize addresses (review of #976, F3)");
+        var byBytes = V3WebRoot.SitemapFiles(held, lastmod, maximumBytes: 2000);
+        Assert.IsGreaterThan(2, byBytes.Count, "split by bytes too");
+        foreach (var (path, text) in byBytes.Skip(1))
+        {
+            Assert.IsLessThanOrEqualTo(2000, text.Length, path);
+        }
+
+        // A record whose sitemap holds more addresses than one file may is read whole (review of #976, F3: R92's gate does not
+        // hang on a sitemap's size), and every work it lists opened.
         var many = ((V3WebRoot.SitemapMaximumUrls - (2 * 2)) / (2 * 2)) + 1;
-        string Works(int skip) => string.Join(",", Enumerable.Range(skip, many - skip).Select(static index => $"{{\"address\":\"/lu-legilux/w{index:D6}\",\"languages\":[\"fra\"]}}"));
-        Assert.IsNull(V3WebRoot.ReadIndexingRecord($"{{\"schema\":\"lex-v3-indexing-record/1\",\"built_at\":null,\"works\":[{Works(0)}]}}"), "over the limit");
-        Assert.IsNotNull(V3WebRoot.ReadIndexingRecord($"{{\"schema\":\"lex-v3-indexing-record/1\",\"built_at\":null,\"works\":[{Works(1)}]}}"), "at it");
+        var works = string.Join(",", Enumerable.Range(0, many).Select(static index => $"{{\"address\":\"/lu-legilux/w{index:D6}\",\"languages\":[\"fra\"]}}"));
+        var large = V3WebRoot.ReadIndexingRecord($"{{\"schema\":\"lex-v3-indexing-record/1\",\"built_at\":null,\"works\":[{works}]}}");
+        Assert.IsNotNull(large, "over one sitemap file's limit: read whole");
+        Assert.HasCount(many, large.Works);
+        Assert.IsTrue(V3WebRoot.IndexablePage(V3WebRoot.Indexed, $"/en/lu-legilux/w{many - 1:D6}", large));
+    }
+
+    [TestMethod]
+    public void TheServersOwnQuestionsNameTheMountedBuildAndTheListedWorksTheApiHolds()
+    {
+        using var table = SiteTable();
+        var engines = Engines(table);
+        var builds = engines.GetProperty("builds").EnumerateArray().ToArray();
+        Assert.IsGreaterThanOrEqualTo(5, builds.Length);
+        foreach (var row in builds)
+        {
+            var envelope = row.GetProperty("envelope").ValueKind == JsonValueKind.Null ? null : Encoding.UTF8.GetBytes(row.GetProperty("envelope").GetRawText());
+            var builtAt = row.GetProperty("builtAt").ValueKind == JsonValueKind.Null ? null : row.GetProperty("builtAt").GetString();
+            Assert.AreEqual(builtAt, V3WebRoot.MountedBuiltAt(envelope), row.GetProperty("what").GetString());
+        }
+
+        foreach (var row in engines.GetProperty("holds").EnumerateArray())
+        {
+            var envelope = row.GetProperty("envelope").ValueKind == JsonValueKind.Null ? null : Encoding.UTF8.GetBytes(row.GetProperty("envelope").GetRawText());
+            Assert.AreEqual(row.GetProperty("held").GetBoolean(), V3WebRoot.DossierHolds(envelope), row.GetProperty("what").GetString());
+        }
+
+        Assert.AreEqual("32016R0679", V3WebRoot.DossierIdentifierOf("/eu-eurlex/32016R0679"), "an EU act is asked by its CELEX");
+        Assert.AreEqual("/lu-legilux/loi-1991-08-10-n3", V3WebRoot.DossierIdentifierOf("/lu-legilux/loi-1991-08-10-n3"));
+
+        // Asked once each: the coverage, and each listed work's dossier; a work the API does not answer is dropped (F5).
+        var asked = new List<string>();
+        var (held, lastmod) = V3WebRoot.SearchEngineFacts(Record(table), TableAnswers(table, asked));
+        Assert.AreEqual(engines.GetProperty("lastmod").GetString(), lastmod);
+        CollectionAssert.AreEqual(engines.GetProperty("held").EnumerateArray().Select(static work => work.GetString()).ToArray(), held!.Works.Select(static work => work.Address).ToArray());
+        CollectionAssert.AreEqual(
+            engines.GetProperty("answers").EnumerateArray()
+                .Select(static answer => $"{answer.GetProperty("operation").GetString()} {string.Join(",", answer.GetProperty("parameters").EnumerateObject().Select(static pair => $"{pair.Name}={pair.Value.GetString()}"))}")
+                .ToArray(),
+            asked.ToArray());
+        var (none, noneLastmod) = V3WebRoot.SearchEngineFacts(null, TableAnswers(table));
+        Assert.IsNull(none);
+        Assert.AreEqual(lastmod, noneLastmod, "no record: still the mounted build");
+        var (unanswered, unansweredLastmod) = V3WebRoot.SearchEngineFacts(Record(table), static (_, _) => null);
+        Assert.IsEmpty(unanswered!.Works, "no answer: nothing held");
+        Assert.IsNull(unansweredLastmod);
     }
 
     [TestMethod]
     public void APageWithTheKeptOutMarkerIsOpenedOnlyIndexedAndALawsPageOnlyForAWorkTheRecordLists()
     {
         using var table = SiteTable();
-        var record = Record(table);
+        var record = Held(table).Record;
         var rows = Engines(table).GetProperty("pages").EnumerateArray().ToArray();
         Assert.IsGreaterThanOrEqualTo(10, rows.Length);
         var page = $"<!doctype html><html><head>{V3WebRoot.KeptOutMeta}</head><body></body></html>";
@@ -155,15 +244,17 @@ public sealed class V3WebRootSearchEnginesTests
         try
         {
             var rows = table.RootElement.GetProperty("paths").EnumerateArray().Where(static row => row.TryGetProperty("searchEngines", out _)).ToArray();
-            CollectionAssert.AreEqual(new[] { "/robots.txt", "/sitemap.xml" }, rows.Select(static row => row.GetProperty("path").GetString()).ToArray());
+            CollectionAssert.AreEqual(new[] { "/robots.txt", "/sitemap.xml", "/sitemap-1.xml", "/sitemap-2.xml" }, rows.Select(static row => row.GetProperty("path").GetString()).ToArray());
+            // The record as the API holds it at startup: read from its file, each listed work its dossier answers (F5).
+            var (held, lastmod) = V3WebRoot.SearchEngineFacts(V3WebRoot.ReadIndexingRecordFile(recordFile), TableAnswers(table));
             foreach (var (state, switchValue, record) in new (string, string?, V3WebRoot.IndexingRecord?)[]
             {
                 (V3WebRoot.KeptOut, null, null),
-                (V3WebRoot.KeptOut, "Indexed", V3WebRoot.ReadIndexingRecordFile(recordFile)),
-                (V3WebRoot.Indexed, "indexed", V3WebRoot.ReadIndexingRecordFile(recordFile)),
+                (V3WebRoot.KeptOut, "Indexed", held),
+                (V3WebRoot.Indexed, "indexed", held),
             })
             {
-                var root = V3WebRoot.Open(directory, switchValue, record)!;
+                var root = V3WebRoot.Open(directory, switchValue, record, lastmod)!;
                 Assert.AreEqual(state, root.SearchEngines);
                 foreach (var row in rows)
                 {
@@ -189,7 +280,7 @@ public sealed class V3WebRootSearchEnginesTests
                     Assert.AreEqual(root.ContentSecurityPolicy, context.Response.Headers.ContentSecurityPolicy.ToString(), $"{state} {path}: every header a page carries");
                     var body = expected.GetProperty("body").GetString() == "robots"
                         ? engines.GetProperty("robots").GetProperty(state).GetString()
-                        : engines.GetProperty("sitemap").GetString();
+                        : engines.GetProperty("sitemap").GetProperty(expected.GetProperty("body").GetString()!).GetString();
                     Assert.AreEqual(body, Body(context), $"{state} {path}");
                     Assert.AreEqual((long)Encoding.UTF8.GetByteCount(body!), context.Response.ContentLength, $"{state} {path}");
                     var head = Request("HEAD", path);
@@ -223,7 +314,9 @@ public sealed class V3WebRootSearchEnginesTests
                     ("/en/lu-legilux/loi-1991-08-10-n3/fra/art_15", false, indexed),
                     ("/en/eu-eurlex/32016R0679/eng", false, indexed),
                     ("/en/lu-legilux/loi-2017-03-14-a439", false, false),
-                    ("/en/lu-legilux/no-such-work", true, false),
+                    // Listed, but the API's dossier does not answer it: never opened, even rendered from an answer (F5).
+                    ("/en/lu-legilux/no-such-work", false, false),
+                    ("/en/lu-legilux/another-missing-work", true, false),
                 })
                 {
                     var context = Request("GET", path);
@@ -234,6 +327,21 @@ public sealed class V3WebRootSearchEnginesTests
                     Assert.AreEqual(opened ? 0 : 1, context.Response.Headers["X-Robots-Tag"].Count, $"{state} {path}");
                     Assert.AreEqual(!opened, body.Contains("<meta name=\"robots\"", StringComparison.Ordinal), $"{state} {path}");
                     Assert.AreEqual((long)Encoding.UTF8.GetByteCount(body), context.Response.ContentLength, $"{state} {path}");
+                }
+
+                // A method refused carries it too (review of #976, F6).
+                foreach (var path in new[] { "/robots.txt", "/en/", "/sitemap.xml" })
+                {
+                    var post = Request("POST", path);
+                    if (await root.TryServeAsync(post, path, CancellationToken.None))
+                    {
+                        Assert.AreEqual(StatusCodes.Status405MethodNotAllowed, post.Response.StatusCode, $"{state} {path}");
+                        Assert.AreEqual(V3WebRoot.XRobotsTag, post.Response.Headers["X-Robots-Tag"].ToString(), $"{state} POST {path}");
+                    }
+                    else
+                    {
+                        Assert.IsFalse(indexed && path == "/sitemap.xml", $"{state} POST {path}: the sitemap is this root's with the site indexed");
+                    }
                 }
 
                 // A redirect or a move: kept out, the header; indexed, none (it is no page: the page it leads to says what it says).
@@ -249,11 +357,14 @@ public sealed class V3WebRootSearchEnginesTests
             }
 
             // Indexed with no record: the home pages are opened, no law's page, and the sitemap lists none.
-            var unrecorded = V3WebRoot.Open(directory, "indexed")!;
+            var unrecorded = V3WebRoot.Open(directory, "indexed", null, lastmod)!;
             Assert.IsFalse(unrecorded.HoldsIndexingRecord);
-            var sitemap = Request("GET", "/sitemap.xml");
-            Assert.IsTrue(await unrecorded.TryServeAsync(sitemap, "/sitemap.xml", CancellationToken.None));
-            Assert.AreEqual(engines.GetProperty("sitemapWithoutRecord").GetString(), Body(sitemap));
+            foreach (var file in engines.GetProperty("sitemapWithoutRecord").EnumerateObject())
+            {
+                var sitemap = Request("GET", file.Name);
+                Assert.IsTrue(await unrecorded.TryServeAsync(sitemap, file.Name, CancellationToken.None), file.Name);
+                Assert.AreEqual(file.Value.GetString(), Body(sitemap), file.Name);
+            }
             var law = Request("GET", "/en/lu-legilux/loi-1991-08-10-n3");
             Assert.IsTrue(await unrecorded.TryServeAsync(law, "/en/lu-legilux/loi-1991-08-10-n3", CancellationToken.None, (_, _) => "{\"result\":{}}"u8.ToArray()));
             Assert.AreEqual(V3WebRoot.XRobotsTag, law.Response.Headers["X-Robots-Tag"].ToString());

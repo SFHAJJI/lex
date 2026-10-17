@@ -79,6 +79,23 @@ const ALTERNATE_PAGES = Object.freeze({
 });
 
 /**
+ * The pages the release's switch opens that stand at no law's address, by their state, each naming itself canonical in its
+ * interface language: the home page at its language's root (also served at `index.html`), and Trust and Coverage (review of
+ * #976, F2: neither named a canonical).
+ */
+const CANONICAL_PAGES = Object.freeze({ 'live-home': '', 'live-coverage': 'coverage.html' });
+
+/**
+ * The canonical link of a live page in `locale`: at a law's address (`lawPath`), the address it shows in that language
+ * (`lawPageLinks`); for the home page and Trust and Coverage, their own address in that language; else none.
+ */
+export function canonicalLink(state, locale, lawPath = null) {
+  if (lawPath !== null) return lawPageLinks(lawPath, SITE_ORIGIN, locale).canonical;
+  const page = CANONICAL_PAGES[state];
+  return page === undefined || !INTERFACE_LANGUAGES.includes(locale) ? null : `${SITE_ORIGIN}/${locale}/${page}`;
+}
+
+/**
  * The alternate-language links of a live page: the same page in each interface language, and for a reader of any other
  * language (`x-default`) the page a reader with no preference gets: the home page's root, which sends each reader to their
  * language, and for any other page that page in French (`negotiateLanguage`'s default; review of #958: the root named a
@@ -239,8 +256,9 @@ export function Document({
         <link rel="stylesheet" href="/styles.css" />
         {/* A page at a law's address names as canonical the address it shows in the page's own interface language, a page
             that answers itself (R67; the plan's item 3.6), and each language's page and the address with no interface
-            language (which sends each reader to theirs) as alternates. */}
-        {banner === 'live' && lawPath !== null ? <link rel="canonical" href={lawPageLinks(lawPath, SITE_ORIGIN, locale).canonical} /> : null}
+            language (which sends each reader to theirs) as alternates; the home page and Trust and Coverage name their own
+            address in the page's language (`canonicalLink`). */}
+        {banner === 'live' && canonicalLink(state, locale, lawPath) !== null ? <link rel="canonical" href={canonicalLink(state, locale, lawPath)} /> : null}
         {banner === 'live'
           ? alternateLinks(state, lawPath).map((link) => <link key={link.hrefLang} rel="alternate" hrefLang={link.hrefLang} href={link.href} />)
           : null}
