@@ -4530,8 +4530,8 @@ The plan's item 3.6, what is left after the switch, the sitemap and the markup (
    plan's item 1.11, O28) writes `v3-corpus/indexing-record.json` beside the mount it measured, listing each work found to name
    none and the text languages its readable address answers a reading in; until then no law's page is opened.
 3. The objection contact R92 and R49 ask for, in the privacy notice's section for people named in acts (O5).
-4. A sitemap index once a record lists more than 50,000 addresses, and each article's readable address once reading by
-   article (3.7) gives an article a page of its own.
+4. Each article's readable address in the sitemap, once reading by article (3.7) gives an article a page of its own (the
+   sitemap index past 50,000 addresses was done in the review of #976).
 
 The plan's item 3.3, what is left after the generator (done on 2026-10-17, above):
 1. Done in #974's repair: the usual form is read by the exact-reference phase to the article it cites (`usualVerdict`).
