@@ -20,7 +20,7 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import test, { beforeEach } from "node:test";
 
-import { TRAP_EXIT_CODE, installBrowserTrap, takeTouches } from "../scripts/browser-trap.mjs";
+import { TRAP_EXIT_CODE, installBrowserTrap, startsBrowser, takeTouches } from "../scripts/browser-trap.mjs";
 
 // The test's own process starter, kept before the trap wraps every one: the deployment probe's command run as a process
 // is the test's doing, not the code under test's.
@@ -335,14 +335,50 @@ test("the deployment probe without --browser runs its HTTP probes and never reac
     assert.ok(probed.stdout.includes(NOT_WALKED_NOTE), "it says no page was walked in a browser");
     assert.match(probed.stdout, /answers as the release holds, over HTTP only \(no page walked in a browser\)/);
     assert.ok(!probed.stderr.includes("browser trap"), probed.stderr);
-    // The control: with --browser the same command reaches the launcher, and the trap ends it before anything starts.
+    // The control: with --browser the same command reaches the launcher, and the trap fails it before anything starts.
     const walked = await run("--release", directory, "--public-key", publicKey, "--origin", image.origin, "--browser");
     assert.equal(walked.code, TRAP_EXIT_CODE, walked.stderr);
-    assert.match(walked.stderr, /the browser trap was touched: findBrowser\(\); nothing was started, and the run ends here/);
+    assert.match(walked.stderr, /the browser trap was touched: findBrowser\(\); nothing was started, and the run ends with 97/);
+    // A caller that catches the trap's error, or ends with its own code, still ends with the trap's.
+    const caught = await new Promise((resolve) => execFile(process.execPath, ["--import", TRAP_URL, "--input-type=module", "--eval",
+      `const { findBrowser } = await import(${JSON.stringify(new URL("../scripts/browser-evidence.mjs", import.meta.url).href)});
+       try { await findBrowser(); } catch { console.log("caught"); }
+       process.exit(0);`],
+    { env: { ...process.env, LEX_BROWSER_TRAP: "exit" } }, (error, stdout) => resolve({ code: error === null ? 0 : error.code, stdout })));
+    assert.deepEqual(caught, { code: TRAP_EXIT_CODE, stdout: "caught\n" });
   } finally {
     await image.close();
     await rm(root, { recursive: true, force: true });
   }
+});
+
+test("a run's trap refuses every browser the launcher knows and every page walker, and none of a release's own processes", async () => {
+  const { browserCandidates } = await import("../scripts/browser-evidence.mjs");
+  for (const platform of ["win32", "linux", "darwin"]) {
+    for (const path of browserCandidates(platform)) {
+      assert.ok(startsBrowser([path, ["--headless=new", "about:blank"]]), path);
+      assert.ok(startsBrowser(["cmd", ["/c", path]]), `${path}, as an argument`);
+    }
+  }
+  assert.ok(startsBrowser(["start msedge https://example.invalid"]), "a shell's command line");
+  assert.ok(startsBrowser([process.execPath, ["scripts/journey.mjs", "--api", "api", "--mount", "mount"]]), "the journey, run by node");
+  assert.ok(startsBrowser([process.execPath, ["C:\\lex\\web\\scripts\\browser-evidence.mjs"]]), "the evidence run");
+  for (const own of [
+    ["dotnet", ["publish", "src/Lex.V3.Api/Lex.V3.Api.csproj", "-p:LexImageWebRoot=C:\\Temp\\lex-image-rehearsal-1\\first\\v3-web", "-t:PublishContainer"]],
+    ["git", ["-C", "C:\\lex-v3\\checkout", "rev-parse", "HEAD"]],
+    ["wsl", ["-d", "Ubuntu-24.04", "-u", "root", "-e", "sh", "-c", "exec env -i 'ASPNETCORE_URLS=http://0.0.0.0:5000' chroot --userspec=1654:1654 \"$R\" 'dotnet' '/app/Lex.V3.Api.dll'"]],
+    ["taskkill /PID 12 /T /F"],
+  ]) {
+    assert.equal(startsBrowser(own), false, own.join(" "));
+  }
+  assert.equal(startsBrowser(["git", ["status"]], { strict: true }), true, "strict: every start");
+
+  // A run whose own script walks pages is refused as it loads, before the script runs (its API directory does not exist
+  // either, so even run it would stop before a browser).
+  const refused = await new Promise((resolve) => execFile(process.execPath, ["--import", TRAP_URL, fileURLToPath(new URL("../scripts/journey.mjs", import.meta.url)), "--api", join(tmpdir(), "no-such-api"), "--mount", "none"],
+    { env: { ...process.env, LEX_BROWSER_TRAP: "exit" } }, (error, stdout, stderr) => resolve({ code: error === null ? 0 : error.code, stderr })));
+  assert.equal(refused.code, TRAP_EXIT_CODE, refused.stderr);
+  assert.match(refused.stderr, /the browser trap was touched: the script [^\n]*journey\.mjs; nothing was started/);
 });
 
 test("the release command names --no-browser beside --no-probe", async () => {

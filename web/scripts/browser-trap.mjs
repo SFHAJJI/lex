@@ -4,10 +4,12 @@
 // launcher, `findBrowser` and `launchBrowser` (every other export is the real one), and wraps `node:child_process`, so a
 // process whose command or script names a browser, or a script that walks pages in one (`browser-evidence.mjs`,
 // `journey.mjs`, `evidence-mutations.mjs`), is never started; `strict` traps every process start. A touch is recorded and
-// stops its caller before anything is started: it throws, or, installed with `exitCode`, ends the process with that code.
+// stops its caller before anything is started: it throws. Installed with `exitCode`, it also says so on standard error,
+// and the process then ends with that code whatever else it would end with, once its own clean-up has run (a release's
+// container and work directory are removed as on any failure), even if something caught the error.
 //
 //   LEX_BROWSER_TRAP=exit node --import ./scripts/browser-trap.mjs scripts/image-rehearsal.mjs ... --no-browser
-//     a run with the trap loaded first: a touch ends it with `TRAP_EXIT_CODE` (97) and says so on standard error.
+//     a run with the trap loaded first: a touch fails it with `TRAP_EXIT_CODE` (97).
 //   installBrowserTrap({ strict: true }) in a test, before it imports any script, then takeTouches().
 //
 // The launcher is replaced through the in-thread module hooks (`module.registerHooks`, Node 22.15 or later); a Node
@@ -22,25 +24,33 @@ export const TRAP_EXIT_CODE = 97;
 /** The query that names the real launcher behind the trap. */
 const REAL = "lex-browser-trap-real";
 const LAUNCHER = /\/scripts\/browser-evidence\.mjs$/i;
-const BROWSER_COMMAND = /(?:^|[\\/\s"'])(?:chrome|chromium|chromium-browser|google-chrome(?:-stable)?|msedge|microsoft-edge(?:-stable)?)(?:\.exe)?(?=$|[\s"'])/i;
+const BROWSER_COMMAND = /(?:^|[\\/\s"'])(?:chrome|chromium|chromium-browser|google-chrome(?:-stable)?|msedge|microsoft[- ]edge(?:-stable)?)(?:\.exe)?(?=$|[\s"'])/i;
 const PAGE_WALKER = /(?:^|[\\/\s"'])(?:browser-evidence|journey|evidence-mutations)\.mjs(?=$|[\s"'])/i;
 const SPAWNERS = Object.freeze(["spawn", "spawnSync", "execFile", "execFileSync", "exec", "execSync", "fork"]);
 
 const touches = [];
 let installed = null;
+let exitArmed = false;
 
 /** Every touch since the last call, as `what it was asked`, and clears them. */
 export function takeTouches() {
   return touches.splice(0, touches.length);
 }
 
-/** Records a touch and stops its caller: ends the process with the installed exit code, or throws. */
+/**
+ * Records a touch and stops its caller by throwing. Installed with an exit code, it says so on standard error and arms the
+ * process to end with that code: an `exit` listener sets it last, so neither the run's own exit code nor a caller that
+ * caught the error can end the run as anything else.
+ */
 export function browserTrapTouched(what) {
   const touch = String(what).slice(0, 300);
   touches.push(touch);
   if (installed?.exitCode !== undefined && installed?.exitCode !== null) {
-    process.stderr.write(`the browser trap was touched: ${touch}; nothing was started, and the run ends here\n`);
-    process.exit(installed.exitCode);
+    process.stderr.write(`the browser trap was touched: ${touch}; nothing was started, and the run ends with ${installed.exitCode}\n`);
+    if (!exitArmed) {
+      exitArmed = true;
+      process.on("exit", () => { process.exitCode = installed.exitCode; });
+    }
   }
   throw new Error(`the browser trap was touched: ${touch}; nothing was started`);
 }
@@ -57,8 +67,12 @@ function trapSource(realUrl) {
   ].join("\n");
 }
 
-/** Whether a process start names a browser or a page walker (`strict`: whatever it names). */
-function startsBrowser(name, args, strict) {
+/**
+ * Whether a process start, as `node:child_process` is asked it (`[command, args?, options?]`), names a browser or a page
+ * walker: its command, or any of its arguments, is a browser's executable (Chrome, Chromium, Edge, or `LEX_BROWSER`'s), or
+ * one of the scripts that walk pages in one. `strict`: every start.
+ */
+export function startsBrowser(args, { strict = false } = {}) {
   if (strict) return true;
   const [command, second] = args;
   const words = [String(command ?? ""), ...(Array.isArray(second) ? second.map(String) : [])];
@@ -92,7 +106,7 @@ export function installBrowserTrap({ strict = false, exitCode = null } = {}) {
   for (const name of SPAWNERS) {
     const original = childProcess[name];
     const trapped = function (...args) {
-      if (startsBrowser(name, args, strict)) return browserTrapTouched(`${name}(${String(args[0])}${Array.isArray(args[1]) ? `, ${args[1].join(" ")}` : ""})`);
+      if (startsBrowser(args, { strict })) return browserTrapTouched(`${name}(${String(args[0])}${Array.isArray(args[1]) ? `, ${args[1].join(" ")}` : ""})`);
       return original.apply(this, args);
     };
     trapped.lexBrowserTrap = true;
@@ -100,8 +114,11 @@ export function installBrowserTrap({ strict = false, exitCode = null } = {}) {
   }
   nodeModule.syncBuiltinESMExports();
   installed = Object.freeze({ strict, exitCode });
+  // A run whose own script walks pages in a browser is refused before it starts: `browser-evidence.mjs` run directly would
+  // call its own launcher, behind the trap's (whose process check would still refuse the browser's start).
+  if (PAGE_WALKER.test(process.argv[1] ?? "")) browserTrapTouched(`the script ${process.argv[1]}`);
   return installed;
 }
 
-// Loaded first by `--import` for a run: installed with the exit code, so a touch ends the run.
+// Loaded first by `--import` for a run: installed with the exit code, so a touch fails the run with it.
 if (process.env.LEX_BROWSER_TRAP === "exit") installBrowserTrap({ exitCode: TRAP_EXIT_CODE });
