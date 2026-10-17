@@ -112,6 +112,8 @@ public sealed class V3PageRendererTests
             // was stopped by its heap. A 3-second time made the test a race with the runner's speed: filling the heap took
             // 3.5 seconds on a loaded runner (2026-10-17).
             using var roomy = V3PageRenderer.Open(directory, TimeSpan.FromSeconds(60))!;
+            Assert.AreEqual("<!doctype html><p>/en/f render 1</p>", await roomy.RenderAsync("en", "reading", "{}", "/en/f", CancellationToken.None),
+                "the roomy renderer's engine renders before the heap, so a fresh engine after the stop says 1 again");
             var clock = Stopwatch.StartNew();
             Assert.IsNull(await roomy.RenderAsync("en", "reading", "{}", "/en/heap", CancellationToken.None), "a render that fills its heap is stopped at the soft limit");
             Assert.IsLessThan(45_000L, clock.ElapsedMilliseconds, "by its heap, before its time");

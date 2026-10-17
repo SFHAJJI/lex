@@ -1,6 +1,6 @@
 # Lex V3: the owner's brief
 
-Updated 2026-10-18 at 01:10 UTC by the driver. The driver updates this file in the first pull request of each
+Updated 2026-10-17 at 23:05 UTC by the driver. The driver updates this file in the first pull request of each
 day and whenever a run starts, ends or stops. At most 40 lines, plain words, no hashes. The detail stays in
 STATUS-WEB.md and STATUS-DATA.md; the acceptance list is LAUNCH-CONTRACT.md.
 
@@ -8,7 +8,7 @@ STATUS-WEB.md and STATUS-DATA.md; the acceptance list is LAUNCH-CONTRACT.md.
 
 - The engine underneath is solid: every quote checkable against its official source, and a signed release that
   rebuilds identically. For Luxembourg the date checks prove little yet: each act has one version so far.
-- Landed on 16 to 18 October: the new home page; a link opens on the article it cites; readable addresses; one
+- Landed on 17 October: the new home page; a link opens on the article it cites; readable addresses; one
   citation in three forms for copy, export and links; and the search box opens a law from its exact reference (an
   ELI, a CELEX number, a Mémorial issue, "loi du 10 août 1991", "Article 6 of Regulation (EU) 2016/679").
 - Being built now, in parallel: long codes read article by article, so a code never arrives as one 13 MB page;
@@ -27,10 +27,10 @@ STATUS-WEB.md and STATUS-DATA.md; the acceptance list is LAUNCH-CONTRACT.md.
 ## What waits on you
 
 - Now, because the codes wait on it: a second copy of the publisher files before old outputs are cleared. Either a
-  "yes" to a private Azure storage copy (under 0.50 EUR a month from your credits) or an encrypted external disk.
-  Also say whether hibernation may go off.
-- Azure money: your 175.70 EUR of credits expire on 12 November. After that the private copy costs about 20 EUR a
-  month unless the subscription is funded; a support plan pays for support only. Keep a valid payment method.
+  "yes" to an Azure storage copy of those files (under 0.50 EUR a month) or an encrypted external disk. Also say
+  whether hibernation may go off.
+- Azure money: your 175.70 EUR of credits end on 12 November. Then the private copy of the site (about 26 EUR a
+  month) is billed to your payment method, within your 30 EUR budget; a support plan pays for support only.
 - DNS: point soufien.lu's name servers to your registrar's own and add the two records the driver gave you.
 - Two questions in open pull requests: which edition of the EU's Official Journal the site calls authentic for acts
   published before 1 July 2013; and whether search engines may index the site once it opens.

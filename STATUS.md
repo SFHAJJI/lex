@@ -1,6 +1,6 @@
 # Lex V3 status
 
-Updated 2026-10-18 by the driver. This file holds the heads, the owner's open items and the pointers to the two
+Updated 2026-10-17 by the driver. This file holds the heads, the owner's open items and the pointers to the two
 lane files (the standing order of 2026-10-01 13:50 UTC: STATUS.md was edited by nearly every pull request and was
 the most frequent conflict). Each lane writes its progress in its own file, in the pull request that makes it:
 
@@ -13,8 +13,8 @@ A feature pull request edits its lane file, not this one; this file changes for 
 
 ## Heads
 
-- `v3/integration`: `f9565335` (2026-10-18, PR #974 merged: exact references first, plan 4.2; #967 to #973 and #975,
-  the citation generator, merged on 2026-10-15 to 2026-10-17). The required checks are strict: `dotnet` (the whole solution, about 14 min on the runner),
+- `v3/integration`: `8826ba71` (2026-10-17, PR #976 merged: search engines, kept out until O27, plan 3.6; #964 and
+  #967 to #975 merged on 2026-10-15 to 2026-10-17, #974, exact references first, just before it). The required checks are strict: `dotnet` (the whole solution, about 14 min on the runner),
   `web`, `canon-windows`, `journeys` and, since 2026-10-15, `image-conditions` (the API's tests inside the release's
   base image). `journeys` walks J1 to J8 and the site's own addresses in Chrome over four fixture mounts (the fixture,
   licence-blocked, two-state and EU annex control mounts), by pointer and by keyboard on the pages the API serves.
@@ -42,6 +42,10 @@ A feature pull request edits its lane file, not this one; this file changes for 
   and search) and the near-final site on 15 December. It supersedes `C:\lex-v3\V3-FINISH-PLAN-2026-09-27.md` and its
   2026-11-07 target. Decision 94 (one driver, one queue, one review per pull request) merged in lex-governance on
   2026-09-27.
+- On 2026-10-17 the owner asked for days, not months. The driver's answer: a private beta of the law held today
+  first, on the private copy; then the codes, once custody has its second copy. Opening a beta to the public before
+  the lawyer's read (O4) and the audits is going live, so it is the owner's decision, asked at the decision sitting
+  below. Until the owner answers O1, the opening of 2 February 2027 stays the plan of record.
 
 ## Owner rulings, 2026-09-30
 
@@ -113,6 +117,10 @@ Decision 95 (lex-governance PR #9, merged 2026-09-30) records these rulings and 
 ## Blocked on the owner
 
 Only money, legal or public claims, credentials and going live (ruling 7):
+- Azure credits: the subscription's trial credit (175.70 EUR left, seen on 2026-10-17) expires on 12 November 2026.
+  From then the private copy of the site (about 26 EUR a month, below) is billed to the payment method on file,
+  within the 30 EUR monthly budget the owner accepted; a support plan pays for support only. The owner checks the
+  payment method before 12 November.
 - Azure, for V3: a new subscription on 2026-10-13. V2's subscription stays disabled (since 2026-10-02), so V2 at
   law.soufien.lu stays down. The owner's Gmail account could not take V3 either: its billing profile is past due on a
   EUR 6.10 invoice the portal cannot take (only Azure Support can clear it). The owner signed up a third Microsoft account (a free trial; about 30 EUR a month accepted) and, at the owner's request,
@@ -125,7 +133,9 @@ Only money, legal or public claims, credentials and going live (ruling 7):
   UTC every Azure call from this machine fails with AADSTS530035 (blocked by the tenant's security defaults). On
   2026-10-14 the owner asked the driver to run the sign-in ("you run az login"): the driver starts a device-code
   sign-in when the owner says "sign in", and the owner enters its code on the phone, this PC on a normal connection.
-  Two codes the driver started that day expired unanswered.
+  Two codes the driver started that day expired unanswered. **Unblocked on 2026-10-17:** the owner created, in Cloud
+  Shell, the service principal `lex-v3-driver` (Contributor on `rg-lex-v3` only, and Key Vault Secrets User for the
+  signing key), which the driver signs in as with a certificate held only on this machine.
 - Where DNS lives (O14): **decided by the owner on 2026-10-14.** Asked "Decide where soufien.lu's DNS lives. I recommend
   your registrar, outside Azure.", the owner answered "yes like v2 same url you run az login": the zone lives at the
   registrar, outside Azure (R117: V2 went down with its subscription), and the site keeps V2's address,
@@ -137,8 +147,9 @@ Only money, legal or public claims, credentials and going live (ruling 7):
 - The plan's decisions (its section 5: each with its recommended answer, its cost and what stops without it):
   - **Now, by Friday 16 October**: the Azure sign-in; the rest of O14 (R117): a valid payment method kept on the V3
     subscription, a backup one, and billing alerts on two channels, so a failed payment cannot take the site down as
-    it took V2; O15, an encrypted external disk (1 to 2 TB), so custody gets a second copy before step 0 deletes
-    anything; turning hibernation off (6.3 GB).
+    it took V2; O15, a second copy of custody before step 0 deletes anything: an encrypted external disk (1 to 2 TB),
+    or, offered on 2026-10-17, a private Azure storage container in `rg-lex-v3` (custody measures about 16 GB, under
+    0.50 EUR a month in the cool tier; money, so it waits for the owner's yes); turning hibernation off (6.3 GB).
   - **The decision sitting, by Wednesday 21 October** (one reply approves the pre-filled answers, striking what the
     owner disagrees with; nothing is assumed from silence): O1, adopt the record and one opening with the full launch
     set on 2 February 2027, the four items of the plan's section 4 (tagged PDFs, the export cart across acts, the
@@ -149,7 +160,8 @@ Only money, legal or public claims, credentials and going live (ruling 7):
     N1, one money envelope (a ceiling of 150 EUR a month, about 120 expected; the external disk; the rented machine; the
     people's checks on quotes, up to about 19,000 EUR); N2, the checks only people may do, by paid independent people,
     never agents (a Luxembourg lawyer, an accessibility auditor, a French-reading legal annotator, a session moderator
-    and ten testers).
+    and ten testers); and, asked on 2026-10-17, whether a beta may open to the public before the lawyer's read and
+    the audits (going live; recommended: no, a private beta first).
   - **By Friday 30 October**: O6, the Luxembourg licence rulings (recommended: L2, L1 and L1b yes for every file, each
     with a visible per-file disclosure; L3 yes in principle; L4 kept withheld; a letter to the SCL); O7, the population
     and its yield; O28, personal data; O5, the legal pages; O4, the lawyer's read as a condition of going live; O26, the
