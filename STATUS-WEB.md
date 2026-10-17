@@ -49,11 +49,14 @@ release from this machine could only skip every probe (`--no-probe`), the ones t
   does and exposes a container's record): over a real mount with an EU index, over the fixture mount, and over a stand-in
   that writes each query and the address on its output and a SQLite file on its `/tmp`, sets a cookie and serves another
   card, each caught with its own reason. Then the deployment probe, in this process and as `deploy.ps1 -SkipBrowserProbe`
-  runs it, as a process with the trap loaded first (`LEX_BROWSER_TRAP=exit node --import ./scripts/browser-trap.mjs ...`,
-  a touch ending it with 97). The trap is never touched. The controls: with the browser asked for, the probe phase and the
-  command each stop at the trap before anything starts. Six mutations each fail the test: the walk run anyway, a browser
-  looked for first, a process started, the deployment probe walking without `--browser`, no step named, the privacy
-  record not held.
+  runs it, as a process with the trap loaded first (`LEX_BROWSER_TRAP=exit node --import ./scripts/browser-trap.mjs ...`:
+  a touch throws, so the run's own clean-up still removes its container and work directory, and the run then ends with 97
+  whatever it exits with, a caught error included). The trap is never touched. The controls: with the browser asked for,
+  the probe phase and the command each stop at the trap before anything starts; a run whose own script walks pages
+  (`journey.mjs`) is refused as the trap loads. The run's process check names every browser path the launcher knows (on
+  Windows, Linux and macOS) and none of a release's own processes (`dotnet`, `git`, `wsl` with the container's script).
+  Six mutations each fail the test: the walk run anyway, a browser looked for first, a process started, the deployment
+  probe walking without `--browser`, no step named, the privacy record not held.
 - **Over the real API**: the probe phase without a browser against `Lex.V3.Api` over the journey fixture mount (published
   from this branch, without the synthetic preview, as the image holds it), its pages served by the API, the trap loaded
   first: no failure in 2.8 s. 18 API journey runs, the served pages, 63 V2 routes, readiness, the card, and privacy over
@@ -85,7 +88,7 @@ release from this machine could only skip every probe (`--no-probe`), the ones t
   next release's. Nothing was deployed, pushed or asked of Azure.
 - **Measured** (this branch, from `v3/integration` at #977's merge, 3b7913ec), with no browser started: the web build; the
   web suite over 111 of its 114 files (all but `keyboard-walk`, `launch-browser` and `paint-check`, which start a
-  browser), 1,230 of 1,230 (`no-browser-probes` 7 of 7); `eng/verify-v3-tree.ps1` 1,610 tracked paths. No C# was
+  browser), 1,231 of 1,231 (`no-browser-probes` 8 of 8); `eng/verify-v3-tree.ps1` 1,610 tracked paths. No C# was
   touched; the journeys are CI's lane.
 
 ## Two tests that timed the runner, not the behaviour (sole driver, 2026-10-17)
