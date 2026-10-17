@@ -218,6 +218,7 @@ internal sealed partial class V3WebRoot
                 {
                     if (WritePageHeaders(response, method))
                     {
+                        ForSearchEnginesRedirect(response);
                         response.Headers.Location = moved.Location;
                         response.StatusCode = StatusCodes.Status301MovedPermanently;
                         response.ContentLength = 0;
@@ -234,6 +235,7 @@ internal sealed partial class V3WebRoot
 
                 if (WritePageHeaders(response, method))
                 {
+                    ForSearchEnginesRedirect(response);
                     // The answer depends on the reader's languages, so a cache must not hand it to another reader.
                     response.Headers.Vary = "Accept-Language";
                     response.Headers.Location = redirect.Location;
@@ -301,6 +303,18 @@ internal sealed partial class V3WebRoot
 
         response.Headers.Remove("X-Robots-Tag");
         return served;
+    }
+
+    /// <summary>
+    /// A redirect or a move with the site indexed carries no <c>X-Robots-Tag</c>: it is no page, and the page it leads to says
+    /// what it says (an <c>x-default</c> alternate is the root's or a law's redirect). Kept out, it keeps the header.
+    /// </summary>
+    private void ForSearchEnginesRedirect(HttpResponse response)
+    {
+        if (string.Equals(SearchEngines, Indexed, StringComparison.Ordinal))
+        {
+            response.Headers.Remove("X-Robots-Tag");
+        }
     }
 
     /// <summary>

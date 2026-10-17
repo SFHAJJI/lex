@@ -18,7 +18,8 @@ namespace Lex.V3.Api;
 /// every response of this root carries <c>X-Robots-Tag: noindex</c>, every page names a robots <c>noindex</c>, and
 /// <c>/sitemap.xml</c> is an address this root does not hold. Indexed, robots.txt allows the pages and disallows the API, MCP,
 /// the health routes, search and export, and names the sitemap; a page whose kept-out marker this root may remove
-/// (<see cref="IndexablePage"/>) is served without it and without the header.
+/// (<see cref="IndexablePage"/>) is served without it and without the header, and a redirect or a move without the header (it
+/// is no page: the page it leads to says what it says).
 /// </para>
 /// <para>
 /// Names (R92, the owner's O28): a law's page is opened only for a work the release's indexing record lists

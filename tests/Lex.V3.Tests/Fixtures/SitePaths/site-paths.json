@@ -1345,6 +1345,17 @@
       "keptOut": "<meta name=\"robots\" content=\"noindex\" data-search-engines=\"kept-out\"/>"
     },
     "xRobotsTag": "noindex",
+    "redirects": {
+      "about": "The X-Robots-Tag a redirect or a move carries in each state (the root's and a law's redirect to the reader's language, a permalink moved): kept out, noindex, as every response; indexed, none: it is no page, and the page it leads to says what it says (an x-default alternate is such a redirect).",
+      "paths": [
+        "/",
+        "/lu-legilux/loi-1991-08-10-n3",
+        "/eu-eurlex/32016R0679/eng",
+        "/en/eu-eurlex/32016R0679/eng/2016-05-04--aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      ],
+      "kept-out": "noindex",
+      "indexed": null
+    },
     "robots": {
       "kept-out": "User-agent: *\nDisallow: /\n",
       "indexed": "User-agent: *\nDisallow: /api/\nDisallow: /mcp\nDisallow: /health/\nDisallow: /fr/search.html\nDisallow: /fr/export.html\nDisallow: /en/search.html\nDisallow: /en/export.html\n\nSitemap: https://law.soufien.lu/sitemap.xml\n"

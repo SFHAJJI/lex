@@ -330,9 +330,16 @@ test("the live server says the switch's state: robots.txt, the sitemap, X-Robots
           assert.equal(body.includes('<meta name="robots"'), !opened, `${state} ${path}`);
           assert.equal(Number(answer.headers.get("content-length")), Buffer.byteLength(body), `${state} ${path}: its length as served`);
         }
-        for (const path of ["/styles.css", "/", "/no-such-page"]) {
+        for (const path of ["/styles.css", "/no-such-page"]) {
           const answer = await fetch(`${live.origin}${path}`, { redirect: "manual" });
           assert.equal(answer.headers.get("x-robots-tag"), X_ROBOTS_TAG, `${state} ${path}: every other answer is kept out`);
+        }
+        // A redirect or a move: kept out, the header; indexed, none (it is no page).
+        assert.ok(ENGINES.redirects.paths.length >= 3);
+        for (const path of ENGINES.redirects.paths) {
+          const answer = await fetch(`${live.origin}${path}`, { redirect: "manual" });
+          assert.ok(answer.status === 301 || answer.status === 302, `${path}: ${answer.status}`);
+          assert.equal(answer.headers.get("x-robots-tag"), ENGINES.redirects[state], `${state} ${path}`);
         }
       } finally {
         await live.close();

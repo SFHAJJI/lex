@@ -21,8 +21,8 @@
 //
 // What it says to search engines is the release's switch (`search-engines.mjs`, R67), as the API says it
 // (`V3WebRoot.SearchEngines.cs`): `/robots.txt` in the switch's state, `/sitemap.xml` only with the site indexed, and
-// `X-Robots-Tag: noindex` on every page, file, redirect and 404 it answers but a page the switch opened, whose kept-out marker
-// it removed. The switch is `LEX_V3_SEARCH_ENGINES` when the server is made, unless the caller names one; the indexing
+// `X-Robots-Tag: noindex` on every page, file and 404 it answers but a page the switch opened, whose kept-out marker it
+// removed, and on a redirect while the site is kept out. The switch is `LEX_V3_SEARCH_ENGINES` when the server is made, unless the caller names one; the indexing
 // record (R92's outcome) is a file the caller names, none by default.
 
 import { INTERFACE_LANGUAGES, movedFor, pageForSitePath, redirectFor, sitePageFor } from "./permalinks.mjs";
@@ -257,6 +257,9 @@ export function createLiveServer({
   const rootPath = resolve(root instanceof URL ? fileURLToPath(root) : root);
   const rendererFor = serverRenderers(rootPath);
   const engines = Object.freeze({ state: searchEnginesState(searchEngines), record: indexingRecordAt(indexingRecord) });
+  // A redirect or a move with the site indexed carries no X-Robots-Tag: it is no page, and the page it leads to says what it
+  // says (an x-default alternate is the root's or a law's redirect). Kept out, it keeps the header, as the API answers it.
+  const redirectRobots = engines.state === INDEXED ? {} : { "x-robots-tag": X_ROBOTS_TAG };
   return createServer(async (request, response) => {
     try {
       let url;
@@ -311,7 +314,7 @@ export function createLiveServer({
       }
       const moved = movedFor(url.pathname, url.search);
       if (moved !== null) {
-        response.writeHead(301, { ...BASE_HEADERS, "x-robots-tag": X_ROBOTS_TAG, location: moved, "content-length": 0 });
+        response.writeHead(301, { ...BASE_HEADERS, ...redirectRobots, location: moved, "content-length": 0 });
         response.end();
         return;
       }
@@ -319,7 +322,7 @@ export function createLiveServer({
       // sends them (V3WebRoot).
       const location = redirectFor(url.pathname, url.search, request.headers["accept-language"]);
       if (location !== null) {
-        response.writeHead(302, { ...BASE_HEADERS, "x-robots-tag": X_ROBOTS_TAG, location, vary: "Accept-Language", "content-length": 0 });
+        response.writeHead(302, { ...BASE_HEADERS, ...redirectRobots, location, vary: "Accept-Language", "content-length": 0 });
         response.end();
         return;
       }

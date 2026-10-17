@@ -236,12 +236,15 @@ public sealed class V3WebRootSearchEnginesTests
                     Assert.AreEqual((long)Encoding.UTF8.GetByteCount(body), context.Response.ContentLength, $"{state} {path}");
                 }
 
-                // Every other answer of this root is kept out: a redirect, a move.
-                foreach (var path in new[] { "/", "/lu-legilux/loi-1991-08-10-n3", "/en/eu-eurlex/32016R0679/eng/2016-05-04--" + new string('a', 64) })
+                // A redirect or a move: kept out, the header; indexed, none (it is no page: the page it leads to says what it says).
+                var redirects = engines.GetProperty("redirects");
+                var wanted = redirects.GetProperty(state).ValueKind == JsonValueKind.Null ? string.Empty : redirects.GetProperty(state).GetString();
+                foreach (var path in redirects.GetProperty("paths").EnumerateArray().Select(static value => value.GetString()!))
                 {
                     var context = Request("GET", path);
                     Assert.IsTrue(await root.TryServeAsync(context, path, CancellationToken.None), path);
-                    Assert.AreEqual(V3WebRoot.XRobotsTag, context.Response.Headers["X-Robots-Tag"].ToString(), $"{state} {path}");
+                    Assert.IsTrue(context.Response.StatusCode is StatusCodes.Status301MovedPermanently or StatusCodes.Status302Found, path);
+                    Assert.AreEqual(wanted, context.Response.Headers["X-Robots-Tag"].ToString(), $"{state} {path}");
                 }
             }
 

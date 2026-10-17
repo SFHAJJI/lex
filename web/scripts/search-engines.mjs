@@ -12,7 +12,8 @@
 //              does not hold).
 //   indexed    robots.txt allows the pages and disallows the API, MCP, the health routes, search and export
 //              (`ROBOTS_INDEXED`), and names the sitemap; a page whose kept-out marker the server may remove
-//              (`indexablePage`) is served without it and without the header; every other response keeps both.
+//              (`indexablePage`) is served without it and without the header, a redirect or a move without the header (it
+//              is no page: the page it leads to says what it says), and every other response keeps the header.
 //
 // The pages carry one of two robots meta elements (`Document.jsx`): `NEVER_INDEXED_META` on a page no search engine is ever
 // asked to index (search, export, the provision history, compare and radar forms, a law's page as built, a refusal, the 404
