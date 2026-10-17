@@ -12,6 +12,7 @@
     <Compile Include="../Lex.V3.TestSupport/ScopeLineQuestions.cs" Link="TestSupport/ScopeLineQuestions.cs" />
   </ItemGroup>
   <ItemGroup>
+    <Content Include="Fixtures/ArticleNumbers/*.json" CopyToOutputDirectory="PreserveNewest" />
     <Content Include="Fixtures/EuManifestationListing/*.json" CopyToOutputDirectory="PreserveNewest" />
     <Content Include="Fixtures/LuxembourgToday/*.json" CopyToOutputDirectory="PreserveNewest" />
     <Content Include="Fixtures/SitePaths/*.json" CopyToOutputDirectory="PreserveNewest" />

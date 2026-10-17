@@ -158,7 +158,7 @@ internal static class ExactReferenceReader
         Options);
 
     private static readonly Regex CelexInAddress = new(
-        @"^(?:https?://)?(?:[a-z0-9-]+\.)*europa\.eu/.*?(?:[?&]uri=celex(?::|%3a)|/resource/celex/)(?<celex>[0-9A-Za-z()/._-]+?)(?:[&#].*)?$", Options);
+        @"^(?:https?://)?(?:[a-z0-9-]+\.)*europa\.eu.*?(?:[?&]uri=celex(?::|%3a)|/resource/celex/)(?<celex>[0-9A-Za-z()/._-]+?)(?:[&#].*)?$", Options);
 
     private static readonly Regex CelexPrefixed = new(@"^(?:celex\s*(?::|n°|no\.?|number)?\s*)(?<celex>\S+)$", Options);
 
