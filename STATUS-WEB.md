@@ -4,6 +4,135 @@ Updated 2026-10-17. The web lane's progress, split out of STATUS.md (which keeps
 items and the pointers) by the standing order of 2026-10-01 13:50 UTC. Every pull request of the web lane
 updates this file, not STATUS.md.
 
+## Exact references first: the one box opens the act a reference names (sole driver, 2026-10-17)
+
+The plan's item 4.2 ("Exact references first. ELI, CELEX, Mémorial citations, historical identifiers and permalinks open
+the act. A citation such as 'Code du travail, article L. 121-6, 15 mars 2021' is read against a fixed table of article
+numbers, then opens Reading at that article and date. In the table: 1 = 1er; L. 121-6 = L.121-6; 42 is never 42ter."),
+to the specification of record's R59 ("An unambiguous citation opens Reading"), R90 (S4-A03's resolver-first order; no
+protected token dropped; absent instruments refused with no list), R13, R21 and R22. Before it, the home box sent an empty
+work identifier, so an ELI or a CELEX typed there was searched as Luxembourg words, and its line said so (#971, F3).
+- **Where the recognition lives: the API** (driver decision). `search` with no work named reads its query as an exact
+  reference before any word is searched (`ExactReferenceReader`, `V3CorpusMount.References.cs`), and every search answer
+  reports the phase as `reference` (`phase: exact_reference`, `outcome`, `rule`, `kind`, `recognised`, `opens`, `reason`)
+  beside `lanes_run`. REST and MCP answer from the one handler, so they agree; the request schema did not change, so the
+  registry digest did not move. With a work named, the phase is not run (`not_run_identifier_given`); a query that is no
+  reference is searched as before (`no_reference`).
+- **The reference kinds** (each held to the mount in `V3CorpusReferenceMountTests` and `V3CorpusEuropeReferenceMountTests`):
+  - a Luxembourg ELI as the publisher writes it (`http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3`, the public
+    site's `https://legilux.public.lu/eli/…`, `eli/etat/…`), at the work, a version (`/jo`, `/consolide/{yyyymmdd}`, a code's
+    date) or an expression (`/jo/fr`);
+  - a CELEX, consolidated forms included (`32016R0679`, `CELEX:32016R0679`, `02016R0679-20160504`), also inside an EUR-Lex or
+    Publications Office address, an EU ELI (`http://data.europa.eu/eli/reg/2016/679/oj`), or an EU act's conventional name
+    read to its CELEX (`Regulation (EU) 2016/679`, `règlement (CE) n° 261/2004`, `Directive 2006/112/EC`, `directive
+    89/391/CEE`);
+  - a Mémorial or Journal officiel A citation (`Mém. A n° 571 de 2021`, `Mémorial A n° 152 du 2 août 2011`, `Journal officiel
+    du Grand-Duché de Luxembourg, Mémorial A, n° 571 du 26 juillet 2021`, `JO A 571/2021`), read against the catalogue's
+    `isPartOf` facts (`…/eli/etat/leg/memorial/{year}/a{n}`); an issue's date, when written, must be its acts'
+    `publicationDate`;
+  - a historical identifier of the catalogue (`1790A0001Z`, `historicalLegalId`);
+  - an address of this site for law in any form R64's reader accepts, with #972's readable addresses: a work, a permalink at
+    an article or not, a dated coordinate, an EU wording's permalink (also of the shape before R64), an act's readable
+    address, as a path, under `/fr/` or `/en/`, or under `https://law.soufien.lu`;
+  - an act by its type and date (`loi du 10 août 1991`, `loi modifiée du …`, `règlement grand-ducal du …`, `arrêté
+    grand-ducal du …`), its title words after the date naming it among those of that day;
+  - a citation: an article of any of these acts, or of an act by its title (which must start with an instrument's word:
+    code, constitution, loi, règlement, arrêté, convention, traité), with or without a date (`Code du travail, article L.
+    121-6, 15 mars 2021`; `article 5 de la loi du 10 août 1991 au 15 mars 2021`; `Article 6 of Regulation (EU) 2016/679, as
+    at 25 May 2018`; `32016R0679 art. 38l`), or an act and a date. A bare title is no reference: the title ladder answers it,
+    as before.
+- **What a reference opens** (no hit, no word searched): the dossier when it names no article and no date; else Reading at
+  the article and date. With a date given (the reference's own, its identifier's, or a search date that is not today), the
+  permalink of the version the date selects (R64); with none (the search's date is today's, or none), the act's readable
+  address (#972, R67), which opens today's version, with the article read in today's version (driver decision, after #972
+  merged). The answer's `opens` says the page, the address and its kind (`dossier`, `permalink`, `readable`).
+- **What is refused, typed, with what was recognised** (the payload's `recognised_*` scalars: kind, act, held title,
+  article, date, date source): an act the indexes do not hold is `identifier_unknown` with no list ("Code du travail" today,
+  since codes come with Release 1); several acts (two laws of one day, several acts of one Mémorial issue) or several
+  articles of one number are `ambiguous_identifier` with every candidate (and their titles), never a guess; a date before
+  the held history is `no_version_for_date` (R22), several versions on it `ambiguous_version`; an article the version does
+  not hold is `anchor_not_in_version` with its nearest ids (by key, so 42bis's neighbours are 42 and 42ter) and the
+  do-not-fall-back rule; a language the act is not held in is `language_not_available`. A date written in a date's shape
+  that names no calendar day, or two dates that disagree (a consolidated CELEX's and the citation's), opens nothing and
+  searches no word (`not_opened`, its `reason`): the date is never dropped.
+- **The fixed table of article numbers** (`src/Lex.V3.Api/article-numbers.json`, embedded; `ArticleNumbers`): the citation
+  words, the forms of the first article, the Latin suffixes and their synonyms (nonies is novies), the code letters (L, R,
+  D, A), and every shape of article id the indexes hold, each with examples. Keys: 1er, premier and 1 are `1`; L. 121-6,
+  L.121-6, L 121-6 and `art_l_121-6`, `art_L.121-6`, `art_l121-6` are `L.121-6`; 42, 42bis, 42ter, 42-1 and XLII are five
+  numbers; 3 is never III, 1er never Ier. A quoted article of an amended act (`art_4)_art_13`, `art__art_3bis`) is never
+  opened; a grouped article (`art_141_à_144`, `art_632_et_633`, `art_559_560`) opens for a number it groups only when no
+  article holds that number itself; a dated id (`art_37-1_20240201`) and a heading after the number are the number's. An EU
+  provision id `038L` is `38l`. The table is held to every article id the population's two indexes hold (207 Luxembourg ids,
+  1,141 EU ids, read read-only from `derive-c` into `tests/Lex.V3.Tests/Fixtures/ArticleNumbers/held-article-ids.json`) and to
+  the AKN fixtures' 208 others (the Code de commerce's ranges among them); code-shaped citations are tested on a synthetic
+  "Code du travail" fixture in two versions.
+- **Dates** (`CitationDates`): `2021-03-15`, `15/03/2021`, `15.03.2021`, `15-03-2021` (the day first), `15 mars 2021`, `1er
+  mars 2021`, `15 March 2021`, `March 15, 2021`, `15. März 2021`, read strictly (31 février, 2021-02-29 and 03/15/2021 are
+  in a date's shape and name no day); a date before a type and date's own date, after a comma or "le", is its title's
+  ("… signée à Genève, le 23 septembre 1936"), and after "au", "on" or "as at" the date asked. The page prints the date back
+  in words in its language (`longDate`). The default is today in Luxembourg (R13, `LuxembourgCalendar`), said apart when
+  the reference names no date.
+- **The pages** (`LiveSearch.jsx`, `live-search.mjs`, `search-answer.mjs`): the home box and the search page route a
+  reference. `opens`: "Recognised: {act}, article {article}, at {date}." (the held title when the index resolved one), then
+  "Opening the reading: {address}" as a link, then the page goes there (`location.assign`). `not_opened`: the recognition and
+  why ("“31 février 2024” names no day of the calendar, so nothing was opened and no word was searched."). A refusal: the
+  recognition above its card, with the phase's own sentences (`LIVE_SEARCH_REFERENCE_REFUSAL_SENTENCES`). The refusal card
+  declares the six `recognised_*` keys (`RECOGNISED_KEYS`).
+- **The EU in the same box** (repairs #971's F3 note): a CELEX, an EU ELI or an EU act's name opens the EU act; the line
+  under the home page's box (and the 404 page's) now says what is true: "A search by words covers Luxembourg law. An ELI, a
+  CELEX number, a Mémorial reference, a permalink, or the citation of an article of an act, with or without a date, opens
+  that act, Luxembourg or EU. To search within an EU act, name it by its CELEX number on the search page." / "La recherche
+  par mots porte sur le droit luxembourgeois. Un ELI, un numéro CELEX, une référence au Mémorial, un permalien ou la
+  citation d’un article d’un acte, avec ou sans date, ouvre cet acte, luxembourgeois ou de l’UE. Pour interroger un acte de
+  l’UE, désignez-le par son numéro CELEX sur la page de recherche." (`search.searchScope`, replacing `search.luxembourgOnly`).
+  The dated and undated sentences ("Only Luxembourg acts were searched …") stay: they are said of a search by words.
+- **French** (Decision 41): 29 forms (25 interface entries with the twelve months, and 4 refusal sentences) were reviewed by
+  Claude (AI reviewer) under the owner's delegation in the addendum of 2026-10-17 ("exact references first") of
+  `C:\lex-v3\lanes\fr-review\review.md`: one changed (the EU date sentence, "in one wording only", so it matches no EU date
+  pattern), 28 approved, 336 checks. They are named in the header comment of `live-chrome-fr.mjs`.
+- **Samples**: the answer census samples the four Luxembourg and two EU reference answers; the refusal census drives five
+  refusals of the phase. A code two producers send with different keys (diff's `bound`, the phase's `recognised_*`) now
+  keeps a sample per key set (`more_payloads`), so no key is in no sample.
+- **On the population** (a read-only probe of `derive-c`, run once and not committed): `loi du 12 novembre 2011`, its ELI
+  and `Mém. A n° 233 de 2011` open its dossier; `2013A3498A` opens `rgd-2013-10-18-n1`; `règlement grand-ducal du 10 février
+  2021` and `Mém. A n° 96 de 2015` are ambiguous (several acts) with their titles; `Code du travail, article L. 121-6, 15 mars
+  2021` is `identifier_unknown` with what was recognised; `Article 6 of Regulation (EU) 2016/679` opens
+  `/eu-eurlex/32016R0679/eng/006`, and at 15 March 2021 the wording of 2016-05-04; `02006L0112-20160601` opens that
+  consolidated wording; `Regulation (EU) No 600/2014, article 38l` opens `…/eng/038L`. Each answered within 0 to 191 ms,
+  but the first EU reference of a mount pays the census's map and an act's timeline (about 1.5 s) and the first Mémorial or
+  historical reference the catalogue's 44,312 facts (about 0.45 s), each once per mount.
+- **Driver decisions** (reversible):
+  - The recognition is in the API, reported as the search answer's `reference` phase, so REST and MCP agree; the page only
+    routes.
+  - A reference with no date opens the act's readable address (today's version, R67); with one, the permalink of the
+    version the date selects (R64). The home box's own today is no date given; a search date that is not today is.
+  - A bare ELI, CELEX, Mémorial or historical identifier, or an act by its type and date, opens the dossier; an ELI or a
+    permalink of a version opens that version's reading.
+  - A bare title stays the title ladder's (no reference), and the act of a citation by title is matched only by the
+    ladder's exact and prefix tiers, never by words it shares, so "Code du travail" never opens an act amending it.
+  - A grouped article opens for a number it groups only when no article holds that number; a quoted article never.
+  - An arabic number never matches a roman one; Latin suffixes have their synonyms; nothing else is near.
+  - A date before an act's own date after a comma or "le" is its title's; after a preposition that asks for a version it
+    is the date asked.
+  - The refusals of the phase carry what was recognised as `recognised_*` scalars beside the code's own payload; the samples
+    keep a payload per key set.
+  - The page shows the recognition and the address, then goes there; the asked date is not carried into Reading's address
+    beyond the version it selects (the reading shows that version's own dates).
+- **Not in this slice** (next): an OJ L citation (`OJ L 119, 4.5.2016, p. 1`), which needs a catalogue of OJ references the
+  EU index does not hold; codes themselves (Release 1: the table and the logic are ready and tested on code-shaped ids); a
+  title with a date inside it other than after a comma or "le"; the asked date written into Reading's address (the plan's
+  3.5, the search in the address); results grouped by act (4.3); an EU index with no census answering a dated EU reference
+  (refused `retrieval_mode_unavailable`, a branch no fixture reaches: every EU fixture and the population hold a census).
+- **Measured** (no browser was started on this machine: the owner's order of 2026-10-16; CI's journeys lane is the browser
+  evidence, and the journeys' home text changed with `search.searchScope` without being run here): `npm run build` in `web`,
+  then `node scripts/react-bundle.mjs` and `node --test` over every web test file but `keyboard-walk`, `launch-browser` and
+  `paint-check`, 108 files, 1,193 of 1,193; `dotnet build Lex.V3.slnx -c Release`, 0 warnings, 0 errors; `Lex.V3.Tests`
+  3,282 passed, 6 skipped; in `Lex.V3.Ingest.Tests` the classes the slice touches and those named for it
+  (`LuxembourgIndex*`, the Census classes, `PublicRequestRecordingTests`, the answer, envelope and refusal-payload samples,
+  the Resolve, Search and EU Search mount tests, the two reference mount classes, the machine gates, the MCP classes, the
+  pinned-permalink and EU time view classes) 303 of 303, and `Census` with `PublicRequestRecordingTests` 45 passed, 2
+  skipped; `eng/verify-v3-tree.ps1` passes; the French review's checks, 29 forms and 336 checks, pass.
+
 ## One citation generator, in three forms (sole driver, 2026-10-17)
 
 The plan's item 3.3 (`C:\lex-v3\PLAN-2026-10-14.md`), to the specification of record's R65 ("One citation generator for
