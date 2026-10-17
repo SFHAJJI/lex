@@ -356,6 +356,13 @@ public sealed class V3WebRootSearchEnginesTests
                 }
             }
 
+            // No file of the build, as the live server answers them too (the review's notes on #976): left to the 404 page.
+            var any = V3WebRoot.Open(directory, "indexed", held, lastmod)!;
+            foreach (var path in new[] { "/en/index.html/", "/en/search%2Ehtml", "/Robots.txt", "//robots.txt", "/sitemap-0.xml", "/sitemap-01.xml" })
+            {
+                Assert.IsFalse(await any.TryServeAsync(Request("GET", path), path, CancellationToken.None), path);
+            }
+
             // Indexed with no record: the home pages are opened, no law's page, and the sitemap lists none.
             var unrecorded = V3WebRoot.Open(directory, "indexed", null, lastmod)!;
             Assert.IsFalse(unrecorded.HoldsIndexingRecord);

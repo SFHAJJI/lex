@@ -496,6 +496,13 @@ test("the live server says the switch's state: robots.txt, the sitemap, X-Robots
       assert.equal(await (await fetch(`${live.origin}/sitemap-1.xml`)).text(), ENGINES.sitemapWithoutRecord["/sitemap-1.xml"]);
       assert.equal((await fetch(`${live.origin}/en/`)).headers.get("x-robots-tag"), null);
       assert.equal((await fetch(`${live.origin}/en/lu-legilux/loi-1991-08-10-n3`)).headers.get("x-robots-tag"), X_ROBOTS_TAG);
+      // Addresses the API answers as no file of the build, the live server too (the review's notes on #976): a final slash,
+      // a percent-escape, a capital, a target of two slashes.
+      for (const path of ["/en/index.html/", "/en/search%2Ehtml", "/Robots.txt", "//robots.txt"]) {
+        const answer = await fetch(`${live.origin}${path}`, { redirect: "manual" });
+        assert.equal(answer.status, 404, path);
+        assert.equal(answer.headers.get("x-robots-tag"), X_ROBOTS_TAG, `${path}: the 404 page, kept out`);
+      }
     } finally {
       await live.close();
     }

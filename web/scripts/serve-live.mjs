@@ -225,13 +225,22 @@ function searchEngineFactsOf(record, apiOrigin, deadlineMs) {
   };
 }
 
+/**
+ * A file's path as the build names one and the API serves it (`V3WebRoot`'s `SafePath`): lower-case letters, digits and
+ * hyphens, a segment at a time, and an extension. Anything else (a final slash, a percent-escape, a capital) is no file of
+ * the build, as the API answers it (review of #976).
+ */
+const FILE_PATH = /^\/[a-z0-9-]+(?:\/[a-z0-9-]+)*\.[a-z0-9]+$/;
+
 async function serveStatic(response, root, pathname, method, acceptLanguage, searchEngines) {
   let relative;
   try {
     // An interface language's root is its home page; a law's address under a language is served the page that reads it
-    // (`permalinks.mjs`).
+    // (`permalinks.mjs`); any other path names a file only in the build's own form.
     const home = INTERFACE_LANGUAGES.find((language) => pathname === `/${language}/`);
-    relative = home !== undefined ? `${home}/index.html` : (pageForSitePath(pathname) ?? decodeURIComponent(pathname.slice(1)));
+    const page = home !== undefined ? `${home}/index.html` : pageForSitePath(pathname);
+    if (page === null && !FILE_PATH.test(pathname)) throw new Error("no file of the build");
+    relative = page ?? pathname.slice(1);
   } catch {
     await notFound(response, root, pathname, method, acceptLanguage);
     return;
@@ -337,6 +346,12 @@ export function createLiveServer({
       }
       if (request.method !== "GET" && request.method !== "HEAD") {
         problem(response, 405, "method_not_allowed");
+        return;
+      }
+      // A target that begins with two slashes is no path of this site (a URL parser reads it as another host's), as the API
+      // answers it: its 404 page (review of #976).
+      if (request.url.startsWith("//")) {
+        await notFound(response, rootPath, request.url.split("?")[0], request.method, request.headers["accept-language"]);
         return;
       }
       // robots.txt in the switch's state, and the sitemap's index and parts only with the site indexed (R67); kept out, or
