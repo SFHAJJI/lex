@@ -1,8 +1,91 @@
 # Lex V3 status: the web lane
 
-Updated 2026-10-16. The web lane's progress, split out of STATUS.md (which keeps the heads, the owner's open
+Updated 2026-10-17. The web lane's progress, split out of STATUS.md (which keeps the heads, the owner's open
 items and the pointers) by the standing order of 2026-10-01 13:50 UTC. Every pull request of the web lane
 updates this file, not STATUS.md.
+
+## One citation generator, in three forms (sole driver, 2026-10-17)
+
+The plan's item 3.3 (`C:\lex-v3\PLAN-2026-10-14.md`), to the specification of record's R65 ("One citation generator for
+copy, export and permalink, per publisher and language, in three forms ... The citation's language follows the quoted
+text. `verify` resolves every form."), with R18 to R21 and R64.
+- **What there was** (read from the code): no citation string anywhere. The reading printed each article's permalink in its
+  evidence line, the export carried that permalink as `citation`, and nothing copied anything (no copy button exists). The
+  API's `citation` operation is lane R4's references written in a state's text, not a citation of it; it is unchanged.
+- **One generator** (`web/scripts/citation.mjs`): for one article of one version, (a) the usual form, (b) the usual form
+  with its dated permalink under the site's origin, and (c) the evidence form, line by line, each in the language of the
+  text cited (`fra`, `eng`), never the interface's. Its words are the chrome tables' `citation` section, read from the table
+  of the text's language whatever the page's; a text in another language gets no form (its permalink cites it).
+  - Luxembourg, French legal usage: "Art. 15 de la loi du 10 août 1991 sur la profession d’avocat, dans sa version
+    applicable au 1er février 2024"; "Art. L. 121-6 du Code du travail". The act by its type and date read from its ELI (loi,
+    rgd, agd, rmin, amin), the title's words after them when the one title held for the text's expression starts with them;
+    a code by its one held title; the article's number by a fixed rule over the publisher's ids (`art_1er`, `art_iii`,
+    `art_unique`, `art_30-2`, `art_l_121-6`, a number before a heading). Any other act type or id shape: no usual form, and
+    the page says so ("Lex composes no usual citation for this article; its permalink cites it.").
+  - EU, EUR-Lex's numbering read from the CELEX's type, year and number: "Article 33 of Regulation (EU) 2016/679",
+    "Regulation (EU) No 575/2013", "Directive 2006/112/EC", "règlement (UE) n° 575/2013", a year before 1999 on two digits;
+    the provision by its own heading when it reads "Article ...", else its id's number.
+  - The version date, when the version is not known to be the one that answers today in Luxembourg: a Luxembourg state with a
+    later held state applicable on or before today, any act held only as published (R76), an EU wording a later one answers
+    today, and the original wording of a bundle that holds no consolidation. Said "dans sa version applicable au {date}"
+    (R21's "applicable on"), and for the EU ", au {date}" / ", as at {date}", never an applicability date.
+  - The evidence form: the usual form (or the permalink), "Permalien : …", the ELI of the resource quoted (or the wording's
+    CELEX, a consolidation's own), the publisher's title, the version's or wording's date, the gazette reference (the act's
+    Mémorial A issue, or that this index does not hold it; for the EU, that the Official Journal reference is not held), the
+    publication date when exactly one is held, the text's SHA-256 (R64's long citation), "Consulted on Lex on {date}
+    (Luxembourg)", an act held only as published's label, and the authenticity sentence: the as-published sentence of its
+    case, the site's sentence on consolidated text, or the EU's statement (in French when the answer's is the table's word
+    for word).
+- **The facts it reads, from the API** (`V3CorpusMount.CitationFacts.cs`): a Luxembourg `evidence_bundle` carries
+  `citation_facts`: the publisher's titles of the listed states' expressions (the dossier's shape, one helper for both) and
+  the act as published (`{work}/jo`) with the publisher's `isPartOf` facts on it (the Mémorial A issue) and its
+  `publicationDate` facts, verbatim. In the population every held state has one title and one Mémorial issue (1,730 of 1,730,
+  counted in `derive-c` read-only); the fixture holds neither, which the forms say. `verify` at an article's (or an EU
+  provision's, both EU paths) permalink answers `article_text_sha256`, the digest of the text as `evidence_bundle` serves it.
+  No request schema changed (the registry digest did not move); the answer and envelope censuses were rendered again.
+- **Wired**: the cited article at its permalink or readable address (`Citations` in `PinnedReading.jsx`) shows the three
+  forms as text a reader copies, under "Cite this article", each marked in its text's language when it is not the page's;
+  the export's JSON (`citation_forms` on every item and exclusion), CSV (`citation_conventional`, `citation_with_permalink`,
+  `citation_evidence`) and PDF (each item's evidence form) keep them, and the export panel shows each item's usual citation.
+  `citation` stays the article's hash-pinned permalink, which `verify` takes as it is.
+- **verify resolves the forms**: (b) and (c) by the permalink they print (as a path or under `https://law.soufien.lu`), (c) by
+  both its hashes, the version's and the text's (`evidenceVerdict`). The census holds `verify` at an article's and an EU
+  provision's permalink from the mounts that sent its two bundles, and the web tests check the generator's forms against
+  them; the journeys verify the cited article's evidence form on every permalink and readable-address step (CI's lane). The
+  usual form alone is read by the exact-reference reader of the plan's item 4.2, not merged yet (next, below).
+- **French**: (filled in after the review addendum)
+- **Driver decisions** (reversible):
+  - One source for each part: the platform serves the facts (`citation_facts`, `article_text_sha256`) and composes no
+    citation; the web generator composes the forms and invents no field. A machine client composes from the same facts;
+    minting the forms in the API too would be two sources of one string.
+  - The citation's words sit in the chrome tables' `citation` section, in both languages, reviewed as the rest of the
+    French is, and read by the text's language; the interface labels around them are the page's.
+  - The version date is added whenever Lex cannot say the version answers today, including every act held only as
+    published, since Lex holds no later version of it. "modifiée" is never written: the index does not hold whether an
+    act was amended.
+  - An EU act's domain is the numbering's for its year (EEC to 1992, EC 1994 to 2008, EU from 2010), and none is written for
+    1993 and 2009, whose acts carry either. The index holds no EU title, author or domain, so a Euratom or CFSP act would be
+    named as the Union's. Of the population's 82 EU acts (the census's seeds, `derive-c` read-only), 76 are regulations and
+    directives of the Union or the Community, none Euratom's, and six are treaty texts (the TFEU, the TEU and the Charter,
+    in their 2012 and 2016 versions, sector 1), which are given no usual form until the generator names treaties (next).
+  - The date clauses are the ones the 4.2 reader reads at the end of a citation ("dans sa version applicable au", "au",
+    "as at"), and Luxembourg's speaks R21's "applicable" and the EU's no applicability at all.
+  - "Consulted on Lex" is the answer's own instant in Luxembourg's calendar: the index holds no time the publisher served
+    the bytes (`observation_time` is not held), so the evidence form says when Lex answered, and nothing else.
+  - The EU's Official Journal reference is said not held, and is not read from a Formex file's name.
+  - The permalink is printed under `https://law.soufien.lu`, the origin of the pages' canonical links.
+  - The three forms stand under the cited article, not under every article of a reading (each article's permalink opens its
+    page, cited first with its forms; a 3,000-article reading stays light, R73). No clipboard button: it is a script-only
+    control the journeys must walk first (next). The dossier names versions by their permalinks and cites no article, so
+    it is unchanged.
+  - The export's schemas (`lex-v3-export/1`, `-eu/1`) keep their names: the forms are added members and columns.
+- **Not in this part** (next, below): `verify` of the usual form, through the 4.2 reader; R20's own sentence for a
+  consolidated Luxembourg text (the act as published and the acts that amended it, the owner's item O4) in place of the
+  site's sentence; R19's sentence for a consolidated EU wording, which the API states as it states the original's; the EU
+  act's title and Official Journal reference, which no index holds; a consolidated Luxembourg state's title, which starts
+  "Version consolidée applicable au …" and is not read into the usual form; the treaties' usual forms ("Article 6 TUE");
+  the clipboard button.
+- **Measured** (this branch, from `v3/integration` at #972's merge, 1608c737): (filled in at the end)
 
 ## The cited article first, what changed since, a stale permalink's current link, and readable addresses (sole driver, 2026-10-16)
 
@@ -4038,6 +4121,18 @@ date" now measures EU dated selection, the owner's main use case.
   table (review of #923).
 
 ## Next, in order (web lane; the data lane's items 1 to 3 are in STATUS-DATA.md)
+
+The plan's item 3.3, what is left after the generator (done on 2026-10-17, above):
+1. `verify` of the usual form: once the plan's item 4.2 lands, its exact-reference reader reads "Art. 15 de la loi du 10 août
+   1991 ..., dans sa version applicable au 1er février 2024" to the act, article and date, and verify (or resolve) answers
+   it as it answers the permalink. The generator's date clauses and act names are written for that reader; no second
+   parser is built here.
+2. R20's own sentence for a consolidated Luxembourg text (the act as published, linked, and the acts that amended it, or that
+   Lex does not yet hold their list), with the owner's item O4, in place of the site's sentence; and R19's sentence for a
+   consolidated EU wording, served by the API.
+3. A copy button beside each form (a script-only control, so the journeys walk its focus and keyboard first), and the
+   treaties' usual forms ("Article 6 TUE", "article 267 TFUE").
+4. An EU act's title, author and Official Journal reference, and a Euratom or CFSP act's domain, when an index holds them.
 
 The plan's item 3.2, what is left after its second part (3.2b, done on 2026-10-16, above), as 3.2c:
 1. The cited bytes of a state only a retained generation holds, quoted from that generation (the mount opens the
