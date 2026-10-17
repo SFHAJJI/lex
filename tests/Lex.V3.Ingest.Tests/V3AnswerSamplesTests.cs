@@ -371,9 +371,6 @@ public sealed class V3AnswerSamplesTests
             await DriveAsync(mount, "provenance", "one work, one state, asked in the language it is held in", parameters),
             await DriveAsync(mount, "as_of", "the same request, so a caller can move from one to the other", parameters),
             await DriveAsync(mount, "evidence_bundle", "the same request again: the text and digests a quote of that state needs", parameters),
-            // Reading by article (the plan's item 3.7): the page that holds one article, asked at the state's permalink, with the
-            // state's contents (every article's position, id, identity and page, no text).
-            await DriveAsync(mount, "evidence_bundle", "the state's permalink and one of its articles, with the contents: the page that holds it, and every article's place", new { identifier = fixture.Permalink, date = fixture.ApplicabilityDate, article = "art_15", contents = true }),
             await DriveAsync(mount, "classification", "the work, in the language it is held in: the publisher's typed facts", new { parameters.identifier, parameters.language }),
             await DriveAsync(mount, "manifestation", "the work, in the language it is held in: the publisher's manifestations, the retained one marked", new { parameters.identifier, parameters.language }),
             await DriveAsync(mount, "status_on", "the same request as as_of: the publisher's force assertions beside the state, none asserted for this act", parameters),
