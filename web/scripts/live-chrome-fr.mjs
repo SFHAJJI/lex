@@ -782,8 +782,8 @@ export const REFUSALS_FR = Object.freeze({
       'La référence désigne plusieurs actes ou articles que ce site détient, et aucun n’est retenu.',
     'The version the date selects holds no article with that number, and no other article is opened in its place.':
       'La version que la date retient ne comporte aucun article de ce numéro, et aucun autre article n’est ouvert à sa place.',
-    'This server holds one wording of this EU act and answers no date for it: leave the date out of the reference.':
-      'Ce serveur détient un seul libellé de cet acte de l’UE et ne répond à aucune date pour celui-ci : retirez la date de la référence.',
+    'This server holds this EU act in one wording only, and answers no date for it: leave the date out of the reference.':
+      'Ce serveur ne détient cet acte de l’UE que dans un seul libellé, et ne répond à aucune date pour celui-ci : retirez la date de la référence.',
   }),
   templates: Object.freeze({
     coverage: Object.freeze({

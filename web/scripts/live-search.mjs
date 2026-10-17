@@ -94,7 +94,7 @@ export const LIVE_SEARCH_REFERENCE_REFUSAL_SENTENCES = Object.freeze({
   language_not_available: "This work is not held in the language asked for.",
   no_version_for_date: LIVE_SEARCH_REFUSAL_SENTENCES.no_version_for_date,
   ambiguous_version: LIVE_SEARCH_REFUSAL_SENTENCES.ambiguous_version,
-  retrieval_mode_unavailable: "This server holds one wording of this EU act and answers no date for it: leave the date out of the reference.",
+  retrieval_mode_unavailable: "This server holds this EU act in one wording only, and answers no date for it: leave the date out of the reference.",
 });
 
 export const LIVE_SEARCH_IDLE = liveChrome().search.idle;
