@@ -49,7 +49,8 @@ internal sealed partial class V3CorpusMount
         "the evidence a reader needs to quote the wording of an EU act that answers the requested date under the selection rule: for each served " +
         "language, the wording dated at or before the requested date that holds until its next_date, with the works that share its date and the " +
         "versions with no usable date disclosed beside it; its hash-pinned permalink and stable coordinate, the corpus members its articles belong " +
-        "to with their retained body digests, and every article with its publisher id and heading, its text (the text the index searches), the " +
+        "to with their retained body digests, and every article of the page served (page_rule; page, pages and, when asked, contents say the " +
+        "wording's pages and articles) with its position, its publisher id and heading, its text (the text the index searches), the " +
         "digest of that text (text_sha256), the digest of the corpus member's retained publisher body (body_sha256: the manifestation the corpus " +
         "holds for the expression, such as its XHTML or PDF), the digest of the Formex package the text was read from (package_sha256) and of the " +
         "package entry (source_entry_sha256), its official source and an article permalink (the wording permalink and the publisher's provision " +
@@ -881,13 +882,34 @@ internal sealed partial class V3CorpusMount
             }
         }
 
-        var bundles = answered.Select(selection =>
+        // Each wording cut into pages, and the page asked (V3CorpusMount.Reading.cs); an article a served wording does not hold is
+        // refused before any text is served.
+        var asked = ReadingPageAskedOf(request.Parameters);
+        var cut = new List<ReadingPages>(answered.Count);
+        foreach (var selection in answered)
+        {
+            var candidate = selection.Entry!.Answer!;
+            var articles = EuropeArticlesOf(candidate.ExpressionId);
+            var pages = CutReadingPages(EuropeReadingEntries(articles), asked, $"the wording in {candidate.Language}");
+            if (pages is null)
+            {
+                return RefuseArticleNotInVersion(request, observedAt, PublisherId.EuEurLex, asked.Article!,
+                    articles.Select(static article => article.PublisherIdentifier).Distinct(StringComparer.Ordinal).ToArray(),
+                    EuropeStatePin(seed, candidate, selection.Entry!.Date).Permalink, candidate.Language);
+            }
+
+            cut.Add(pages);
+        }
+
+        var bundles = answered.Select((selection, at) =>
         {
             var entry = selection.Entry!;
             var candidate = entry.Answer!;
             var pin = EuropeStatePin(seed, candidate, entry.Date);
             var articles = EuropeArticlesOf(candidate.ExpressionId);
-            var quoted = articles.Where(static article => article.Text.Length > 0).ToArray();
+            var pages = cut[at];
+            var quoted = articles.Select(static (article, position) => (Article: article, Position: position))
+                .Where(item => item.Article.Text.Length > 0 && pages.Holds(item.Position)).ToArray();
             return new
             {
                 publisher_work_id = candidate.State.PublisherWorkIri,
@@ -917,8 +939,9 @@ internal sealed partial class V3CorpusMount
                         body_receipt_sha256 = member.BodyReceiptSha256,
                     })
                     .ToArray(),
-                articles = quoted.Select(article =>
+                articles = quoted.Select(item =>
                 {
+                    var article = item.Article;
                     var textBytes = Encoding.UTF8.GetBytes(article.Text);
                     var textSha256 = Convert.ToHexStringLower(SHA256.HashData(textBytes));
                     if (article.TextSha256 is not null && !string.Equals(article.TextSha256, textSha256, StringComparison.Ordinal))
@@ -929,6 +952,7 @@ internal sealed partial class V3CorpusMount
 
                     return new
                     {
+                        position = item.Position + 1,
                         article_identity_sha256 = article.ArticleIdentitySha256,
                         publisher_id = article.PublisherIdentifier,
                         heading = article.Heading,
@@ -945,14 +969,19 @@ internal sealed partial class V3CorpusMount
                         provision_coordinate = candidate.ExpressionId + "#lex-provision=" + Uri.EscapeDataString(article.PublisherIdentifier),
                     };
                 }).ToArray(),
-                articles_without_text = articles.Where(static article => article.Text.Length == 0).Select(static article => new
-                {
-                    article_identity_sha256 = article.ArticleIdentitySha256,
-                    publisher_id = article.PublisherIdentifier,
-                }).ToArray(),
+                articles_without_text = articles.Select(static (article, position) => (Article: article, Position: position))
+                    .Where(item => item.Article.Text.Length == 0 && pages.Holds(item.Position)).Select(static item => new
+                    {
+                        position = item.Position + 1,
+                        article_identity_sha256 = item.Article.ArticleIdentitySha256,
+                        publisher_id = item.Article.PublisherIdentifier,
+                    }).ToArray(),
                 annexes_not_served = EuropeAnnexesNotServed(
                     articles.Select(static article => article.ObjectRefSha256), candidate.ExpressionId,
                     () => EuropeOfficialSourceOf(articles, candidate.State.PublisherWorkIri)),
+                page = ReadingPageMember(pages, null),
+                pages = ReadingPagesMember(pages, headings: true),
+                contents = asked.Contents ? ReadingContentsMember(pages, headings: true) : null,
             };
         }).ToArray();
 
@@ -962,11 +991,14 @@ internal sealed partial class V3CorpusMount
             requested_identifier = identifier,
             requested_date = requestedDate,
             requested_language = requestedLanguage,
+            requested_page = asked.Page,
+            requested_article = asked.Article,
             publisher = EuropePermalinkPublisher,
             publisher_work_id = timeline.RootWorkIri,
             celex = seed,
             available_languages = timeline.Languages,
             served_languages = answered.Select(static selection => selection.Language).ToArray(),
+            page_rule = EuropeReadingPageRule,
             wordings = bundles,
             acknowledgement = EuropeTextAcknowledgement,
             authenticity = EuropeTextAuthenticity,

@@ -77,9 +77,18 @@ public sealed class V3CorpusEuropeEvidenceBundleMountTests
         Assert.AreEqual(V3CorpusMount.EuropeAnnexesNotHeldReason, original.GetProperty("not_held").EnumerateArray()
             .Single(static row => row.GetProperty("item").GetString() == "annexes").GetProperty("reason").GetString());
 
-        // Every article with text the index holds of the expression is quoted, in its order, with the index's own text.
+        // Every article with text the index holds of the expression is quoted, in its order, with the index's own text, one
+        // page at a time (the plan's item 3.7: the wording is several pages of at most 98,304 bytes of text).
         var held = ArticleTexts(fixture.Directory, expressionId);
-        var articles = wording.GetProperty("articles").EnumerateArray().ToArray();
+        var pages = wording.GetProperty("page").GetProperty("pages").GetInt32();
+        Assert.IsGreaterThan(1, pages, "the GDPR's English wording is read in pages");
+        var articles = new List<JsonElement>();
+        for (var number = 1; number <= pages; number++)
+        {
+            var page = await EnvelopeAsync(mount, Route, "evidence_bundle", new { identifier = "32016R0679", date = wordingDate, language = "eng", page = number });
+            articles.AddRange(page.Result!.Value.GetProperty("wordings").EnumerateArray().Single().GetProperty("articles").EnumerateArray().Select(static article => article.Clone()));
+        }
+
         CollectionAssert.AreEqual(
             held.Where(static row => row.Text.Length > 0).Select(static row => row.Identity).ToArray(),
             articles.Select(static article => article.GetProperty("article_identity_sha256").GetString()).ToArray());

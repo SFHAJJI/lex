@@ -259,7 +259,10 @@ public static class V3PlatformSchemaExporter
             ["identifier", "date"],
             ("identifier", NonBlankString()),
             ("date", CivilDate()),
-            ("language", NonBlankString())),
+            ("language", NonBlankString()),
+            ("article", NonBlankString()),
+            ("page", PageNumber()),
+            ("contents", new JsonObject { ["type"] = "boolean" })),
         "classification" => Parameters(
             ["identifier"],
             ("identifier", NonBlankString()),
@@ -357,6 +360,17 @@ public static class V3PlatformSchemaExporter
         ["type"] = "integer",
         ["minimum"] = 1,
         ["maximum"] = 200,
+    };
+
+    /// <summary>
+    /// A page of a version's reading, counted from 1 (<c>evidence_bundle</c>): the operation refuses a page past the version's
+    /// last as a malformed request.
+    /// </summary>
+    private static JsonObject PageNumber() => new()
+    {
+        ["type"] = "integer",
+        ["minimum"] = 1,
+        ["maximum"] = 100000,
     };
 
     /// <summary>

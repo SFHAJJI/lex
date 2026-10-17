@@ -1067,13 +1067,17 @@ public sealed class V3CorpusResolveMountTests
         public string IndexSha256 { get; }
         public byte[] CorpusBytes => _corpusBytes.ToArray();
 
-        public static async Task<MountedFixture> CreateAsync()
+        /// <summary>
+        /// The fixture mount, from the retained publisher file, or from <paramref name="body"/>, a document of the same act in
+        /// its shape (<see cref="SyntheticLongAct"/>: synthetic articles, built at test time and never committed).
+        /// </summary>
+        public static async Task<MountedFixture> CreateAsync(byte[]? body = null)
         {
             const string manifestation =
                 "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo/fr/xml";
             const string item =
                 "http://data.legilux.public.lu/filestore/eli/etat/leg/loi/1991/08/10/n3/jo/fr/xml/eli-etat-leg-loi-1991-08-10-n3-jo-fr-xml.xml";
-            var xml = await File.ReadAllBytesAsync(Path.Combine(
+            var xml = body ?? await File.ReadAllBytesAsync(Path.Combine(
                 AppContext.BaseDirectory,
                 "Fixtures",
                 "LuAknLegalContent",

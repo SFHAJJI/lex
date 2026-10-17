@@ -61,7 +61,7 @@ internal static class V3McpJsonRpc
         "cited_by" => "The references, in any held Luxembourg state, whose target is exactly this work.",
         "verify" => "Verify a hash-pinned permalink against the state digest the index holds, or read the current digests to pin.",
         "relations" => "The reference edges of a Luxembourg work in both directions, as one ordered, paged list.",
-        "evidence_bundle" => "What a quote of a Luxembourg state needs: every article's text with its digests, the state's permalink, digests, sources and official identities, composed under the rights rule; for an EU act, the same for the wording of the date.",
+        "evidence_bundle" => "What a quote of a Luxembourg state needs, one bounded page at a time (at most 50 articles and 96 KiB of text; page or article chooses the page, contents adds the table of contents): each article's text with its digests, the state's permalink, digests, sources and official identities, composed under the rights rule; for an EU act, the same for the wording of the date.",
         "classification" => "The publisher's typed facts about a Luxembourg work, verbatim: document type, RDF types, legal value, responsible body, historical identifiers, publication and document dates.",
         "manifestation" => "The publisher's manifestations of a Luxembourg work's expressions with their formats and items, the retained one marked with its body digest.",
         "status_on" => "The publisher's force assertions about a Luxembourg work (its inForceStatus, dateEntryInForce and dateNoLongerInForce facts), verbatim, beside the state applicable on a date, with one fixed reading of the dates.",

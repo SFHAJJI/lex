@@ -96,6 +96,7 @@ public sealed class GuardedConstructionCensusTests
                     + "method private instance Lex.V3.Api.V3CorpusMount::OpenLuxembourgWork, "
                     + "method private instance Lex.V3.Api.V3CorpusMount::ReferenceAnswer, "
                     + "method private instance Lex.V3.Api.V3CorpusMount::RefuseAmbiguousVersion, "
+                    + "method private instance Lex.V3.Api.V3CorpusMount::RefuseArticleNotInVersion, "
                     + "method private instance Lex.V3.Api.V3CorpusMount::RefuseEuropeLanguage, "
                     + "method private instance Lex.V3.Api.V3CorpusMount::RefuseNoVersionForDate, "
                     + "method private instance Lex.V3.Api.V3CorpusMount::RefuseNoVersionForDate, "
