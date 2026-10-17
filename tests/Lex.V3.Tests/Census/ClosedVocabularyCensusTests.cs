@@ -54,6 +54,9 @@ public sealed class ClosedVocabularyCensusTests
         CollectionAssert.AreEqual(
             new[]
             {
+                "Lex.V3.Api.ArticleNumberReading: Number, Range, Group, Quoted",
+                "Lex.V3.Api.ReferenceActForm: LuxembourgEli, Celex, Memorial, HistoricalLegalId, "
+                    + "Permalink, TypeAndDate, EuropeName, Title",
                 "Lex.V3.Api.SyntheticResolutionDisposition: Held, CandidateOnly",
                 "Lex.V3.Api.V3TransportFailureKind: MalformedJson, DuplicateJsonMember, "
                     + "TrailingJsonContent, RequestTooLarge, RequestTooDeep, ParametersNotObject, "
