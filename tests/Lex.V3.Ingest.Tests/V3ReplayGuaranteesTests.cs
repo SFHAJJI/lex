@@ -10,6 +10,7 @@ using Lex.V3.Contracts.Platform;
 using Lex.V3.Ingest.Luxembourg;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.Features;
+using Microsoft.Data.Sqlite;
 using static Lex.V3.Ingest.Tests.V3CorpusResolveMountTests;
 
 namespace Lex.V3.Ingest.Tests;
@@ -22,7 +23,9 @@ namespace Lex.V3.Ingest.Tests;
 /// when asked again later, apart from the observation time and the request's own reference;</item>
 /// <item>G5: a reader holding one evidence bundle and the publisher's file finds each served article's text in that file,
 /// and recomputes the body digest, each text digest, the article identities digest and the state digest from the
-/// derivations the platform publishes.</item>
+/// derivations the platform publishes. On an index 9 the state digest is digest /2, whose row facts after the language
+/// the answer does not carry until S7a serves them: until then this test reads them from the mounted index, and the
+/// derivation says a caller cannot recompute the digest from the answer alone.</item>
 /// </list>
 /// G1 version immutability, G3 bitemporal completeness and G4 as-observed answering need a chain: three real builds of
 /// the state fixture on three days, each chained to the one before and written as the mount it would be, keeping the
@@ -186,20 +189,30 @@ public sealed class V3ReplayGuaranteesTests
         Assert.AreEqual(LengthPrefixedSha256(identities), state.GetProperty("article_identities_sha256").GetString(),
             "article_identities_sha256 is the digest of the identities in sorted order, each preceded by its length");
 
+        // The fixture is an index 9: state digest /2. The row's own facts after the language are read from the mounted
+        // index by this test's own SQL, since the answer does not carry them until S7a.
+        var stateSha256 = state.GetProperty("state_sha256").GetString()!;
+        var rowFacts = RowFactsOf(fixture.Directory, stateSha256);
+        var profiles = state.GetProperty("rule_profile_sha256s").EnumerateArray().Select(static value => value.GetString()!)
+            .Order(StringComparer.Ordinal).ToArray();
         string[] fields =
         [
-            "lex-v3-luxembourg-expression-state/1",
+            "lex-v3-luxembourg-expression-state/2",
             bundle.GetProperty("publisher").GetString()!,
             bundle.GetProperty("work_key").GetString()!,
             state.GetProperty("applicability_date").GetString()!,
+            rowFacts[0],
+            rowFacts[1],
             state.GetProperty("expression_iri").GetString()!,
             state.GetProperty("publisher_work_iri").GetString()!,
             state.GetProperty("publisher_legal_resource_iri").GetString()!,
             state.GetProperty("language").GetString()!,
-            .. state.GetProperty("rule_profile_sha256s").EnumerateArray().Select(static value => value.GetString()!).Order(StringComparer.Ordinal),
+            .. rowFacts[2..],
+            profiles.Length.ToString(CultureInfo.InvariantCulture),
+            .. profiles,
+            identities.Length.ToString(CultureInfo.InvariantCulture),
             .. identities,
         ];
-        var stateSha256 = state.GetProperty("state_sha256").GetString();
         Assert.AreEqual(LengthPrefixedSha256(fields), stateSha256,
             "the state digest recomputes from the values provenance's derivation names, in its order, the domain tag first");
         StringAssert.EndsWith(state.GetProperty("permalink").GetString(), "--" + stateSha256 + "/" + state.GetProperty("language").GetString(), "the permalink pins that digest, in its language (R64)");
@@ -211,9 +224,36 @@ public sealed class V3ReplayGuaranteesTests
             await AnswerAsync(mount, "provenance", new { identifier = $"/lu-legilux/{fixture.WorkKey}", date = fixture.ApplicabilityDate, language = "fra" }, ObservedAt, "replay-provenance"),
             V3OperationRegistry.Reviewed).Result!.Value.GetProperty("derivation").GetString();
         StringAssert.StartsWith(provenance,
-            "state_sha256 is a SHA-256 over these values, each as UTF-8 preceded by its length as four bytes big-endian: the domain tag " +
-            "lex-v3-luxembourg-expression-state/1, the publisher, the work key, the applicability date, the expression, the publisher work IRI, " +
-            "the publisher legal-resource IRI, the language, each rule-profile digest in sorted order and each article identity in sorted order;");
+            "state_sha256 is state digest /2, a SHA-256 over these values, each as UTF-8 preceded by its length as four bytes big-endian: " +
+            "the domain tag lex-v3-luxembourg-expression-state/2, the publisher, the work key, the applicability date, the date's role, the " +
+            "state's kind, the expression, the publisher work IRI, the publisher legal-resource IRI, the language, the end the publisher " +
+            "states, the publication date, the text status, its reason, the in-file identity, the in-file date, the entry into force and the " +
+            "French expression a translation takes its interval from (each the empty string when there is none), then the number of " +
+            "rule-profile digests as decimal text and each digest in sorted order, then the number of article identities as decimal text and " +
+            "each identity in sorted order;");
+        StringAssert.Contains(provenance, "a caller cannot recompute the digest from it alone",
+            "and it says what G5 lacks on an index 9 until S7a carries the row facts");
+    }
+
+    /// <summary>
+    /// The facts state digest /2 takes from an index 9's row beyond those the answer carries, in the derivation's order
+    /// (the date's role and the state's kind, then the publisher's end to the translation's French expression), each the
+    /// empty string when there is none.
+    /// </summary>
+    private static string[] RowFactsOf(string mountDirectory, string stateSha256)
+    {
+        using var connection = LuxembourgIndexBuilder.Open(
+            Path.Combine(mountDirectory, V3CorpusMount.IndexFileName), SqliteOpenMode.ReadOnly);
+        using var command = connection.CreateCommand();
+        command.CommandText =
+            "SELECT date_role,state_kind,CASE WHEN applicable_to_source='publisher' THEN applicable_to END,publication_date," +
+            "text_status,text_status_reason,in_file_identity,in_file_date,entry_into_force,translation_of FROM states WHERE state_sha256=$s";
+        command.Parameters.AddWithValue("$s", stateSha256);
+        using var reader = command.ExecuteReader();
+        Assert.IsTrue(reader.Read(), "the bundle's state is a row of the mounted index");
+        var facts = Enumerable.Range(0, reader.FieldCount).Select(index => reader.IsDBNull(index) ? "" : reader.GetString(index)).ToArray();
+        Assert.IsFalse(reader.Read());
+        return facts;
     }
 
     [TestMethod]
