@@ -18,7 +18,7 @@ import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import test from "node:test";
+import test, { beforeEach } from "node:test";
 
 import { TRAP_EXIT_CODE, installBrowserTrap, takeTouches } from "../scripts/browser-trap.mjs";
 
@@ -39,6 +39,9 @@ const { writeLayout, writeTar } = await import("../scripts/image-reproducible.mj
 const { ASSETS, imageSignatureAsset, publishRelease, releaseVersion } = await import("../scripts/release-assets.mjs");
 
 const sha256 = (bytes) => createHash("sha256").update(bytes).digest("hex");
+
+// Each test holds its own touches: one a failing test left is not the next test's.
+beforeEach(() => { takeTouches(); });
 const CARD = readFileSync(new URL("../../schemas/v3-platform/evaluation-card.json", import.meta.url));
 const PAGE = Buffer.from("<!doctype html><title>Lex V3</title><p>V3's own page</p>\n");
 const NOT_FOUND_PAGE = Buffer.from("<!doctype html><title>Page introuvable - Lex</title><p>V3's own 404 page</p>\n");
