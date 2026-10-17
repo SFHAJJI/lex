@@ -84,13 +84,27 @@ const EUROPE_ENTRIES = new Set([
   "common.europeAnnexes.one", "common.europeAnnexes.other",
   "reading.europePinReplaced", "reading.europePinNotHeld", "reading.europeWholeAct", "reading.europeNewerWording",
   "reading.europeLaterWordingNotHeld",
+  // The citation generator's EU words (`citation.mjs`): an EU act's name and the date it is cited at, the wording's line of
+  // the evidence form, the Official Journal reference no index holds, and the EU's authenticity statement.
+  "citation.europe.article", "citation.europe.acts.R", "citation.europe.acts.L", "citation.europe.acts.D",
+  "citation.europe.domains.EU", "citation.europe.domains.EC", "citation.europe.domains.EEC", "citation.europe.numbered",
+  "citation.europe.numberedNoDomain", "citation.europe.yearFirst", "citation.europe.suffixed", "citation.europe.plain",
+  "citation.europe.version", "citation.europe.authenticity", "citation.evidence.originalWording",
+  "citation.evidence.consolidatedWording", "citation.evidence.officialJournalNotHeld",
 ]);
 
 /**
  * The entries the reading's lead says on both publishers' pages (`PinnedReading.jsx`): they name the version through its own
  * heading, so they say no date word of either publisher themselves (the French review of 2026-10-16 asked for the check).
  */
-const SHARED_LEAD_ENTRIES = new Set(["reading.citedTitle", "reading.citedFrom", "reading.citedWithoutText", "reading.openToday"]);
+const SHARED_LEAD_ENTRIES = new Set([
+  "reading.citedTitle", "reading.citedFrom", "reading.citedWithoutText", "reading.openToday",
+  // The cited article's citations, under the same labels on both publishers' pages (`Citations`), and the lines of the
+  // citation generator both publishers' forms say (`citation.mjs`).
+  "reading.cite", "reading.citeConventional", "reading.citeWithPermalink", "reading.citeEvidence", "reading.citeNotComposed",
+  "export.usualCitation", "citation.withPermalink", "citation.date", "citation.firstOfMonth", "citation.evidence.permalink",
+  "citation.evidence.textSha256", "citation.evidence.noText", "citation.evidence.consulted",
+]);
 
 function fieldsOf(node, found = new Set()) {
   if (Array.isArray(node)) node.forEach((item) => fieldsOf(item, found));

@@ -81,6 +81,11 @@ public sealed class V3EnvelopeSamplesTests
             Directory.Delete(branchRoot, recursive: true);
         }
 
+        // The GDPR's pinned English wording, whose provision permalink verify answers with its text digest (the evidence form's
+        // second hash, R65).
+        var europeWording = (await CaptureAsync(europe.CorpusSha256, europe.IndexSha256, europeMount, "dossier", "probe", new { identifier = "32016R0679" }))
+            ["envelope"]!["result"]!["value"]!["expressions"]![0]!["pinned_wording"]!["permalink"]!.GetValue<string>();
+
         var envelopes = new JsonArray
         {
             await CaptureAsync(fixture, mount, "coverage", "the whole mount: an answer", new { }),
@@ -107,6 +112,9 @@ public sealed class V3EnvelopeSamplesTests
             await CaptureAsync(fixture, mount, "evidence_bundle", "a state's permalink at its own date: an answer, the state it pins", new { identifier = fixture.Permalink, date = fixture.ApplicabilityDate, language = "fra" }),
             await CaptureAsync(fixture, mount, "evidence_bundle", "a state's permalink whose digest is not the one held at its date: a refusal with the current link", new { identifier = fixture.PermalinkOf(new string('0', 64)), date = fixture.ApplicabilityDate, language = "fra" }),
             laterNotHeld,
+            // A citation's evidence form is verified by both its hashes (R65): the version's, in its permalink, and the text's.
+            await CaptureAsync(fixture, mount, "verify", "an article's permalink: digest_matches, with the article's text digest", new { identifier = fixture.Permalink + "/art_15" }),
+            await CaptureAsync(europe.CorpusSha256, europe.IndexSha256, europeMount, "verify", "an EU provision's permalink: digest_matches, with the provision's text digest", new { identifier = europeWording + "/033" }),
             await CaptureAsync(fixture, mount, "article_history", "one article of the work, in the language it is held in: an answer", new { identifier = $"/lu-legilux/{fixture.WorkKey}", anchor = "art_15", language = "fra" }),
             await CaptureAsync(fixture, mount, "article_history", "an article id no held state carries: a refusal with a payload", new { identifier = $"/lu-legilux/{fixture.WorkKey}", anchor = "art_44" }),
             await CaptureAsync(fixture, mount, "article_history", "a work the index does not hold: a refusal with a payload", new { identifier = "/lu-legilux/no-such-work", anchor = "art_15" }),

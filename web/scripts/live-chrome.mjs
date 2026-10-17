@@ -149,6 +149,13 @@ const EN = Object.freeze({
       one: "{count} article quoted, {withoutText} held without text.",
       other: "{count} articles quoted, {withoutText} held without text.",
     }),
+    // The cited article's citations, from the one citation generator (`citation.mjs`; the plan's item 3.3, R65): each form is
+    // said in the language of the text it cites (`citation` below), under these labels in the page's.
+    cite: "Cite this article",
+    citeConventional: "Usual citation",
+    citeWithPermalink: "With its permalink",
+    citeEvidence: "Evidence form",
+    citeNotComposed: "Lex composes no usual citation for this article; its permalink cites it.",
   }),
   history: Object.freeze({
     title: "Provision history",
@@ -278,6 +285,8 @@ const EN = Object.freeze({
     formatRefused: "{format} is not offered for this export: {reason}.",
     composeFailed: "This export cannot be composed: {reason}.",
     jsonSummary: "The JSON as it will be saved",
+    // Each exported article's usual citation (`citation.mjs`), in its text's language; the file carries the three forms.
+    usualCitation: "Usual citation: {citation}",
   }),
   card: Object.freeze({
     heading: "Evaluation card",
@@ -446,6 +455,75 @@ const EN = Object.freeze({
         printed_memorial: "This text was extracted and normalised by Lex, for information; it is not authentic. For an act published before 1 January 2017, the printed Mémorial is authentic, and the publisher's PDF is its digital reproduction. The act as published: {act}.",
         publication_date_not_stated: "This text was extracted and normalised by Lex, for information; it is not authentic. The publisher's record gives no single publication date for this act, so Lex does not say which edition is authentic. The act as published: {act}.",
       }),
+    }),
+  }),
+  // The one citation generator's words (`citation.mjs`; the plan's item 3.3, the specification of record's R65). A citation is
+  // said in the language of the text it cites, never the interface's, so the generator reads this section from the table of
+  // that language whatever the page's: `fra` from the French table, `eng` from this one. The usual form is French legal
+  // usage for a Luxembourg act and EUR-Lex's for an EU act, in words the exact-reference reader of the plan's item 4.2 reads:
+  // an act's type and date or an EU act's name, an article number, and a date after "dans sa version applicable au", "au" or
+  // "as at". The evidence form's lines say what each value is, and what the index does not hold.
+  citation: Object.freeze({
+    months: Object.freeze(["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"]),
+    date: "{day} {month} {year}",
+    firstOfMonth: "{day} {month} {year}",
+    withPermalink: "{citation} ({permalink})",
+    luxembourg: Object.freeze({
+      article: "Article {number}",
+      articleFirst: "Article {number}",
+      articleUnique: "Sole article",
+      acts: Object.freeze({
+        loi: "{article} of the Law of {date}",
+        rgd: "{article} of the Grand-Ducal Regulation of {date}",
+        agd: "{article} of the Grand-Ducal Decree of {date}",
+        rmin: "{article} of the Ministerial Regulation of {date}",
+        amin: "{article} of the Ministerial Decree of {date}",
+        code: "{article} of the {code}",
+      }),
+      // How the publisher's title of an act of each type starts, so the words after its type and date can follow them.
+      titles: Object.freeze({
+        loi: "Law of {date}",
+        rgd: "Grand-Ducal Regulation of {date}",
+        agd: "Grand-Ducal Decree of {date}",
+        rmin: "Ministerial Regulation of {date}",
+        amin: "Ministerial Decree of {date}",
+      }),
+      version: "{citation}, as applicable on {date}",
+    }),
+    europe: Object.freeze({
+      article: "Article {number}",
+      acts: Object.freeze({
+        R: "{article} of Regulation {designation}",
+        L: "{article} of Directive {designation}",
+        D: "{article} of Decision {designation}",
+      }),
+      domains: Object.freeze({ EU: "EU", EC: "EC", EEC: "EEC" }),
+      numbered: "({domain}) No {number}/{year}",
+      numberedNoDomain: "No {number}/{year}",
+      yearFirst: "({domain}) {year}/{number}",
+      suffixed: "{year}/{number}/{domain}",
+      plain: "{year}/{number}",
+      version: "{citation}, as at {date}",
+      // The platform's authenticity statement for EU text (`V3CorpusMount.EuropeTextAuthenticity`), word for word: the
+      // generator says it in the cited text's language only when the answer says exactly this.
+      authenticity: "Only the Official Journal of the European Union published in electronic form is authentic and produces legal effects (Regulation (EU) No 216/2013, Article 1(2)); this text is a reproduction read from the Publications Office's Formex package, not the authentic edition.",
+    }),
+    evidence: Object.freeze({
+      permalink: "Permalink: {permalink}",
+      eli: "ELI: {eli}",
+      celex: "CELEX: {celex}",
+      title: "Title (publisher): {title}",
+      version: "Version: applicable from {date} (publisher)",
+      memorial: "Published in: Mémorial A No {number} of {year} ({iri})",
+      memorialIri: "Published in: {iri}",
+      memorialNotHeld: "Published in: the issue of the Mémorial A is not held by this index.",
+      publicationDate: "Publication date (publisher): {date}",
+      originalWording: "Wording: the original wording of {date}",
+      consolidatedWording: "Wording: the consolidated wording of {date}",
+      officialJournalNotHeld: "Published in: the Official Journal reference is not held by this index.",
+      textSha256: "Text digest (SHA-256): {digest}",
+      noText: "Text digest (SHA-256): none, the article is held without text.",
+      consulted: "Consulted on Lex on {date} (Luxembourg).",
     }),
   }),
   form: Object.freeze({

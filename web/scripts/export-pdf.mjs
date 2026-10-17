@@ -8,7 +8,8 @@
 // published (the plan's item 0.6), and the corpus, index and registry digests; each item carries its
 // citation (the hash-pinned article permalink), its text and body digests, its official source, its
 // rights, its own date where it differs from its state's, its notes, and its text; each exclusion
-// carries its reason.
+// carries its reason. Each item and exclusion ends with its citation's evidence form (`citation.mjs`; R65: "exports keep
+// this form"), line by line, in the language of the text cited.
 //
 // It is written here, byte by byte, with no library: PDF 1.4, A4 pages, uncompressed content streams,
 // the standard Helvetica and Courier fonts in WinAnsiEncoding, no embedded font and no time of making,
@@ -107,8 +108,12 @@ function textsOf(model) {
   const texts = [model.watermark, model.identifier, model.rightsDisposition, model.rightsRule, model.observedAt, asPublishedParagraph(model.asPublished)];
   for (const item of model.items) {
     texts.push(item.publisherId, item.language, item.citation, item.officialSource, item.text, ...item.notes.flatMap((note) => [note.marker, note.text]));
+    if (item.citations !== null) texts.push(item.citations.evidence);
   }
-  for (const entry of model.excluded) texts.push(entry.publisherId, entry.language, entry.citation, entry.statePermalink, entry.reason);
+  for (const entry of model.excluded) {
+    texts.push(entry.publisherId, entry.language, entry.citation, entry.statePermalink, entry.reason);
+    if (entry.citations !== null) texts.push(entry.citations.evidence);
+  }
   return texts.map((text) => String(text).replace(/\r\n?/g, '\n').replaceAll('\n', ' '));
 }
 
@@ -223,6 +228,13 @@ function sentence(text) {
   return /[.!?]$/.test(capitalised) ? capitalised : `${capitalised}.`;
 }
 
+/** An item's or exclusion's citation, its evidence form line by line under a label, or nothing for a text no citation is composed in. */
+function addCitation(add, citations) {
+  if (citations === null) return;
+  add('Citation (evidence form)', { size: 9 });
+  add(citations.evidence, { size: 9, indent: 12 });
+}
+
 /** The line at the foot of a page: its number, and what was asked. */
 function pageLine(model, number, count) {
   return `Page ${number} of ${count}. ${model.identifier}, read on ${model.date}.`;
@@ -259,6 +271,8 @@ function layout(model) {
     gap(3);
     add(item.text);
     for (const note of item.notes) add(`[${note.marker}] ${note.text}`, { size: 9, indent: 12 });
+    gap(3);
+    addCitation(add, item.citations);
   }
 
   if (model.excluded.length > 0) {
@@ -268,6 +282,7 @@ function layout(model) {
       add(`${entry.publisherId} (${entry.language}, applying from ${entry.appliesFrom}): excluded, ${entry.reason}.`);
       add(entry.citation, { font: 'mono', size: 8, label: 'citation ' });
       add(entry.statePermalink, { font: 'mono', size: 8, label: 'state    ' });
+      addCitation(add, entry.citations);
     }
   }
   return done();
@@ -308,6 +323,8 @@ function europeLayout(model, unsettable = null) {
     add(`Authenticity: ${item.authenticity}`, { size: 9 });
     gap(3);
     add(item.text);
+    gap(3);
+    addCitation(add, item.citations);
   }
 
   if (model.excluded.length > 0 || model.annexesNotServed.length > 0) {
@@ -317,6 +334,7 @@ function europeLayout(model, unsettable = null) {
       add(`${entry.publisherId} (${entry.language}, ${wordingOf(entry)}): excluded, ${entry.reason}.`);
       add(entry.citation, { font: 'mono', size: 8, label: 'citation ' });
       add(entry.wordingPermalink, { font: 'mono', size: 8, label: 'wording  ' });
+      addCitation(add, entry.citations);
     }
     // An annex is counted, with the platform's reason and where to read it officially; its text is never held.
     for (const row of model.annexesNotServed) {

@@ -206,6 +206,8 @@ function readState(state, index, context) {
     bodySha256s,
     publisherLegalResourceIri: requireText(
       requireOwn(state, 'publisher_legal_resource_iri', where), `${where} publisher_legal_resource_iri`),
+    // The work's ELI, which names the act's type and date (the citation generator's act name, `citation.mjs`).
+    publisherWorkIri: requireText(requireOwn(state, 'publisher_work_iri', where), `${where} publisher_work_iri`),
   };
   const articles = requireList(requireOwn(state, 'articles', where), `${where} articles`)
     .map((article, articleIndex) => readArticle(article, articleIndex, partial, where));
@@ -252,6 +254,55 @@ function readState(state, index, context) {
     articlesNotAdmitted: requireCount(requireOwn(state, 'articles_not_admitted', where), `${where} articles_not_admitted`),
     validityConflictCount: conflictCount,
     validityConflictRule: requireText(requireOwn(state, 'validity_conflict_rule', where), `${where} validity_conflict_rule`),
+  });
+}
+
+/** One publisher fact's value as an answer serves it (`subject_iri`, `value`, `evidence_sha256`), when its subject is `subject`. */
+function readFactOf(fact, subject, where) {
+  if (requireText(requireOwn(fact, 'subject_iri', where), `${where}.subject_iri`) !== subject) {
+    throw new Error(`${where} is a fact of ${fact.subject_iri}, not of ${subject}`);
+  }
+  requireDigest(requireOwn(fact, 'evidence_sha256', where), `${where}.evidence_sha256`);
+  return requireText(requireOwn(fact, 'value', where), `${where}.value`);
+}
+
+/**
+ * The facts a citation of a Luxembourg bundle's states is composed from (`citation_facts`; the plan's item 3.3, R65), each
+ * the publisher's, verbatim: the titles of each listed state's expression, by language (`titles` and `shortTitles`, the
+ * words alone), and the act as published (the states' work IRI followed by `/jo`) with the issues of the Mémorial A the
+ * publisher says it is part of and its publication dates. A title of an expression no listed state is, or a fact of
+ * another subject, is drift and thrown: it would name another act or another text.
+ */
+export function readCitationFacts(facts, states) {
+  const where = 'citation_facts';
+  const works = [...new Set(states.map((state) => state.publisherWorkIri))];
+  if (works.length !== 1) throw new Error(`${where} is of one work, and the states name ${works.length}`);
+  const journalOfficielIri = requireText(requireOwn(facts, 'journal_officiel_iri', where), `${where}.journal_officiel_iri`);
+  if (journalOfficielIri !== `${works[0]}/jo`) throw new Error(`${where}.journal_officiel_iri ${journalOfficielIri} is not the act as published of ${works[0]}`);
+  const expressions = new Set(states.map((state) => state.expressionIri));
+  const titles = Object.freeze(requireList(requireOwn(facts, 'titles', where), `${where}.titles`).map((group, index) => {
+    const at = `${where}.titles[${index}]`;
+    const expressionIri = requireText(requireOwn(group, 'expression_iri', at), `${at}.expression_iri`);
+    if (!expressions.has(expressionIri)) throw new Error(`${at} is of ${expressionIri}, which no listed state is`);
+    const words = (key) => Object.freeze(requireList(requireOwn(group, key, at), `${at}.${key}`).map((row, rowIndex) => {
+      requireDigest(requireOwn(row, 'evidence_sha256', `${at}.${key}[${rowIndex}]`), `${at}.${key}[${rowIndex}].evidence_sha256`);
+      return requireText(requireOwn(row, 'title', `${at}.${key}[${rowIndex}]`), `${at}.${key}[${rowIndex}].title`);
+    }));
+    return Object.freeze({
+      language: requireText(requireOwn(group, 'language', at), `${at}.language`),
+      expressionIri,
+      titles: words('titles'),
+      shortTitles: words('short_titles'),
+    });
+  }));
+  const factsOf = (key) => Object.freeze(requireList(requireOwn(facts, key, where), `${where}.${key}`)
+    .map((fact, index) => readFactOf(fact, journalOfficielIri, `${where}.${key}[${index}]`)));
+  requireText(requireOwn(facts, 'rule', where), `${where}.rule`);
+  return Object.freeze({
+    titles,
+    journalOfficielIri,
+    memorialIssues: factsOf('memorial_issues'),
+    publicationDates: factsOf('publication_dates'),
   });
 }
 
@@ -310,6 +361,7 @@ export function readEvidenceBundle(answer) {
   const verifiedBy = requireOwn(answer, 'verified_by', where);
 
   return Object.freeze({
+    publisher,
     identifier: requireText(requireOwn(answer, 'requested_identifier', where), 'requested_identifier'),
     workKey,
     date,
@@ -321,6 +373,8 @@ export function readEvidenceBundle(answer) {
     notHeld,
     // An act held only as first published says so (the plan's item 0.6): `as-published.mjs` reads it, or null.
     asPublished: readAsPublished(answer, { states, notHeld }),
+    // What a citation of the states needs that they do not carry (R65): read by `readCitationFacts`.
+    citationFacts: readCitationFacts(requireOwn(answer, 'citation_facts', where), states),
     scope: requireText(requireOwn(answer, 'scope', where), 'scope'),
     articlesNotAdmittedNote: requireText(requireOwn(answer, 'articles_not_admitted_note', where), 'articles_not_admitted_note'),
     corpusSha256: requireDigest(requireOwn(verifiedBy, 'corpus_sha256', 'verified_by'), 'verified_by.corpus_sha256'),
@@ -360,6 +414,9 @@ function readEuropeWording(wording, index, { celex, date }) {
     throw new Error(`${where} says next_text_held is ${JSON.stringify(nextTextHeld)} beside the next date ${JSON.stringify(nextDate ?? null)}; it is true or false beside a date, and null with none`);
   }
   const wordingSha256 = requireDigest(requireOwn(wording, 'wording_sha256', where), `${where} wording_sha256`);
+  // The time view names the CELEX of the work its wording is read from (a consolidated version's own, `0…-{date}`); the
+  // original-wording bundle names only the act's, which is then the wording's.
+  const wordingCelex = Object.hasOwn(wording, 'celex') ? requireText(wording.celex, `${where} celex`) : celex;
   const permalink = requireText(requireOwn(wording, 'permalink', where), `${where} permalink`);
   const expected = europePermalink({ celex, date: wordingDate, wordingSha256, language });
   if (permalink !== expected) {
@@ -441,7 +498,7 @@ function readEuropeWording(wording, index, { celex, date }) {
   // The annexes of the wording's sources, never quoted: each disposition's count, reason and official source.
   const annexesNotServed = readAnnexesNotServed(wording, where);
   return Object.freeze({
-    expressionIri, language, kind, wordingDate, nextDate, nextTextHeld, wordingSha256, permalink, stableCoordinate, sources, articles, articlesWithoutText,
+    expressionIri, language, kind, wordingDate, nextDate, nextTextHeld, wordingSha256, wordingCelex, permalink, stableCoordinate, sources, articles, articlesWithoutText,
     sameDateWorks, unplacedVersions, annexesNotServed,
   });
 }
