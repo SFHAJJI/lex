@@ -10,20 +10,52 @@
   "produced": [
     {
       "code": "ambiguous_identifier",
+      "more_payloads": [
+        {
+          "candidates": [
+            "fixture-work-identifier",
+            "fixture-work-identifier-two"
+          ],
+          "match_reason": "prefix",
+          "requested_identifier": "Reglement sur l\u0027epreuve"
+        }
+      ],
       "optional_payload_keys": [
-        "match_reason"
+        "candidate_held",
+        "candidate_titles",
+        "match_reason",
+        "recognised_act",
+        "recognised_article",
+        "recognised_date",
+        "recognised_date_source",
+        "recognised_kind",
+        "recognised_title"
       ],
       "payload": {
-        "candidates": [
-          "fixture-work-identifier",
-          "fixture-work-identifier-two"
+        "candidate_held": [
+          true,
+          false
         ],
-        "match_reason": "prefix",
-        "requested_identifier": "Reglement sur l\u0027epreuve"
+        "candidate_titles": [
+          null,
+          "R\u00E8glement grand-ducal du 9 ao\u00FBt 1991 relatif aux examens"
+        ],
+        "candidates": [
+          "/lu-legilux/loi-1991-08-10-n3",
+          "http://data.legilux.public.lu/eli/etat/leg/rgd/1991/08/09/n1"
+        ],
+        "recognised_act": "M\u00E9m. A n\u00B0 58 de 1991",
+        "recognised_article": null,
+        "recognised_date": null,
+        "recognised_date_source": null,
+        "recognised_kind": "memorial",
+        "recognised_title": null,
+        "requested_identifier": "M\u00E9m. A n\u00B0 58 de 1991"
       },
       "produced_by": [
         "evidence_bundle",
         "resolve",
+        "search",
         "verify"
       ]
     },
@@ -348,12 +380,25 @@
     },
     {
       "code": "retrieval_mode_unavailable",
-      "optional_payload_keys": [],
+      "optional_payload_keys": [
+        "recognised_act",
+        "recognised_article",
+        "recognised_date",
+        "recognised_date_source",
+        "recognised_kind",
+        "recognised_title"
+      ],
       "payload": {
         "available_modes": [
           "r0_exact_coordinate"
         ],
-        "requested_mode": "r6_article_history"
+        "recognised_act": "32026R0002",
+        "recognised_article": null,
+        "recognised_date": "2026-03-15",
+        "recognised_date_source": "citation",
+        "recognised_kind": "citation",
+        "recognised_title": null,
+        "requested_mode": "r6_as_of"
       },
       "produced_by": [
         "article_history",
@@ -389,22 +434,51 @@
     },
     {
       "code": "text_not_available",
-      "optional_payload_keys": [],
+      "more_payloads": [
+        {
+          "articles_held": 49,
+          "asserts_absence_of_law": false,
+          "language": "fra",
+          "official_identity": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo",
+          "official_source": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3",
+          "permalink": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--5bca01f82ef3058cfebe7f8a8a6eb1f1fbeeb32b8a1ea7b2c02ac20963235e3a/fra",
+          "retained_transport_evidence": "fb59b9fd9372a286c80c90caae9b8676839c85c22f43fcfeec4444bbbf72addb",
+          "stable_coordinate": "/lu-legilux/loi-1991-08-10-n3/2024-02-01",
+          "what_would_answer": [
+            "new_official_observation"
+          ]
+        }
+      ],
+      "optional_payload_keys": [
+        "articles_held",
+        "permalink",
+        "recognised_act",
+        "recognised_article",
+        "recognised_date",
+        "recognised_date_source",
+        "recognised_kind",
+        "recognised_title",
+        "stable_coordinate"
+      ],
       "payload": {
-        "articles_held": 49,
         "asserts_absence_of_law": false,
-        "language": "fra",
-        "official_identity": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo",
-        "official_source": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3",
-        "permalink": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--5bca01f82ef3058cfebe7f8a8a6eb1f1fbeeb32b8a1ea7b2c02ac20963235e3a/fra",
-        "retained_transport_evidence": "fb59b9fd9372a286c80c90caae9b8676839c85c22f43fcfeec4444bbbf72addb",
-        "stable_coordinate": "/lu-legilux/loi-1991-08-10-n3/2024-02-01",
+        "language": "eng",
+        "official_identity": "http://publications.europa.eu/resource/cellar/bbbbbbbb-0000-0000-0000-00000000000b",
+        "official_source": "http://publications.europa.eu/resource/cellar/bbbbbbbb-0000-0000-0000-00000000000b",
+        "recognised_act": "Regulation (EU) 2016/679 (CELEX 32016R0679)",
+        "recognised_article": null,
+        "recognised_date": "2025-03-01",
+        "recognised_date_source": "citation",
+        "recognised_kind": "citation",
+        "recognised_title": null,
+        "retained_transport_evidence": "none",
         "what_would_answer": [
           "new_official_observation"
         ]
       },
       "produced_by": [
-        "evidence_bundle"
+        "evidence_bundle",
+        "search"
       ]
     },
     {

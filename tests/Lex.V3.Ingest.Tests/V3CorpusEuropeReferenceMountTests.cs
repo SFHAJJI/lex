@@ -134,6 +134,28 @@ public sealed class V3CorpusEuropeReferenceMountTests
     }
 
     [TestMethod]
+    public async Task AnActTheEuIndexHoldsOutsideItsCensusOpensItsDossierAndADateIsAModeItCannotServe()
+    {
+        // The review of #974, F5: the act's one wording answers no date, so a date is retrieval_mode_unavailable, said with what
+        // was recognised.
+        var fixture = await EuropeMountedFixture.CreateAsync();
+        await using var cleanup = fixture;
+        await fixture.AddSecondExpressionWithSamePublisherProvisionIdentifierAsync();
+        using var mount = await V3CorpusMount.OpenAsync(fixture.Directory, CancellationToken.None);
+        Assert.IsNotNull(mount);
+
+        Assert.AreEqual("/eu-eurlex/32026R0002",
+            Opened(await SearchAsync(mount, "32026R0002", language: "eng"), "dossier").GetProperty("opens").GetProperty("address").GetString());
+        const string dated = "32026R0002, 15 March 2026";
+        var envelope = await SearchAsync(mount, dated, language: "eng");
+        var payload = Refused(envelope, "retrieval_mode_unavailable", dated);
+        Assert.AreEqual(PublisherId.EuEurLex, envelope.Context.Publisher);
+        Assert.AreEqual("r6_as_of", payload.GetProperty("requested_mode").GetString());
+        Assert.AreEqual("2026-03-15", payload.GetProperty("recognised_date").GetString());
+        Assert.AreEqual("citation", payload.GetProperty("recognised_date_source").GetString());
+    }
+
+    [TestMethod]
     public async Task OnACensusTheDateSelectsTheWordingAndAConsolidatedCelexNamesItsOwnDate()
     {
         var (root, directory) = await V3CorpusEuropeTimeViewTests.ConsolidatedMountAsync(missingStateCelex: false);
@@ -160,6 +182,8 @@ public sealed class V3CorpusEuropeReferenceMountTests
                          ("Regulation (EU) 2016/679, 15 March 2025", consolidated, "citation"),
                          ("règlement (UE) 2016/679 au 15 mars 2020", original, "citation"),
                          ("02016R0679-20240101", consolidated, "identifier"),
+                         // The review of #974, F7: a consolidated version's ELI names its date, as its CELEX does.
+                         ("http://data.europa.eu/eli/reg/2016/679/2024-01-01", consolidated, "identifier"),
                      })
             {
                 var reference = Opened(await SearchAsync(mount, query, language: "eng"), query);

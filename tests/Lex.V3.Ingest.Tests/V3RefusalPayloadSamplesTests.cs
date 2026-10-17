@@ -46,6 +46,8 @@ public sealed class V3RefusalPayloadSamplesTests
         await ObserveOneStateAsync(census);
         await ObserveRightsAsync(census);
         await ObserveUnmountedAsync(census);
+        await ObserveReferenceListsAsync(census);
+        await ObserveEuropeReferencesAsync(census);
         Assert.IsEmpty(census.Problems, "Scenarios that did not yield the refusal they name:\n" + string.Join("\n", census.Problems));
         var observed = census.Observed;
 
@@ -353,6 +355,55 @@ public sealed class V3RefusalPayloadSamplesTests
         await DriveAsync(observed, mount, "ask", "no Luxembourg index", new { question = "Can I be fired while on sick leave?" }, "no_corpus_mounted");
         await DriveAsync(observed, mount, "events", "no Luxembourg index", new { }, "no_corpus_mounted");
         await DriveAsync(observed, mount, "answer_drift", "no Luxembourg index", new { }, "no_corpus_mounted");
+    }
+
+    private static async Task ObserveReferenceListsAsync(Census observed)
+    {
+        // search's exact references (the review of #974, F2): a Mémorial issue the catalogue says publishes two acts, the
+        // fixture's and one the index holds no version of, names both, each marked held or not, and opens neither.
+        const string issue = "http://data.legilux.public.lu/eli/etat/leg/memorial/1991/a58";
+        const string other = "http://data.legilux.public.lu/eli/etat/leg/rgd/1991/08/09/n1";
+        var fixture = await MountedFixture.CreateAsync();
+        await using var cleanup = fixture;
+        await fixture.AddWorkFactAsync("http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo", "isPartOf", "wemi_structural", "iri", issue);
+        await fixture.AddWorkFactAsync(other + "/jo", "isPartOf", "wemi_structural", "iri", issue);
+        await fixture.AddWorkFactAsync(other + "/jo/fr", "title", "expression_language_or_title", "literal", "Règlement grand-ducal du 9 août 1991 relatif aux examens");
+        using var mount = await V3CorpusMount.OpenAsync(fixture.Directory, CancellationToken.None);
+        Assert.IsNotNull(mount);
+        await DriveAsync(observed, mount, "search", "a Mémorial issue that publishes two acts: each listed, held or not, none chosen",
+            new { query = "Mém. A n° 58 de 1991", language = "fra" }, "ambiguous_identifier");
+    }
+
+    private static async Task ObserveEuropeReferencesAsync(Census observed)
+    {
+        // search's exact references to EU acts (the review of #974, F5): every refusal of the phase says what was recognised, and
+        // the reader renders each. An act the EU index holds outside its census has one wording, which answers no date.
+        var fixture = await EuropeMountedFixture.CreateAsync();
+        await using (fixture)
+        {
+            await fixture.AddSecondExpressionWithSamePublisherProvisionIdentifierAsync();
+            using var mount = await V3CorpusMount.OpenAsync(fixture.Directory, CancellationToken.None);
+            Assert.IsNotNull(mount);
+            await DriveAsync(observed, mount, "search", "a citation at a date of an EU act this index holds outside its census",
+                new { query = "32026R0002, 15 March 2026", language = "eng" }, "retrieval_mode_unavailable");
+        }
+
+        // The wording the date selects, held in no served language.
+        var (root, directory) = await V3CorpusEuropeTimeViewTests.ConsolidatedWorksMountAsync(
+            new EuFirstMountAcquisitionTests.ConsolidatedWorkSpec(
+                V3CorpusEuropeTimeViewBranchTests.WorkB, V3CorpusEuropeTimeViewTests.ConsolidationDate, V3CorpusEuropeTimeViewBranchTests.Designated,
+                null, V3CorpusEuropeTimeViewBranchTests.FrenchPackage));
+        try
+        {
+            using var mount = await V3CorpusMount.OpenAsync(directory, CancellationToken.None);
+            Assert.IsNotNull(mount);
+            await DriveAsync(observed, mount, "search", "a citation at a date whose EU wording is held in no served language",
+                new { query = "Regulation (EU) 2016/679, 1 March 2025", language = "eng" }, "text_not_available");
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
     }
 
     /// <summary>Drives one served operation through the real handler and records the refusal, which must be the one named.</summary>

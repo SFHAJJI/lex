@@ -11,12 +11,15 @@ namespace Lex.V3.Api;
 /// <c>search</c> that names no work reads its query as an exact reference before any word is searched
 /// (<see cref="ExactReferenceReader"/>), and the answer reports the phase as <c>reference</c>. A reference the indexes hold opens
 /// its act: Reading at the article and date the reference names (the date defaults to the search's date, else today in
-/// Luxembourg, R13), or the dossier when it names neither; the answer is the address to open, and no word is searched. A
-/// reference naming an act the indexes do not hold is refused <c>identifier_unknown</c> with no list, never searched as words;
-/// several acts or articles are <c>ambiguous_identifier</c> with every candidate, never a guess; a date before the act's held
-/// history is <c>no_version_for_date</c>, an article the version does not hold <c>anchor_not_in_version</c>. Every refusal of
-/// the phase carries what was recognised (<c>recognised_*</c>), so a page can say what it read. A query that is no reference is
-/// searched as before.
+/// Luxembourg, R13), or the dossier when it names neither; the answer is the address to open, and no word is searched. Only a
+/// strict locator says an act is absent (the review of #974): an ELI, a CELEX, a Mémorial issue, a historical identifier, an EU
+/// act's name, or a type and date whose day holds no act in the indexes or the publisher's catalogue is refused
+/// <c>identifier_unknown</c> with no list, never searched as words. A title is no strict locator: a title the index holds no act
+/// under is searched as words, as typed. A day, an issue or an ELI under which the catalogue names several acts, and words after
+/// a type and date that name none of that day's acts, are <c>ambiguous_identifier</c> listing every act, each marked held or not,
+/// never a guess; a date before the act's held history is <c>no_version_for_date</c>, an article the version does not hold
+/// <c>anchor_not_in_version</c>. Every refusal of the phase carries what was recognised (<c>recognised_*</c>), so a page can say
+/// what it read. A query that is no reference is searched as before.
 /// </summary>
 internal sealed partial class V3CorpusMount
 {
@@ -359,7 +362,8 @@ internal sealed partial class V3CorpusMount
             {
                 requested_identifier = query,
                 candidates = located.Acts.Select(static act => act.Identifier).ToArray(),
-                candidate_titles = located.Acts.Select(static act => act.Title ?? act.WorkIri).ToArray(),
+                // An act the index and the catalogue state no title of has none here (null): its identifier names it.
+                candidate_titles = located.Acts.Select(static act => act.Title).ToArray(),
                 candidate_held = located.Acts.Select(static act => act.Held).ToArray(),
             });
             return WithRecognition(request, V3PlatformOperationOutcome.Refused(
