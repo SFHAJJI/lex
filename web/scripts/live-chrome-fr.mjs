@@ -58,7 +58,11 @@
 // sentence for an EU act searched at a date, were reviewed by the same reviewer under the same delegation in the
 // addendum of 2026-10-16 (17 forms, none changed). `site.notAdvice` is J6's French as R50 fixes it, "conseil juridique"
 // included against T10's "consultation juridique": the lawyer's read settles it (the owner's item O4), with the two other
-// points the addendum records.
+// points the addendum records. In the review of #971 (the same addendum's section of 2026-10-17, 5 forms, none changed),
+// `search.dated` and `search.undated` were replaced to say what a dated search searched (the latest held version
+// applicable from the date or an earlier one, an act held only as published searched as published) and that only
+// Luxembourg acts were searched, and `search.noHitLuxembourg`, `search.luxembourgOnly` and `search.searchPage` say the
+// home page's box searches Luxembourg law and lead to the search page for an EU act.
 // No French entry ships unreviewed.
 //
 // Vocabulary: a work is an "acte" (a publisher's Cellar work, one record of an EU act, is an "œuvre de l’éditeur"), a

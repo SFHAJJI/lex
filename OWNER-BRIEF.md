@@ -1,6 +1,6 @@
 # Lex V3: the owner's brief
 
-Updated 2026-10-16 at 07:10 UTC by the driver. The driver updates this file in the first pull request of each
+Updated 2026-10-17 at 13:53 UTC by the driver. The driver updates this file in the first pull request of each
 day and whenever a run starts, ends or stops. At most 40 lines, plain words, no hashes. The detail stays in
 STATUS-WEB.md and STATUS-DATA.md; the acceptance list is LAUNCH-CONTRACT.md.
 
@@ -22,7 +22,7 @@ STATUS-WEB.md and STATUS-DATA.md; the acceptance list is LAUNCH-CONTRACT.md.
   within six weeks of the opening, if you agree.
 - You see a private preview on 7 November (the codes, the new home page and search) and the near-final site on 15
   December. The full plan is your private page, and C:\lex-v3\PLAN-2026-10-14.md.
-- Decided today, by you: the domain's DNS lives at your registrar, outside Azure, and the site keeps V2's address,
+- Decided on 14 October, by you: the DNS lives at your registrar, outside Azure, and the site keeps V2's address,
   law.soufien.lu. The opening waits until the site matches the specification and passes the checks only people do.
 
 ## What waits on you
