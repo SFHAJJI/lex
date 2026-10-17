@@ -70,7 +70,10 @@
 // the two refusal sentences for `pinned_digest_mismatch` in `REFUSALS_FR.sentences`, were reviewed by the same reviewer
 // under the same delegation in the addendum of 2026-10-16 (11 forms, 1 changed in review: a quotation is "cité d’après" its
 // version, never "extrait de", the table's word for Lex's own extraction; `reading.citedWithoutText` is the review's own
-// rendering, given for the article held without text, which the review found the page said "quoted from").
+// rendering, given for the article held without text, which the review found the page said "quoted from"). What the EU
+// banner says of a next wording whose text this site does not hold in the page's language (`reading.europeLaterWordingNotHeld`;
+// the review of #972's finding F1) was reviewed by the same reviewer under the same delegation in the addendum of 2026-10-17
+// (1 form, changed in review: "pour cet acte" before the wording, so its date and its text cannot be read as the act's).
 // No French entry ships unreviewed.
 //
 // Vocabulary: a work is an "acte" (a publisher's Cellar work, one record of an EU act, is an "œuvre de l’éditeur"), a
@@ -162,7 +165,7 @@ export const LIVE_CHROME_FR = Object.freeze({
     europeWholeAct: 'L’acte entier dans ce libellé',
     newerVersion: 'Une version plus récente est applicable à partir du {date} (éditeur).',
     europeNewerWording: 'Un libellé ultérieur de cet acte est détenu : le libellé du {date}.',
-    europeLaterWordingNotHeld: 'Les données de l’éditeur nomment un libellé ultérieur de cet acte, du {date}, dont ce site ne détient pas le texte dans cette langue.',
+    europeLaterWordingNotHeld: 'Les données de l’éditeur nomment, pour cet acte, un libellé ultérieur du {date}, dont ce site ne détient pas le texte dans cette langue.',
     openToday: 'Lire cet acte à la date du jour',
     title: 'Lecture',
     eyebrow: 'Lecture',

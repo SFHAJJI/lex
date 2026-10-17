@@ -63,10 +63,11 @@ link.") and R67 ("Every work and article has a readable address that resolves to
   calendar date, with or without a digest after it, so neither the EU stable coordinate (`/eu-eurlex/{celex}/{lng}/{date}`)
   nor the EU shape before R64 (moved) is read as one. Its canonical link is itself: the article's readable address when the
   version shown holds the article (escaped as the platform escapes it), else the act's.
-- **The shared table** (`site-paths.json`) holds 118 paths (96 before): 34 served (10 readable, four of them naming their
-  canonical), 14 sent, 3 moved, 67 neither (8 readable shapes that are none: the EU stable coordinate, a date as an
-  article, `FRA`, `fr`, an empty or `%2E%2E` segment, two segments, `/de/`), and the date it is held at (`today`); every
-  served permalink row renders from the permalink itself.
+- **The shared table** (`site-paths.json`) holds 122 paths (96 before): 33 served (9 readable, four of them naming their
+  canonical), 14 sent, 7 moved (4 of them a consolidated version's readable address, the review of #972), 68 neither (9
+  readable shapes that are none: the EU stable coordinate, a date as an article, under a consolidated CELEX too, `FRA`,
+  `fr`, an empty or `%2E%2E` segment, two segments, `/de/`), and the date it is held at (`today`); every served permalink
+  row renders from the permalink itself.
 - **French** (Decision 41): eleven new forms (nine reading entries and two refusal sentences), reviewed by an independent
   reviewer in the addendum of 2026-10-16 of `C:\lex-v3\lanes\fr-review\review.md` (1 changed: "Cité d’après {source}.", never
   "Extrait de", the table's word for Lex's own extraction), and a twelfth, `reading.citedWithoutText`, in the review's own
@@ -106,7 +107,32 @@ link.") and R67 ("Every work and article has a readable address that resolves to
   `provenance` was looked for and run: the `V3CorpusEurope*`, `V3CorpusAsOf*`, `V3CorpusProvenance*`,
   `V3CorpusEvidenceBundle*` and pinned-permalink classes, with generation quotes, as_observed, citation verification, MCP,
   replay, article history, diff, timeline, citation, in_force_on, status_on, changes_in_period, articles not admitted and the
-  EU annex control case: 229 of 229.
+  EU annex control case: 229 of 229. That repair is db64aa58.
+- **The review of #972** (an independent reviewer, its probes over HTTP against both servers, on derived EU mounts): two
+  findings, both reproduced, repaired in one round.
+  - F1, medium: the EU banner said "A later wording of this act is held: the wording of 2024-01-01" at the English
+    permalink of a mount whose 2024-01-01 consolidation is held in French only, and its "Read this act at today's date"
+    answered `text_not_available` on both servers: the page printed `next_date`, the selection's bound, which holds
+    whether or not the next wording's text is held. The API now says it: `next_text_held` beside `next_date` in
+    `evidence_bundle`'s, `as_of`'s and `timeline`'s EU wordings (null with no next wording; the pinned path too), and the
+    reader requires it beside every next date. The page says the held form only when it is true, and otherwise "The
+    publisher's record names, for this act, a later wording of {date}, whose text this site does not hold in this language."
+    (French, reviewed in the addendum of 2026-10-17, which moved "for this act" before the wording in both languages: "Les
+    données de l’éditeur nomment, pour cet acte, un libellé ultérieur du {date}, dont ce site ne détient pas le texte dans
+    cette langue."), with no link to a text this site does not hold. The Luxembourg banner
+    was checked for the same flaw: its date is the next state the index holds, which the sentence names as a version and of
+    whose text it says nothing, so it stands. Tested on the branch fixture (`V3CorpusEuropeTimeViewBranchTests`, the API),
+    whose English permalink answer joins the envelope census (its derived mount's per-run corpus, index and receipt digests
+    replaced, as the census's note says), and in `pinned-reading.test.mjs` on that answer; the accessibility and chrome
+    scans read the census's EU bundle.
+  - F2, low to medium: on a mount with the consolidations 02016R0679-20240101 and 02016R0679-20250101,
+    `/en/eu-eurlex/02016R0679-20240101/eng/005` quoted the wording of 2025-01-01 under the canonical
+    `.../eu-eurlex/02016R0679-20240101/eng/005`: the readable branch of `readingAddressShown` built the canonical from the
+    request, against #967's rule. A consolidated version's readable address (`/eu-eurlex/0{act}-{yyyymmdd}/{lng}[/{provision}]`)
+    now answers `301` to its act's (`/eu-eurlex/3{act}/{lng}[/{provision}]`) on both servers, computed from the address
+    alone, its interface language, provision and query kept; its dossier stands. A readable page's canonical and its
+    whole-act link are built from the work key or CELEX the answer names. The table's served row for
+    `/en/eu-eurlex/02016R0679-20160504/eng/047` is now moved, with three moved rows and one neither added.
 
 ## The home page, and the sentence that says what Lex is not (sole driver, 2026-10-16)
 
@@ -4265,6 +4291,15 @@ Each is the driver's call under ruling 7 and can be reversed by a later pull req
   forbid but which states the applicability without its attribution; "A later wording of this act is held: the wording of
   {date}." for an EU wording, whose date is never an applicability date. Each links the act at today's date (its readable
   address), never a newer version's permalink, which the answer does not name.
+- Whether the next EU wording's text is held (2026-10-17, the review of #972): `next_text_held`, a boolean beside
+  `next_date` (null with none), rather than the date of the next held wording: the next wording bounds the one shown
+  whether or not its text is held, and a reader told only of a later held one would not learn that an unheld one stands
+  between. An unheld next wording is said as the publisher's record names it, with no link to the act today. Reversible.
+- A consolidated version's readable address (2026-10-17, the review of #972): it moves for good (`301`) to its act's
+  readable address, computed from the address alone (EUR-Lex writes a consolidated version's CELEX as its act's in sector 0
+  with the consolidation's date), so every reader gets the same answer and no address names one wording while showing
+  another. The version itself stays citable by its permalink, and its dossier address stands. Reversible: a readable
+  address per wording, with its own date.
 - The readable address (2026-10-16, R67): `/lu-legilux/{work}/{lng}[/{article}]` and `/eu-eurlex/{celex}/{lng}[/{provision}]`,
   the text's language in the place a permalink's pin stands, at today in Luxembourg; the act with no language stays its
   dossier. The language is the address's, so a reader's link opens the text in the language they cited. An article segment

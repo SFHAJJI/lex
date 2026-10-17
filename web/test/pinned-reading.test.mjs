@@ -130,7 +130,7 @@ test("a version that is not the latest held says so, in its publisher's words, w
   assert.deepEqual([branchWording.nextDate, branchWording.nextTextHeld], ["2024-01-01", false]);
   const branchPin = readingPinOf(`/en${branchWording.permalink}/${branchWording.articles[4].publisherId}`, LATER_NOT_HELD);
   const branchMarkup = lead(branch, branchPin);
-  assert.ok(branchMarkup.includes("<p data-changed-since=\"\">The publisher&#x27;s record names a later wording of this act, of 2024-01-01, whose text this site does not hold in this language.</p>"), branchMarkup.slice(0, 400));
+  assert.ok(branchMarkup.includes("<p data-changed-since=\"\">The publisher&#x27;s record names, for this act, a later wording of 2024-01-01, whose text this site does not hold in this language.</p>"), branchMarkup.slice(0, 400));
   assert.ok(!branchMarkup.includes("is held: the wording of"), "never said held");
   assert.ok(!branchMarkup.includes("today&#x27;s date"), "no link to the act today, whose text this site does not hold");
   const latest = europeEnvelope(europeBundle((value) => {
