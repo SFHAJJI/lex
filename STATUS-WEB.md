@@ -1,8 +1,22 @@
 # Lex V3 status: the web lane
 
-Updated 2026-10-17. The web lane's progress, split out of STATUS.md (which keeps the heads, the owner's open
+Updated 2026-10-18. The web lane's progress, split out of STATUS.md (which keeps the heads, the owner's open
 items and the pointers) by the standing order of 2026-10-01 13:50 UTC. Every pull request of the web lane
 updates this file, not STATUS.md.
+
+## Two tests that timed the runner, not the behaviour (sole driver, 2026-10-18)
+
+#974's first `dotnet` run was cancelled at its 45-minute limit on a slow runner: every step took about eight times its
+usual time, the build 6 min 18 s for 45 s. Two tests failed there on timing alone, and the re-run passed.
+- `V3PageRendererTests.ARenderStoppedForItsTimeOrItsHeapLeavesTheProcessStandingAndItsLanguageAFreshEngine` held "stopped
+  by its heap, before its time" to a renderer whose time was 3 s, and filling the heap took 3.5 s there. The heap is now
+  asked of a second renderer with a 60 s time and must stop well before it (45 s); the loop is still stopped by the 3 s
+  renderer's time.
+- `AzureCustodyProbeContractTests.LinuxSigtermCancelsWithoutReturningOutput` sent SIGTERM 250 ms after the probe
+  started, and got the runtime's default 143 when the probe's own handler was not yet registered. The signal is now sent
+  after 250 ms, then 2 s, then 8 s, while the answer is 143; the answer must be 130 and no attempt may write output, so
+  a probe whose handler is gone still fails.
+- Measured: `Lex.V3.Tests` filtered to both classes, 52 of 52 (the SIGTERM test runs on Linux only, in CI).
 
 ## Search engines: kept out until O27, one switch, the sitemap and the Legislation markup (sole driver, 2026-10-17)
 
