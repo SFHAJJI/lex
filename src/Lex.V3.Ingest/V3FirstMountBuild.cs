@@ -358,14 +358,14 @@ public sealed class V3FirstMountBuild
                     : $"two builds of the corpus differ: {corpus.ArtifactRef.Sha256} then {corpusAgain.ArtifactRef.Sha256}");
         }
 
-        var luxembourgIndex = LuxembourgIndexBuilder.TryBuild(profileEnvelope, predecessor, builtAt, out var luxembourgIndexRefusal, out var luxembourgIndexDetail);
+        var luxembourgIndex = LuxembourgIndexBuilder.TryBuild(profileEnvelope, predecessor, builtAt, luxembourg.DerivedAt, out var luxembourgIndexRefusal, out var luxembourgIndexDetail);
         if (luxembourgIndex is null)
         {
             return V3FirstMountBuildResult.Refused(
                 V3FirstMountBuildRefusal.LuxembourgIndexRefused, $"{luxembourgIndexRefusal}: {luxembourgIndexDetail}");
         }
 
-        var luxembourgIndexAgain = LuxembourgIndexBuilder.TryBuild(profileEnvelope, predecessor, builtAt, out luxembourgIndexRefusal, out luxembourgIndexDetail);
+        var luxembourgIndexAgain = LuxembourgIndexBuilder.TryBuild(profileEnvelope, predecessor, builtAt, luxembourg.DerivedAt, out luxembourgIndexRefusal, out luxembourgIndexDetail);
         if (luxembourgIndexAgain is null
             || !SameArtefact(luxembourgIndex.IndexRef, luxembourgIndex.IndexBytes, luxembourgIndexAgain.IndexRef, luxembourgIndexAgain.IndexBytes)
             || !SameArtefact(luxembourgIndex.CapabilityManifestRef, luxembourgIndex.CapabilityManifestBytes,

@@ -458,7 +458,7 @@ internal sealed partial class V3CorpusMount : IDisposable
         "forward (events: log.ancestors[].log_id)";
 
     internal const string AsObservedLegacyWhatWouldAnswer =
-        "a mount whose Luxembourg index records its builds (lex-v3-luxembourg-index/8); this one is lex-v3-luxembourg-index/6, built " +
+        "a mount whose Luxembourg index records its builds (lex-v3-luxembourg-index/8 or /9); this one is lex-v3-luxembourg-index/6, built " +
         "before builds were recorded, so it names no snapshot and no build time";
 
     internal const string AsObservedNotHeldWorkWhatWouldAnswer =
@@ -875,6 +875,22 @@ internal sealed partial class V3CorpusMount : IDisposable
         "the list it holds); this mount's own reader recomputes the state digest when the index is opened and refuses an index in which it " +
         "does not match its row";
 
+    /// <summary>
+    /// The derivation on a mount of lex-v3-luxembourg-index/9, whose state digest is /2: the same encoding over the row's own
+    /// facts, which the answer carries in each state's <c>digest_inputs</c>.
+    /// </summary>
+    internal const string ProvenanceDerivationNine =
+        "state_sha256 is a SHA-256 over these values, each as UTF-8 preceded by its length as four bytes big-endian: the domain tag " +
+        "lex-v3-luxembourg-expression-state/2, the publisher, the work key, the applicability date, the date's role, the state's kind, the " +
+        "expression, the publisher work IRI, the publisher legal-resource IRI, the language, then from digest_inputs the end the publisher " +
+        "states, the publication date, the text status, its reason, the in-file identity, the in-file date, the entry into force and the " +
+        "French expression a translation takes its interval from (each the empty string when null), then the number of rule-profile digests " +
+        "as decimal text and each digest in sorted order, then the number of article identities as decimal text and each identity in sorted " +
+        "order; an end derived from the next state, the boundary and provisional are not in it; the article identities are not carried here " +
+        "(they are article_identities in as_of's answer to the same request, and article_identities_sha256 is the SHA-256 of them in sorted " +
+        "order, each preceded by its length in the same way, so a caller can check the list it holds); this mount's own reader recomputes " +
+        "the state digest when the index is opened and refuses an index in which it does not match its row";
+
     internal const string ProvenanceSourcesNote =
         "object_ref_sha256 identifies the source object in the corpus; body_sha256 is the digest of the publisher bytes the corpus retained " +
         "for it, body_byte_length their length and body_receipt_sha256 the digest of the corpus receipt for that body, each null where the " +
@@ -984,8 +1000,14 @@ internal sealed partial class V3CorpusMount : IDisposable
         }
 
         var served = new List<object>();
+        var nine = _reader!.RecordsCatalogueStates;
         foreach (var state in chosen)
         {
+            // On index 9 the state digest is /2, over the row's own facts as well: they are carried, so the chain stays one a
+            // caller can recompute (a reader of an index 8 or 6 has none, and its digest is /1).
+            var row = nine
+                ? _reader.ResolveCatalogueStates(state.WorkKey).Single(candidate => string.Equals(candidate.StateSha256, state.StateSha256, StringComparison.Ordinal))
+                : null;
             served.Add(new
             {
                 language = state.Language,
@@ -999,6 +1021,19 @@ internal sealed partial class V3CorpusMount : IDisposable
                 rule_profile_sha256s = state.RuleProfileSha256s,
                 articles = state.ArticleIdentities.Count,
                 article_identities_sha256 = ArticleIdentitiesSha256(state.ArticleIdentities),
+                digest_inputs = row is null ? null : new
+                {
+                    date_role = row.DateRole,
+                    state_kind = row.StateKind,
+                    publisher_applicable_to = row.ApplicableToSource == "publisher" ? row.ApplicableTo : null,
+                    publication_date = row.PublicationDate,
+                    text_status = row.TextStatus,
+                    text_status_reason = row.TextStatusReason,
+                    in_file_identity = row.InFileIdentity,
+                    in_file_date = row.InFileDate,
+                    entry_into_force = row.EntryIntoForce,
+                    translation_of = row.TranslationOf,
+                },
                 sources = _reader!.ResolveStateSources(state.StateSha256).Select(SourceRow).ToArray(),
             });
         }
@@ -1019,7 +1054,7 @@ internal sealed partial class V3CorpusMount : IDisposable
                 index_sha256 = _reader!.IndexRef.Sha256,
                 registry_sha256 = V3OperationRegistry.Reviewed.Sha256,
             },
-            derivation = ProvenanceDerivation,
+            derivation = nine ? ProvenanceDerivationNine : ProvenanceDerivation,
             sources_note = ProvenanceSourcesNote,
             not_held = ProvenanceNotHeld.Select(static row => new { item = row[0], reason = row[1] }).ToArray(),
         });
@@ -4807,7 +4842,8 @@ internal sealed partial class V3CorpusMount : IDisposable
 
     internal const string EventsScope =
         "the event log of the mounted Luxembourg index: a list numbered from 1, polled by cursor, append-only; a genesis log (one observation, " +
-        "no predecessor) holds one first_sighting per held state and nothing else; a chained log carries its predecessors' observations unchanged " +
+        "no predecessor) holds one first_sighting per state row and nothing else (on lex-v3-luxembourg-index/9 a row may be a state whose text " +
+        "is not held); a chained log carries its predecessors' observations unchanged " +
         "and appends one observation per later build (log.basis says which)";
 
     internal const string EventsDeliveryNote =
@@ -4822,6 +4858,8 @@ internal sealed partial class V3CorpusMount : IDisposable
         "and does not say when the publisher published the text or when it was fetched; observed_from is null because no observation time is held; " +
         "log.built_at is the time the acquiring build read once its acquisition had ended, an upper bound on when its corpus was observed " +
         "and never an observation time, and an index derived again from custody keeps it rather than the time of that derivation; " +
+        "log.derived_at is when this index was derived from custody, the time its derivation's inputs state, and null when its " +
+        "derivations are the acquiring build's own or when its schema records none (lex-v3-luxembourg-index/8); " +
         "a revision (validity_revised, interval_closed, file_replaced, withdrawn_from_source, ...) needs a later build compared against this one";
 
     /// <summary>The genesis note on a schema-6 index, which records no build time: the same, without the build-time sentence.</summary>
@@ -5135,6 +5173,7 @@ internal sealed partial class V3CorpusMount : IDisposable
         log_id = logId,
         basis = observations.Count <= 1 ? V3EventRegistry.GenesisBasis : V3EventRegistry.ChainedBasis,
         built_at = observations.Count == 0 ? null : observations[^1].BuiltAt,
+        derived_at = observations.Count == 0 ? null : observations[^1].DerivedAt,
         predecessor_index_sha256 = observations.Count == 0 ? null : observations[^1].PredecessorIndexSha256,
         observations_compared = Math.Max(0, observations.Count - 1),
         ancestors = AncestorLogs(observations)

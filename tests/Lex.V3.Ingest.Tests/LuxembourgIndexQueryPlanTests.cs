@@ -43,11 +43,18 @@ public sealed class LuxembourgIndexQueryPlanTests
     private static readonly (string Sql, (string, object)[] Parameters) CitationsToQuery =
         (LuxembourgIndexQueries.CitationsTo, [("$iris", "[\"http://example.invalid/eli/x\"]")]);
 
+    // The fixture is an index 9, so the reader runs the held-rows variants of the three state queries on it.
     private static readonly (string Sql, (string, object)[] Parameters) StatesOfExpressionsQuery =
-        (LuxembourgIndexQueries.StatesOfExpressions, [("$expressions", "[\"http://example.invalid/expression\"]")]);
+        (LuxembourgIndexQueries.StatesOfExpressionsNine, [("$expressions", "[\"http://example.invalid/expression\"]")]);
 
     private static readonly (string Sql, (string, object)[] Parameters) HeldWorksQuery =
-        (LuxembourgIndexQueries.HeldWorks, [("$iris", "[\"http://example.invalid/eli/x\"]")]);
+        (LuxembourgIndexQueries.HeldWorksNine, [("$iris", "[\"http://example.invalid/eli/x\"]")]);
+
+    private static readonly (string Sql, (string, object)[] Parameters) CatalogueStatesQuery =
+        (LuxembourgIndexQueries.CatalogueStatesOfWork, [("$work", "loi-1991-08-10-n3")]);
+
+    private static readonly (string Sql, (string, object)[] Parameters) IntervalsQuery =
+        (LuxembourgIndexQueries.IntervalsOfWork, [("$work", "loi-1991-08-10-n3")]);
 
     private static readonly (string Sql, (string, object)[] Parameters) StateDocumentQuery =
         (LuxembourgIndexQueries.StateDocumentOutcomes, [("$states", "[\"" + Digest + "\"]")]);
@@ -59,7 +66,25 @@ public sealed class LuxembourgIndexQueryPlanTests
         (LuxembourgIndexQueries.SubjectFactsUnder, [("$low", "http://example.invalid/eli/x/consolide/"), ("$high", "http://example.invalid/eli/x/consolide0")]);
 
     private static readonly (string Sql, (string, object)[] Parameters) WorkRecordsQuery =
-        (LuxembourgIndexQueries.WorkRecords, [("$after", "a"), ("$language", "fra"), ("$type", "LOI"), ("$take", 10)]);
+        (LuxembourgIndexQueries.WorkRecordsNine, [("$after", "a"), ("$language", "fra"), ("$type", "LOI"), ("$take", 10)]);
+
+    /// <summary>
+    /// One work's rows of a table whose primary key starts with the work key (index 9's states and its interval
+    /// transitions): one range of that key, never a scan, whatever the statistics say.
+    /// </summary>
+    private static IEnumerable<string> WorkRangeProblems(string label, string name, string table, string index, string[] plan)
+    {
+        var shown = $"{label}, {name}: {string.Join(" | ", plan)}";
+        if (plan.Any(line => Regex.IsMatch(line, $@"^SCAN {table}\b")))
+        {
+            yield return $"{table} is scanned for one work. " + shown;
+        }
+
+        if (!plan.Any(line => line.StartsWith($"SEARCH {table} USING INDEX {index} (work_key=?)", StringComparison.Ordinal)))
+        {
+            yield return $"one work's rows are not a range of {index} on the work key. " + shown;
+        }
+    }
 
     private static readonly (string Sql, (string, object)[] Parameters) EventsAfterQuery =
         (LuxembourgIndexQueries.EventsAfter, [("$after", 1L), ("$take", 10)]);
@@ -457,6 +482,8 @@ public sealed class LuxembourgIndexQueryPlanTests
             .Concat(SubjectFactsProblems("the index as built", Plan(connection, SubjectFactsQuery.Sql, SubjectFactsQuery.Parameters)))
             .Concat(SubjectFactsUnderProblems("the index as built", Plan(connection, SubjectFactsUnderQuery.Sql, SubjectFactsUnderQuery.Parameters)))
             .Concat(WorkRecordsProblems("the index as built", Plan(connection, WorkRecordsQuery.Sql, WorkRecordsQuery.Parameters)))
+            .Concat(WorkRangeProblems("the index as built", "CatalogueStatesOfWork", "states", "sqlite_autoindex_states_1", Plan(connection, CatalogueStatesQuery.Sql, CatalogueStatesQuery.Parameters)))
+            .Concat(WorkRangeProblems("the index as built", "IntervalsOfWork", "i", "sqlite_autoindex_intervals_1", Plan(connection, IntervalsQuery.Sql, IntervalsQuery.Parameters)))
             // The event pages are not asked of the fixture as built: its log holds one event, and the planner rightly
             // scans a one-row table rather than seek into it. They are held below, with no statistics and with
             // statistics shaped like a real log, which is where a pass from the start would cost something.
@@ -492,6 +519,7 @@ public sealed class LuxembourgIndexQueryPlanTests
                          "INSERT INTO sqlite_stat1 VALUES ('work_facts','sqlite_autoindex_work_facts_1','60000 20 4 2 1 1 1 1')",
                          "INSERT INTO sqlite_stat1 VALUES ('events','events_event_seq','9000 9000 1')",
                          "INSERT INTO sqlite_stat1 VALUES ('events','sqlite_autoindex_events_1','9000 9000 1 1')",
+                         "INSERT INTO sqlite_stat1 VALUES ('intervals','sqlite_autoindex_intervals_1','4000 2 1')",
                      ], true),
                  })
         {
@@ -524,6 +552,8 @@ public sealed class LuxembourgIndexQueryPlanTests
             problems.AddRange(SubjectFactsProblems(label, Plan(connection, SubjectFactsQuery.Sql, SubjectFactsQuery.Parameters)));
             problems.AddRange(SubjectFactsUnderProblems(label, Plan(connection, SubjectFactsUnderQuery.Sql, SubjectFactsUnderQuery.Parameters)));
             problems.AddRange(WorkRecordsProblems(label, Plan(connection, WorkRecordsQuery.Sql, WorkRecordsQuery.Parameters)));
+            problems.AddRange(WorkRangeProblems(label, "CatalogueStatesOfWork", "states", "sqlite_autoindex_states_1", Plan(connection, CatalogueStatesQuery.Sql, CatalogueStatesQuery.Parameters)));
+            problems.AddRange(WorkRangeProblems(label, "IntervalsOfWork", "i", "sqlite_autoindex_intervals_1", Plan(connection, IntervalsQuery.Sql, IntervalsQuery.Parameters)));
             problems.AddRange(EventsAfterProblems(label, Plan(connection, EventsAfterQuery.Sql, EventsAfterQuery.Parameters)));
             problems.AddRange(EventsOfNameAfterProblems(label, Plan(connection, EventsOfNameAfterQuery.Sql, EventsOfNameAfterQuery.Parameters)));
             problems.AddRange(WorkEventsUpToProblems(label, Plan(connection, WorkEventsUpToQuery.Sql, WorkEventsUpToQuery.Parameters)));
@@ -561,10 +591,22 @@ public sealed class LuxembourgIndexQueryPlanTests
             1,
             Occurrences(reader, "command.CommandText = LuxembourgIndexQueries.SubjectFactsUnder;"),
             "The reader does not run LuxembourgIndexQueries.SubjectFactsUnder exactly once, so the plan asked of it is not the plan it gets.");
+        foreach (var name in new[] { "WorkRecords", "HeldWorks", "StatesOfExpressions" })
+        {
+            Assert.AreEqual(
+                1,
+                Occurrences(reader, $"command.CommandText = _version == 9 ? LuxembourgIndexQueries.{name}Nine : LuxembourgIndexQueries.{name};"),
+                $"The reader does not run LuxembourgIndexQueries.{name}Nine on index 9 (and {name} before it) exactly once, so the plan asked of it is not the plan it gets.");
+        }
+
         Assert.AreEqual(
             1,
-            Occurrences(reader, "command.CommandText = LuxembourgIndexQueries.WorkRecords;"),
-            "The reader does not run LuxembourgIndexQueries.WorkRecords exactly once, so the plan asked of it is not the plan it gets.");
+            Occurrences(reader, "command.CommandText = LuxembourgIndexQueries.IntervalsOfWork;"),
+            "The reader does not run LuxembourgIndexQueries.IntervalsOfWork exactly once, so the plan asked of it is not the plan it gets.");
+        Assert.AreEqual(
+            1,
+            Occurrences(reader, "? LuxembourgIndexQueries.CatalogueStatesOfWork"),
+            "The reader does not run LuxembourgIndexQueries.CatalogueStatesOfWork exactly once on index 9, so the plan asked of it is not the plan it gets.");
         foreach (var name in new[] { "EventsAfter", "EventsOfNameAfter", "EventCount" })
         {
             Assert.AreEqual(

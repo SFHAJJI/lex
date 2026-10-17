@@ -79,11 +79,47 @@ public sealed class V3CorpusProvenanceMountTests
         DateOnly.ParseExact(date, "yyyy-MM-dd", CultureInfo.InvariantCulture).AddDays(days)
             .ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
 
-    /// <summary>The digest derivation as the answer states it, written out here from that sentence alone.</summary>
+    /// <summary>
+    /// The digest derivation as the answer states it, written out here from that sentence alone: state digest /2 on index 9,
+    /// over the row's own facts the answer carries in <paramref name="digestInputs"/>, and /1 without them.
+    /// </summary>
     private static string RecomputeStateDigest(
         string publisher, string workKey, string date, string expression, string workIri, string resourceIri, string language,
-        IEnumerable<string> profiles, IEnumerable<string> identities)
+        IEnumerable<string> profiles, IEnumerable<string> identities, JsonElement? digestInputs = null)
     {
+        if (digestInputs is { ValueKind: JsonValueKind.Object } inputs)
+        {
+            using var two = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
+            void Field(string value)
+            {
+                var bytes = Encoding.UTF8.GetBytes(value);
+                var length = new byte[4];
+                System.Buffers.Binary.BinaryPrimitives.WriteInt32BigEndian(length, bytes.Length);
+                two.AppendData(length);
+                two.AppendData(bytes);
+            }
+
+            string Input(string name) => inputs.GetProperty(name).ValueKind == JsonValueKind.Null ? "" : inputs.GetProperty(name).GetString()!;
+            Field("lex-v3-luxembourg-expression-state/2");
+            foreach (var value in new[] { publisher, workKey, date, Input("date_role"), Input("state_kind"), expression, workIri, resourceIri, language })
+            {
+                Field(value);
+            }
+
+            foreach (var name in new[] { "publisher_applicable_to", "publication_date", "text_status", "text_status_reason", "in_file_identity", "in_file_date", "entry_into_force", "translation_of" })
+            {
+                Field(Input(name));
+            }
+
+            var sortedProfiles = profiles.Order(StringComparer.Ordinal).ToArray();
+            var sortedIdentities = identities.Order(StringComparer.Ordinal).ToArray();
+            Field(sortedProfiles.Length.ToString(CultureInfo.InvariantCulture));
+            foreach (var profile in sortedProfiles) Field(profile);
+            Field(sortedIdentities.Length.ToString(CultureInfo.InvariantCulture));
+            foreach (var identity in sortedIdentities) Field(identity);
+            return Convert.ToHexStringLower(two.GetHashAndReset());
+        }
+
         using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
         void Append(string value)
         {
@@ -177,7 +213,8 @@ public sealed class V3CorpusProvenanceMountTests
         Assert.AreEqual(
             state.GetProperty("state_sha256").GetString(),
             RecomputeStateDigest("lu-legilux", row.WorkKey, row.Date, row.Expression, row.WorkIri, row.ResourceIri, row.Language,
-                JsonSerializer.Deserialize<string[]>(row.ProfilesJson)!, identities));
+                JsonSerializer.Deserialize<string[]>(row.ProfilesJson)!, identities, state.GetProperty("digest_inputs")));
+        Assert.AreEqual(V3CorpusMount.ProvenanceDerivationNine, body.GetProperty("derivation").GetString(), "an index 9 states digest /2");
 
         // The sources are the corpus members that hold the state's articles, each once, in digest order,
         // with what the corpus recorded for it. Several articles of one document are one source.
@@ -233,7 +270,8 @@ public sealed class V3CorpusProvenanceMountTests
                 state.GetProperty("applicability_date").GetString()!,
                 state.GetProperty("expression_iri").GetString()!, state.GetProperty("publisher_work_iri").GetString()!,
                 state.GetProperty("publisher_legal_resource_iri").GetString()!, state.GetProperty("language").GetString()!,
-                state.GetProperty("rule_profile_sha256s").EnumerateArray().Select(static p => p.GetString()!).ToArray(), callersList));
+                state.GetProperty("rule_profile_sha256s").EnumerateArray().Select(static p => p.GetString()!).ToArray(), callersList,
+                state.GetProperty("digest_inputs")));
         Assert.AreEqual(asOf.GetProperty("state_sha256").GetString(), state.GetProperty("state_sha256").GetString());
         Assert.AreEqual(asOf.GetProperty("permalink").GetString(), state.GetProperty("permalink").GetString());
         Assert.AreEqual(asOf.GetProperty("stable_coordinate").GetString(), state.GetProperty("stable_coordinate").GetString());

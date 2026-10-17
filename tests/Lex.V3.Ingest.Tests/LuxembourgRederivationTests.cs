@@ -35,6 +35,9 @@ public sealed class LuxembourgRederivationTests
     private const string Content1RuleSha256 = "dd32d9a59ea33b8c9e9cd51b7b2657a6fa2b716ad00e35db075416ba4cd38a9b";
     private const string Inventory4RuleSha256 = "8a011d874aed08b161d90c900d54e9ab26dd9f925ed37323e544e44b2056c63f";
     private const string Content2RuleSha256 = "bf3fea5a5229d1a9f035d8d56816bd054abee30591370dfc6fe62f154dfaef2d";
+
+    /// <summary>State digest /2's rule profile (index 9, S6), recomputed in Python from its text.</summary>
+    private const string State2RuleSha256 = LuxembourgIndexCatalogueStatesTests.PinnedStateRuleProfileSha256;
     private const string Policy1Sha256 = "a477f4f2e6e0468bc9069da742f6f34f248ec831e01277a40552cb1e5bad2abb";
 
     private static readonly DateTimeOffset DerivedAt = new(2026, 10, 17, 6, 0, 0, TimeSpan.Zero);
@@ -94,6 +97,7 @@ public sealed class LuxembourgRederivationTests
             {
                 new LuxembourgRederivationRule("lex-v3-luxembourg-akn-article-inventory-profile/4", Inventory4RuleSha256),
                 new LuxembourgRederivationRule("lex-v3-luxembourg-akn-legal-content-profile/2", Content2RuleSha256),
+                new LuxembourgRederivationRule("lex-v3-luxembourg-expression-state/2", State2RuleSha256),
             },
             LuxembourgRederivation.RulesOf(LuxembourgRederivation.Release1RuleSet).ToArray());
 
@@ -245,7 +249,7 @@ public sealed class LuxembourgRederivationTests
                     "the report states the path; a count belongs to the process that measured it");
                 Assert.IsFalse(derivation.TryGetProperty("publisherRequests", out _), "no constant count stands in for a measurement");
                 Assert.AreEqual(AcquisitionJournal.CurrentSource(), derivation.GetProperty("toolSource").GetString());
-                Assert.AreEqual(2, derivation.GetProperty("rules").GetArrayLength());
+                Assert.AreEqual(3, derivation.GetProperty("rules").GetArrayLength());
                 Assert.AreEqual(
                     $"Acquired by the Luxembourg acquisition whose catalog is {verified.CheckpointRef.Sha256}; re-derived from "
                     + $"that acquisition's custody under rule set lu-release-1 and admission policy {Policy1Sha256}, at the "
@@ -310,7 +314,7 @@ public sealed class LuxembourgRederivationTests
         Assert.AreEqual(Content1RuleSha256, verifiedUnder.GetProperty("content_profile_sha256").GetString());
         var rules = root.GetProperty("rules");
         Assert.AreEqual(LuxembourgRederivation.Release1RuleSet, rules.GetProperty("rule_set").GetString());
-        CollectionAssert.AreEqual(new[] { Inventory4RuleSha256, Content2RuleSha256 },
+        CollectionAssert.AreEqual(new[] { Inventory4RuleSha256, Content2RuleSha256, State2RuleSha256 },
             rules.GetProperty("profiles").EnumerateArray().Select(static rule => rule.GetProperty("sha256").GetString()).ToArray());
         Assert.AreEqual(Policy1Sha256, rules.GetProperty("admission_policy_sha256").GetString());
         Assert.AreEqual("as_acquired", rules.GetProperty("rights_resolution").GetString());
@@ -367,14 +371,19 @@ public sealed class LuxembourgRederivationTests
         var writesBefore = store.CreateCallCount;
         foreach (var (what, request, expected) in new (string, LuxembourgRederivationRequest, string)[]
                  {
-                     ("an altered inventory digest", Release1() with { Rules = [rules[0] with { Sha256 = new string('e', 64) }, rules[1]] },
+                     ("an altered inventory digest", Release1() with { Rules = [rules[0] with { Sha256 = new string('e', 64) }, rules[1], rules[2]] },
                          "no rule digest is substituted"),
-                     ("an altered content digest", Release1() with { Rules = [rules[0], rules[1] with { Sha256 = Inventory4RuleSha256 }] },
+                     ("an altered content digest", Release1() with { Rules = [rules[0], rules[1] with { Sha256 = Inventory4RuleSha256 }, rules[2]] },
                          "no rule digest is substituted"),
-                     ("the frozen content rule", Release1() with { Rules = [rules[0], new("lex-v3-luxembourg-akn-legal-content-profile/1", Content1RuleSha256)] },
+                     ("the frozen content rule", Release1() with { Rules = [rules[0], new("lex-v3-luxembourg-akn-legal-content-profile/1", Content1RuleSha256), rules[2]] },
                          "no rule digest is substituted"),
                      ("a missing rule", Release1() with { Rules = [rules[0]] }, "no rule digest is substituted"),
-                     ("a rule renamed", Release1() with { Rules = [rules[0] with { Profile = "lex-v3-luxembourg-akn-article-inventory-profile/5" }, rules[1]] },
+                     // Inputs written before index 9 named inventory /4 and content /2 only: they refuse, and no build runs them
+                     // under a state rule they did not name.
+                     ("the rule set as it was before state digest /2", Release1() with { Rules = [rules[0], rules[1]] }, "no rule digest is substituted"),
+                     ("an altered state digest rule", Release1() with { Rules = [rules[0], rules[1], rules[2] with { Sha256 = new string('d', 64) }] },
+                         "no rule digest is substituted"),
+                     ("a rule renamed", Release1() with { Rules = [rules[0] with { Profile = "lex-v3-luxembourg-akn-article-inventory-profile/5" }, rules[1], rules[2]] },
                          "no rule digest is substituted"),
                      ("an unknown rule set", Release1() with { RuleSet = "lu-release-2" }, "no rule set is substituted"),
                      ("an unregistered policy", Release1() with { AdmissionPolicySha256 = new string('a', 64) }, "no policy is substituted"),

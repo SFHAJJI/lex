@@ -1397,29 +1397,15 @@ public sealed class V3CorpusResolveMountTests
                     Assert.AreEqual(1, insert.ExecuteNonQuery());
                 }
                 identities.Sort(StringComparer.Ordinal);
-                var profiles = System.Text.Json.JsonSerializer.Deserialize<string[]>(sourceState.RuleProfilesJson)!;
-                var digest = LuxembourgIndexBuilder.StateSha256(
-                    workKey, applicabilityDate, expression,
-                    workIri, resourceIri, sourceState.Language,
-                    profiles, identities);
-                later = new LuxembourgIndexBuilder.StateRow(
-                    workKey, applicabilityDate, digest, expression,
+                // The new state, completed as its schema's builder writes it (its digest among the rest), with every
+                // other state's chain fields recomputed.
+                var added = new LuxembourgIndexBuilder.StateRow(
+                    workKey, applicabilityDate, "", expression,
                     workIri, resourceIri, sourceState.Language,
                     sourceState.RuleProfilesJson, System.Text.Json.JsonSerializer.Serialize(identities));
-                using (var insertState = connection.CreateCommand())
-                {
-                    insertState.CommandText = "INSERT INTO states VALUES($work,$date,$digest,$expression,$workIri,$resource,$language,$profiles,$identities)";
-                    insertState.Parameters.AddWithValue("$work", later.WorkKey);
-                    insertState.Parameters.AddWithValue("$date", later.ApplicabilityDate);
-                    insertState.Parameters.AddWithValue("$digest", later.StateSha256);
-                    insertState.Parameters.AddWithValue("$expression", later.ExpressionIri);
-                    insertState.Parameters.AddWithValue("$workIri", later.PublisherWorkIri);
-                    insertState.Parameters.AddWithValue("$resource", later.PublisherLegalResourceIri);
-                    insertState.Parameters.AddWithValue("$language", later.Language);
-                    insertState.Parameters.AddWithValue("$profiles", later.RuleProfilesJson);
-                    insertState.Parameters.AddWithValue("$identities", later.ArticleIdentitiesJson);
-                    Assert.AreEqual(1, insertState.ExecuteNonQuery());
-                }
+                later = LuxembourgIndexBuilderTests.RewriteStates(connection, ReadStates(connection).Append(added))
+                    .Single(row => string.Equals(row.ExpressionIri, expression, StringComparison.Ordinal) &&
+                                   string.Equals(row.ApplicabilityDate, applicabilityDate, StringComparison.Ordinal));
                 members = ReadMembers(connection);
                 articles = ReadArticles(connection);
                 states = ReadStates(connection);
@@ -1583,17 +1569,11 @@ public sealed class V3CorpusResolveMountTests
                     string.Equals(row.ExpressionIri, expressionIri, StringComparison.Ordinal));
                 var profiles = System.Text.Json.JsonSerializer.Deserialize<string[]>(state.RuleProfilesJson)!
                     .Append(profileSha256).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray();
-                var identities = System.Text.Json.JsonSerializer.Deserialize<string[]>(state.ArticleIdentitiesJson)!;
                 // The state digest is derived from its row, profiles included, and the reader checks it.
-                var digest = LuxembourgIndexBuilder.StateSha256(
-                    state.WorkKey, state.ApplicabilityDate, state.ExpressionIri, state.PublisherWorkIri,
-                    state.PublisherLegalResourceIri, state.Language, profiles, identities);
-                using var set = connection.CreateCommand();
-                set.CommandText = "UPDATE states SET rule_profiles_json=$profiles, state_sha256=$digest WHERE expression_iri=$expression";
-                set.Parameters.AddWithValue("$profiles", System.Text.Json.JsonSerializer.Serialize(profiles));
-                set.Parameters.AddWithValue("$digest", digest);
-                set.Parameters.AddWithValue("$expression", expressionIri);
-                Assert.AreEqual(1, set.ExecuteNonQuery());
+                LuxembourgIndexBuilderTests.RewriteStates(connection, ReadStates(connection).Select(row =>
+                    string.Equals(row.ExpressionIri, expressionIri, StringComparison.Ordinal)
+                        ? row with { RuleProfilesJson = System.Text.Json.JsonSerializer.Serialize(profiles) }
+                        : row));
             });
 
         /// <summary>Renames the publisher-minted id of the article with this id in one expression.</summary>
@@ -1698,29 +1678,19 @@ public sealed class V3CorpusResolveMountTests
                     Assert.AreEqual(1, insert.ExecuteNonQuery());
                 }
                 identities.Sort(StringComparer.Ordinal);
-                var profiles = System.Text.Json.JsonSerializer.Deserialize<string[]>(sourceState.RuleProfilesJson)!;
                 var stateDate = applicabilityDate ?? sourceState.ApplicabilityDate;
-                var digest = LuxembourgIndexBuilder.StateSha256(
-                    sourceState.WorkKey, stateDate, expression,
+                // A German expression of the same legal resource: under index 9 a translation of the French state, whose
+                // date and role it takes when it is dated as that state is; otherwise its own.
+                var added = new LuxembourgIndexBuilder.StateRow(
+                    sourceState.WorkKey, stateDate, "", expression,
                     sourceState.PublisherWorkIri, sourceState.PublisherLegalResourceIri, "deu",
-                    profiles, identities);
-                alternate = new LuxembourgIndexBuilder.StateRow(
-                    sourceState.WorkKey, stateDate, digest, expression,
-                    sourceState.PublisherWorkIri, sourceState.PublisherLegalResourceIri, "deu",
-                    sourceState.RuleProfilesJson, System.Text.Json.JsonSerializer.Serialize(identities));
-                using (var insertState = connection.CreateCommand())
+                    sourceState.RuleProfilesJson, System.Text.Json.JsonSerializer.Serialize(identities))
                 {
-                    insertState.CommandText = "INSERT INTO states VALUES($work,$date,$digest,$expression,$workIri,$resource,'deu',$profiles,$identities)";
-                    insertState.Parameters.AddWithValue("$work", alternate.WorkKey);
-                    insertState.Parameters.AddWithValue("$date", alternate.ApplicabilityDate);
-                    insertState.Parameters.AddWithValue("$digest", alternate.StateSha256);
-                    insertState.Parameters.AddWithValue("$expression", alternate.ExpressionIri);
-                    insertState.Parameters.AddWithValue("$workIri", alternate.PublisherWorkIri);
-                    insertState.Parameters.AddWithValue("$resource", alternate.PublisherLegalResourceIri);
-                    insertState.Parameters.AddWithValue("$profiles", alternate.RuleProfilesJson);
-                    insertState.Parameters.AddWithValue("$identities", alternate.ArticleIdentitiesJson);
-                    Assert.AreEqual(1, insertState.ExecuteNonQuery());
-                }
+                    DateRole = sourceState.DateRole,
+                    InFileDate = sourceState.InFileDate,
+                };
+                alternate = LuxembourgIndexBuilderTests.RewriteStates(connection, ReadStates(connection).Append(added))
+                    .Single(row => string.Equals(row.ExpressionIri, expression, StringComparison.Ordinal));
                 members = ReadMembers(connection);
                 articles = ReadArticles(connection);
                 states = ReadStates(connection);
@@ -2118,8 +2088,8 @@ public sealed class V3CorpusResolveMountTests
                 Assert.AreEqual(1, insert.ExecuteNonQuery());
             }
 
-            var events = LuxembourgIndexBuilderTests.RefreshGenesisEvents(connection, articles, states, bodyByObjectRef);
-            return LuxembourgIndexBuilder.HashLogicalRows(members, articles, states, titles, relations, facts, events);
+            _ = LuxembourgIndexBuilderTests.RefreshGenesisEvents(connection, articles, states, bodyByObjectRef);
+            return LuxembourgIndexBuilderTests.LogicalRowsOf(connection);
         }
 
         private static LuxembourgIndexBuilder.MemberRow[] ReadMembers(SqliteConnection connection)
@@ -2148,18 +2118,8 @@ public sealed class V3CorpusResolveMountTests
             return values.ToArray();
         }
 
-        private static LuxembourgIndexBuilder.StateRow[] ReadStates(SqliteConnection connection)
-        {
-            using var command = connection.CreateCommand();
-            command.CommandText = "SELECT work_key,applicability_date,state_sha256,expression_iri,publisher_work_iri,publisher_legal_resource_iri,language,rule_profiles_json,article_identities_json FROM states ORDER BY work_key,applicability_date,expression_iri,language";
-            using var reader = command.ExecuteReader();
-            var values = new List<LuxembourgIndexBuilder.StateRow>();
-            while (reader.Read()) values.Add(new(
-                reader.GetString(0), reader.GetString(1), reader.GetString(2), reader.GetString(3),
-                reader.GetString(4), reader.GetString(5), reader.GetString(6), reader.GetString(7),
-                reader.GetString(8)));
-            return values.ToArray();
-        }
+        private static LuxembourgIndexBuilder.StateRow[] ReadStates(SqliteConnection connection) =>
+            LuxembourgIndexBuilderTests.ReadStates(connection);
 
         private static LuxembourgIndexBuilder.WorkTitleRow[] ReadWorkTitles(SqliteConnection connection)
         {

@@ -67,6 +67,21 @@ internal static class LuxembourgIndexQueries
         """;
 
     /// <summary>
+    /// <see cref="HeldWorks"/> over index 9, whose states table also holds textless rows: the held rows only, so an IRI
+    /// names a held work exactly as it did before index 9.
+    /// </summary>
+    internal const string HeldWorksNine = """
+        SELECT s.publisher_legal_resource_iri, s.work_key
+        FROM states s
+        WHERE s.publisher_legal_resource_iri IN (SELECT value FROM json_each($iris)) AND s.text_status = 'held'
+        UNION
+        SELECT s.publisher_work_iri, s.work_key
+        FROM states s
+        WHERE s.publisher_work_iri IN (SELECT value FROM json_each($iris)) AND s.text_status = 'held'
+        ORDER BY 1, 2
+        """;
+
+    /// <summary>
     /// The forward edges of lane R4's edge table whose target is exactly one of a list of IRIs, with the citing article's
     /// publisher id, expression and language: the same rows the per-state query reads, read by their target. The list is
     /// walked and each IRI is looked up in the target index, then the citing article by primary key, so the cost is the
@@ -96,6 +111,38 @@ internal static class LuxembourgIndexQueries
         WHERE s.expression_iri IN (SELECT value FROM json_each($expressions))
         ORDER BY s.applicability_date, s.work_key, s.language, s.expression_iri, s.state_sha256
         """;
+
+    /// <summary><see cref="StatesOfExpressions"/> over index 9: its held rows only.</summary>
+    internal const string StatesOfExpressionsNine = """
+        SELECT s.work_key, s.applicability_date, s.state_sha256, s.expression_iri, s.publisher_work_iri,
+               s.publisher_legal_resource_iri, s.language, s.rule_profiles_json, s.article_identities_json
+        FROM states s
+        WHERE s.expression_iri IN (SELECT value FROM json_each($expressions)) AND s.text_status = 'held'
+        ORDER BY s.applicability_date, s.work_key, s.language, s.expression_iri, s.state_sha256
+        """;
+
+    /// <summary>
+    /// Index 9's state columns, in the order the reader reads a row: schema 8's nine, then the kind, the date's role, the
+    /// end and its source, the boundary, the publication date, the text status and its reason, the in-file identity and
+    /// date, the French expression a translation takes its interval from, <c>provisional</c>, and an act's catalogue entry
+    /// into force.
+    /// </summary>
+    internal const string StateColumnsNine =
+        "work_key,applicability_date,state_sha256,expression_iri,publisher_work_iri,publisher_legal_resource_iri,language," +
+        "rule_profiles_json,article_identities_json,state_kind,date_role,applicable_to,applicable_to_source,boundary," +
+        "publication_date,text_status,text_status_reason,in_file_identity,in_file_date,translation_of,provisional,entry_into_force";
+
+    /// <summary>
+    /// Every state row of one work in index 9, held or textless, in key order: a range of the states table's primary key,
+    /// whose first column is the work key, so its cost is the work's rows and never a scan.
+    /// </summary>
+    internal const string CatalogueStatesOfWork =
+        "SELECT " + StateColumnsNine + " FROM states WHERE work_key=$work ORDER BY applicability_date,expression_iri,language";
+
+    /// <summary>One work's interval transitions in chain order: a range of the interval table's primary key (work key, ordinal).</summary>
+    internal const string IntervalsOfWork =
+        "SELECT i.work_key,i.ordinal,i.kind,i.from_state_sha256,i.to_state_sha256,i.span_from,i.span_to " +
+        "FROM intervals i WHERE i.work_key=$work ORDER BY i.ordinal";
 
     internal const string ArticleIds = """
         SELECT DISTINCT a.publisher_id
@@ -169,6 +216,21 @@ internal static class LuxembourgIndexQueries
         "AND f.predicate='typeDocument' AND (f.object_value=$type OR substr(f.object_value,-(length($type)+1))='/'||$type))) " +
         "GROUP BY s.work_key ORDER BY s.work_key LIMIT $take";
 
+    /// <summary>
+    /// <see cref="WorkRecords"/> over index 9: the held rows only, in the listing and in its language filter, so a work and its
+    /// dates and counts are what they were before index 9 added textless rows.
+    /// </summary>
+    internal const string WorkRecordsNine =
+        "SELECT s.work_key," +
+        "json_group_array(DISTINCT s.publisher_work_iri),json_group_array(DISTINCT s.publisher_legal_resource_iri)," +
+        "json_group_array(DISTINCT s.language),MIN(s.applicability_date),MAX(s.applicability_date),COUNT(*) " +
+        "FROM states s " +
+        "WHERE s.text_status = 'held' AND ($after IS NULL OR s.work_key>$after) " +
+        "AND ($language IS NULL OR EXISTS (SELECT 1 FROM states l WHERE l.work_key=s.work_key AND l.language=$language AND l.text_status = 'held')) " +
+        "AND ($type IS NULL OR EXISTS (SELECT 1 FROM work_facts f WHERE f.subject_iri IN (s.publisher_work_iri,s.publisher_legal_resource_iri) " +
+        "AND f.predicate='typeDocument' AND (f.object_value=$type OR substr(f.object_value,-(length($type)+1))='/'||$type))) " +
+        "GROUP BY s.work_key ORDER BY s.work_key LIMIT $take";
+
     /// <summary>The event log's size and last sequence number, read from the primary key (the rowid).</summary>
     internal const string EventLog =
         "SELECT COUNT(*),coalesce(MAX(e.seq),0) FROM events e";
@@ -208,6 +270,11 @@ internal static class LuxembourgIndexQueries
     /// <summary>The event log's observations, in order.</summary>
     internal const string Observations =
         "SELECT o.observation,o.corpus_sha256,o.predecessor_index_sha256,o.first_seq,o.last_seq,o.built_at " +
+        "FROM observations o ORDER BY o.observation";
+
+    /// <summary>Log /3's observations (index 9), in order, with each one's derivation time.</summary>
+    internal const string ObservationsNine =
+        "SELECT o.observation,o.corpus_sha256,o.predecessor_index_sha256,o.first_seq,o.last_seq,o.built_at,o.derived_at " +
         "FROM observations o ORDER BY o.observation";
 
     /// <summary>
