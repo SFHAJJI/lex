@@ -82,10 +82,10 @@ three-field form, no date, no coverage line, and a footer whose advice line R50 
   none changed, `site.notAdvice` approved as R50 fixes it with three points for O4. They are named in the header
   comment of `live-chrome-fr.mjs`.
 - **Under O4, the lawyer's read** (R50, R22; recorded for the owner, not decided here): the dated search's sentence
-  (above, in both languages) is a public claim about what a search covered, and goes to the same read. And: J6's "conseil juridique" ships as R50
-  specifies it, against the French review's term T10, "consultation juridique" (loi modifiée du 10 août 1991, art. 2(2)),
-  which every other French entry follows; if O4 keeps T10, the sentence ends "et ce n’est pas une consultation
-  juridique". The review's two other points for the same read: J6 does not say "published" ("le texte publié de la
+  (above, in both languages) is a public claim about what a search covered, and goes to the same read. And: J6's
+  "conseil juridique" ships as R50 specifies it, against the French review's term T10, "consultation juridique" (loi
+  modifiée du 10 août 1991, art. 2(2)), which every other French entry follows; if O4 keeps T10, the sentence ends "et
+  ce n’est pas une consultation juridique". The review's two other points for the same read: J6 does not say "published" ("le texte publié de la
   loi" would), and says "ce qui s’applique à votre situation" for "whether or how it applies to your situation".
 - **Driver decisions** (reversible):
   - The home page is rendered by the server from the coverage answer, with the facts it shows, not the envelope, in the
