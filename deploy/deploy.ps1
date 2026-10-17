@@ -26,7 +26,17 @@ With -Apply, in order:
    not, the ranges are set again and read back once more, and the script stops if they still do not hold;
 5. the zero-traffic probe runs against the candidate's own URL (`web/scripts/deploy-probe.mjs --origin`), the browser
    probes included (`--browser`: the journey's real-mount steps through a browser; Chrome or Edge must be installed),
-   unless -SkipBrowserProbe says they are skipped;
+   unless -SkipBrowserProbe says they are skipped. Skipped, no browser is looked for or started, and only the HTTP
+   probes run: the release read back; `GET /` sending a reader who names no language to `/fr/`; the home page the
+   release image's own (as built, or as its renderer renders the candidate's coverage answer) with the CSP
+   (`frame-ancestors 'none'`), HSTS, `Referrer-Policy: no-referrer` and `nosniff`; the 404 page; the card at its stable
+   route; coverage from the release's corpus; the clock; an accented title; readiness and no synthetic preview; V2's
+   routes. Privacy cannot be observed on a remote revision either way (the release's image run holds it). The page
+   steps (each page held to its answer, its hydration, console, paint and keyboard path, every citation verified) are
+   then walked nowhere over the real mount: CI's journeys walk the fixture mounts only, and a release rehearsed with
+   `image-rehearsal.mjs --no-browser` walks none. On the driver's machine no browser may run (the owner's order of
+   2026-10-16), so a deployment from it runs with -SkipBrowserProbe; a browser walk of the private candidate from a
+   machine where a browser is allowed is the step left before the opening (STATUS-WEB.md);
 6. if the probe fails, the candidate revision is deactivated (the removal step) and the script exits non-zero.
 Promotion (moving traffic to the candidate) is printed for the owner and never run.
 
@@ -244,14 +254,14 @@ Step "probe the candidate"
 $browserProbe = if ($SkipBrowserProbe) { @() } else { @('--browser') }
 if (-not $Apply) {
     Write-Host "  > node web/scripts/deploy-probe.mjs --origin https://$AppName---candidate.<environment default domain> --release $releasePath --public-key $keyPath $($signerProbe -join ' ') $($browserProbe -join ' ')"
-    if ($SkipBrowserProbe) { Write-Host "  (the browser probes are skipped: -SkipBrowserProbe)" }
+    if ($SkipBrowserProbe) { Write-Host "  (the browser probes are skipped: -SkipBrowserProbe; only the HTTP probes would run, and no page of the candidate would be walked in a browser)" }
     Write-Host "== planned only: run again with -Apply to deploy (the owner's decision)"
     exit 0
 }
 $domain = az containerapp env show --ids $EnvironmentId --query properties.defaultDomain -o tsv
 $candidate = az containerapp show -g $ResourceGroup -n $AppName --query properties.latestRevisionName -o tsv
 $origin = "https://$AppName---candidate.$domain"
-if ($SkipBrowserProbe) { Write-Host "  the browser probes are skipped (-SkipBrowserProbe): only the HTTP probes run" }
+if ($SkipBrowserProbe) { Write-Host "  the browser probes are skipped (-SkipBrowserProbe): only the HTTP probes run, and no page of the candidate is walked in a browser" }
 & node (Join-Path $checkout 'web/scripts/deploy-probe.mjs') --origin $origin --release $releasePath --public-key $keyPath @signerProbe @browserProbe
 if ($LASTEXITCODE -ne 0) {
     # 6. The removal step: the candidate never carried traffic (or only the allowed addresses'), and is deactivated.
