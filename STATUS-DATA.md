@@ -19,7 +19,8 @@ Updated 2026-10-16.
   - R0's result is passed straight in and R1 drops its references to it, the frozen inventory and the frozen content once
     it has taken what the record names (the design's "drop R0's /3 and /1 once their digests match"; R0 matched them
     against its catalog when it reopened).
-  - It has no wire capability: its whole surface is a custody store, an acquisition result and a request.
+  - It holds no transport: its whole surface is a custody store, an acquisition result and a request. That is a property
+    of its code, which no signature check proves; zero traffic is measured (the bullet "Zero wire, measured" below).
 - **The record `lex-lu-rederivation/1`**, held in custody; its resource id is `ContentDerivedIdentity` over its bytes. It
   names no tool commit and no clock (a test re-derives at another `derived_at` and gets the same bytes and id).
   - `acquisition`: the catalog, the query checkpoint, the record set, the observed set, the final manifests, run
@@ -30,7 +31,8 @@ Updated 2026-10-16.
   - `rules`: the rule set `lu-release-1`, its profiles by name and digest (inventory /4 `8a011d87…`, content /2
     `bf3fea5a…`), the admission policy, `rights_resolution: as_acquired`.
   - `outputs`: the /4 and /2 population identities. `counts`: held bodies, rights dispositions, inventory dispositions,
-    content-consistency refusals, content dispositions, admitted articles. `publisher_requests: 0`.
+    content-consistency refusals, content dispositions, admitted articles. `publisher_session: none_on_this_path`: a
+    statement of what the path is, not a count (a count belongs to a process; the offline tool measures its own).
   - The fixture record (one synthetic consolidation) is 2,045 bytes; its digest moves with each fixture acquisition,
     whose catalog names fresh URNs.
 - **Wiring.**
@@ -49,13 +51,34 @@ Updated 2026-10-16.
   prints `luxembourg_rederivation=<sha>` for inputs /3.
 - **Clock and texts.** The served genesis, silence, upstream-health and as-observed texts no longer say built_at is when
   the build ran: built_at is the time the acquiring build read once its acquisition ended, an upper bound on observation,
-  which a derivation from custody keeps. The build report gains a `derivation` block: a statement naming the catalog
-  (and, for a resumed acquisition, its window and spend), `derivedAt`, the rule set and rules, the policy, the record,
-  the tool source and `publisherRequests: 0`.
+  which a derivation from custody keeps. The build report gains a `derivation` block: a statement naming the catalog,
+  for a resumed acquisition its window and both spends ("the resumed run had spent N publisher request(s) when it
+  catalogued, after at least M by the earlier run(s)": `WireSpent` is the resumed run's alone, the earlier runs' floor is
+  `PreviousWireSpentAtLeast`, and neither is added to the other), the rules and policy, "at the derivation time its inputs
+  state" (`derivedAt` is the inputs' stated time, never a clock read), and that the path holds no publisher session; then
+  the rule set and rules, the policy, the record, the tool source and `publisherSession: none_on_this_path`.
 - **Tamper checks.** R1 refuses an unimplemented rule set or digest, or a policy the set does not name; a held body the
   frozen inventory read that no longer reads as its digest; a record other than the sealed one; and R0 results that are
   refused, uncatalogued or already re-derived. No record is held for a refusal.
-- **Tests** (`LuxembourgRederivationTests`, 11, and one in `V3OfflineMountTests`), over a synthetic Akoma Ntoso
+- **Zero wire, measured** (the review's F1). A proxy trap sees only clients that use the default proxy, and the code base's
+  own session builds its handler with `UseProxy = false` (`RoutedHttpAcquisitionSession.CreatePinnedHandler`), so the
+  trap could not see the production transport, and the old signature check could not see a method body.
+  - `V3NetworkActivityListener` (Ingest) counts every socket connect (`System.Net.Sockets` `ConnectStart`), name resolution
+    (`System.Net.NameResolution` `ResolutionStart`) and HTTP request (`System.Net.Http` `RequestStart`) the process
+    starts, on any transport. A sentinel test proves it is not vacuous: a `UseProxy = false` client to a loopback stand-in
+    counts a connect and a request, and a resolution of `localhost` counts.
+  - In process, the end-to-end test runs `ApplyAsync`, and the inputs /3 test runs each `DeriveAsync`, inside the listener,
+    and requires zero.
+  - `V3OfflineProcess` is a process-wide guard (an `AppContext` switch): once entered, the session's one constructor,
+    through which every session on every transport is built, refuses. The tool's offline commands (`derive`,
+    `rederive-inputs`, `rederive-seal`) enter it before any work and run inside a listener; each prints
+    `offline_guard=on; network measured: …; publisher_requests=<n>` with `n` the measured total, and refuses with exit 5
+    when `n > 0` (a derive removes the directory it wrote; a rederive step removes its pointer). A test enters the guard
+    and shows the test transport refused before it sends anything.
+  - The separate-process tests now require the guard on and every count at zero in each command's own output. The older
+    derive trap tests (`V3OfflineMountTests` and `EuFirstMountAcquisitionResumeTests`) shared the trap's blind spot; they
+    read the same measured line now, through `RunOfflineCommandAsync`.
+- **Tests** (`LuxembourgRederivationTests`, 14, and one in `V3OfflineMountTests`), over a synthetic Akoma Ntoso
   consolidation served by the shared Luxembourg fixture in place of its PDF (every byte written in the test; no publisher
   file and none of the withheld fixtures). Content /1 reads one of its two articles (the other carries index terms); R1
   admits both.
@@ -68,8 +91,10 @@ Updated 2026-10-16.
   - Inputs /3 in process over an act range (/1) and over a population scope (/2, the dry run's shape): derive, seal,
     derive again, the same files as an in-process build over R1; six malformed inputs /3 refuse before writing anything.
   - Through the tool, each step in its own process with every proxy at a local trap: `rederive-inputs`, `derive`,
-    `rederive-seal`, `derive`, a wrong seal refused (exit 3), usage errors (exit 2); no connection reaches the trap, and
-    `derive` prints `publisher_requests=0`.
+    `rederive-seal`, `derive`, a wrong seal refused (exit 3), usage errors (exit 2); each command prints the guard on and a
+    measured zero, and no connection reaches the trap.
+  - A resumed acquisition (the legislative population replayed from a complete journal): R1 keeps R0's resumption, catalog
+    and scope manifest, and the report's statement is pinned with both spends.
   - R0's pins hold: the frozen rule digests (`70e92611…`, `dd32d9a5…`) are asserted, `LuxembourgAknFrozenReplayTests`
     passes unchanged, and a corpus built from the acquisition's own derivations writes no new header field.
   - Censuses: one new guarded type (the record) and its doors, `WithRederivation`, `WithLuxembourgRederivation`,
@@ -100,7 +125,33 @@ Updated 2026-10-16.
     inputs are never sealed again; the unsealed inputs stay in custody.
   - A body check compares with R0: a body /4 cannot read by its digest refuses unless /3 could not read it either (run 15:
     none); any body content /2 cannot read refuses.
-  - `V3OfflineMount` now holds two schema identifiers, so it moves from the census's declined list to the registry pin.
+  - `V3OfflineMount` now holds two schema identifiers, so it moves from the census's declined list to the registry pin;
+    `V3OfflineProcess` (one switch name) joins the declined list.
+  - **`verified_under` names no in-file rights reading /1.** The design lists reading /1's digest among the rules R0
+    verified under, but the reading has no rule profile and no digest in code (`LuxembourgInFileRightsReader.ReadAsync` is
+    pinned by its tests and by R0's query replay, not by a digest). The record does not mint one; S1 gives reading /2 a
+    profile and its digest, and S4r's record names it.
+  - **`profile_identities` carries no policy digest.** The design lists the policy among the profile identities; the
+    policy is named once, in the header's `luxembourg_rights_admission_policy`, beside the record it belongs to, and a
+    corpus without a re-derivation names none (it reads as policy /1).
+  - **The record and the report state the path, not a count** (`publisher_session`, `publisherSession`): both are written
+    in whatever process derives, and a count is a measurement of one process. The tool's `publisher_requests=<n>` is the
+    measurement.
+- **Review of #973** (one round; two material findings, both reproduced by the reviewer, both repaired in the review
+  commits; each mutation below was run in this worktree on the repaired code, then restored):
+  - F1, zero wire not measured: the reviewer's M1 (a GET built as the session builds its handler, `UseProxy = false`, from
+    inside `ApplyAsync`) passed every test. Now it fails 5 of 15: the end-to-end and resumed tests' listeners (socket
+    connects 1, HTTP requests 1), both inputs /3 rows, and the tool round trip, where `derive` exits 5 with
+    `publisher_requests=2`. Two guard mutations fail too: the constructor without its refusal fails
+    `AnOfflineProcessBuildsNoPublisherSession`, and the tool not entering the guard fails the tool round trip (exit 5,
+    `offline_guard=off`).
+  - F2, a resumed acquisition's spend understated: run 15's report would have said 21,972 requests where the acquisition
+    spent at least 25,092. The statement now names both spends apart. The reviewer's m3 (R1 dropping R0's resumption)
+    passed every test; now it fails `AReDerivationOfAResumedAcquisitionKeepsItsResumptionAndStatesBothSpends` ("R1 keeps
+    R0's resumption").
+  - The review's notes: the report gives the derivation time as the one the inputs state; the two deviations from the
+    design (`verified_under` without reading /1, `profile_identities` without the policy) are recorded as driver
+    decisions above.
 - **For the dry run.** `rederive-inputs` and a derive of inputs /3 write two small objects (the inputs and the record) into
   the custody they read, and a pointer file into its root; nothing else in custody is written. R1 parses each held XML body
   twice more (/4, /2), after R0's two, and holds content /2's tokens for about 270,000 articles through the builds; the
