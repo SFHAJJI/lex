@@ -183,16 +183,20 @@ test('the language menu leads to the same page in the other language, its articl
   assert.equal(sameDocumentIn('fr', '/locale-de.html'), '/fr/', 'a page under no language leads to the home page');
 });
 
-test("a law page's head names the address with no interface language as canonical, and the address in each language", () => {
+test("a law page's head names its address in the page's own interface language as canonical, and the address in each language and with none", () => {
   const article = `/eu-eurlex/32016R0679/2016-05-04--${DIGEST}/eng/047`;
-  assert.deepEqual(JSON.parse(JSON.stringify(lawPageLinks(article, 'https://law.soufien.lu'))), {
-    canonical: `https://law.soufien.lu${article}`,
-    alternates: [
-      { hrefLang: 'fr', href: `https://law.soufien.lu/fr${article}` },
-      { hrefLang: 'en', href: `https://law.soufien.lu/en${article}` },
-      { hrefLang: 'x-default', href: `https://law.soufien.lu${article}` },
-    ],
-  });
+  for (const locale of INTERFACE_LANGUAGES) {
+    assert.deepEqual(JSON.parse(JSON.stringify(lawPageLinks(article, 'https://law.soufien.lu', locale))), {
+      // A page that answers itself: the address with no interface language answers a redirect (the plan's item 3.6).
+      canonical: `https://law.soufien.lu/${locale}${article}`,
+      alternates: [
+        { hrefLang: 'fr', href: `https://law.soufien.lu/fr${article}` },
+        { hrefLang: 'en', href: `https://law.soufien.lu/en${article}` },
+        { hrefLang: 'x-default', href: `https://law.soufien.lu${article}` },
+      ],
+    }, locale);
+  }
+  for (const locale of [undefined, 'de', 'FR']) assert.throws(() => lawPageLinks(article, 'https://law.soufien.lu', locale), /under an interface language/, String(locale));
 });
 
 test('a wide table scrolls in a region of its own, in the tab order and named by the sentence above it', () => {
