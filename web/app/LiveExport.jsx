@@ -25,6 +25,7 @@ import { EuropeWordingHeading, QuoteEvidence, ReadingAnswerView, ReadingForm } f
 import { createReadingSession, quotationLanguageTag } from '../scripts/live-reading.mjs';
 import { EXPORT_FORMATS, LIVE_EXPORT_IDLE, exportState, formatRefused, pinKey, saveExport } from '../scripts/live-export.mjs';
 import { EUROPE_EXPORT_SCHEMA, asPublishedParagraph, exportJson } from '../scripts/export-build.mjs';
+import { citationLang } from '../scripts/citation.mjs';
 import { ENGLISH_LANG, countedEntry, fillText, liveChrome } from '../scripts/live-chrome.mjs';
 import { AsPublished, EuropeAnnexes, LiveAnswer, Permalink, Said, Say, StatusSentence, inEnglish } from './LiveAnswer.jsx';
 
@@ -43,7 +44,7 @@ function UsualCitation({ citations }) {
     <>
       <br />
       <span data-usual-citation="">
-        <Say template={COPY.usualCitation} values={{ citation: <span lang={quotationLanguageTag(citations.language)}>{citations.conventional}</span> }} />
+        <Say template={COPY.usualCitation} values={{ citation: <span lang={citationLang(citations.language)}>{citations.conventional}</span> }} />
       </span>
     </>
   );

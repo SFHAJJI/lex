@@ -16,8 +16,8 @@ import { readingOutcome } from "../scripts/live-reading.mjs";
 import { CITATION_ORIGIN, citationForms, citationWords, dateInWords, europeArticle, evidenceVerdict, luxembourgArticle } from "../scripts/citation.mjs";
 import { readEuropeEvidenceBundle, readEvidenceBundle, readEvidenceBundleAnswer } from "../scripts/reading-answer.mjs";
 import { AUTHENTICITY_SENTENCES } from "../scripts/as-published.mjs";
-import { CSV_COLUMNS, composeExport, exportCsv, exportJson } from "../scripts/export-build.mjs";
-import { exportPdf } from "../scripts/export-pdf.mjs";
+import { CSV_COLUMNS, composeEuropeExport, composeExport, exportCsv, exportJson } from "../scripts/export-build.mjs";
+import { exportPdf, pdfRefusal } from "../scripts/export-pdf.mjs";
 import { liveChrome } from "../scripts/live-chrome.mjs";
 import { assertTimeVocabulary } from "../scripts/publisher-vocabulary.mjs";
 import { europeBundle } from "../scripts/europe-bundle-sample.mjs";
@@ -370,6 +370,19 @@ test("the export keeps the evidence form: each item and exclusion carries the th
   const pdf = Buffer.from(exportPdf(model)).toString("latin1");
   assert.ok(pdf.includes("Citation \\(evidence form\\)"), "the PDF labels each item's evidence form");
   assert.ok(pdf.includes("Consult\\351 sur Lex le 2026-09-18 \\(Luxembourg\\)."), "and sets its lines, in the text's language");
+  assert.equal(pdfRefusal(model), null, "the French forms' characters are the standard fonts' (the no-break space, ’, é, °)");
+
+  // An EU export keeps its forms too, and its PDF is offered.
+  const eu = readEuropeEvidenceBundle(europeBundle());
+  const [wording] = eu.wordings;
+  const euModel = composeEuropeExport({
+    view: eu, observedAt: OBSERVED, registrySha256: "3".repeat(64),
+    pinned: [...wording.articles, ...wording.articlesWithoutText].map((article) => ({ wordingSha256: wording.wordingSha256, publisherId: article.publisherId })),
+  });
+  assert.equal(euModel.items[0].citations.conventional, "Article 1 of Regulation (EU) 2016/679, as at 27 April 2016");
+  assert.ok(euModel.excluded[0].citations.evidence.includes("Text digest (SHA-256): none, the article is held without text."));
+  assert.equal(pdfRefusal(euModel), null);
+  assert.ok(Buffer.from(exportPdf(euModel)).toString("latin1").includes("Published in: the Official Journal reference is not held by this index."));
 });
 
 test("the cited article at its permalink carries its three forms, in the text's language, under the page's labels", () => {

@@ -25,7 +25,7 @@ import { ArticleText, EuropeWordingHeading, QuoteEvidence } from './LiveReading.
 import { quotationLanguageTag } from '../scripts/live-reading.mjs';
 import { CHROME_LOCALE, fillText, liveChrome } from '../scripts/live-chrome.mjs';
 import { anchorText, currentAddress, permalinkHref } from '../scripts/permalinks.mjs';
-import { citationForms } from '../scripts/citation.mjs';
+import { citationForms, citationLang } from '../scripts/citation.mjs';
 
 const COPY = liveChrome().reading;
 
@@ -108,7 +108,7 @@ export function Citations({ view, version, article, observedAt }) {
   if (typeof observedAt !== 'string') return null;
   const forms = citationForms({ view, version, article, observedAt });
   if (forms === null) return null;
-  const lang = quotationLanguageTag(forms.language);
+  const lang = citationLang(forms.language);
   return (
     <section data-citation={forms.language}>
       <h3>{COPY.cite}</h3>

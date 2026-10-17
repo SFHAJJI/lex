@@ -45,7 +45,7 @@
 //
 // This module is data and pure functions only: the live pages' bundles, the export and the tests share it.
 
-import { fillText, liveChrome } from './live-chrome.mjs';
+import { CHROME_LOCALE, fillText, liveChrome } from './live-chrome.mjs';
 import { articlePermalink } from './permalinks.mjs';
 import { CANONICAL_HOST } from './routes.mjs';
 import { isCalendarDate, luxembourgDate } from './temporal.mjs';
@@ -76,6 +76,15 @@ const MEMORIAL_ISSUE = /^http:\/\/data\.legilux\.public\.lu\/eli\/etat\/leg\/mem
 
 /** A CELEX an EU act is numbered from: sector 3, its year, its type and its number. */
 const ACT_CELEX = /^3(\d{4})([RLD])0*(\d+)$/;
+
+/**
+ * The `lang` a citation is marked with on this bundle's pages: its text's language (`fr`, `en`), and none on a page in that
+ * language already, as a page marks no English on an English page.
+ */
+export function citationLang(language) {
+  const tag = CITATION_LANGUAGES[language];
+  return tag === undefined || tag === CHROME_LOCALE ? undefined : tag;
+}
 
 /** The words of a citation in a text's language, or null when no citation is composed in it. */
 export function citationWords(language) {
