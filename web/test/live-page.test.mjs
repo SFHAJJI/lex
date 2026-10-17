@@ -42,9 +42,10 @@ test("the tree the browser hydrates is the tree the server rendered (review of #
 
 test("the search page's server render is the tree the browser hydrates", () => {
   const html = renderLiveSearchPage();
-  const open = '<div id="live-search-root">';
+  const open = '<div id="live-search-root" data-variant="search">';
+  assert.ok(html.includes(open), "the root names its form, which the search script hydrates");
   const root = html.slice(html.indexOf(open) + open.length);
-  assert.ok(root.startsWith(renderToString(liveSearchTree())), "a hydration that changed the markup would re-render silently");
+  assert.ok(root.startsWith(renderToString(liveSearchTree("search"))), "a hydration that changed the markup would re-render silently");
   assert.match(html, new RegExp(`data-live="${LIVE_MARKER}"`), "the search page is a live page, under the live banner");
 });
 
@@ -101,12 +102,12 @@ test("the live build writes its own directory, embeds the contract and nothing e
   const url = new URL(`file:///${destination.replaceAll("\\", "/")}/`);
   try {
     await buildLive(url, { buildTag: "live-page-test" });
-    // The home page is the search screen under the site's introduction (UX spec section 2), hydrated by the search script.
+    // The home page (R47), hydrated by its own script; both servers render it from the coverage answer instead.
     // Every page stands under its interface language (R61): English under en/, beside fr/; the root holds no page.
     await assert.rejects(readFile(join(destination, "index.html")), "the root sends a reader to a language: no page stands there");
     const home = await readFile(join(destination, "en", "index.html"), "utf8");
     assert.match(home, /data-preview-state="live-home"/, "the English root is the home page");
-    assert.match(home, /<script src="\/en\/client-live-search.js" defer=""><\/script>/, "the home page is hydrated by the search script");
+    assert.match(home, /<script src="\/en\/client-live-home.js" defer=""><\/script>/, "the home page is hydrated by its own script");
     assert.match(home, new RegExp(`data-live="${LIVE_MARKER}"`));
     // Trust and Coverage, with its card, is coverage.html.
     const index = await readFile(join(destination, "en", "coverage.html"), "utf8");

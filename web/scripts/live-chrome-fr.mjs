@@ -51,6 +51,18 @@
 // second addendum of 2026-10-15 (14 forms, 1 changed in review: no comma before "ou" in `notFound.intro`; the reader's
 // request is a "demande", as on the refusal card's retry line, and "not an answer about the law" is "pas une réponse sur
 // le droit").
+// The home page and the sentence that says what Lex is not (the plan's items 4.1 and 6.8; R47, R52, R11, R13, R50):
+// `search.placeholder`, `search.dated`, `search.undated`, `site.notAdvice`, `site.authenticity` (the second sentence of the
+// withdrawn `site.advice`, unchanged), `home.aboutHeading`, `home.coverage`, `home.coverageUndated`, `home.acts`,
+// `home.versions` and `home.articles` (each `one` and `other`), `home.links` and `form.today`, and the search page's refusal
+// sentence for an EU act searched at a date, were reviewed by the same reviewer under the same delegation in the
+// addendum of 2026-10-16 (17 forms, none changed). `site.notAdvice` is J6's French as R50 fixes it, "conseil juridique"
+// included against T10's "consultation juridique": the lawyer's read settles it (the owner's item O4), with the two other
+// points the addendum records. In the review of #971 (the same addendum's section of 2026-10-17, 5 forms, none changed),
+// `search.dated` and `search.undated` were replaced to say what a dated search searched (the latest held version
+// applicable from the date or an earlier one, an act held only as published searched as published) and that only
+// Luxembourg acts were searched, and `search.noHitLuxembourg`, `search.luxembourgOnly` and `search.searchPage` say the
+// home page's box searches Luxembourg law and lead to the search page for an EU act.
 // No French entry ships unreviewed.
 //
 // Vocabulary: a work is an "acte" (a publisher's Cellar work, one record of an EU act, is an "œuvre de l’éditeur"), a
@@ -96,6 +108,12 @@ export const LIVE_CHROME_FR = Object.freeze({
     euWording: 'Chaque résultat se trouve dans le libellé original de {celex} que ce serveur détient en {language}, daté du {date} et épinglé par son empreinte : {permalink}',
     euHit: '{heading} de {celex}, libellé du {date}',
     notHeldHeading: 'Ce que cette recherche ne couvre pas',
+    placeholder: 'Rechercher par intitulé, numéro, ELI ou CELEX, ou par des mots du texte',
+    dated: 'Seuls des actes luxembourgeois ont été interrogés. Pour chacun, la dernière version que ce site détient qui est applicable à partir du {date} ou d’une date antérieure (éditeur) a été interrogée, et un acte sans une telle version ne l’a pas été. Un acte détenu uniquement tel que publié est interrogé tel que publié, et peut avoir été modifié depuis.',
+    undated: 'Seuls des actes luxembourgeois ont été interrogés, sans date : toutes les versions que ce site détient ont été interrogées, et chaque résultat indique la date de sa version.',
+    noHitLuxembourg: 'Aucun article du texte luxembourgeois que ce serveur détient et qu’il est autorisé à interroger ne contient « {query} ».',
+    luxembourgOnly: 'Cette recherche porte sur le droit luxembourgeois. Pour interroger un acte de l’UE, désignez-le par son numéro CELEX sur la {link}.',
+    searchPage: 'page de recherche',
   }),
   dossier: Object.freeze({
     title: 'Dossier',
@@ -467,7 +485,8 @@ export const LIVE_CHROME_FR = Object.freeze({
     radar: 'Modifications',
     export: 'Export',
     coverage: 'Ce que ce site détient',
-    advice: 'Documentation, et non consultation juridique. Les textes consolidés n’ont aucun effet juridique : seuls font foi les textes publiés au Journal officiel du Grand-Duché de Luxembourg (Mémorial A) et au Journal officiel de l’Union européenne.',
+    notAdvice: 'Lex montre le texte de la loi. Il ne dit pas ce qui s’applique à votre situation, et ce n’est pas un conseil juridique.',
+    authenticity: 'Les textes consolidés n’ont aucun effet juridique : seuls font foi les textes publiés au Journal officiel du Grand-Duché de Luxembourg (Mémorial A) et au Journal officiel de l’Union européenne.',
     sources: 'Les textes proviennent de Legilux et de l’Office des publications de l’Union européenne, tels que ce site les détient ; chaque article cité indique sa source officielle.',
   }),
   home: Object.freeze({
@@ -475,6 +494,22 @@ export const LIVE_CHROME_FR = Object.freeze({
     eyebrow: 'Rechercher dans le droit',
     heading: 'Le droit luxembourgeois et de l’UE à la date de votre choix',
     intro: 'Recherchez dans les textes que ce site détient, ouvrez un acte tel qu’il se présentait à la date de votre choix, voyez comment chaque article a changé, comparez deux dates et exportez avec des citations que chacun peut vérifier auprès de la source officielle. Lorsque ce site ne détient pas un texte ou une date, il le dit.',
+    aboutHeading: 'Ce qu’est Lex et ce qu’il n’est pas',
+    coverage: 'Ce site détient {acts} du droit luxembourgeois, en {versions} comptant {articles}, d’après l’index construit le {date}.',
+    coverageUndated: 'Ce site détient {acts} du droit luxembourgeois, en {versions} comptant {articles} ; l’index qu’il détient ne consigne aucune date de construction.',
+    acts: Object.freeze({
+      one: '{count} acte',
+      other: '{count} actes',
+    }),
+    versions: Object.freeze({
+      one: '{count} version',
+      other: '{count} versions',
+    }),
+    articles: Object.freeze({
+      one: '{count} article',
+      other: '{count} articles',
+    }),
+    links: 'Ailleurs sur ce site',
   }),
   failure: Object.freeze({
     line: 'Lex n’a pas pu mener à bien cette demande. Ce n’est pas une réponse sur le droit.',
@@ -536,6 +571,7 @@ export const LIVE_CHROME_FR = Object.freeze({
     phrase: 'Expression',
     date: 'Date',
     datePlaceholder: 'aaaa-mm-jj',
+    today: 'Aujourd’hui au Luxembourg : {date}.',
     articleIdPlaceholder: 'art_15',
     from: 'Du',
     to: 'Au',
@@ -578,6 +614,8 @@ export const REFUSALS_FR = Object.freeze({
       'Cet index ne contient aucun acte sous cet identifiant.',
     'That identifier names more than one held work or expression, so none is searched.':
       'Cet identifiant désigne plusieurs actes ou expressions détenus ; la recherche ne porte donc sur aucun d’eux.',
+    'An EU act is searched in the wording this server holds, not at a date: leave the date empty to search it.':
+      'Un acte de l’UE est interrogé dans le libellé que ce serveur détient, et non à une date : laissez la date vide pour l’interroger.',
     'This work is not held in the language asked for.':
       'Cet acte n’est pas détenu dans la langue demandée.',
     'That identifier names more than one held work, so no dossier is chosen.':

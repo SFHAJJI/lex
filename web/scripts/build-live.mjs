@@ -5,8 +5,8 @@
 // and this page's whole purpose is one request to the server it came from. The shell (stylesheet,
 // fonts, favicon) is the same, copied from `src/` with the generated tokens appended, as the
 // preview build does, at the root with the evaluation card. The pages stand under each interface language,
-// English under `en/` and French under `fr/` (R61): `index.html` (the home page: the search screen under
-// the site's introduction, script `client-live-search.js`), `coverage.html` (Trust and Coverage, script
+// English under `en/` and French under `fr/` (R61): `index.html` (the home page as built, script
+// `client-live-home.js`; both servers render it from the coverage answer instead), `coverage.html` (Trust and Coverage, script
 // `client-live.js`), `search.html` (search, script `client-live-search.js`), `dossier.html` (dossier,
 // script `client-live-dossier.js`), `reading.html` (reading, script `client-live-reading.js`),
 // `history.html` (provision history, script `client-live-history.js`), `compare.html` (compare, script
@@ -30,7 +30,7 @@ export const LIVE_DESTINATION = new URL("../dist-live/", import.meta.url);
 
 /** The live pages: each page's source, its renderer, the file it is written to, and its script. */
 const PAGES = Object.freeze([
-  ["live-search-page", "renderLiveHomePage", "index.html", "client-live-search-entry.jsx", "client-live-search.js"],
+  ["live-home-page", "renderLiveHomePage", "index.html", "client-live-home-entry.jsx", "client-live-home.js"],
   ["live-coverage-page", "renderLiveCoveragePage", "coverage.html", "client-live-entry.jsx", "client-live.js"],
   ["live-search-page", "renderLiveSearchPage", "search.html", "client-live-search-entry.jsx", "client-live-search.js"],
   ["live-dossier-page", "renderLiveDossierPage", "dossier.html", "client-live-dossier-entry.jsx", "client-live-dossier.js"],

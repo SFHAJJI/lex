@@ -23,6 +23,8 @@
 // is headed by its own date as a wording's (never an applicability date), and the acknowledgement and
 // authenticity statement Decision 95 requires stand above the text, as the platform words them (in
 // English, marked English on a page in another language).
+//
+// Between the form and the reading, the sentence that says what Lex is not (the specification of record's R50).
 
 import { useEffect, useRef, useState } from 'react';
 
@@ -418,6 +420,8 @@ export function LiveReading({ contract, fetchImpl, initial = null }) {
   return (
     <div>
       <ReadingForm key={pin === null ? 'blank' : pin.permalink} initial={pin?.request ?? null} onAsk={ask} />
+      {/* What Lex is not, above the text it shows (the specification of record's R50: Reading says it). */}
+      <p className="not-advice" data-not-advice="">{liveChrome().site.notAdvice}</p>
       <LiveAnswer>
         {replaced ? (
           <p data-pin-replaced="">

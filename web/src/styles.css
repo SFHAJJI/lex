@@ -561,6 +561,141 @@ blockquote.law {
   }
 }
 
+/* Beside a search's date field, today in Luxembourg (R13); under a search or a reading form, the sentence that says what
+   Lex is not (R50), set apart by a rule as well as by its place; the home page's coverage line (R11), what Lex is and is
+   not, and its links (R47). */
+.site-header ~ main .field-hint {
+  margin: -0.45rem 0 0;
+  color: #44554a;
+  font-size: 0.85rem;
+  line-height: 1.4;
+}
+
+.not-advice {
+  max-inline-size: 40rem;
+  padding-inline-start: 0.75rem;
+  border-inline-start: 3px solid #3f5d4a;
+  font-size: 0.95rem;
+  line-height: 1.5;
+}
+
+.search-scope {
+  max-inline-size: 40rem;
+  color: #44554a;
+  font-size: 0.9rem;
+  line-height: 1.5;
+}
+
+.coverage-line {
+  max-inline-size: 40rem;
+  color: #44554a;
+  font-size: 0.95rem;
+  line-height: 1.5;
+}
+
+.home-about {
+  display: grid;
+  gap: 0.4rem;
+  max-inline-size: 42rem;
+}
+
+.home-about h2 {
+  margin: 0;
+  font-family: "Source Serif 4", Georgia, serif;
+  font-size: 1.25rem;
+}
+
+.home-about p {
+  line-height: 1.55;
+}
+
+.home-links ul {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 1.25rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* The home page's form: the box across the row, then its date and its language side by side, then today and the
+   button, so the box and the sentence under the form are in view on a small phone (R47). */
+.site-header ~ main .search-home form {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  align-items: end;
+}
+
+.site-header ~ main .search-home form > label:first-child,
+.site-header ~ main .search-home form > .field-hint,
+.site-header ~ main .search-home form > button[type="submit"] {
+  grid-column: 1 / -1;
+}
+
+@media (prefers-color-scheme: dark) {
+  .site-header ~ main .field-hint,
+  .search-scope,
+  .coverage-line {
+    color: #b8c6bc;
+  }
+
+  .not-advice {
+    border-color: #a5c9b0;
+  }
+}
+
+/* On a phone the site's header and the home page's heading step down, so the box comes first and the sentence under
+   the form stays in view without scrolling (R47; measured at 320 by 640 CSS pixels by the journeys' home step). */
+@media (max-width: 30rem) {
+  .site-header {
+    gap: 0.35rem 1rem;
+    padding: 0.55rem 0.75rem;
+  }
+
+  .site-name {
+    font-size: 1.25rem;
+  }
+
+  .site-tagline {
+    font-size: 0.8rem;
+  }
+
+  .site-nav ul {
+    gap: 0.1rem 0.8rem;
+  }
+
+  .site-header .locale-nav ul {
+    gap: 0.1rem 0.6rem;
+  }
+
+  .site-nav {
+    font-size: 0.85rem;
+  }
+
+  .site-header .locale-nav {
+    font-size: 0.8rem;
+  }
+
+  .site-header ~ main {
+    padding-block: 1rem 1.5rem;
+  }
+
+  [data-preview-state="live-home"] main > .eyebrow {
+    display: none;
+  }
+
+  [data-preview-state="live-home"] main > h1 {
+    font-size: 1.3rem;
+  }
+
+  .site-header ~ main .search-home form {
+    gap: 0.6rem 0.75rem;
+  }
+
+  .site-header ~ main .search-home form > .field-hint {
+    margin-block-start: -0.3rem;
+  }
+}
+
 .shell-switcher {
   list-style: none;
   margin: 0;

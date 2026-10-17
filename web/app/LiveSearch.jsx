@@ -21,6 +21,14 @@
 // The form's controls carry no `name`: a submit the browser performs itself (before the bundle has
 // hydrated the page, or without it) then sends nothing, so the phrase never reaches the address bar,
 // the history or a referrer. Only the hydrated screen sends it, in a request body.
+//
+// The screen has two forms of one form (`variant`). The home page's (R47, R52) is the one box, with its
+// placeholder, a date field that starts at today, the calendar date in Luxembourg (R13), and the
+// language: a search across the Luxembourg works this server holds, at that date, which the line under
+// it says, with the way to an EU act (the search page). The search page's form adds the optional work
+// identifier, which is how an EU act is searched, and its date field starts empty (`live-search.mjs`
+// says why). Below either form, before any answer, the sentence that says
+// what Lex is not (R50), which the search results carry on both pages.
 
 import { useEffect, useRef, useState } from 'react';
 
@@ -32,8 +40,9 @@ import {
   SEARCH_LANGUAGES,
   SEARCH_QUERY_MAX,
   createSearchSession,
+  todayInLuxembourg,
 } from '../scripts/live-search.mjs';
-import { CHROME_LOCALE, ENGLISH_LANG, countedEntry, liveChrome } from '../scripts/live-chrome.mjs';
+import { CHROME_LOCALE, ENGLISH_LANG, countedEntry, fillText, liveChrome, livePath } from '../scripts/live-chrome.mjs';
 import { articlePermalink, permalinkHref } from '../scripts/permalinks.mjs';
 
 /** The forms' labels and buttons, and this screen's sentences, from the interface copy table. */
@@ -170,6 +179,19 @@ function Hit({ hit }) {
   );
 }
 
+/**
+ * The date a Luxembourg search was asked at, as its answer echoes it (R13: printed), or that none was: then every held
+ * version was searched. An EU answer names no date; its wording's date is said with the wording (`EuropeWording`).
+ */
+function SearchedOn({ view }) {
+  if (view.publisher === 'eu-eurlex') return null;
+  return (
+    <p data-searched-on={view.date ?? ''}>
+      {view.date === null ? COPY.undated : <Say template={COPY.dated} values={{ date: view.date }} />}
+    </p>
+  );
+}
+
 /** One search view, laid out: the hits and what they are, or the no-hit answer. */
 export function SearchResultsView({ view, onNextPage }) {
   const { population } = view;
@@ -188,12 +210,16 @@ export function SearchResultsView({ view, onNextPage }) {
           }}
         />
       </p>
+      <SearchedOn view={view} />
       <SearchWorkResolution resolution={view.workResolution} />
       {europe ? <EuropeWording view={view} /> : <AmbiguousWorks works={view.ambiguousWorks} date={view.date} />}
       {view.hits.length === 0 ? (
         <>
           {view.searchableTextHeld ? (
-            <p data-no-hit=""><Say template={COPY.noHit} values={{ query: view.query }} /> {inEnglish(asSentence(view.matching))}</p>
+            <p data-no-hit="">
+              {/* With no work named, a search is of Luxembourg law alone, and says so. */}
+              <Say template={view.identifier === null ? COPY.noHitLuxembourg : COPY.noHit} values={{ query: view.query }} /> {inEnglish(asSentence(view.matching))}
+            </p>
           ) : (
             <p data-no-hit="">
               <Say template={COPY.noText} values={{ language: view.language, languages: view.searchableLanguages.join(', ') }} />
@@ -252,16 +278,37 @@ export function SearchAnswerView({ outcome, onNextPage, onRetry }) {
   );
 }
 
+/** The two forms of the search form: the home page's one box, and the search page's with a work identifier. */
+export const SEARCH_VARIANTS = Object.freeze(['home', 'search']);
+
+/**
+ * The id of the line that says today beside the date field: a page holds one search form, and an id React mints
+ * (`useId`) is minted from the tree's root, which the server's render and the browser's hydration of the screen's root do
+ * not share.
+ */
+const TODAY_HINT = 'search-today';
+
 /**
  * The live screen: a form, and the state of the last search asked. A search is asked when the
  * reader submits (never while rendering, never on its own); the session (`createSearchSession`)
  * cancels the one in flight when another is asked, and unmounting cancels whatever is left.
  * `contract` and `fetchImpl` must be stable for the screen's life.
+ *
+ * `variant` is `home` (the one box; the date starts at today) or `search` (with the work identifier;
+ * the date starts empty). `today` is today's date in Luxembourg as the server said it when it rendered
+ * the page (the home page's facts), or null: then this browser's clock says it, once hydrated, by the
+ * same coded rule (`todayInLuxembourg`), and a home page's date field takes it unless the reader has
+ * already written in the field. What the field holds when the reader submits is what is sent.
  */
-export function LiveSearch({ contract, fetchImpl }) {
+export function LiveSearch({ contract, fetchImpl, variant = 'search', today = null }) {
+  if (!SEARCH_VARIANTS.includes(variant)) throw new Error(`the search form is the home page's or the search page's, not ${JSON.stringify(variant)}`);
+  const home = variant === 'home';
   const [query, setQuery] = useState('');
   const [language, setLanguage] = useState(SEARCH_LANGUAGES[0].code);
   const [identifier, setIdentifier] = useState('');
+  const [knownToday, setKnownToday] = useState(today);
+  const [date, setDate] = useState(home && today !== null ? today : '');
+  const dateWritten = useRef(false);
   const [outcome, setOutcome] = useState(IDLE);
   const session = useRef(null);
   if (session.current === null) {
@@ -270,13 +317,31 @@ export function LiveSearch({ contract, fetchImpl }) {
 
   useEffect(() => () => session.current.cancel(), []);
 
+  // Today, from this browser's clock, when no server said it: after hydration, so the page the server rendered is the
+  // page hydrated, and never the build's time.
+  useEffect(() => {
+    if (knownToday !== null) return;
+    const now = todayInLuxembourg();
+    if (now === null) return;
+    setKnownToday(now);
+    if (home && !dateWritten.current) setDate((current) => (current === '' ? now : current));
+  }, []);
+
+  // Today, said beside the date field: under it on the search page; on the home page, whose date and language share a
+  // row, under the two.
+  const todayHint = knownToday === null ? null : (
+    <p id={TODAY_HINT} className="field-hint" data-today={knownToday}>
+      {fillText(FORM.today, { date: knownToday })}
+    </p>
+  );
+
   return (
-    <div>
+    <div className={home ? 'search-home' : undefined}>
       <form
         role="search"
         onSubmit={(event) => {
           event.preventDefault();
-          session.current.ask({ query, language, identifier });
+          session.current.ask({ query, language, identifier: home ? '' : identifier, date });
         }}
       >
         <label>
@@ -284,21 +349,43 @@ export function LiveSearch({ contract, fetchImpl }) {
           <input
             type="search"
             value={query}
+            placeholder={COPY.placeholder}
             maxLength={SEARCH_QUERY_MAX}
             autoComplete="off"
             onChange={(event) => setQuery(event.target.value)}
           />
         </label>{' '}
+        {home ? null : (
+          <>
+            <label>
+              {FORM.workIdentifierOptional}{' '}
+              <input
+                type="text"
+                value={identifier}
+                autoComplete="off"
+                spellCheck={false}
+                onChange={(event) => setIdentifier(event.target.value)}
+              />
+            </label>{' '}
+          </>
+        )}
         <label>
-          {FORM.workIdentifierOptional}{' '}
+          {FORM.date}{' '}
           <input
             type="text"
-            value={identifier}
+            inputMode="numeric"
+            placeholder={FORM.datePlaceholder}
+            value={date}
             autoComplete="off"
-            spellCheck={false}
-            onChange={(event) => setIdentifier(event.target.value)}
+            data-search-date=""
+            aria-describedby={knownToday === null ? undefined : TODAY_HINT}
+            onChange={(event) => {
+              dateWritten.current = true;
+              setDate(event.target.value);
+            }}
           />
         </label>{' '}
+        {home ? null : todayHint}
         <label>
           {FORM.language}{' '}
           <select value={language} onChange={(event) => setLanguage(event.target.value)}>
@@ -309,8 +396,15 @@ export function LiveSearch({ contract, fetchImpl }) {
             ))}
           </select>
         </label>{' '}
+        {home ? todayHint : null}
         <button type="submit">{FORM.submit.search}</button>
       </form>
+      <p className="not-advice" data-not-advice="">{liveChrome().site.notAdvice}</p>
+      {home ? (
+        <p className="search-scope" data-search-scope="">
+          <Say template={COPY.luxembourgOnly} values={{ link: <a href={livePath('search.html')}>{COPY.searchPage}</a> }} />
+        </p>
+      ) : null}
       <LiveAnswer>
         <SearchAnswerView outcome={outcome} onNextPage={(after) => session.current.next(after)} onRetry={() => session.current.retry()} />
       </LiveAnswer>

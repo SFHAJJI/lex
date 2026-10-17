@@ -4,9 +4,9 @@ using System.Text.Json;
 namespace Lex.V3.Api;
 
 /// <summary>
-/// A law's address under an interface language, as the server renders it (the specification of record's R67): its
-/// language, the page (<c>reading</c>, <c>dossier</c>), and the operation and parameters the page itself would ask
-/// (<see cref="V3WebRoot.SitePageFor"/>).
+/// A law's address under an interface language, or that language's home page, as the server renders it (the specification
+/// of record's R67): its language, the page (<c>reading</c>, <c>dossier</c>, <c>home</c>), and the operation and parameters
+/// the page itself would ask (<see cref="V3WebRoot.SitePageFor"/>).
 /// </summary>
 internal sealed record V3SitePage(string Language, string Kind, string OperationId, IReadOnlyDictionary<string, string> Parameters)
 {

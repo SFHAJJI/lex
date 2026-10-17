@@ -113,7 +113,7 @@ internal sealed class V3PageRenderer : IDisposable
         };
 
     /// <summary>
-    /// The page <paramref name="kind"/> (<c>reading</c>, <c>dossier</c>) at <paramref name="path"/> in
+    /// The page <paramref name="kind"/> (<c>reading</c>, <c>dossier</c>, <c>home</c>) at <paramref name="path"/> in
     /// <paramref name="language"/>, rendered from <paramref name="envelopeJson"/> (the API's answer to the request the page
     /// itself would send); null when there is no renderer for the language, or the render waits too long, fails, is stopped
     /// or returns anything but a whole document.

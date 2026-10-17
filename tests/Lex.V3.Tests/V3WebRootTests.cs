@@ -409,6 +409,30 @@ public sealed class V3WebRootTests
             Assert.AreEqual(StatusCodes.Status200OK, head.Response.StatusCode);
             Assert.AreEqual("", Body(head), "HEAD carries the headers and no body");
             Assert.IsGreaterThan(0L, head.Response.ContentLength!.Value);
+
+            // An interface language's home page is rendered from the coverage answer, asked with no parameters as the page as
+            // built asks it once loaded (its coverage line and today in Luxembourg, R11 and R13), and served as built without one.
+            foreach (var home in new[] { "/en/", "/en/index.html" })
+            {
+                V3SitePage? homeAsked = null;
+                var rendered = Request("GET", home);
+                Assert.IsTrue(await root.TryServeAsync(rendered, home, CancellationToken.None, (page, _) =>
+                {
+                    homeAsked = page;
+                    return "{\"result\":{},\"refusal\":null}"u8.ToArray();
+                }), home);
+                Assert.AreEqual(StatusCodes.Status200OK, rendered.Response.StatusCode, home);
+                Assert.AreEqual($"<!doctype html><p>home answer {home}</p>", Body(rendered), $"{home}: the page rendered from the coverage answer");
+                AssertPageHeaders(root, rendered, home);
+                Assert.AreEqual("coverage", homeAsked!.OperationId, home);
+                Assert.AreEqual("home", homeAsked.Kind, home);
+                Assert.AreEqual(0, homeAsked.Parameters.Count, $"{home}: coverage takes no parameters from the page");
+
+                var asBuilt = Request("GET", home);
+                Assert.IsTrue(await root.TryServeAsync(asBuilt, home, CancellationToken.None, (_, _) => null), home);
+                Assert.AreEqual(StatusCodes.Status200OK, asBuilt.Response.StatusCode, home);
+                StringAssert.Contains(Body(asBuilt), "index", $"{home}: no answer, the page as built, which asks for itself");
+            }
         }
         finally
         {

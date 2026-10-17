@@ -10,13 +10,18 @@ import {
   NOT_FOUND_SAID,
   NOT_FOUND_STEP,
   RETRIED_SEARCH_STEP,
+  bodyOn,
   failurePageExpectations,
   journeyVerdict,
+  todayInLuxembourgAt,
 } from "../scripts/journey.mjs";
 import { cspValue } from "../scripts/csp.mjs";
 import { liveChrome } from "../scripts/live-chrome.mjs";
 
 const ORIGIN = "http://127.0.0.1:5000";
+
+/** Today in Luxembourg, which a home page's search (and the 404 page's, which is the home page's) sends. */
+const TODAY = todayInLuxembourgAt(Date.now());
 
 /** A run of `step` that did what the page must do: its document, its script, and `asks` requests to the API. */
 function observedAt(step, { pageStatus = 404, asks = 1, answerState = "success", text = "", retried } = {}) {
@@ -31,9 +36,10 @@ function observedAt(step, { pageStatus = 404, asks = 1, answerState = "success",
         method: "POST",
         headers: { "Content-Type": "application/json" },
         headersSent: true,
-        postData: JSON.stringify(step.body),
+        postData: JSON.stringify(bodyOn(step.body, TODAY)),
       })),
     ],
+    todays: [TODAY],
     console: [],
     storage: { local: 0, session: 0 },
     csp: cspValue(),
@@ -56,6 +62,7 @@ test("R60's runs: the 404 page searched with the fixture mount and with none, an
   assert.equal(NOT_FOUND_STEP.path, "/en/no-such-page");
   assert.equal(NOT_FOUND_STEP.notFound, true);
   assert.deepEqual(NOT_FOUND_STEP.body, JOURNEY_STEPS.home.body, "the 404 page's search asks what the home page's asks");
+  assert.equal(NOT_FOUND_STEP.frontDoor, false, "the 404 page offers the home page's search, not its front door");
   assert.equal(NOT_FOUND_SAID, liveChrome("en").notFound.heading, "the 404 page's own heading");
   assert.equal(FAILURE_LINE, liveChrome("en").failure.line, "the failure panel's own line");
   assert.deepEqual(RETRIED_SEARCH_STEP.body, JOURNEY_STEPS.search.body);

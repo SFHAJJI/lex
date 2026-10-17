@@ -1,8 +1,152 @@
 # Lex V3 status: the web lane
 
-Updated 2026-10-15. The web lane's progress, split out of STATUS.md (which keeps the heads, the owner's open
+Updated 2026-10-16. The web lane's progress, split out of STATUS.md (which keeps the heads, the owner's open
 items and the pointers) by the standing order of 2026-10-01 13:50 UTC. Every pull request of the web lane
 updates this file, not STATUS.md.
+
+## The home page, and the sentence that says what Lex is not (sole driver, 2026-10-16)
+
+The plan's items 4.1 (the home page) and 6.8 (the not-legal-advice sentence), to the specification of record's R47, R52,
+R11, R13 and R50. PR #955 made the home page the search screen under the site's introduction; it had the search page's
+three-field form, no date, no coverage line, and a footer whose advice line R50 replaces.
+- **One box** (R52): the home page's form is the one box, placeholder word for word "Search by title, number, ELI or
+  CELEX, or words from the text" (French: "Rechercher par intitulé, numéro, ELI ou CELEX, ou par des mots du texte"), a
+  date field and the language; the box is the first control of the page's content. The search page keeps the optional
+  work identifier, which is how an EU act is searched (`LiveSearch`'s `home` and `search` forms of one screen); the 404
+  page offers the home page's form.
+- **Today** (R13): the date field starts at the calendar date in Luxembourg, by the coded rule (`luxembourgDate`, plan
+  0.8): when the server renders the page, of the instant the API answered (the answer's `context.freshness.observed_at`);
+  on the page as built, of this browser's clock once hydrated (`todayInLuxembourg`); never the build's time. The line
+  under the field says it ("Today in Luxembourg: {date}." / "Aujourd’hui au Luxembourg : {date}."). It is sent as the
+  search's `date`, the platform's own parameter and the one date mechanism a search has (the reading form's date input,
+  extended to search): each Luxembourg work then contributes the version that applies on that date, and a named work is
+  answered as `as_of` answers it. The answer echoes it (`requested_date`) and the results print it, said of what this
+  site holds (since the review, below): "Only Luxembourg acts were searched. For each, the latest version this site
+  holds that is applicable from {date} or an earlier date (publisher) was searched, and an act with no such version was
+  not. An act held only as published is searched as published, and may have been amended since.", or with no date
+  "Only Luxembourg acts were searched, with no date: every version this site holds was searched, and each result names
+  its version's date." The request and the answer's echo are the search's trace; the date in the address is the plan's
+  item 3.5.
+- **The home page is rendered by the server** (R67, as a law's page is): both servers ask `coverage` for `/fr/`, `/en/`
+  and each one's `index.html` (`sitePageFor` in `permalinks.mjs`, `V3WebRoot.SitePageFor`, held to the shared table,
+  `site-paths.json`), render the page from that envelope (`ssr-entry.jsx`, kind `home`) and write into it the facts it
+  shows (`lex-home-facts`: today and the coverage line, a few values, never the envelope, whose capability cells run to
+  thousands of rows on a population), which the browser hydrates the same tree from, so the page asks nothing as it
+  loads. A page served as built (no renderer, or a render that failed) asks `coverage` once loaded. The deploy probe takes
+  `/fr/` as the release's own home page as built, byte for byte, or rendered: the built page's head byte for byte, its
+  script and its facts block (`isOwnHomePage`).
+- **The coverage line** (R11): "This site holds {acts} of Luxembourg law, in {versions} with {articles}, as of the index
+  built on {date}.", every count the answer's `totals` (works, states, articles), the date that of the build the mounted
+  log records as `mounted` (`history.snapshots_with_text`), in Luxembourg's calendar as today is. A log that records no
+  build says the counts and "the index it holds records no build date"; with no corpus mounted the line is the coverage
+  page's own sentence ("This build has no index mounted."); an answer the coverage reader refuses shows no line. The
+  coverage answer counts the Luxembourg mount only, so the line says nothing of EU counts, which no answer serves.
+- **What Lex is and is not**: the site's reviewed introduction under its own heading, and R50's sentence directly under
+  the box. **Links**: Changes (`radar.html`) and Trust and Coverage (`coverage.html`), by their pages' own names.
+  Developers and Get help have no live page, so nothing links to them (R52). **Nothing unserved** (R52): no assistant,
+  chip, toggle, basket or translation control; a test holds the page to it.
+- **No example searches.** They would have to come from what the mount serves, and neither the coverage answer nor
+  `browse` names a title or a text (browse names a work by its identifiers, "titles are served by dossier and resolve"),
+  so no example could be shown to land on held text without a literal the mount may not hold. None is shown; they come
+  when an answer serves them (next, below).
+- **On phones** (R47): the box first and the sentence under the form in view. The site's header and the home page's
+  heading step down under 30rem, and the home form sets its date and language side by side. Measured in Chrome with the
+  fixture's coverage answer (the bottom of the box, then of the sentence, in CSS pixels): English 333 and 591 at 320 by
+  640, 333 and 569 at 360 by 640 and at 390 by 844; French 387 and 623 at 320 by 640, 364 and 599 at 360 by 640. The
+  journeys' home step holds it at 320 by 640.
+- **R50's sentence** (6.8): "Lex shows the published text of the law. It does not tell you whether or how it applies to
+  your situation and is not legal advice." and J6's French, "Lex montre le texte de la loi. Il ne dit pas ce qui
+  s’applique à votre situation, et ce n’est pas un conseil juridique." (`site.notAdvice`), on the home page under the
+  box, above the search results on the home and search pages, above the text in Reading (as built, and at a permalink
+  as both servers render it), and first in the footer of every live page, where it replaces "Documentation, not legal
+  advice."; the footer's authenticity sentence stands on its own line (`site.authenticity`, unchanged words; R20
+  rewrites it). It stands outside the answer views, whose date-word test is about dates, not about applying the law.
+- **The search page's dates**: its date field starts empty, so the search a reader asks there is unchanged; a named
+  Luxembourg work and a date meet `as_of`'s refusals, said with the reading's reviewed sentences; an EU act and a date
+  meet the platform's `retrieval_mode_unavailable`, said as "An EU act is searched in the wording this server holds,
+  not at a date: leave the date empty to search it."
+- **No count is a literal** (R11): no test held the interface's words to it (`no-hit-card.test.mjs` holds a population's
+  count to its date). `no-literal-counts.test.mjs` refuses the pack's figures (1,402, 1,250, 24,579, 23,370, 24,622,
+  1,252, 2026-08-27, "August 2026", in any grouping) in both tables, the French refusal sentences, every refusal sentence
+  a screen says and every live page rendered; holds the tables to say a number only where its allowlist names a citation
+  of law or a statistical label; and holds the coverage line to the answer's counts exactly, the pack's own figures
+  included when an answer serves them.
+- **The journeys**: the home step (`frontDoor`) must arrive rendered (its facts block in the page's own bytes), with its
+  coverage line counted (with no mount, the no-mount line) and today in its date field; its search must send today
+  (`TODAY_IN_LUXEMBOURG` in the step's body, filled with the run's today at its start or end, so a run across midnight in
+  Luxembourg passes on either day); and at 320 by 640 the box must be the first control and it and the sentence under
+  it in view. The home, search, reading and permalink steps expect R50's sentence, the home step its coverage line and
+  its dated search, the search step its undated one. The 404 step keeps the home page's search, not its front door.
+- **French** (Decision 41): the 17 new forms (16 interface entries and the EU refusal sentence) were reviewed by Claude
+  (AI reviewer) under the owner's delegation in the addendum of 2026-10-16 of `C:\lex-v3\lanes\fr-review\review.md`:
+  none changed, `site.notAdvice` approved as R50 fixes it with three points for O4. They are named in the header
+  comment of `live-chrome-fr.mjs`.
+- **Under O4, the lawyer's read** (R50, R22; recorded for the owner, not decided here): the dated search's sentence
+  (above, in both languages) is a public claim about what a search covered, and goes to the same read. And: J6's
+  "conseil juridique" ships as R50 specifies it, against the French review's term T10, "consultation juridique" (loi
+  modifiée du 10 août 1991, art. 2(2)), which every other French entry follows; if O4 keeps T10, the sentence ends "et
+  ce n’est pas une consultation juridique". The review's two other points for the same read: J6 does not say
+  "published" ("le texte publié de la loi" would), and says "ce qui s’applique à votre situation" for "whether or how it
+  applies to your situation".
+- **Driver decisions** (reversible):
+  - The home page is rendered by the server from the coverage answer, with the facts it shows, not the envelope, in the
+    page; "server-rendered where the page is rendered, else on load" both hold.
+  - Today on a rendered page is the API's instant, on a page as built the browser's clock; the coverage line's date is
+    the mounted build's date in Luxembourg's calendar, so the two dates compare (R13: "When the index is older, both
+    dates are shown").
+  - The search page's date starts empty, the home page's at today: an EU act's search takes no date.
+  - "The one-line statement" (R47) is read as R50's sentence directly under the box; the header's tagline stays in view
+    on a phone too.
+  - The box's placeholder names ELI and CELEX as R52 words it; until the plan's item 4.2 (exact references first), an
+    identifier typed into the box is searched as words, and the search page's work identifier names a work.
+  - No example searches, until an answer serves examples that land on held text.
+  - The home page's box stays Luxembourg's (an empty identifier, as the 404 page's): its sentences say so, and a line
+    under it leads to the search page for an EU act; routing an identifier typed in the box is item 4.2.
+  - The deploy probe renders a served home page again with the release's own renderer, rather than recording that as
+    next: it is one function (`renderedHomePage`) over files the probe already holds.
+- **Review** (independent Claude subagent, PR #971): changes requested, three material findings, each reproduced, repaired
+  in one round.
+  - F1, the dated search's sentence overstated: "Searched the version of each act that applies on {date}" said a
+    version applies, where the search takes the latest held state on or before the date (`SelectAtDate`) and every
+    held Luxembourg act is held as first published, 273 of them with an end-of-force date before today (R21, R22, R76).
+    Repaired: the sentence says the latest version this site holds applicable from the date or an earlier one
+    (publisher), and that an act held only as published is searched as published and may have been amended since,
+    in R21's words and the as-published label's; `search.undated` names Luxembourg too. Both French forms were
+    reviewed (the addendum's section of 2026-10-17). The label on each hit is item 4.3's.
+  - F2, the deploy probe's `isOwnHomePage` passed any body with the built head, a script tag and the facts block's
+    opening tag, the facts never read: a swapped footer line, a root replaced by anything with empty facts, and a count
+    typed into the coverage line all passed. Repaired: `homePageFailures` holds everything outside the root's content
+    and the facts block to the built page byte for byte, reads the facts with `readHomeFactsValue`, and renders the page
+    again with the release's own `ssr/fr.js` from the probe's coverage answer on the facts' day, which must equal the
+    served page byte for byte; with no renderer or no answer it fails closed. Held on stand-ins (`deploy-probe.test.mjs`)
+    and on the real built renderer (`live-ssr.test.mjs`), where the page it renders passes and the four the review
+    found do not.
+  - F3, the home page's box searches Luxembourg law only and nothing said so, under a heading of Luxembourg and EU law
+    and a placeholder naming ELI and CELEX. Repaired: the dated and undated sentences say "Only Luxembourg acts were
+    searched", the no-hit sentence of a search naming no work says "the Luxembourg text", and a line under the home
+    page's box and the 404 page's says "This search covers Luxembourg law. To search within an EU act, name it by its
+    CELEX number on the search page." (French: "Cette recherche porte sur le droit luxembourgeois. Pour interroger un
+    acte de l’UE, désignez-le par son numéro CELEX sur la page de recherche."), below R50's sentence so the phone's
+    first screen is unchanged. No identifier is routed (item 4.2).
+  - The journeys' expectations follow the new wording (`homeTexts`, the search step); they were not run on this machine
+    for the repair (no browser runs here since 2026-10-16), so CI's journeys lane is their evidence.
+- **Not in this slice** (next): the as-published label on each hit of a search (item 4.3: the dated sentence says it
+  once, above the hits); the help block on high-stakes acts and the Get help page (plan 6.7, R50); examples served
+  by the API (coverage could name, per language, a held title the resolver maps to one work whose strict search finds
+  text, computed at build); the search in the address after `#` (3.5); EU counts on the home page once an answer counts
+  the EU index; today beside the index date on the other pages (3.4); exact references from the one box (4.2); a
+  Developers page and its link (8.x).
+- **Measured** (after the review's repair, with no browser run on this machine: since 2026-10-16 the owner's order keeps
+  every browser off it, and CI's journeys lane is the browser evidence): `npm run build` in `web`, then `node --test` over
+  every web test file but the three that start a browser (`keyboard-walk`, `launch-browser`, `paint-check`, which CI runs),
+  106 files, 1,172 of 1,172; `dotnet build Lex.V3.slnx -c Release`, 0 warnings, 0 errors; `Lex.V3.Tests` 3,175 passed, 6
+  skipped; in `Lex.V3.Ingest.Tests` the Census and `PublicRequestRecordingTests` classes 44 passed, 2 skipped (the slice
+  touches no Ingest class); `eng/verify-v3-tree.ps1` passes; the French review's checks, 17 forms and 209 checks, then the
+  repair's 5 forms and 64 checks, all pass. Before the review, on 2026-10-16, the journeys against an API published from
+  this branch passed (the fixture mount 49 of 49 through the live server and 49 of 49 by keyboard on the pages the API
+  serves, the licence-blocked mount 12 of 12, the two-state mount 2 of 2 and the EU annex mount 3 of 3 in both modes), and
+  the home page measured in Chrome at 320 by 640 kept the box and the sentence under it in view (English 333 and 591 px,
+  French 387 and 623 px); the repair adds its scope line below that sentence and changes no wording above it.
 
 ## One permalink shape: publisher, work, date and digest, language, article (sole driver, 2026-10-15)
 
@@ -4228,6 +4372,9 @@ Each is the driver's call under ruling 7 and can be reversed by a later pull req
 
 ## Waiting on others
 
+- The owner's item O4, the lawyer's read: R50's French as J6 gives it, "ce n’est pas un conseil juridique", against the
+  French review's term "consultation juridique" (T10), and the review's two other points on that sentence (the home
+  page, above, 2026-10-15). It ships as R50 specifies it until the read settles it.
 - The bounded real mount is available at
   `C:\lex-v3\first-mount-decision95-restart-20260930\v3-corpus`; the web lane's journeys run on it
   (PR #815). Its Luxembourg index is schema 6. The reader refused it from #864 until PR #878, which
