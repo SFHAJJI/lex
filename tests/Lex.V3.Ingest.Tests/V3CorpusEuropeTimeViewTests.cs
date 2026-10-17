@@ -47,7 +47,7 @@ public sealed class V3CorpusEuropeTimeViewTests
     }
 
     /// <summary>The original wording EU dossier pins in a language: its Formex act date and its permalink.</summary>
-    private static async Task<(string Date, string Permalink)> OriginalPinAsync(V3CorpusMount mount, string language)
+    internal static async Task<(string Date, string Permalink)> OriginalPinAsync(V3CorpusMount mount, string language)
     {
         var dossier = await EnvelopeAsync(mount, "/api/v3/dossier", "dossier", new { identifier = GdprSeed, language });
         Assert.IsNull(dossier.Refusal, dossier.Refusal?.Code);

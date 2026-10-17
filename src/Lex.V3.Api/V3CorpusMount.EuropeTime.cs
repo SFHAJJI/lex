@@ -55,7 +55,8 @@ internal sealed partial class V3CorpusMount
         "package entry (source_entry_sha256), its official source and an article permalink (the wording permalink and the publisher's provision " +
         "id as a last segment, which verify accepts); an article whose text is empty is named under articles_without_text and is not served as a quote; " +
         "the annexes the corpus classified on those members are listed under annexes_not_served, each served as text not available with the " +
-        "official source to read it, and never quoted; " + EuropePinnedPermalinkRule;
+        "official source to read it, and never quoted; next_date is the date of the next dated wording, whose text may or may not be held, and " +
+        "next_text_held says whether it is, in that language; " + EuropePinnedPermalinkRule;
 
     internal static readonly string[][] EuropeTimeBundleNotHeld =
     [
@@ -361,7 +362,7 @@ internal sealed partial class V3CorpusMount
         state.DateStatus == EuropeIndexStateDateStatus.OriginalWording ? "original_wording" : "consolidated_version";
 
     /// <summary>One dated wording as the time view serves it, with the works that share its date.</summary>
-    private object EuropeDatedRow(string seed, EuropeDatedWording entry, string? nextDate)
+    private object EuropeDatedRow(string seed, EuropeDatedWording entry, string? nextDate, bool? nextTextHeld)
     {
         var pin = entry.Answer is null ? ((string Sha256, string Permalink, IReadOnlyList<string> Provisions)?)null : EuropeStatePin(seed, entry.Answer, entry.Date);
         return new
@@ -380,6 +381,7 @@ internal sealed partial class V3CorpusMount
             stable_coordinate = pin is null ? null : EuropeStableCoordinate(pin.Value.Permalink),
             permalink = pin?.Permalink,
             next_date = nextDate,
+            next_text_held = nextTextHeld,
             same_date_works = EuropeSameDateWorks(entry),
         };
     }
@@ -595,7 +597,8 @@ internal sealed partial class V3CorpusMount
                     history_begins = ofLanguage.Dated.Count == 0 ? null : ofLanguage.Dated[0].Date,
                     wording_count = ofLanguage.Dated.Count,
                     wordings = ofLanguage.Dated
-                        .Select((entry, position) => EuropeDatedRow(seed, entry, position + 1 < ofLanguage.Dated.Count ? ofLanguage.Dated[position + 1].Date : null))
+                        .Select((entry, position) => EuropeDatedRow(seed, entry, position + 1 < ofLanguage.Dated.Count ? ofLanguage.Dated[position + 1].Date : null,
+                            NextTextHeldAfter(ofLanguage.Dated, position)))
                         .ToArray(),
                     unplaced_versions = ofLanguage.Unplaced.Select(unplaced => EuropeUnplacedRow(unplaced, null)).ToArray(),
                 };
@@ -612,12 +615,21 @@ internal sealed partial class V3CorpusMount
             new V3PlatformOperationResult(request, "timeline", result.RootElement));
     }
 
-    /// <summary>The selection of one language at one date, or why there is none.</summary>
+    /// <summary>
+    /// The selection of one language at one date, or why there is none. <see cref="NextTextHeld"/> says whether the next dated
+    /// wording's text is held in that language (null when there is no next wording): its date bounds the selection whether
+    /// or not its text is held (review of #972: a page said a later wording "is held" of one whose text is not).
+    /// </summary>
     private sealed record EuropeSelection(
         string Language,
         EuropeDatedWording? Entry,
         string? NextDate,
-        IReadOnlyList<(EuropeIndexState State, EuropeWordingCandidate? Held)> ConflictingUnplaced);
+        IReadOnlyList<(EuropeIndexState State, EuropeWordingCandidate? Held)> ConflictingUnplaced,
+        bool? NextTextHeld = null);
+
+    /// <summary>Whether the dated wording after <paramref name="position"/> has its text held in its language; null when there is none.</summary>
+    private static bool? NextTextHeldAfter(IReadOnlyList<EuropeDatedWording> dated, int position) =>
+        position + 1 < dated.Count ? dated[position + 1].Held.Count > 0 : null;
 
     private EuropeSelection EuropeSelectAt(EuropeLanguageTimeline ofLanguage, string requestedDate)
     {
@@ -642,7 +654,7 @@ internal sealed partial class V3CorpusMount
             ? Array.Empty<(EuropeIndexState State, EuropeWordingCandidate? Held)>()
             : ofLanguage.Unplaced.Where(unplaced => unplaced.Held is not null &&
                 !string.Equals(EuropeTextKeyOf(unplaced.Held.ExpressionId), answerText, StringComparison.Ordinal)).ToArray();
-        return new EuropeSelection(ofLanguage.Language, entry, next, conflicting);
+        return new EuropeSelection(ofLanguage.Language, entry, next, conflicting, NextTextHeldAfter(ofLanguage.Dated, index));
     }
 
     /// <summary>
@@ -779,7 +791,7 @@ internal sealed partial class V3CorpusMount
             states = answered.Select(selection => new
             {
                 language = selection.Language,
-                wording = EuropeDatedRow(seed, selection.Entry!, selection.NextDate),
+                wording = EuropeDatedRow(seed, selection.Entry!, selection.NextDate, selection.NextTextHeld),
                 unplaced_versions = timeline.ByLanguage[selection.Language].Unplaced
                     .Select(unplaced => EuropeUnplacedRow(unplaced, EuropeTextKeyOf(selection.Entry!.Answer!.ExpressionId)))
                     .ToArray(),
@@ -881,6 +893,7 @@ internal sealed partial class V3CorpusMount
                 language = candidate.Language,
                 wording_date = entry.Date,
                 next_date = selection.NextDate,
+                next_text_held = selection.NextTextHeld,
                 basis = entry.Basis,
                 wording_sha256 = pin.Sha256,
                 stable_coordinate = EuropeStableCoordinate(pin.Permalink),

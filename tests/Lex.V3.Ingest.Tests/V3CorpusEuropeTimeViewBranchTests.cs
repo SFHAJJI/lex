@@ -160,6 +160,43 @@ public sealed class V3CorpusEuropeTimeViewBranchTests
     }
 
     [TestMethod]
+    public async Task ANextWordingWhoseTextIsNotHeldInALanguageIsSaidSoBesideItsDate()
+    {
+        // Review of #972: the 2024-01-01 consolidation is held in French only. Its date bounds the original wording in both
+        // languages, but only the French reading may say a later wording is held; the English one says it is not.
+        var (root, directory) = await ConsolidatedWorksMountAsync(
+            new EuFirstMountAcquisitionTests.ConsolidatedWorkSpec(WorkB, ConsolidationDate, Designated, null, FrenchPackage));
+        try
+        {
+            using var mount = await V3CorpusMount.OpenAsync(directory, CancellationToken.None);
+            Assert.IsNotNull(mount);
+            foreach (var (language, held) in new[] { ("eng", false), ("fra", true) })
+            {
+                var (originalDate, permalink) = await OriginalPinAsync(mount, language);
+                var bundle = await EnvelopeAsync(mount, "/api/v3/evidence_bundle", "evidence_bundle", new { identifier = permalink, date = originalDate });
+                Assert.IsNull(bundle.Refusal, $"{language}: {bundle.Refusal?.Code}");
+                var wording = bundle.Result!.Value.GetProperty("wordings").EnumerateArray().Single();
+                Assert.AreEqual(ConsolidationDate, wording.GetProperty("next_date").GetString(), $"{language}: the next wording's date bounds the selection");
+                Assert.AreEqual(held, wording.GetProperty("next_text_held").GetBoolean(), $"{language}: whether its text is held in this language");
+
+                var asOf = await EnvelopeAsync(mount, "/api/v3/as_of", "as_of", new { identifier = GdprSeed, date = originalDate, language });
+                var row = asOf.Result!.Value.GetProperty("states").EnumerateArray().Single().GetProperty("wording");
+                Assert.AreEqual(held, row.GetProperty("next_text_held").GetBoolean(), $"{language}: as_of says it too");
+
+                var timeline = await EnvelopeAsync(mount, "/api/v3/timeline", "timeline", new { identifier = GdprSeed, language });
+                var wordings = timeline.Result!.Value.GetProperty("languages").EnumerateArray().Single().GetProperty("wordings").EnumerateArray().ToArray();
+                Assert.AreEqual(held, wordings[0].GetProperty("next_text_held").GetBoolean(), $"{language}: the timeline's first wording");
+                Assert.AreEqual(held, wordings[1].GetProperty("text_held").GetBoolean(), $"{language}: which the next row's text_held says");
+                Assert.AreEqual(JsonValueKind.Null, wordings[1].GetProperty("next_text_held").ValueKind, $"{language}: no wording after the latest");
+            }
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [TestMethod]
     public async Task AVersionWithNoUsableDateIsDisclosedWhenItsHeldTextIsTheSameAndMakesTheDatesAmbiguousWhenItDiffers()
     {
         var (sameRoot, sameDirectory) = await ConsolidatedWorksMountAsync(

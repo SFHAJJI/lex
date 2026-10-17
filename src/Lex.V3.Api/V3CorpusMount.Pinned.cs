@@ -401,7 +401,8 @@ internal sealed partial class V3CorpusMount
             language,
             entry with { Answer = match.Candidate },
             index + 1 < dated.Count ? dated[index + 1].Date : null,
-            Array.Empty<(Lex.V3.Ingest.Europe.EuropeIndexState State, EuropeWordingCandidate? Held)>());
+            Array.Empty<(Lex.V3.Ingest.Europe.EuropeIndexState State, EuropeWordingCandidate? Held)>(),
+            NextTextHeldAfter(dated, index));
         return null;
     }
 }

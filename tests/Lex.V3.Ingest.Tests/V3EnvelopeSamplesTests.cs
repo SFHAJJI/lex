@@ -35,6 +35,7 @@ public sealed class V3EnvelopeSamplesTests
     private static readonly string FixedCorpusDigest = new('a', 64);
     private static readonly string FixedIndexDigest = new('b', 64);
     private static readonly string FixedObjectRefDigest = new('c', 64);
+    private static readonly string FixedReceiptDigest = new('d', 64);
 
     [TestMethod]
     public async Task TheEnvelopeSamplesAreWhatTheHandlerSendsBesideTheReviewedContract()
@@ -49,6 +50,36 @@ public sealed class V3EnvelopeSamplesTests
         await using var cleanupEurope = europe;
         using var europeMount = await V3CorpusMount.OpenAsync(europe.Directory, CancellationToken.None);
         Assert.IsNotNull(europeMount);
+
+        // The EU time view on a mount whose 2024-01-01 consolidation is held in French only (review of #972): the English
+        // original wording's permalink, whose next wording's text this site does not hold in English. Captured first, so the
+        // derived mount is gone before the rest is asked.
+        JsonObject laterNotHeld;
+        var (branchRoot, branchDirectory) = await V3CorpusEuropeTimeViewTests.ConsolidatedWorksMountAsync(
+            new EuFirstMountAcquisitionTests.ConsolidatedWorkSpec(
+                V3CorpusEuropeTimeViewBranchTests.WorkB, V3CorpusEuropeTimeViewTests.ConsolidationDate, V3CorpusEuropeTimeViewBranchTests.Designated,
+                null, V3CorpusEuropeTimeViewBranchTests.FrenchPackage));
+        try
+        {
+            using var branchMount = await V3CorpusMount.OpenAsync(branchDirectory, CancellationToken.None);
+            Assert.IsNotNull(branchMount);
+            var (originalDate, originalPermalink) = await V3CorpusEuropeTimeViewTests.OriginalPinAsync(branchMount, "eng");
+            const string scenario = "an EU wording's permalink whose next wording's text is not held in its language: an answer, the wording it pins";
+            var parameters = new { identifier = originalPermalink, date = originalDate };
+            // The derived mount's corpus and index digests move from run to run (its custody mints its references), so they
+            // are read from a first answer and replaced in the one recorded, as every other mount's are.
+            var probe = (await CaptureAsync(FixedCorpusDigest, FixedIndexDigest, branchMount, "evidence_bundle", scenario, parameters))["envelope"]!;
+            laterNotHeld = await CaptureAsync(
+                probe["context"]!["snapshot"]!["snapshot_sha256"]!.GetValue<string>(),
+                probe["result"]!["value"]!["index_sha256"]!.GetValue<string>(),
+                branchMount, "evidence_bundle", scenario, parameters);
+            // Its custody records each body's receipt per run too.
+            WithFixed(laterNotHeld["envelope"]!, "body_receipt_sha256", FixedReceiptDigest);
+        }
+        finally
+        {
+            Directory.Delete(branchRoot, recursive: true);
+        }
 
         var envelopes = new JsonArray
         {
@@ -75,6 +106,7 @@ public sealed class V3EnvelopeSamplesTests
             // The reading at a permalink asks by the permalink itself (R64): the state it pins, or why not.
             await CaptureAsync(fixture, mount, "evidence_bundle", "a state's permalink at its own date: an answer, the state it pins", new { identifier = fixture.Permalink, date = fixture.ApplicabilityDate, language = "fra" }),
             await CaptureAsync(fixture, mount, "evidence_bundle", "a state's permalink whose digest is not the one held at its date: a refusal with the current link", new { identifier = fixture.PermalinkOf(new string('0', 64)), date = fixture.ApplicabilityDate, language = "fra" }),
+            laterNotHeld,
             await CaptureAsync(fixture, mount, "article_history", "one article of the work, in the language it is held in: an answer", new { identifier = $"/lu-legilux/{fixture.WorkKey}", anchor = "art_15", language = "fra" }),
             await CaptureAsync(fixture, mount, "article_history", "an article id no held state carries: a refusal with a payload", new { identifier = $"/lu-legilux/{fixture.WorkKey}", anchor = "art_44" }),
             await CaptureAsync(fixture, mount, "article_history", "a work the index does not hold: a refusal with a payload", new { identifier = "/lu-legilux/no-such-work", anchor = "art_15" }),
@@ -94,7 +126,9 @@ public sealed class V3EnvelopeSamplesTests
             ["note"] = "Whole REST envelopes the real handler sent, each verified by V3EnvelopeJson.ParseAndVerify before it was recorded, " +
                 "and the reviewed registry's contract a reader needs to verify one. The fixture's per-run corpus and index digests are replaced " +
                 $"by {FixedCorpusDigest[..8]}... and {FixedIndexDigest[..8]}... (same shape, every occurrence), and every object_ref_sha256 " +
-                $"(the corpus's per-run reference to the object holding a source's bytes) by {FixedObjectRefDigest[..8]}...; nothing else is edited. " +
+                $"(the corpus's per-run reference to the object holding a source's bytes) by {FixedObjectRefDigest[..8]}...; in the one envelope from a " +
+                $"mount derived from custody (the EU time view whose next wording's text is not held in English), every body_receipt_sha256 (that " +
+                $"custody's per-run receipt) by {FixedReceiptDigest[..8]}...; nothing else is edited. " +
                 "THE PRODUCER IS REAL AND THE MOUNT IS A FIXTURE.",
             ["contract"] = Contract(),
             ["envelopes"] = envelopes,
@@ -179,21 +213,24 @@ public sealed class V3EnvelopeSamplesTests
     /// references per run, so the evidence bundle's sources would otherwise differ between two runs of
     /// the same fixture. A value that is not a digest is left as it is, so the verification still sees it.
     /// </summary>
-    private static JsonNode WithFixedObjectRefs(JsonNode node)
+    private static JsonNode WithFixedObjectRefs(JsonNode node) => WithFixed(node, "object_ref_sha256", FixedObjectRefDigest);
+
+    /// <summary>Replaces every <paramref name="field"/> value that is a digest with <paramref name="fixedDigest"/>.</summary>
+    private static JsonNode WithFixed(JsonNode node, string field, string fixedDigest)
     {
         switch (node)
         {
             case JsonObject value:
                 foreach (var key in value.Select(static pair => pair.Key).ToArray())
                 {
-                    if (key == "object_ref_sha256" && value[key] is JsonValue digest &&
+                    if (key == field && value[key] is JsonValue digest &&
                         digest.TryGetValue<string>(out var text) && text.Length == 64 && text.All(Uri.IsHexDigit))
                     {
-                        value[key] = FixedObjectRefDigest;
+                        value[key] = fixedDigest;
                     }
                     else if (value[key] is { } child)
                     {
-                        WithFixedObjectRefs(child);
+                        WithFixed(child, field, fixedDigest);
                     }
                 }
 
@@ -201,7 +238,7 @@ public sealed class V3EnvelopeSamplesTests
             case JsonArray items:
                 foreach (var child in items)
                 {
-                    if (child is not null) WithFixedObjectRefs(child);
+                    if (child is not null) WithFixed(child, field, fixedDigest);
                 }
 
                 break;
