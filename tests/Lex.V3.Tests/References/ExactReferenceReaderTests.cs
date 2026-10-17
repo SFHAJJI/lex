@@ -185,6 +185,7 @@ public sealed class ExactReferenceReaderTests
     [DataRow("Code du travail, article L. 121-6, on March 15, 2021", nameof(ReferenceActForm.Title), "Code du travail", "L.121-6", "2021-03-15")]
     [DataRow("art. L. 121-6 du Code du travail", nameof(ReferenceActForm.Title), "Code du travail", "L.121-6", null)]
     [DataRow("article 5 de la loi du 10 août 1991 au 15 mars 2021", nameof(ReferenceActForm.TypeAndDate), "loi du 10 août 1991", "5", "2021-03-15")]
+    [DataRow("article 5 de la loi du 10 août 1991 au 1er janvier 1990", nameof(ReferenceActForm.TypeAndDate), "loi du 10 août 1991", "5", "1990-01-01")]
     [DataRow("article premier de la loi du 10 août 1991", nameof(ReferenceActForm.TypeAndDate), "loi du 10 août 1991", "1", null)]
     [DataRow("art. 1er du règlement grand-ducal du 13 octobre 2017", nameof(ReferenceActForm.TypeAndDate), "règlement grand-ducal du 13 octobre 2017", "1", null)]
     [DataRow("loi du 10 août 1991, art. 42ter", nameof(ReferenceActForm.TypeAndDate), "loi du 10 août 1991", "42ter", null)]

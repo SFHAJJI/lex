@@ -195,6 +195,12 @@ public sealed class V3RefusalPayloadSamplesTests
         await DriveAsync(observed, mount, "search", "a language not held", new { query = "loyer", language = "eng" }, "language_not_available");
         await DriveAsync(observed, mount, "search", "an identifier no work has", new { query = "loyer", language = "fra", identifier = unknown }, "identifier_unknown");
         await DriveAsync(observed, mount, "search", "a mode the index cannot serve", new { query = "loyer", language = "fra", mode = "bm25" }, "retrieval_mode_unavailable");
+        // search's exact references (the plan's item 4.2): every refusal of the phase says what was recognised.
+        await DriveAsync(observed, mount, "search", "an exact reference to an act this index does not hold: refused with no list", new { query = "Code du travail, article L. 121-6, 15 mars 2021", language = "fra" }, "identifier_unknown");
+        await DriveAsync(observed, mount, "search", "a citation of an article the version the date selects does not hold", new { query = "article 99 de la loi du 10 août 1991, 15 mars 2024", language = "fra" }, "anchor_not_in_version");
+        await DriveAsync(observed, mount, "search", "a citation at a date before the act's held history", new { query = "article 5 de la loi du 10 août 1991 au 1er janvier 1990", language = "fra" }, "no_version_for_date");
+        await DriveAsync(observed, mount, "search", "a citation at a date two states of the act share", new { query = $"article 5 de la loi du 10 août 1991, {twinDate}", language = "fra" }, "ambiguous_version");
+        await DriveAsync(observed, mount, "search", "a citation of an act in a language it is not held in", new { query = "article 5 de la loi du 10 août 1991, 15 mars 2024", language = "eng" }, "language_not_available");
         // search can answer one EU work, so on a mount with no EU index the missing corpus is the reason.
         await DriveAsync(observed, mount, "search", "a European identifier on a Luxembourg-only mount", new { query = "loyer", language = "fra", identifier = european }, "no_corpus_mounted");
 
@@ -396,18 +402,39 @@ public sealed class V3RefusalPayloadSamplesTests
             var everywhere = union.Where(key => keySets.All(keys => keys.Contains(key, StringComparer.Ordinal))).ToArray();
             // The richest payload seen is the sample: a reader held against it is held against every field any producer sends.
             var richest = members.OrderByDescending(static o => o.Payload.EnumerateObject().Count()).ThenBy(static o => o.Operation, StringComparer.Ordinal).First();
-            // "A reader held against the sample is held against every field any producer sends" is true only
-            // while one producer's payload holds every key another sends. Two producers with disjoint keys
-            // would put a key in optional_payload_keys and in no sample, where nothing could render it.
-            var missing = union.Except(richest.Payload.EnumerateObject().Select(static p => p.Name), StringComparer.Ordinal).ToArray();
-            Assert.IsEmpty(missing, $"{group.Key}: no single producer sends every key any producer sends ({string.Join(", ", missing)} is in no sample); the census needs a sample per key set for this code.");
-            produced.Add(new JsonObject
+            // "A reader held against the samples is held against every field any producer sends" holds only while
+            // every key is in a sample. When no one producer's payload holds every key another sends (search's exact
+            // references add what was recognised where diff adds its bound), the richest payload that carries a key
+            // still uncovered joins the samples (more_payloads), until every key is in one; a key in no sample fails.
+            var more = new List<Observation>();
+            var covered = richest.Payload.EnumerateObject().Select(static p => p.Name).ToHashSet(StringComparer.Ordinal);
+            while (union.FirstOrDefault(key => !covered.Contains(key)) is { } uncovered)
+            {
+                var next = members
+                    .Where(o => o.Payload.TryGetProperty(uncovered, out _))
+                    .OrderByDescending(static o => o.Payload.EnumerateObject().Count())
+                    .ThenBy(static o => o.Operation, StringComparer.Ordinal)
+                    .ThenBy(static o => o.Scenario, StringComparer.Ordinal)
+                    .First();
+                more.Add(next);
+                covered.UnionWith(next.Payload.EnumerateObject().Select(static p => p.Name));
+            }
+
+            var missing = union.Where(key => !covered.Contains(key)).ToArray();
+            Assert.IsEmpty(missing, $"{group.Key}: {string.Join(", ", missing)} is in no sample; the census needs a sample per key set for this code.");
+            var row = new JsonObject
             {
                 ["code"] = group.Key,
                 ["optional_payload_keys"] = new JsonArray(union.Except(everywhere, StringComparer.Ordinal).Select(static k => (JsonNode)k).ToArray()),
                 ["payload"] = JsonNode.Parse(richest.Payload.GetRawText()),
                 ["produced_by"] = new JsonArray(members.Select(static o => o.Operation).Distinct(StringComparer.Ordinal).Select(static o => (JsonNode)o).ToArray()),
-            });
+            };
+            if (more.Count > 0)
+            {
+                row["more_payloads"] = new JsonArray(more.Select(static o => JsonNode.Parse(o.Payload.GetRawText())).ToArray());
+            }
+
+            produced.Add(row);
         }
 
         var root = new JsonObject

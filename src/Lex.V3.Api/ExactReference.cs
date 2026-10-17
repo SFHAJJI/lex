@@ -136,7 +136,7 @@ internal static class ExactReferenceReader
         @"on|at|as\s+at|as\s+of|as\s+on|in\s+the\s+version\s+of|am|zum|stand)";
 
     private static readonly Regex DateClause = new(
-        @"^(?<head>.+?)(?:\s*,\s*(?:" + Preposition + @"\s+)?|\s+" + Preposition + @"\s+)(?<date>" + CitationDates.Shape + @")$",
+        @"^(?<head>.+?)(?:\s*,\s*(?:(?<prep>" + Preposition + @")\s+)?|\s+(?<prep>" + Preposition + @")\s+)(?<date>" + CitationDates.Shape + @")$",
         Options);
 
     // A citation word, then the number, then "of" and the act.
@@ -207,8 +207,9 @@ internal static class ExactReferenceReader
         }
 
         // A date clause at the end, then a citation with an article, or an act and the date. A date earlier than a type and
-        // date's own date is not a date to read the act at (no version of an act applies before it is made): it is part of
-        // the act's title ("… signée à Genève, le 23 septembre 1936"), and the whole text is read again as one act.
+        // date's own date, after a comma or "le" alone, is part of the act's title ("… signée à Genève, le 23 septembre
+        // 1936"), and the whole text is read again as one act; after a preposition that asks for a version ("au", "à la date
+        // du", "as at", "on"), it is the date asked, which no held version may answer.
         (ReferenceAct Act, string? ArticleAsTyped, ArticleNumber? Article)? found = null;
         string? dateAsTyped = null;
         if (DateClause.Match(text) is { Success: true } clause && CitationDates.IsDateShaped(clause.Groups["date"].Value))
@@ -216,7 +217,8 @@ internal static class ExactReferenceReader
             var head = clause.Groups["head"].Value.Trim().TrimEnd(',').Trim();
             dateAsTyped = clause.Groups["date"].Value.Trim();
             found = Citation(head) ?? (Act(head, allowTitle: true) is { } dated ? (dated, null, null) : null);
-            if (found is { } candidate && candidate.Act.ActDate is { } own &&
+            var asked = clause.Groups["prep"].Success && ArticleNumbers.Fold(clause.Groups["prep"].Value) != "le";
+            if (!asked && found is { } candidate && candidate.Act.ActDate is { } own &&
                 CitationDates.Read(dateAsTyped) is { } reading && string.CompareOrdinal(reading.Date, own.Date) < 0)
             {
                 found = null;
