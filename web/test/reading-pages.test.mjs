@@ -10,7 +10,8 @@ import test from "node:test";
 import { createElement as h } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 
-import { ExportAnswerView, ReadingAnswerView } from "../.react-build/app.mjs";
+import { ExportAnswerView, ReadingAnswerView, renderLiveReadingPage } from "../.react-build/app.mjs";
+import { syntheticReading } from "../scripts/reading-weight.mjs";
 import { readingOutcome } from "../scripts/live-reading.mjs";
 import { readingAddressShown } from "../scripts/initial-answer.mjs";
 import { assembleReading, hasNextPage, mergeReadingPage, nextPageRequest, pageAddress, pagesShown, readNextPage, showsWholeVersions, viewOf } from "../scripts/reading-pages.mjs";
@@ -187,4 +188,22 @@ test("an article the version does not hold is refused with the ids nearest it, a
   const permalink = ONE_PAGE.result.value.states[0].permalink;
   const lead = renderToStaticMarkup(h(PinnedLead, { outcome, pin: readingPinOf(`/en${permalink}/art_15-9`, NOT_HELD) }));
   assert.equal(lead, `<p data-pinned-lead="" data-article-not-held=""><a href="/en${permalink}">The whole act at this version</a></p>`);
+});
+
+test("the speed check of the stand-in for the codes: the first page of 3,000 articles is a small fraction of the whole (R73)", () => {
+  // The page budget (the plan's item 3.7; STATUS-WEB.md): a reading page weighs at most 400,000 bytes, about 3 per cent of the
+  // 12.9 MB a whole reading of 3,000 articles weighed, whatever the version's length; the measured page is about 260 KB.
+  const BUDGET = 400_000;
+  const envelope = syntheticReading(census, 3000, "page");
+  const [state] = envelope.result.value.states;
+  assert.equal(state.page.articles_in_version, 3000);
+  assert.equal(state.page.pages, 60);
+  const started = performance.now();
+  const html = renderLiveReadingPage({ initial: { envelope, path: `/fr${state.permalink}` } });
+  const elapsed = performance.now() - started;
+  const bytes = Buffer.byteLength(html, "utf8");
+  assert.ok(bytes < BUDGET, `the first page of 3,000 articles weighs ${bytes} bytes, over its budget of ${BUDGET}`);
+  assert.equal((html.match(/ data-article="/g) ?? []).length, 50, "one page of articles");
+  assert.ok(html.replaceAll("<!-- -->", "").includes("Page 1 of 60: art_1er to art_50."));
+  assert.ok(elapsed < 2_000, `rendered in ${Math.round(elapsed)} ms`);
 });
