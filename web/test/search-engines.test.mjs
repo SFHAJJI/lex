@@ -242,6 +242,14 @@ test("every live page names one robots noindex as built: the switch opens the ho
   assert.equal(canonicalOf(never["the home page as built"]), `${ORIGIN}/en/`);
   assert.equal(canonicalOf(opened.coverage), `${ORIGIN}/en/coverage.html`);
   for (const what of ["search", "export", "history", "the 404 page", "German"]) assert.equal(canonicalOf(never[what]), null, `${what}: no canonical`);
+  // A search's answer, an exact reference's refusal card among them (plan 4.2), is shown by script once a reader asks, its
+  // words in the address's fragment (R109), which no crawler sends: no page a server renders carries one but a law's
+  // refusal, which is never opened; and the search screens that show them, the search page and the 404 page, are never
+  // opened either, whatever their answer.
+  for (const [what, html] of [["the search page", never.search], ["the 404 page", never["the 404 page"]], ["the home page", opened.home], ["the home page as built", never["the home page as built"]]]) {
+    assert.ok(!html.includes('class="refusal-card"'), `${what}: no refusal card as served`);
+  }
+  for (const what of ["a refused reading", "a work the index does not hold"]) assert.ok(never[what].includes('class="refusal-card"'), `${what}: its card, never opened`);
 });
 
 test("a permalink showing the version its act's readable address shows today names that readable address canonical; any other version names itself (R67)", () => {
