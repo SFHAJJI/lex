@@ -107,9 +107,10 @@ Updated 2026-10-17.
   - `LuxembourgIndexBuilderTests`: the schema at /9; the fixed-input index (one held act, a textless consolidation, an
     interval, a derivation time) re-pinned to `46a9b1e7…`; the state tampers recomputed under digest /2; `Schema8Of`, a
     test-side rewrite of a built index 9 into schema 8's tables (held rows, digest /1, log /2), and
-    `ASchema8IndexIsStillReadExactlyAsSchema8CheckedIt` (seven tampers refused with schema 8's own reasons, and the rewrite
-    opens as schema 8 with no derivation time); the log /2 unit tests kept on log /2's projection, which reading an index 8
-    still runs.
+    `ASchema8IndexIsStillReadExactlyAsSchema8CheckedIt` over the multi-body fixture's index 9, every byte synthetic (seven
+    tampers refused with schema 8's own reasons, and the rewrite opens as schema 8 with no derivation time, its held states
+    only and none of index 9's fields); the log /2 unit tests kept on log /2's projection, which reading an index 8 still
+    runs.
   - `LuxembourgIndexQueryPlanTests`: the three held-row variants planned on the index as built, and the two work ranges
     (`CatalogueStatesOfWork`, `IntervalsOfWork`) held to a primary-key search, with no statistics and with statistics shaped
     like a real index; the reader is held to running exactly those texts.
@@ -117,8 +118,10 @@ Updated 2026-10-17.
     mount's schema-6 files still open and serve as before.
   - `LuxembourgRederivationTests`: `lu-release-1` names three rules; inputs naming the two rules from before S6, or an
     altered state rule, refuse; the record names the three profiles.
-  - `V3CorpusProvenanceMountTests`: digest /2 recomputed from the table's row facts; the /9 sentence pinned verbatim. The
-    mount fixture's state edits (`AddStateAsync`, the German state, the profile edit) go through a
+  - `V3CorpusProvenanceMountTests`: digest /2 recomputed from the table's row facts; the /9 sentence pinned verbatim.
+    `V3ReplayGuaranteesTests` (G5): the evidence bundle and the publisher file still give each article's text, the body,
+    text and identities digests; state digest /2 is recomputed from the bundle's values and the row facts after the
+    language, which the test reads from the mounted index until S7a carries them in the answer. The mount fixture's state edits (`AddStateAsync`, the German state, the profile edit) go through a
     shared `RewriteStates`, which completes each row as the builder would and recomputes the chain.
   - Census: the registries, the new guarded type (`CatalogueFacts`) and `TryReadLog`; candidates 272, guarded types 143.
   - The answer, envelope and refusal samples re-rendered (state digests /2, `log.derived_at`, the derivation sentence); the
@@ -209,7 +212,8 @@ Updated 2026-10-17.
     an expression whose legal resource spells no state keeps index 8's key.
 - **Not yet.** S7a: the interval selection for `as_of`, `in_force_on`, `as_observed`, `evidence_bundle` and `diff`, the
   refusals for textless states, unclear ends and invalid intervals, `provisional`, translations' labels, the state rows'
-  new fields (and with them a provenance chain a caller can recompute again), and the undated-search fold; S7b: timelines'
+  new fields (and with them a provenance chain a caller can recompute again: G5 from the answer alone), and the
+  undated-search fold; S7b: timelines'
   gaps and speech roles; S7c: the web, including the coverage row "history gives when each build ran" and the events page
   for textless rows; S8: gates and journeys over D1; S4b; the dry run, which measures index 9 over the real population.
 
