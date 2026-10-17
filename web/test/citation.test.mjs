@@ -311,6 +311,10 @@ test("an EU consolidation in French is cited in French, with its own CELEX and t
   // The provision's own heading, as the text prints it, its no-break spaces plain in a citation that is copied.
   const bis = europeConsolidation({ heading: `Article${NB}32${NB}bis` });
   assert.equal(citationForms({ view: bis.view, version: bis.wording, article: bis.article, observedAt: "2026-10-17T10:00:00Z" }).conventional, "Article 32 bis du règlement (UE) 2016/679");
+  // The narrow no-break space too (review of #975).
+  const NNB = String.fromCharCode(0x202f);
+  const narrow = europeConsolidation({ heading: `Article${NNB}32${NNB}bis` });
+  assert.equal(citationForms({ view: narrow.view, version: narrow.wording, article: narrow.article, observedAt: "2026-10-17T10:00:00Z" }).conventional, "Article 32 bis du règlement (UE) 2016/679");
   // A statement the table does not hold word for word is said as the platform served it.
   const other = europeConsolidation({ authenticity: "Another statement." });
   assert.equal(citationForms({ view: other.view, version: other.wording, article: other.article, observedAt: "2026-10-17T10:00:00Z" }).evidenceLines.at(-1), "Another statement.");
@@ -408,6 +412,32 @@ test("the export keeps the evidence form: each item and exclusion carries the th
   assert.ok(euModel.excluded[0].citations.evidence.includes("Text digest (SHA-256): none, the article is held without text."));
   assert.equal(pdfRefusal(euModel), null);
   assert.ok(Buffer.from(exportPdf(euModel)).toString("latin1").includes("Published in: the Official Journal reference is not held by this index."));
+});
+
+test("a title written with combining accents is cited composed, quoted as served, and set by the PDF as the letters it composes (review of #975)", () => {
+  // Four held règlements grand-ducaux of 2018 hold such titles; the PDF refused them, which no export did before the forms.
+  const decomposed = "Loi du 10 août 1991 relative à la procédure d’élection.".normalize("NFD");
+  assert.notEqual(decomposed, decomposed.normalize("NFC"), "the title is decomposed");
+  const answer = luxembourgAnswer((value) => {
+    value.citation_facts.titles = [{ language: "fra", expression_iri: value.states[0].expression_iri, titles: [{ title: decomposed, evidence_sha256: "1".repeat(64) }], short_titles: [] }];
+  });
+  const forms = luxembourgForms(answer, "art_15");
+  assert.equal(forms.conventional, "Art. 15 de la loi du 10 août 1991 relative à la procédure d’élection, dans sa version applicable au 1er février 2024",
+    "the usual form, copied, in its composed form, its title's words read after the type and date");
+  assert.equal(forms.withPermalink, forms.withPermalink.normalize("NFC"));
+  assert.ok(forms.evidenceLines.includes(`Intitulé (éditeur)${NB}: ${decomposed}`), "the evidence form quotes the title as served");
+
+  const view = readEvidenceBundle(answer);
+  const [state] = view.states;
+  const model = composeExport({ view, pinned: [{ stateSha256: state.stateSha256, publisherId: "art_15" }], observedAt: OBSERVED });
+  assert.ok(JSON.parse(exportJson(model)).items[0].citation_forms.evidence.includes(decomposed), "the JSON keeps the bytes as served");
+  assert.equal(pdfRefusal(model), null, "the PDF is offered");
+  const pdf = Buffer.from(exportPdf(model)).toString("latin1");
+  assert.ok(pdf.includes("proc\\351dure d\\222\\351lection."), "set as the composed letters WinAnsi holds");
+  assert.ok(pdf.includes("Accents written as combining marks are set here as the accented letters they compose"), "and the PDF says so");
+  // A text already composed adds no such note.
+  const plain = composeExport({ view: readEvidenceBundle(LU.result.value), pinned: [{ stateSha256: state.stateSha256, publisherId: "art_15" }], observedAt: OBSERVED });
+  assert.ok(!Buffer.from(exportPdf(plain)).toString("latin1").includes("Accents written as combining marks"));
 });
 
 test("the cited article at its permalink carries its three forms, in the text's language, under the page's labels", () => {

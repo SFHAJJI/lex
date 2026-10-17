@@ -14,9 +14,12 @@
 // It is written here, byte by byte, with no library: PDF 1.4, A4 pages, uncompressed content streams,
 // the standard Helvetica and Courier fonts in WinAnsiEncoding, no embedded font and no time of making,
 // so the same model always gives the same bytes. The standard fonts set Latin-1 and the few
-// typographic characters WinAnsi adds. Typographic spaces and hyphens outside that set are set as
-// plain spaces and hyphens, and the PDF says so when it did; any other character it cannot set makes
-// the PDF refused with the characters named (`pdfRefusal`), never replaced silently. The text digests
+// typographic characters WinAnsi adds. Each text is set in its composed form (Unicode NFC), so an accent
+// written as a combining mark (a publisher's title in decomposed form) is set as the accented letter it
+// composes, and the PDF says so when it did; the JSON and CSV keep the bytes as served. Typographic spaces
+// and hyphens outside that set are set as plain spaces and hyphens, and the PDF says so when it did; any
+// other character it cannot set makes the PDF refused with the characters named and the field that holds
+// them (`pdfRefusal`), never replaced silently. The text digests
 // are of the text as served, which the JSON export carries whole. The PDF is not tagged, so the
 // statute language of each text is not marked in it.
 //
@@ -78,15 +81,20 @@ const FONTS = Object.freeze({
   mono: Object.freeze({ resource: 'F2', width: () => 600 }),
 });
 
+/** The one sentence the PDF adds when it set accents written as combining marks as the letters they compose. */
+export const PDF_COMPOSITION_NOTE =
+  'Accents written as combining marks are set here as the accented letters they compose (Unicode NFC); each text digest is of the text as served.';
+
 /**
- * One text as WinAnsi bytes: `{bytes, substituted}`, or `{unsettable}` naming the characters the
- * standard fonts cannot set (as U+XXXX).
+ * One text as WinAnsi bytes, in its composed form (NFC): `{bytes, substituted, composed}`, or `{unsettable}` naming the
+ * characters the standard fonts cannot set (as U+XXXX). `composed` says the text was not in its composed form as served.
  */
 function encode(text) {
   const bytes = [];
   const unsettable = new Set();
   let substituted = false;
-  for (const char of text) {
+  const setAs = text.normalize('NFC');
+  for (const char of setAs) {
     const code = char.codePointAt(0);
     if ((code >= 0x20 && code <= 0x7e) || (code >= 0xa0 && code <= 0xff)) bytes.push(code);
     else if (WIN_ANSI_HIGH[code] !== undefined) bytes.push(WIN_ANSI_HIGH[code]);
@@ -95,7 +103,7 @@ function encode(text) {
       substituted = true;
     } else unsettable.add(`U+${code.toString(16).toUpperCase().padStart(4, '0')}`);
   }
-  return unsettable.size > 0 ? { unsettable: [...unsettable] } : { bytes, substituted };
+  return unsettable.size > 0 ? { unsettable: [...unsettable] } : { bytes, substituted, composed: setAs !== text };
 }
 
 /** The width, in points, of WinAnsi bytes set in one font and size. */
@@ -103,42 +111,29 @@ export function pdfTextWidth(bytes, font, size) {
   return bytes.reduce((sum, byte) => sum + FONTS[font].width(byte), 0) * size / 1000;
 }
 
-/** Every text the PDF sets for a model, as it will set them. */
-function textsOf(model) {
-  const texts = [model.watermark, model.identifier, model.rightsDisposition, model.rightsRule, model.observedAt, asPublishedParagraph(model.asPublished)];
-  for (const item of model.items) {
-    texts.push(item.publisherId, item.language, item.citation, item.officialSource, item.text, ...item.notes.flatMap((note) => [note.marker, note.text]));
-    if (item.citations !== null) texts.push(item.citations.evidence);
-  }
-  for (const entry of model.excluded) {
-    texts.push(entry.publisherId, entry.language, entry.citation, entry.statePermalink, entry.reason);
-    if (entry.citations !== null) texts.push(entry.citations.evidence);
-  }
-  return texts.map((text) => String(text).replace(/\r\n?/g, '\n').replaceAll('\n', ' '));
-}
-
 /**
- * Why this model cannot be set as a PDF (the characters the standard fonts cannot set), or null when
- * it can.
+ * Why this model cannot be set as a PDF, or null when it can: the characters the standard fonts cannot set, each under the
+ * field that holds them ("article art_15's text", "article art_15's evidence form", "the identifier asked"), read off the
+ * layout the PDF sets and off each page's head and foot (the watermark, the page's line, and an EU export's
+ * acknowledgement), so a refusal never lays the fault on a field that does not hold it.
  */
 export function pdfRefusal(model) {
-  const unsettable = model.schema === EUROPE_EXPORT_SCHEMA
-    ? europeUnsettable(model)
-    : new Set(textsOf(model).flatMap((text) => encode(text).unsettable ?? []));
-  return unsettable.size === 0 ? null : `its text holds characters the standard PDF fonts cannot set (${[...unsettable].join(', ')})`;
-}
-
-/**
- * The characters an EU export's PDF cannot set: what its layout sets, and what each page's head and
- * foot set besides (the watermark, the page's line and the acknowledgement).
- */
-function europeUnsettable(model) {
-  const unsettable = new Set();
-  europeLayout(model, unsettable);
-  for (const text of [model.watermark, pageLine(model, 1, 1), model.acknowledgement]) {
-    for (const code of encode(text).unsettable ?? []) unsettable.add(code);
-  }
-  return unsettable;
+  const unsettable = new Map();
+  const europe = model.schema === EUROPE_EXPORT_SCHEMA;
+  if (europe) europeLayout(model, unsettable);
+  else layout(model, unsettable);
+  const gather = (field, text) => {
+    for (const code of encode(text).unsettable ?? []) {
+      if (!unsettable.has(field)) unsettable.set(field, new Set());
+      unsettable.get(field).add(code);
+    }
+  };
+  gather('the watermark', model.watermark);
+  gather('the identifier asked', pageLine(model, 1, 1));
+  if (europe) gather('the acknowledgement', model.acknowledgement);
+  if (unsettable.size === 0) return null;
+  const fields = [...unsettable].map(([field, codes]) => `${field} (${[...codes].join(', ')})`);
+  return `it holds characters the standard PDF fonts cannot set, in ${fields.join('; ')}`;
 }
 
 /** The width a line takes on the page: its trailing spaces take none. */
@@ -190,29 +185,37 @@ function wrap(bytes, font, size, width) {
 
 /**
  * A layout as it is written: a list of lines (`{font, size, leading, bytes, indent}`) and gaps
- * (`{gap}`), which `add` and `gap` append and `done` closes with the substitution note when one is
- * due. A character the standard fonts cannot set throws; given `unsettable`, a Set, it is gathered
- * there instead and its paragraph left out, which is how an EU export's refusal is read off its layout.
+ * (`{gap}`), which `add` and `gap` append and `done` closes with the composition and substitution notes
+ * when they are due. A character the standard fonts cannot set throws; given `unsettable`, a Map, it is
+ * gathered there under the field the text was added for (`field`) instead and its paragraph left out,
+ * which is how a refusal is read off the layout (`pdfRefusal`).
  */
 function layoutWriter(unsettable = null) {
   const blocks = [];
   let substituted = false;
+  let composed = false;
   // A text's line breaks are its paragraphs; each is encoded and wrapped on its own.
   // `keep` is the height that must follow a heading on its page, so no heading ends a page alone.
-  const add = (text, { font = 'sans', size = 10, leading = size * 1.3, indent = 0, label = '', keep = 0 } = {}) => {
+  const add = (text, { font = 'sans', size = 10, leading = size * 1.3, indent = 0, label = '', keep = 0, field = "the export's own lines" } = {}) => {
     for (const paragraph of `${label}${text}`.replace(/\r\n?/g, '\n').split('\n')) {
       const encoded = encode(paragraph);
-      if (encoded.unsettable && unsettable === null) throw new Error(`the PDF cannot set ${encoded.unsettable.join(', ')}`);
+      if (encoded.unsettable && unsettable === null) throw new Error(`the PDF cannot set ${encoded.unsettable.join(', ')}, in ${field}`);
       if (encoded.unsettable) {
-        for (const code of encoded.unsettable) unsettable.add(code);
+        if (!unsettable.has(field)) unsettable.set(field, new Set());
+        for (const code of encoded.unsettable) unsettable.get(field).add(code);
         continue;
       }
       substituted ||= encoded.substituted;
+      composed ||= encoded.composed;
       for (const bytes of wrap(encoded.bytes, font, size, PDF_TEXT_WIDTH - indent)) blocks.push({ font, size, leading, bytes, indent, keep });
     }
   };
   const gap = (height) => blocks.push({ gap: height });
   const done = () => {
+    if (composed) {
+      gap(12);
+      add(PDF_COMPOSITION_NOTE, { size: 9 });
+    }
     if (substituted) {
       gap(12);
       add(PDF_SUBSTITUTION_NOTE, { size: 9 });
@@ -229,10 +232,10 @@ function sentence(text) {
 }
 
 /** An item's or exclusion's citation, its evidence form line by line under a label, or nothing for a text no citation is composed in. */
-function addCitation(add, citations) {
+function addCitation(add, citations, subject) {
   if (citations === null) return;
   add('Citation (evidence form)', { size: 9 });
-  add(citations.evidence, { size: 9, indent: 12 });
+  add(citations.evidence, { size: 9, indent: 12, field: `${subject}'s evidence form` });
 }
 
 /** The line at the foot of a page: its number, and what was asked. */
@@ -240,15 +243,18 @@ function pageLine(model, number, count) {
   return `Page ${number} of ${count}. ${model.identifier}, read on ${model.date}.`;
 }
 
-/** The layout of a Luxembourg export (`lex-v3-export/1`). */
-function layout(model) {
-  const { add, gap, done } = layoutWriter();
+/**
+ * The layout of a Luxembourg export (`lex-v3-export/1`). With `unsettable`, the characters the fonts cannot set are
+ * gathered there, by field (`layoutWriter`).
+ */
+function layout(model, unsettable = null) {
+  const { add, gap, done } = layoutWriter(unsettable);
   const total = model.items.length + model.excluded.length;
   add('Lex V3 export', { size: 16, leading: 22 });
-  add(`Asked: ${model.identifier}, read on ${model.date}. The answering snapshot was observed at ${model.observedAt}.`);
-  add(`Text served under ${model.rightsDisposition}. ${sentence(model.rightsRule)}`);
+  add(`Asked: ${model.identifier}, read on ${model.date}. The answering snapshot was observed at ${model.observedAt}.`, { field: 'the identifier asked' });
+  add(`Text served under ${model.rightsDisposition}. ${sentence(model.rightsRule)}`, { field: 'the rights rule' });
   // An act held only as first published says so, with its later versions and its authenticity sentence (item 0.6).
-  if (model.asPublished !== null) add(asPublishedParagraph(model.asPublished));
+  if (model.asPublished !== null) add(asPublishedParagraph(model.asPublished), { field: 'the as-published paragraph' });
   add(`${total} ${total === 1 ? 'article' : 'articles'} pinned: ${model.items.length} exported with text, ${model.excluded.length} excluded.`);
   gap(4);
   add('Verified by', { size: 9 });
@@ -257,32 +263,34 @@ function layout(model) {
   add(model.verifiedBy.registrySha256, { font: 'mono', size: 8, label: 'registry ' });
 
   for (const item of model.items) {
+    const subject = `article ${item.publisherId}`;
     gap(12);
-    add(`${item.publisherId} (${item.language}, applying from ${item.appliesFrom})`, { size: 12, leading: 16, keep: 120 });
-    add(item.citation, { font: 'mono', size: 8, label: 'citation        ' });
-    add(item.statePermalink, { font: 'mono', size: 8, label: 'state           ' });
+    add(`${item.publisherId} (${item.language}, applying from ${item.appliesFrom})`, { size: 12, leading: 16, keep: 120, field: `${subject}'s heading` });
+    add(item.citation, { font: 'mono', size: 8, label: 'citation        ', field: `${subject}'s permalink` });
+    add(item.statePermalink, { font: 'mono', size: 8, label: 'state           ', field: `${subject}'s state permalink` });
     add(item.textSha256, { font: 'mono', size: 8, label: 'text sha-256    ' });
     add(item.bodySha256, { font: 'mono', size: 8, label: 'body sha-256    ' });
-    add(item.officialSource, { font: 'mono', size: 8, label: 'official source ' });
-    add(`Rights: ${item.rightsDisposition}.`, { size: 9 });
+    add(item.officialSource, { font: 'mono', size: 8, label: 'official source ', field: `${subject}'s official source` });
+    add(`Rights: ${item.rightsDisposition}.`, { size: 9, field: `${subject}'s rights` });
     if (item.validityConflict) {
       add(`This article's own date is ${item.articleValidFrom}; its state applies from ${item.appliesFrom}.`, { size: 9 });
     }
     gap(3);
-    add(item.text);
-    for (const note of item.notes) add(`[${note.marker}] ${note.text}`, { size: 9, indent: 12 });
+    add(item.text, { field: `${subject}'s text` });
+    for (const note of item.notes) add(`[${note.marker}] ${note.text}`, { size: 9, indent: 12, field: `${subject}'s notes` });
     gap(3);
-    addCitation(add, item.citations);
+    addCitation(add, item.citations, subject);
   }
 
   if (model.excluded.length > 0) {
     gap(12);
     add('Excluded', { size: 12, leading: 16, keep: 40 });
     for (const entry of model.excluded) {
-      add(`${entry.publisherId} (${entry.language}, applying from ${entry.appliesFrom}): excluded, ${entry.reason}.`);
-      add(entry.citation, { font: 'mono', size: 8, label: 'citation ' });
-      add(entry.statePermalink, { font: 'mono', size: 8, label: 'state    ' });
-      addCitation(add, entry.citations);
+      const subject = `excluded article ${entry.publisherId}`;
+      add(`${entry.publisherId} (${entry.language}, applying from ${entry.appliesFrom}): excluded, ${entry.reason}.`, { field: subject });
+      add(entry.citation, { font: 'mono', size: 8, label: 'citation ', field: `${subject}'s permalink` });
+      add(entry.statePermalink, { font: 'mono', size: 8, label: 'state    ', field: `${subject}'s state permalink` });
+      addCitation(add, entry.citations, subject);
     }
   }
   return done();
@@ -291,7 +299,7 @@ function layout(model) {
 /**
  * The layout of an EU export (`lex-v3-export-eu/1`). Each item and exclusion is dated as its wording
  * is: the original or the consolidated wording of its date, never a date it applies from. With
- * `unsettable`, the characters the fonts cannot set are gathered there (`layoutWriter`).
+ * `unsettable`, the characters the fonts cannot set are gathered there, by field (`layoutWriter`).
  */
 function europeLayout(model, unsettable = null) {
   const { add, gap, done } = layoutWriter(unsettable);
@@ -299,11 +307,11 @@ function europeLayout(model, unsettable = null) {
 
   const total = model.items.length + model.excluded.length;
   add('Lex V3 export', { size: 16, leading: 22 });
-  add(`Asked: ${model.identifier}, read on ${model.date}. The answering snapshot was observed at ${model.observedAt}.`);
-  add(model.acknowledgement);
-  add(model.authenticity);
-  add(sentence(model.rightsRule));
-  add(sentence(model.wordingDateSemantics));
+  add(`Asked: ${model.identifier}, read on ${model.date}. The answering snapshot was observed at ${model.observedAt}.`, { field: 'the identifier asked' });
+  add(model.acknowledgement, { field: 'the acknowledgement' });
+  add(model.authenticity, { field: 'the authenticity statement' });
+  add(sentence(model.rightsRule), { field: 'the rights rule' });
+  add(sentence(model.wordingDateSemantics), { field: 'what a wording date is' });
   add(`${total} ${total === 1 ? 'article' : 'articles'} pinned: ${model.items.length} exported with text, ${model.excluded.length} excluded.`);
   gap(4);
   add('Verified by', { size: 9 });
@@ -312,35 +320,38 @@ function europeLayout(model, unsettable = null) {
   add(model.verifiedBy.registrySha256, { font: 'mono', size: 8, label: 'registry ' });
 
   for (const item of model.items) {
+    const subject = `article ${item.publisherId}`;
     gap(12);
-    add(`${item.publisherId}${item.heading === '' ? '' : ` ${item.heading}`} (${item.language}, ${wordingOf(item)})`, { size: 12, leading: 16, keep: 120 });
-    add(item.citation, { font: 'mono', size: 8, label: 'citation        ' });
-    add(item.wordingPermalink, { font: 'mono', size: 8, label: 'wording         ' });
+    add(`${item.publisherId}${item.heading === '' ? '' : ` ${item.heading}`} (${item.language}, ${wordingOf(item)})`, { size: 12, leading: 16, keep: 120, field: `${subject}'s heading` });
+    add(item.citation, { font: 'mono', size: 8, label: 'citation        ', field: `${subject}'s permalink` });
+    add(item.wordingPermalink, { font: 'mono', size: 8, label: 'wording         ', field: `${subject}'s wording permalink` });
     add(item.textSha256, { font: 'mono', size: 8, label: 'text sha-256    ' });
     add(item.bodySha256, { font: 'mono', size: 8, label: 'body sha-256    ' });
-    add(item.officialSource, { font: 'mono', size: 8, label: 'official source ' });
-    add(`Acknowledgement: ${item.acknowledgement}`, { size: 9 });
-    add(`Authenticity: ${item.authenticity}`, { size: 9 });
+    add(item.officialSource, { font: 'mono', size: 8, label: 'official source ', field: `${subject}'s official source` });
+    add(`Acknowledgement: ${item.acknowledgement}`, { size: 9, field: `${subject}'s acknowledgement` });
+    add(`Authenticity: ${item.authenticity}`, { size: 9, field: `${subject}'s authenticity statement` });
     gap(3);
-    add(item.text);
+    add(item.text, { field: `${subject}'s text` });
     gap(3);
-    addCitation(add, item.citations);
+    addCitation(add, item.citations, subject);
   }
 
   if (model.excluded.length > 0 || model.annexesNotServed.length > 0) {
     gap(12);
     add('Excluded', { size: 12, leading: 16, keep: 40 });
     for (const entry of model.excluded) {
-      add(`${entry.publisherId} (${entry.language}, ${wordingOf(entry)}): excluded, ${entry.reason}.`);
-      add(entry.citation, { font: 'mono', size: 8, label: 'citation ' });
-      add(entry.wordingPermalink, { font: 'mono', size: 8, label: 'wording  ' });
-      addCitation(add, entry.citations);
+      const subject = `excluded article ${entry.publisherId}`;
+      add(`${entry.publisherId} (${entry.language}, ${wordingOf(entry)}): excluded, ${entry.reason}.`, { field: subject });
+      add(entry.citation, { font: 'mono', size: 8, label: 'citation ', field: `${subject}'s permalink` });
+      add(entry.wordingPermalink, { font: 'mono', size: 8, label: 'wording  ', field: `${subject}'s wording permalink` });
+      addCitation(add, entry.citations, subject);
     }
     // An annex is counted, with the platform's reason and where to read it officially; its text is never held.
-    for (const row of model.annexesNotServed) {
-      add(`${row.count} ${row.count === 1 ? 'annex' : 'annexes'} (${row.language}, ${wordingOf(row)}): excluded, ${row.disposition}, served as ${row.servedAs}. ${sentence(row.reason)}`);
-      add(row.officialSource, { font: 'mono', size: 8, label: 'official source ' });
-    }
+    model.annexesNotServed.forEach((row, index) => {
+      const subject = `annex row ${index + 1}`;
+      add(`${row.count} ${row.count === 1 ? 'annex' : 'annexes'} (${row.language}, ${wordingOf(row)}): excluded, ${row.disposition}, served as ${row.servedAs}. ${sentence(row.reason)}`, { field: subject });
+      add(row.officialSource, { font: 'mono', size: 8, label: 'official source ', field: `${subject}'s official source` });
+    });
   }
   return done();
 }

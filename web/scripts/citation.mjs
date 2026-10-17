@@ -24,7 +24,8 @@
 //     `art_iii`, `art_unique`, a code's `art_l_121-6`, a number before a heading); an id of no shape here (a quoted article
 //     of an amending act, a heading alone) is given no usual form. An EU provision is named by its own heading when it reads
 //     "Article ..." (the text's words, "Article 32 bis", its no-break spaces as plain ones, since a citation is copied), else
-//     by its id's number (`006` is 6).
+//     by its id's number (`006` is 6). The usual form is set in its composed form (NFC); the evidence form quotes the title as
+//     the publisher served it.
 //   - An EU act is named as EUR-Lex numbers it, from its CELEX's type (R, L, D), year and number: "Regulation (EU)
 //     2016/679", "Regulation (EU) No 575/2013", "Directive 2006/112/EC", a year before 1999 on two digits. The domain is
 //     the numbering's for the act's year (EEC before 1993, EC from 1994 to 2008, EU from 2010); in 1993 and 2009, whose acts
@@ -132,8 +133,8 @@ export function luxembourgArticle(publisherId, words) {
 /** An EU provision as its usual citation names it: its own heading when it reads "Article ...", else its id's number. */
 export function europeArticle(article, words) {
   const heading = (article.heading ?? '').trim();
-  // A citation is copied text: the heading's no-break spaces ("Article\u00a0premier") are plain ones in it.
-  if (/^Article[\s\u00a0]+\S/.test(heading)) return heading.replace(/\u00a0/g, ' ');
+  // A citation is copied text: the heading's no-break spaces, wide or narrow ("Article\u00a0premier"), are plain ones in it.
+  if (/^Article[\s\u00a0\u202f]+\S/.test(heading)) return heading.replace(/[\u00a0\u202f]/g, ' ');
   const numbered = /^0*(\d+)([A-Z]*)$/.exec(article.publisherId);
   return numbered === null ? null : fillText(words.europe.article, { number: `${numbered[1]}${numbered[2].toLowerCase()}` });
 }
@@ -199,7 +200,8 @@ function luxembourgConventional(state, articleText, facts, words) {
   // The words after the title's type and date, when it starts with them (a day's "1er" written as "1" too).
   const starts = [date, dateInWords(`${year}-${month}-${day}`, { ...words, firstOfMonth: words.date })]
     .map((said) => folded(fillText(words.luxembourg.titles[type], { date: said })));
-  const plain = withoutFullStop(title);
+  // Matched and continued in its composed form: a title written with combining accents starts with its type and date too.
+  const plain = withoutFullStop(title).normalize('NFC');
   const prefix = starts.find((start) => folded(plain).startsWith(start) && (folded(plain).length === start.length || /^[\s,]/.test(plain.slice(start.length))));
   if (prefix === undefined) return act;
   const rest = plain.slice(prefix.length).trim();
@@ -260,6 +262,9 @@ export function citationForms({ view, version, article, observedAt }) {
       ? usual
       : fillText(words.luxembourg.version, { citation: usual, date: dateInWords(version.applicabilityDate, words) });
   }
+  // The usual form is copied text, in its composed form (NFC): a title the publisher wrote with combining accents reaches no
+  // copy decomposed. The evidence form quotes the title as served.
+  if (conventional !== null) conventional = conventional.normalize('NFC');
   const withPermalink = conventional === null ? permalink : fillText(words.withPermalink, { citation: conventional, permalink });
 
   lines.push(conventional ?? permalink);

@@ -34,7 +34,7 @@ text. `verify` resolves every form."), with R18 to R21 and R64.
     CELEX, a consolidation's own), the publisher's title, the version's or wording's date, the gazette reference (the act's
     Mémorial A issue, or that this index does not hold it; for the EU, that the Official Journal reference is not held), the
     publication date when exactly one is held, the text's SHA-256 (R64's long citation), "Consulted on Lex on {date}
-    (Luxembourg)", an act held only as published's label, and the authenticity sentence: the as-published sentence of its
+    (date in Luxembourg)", an act held only as published's label, and the authenticity sentence: the as-published sentence of its
     case, the site's sentence on consolidated text, or the EU's statement (in French when the answer's is the table's word
     for word).
 - **The facts it reads, from the API** (`V3CorpusMount.CitationFacts.cs`): a Luxembourg `evidence_bundle` carries
@@ -90,7 +90,9 @@ text. `verify` resolves every form."), with R18 to R21 and R64.
     1993 and 2009, whose acts carry either. The index holds no EU title, author or domain, so a Euratom or CFSP act would be
     named as the Union's. Of the population's 82 EU acts (the census's seeds, `derive-c` read-only), 76 are regulations and
     directives of the Union or the Community, none Euratom's, and six are treaty texts (the TFEU, the TEU and the Charter,
-    in their 2012 and 2016 versions, sector 1), which are given no usual form until the generator names treaties (next).
+    in their 2012 and 2016 versions, sector 1). Those six have empty timelines on `derive-c` (no wording of them is held to
+    read), so they cannot be cited at all today, by any form; when a wording of one is held, it gets no usual form until
+    the generator names treaties (next).
   - The date clauses are the ones the 4.2 reader reads at the end of a citation ("dans sa version applicable au", "au",
     "as at"), and Luxembourg's speaks R21's "applicable" and the EU's no applicability at all.
   - "Consulted on Lex" is the answer's own instant in Luxembourg's calendar: the index holds no time the publisher served
@@ -102,13 +104,23 @@ text. `verify` resolves every form."), with R18 to R21 and R64.
     control the journeys must walk first (next). The dossier names versions by their permalinks and cites no article, so
     it is unchanged.
   - The export's schemas (`lex-v3-export/1`, `-eu/1`) keep their names: the forms are added members and columns.
+  - The PDF sets each text in its composed form (Unicode NFC) and says so when that changed anything ("Accents written as
+    combining marks are set here as the accented letters they compose"); the JSON and CSV keep the bytes as served, and
+    the evidence form quotes a title as served. The usual form is composed (NFC) and its no-break spaces, wide or narrow,
+    are plain, since it is copied. A PDF refusal names the field that holds the characters ("article art_2's text",
+    "article art_15's evidence form"), never the article's text in place of another field (review of #975, F1).
 - **Not in this part** (next, below): `verify` of the usual form, through the 4.2 reader; R20's own sentence for a
   consolidated Luxembourg text (the act as published and the acts that amended it, the owner's item O4) in place of the
   site's sentence; R19's sentence for a consolidated EU wording, which the API states as it states the original's; the EU
   act's title and Official Journal reference, which no index holds; a consolidated Luxembourg state's title, which starts
   "Version consolidée applicable au …" and is not read into the usual form; the treaties' usual forms ("Article 6 TUE");
-  the clipboard button.
-- **Measured** (this branch, from `v3/integration` at #972's merge, 1608c737), with no browser started: the web build; the web suite over 108 of its 111 files (all but `keyboard-walk`, `launch-browser` and `paint-check`), 1,196 of 1,196 after the French review's changes and the generator's repairs (1,195 of 1,195 before them); `dotnet build Lex.V3.slnx -c Release` (and `--no-incremental`) 0 warnings, 0 errors; `Lex.V3.Tests` 3,181 (3,175 passed, 6 skipped); the `Lex.V3.Ingest.Tests` classes touched with Census, `PublicRequestRecordingTests`, the answer, envelope and refusal samples, verify, citation, citation facts, as-published, dossier, evidence bundle, pinned permalink, EU time view, EU permalink, generation quote and MCP, 181 (178 passed, 3 skipped), and the mounted and machine gates, replay, events, locator, resolve, EU capability and journey mounts, 105 (99 passed, 6 skipped); the answer and envelope censuses rendered again and verified without the variables; `eng/verify-v3-tree.ps1` 1,585 tracked paths. The journeys are CI's.
+  the clipboard button. And a legal claim, the owner's under O4 (review of #975, F2): the EU authenticity line every EU
+  evidence form ends with says that only the electronic Official Journal is authentic (Regulation (EU) No 216/2013), while
+  R20 dates that: "the electronic Official Journal is authentic since 1 July 2013 (Regulation (EU) No 216/2013), the
+  printed edition before". Thirteen of the 63 citable EU acts (`02003L0087` to `02013R0575`) were published before 1 July
+  2013, so for them the line names the wrong edition. The platform's sentence (`V3CorpusMount.EuropeTextAuthenticity`) is
+  not reworded here: its wording is the owner's, asked in the pull request.
+- **Measured** (this branch, rebased on `v3/integration` at #973's merge, 51ca8059), with no browser started: the web build; the web suite over 108 of its 111 files (all but `keyboard-walk`, `launch-browser` and `paint-check`), 1,197 of 1,197 after the review of #975's repairs (1,196 after the French review's, 1,195 before them); the review's export run over `derive-c`'s 7,877 quoted Luxembourg articles, each exported alone, read-only through a local API (the mount's listing unchanged before and after): the PDF is refused for 8, every one of them for characters in the article's own text, which no encoding sets (Σ, ≤, ≥, ↑, and a combining accent with no composed letter), and every one refused before this slice too (23 were, under the encoder before), none newly; the JSON and CSV carry the generator's forms verbatim for all 7,877, and no usual form is in a decomposed form. Measured before the rebase: `dotnet build Lex.V3.slnx -c Release` (and `--no-incremental`) 0 warnings, 0 errors; `Lex.V3.Tests` 3,181 (3,175 passed, 6 skipped); the `Lex.V3.Ingest.Tests` classes touched with Census, `PublicRequestRecordingTests`, the answer, envelope and refusal samples, verify, citation, citation facts, as-published, dossier, evidence bundle, pinned permalink, EU time view, EU permalink, generation quote and MCP, 181 (178 passed, 3 skipped), and the mounted and machine gates, replay, events, locator, resolve, EU capability and journey mounts, 105 (99 passed, 6 skipped); the answer and envelope censuses rendered again and verified without the variables; `eng/verify-v3-tree.ps1` 1,591 tracked paths after the rebase. The journeys are CI's.
 
 ## The cited article first, what changed since, a stale permalink's current link, and readable addresses (sole driver, 2026-10-16)
 
@@ -4156,6 +4168,15 @@ The plan's item 3.3, what is left after the generator (done on 2026-10-17, above
 3. A copy button beside each form (a script-only control, so the journeys walk its focus and keyboard first), and the
    treaties' usual forms ("Article 6 TUE", "article 267 TFUE").
 4. An EU act's title, author and Official Journal reference, and a Euratom or CFSP act's domain, when an index holds them.
+5. The EU authenticity line's date (review of #975, F2; the owner's item O4): R20's dated clause ("the electronic Official
+   Journal is authentic since 1 July 2013 (Regulation (EU) No 216/2013), the printed edition before") in place of the
+   platform's undated sentence, for the 13 of the 63 citable EU acts published before 1 July 2013, checked against the
+   regulation's art. 1(2) and art. 3(3) as amended, in the wording the owner gives; then its French, reviewed.
+6. The data lane's note on Luxembourg dates (review of #975): the 1,725 states held only as published are dated by the
+   publisher's `dateEntryInForce`, not `dateApplicability`, yet the site and the citation say "applicable from …
+   (publisher)" and "dans sa version applicable au …". R21 wants entry into force and application said as separate
+   values; index /9's `date_role` (S6) and the reader (S7a, S7c) will carry which one a state's date is, and the
+   generator then says each in its own words.
 
 The plan's item 3.2, what is left after its second part (3.2b, done on 2026-10-16, above), as 3.2c:
 1. The cited bytes of a state only a retained generation holds, quoted from that generation (the mount opens the
