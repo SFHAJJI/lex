@@ -69,7 +69,12 @@ catch (Exception exception)
 V3WebRoot? webRoot = null;
 try
 {
-    webRoot = V3WebRoot.Open(Path.Combine(AppContext.BaseDirectory, V3WebRoot.DirectoryName));
+    // What the pages say to search engines is the release's switch (R67, O27): kept out unless LEX_V3_SEARCH_ENGINES is
+    // `indexed`; a law's page is opened only for a work the indexing record beside the mount lists (R92, O28).
+    webRoot = V3WebRoot.Open(
+        Path.Combine(AppContext.BaseDirectory, V3WebRoot.DirectoryName),
+        Environment.GetEnvironmentVariable(V3WebRoot.SearchEnginesVariable),
+        corpusMount is null ? null : V3WebRoot.ReadIndexingRecordFile(Path.Combine(AppContext.BaseDirectory, "v3-corpus", V3WebRoot.IndexingRecordFile)));
 }
 catch (Exception exception)
 {

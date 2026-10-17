@@ -19,6 +19,7 @@ import { cspValue } from '../scripts/csp.mjs';
 import { LocaleNav, localeHome } from './LocaleNav.jsx';
 import { CHROME_LOCALE, fillText, liveChrome, livePath } from '../scripts/live-chrome.mjs';
 import { INTERFACE_LANGUAGES, lawPageLinks } from '../scripts/permalinks.mjs';
+import { jsonInScript } from '../scripts/initial-answer.mjs';
 import { CANONICAL_HOST } from '../scripts/routes.mjs';
 
 /** The marker that says, in the DOM, that nothing on this page is law. */
@@ -86,7 +87,7 @@ const ALTERNATE_PAGES = Object.freeze({
  * (`lawPageLinks`, which the page as built writes once loaded, `client.jsx`).
  */
 export function alternateLinks(state, lawPath = null) {
-  if (lawPath !== null) return lawPageLinks(lawPath, SITE_ORIGIN).alternates;
+  if (lawPath !== null) return lawPageLinks(lawPath, SITE_ORIGIN, CHROME_LOCALE).alternates;
   const page = ALTERNATE_PAGES[state];
   if (page === undefined) return [];
   return [
@@ -173,6 +174,13 @@ export function Document({
   density = null,
   // The address of the law a page the server rendered stands at, with no language (`/lu-legilux/{work}/...`), or null.
   lawPath = null,
+  // What a live page says to search engines (R67; `search-engines.mjs`): `never`, a page no search engine is asked to index
+  // (search, export, the forms, a law's page as built or refused, the 404 and maintenance pages), or `switch`, a page the
+  // release's switch opens (the home pages, Trust and Coverage, a law's page rendered whole). Either way the page as rendered
+  // is kept out; the server removes the kept-out marker when the switch is on and the page may be indexed.
+  indexing = 'never',
+  // A law's page's schema.org Legislation markup (`structured-data.mjs`), written as JSON-LD in the head, or null.
+  structuredData = null,
   children,
 }) {
   // Each axis names itself. Both guards used to raise the same sentence, so a test feeding an
@@ -205,6 +213,9 @@ export function Document({
   if (banner !== 'synthetic' && banner !== 'live') {
     throw new Error(`a page carries the synthetic or the live banner, not ${JSON.stringify(banner)}`);
   }
+  if (indexing !== 'never' && indexing !== 'switch') {
+    throw new Error(`a page is never indexed or opened by the switch, not ${JSON.stringify(indexing)}`);
+  }
 
   const shellAttributes =
     shell === null ? {} : { 'data-shell': shell, 'data-density': density ?? '' };
@@ -220,13 +231,22 @@ export function Document({
             and served from this origin. */}
         <meta httpEquiv="Content-Security-Policy" content={cspValue()} />
         <title>{banner === 'live' ? fillText(liveChrome().shell.title, { title }) : `${title} - Lex V3 preview`}</title>
+        {/* Kept out of search engines as rendered (R67, O27): `search-engines.mjs` says which marker a server removes. */}
+        {banner === 'live'
+          ? (indexing === 'switch' ? <meta name="robots" content="noindex" data-search-engines="kept-out" /> : <meta name="robots" content="noindex" />)
+          : null}
         <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
         <link rel="stylesheet" href="/styles.css" />
-        {/* A page at a law's address names as canonical the address with no interface language, the permalink Lex prints
-            and cites (R64, R67), which sends each reader to their language; each language's page is an alternate. */}
-        {banner === 'live' && lawPath !== null ? <link rel="canonical" href={lawPageLinks(lawPath, SITE_ORIGIN).canonical} /> : null}
+        {/* A page at a law's address names as canonical the address it shows in the page's own interface language, a page
+            that answers itself (R67; the plan's item 3.6), and each language's page and the address with no interface
+            language (which sends each reader to theirs) as alternates. */}
+        {banner === 'live' && lawPath !== null ? <link rel="canonical" href={lawPageLinks(lawPath, SITE_ORIGIN, locale).canonical} /> : null}
         {banner === 'live'
           ? alternateLinks(state, lawPath).map((link) => <link key={link.hrefLang} rel="alternate" hrefLang={link.hrefLang} href={link.href} />)
+          : null}
+        {/* Data, not a script: no Content-Security-Policy runs it, as the answer's own block (`initial-answer.mjs`). */}
+        {banner === 'live' && structuredData !== null
+          ? <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonInScript(structuredData) }} />
           : null}
       </head>
       <body>

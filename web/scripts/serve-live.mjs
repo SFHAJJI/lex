@@ -18,10 +18,21 @@
 // R67): the page asks the API, as itself would, through the same forwarder, and the built server renderer
 // (`ssr/{language}.js`, `app/ssr-entry.jsx`) renders the page from that answer, in a context of its own with nothing
 // of this process in it. When anything in that fails, the page is served as built and asks for itself.
+//
+// What it says to search engines is the release's switch (`search-engines.mjs`, R67), as the API says it
+// (`V3WebRoot.SearchEngines.cs`): `/robots.txt` in the switch's state, `/sitemap.xml` only with the site indexed, and
+// `X-Robots-Tag: noindex` on every page, file, redirect and 404 it answers but a page the switch opened, whose kept-out marker
+// it removed. The switch is `LEX_V3_SEARCH_ENGINES` when the server is made, unless the caller names one; the indexing
+// record (R92's outcome) is a file the caller names, none by default.
 
 import { INTERFACE_LANGUAGES, movedFor, pageForSitePath, redirectFor, sitePageFor } from "./permalinks.mjs";
 import { luxembourgDate } from "./temporal.mjs";
+import {
+  ROBOTS_CONTENT_TYPE, ROBOTS_PATH, SEARCH_ENGINES_VARIABLE, SITEMAP_CONTENT_TYPE, SITEMAP_PATH, INDEXED, X_ROBOTS_TAG, readIndexingRecord,
+  robotsTxt, searchEnginesState, servedPage, sitemapXml,
+} from "./search-engines.mjs";
 import { createServer, request as httpRequest } from "node:http";
+import { readFileSync } from "node:fs";
 import { readFile, stat } from "node:fs/promises";
 import { extname, join, relative as pathRelative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -142,6 +153,7 @@ async function renderSitePage(page, pathname, apiOrigin, renderer, deadlineMs) {
  */
 async function notFound(response, root, pathname, method, acceptLanguage) {
   const chosen = notFoundPageFor(method, pathname, acceptLanguage);
+  // No 404 page is indexed, whatever the switch: its page names no marker a server removes.
   let bytes = null;
   try {
     bytes = chosen === null ? null : await readFile(join(root, chosen.page));
@@ -154,6 +166,7 @@ async function notFound(response, root, pathname, method, acceptLanguage) {
   }
   response.writeHead(404, {
     ...BASE_HEADERS,
+    "x-robots-tag": X_ROBOTS_TAG,
     "content-type": CONTENT_TYPES[".html"],
     "content-length": bytes.length,
     ...(chosen.negotiated ? { vary: "Accept-Language" } : {}),
@@ -161,7 +174,17 @@ async function notFound(response, root, pathname, method, acceptLanguage) {
   response.end(method === "HEAD" ? undefined : bytes);
 }
 
-async function serveStatic(response, root, pathname, method, acceptLanguage) {
+/**
+ * A page's bytes as served in the switch's state (`servedPage`), and the headers it adds: `X-Robots-Tag` unless the page was
+ * opened. Any other file is served as it is, with the header.
+ */
+function forSearchEngines(bytes, type, pathname, searchEngines) {
+  if (type !== CONTENT_TYPES[".html"]) return { bytes, headers: { "x-robots-tag": X_ROBOTS_TAG } };
+  const served = servedPage(bytes.toString("utf8"), { state: searchEngines.state, pathname, record: searchEngines.record });
+  return served.opened ? { bytes: Buffer.from(served.html, "utf8"), headers: {} } : { bytes, headers: { "x-robots-tag": X_ROBOTS_TAG } };
+}
+
+async function serveStatic(response, root, pathname, method, acceptLanguage, searchEngines) {
   let relative;
   try {
     // An interface language's root is its home page; a law's address under a language is served the page that reads it
@@ -191,9 +214,19 @@ async function serveStatic(response, root, pathname, method, acceptLanguage) {
     await notFound(response, root, pathname, method, acceptLanguage);
     return;
   }
-  const bytes = await readFile(file);
-  response.writeHead(200, { ...BASE_HEADERS, "content-type": type, "content-length": bytes.length });
-  response.end(method === "HEAD" ? undefined : bytes);
+  const served = forSearchEngines(await readFile(file), type, pathname, searchEngines);
+  response.writeHead(200, { ...BASE_HEADERS, ...served.headers, "content-type": type, "content-length": served.bytes.length });
+  response.end(method === "HEAD" ? undefined : served.bytes);
+}
+
+/** The indexing record a caller names (a path or file URL), read once, or null when none is named or it is none. */
+function indexingRecordAt(location) {
+  if (location === null || location === undefined) return null;
+  try {
+    return readIndexingRecord(readFileSync(location instanceof URL ? location : resolve(String(location)), "utf8"));
+  } catch {
+    return null;
+  }
 }
 
 /** Today in Luxembourg (R13) at the instant `now` gives, or null outside the range the rule is held for. */
@@ -208,11 +241,22 @@ function luxembourgToday(now) {
 /**
  * The server. `root` is the built live directory (`dist-live/`), `apiOrigin` the origin of a
  * running `Lex.V3.Api` (for example `http://127.0.0.1:5075`), and `now` its clock (a UTC instant), which says the date a
- * readable address's page is rendered at (R67: the current version, today in Luxembourg). It is returned unstarted.
+ * readable address's page is rendered at (R67: the current version, today in Luxembourg). `searchEngines` is the release's
+ * switch (`indexed`, or anything else for kept out; `LEX_V3_SEARCH_ENGINES` by default) and `indexingRecord` the file of
+ * the release's indexing record, R92's outcome (`readIndexingRecord`; none by default, so no law's page is opened). It is
+ * returned unstarted.
  */
-export function createLiveServer({ root, apiOrigin, apiDeadlineMs = API_DEADLINE_MS, now = () => new Date().toISOString() }) {
+export function createLiveServer({
+  root,
+  apiOrigin,
+  apiDeadlineMs = API_DEADLINE_MS,
+  now = () => new Date().toISOString(),
+  searchEngines = process.env[SEARCH_ENGINES_VARIABLE],
+  indexingRecord = null,
+}) {
   const rootPath = resolve(root instanceof URL ? fileURLToPath(root) : root);
   const rendererFor = serverRenderers(rootPath);
+  const engines = Object.freeze({ state: searchEnginesState(searchEngines), record: indexingRecordAt(indexingRecord) });
   return createServer(async (request, response) => {
     try {
       let url;
@@ -252,9 +296,22 @@ export function createLiveServer({ root, apiOrigin, apiDeadlineMs = API_DEADLINE
       }
       // An EU permalink of the shape before R64 has moved for good to R64's, under the interface language it had, the same
       // answer for every reader, as the API moves it (V3WebRoot.MovedFor).
+      // robots.txt in the switch's state, and the sitemap only with the site indexed (R67); kept out, the sitemap is an
+      // address this site does not hold.
+      if (url.pathname === ROBOTS_PATH || (url.pathname === SITEMAP_PATH && engines.state === INDEXED)) {
+        const bytes = Buffer.from(url.pathname === ROBOTS_PATH ? robotsTxt(engines.state) : sitemapXml(engines.record), "utf8");
+        response.writeHead(200, {
+          ...BASE_HEADERS,
+          "x-robots-tag": X_ROBOTS_TAG,
+          "content-type": url.pathname === ROBOTS_PATH ? ROBOTS_CONTENT_TYPE : SITEMAP_CONTENT_TYPE,
+          "content-length": bytes.length,
+        });
+        response.end(request.method === "HEAD" ? undefined : bytes);
+        return;
+      }
       const moved = movedFor(url.pathname, url.search);
       if (moved !== null) {
-        response.writeHead(301, { ...BASE_HEADERS, location: moved, "content-length": 0 });
+        response.writeHead(301, { ...BASE_HEADERS, "x-robots-tag": X_ROBOTS_TAG, location: moved, "content-length": 0 });
         response.end();
         return;
       }
@@ -262,7 +319,7 @@ export function createLiveServer({ root, apiOrigin, apiDeadlineMs = API_DEADLINE
       // sends them (V3WebRoot).
       const location = redirectFor(url.pathname, url.search, request.headers["accept-language"]);
       if (location !== null) {
-        response.writeHead(302, { ...BASE_HEADERS, location, vary: "Accept-Language", "content-length": 0 });
+        response.writeHead(302, { ...BASE_HEADERS, "x-robots-tag": X_ROBOTS_TAG, location, vary: "Accept-Language", "content-length": 0 });
         response.end();
         return;
       }
@@ -277,13 +334,13 @@ export function createLiveServer({ root, apiOrigin, apiDeadlineMs = API_DEADLINE
           rendered = null;
         }
         if (rendered !== null) {
-          const bytes = Buffer.from(rendered.html, "utf8");
-          response.writeHead(rendered.status, { ...BASE_HEADERS, "content-type": CONTENT_TYPES[".html"], "content-length": bytes.length });
-          response.end(request.method === "HEAD" ? undefined : bytes);
+          const served = forSearchEngines(Buffer.from(rendered.html, "utf8"), CONTENT_TYPES[".html"], url.pathname, engines);
+          response.writeHead(rendered.status, { ...BASE_HEADERS, ...served.headers, "content-type": CONTENT_TYPES[".html"], "content-length": served.bytes.length });
+          response.end(request.method === "HEAD" ? undefined : served.bytes);
           return;
         }
       }
-      await serveStatic(response, rootPath, url.pathname, request.method, request.headers["accept-language"]);
+      await serveStatic(response, rootPath, url.pathname, request.method, request.headers["accept-language"], engines);
     } catch {
       if (!response.headersSent) problem(response, 500, "server_error");
       else response.destroy();

@@ -50,8 +50,13 @@ export function lawPathOf(path) {
  * holds it without text, escaped as the platform escapes it, else the act's readable address in that language, each built
  * from the act the answer names (its work key, or its EU act's CELEX), never the request's (review of #972); with no view,
  * the act's readable address the request names. Any other address is returned as it is.
+ *
+ * At a permalink whose pinned version is the one its act's readable address shows `today` (Luxembourg's date, R13;
+ * `answersToday`): that readable address, the article's when the version holds it (R67: "identical version pages point
+ * their canonical link there"; the plan's item 3.6, revisiting the decision of #967 that such a permalink names itself).
+ * With no `today`, a permalink names itself as above.
  */
-export function readingAddressShown(view, address, refusal = null) {
+export function readingAddressShown(view, address, refusal = null, today = null) {
   const named = parseSitePath(address);
   if (named === null) return address;
   const shown = (view?.publisher === 'eu-eurlex' ? view.wordings : view?.states) ?? [];
@@ -71,10 +76,46 @@ export function readingAddressShown(view, address, refusal = null) {
   const pinned = shown.find((one) => one.permalink === named.permalink);
   if (pinned === undefined) return shown[0]?.permalink ?? named.permalink;
   const publisherId = anchorText(named.anchor);
+  if (answersToday(view, pinned, today)) {
+    const europe = view.publisher === 'eu-eurlex';
+    return currentAddress({
+      publisher: europe ? 'eu-eurlex' : 'lu-legilux',
+      work: europe ? view.celex : view.workKey,
+      language: pinned.language,
+      publisherId: publisherId !== null && holdsArticle(pinned, publisherId) ? publisherId : null,
+    });
+  }
   if (publisherId === null) return pinned.permalink;
   const quoted = (pinned.articles ?? []).find((article) => article.publisherId === publisherId);
   if (quoted !== undefined) return quoted.permalink;
   return holdsArticle(pinned, publisherId) ? articlePermalink(pinned.permalink, publisherId) : pinned.permalink;
+}
+
+/**
+ * Whether `version`, a state (or EU wording) of the reading `view`, is the one its act's readable address shows on `today`
+ * (Luxembourg's date, R13), so the two pages show one version (R67). A Luxembourg state applicable on or before today with
+ * no later state held applicable on or before it (an act held only as published included: its readable address shows that
+ * state too). An EU wording in the time view, dated on or before today with no later wording dated on or before it: a later
+ * wording whose text is not held in the language still bounds it (the readable address then refuses), and a wording outside
+ * the time view (no `nextDate`) answers only its own date, so its act's readable address shows it on no other day. False
+ * with no `today`.
+ */
+export function answersToday(view, version, today) {
+  if (!isCalendarDate(today) || view === null || version === undefined || version === null) return false;
+  if (view.publisher === 'eu-eurlex') {
+    if (version.nextDate === undefined) return false;
+    return version.wordingDate <= today && (version.nextDate === null || version.nextDate > today);
+  }
+  return version.applicabilityDate <= today && (version.nextApplicabilityDate === null || version.nextApplicabilityDate > today);
+}
+
+/** Today in Luxembourg (R13) at an answer's own instant (`context.freshness.observed_at`), or null when it names none. */
+export function todayAt(instant) {
+  try {
+    return typeof instant === 'string' ? luxembourgDate(instant) : null;
+  } catch {
+    return null;
+  }
 }
 
 /** Whether a state (or EU wording) quotes the article with this publisher id, or holds it without text. */
