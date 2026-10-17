@@ -1,0 +1,137 @@
+{
+  "schema": "lex-v3-article-number-table/1",
+  "rule": "An article number, as a citation writes it and as an index holds it, is read to one key, and a citation opens the article whose key is its key: never a near one. Case, spacing and the code letter's dot are not part of a number (L. 121-6, L.121-6 and L 121-6 are L.121-6); 1er, premier and 1 are 1; a suffix is part of a number (42, 42bis, 42ter and 42-1 are four numbers); an arabic number is never a roman one (3 is not III). A grouped article (a range such as 141 à 144, or two numbers joined) is opened by a citation of a number it groups only when no article of the version holds that number itself. An id this table reads as no number of the act (a quoted article of an amended act) is never opened by a citation.",
+  "citation_words": ["article", "articles", "art.", "art", "artikel", "artikels"],
+  "first": ["1er", "premier"],
+  "unique": ["unique"],
+  "code_letters": ["L", "R", "D", "A"],
+  "latin_suffixes": [
+    { "suffix": "bis", "rank": 2 },
+    { "suffix": "ter", "rank": 3 },
+    { "suffix": "quater", "rank": 4 },
+    { "suffix": "quinquies", "rank": 5 },
+    { "suffix": "sexies", "rank": 6 },
+    { "suffix": "septies", "rank": 7 },
+    { "suffix": "octies", "rank": 8 },
+    { "suffix": "novies", "rank": 9, "also": ["nonies"] },
+    { "suffix": "decies", "rank": 10 },
+    { "suffix": "undecies", "rank": 11 },
+    { "suffix": "duodecies", "rank": 12 },
+    { "suffix": "terdecies", "rank": 13, "also": ["tredecies"] },
+    { "suffix": "quaterdecies", "rank": 14 },
+    { "suffix": "quinquiesdecies", "rank": 15, "also": ["quindecies"] },
+    { "suffix": "sexiesdecies", "rank": 16, "also": ["sexdecies"] },
+    { "suffix": "septiesdecies", "rank": 17, "also": ["septdecies"] },
+    { "suffix": "octiesdecies", "rank": 18, "also": ["octodecies"] },
+    { "suffix": "noviesdecies", "rank": 19, "also": ["novodecies"] },
+    { "suffix": "vicies", "rank": 20 }
+  ],
+  "range_words": ["à", "a", "to"],
+  "group_words": ["et", "and", "und"],
+  "luxembourg_id_shapes": [
+    {
+      "shape": "art_{n})_art_{number}",
+      "reading": "quoted",
+      "why": "a point of an amending act's article that quotes an article of the act it amends (art_4)_art_13 is point 4)'s Art. 13.): not an article of the act that holds it",
+      "examples": { "art_4)_art_13": null, "art_2)_art_33-1": null, "art_2)_art_33-1_1": null }
+    },
+    {
+      "shape": "art__art_{number}",
+      "reading": "quoted",
+      "why": "an article quoted inside another article's text, which the publisher numbers under that article (art__art_3bis in loi-1984-02-24-n1 is under art_6): not an article of the act that holds it",
+      "examples": { "art__art_1er": null, "art__art_3bis": null }
+    },
+    {
+      "shape": "art_{n}_à_{m}",
+      "reading": "range",
+      "why": "one article element the publisher writes for the articles from n to m (Art. 141 à 144.), as codes do for repealed runs",
+      "examples": { "art_141_à_144": "141 à 144", "art_22_à_64": "22 à 64" }
+    },
+    {
+      "shape": "art_{n}_et_{m}",
+      "reading": "group",
+      "why": "one article element for the two articles n and m (scl:ids art_632;art_633)",
+      "examples": { "art_632_et_633": "632 et 633" }
+    },
+    {
+      "shape": "art_{n}_{m}",
+      "reading": "group",
+      "why": "one article element for the two articles n and m (art_559_560, scl:ids art_559;art_560)",
+      "examples": { "art_559_560": "559 et 560" }
+    },
+    {
+      "shape": "art_{number}_{yyyymmdd}",
+      "reading": "number",
+      "why": "an article id the publisher dates (art_37-1_20240201, an Art. 37-1 struck in the version of 2024-02-01): the article number is the part before the date",
+      "examples": { "art_37-1_20240201": "37-1" }
+    },
+    {
+      "shape": "art_{number}_{heading}",
+      "reading": "number",
+      "why": "an article id that carries the article's heading after its number (art_2_champ_d'application is Art. 2. Champ d'application)",
+      "examples": { "art_2_champ_d'application": "2", "art_1er_objet": "1" }
+    },
+    {
+      "shape": "art_{number}",
+      "reading": "number",
+      "why": "the publisher's usual article id",
+      "examples": { "art_2": "2", "art_1er": "1", "art_33-1": "33-1", "art_40bis": "40bis", "art_iii": "III", "art_ier": "I", "art_unique": "unique", "art_l_121-6": "L.121-6", "art_L.121-6": "L.121-6", "art_l121-6": "L.121-6", "art_L._121-6": "L.121-6", "art_R.121-1": "R.121-1" }
+    },
+    {
+      "shape": "art{number}",
+      "reading": "number",
+      "why": "the same, written without the underscore",
+      "examples": { "art12": "12", "art1er": "1" }
+    },
+    {
+      "shape": "article_{number}",
+      "reading": "number",
+      "why": "the same, with the word written out",
+      "examples": { "article_4": "4", "article_unique": "unique", "article_iv": "IV" }
+    },
+    {
+      "shape": "Article {number}.",
+      "reading": "number",
+      "why": "the article's own heading used as its id (an annex article, act-rgd-2021-04-28-a356)",
+      "examples": { "Article 1.": "1", "Article 2.": "2" }
+    }
+  ],
+  "europe_id_shape": {
+    "shape": "{nnn}{letters}",
+    "reading": "number",
+    "why": "the EU index's provision id: the article number written on at least three digits, then its letters in capitals (038L is Article 38l)",
+    "examples": { "006": "6", "199": "199", "038L": "38l", "430C": "430c", "001AA": "1aa" }
+  },
+  "citation_examples": {
+    "1": "1",
+    "1er": "1",
+    "premier": "1",
+    "Ier": "I",
+    "L. 121-6": "L.121-6",
+    "L.121-6": "L.121-6",
+    "L 121-6": "L.121-6",
+    "l. 121-6": "L.121-6",
+    "42": "42",
+    "42ter": "42ter",
+    "42 ter": "42ter",
+    "42-ter": "42ter",
+    "42-1": "42-1",
+    "5nonies": "5novies",
+    "III": "III",
+    "unique": "unique",
+    "38l": "38l",
+    "141 à 144": "141 à 144",
+    "632 et 633": "632 et 633"
+  },
+  "never_equal": [
+    ["42", "42ter"],
+    ["42", "42bis"],
+    ["42", "42-1"],
+    ["42bis", "42ter"],
+    ["3", "III"],
+    ["1", "I"],
+    ["121-6", "L.121-6"],
+    ["L.121-6", "R.121-6"],
+    ["38", "38l"]
+  ]
+}

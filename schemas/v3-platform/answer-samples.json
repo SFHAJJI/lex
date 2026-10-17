@@ -5836,6 +5836,7 @@
         ],
         "index_sha256": "\u003Cvaries-per-run\u003E",
         "lanes": "strict: the query as typed is a substring; relaxed: every distinct whitespace-separated term is a substring, in any order, so the relaxed set contains the strict set. With no mode the answer is the strict hits and then only the relaxed hits strict did not serve, each article once; with a mode it is that lane\u0027s whole set. A lane not asked for is null in the population, not zero",
+        "lanes_run": true,
         "limit": 200,
         "matching": "byte-exact substring of the article\u0027s searchable text, which is its text and reference tokens as the index holds them (modification markers and note references are not searched); case and diacritics are significant; nothing is folded, stemmed or expanded",
         "modes_held": [
@@ -5861,6 +5862,15 @@
         },
         "publisher": "lu-legilux",
         "ranking": "none; strict lane before relaxed lane, then work key, publisher date, article identity and state digest. This index holds no BM25 ranker, so a page is the first hits in this order and not the best hits",
+        "reference": {
+          "kind": null,
+          "opens": null,
+          "outcome": "no_reference",
+          "phase": "exact_reference",
+          "reason": null,
+          "recognised": null,
+          "rule": "before any word is searched, the query is read as an exact reference: an ELI, a CELEX (consolidated forms included), a Memorial or Journal officiel A citation, a historical identifier of the publisher\u0027s catalogue, an address of this site for law, an act by its type and date or an EU act by its conventional name, or a citation of an article of an act and of a date; a reference the indexes hold opens its act, at the article and date it names (the date defaults to the search\u0027s date, else to today in Luxembourg), or its dossier when it names neither, and no word is searched; an identifier, an EU act\u0027s name or a type and date that names no act the indexes or the publisher\u0027s catalogue hold is refused identifier_unknown, with no list; a day, an issue or a name that names several acts is refused ambiguous_identifier with every one, held or not, and none is chosen; a title the index does not hold, and words after a type and date that name none of that day\u0027s acts, open nothing on their own: a title is searched as words, and the day\u0027s acts are listed; a date in a date\u0027s shape that names no calendar day opens nothing; a query that is no reference is searched as words"
+        },
         "requested_after": null,
         "requested_date": null,
         "requested_identifier": null,
@@ -5915,6 +5925,7 @@
         ],
         "index_sha256": "\u003Cvaries-per-run\u003E",
         "lanes": "strict: the query as typed is a substring; relaxed: every distinct whitespace-separated term is a substring, in any order, so the relaxed set contains the strict set. With no mode the answer is the strict hits and then only the relaxed hits strict did not serve, each article once; with a mode it is that lane\u0027s whole set. A lane not asked for is null in the population, not zero",
+        "lanes_run": true,
         "limit": 1,
         "matching": "byte-exact substring of the article\u0027s searchable text, which is its text and reference tokens as the index holds them (modification markers and note references are not searched); case and diacritics are significant; nothing is folded, stemmed or expanded",
         "modes_held": [
@@ -5940,6 +5951,15 @@
         },
         "publisher": "lu-legilux",
         "ranking": "none; strict lane before relaxed lane, then work key, publisher date, article identity and state digest. This index holds no BM25 ranker, so a page is the first hits in this order and not the best hits",
+        "reference": {
+          "kind": null,
+          "opens": null,
+          "outcome": "no_reference",
+          "phase": "exact_reference",
+          "reason": null,
+          "recognised": null,
+          "rule": "before any word is searched, the query is read as an exact reference: an ELI, a CELEX (consolidated forms included), a Memorial or Journal officiel A citation, a historical identifier of the publisher\u0027s catalogue, an address of this site for law, an act by its type and date or an EU act by its conventional name, or a citation of an article of an act and of a date; a reference the indexes hold opens its act, at the article and date it names (the date defaults to the search\u0027s date, else to today in Luxembourg), or its dossier when it names neither, and no word is searched; an identifier, an EU act\u0027s name or a type and date that names no act the indexes or the publisher\u0027s catalogue hold is refused identifier_unknown, with no list; a day, an issue or a name that names several acts is refused ambiguous_identifier with every one, held or not, and none is chosen; a title the index does not hold, and words after a type and date that name none of that day\u0027s acts, open nothing on their own: a title is searched as words, and the day\u0027s acts are listed; a date in a date\u0027s shape that names no calendar day opens nothing; a query that is no reference is searched as words"
+        },
         "requested_after": null,
         "requested_date": null,
         "requested_identifier": null,
@@ -6045,6 +6065,7 @@
         ],
         "index_sha256": "\u003Cvaries-per-run\u003E",
         "lanes": "strict: the query as typed is a substring; relaxed: every distinct whitespace-separated term is a substring, in any order, so the relaxed set contains the strict set. With no mode the answer is the strict hits and then only the relaxed hits strict did not serve, each article once; with a mode it is that lane\u0027s whole set. A lane not asked for is null in the population, not zero",
+        "lanes_run": true,
         "limit": 200,
         "matching": "byte-exact substring of the article\u0027s searchable text, which is its text and reference tokens as the index holds them (modification markers and note references are not searched); case and diacritics are significant; nothing is folded, stemmed or expanded",
         "modes_held": [
@@ -6070,6 +6091,15 @@
         },
         "publisher": "lu-legilux",
         "ranking": "none; strict lane before relaxed lane, then work key, publisher date, article identity and state digest. This index holds no BM25 ranker, so a page is the first hits in this order and not the best hits",
+        "reference": {
+          "kind": null,
+          "opens": null,
+          "outcome": "no_reference",
+          "phase": "exact_reference",
+          "reason": null,
+          "recognised": null,
+          "rule": "before any word is searched, the query is read as an exact reference: an ELI, a CELEX (consolidated forms included), a Memorial or Journal officiel A citation, a historical identifier of the publisher\u0027s catalogue, an address of this site for law, an act by its type and date or an EU act by its conventional name, or a citation of an article of an act and of a date; a reference the indexes hold opens its act, at the article and date it names (the date defaults to the search\u0027s date, else to today in Luxembourg), or its dossier when it names neither, and no word is searched; an identifier, an EU act\u0027s name or a type and date that names no act the indexes or the publisher\u0027s catalogue hold is refused identifier_unknown, with no list; a day, an issue or a name that names several acts is refused ambiguous_identifier with every one, held or not, and none is chosen; a title the index does not hold, and words after a type and date that name none of that day\u0027s acts, open nothing on their own: a title is searched as words, and the day\u0027s acts are listed; a date in a date\u0027s shape that names no calendar day opens nothing; a query that is no reference is searched as words"
+        },
         "requested_after": "strict.5bca01f82ef3058cfebe7f8a8a6eb1f1fbeeb32b8a1ea7b2c02ac20963235e3a.05308b0478c8f6bf9ab81db3514594a5bd4098555db06f5a656ab27130f0d7fb",
         "requested_date": null,
         "requested_identifier": null,
@@ -6192,6 +6222,7 @@
         ],
         "index_sha256": "\u003Cvaries-per-run\u003E",
         "lanes": "strict: the query as typed is a substring; relaxed: every distinct whitespace-separated term is a substring, in any order, so the relaxed set contains the strict set. With no mode the answer is the strict hits and then only the relaxed hits strict did not serve, each article once; with a mode it is that lane\u0027s whole set. A lane not asked for is null in the population, not zero",
+        "lanes_run": true,
         "limit": 200,
         "matching": "byte-exact substring of the article\u0027s searchable text, which is its text and reference tokens as the index holds them (modification markers and note references are not searched); case and diacritics are significant; nothing is folded, stemmed or expanded",
         "modes_held": [
@@ -6217,6 +6248,15 @@
         },
         "publisher": "lu-legilux",
         "ranking": "none; strict lane before relaxed lane, then work key, publisher date, article identity and state digest. This index holds no BM25 ranker, so a page is the first hits in this order and not the best hits",
+        "reference": {
+          "kind": null,
+          "opens": null,
+          "outcome": "no_reference",
+          "phase": "exact_reference",
+          "reason": null,
+          "recognised": null,
+          "rule": "before any word is searched, the query is read as an exact reference: an ELI, a CELEX (consolidated forms included), a Memorial or Journal officiel A citation, a historical identifier of the publisher\u0027s catalogue, an address of this site for law, an act by its type and date or an EU act by its conventional name, or a citation of an article of an act and of a date; a reference the indexes hold opens its act, at the article and date it names (the date defaults to the search\u0027s date, else to today in Luxembourg), or its dossier when it names neither, and no word is searched; an identifier, an EU act\u0027s name or a type and date that names no act the indexes or the publisher\u0027s catalogue hold is refused identifier_unknown, with no list; a day, an issue or a name that names several acts is refused ambiguous_identifier with every one, held or not, and none is chosen; a title the index does not hold, and words after a type and date that name none of that day\u0027s acts, open nothing on their own: a title is searched as words, and the day\u0027s acts are listed; a date in a date\u0027s shape that names no calendar day opens nothing; a query that is no reference is searched as words"
+        },
         "requested_after": null,
         "requested_date": null,
         "requested_identifier": null,
@@ -6253,6 +6293,7 @@
         "hits": [],
         "index_sha256": "\u003Cvaries-per-run\u003E",
         "lanes": "strict: the query as typed is a substring; relaxed: every distinct whitespace-separated term is a substring, in any order, so the relaxed set contains the strict set. With no mode the answer is the strict hits and then only the relaxed hits strict did not serve, each article once; with a mode it is that lane\u0027s whole set. A lane not asked for is null in the population, not zero",
+        "lanes_run": true,
         "limit": 200,
         "matching": "byte-exact substring of the article\u0027s searchable text, which is its text and reference tokens as the index holds them (modification markers and note references are not searched); case and diacritics are significant; nothing is folded, stemmed or expanded",
         "modes_held": [
@@ -6278,6 +6319,15 @@
         },
         "publisher": "lu-legilux",
         "ranking": "none; strict lane before relaxed lane, then work key, publisher date, article identity and state digest. This index holds no BM25 ranker, so a page is the first hits in this order and not the best hits",
+        "reference": {
+          "kind": null,
+          "opens": null,
+          "outcome": "no_reference",
+          "phase": "exact_reference",
+          "reason": null,
+          "recognised": null,
+          "rule": "before any word is searched, the query is read as an exact reference: an ELI, a CELEX (consolidated forms included), a Memorial or Journal officiel A citation, a historical identifier of the publisher\u0027s catalogue, an address of this site for law, an act by its type and date or an EU act by its conventional name, or a citation of an article of an act and of a date; a reference the indexes hold opens its act, at the article and date it names (the date defaults to the search\u0027s date, else to today in Luxembourg), or its dossier when it names neither, and no word is searched; an identifier, an EU act\u0027s name or a type and date that names no act the indexes or the publisher\u0027s catalogue hold is refused identifier_unknown, with no list; a day, an issue or a name that names several acts is refused ambiguous_identifier with every one, held or not, and none is chosen; a title the index does not hold, and words after a type and date that name none of that day\u0027s acts, open nothing on their own: a title is searched as words, and the day\u0027s acts are listed; a date in a date\u0027s shape that names no calendar day opens nothing; a query that is no reference is searched as words"
+        },
         "requested_after": null,
         "requested_date": null,
         "requested_identifier": null,
@@ -6370,6 +6420,7 @@
         ],
         "index_sha256": "\u003Cvaries-per-run\u003E",
         "lanes": "strict: the query as typed is a substring; relaxed: every distinct whitespace-separated term is a substring, in any order, so the relaxed set contains the strict set. With no mode the answer is the strict hits and then only the relaxed hits strict did not serve, each article once; with a mode it is that lane\u0027s whole set. A lane not asked for is null in the population, not zero",
+        "lanes_run": true,
         "limit": 200,
         "matching": "byte-exact substring of the article\u0027s searchable text as the EU index holds it; case and diacritics are significant; nothing is folded, stemmed or expanded",
         "modes_held": [
@@ -6419,6 +6470,15 @@
         },
         "publisher": "eu-eurlex",
         "ranking": "none; strict lane before relaxed lane, then the publisher\u0027s article id and article identity. This index holds no BM25 ranker, so a page is the first hits in this order and not the best hits",
+        "reference": {
+          "kind": null,
+          "opens": null,
+          "outcome": "not_run_identifier_given",
+          "phase": "exact_reference",
+          "reason": null,
+          "recognised": null,
+          "rule": "before any word is searched, the query is read as an exact reference: an ELI, a CELEX (consolidated forms included), a Memorial or Journal officiel A citation, a historical identifier of the publisher\u0027s catalogue, an address of this site for law, an act by its type and date or an EU act by its conventional name, or a citation of an article of an act and of a date; a reference the indexes hold opens its act, at the article and date it names (the date defaults to the search\u0027s date, else to today in Luxembourg), or its dossier when it names neither, and no word is searched; an identifier, an EU act\u0027s name or a type and date that names no act the indexes or the publisher\u0027s catalogue hold is refused identifier_unknown, with no list; a day, an issue or a name that names several acts is refused ambiguous_identifier with every one, held or not, and none is chosen; a title the index does not hold, and words after a type and date that name none of that day\u0027s acts, open nothing on their own: a title is searched as words, and the day\u0027s acts are listed; a date in a date\u0027s shape that names no calendar day opens nothing; a query that is no reference is searched as words"
+        },
         "requested_after": null,
         "requested_date": null,
         "requested_identifier": "32016R0679",
@@ -6477,6 +6537,7 @@
         ],
         "index_sha256": "\u003Cvaries-per-run\u003E",
         "lanes": "strict: the query as typed is a substring; relaxed: every distinct whitespace-separated term is a substring, in any order, so the relaxed set contains the strict set. With no mode the answer is the strict hits and then only the relaxed hits strict did not serve, each article once; with a mode it is that lane\u0027s whole set. A lane not asked for is null in the population, not zero",
+        "lanes_run": true,
         "limit": 1,
         "matching": "byte-exact substring of the article\u0027s searchable text as the EU index holds it; case and diacritics are significant; nothing is folded, stemmed or expanded",
         "modes_held": [
@@ -6526,6 +6587,15 @@
         },
         "publisher": "eu-eurlex",
         "ranking": "none; strict lane before relaxed lane, then the publisher\u0027s article id and article identity. This index holds no BM25 ranker, so a page is the first hits in this order and not the best hits",
+        "reference": {
+          "kind": null,
+          "opens": null,
+          "outcome": "not_run_identifier_given",
+          "phase": "exact_reference",
+          "reason": null,
+          "recognised": null,
+          "rule": "before any word is searched, the query is read as an exact reference: an ELI, a CELEX (consolidated forms included), a Memorial or Journal officiel A citation, a historical identifier of the publisher\u0027s catalogue, an address of this site for law, an act by its type and date or an EU act by its conventional name, or a citation of an article of an act and of a date; a reference the indexes hold opens its act, at the article and date it names (the date defaults to the search\u0027s date, else to today in Luxembourg), or its dossier when it names neither, and no word is searched; an identifier, an EU act\u0027s name or a type and date that names no act the indexes or the publisher\u0027s catalogue hold is refused identifier_unknown, with no list; a day, an issue or a name that names several acts is refused ambiguous_identifier with every one, held or not, and none is chosen; a title the index does not hold, and words after a type and date that name none of that day\u0027s acts, open nothing on their own: a title is searched as words, and the day\u0027s acts are listed; a date in a date\u0027s shape that names no calendar day opens nothing; a query that is no reference is searched as words"
+        },
         "requested_after": null,
         "requested_date": null,
         "requested_identifier": "32016R0679",
@@ -6602,6 +6672,7 @@
         ],
         "index_sha256": "\u003Cvaries-per-run\u003E",
         "lanes": "strict: the query as typed is a substring; relaxed: every distinct whitespace-separated term is a substring, in any order, so the relaxed set contains the strict set. With no mode the answer is the strict hits and then only the relaxed hits strict did not serve, each article once; with a mode it is that lane\u0027s whole set. A lane not asked for is null in the population, not zero",
+        "lanes_run": true,
         "limit": 200,
         "matching": "byte-exact substring of the article\u0027s searchable text as the EU index holds it; case and diacritics are significant; nothing is folded, stemmed or expanded",
         "modes_held": [
@@ -6651,6 +6722,15 @@
         },
         "publisher": "eu-eurlex",
         "ranking": "none; strict lane before relaxed lane, then the publisher\u0027s article id and article identity. This index holds no BM25 ranker, so a page is the first hits in this order and not the best hits",
+        "reference": {
+          "kind": null,
+          "opens": null,
+          "outcome": "not_run_identifier_given",
+          "phase": "exact_reference",
+          "reason": null,
+          "recognised": null,
+          "rule": "before any word is searched, the query is read as an exact reference: an ELI, a CELEX (consolidated forms included), a Memorial or Journal officiel A citation, a historical identifier of the publisher\u0027s catalogue, an address of this site for law, an act by its type and date or an EU act by its conventional name, or a citation of an article of an act and of a date; a reference the indexes hold opens its act, at the article and date it names (the date defaults to the search\u0027s date, else to today in Luxembourg), or its dossier when it names neither, and no word is searched; an identifier, an EU act\u0027s name or a type and date that names no act the indexes or the publisher\u0027s catalogue hold is refused identifier_unknown, with no list; a day, an issue or a name that names several acts is refused ambiguous_identifier with every one, held or not, and none is chosen; a title the index does not hold, and words after a type and date that name none of that day\u0027s acts, open nothing on their own: a title is searched as words, and the day\u0027s acts are listed; a date in a date\u0027s shape that names no calendar day opens nothing; a query that is no reference is searched as words"
+        },
         "requested_after": "strict.7ab119a143803f39c2c7bccb41c19504294baa152fdfda20607356624da54a2c",
         "requested_date": null,
         "requested_identifier": "32016R0679",
@@ -6690,6 +6770,7 @@
         "hits": [],
         "index_sha256": "\u003Cvaries-per-run\u003E",
         "lanes": "strict: the query as typed is a substring; relaxed: every distinct whitespace-separated term is a substring, in any order, so the relaxed set contains the strict set. With no mode the answer is the strict hits and then only the relaxed hits strict did not serve, each article once; with a mode it is that lane\u0027s whole set. A lane not asked for is null in the population, not zero",
+        "lanes_run": true,
         "limit": 200,
         "matching": "byte-exact substring of the article\u0027s searchable text as the EU index holds it; case and diacritics are significant; nothing is folded, stemmed or expanded",
         "modes_held": [
@@ -6739,6 +6820,15 @@
         },
         "publisher": "eu-eurlex",
         "ranking": "none; strict lane before relaxed lane, then the publisher\u0027s article id and article identity. This index holds no BM25 ranker, so a page is the first hits in this order and not the best hits",
+        "reference": {
+          "kind": null,
+          "opens": null,
+          "outcome": "not_run_identifier_given",
+          "phase": "exact_reference",
+          "reason": null,
+          "recognised": null,
+          "rule": "before any word is searched, the query is read as an exact reference: an ELI, a CELEX (consolidated forms included), a Memorial or Journal officiel A citation, a historical identifier of the publisher\u0027s catalogue, an address of this site for law, an act by its type and date or an EU act by its conventional name, or a citation of an article of an act and of a date; a reference the indexes hold opens its act, at the article and date it names (the date defaults to the search\u0027s date, else to today in Luxembourg), or its dossier when it names neither, and no word is searched; an identifier, an EU act\u0027s name or a type and date that names no act the indexes or the publisher\u0027s catalogue hold is refused identifier_unknown, with no list; a day, an issue or a name that names several acts is refused ambiguous_identifier with every one, held or not, and none is chosen; a title the index does not hold, and words after a type and date that name none of that day\u0027s acts, open nothing on their own: a title is searched as words, and the day\u0027s acts are listed; a date in a date\u0027s shape that names no calendar day opens nothing; a query that is no reference is searched as words"
+        },
         "requested_after": null,
         "requested_date": null,
         "requested_identifier": "32016R0679",
@@ -6761,6 +6851,397 @@
           "retrieval_lane": "r1_work_discovery",
           "work": null
         }
+      }
+    },
+    {
+      "operation": "search",
+      "object_type": "quote",
+      "scenario": "an act by its type and date, no article and no date: the phase opens its dossier, and no word is searched",
+      "answer": {
+        "corpus_sha256": "\u003Cvaries-per-run\u003E",
+        "hits": [],
+        "index_sha256": "\u003Cvaries-per-run\u003E",
+        "lanes_run": false,
+        "publisher": "lu-legilux",
+        "reference": {
+          "kind": "citation",
+          "opens": {
+            "address": "/lu-legilux/loi-1991-08-10-n3",
+            "address_kind": "dossier",
+            "article_id": null,
+            "language": null,
+            "page": "dossier",
+            "publisher": "lu-legilux",
+            "state_date": null,
+            "work": "loi-1991-08-10-n3"
+          },
+          "outcome": "opens",
+          "phase": "exact_reference",
+          "reason": null,
+          "recognised": {
+            "act": {
+              "as_typed": "loi du 10 ao\u00FBt 1991",
+              "form": "type_and_date",
+              "identifier": "loi du 10 ao\u00FBt 1991",
+              "title": null,
+              "title_language": null,
+              "work": "loi-1991-08-10-n3"
+            },
+            "article": null,
+            "article_rule": null,
+            "date": null,
+            "language": null,
+            "text": "loi du 10 ao\u00FBt 1991"
+          },
+          "rule": "before any word is searched, the query is read as an exact reference: an ELI, a CELEX (consolidated forms included), a Memorial or Journal officiel A citation, a historical identifier of the publisher\u0027s catalogue, an address of this site for law, an act by its type and date or an EU act by its conventional name, or a citation of an article of an act and of a date; a reference the indexes hold opens its act, at the article and date it names (the date defaults to the search\u0027s date, else to today in Luxembourg), or its dossier when it names neither, and no word is searched; an identifier, an EU act\u0027s name or a type and date that names no act the indexes or the publisher\u0027s catalogue hold is refused identifier_unknown, with no list; a day, an issue or a name that names several acts is refused ambiguous_identifier with every one, held or not, and none is chosen; a title the index does not hold, and words after a type and date that name none of that day\u0027s acts, open nothing on their own: a title is searched as words, and the day\u0027s acts are listed; a date in a date\u0027s shape that names no calendar day opens nothing; a query that is no reference is searched as words"
+        },
+        "requested_after": null,
+        "requested_date": null,
+        "requested_identifier": null,
+        "requested_language": "fra",
+        "requested_mode": null,
+        "requested_query": "loi du 10 ao\u00FBt 1991"
+      }
+    },
+    {
+      "operation": "search",
+      "object_type": "quote",
+      "scenario": "an article of that act at a date: the phase opens Reading at that article in the version the date selects, by its permalink",
+      "answer": {
+        "corpus_sha256": "\u003Cvaries-per-run\u003E",
+        "hits": [],
+        "index_sha256": "\u003Cvaries-per-run\u003E",
+        "lanes_run": false,
+        "publisher": "lu-legilux",
+        "reference": {
+          "kind": "citation",
+          "opens": {
+            "address": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--5bca01f82ef3058cfebe7f8a8a6eb1f1fbeeb32b8a1ea7b2c02ac20963235e3a/fra/art_15",
+            "address_kind": "permalink",
+            "article_id": "art_15",
+            "language": "fra",
+            "page": "reading",
+            "publisher": "lu-legilux",
+            "state_date": "2024-02-01",
+            "work": "loi-1991-08-10-n3"
+          },
+          "outcome": "opens",
+          "phase": "exact_reference",
+          "reason": null,
+          "recognised": {
+            "act": {
+              "as_typed": "loi du 10 ao\u00FBt 1991",
+              "form": "type_and_date",
+              "identifier": "loi du 10 ao\u00FBt 1991",
+              "title": null,
+              "title_language": null,
+              "work": "loi-1991-08-10-n3"
+            },
+            "article": {
+              "as_typed": "15",
+              "key": "15",
+              "matched_by": "number",
+              "number": "15",
+              "part": null
+            },
+            "article_rule": "An article number, as a citation writes it and as an index holds it, is read to one key, and a citation opens the article whose key is its key: never a near one. Case, spacing and the code letter\u0027s dot are not part of a number (L. 121-6, L.121-6 and L 121-6 are L.121-6); 1er, premier and 1 are 1; a suffix is part of a number (42, 42bis, 42ter and 42-1 are four numbers); an arabic number is never a roman one (3 is not III). A grouped article (a range such as 141 \u00E0 144, or two numbers joined) is opened by a citation of a number it groups only when no article of the version holds that number itself. An id this table reads as no number of the act (a quoted article of an amended act) is never opened by a citation.",
+            "date": {
+              "as_typed": "15 mars 2024",
+              "date": "2024-03-15",
+              "source": "citation"
+            },
+            "language": "fra",
+            "text": "article 15 de la loi du 10 ao\u00FBt 1991, 15 mars 2024"
+          },
+          "rule": "before any word is searched, the query is read as an exact reference: an ELI, a CELEX (consolidated forms included), a Memorial or Journal officiel A citation, a historical identifier of the publisher\u0027s catalogue, an address of this site for law, an act by its type and date or an EU act by its conventional name, or a citation of an article of an act and of a date; a reference the indexes hold opens its act, at the article and date it names (the date defaults to the search\u0027s date, else to today in Luxembourg), or its dossier when it names neither, and no word is searched; an identifier, an EU act\u0027s name or a type and date that names no act the indexes or the publisher\u0027s catalogue hold is refused identifier_unknown, with no list; a day, an issue or a name that names several acts is refused ambiguous_identifier with every one, held or not, and none is chosen; a title the index does not hold, and words after a type and date that name none of that day\u0027s acts, open nothing on their own: a title is searched as words, and the day\u0027s acts are listed; a date in a date\u0027s shape that names no calendar day opens nothing; a query that is no reference is searched as words"
+        },
+        "requested_after": null,
+        "requested_date": null,
+        "requested_identifier": null,
+        "requested_language": "fra",
+        "requested_mode": null,
+        "requested_query": "article 15 de la loi du 10 ao\u00FBt 1991, 15 mars 2024"
+      }
+    },
+    {
+      "operation": "search",
+      "object_type": "quote",
+      "scenario": "the same article with no date: the phase opens Reading at it by the act\u0027s readable address, today\u0027s version",
+      "answer": {
+        "corpus_sha256": "\u003Cvaries-per-run\u003E",
+        "hits": [],
+        "index_sha256": "\u003Cvaries-per-run\u003E",
+        "lanes_run": false,
+        "publisher": "lu-legilux",
+        "reference": {
+          "kind": "citation",
+          "opens": {
+            "address": "/lu-legilux/loi-1991-08-10-n3/fra/art_15",
+            "address_kind": "readable",
+            "article_id": "art_15",
+            "language": "fra",
+            "page": "reading",
+            "publisher": "lu-legilux",
+            "state_date": "2024-02-01",
+            "work": "loi-1991-08-10-n3"
+          },
+          "outcome": "opens",
+          "phase": "exact_reference",
+          "reason": null,
+          "recognised": {
+            "act": {
+              "as_typed": "loi du 10 ao\u00FBt 1991",
+              "form": "type_and_date",
+              "identifier": "loi du 10 ao\u00FBt 1991",
+              "title": null,
+              "title_language": null,
+              "work": "loi-1991-08-10-n3"
+            },
+            "article": {
+              "as_typed": "15",
+              "key": "15",
+              "matched_by": "number",
+              "number": "15",
+              "part": null
+            },
+            "article_rule": "An article number, as a citation writes it and as an index holds it, is read to one key, and a citation opens the article whose key is its key: never a near one. Case, spacing and the code letter\u0027s dot are not part of a number (L. 121-6, L.121-6 and L 121-6 are L.121-6); 1er, premier and 1 are 1; a suffix is part of a number (42, 42bis, 42ter and 42-1 are four numbers); an arabic number is never a roman one (3 is not III). A grouped article (a range such as 141 \u00E0 144, or two numbers joined) is opened by a citation of a number it groups only when no article of the version holds that number itself. An id this table reads as no number of the act (a quoted article of an amended act) is never opened by a citation.",
+            "date": {
+              "as_typed": null,
+              "date": "2026-09-17",
+              "source": "today_in_luxembourg"
+            },
+            "language": "fra",
+            "text": "article 15 de la loi du 10 ao\u00FBt 1991"
+          },
+          "rule": "before any word is searched, the query is read as an exact reference: an ELI, a CELEX (consolidated forms included), a Memorial or Journal officiel A citation, a historical identifier of the publisher\u0027s catalogue, an address of this site for law, an act by its type and date or an EU act by its conventional name, or a citation of an article of an act and of a date; a reference the indexes hold opens its act, at the article and date it names (the date defaults to the search\u0027s date, else to today in Luxembourg), or its dossier when it names neither, and no word is searched; an identifier, an EU act\u0027s name or a type and date that names no act the indexes or the publisher\u0027s catalogue hold is refused identifier_unknown, with no list; a day, an issue or a name that names several acts is refused ambiguous_identifier with every one, held or not, and none is chosen; a title the index does not hold, and words after a type and date that name none of that day\u0027s acts, open nothing on their own: a title is searched as words, and the day\u0027s acts are listed; a date in a date\u0027s shape that names no calendar day opens nothing; a query that is no reference is searched as words"
+        },
+        "requested_after": null,
+        "requested_date": null,
+        "requested_identifier": null,
+        "requested_language": "fra",
+        "requested_mode": null,
+        "requested_query": "article 15 de la loi du 10 ao\u00FBt 1991"
+      }
+    },
+    {
+      "operation": "search",
+      "object_type": "quote",
+      "scenario": "a citation whose date names no calendar day: nothing is opened, and no word is searched with the date dropped",
+      "answer": {
+        "corpus_sha256": "\u003Cvaries-per-run\u003E",
+        "hits": [],
+        "index_sha256": "\u003Cvaries-per-run\u003E",
+        "lanes_run": false,
+        "publisher": "lu-legilux",
+        "reference": {
+          "kind": "citation",
+          "opens": null,
+          "outcome": "not_opened",
+          "phase": "exact_reference",
+          "reason": "date_not_a_calendar_date",
+          "recognised": {
+            "act": {
+              "as_typed": "loi du 10 ao\u00FBt 1991",
+              "form": "type_and_date",
+              "identifier": "loi du 10 ao\u00FBt 1991",
+              "title": null,
+              "title_language": null,
+              "work": null
+            },
+            "article": {
+              "as_typed": "15",
+              "key": "15",
+              "matched_by": null,
+              "number": "15",
+              "part": null
+            },
+            "article_rule": "An article number, as a citation writes it and as an index holds it, is read to one key, and a citation opens the article whose key is its key: never a near one. Case, spacing and the code letter\u0027s dot are not part of a number (L. 121-6, L.121-6 and L 121-6 are L.121-6); 1er, premier and 1 are 1; a suffix is part of a number (42, 42bis, 42ter and 42-1 are four numbers); an arabic number is never a roman one (3 is not III). A grouped article (a range such as 141 \u00E0 144, or two numbers joined) is opened by a citation of a number it groups only when no article of the version holds that number itself. An id this table reads as no number of the act (a quoted article of an amended act) is never opened by a citation.",
+            "date": {
+              "as_typed": "31 f\u00E9vrier 2024",
+              "date": null,
+              "source": "citation"
+            },
+            "language": null,
+            "text": "article 15 de la loi du 10 ao\u00FBt 1991, 31 f\u00E9vrier 2024"
+          },
+          "rule": "before any word is searched, the query is read as an exact reference: an ELI, a CELEX (consolidated forms included), a Memorial or Journal officiel A citation, a historical identifier of the publisher\u0027s catalogue, an address of this site for law, an act by its type and date or an EU act by its conventional name, or a citation of an article of an act and of a date; a reference the indexes hold opens its act, at the article and date it names (the date defaults to the search\u0027s date, else to today in Luxembourg), or its dossier when it names neither, and no word is searched; an identifier, an EU act\u0027s name or a type and date that names no act the indexes or the publisher\u0027s catalogue hold is refused identifier_unknown, with no list; a day, an issue or a name that names several acts is refused ambiguous_identifier with every one, held or not, and none is chosen; a title the index does not hold, and words after a type and date that name none of that day\u0027s acts, open nothing on their own: a title is searched as words, and the day\u0027s acts are listed; a date in a date\u0027s shape that names no calendar day opens nothing; a query that is no reference is searched as words"
+        },
+        "requested_after": null,
+        "requested_date": null,
+        "requested_identifier": null,
+        "requested_language": "fra",
+        "requested_mode": null,
+        "requested_query": "article 15 de la loi du 10 ao\u00FBt 1991, 31 f\u00E9vrier 2024"
+      }
+    },
+    {
+      "operation": "search",
+      "object_type": "quote",
+      "scenario": "the usual citation form the generator composes for that article: the phase reads it and opens the article it cites, in the version it names",
+      "answer": {
+        "corpus_sha256": "\u003Cvaries-per-run\u003E",
+        "hits": [],
+        "index_sha256": "\u003Cvaries-per-run\u003E",
+        "lanes_run": false,
+        "publisher": "lu-legilux",
+        "reference": {
+          "kind": "citation",
+          "opens": {
+            "address": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--5bca01f82ef3058cfebe7f8a8a6eb1f1fbeeb32b8a1ea7b2c02ac20963235e3a/fra/art_15",
+            "address_kind": "permalink",
+            "article_id": "art_15",
+            "language": "fra",
+            "page": "reading",
+            "publisher": "lu-legilux",
+            "state_date": "2024-02-01",
+            "work": "loi-1991-08-10-n3"
+          },
+          "outcome": "opens",
+          "phase": "exact_reference",
+          "reason": null,
+          "recognised": {
+            "act": {
+              "as_typed": "loi du 10 ao\u00FBt 1991",
+              "form": "type_and_date",
+              "identifier": "loi du 10 ao\u00FBt 1991",
+              "title": null,
+              "title_language": null,
+              "work": "loi-1991-08-10-n3"
+            },
+            "article": {
+              "as_typed": "15",
+              "key": "15",
+              "matched_by": "number",
+              "number": "15",
+              "part": null
+            },
+            "article_rule": "An article number, as a citation writes it and as an index holds it, is read to one key, and a citation opens the article whose key is its key: never a near one. Case, spacing and the code letter\u0027s dot are not part of a number (L. 121-6, L.121-6 and L 121-6 are L.121-6); 1er, premier and 1 are 1; a suffix is part of a number (42, 42bis, 42ter and 42-1 are four numbers); an arabic number is never a roman one (3 is not III). A grouped article (a range such as 141 \u00E0 144, or two numbers joined) is opened by a citation of a number it groups only when no article of the version holds that number itself. An id this table reads as no number of the act (a quoted article of an amended act) is never opened by a citation.",
+            "date": {
+              "as_typed": "1er f\u00E9vrier 2024",
+              "date": "2024-02-01",
+              "source": "citation"
+            },
+            "language": "fra",
+            "text": "Art. 15 de la loi du 10 ao\u00FBt 1991, dans sa version applicable au 1er f\u00E9vrier 2024"
+          },
+          "rule": "before any word is searched, the query is read as an exact reference: an ELI, a CELEX (consolidated forms included), a Memorial or Journal officiel A citation, a historical identifier of the publisher\u0027s catalogue, an address of this site for law, an act by its type and date or an EU act by its conventional name, or a citation of an article of an act and of a date; a reference the indexes hold opens its act, at the article and date it names (the date defaults to the search\u0027s date, else to today in Luxembourg), or its dossier when it names neither, and no word is searched; an identifier, an EU act\u0027s name or a type and date that names no act the indexes or the publisher\u0027s catalogue hold is refused identifier_unknown, with no list; a day, an issue or a name that names several acts is refused ambiguous_identifier with every one, held or not, and none is chosen; a title the index does not hold, and words after a type and date that name none of that day\u0027s acts, open nothing on their own: a title is searched as words, and the day\u0027s acts are listed; a date in a date\u0027s shape that names no calendar day opens nothing; a query that is no reference is searched as words"
+        },
+        "requested_after": null,
+        "requested_date": null,
+        "requested_identifier": null,
+        "requested_language": "fra",
+        "requested_mode": null,
+        "requested_query": "Art. 15 de la loi du 10 ao\u00FBt 1991, dans sa version applicable au 1er f\u00E9vrier 2024"
+      }
+    },
+    {
+      "operation": "search",
+      "object_type": "quote",
+      "scenario": "an EU act by its conventional name: the phase reads its CELEX and opens its dossier",
+      "answer": {
+        "corpus_sha256": "\u003Cvaries-per-run\u003E",
+        "hits": [],
+        "index_sha256": "\u003Cvaries-per-run\u003E",
+        "lanes_run": false,
+        "publisher": "eu-eurlex",
+        "reference": {
+          "kind": "citation",
+          "opens": {
+            "address": "/eu-eurlex/32016R0679",
+            "address_kind": "dossier",
+            "article_id": null,
+            "language": null,
+            "page": "dossier",
+            "publisher": "eu-eurlex",
+            "state_date": null,
+            "work": "32016R0679"
+          },
+          "outcome": "opens",
+          "phase": "exact_reference",
+          "reason": null,
+          "recognised": {
+            "act": {
+              "as_typed": "Regulation (EU) 2016/679",
+              "form": "eu_act_name",
+              "identifier": "Regulation (EU) 2016/679 (CELEX 32016R0679)",
+              "title": null,
+              "title_language": null,
+              "work": "32016R0679"
+            },
+            "article": null,
+            "article_rule": null,
+            "date": null,
+            "language": null,
+            "text": "Regulation (EU) 2016/679"
+          },
+          "rule": "before any word is searched, the query is read as an exact reference: an ELI, a CELEX (consolidated forms included), a Memorial or Journal officiel A citation, a historical identifier of the publisher\u0027s catalogue, an address of this site for law, an act by its type and date or an EU act by its conventional name, or a citation of an article of an act and of a date; a reference the indexes hold opens its act, at the article and date it names (the date defaults to the search\u0027s date, else to today in Luxembourg), or its dossier when it names neither, and no word is searched; an identifier, an EU act\u0027s name or a type and date that names no act the indexes or the publisher\u0027s catalogue hold is refused identifier_unknown, with no list; a day, an issue or a name that names several acts is refused ambiguous_identifier with every one, held or not, and none is chosen; a title the index does not hold, and words after a type and date that name none of that day\u0027s acts, open nothing on their own: a title is searched as words, and the day\u0027s acts are listed; a date in a date\u0027s shape that names no calendar day opens nothing; a query that is no reference is searched as words"
+        },
+        "requested_after": null,
+        "requested_date": null,
+        "requested_identifier": null,
+        "requested_language": "eng",
+        "requested_mode": null,
+        "requested_query": "Regulation (EU) 2016/679"
+      }
+    },
+    {
+      "operation": "search",
+      "object_type": "quote",
+      "scenario": "an article of the EU act with no date: Reading at the provision by the act\u0027s readable address",
+      "answer": {
+        "corpus_sha256": "\u003Cvaries-per-run\u003E",
+        "hits": [],
+        "index_sha256": "\u003Cvaries-per-run\u003E",
+        "lanes_run": false,
+        "publisher": "eu-eurlex",
+        "reference": {
+          "kind": "citation",
+          "opens": {
+            "address": "/eu-eurlex/32016R0679/eng/099",
+            "address_kind": "readable",
+            "article_id": "099",
+            "language": "eng",
+            "page": "reading",
+            "publisher": "eu-eurlex",
+            "state_date": "2016-04-27",
+            "work": "32016R0679"
+          },
+          "outcome": "opens",
+          "phase": "exact_reference",
+          "reason": null,
+          "recognised": {
+            "act": {
+              "as_typed": "Regulation (EU) 2016/679",
+              "form": "eu_act_name",
+              "identifier": "Regulation (EU) 2016/679 (CELEX 32016R0679)",
+              "title": null,
+              "title_language": null,
+              "work": "32016R0679"
+            },
+            "article": {
+              "as_typed": "99",
+              "key": "99",
+              "matched_by": "number",
+              "number": "99",
+              "part": null
+            },
+            "article_rule": "An article number, as a citation writes it and as an index holds it, is read to one key, and a citation opens the article whose key is its key: never a near one. Case, spacing and the code letter\u0027s dot are not part of a number (L. 121-6, L.121-6 and L 121-6 are L.121-6); 1er, premier and 1 are 1; a suffix is part of a number (42, 42bis, 42ter and 42-1 are four numbers); an arabic number is never a roman one (3 is not III). A grouped article (a range such as 141 \u00E0 144, or two numbers joined) is opened by a citation of a number it groups only when no article of the version holds that number itself. An id this table reads as no number of the act (a quoted article of an amended act) is never opened by a citation.",
+            "date": {
+              "as_typed": null,
+              "date": "2026-09-17",
+              "source": "today_in_luxembourg"
+            },
+            "language": "eng",
+            "text": "Article 99 of Regulation (EU) 2016/679"
+          },
+          "rule": "before any word is searched, the query is read as an exact reference: an ELI, a CELEX (consolidated forms included), a Memorial or Journal officiel A citation, a historical identifier of the publisher\u0027s catalogue, an address of this site for law, an act by its type and date or an EU act by its conventional name, or a citation of an article of an act and of a date; a reference the indexes hold opens its act, at the article and date it names (the date defaults to the search\u0027s date, else to today in Luxembourg), or its dossier when it names neither, and no word is searched; an identifier, an EU act\u0027s name or a type and date that names no act the indexes or the publisher\u0027s catalogue hold is refused identifier_unknown, with no list; a day, an issue or a name that names several acts is refused ambiguous_identifier with every one, held or not, and none is chosen; a title the index does not hold, and words after a type and date that name none of that day\u0027s acts, open nothing on their own: a title is searched as words, and the day\u0027s acts are listed; a date in a date\u0027s shape that names no calendar day opens nothing; a query that is no reference is searched as words"
+        },
+        "requested_after": null,
+        "requested_date": null,
+        "requested_identifier": null,
+        "requested_language": "eng",
+        "requested_mode": null,
+        "requested_query": "Article 99 of Regulation (EU) 2016/679"
       }
     },
     {

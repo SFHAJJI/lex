@@ -26,9 +26,16 @@
 // with the provision as a last segment. A hit this page shows must pin its wording, so an answer with hits
 // and no pinned wording is refused here rather than shown unpinned. The wording date is the date the
 // publisher's Formex package gives the act (`date_semantics`), never an applicability date.
+//
+// Exact references first (the plan's item 4.2): a search that names no work reads its query as an exact reference
+// before any word is searched, and its answer reports the phase as `reference`. A reference the indexes hold answers
+// with the address its act opens at and no hit (`readReferenceAnswer`): the dossier, a permalink pinning the version
+// the date selects, or the act's readable address for today's version; or with nothing opened, when its date names no
+// calendar day or two of its dates disagree. Every other answer says the phase read no reference, or did not run
+// because a work was named, and is read as before.
 
 import { isCalendarDate } from './temporal.mjs';
-import { articlePermalink, escapeSegment, luxembourgPermalink } from './permalinks.mjs';
+import { articlePermalink, escapeSegment, luxembourgPermalink, parseSitePath } from './permalinks.mjs';
 
 const DIGEST = /^[0-9a-f]{64}$/;
 
@@ -396,6 +403,8 @@ export function readSearch(answer) {
     hits: Object.freeze(hits),
     ambiguousWorks: readAmbiguousWorks(requireOwn(answer, 'ambiguous_works', where), requestedDate, hits),
     workResolution: readWorkResolution(requireOwn(answer, 'work_resolution', where), identifier),
+    reference: readReferencePhase(answer, identifier),
+    referenceReason: readReferenceReason(answer),
     limit,
     truncated,
     continueAfter,
@@ -572,6 +581,8 @@ export function readEuropeSearch(answer) {
     wording,
     hits: Object.freeze(hits),
     workResolution: readWorkResolution(requireOwn(answer, 'work_resolution', where), identifier),
+    reference: readReferencePhase(answer, identifier),
+    referenceReason: readReferenceReason(answer),
     limit,
     truncated,
     continueAfter,
@@ -584,8 +595,242 @@ export function readEuropeSearch(answer) {
   });
 }
 
-/** Reads a search answer with the reader its publisher names: Luxembourg's, or the EU's in one work. */
+/** What the exact-reference phase says it did, in the platform's closed vocabulary. */
+export const REFERENCE_OUTCOMES = Object.freeze(['no_reference', 'not_run_identifier_given', 'opens', 'not_opened']);
+
+/** The kinds of reference the phase reads (a bare identifier's family, or a citation). */
+export const REFERENCE_KINDS = Object.freeze(['eli', 'celex', 'memorial', 'historical_legal_id', 'permalink', 'citation']);
+
+/** The forms an act is named in. */
+export const REFERENCE_ACT_FORMS = Object.freeze(['eli', 'celex', 'memorial', 'historical_legal_id', 'permalink', 'type_and_date', 'eu_act_name', 'title']);
+
+/** Where a reference's date came from: the reference itself, its identifier, the search's date field, or today in Luxembourg (R13). */
+export const REFERENCE_DATE_SOURCES = Object.freeze(['citation', 'identifier', 'search_date', 'today_in_luxembourg']);
+
+/** Why a recognised reference opened nothing. */
+export const NOT_OPENED_REASONS = Object.freeze(['date_not_a_calendar_date', 'two_dates_disagree']);
+
+/** Why a query the phase read as a citation was searched as words: a title the index holds no act under (review of #974, F1). */
+export const SEARCHED_AS_WORDS_REASONS = Object.freeze(['title_not_held']);
+
+/** The kinds of address a reference opens: a dossier, a permalink that pins a version, an act's readable address (R67). */
+export const OPENED_ADDRESS_KINDS = Object.freeze({ dossier: 'work', permalink: 'state', readable: 'current' });
+
+function requireOneOf(value, allowed, where) {
+  if (!allowed.includes(value)) {
+    throw new Error(`${where} is ${JSON.stringify(value)}, not one of ${allowed.join(', ')}`);
+  }
+  return value;
+}
+
+/** The phase's report on an answer that searched words: none read, or not run because a work was named. */
+function readReferencePhase(answer, identifier) {
+  if (!Object.hasOwn(answer, 'reference')) return null;
+  const reference = answer.reference;
+  if (requireOwn(reference, 'phase', 'reference') !== 'exact_reference') {
+    throw new Error('reference is the exact_reference phase');
+  }
+  const outcome = requireOneOf(requireOwn(reference, 'outcome', 'reference'), ['no_reference', 'not_run_identifier_given'], 'reference.outcome of an answer that searched words');
+  if ((identifier !== null) !== (outcome === 'not_run_identifier_given')) {
+    throw new Error('the phase is not run exactly when a work is named');
+  }
+  return outcome;
+}
+
+/** Why the phase searched as words a query it read as a citation, or null: only a search that read no reference says one. */
+function readReferenceReason(answer) {
+  const reason = answer.reference?.reason ?? null;
+  if (reason === null) return null;
+  if (answer.reference.outcome !== 'no_reference') {
+    throw new Error('reference.reason is said only of a query searched as words');
+  }
+  return requireOneOf(reason, SEARCHED_AS_WORDS_REASONS, 'reference.reason');
+}
+
+/** What the phase recognised: the act, the article and the date, each as typed and as read. */
+function readRecognised(value) {
+  const where = 'reference.recognised';
+  const act = requireOwn(value, 'act', where);
+  const article = requireOwn(value, 'article', where);
+  const date = requireOwn(value, 'date', where);
+  return Object.freeze({
+    text: requireText(requireOwn(value, 'text', where), `${where}.text`),
+    act: Object.freeze({
+      form: requireOneOf(requireOwn(act, 'form', `${where}.act`), REFERENCE_ACT_FORMS, `${where}.act.form`),
+      asTyped: requireText(requireOwn(act, 'as_typed', `${where}.act`), `${where}.act.as_typed`),
+      identifier: requireText(requireOwn(act, 'identifier', `${where}.act`), `${where}.act.identifier`),
+      work: requireTextOrNull(requireOwn(act, 'work', `${where}.act`), `${where}.act.work`),
+      title: requireTextOrNull(requireOwn(act, 'title', `${where}.act`), `${where}.act.title`),
+      titleLanguage: requireTextOrNull(requireOwn(act, 'title_language', `${where}.act`), `${where}.act.title_language`),
+    }),
+    article: article === null ? null : Object.freeze({
+      asTyped: requireText(requireOwn(article, 'as_typed', `${where}.article`), `${where}.article.as_typed`),
+      number: requireText(requireOwn(article, 'number', `${where}.article`), `${where}.article.number`),
+      key: requireText(requireOwn(article, 'key', `${where}.article`), `${where}.article.key`),
+      matchedBy: requireTextOrNull(requireOwn(article, 'matched_by', `${where}.article`), `${where}.article.matched_by`),
+      // A part of the article the citation names (an alinéa, a paragraph), as typed: the article opens, and the part is said.
+      part: Object.hasOwn(article, 'part') ? requireTextOrNull(article.part, `${where}.article.part`) : null,
+    }),
+    date: date === null ? null : Object.freeze({
+      asTyped: requireTextOrNull(requireOwn(date, 'as_typed', `${where}.date`), `${where}.date.as_typed`),
+      date: requireOwn(date, 'date', `${where}.date`) === null ? null : requireDate(date.date, `${where}.date.date`),
+      source: date.source === null ? null : requireOneOf(requireOwn(date, 'source', `${where}.date`), REFERENCE_DATE_SOURCES, `${where}.date.source`),
+    }),
+    language: requireTextOrNull(requireOwn(value, 'language', where), `${where}.language`),
+  });
+}
+
+/** The address a reference opens, held to the kind it says it is: a dossier's, a permalink, or a readable address. */
+function readOpens(value) {
+  const where = 'reference.opens';
+  const page = requireOneOf(requireOwn(value, 'page', where), ['reading', 'dossier'], `${where}.page`);
+  const addressKind = requireOneOf(requireOwn(value, 'address_kind', where), Object.keys(OPENED_ADDRESS_KINDS), `${where}.address_kind`);
+  if ((page === 'dossier') !== (addressKind === 'dossier')) {
+    throw new Error(`${where} opens a ${page} at a ${addressKind} address`);
+  }
+  const address = requireText(requireOwn(value, 'address', where), `${where}.address`);
+  const named = parseSitePath(address);
+  if (named === null || named.locale !== null || named.kind !== OPENED_ADDRESS_KINDS[addressKind]) {
+    throw new Error(`${where}.address ${JSON.stringify(address)} is not a ${addressKind} address of this site`);
+  }
+  const publisher = requireOneOf(requireOwn(value, 'publisher', where), ['lu-legilux', 'eu-eurlex'], `${where}.publisher`);
+  if (named.publisher !== publisher) {
+    throw new Error(`${where}.address is ${named.publisher}'s, and the reference opens ${publisher}'s act`);
+  }
+  const stateDate = requireOwn(value, 'state_date', where);
+  return Object.freeze({
+    page,
+    addressKind,
+    publisher,
+    address,
+    work: requireText(requireOwn(value, 'work', where), `${where}.work`),
+    language: requireTextOrNull(requireOwn(value, 'language', where), `${where}.language`),
+    stateDate: stateDate === null ? null : requireDate(stateDate, `${where}.state_date`),
+    articleId: requireTextOrNull(requireOwn(value, 'article_id', where), `${where}.article_id`),
+  });
+}
+
+/**
+ * Reads a `search` answer whose query the phase read as an exact reference that answers the search: the address its act
+ * opens at (`opens`), or why nothing was opened (`not_opened`). No word was searched, so the answer carries no hit.
+ */
+export function readReferenceAnswer(answer) {
+  const where = 'this search answer';
+  const publisher = requireOneOf(requireOwn(answer, 'publisher', where), ['lu-legilux', 'eu-eurlex'], 'publisher');
+  if (requireOwn(answer, 'lanes_run', where) !== false) {
+    throw new Error('an answer to an exact reference ran no lane');
+  }
+  if (requireList(requireOwn(answer, 'hits', where), 'hits').length !== 0) {
+    throw new Error('an answer to an exact reference lists no hit');
+  }
+  if (requireOwn(answer, 'requested_identifier', where) !== null) {
+    throw new Error('the phase runs only when no work is named');
+  }
+  const requestedDate = requireOwn(answer, 'requested_date', where);
+  if (requestedDate !== null) requireDate(requestedDate, 'requested_date');
+  const reference = requireOwn(answer, 'reference', where);
+  if (requireOwn(reference, 'phase', 'reference') !== 'exact_reference') {
+    throw new Error('reference is the exact_reference phase');
+  }
+  const outcome = requireOneOf(requireOwn(reference, 'outcome', 'reference'), ['opens', 'not_opened'], 'reference.outcome');
+  const opens = requireOwn(reference, 'opens', 'reference');
+  const reason = requireOwn(reference, 'reason', 'reference');
+  if ((outcome === 'opens') !== (opens !== null) || (outcome === 'opens') !== (reason === null)) {
+    throw new Error('a reference opens an address exactly when it says no reason it opened nothing');
+  }
+  const view = Object.freeze({
+    kind: 'reference',
+    publisher,
+    query: requireText(requireOwn(answer, 'requested_query', where), 'requested_query'),
+    language: requireText(requireOwn(answer, 'requested_language', where), 'requested_language'),
+    date: requestedDate,
+    outcome,
+    referenceKind: requireOneOf(requireOwn(reference, 'kind', 'reference'), REFERENCE_KINDS, 'reference.kind'),
+    rule: requireText(requireOwn(reference, 'rule', 'reference'), 'reference.rule'),
+    recognised: readRecognised(requireOwn(reference, 'recognised', 'reference')),
+    opens: opens === null ? null : readOpens(opens),
+    reason: reason === null ? null : requireOneOf(reason, NOT_OPENED_REASONS, 'reference.reason'),
+  });
+  if (view.opens !== null && view.opens.publisher !== publisher) {
+    throw new Error(`the answer is ${publisher}'s and opens ${view.opens.publisher}'s act`);
+  }
+  return view;
+}
+
+/**
+ * What a refusal of the phase says it recognised, from its payload's `recognised_*` members (a refusal payload carries
+ * scalars), or null for a refusal of a search that read no reference.
+ */
+export function readRefusalRecognition(payload) {
+  if (payload === null || typeof payload !== 'object' || !Object.hasOwn(payload, 'recognised_kind')) return null;
+  const where = 'the refusal payload';
+  const date = requireOwn(payload, 'recognised_date', where);
+  const source = requireOwn(payload, 'recognised_date_source', where);
+  return Object.freeze({
+    kind: requireOneOf(payload.recognised_kind, REFERENCE_KINDS, `${where}.recognised_kind`),
+    act: requireText(requireOwn(payload, 'recognised_act', where), `${where}.recognised_act`),
+    title: requireTextOrNull(requireOwn(payload, 'recognised_title', where), `${where}.recognised_title`),
+    article: requireTextOrNull(requireOwn(payload, 'recognised_article', where), `${where}.recognised_article`),
+    date: date === null ? null : requireDate(date, `${where}.recognised_date`),
+    dateSource: source === null ? null : requireOneOf(source, REFERENCE_DATE_SOURCES, `${where}.recognised_date_source`),
+    // This site's address of the act when this site holds it (a version or an article of it is then what is not held).
+    heldAct: Object.hasOwn(payload, 'recognised_held_act')
+      ? requireTextOrNull(payload.recognised_held_act, `${where}.recognised_held_act`)
+      : null,
+    // The permalink of the version (or EU wording) selected, when this site holds it and the refusal is about its articles.
+    heldVersion: Object.hasOwn(payload, 'recognised_held_version')
+      ? requireTextOrNull(payload.recognised_held_version, `${where}.recognised_held_version`)
+      : null,
+    // The acts the publisher's catalogue names, which this site holds no version of (an identifier_unknown that names one).
+    catalogueWorks: Object.hasOwn(payload, 'recognised_catalogue_works')
+      ? Object.freeze(requireList(payload.recognised_catalogue_works, `${where}.recognised_catalogue_works`)
+        .map((work, index) => requireText(work, `${where}.recognised_catalogue_works[${index}]`)))
+      : null,
+  });
+}
+
+/**
+ * The acts a reference may name, from an `ambiguous_identifier` refusal of the phase, in the platform's order: each act's
+ * identifier (this site's address when it holds the act, else the publisher's work IRI), its title (null when none is
+ * stated) and the language the title is written in, and whether this site holds a version of it (null when the payload
+ * does not say: an EU act's census seeds).
+ */
+export function readReferenceCandidates(payload) {
+  const where = 'the refusal payload';
+  const candidates = requireList(requireOwn(payload, 'candidates', where), `${where}.candidates`);
+  const titles = Object.hasOwn(payload, 'candidate_titles') ? requireList(payload.candidate_titles, `${where}.candidate_titles`) : null;
+  const held = Object.hasOwn(payload, 'candidate_held') ? requireList(payload.candidate_held, `${where}.candidate_held`) : null;
+  const languages = Object.hasOwn(payload, 'candidate_title_languages')
+    ? requireList(payload.candidate_title_languages, `${where}.candidate_title_languages`)
+    : null;
+  for (const [name, list] of [['candidate_titles', titles], ['candidate_title_languages', languages], ['candidate_held', held]]) {
+    if (list !== null && list.length !== candidates.length) {
+      throw new Error(`${where}.${name} has ${list.length} entries for ${candidates.length} candidates`);
+    }
+  }
+  return Object.freeze(candidates.map((identifier, index) => {
+    const isHeld = held === null ? null : requireBoolean(held[index], `${where}.candidate_held[${index}]`);
+    const named = requireText(identifier, `${where}.candidates[${index}]`);
+    if (isHeld === true && !named.startsWith('/')) {
+      throw new Error(`${where}.candidates[${index}] is held and is not an address of this site`);
+    }
+    const title = titles === null ? null : requireTextOrNull(titles[index], `${where}.candidate_titles[${index}]`);
+    const titleLanguage = languages === null ? null : requireTextOrNull(languages[index], `${where}.candidate_title_languages[${index}]`);
+    if ((title === null) !== (titleLanguage === null) && languages !== null) {
+      throw new Error(`${where}.candidate_title_languages[${index}] names a language exactly when there is a title`);
+    }
+    return Object.freeze({ identifier: named, title, titleLanguage, held: isHeld });
+  }));
+}
+
+/**
+ * Reads a search answer with the reader its kind names: an exact reference's (it opens an act, or says why not), the
+ * Luxembourg search's, or the EU's in one work.
+ */
 export function readSearchAnswer(answer) {
+  if (answer !== null && typeof answer === 'object' && ['opens', 'not_opened'].includes(answer.reference?.outcome)) {
+    return readReferenceAnswer(answer);
+  }
   return answer !== null && typeof answer === 'object' && answer.publisher === 'eu-eurlex'
     ? readEuropeSearch(answer)
     : readSearch(answer);

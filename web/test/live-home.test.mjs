@@ -234,7 +234,7 @@ test("a dated search says what this site holds was searched, in Luxembourg law, 
   // published: never "the version that applies", which on a population of acts held as first published claims too much.
   assert.doesNotMatch(dated, /\bthat applies\b|\bapplying on\b|\bin force\b/);
   for (const language of ["en", "fr"]) {
-    for (const entry of ["dated", "undated", "noHitLuxembourg", "luxembourgOnly"]) assertTimeVocabulary(liveChrome(language).search[entry], `${language} search.${entry}`);
+    for (const entry of ["dated", "undated", "noHitLuxembourg", "searchScope"]) assertTimeVocabulary(liveChrome(language).search[entry], `${language} search.${entry}`);
     // The as-published label's own words (common.asPublished.label): "as published" and "may have been amended since".
     const label = liveChrome(language).common.asPublished.label.split(";").map((part) => part.trim());
     for (const words of label.slice(0, 2)) assert.ok(liveChrome(language).search.dated.includes(words), `${language}: the dated sentence says "${words}"`);
@@ -251,14 +251,14 @@ test("with no work named, the no-hit sentence says the search was of Luxembourg 
   assert.ok(named.includes("No article of the text this server holds and may search contains “assemblée générale”."), named);
 });
 
-test("under the home page's box and the 404 page's, a line says the search covers Luxembourg law and leads to the search page for an EU act (review of #971)", () => {
+test("under the home page's box and the 404 page's, a line says a search by words covers Luxembourg law, an exact reference opens its act, Luxembourg or EU, and the search page searches within an EU act (review of #971; plan 4.2)", () => {
   const line = (html) => /<p class="search-scope" data-search-scope="">([\s\S]*?)<\/p>/.exec(mainOf(html).replaceAll("<!-- -->", ""))?.[1] ?? null;
   for (const html of [rendered(COVERAGE), renderLiveHomePage(), renderLiveNotFoundPage()]) {
-    assert.equal(line(html), 'This search covers Luxembourg law. To search within an EU act, name it by its CELEX number on the <a href="/en/search.html">search page</a>.');
+    assert.equal(line(html), 'A search by words covers Luxembourg law. An ELI, a CELEX number, a Mémorial reference, a permalink, or the citation of an article of an act, with or without a date, opens that act, Luxembourg or EU, when this site holds it. To search within an EU act, name it by its CELEX number on the <a href="/en/search.html">search page</a>.');
     const main = mainOf(html);
     assert.ok(main.indexOf("data-not-advice") < main.indexOf("data-search-scope") && main.indexOf("data-search-scope") < main.indexOf("data-live-answer"), "under R50's sentence, so the phone's first screen keeps the box and that sentence");
   }
   assert.equal(line(renderLiveSearchPage()), null, "the search page names a work itself");
-  assert.equal(liveChrome("fr").search.luxembourgOnly, "Cette recherche porte sur le droit luxembourgeois. Pour interroger un acte de l’UE, désignez-le par son numéro CELEX sur la {link}.");
+  assert.equal(liveChrome("fr").search.searchScope, "La recherche par mots porte sur le droit luxembourgeois. Un ELI, un numéro CELEX, une référence au Mémorial, un permalien ou la citation d’un article d’un acte, avec ou sans date, ouvre cet acte, luxembourgeois ou de l’UE, lorsque ce site le détient. Pour interroger un acte de l’UE, désignez-le par son numéro CELEX sur la {link}.");
   assert.equal(liveChrome("fr").search.searchPage, "page de recherche");
 });

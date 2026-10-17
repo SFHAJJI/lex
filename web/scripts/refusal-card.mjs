@@ -248,6 +248,27 @@ export const CONTRACT_STATUS = Object.freeze({
   reason: 'payloads for nine codes are unfrozen; see issue 348',
 });
 
+/**
+ * What a refusal of search's exact-reference phase (the plan's item 4.2) carries beside its code's own payload: what was
+ * recognised, as scalars (the kind, the act, its held title, the article and the date as read, and where the date came
+ * from), this site's address of the act when it holds it and the permalink of the version it selected when that is held,
+ * and the acts the publisher's catalogue names that this site
+ * holds no version of. Optional on every code the
+ * phase can refuse with a declared payload (the review of #974, F5: text_not_available and retrieval_mode_unavailable
+ * lacked them, so their card could not be shown), since every other producer of these codes sends none of them.
+ */
+export const RECOGNISED_KEYS = Object.freeze([
+  'recognised_kind',
+  'recognised_act',
+  'recognised_title',
+  'recognised_article',
+  'recognised_date',
+  'recognised_date_source',
+  'recognised_catalogue_works',
+  'recognised_held_act',
+  'recognised_held_version',
+]);
+
 export const REQUIRED_PAYLOAD = Object.freeze({
   no_version_for_date: Object.freeze({
     // `requested_date` is OPTIONAL here and required nowhere, which is a smaller answer than the
@@ -259,7 +280,7 @@ export const REQUIRED_PAYLOAD = Object.freeze({
     // make the reader render what the platform sends, not to rewrite the surface's own producers.
     // Named as open work rather than done quietly or left unsaid.
     keys: Object.freeze(['history_begins', 'nearest_earlier', 'nearest_later']),
-    optional: Object.freeze(['requested_date', 'bound']),
+    optional: Object.freeze(['requested_date', 'bound', ...RECOGNISED_KEYS]),
     basis:
       '33-product-spec: "no_version_for_date carries history_begins, nearest_earlier, ' +
       'nearest_later"',
@@ -274,6 +295,7 @@ export const REQUIRED_PAYLOAD = Object.freeze({
       'nearest_anchors',
       'do_not_fall_back_to_full_text_search',
     ]),
+    optional: RECOGNISED_KEYS,
     basis:
       '31-v3-spec: "anchor_not_in_version (with nearest_anchors and the do-not-fall-back note)"',
   }),
@@ -302,7 +324,7 @@ export const REQUIRED_PAYLOAD = Object.freeze({
     // producer sends, so it threw on every refusal of this code the platform can make; the work
     // is now read from the candidates themselves, in requireCandidates, which says why.
     keys: Object.freeze(['requested_date', 'candidates']),
-    optional: Object.freeze(['bound']),
+    optional: Object.freeze(['bound', ...RECOGNISED_KEYS]),
     basis:
       '35-ideal-ux: "listing each candidate as applicable from {date}, hash {8 hex}, ' +
       'published {date} ... there is no default selection"',
@@ -334,7 +356,7 @@ export const REQUIRED_PAYLOAD = Object.freeze({
     // and that is what `evidence_bundle` produces for a state whose articles hold no text. The
     // coordinate, the permalink, the language and the article count travel beside them.
     keys: Object.freeze(['official_identity', 'official_source', 'retained_transport_evidence']),
-    optional: Object.freeze(['articles_held', 'language', 'permalink', 'stable_coordinate']),
+    optional: Object.freeze(['articles_held', 'language', 'permalink', 'stable_coordinate', ...RECOGNISED_KEYS]),
     // TWO producers reach this card and they share no key. This surface's own reading view says it
     // for one provision it holds no text for, with that provision's official file and gazette
     // chain (`reading.mjs`), and it is held to exactly that set until it is rebuilt on
@@ -353,6 +375,7 @@ export const REQUIRED_PAYLOAD = Object.freeze({
     // threw on the refusal `search` actually produces. It stays renderable when a producer does
     // disclose a fallback; it is no longer demanded from producers that correctly do not.
     keys: Object.freeze(['requested_mode', 'available_modes']),
+    optional: RECOGNISED_KEYS,
     basis:
       'lex-v3-operation-registry/1: retrieval_mode_unavailable carries requested_mode, ' +
       'available_modes',
@@ -376,7 +399,7 @@ export const REQUIRED_PAYLOAD = Object.freeze({
     // instead as `what_would_answer_detail`. The mandated fields are optional here, not required,
     // because the preview surfaces produce this code without them; the disclosure stays required.
     keys: Object.freeze(['population_disclosure']),
-    optional: Object.freeze(['requested_identifier', 'official_search_actions', 'what_would_answer_detail']),
+    optional: Object.freeze(['requested_identifier', 'official_search_actions', 'what_would_answer_detail', ...RECOGNISED_KEYS]),
     basis:
       '35-ideal-ux: "the card offers the resolver ... and the out-of-corpus explanation ' +
       'with the population disclosure"',

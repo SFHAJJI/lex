@@ -54,6 +54,9 @@ try
     corpusMount = await V3CorpusMount.OpenAsync(
         Path.Combine(AppContext.BaseDirectory, "v3-corpus"),
         app.Lifetime.ApplicationStopping);
+
+    // What search's exact references read on their first use, read once here, so no request pays it or waits behind it.
+    corpusMount?.Warm();
 }
 catch (Exception exception)
 {

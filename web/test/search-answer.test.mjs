@@ -12,10 +12,18 @@ import test from "node:test";
 
 import {
   LANE_MATCH_REASON,
+  NOT_OPENED_REASONS,
+  SEARCHED_AS_WORDS_REASONS,
+  OPENED_ADDRESS_KINDS,
+  REFERENCE_DATE_SOURCES,
+  REFERENCE_KINDS,
+  REFERENCE_OUTCOMES,
   SEARCH_LANES,
   WORK_RESOLUTION_OUTCOMES,
   escapeProvision,
   readEuropeSearch,
+  readReferenceAnswer,
+  readRefusalRecognition,
   readSearch,
   readSearchAnswer,
 } from "../scripts/search-answer.mjs";
@@ -23,9 +31,15 @@ import {
 const SAMPLES = new URL("../../schemas/v3-platform/answer-samples.json", import.meta.url);
 const PLACEHOLDER = "<varies-per-run>";
 
-async function capturedRows(publisher) {
+/** Whether a captured search answer is an exact reference's (it opens an act, or says why not) rather than a word search's. */
+function isReferenceAnswer(answer) {
+  return ["opens", "not_opened"].includes(answer.reference?.outcome);
+}
+
+async function capturedRows(publisher, { references = false } = {}) {
   const parsed = JSON.parse(await readFile(SAMPLES, "utf8"));
-  const rows = parsed.sampled.filter((sample) => sample.operation === "search" && sample.answer.publisher === publisher);
+  const rows = parsed.sampled.filter((sample) => sample.operation === "search" && sample.answer.publisher === publisher &&
+    isReferenceAnswer(sample.answer) === references);
   for (const row of rows) assert.equal(row.object_type, "quote");
   return rows.map((row) => withDigests(row.answer));
 }
@@ -291,4 +305,111 @@ test("each rule an EU answer states about itself is refused when broken, with th
   for (const [what, base, change, reason] of cases) {
     assert.throws(() => readEuropeSearch(mutate(base, change)), reason, what);
   }
+});
+
+// Exact references first (the plan's item 4.2): the answers the census captured for a query the platform read as an
+// exact reference, in the order the census drives them: Luxembourg's dossier, a permalink at a date, the readable
+// address with no date, a date that names no day; the EU's dossier and its readable address.
+test("the captured reference answers read: the dossier, a permalink at the date, the readable address, and nothing opened", async () => {
+  const [dossier, dated, undated, notADay] = await capturedRows("lu-legilux", { references: true });
+  const [europeDossier, europeReadable] = await capturedRows("eu-eurlex", { references: true });
+
+  const opened = readSearchAnswer(dossier);
+  assert.equal(opened.kind, "reference");
+  assert.equal(opened.outcome, "opens");
+  assert.equal(opened.referenceKind, "citation");
+  assert.equal(opened.opens.page, "dossier");
+  assert.equal(opened.opens.addressKind, "dossier");
+  assert.match(opened.opens.address, /^\/lu-legilux\/[a-z0-9_-]+$/);
+  assert.equal(opened.recognised.act.form, "type_and_date");
+  assert.equal(opened.recognised.article, null);
+  assert.equal(opened.recognised.date, null, "a dossier opens at no date");
+
+  const atDate = readSearchAnswer(dated);
+  assert.equal(atDate.opens.addressKind, "permalink");
+  assert.match(atDate.opens.address, /^\/lu-legilux\/[a-z0-9_-]+\/\d{4}-\d{2}-\d{2}--[0-9a-f]{64}\/fra\/art_15$/);
+  assert.equal(atDate.recognised.article.number, "15");
+  assert.deepEqual({ ...atDate.recognised.date }, { asTyped: "15 mars 2024", date: "2024-03-15", source: "citation" });
+
+  const today = readSearchAnswer(undated);
+  assert.equal(today.opens.addressKind, "readable");
+  assert.match(today.opens.address, /^\/lu-legilux\/[a-z0-9_-]+\/fra\/art_15$/);
+  assert.equal(today.recognised.date.source, "today_in_luxembourg");
+  assert.equal(today.recognised.date.asTyped, null);
+
+  const nothing = readSearchAnswer(notADay);
+  assert.equal(nothing.outcome, "not_opened");
+  assert.equal(nothing.opens, null);
+  assert.equal(nothing.reason, "date_not_a_calendar_date");
+  assert.deepEqual({ ...nothing.recognised.date }, { asTyped: "31 février 2024", date: null, source: "citation" });
+
+  const europe = readSearchAnswer(europeDossier);
+  assert.equal(europe.publisher, "eu-eurlex");
+  assert.equal(europe.opens.address, "/eu-eurlex/32016R0679");
+  assert.equal(europe.recognised.act.identifier, "Regulation (EU) 2016/679 (CELEX 32016R0679)");
+  const provision = readSearchAnswer(europeReadable);
+  assert.equal(provision.opens.addressKind, "readable");
+  assert.equal(provision.opens.address, "/eu-eurlex/32016R0679/eng/099");
+  assert.equal(provision.recognised.article.number, "99");
+});
+
+test("each rule a reference answer states about itself is refused when broken", async () => {
+  const [dossier, dated] = await capturedRows("lu-legilux", { references: true });
+  const broken = [
+    [mutate(dated, (a) => { a.lanes_run = true; }), /ran no lane/],
+    [mutate(dated, (a) => { a.hits = [{}]; }), /lists no hit/],
+    [mutate(dated, (a) => { a.requested_identifier = "/lu-legilux/x"; }), /no work is named/],
+    [mutate(dated, (a) => { a.reference.reason = "date_not_a_calendar_date"; }), /exactly when it says no reason/],
+    [mutate(dated, (a) => { a.reference.opens.address_kind = "readable"; }), /not a readable address/],
+    [mutate(dated, (a) => { a.reference.opens.address = "/fr" + a.reference.opens.address; }), /not a permalink address/],
+    [mutate(dated, (a) => { a.reference.opens.address = "https://example.invalid/x"; }), /not a permalink address/],
+    [mutate(dated, (a) => { a.reference.opens.publisher = "eu-eurlex"; }), /is lu-legilux's/],
+    [mutate(dossier, (a) => { a.reference.opens.page = "reading"; }), /opens a reading at a dossier address/],
+    [mutate(dated, (a) => { a.reference.kind = "guess"; }), /reference.kind/],
+    [mutate(dated, (a) => { a.reference.recognised.date.source = "nearby"; }), /date.source/],
+    [mutate(dated, (a) => { a.reference.recognised.date.date = "2024-02-30"; }), /not a calendar date/],
+  ];
+  for (const [answer, reason] of broken) assert.throws(() => readReferenceAnswer(answer), reason);
+});
+
+test("an answer that searched words says the phase read no reference, or did not run because a work was named", async () => {
+  const { both } = await capturedAnswers();
+  assert.equal(readSearch(both).reference, "no_reference");
+  const [named] = await capturedRows("eu-eurlex");
+  assert.equal(readEuropeSearch(named).reference, "not_run_identifier_given");
+  assert.throws(() => readSearch(mutate(both, (a) => { a.reference.outcome = "not_run_identifier_given"; })), /not run exactly when a work is named/);
+  assert.throws(() => readSearch(mutate(both, (a) => { a.reference.outcome = "opens"; })), /searched words/);
+  // A capture from before the phase carries no report of it, and reads as before.
+  assert.equal(readSearch(mutate(both, (a) => { delete a.reference; })).reference, null);
+});
+
+test("a refusal of the phase says what was recognised; one of a word search says nothing", () => {
+  const recognised = readRefusalRecognition({
+    requested_identifier: "Code du travail, article L. 121-6, 15 mars 2021",
+    recognised_kind: "citation",
+    recognised_act: "Code du travail",
+    recognised_title: null,
+    recognised_article: "L. 121-6",
+    recognised_date: "2021-03-15",
+    recognised_date_source: "citation",
+  });
+  assert.deepEqual({ ...recognised }, { kind: "citation", act: "Code du travail", title: null, article: "L. 121-6", date: "2021-03-15", dateSource: "citation", heldAct: null, heldVersion: null, catalogueWorks: null });
+  // The acts the publisher's catalogue names, which this site holds no version of (the review of #974, F2).
+  const unknown = {
+    recognised_kind: "citation", recognised_act: "loi du 10 août 1991", recognised_title: null, recognised_article: null,
+    recognised_date: null, recognised_date_source: null, recognised_catalogue_works: ["http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n5"],
+  };
+  assert.deepEqual(readRefusalRecognition(unknown).catalogueWorks, ["http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n5"]);
+  assert.throws(() => readRefusalRecognition({ ...unknown, recognised_catalogue_works: "n5" }), /recognised_catalogue_works/);
+  assert.equal(readRefusalRecognition({ requested_language: "deu", available_languages: ["fra"] }), null);
+  assert.throws(() => readRefusalRecognition({ recognised_kind: "guess", recognised_act: "x", recognised_title: null, recognised_article: null, recognised_date: null, recognised_date_source: null }), /recognised_kind/);
+});
+
+test("the phase's vocabularies are the platform's", () => {
+  assert.deepEqual(REFERENCE_OUTCOMES, ["no_reference", "not_run_identifier_given", "opens", "not_opened"]);
+  assert.deepEqual(REFERENCE_KINDS, ["eli", "celex", "memorial", "historical_legal_id", "permalink", "citation"]);
+  assert.deepEqual(REFERENCE_DATE_SOURCES, ["citation", "identifier", "search_date", "today_in_luxembourg"]);
+  assert.deepEqual(NOT_OPENED_REASONS, ["date_not_a_calendar_date", "two_dates_disagree"]);
+  assert.deepEqual(SEARCHED_AS_WORDS_REASONS, ["title_not_held"]);
+  assert.deepEqual(OPENED_ADDRESS_KINDS, { dossier: "work", permalink: "state", readable: "current" });
 });

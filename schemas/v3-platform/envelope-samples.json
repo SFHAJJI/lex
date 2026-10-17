@@ -888,6 +888,7 @@
             ],
             "index_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
             "lanes": "strict: the query as typed is a substring; relaxed: every distinct whitespace-separated term is a substring, in any order, so the relaxed set contains the strict set. With no mode the answer is the strict hits and then only the relaxed hits strict did not serve, each article once; with a mode it is that lane\u0027s whole set. A lane not asked for is null in the population, not zero",
+            "lanes_run": true,
             "limit": 200,
             "matching": "byte-exact substring of the article\u0027s searchable text, which is its text and reference tokens as the index holds them (modification markers and note references are not searched); case and diacritics are significant; nothing is folded, stemmed or expanded",
             "modes_held": [
@@ -913,6 +914,15 @@
             },
             "publisher": "lu-legilux",
             "ranking": "none; strict lane before relaxed lane, then work key, publisher date, article identity and state digest. This index holds no BM25 ranker, so a page is the first hits in this order and not the best hits",
+            "reference": {
+              "kind": null,
+              "opens": null,
+              "outcome": "no_reference",
+              "phase": "exact_reference",
+              "reason": null,
+              "recognised": null,
+              "rule": "before any word is searched, the query is read as an exact reference: an ELI, a CELEX (consolidated forms included), a Memorial or Journal officiel A citation, a historical identifier of the publisher\u0027s catalogue, an address of this site for law, an act by its type and date or an EU act by its conventional name, or a citation of an article of an act and of a date; a reference the indexes hold opens its act, at the article and date it names (the date defaults to the search\u0027s date, else to today in Luxembourg), or its dossier when it names neither, and no word is searched; an identifier, an EU act\u0027s name or a type and date that names no act the indexes or the publisher\u0027s catalogue hold is refused identifier_unknown, with no list; a day, an issue or a name that names several acts is refused ambiguous_identifier with every one, held or not, and none is chosen; a title the index does not hold, and words after a type and date that name none of that day\u0027s acts, open nothing on their own: a title is searched as words, and the day\u0027s acts are listed; a date in a date\u0027s shape that names no calendar day opens nothing; a query that is no reference is searched as words"
+            },
             "requested_after": null,
             "requested_date": null,
             "requested_identifier": null,
@@ -1076,6 +1086,7 @@
             ],
             "index_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
             "lanes": "strict: the query as typed is a substring; relaxed: every distinct whitespace-separated term is a substring, in any order, so the relaxed set contains the strict set. With no mode the answer is the strict hits and then only the relaxed hits strict did not serve, each article once; with a mode it is that lane\u0027s whole set. A lane not asked for is null in the population, not zero",
+            "lanes_run": true,
             "limit": 200,
             "matching": "byte-exact substring of the article\u0027s searchable text as the EU index holds it; case and diacritics are significant; nothing is folded, stemmed or expanded",
             "modes_held": [
@@ -1125,6 +1136,15 @@
             },
             "publisher": "eu-eurlex",
             "ranking": "none; strict lane before relaxed lane, then the publisher\u0027s article id and article identity. This index holds no BM25 ranker, so a page is the first hits in this order and not the best hits",
+            "reference": {
+              "kind": null,
+              "opens": null,
+              "outcome": "not_run_identifier_given",
+              "phase": "exact_reference",
+              "reason": null,
+              "recognised": null,
+              "rule": "before any word is searched, the query is read as an exact reference: an ELI, a CELEX (consolidated forms included), a Memorial or Journal officiel A citation, a historical identifier of the publisher\u0027s catalogue, an address of this site for law, an act by its type and date or an EU act by its conventional name, or a citation of an article of an act and of a date; a reference the indexes hold opens its act, at the article and date it names (the date defaults to the search\u0027s date, else to today in Luxembourg), or its dossier when it names neither, and no word is searched; an identifier, an EU act\u0027s name or a type and date that names no act the indexes or the publisher\u0027s catalogue hold is refused identifier_unknown, with no list; a day, an issue or a name that names several acts is refused ambiguous_identifier with every one, held or not, and none is chosen; a title the index does not hold, and words after a type and date that name none of that day\u0027s acts, open nothing on their own: a title is searched as words, and the day\u0027s acts are listed; a date in a date\u0027s shape that names no calendar day opens nothing; a query that is no reference is searched as words"
+            },
             "requested_after": null,
             "requested_date": null,
             "requested_identifier": "32016R0679",

@@ -308,7 +308,8 @@ internal sealed partial class V3CorpusMount
                     return new EuropeDatedWording(entry.Key, works, held, Answer: null, Basis: "text_not_held");
                 }
 
-                if (held.Select(candidate => EuropeTextKeyOf(candidate.ExpressionId)).Distinct(StringComparer.Ordinal).Count() > 1)
+                // One held text agrees with itself: its articles are read to compare texts only when the date holds several.
+                if (held.Length > 1 && held.Select(candidate => EuropeTextKeyOf(candidate.ExpressionId)).Distinct(StringComparer.Ordinal).Count() > 1)
                 {
                     return new EuropeDatedWording(entry.Key, works, held, Answer: null, Basis: "different_texts");
                 }
@@ -649,7 +650,10 @@ internal sealed partial class V3CorpusMount
 
         var entry = ofLanguage.Dated[index];
         var next = index + 1 < ofLanguage.Dated.Count ? ofLanguage.Dated[index + 1].Date : null;
-        var answerText = entry.Answer is null ? null : EuropeTextKeyOf(entry.Answer.ExpressionId);
+        // The answer's text is read only to compare it with a held version that has no usable date, when there is one.
+        var answerText = entry.Answer is null || !ofLanguage.Unplaced.Any(static unplaced => unplaced.Held is not null)
+            ? null
+            : EuropeTextKeyOf(entry.Answer.ExpressionId);
         var conflicting = answerText is null
             ? Array.Empty<(EuropeIndexState State, EuropeWordingCandidate? Held)>()
             : ofLanguage.Unplaced.Where(unplaced => unplaced.Held is not null &&

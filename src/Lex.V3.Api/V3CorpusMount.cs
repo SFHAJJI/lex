@@ -3779,6 +3779,16 @@ internal sealed partial class V3CorpusMount : IDisposable
                 "The requested date is not a civil calendar date.");
         }
 
+        // Exact references first (resolver first, S4-A03; R59, R90): a search that names no work reads its query as an exact
+        // reference before any word is searched (V3CorpusMount.References.cs). A reference opens its act, or is refused with what
+        // was recognised; a query that is no reference is searched as before, and the answer says the phase read none.
+        string? referenceReason = null;
+        if (identifier is null && (mode is null || SearchModes.Contains(mode, StringComparer.Ordinal)) &&
+            SearchReference(request, query, language, requestedDate, mode, after, observedAt, out referenceReason) is { } referenced)
+        {
+            return referenced;
+        }
+
         if (identifier is not null &&
             RouteEuropeSearch(request, identifier, language, query, terms, requestedDate, mode, after, limit, observedAt) is { } europe)
         {
@@ -4024,6 +4034,8 @@ internal sealed partial class V3CorpusMount : IDisposable
             searchable_languages = _reader.SearchableLanguages(),
             modes_held = SearchModes,
             modes_not_held = new[] { "bm25", "semantic" },
+            reference = ReferenceNotRead(identifier is null ? "no_reference" : "not_run_identifier_given", referenceReason),
+            lanes_run = true,
             work_resolution = new
             {
                 retrieval_lane = "r1_work_discovery",
@@ -4295,6 +4307,8 @@ internal sealed partial class V3CorpusMount : IDisposable
             searchable_languages = _europeReader.SearchableLanguages(),
             modes_held = SearchModes,
             modes_not_held = new[] { "bm25", "semantic" },
+            reference = ReferenceNotRead("not_run_identifier_given"),
+            lanes_run = true,
             work_resolution = new
             {
                 retrieval_lane = "r1_work_discovery",

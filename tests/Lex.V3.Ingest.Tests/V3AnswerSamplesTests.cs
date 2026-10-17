@@ -401,6 +401,17 @@ public sealed class V3AnswerSamplesTests
             europeFirstPage,
             await DriveAsync(europeMount, "search", "the EU page after the first one-hit page, no limit: the rest of the result, whose population is still the whole result's", new { query = "joint controllers", language = "eng", identifier = "32016R0679", after = europeFirstPage.Body["continue_after"]!.GetValue<string>() }),
             await DriveAsync(europeMount, "search", "a word the EU work's held wording does not carry: no hit is an answer, not a refusal", new { query = "zephyr", language = "eng", identifier = "32016R0679" }),
+            // Exact references first (the plan's item 4.2): a search that names no work reads its query as a reference before
+            // any word, and a reference the index holds opens its act, as the address the page goes to, with no word searched.
+            await DriveAsync(mount, "search", "an act by its type and date, no article and no date: the phase opens its dossier, and no word is searched", new { query = "loi du 10 août 1991", language = "fra" }),
+            await DriveAsync(mount, "search", "an article of that act at a date: the phase opens Reading at that article in the version the date selects, by its permalink", new { query = "article 15 de la loi du 10 août 1991, 15 mars 2024", language = "fra" }),
+            await DriveAsync(mount, "search", "the same article with no date: the phase opens Reading at it by the act's readable address, today's version", new { query = "article 15 de la loi du 10 août 1991", language = "fra" }),
+            await DriveAsync(mount, "search", "a citation whose date names no calendar day: nothing is opened, and no word is searched with the date dropped", new { query = "article 15 de la loi du 10 août 1991, 31 février 2024", language = "fra" }),
+            // R65's "verify resolves every form": the usual form the citation generator composes for that article of the bundle
+            // the envelope census holds, read by the phase to the article it cites (`usualVerdict` holds the two together).
+            await DriveAsync(mount, "search", "the usual citation form the generator composes for that article: the phase reads it and opens the article it cites, in the version it names", new { query = "Art. 15 de la loi du 10 août 1991, dans sa version applicable au 1er février 2024", language = "fra" }),
+            await DriveAsync(europeMount, "search", "an EU act by its conventional name: the phase reads its CELEX and opens its dossier", new { query = "Regulation (EU) 2016/679", language = "eng" }),
+            await DriveAsync(europeMount, "search", "an article of the EU act with no date: Reading at the provision by the act's readable address", new { query = "Article 99 of Regulation (EU) 2016/679", language = "eng" }),
             // `dossier` is sampled for the live dossier screen's reader: the work, in the language it is held in.
             await DriveAsync(mount, "dossier", "the work, in the language it is held in: its identity, its held states and what the dossier does not hold", new { parameters.identifier, parameters.language }),
             // The EU dossier, for the same screen's EU reader: the GDPR by its CELEX, its one held expression with the

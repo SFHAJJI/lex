@@ -81,10 +81,14 @@ export const REFUSAL_EXAMPLES = Object.freeze({
     // `candidates_named`, a single prose string, was what this example taught; `resolve` sends a
     // LIST of candidates, the identifier asked for, and why they matched. A reader building a
     // disambiguation screen from the old example would have written a parser for a sentence.
+    // Search's exact references send the richest form (the review of #974, F2), which this example
+    // follows: the acts a day, an issue or an ELI may name, as this site's addresses, each marked
+    // held or not (one only the publisher's catalogue names is its work IRI, and is not held), with
+    // the titles they are named by and what was recognised; `resolve`'s `match_reason` is not sent.
     payload: {
-      requested_identifier: "Reglement sur l'epreuve",
-      candidates: [`${WORK}-a`, `${WORK}-b`],
-      match_reason: 'prefix',
+      requested_identifier: 'loi du 1er janvier 2000',
+      candidates: [`/lu-legilux/${WORK}-a`, `/lu-legilux/${WORK}-b`],
+      candidate_held: [true, true],
     },
   },
   out_of_corpus_scope: {

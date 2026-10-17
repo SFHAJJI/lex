@@ -20,12 +20,23 @@
 // date field starts at today, the calendar date in Luxembourg (R13; `todayInLuxembourg`, by the coded
 // rule of `temporal.mjs`); the search page's starts empty, because an EU act is searched in the one
 // wording held and the platform refuses it a date (`retrieval_mode_unavailable`), which the page says.
+//
+// Exact references first (the plan's item 4.2): the platform reads the query as an exact reference before any word is
+// searched (an ELI, a CELEX, a Mémorial citation, a permalink, a citation of an article of an act at a date), and a
+// reference it holds answers with the address its act opens at. That is the `opens` state, which carries the address as a
+// link on this page (`href`); the screen goes there. A reference that opens nothing (a date that names no calendar day,
+// two dates that disagree) is `not_opened`; a refusal of the phase carries what was recognised (`recognition`) and is
+// said with the phase's own sentences (`LIVE_SEARCH_REFERENCE_REFUSAL_SENTENCES`, or for an EU act, as the refusal's
+// context names its publisher, `LIVE_SEARCH_EUROPE_REFERENCE_REFUSAL_SENTENCES`), so the page says what it read. A
+// reference that may name several acts lists each (`candidates`), linked when this site holds it, and opens none.
 
 import { askV3 } from "./v3-client.mjs";
-import { readSearchAnswer } from "./search-answer.mjs";
+import { readReferenceCandidates, readRefusalRecognition, readSearchAnswer } from "./search-answer.mjs";
+import { LIVE_READING_EUROPE_REFUSAL_SENTENCES } from "./live-reading.mjs";
 import { validateRefusal } from "./refusal-card.mjs";
 import { noCorpusMountedSentence, tableRefusalSentence, unshownRefusal } from "./live-refusals.mjs";
-import { englishStatement, fillText, liveChrome, refusalTemplate } from "./live-chrome.mjs";
+import { CHROME_LOCALE, englishStatement, fillText, liveChrome, refusalTemplate } from "./live-chrome.mjs";
+import { permalinkHref } from "./permalinks.mjs";
 import { isCalendarDate, luxembourgDate } from "./temporal.mjs";
 
 /** The ceiling on a query's characters, the platform's own (`SearchMaxQueryCharacters`). */
@@ -73,6 +84,72 @@ export const LIVE_SEARCH_REFUSAL_SENTENCES = Object.freeze({
   retrieval_mode_unavailable: "An EU act is searched in the wording this server holds, not at a date: leave the date empty to search it.",
 });
 
+/**
+ * The sentence per refusal code of a search whose query was read as an exact reference to a Luxembourg act (the payload's
+ * `recognised_*` members say what was read): the act it names is not held, it may name several (held or not: the review
+ * of #974 found the list names acts this site does not hold), the version the date selects holds no article of that
+ * number, or the act is not held in the language asked. A date before the history and several versions on the date are
+ * said with the search's own sentences above.
+ */
+export const LIVE_SEARCH_REFERENCE_REFUSAL_SENTENCES = Object.freeze({
+  identifier_unknown: "This site holds no act the reference names, so nothing was opened and no word was searched.",
+  // Not "several": words after a type and date that name none of the day's acts list them, however many (the French
+  // review of #974's repair).
+  ambiguous_identifier: "The reference does not name a single act or article for certain, and none is chosen.",
+  anchor_not_in_version: "The version the date selects holds no article with that number, and no other article is opened in its place.",
+  language_not_available: "This work is not held in the language asked for.",
+  no_version_for_date: LIVE_SEARCH_REFUSAL_SENTENCES.no_version_for_date,
+  ambiguous_version: LIVE_SEARCH_REFUSAL_SENTENCES.ambiguous_version,
+});
+
+/**
+ * The same refusals of a reference to an EU act (the refusal's context names eu-eurlex; the review of #974, F4): an EU
+ * date is the date of a wording, never an applicability date, so the time view's refusals are said as the reading says
+ * them for an EU act (`LIVE_READING_EUROPE_REFUSAL_SENTENCES`), the wording the date selects holds no article of that
+ * number, and an act held outside the census answers no date.
+ */
+export const LIVE_SEARCH_EUROPE_REFERENCE_REFUSAL_SENTENCES = Object.freeze({
+  identifier_unknown: LIVE_SEARCH_REFERENCE_REFUSAL_SENTENCES.identifier_unknown,
+  ambiguous_identifier: LIVE_SEARCH_REFERENCE_REFUSAL_SENTENCES.ambiguous_identifier,
+  anchor_not_in_version: "The wording the date selects holds no article with that number, and no other article is opened in its place.",
+  language_not_available: LIVE_READING_EUROPE_REFUSAL_SENTENCES.language_not_available,
+  no_version_for_date: LIVE_READING_EUROPE_REFUSAL_SENTENCES.no_version_for_date,
+  ambiguous_version: LIVE_READING_EUROPE_REFUSAL_SENTENCES.ambiguous_version,
+  text_not_available: LIVE_READING_EUROPE_REFUSAL_SENTENCES.text_not_available,
+  retrieval_mode_unavailable: "This server holds this EU act in one wording only, and answers no date for it: leave the date out of the reference.",
+});
+
+/**
+ * The phase's `identifier_unknown` when this site holds the act the reference names (the payload's `recognised_held_act`),
+ * where "holds no act" would be false (the French review of #974's repair, its driver point 1): a Luxembourg version it
+ * names that this site does not hold (`version`), or a version or EU wording it selects that this site holds with no article
+ * (`article`, the payload's `recognised_held_version` naming it). An EU act held is opened at any wording it names, so the
+ * EU has the second case only.
+ */
+export const LIVE_SEARCH_HELD_ACT_REFUSAL_SENTENCES = Object.freeze({
+  "lu-legilux": Object.freeze({
+    version: "This site holds the act the reference names, but not the version it names, so nothing was opened and no word was searched.",
+    article: "This site holds the act the reference names and the version the date selects, but no article of that version, so nothing was opened and no word was searched.",
+  }),
+  "eu-eurlex": Object.freeze({
+    article: "This site holds the act the reference names and the wording selected, but no article of that wording, so nothing was opened and no word was searched.",
+  }),
+});
+
+/** The phase's sentences for a refusal, by the publisher its context names. */
+export function referenceRefusalSentences(context) {
+  return context?.publisher === "eu-eurlex" ? LIVE_SEARCH_EUROPE_REFERENCE_REFUSAL_SENTENCES : LIVE_SEARCH_REFERENCE_REFUSAL_SENTENCES;
+}
+
+/** The sentence table for a refusal of the phase: its publisher's, with the held act's sentence when the act is held. */
+function referenceTableFor(context, code, recognition) {
+  const table = referenceRefusalSentences(context);
+  if (code !== "identifier_unknown" || recognition.heldAct === null) return table;
+  const held = LIVE_SEARCH_HELD_ACT_REFUSAL_SENTENCES[context?.publisher === "eu-eurlex" ? "eu-eurlex" : "lu-legilux"];
+  const sentence = held[recognition.heldVersion === null ? "version" : "article"];
+  return sentence === undefined ? table : Object.freeze({ ...table, identifier_unknown: sentence });
+}
+
 export const LIVE_SEARCH_IDLE = liveChrome().search.idle;
 export const LIVE_SEARCH_LOADING = liveChrome().common.loading;
 
@@ -101,6 +178,21 @@ export function unshownRefusalSentence(code, reason) {
 
 export function invalidAnswerSentence(reason) {
   return `The answer could not be read as a search answer: ${reason}.`;
+}
+
+/**
+ * A calendar date (yyyy-mm-dd) as the page's language writes it in words, so a reference's date is printed back as it was
+ * read (15/03/2021 is 15 March 2021, never 3 May): the day (French writes the first "1er"), the month's name and the year.
+ */
+export function longDate(date, locale = CHROME_LOCALE) {
+  if (!isCalendarDate(date)) throw new Error(`${JSON.stringify(date)} is not a calendar date`);
+  const common = liveChrome(locale).common;
+  const [year, month, day] = date.split("-").map(Number);
+  return fillText(common.longDate, {
+    day: day === 1 ? fillText(common.firstDay, { day: "1" }) : String(day),
+    month: common.months[month - 1],
+    year: String(year),
+  });
 }
 
 /**
@@ -166,18 +258,41 @@ export function searchParameters({ query, language, identifier = "", date = "", 
  */
 export function searchOutcome(asked) {
   if (asked.state === "success") {
+    let view;
     try {
-      return { state: "success", view: readSearchAnswer(asked.envelope.result.value), context: asked.envelope.context };
+      view = readSearchAnswer(asked.envelope.result.value);
     } catch (error) {
       return { state: "invalid_envelope", ...englishStatement(invalidAnswerSentence(error.message)) };
     }
+    if (view.kind === "reference") {
+      // The act opens at its address on this site, under this page's interface language; the screen goes there.
+      return view.outcome === "opens"
+        ? { state: "opens", view, href: permalinkHref(view.opens.address, CHROME_LOCALE), context: asked.envelope.context }
+        : { state: "not_opened", view, context: asked.envelope.context };
+    }
+    return { state: "success", view, context: asked.envelope.context };
   }
 
   if (asked.state === "refusal") {
     const { code, helpful_payload: payload } = asked.envelope.refusal;
+    let recognition = null;
+    let candidates = null;
+    try {
+      recognition = readRefusalRecognition(payload);
+      // The acts a reference may name, each linked under this page's language when this site holds it; none is chosen.
+      candidates = recognition !== null && code === "ambiguous_identifier"
+        ? readReferenceCandidates(payload).map((candidate) => Object.freeze({
+          ...candidate,
+          href: candidate.held === true ? permalinkHref(candidate.identifier, CHROME_LOCALE) : null,
+        }))
+        : null;
+    } catch (error) {
+      return { state: "invalid_envelope", ...englishStatement(invalidAnswerSentence(error.message)) };
+    }
+    const table = recognition === null ? LIVE_SEARCH_REFUSAL_SENTENCES : referenceTableFor(asked.envelope.context, code, recognition);
     const sentence = code === "no_corpus_mounted"
       ? noCorpusMountedSentence(payload)
-      : tableRefusalSentence(LIVE_SEARCH_REFUSAL_SENTENCES, code, unexpectedRefusalSentence);
+      : tableRefusalSentence(table, code, unexpectedRefusalSentence);
     try {
       validateRefusal({ code, sentence, payload });
     } catch (error) {
@@ -185,11 +300,12 @@ export function searchOutcome(asked) {
         state: "refusal",
         code,
         card: false,
+        recognition,
         ...unshownRefusal("search", UNSHOWN, code, error.message),
         context: asked.envelope.context,
       };
     }
-    return { state: "refusal", code, card: true, sentence, payload, context: asked.envelope.context };
+    return { state: "refusal", code, card: true, sentence, payload, recognition, candidates, context: asked.envelope.context };
   }
 
   if (asked.state === "transport_failure") {
