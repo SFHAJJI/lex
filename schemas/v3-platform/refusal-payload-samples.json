@@ -10,34 +10,100 @@
   "produced": [
     {
       "code": "ambiguous_identifier",
+      "more_payloads": [
+        {
+          "candidates": [
+            "fixture-work-identifier",
+            "fixture-work-identifier-two"
+          ],
+          "match_reason": "prefix",
+          "requested_identifier": "Reglement sur l\u0027epreuve"
+        }
+      ],
       "optional_payload_keys": [
-        "match_reason"
+        "candidate_held",
+        "candidate_title_languages",
+        "candidate_titles",
+        "match_reason",
+        "recognised_act",
+        "recognised_article",
+        "recognised_date",
+        "recognised_date_source",
+        "recognised_held_act",
+        "recognised_held_version",
+        "recognised_kind",
+        "recognised_title"
       ],
       "payload": {
-        "candidates": [
-          "fixture-work-identifier",
-          "fixture-work-identifier-two"
+        "candidate_held": [
+          true,
+          false
         ],
-        "match_reason": "prefix",
-        "requested_identifier": "Reglement sur l\u0027epreuve"
+        "candidate_title_languages": [
+          null,
+          "fra"
+        ],
+        "candidate_titles": [
+          null,
+          "R\u00E8glement grand-ducal du 9 ao\u00FBt 1991 relatif aux examens"
+        ],
+        "candidates": [
+          "/lu-legilux/loi-1991-08-10-n3",
+          "http://data.legilux.public.lu/eli/etat/leg/rgd/1991/08/09/n1"
+        ],
+        "recognised_act": "M\u00E9m. A n\u00B0 58 de 1991",
+        "recognised_article": null,
+        "recognised_date": null,
+        "recognised_date_source": null,
+        "recognised_held_act": null,
+        "recognised_held_version": null,
+        "recognised_kind": "memorial",
+        "recognised_title": null,
+        "requested_identifier": "M\u00E9m. A n\u00B0 58 de 1991"
       },
       "produced_by": [
         "evidence_bundle",
         "resolve",
+        "search",
         "verify"
       ]
     },
     {
       "code": "ambiguous_version",
+      "more_payloads": [
+        {
+          "bound": "from",
+          "candidates": [
+            "/lu-legilux/loi-1991-08-10-n3/2026-04-11--6c164597ee18b9c4ca661f4732ceb947975d5a6e6f8b712ac6b333263e804f35/fra",
+            "/lu-legilux/loi-1991-08-10-n3/2026-04-11--b1bf4908e5a8193a1bed3573c007566f58210a79312046f1b1556eb322616b38/fra"
+          ],
+          "requested_date": "2026-04-11"
+        }
+      ],
       "optional_payload_keys": [
-        "bound"
+        "bound",
+        "recognised_act",
+        "recognised_article",
+        "recognised_date",
+        "recognised_date_source",
+        "recognised_held_act",
+        "recognised_held_version",
+        "recognised_kind",
+        "recognised_title"
       ],
       "payload": {
-        "bound": "from",
         "candidates": [
           "/lu-legilux/loi-1991-08-10-n3/2026-04-11--6c164597ee18b9c4ca661f4732ceb947975d5a6e6f8b712ac6b333263e804f35/fra",
           "/lu-legilux/loi-1991-08-10-n3/2026-04-11--b1bf4908e5a8193a1bed3573c007566f58210a79312046f1b1556eb322616b38/fra"
         ],
+        "recognised_act": "loi du 10 ao\u00FBt 1991",
+        "recognised_article": "5",
+        "recognised_date": "2026-04-11",
+        "recognised_date_source": "citation",
+        "recognised_held_act": "/lu-legilux/loi-1991-08-10-n3",
+        "recognised_held_version": null,
+        "recognised_kind": "citation",
+        "recognised_title": "R\u00E8glement sur l\u0027\u00E9preuve terminale zeta",
         "requested_date": "2026-04-11"
       },
       "produced_by": [
@@ -53,23 +119,31 @@
     },
     {
       "code": "anchor_not_in_version",
-      "optional_payload_keys": [],
+      "optional_payload_keys": [
+        "recognised_act",
+        "recognised_article",
+        "recognised_date",
+        "recognised_date_source",
+        "recognised_held_act",
+        "recognised_held_version",
+        "recognised_kind",
+        "recognised_title"
+      ],
       "payload": {
         "asserts_absence_of_law": false,
         "do_not_fall_back_to_full_text_search": true,
         "nearest_anchors": [
-          "art_10",
-          "art_11",
-          "art_12",
-          "art_13",
-          "art_14",
-          "art_15",
-          "art_16",
-          "art_17",
-          "art_18",
-          "art_19"
+          "art_9"
         ],
-        "requested_anchor": "art_no_such_anchor",
+        "recognised_act": "loi du 10 ao\u00FBt 1991",
+        "recognised_article": "99",
+        "recognised_date": "2024-03-15",
+        "recognised_date_source": "citation",
+        "recognised_held_act": "/lu-legilux/loi-1991-08-10-n3",
+        "recognised_held_version": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--5bca01f82ef3058cfebe7f8a8a6eb1f1fbeeb32b8a1ea7b2c02ac20963235e3a/fra",
+        "recognised_kind": "citation",
+        "recognised_title": "R\u00E8glement sur l\u0027\u00E9preuve terminale zeta",
+        "requested_anchor": "99",
         "what_would_answer": [
           "corrected_identifier",
           "new_official_observation"
@@ -79,6 +153,7 @@
         "article_history",
         "citation",
         "evidence_bundle",
+        "search",
         "verify"
       ]
     },
@@ -106,19 +181,36 @@
     },
     {
       "code": "identifier_unknown",
-      "optional_payload_keys": [],
+      "optional_payload_keys": [
+        "recognised_act",
+        "recognised_article",
+        "recognised_date",
+        "recognised_date_source",
+        "recognised_held_act",
+        "recognised_held_version",
+        "recognised_kind",
+        "recognised_title"
+      ],
       "payload": {
         "asserts_absence_of_law": false,
         "official_search_actions": [
           "search"
         ],
         "population_disclosure": "This build\u0027s Luxembourg index holds 1 Luxembourg work, with states dated from 2024-02-01 to 2026-04-11.",
+        "recognised_act": "/lu-legilux/no-such-work",
+        "recognised_article": null,
+        "recognised_date": null,
+        "recognised_date_source": null,
+        "recognised_held_act": null,
+        "recognised_held_version": null,
+        "recognised_kind": "permalink",
+        "recognised_title": null,
         "requested_identifier": "/lu-legilux/no-such-work",
         "what_would_answer": [
           "corrected_identifier",
           "expanded_official_scope"
         ],
-        "what_would_answer_detail": "a Luxembourg work identifier present in the mounted index"
+        "what_would_answer_detail": "an address of this site for a Luxembourg act this index holds: its act, its readable address or a permalink of one of its versions; the reference was read, and what it names is not held here, so no word was searched"
       },
       "produced_by": [
         "article_history",
@@ -143,12 +235,29 @@
     },
     {
       "code": "language_not_available",
-      "optional_payload_keys": [],
+      "optional_payload_keys": [
+        "recognised_act",
+        "recognised_article",
+        "recognised_date",
+        "recognised_date_source",
+        "recognised_held_act",
+        "recognised_held_version",
+        "recognised_kind",
+        "recognised_title"
+      ],
       "payload": {
         "available_languages": [
           "deu",
           "fra"
         ],
+        "recognised_act": "loi du 10 ao\u00FBt 1991",
+        "recognised_article": "5",
+        "recognised_date": "2024-03-15",
+        "recognised_date_source": "citation",
+        "recognised_held_act": "/lu-legilux/loi-1991-08-10-n3",
+        "recognised_held_version": null,
+        "recognised_kind": "citation",
+        "recognised_title": "R\u00E8glement sur l\u0027\u00E9preuve terminale zeta",
         "requested_language": "eng"
       },
       "produced_by": [
@@ -204,16 +313,44 @@
     },
     {
       "code": "no_version_for_date",
+      "more_payloads": [
+        {
+          "asserts_absence_of_law": false,
+          "bound": "from",
+          "history_begins": "2024-02-01",
+          "nearest_earlier": null,
+          "nearest_later": "2024-02-01",
+          "requested_date": "1900-01-01",
+          "what_would_answer": [
+            "new_official_observation"
+          ]
+        }
+      ],
       "optional_payload_keys": [
-        "bound"
+        "bound",
+        "recognised_act",
+        "recognised_article",
+        "recognised_date",
+        "recognised_date_source",
+        "recognised_held_act",
+        "recognised_held_version",
+        "recognised_kind",
+        "recognised_title"
       ],
       "payload": {
         "asserts_absence_of_law": false,
-        "bound": "from",
         "history_begins": "2024-02-01",
         "nearest_earlier": null,
         "nearest_later": "2024-02-01",
-        "requested_date": "1900-01-01",
+        "recognised_act": "loi du 10 ao\u00FBt 1991",
+        "recognised_article": "5",
+        "recognised_date": "1990-01-01",
+        "recognised_date_source": "citation",
+        "recognised_held_act": "/lu-legilux/loi-1991-08-10-n3",
+        "recognised_held_version": null,
+        "recognised_kind": "citation",
+        "recognised_title": "R\u00E8glement sur l\u0027\u00E9preuve terminale zeta",
+        "requested_date": "1990-01-01",
         "what_would_answer": [
           "new_official_observation"
         ]
@@ -273,12 +410,29 @@
     },
     {
       "code": "retrieval_mode_unavailable",
-      "optional_payload_keys": [],
+      "optional_payload_keys": [
+        "recognised_act",
+        "recognised_article",
+        "recognised_date",
+        "recognised_date_source",
+        "recognised_held_act",
+        "recognised_held_version",
+        "recognised_kind",
+        "recognised_title"
+      ],
       "payload": {
         "available_modes": [
           "r0_exact_coordinate"
         ],
-        "requested_mode": "r6_article_history"
+        "recognised_act": "32026R0002",
+        "recognised_article": null,
+        "recognised_date": "2026-03-15",
+        "recognised_date_source": "citation",
+        "recognised_held_act": "/eu-eurlex/32026R0002",
+        "recognised_held_version": null,
+        "recognised_kind": "citation",
+        "recognised_title": null,
+        "requested_mode": "r6_as_of"
       },
       "produced_by": [
         "article_history",
@@ -314,22 +468,55 @@
     },
     {
       "code": "text_not_available",
-      "optional_payload_keys": [],
+      "more_payloads": [
+        {
+          "articles_held": 49,
+          "asserts_absence_of_law": false,
+          "language": "fra",
+          "official_identity": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo",
+          "official_source": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3",
+          "permalink": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--5bca01f82ef3058cfebe7f8a8a6eb1f1fbeeb32b8a1ea7b2c02ac20963235e3a/fra",
+          "retained_transport_evidence": "fb59b9fd9372a286c80c90caae9b8676839c85c22f43fcfeec4444bbbf72addb",
+          "stable_coordinate": "/lu-legilux/loi-1991-08-10-n3/2024-02-01",
+          "what_would_answer": [
+            "new_official_observation"
+          ]
+        }
+      ],
+      "optional_payload_keys": [
+        "articles_held",
+        "permalink",
+        "recognised_act",
+        "recognised_article",
+        "recognised_date",
+        "recognised_date_source",
+        "recognised_held_act",
+        "recognised_held_version",
+        "recognised_kind",
+        "recognised_title",
+        "stable_coordinate"
+      ],
       "payload": {
-        "articles_held": 49,
         "asserts_absence_of_law": false,
-        "language": "fra",
-        "official_identity": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo",
-        "official_source": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3",
-        "permalink": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--5bca01f82ef3058cfebe7f8a8a6eb1f1fbeeb32b8a1ea7b2c02ac20963235e3a/fra",
-        "retained_transport_evidence": "fb59b9fd9372a286c80c90caae9b8676839c85c22f43fcfeec4444bbbf72addb",
-        "stable_coordinate": "/lu-legilux/loi-1991-08-10-n3/2024-02-01",
+        "language": "eng",
+        "official_identity": "http://publications.europa.eu/resource/cellar/bbbbbbbb-0000-0000-0000-00000000000b",
+        "official_source": "http://publications.europa.eu/resource/cellar/bbbbbbbb-0000-0000-0000-00000000000b",
+        "recognised_act": "Regulation (EU) 2016/679 (CELEX 32016R0679)",
+        "recognised_article": null,
+        "recognised_date": "2025-03-01",
+        "recognised_date_source": "citation",
+        "recognised_held_act": "/eu-eurlex/32016R0679",
+        "recognised_held_version": null,
+        "recognised_kind": "citation",
+        "recognised_title": null,
+        "retained_transport_evidence": "none",
         "what_would_answer": [
           "new_official_observation"
         ]
       },
       "produced_by": [
-        "evidence_bundle"
+        "evidence_bundle",
+        "search"
       ]
     },
     {
