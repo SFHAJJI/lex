@@ -46,7 +46,8 @@
 //
 // `verify` resolves every form it emits: the permalink forms by the permalink, as a path or under the site's origin, and the
 // evidence form by its two hashes, the version's in the permalink and the text's (`article_text_sha256`, `evidenceVerdict`).
-// The usual form alone is read by the exact-reference reader of the plan's item 4.2, which the words here are written for.
+// The usual form is read by the exact-reference phase of the plan's item 4.2, which the words here are written for: asked as
+// a search's query, it opens Reading at the article it cites (`usualVerdict`; the answer census asks it one).
 //
 // This module is data and pure functions only: the live pages' bundles, the export and the tests share it.
 
@@ -313,6 +314,30 @@ export function citationForms({ view, version, article, observedAt }) {
     permalink,
     textSha256,
   });
+}
+
+/**
+ * What the exact-reference phase (the plan's item 4.2) says of a citation's usual form, asked as a search's query with no
+ * work named (R65: "verify resolves every form"): `matches` when the platform read it as a reference and opens Reading at
+ * the cited article, by the permalink of the version the form names, or, for a form that names no date (its version
+ * answers today), by the act's readable address of that article; otherwise why not (`refused`, `another_act`,
+ * `another_version`, `another_article`). `view` is the search answer as `readSearchAnswer` reads it.
+ */
+export function usualVerdict(forms, view) {
+  if (forms.conventional === null || view === null || typeof view !== 'object' || view.kind !== 'reference') return 'refused';
+  if (view.outcome !== 'opens' || view.opens.page !== 'reading') return 'refused';
+  // The cited article's permalink: /{publisher}/{work}/{date}--{sha256}/{language}/{article}.
+  const path = forms.permalink.slice(CITATION_ORIGIN.length);
+  const [, publisher, work, , language, article] = path.split('/');
+  const opened = view.opens.address.split('/');
+  if (opened[1] !== publisher || opened[2] !== work) return 'another_act';
+  if (view.opens.addressKind === 'readable') {
+    // Today's version, at the article: what a form with no date cites.
+    if (opened[3] !== language) return 'another_version';
+    return opened[4] === article ? 'matches' : 'another_article';
+  }
+  if (view.opens.address === path) return 'matches';
+  return opened.slice(0, 5).join('/') === path.split('/').slice(0, 5).join('/') ? 'another_article' : 'another_version';
 }
 
 /**

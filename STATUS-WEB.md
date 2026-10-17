@@ -84,7 +84,8 @@ work identifier, so an ELI or a CELEX typed there was searched as Luxembourg wor
   why ("“31 février 2024” names no day of the calendar, so nothing was opened and no word was searched."). A refusal: the
   recognition above its card, with the phase's own sentences (`LIVE_SEARCH_REFERENCE_REFUSAL_SENTENCES`, or for an EU act
   `LIVE_SEARCH_EUROPE_REFERENCE_REFUSAL_SENTENCES`), the acts a list names (a held one linked, one only the catalogue names
-  said as not held), and under an absent act's card the catalogue's act that names it. The refusal card declares the seven
+  said as not held), and under an absent act's card the catalogue's act that names it; a held act whose named version (or
+  whose selected version's articles) this site does not hold is said as held. The refusal card declares the nine
   `recognised_*` keys (`RECOGNISED_KEYS`) on every code the phase refuses with a declared payload.
 - **The EU in the same box** (repairs #971's F3 note): a CELEX, an EU ELI or an EU act's name opens the EU act; the line
   under the home page's box (and the 404 page's) now says what is true: "A search by words covers Luxembourg law. An ELI, a
@@ -98,18 +99,79 @@ work identifier, so an ELI or a CELEX typed there was searched as Luxembourg wor
 - **French** (Decision 41): 29 forms (25 interface entries with the twelve months, and 4 refusal sentences) were reviewed by
   Claude (AI reviewer) under the owner's delegation in the addendum of 2026-10-17 ("exact references first") of
   `C:\lex-v3\lanes\fr-review\review.md`: one changed (the EU date sentence, "in one wording only", so it matches no EU date
-  pattern), 28 approved, 336 checks. They are named in the header comment of `live-chrome-fr.mjs`.
-- **Samples**: the answer census samples the four Luxembourg and two EU reference answers; the refusal census drives five
-  refusals of the phase. A code two producers send with different keys (diff's `bound`, the phase's `recognised_*`) now
-  keeps a sample per key set (`more_payloads`), so no key is in no sample.
-- **On the population** (a read-only probe of `derive-c`, run once and not committed): `loi du 12 novembre 2011`, its ELI
-  and `Mém. A n° 233 de 2011` open its dossier; `2013A3498A` opens `rgd-2013-10-18-n1`; `règlement grand-ducal du 10 février
-  2021` and `Mém. A n° 96 de 2015` are ambiguous (several acts) with their titles; `Code du travail, article L. 121-6, 15 mars
-  2021` is `identifier_unknown` with what was recognised; `Article 6 of Regulation (EU) 2016/679` opens
-  `/eu-eurlex/32016R0679/eng/006`, and at 15 March 2021 the wording of 2016-05-04; `02006L0112-20160601` opens that
-  consolidated wording; `Regulation (EU) No 600/2014, article 38l` opens `…/eng/038L`. Each answered within 0 to 191 ms,
-  but the first EU reference of a mount pays the census's map and an act's timeline (about 1.5 s) and the first Mémorial or
-  historical reference the catalogue's 44,312 facts (about 0.45 s), each once per mount.
+  pattern), 28 approved, 336 checks. The repair's forms (4 interface entries, 2 refusal sentences, and the 3 sentences said
+  of an act this site holds) were reviewed by an independent reviewer (Claude, AI reviewer, not the author) in the addendum
+  "the repair of exact references (the review of #974)": `search.titleNotHeld` changed ("intitulé", "l’expression"), the
+  list's sentence changed in both languages ("does not name a single act or article for certain": a list can hold one act),
+  the held-act sentences written by the review, the rest approved; 509 and 188 checks. All are named in the header comment
+  of `live-chrome-fr.mjs`.
+- **Samples**: the answer census samples the four Luxembourg and two EU reference answers, and the citation generator's
+  usual form read back (R65: `usualVerdict`); the refusal census drives eight refusals of the phase (a Mémorial issue's list
+  of a held and an unheld act; an EU act outside the census at a date; an EU wording held in no served language among
+  them). A code two producers send with different keys (diff's `bound`, the phase's `recognised_*`) keeps a sample per key
+  set (`more_payloads`), so no key is in no sample, and the worked example's check reads every sample a code keeps.
+- **Verify of the usual citation form** (the citation generator's next item, now that #975 is on the base): the usual form
+  the generator composes ("Art. 15 de la loi du 10 août 1991, dans sa version applicable au 1er février 2024") is asked
+  as a search's query by the answer census, the phase opens the article it cites at that version, and `usualVerdict`
+  (`web/scripts/citation.mjs`) says `matches`, or why not (`another_act`, `another_version`, `another_article`,
+  `refused`); an EU form at a date ("Article 99 of Regulation (EU) 2016/679, as at 27 April 2016") is held to its wording
+  on the EU mount.
+- **On the population** (read-only probes of `derive-c`, not committed; the reviewer's `run1` to `run7` and the repair's
+  own, before and after, beside the reviewer's in the scratch folder): `loi du 12 novembre 2011` and `Mém. A n° 233 de 2011`
+  list their acts (n1 held and linked; the catalogue's n2, and the règlement grand-ducal of the issue, said as not held);
+  n2's ELI is `identifier_unknown` naming the catalogue's act; `loi du 21 septembre 2017` (one act that day) opens, and with
+  an earlier date after a comma, "le" or "au" is `no_version_for_date` at that date (`history_begins` 2017-10-06);
+  `Code du travail, article L. 121-6, 15 mars 2021` and the reviewer's eight other title forms are word searches
+  (`title_not_held`); `règlement (UE) n° 2019/2088`, `Règlement (UE) n° 2016/679`, `Regulation (EU) No 2016/679`,
+  `règlement (CE) 593/2008`, `Règlement (UE) 2016/679 du 27 avril 2016` and the expression ELI `…/oj/eng` open their
+  dossiers; `2013A3498A` opens `rgd-2013-10-18-n1`; `Article 6 of Regulation (EU) 2016/679` opens
+  `/eu-eurlex/32016R0679/eng/006`. Of the reviewer's 60 probes, 38 answer differently, each as the review asked. The
+  server reads the EU census's identifiers and the catalogue's issues once when the mount opens (`Warm`, 2.8 s of a 50 s
+  start, the rest the indexes' copy and check): the first Mémorial reference answers in 48 ms (was 492), the first EU
+  reference in 56 ms (was 2,116), and a search beside it in 266 ms (was 1,877). An EU act's own timeline is still read on its
+  first use (the VAT directive's in 3.4 s on a loaded machine, was 2.0 s; MiFIR's in 0.8 s, was 0.3 s), as every time-view
+  answer reads it (next).
+- **Review** (#974, by the other model family; one repair round; each finding reproduced on `derive-c` with the reviewer's
+  own probes, and asked again after the repair):
+  - **F1, a false absence (blocking).** A citation by a title the index holds no act under was refused `identifier_unknown`
+    ("Code du travail, article L. 121-6, 15 mars 2021", "règlement intérieur article 12", "loi sur le bail commercial,
+    article 3"), as were words after a type and date that named no act of the day ("loi du 3 février 2018 relative au bail
+    commercial", "… ne s'applique pas") and an earlier date after a comma ("article 2 de la loi …, 1er janvier 2010").
+    Repair: only a strict locator says an act is absent; a title the index holds no act under is searched as words, as
+    typed, every protected token a term (the phase's `reason: title_not_held`, said on the page); title words that name none
+    of a day's acts list them (`ambiguous_identifier`, even of one act); an earlier date after a comma or "le" is the date
+    asked unless the title words then name an act of the day; the home line says "when this site holds it". After: the nine
+    title forms are word searches; on a day of one act the earlier date is `no_version_for_date` after a comma, "le" and
+    "au".
+  - **F2, a guess among a day's acts (blocking).** A type and date, an ELI or a Mémorial issue opened the one act the index
+    holds while the catalogue names others ("loi du 12 novembre 2011" opened n1; the catalogue names n2). Repair: the
+    catalogue's subjects under the day's ELI prefix (`ResolveSubjectsUnder`) or the issue count with the index's works;
+    several are `ambiguous_identifier` with every act (`candidates`, `candidate_titles`, `candidate_title_languages`,
+    `candidate_held`), none opened; one only the catalogue names is `identifier_unknown` naming it
+    (`recognised_catalogue_works`). After: the day lists n1 and n2, "loi du 3 février 2018, article 1er" lists a110 (held)
+    and a112, a113 and a130 (not held), the issue lists the loi and the règlement grand-ducal.
+  - **F3, EU names read in one order (blocking).** "règlement (UE) n° 2019/2088" was read as 32088R2019 and refused after
+    16.5 s; "n° 2016/679" and "No 2016/679" were searched as words. Repair: year first with (UE)/(EU) or a first part from
+    2015, else both orders, the first the EU index holds chosen; a name in the EU's shape is an EU name or no reference,
+    never a Luxembourg title. After: each opens its dossier, in 3 to 34 ms.
+  - **F4, an EU refusal in Luxembourg words.** Repair: `LIVE_SEARCH_EUROPE_REFERENCE_REFUSAL_SENTENCES`, chosen by the
+    refusal context's publisher (the reading's EU sentences, and "The wording the date selects holds no article with that
+    number, …"). After: "Regulation (EU) 2016/679, 1 January 1990" says "This index holds no wording of this EU act for that
+    date." (was "No state of this work … applies on that date.").
+  - **F5, cards that could not be shown.** `text_not_available` and `retrieval_mode_unavailable` refused what was
+    recognised. Repair: `RECOGNISED_KEYS` optional on both (with the catalogue's acts and the held act), an EU
+    `text_not_available` sentence, and the census drives both codes. After: the reviewer's three EU `text_not_available`
+    probes show their cards (before: "its card cannot be shown"), as do the eleven refusals put through the screen.
+  - **F6.** "2012-1-5" was said to name no day. Repair: an ISO date's month and day may have one digit.
+  - **F7.** Repair: an expression's EU ELI (`…/oj/eng`, its language pinned), `eur-lex.europa.eu/eli/…`, a consolidated
+    version's EU ELI date, "la loi du …", "art. 2, loi du …", an EU name with its body and its own date, and a part of an
+    article ("art. 2 al. 3", "article 2, alinéa 3, de …"), which opens the article and is said with it; the MCP search
+    tool's description says the phase first.
+  - **Performance.** Repair: `Warm` when the mount opens (above); the EU time view compares texts only when a date holds
+    several, and reads the answer's text only when a version without a usable date is held.
+  - **The French review's material point** (not the reviewer's): "this site holds no act" was said of a held act whose named
+    version is not held (154 held acts name 389 consolidated versions not held). Repair: `recognised_held_act` and
+    `recognised_held_version` on every refusal of the phase, and three sentences for a held act.
 - **Driver decisions** (reversible):
   - The recognition is in the API, reported as the search answer's `reference` phase, so REST and MCP agree; the page only
     routes.
@@ -139,17 +201,20 @@ work identifier, so an ELI or a CELEX typed there was searched as Luxembourg wor
   title with a date inside it other than after a comma or "le"; the asked date written into Reading's address (the plan's
   3.5, the search in the address); results grouped by act (4.3); an EU act held outside the census answering a dated
   reference (refused `retrieval_mode_unavailable`, now driven in the census by an act outside it); an EU-shaped name that
-  reads to no CELEX ("règlement (UE) n° 5/6") is no reference and is searched as words.
+  reads to no CELEX ("règlement (UE) n° 5/6") is no reference and is searched as words; an EU act's timeline read without
+  its articles' text, so its first use is cheap (today it reads every article of the wordings it compares and pins); an
+  `anchor_not_in_version` of an EU act outside the census, which reads no date, said without "the date selects" (the French
+  review's optional point).
 - **Measured** (no browser was started on this machine: the owner's order of 2026-10-16; CI's journeys lane is the browser
-  evidence, and the journeys' home text changed with `search.searchScope` without being run here): `npm run build` in `web`,
-  then `node scripts/react-bundle.mjs` and `node --test` over every web test file but `keyboard-walk`, `launch-browser` and
-  `paint-check`, 108 files, 1,193 of 1,193; `dotnet build Lex.V3.slnx -c Release`, 0 warnings, 0 errors; `Lex.V3.Tests`
-  3,282 passed, 6 skipped; in `Lex.V3.Ingest.Tests` the classes the slice touches and those named for it
-  (`LuxembourgIndex*`, the Census classes, `PublicRequestRecordingTests`, the answer, envelope and refusal-payload samples,
-  the Resolve, Search and EU Search mount tests, the two reference mount classes, the machine gates, the MCP classes, the
-  pinned-permalink and EU time view classes) 303 of 303, and `Census` with `PublicRequestRecordingTests` 45 passed, 2
-  skipped; `eng/verify-v3-tree.ps1` passes; the French review's checks, 29 forms and 336 checks, pass.
-
+  evidence, and the journeys' home text changed with `search.searchScope` without being run here), after the rebase on
+  `v3/integration` at 32a9522e (#975): `npm run build` in `web`, then `node --test` over every web test file but
+  `keyboard-walk`, `launch-browser` and `paint-check`, 109 files, 1,213 of 1,213; `dotnet build Lex.V3.slnx -c Release`, 0
+  warnings, 0 errors; `Lex.V3.Tests` 3,310 passed, 6 skipped; in `Lex.V3.Ingest.Tests` the classes the slice touches and
+  those named for it (`LuxembourgIndex*`, the Census classes, `PublicRequestRecordingTests`, the answer, envelope and
+  refusal-payload samples, the Resolve, Search and EU Search mount tests, the two reference mount classes, the machine
+  gates, the MCP classes, the pinned-permalink, EU time view and citation classes) 480 passed, 4 skipped; the censuses
+  and samples rendered from the handler and verified without the switch; `eng/verify-v3-tree.ps1` passes (1,603 paths); the
+  French reviews' checks pass (336, then 509 and 188).
 ## One citation generator, in three forms (sole driver, 2026-10-17)
 
 The plan's item 3.3 (`C:\lex-v3\PLAN-2026-10-14.md`), to the specification of record's R65 ("One citation generator for
@@ -199,7 +264,8 @@ text. `verify` resolves every form."), with R18 to R21 and R64.
   both its hashes, the version's and the text's (`evidenceVerdict`). The census holds `verify` at an article's and an EU
   provision's permalink from the mounts that sent its two bundles, and the web tests check the generator's forms against
   them; the journeys verify the cited article's evidence form on every permalink and readable-address step (CI's lane). The
-  usual form alone is read by the exact-reference reader of the plan's item 4.2, not merged yet (next, below).
+  usual form is read by the exact-reference phase of the plan's item 4.2 (#974): asked as a search's query, it opens the
+  article it cites (`usualVerdict`; the answer census asks it one).
 - **French**: the 65 new forms (five reading labels, `export.usualCitation`, the `citation` section, the twelve months among
   them) were reviewed by an independent reviewer in the addendum of 2026-10-17 on the citation generator of
   `C:\lex-v3\lanes\fr-review\review.md`: 3 changed, 62 approved, and named in `live-chrome-fr.mjs`'s header.
@@ -255,7 +321,7 @@ text. `verify` resolves every form."), with R18 to R21 and R64.
     the evidence form quotes a title as served. The usual form is composed (NFC) and its no-break spaces, wide or narrow,
     are plain, since it is copied. A PDF refusal names the field that holds the characters ("article art_2's text",
     "article art_15's evidence form"), never the article's text in place of another field (review of #975, F1).
-- **Not in this part** (next, below): `verify` of the usual form, through the 4.2 reader; R20's own sentence for a
+- **Not in this part** (next, below): R20's own sentence for a
   consolidated Luxembourg text (the act as published and the acts that amended it, the owner's item O4) in place of the
   site's sentence; R19's sentence for a consolidated EU wording, which the API states as it states the original's; the EU
   act's title and Official Journal reference, which no index holds; a consolidated Luxembourg state's title, which starts
@@ -4304,10 +4370,8 @@ date" now measures EU dated selection, the owner's main use case.
 ## Next, in order (web lane; the data lane's items 1 to 3 are in STATUS-DATA.md)
 
 The plan's item 3.3, what is left after the generator (done on 2026-10-17, above):
-1. `verify` of the usual form: once the plan's item 4.2 lands, its exact-reference reader reads "Art. 15 de la loi du 10 août
-   1991 ..., dans sa version applicable au 1er février 2024" to the act, article and date, and verify (or resolve) answers
-   it as it answers the permalink. The generator's date clauses and act names are written for that reader; no second
-   parser is built here.
+1. Done in #974's repair: the usual form is read by the exact-reference phase to the article it cites (`usualVerdict`).
+   Next of 4.2: an EU act's timeline read without its articles' text, so an act's first reference is cheap.
 2. R20's own sentence for a consolidated Luxembourg text (the act as published, linked, and the acts that amended it, or that
    Lex does not yet hold their list), with the owner's item O4, in place of the site's sentence; and R19's sentence for a
    consolidated EU wording, served by the API.

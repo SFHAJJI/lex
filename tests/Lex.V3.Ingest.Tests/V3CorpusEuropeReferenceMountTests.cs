@@ -96,6 +96,11 @@ public sealed class V3CorpusEuropeReferenceMountTests
         Assert.AreEqual(pinned + "/099", dated.GetProperty("opens").GetProperty("address").GetString());
         Assert.AreEqual("2016-04-27", dated.GetProperty("opens").GetProperty("state_date").GetString(), "the wording the date selects");
         Assert.AreEqual("2021-03-15", dated.GetProperty("recognised").GetProperty("date").GetProperty("date").GetString());
+        // The citation generator's usual form of a wording that no longer answers today ("…, as at {date}") reads to that
+        // wording (R65: verify resolves every form).
+        Assert.AreEqual(pinned + "/099",
+            Opened(await SearchAsync(mount, "Article 99 of Regulation (EU) 2016/679, as at 27 April 2016", language: "eng"), "usual form")
+                .GetProperty("opens").GetProperty("address").GetString());
         const string early = "Article 99 of Regulation (EU) 2016/679, 15 March 2015";
         var before = Refused(await SearchAsync(mount, early, language: "eng"), "no_version_for_date", early);
         Assert.AreEqual("2015-03-15", before.GetProperty("recognised_date").GetString(), "the date is kept, and no wording this index holds answers it");

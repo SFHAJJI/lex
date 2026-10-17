@@ -7077,6 +7077,66 @@
     {
       "operation": "search",
       "object_type": "quote",
+      "scenario": "the usual citation form the generator composes for that article: the phase reads it and opens the article it cites, in the version it names",
+      "answer": {
+        "corpus_sha256": "\u003Cvaries-per-run\u003E",
+        "hits": [],
+        "index_sha256": "\u003Cvaries-per-run\u003E",
+        "lanes_run": false,
+        "publisher": "lu-legilux",
+        "reference": {
+          "kind": "citation",
+          "opens": {
+            "address": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--5bca01f82ef3058cfebe7f8a8a6eb1f1fbeeb32b8a1ea7b2c02ac20963235e3a/fra/art_15",
+            "address_kind": "permalink",
+            "article_id": "art_15",
+            "language": "fra",
+            "page": "reading",
+            "publisher": "lu-legilux",
+            "state_date": "2024-02-01",
+            "work": "loi-1991-08-10-n3"
+          },
+          "outcome": "opens",
+          "phase": "exact_reference",
+          "reason": null,
+          "recognised": {
+            "act": {
+              "as_typed": "loi du 10 ao\u00FBt 1991",
+              "form": "type_and_date",
+              "identifier": "loi du 10 ao\u00FBt 1991",
+              "title": null,
+              "title_language": null,
+              "work": "loi-1991-08-10-n3"
+            },
+            "article": {
+              "as_typed": "15",
+              "key": "15",
+              "matched_by": "number",
+              "number": "15",
+              "part": null
+            },
+            "article_rule": "An article number, as a citation writes it and as an index holds it, is read to one key, and a citation opens the article whose key is its key: never a near one. Case, spacing and the code letter\u0027s dot are not part of a number (L. 121-6, L.121-6 and L 121-6 are L.121-6); 1er, premier and 1 are 1; a suffix is part of a number (42, 42bis, 42ter and 42-1 are four numbers); an arabic number is never a roman one (3 is not III). A grouped article (a range such as 141 \u00E0 144, or two numbers joined) is opened by a citation of a number it groups only when no article of the version holds that number itself. An id this table reads as no number of the act (a quoted article of an amended act) is never opened by a citation.",
+            "date": {
+              "as_typed": "1er f\u00E9vrier 2024",
+              "date": "2024-02-01",
+              "source": "citation"
+            },
+            "language": "fra",
+            "text": "Art. 15 de la loi du 10 ao\u00FBt 1991, dans sa version applicable au 1er f\u00E9vrier 2024"
+          },
+          "rule": "before any word is searched, the query is read as an exact reference: an ELI, a CELEX (consolidated forms included), a Memorial or Journal officiel A citation, a historical identifier of the publisher\u0027s catalogue, an address of this site for law, an act by its type and date or an EU act by its conventional name, or a citation of an article of an act and of a date; a reference the indexes hold opens its act, at the article and date it names (the date defaults to the search\u0027s date, else to today in Luxembourg), or its dossier when it names neither, and no word is searched; an identifier, an EU act\u0027s name or a type and date that names no act the indexes or the publisher\u0027s catalogue hold is refused identifier_unknown, with no list; a day, an issue or a name that names several acts is refused ambiguous_identifier with every one, held or not, and none is chosen; a title the index does not hold, and words after a type and date that name none of that day\u0027s acts, open nothing on their own: a title is searched as words, and the day\u0027s acts are listed; a date in a date\u0027s shape that names no calendar day opens nothing; a query that is no reference is searched as words"
+        },
+        "requested_after": null,
+        "requested_date": null,
+        "requested_identifier": null,
+        "requested_language": "fra",
+        "requested_mode": null,
+        "requested_query": "Art. 15 de la loi du 10 ao\u00FBt 1991, dans sa version applicable au 1er f\u00E9vrier 2024"
+      }
+    },
+    {
+      "operation": "search",
+      "object_type": "quote",
       "scenario": "an EU act by its conventional name: the phase reads its CELEX and opens its dossier",
       "answer": {
         "corpus_sha256": "\u003Cvaries-per-run\u003E",

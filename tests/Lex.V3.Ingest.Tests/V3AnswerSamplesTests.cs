@@ -407,6 +407,9 @@ public sealed class V3AnswerSamplesTests
             await DriveAsync(mount, "search", "an article of that act at a date: the phase opens Reading at that article in the version the date selects, by its permalink", new { query = "article 15 de la loi du 10 août 1991, 15 mars 2024", language = "fra" }),
             await DriveAsync(mount, "search", "the same article with no date: the phase opens Reading at it by the act's readable address, today's version", new { query = "article 15 de la loi du 10 août 1991", language = "fra" }),
             await DriveAsync(mount, "search", "a citation whose date names no calendar day: nothing is opened, and no word is searched with the date dropped", new { query = "article 15 de la loi du 10 août 1991, 31 février 2024", language = "fra" }),
+            // R65's "verify resolves every form": the usual form the citation generator composes for that article of the bundle
+            // the envelope census holds, read by the phase to the article it cites (`usualVerdict` holds the two together).
+            await DriveAsync(mount, "search", "the usual citation form the generator composes for that article: the phase reads it and opens the article it cites, in the version it names", new { query = "Art. 15 de la loi du 10 août 1991, dans sa version applicable au 1er février 2024", language = "fra" }),
             await DriveAsync(europeMount, "search", "an EU act by its conventional name: the phase reads its CELEX and opens its dossier", new { query = "Regulation (EU) 2016/679", language = "eng" }),
             await DriveAsync(europeMount, "search", "an article of the EU act with no date: Reading at the provision by the act's readable address", new { query = "Article 99 of Regulation (EU) 2016/679", language = "eng" }),
             // `dossier` is sampled for the live dossier screen's reader: the work, in the language it is held in.

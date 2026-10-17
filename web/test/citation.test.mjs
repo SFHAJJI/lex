@@ -13,7 +13,8 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { Citations, PinnedLead } from "../.react-build/app.mjs";
 import { readingPinOf } from "../scripts/initial-answer.mjs";
 import { readingOutcome } from "../scripts/live-reading.mjs";
-import { CITATION_ORIGIN, citationForms, citationWords, dateInWords, europeArticle, evidenceVerdict, luxembourgArticle } from "../scripts/citation.mjs";
+import { CITATION_ORIGIN, citationForms, citationWords, dateInWords, europeArticle, evidenceVerdict, luxembourgArticle, usualVerdict } from "../scripts/citation.mjs";
+import { readSearchAnswer } from "../scripts/search-answer.mjs";
 import { readEuropeEvidenceBundle, readEvidenceBundle, readEvidenceBundleAnswer } from "../scripts/reading-answer.mjs";
 import { AUTHENTICITY_SENTENCES } from "../scripts/as-published.mjs";
 import { CSV_COLUMNS, composeEuropeExport, composeExport, exportCsv, exportJson } from "../scripts/export-build.mjs";
@@ -34,6 +35,7 @@ const envelopeOf = (operation, scenarioStart) => {
 const LU = envelopeOf("evidence_bundle", "the work on its state's date");
 const EU = envelopeOf("evidence_bundle", "an EU wording's permalink whose next wording's text is not held");
 const LU_VERIFIED = envelopeOf("verify", "an article's permalink");
+const ANSWERS = JSON.parse(await readFile(new URL("../../schemas/v3-platform/answer-samples.json", import.meta.url), "utf8"));
 const EU_VERIFIED = envelopeOf("verify", "an EU provision's permalink");
 const OBSERVED = LU.context.freshness.observed_at;
 const WORK = "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3";
@@ -466,4 +468,27 @@ test("the forms are said in R21's words and the reviewed French's typography, an
   // The French table's months and its first of a month, as French writes a date in a citation.
   assert.deepEqual([...FR.citation.months], ["janvier", "février", "mars", "avril", "mai", "juin", "juillet", "août", "septembre", "octobre", "novembre", "décembre"]);
   assert.equal(FR.citation.firstOfMonth, "{day}er {month} {year}");
+});
+
+test("the usual form is verified by the exact-reference phase: read as the search's query, it opens the article it cites", () => {
+  // R65's "verify resolves every form", for the form with no hash in it (the plan's item 4.2): the answer census asked the
+  // phase this article's usual form, as the generator composes it from the bundle the envelope census holds.
+  const forms = luxembourgForms(LU.result.value, "art_15");
+  const sample = ANSWERS.sampled.find((row) => row.operation === "search" && row.answer.requested_query === forms.conventional);
+  assert.ok(sample, `the answer census asks the phase the generator's usual form "${forms.conventional}"`);
+  const view = readSearchAnswer(sample.answer);
+  assert.equal(usualVerdict(forms, view), "matches");
+  assert.equal(view.opens.address, forms.permalink.slice(CITATION_ORIGIN.length), "the version the form names, at its article");
+
+  // Each other answer says why not.
+  const at = (address, addressKind = "permalink") => ({ ...view, opens: { ...view.opens, address, addressKind } });
+  const [, publisher, work, pin, language] = view.opens.address.split("/");
+  assert.equal(usualVerdict(forms, at(`/${publisher}/${work}/${pin}/${language}/art_16`)), "another_article");
+  assert.equal(usualVerdict(forms, at(`/${publisher}/${work}/2020-01-01--${"0".repeat(64)}/${language}/art_15`)), "another_version");
+  assert.equal(usualVerdict(forms, at(`/${publisher}/loi-2000-01-01-n1/${pin}/${language}/art_15`)), "another_act");
+  assert.equal(usualVerdict(forms, at(`/${publisher}/${work}/${language}/art_15`, "readable")), "matches", "a form with no date cites today's version");
+  assert.equal(usualVerdict(forms, at(`/${publisher}/${work}/${language}/art_16`, "readable")), "another_article");
+  assert.equal(usualVerdict(forms, { ...view, outcome: "not_opened", opens: null }), "refused");
+  assert.equal(usualVerdict(forms, null), "refused");
+  assert.equal(usualVerdict({ ...forms, conventional: null }, view), "refused", "no usual form, nothing to verify");
 });
