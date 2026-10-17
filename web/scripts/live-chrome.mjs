@@ -318,9 +318,9 @@ const EN = Object.freeze({
     // Each exported article's usual citation (`citation.mjs`), in its text's language; the file carries the three forms.
     usualCitation: "Usual citation: {citation}",
     // Reading by page (the plan's item 3.7): a version's every article pinned at once, its other pages read first.
-    pinAll: "Pin every article of this version",
-    readingPages: "Reading every page of this version: {done} of {pages}.",
-    pagesFailed: "Not every page of this version could be read; nothing more was pinned.",
+    pinAll: "Pin every article",
+    readingPages: "Reading every page: {done} of {pages}.",
+    pagesFailed: "Not every page could be read; nothing more was pinned.",
   }),
   card: Object.freeze({
     heading: "Evaluation card",

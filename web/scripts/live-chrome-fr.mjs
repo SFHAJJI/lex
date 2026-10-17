@@ -377,9 +377,9 @@ export const LIVE_CHROME_FR = Object.freeze({
     composeFailed: 'Cet export ne peut pas être composé : {reason}.',
     jsonSummary: 'Le JSON tel qu’il sera enregistré',
     usualCitation: 'Citation usuelle : {citation}',
-    pinAll: 'Épingler tous les articles de cette version',
-    readingPages: 'Lecture de toutes les pages de cette version : {done} sur {pages}.',
-    pagesFailed: 'Les pages de cette version n’ont pas toutes pu être lues ; rien de plus n’a été épinglé.',
+    pinAll: 'Épingler tous les articles',
+    readingPages: 'Lecture de toutes les pages : {done} sur {pages}.',
+    pagesFailed: 'Les pages n’ont pas toutes pu être lues ; rien de plus n’a été épinglé.',
   }),
   card: Object.freeze({
     heading: 'Fiche d’évaluation',

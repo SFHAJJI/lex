@@ -154,9 +154,9 @@ test("the export composer pins from the page shown, with the control that pins e
   const outcome = readingOutcome({ state: "success", envelope: FIRST });
   const markup = renderToStaticMarkup(h(ExportAnswerView, { outcome, pins: new Set(), onPin: () => {}, onPinAll: () => {} })).replaceAll("<!-- -->", "");
   assert.ok(markup.includes('<p data-pages-shown="1-1">Page 1 of 2: art_1er to art_50.</p>'));
-  assert.ok(markup.includes(`<button type="button" data-pin-all="${outcome.view.states[0].stateSha256}">Pin every article of this version</button>`));
+  assert.ok(markup.includes(`<button type="button" data-pin-all="${outcome.view.states[0].stateSha256}">Pin every article</button>`));
   const reading = renderToStaticMarkup(h(ExportAnswerView, { outcome, pins: new Set(), onPin: () => {}, onPinAll: () => {}, assembling: { [outcome.view.states[0].stateSha256]: { state: "loading", done: 1, pages: 2 } } }));
-  assert.ok(reading.includes("Reading every page of this version: 1 of 2."));
+  assert.ok(reading.includes("Reading every page: 1 of 2."));
   assert.ok(reading.includes("disabled"), "one reading at a time");
 });
 
