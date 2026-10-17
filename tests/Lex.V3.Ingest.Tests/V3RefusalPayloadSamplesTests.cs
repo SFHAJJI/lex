@@ -196,7 +196,7 @@ public sealed class V3RefusalPayloadSamplesTests
         await DriveAsync(observed, mount, "search", "an identifier no work has", new { query = "loyer", language = "fra", identifier = unknown }, "identifier_unknown");
         await DriveAsync(observed, mount, "search", "a mode the index cannot serve", new { query = "loyer", language = "fra", mode = "bm25" }, "retrieval_mode_unavailable");
         // search's exact references (the plan's item 4.2): every refusal of the phase says what was recognised.
-        await DriveAsync(observed, mount, "search", "an exact reference to an act this index does not hold: refused with no list", new { query = "Code du travail, article L. 121-6, 15 mars 2021", language = "fra" }, "identifier_unknown");
+        await DriveAsync(observed, mount, "search", "an exact reference to an act this index does not hold: refused with no list", new { query = "/lu-legilux/no-such-work", language = "fra" }, "identifier_unknown");
         await DriveAsync(observed, mount, "search", "a citation of an article the version the date selects does not hold", new { query = "article 99 de la loi du 10 août 1991, 15 mars 2024", language = "fra" }, "anchor_not_in_version");
         await DriveAsync(observed, mount, "search", "a citation at a date before the act's held history", new { query = "article 5 de la loi du 10 août 1991 au 1er janvier 1990", language = "fra" }, "no_version_for_date");
         await DriveAsync(observed, mount, "search", "a citation at a date two states of the act share", new { query = $"article 5 de la loi du 10 août 1991, {twinDate}", language = "fra" }, "ambiguous_version");

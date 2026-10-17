@@ -145,18 +145,18 @@
           "search"
         ],
         "population_disclosure": "This build\u0027s Luxembourg index holds 1 Luxembourg work, with states dated from 2024-02-01 to 2026-04-11.",
-        "recognised_act": "Code du travail",
-        "recognised_article": "L. 121-6",
-        "recognised_date": "2021-03-15",
-        "recognised_date_source": "citation",
-        "recognised_kind": "citation",
+        "recognised_act": "/lu-legilux/no-such-work",
+        "recognised_article": null,
+        "recognised_date": null,
+        "recognised_date_source": null,
+        "recognised_kind": "permalink",
         "recognised_title": null,
-        "requested_identifier": "Code du travail, article L. 121-6, 15 mars 2021",
+        "requested_identifier": "/lu-legilux/no-such-work",
         "what_would_answer": [
           "corrected_identifier",
           "expanded_official_scope"
         ],
-        "what_would_answer_detail": "an act this index holds; the reference was read, and what it names is not held here, so no word was searched"
+        "what_would_answer_detail": "an address of this site for a Luxembourg act this index holds: its act, its readable address or a permalink of one of its versions; the reference was read, and what it names is not held here, so no word was searched"
       },
       "produced_by": [
         "article_history",

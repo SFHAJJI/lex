@@ -757,7 +757,7 @@ internal sealed partial class V3CorpusMount
             }
 
             return WithRecognition(request, Unknown(request, query, observedAt, PublisherId.EuEurLex,
-                "an address of this site for EU law: /eu-eurlex/{celex}, or a permalink /eu-eurlex/{celex}/{date}--{sha256}/{language}" + ReferenceNotHeld), recognised);
+                "an address of this site for an EU act this EU index holds: its act, its readable address or a permalink of one of its wordings" + ReferenceNotHeld), recognised);
         }
 
         var recognition = new Recognition(reference, "lu-legilux");
@@ -798,7 +798,7 @@ internal sealed partial class V3CorpusMount
         }
 
         return WithRecognition(request, Unknown(request, query, observedAt, PublisherId.LuLegilux,
-            "an address of this site for a Luxembourg act this index holds: /lu-legilux/{work}, or a permalink /lu-legilux/{work}/{date}--{sha256}/{language}" + ReferenceNotHeld), recognition);
+            "an address of this site for a Luxembourg act this index holds: its act, its readable address or a permalink of one of its versions" + ReferenceNotHeld), recognition);
     }
 
     /// <summary>A permalink opens as written (its own page says when its pin is not the version served) when its act is held.</summary>
@@ -908,11 +908,13 @@ internal sealed partial class V3CorpusMount
                 key = article.Key,
                 matched_by = recognition.ArticleMatchedBy,
             },
-            date = reference.DateAsTyped is null && recognition.Date is null ? null : new
+            // A date the reference writes in a date's shape and that names no day is the date as typed, never dropped: the
+            // reading date's, or the act's own (a type and date's, a Mémorial issue's).
+            date = reference.DateAsTyped is null && recognition.Date is null && !(reference.Act.DateNotRead && reference.DateNotRead is not null) ? null : new
             {
-                as_typed = reference.DateAsTyped,
+                as_typed = reference.DateAsTyped ?? (reference.Act.DateNotRead ? reference.Act.ActDateAsTyped : null),
                 date = recognition.Date ?? reference.Date?.Date,
-                source = recognition.DateSource ?? (reference.DateAsTyped is null ? null : "citation"),
+                source = recognition.DateSource ?? (reference.DateAsTyped is null && !reference.Act.DateNotRead ? null : "citation"),
             },
             language = recognition.Language,
             article_rule = reference.Article is null ? null : ArticleNumbers.Rule,

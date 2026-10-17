@@ -7100,7 +7100,7 @@
             "act": {
               "as_typed": "Regulation (EU) 2016/679",
               "form": "eu_act_name",
-              "identifier": "32016R0679",
+              "identifier": "Regulation (EU) 2016/679 (CELEX 32016R0679)",
               "title": null,
               "title_language": null,
               "work": "32016R0679"
@@ -7150,7 +7150,7 @@
             "act": {
               "as_typed": "Regulation (EU) 2016/679",
               "form": "eu_act_name",
-              "identifier": "32016R0679",
+              "identifier": "Regulation (EU) 2016/679 (CELEX 32016R0679)",
               "title": null,
               "title_language": null,
               "work": "32016R0679"

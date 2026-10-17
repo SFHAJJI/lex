@@ -50,17 +50,22 @@ internal sealed record ReferenceAct(
     CitationDate? ActDate = null,
     string? TitleWords = null,
     string? Title = null,
-    bool DateNotRead = false)
+    bool DateNotRead = false,
+    string? ActDateAsTyped = null)
 {
     /// <summary>The publisher whose index holds the act this form names.</summary>
     public bool IsEurope => Form is ReferenceActForm.Celex or ReferenceActForm.EuropeName ||
         (Form == ReferenceActForm.Permalink && Address!.StartsWith("/eu-eurlex/", StringComparison.Ordinal));
 
-    /// <summary>The identifier the act is printed by in the recognition: the normalised identifier, or the act as typed.</summary>
+    /// <summary>
+    /// The identifier the act is printed by in the recognition: the normalised identifier, an EU act's name with the CELEX it
+    /// was read to, or the act as typed.
+    /// </summary>
     public string Label => Form switch
     {
         ReferenceActForm.LuxembourgEli => Eli!,
-        ReferenceActForm.Celex or ReferenceActForm.EuropeName => Celex!,
+        ReferenceActForm.Celex => Celex!,
+        ReferenceActForm.EuropeName => $"{AsTyped} (CELEX {Celex})",
         ReferenceActForm.HistoricalLegalId => HistoricalLegalId!,
         ReferenceActForm.Permalink => Address!,
         _ => AsTyped,
@@ -314,7 +319,7 @@ internal static class ExactReferenceReader
                 issued = CitationDates.Read(year);
                 if (issued is null)
                 {
-                    return new ReferenceAct(ReferenceActForm.Memorial, value, MemorialNumber: number, DateNotRead: true);
+                    return new ReferenceAct(ReferenceActForm.Memorial, value, MemorialNumber: number, DateNotRead: true, ActDateAsTyped: year);
                 }
 
                 year = issued.Date[..4];
@@ -337,7 +342,8 @@ internal static class ExactReferenceReader
                 LuxembourgType: eliType,
                 ActDate: actDate,
                 TitleWords: rest.Length == 0 ? null : rest,
-                DateNotRead: actDate is null);
+                DateNotRead: actDate is null,
+                ActDateAsTyped: typed.Groups["date"].Value);
         }
 
         if (EuropeName.Match(value) is { Success: true } named && EuropeNameCelex(named) is { } celex)

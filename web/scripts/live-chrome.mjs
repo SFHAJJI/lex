@@ -67,9 +67,22 @@ const EN = Object.freeze({
     undated: "Only Luxembourg acts were searched, with no date: every version this site holds was searched, and each result names its version's date.",
     // A search with no work named searches Luxembourg law alone, and its no-hit sentence says so.
     noHitLuxembourg: "No article of the Luxembourg text this server holds and may search contains “{query}”.",
-    // Under the home page's box (and the 404 page's): what it searches, and where an EU act is searched.
-    luxembourgOnly: "This search covers Luxembourg law. To search within an EU act, name it by its CELEX number on the {link}.",
+    // Under the home page's box (and the 404 page's): what a search by words covers, what an exact reference opens (the
+    // plan's item 4.2), and where words are searched within an EU act.
+    searchScope: "A search by words covers Luxembourg law. An ELI, a CELEX number, a Mémorial reference, a permalink, or the citation of an article of an act, with or without a date, opens that act, Luxembourg or EU. To search within an EU act, name it by its CELEX number on the {link}.",
     searchPage: "search page",
+    // What an exact reference was read as (the plan's item 4.2), said before its act opens and above a refusal of it: the
+    // act, the article and the date as read, the date in words. A date the reference does not name is said apart.
+    recognised: "Recognised: {act}.",
+    recognisedArticle: "Recognised: {act}, article {article}.",
+    recognisedDate: "Recognised: {act}, at {date}.",
+    recognisedArticleDate: "Recognised: {act}, article {article}, at {date}.",
+    recognisedToday: "No date was given: the date read is today in Luxembourg, {date}.",
+    recognisedSearchDate: "The reference names no date: the date read is the search's, {date}.",
+    opensReading: "Opening the reading: {link}",
+    opensDossier: "Opening the dossier: {link}",
+    notOpenedDate: "“{date}” names no day of the calendar, so nothing was opened and no word was searched.",
+    notOpenedTwoDates: "The reference names two dates that disagree, so nothing was opened and no word was searched.",
   }),
   dossier: Object.freeze({
     title: "Dossier",
@@ -431,6 +444,11 @@ const EN = Object.freeze({
     // Between the items of a list said in one line: its spaces are its content (French sets a no-break
     // space before the semicolon).
     listSeparator: "; ",
+    // A calendar date in words (a reference's date printed back as it was read): the day, the month's name, the year; the
+    // first of a month is written as the language writes it.
+    longDate: "{day} {month} {year}",
+    firstDay: "{day}",
+    months: Object.freeze(["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"]),
     // The annexes of one EU wording a corpus disposition holds, never served as text (`europe-annexes.mjs`).
     europeAnnexes: Object.freeze({
       one: "{count} annex of the {language} wording is not served as text, and is never searched, quoted or exported: {reason}. Official source {source}.",

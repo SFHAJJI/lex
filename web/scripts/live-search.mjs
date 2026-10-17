@@ -20,12 +20,20 @@
 // date field starts at today, the calendar date in Luxembourg (R13; `todayInLuxembourg`, by the coded
 // rule of `temporal.mjs`); the search page's starts empty, because an EU act is searched in the one
 // wording held and the platform refuses it a date (`retrieval_mode_unavailable`), which the page says.
+//
+// Exact references first (the plan's item 4.2): the platform reads the query as an exact reference before any word is
+// searched (an ELI, a CELEX, a Mémorial citation, a permalink, a citation of an article of an act at a date), and a
+// reference it holds answers with the address its act opens at. That is the `opens` state, which carries the address as a
+// link on this page (`href`); the screen goes there. A reference that opens nothing (a date that names no calendar day,
+// two dates that disagree) is `not_opened`; a refusal of the phase carries what was recognised (`recognition`) and is
+// said with the phase's own sentences (`LIVE_SEARCH_REFERENCE_REFUSAL_SENTENCES`), so the page says what it read.
 
 import { askV3 } from "./v3-client.mjs";
-import { readSearchAnswer } from "./search-answer.mjs";
+import { readRefusalRecognition, readSearchAnswer } from "./search-answer.mjs";
 import { validateRefusal } from "./refusal-card.mjs";
 import { noCorpusMountedSentence, tableRefusalSentence, unshownRefusal } from "./live-refusals.mjs";
-import { englishStatement, fillText, liveChrome, refusalTemplate } from "./live-chrome.mjs";
+import { CHROME_LOCALE, englishStatement, fillText, liveChrome, refusalTemplate } from "./live-chrome.mjs";
+import { permalinkHref } from "./permalinks.mjs";
 import { isCalendarDate, luxembourgDate } from "./temporal.mjs";
 
 /** The ceiling on a query's characters, the platform's own (`SearchMaxQueryCharacters`). */
@@ -73,6 +81,22 @@ export const LIVE_SEARCH_REFUSAL_SENTENCES = Object.freeze({
   retrieval_mode_unavailable: "An EU act is searched in the wording this server holds, not at a date: leave the date empty to search it.",
 });
 
+/**
+ * The sentence per refusal code of a search whose query was read as an exact reference (the payload's `recognised_*`
+ * members say what was read): the act it names is not held, it names several, the version the date selects holds no
+ * article of that number, the act is not held in the language asked, or the EU index answers no date for it. A date before
+ * the history and several versions on the date are said with the search's own sentences above.
+ */
+export const LIVE_SEARCH_REFERENCE_REFUSAL_SENTENCES = Object.freeze({
+  identifier_unknown: "This site holds no act the reference names, so nothing was opened and no word was searched.",
+  ambiguous_identifier: "The reference names more than one act or article this site holds, and none is chosen.",
+  anchor_not_in_version: "The version the date selects holds no article with that number, and no other article is opened in its place.",
+  language_not_available: "This work is not held in the language asked for.",
+  no_version_for_date: LIVE_SEARCH_REFUSAL_SENTENCES.no_version_for_date,
+  ambiguous_version: LIVE_SEARCH_REFUSAL_SENTENCES.ambiguous_version,
+  retrieval_mode_unavailable: "This server holds one wording of this EU act and answers no date for it: leave the date out of the reference.",
+});
+
 export const LIVE_SEARCH_IDLE = liveChrome().search.idle;
 export const LIVE_SEARCH_LOADING = liveChrome().common.loading;
 
@@ -101,6 +125,21 @@ export function unshownRefusalSentence(code, reason) {
 
 export function invalidAnswerSentence(reason) {
   return `The answer could not be read as a search answer: ${reason}.`;
+}
+
+/**
+ * A calendar date (yyyy-mm-dd) as the page's language writes it in words, so a reference's date is printed back as it was
+ * read (15/03/2021 is 15 March 2021, never 3 May): the day (French writes the first "1er"), the month's name and the year.
+ */
+export function longDate(date, locale = CHROME_LOCALE) {
+  if (!isCalendarDate(date)) throw new Error(`${JSON.stringify(date)} is not a calendar date`);
+  const common = liveChrome(locale).common;
+  const [year, month, day] = date.split("-").map(Number);
+  return fillText(common.longDate, {
+    day: day === 1 ? fillText(common.firstDay, { day: "1" }) : String(day),
+    month: common.months[month - 1],
+    year: String(year),
+  });
 }
 
 /**
@@ -166,18 +205,33 @@ export function searchParameters({ query, language, identifier = "", date = "", 
  */
 export function searchOutcome(asked) {
   if (asked.state === "success") {
+    let view;
     try {
-      return { state: "success", view: readSearchAnswer(asked.envelope.result.value), context: asked.envelope.context };
+      view = readSearchAnswer(asked.envelope.result.value);
     } catch (error) {
       return { state: "invalid_envelope", ...englishStatement(invalidAnswerSentence(error.message)) };
     }
+    if (view.kind === "reference") {
+      // The act opens at its address on this site, under this page's interface language; the screen goes there.
+      return view.outcome === "opens"
+        ? { state: "opens", view, href: permalinkHref(view.opens.address, CHROME_LOCALE), context: asked.envelope.context }
+        : { state: "not_opened", view, context: asked.envelope.context };
+    }
+    return { state: "success", view, context: asked.envelope.context };
   }
 
   if (asked.state === "refusal") {
     const { code, helpful_payload: payload } = asked.envelope.refusal;
+    let recognition = null;
+    try {
+      recognition = readRefusalRecognition(payload);
+    } catch (error) {
+      return { state: "invalid_envelope", ...englishStatement(invalidAnswerSentence(error.message)) };
+    }
+    const table = recognition === null ? LIVE_SEARCH_REFUSAL_SENTENCES : LIVE_SEARCH_REFERENCE_REFUSAL_SENTENCES;
     const sentence = code === "no_corpus_mounted"
       ? noCorpusMountedSentence(payload)
-      : tableRefusalSentence(LIVE_SEARCH_REFUSAL_SENTENCES, code, unexpectedRefusalSentence);
+      : tableRefusalSentence(table, code, unexpectedRefusalSentence);
     try {
       validateRefusal({ code, sentence, payload });
     } catch (error) {
@@ -185,11 +239,12 @@ export function searchOutcome(asked) {
         state: "refusal",
         code,
         card: false,
+        recognition,
         ...unshownRefusal("search", UNSHOWN, code, error.message),
         context: asked.envelope.context,
       };
     }
-    return { state: "refusal", code, card: true, sentence, payload, context: asked.envelope.context };
+    return { state: "refusal", code, card: true, sentence, payload, recognition, context: asked.envelope.context };
   }
 
   if (asked.state === "transport_failure") {

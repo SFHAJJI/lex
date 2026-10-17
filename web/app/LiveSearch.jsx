@@ -29,6 +29,11 @@
 // identifier, which is how an EU act is searched, and its date field starts empty (`live-search.mjs`
 // says why). Below either form, before any answer, the sentence that says
 // what Lex is not (R50), which the search results carry on both pages.
+//
+// Exact references first (the plan's item 4.2): the platform reads the query as an exact reference before any word is
+// searched. A reference it holds answers with the address its act opens at; the screen says what it recognised (the act,
+// the article and the date, printed back in words) and the address it opens, then goes there. A reference that opens
+// nothing says why, and a refusal of one says what was recognised above its card, so the reader sees what was read.
 
 import { useEffect, useRef, useState } from 'react';
 
@@ -40,6 +45,7 @@ import {
   SEARCH_LANGUAGES,
   SEARCH_QUERY_MAX,
   createSearchSession,
+  longDate,
   todayInLuxembourg,
 } from '../scripts/live-search.mjs';
 import { CHROME_LOCALE, ENGLISH_LANG, countedEntry, fillText, liveChrome, livePath } from '../scripts/live-chrome.mjs';
@@ -249,7 +255,95 @@ export function SearchResultsView({ view, onNextPage }) {
   );
 }
 
-/** One view state, laid out: the results, the refusal card, or the sentence a state carries. */
+/**
+ * What an exact reference was read as, for the line that says so: from an answer's `recognised`, or from a refusal's
+ * `recognised_*` members. The act is named by its held title when the index resolved one, else as the platform read it.
+ */
+export function recognitionOf(outcome) {
+  if (outcome.state === 'opens' || outcome.state === 'not_opened') {
+    const { recognised, referenceKind } = outcome.view;
+    return {
+      kind: referenceKind,
+      act: recognised.act.title ?? recognised.act.identifier,
+      actLanguage: recognised.act.title === null ? null : recognised.act.titleLanguage,
+      article: recognised.article?.number ?? null,
+      date: recognised.date?.date ?? null,
+      dateSource: recognised.date?.source ?? null,
+    };
+  }
+  const recognition = outcome.recognition ?? null;
+  if (recognition === null) return null;
+  return {
+    kind: recognition.kind,
+    act: recognition.title ?? recognition.act,
+    actLanguage: null,
+    article: recognition.article,
+    date: recognition.date,
+    dateSource: recognition.dateSource,
+  };
+}
+
+/**
+ * The line that says what the reference was read as: the act, the article and the date as read, the date in words, so
+ * 15/03/2021 is printed back as 15 March 2021. A date the reference does not name (today in Luxembourg, or the search's)
+ * is said apart, as the date read.
+ */
+export function Recognition({ recognition }) {
+  if (recognition === null) return null;
+  const { act, actLanguage, article, date, dateSource } = recognition;
+  const named = date !== null && (dateSource === 'citation' || dateSource === 'identifier');
+  const template = article === null
+    ? (named ? COPY.recognisedDate : COPY.recognised)
+    : (named ? COPY.recognisedArticleDate : COPY.recognisedArticle);
+  const values = {
+    act: actLanguage === null ? act : <span lang={quotationLanguageTag(actLanguage)}>{act}</span>,
+    ...(article === null ? {} : { article }),
+    ...(named ? { date: longDate(date) } : {}),
+  };
+  return (
+    <div data-recognised={recognition.kind}>
+      <p><Say template={template} values={values} /></p>
+      {date !== null && !named ? (
+        <p data-date-read={dateSource}>
+          <Say template={dateSource === 'today_in_luxembourg' ? COPY.recognisedToday : COPY.recognisedSearchDate} values={{ date: longDate(date) }} />
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
+/** A reference that opens its act: what was read, and the address it opens, which the screen goes to. */
+function ReferenceOpens({ outcome }) {
+  const { opens } = outcome.view;
+  return (
+    <>
+      <Recognition recognition={recognitionOf(outcome)} />
+      <p role="status" data-opens={opens.addressKind}>
+        <Say
+          template={opens.page === 'dossier' ? COPY.opensDossier : COPY.opensReading}
+          values={{ link: <a href={outcome.href}><code>{opens.address}</code></a> }}
+        />
+      </p>
+    </>
+  );
+}
+
+/** A reference that opens nothing: what was read, and why nothing was opened and no word searched. */
+function ReferenceNotOpened({ outcome }) {
+  const { recognised, reason } = outcome.view;
+  return (
+    <>
+      <Recognition recognition={recognitionOf(outcome)} />
+      <p role="status" data-not-opened={reason}>
+        {reason === 'two_dates_disagree'
+          ? COPY.notOpenedTwoDates
+          : <Say template={COPY.notOpenedDate} values={{ date: recognised.date?.asTyped ?? recognised.text }} />}
+      </p>
+    </>
+  );
+}
+
+/** One view state, laid out: the results, the act a reference opens, the refusal card, or the sentence a state carries. */
 export function SearchAnswerView({ outcome, onNextPage, onRetry }) {
   if (outcome.state === 'success') {
     return (
@@ -259,10 +353,27 @@ export function SearchAnswerView({ outcome, onNextPage, onRetry }) {
     );
   }
 
+  if (outcome.state === 'opens') {
+    return (
+      <section data-answer-state="opens">
+        <ReferenceOpens outcome={outcome} />
+      </section>
+    );
+  }
+
+  if (outcome.state === 'not_opened') {
+    return (
+      <section data-answer-state="not_opened">
+        <ReferenceNotOpened outcome={outcome} />
+      </section>
+    );
+  }
+
   if (outcome.state === 'refusal' && outcome.card) {
     return (
       <section data-answer-state="refusal">
         <FailureFrame outcome={outcome} onRetry={onRetry}>
+          <Recognition recognition={recognitionOf(outcome)} />
           <RefusalCard code={outcome.code} sentence={outcome.sentence} payload={outcome.payload} copy={refusalCardCopyFor(outcome.context)} />
         </FailureFrame>
       </section>
@@ -272,6 +383,7 @@ export function SearchAnswerView({ outcome, onNextPage, onRetry }) {
   return (
     <section data-answer-state={outcome.state}>
       <FailureFrame outcome={outcome} onRetry={onRetry}>
+        {outcome.state === 'refusal' ? <Recognition recognition={recognitionOf(outcome)} /> : null}
         <StatusSentence outcome={outcome} />
       </FailureFrame>
     </section>
@@ -316,6 +428,12 @@ export function LiveSearch({ contract, fetchImpl, variant = 'search', today = nu
   }
 
   useEffect(() => () => session.current.cancel(), []);
+
+  // A reference the platform holds opens its act: the screen goes to the address, under this page's language, once the
+  // answer says what was read (the line stays in the page this one leaves behind).
+  useEffect(() => {
+    if (outcome.state === 'opens') window.location.assign(outcome.href);
+  }, [outcome]);
 
   // Today, from this browser's clock, when no server said it: after hydration, so the page the server rendered is the
   // page hydrated, and never the build's time.
@@ -402,7 +520,7 @@ export function LiveSearch({ contract, fetchImpl, variant = 'search', today = nu
       <p className="not-advice" data-not-advice="">{liveChrome().site.notAdvice}</p>
       {home ? (
         <p className="search-scope" data-search-scope="">
-          <Say template={COPY.luxembourgOnly} values={{ link: <a href={livePath('search.html')}>{COPY.searchPage}</a> }} />
+          <Say template={COPY.searchScope} values={{ link: <a href={livePath('search.html')}>{COPY.searchPage}</a> }} />
         </p>
       ) : null}
       <LiveAnswer>

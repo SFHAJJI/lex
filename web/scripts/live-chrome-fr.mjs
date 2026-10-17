@@ -83,6 +83,14 @@
 // review: the evidence form's label is "Avec ses éléments de vérification", never "probante", which would claim the
 // probative value its own authenticity line denies; a Luxembourg sole article is "Art. unique", as the act prints it; and
 // the date Lex was consulted is "(date au Luxembourg)", never a place).
+// Exact references first (the plan's item 4.2; R59, R90, R13): the line under the home page's box, now that an identifier
+// or a citation typed there opens its act (`search.searchScope`, replacing `search.luxembourgOnly`); what a reference was
+// read as (`search.recognised`, `search.recognisedArticle`, `search.recognisedDate`, `search.recognisedArticleDate`), the
+// date read when it names none (`search.recognisedToday`, `search.recognisedSearchDate`), the address it opens
+// (`search.opensReading`, `search.opensDossier`) and why it opened nothing (`search.notOpenedDate`,
+// `search.notOpenedTwoDates`); a date in words (`common.longDate`, `common.firstDay`, the twelve `common.months`); and the
+// phase's four refusal sentences in `REFUSALS_FR.sentences`, were reviewed by the same reviewer under the same delegation
+// in the addendum of 2026-10-17 for that pull request (the record names each, with what changed in review).
 // No French entry ships unreviewed.
 //
 // Vocabulary: a work is an "acte" (a publisher's Cellar work, one record of an EU act, is an "œuvre de l’éditeur"), a
@@ -132,8 +140,18 @@ export const LIVE_CHROME_FR = Object.freeze({
     dated: 'Seuls des actes luxembourgeois ont été interrogés. Pour chacun, la dernière version que ce site détient qui est applicable à partir du {date} ou d’une date antérieure (éditeur) a été interrogée, et un acte sans une telle version ne l’a pas été. Un acte détenu uniquement tel que publié est interrogé tel que publié, et peut avoir été modifié depuis.',
     undated: 'Seuls des actes luxembourgeois ont été interrogés, sans date : toutes les versions que ce site détient ont été interrogées, et chaque résultat indique la date de sa version.',
     noHitLuxembourg: 'Aucun article du texte luxembourgeois que ce serveur détient et qu’il est autorisé à interroger ne contient « {query} ».',
-    luxembourgOnly: 'Cette recherche porte sur le droit luxembourgeois. Pour interroger un acte de l’UE, désignez-le par son numéro CELEX sur la {link}.',
+    searchScope: 'La recherche par mots porte sur le droit luxembourgeois. Un ELI, un numéro CELEX, une référence au Mémorial, un permalien ou la citation d’un article d’un acte, avec ou sans date, ouvre cet acte, luxembourgeois ou de l’UE. Pour interroger un acte de l’UE, désignez-le par son numéro CELEX sur la {link}.',
     searchPage: 'page de recherche',
+    recognised: 'Référence reconnue : {act}.',
+    recognisedArticle: 'Référence reconnue : {act}, article {article}.',
+    recognisedDate: 'Référence reconnue : {act}, au {date}.',
+    recognisedArticleDate: 'Référence reconnue : {act}, article {article}, au {date}.',
+    recognisedToday: 'Aucune date n’a été indiquée : la date lue est celle d’aujourd’hui au Luxembourg, le {date}.',
+    recognisedSearchDate: 'La référence n’indique aucune date : la date lue est celle de la recherche, le {date}.',
+    opensReading: 'Ouverture de la lecture : {link}',
+    opensDossier: 'Ouverture du dossier : {link}',
+    notOpenedDate: '« {date} » ne désigne aucun jour du calendrier ; rien n’a donc été ouvert, et aucun mot n’a été recherché.',
+    notOpenedTwoDates: 'La référence indique deux dates qui ne concordent pas ; rien n’a donc été ouvert, et aucun mot n’a été recherché.',
   }),
   dossier: Object.freeze({
     title: 'Dossier',
@@ -580,6 +598,9 @@ export const LIVE_CHROME_FR = Object.freeze({
     noneHeld: 'aucune détenue',
     notHeldRow: '{item} : {reason}',
     listSeparator: ' ; ',
+    longDate: '{day} {month} {year}',
+    firstDay: '{day}er',
+    months: Object.freeze(['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre']),
     europeAnnexes: Object.freeze({
       one: '{count} annexe du libellé en {language} n’est pas communiquée sous forme de texte et n’est jamais interrogée, citée ni exportée : {reason}. Source officielle {source}.',
       other: '{count} annexes du libellé en {language} ne sont pas communiquées sous forme de texte et ne sont jamais interrogées, citées ni exportées : {reason}. Source officielle {source}.',
@@ -755,6 +776,14 @@ export const REFUSALS_FR = Object.freeze({
       'La version que ce permalien épingle n’est pas celle que cet index contient pour sa date.',
     'The wording this permalink pins is not one this index holds for its date.':
       'Le libellé que ce permalien épingle n’est pas un libellé que cet index contient pour sa date.',
+    'This site holds no act the reference names, so nothing was opened and no word was searched.':
+      'Ce site ne détient aucun acte que la référence désigne ; rien n’a donc été ouvert, et aucun mot n’a été recherché.',
+    'The reference names more than one act or article this site holds, and none is chosen.':
+      'La référence désigne plusieurs actes ou articles que ce site détient, et aucun n’est retenu.',
+    'The version the date selects holds no article with that number, and no other article is opened in its place.':
+      'La version que la date retient ne comporte aucun article de ce numéro, et aucun autre article n’est ouvert à sa place.',
+    'This server holds one wording of this EU act and answers no date for it: leave the date out of the reference.':
+      'Ce serveur détient un seul libellé de cet acte de l’UE et ne répond à aucune date pour celui-ci : retirez la date de la référence.',
   }),
   templates: Object.freeze({
     coverage: Object.freeze({
